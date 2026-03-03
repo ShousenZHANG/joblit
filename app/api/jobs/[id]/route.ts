@@ -225,7 +225,8 @@ export async function DELETE(
   });
 
   if (!job) {
-    return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+    // Idempotent delete: if the row is already gone, treat it as success.
+    return NextResponse.json({ ok: true, alreadyDeleted: true });
   }
 
   const application = await prisma.application.findUnique({

@@ -432,6 +432,7 @@ export function JobsClient({
   const [externalSkillPackFresh, setExternalSkillPackFresh] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteCandidate, setDeleteCandidate] = useState<{ id: string; title: string } | null>(null);
+  const [suppressedDeletedIds, setSuppressedDeletedIds] = useState<Set<string>>(new Set());
   const [tailorSourceByJob, setTailorSourceByJob] = useState<
     Record<string, { cv?: CvSource; cover?: CoverSource }>
   >({});
@@ -740,7 +741,7 @@ export function JobsClient({
     [pageQueries],
   );
 
-  const items = useMemo(() => {
+  const mergedItems = useMemo(() => {
     const merged: JobItem[] = [];
     const seenIds = new Set<string>();
     for (const page of pageResponses) {
@@ -752,6 +753,11 @@ export function JobsClient({
     }
     return merged;
   }, [pageResponses]);
+
+  const items = useMemo(
+    () => mergedItems.filter((item) => !suppressedDeletedIds.has(item.id)),
+    [mergedItems, suppressedDeletedIds],
+  );
 
   const totalCount = pageResponses[0]?.totalCount;
   const nextCursor = pageResponses.length
@@ -1046,11 +1052,21 @@ export function JobsClient({
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/jobs/${id}`, { method: "DELETE" });
+      if (res.status === 404) {
+        // Idempotent delete: treat already-removed rows as success.
+        return;
+      }
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || "Failed to delete job");
     },
     onMutate: async (id) => {
       setError(null);
+      setSuppressedDeletedIds((prev) => {
+        if (prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
       setDeletingIds((prev) => new Set(prev).add(id));
       await queryClient.cancelQueries({ queryKey: ["jobs"] });
       const previousSelectedId = selectedId;
@@ -1101,8 +1117,16 @@ export function JobsClient({
         previousSelectedId,
       };
     },
-    onError: (e, _id, context) => {
+    onError: (e, id, context) => {
       setError(getErrorMessage(e, "Failed to delete job"));
+      if (id) {
+        setSuppressedDeletedIds((prev) => {
+          if (!prev.has(id)) return prev;
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }
       for (const patch of context?.rollbackPatches ?? []) {
         queryClient.setQueryData<JobsResponse>(patch.queryKey, (old) =>
           restorePatchedJob(old, patch),

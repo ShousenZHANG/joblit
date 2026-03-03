@@ -508,6 +508,234 @@ describe("JobsClient", () => {
     expect(actionRows[0]).toHaveClass("grid", "grid-cols-1", "sm:grid-cols-2");
   });
 
+  it("keeps a just-deleted job hidden even if a stale refetch returns it once", async () => {
+    const user = userEvent.setup();
+    let jobsFetchCount = 0;
+    const mockFetch = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url.startsWith("/api/jobs?limit=50")) {
+        jobsFetchCount += 1;
+        return new Response(
+          JSON.stringify({ items: [baseJob], nextCursor: null, facets: { jobLevels: ["Mid"] } }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.startsWith("/api/jobs?")) {
+        jobsFetchCount += 1;
+        // Simulate a stale list response returning the deleted row once.
+        return new Response(
+          JSON.stringify({ items: [baseJob], nextCursor: null, facets: { jobLevels: ["Mid"] } }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.startsWith("/api/jobs/") && init?.method === "DELETE") {
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.startsWith("/api/jobs/") && (!init || init.method === "GET")) {
+        return new Response(
+          JSON.stringify({ id: baseJob.id, description: "Job description" }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
+
+    const removeButton = (await screen.findAllByTestId("job-remove-button"))[0];
+    await user.click(removeButton);
+    const dialog = await screen.findByRole("alertdialog", { name: /delete this job/i });
+    await user.click(within(dialog).getByRole("button", { name: /^delete$/i }));
+
+    const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
+    await waitFor(() => {
+      expect(
+        within(resultsPane).queryByRole("button", { name: /Frontend Engineer/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    expect(jobsFetchCount).toBeGreaterThan(0);
+  });
+
+  it("submits only one delete request when delete confirm is double-clicked quickly", async () => {
+    const user = userEvent.setup();
+    let deleteCalls = 0;
+    let resolveDelete: (() => void) | null = null;
+    const deletePromise = new Promise<Response>((resolve) => {
+      resolveDelete = () =>
+        resolve(
+          new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+    });
+
+    const mockFetch = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url.startsWith("/api/jobs?limit=50")) {
+        return new Response(
+          JSON.stringify({ items: [baseJob], nextCursor: null, facets: { jobLevels: ["Mid"] } }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.startsWith("/api/jobs?")) {
+        return new Response(
+          JSON.stringify({ items: [baseJob], nextCursor: null, facets: { jobLevels: ["Mid"] } }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.startsWith(`/api/jobs/${baseJob.id}`) && init?.method === "DELETE") {
+        deleteCalls += 1;
+        return deletePromise;
+      }
+      if (url.startsWith("/api/jobs/") && (!init || init.method === "GET")) {
+        return new Response(
+          JSON.stringify({ id: baseJob.id, description: "Job description" }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
+
+    const removeButton = (await screen.findAllByTestId("job-remove-button"))[0];
+    await user.click(removeButton);
+    const dialog = await screen.findByRole("alertdialog", { name: /delete this job/i });
+    const confirm = within(dialog).getByRole("button", { name: /^delete$/i });
+    await user.dblClick(confirm);
+
+    expect(resolveDelete).toBeTruthy();
+    resolveDelete?.();
+
+    await waitFor(() => {
+      expect(deleteCalls).toBe(1);
+    });
+  });
+
+  it("keeps pending-deletion jobs hidden during overlapping delete refetches", async () => {
+    const user = userEvent.setup();
+    const firstJob = { ...baseJob, id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", title: "Frontend Engineer A" };
+    const secondJob = { ...baseJob, id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", title: "Backend Engineer B" };
+    let firstDeleted = false;
+    let secondDeleted = false;
+    let resolveFirstDelete: (() => void) | null = null;
+    let resolveSecondDelete: (() => void) | null = null;
+
+    const firstDeletePromise = new Promise<Response>((resolve) => {
+      resolveFirstDelete = () => {
+        firstDeleted = true;
+        resolve(
+          new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      };
+    });
+
+    const secondDeletePromise = new Promise<Response>((resolve) => {
+      resolveSecondDelete = () => {
+        secondDeleted = true;
+        resolve(
+          new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      };
+    });
+
+    const listPayload = () => {
+      const items = [firstDeleted ? null : firstJob, secondDeleted ? null : secondJob].filter(
+        (item): item is typeof firstJob => Boolean(item),
+      );
+      return {
+        items,
+        nextCursor: null,
+        totalCount: items.length,
+        facets: { jobLevels: ["Mid"] },
+      };
+    };
+
+    const mockFetch = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url.startsWith("/api/jobs?limit=50")) {
+        return new Response(JSON.stringify(listPayload()), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.startsWith("/api/jobs?")) {
+        return new Response(JSON.stringify(listPayload()), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url === `/api/jobs/${firstJob.id}` && init?.method === "DELETE") {
+        return firstDeletePromise;
+      }
+      if (url === `/api/jobs/${secondJob.id}` && init?.method === "DELETE") {
+        return secondDeletePromise;
+      }
+      if (url.startsWith("/api/jobs/") && (!init || init.method === "GET")) {
+        const id = url.split("/").at(-1) ?? "";
+        return new Response(
+          JSON.stringify({
+            id,
+            description: id === secondJob.id ? "Second job description" : "First job description",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    renderWithClient(<JobsClient initialItems={[firstJob, secondJob]} initialCursor={null} />);
+
+    expect((await screen.findAllByText("Frontend Engineer A")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("Backend Engineer B")).length).toBeGreaterThan(0);
+    const confirmDelete = async () => {
+      const dialog = await screen.findByRole("alertdialog", { name: /delete this job/i });
+      await user.click(within(dialog).getByRole("button", { name: /^delete$/i }));
+    };
+
+    await user.click((await screen.findAllByTestId("job-remove-button"))[0]);
+    await confirmDelete();
+
+    await user.click((await screen.findAllByTestId("job-remove-button"))[0]);
+    await confirmDelete();
+
+    expect(resolveFirstDelete).toBeTruthy();
+    resolveFirstDelete?.();
+
+    const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
+    await waitFor(() => {
+      expect(
+        within(resultsPane).queryByRole("button", { name: /Backend Engineer B/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    expect(resolveSecondDelete).toBeTruthy();
+    resolveSecondDelete?.();
+
+    await waitFor(() => {
+      expect(
+        within(resultsPane).queryByRole("button", { name: /Frontend Engineer A/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        within(resultsPane).queryByRole("button", { name: /Backend Engineer B/i }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
   it("keeps results and details panels both visible on mobile layouts", async () => {
     const user = userEvent.setup();
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
