@@ -22,6 +22,8 @@ const BodySchema = z.object({
           job_level: z.string().optional().nullable(),
           jobLevel: z.string().optional().nullable(),
           description: z.string().optional().nullable(),
+          market: z.string().optional().default("AU"),
+          site: z.string().optional().nullable(),
         })
         .passthrough(),
     )
@@ -84,6 +86,7 @@ export async function POST(req: Request) {
           jobType: it.jobType ?? it.job_type ?? null,
           jobLevel: it.jobLevel ?? it.job_level ?? null,
           description: it.description ?? null,
+          market: it.market ?? "AU",
         };
       })
       .filter(Boolean) as Array<{
@@ -94,6 +97,7 @@ export async function POST(req: Request) {
       jobType: string | null;
       jobLevel: string | null;
       description: string | null;
+      market: string;
     }>;
 
     const deletedUrls = await prisma.deletedJobUrl.findMany({
@@ -130,6 +134,7 @@ export async function POST(req: Request) {
           jobType: current.jobType,
           jobLevel: current.jobLevel,
           description: current.description,
+          market: current.market,
           status: "NEW",
         })),
         skipDuplicates: true,

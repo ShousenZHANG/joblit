@@ -29,6 +29,8 @@ const QuerySchema = z.object({
   location: z.string().trim().min(1).max(80).optional(),
   jobLevel: z.string().trim().min(1).max(80).optional(),
   sort: z.enum(["newest", "oldest"]).optional().default("newest"),
+  market: z.enum(["AU", "CN"]).optional(),
+  platform: z.string().trim().min(1).max(80).optional(),
 });
 
 export async function GET(req: Request) {
@@ -48,7 +50,7 @@ export async function GET(req: Request) {
     );
   }
 
-  const { limit, cursor, status, q, location, jobLevel, sort } = parsed.data;
+  const { limit, cursor, status, q, location, jobLevel, sort, market, platform } = parsed.data;
 
   const orderBy =
     sort === "oldest"
@@ -103,6 +105,7 @@ export async function GET(req: Request) {
   const where: JobWhereClause = {
     userId,
     ...(status ? { status } : {}),
+    ...(market ? { market } : {}),
     ...(andClauses.length ? { AND: andClauses } : {}),
   };
 
@@ -123,6 +126,7 @@ export async function GET(req: Request) {
         status: true,
         createdAt: true,
         updatedAt: true,
+        market: true,
         applications: {
           select: { resumePdfUrl: true, resumePdfName: true, coverPdfUrl: true },
         },
@@ -157,6 +161,8 @@ export async function GET(req: Request) {
     `location=${location ?? ""}`,
     `jobLevel=${jobLevel ?? ""}`,
     `sort=${sort}`,
+    `market=${market ?? ""}`,
+    `platform=${platform ?? ""}`,
   ].join("|");
   const etag = buildJobsListEtag({
     userId,
