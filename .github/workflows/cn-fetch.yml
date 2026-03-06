@@ -1,0 +1,36 @@
+name: CN Job Fetch
+
+on:
+  workflow_dispatch:
+    inputs:
+      runId:
+        description: "FetchRun id (uuid)"
+        required: true
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r tools/fetcher/requirements-cn.txt
+
+      - name: Run CN fetcher
+        env:
+          RUN_ID: ${{ inputs.runId }}
+          JOBFLOW_WEB_URL: ${{ secrets.JOBFLOW_WEB_URL }}
+          IMPORT_SECRET: ${{ secrets.IMPORT_SECRET }}
+          FETCH_RUN_SECRET: ${{ secrets.FETCH_RUN_SECRET }}
+          BOSS_COOKIE: ${{ secrets.BOSS_COOKIE }}
+        working-directory: tools/fetcher
+        run: python run_cn_fetcher.py
