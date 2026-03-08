@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useGuide } from "@/app/GuideContext";
+import { useTranslations, useLocale } from "next-intl";
 
 type ResumeBasics = {
   fullName: string;
@@ -246,6 +247,8 @@ function SortableItem({
 export function ResumeForm() {
   const { toast } = useToast();
   const { isTaskHighlighted, markTaskComplete } = useGuide();
+  const t = useTranslations("resumeForm");
+  const globalLocale = useLocale();
   const guideHighlightClass =
     "ring-2 ring-emerald-400 ring-offset-2 ring-offset-white shadow-[0_0_0_4px_rgba(16,185,129,0.18)]";
   const [currentStep, setCurrentStep] = useState(0);
@@ -269,7 +272,7 @@ export function ResumeForm() {
   const [profileCreating, setProfileCreating] = useState(false);
   const [profileDeleting, setProfileDeleting] = useState(false);
 
-  const [locale, setLocale] = useState<string>("en-AU");
+  const locale = globalLocale === "zh" ? "zh-CN" : "en-AU";
   const steps = locale === "zh-CN" ? stepsCN : stepsEN;
 
   const [basics, setBasics] = useState<ResumeBasics>(emptyBasics);
@@ -343,9 +346,6 @@ export function ResumeForm() {
       }
 
       const profileRecord = profile as ResumeProfilePayload & { locale?: string };
-      if (profileRecord.locale) {
-        setLocale(profileRecord.locale);
-      }
       setBasics(profile.basics ?? emptyBasics);
       setLinks(Array.isArray(profile.links) && profile.links.length > 0 ? profile.links : defaultLinks);
       setSummary(profile.summary ?? "");
@@ -1017,8 +1017,8 @@ export function ResumeForm() {
       if (!hasAnyContent) {
         if (showEmptyToast) {
           toast({
-            title: "Add details first",
-            description: "Fill in at least one section before previewing.",
+            title: t("toastAddDetailsFirst"),
+            description: t("toastAddDetailsFirstDesc"),
             variant: "destructive",
           });
         }
@@ -1062,21 +1062,21 @@ export function ResumeForm() {
           });
 
           if (!res.ok) {
-            let message = "Preview failed. Try again.";
+            let message = t("previewFailed");
             let code: string | undefined;
             if (res.headers.get("content-type")?.includes("application/json")) {
               const json = await res.json().catch(() => null);
               code = json?.error?.code;
               if (code === "LATEX_RENDER_CONFIG_MISSING") {
-                message = "Preview service is not configured.";
+                message = t("previewNotConfigured");
               } else if (code === "LATEX_RENDER_TIMEOUT") {
-                message = "Preview timed out. Retrying...";
+                message = t("previewTimeout");
               } else if (code === "LATEX_RENDER_UNREACHABLE") {
-                message = "Preview service is unavailable.";
+                message = t("previewUnavailable");
               } else if (code === "LATEX_RENDER_FAILED") {
-                message = "Preview failed to compile.";
+                message = t("previewCompileFailed");
               } else if (code === "NO_PROFILE") {
-                message = "Save your resume first to generate a preview.";
+                message = t("previewSaveFirst");
               }
             }
 
@@ -1103,7 +1103,7 @@ export function ResumeForm() {
         } catch (err) {
           if ((err as Error).name === "AbortError") return;
           if (!hasExistingPreview) {
-            setPreviewError("Preview failed. Try again.");
+            setPreviewError(t("previewFailed"));
             setPreviewStatus("error");
           }
         } finally {
@@ -1154,11 +1154,11 @@ export function ResumeForm() {
       const json = await res.json();
       hydrateFromResumeApi(json);
       toast({
-        title: "New version created",
+        title: t("toastNewVersionCreated"),
         description:
           mode === "copy"
-            ? "Started from your active version so you can edit only the differences."
-            : "Created a blank version.",
+            ? t("toastNewVersionCopyDesc")
+            : t("toastNewVersionBlankDesc"),
       });
       setPdfUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
@@ -1168,9 +1168,9 @@ export function ResumeForm() {
       setPreviewError(null);
     } catch {
       toast({
-        title: "Could not create version",
+        title: t("toastCouldNotCreateVersion"),
         description:
-          "Please run migrations if needed (`npx prisma migrate deploy`) and try again.",
+          t("toastCouldNotCreateVersionDesc"),
         variant: "destructive",
       });
     } finally {
@@ -1182,8 +1182,8 @@ export function ResumeForm() {
     if (!selectedProfileId || profileDeleting || profileCreating || profileSwitching) return;
     if (profiles.length <= 1) {
       toast({
-        title: "Cannot delete the only version",
-        description: "Keep at least one master resume version.",
+        title: t("toastCannotDeleteOnly"),
+        description: t("toastCannotDeleteOnlyDesc"),
         variant: "destructive",
       });
       return;
@@ -1191,7 +1191,7 @@ export function ResumeForm() {
 
     const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId);
     const confirmed = window.confirm(
-      `Delete "${selectedProfile?.name ?? "this version"}"? This action cannot be undone.`,
+      t("confirmDeleteVersion", { name: selectedProfile?.name ?? t("thisVersion") }),
     );
     if (!confirmed) return;
 
@@ -1218,19 +1218,19 @@ export function ResumeForm() {
       setPreviewStatus("idle");
       setPreviewError(null);
       toast({
-        title: "Version deleted",
-        description: "Your remaining versions are unchanged.",
+        title: t("toastVersionDeleted"),
+        description: t("toastVersionDeletedDesc"),
       });
     } catch (error) {
       toast({
         title:
           error instanceof Error && error.message === "LAST_PROFILE"
-            ? "Cannot delete the only version"
-            : "Could not delete version",
+            ? t("toastCannotDeleteOnly")
+            : t("toastCouldNotDeleteVersion"),
         description:
           error instanceof Error && error.message === "LAST_PROFILE"
-            ? "At least one master resume version is required."
-            : "Please try again.",
+            ? t("toastCannotDeleteOnlyDesc")
+            : t("toastTryAgain"),
         variant: "destructive",
       });
     } finally {
@@ -1267,13 +1267,13 @@ export function ResumeForm() {
       setPreviewStatus("idle");
       setPreviewError(null);
       toast({
-        title: "Switched version",
-        description: "Generation now uses the selected master resume.",
+        title: t("toastSwitchedVersion"),
+        description: t("toastSwitchedVersionDesc"),
       });
     } catch {
       toast({
-        title: "Could not switch version",
-        description: "Please try again.",
+        title: t("toastCouldNotSwitchVersion"),
+        description: t("toastTryAgain"),
         variant: "destructive",
       });
       setSelectedProfileId(activeProfileId);
@@ -1315,15 +1315,15 @@ export function ResumeForm() {
       const json = await res.json();
       hydrateFromResumeApi(json);
       toast({
-        title: "Saved",
-        description: "Your selected master resume version has been updated.",
+        title: t("toastSaved"),
+        description: t("toastSavedDesc"),
       });
       markTaskComplete("resume_setup");
       schedulePreview(150);
     } catch {
       toast({
-        title: "Save failed",
-        description: "Please try again.",
+        title: t("toastSaveFailed"),
+        description: t("toastTryAgain"),
         variant: "destructive",
       });
     } finally {
@@ -1384,7 +1384,7 @@ export function ResumeForm() {
               : "absolute inset-x-4 bottom-4 flex items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700"
           }
         >
-          <span>{previewError ?? "Preview failed. Try again."}</span>
+          <span>{previewError ?? t("previewFailed")}</span>
           <Button
             type="button"
             size="sm"
@@ -1403,46 +1403,46 @@ export function ResumeForm() {
       return (
         <div className="space-y-5">
           <div>
-            <h2 className="text-base font-semibold text-slate-900">Personal info</h2>
+            <h2 className="text-base font-semibold text-slate-900">{t("personalInfo")}</h2>
             <p className="text-sm text-muted-foreground">
-              Add the core details used across all applications.
+              {t("personalInfoDesc")}
             </p>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="resume-full-name">Full name</Label>
+              <Label htmlFor="resume-full-name">{t("fullName")}</Label>
               <Input
                 id="resume-full-name"
                 value={basics.fullName}
                 onChange={(event) => updateBasics("fullName", event.target.value)}
-                placeholder="Jane Doe"
+                placeholder={t("fullNamePlaceholder")}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="resume-title">Title</Label>
+              <Label htmlFor="resume-title">{t("title")}</Label>
               <Input
                 id="resume-title"
                 value={basics.title}
                 onChange={(event) => updateBasics("title", event.target.value)}
-                placeholder="Full Stack Engineer"
+                placeholder={t("titlePlaceholder")}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="resume-email">Email</Label>
+              <Label htmlFor="resume-email">{t("email")}</Label>
               <Input
                 id="resume-email"
                 value={basics.email}
                 onChange={(event) => updateBasics("email", event.target.value)}
-                placeholder="jane@example.com"
+                placeholder={t("emailPlaceholder")}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="resume-phone">Phone</Label>
+              <Label htmlFor="resume-phone">{t("phone")}</Label>
               <Input
                 id="resume-phone"
                 value={basics.phone}
                 onChange={(event) => updateBasics("phone", event.target.value)}
-                placeholder="+61 400 000 000"
+                placeholder={t("phonePlaceholder")}
               />
             </div>
           </div>
@@ -1559,34 +1559,34 @@ export function ResumeForm() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold text-slate-900">Links</h3>
+                <h3 className="text-sm font-semibold text-slate-900">{t("links")}</h3>
                 <p className="text-sm text-muted-foreground">
-                  Add LinkedIn, GitHub, or portfolio URLs.
+                  {t("linksDesc")}
                 </p>
               </div>
               <Button type="button" variant="secondary" onClick={addLink}>
-                Add link
+                {t("addLink")}
               </Button>
             </div>
             <div className="space-y-3">
               {links.map((link, index) => (
                 <div key={`link-${index}`} className="grid gap-3 md:grid-cols-[180px,1fr,auto]">
                   <div className="space-y-2">
-                    <Label htmlFor={`link-label-${index}`}>Label</Label>
+                    <Label htmlFor={`link-label-${index}`}>{t("label")}</Label>
                     <Input
                       id={`link-label-${index}`}
                       value={link.label}
                       onChange={(event) => updateLink(index, "label", event.target.value)}
-                      placeholder="LinkedIn"
+                      placeholder={t("linkLabelPlaceholder")}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor={`link-url-${index}`}>URL</Label>
+                    <Label htmlFor={`link-url-${index}`}>{t("url")}</Label>
                     <Input
                       id={`link-url-${index}`}
                       value={link.url}
                       onChange={(event) => updateLink(index, "url", event.target.value)}
-                      placeholder="https://"
+                      placeholder={t("linkUrlPlaceholder")}
                     />
                   </div>
                   {links.length > 1 ? (
@@ -1597,7 +1597,7 @@ export function ResumeForm() {
                         className="text-xs text-red-600 hover:text-red-600"
                         onClick={() => removeLink(index)}
                       >
-                        Remove
+                        {t("remove")}
                       </Button>
                     </div>
                   ) : null}
@@ -1613,21 +1613,21 @@ export function ResumeForm() {
       return (
         <div className="space-y-3">
           <div>
-            <h2 className="text-base font-semibold text-slate-900">Summary</h2>
+            <h2 className="text-base font-semibold text-slate-900">{t("summary")}</h2>
             <p className="text-sm text-muted-foreground">
-              Share a concise summary of your strengths.
+              {t("summaryDesc")}
             </p>
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="resume-summary">Summary</Label>
+              <Label htmlFor="resume-summary">{t("summary")}</Label>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 onClick={() => applyBoldMarkdown("summary", summary, setSummary)}
               >
-                Bold selected
+                {t("boldSelected")}
               </Button>
             </div>
             <Textarea
@@ -1635,7 +1635,7 @@ export function ResumeForm() {
               ref={registerMarkdownRef("summary")}
               value={summary}
               onChange={(event) => setSummary(event.target.value)}
-              placeholder="Write a concise summary that highlights your strengths."
+              placeholder={t("summaryPlaceholder")}
               rows={5}
             />
           </div>
@@ -1648,11 +1648,11 @@ export function ResumeForm() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-base font-semibold text-slate-900">Professional experience</h2>
-              <p className="text-sm text-muted-foreground">Add your most recent roles.</p>
+              <h2 className="text-base font-semibold text-slate-900">{t("experience")}</h2>
+              <p className="text-sm text-muted-foreground">{t("experienceDesc")}</p>
             </div>
             <Button type="button" variant="secondary" onClick={addExperience}>
-              Add experience
+              {t("addExperience")}
             </Button>
           </div>
           <div className="space-y-5">
@@ -1679,9 +1679,9 @@ export function ResumeForm() {
                       >
                         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-1 py-1">
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold text-slate-900">Experience {index + 1}</p>
+                            <p className="text-sm font-semibold text-slate-900">{t("experienceN", { n: index + 1 })}</p>
                             <p className="truncate text-xs text-muted-foreground">
-                              {entry.title || entry.company ? `${entry.title || "Untitled"} · ${entry.company || "Company"}` : "Draft"}
+                              {entry.title || entry.company ? `${entry.title || t("untitled")} · ${entry.company || t("company")}` : t("draft")}
                             </p>
                           </div>
                           <div className="flex items-center gap-1">
@@ -1738,7 +1738,7 @@ export function ResumeForm() {
                                   removeExperience(index);
                                 }}
                               >
-                                Remove
+                                {t("remove")}
                               </Button>
                             ) : null}
                             {expandedExperienceIndex === index ? (
@@ -1751,52 +1751,52 @@ export function ResumeForm() {
                         <div className="space-y-3 pt-3">
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor={`experience-title-${index}`}>Experience title</Label>
+                      <Label htmlFor={`experience-title-${index}`}>{t("experienceTitle")}</Label>
                       <Input
                         id={`experience-title-${index}`}
                         value={entry.title}
                         onChange={(event) => updateExperience(index, "title", event.target.value)}
-                        placeholder="Software Engineer"
+                        placeholder={t("experienceTitlePlaceholder")}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor={`experience-company-${index}`}>Experience company</Label>
+                      <Label htmlFor={`experience-company-${index}`}>{t("experienceCompany")}</Label>
                       <Input
                         id={`experience-company-${index}`}
                         value={entry.company}
                         onChange={(event) => updateExperience(index, "company", event.target.value)}
-                        placeholder="Example Co"
+                        placeholder={t("experienceCompanyPlaceholder")}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor={`experience-location-${index}`}>Experience location</Label>
+                      <Label htmlFor={`experience-location-${index}`}>{t("experienceLocation")}</Label>
                       <Input
                         id={`experience-location-${index}`}
                         value={entry.location}
                         onChange={(event) => updateExperience(index, "location", event.target.value)}
-                        placeholder="Sydney, Australia"
+                        placeholder={t("experienceLocationPlaceholder")}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor={`experience-dates-${index}`}>Experience dates</Label>
+                      <Label htmlFor={`experience-dates-${index}`}>{t("experienceDates")}</Label>
                       <Input
                         id={`experience-dates-${index}`}
                         value={entry.dates}
                         onChange={(event) => updateExperience(index, "dates", event.target.value)}
-                        placeholder="2023 - 2025"
+                        placeholder={t("experienceDatesPlaceholder")}
                       />
                     </div>
                   </div>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label>Experience links (optional, max 2)</Label>
+                      <Label>{t("experienceLinks")}</Label>
                       <Button
                         type="button"
                         variant="secondary"
                         onClick={() => addExperienceLink(index)}
                         disabled={entry.links.length >= 2}
                       >
-                        Add link
+                        {t("addLink")}
                       </Button>
                     </div>
                     <div className="space-y-2">
@@ -1810,14 +1810,14 @@ export function ResumeForm() {
                             onChange={(event) =>
                               updateExperienceLink(index, linkIndex, "label", event.target.value)
                             }
-                            placeholder="GitHub / Demo"
+                            placeholder={t("expLinkLabelPlaceholder")}
                           />
                           <Input
                             value={link.url}
                             onChange={(event) =>
                               updateExperienceLink(index, linkIndex, "url", event.target.value)
                             }
-                            placeholder="https://"
+                            placeholder={t("linkUrlPlaceholder")}
                           />
                           <Button
                             type="button"
@@ -1825,7 +1825,7 @@ export function ResumeForm() {
                             className="text-xs text-slate-500 hover:text-slate-900"
                             onClick={() => removeExperienceLink(index, linkIndex)}
                           >
-                            Remove
+                            {t("remove")}
                           </Button>
                         </div>
                       ))}
@@ -1833,9 +1833,9 @@ export function ResumeForm() {
                   </div>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label>Experience bullets</Label>
+                      <Label>{t("experienceBullets")}</Label>
                       <Button type="button" variant="secondary" onClick={() => addExperienceBullet(index)}>
-                        Add bullet
+                        {t("addBullet")}
                       </Button>
                     </div>
                     <div className="space-y-2">
@@ -1843,7 +1843,7 @@ export function ResumeForm() {
                         <div key={`exp-${index}-bullet-${bulletIndex}`} className="flex gap-2">
                           <div className="flex-1 space-y-2">
                             <div className="flex items-center justify-between">
-                              <Label htmlFor={`experience-bullet-${index}-${bulletIndex}`}>Experience bullet</Label>
+                              <Label htmlFor={`experience-bullet-${index}-${bulletIndex}`}>{t("experienceBullet")}</Label>
                               <Button
                                 type="button"
                                 variant="ghost"
@@ -1856,7 +1856,7 @@ export function ResumeForm() {
                                   )
                                 }
                               >
-                                Bold selected
+                                {t("boldSelected")}
                               </Button>
                             </div>
                             <Input
@@ -1866,7 +1866,7 @@ export function ResumeForm() {
                               onChange={(event) =>
                                 updateExperienceBullet(index, bulletIndex, event.target.value)
                               }
-                              placeholder="Improved API latency by 35%"
+                              placeholder={t("experienceBulletPlaceholder")}
                             />
                           </div>
                           <div className="flex items-end">
@@ -1876,7 +1876,7 @@ export function ResumeForm() {
                               className="text-xs text-slate-500 hover:text-slate-900"
                               onClick={() => removeExperienceBullet(index, bulletIndex)}
                             >
-                              Remove
+                              {t("remove")}
                             </Button>
                           </div>
                         </div>
@@ -1900,11 +1900,11 @@ export function ResumeForm() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-base font-semibold text-slate-900">Projects</h2>
-              <p className="text-sm text-muted-foreground">Highlight the most relevant projects.</p>
+              <h2 className="text-base font-semibold text-slate-900">{t("projects")}</h2>
+              <p className="text-sm text-muted-foreground">{t("projectsDesc")}</p>
             </div>
             <Button type="button" variant="secondary" onClick={addProject}>
-              Add project
+              {t("addProject")}
             </Button>
           </div>
           <div className="space-y-5">
@@ -1931,9 +1931,9 @@ export function ResumeForm() {
                       >
                         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-1 py-1">
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold text-slate-900">Project {index + 1}</p>
+                            <p className="text-sm font-semibold text-slate-900">{t("projectN", { n: index + 1 })}</p>
                             <p className="truncate text-xs text-muted-foreground">
-                              {entry.name ? `${entry.name}${entry.stack ? ` · ${entry.stack}` : ""}` : "Draft"}
+                              {entry.name ? `${entry.name}${entry.stack ? ` · ${entry.stack}` : ""}` : t("draft")}
                             </p>
                           </div>
                           <div className="flex items-center gap-1">
@@ -1990,7 +1990,7 @@ export function ResumeForm() {
                                   removeProject(index);
                                 }}
                               >
-                                Remove
+                                {t("remove")}
                               </Button>
                             ) : null}
                             {expandedProjectIndex === index ? (
@@ -2003,47 +2003,47 @@ export function ResumeForm() {
                         <div className="space-y-3 pt-3">
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor={`project-name-${index}`}>Project name</Label>
+                      <Label htmlFor={`project-name-${index}`}>{t("projectName")}</Label>
                       <Input
                         id={`project-name-${index}`}
                         value={entry.name}
                         onChange={(event) => updateProject(index, "name", event.target.value)}
-                        placeholder="Jobflow"
+                        placeholder={t("projectNamePlaceholder")}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor={`project-location-${index}`}>Project location</Label>
+                      <Label htmlFor={`project-location-${index}`}>{t("projectLocation")}</Label>
                       <Input
                         id={`project-location-${index}`}
                         value={entry.location}
                         onChange={(event) => updateProject(index, "location", event.target.value)}
-                        placeholder="Sydney, Australia"
+                        placeholder={t("projectLocationPlaceholder")}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor={`project-dates-${index}`}>Project dates</Label>
+                      <Label htmlFor={`project-dates-${index}`}>{t("projectDates")}</Label>
                       <Input
                         id={`project-dates-${index}`}
                         value={entry.dates}
                         onChange={(event) => updateProject(index, "dates", event.target.value)}
-                        placeholder="2024"
+                        placeholder={t("projectDatesPlaceholder")}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor={`project-stack-${index}`}>Tech stack</Label>
+                      <Label htmlFor={`project-stack-${index}`}>{t("techStack")}</Label>
                       <Input
                         id={`project-stack-${index}`}
                         value={entry.stack}
                         onChange={(event) => updateProject(index, "stack", event.target.value)}
-                        placeholder="Next.js, TypeScript, Prisma, PostgreSQL"
+                        placeholder={t("techStackPlaceholder")}
                       />
                     </div>
                   </div>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label>Project links (optional)</Label>
+                      <Label>{t("projectLinksOptional")}</Label>
                       <Button type="button" variant="secondary" onClick={() => addProjectLink(index)}>
-                        Add link
+                        {t("addLink")}
                       </Button>
                     </div>
                     <div className="space-y-2">
@@ -2057,14 +2057,14 @@ export function ResumeForm() {
                             onChange={(event) =>
                               updateProjectLink(index, linkIndex, "label", event.target.value)
                             }
-                            placeholder="GitHub / Live Demo / Case Study"
+                            placeholder={t("projectLinkLabelPlaceholder")}
                           />
                           <Input
                             value={link.url}
                             onChange={(event) =>
                               updateProjectLink(index, linkIndex, "url", event.target.value)
                             }
-                            placeholder="https://"
+                            placeholder={t("linkUrlPlaceholder")}
                           />
                           <Button
                             type="button"
@@ -2072,7 +2072,7 @@ export function ResumeForm() {
                             className="text-xs text-slate-500 hover:text-slate-900"
                             onClick={() => removeProjectLink(index, linkIndex)}
                           >
-                            Remove
+                            {t("remove")}
                           </Button>
                         </div>
                       ))}
@@ -2080,9 +2080,9 @@ export function ResumeForm() {
                   </div>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label>Project bullets</Label>
+                      <Label>{t("projectBullets")}</Label>
                       <Button type="button" variant="secondary" onClick={() => addProjectBullet(index)}>
-                        Add bullet
+                        {t("addBullet")}
                       </Button>
                     </div>
                     <div className="space-y-2">
@@ -2090,7 +2090,7 @@ export function ResumeForm() {
                         <div key={`project-${index}-bullet-${bulletIndex}`} className="flex gap-2">
                           <div className="flex-1 space-y-2">
                             <div className="flex items-center justify-between">
-                              <Label htmlFor={`project-bullet-${index}-${bulletIndex}`}>Project bullet</Label>
+                              <Label htmlFor={`project-bullet-${index}-${bulletIndex}`}>{t("projectBullet")}</Label>
                               <Button
                                 type="button"
                                 variant="ghost"
@@ -2103,7 +2103,7 @@ export function ResumeForm() {
                                   )
                                 }
                               >
-                                Bold selected
+                                {t("boldSelected")}
                               </Button>
                             </div>
                             <Input
@@ -2113,7 +2113,7 @@ export function ResumeForm() {
                               onChange={(event) =>
                                 updateProjectBullet(index, bulletIndex, event.target.value)
                               }
-                              placeholder="Launched a new workflow"
+                              placeholder={t("projectBulletPlaceholder")}
                             />
                           </div>
                           <div className="flex items-end">
@@ -2123,7 +2123,7 @@ export function ResumeForm() {
                               className="text-xs text-slate-500 hover:text-slate-900"
                               onClick={() => removeProjectBullet(index, bulletIndex)}
                             >
-                              Remove
+                              {t("remove")}
                             </Button>
                           </div>
                         </div>
@@ -2147,11 +2147,11 @@ export function ResumeForm() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-base font-semibold text-slate-900">Education</h2>
-              <p className="text-sm text-muted-foreground">List your most relevant education.</p>
+              <h2 className="text-base font-semibold text-slate-900">{t("education")}</h2>
+              <p className="text-sm text-muted-foreground">{t("educationDesc")}</p>
             </div>
             <Button type="button" variant="secondary" onClick={addEducation}>
-              Add education
+              {t("addEducation")}
             </Button>
           </div>
           <div className="space-y-5">
@@ -2169,7 +2169,7 @@ export function ResumeForm() {
                     {({ dragHandleProps }) => (
                       <div className="space-y-3 rounded-2xl border border-slate-900/10 bg-white/70 p-4">
                         <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm font-medium text-slate-800">Education {index + 1}</p>
+                          <p className="text-sm font-medium text-slate-800">{t("educationN", { n: index + 1 })}</p>
                           <div className="flex items-center gap-1">
                             <Button
                               type="button"
@@ -2208,56 +2208,56 @@ export function ResumeForm() {
                                 className="text-xs text-red-600 hover:text-red-600"
                                 onClick={() => removeEducation(index)}
                               >
-                                Remove
+                                {t("remove")}
                               </Button>
                             ) : null}
                           </div>
                         </div>
                         <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor={`education-school-${index}`}>School</Label>
+                    <Label htmlFor={`education-school-${index}`}>{t("school")}</Label>
                     <Input
                       id={`education-school-${index}`}
                       value={entry.school}
                       onChange={(event) => updateEducation(index, "school", event.target.value)}
-                      placeholder="University of Example"
+                      placeholder={t("schoolPlaceholder")}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor={`education-degree-${index}`}>Degree</Label>
+                    <Label htmlFor={`education-degree-${index}`}>{t("degree")}</Label>
                     <Input
                       id={`education-degree-${index}`}
                       value={entry.degree}
                       onChange={(event) => updateEducation(index, "degree", event.target.value)}
-                      placeholder="Master of IT"
+                      placeholder={t("degreePlaceholder")}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor={`education-location-${index}`}>Location</Label>
+                    <Label htmlFor={`education-location-${index}`}>{t("educationLocation")}</Label>
                     <Input
                       id={`education-location-${index}`}
                       value={entry.location}
                       onChange={(event) => updateEducation(index, "location", event.target.value)}
-                      placeholder="Sydney, Australia"
+                      placeholder={t("educationLocationPlaceholder")}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor={`education-dates-${index}`}>Dates</Label>
+                    <Label htmlFor={`education-dates-${index}`}>{t("educationDates")}</Label>
                     <Input
                       id={`education-dates-${index}`}
                       value={entry.dates}
                       onChange={(event) => updateEducation(index, "dates", event.target.value)}
-                      placeholder="2023 - 2025"
+                      placeholder={t("educationDatesPlaceholder")}
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor={`education-details-${index}`}>Details (optional)</Label>
+                  <Label htmlFor={`education-details-${index}`}>{t("detailsOptional")}</Label>
                   <Input
                     id={`education-details-${index}`}
                     value={entry.details ?? ""}
                     onChange={(event) => updateEducation(index, "details", event.target.value)}
-                    placeholder="WAM 80/100"
+                    placeholder={t("detailsPlaceholder")}
                   />
                 </div>
                       </div>
@@ -2275,11 +2275,11 @@ export function ResumeForm() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-base font-semibold text-slate-900">Skills</h2>
-            <p className="text-sm text-muted-foreground">Group skills by category.</p>
+            <h2 className="text-base font-semibold text-slate-900">{t("skills")}</h2>
+            <p className="text-sm text-muted-foreground">{t("skillsDesc")}</p>
           </div>
           <Button type="button" variant="secondary" onClick={addSkillGroup}>
-            Add group
+            {t("addGroup")}
           </Button>
         </div>
         <div className="space-y-5">
@@ -2297,7 +2297,7 @@ export function ResumeForm() {
                   {({ dragHandleProps }) => (
                     <div className="space-y-3 rounded-2xl border border-slate-900/10 bg-white/70 p-4">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-medium text-slate-800">Group {index + 1}</p>
+                        <p className="text-sm font-medium text-slate-800">{t("groupN", { n: index + 1 })}</p>
                         <div className="flex items-center gap-1">
                           <Button
                             type="button"
@@ -2336,27 +2336,27 @@ export function ResumeForm() {
                               className="text-xs text-red-600 hover:text-red-600"
                               onClick={() => removeSkillGroup(index)}
                             >
-                              Remove
+                              {t("remove")}
                             </Button>
                           ) : null}
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor={`skill-label-${index}`}>Category</Label>
+                        <Label htmlFor={`skill-label-${index}`}>{t("category")}</Label>
                         <Input
                           id={`skill-label-${index}`}
                           value={group.category}
                           onChange={(event) => updateSkillGroup(index, "category", event.target.value)}
-                          placeholder="Frontend"
+                          placeholder={t("categoryPlaceholder")}
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor={`skill-items-${index}`}>Items (comma-separated)</Label>
+                        <Label htmlFor={`skill-items-${index}`}>{t("itemsCommaSeparated")}</Label>
                         <Input
                           id={`skill-items-${index}`}
                           value={group.itemsText}
                           onChange={(event) => updateSkillGroup(index, "itemsText", event.target.value)}
-                          placeholder="React, Next.js, TypeScript, Tailwind CSS"
+                          placeholder={t("itemsPlaceholder")}
                         />
                       </div>
                     </div>
@@ -2379,14 +2379,14 @@ export function ResumeForm() {
           data-testid="resume-preview-dialog"
         >
           <DialogHeader className="sr-only">
-            <DialogTitle>PDF preview</DialogTitle>
-            <DialogDescription>Refreshes after Next or Save.</DialogDescription>
+            <DialogTitle>{t("pdfPreview")}</DialogTitle>
+            <DialogDescription>{t("pdfPreviewDesc")}</DialogDescription>
           </DialogHeader>
           <div className="flex h-full flex-col">
             <div className="flex h-11 items-center justify-end border-b border-slate-900/10 bg-white/90 px-3">
               <DialogClose asChild>
                 <Button type="button" variant="ghost" size="sm">
-                  Close
+                  {t("close")}
                 </Button>
               </DialogClose>
             </div>
@@ -2400,9 +2400,9 @@ export function ResumeForm() {
       <div className="space-y-6 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:items-start lg:gap-6 lg:space-y-0">
         <aside className="hidden lg:block lg:sticky lg:top-20">
           <div className="rounded-2xl border border-slate-900/10 bg-white/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Resume setup</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{t("resumeSetup")}</p>
             <p className="mt-1 text-sm text-slate-700">
-              Step {currentStep + 1} of {steps.length}
+              {t("stepOf", { current: currentStep + 1, total: steps.length })}
             </p>
             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-200">
               <div
@@ -2428,7 +2428,7 @@ export function ResumeForm() {
                 >
                   <span>{step.label}</span>
                   <span className="text-xs">
-                    {step.status === "complete" ? "Done" : step.status === "current" ? "Now" : ""}
+                    {step.status === "complete" ? t("done") : step.status === "current" ? t("now") : ""}
                   </span>
                 </button>
               ))}
@@ -2460,10 +2460,10 @@ export function ResumeForm() {
           </div>
 
           <div className="rounded-2xl border border-slate-900/10 bg-white/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Master resume version</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{t("masterResumeVersion")}</p>
             <div className="mt-2 flex flex-col gap-2 sm:flex-row">
               <Label htmlFor="resume-profile-select" className="sr-only">
-                Resume version
+                {t("resumeVersion")}
               </Label>
               <select
                 id="resume-profile-select"
@@ -2479,12 +2479,12 @@ export function ResumeForm() {
                 className="min-h-11 w-full flex-1 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm transition hover:border-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 disabled:cursor-not-allowed disabled:bg-slate-100"
               >
                 {profiles.length === 0 ? (
-                  <option value="">Unsaved version</option>
+                  <option value="">{t("unsavedVersion")}</option>
                 ) : null}
                 {profiles.map((profile) => (
                   <option key={profile.id} value={profile.id}>
                     {profile.name}
-                    {profile.id === activeProfileId ? " (Active)" : ""}
+                    {profile.id === activeProfileId ? ` (${t("active")})` : ""}
                   </option>
                 ))}
               </select>
@@ -2496,7 +2496,7 @@ export function ResumeForm() {
                   disabled={profileCreating || profileSwitching || profileDeleting}
                 >
                   <Plus className="h-4 w-4" />
-                  {profileCreating ? "Creating..." : "New version"}
+                  {profileCreating ? t("creating") : t("newVersion")}
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -2504,7 +2504,7 @@ export function ResumeForm() {
                       type="button"
                       variant="outline"
                       size="icon"
-                      aria-label="More version actions"
+                      aria-label={t("moreVersionActions")}
                       disabled={profileCreating || profileSwitching || profileDeleting}
                     >
                       <ChevronDown className="h-4 w-4" />
@@ -2512,10 +2512,10 @@ export function ResumeForm() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onSelect={() => void handleCreateProfile("copy")}>
-                      New version from active
+                      {t("newVersionFromActive")}
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => void handleCreateProfile("blank")}>
-                      New blank version
+                      {t("newBlankVersion")}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       className="text-rose-600 focus:text-rose-700"
@@ -2523,60 +2523,30 @@ export function ResumeForm() {
                       disabled={profiles.length <= 1 || !selectedProfileId}
                     >
                       <Trash2 className="mr-2 h-4 w-4" />
-                      Delete selected version
+                      {t("deleteSelectedVersion")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
             </div>
             <div className="mt-3 space-y-1">
-              <Label htmlFor="resume-profile-name">Version name</Label>
+              <Label htmlFor="resume-profile-name">{t("versionName")}</Label>
               <Input
                 id="resume-profile-name"
                 value={profileName}
                 onChange={(event) => setProfileName(event.target.value)}
                 maxLength={80}
-                placeholder="Custom Blank"
+                placeholder={t("versionNamePlaceholder")}
                 disabled={profileDeleting}
               />
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              New version clones the active resume by default. Active version drives CV and CL generation.
+              {t("versionCloneHint")}
             </p>
           </div>
 
           <div className="rounded-2xl border border-slate-900/10 bg-white/70 px-4 py-3">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Locale / 语言</p>
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  onClick={() => setLocale("en-AU")}
-                  className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                    locale === "en-AU"
-                      ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300"
-                  }`}
-                >
-                  EN
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLocale("zh-CN")}
-                  className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                    locale === "zh-CN"
-                      ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300"
-                  }`}
-                >
-                  中文
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-900/10 bg-white/70 px-4 py-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Current step</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{t("currentStep")}</p>
             <div className="mt-1 flex items-center justify-between gap-3">
               <p className="text-base font-semibold text-slate-900">{currentStepLabel}</p>
               <p className="text-xs text-slate-500">
@@ -2604,7 +2574,7 @@ export function ResumeForm() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Button type="button" variant="ghost" onClick={handleBack} disabled={currentStep === 0}>
-                  Back
+                  {t("back")}
                 </Button>
                 <Button
                   type="button"
@@ -2612,12 +2582,12 @@ export function ResumeForm() {
                   onClick={handleOpenPreview}
                   disabled={!hasAnyContent}
                 >
-                  Preview
+                  {t("preview")}
                 </Button>
               </div>
               {currentStep < steps.length - 1 ? (
                 <Button type="button" onClick={handleNext} disabled={!canContinue}>
-                  Next
+                  {t("next")}
                 </Button>
               ) : (
                 <Button
@@ -2630,7 +2600,7 @@ export function ResumeForm() {
                   }`}
                   data-guide-highlight={isTaskHighlighted("resume_setup") ? "true" : "false"}
                 >
-                  {saving ? "Saving..." : "Save selected resume"}
+                  {saving ? t("saving") : t("saveSelectedResume")}
                 </Button>
               )}
             </div>

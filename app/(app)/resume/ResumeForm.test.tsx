@@ -1,11 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
 import { ResumeForm } from "@/components/resume/ResumeForm";
+import messages from "@/messages/en.json";
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
+
+const renderForm = () =>
+  render(
+    <NextIntlClientProvider locale="en" messages={messages}>
+      <ResumeForm />
+    </NextIntlClientProvider>,
+  );
 
 describe("ResumeForm", () => {
   const closePreviewIfOpen = () => {
@@ -21,7 +30,7 @@ describe("ResumeForm", () => {
       vi.fn(async () => new Response(JSON.stringify({ profile: null }), { status: 200 })),
     );
 
-    render(<ResumeForm />);
+    renderForm();
 
     expect(await screen.findByRole("heading", { name: "Personal info" })).toBeInTheDocument();
     expect(screen.getByLabelText("Full name")).toBeInTheDocument();
@@ -42,7 +51,7 @@ describe("ResumeForm", () => {
       vi.fn(async () => new Response(JSON.stringify({ profile: null }), { status: 200 })),
     );
 
-    render(<ResumeForm />);
+    renderForm();
 
     fireEvent.change(await screen.findByLabelText("Full name"), {
       target: { value: "Jane Doe" },
@@ -74,7 +83,7 @@ describe("ResumeForm", () => {
       vi.fn(async () => new Response(JSON.stringify({ profile: null }), { status: 200 })),
     );
 
-    render(<ResumeForm />);
+    renderForm();
 
     fireEvent.change(await screen.findByLabelText("Full name"), {
       target: { value: "Jane Doe" },
@@ -118,7 +127,7 @@ describe("ResumeForm", () => {
       vi.fn(async () => new Response(JSON.stringify({ profile: null }), { status: 200 })),
     );
 
-    render(<ResumeForm />);
+    renderForm();
 
     fireEvent.change(await screen.findByLabelText("Full name"), {
       target: { value: "Jane Doe" },
@@ -144,7 +153,7 @@ describe("ResumeForm", () => {
       vi.fn(async () => new Response(JSON.stringify({ profile: null }), { status: 200 })),
     );
 
-    render(<ResumeForm />);
+    renderForm();
 
     expect(await screen.findByRole("heading", { name: "Personal info" })).toBeInTheDocument();
 
@@ -178,7 +187,7 @@ describe("ResumeForm", () => {
       vi.fn(async () => new Response(JSON.stringify({ profile: null }), { status: 200 })),
     );
 
-    const { container } = render(<ResumeForm />);
+    const { container } = renderForm();
     expect(await screen.findByRole("heading", { name: "Personal info" })).toBeInTheDocument();
     expect(container.querySelector('[data-guide-anchor="resume_setup"]')).toBeTruthy();
   });
@@ -202,7 +211,7 @@ describe("ResumeForm", () => {
     const getPreviewCallCount = () =>
       fetchMock.mock.calls.filter(([firstArg]) => firstArg === "/api/resume-pdf").length;
 
-    render(<ResumeForm />);
+    renderForm();
 
     fireEvent.change(await screen.findByLabelText("Full name"), {
       target: { value: "Jane Doe" },
