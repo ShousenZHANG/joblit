@@ -32,6 +32,6 @@ jobs:
           IMPORT_SECRET: ${{ secrets.IMPORT_SECRET }}
           FETCH_RUN_SECRET: ${{ secrets.FETCH_RUN_SECRET }}
           BOSS_COOKIE: ${{ secrets.BOSS_COOKIE }}
-          BING_SEARCH_KEY: ${{ secrets.BING_SEARCH_KEY }}
+          SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
         working-directory: tools/fetcher
         run: python run_cn_fetcher.py

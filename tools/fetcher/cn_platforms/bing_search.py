@@ -1,9 +1,8 @@
-"""Bing Web Search API v7 proxy for CN job platforms.
+"""Serper.dev Google Search proxy for CN job platforms.
 
-Uses the official Bing Web Search API (not HTML scraping) to search for
-"keyword city site:zhipin.com" and return structured results.
-Requires BING_SEARCH_KEY env var (Azure Cognitive Services key).
-Free tier: 1 000 calls/month.
+Uses Serper.dev API to search for "keyword city site:zhipin.com"
+and return structured results. Free tier: 2500 searches.
+Requires SERPER_API_KEY env var.
 """
 import logging
 import os
@@ -16,7 +15,7 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-BING_API_ENDPOINT = "https://api.bing.microsoft.com/v7.0/search"
+SERPER_API_ENDPOINT = "https://google.serper.dev/search"
 
 # Map platform names to their domains for site: search
 PLATFORM_SITES: Dict[str, str] = {
@@ -26,7 +25,7 @@ PLATFORM_SITES: Dict[str, str] = {
     "zhilian": "zhaopin.com",
 }
 
-RATE_LIMIT_DELAY = 1.0  # seconds between API requests (generous for paid API)
+RATE_LIMIT_DELAY = 1.0
 
 # Salary pattern: e.g. "15-25K", "15k-25k", "15-25千", "1-2万"
 SALARY_RE = re.compile(
@@ -35,13 +34,11 @@ SALARY_RE = re.compile(
 
 
 def _extract_salary(text: str) -> str:
-    """Try to extract salary range from search snippet."""
     m = SALARY_RE.search(text)
     return m.group(0) if m else ""
 
 
 def _extract_company_from_snippet(snippet: str, site: str) -> str:
-    """Try to extract company name from Bing snippet text."""
     if site == "boss":
         m = re.match(r"^(.{2,20}?)(?:招聘|·|—|-|发布)", snippet)
         if m:
@@ -49,21 +46,19 @@ def _extract_company_from_snippet(snippet: str, site: str) -> str:
     return ""
 
 
-def _parse_api_results(data: Dict[str, Any], site_domain: str, site_name: str) -> List[Dict[str, Any]]:
-    """Parse Bing Web Search API JSON response into job dicts."""
+def _parse_serper_results(data: Dict[str, Any], site_domain: str, site_name: str) -> List[Dict[str, Any]]:
+    """Parse Serper API JSON response into job dicts."""
     results: List[Dict[str, Any]] = []
-    web_pages = data.get("webPages", {})
 
-    for item in web_pages.get("value", []):
-        url = item.get("url", "")
+    for item in data.get("organic", []):
+        url = item.get("link", "")
         parsed = urlparse(url)
         if site_domain not in parsed.netloc:
             continue
 
-        title_text = item.get("name", "")
+        title_text = item.get("title", "")
         snippet = item.get("snippet", "")
 
-        # Clean title: remove site suffixes
         clean_title = re.sub(
             r"\s*[-–|_·]\s*(Boss直聘|BOSS直聘|拉勾网|拉勾|猎聘|猎聘网|智联招聘)\s*$",
             "",
@@ -82,7 +77,7 @@ def _parse_api_results(data: Dict[str, Any], site_domain: str, site_name: str) -
             "jobUrl": url,
             "description": snippet,
             "salary": salary,
-            "site": f"bing_{site_name}",
+            "site": f"serper_{site_name}",
         })
 
     return results
@@ -95,25 +90,18 @@ def fetch_bing(
     salary_range: Optional[Dict[str, int]] = None,
     results_per_query: int = 30,
 ) -> List[Dict[str, Any]]:
-    """Fetch job listings via the Bing Web Search API v7.
+    """Fetch job listings via Serper.dev Google Search API.
 
-    For each query+site combo, calls the API with "query city site:domain"
-    and parses the JSON response.
+    Keeps the same function name (fetch_bing) for backward compatibility
+    with run_cn_fetcher.py.
 
-    Requires BING_SEARCH_KEY env var.
-
-    Args:
-        queries: Job title keywords, e.g. ["前端工程师", "React开发"]
-        city: Chinese city name, e.g. "上海"
-        sites: Platform names to search, e.g. ["boss", "lagou"].
-        salary_range: Optional min/max filter (applied post-fetch).
-        results_per_query: Target number of results per query+site combo.
+    Requires SERPER_API_KEY env var (free at https://serper.dev).
     """
-    api_key = os.environ.get("BING_SEARCH_KEY", "").strip()
+    api_key = os.environ.get("SERPER_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError(
-            "BING_SEARCH_KEY is not set. "
-            "Get a free key at https://portal.azure.com → Bing Search v7."
+            "SERPER_API_KEY is not set. "
+            "Get a free key at https://serper.dev"
         )
 
     if sites is None:
@@ -124,42 +112,44 @@ def fetch_bing(
     for site_name in sites:
         domain = PLATFORM_SITES.get(site_name)
         if not domain:
-            logger.warning("Unknown platform for Bing search: %s", site_name)
+            logger.warning("Unknown platform for search: %s", site_name)
             continue
 
         for query in queries:
             search_query = f"{query} {city} site:{domain}"
             fetched = 0
 
-            for offset in range(0, results_per_query, 50):
-                count = min(50, results_per_query - fetched)
-                params = {
+            # Serper supports up to 100 results per call via num param
+            # Paginate with page param (1-indexed)
+            page = 1
+            while fetched < results_per_query:
+                num = min(10, results_per_query - fetched)
+                payload = {
                     "q": search_query,
-                    "count": str(count),
-                    "offset": str(offset),
-                    "mkt": "zh-CN",
-                    "responseFilter": "Webpages",
+                    "gl": "cn",
+                    "hl": "zh-cn",
+                    "num": num,
+                    "page": page,
                 }
                 try:
-                    resp = requests.get(
-                        BING_API_ENDPOINT,
-                        params=params,
-                        headers={"Ocp-Apim-Subscription-Key": api_key},
+                    resp = requests.post(
+                        SERPER_API_ENDPOINT,
+                        json=payload,
+                        headers={
+                            "X-API-KEY": api_key,
+                            "Content-Type": "application/json",
+                        },
                         timeout=15,
                     )
                     if resp.status_code == 401:
-                        raise RuntimeError("BING_SEARCH_KEY is invalid or expired")
-                    if resp.status_code == 403:
-                        logger.warning("Bing API quota exceeded for '%s' site:%s", query, domain)
-                        break
+                        raise RuntimeError("SERPER_API_KEY is invalid")
                     if resp.status_code == 429:
-                        logger.warning("Bing API rate limited for '%s' site:%s", query, domain)
-                        time.sleep(5)
+                        logger.warning("Serper rate limited for '%s' site:%s", query, domain)
                         break
                     resp.raise_for_status()
 
                     data = resp.json()
-                    page_results = _parse_api_results(data, domain, site_name)
+                    page_results = _parse_serper_results(data, domain, site_name)
                     if not page_results:
                         break
 
@@ -170,24 +160,20 @@ def fetch_bing(
                     all_results.extend(page_results)
                     fetched += len(page_results)
                     logger.info(
-                        "Bing API query='%s' site=%s offset=%d fetched=%d",
-                        query, domain, offset, len(page_results),
+                        "Serper query='%s' site=%s page=%d fetched=%d",
+                        query, domain, page, len(page_results),
                     )
 
                     if fetched >= results_per_query:
                         break
-
-                    # Check if there are more results
-                    total_estimated = data.get("webPages", {}).get("totalEstimatedMatches", 0)
-                    if offset + count >= total_estimated:
-                        break
+                    page += 1
                 except requests.HTTPError:
                     raise
                 except Exception as e:
-                    logger.error("Bing API error query='%s' site=%s: %s", query, domain, e)
+                    logger.error("Serper error query='%s' site=%s: %s", query, domain, e)
                     break
 
                 time.sleep(RATE_LIMIT_DELAY)
 
-    logger.info("Bing total: %d results", len(all_results))
+    logger.info("Serper total: %d results", len(all_results))
     return all_results
