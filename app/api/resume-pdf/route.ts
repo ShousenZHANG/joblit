@@ -133,7 +133,7 @@ export async function POST(req: Request) {
 
   let pdf: Buffer;
   try {
-    pdf = await compileLatexToPdf(tex, locale === "zh-CN" ? { engine: "xelatex" } : {});
+    pdf = await compileLatexToPdf(tex);
   } catch (err) {
     if (err instanceof LatexRenderError) {
       return NextResponse.json(

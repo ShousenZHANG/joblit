@@ -17,13 +17,7 @@ export class LatexRenderError extends Error {
   }
 }
 
-export interface CompileOptions {
-  engine?: "pdflatex" | "xelatex";
-  timeoutMs?: number;
-}
-
-export async function compileLatexToPdf(tex: string, options: CompileOptions = {}) {
-  const { engine = "pdflatex", timeoutMs = 20000 } = options;
+export async function compileLatexToPdf(tex: string, timeoutMs = 20000) {
   const url = process.env.LATEX_RENDER_URL;
   const token = process.env.LATEX_RENDER_TOKEN;
   if (!url || !token) {
@@ -45,7 +39,7 @@ export async function compileLatexToPdf(tex: string, options: CompileOptions = {
         "content-type": "application/json",
         "x-api-key": token,
       },
-      body: JSON.stringify({ tex, engine }),
+      body: JSON.stringify({ tex }),
       signal: controller.signal,
     });
   } catch (err) {

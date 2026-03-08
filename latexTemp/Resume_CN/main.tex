@@ -1,8 +1,8 @@
 \documentclass[10pt, a4paper]{article}
 
 \usepackage[left=1.8cm, right=1.8cm, top=1.5cm, bottom=1.5cm]{geometry}
-\usepackage{xeCJK}
-\usepackage{fontspec}
+\usepackage{CJKutf8}
+\usepackage[T1]{fontenc}
 \usepackage{titlesec}
 \usepackage{enumitem}
 \usepackage{hyperref}
@@ -11,11 +11,6 @@
 \usepackage{ifthen}
 \usepackage{tabularx}
 \usepackage{array}
-
-% Chinese font setup
-\setCJKmainfont{Noto Sans CJK SC}
-\setCJKsansfont{Noto Sans CJK SC}
-\setmainfont{Noto Sans}
 
 % Colors
 \definecolor{primaryColor}{RGB}{0, 79, 144}
@@ -37,6 +32,7 @@
 \renewcommand\labelitemi{$\vcenter{\hbox{\small$\bullet$}}$}
 
 \begin{document}
+\begin{CJK}{UTF8}{gbsn}
 
 % === HEADER ===
 \begin{center}
@@ -63,4 +59,5 @@
 % === EDUCATION ===
 {{EDUCATION_SECTION}}
 
+\end{CJK}
 \end{document}
