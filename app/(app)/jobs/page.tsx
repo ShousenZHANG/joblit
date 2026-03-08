@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
+import { getLocale } from "next-intl/server";
 import { authOptions } from "@/auth";
 import { JobsClient } from "./JobsClient";
 import { prisma } from "@/lib/server/prisma";
@@ -11,9 +12,11 @@ export default async function JobsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect("/login?callbackUrl=/jobs");
   const userId = session.user.id;
+  const locale = await getLocale();
+  const market = locale === "zh" ? "CN" : "AU";
 
   const itemsRaw = await prisma.job.findMany({
-    where: { userId },
+    where: { userId, market },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: 10,
     select: {
