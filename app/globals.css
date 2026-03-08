@@ -1005,3 +1005,8 @@ body {
 .jobs-scroll-area .scroll-area-thumb:hover {
   background: var(--jobs-scroll-thumb-hover);
 }
+
+html[lang="zh"] {
+  --font-geist-sans: system-ui, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-edu-body: system-ui, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+}

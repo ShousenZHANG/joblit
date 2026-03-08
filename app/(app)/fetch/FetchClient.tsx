@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,7 @@ import {
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { useFetchStatus } from "@/app/FetchStatusContext";
 import { useGuide } from "@/app/GuideContext";
+import { useMarket } from "@/hooks/useMarket";
 
 const COMMON_TITLES = [
   "Software Engineer",
@@ -85,10 +87,12 @@ export function FetchClient() {
   const router = useRouter();
   const { data: session } = useSession();
   const userId = session?.user?.id ?? null;
+  const t = useTranslations("fetch");
+  const tc = useTranslations("common");
   const [jobTitle, setJobTitle] = useState("Software Engineer");
   const [location, setLocation] = useState("Sydney, New South Wales, Australia");
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
-  const [market, setMarket] = useState<"AU" | "CN">("AU");
+  const market = useMarket();
   const [cnCity, setCnCity] = useState("上海");
   const [cnPlatforms, setCnPlatforms] = useState<string[]>(["boss", "lagou", "liepin", "zhilian"]);
   const [cnExcludeKeywords, setCnExcludeKeywords] = useState("");
@@ -257,26 +261,7 @@ export function FetchClient() {
   return (
     <div className="flex flex-col gap-6">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold text-foreground">Search roles</h1>
-      </div>
-
-      <div className="flex gap-2">
-        <Button
-          variant={market === "AU" ? "default" : "outline"}
-          size="sm"
-          className="rounded-full"
-          onClick={() => setMarket("AU")}
-        >
-          🌏 海外
-        </Button>
-        <Button
-          variant={market === "CN" ? "default" : "outline"}
-          size="sm"
-          className="rounded-full"
-          onClick={() => setMarket("CN")}
-        >
-          🇨🇳 国内
-        </Button>
+        <h1 className="text-2xl font-semibold text-foreground">{t("searchRoles")}</h1>
       </div>
 
       {activeError ? (
@@ -289,7 +274,7 @@ export function FetchClient() {
       <Card className="rounded-3xl border-2 border-slate-900/10 bg-white/80 shadow-[0_20px_45px_-35px_rgba(15,23,42,0.35)] backdrop-blur transition-shadow duration-200 ease-out hover:shadow-[0_26px_55px_-40px_rgba(15,23,42,0.4)]">
         <CardContent className="grid gap-4 p-5 md:grid-cols-3">
           <div className="space-y-2">
-            <Label>Job title</Label>
+            <Label>{t("jobTitle")}</Label>
             <Popover open={suggestionsOpen} onOpenChange={setSuggestionsOpen}>
               <PopoverAnchor asChild>
                 <Input
@@ -339,11 +324,11 @@ export function FetchClient() {
             </p>
           </div>
           <div className="space-y-2">
-            <Label>Location</Label>
+            <Label>{t("locationLabel")}</Label>
             <Input value={location} onChange={(e) => setLocation(e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label>Hours old</Label>
+            <Label>{t("hoursOld")}</Label>
             <Select value={String(hoursOld)} onValueChange={(v) => setHoursOld(Number(v))}>
               <SelectTrigger>
                 <SelectValue />
@@ -365,7 +350,7 @@ export function FetchClient() {
       <Card className="rounded-3xl border-2 border-slate-900/10 bg-white/80 shadow-[0_20px_45px_-35px_rgba(15,23,42,0.35)] backdrop-blur transition-shadow duration-200 ease-out hover:shadow-[0_26px_55px_-40px_rgba(15,23,42,0.4)]">
         <CardContent className="grid gap-4 p-5 md:grid-cols-2">
           <div className="space-y-2">
-            <Label>职位名称</Label>
+            <Label>{t("jobTitle")}</Label>
             <Popover open={suggestionsOpen} onOpenChange={setSuggestionsOpen}>
               <PopoverAnchor asChild>
                 <Input
@@ -411,7 +396,7 @@ export function FetchClient() {
             </Popover>
           </div>
           <div className="space-y-2">
-            <Label>城市</Label>
+            <Label>{t("cnCity")}</Label>
             <Select value={cnCity} onValueChange={setCnCity}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -422,7 +407,7 @@ export function FetchClient() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>平台</Label>
+            <Label>{t("cnPlatforms")}</Label>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="h-10 w-full justify-between rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 shadow-none">
@@ -448,7 +433,7 @@ export function FetchClient() {
             </DropdownMenu>
           </div>
           <div className="space-y-2">
-            <Label>排除关键词</Label>
+            <Label>{t("cnExcludeKeywords")}</Label>
             <Input
               placeholder="逗号分隔，例如 实习,兼职"
               value={cnExcludeKeywords}
@@ -587,7 +572,7 @@ export function FetchClient() {
           data-guide-highlight={isTaskHighlighted("first_fetch") ? "true" : "false"}
           data-guide-anchor="first_fetch"
         >
-          {isSubmitting ? "Starting..." : "Start fetch"}
+          {isSubmitting ? t("fetching") : t("startFetch")}
         </Button>
         <Button
           variant="outline"

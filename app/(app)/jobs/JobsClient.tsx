@@ -8,6 +8,7 @@ import rehypeHighlight from "rehype-highlight";
 import "highlight.js/styles/github.css";
 import "react-day-picker/dist/style.css";
 import { Copy, Download, ExternalLink, FileText, MapPin, Search, Trash2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +29,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useMarket } from "@/hooks/useMarket";
 import { useGuide } from "@/app/GuideContext";
 import { useFetchStatus, type FetchRunStatus } from "@/app/FetchStatusContext";
 
@@ -256,7 +258,7 @@ const HIGHLIGHT_KEYWORDS = [
   "dbt",
 ];
 
-const LOCATION_OPTIONS = [
+const AU_LOCATION_OPTIONS = [
   { value: "New South Wales, Australia", label: "New South Wales" },
   { value: "Victoria, Australia", label: "Victoria" },
   { value: "Queensland, Australia", label: "Queensland" },
@@ -265,6 +267,19 @@ const LOCATION_OPTIONS = [
   { value: "Australian Capital Territory, Australia", label: "ACT" },
   { value: "Tasmania, Australia", label: "Tasmania" },
   { value: "Northern Territory, Australia", label: "Northern Territory" },
+];
+
+const CN_LOCATION_OPTIONS = [
+  { value: "Beijing", label: "Beijing" },
+  { value: "Shanghai", label: "Shanghai" },
+  { value: "Shenzhen", label: "Shenzhen" },
+  { value: "Guangzhou", label: "Guangzhou" },
+  { value: "Hangzhou", label: "Hangzhou" },
+  { value: "Chengdu", label: "Chengdu" },
+  { value: "Nanjing", label: "Nanjing" },
+  { value: "Wuhan", label: "Wuhan" },
+  { value: "Suzhou", label: "Suzhou" },
+  { value: "Xi'an", label: "Xi'an" },
 ];
 
 function escapeRegExp(value: string) {
@@ -407,6 +422,9 @@ export function JobsClient({
 }) {
   const { toast } = useToast();
   const { isTaskHighlighted, markTaskComplete } = useGuide();
+  const t = useTranslations("jobs");
+  const tc = useTranslations("common");
+  const market = useMarket();
   const { runId: fetchRunId, status: fetchStatus, importedCount: fetchImportedCount } = useFetchStatus();
   const guideHighlightClass =
     "ring-2 ring-emerald-400 ring-offset-2 ring-offset-white shadow-[0_0_0_4px_rgba(16,185,129,0.18)]";
@@ -450,7 +468,6 @@ export function JobsClient({
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
   const [locationFilter, setLocationFilter] = useState("ALL");
   const [jobLevelFilter, setJobLevelFilter] = useState("ALL");
-  const [marketFilter, setMarketFilter] = useState<"" | "AU" | "CN">("");
   const [selectedId, setSelectedId] = useState<string | null>(initialItems[0]?.id ?? null);
   const [timeZone] = useState<string | null>(() => getUserTimeZone() || null);
   const [isPending, startTransition] = useTransition();
@@ -625,11 +642,11 @@ export function JobsClient({
       statusFilter,
       locationFilter,
       jobLevelFilter,
-      marketFilter,
+      market,
       sortOrder,
       pageSize,
     }),
-    [debouncedQ, statusFilter, locationFilter, jobLevelFilter, marketFilter, sortOrder, pageSize],
+    [debouncedQ, statusFilter, locationFilter, jobLevelFilter, market, sortOrder, pageSize],
   );
 
   useEffect(() => {
@@ -647,7 +664,7 @@ export function JobsClient({
     if (debouncedFilters.q.trim()) sp.set("q", debouncedFilters.q.trim());
     if (debouncedFilters.locationFilter !== "ALL") sp.set("location", debouncedFilters.locationFilter);
     if (debouncedFilters.jobLevelFilter !== "ALL") sp.set("jobLevel", debouncedFilters.jobLevelFilter);
-    if (debouncedFilters.marketFilter) sp.set("market", debouncedFilters.marketFilter);
+    sp.set("market", debouncedFilters.market);
     sp.set("sort", debouncedFilters.sortOrder);
     return sp.toString();
   }, [debouncedFilters]);
@@ -1834,39 +1851,14 @@ export function JobsClient({
         data-testid="jobs-toolbar"
         className="rounded-3xl border-2 border-slate-900/10 bg-white/80 p-5 shadow-[0_20px_45px_-35px_rgba(15,23,42,0.35)] backdrop-blur transition-shadow duration-200 ease-out hover:shadow-[0_26px_55px_-40px_rgba(15,23,42,0.4)]"
       >
-        <div className="mb-3 flex gap-1">
-          {([
-            { value: "", label: "All" },
-            { value: "AU", label: "🌏 海外" },
-            { value: "CN", label: "🇨🇳 国内" },
-          ] as const).map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => {
-                startTransition(() => {
-                  resetPagination();
-                  setMarketFilter(opt.value as "" | "AU" | "CN");
-                });
-              }}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                marketFilter === opt.value
-                  ? "bg-emerald-600 text-white"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
         <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr_0.8fr_0.8fr_0.9fr_auto] lg:items-end">
           <div className="space-y-2">
-            <div className="text-xs text-muted-foreground">Title or Keywords</div>
+            <div className="text-xs text-muted-foreground">{t("titleOrKeywords")}</div>
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 className="pl-9"
-                placeholder="e.g. software engineer"
+                placeholder={t("placeholder")}
                 value={q}
                 onChange={(e) => {
                   resetPagination();
@@ -1876,7 +1868,7 @@ export function JobsClient({
             </div>
           </div>
           <div className="space-y-2">
-            <div className="text-xs text-muted-foreground">Location</div>
+            <div className="text-xs text-muted-foreground">{t("location")}</div>
             <div className="relative">
               <MapPin className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Select
@@ -1889,11 +1881,11 @@ export function JobsClient({
                 }}
               >
                 <SelectTrigger className="pl-9">
-                  <SelectValue placeholder="All locations" />
+                  <SelectValue placeholder={tc("allLocations")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ALL">All locations</SelectItem>
-                  {LOCATION_OPTIONS.map((loc) => (
+                  <SelectItem value="ALL">{tc("allLocations")}</SelectItem>
+                  {(market === "CN" ? CN_LOCATION_OPTIONS : AU_LOCATION_OPTIONS).map((loc) => (
                     <SelectItem key={loc.value} value={loc.value}>
                       {loc.label}
                     </SelectItem>
@@ -1903,7 +1895,7 @@ export function JobsClient({
             </div>
           </div>
           <div className="space-y-2">
-            <div className="text-xs text-muted-foreground">Job level</div>
+            <div className="text-xs text-muted-foreground">{t("jobLevel")}</div>
             <Select
               value={jobLevelFilter}
               onValueChange={(v) => {
@@ -1914,10 +1906,10 @@ export function JobsClient({
               }}
             >
               <SelectTrigger>
-                <SelectValue placeholder="All levels" />
+                <SelectValue placeholder={tc("allLevels")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">All levels</SelectItem>
+                <SelectItem value="ALL">{tc("allLevels")}</SelectItem>
                 {jobLevelOptions.map((level) => (
                   <SelectItem key={level} value={level}>
                     {level}
@@ -1927,7 +1919,7 @@ export function JobsClient({
             </Select>
           </div>
           <div className="space-y-2">
-            <div className="text-xs text-muted-foreground">Status</div>
+            <div className="text-xs text-muted-foreground">{t("status")}</div>
             <Select
               value={statusFilter}
               onValueChange={(v) => {
@@ -1938,18 +1930,18 @@ export function JobsClient({
               }}
             >
               <SelectTrigger>
-                <SelectValue placeholder="All" />
+                <SelectValue placeholder={tc("all")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">All</SelectItem>
-                <SelectItem value="NEW">New</SelectItem>
-                <SelectItem value="APPLIED">Applied</SelectItem>
-                <SelectItem value="REJECTED">Rejected</SelectItem>
+                <SelectItem value="ALL">{tc("all")}</SelectItem>
+                <SelectItem value="NEW">{t("statusNew")}</SelectItem>
+                <SelectItem value="APPLIED">{t("statusApplied")}</SelectItem>
+                <SelectItem value="REJECTED">{t("statusRejected")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-2" data-testid="jobs-sort">
-            <div className="text-xs text-muted-foreground">Posted</div>
+            <div className="text-xs text-muted-foreground">{t("posted")}</div>
             <Select
               value={sortOrder}
               onValueChange={(v) => {
@@ -1960,11 +1952,11 @@ export function JobsClient({
               }}
             >
               <SelectTrigger className="h-9 bg-muted/40">
-                <SelectValue placeholder="Posted" />
+                <SelectValue placeholder={t("posted")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="newest">Posted: newest</SelectItem>
-                <SelectItem value="oldest">Posted: oldest</SelectItem>
+                <SelectItem value="newest">{t("newestFirst")}</SelectItem>
+                <SelectItem value="oldest">{t("oldestFirst")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1975,7 +1967,7 @@ export function JobsClient({
               className="h-10 w-full rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 px-6 text-sm font-semibold text-white shadow-md transition-all duration-200 hover:from-emerald-600 hover:to-emerald-700 hover:shadow-lg hover:brightness-105 active:scale-[0.97] disabled:opacity-50 lg:w-auto"
             >
               <Search className="mr-1.5 h-4 w-4" />
-              Search
+              {tc("search")}
             </Button>
           </div>
         </div>
@@ -1995,7 +1987,7 @@ export function JobsClient({
         >
           <div className="flex items-center justify-between border-b px-4 py-3 text-sm font-semibold">
             <span>
-              Results
+              {t("results")}
               {typeof totalCount === "number" ? (
                 <span className="ml-1.5 text-xs font-normal text-muted-foreground">
                   · {totalCount} {totalCount === 1 ? "job" : "jobs"}
@@ -2063,7 +2055,7 @@ export function JobsClient({
               </div>
             ) : !loading ? (
               <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                No jobs yet.
+                {t("noJobs")}
               </div>
             ) : null}
           </ScrollArea>
@@ -2360,22 +2352,18 @@ export function JobsClient({
       >
         <AlertDialogContent className="max-w-md rounded-2xl border-slate-200">
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete this job?</AlertDialogTitle>
+            <AlertDialogTitle>{t("deleteConfirmTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove{" "}
-              <span className="font-medium text-slate-900">
-                {deleteCandidate?.title ?? "this role"}
-              </span>{" "}
-              from your list. This action cannot be undone.
+              {t("deleteConfirmDesc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-xl">{tc("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteCandidate}
               className="rounded-xl bg-rose-600 text-white hover:bg-rose-700"
             >
-              Delete
+              {tc("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

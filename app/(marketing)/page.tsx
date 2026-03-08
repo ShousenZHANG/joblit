@@ -9,6 +9,7 @@ import {
   SlidersHorizontal,
   Zap,
 } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DemoCard } from "./DemoCard";
@@ -47,64 +48,37 @@ const jsonLd = {
 
 /* ── Static data ──────────────────────────────────────── */
 
-const features = [
-  {
-    icon: Search,
-    title: "Smart search",
-    description:
-      "AI-powered matching surfaces the most relevant roles for your skills and preferences.",
-    accent: "bg-emerald-100",
-  },
-  {
-    icon: BarChart3,
-    title: "Quick compare",
-    description:
-      "Side-by-side views let you evaluate compensation, culture, and growth at a glance.",
-    accent: "bg-sky-100",
-  },
-  {
-    icon: FileText,
-    title: "Tailored resumes",
-    description:
-      "One-click generation produces polished, role-specific resumes and cover letters.",
-    accent: "bg-amber-100",
-  },
-  {
-    icon: Zap,
-    title: "Auto tracking",
-    description:
-      "Every application is logged automatically so nothing slips through the cracks.",
-    accent: "bg-purple-100",
-  },
+const featureIcons = [
+  { icon: Search, accent: "bg-emerald-100" },
+  { icon: BarChart3, accent: "bg-sky-100" },
+  { icon: FileText, accent: "bg-amber-100" },
+  { icon: Zap, accent: "bg-purple-100" },
 ];
 
-const steps = [
-  {
-    number: "1",
-    title: "Discover roles",
-    description:
-      "Search across sources with smart filters for title, location, level, and more.",
-    icon: Search,
-  },
-  {
-    number: "2",
-    title: "Refine & compare",
-    description:
-      "Shortlist your top picks and compare them side by side to find the best fit.",
-    icon: SlidersHorizontal,
-  },
-  {
-    number: "3",
-    title: "Apply with confidence",
-    description:
-      "Generate tailored documents, track applications, and stay organized end to end.",
-    icon: Send,
-  },
+const stepIcons = [
+  { number: "1", icon: Search },
+  { number: "2", icon: SlidersHorizontal },
+  { number: "3", icon: Send },
 ];
 
 /* ── Page ─────────────────────────────────────────────── */
 
-export default function HomePage() {
+export default async function HomePage() {
+  const t = await getTranslations("marketing");
+  const tn = await getTranslations("nav");
+
+  const features = [
+    { ...featureIcons[0], title: t("feature1Title"), description: t("feature1Desc") },
+    { ...featureIcons[1], title: t("feature2Title"), description: t("feature2Desc") },
+    { ...featureIcons[2], title: t("feature3Title"), description: t("feature3Desc") },
+    { ...featureIcons[3], title: t("feature4Title"), description: t("feature4Desc") },
+  ];
+
+  const steps = [
+    { ...stepIcons[0], title: t("step1Title"), description: t("step1Desc") },
+    { ...stepIcons[1], title: t("step2Title"), description: t("step2Desc") },
+    { ...stepIcons[2], title: t("step3Title"), description: t("step3Desc") },
+  ];
   return (
     <>
       <script
@@ -123,7 +97,7 @@ export default function HomePage() {
           href="#main-content"
           className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-xl focus:border-2 focus:border-slate-800 focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-slate-900 focus:shadow-lg focus:outline-none"
         >
-          Skip to content
+          {t("skipToContent")}
         </a>
 
         {/* ── Navigation ─────────────────────── */}
@@ -147,10 +121,10 @@ export default function HomePage() {
               </Link>
               <div className="hidden items-center gap-2 md:flex">
                 <Link href="/jobs" className="edu-nav-link edu-nav-pill">
-                  Jobs
+                  {tn("jobs")}
                 </Link>
                 <Link href="/fetch" className="edu-nav-link edu-nav-pill">
-                  Fetch
+                  {tn("fetch")}
                 </Link>
               </div>
             </div>
@@ -161,13 +135,13 @@ export default function HomePage() {
                 variant="outline"
                 className="edu-outline edu-cta--press hidden md:inline-flex"
               >
-                <Link href="/login">Log in</Link>
+                <Link href="/login">{t("login")}</Link>
               </Button>
               <Button
                 asChild
                 className="edu-cta edu-cta--press hidden md:inline-flex"
               >
-                <Link href="/login">Start free</Link>
+                <Link href="/login">{t("cta")}</Link>
               </Button>
             </div>
           </nav>
@@ -182,14 +156,13 @@ export default function HomePage() {
                     className="mr-2 inline-block h-2 w-2 rounded-full bg-emerald-500"
                     aria-hidden="true"
                   />
-                  New: faster job discovery
+                  {t("badge")}
                 </Badge>
                 <h1 className="edu-title mt-6 text-4xl leading-tight text-slate-900 md:text-6xl">
-                  Find the right roles,{" "}
-                  <span className="text-emerald-500">faster</span>.
+                  {t("heroTitle")}
                 </h1>
                 <p className="mt-5 max-w-xl text-base text-slate-600 md:text-lg">
-                  Search smarter, compare quickly, and move with clarity.
+                  {t("heroSubtitle")}
                 </p>
                 <div className="mt-6 flex flex-wrap justify-center gap-3 lg:justify-start">
                   <Button
@@ -246,11 +219,10 @@ export default function HomePage() {
                 id="features-heading"
                 className="edu-title text-2xl text-slate-900 md:text-4xl"
               >
-                Everything you need to land the right role
+                {t("heroTitle")}
               </h2>
               <p className="mx-auto mt-3 max-w-2xl text-base text-slate-600 md:text-lg">
-                From discovery to application, Jobflow keeps your search
-                organized and efficient.
+                {t("heroSubtitle")}
               </p>
               <div className="mt-10 grid gap-6 text-left sm:grid-cols-2 lg:grid-cols-4">
                 {features.map((f) => (
@@ -278,10 +250,10 @@ export default function HomePage() {
                 id="how-heading"
                 className="edu-title text-2xl text-slate-900 md:text-4xl"
               >
-                How it works
+                {t("howItWorks")}
               </h2>
               <p className="mx-auto mt-3 max-w-2xl text-base text-slate-600 md:text-lg">
-                Three simple steps to go from searching to applying.
+                {t("heroSubtitle")}
               </p>
               <div className="mt-10 grid gap-8 text-left md:grid-cols-3">
                 {steps.map((s) => (
@@ -310,11 +282,10 @@ export default function HomePage() {
                   id="cta-heading"
                   className="edu-title text-2xl text-slate-900 md:text-4xl"
                 >
-                  Ready to find your next role?
+                  {t("readyToStart")}
                 </h2>
                 <p className="mx-auto mt-3 max-w-xl text-base text-slate-600 md:text-lg">
-                  Join thousands of job seekers who search smarter and land
-                  faster with Jobflow.
+                  {t("readyToStartDesc")}
                 </p>
                 <div className="mt-6 flex flex-wrap justify-center gap-3">
                   <Button
@@ -323,7 +294,7 @@ export default function HomePage() {
                     className="edu-cta edu-cta--press"
                   >
                     <Link href="/login">
-                      Get started free <ArrowRight className="h-4 w-4" />
+                      {t("getStarted")} <ArrowRight className="h-4 w-4" />
                     </Link>
                   </Button>
                 </div>
@@ -393,7 +364,7 @@ export default function HomePage() {
             </div>
             <div className="mt-10 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-500">
               <span>
-                &copy; {new Date().getFullYear()} Jobflow. All rights reserved.
+                &copy; {new Date().getFullYear()} Jobflow. {t("allRightsReserved")}
               </span>
               <div className="flex items-center gap-4">
                 <Link

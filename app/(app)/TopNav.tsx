@@ -4,8 +4,10 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import { CircleHelp, Search } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { useGuide } from "../GuideContext";
 
 export function TopNav() {
@@ -13,6 +15,8 @@ export function TopNav() {
   const pathname = usePathname();
   const router = useRouter();
   const { openGuide, state } = useGuide();
+  const t = useTranslations("nav");
+  const tc = useTranslations("common");
 
   const prepareRouteChange = () => {
     const appShell = document.querySelector<HTMLElement>(".app-shell");
@@ -23,10 +27,10 @@ export function TopNav() {
   };
 
   const links = [
-    { href: "/jobs", label: "Jobs" },
-    { href: "/fetch", label: "Fetch" },
-    { href: "/resume", label: "Resume" },
-    { href: "/automation", label: "Automation" },
+    { href: "/jobs", label: t("jobs") },
+    { href: "/fetch", label: t("fetch") },
+    { href: "/resume", label: t("resume") },
+    { href: "/automation", label: t("automation") },
   ];
   const mobileRoute = links.find((link) => pathname.startsWith(link.href))?.href ?? "/jobs";
   const email = data?.user?.email ?? "";
@@ -105,20 +109,21 @@ export function TopNav() {
               onClick={openGuide}
             >
               <CircleHelp className="mr-1 h-3.5 w-3.5" />
-              Guide
+              {t("guide")}
               {state ? (
                 <span className="ml-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
                   {state.completedCount}/{state.totalCount}
                 </span>
               ) : null}
             </Button>
+            <LocaleSwitcher />
             <Button
               variant="outline"
               size="sm"
               className="edu-outline edu-cta--press edu-outline--compact h-9 flex-1 px-3 text-xs sm:flex-none"
               onClick={() => signOut({ callbackUrl: "/login" })}
             >
-              Sign out
+              {tc("signOut")}
             </Button>
           </div>
         </div>

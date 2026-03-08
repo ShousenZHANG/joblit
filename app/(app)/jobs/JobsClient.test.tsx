@@ -2,9 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { NextIntlClientProvider } from "next-intl";
 import { JobsClient } from "./JobsClient";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Toaster } from "@/components/ui/toaster";
+import messages from "../../../messages/en.json";
 
 const fetchStatusMock = vi.hoisted(() => ({
   state: { runId: null as string | null, status: null as string | null, importedCount: 0 },
@@ -38,10 +40,12 @@ function renderWithClient(ui: React.ReactElement) {
     },
   });
   return render(
-    <QueryClientProvider client={client}>
-      {ui}
-      <Toaster />
-    </QueryClientProvider>,
+    <NextIntlClientProvider locale="en" messages={messages}>
+      <QueryClientProvider client={client}>
+        {ui}
+        <Toaster />
+      </QueryClientProvider>
+    </NextIntlClientProvider>,
   );
 }
 
@@ -300,10 +304,12 @@ describe("JobsClient", () => {
     });
 
     render(
-      <QueryClientProvider client={client}>
-        <JobsClient initialItems={[newJob]} initialCursor={null} />
-        <Toaster />
-      </QueryClientProvider>,
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <QueryClientProvider client={client}>
+          <JobsClient initialItems={[newJob]} initialCursor={null} />
+          <Toaster />
+        </QueryClientProvider>
+      </NextIntlClientProvider>,
     );
 
     await waitFor(() => {
@@ -349,10 +355,12 @@ describe("JobsClient", () => {
       },
     });
     const wrap = (ui: React.ReactElement) => (
-      <QueryClientProvider client={client}>
-        {ui}
-        <Toaster />
-      </QueryClientProvider>
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <QueryClientProvider client={client}>
+          {ui}
+          <Toaster />
+        </QueryClientProvider>
+      </NextIntlClientProvider>
     );
     const { rerender } = render(
       wrap(<JobsClient initialItems={[page1Job]} initialCursor={"55555555-5555-5555-5555-555555555555"} />),
@@ -973,10 +981,12 @@ describe("JobsClient", () => {
     vi.stubGlobal("fetch", mockFetch);
 
     render(
-      <QueryClientProvider client={client}>
-        <JobsClient initialItems={[baseJob]} initialCursor={null} />
-        <Toaster />
-      </QueryClientProvider>,
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <QueryClientProvider client={client}>
+          <JobsClient initialItems={[baseJob]} initialCursor={null} />
+          <Toaster />
+        </QueryClientProvider>
+      </NextIntlClientProvider>,
     );
 
     const primaryActions = (await screen.findAllByTestId("job-primary-actions"))[0];
@@ -1048,10 +1058,12 @@ describe("JobsClient", () => {
     vi.stubGlobal("fetch", mockFetch);
 
     render(
-      <QueryClientProvider client={client}>
-        <JobsClient initialItems={[baseJob]} initialCursor={null} />
-        <Toaster />
-      </QueryClientProvider>,
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <QueryClientProvider client={client}>
+          <JobsClient initialItems={[baseJob]} initialCursor={null} />
+          <Toaster />
+        </QueryClientProvider>
+      </NextIntlClientProvider>,
     );
 
     const removeButton = (await screen.findAllByTestId("job-remove-button"))[0];

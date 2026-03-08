@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { NextIntlClientProvider } from "next-intl";
 import { FetchClient } from "./FetchClient";
+import messages from "../../../messages/en.json";
 
 Object.defineProperty(window.HTMLElement.prototype, "scrollIntoView", {
   value: vi.fn(),
@@ -50,6 +52,14 @@ vi.mock("@/app/FetchStatusContext", () => ({
 }));
 
 describe("FetchClient", () => {
+  function renderFetch() {
+    return render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <FetchClient />
+      </NextIntlClientProvider>,
+    );
+  }
+
   beforeEach(() => {
     vi.restoreAllMocks();
     pushMock.mockReset();
@@ -87,7 +97,7 @@ describe("FetchClient", () => {
     const user = userEvent.setup();
     const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
 
-    render(<FetchClient />);
+    renderFetch();
 
     await user.click(screen.getByRole("button", { name: /start fetch/i }));
 
@@ -102,7 +112,7 @@ describe("FetchClient", () => {
   it("splits multiple titles into queries when creating a fetch run", async () => {
     const user = userEvent.setup();
 
-    render(<FetchClient />);
+    renderFetch();
 
     const titleInput = screen.getAllByPlaceholderText(/e\.g\. software engineer/i)[0];
     fireEvent.change(titleInput, {
@@ -138,7 +148,7 @@ describe("FetchClient", () => {
   });
 
   it("uses a mobile-friendly stacked fetch action layout", () => {
-    render(<FetchClient />);
+    renderFetch();
 
     const actions = screen.getByTestId("fetch-actions");
     expect(actions).toHaveClass("flex-col");

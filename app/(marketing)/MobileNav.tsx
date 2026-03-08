@@ -3,11 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const t = useTranslations("marketing");
+  const tn = useTranslations("nav");
 
   useEffect(() => {
     if (!open) return;
@@ -64,7 +67,7 @@ export function MobileNav() {
             className="edu-fav-link"
             onClick={() => setOpen(false)}
           >
-            Jobs
+            {tn("jobs")}
           </Link>
           <Link
             href="/fetch"
@@ -72,7 +75,7 @@ export function MobileNav() {
             className="edu-fav-link"
             onClick={() => setOpen(false)}
           >
-            Fetch
+            {tn("fetch")}
           </Link>
           <hr className="my-2 border-slate-200" />
           <Link
@@ -81,7 +84,7 @@ export function MobileNav() {
             className="edu-fav-link"
             onClick={() => setOpen(false)}
           >
-            Log in
+            {t("login")}
           </Link>
           <Link
             href="/login"
@@ -89,7 +92,7 @@ export function MobileNav() {
             className="edu-fav-link font-semibold text-emerald-700"
             onClick={() => setOpen(false)}
           >
-            Start free
+            {t("cta")}
           </Link>
         </div>
       )}
