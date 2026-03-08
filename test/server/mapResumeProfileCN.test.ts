@@ -9,10 +9,10 @@ const fullProfile = {
     phone: "138-0000-0000",
     photoUrl: "https://example.com/photo.jpg",
     gender: "男",
-    birthDate: "1995.06",
-    workYears: "5年经验",
-    availableDate: "随时到岗",
-    expectedSalary: "25-40K",
+    age: "28",
+    identity: "5年经验",
+    wechat: "zhangsan_wx",
+    qq: "123456789",
   },
   links: [
     { label: "LinkedIn", url: "https://linkedin.com/in/zhangsan" },
@@ -70,10 +70,10 @@ describe("mapResumeProfileCN", () => {
     expect(mapped.photoBlock).toContain("includegraphics");
     expect(mapped.photoBlock).toContain("photo.jpg");
     expect(mapped.personalInfoLine).toContain("男");
-    expect(mapped.personalInfoLine).toContain("1995.06");
+    expect(mapped.personalInfoLine).toContain("28");
     expect(mapped.personalInfoLine).toContain("5年经验");
-    expect(mapped.personalInfoLine).toContain("随时到岗");
-    expect(mapped.objective).toContain("25-40K");
+    expect(mapped.contactExtraLine).toContain("zhangsan\\_wx");
+    expect(mapped.contactExtraLine).toContain("123456789");
 
     // Links line
     expect(mapped.linksLine).toContain("$|$");
@@ -116,7 +116,7 @@ describe("mapResumeProfileCN", () => {
     expect(mapped.candidate.name).toContain("李四");
     expect(mapped.photoBlock).toBe("");
     expect(mapped.personalInfoLine).toBe("");
-    expect(mapped.objective).toBe("");
+    expect(mapped.contactExtraLine).toBe("");
     expect(mapped.linksLine).toBe("");
     expect(mapped.skills).toEqual([]);
     expect(mapped.experiences).toEqual([]);
@@ -132,8 +132,8 @@ describe("mapResumeProfileCN", () => {
         email: "w@x.com",
         phone: "137",
         gender: "女",
-        workYears: "3年经验",
-        // birthDate and availableDate omitted
+        identity: "3年经验",
+        // age omitted
       },
       links: [],
       summary: "",
@@ -147,5 +147,7 @@ describe("mapResumeProfileCN", () => {
     expect(mapped.personalInfoLine).toContain("3年经验");
     // Should not have dangling separators for missing fields
     expect(mapped.personalInfoLine).not.toMatch(/\|\s*\|/);
+    // No wechat/qq provided
+    expect(mapped.contactExtraLine).toBe("");
   });
 });

@@ -13,13 +13,10 @@ const full = {
   location: "北京市海淀区",
   photoUrl: "https://example.com/photo.jpg",
   gender: "男",
-  birthDate: "1995-06",
-  nativePlace: "湖南长沙",
-  politicalStatus: "群众",
-  maritalStatus: "未婚",
-  expectedSalary: "25k-35k",
-  availableDate: "随时到岗",
-  workYears: "5年",
+  age: "28",
+  identity: "3年经验",
+  wechat: "zhangsan_wx",
+  qq: "123456789",
 };
 
 describe("CnResumeBasicsSchema", () => {
@@ -27,8 +24,10 @@ describe("CnResumeBasicsSchema", () => {
     const result = CnResumeBasicsSchema.safeParse(full);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.nativePlace).toBe("湖南长沙");
-      expect(result.data.workYears).toBe("5年");
+      expect(result.data.age).toBe("28");
+      expect(result.data.identity).toBe("3年经验");
+      expect(result.data.wechat).toBe("zhangsan_wx");
+      expect(result.data.qq).toBe("123456789");
     }
   });
 

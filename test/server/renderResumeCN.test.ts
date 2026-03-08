@@ -15,8 +15,8 @@ const fullInput: RenderResumeCNInput = {
     linkedinText: "LinkedIn",
   },
   photoBlock: "\\includegraphics[width=2.5cm]{https://example.com/photo.jpg}\\\\[4pt]",
-  personalInfoLine: "男 $|$ 1995.06 $|$ 5年经验 $|$ 随时到岗",
-  objective: "前端开发工程师 · 25-40K",
+  personalInfoLine: "男 $|$ 28 $|$ 5年经验",
+  contactExtraLine: " \\enspace $|$ \\enspace 微信: zhangsan\\_wx \\enspace $|$ \\enspace QQ: 123456789",
   linksLine: " $|$ \\href{https://linkedin.com/in/zhangsan}{LinkedIn}",
   summary: "资深前端工程师",
   skills: [
@@ -65,7 +65,7 @@ describe("renderResumeCNTex", () => {
     expect(output).toContain("zhangsan@example.com");
     expect(output).toContain("includegraphics");
     expect(output).toContain("男");
-    expect(output).toContain("25-40K");
+    expect(output).toContain("zhangsan\\_wx");
   });
 
   it("contains expected section headers", () => {
@@ -75,7 +75,6 @@ describe("renderResumeCNTex", () => {
     expect(output).toContain("工作经历");
     expect(output).toContain("项目经历");
     expect(output).toContain("教育背景");
-    expect(output).toContain("求职意向");
   });
 
   it("renders skills correctly", () => {
@@ -103,7 +102,7 @@ describe("renderResumeCNTex", () => {
       },
       photoBlock: "",
       personalInfoLine: "",
-      objective: "",
+      contactExtraLine: "",
       linksLine: "",
       summary: "",
       skills: [{ label: "技能", items: ["Go"] }],
