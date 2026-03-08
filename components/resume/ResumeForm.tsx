@@ -465,7 +465,7 @@ export function ResumeForm() {
   useEffect(() => {
     let active = true;
     const load = async () => {
-      const res = await fetch("/api/resume-profile");
+      const res = await fetch(`/api/resume-profile?locale=${locale}`);
       if (!res.ok) return;
       const json = await res.json();
       if (!active) return;
@@ -475,7 +475,7 @@ export function ResumeForm() {
     return () => {
       active = false;
     };
-  }, [hydrateFromResumeApi]);
+  }, [locale, hydrateFromResumeApi]);
 
   useEffect(() => {
     return () => {
@@ -1142,6 +1142,7 @@ export function ResumeForm() {
           action: "create",
           mode,
           sourceProfileId: activeProfileId ?? selectedProfileId ?? undefined,
+          locale,
         }),
       });
       if (!res.ok) {
@@ -1200,7 +1201,7 @@ export function ResumeForm() {
       const res = await fetch("/api/resume-profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "delete", profileId: selectedProfileId }),
+        body: JSON.stringify({ action: "delete", profileId: selectedProfileId, locale }),
       });
       if (!res.ok) {
         const code = (await res.json().catch(() => null))?.error;
@@ -1253,7 +1254,7 @@ export function ResumeForm() {
       const res = await fetch("/api/resume-profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "activate", profileId }),
+        body: JSON.stringify({ action: "activate", profileId, locale }),
       });
       if (!res.ok) {
         throw new Error("Activate profile failed");
@@ -1301,6 +1302,7 @@ export function ResumeForm() {
         profileId: selectedProfileId ?? undefined,
         name: profileName.trim() || undefined,
         setActive: true,
+        locale,
       };
       const res = await fetch("/api/resume-profile", {
         method: "POST",

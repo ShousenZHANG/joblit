@@ -52,7 +52,9 @@ describe("resume profile api", () => {
       summary: "Hello",
     });
 
-    const res = await GET();
+    const res = await GET(
+      new Request("http://localhost/api/resume-profile"),
+    );
     const json = await res.json();
 
     expect(res.status).toBe(200);
@@ -136,6 +138,7 @@ describe("resume profile api", () => {
         education: payload.education,
       },
       {
+        locale: "en-AU",
         profileId: payload.profileId,
         name: payload.name,
         setActive: payload.setActive,
@@ -221,6 +224,7 @@ describe("resume profile api", () => {
 
     expect(res.status).toBe(200);
     expect(resumeProfileService.createResumeProfile).toHaveBeenCalledWith("user-1", {
+      locale: "en-AU",
       mode: "copy",
       sourceProfileId: "a6437908-54fd-4a26-a1e4-3350fc98ac63",
       name: undefined,

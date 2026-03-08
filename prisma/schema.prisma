@@ -72,7 +72,7 @@ model User {
   deletedJobUrls DeletedJobUrl[]
   dailyCheckins  DailyCheckin[]
   resumeProfiles ResumeProfile[]
-  activeResumeProfile ActiveResumeProfile?
+  activeResumeProfiles ActiveResumeProfile[]
   applications   Application[]
   promptRuleTemplates PromptRuleTemplate[]
   onboardingState OnboardingState?
@@ -265,16 +265,19 @@ model ResumeProfile {
 
   @@index([userId, name])
   @@index([userId, updatedAt])
+  @@index([userId, locale, updatedAt])
 }
 
 model ActiveResumeProfile {
-  userId          String        @id @db.Uuid
+  userId          String        @db.Uuid
+  locale          String        @default("en-AU") // "en-AU" | "zh-CN"
   user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   resumeProfileId String        @db.Uuid
   resumeProfile   ResumeProfile @relation(fields: [resumeProfileId], references: [id], onDelete: Cascade)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
+  @@id([userId, locale])
   @@index([resumeProfileId])
 }
 

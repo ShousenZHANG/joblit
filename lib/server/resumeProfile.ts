@@ -101,21 +101,21 @@ function cloneJsonValueForCreate(value: Prisma.JsonValue | null | undefined) {
   return value as Prisma.InputJsonValue;
 }
 
-async function ensureActivePointer(userId: string, resumeProfileId: string) {
+async function ensureActivePointer(userId: string, locale: string, resumeProfileId: string) {
   await prisma.activeResumeProfile.upsert({
-    where: { userId },
+    where: { userId_locale: { userId, locale } },
     update: { resumeProfileId },
-    create: { userId, resumeProfileId },
+    create: { userId, locale, resumeProfileId },
   });
 }
 
-async function getFallbackLatestProfile(userId: string) {
+async function getFallbackLatestProfile(userId: string, locale: string) {
   const latest = await prisma.resumeProfile.findFirst({
-    where: { userId },
+    where: { userId, locale },
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
   });
   if (latest) {
-    await ensureActivePointer(userId, latest.id);
+    await ensureActivePointer(userId, locale, latest.id);
   }
   return latest;
 }
@@ -127,10 +127,10 @@ async function getTargetProfile(userId: string, profileId?: string) {
   });
 }
 
-export async function listResumeProfiles(userId: string) {
+export async function listResumeProfiles(userId: string, locale: string = "en-AU") {
   const [profiles, activePointer] = await prisma.$transaction([
     prisma.resumeProfile.findMany({
-      where: { userId },
+      where: { userId, locale },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
       select: {
         id: true,
@@ -141,7 +141,7 @@ export async function listResumeProfiles(userId: string) {
       },
     }),
     prisma.activeResumeProfile.findUnique({
-      where: { userId },
+      where: { userId_locale: { userId, locale } },
       select: { resumeProfileId: true },
     }),
   ]);
@@ -149,7 +149,7 @@ export async function listResumeProfiles(userId: string) {
   let activeProfileId = activePointer?.resumeProfileId ?? null;
   if (!activeProfileId && profiles[0]) {
     activeProfileId = profiles[0].id;
-    await ensureActivePointer(userId, profiles[0].id);
+    await ensureActivePointer(userId, locale, profiles[0].id);
   }
 
   return {
@@ -161,14 +161,15 @@ export async function listResumeProfiles(userId: string) {
   };
 }
 
-export async function getResumeProfile(userId: string, options?: { profileId?: string }) {
+export async function getResumeProfile(userId: string, options?: { profileId?: string; locale?: string }) {
+  const locale = options?.locale ?? "en-AU";
   const explicitProfileId = options?.profileId;
   if (explicitProfileId) {
     return getTargetProfile(userId, explicitProfileId);
   }
 
   const activePointer = await prisma.activeResumeProfile.findUnique({
-    where: { userId },
+    where: { userId_locale: { userId, locale } },
     select: { resumeProfileId: true },
   });
 
@@ -182,22 +183,23 @@ export async function getResumeProfile(userId: string, options?: { profileId?: s
     if (active) return active;
   }
 
-  return getFallbackLatestProfile(userId);
+  return getFallbackLatestProfile(userId, locale);
 }
 
-export async function setActiveResumeProfile(userId: string, profileId: string) {
+export async function setActiveResumeProfile(userId: string, locale: string, profileId: string) {
   const target = await getTargetProfile(userId, profileId);
   if (!target) return null;
-  await ensureActivePointer(userId, target.id);
+  await ensureActivePointer(userId, locale, target.id);
   return target;
 }
 
 async function buildDefaultProfileName(
   userId: string,
+  locale: string,
   tx: Pick<Prisma.TransactionClient, "resumeProfile"> | typeof prisma = prisma,
 ) {
   const existing = await tx.resumeProfile.findMany({
-    where: { userId },
+    where: { userId, locale },
     select: { name: true },
   });
 
@@ -220,14 +222,16 @@ export async function createResumeProfile(
     setActive?: boolean;
     mode?: "copy" | "blank";
     sourceProfileId?: string;
+    locale?: string;
   },
 ) {
+  const locale = options?.locale ?? "en-AU";
   const createMode = options?.mode ?? "copy";
 
   return prisma.$transaction(async (tx) => {
     const resolvedName = options?.name
       ? normalizeProfileName(options.name)
-      : await buildDefaultProfileName(userId, tx);
+      : await buildDefaultProfileName(userId, locale, tx);
 
     let sourceProfile: Prisma.ResumeProfileGetPayload<{ select: typeof PROFILE_CLONE_SELECT }> | null =
       null;
@@ -242,7 +246,7 @@ export async function createResumeProfile(
 
       if (!sourceProfile) {
         const activePointer = await tx.activeResumeProfile.findUnique({
-          where: { userId },
+          where: { userId_locale: { userId, locale } },
           select: { resumeProfileId: true },
         });
         if (activePointer?.resumeProfileId) {
@@ -255,7 +259,7 @@ export async function createResumeProfile(
 
       if (!sourceProfile) {
         sourceProfile = await tx.resumeProfile.findFirst({
-          where: { userId },
+          where: { userId, locale },
           orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
           select: PROFILE_CLONE_SELECT,
         });
@@ -266,6 +270,7 @@ export async function createResumeProfile(
       data: {
         userId,
         name: resolvedName,
+        locale,
         ...(sourceProfile
           ? {
               summary: sourceProfile.summary,
@@ -282,9 +287,9 @@ export async function createResumeProfile(
 
     if (options?.setActive !== false) {
       await tx.activeResumeProfile.upsert({
-        where: { userId },
+        where: { userId_locale: { userId, locale } },
         update: { resumeProfileId: profile.id },
-        create: { userId, resumeProfileId: profile.id },
+        create: { userId, locale, resumeProfileId: profile.id },
       });
     }
 
@@ -311,11 +316,12 @@ export type DeleteResumeProfileResult =
 
 export async function deleteResumeProfile(
   userId: string,
+  locale: string,
   profileId: string,
 ): Promise<DeleteResumeProfileResult> {
   return prisma.$transaction(async (tx) => {
     const profiles = await tx.resumeProfile.findMany({
-      where: { userId },
+      where: { userId, locale },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
       select: { id: true },
     });
@@ -330,7 +336,7 @@ export async function deleteResumeProfile(
     }
 
     const activePointer = await tx.activeResumeProfile.findUnique({
-      where: { userId },
+      where: { userId_locale: { userId, locale } },
       select: { resumeProfileId: true },
     });
 
@@ -343,9 +349,9 @@ export async function deleteResumeProfile(
       nextActiveProfileId = profiles.find((profile) => profile.id !== profileId)?.id ?? null;
       if (nextActiveProfileId) {
         await tx.activeResumeProfile.upsert({
-          where: { userId },
+          where: { userId_locale: { userId, locale } },
           update: { resumeProfileId: nextActiveProfileId },
-          create: { userId, resumeProfileId: nextActiveProfileId },
+          create: { userId, locale, resumeProfileId: nextActiveProfileId },
         });
       }
     }
@@ -365,14 +371,16 @@ export async function upsertResumeProfile(
     profileId?: string;
     name?: string;
     setActive?: boolean;
+    locale?: string;
   },
 ) {
+  const locale = options?.locale ?? "en-AU";
   const normalized = toNormalizedWriteData(data);
   const explicitProfileId = options?.profileId;
 
   const target = explicitProfileId
     ? await getTargetProfile(userId, explicitProfileId)
-    : await getResumeProfile(userId);
+    : await getResumeProfile(userId, { locale });
 
   if (explicitProfileId && !target) {
     return null;
@@ -382,13 +390,14 @@ export async function upsertResumeProfile(
     const created = await prisma.resumeProfile.create({
       data: {
         userId,
+        locale,
         name: normalizeProfileName(options?.name),
         ...normalized,
       },
     });
 
     if (options?.setActive !== false) {
-      await ensureActivePointer(userId, created.id);
+      await ensureActivePointer(userId, locale, created.id);
     }
 
     return created;
@@ -406,7 +415,7 @@ export async function upsertResumeProfile(
   });
 
   if (options?.setActive !== false) {
-    await ensureActivePointer(userId, updated.id);
+    await ensureActivePointer(userId, locale, updated.id);
   }
 
   return updated;

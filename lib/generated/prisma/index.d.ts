@@ -177,7 +177,9 @@ export const ApplicationBatchTaskStatus: typeof $Enums.ApplicationBatchTaskStatu
  * Type-safe database client for TypeScript & Node.js
  * @example
  * ```
- * const prisma = new PrismaClient()
+ * const prisma = new PrismaClient({
+ *   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL })
+ * })
  * // Fetch zero or more Users
  * const users = await prisma.user.findMany()
  * ```
@@ -198,7 +200,9 @@ export class PrismaClient<
    * Type-safe database client for TypeScript & Node.js
    * @example
    * ```
-   * const prisma = new PrismaClient()
+   * const prisma = new PrismaClient({
+   *   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL })
+   * })
    * // Fetch zero or more Users
    * const users = await prisma.user.findMany()
    * ```
@@ -278,7 +282,7 @@ export class PrismaClient<
    * ])
    * ```
    * 
-   * Read more in our [docs](https://www.prisma.io/docs/concepts/components/prisma-client/transactions).
+   * Read more in our [docs](https://www.prisma.io/docs/orm/prisma-client/queries/transactions).
    */
   $transaction<P extends Prisma.PrismaPromise<any>[]>(arg: [...P], options?: { isolationLevel?: Prisma.TransactionIsolationLevel }): $Utils.JsPromise<runtime.Types.Utils.UnwrapTuple<P>>
 
@@ -477,8 +481,8 @@ export namespace Prisma {
   export import Exact = $Public.Exact
 
   /**
-   * Prisma Client JS version: 7.4.0
-   * Query Engine version: ab56fe763f921d033a6c195e7ddeb3e255bdbb57
+   * Prisma Client JS version: 7.4.2
+   * Query Engine version: 94a226be1cf2967af2541cca5529f0f7ba866919
    */
   export type PrismaVersion = {
     client: string
@@ -2139,6 +2143,7 @@ export namespace Prisma {
     deletedJobUrls: number
     dailyCheckins: number
     resumeProfiles: number
+    activeResumeProfiles: number
     applications: number
     promptRuleTemplates: number
     applicationBatches: number
@@ -2153,6 +2158,7 @@ export namespace Prisma {
     deletedJobUrls?: boolean | UserCountOutputTypeCountDeletedJobUrlsArgs
     dailyCheckins?: boolean | UserCountOutputTypeCountDailyCheckinsArgs
     resumeProfiles?: boolean | UserCountOutputTypeCountResumeProfilesArgs
+    activeResumeProfiles?: boolean | UserCountOutputTypeCountActiveResumeProfilesArgs
     applications?: boolean | UserCountOutputTypeCountApplicationsArgs
     promptRuleTemplates?: boolean | UserCountOutputTypeCountPromptRuleTemplatesArgs
     applicationBatches?: boolean | UserCountOutputTypeCountApplicationBatchesArgs
@@ -2217,6 +2223,13 @@ export namespace Prisma {
    */
   export type UserCountOutputTypeCountResumeProfilesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: ResumeProfileWhereInput
+  }
+
+  /**
+   * UserCountOutputType without action
+   */
+  export type UserCountOutputTypeCountActiveResumeProfilesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: ActiveResumeProfileWhereInput
   }
 
   /**
@@ -2550,7 +2563,7 @@ export namespace Prisma {
     deletedJobUrls?: boolean | User$deletedJobUrlsArgs<ExtArgs>
     dailyCheckins?: boolean | User$dailyCheckinsArgs<ExtArgs>
     resumeProfiles?: boolean | User$resumeProfilesArgs<ExtArgs>
-    activeResumeProfile?: boolean | User$activeResumeProfileArgs<ExtArgs>
+    activeResumeProfiles?: boolean | User$activeResumeProfilesArgs<ExtArgs>
     applications?: boolean | User$applicationsArgs<ExtArgs>
     promptRuleTemplates?: boolean | User$promptRuleTemplatesArgs<ExtArgs>
     onboardingState?: boolean | User$onboardingStateArgs<ExtArgs>
@@ -2598,7 +2611,7 @@ export namespace Prisma {
     deletedJobUrls?: boolean | User$deletedJobUrlsArgs<ExtArgs>
     dailyCheckins?: boolean | User$dailyCheckinsArgs<ExtArgs>
     resumeProfiles?: boolean | User$resumeProfilesArgs<ExtArgs>
-    activeResumeProfile?: boolean | User$activeResumeProfileArgs<ExtArgs>
+    activeResumeProfiles?: boolean | User$activeResumeProfilesArgs<ExtArgs>
     applications?: boolean | User$applicationsArgs<ExtArgs>
     promptRuleTemplates?: boolean | User$promptRuleTemplatesArgs<ExtArgs>
     onboardingState?: boolean | User$onboardingStateArgs<ExtArgs>
@@ -2619,7 +2632,7 @@ export namespace Prisma {
       deletedJobUrls: Prisma.$DeletedJobUrlPayload<ExtArgs>[]
       dailyCheckins: Prisma.$DailyCheckinPayload<ExtArgs>[]
       resumeProfiles: Prisma.$ResumeProfilePayload<ExtArgs>[]
-      activeResumeProfile: Prisma.$ActiveResumeProfilePayload<ExtArgs> | null
+      activeResumeProfiles: Prisma.$ActiveResumeProfilePayload<ExtArgs>[]
       applications: Prisma.$ApplicationPayload<ExtArgs>[]
       promptRuleTemplates: Prisma.$PromptRuleTemplatePayload<ExtArgs>[]
       onboardingState: Prisma.$OnboardingStatePayload<ExtArgs> | null
@@ -3035,7 +3048,7 @@ export namespace Prisma {
     deletedJobUrls<T extends User$deletedJobUrlsArgs<ExtArgs> = {}>(args?: Subset<T, User$deletedJobUrlsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$DeletedJobUrlPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     dailyCheckins<T extends User$dailyCheckinsArgs<ExtArgs> = {}>(args?: Subset<T, User$dailyCheckinsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$DailyCheckinPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     resumeProfiles<T extends User$resumeProfilesArgs<ExtArgs> = {}>(args?: Subset<T, User$resumeProfilesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ResumeProfilePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
-    activeResumeProfile<T extends User$activeResumeProfileArgs<ExtArgs> = {}>(args?: Subset<T, User$activeResumeProfileArgs<ExtArgs>>): Prisma__ActiveResumeProfileClient<$Result.GetResult<Prisma.$ActiveResumeProfilePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    activeResumeProfiles<T extends User$activeResumeProfilesArgs<ExtArgs> = {}>(args?: Subset<T, User$activeResumeProfilesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ActiveResumeProfilePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     applications<T extends User$applicationsArgs<ExtArgs> = {}>(args?: Subset<T, User$applicationsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ApplicationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     promptRuleTemplates<T extends User$promptRuleTemplatesArgs<ExtArgs> = {}>(args?: Subset<T, User$promptRuleTemplatesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PromptRuleTemplatePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     onboardingState<T extends User$onboardingStateArgs<ExtArgs> = {}>(args?: Subset<T, User$onboardingStateArgs<ExtArgs>>): Prisma__OnboardingStateClient<$Result.GetResult<Prisma.$OnboardingStatePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
@@ -3633,9 +3646,9 @@ export namespace Prisma {
   }
 
   /**
-   * User.activeResumeProfile
+   * User.activeResumeProfiles
    */
-  export type User$activeResumeProfileArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+  export type User$activeResumeProfilesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the ActiveResumeProfile
      */
@@ -3649,6 +3662,11 @@ export namespace Prisma {
      */
     include?: ActiveResumeProfileInclude<ExtArgs> | null
     where?: ActiveResumeProfileWhereInput
+    orderBy?: ActiveResumeProfileOrderByWithRelationInput | ActiveResumeProfileOrderByWithRelationInput[]
+    cursor?: ActiveResumeProfileWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: ActiveResumeProfileScalarFieldEnum | ActiveResumeProfileScalarFieldEnum[]
   }
 
   /**
@@ -14229,6 +14247,7 @@ export namespace Prisma {
 
   export type ActiveResumeProfileMinAggregateOutputType = {
     userId: string | null
+    locale: string | null
     resumeProfileId: string | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -14236,6 +14255,7 @@ export namespace Prisma {
 
   export type ActiveResumeProfileMaxAggregateOutputType = {
     userId: string | null
+    locale: string | null
     resumeProfileId: string | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -14243,6 +14263,7 @@ export namespace Prisma {
 
   export type ActiveResumeProfileCountAggregateOutputType = {
     userId: number
+    locale: number
     resumeProfileId: number
     createdAt: number
     updatedAt: number
@@ -14252,6 +14273,7 @@ export namespace Prisma {
 
   export type ActiveResumeProfileMinAggregateInputType = {
     userId?: true
+    locale?: true
     resumeProfileId?: true
     createdAt?: true
     updatedAt?: true
@@ -14259,6 +14281,7 @@ export namespace Prisma {
 
   export type ActiveResumeProfileMaxAggregateInputType = {
     userId?: true
+    locale?: true
     resumeProfileId?: true
     createdAt?: true
     updatedAt?: true
@@ -14266,6 +14289,7 @@ export namespace Prisma {
 
   export type ActiveResumeProfileCountAggregateInputType = {
     userId?: true
+    locale?: true
     resumeProfileId?: true
     createdAt?: true
     updatedAt?: true
@@ -14346,6 +14370,7 @@ export namespace Prisma {
 
   export type ActiveResumeProfileGroupByOutputType = {
     userId: string
+    locale: string
     resumeProfileId: string
     createdAt: Date
     updatedAt: Date
@@ -14370,6 +14395,7 @@ export namespace Prisma {
 
   export type ActiveResumeProfileSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     userId?: boolean
+    locale?: boolean
     resumeProfileId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -14379,6 +14405,7 @@ export namespace Prisma {
 
   export type ActiveResumeProfileSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     userId?: boolean
+    locale?: boolean
     resumeProfileId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -14388,6 +14415,7 @@ export namespace Prisma {
 
   export type ActiveResumeProfileSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     userId?: boolean
+    locale?: boolean
     resumeProfileId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -14397,12 +14425,13 @@ export namespace Prisma {
 
   export type ActiveResumeProfileSelectScalar = {
     userId?: boolean
+    locale?: boolean
     resumeProfileId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type ActiveResumeProfileOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"userId" | "resumeProfileId" | "createdAt" | "updatedAt", ExtArgs["result"]["activeResumeProfile"]>
+  export type ActiveResumeProfileOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"userId" | "locale" | "resumeProfileId" | "createdAt" | "updatedAt", ExtArgs["result"]["activeResumeProfile"]>
   export type ActiveResumeProfileInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     user?: boolean | UserDefaultArgs<ExtArgs>
     resumeProfile?: boolean | ResumeProfileDefaultArgs<ExtArgs>
@@ -14424,6 +14453,7 @@ export namespace Prisma {
     }
     scalars: $Extensions.GetPayloadResult<{
       userId: string
+      locale: string
       resumeProfileId: string
       createdAt: Date
       updatedAt: Date
@@ -14853,6 +14883,7 @@ export namespace Prisma {
    */
   interface ActiveResumeProfileFieldRefs {
     readonly userId: FieldRef<"ActiveResumeProfile", 'String'>
+    readonly locale: FieldRef<"ActiveResumeProfile", 'String'>
     readonly resumeProfileId: FieldRef<"ActiveResumeProfile", 'String'>
     readonly createdAt: FieldRef<"ActiveResumeProfile", 'DateTime'>
     readonly updatedAt: FieldRef<"ActiveResumeProfile", 'DateTime'>
@@ -18911,6 +18942,7 @@ export namespace Prisma {
 
   export const ActiveResumeProfileScalarFieldEnum: {
     userId: 'userId',
+    locale: 'locale',
     resumeProfileId: 'resumeProfileId',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
@@ -19204,7 +19236,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlListRelationFilter
     dailyCheckins?: DailyCheckinListRelationFilter
     resumeProfiles?: ResumeProfileListRelationFilter
-    activeResumeProfile?: XOR<ActiveResumeProfileNullableScalarRelationFilter, ActiveResumeProfileWhereInput> | null
+    activeResumeProfiles?: ActiveResumeProfileListRelationFilter
     applications?: ApplicationListRelationFilter
     promptRuleTemplates?: PromptRuleTemplateListRelationFilter
     onboardingState?: XOR<OnboardingStateNullableScalarRelationFilter, OnboardingStateWhereInput> | null
@@ -19227,7 +19259,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlOrderByRelationAggregateInput
     dailyCheckins?: DailyCheckinOrderByRelationAggregateInput
     resumeProfiles?: ResumeProfileOrderByRelationAggregateInput
-    activeResumeProfile?: ActiveResumeProfileOrderByWithRelationInput
+    activeResumeProfiles?: ActiveResumeProfileOrderByRelationAggregateInput
     applications?: ApplicationOrderByRelationAggregateInput
     promptRuleTemplates?: PromptRuleTemplateOrderByRelationAggregateInput
     onboardingState?: OnboardingStateOrderByWithRelationInput
@@ -19253,7 +19285,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlListRelationFilter
     dailyCheckins?: DailyCheckinListRelationFilter
     resumeProfiles?: ResumeProfileListRelationFilter
-    activeResumeProfile?: XOR<ActiveResumeProfileNullableScalarRelationFilter, ActiveResumeProfileWhereInput> | null
+    activeResumeProfiles?: ActiveResumeProfileListRelationFilter
     applications?: ApplicationListRelationFilter
     promptRuleTemplates?: PromptRuleTemplateListRelationFilter
     onboardingState?: XOR<OnboardingStateNullableScalarRelationFilter, OnboardingStateWhereInput> | null
@@ -20053,6 +20085,7 @@ export namespace Prisma {
     OR?: ActiveResumeProfileWhereInput[]
     NOT?: ActiveResumeProfileWhereInput | ActiveResumeProfileWhereInput[]
     userId?: UuidFilter<"ActiveResumeProfile"> | string
+    locale?: StringFilter<"ActiveResumeProfile"> | string
     resumeProfileId?: UuidFilter<"ActiveResumeProfile"> | string
     createdAt?: DateTimeFilter<"ActiveResumeProfile"> | Date | string
     updatedAt?: DateTimeFilter<"ActiveResumeProfile"> | Date | string
@@ -20062,6 +20095,7 @@ export namespace Prisma {
 
   export type ActiveResumeProfileOrderByWithRelationInput = {
     userId?: SortOrder
+    locale?: SortOrder
     resumeProfileId?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -20070,19 +20104,22 @@ export namespace Prisma {
   }
 
   export type ActiveResumeProfileWhereUniqueInput = Prisma.AtLeast<{
-    userId?: string
+    userId_locale?: ActiveResumeProfileUserIdLocaleCompoundUniqueInput
     AND?: ActiveResumeProfileWhereInput | ActiveResumeProfileWhereInput[]
     OR?: ActiveResumeProfileWhereInput[]
     NOT?: ActiveResumeProfileWhereInput | ActiveResumeProfileWhereInput[]
+    userId?: UuidFilter<"ActiveResumeProfile"> | string
+    locale?: StringFilter<"ActiveResumeProfile"> | string
     resumeProfileId?: UuidFilter<"ActiveResumeProfile"> | string
     createdAt?: DateTimeFilter<"ActiveResumeProfile"> | Date | string
     updatedAt?: DateTimeFilter<"ActiveResumeProfile"> | Date | string
     user?: XOR<UserScalarRelationFilter, UserWhereInput>
     resumeProfile?: XOR<ResumeProfileScalarRelationFilter, ResumeProfileWhereInput>
-  }, "userId">
+  }, "userId_locale">
 
   export type ActiveResumeProfileOrderByWithAggregationInput = {
     userId?: SortOrder
+    locale?: SortOrder
     resumeProfileId?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -20096,6 +20133,7 @@ export namespace Prisma {
     OR?: ActiveResumeProfileScalarWhereWithAggregatesInput[]
     NOT?: ActiveResumeProfileScalarWhereWithAggregatesInput | ActiveResumeProfileScalarWhereWithAggregatesInput[]
     userId?: UuidWithAggregatesFilter<"ActiveResumeProfile"> | string
+    locale?: StringWithAggregatesFilter<"ActiveResumeProfile"> | string
     resumeProfileId?: UuidWithAggregatesFilter<"ActiveResumeProfile"> | string
     createdAt?: DateTimeWithAggregatesFilter<"ActiveResumeProfile"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"ActiveResumeProfile"> | Date | string
@@ -20376,7 +20414,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileCreateNestedManyWithoutUserInput
     applications?: ApplicationCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
@@ -20399,7 +20437,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUncheckedCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinUncheckedCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileUncheckedCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedCreateNestedManyWithoutUserInput
     applications?: ApplicationUncheckedCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
@@ -20422,7 +20460,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUpdateManyWithoutUserNestedInput
     applications?: ApplicationUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
@@ -20445,7 +20483,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUncheckedUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUncheckedUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUncheckedUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedUpdateManyWithoutUserNestedInput
     applications?: ApplicationUncheckedUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
@@ -21319,28 +21357,32 @@ export namespace Prisma {
   }
 
   export type ActiveResumeProfileCreateInput = {
+    locale?: string
     createdAt?: Date | string
     updatedAt?: Date | string
-    user: UserCreateNestedOneWithoutActiveResumeProfileInput
+    user: UserCreateNestedOneWithoutActiveResumeProfilesInput
     resumeProfile: ResumeProfileCreateNestedOneWithoutActiveSelectionsInput
   }
 
   export type ActiveResumeProfileUncheckedCreateInput = {
     userId: string
+    locale?: string
     resumeProfileId: string
     createdAt?: Date | string
     updatedAt?: Date | string
   }
 
   export type ActiveResumeProfileUpdateInput = {
+    locale?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
-    user?: UserUpdateOneRequiredWithoutActiveResumeProfileNestedInput
+    user?: UserUpdateOneRequiredWithoutActiveResumeProfilesNestedInput
     resumeProfile?: ResumeProfileUpdateOneRequiredWithoutActiveSelectionsNestedInput
   }
 
   export type ActiveResumeProfileUncheckedUpdateInput = {
     userId?: StringFieldUpdateOperationsInput | string
+    locale?: StringFieldUpdateOperationsInput | string
     resumeProfileId?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -21348,18 +21390,21 @@ export namespace Prisma {
 
   export type ActiveResumeProfileCreateManyInput = {
     userId: string
+    locale?: string
     resumeProfileId: string
     createdAt?: Date | string
     updatedAt?: Date | string
   }
 
   export type ActiveResumeProfileUpdateManyMutationInput = {
+    locale?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type ActiveResumeProfileUncheckedUpdateManyInput = {
     userId?: StringFieldUpdateOperationsInput | string
+    locale?: StringFieldUpdateOperationsInput | string
     resumeProfileId?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -21738,9 +21783,10 @@ export namespace Prisma {
     none?: ResumeProfileWhereInput
   }
 
-  export type ActiveResumeProfileNullableScalarRelationFilter = {
-    is?: ActiveResumeProfileWhereInput | null
-    isNot?: ActiveResumeProfileWhereInput | null
+  export type ActiveResumeProfileListRelationFilter = {
+    every?: ActiveResumeProfileWhereInput
+    some?: ActiveResumeProfileWhereInput
+    none?: ActiveResumeProfileWhereInput
   }
 
   export type ApplicationListRelationFilter = {
@@ -21802,6 +21848,10 @@ export namespace Prisma {
   }
 
   export type ResumeProfileOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type ActiveResumeProfileOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
@@ -22546,16 +22596,6 @@ export namespace Prisma {
     not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
   }
 
-  export type ActiveResumeProfileListRelationFilter = {
-    every?: ActiveResumeProfileWhereInput
-    some?: ActiveResumeProfileWhereInput
-    none?: ActiveResumeProfileWhereInput
-  }
-
-  export type ActiveResumeProfileOrderByRelationAggregateInput = {
-    _count?: SortOrder
-  }
-
   export type ResumeProfileCountOrderByAggregateInput = {
     id?: SortOrder
     userId?: SortOrder
@@ -22634,8 +22674,14 @@ export namespace Prisma {
     isNot?: ResumeProfileWhereInput
   }
 
+  export type ActiveResumeProfileUserIdLocaleCompoundUniqueInput = {
+    userId: string
+    locale: string
+  }
+
   export type ActiveResumeProfileCountOrderByAggregateInput = {
     userId?: SortOrder
+    locale?: SortOrder
     resumeProfileId?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -22643,6 +22689,7 @@ export namespace Prisma {
 
   export type ActiveResumeProfileMaxOrderByAggregateInput = {
     userId?: SortOrder
+    locale?: SortOrder
     resumeProfileId?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -22650,6 +22697,7 @@ export namespace Prisma {
 
   export type ActiveResumeProfileMinOrderByAggregateInput = {
     userId?: SortOrder
+    locale?: SortOrder
     resumeProfileId?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -22891,10 +22939,11 @@ export namespace Prisma {
     connect?: ResumeProfileWhereUniqueInput | ResumeProfileWhereUniqueInput[]
   }
 
-  export type ActiveResumeProfileCreateNestedOneWithoutUserInput = {
-    create?: XOR<ActiveResumeProfileCreateWithoutUserInput, ActiveResumeProfileUncheckedCreateWithoutUserInput>
-    connectOrCreate?: ActiveResumeProfileCreateOrConnectWithoutUserInput
-    connect?: ActiveResumeProfileWhereUniqueInput
+  export type ActiveResumeProfileCreateNestedManyWithoutUserInput = {
+    create?: XOR<ActiveResumeProfileCreateWithoutUserInput, ActiveResumeProfileUncheckedCreateWithoutUserInput> | ActiveResumeProfileCreateWithoutUserInput[] | ActiveResumeProfileUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: ActiveResumeProfileCreateOrConnectWithoutUserInput | ActiveResumeProfileCreateOrConnectWithoutUserInput[]
+    createMany?: ActiveResumeProfileCreateManyUserInputEnvelope
+    connect?: ActiveResumeProfileWhereUniqueInput | ActiveResumeProfileWhereUniqueInput[]
   }
 
   export type ApplicationCreateNestedManyWithoutUserInput = {
@@ -22980,10 +23029,11 @@ export namespace Prisma {
     connect?: ResumeProfileWhereUniqueInput | ResumeProfileWhereUniqueInput[]
   }
 
-  export type ActiveResumeProfileUncheckedCreateNestedOneWithoutUserInput = {
-    create?: XOR<ActiveResumeProfileCreateWithoutUserInput, ActiveResumeProfileUncheckedCreateWithoutUserInput>
-    connectOrCreate?: ActiveResumeProfileCreateOrConnectWithoutUserInput
-    connect?: ActiveResumeProfileWhereUniqueInput
+  export type ActiveResumeProfileUncheckedCreateNestedManyWithoutUserInput = {
+    create?: XOR<ActiveResumeProfileCreateWithoutUserInput, ActiveResumeProfileUncheckedCreateWithoutUserInput> | ActiveResumeProfileCreateWithoutUserInput[] | ActiveResumeProfileUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: ActiveResumeProfileCreateOrConnectWithoutUserInput | ActiveResumeProfileCreateOrConnectWithoutUserInput[]
+    createMany?: ActiveResumeProfileCreateManyUserInputEnvelope
+    connect?: ActiveResumeProfileWhereUniqueInput | ActiveResumeProfileWhereUniqueInput[]
   }
 
   export type ApplicationUncheckedCreateNestedManyWithoutUserInput = {
@@ -23134,14 +23184,18 @@ export namespace Prisma {
     deleteMany?: ResumeProfileScalarWhereInput | ResumeProfileScalarWhereInput[]
   }
 
-  export type ActiveResumeProfileUpdateOneWithoutUserNestedInput = {
-    create?: XOR<ActiveResumeProfileCreateWithoutUserInput, ActiveResumeProfileUncheckedCreateWithoutUserInput>
-    connectOrCreate?: ActiveResumeProfileCreateOrConnectWithoutUserInput
-    upsert?: ActiveResumeProfileUpsertWithoutUserInput
-    disconnect?: ActiveResumeProfileWhereInput | boolean
-    delete?: ActiveResumeProfileWhereInput | boolean
-    connect?: ActiveResumeProfileWhereUniqueInput
-    update?: XOR<XOR<ActiveResumeProfileUpdateToOneWithWhereWithoutUserInput, ActiveResumeProfileUpdateWithoutUserInput>, ActiveResumeProfileUncheckedUpdateWithoutUserInput>
+  export type ActiveResumeProfileUpdateManyWithoutUserNestedInput = {
+    create?: XOR<ActiveResumeProfileCreateWithoutUserInput, ActiveResumeProfileUncheckedCreateWithoutUserInput> | ActiveResumeProfileCreateWithoutUserInput[] | ActiveResumeProfileUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: ActiveResumeProfileCreateOrConnectWithoutUserInput | ActiveResumeProfileCreateOrConnectWithoutUserInput[]
+    upsert?: ActiveResumeProfileUpsertWithWhereUniqueWithoutUserInput | ActiveResumeProfileUpsertWithWhereUniqueWithoutUserInput[]
+    createMany?: ActiveResumeProfileCreateManyUserInputEnvelope
+    set?: ActiveResumeProfileWhereUniqueInput | ActiveResumeProfileWhereUniqueInput[]
+    disconnect?: ActiveResumeProfileWhereUniqueInput | ActiveResumeProfileWhereUniqueInput[]
+    delete?: ActiveResumeProfileWhereUniqueInput | ActiveResumeProfileWhereUniqueInput[]
+    connect?: ActiveResumeProfileWhereUniqueInput | ActiveResumeProfileWhereUniqueInput[]
+    update?: ActiveResumeProfileUpdateWithWhereUniqueWithoutUserInput | ActiveResumeProfileUpdateWithWhereUniqueWithoutUserInput[]
+    updateMany?: ActiveResumeProfileUpdateManyWithWhereWithoutUserInput | ActiveResumeProfileUpdateManyWithWhereWithoutUserInput[]
+    deleteMany?: ActiveResumeProfileScalarWhereInput | ActiveResumeProfileScalarWhereInput[]
   }
 
   export type ApplicationUpdateManyWithoutUserNestedInput = {
@@ -23308,14 +23362,18 @@ export namespace Prisma {
     deleteMany?: ResumeProfileScalarWhereInput | ResumeProfileScalarWhereInput[]
   }
 
-  export type ActiveResumeProfileUncheckedUpdateOneWithoutUserNestedInput = {
-    create?: XOR<ActiveResumeProfileCreateWithoutUserInput, ActiveResumeProfileUncheckedCreateWithoutUserInput>
-    connectOrCreate?: ActiveResumeProfileCreateOrConnectWithoutUserInput
-    upsert?: ActiveResumeProfileUpsertWithoutUserInput
-    disconnect?: ActiveResumeProfileWhereInput | boolean
-    delete?: ActiveResumeProfileWhereInput | boolean
-    connect?: ActiveResumeProfileWhereUniqueInput
-    update?: XOR<XOR<ActiveResumeProfileUpdateToOneWithWhereWithoutUserInput, ActiveResumeProfileUpdateWithoutUserInput>, ActiveResumeProfileUncheckedUpdateWithoutUserInput>
+  export type ActiveResumeProfileUncheckedUpdateManyWithoutUserNestedInput = {
+    create?: XOR<ActiveResumeProfileCreateWithoutUserInput, ActiveResumeProfileUncheckedCreateWithoutUserInput> | ActiveResumeProfileCreateWithoutUserInput[] | ActiveResumeProfileUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: ActiveResumeProfileCreateOrConnectWithoutUserInput | ActiveResumeProfileCreateOrConnectWithoutUserInput[]
+    upsert?: ActiveResumeProfileUpsertWithWhereUniqueWithoutUserInput | ActiveResumeProfileUpsertWithWhereUniqueWithoutUserInput[]
+    createMany?: ActiveResumeProfileCreateManyUserInputEnvelope
+    set?: ActiveResumeProfileWhereUniqueInput | ActiveResumeProfileWhereUniqueInput[]
+    disconnect?: ActiveResumeProfileWhereUniqueInput | ActiveResumeProfileWhereUniqueInput[]
+    delete?: ActiveResumeProfileWhereUniqueInput | ActiveResumeProfileWhereUniqueInput[]
+    connect?: ActiveResumeProfileWhereUniqueInput | ActiveResumeProfileWhereUniqueInput[]
+    update?: ActiveResumeProfileUpdateWithWhereUniqueWithoutUserInput | ActiveResumeProfileUpdateWithWhereUniqueWithoutUserInput[]
+    updateMany?: ActiveResumeProfileUpdateManyWithWhereWithoutUserInput | ActiveResumeProfileUpdateManyWithWhereWithoutUserInput[]
+    deleteMany?: ActiveResumeProfileScalarWhereInput | ActiveResumeProfileScalarWhereInput[]
   }
 
   export type ApplicationUncheckedUpdateManyWithoutUserNestedInput = {
@@ -23788,9 +23846,9 @@ export namespace Prisma {
     deleteMany?: ActiveResumeProfileScalarWhereInput | ActiveResumeProfileScalarWhereInput[]
   }
 
-  export type UserCreateNestedOneWithoutActiveResumeProfileInput = {
-    create?: XOR<UserCreateWithoutActiveResumeProfileInput, UserUncheckedCreateWithoutActiveResumeProfileInput>
-    connectOrCreate?: UserCreateOrConnectWithoutActiveResumeProfileInput
+  export type UserCreateNestedOneWithoutActiveResumeProfilesInput = {
+    create?: XOR<UserCreateWithoutActiveResumeProfilesInput, UserUncheckedCreateWithoutActiveResumeProfilesInput>
+    connectOrCreate?: UserCreateOrConnectWithoutActiveResumeProfilesInput
     connect?: UserWhereUniqueInput
   }
 
@@ -23800,12 +23858,12 @@ export namespace Prisma {
     connect?: ResumeProfileWhereUniqueInput
   }
 
-  export type UserUpdateOneRequiredWithoutActiveResumeProfileNestedInput = {
-    create?: XOR<UserCreateWithoutActiveResumeProfileInput, UserUncheckedCreateWithoutActiveResumeProfileInput>
-    connectOrCreate?: UserCreateOrConnectWithoutActiveResumeProfileInput
-    upsert?: UserUpsertWithoutActiveResumeProfileInput
+  export type UserUpdateOneRequiredWithoutActiveResumeProfilesNestedInput = {
+    create?: XOR<UserCreateWithoutActiveResumeProfilesInput, UserUncheckedCreateWithoutActiveResumeProfilesInput>
+    connectOrCreate?: UserCreateOrConnectWithoutActiveResumeProfilesInput
+    upsert?: UserUpsertWithoutActiveResumeProfilesInput
     connect?: UserWhereUniqueInput
-    update?: XOR<XOR<UserUpdateToOneWithWhereWithoutActiveResumeProfileInput, UserUpdateWithoutActiveResumeProfileInput>, UserUncheckedUpdateWithoutActiveResumeProfileInput>
+    update?: XOR<XOR<UserUpdateToOneWithWhereWithoutActiveResumeProfilesInput, UserUpdateWithoutActiveResumeProfilesInput>, UserUncheckedUpdateWithoutActiveResumeProfilesInput>
   }
 
   export type ResumeProfileUpdateOneRequiredWithoutActiveSelectionsNestedInput = {
@@ -24540,12 +24598,14 @@ export namespace Prisma {
   }
 
   export type ActiveResumeProfileCreateWithoutUserInput = {
+    locale?: string
     createdAt?: Date | string
     updatedAt?: Date | string
     resumeProfile: ResumeProfileCreateNestedOneWithoutActiveSelectionsInput
   }
 
   export type ActiveResumeProfileUncheckedCreateWithoutUserInput = {
+    locale?: string
     resumeProfileId: string
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -24554,6 +24614,11 @@ export namespace Prisma {
   export type ActiveResumeProfileCreateOrConnectWithoutUserInput = {
     where: ActiveResumeProfileWhereUniqueInput
     create: XOR<ActiveResumeProfileCreateWithoutUserInput, ActiveResumeProfileUncheckedCreateWithoutUserInput>
+  }
+
+  export type ActiveResumeProfileCreateManyUserInputEnvelope = {
+    data: ActiveResumeProfileCreateManyUserInput | ActiveResumeProfileCreateManyUserInput[]
+    skipDuplicates?: boolean
   }
 
   export type ApplicationCreateWithoutUserInput = {
@@ -24953,27 +25018,31 @@ export namespace Prisma {
     updatedAt?: DateTimeFilter<"ResumeProfile"> | Date | string
   }
 
-  export type ActiveResumeProfileUpsertWithoutUserInput = {
+  export type ActiveResumeProfileUpsertWithWhereUniqueWithoutUserInput = {
+    where: ActiveResumeProfileWhereUniqueInput
     update: XOR<ActiveResumeProfileUpdateWithoutUserInput, ActiveResumeProfileUncheckedUpdateWithoutUserInput>
     create: XOR<ActiveResumeProfileCreateWithoutUserInput, ActiveResumeProfileUncheckedCreateWithoutUserInput>
-    where?: ActiveResumeProfileWhereInput
   }
 
-  export type ActiveResumeProfileUpdateToOneWithWhereWithoutUserInput = {
-    where?: ActiveResumeProfileWhereInput
+  export type ActiveResumeProfileUpdateWithWhereUniqueWithoutUserInput = {
+    where: ActiveResumeProfileWhereUniqueInput
     data: XOR<ActiveResumeProfileUpdateWithoutUserInput, ActiveResumeProfileUncheckedUpdateWithoutUserInput>
   }
 
-  export type ActiveResumeProfileUpdateWithoutUserInput = {
-    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
-    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
-    resumeProfile?: ResumeProfileUpdateOneRequiredWithoutActiveSelectionsNestedInput
+  export type ActiveResumeProfileUpdateManyWithWhereWithoutUserInput = {
+    where: ActiveResumeProfileScalarWhereInput
+    data: XOR<ActiveResumeProfileUpdateManyMutationInput, ActiveResumeProfileUncheckedUpdateManyWithoutUserInput>
   }
 
-  export type ActiveResumeProfileUncheckedUpdateWithoutUserInput = {
-    resumeProfileId?: StringFieldUpdateOperationsInput | string
-    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
-    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  export type ActiveResumeProfileScalarWhereInput = {
+    AND?: ActiveResumeProfileScalarWhereInput | ActiveResumeProfileScalarWhereInput[]
+    OR?: ActiveResumeProfileScalarWhereInput[]
+    NOT?: ActiveResumeProfileScalarWhereInput | ActiveResumeProfileScalarWhereInput[]
+    userId?: UuidFilter<"ActiveResumeProfile"> | string
+    locale?: StringFilter<"ActiveResumeProfile"> | string
+    resumeProfileId?: UuidFilter<"ActiveResumeProfile"> | string
+    createdAt?: DateTimeFilter<"ActiveResumeProfile"> | Date | string
+    updatedAt?: DateTimeFilter<"ActiveResumeProfile"> | Date | string
   }
 
   export type ApplicationUpsertWithWhereUniqueWithoutUserInput = {
@@ -25154,7 +25223,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileCreateNestedManyWithoutUserInput
     applications?: ApplicationCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
@@ -25176,7 +25245,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUncheckedCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinUncheckedCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileUncheckedCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedCreateNestedManyWithoutUserInput
     applications?: ApplicationUncheckedCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
@@ -25214,7 +25283,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUpdateManyWithoutUserNestedInput
     applications?: ApplicationUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
@@ -25236,7 +25305,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUncheckedUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUncheckedUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUncheckedUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedUpdateManyWithoutUserNestedInput
     applications?: ApplicationUncheckedUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
@@ -25258,7 +25327,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileCreateNestedManyWithoutUserInput
     applications?: ApplicationCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
@@ -25280,7 +25349,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUncheckedCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinUncheckedCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileUncheckedCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedCreateNestedManyWithoutUserInput
     applications?: ApplicationUncheckedCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
@@ -25318,7 +25387,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUpdateManyWithoutUserNestedInput
     applications?: ApplicationUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
@@ -25340,7 +25409,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUncheckedUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUncheckedUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUncheckedUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedUpdateManyWithoutUserNestedInput
     applications?: ApplicationUncheckedUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
@@ -25362,7 +25431,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileCreateNestedManyWithoutUserInput
     applications?: ApplicationCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
@@ -25384,7 +25453,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUncheckedCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinUncheckedCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileUncheckedCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedCreateNestedManyWithoutUserInput
     applications?: ApplicationUncheckedCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
@@ -25498,7 +25567,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUpdateManyWithoutUserNestedInput
     applications?: ApplicationUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
@@ -25520,7 +25589,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUncheckedUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUncheckedUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUncheckedUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedUpdateManyWithoutUserNestedInput
     applications?: ApplicationUncheckedUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
@@ -25575,7 +25644,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileCreateNestedManyWithoutUserInput
     applications?: ApplicationCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
@@ -25597,7 +25666,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUncheckedCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinUncheckedCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileUncheckedCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedCreateNestedManyWithoutUserInput
     applications?: ApplicationUncheckedCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
@@ -25671,7 +25740,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUpdateManyWithoutUserNestedInput
     applications?: ApplicationUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
@@ -25693,7 +25762,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUncheckedUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUncheckedUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUncheckedUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedUpdateManyWithoutUserNestedInput
     applications?: ApplicationUncheckedUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
@@ -25762,7 +25831,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileCreateNestedManyWithoutUserInput
     applications?: ApplicationCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
@@ -25784,7 +25853,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUncheckedCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinUncheckedCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileUncheckedCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedCreateNestedManyWithoutUserInput
     applications?: ApplicationUncheckedCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
@@ -25898,7 +25967,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUpdateManyWithoutUserNestedInput
     applications?: ApplicationUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
@@ -25920,7 +25989,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUncheckedUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUncheckedUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUncheckedUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedUpdateManyWithoutUserNestedInput
     applications?: ApplicationUncheckedUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
@@ -25986,7 +26055,7 @@ export namespace Prisma {
     fetchRuns?: FetchRunCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileCreateNestedManyWithoutUserInput
     applications?: ApplicationCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
@@ -26008,7 +26077,7 @@ export namespace Prisma {
     fetchRuns?: FetchRunUncheckedCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinUncheckedCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileUncheckedCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedCreateNestedManyWithoutUserInput
     applications?: ApplicationUncheckedCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
@@ -26046,7 +26115,7 @@ export namespace Prisma {
     fetchRuns?: FetchRunUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUpdateManyWithoutUserNestedInput
     applications?: ApplicationUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
@@ -26068,7 +26137,7 @@ export namespace Prisma {
     fetchRuns?: FetchRunUncheckedUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUncheckedUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUncheckedUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedUpdateManyWithoutUserNestedInput
     applications?: ApplicationUncheckedUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
@@ -26090,7 +26159,7 @@ export namespace Prisma {
     fetchRuns?: FetchRunCreateNestedManyWithoutUserInput
     deletedJobUrls?: DeletedJobUrlCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileCreateNestedManyWithoutUserInput
     applications?: ApplicationCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
@@ -26112,7 +26181,7 @@ export namespace Prisma {
     fetchRuns?: FetchRunUncheckedCreateNestedManyWithoutUserInput
     deletedJobUrls?: DeletedJobUrlUncheckedCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileUncheckedCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedCreateNestedManyWithoutUserInput
     applications?: ApplicationUncheckedCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
@@ -26150,7 +26219,7 @@ export namespace Prisma {
     fetchRuns?: FetchRunUpdateManyWithoutUserNestedInput
     deletedJobUrls?: DeletedJobUrlUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUpdateManyWithoutUserNestedInput
     applications?: ApplicationUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
@@ -26172,7 +26241,7 @@ export namespace Prisma {
     fetchRuns?: FetchRunUncheckedUpdateManyWithoutUserNestedInput
     deletedJobUrls?: DeletedJobUrlUncheckedUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUncheckedUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedUpdateManyWithoutUserNestedInput
     applications?: ApplicationUncheckedUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
@@ -26194,7 +26263,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileCreateNestedManyWithoutUserInput
     applications?: ApplicationCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
@@ -26216,7 +26285,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUncheckedCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinUncheckedCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileUncheckedCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedCreateNestedManyWithoutUserInput
     applications?: ApplicationUncheckedCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
@@ -26254,7 +26323,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUpdateManyWithoutUserNestedInput
     applications?: ApplicationUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
@@ -26276,7 +26345,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUncheckedUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUncheckedUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUncheckedUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedUpdateManyWithoutUserNestedInput
     applications?: ApplicationUncheckedUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
@@ -26298,7 +26367,7 @@ export namespace Prisma {
     fetchRuns?: FetchRunCreateNestedManyWithoutUserInput
     deletedJobUrls?: DeletedJobUrlCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileCreateNestedManyWithoutUserInput
     applications?: ApplicationCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
@@ -26320,7 +26389,7 @@ export namespace Prisma {
     fetchRuns?: FetchRunUncheckedCreateNestedManyWithoutUserInput
     deletedJobUrls?: DeletedJobUrlUncheckedCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinUncheckedCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedCreateNestedManyWithoutUserInput
     applications?: ApplicationUncheckedCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
@@ -26374,13 +26443,15 @@ export namespace Prisma {
   }
 
   export type ActiveResumeProfileCreateWithoutResumeProfileInput = {
+    locale?: string
     createdAt?: Date | string
     updatedAt?: Date | string
-    user: UserCreateNestedOneWithoutActiveResumeProfileInput
+    user: UserCreateNestedOneWithoutActiveResumeProfilesInput
   }
 
   export type ActiveResumeProfileUncheckedCreateWithoutResumeProfileInput = {
     userId: string
+    locale?: string
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -26420,7 +26491,7 @@ export namespace Prisma {
     fetchRuns?: FetchRunUpdateManyWithoutUserNestedInput
     deletedJobUrls?: DeletedJobUrlUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUpdateManyWithoutUserNestedInput
     applications?: ApplicationUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
@@ -26442,7 +26513,7 @@ export namespace Prisma {
     fetchRuns?: FetchRunUncheckedUpdateManyWithoutUserNestedInput
     deletedJobUrls?: DeletedJobUrlUncheckedUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUncheckedUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedUpdateManyWithoutUserNestedInput
     applications?: ApplicationUncheckedUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
@@ -26482,17 +26553,7 @@ export namespace Prisma {
     data: XOR<ActiveResumeProfileUpdateManyMutationInput, ActiveResumeProfileUncheckedUpdateManyWithoutResumeProfileInput>
   }
 
-  export type ActiveResumeProfileScalarWhereInput = {
-    AND?: ActiveResumeProfileScalarWhereInput | ActiveResumeProfileScalarWhereInput[]
-    OR?: ActiveResumeProfileScalarWhereInput[]
-    NOT?: ActiveResumeProfileScalarWhereInput | ActiveResumeProfileScalarWhereInput[]
-    userId?: UuidFilter<"ActiveResumeProfile"> | string
-    resumeProfileId?: UuidFilter<"ActiveResumeProfile"> | string
-    createdAt?: DateTimeFilter<"ActiveResumeProfile"> | Date | string
-    updatedAt?: DateTimeFilter<"ActiveResumeProfile"> | Date | string
-  }
-
-  export type UserCreateWithoutActiveResumeProfileInput = {
+  export type UserCreateWithoutActiveResumeProfilesInput = {
     id?: string
     email?: string | null
     name?: string | null
@@ -26514,7 +26575,7 @@ export namespace Prisma {
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
   }
 
-  export type UserUncheckedCreateWithoutActiveResumeProfileInput = {
+  export type UserUncheckedCreateWithoutActiveResumeProfilesInput = {
     id?: string
     email?: string | null
     name?: string | null
@@ -26536,9 +26597,9 @@ export namespace Prisma {
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
   }
 
-  export type UserCreateOrConnectWithoutActiveResumeProfileInput = {
+  export type UserCreateOrConnectWithoutActiveResumeProfilesInput = {
     where: UserWhereUniqueInput
-    create: XOR<UserCreateWithoutActiveResumeProfileInput, UserUncheckedCreateWithoutActiveResumeProfileInput>
+    create: XOR<UserCreateWithoutActiveResumeProfilesInput, UserUncheckedCreateWithoutActiveResumeProfilesInput>
   }
 
   export type ResumeProfileCreateWithoutActiveSelectionsInput = {
@@ -26582,18 +26643,18 @@ export namespace Prisma {
     create: XOR<ResumeProfileCreateWithoutActiveSelectionsInput, ResumeProfileUncheckedCreateWithoutActiveSelectionsInput>
   }
 
-  export type UserUpsertWithoutActiveResumeProfileInput = {
-    update: XOR<UserUpdateWithoutActiveResumeProfileInput, UserUncheckedUpdateWithoutActiveResumeProfileInput>
-    create: XOR<UserCreateWithoutActiveResumeProfileInput, UserUncheckedCreateWithoutActiveResumeProfileInput>
+  export type UserUpsertWithoutActiveResumeProfilesInput = {
+    update: XOR<UserUpdateWithoutActiveResumeProfilesInput, UserUncheckedUpdateWithoutActiveResumeProfilesInput>
+    create: XOR<UserCreateWithoutActiveResumeProfilesInput, UserUncheckedCreateWithoutActiveResumeProfilesInput>
     where?: UserWhereInput
   }
 
-  export type UserUpdateToOneWithWhereWithoutActiveResumeProfileInput = {
+  export type UserUpdateToOneWithWhereWithoutActiveResumeProfilesInput = {
     where?: UserWhereInput
-    data: XOR<UserUpdateWithoutActiveResumeProfileInput, UserUncheckedUpdateWithoutActiveResumeProfileInput>
+    data: XOR<UserUpdateWithoutActiveResumeProfilesInput, UserUncheckedUpdateWithoutActiveResumeProfilesInput>
   }
 
-  export type UserUpdateWithoutActiveResumeProfileInput = {
+  export type UserUpdateWithoutActiveResumeProfilesInput = {
     id?: StringFieldUpdateOperationsInput | string
     email?: NullableStringFieldUpdateOperationsInput | string | null
     name?: NullableStringFieldUpdateOperationsInput | string | null
@@ -26615,7 +26676,7 @@ export namespace Prisma {
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
   }
 
-  export type UserUncheckedUpdateWithoutActiveResumeProfileInput = {
+  export type UserUncheckedUpdateWithoutActiveResumeProfilesInput = {
     id?: StringFieldUpdateOperationsInput | string
     email?: NullableStringFieldUpdateOperationsInput | string | null
     name?: NullableStringFieldUpdateOperationsInput | string | null
@@ -26699,7 +26760,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
@@ -26721,7 +26782,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUncheckedCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinUncheckedCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileUncheckedCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
@@ -26839,7 +26900,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
@@ -26861,7 +26922,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUncheckedUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUncheckedUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUncheckedUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
@@ -26975,7 +27036,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileCreateNestedManyWithoutUserInput
     applications?: ApplicationCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
@@ -26997,7 +27058,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUncheckedCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinUncheckedCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileUncheckedCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedCreateNestedManyWithoutUserInput
     applications?: ApplicationUncheckedCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
@@ -27035,7 +27096,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUpdateManyWithoutUserNestedInput
     applications?: ApplicationUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
@@ -27057,7 +27118,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUncheckedUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUncheckedUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUncheckedUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedUpdateManyWithoutUserNestedInput
     applications?: ApplicationUncheckedUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
@@ -27079,7 +27140,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileCreateNestedManyWithoutUserInput
     applications?: ApplicationCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateCreateNestedManyWithoutUserInput
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
@@ -27101,7 +27162,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUncheckedCreateNestedManyWithoutUserInput
     dailyCheckins?: DailyCheckinUncheckedCreateNestedManyWithoutUserInput
     resumeProfiles?: ResumeProfileUncheckedCreateNestedManyWithoutUserInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedCreateNestedOneWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedCreateNestedManyWithoutUserInput
     applications?: ApplicationUncheckedCreateNestedManyWithoutUserInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedCreateNestedManyWithoutUserInput
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
@@ -27139,7 +27200,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUpdateManyWithoutUserNestedInput
     applications?: ApplicationUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUpdateManyWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
@@ -27161,7 +27222,7 @@ export namespace Prisma {
     deletedJobUrls?: DeletedJobUrlUncheckedUpdateManyWithoutUserNestedInput
     dailyCheckins?: DailyCheckinUncheckedUpdateManyWithoutUserNestedInput
     resumeProfiles?: ResumeProfileUncheckedUpdateManyWithoutUserNestedInput
-    activeResumeProfile?: ActiveResumeProfileUncheckedUpdateOneWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedUpdateManyWithoutUserNestedInput
     applications?: ApplicationUncheckedUpdateManyWithoutUserNestedInput
     promptRuleTemplates?: PromptRuleTemplateUncheckedUpdateManyWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
@@ -27248,6 +27309,13 @@ export namespace Prisma {
     experiences?: NullableJsonNullValueInput | InputJsonValue
     projects?: NullableJsonNullValueInput | InputJsonValue
     education?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type ActiveResumeProfileCreateManyUserInput = {
+    locale?: string
+    resumeProfileId: string
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -27561,6 +27629,27 @@ export namespace Prisma {
     experiences?: NullableJsonNullValueInput | InputJsonValue
     projects?: NullableJsonNullValueInput | InputJsonValue
     education?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ActiveResumeProfileUpdateWithoutUserInput = {
+    locale?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    resumeProfile?: ResumeProfileUpdateOneRequiredWithoutActiveSelectionsNestedInput
+  }
+
+  export type ActiveResumeProfileUncheckedUpdateWithoutUserInput = {
+    locale?: StringFieldUpdateOperationsInput | string
+    resumeProfileId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ActiveResumeProfileUncheckedUpdateManyWithoutUserInput = {
+    locale?: StringFieldUpdateOperationsInput | string
+    resumeProfileId?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -27907,6 +27996,7 @@ export namespace Prisma {
 
   export type ActiveResumeProfileCreateManyResumeProfileInput = {
     userId: string
+    locale?: string
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -27957,19 +28047,22 @@ export namespace Prisma {
   }
 
   export type ActiveResumeProfileUpdateWithoutResumeProfileInput = {
+    locale?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
-    user?: UserUpdateOneRequiredWithoutActiveResumeProfileNestedInput
+    user?: UserUpdateOneRequiredWithoutActiveResumeProfilesNestedInput
   }
 
   export type ActiveResumeProfileUncheckedUpdateWithoutResumeProfileInput = {
     userId?: StringFieldUpdateOperationsInput | string
+    locale?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type ActiveResumeProfileUncheckedUpdateManyWithoutResumeProfileInput = {
     userId?: StringFieldUpdateOperationsInput | string
+    locale?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }

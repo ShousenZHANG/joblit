@@ -99,7 +99,10 @@ export async function POST(req: Request) {
   }
 
   if (!sourceProfile) {
-    sourceProfile = await getResumeProfile(userId);
+    const { searchParams } = new URL(req.url);
+    const rawLocale = searchParams.get("locale") ?? "en-AU";
+    const pdfLocale = rawLocale === "zh-CN" ? "zh-CN" : "en-AU";
+    sourceProfile = await getResumeProfile(userId, { locale: pdfLocale });
   }
 
   if (!sourceProfile) {

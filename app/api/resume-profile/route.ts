@@ -69,10 +69,13 @@ const ResumeProfileSchema = z.object({
   education: z.array(ResumeEducationSchema).max(10).optional().nullable(),
 });
 
+const LocaleSchema = z.enum(["en-AU", "zh-CN"]).default("en-AU");
+
 const ResumeProfileUpsertSchema = ResumeProfileSchema.extend({
   profileId: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(80).optional(),
   setActive: z.boolean().optional(),
+  locale: LocaleSchema,
 });
 
 const ResumeProfilePatchSchema = z.discriminatedUnion("action", [
@@ -81,10 +84,12 @@ const ResumeProfilePatchSchema = z.discriminatedUnion("action", [
     name: z.string().trim().min(1).max(80).optional(),
     mode: z.enum(["copy", "blank"]).optional(),
     sourceProfileId: z.string().uuid().optional(),
+    locale: LocaleSchema,
   }),
   z.object({
     action: z.literal("activate"),
     profileId: z.string().uuid(),
+    locale: LocaleSchema,
   }),
   z.object({
     action: z.literal("rename"),
@@ -94,6 +99,7 @@ const ResumeProfilePatchSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("delete"),
     profileId: z.string().uuid(),
+    locale: LocaleSchema,
   }),
 ]);
 
@@ -102,10 +108,10 @@ async function getAuthorizedUserId() {
   return session?.user?.id ?? null;
 }
 
-async function buildResumeProfileResponse(userId: string) {
-  const { profiles, activeProfileId } = await listResumeProfiles(userId);
+async function buildResumeProfileResponse(userId: string, locale: string = "en-AU") {
+  const { profiles, activeProfileId } = await listResumeProfiles(userId, locale);
   const activeProfile = activeProfileId
-    ? await getResumeProfile(userId, { profileId: activeProfileId })
+    ? await getResumeProfile(userId, { profileId: activeProfileId, locale })
     : null;
 
   return {
@@ -135,13 +141,17 @@ function parsePrismaError(error: unknown) {
   return null;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const userId = await getAuthorizedUserId();
   if (!userId) {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
 
-  const state = await buildResumeProfileResponse(userId);
+  const { searchParams } = new URL(req.url);
+  const rawLocale = searchParams.get("locale") ?? "en-AU";
+  const locale = rawLocale === "zh-CN" ? "zh-CN" : "en-AU";
+
+  const state = await buildResumeProfileResponse(userId, locale);
   return NextResponse.json(state, { status: 200 });
 }
 
@@ -177,6 +187,7 @@ export async function POST(req: Request) {
         profileId: parsed.data.profileId,
         name: parsed.data.name,
         setActive: parsed.data.setActive,
+        locale: parsed.data.locale,
       },
     );
   } catch (error) {
@@ -189,7 +200,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "PROFILE_NOT_FOUND" }, { status: 404 });
   }
 
-  const state = await buildResumeProfileResponse(userId);
+  const state = await buildResumeProfileResponse(userId, parsed.data.locale);
   return NextResponse.json(state, { status: 200 });
 }
 
@@ -208,13 +219,17 @@ export async function PATCH(req: Request) {
     );
   }
 
+  let locale = "en-AU";
+
   if (parsed.data.action === "create") {
+    locale = parsed.data.locale;
     try {
       await createResumeProfile(userId, {
         name: parsed.data.name,
         setActive: true,
         mode: parsed.data.mode,
         sourceProfileId: parsed.data.sourceProfileId,
+        locale,
       });
     } catch (error) {
       const prismaErrorResponse = parsePrismaError(error);
@@ -224,7 +239,8 @@ export async function PATCH(req: Request) {
   }
 
   if (parsed.data.action === "activate") {
-    const target = await setActiveResumeProfile(userId, parsed.data.profileId);
+    locale = parsed.data.locale;
+    const target = await setActiveResumeProfile(userId, locale, parsed.data.profileId);
     if (!target) {
       return NextResponse.json({ error: "PROFILE_NOT_FOUND" }, { status: 404 });
     }
@@ -238,7 +254,8 @@ export async function PATCH(req: Request) {
   }
 
   if (parsed.data.action === "delete") {
-    const result = await deleteResumeProfile(userId, parsed.data.profileId);
+    locale = parsed.data.locale;
+    const result = await deleteResumeProfile(userId, locale, parsed.data.profileId);
     if (result.status === "not_found") {
       return NextResponse.json({ error: "PROFILE_NOT_FOUND" }, { status: 404 });
     }
@@ -250,6 +267,6 @@ export async function PATCH(req: Request) {
     }
   }
 
-  const state = await buildResumeProfileResponse(userId);
+  const state = await buildResumeProfileResponse(userId, locale);
   return NextResponse.json(state, { status: 200 });
 }
