@@ -127,7 +127,7 @@ type ResumeProfileSummary = {
 };
 
 const stepsEN = ["Personal info", "Summary", "Experience", "Projects", "Education", "Skills"] as const;
-const stepsCN = ["个人信息", "自我评价", "工作经历", "项目经历", "教育背景", "专业技能"] as const;
+const stepsCN = ["个人信息", "工作经历", "项目经历", "教育背景", "专业技能"] as const;
 
 const emptyBasics: ResumeBasics = {
   fullName: "",
@@ -493,7 +493,8 @@ export function ResumeForm() {
 
   const isStepValid = useCallback(
     (stepIndex: number) => {
-      if (stepIndex === 0) {
+      const stepName = steps[stepIndex];
+      if (stepName === "Personal info" || stepName === "个人信息") {
         return (
           hasContent(basics.fullName) &&
           hasContent(basics.title) &&
@@ -501,11 +502,10 @@ export function ResumeForm() {
           hasContent(basics.phone)
         );
       }
-      if (stepIndex === 1) {
-        if (locale === "zh-CN") return true;
+      if (stepName === "Summary") {
         return hasContent(summary);
       }
-      if (stepIndex === 2) {
+      if (stepName === "Experience" || stepName === "工作经历") {
         return (
           experiences.length > 0 &&
           experiences.every(
@@ -518,7 +518,7 @@ export function ResumeForm() {
           )
         );
       }
-      if (stepIndex === 3) {
+      if (stepName === "Projects" || stepName === "项目经历") {
         return (
           projects.length > 0 &&
           projects.every(
@@ -529,7 +529,7 @@ export function ResumeForm() {
           )
         );
       }
-      if (stepIndex === 4) {
+      if (stepName === "Education" || stepName === "教育背景") {
         return (
           education.length > 0 &&
           education.every(
@@ -540,7 +540,7 @@ export function ResumeForm() {
           )
         );
       }
-      if (stepIndex === 5) {
+      if (stepName === "Skills" || stepName === "专业技能") {
         return (
           skills.length > 0 &&
           skills.every(
@@ -551,7 +551,7 @@ export function ResumeForm() {
       }
       return false;
     },
-    [basics, summary, experiences, projects, education, skills],
+    [basics, summary, experiences, projects, education, skills, locale, steps],
   );
 
   const maxStep = useMemo(() => {
@@ -1399,7 +1399,9 @@ export function ResumeForm() {
       );
 
   const renderStep = () => {
-    if (currentStep === 0) {
+    const stepName = steps[currentStep];
+
+    if (stepName === "Personal info" || stepName === "个人信息") {
       return (
         <div className="space-y-5">
           <div>
@@ -1540,24 +1542,6 @@ export function ResumeForm() {
                   placeholder="如: 大四学生 / 3年经验"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="resume-wechat">微信</Label>
-                <Input
-                  id="resume-wechat"
-                  value={basics.wechat ?? ""}
-                  onChange={(event) => updateBasics("wechat" as keyof ResumeBasics, event.target.value)}
-                  placeholder="微信号"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="resume-qq">QQ</Label>
-                <Input
-                  id="resume-qq"
-                  value={basics.qq ?? ""}
-                  onChange={(event) => updateBasics("qq" as keyof ResumeBasics, event.target.value)}
-                  placeholder="QQ号"
-                />
-              </div>
             </div>
           )}
 
@@ -1614,19 +1598,7 @@ export function ResumeForm() {
       );
     }
 
-    if (currentStep === 1) {
-      if (locale === "zh-CN") {
-        return (
-          <div className="space-y-3">
-            <div>
-              <h2 className="text-base font-semibold text-slate-900">自我评价（不需要填写）</h2>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-              💡 现代大厂中文极简风格规范中，通常不需要冗长的自我评价。请直接点击“下一步”完善工作经历。
-            </div>
-          </div>
-        );
-      }
+    if (stepName === "Summary") {
       return (
         <div className="space-y-3">
           <div>
@@ -1660,7 +1632,7 @@ export function ResumeForm() {
       );
     }
 
-    if (currentStep === 2) {
+    if (stepName === "Experience" || stepName === "工作经历") {
       return (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -1912,7 +1884,7 @@ export function ResumeForm() {
       );
     }
 
-    if (currentStep === 3) {
+    if (stepName === "Projects" || stepName === "项目经历") {
       return (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -2159,7 +2131,7 @@ export function ResumeForm() {
       );
     }
 
-    if (currentStep === 4) {
+    if (stepName === "Education" || stepName === "教育背景") {
       return (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
