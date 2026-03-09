@@ -2,7 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type HTMLAttributes, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, GripVertical, MoveDown, MoveUp, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, GripVertical, MoveDown, MoveUp, Plus, Trash2, Download } from "lucide-react";
 import {
   closestCenter,
   DndContext,
@@ -2400,7 +2400,24 @@ export function ResumeForm() {
             <DialogDescription>{t("pdfPreviewDesc")}</DialogDescription>
           </DialogHeader>
           <div className="flex h-full flex-col">
-            <div className="flex h-11 items-center justify-end border-b border-slate-900/10 bg-white/90 px-3">
+            <div className="flex h-11 items-center justify-end border-b border-slate-900/10 bg-white/90 px-3 gap-2">
+              {pdfUrl && previewStatus === "ready" && (
+                <a
+                  href={pdfUrl}
+                  download={(() => {
+                    const fallback = locale === "zh-CN" ? "未命名简历" : "Unnamed_Resume";
+                    if (!basics.fullName && !basics.title) return `${fallback}.pdf`;
+                    const safeName = (basics.fullName || "").replace(/\s+/g, "_");
+                    const safeTitle = (basics.title || "").replace(/\s+/g, "_");
+                    const connector = safeName && safeTitle ? "_" : "";
+                    return `${safeName}${connector}${safeTitle}.pdf`;
+                  })()}
+                  className="inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 text-xs font-medium text-emerald-700 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 disabled:pointer-events-none disabled:opacity-50"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {t("download")}
+                </a>
+              )}
               <DialogClose asChild>
                 <Button type="button" variant="ghost" size="sm">
                   {t("close")}
