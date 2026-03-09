@@ -69,7 +69,9 @@ export function mapResumeProfileCN(profile: ResumeProfileLike) {
   const photoUrl = toStringValue(basics.photoUrl).trim();
   const photoBlock =
     photoUrl.length > 0
-      ? `\\includegraphics[height=3.2cm]{photo}`
+      ? `\\begin{tikzpicture}[remember picture, overlay]
+\\node[anchor=north east, inner sep=0pt] at ([xshift=-1.8cm, yshift=-1.5cm]current page.north east) {\\includegraphics[height=3.2cm]{photo}};
+\\end{tikzpicture}`
       : "";
 
   // --- Contact extras (WeChat / QQ) ---

@@ -1,4 +1,4 @@
-\documentclass[10pt, a4paper]{article}
+﻿\documentclass[10pt, a4paper]{article}
 
 \usepackage[left=1.8cm, right=1.8cm, top=1.5cm, bottom=1.5cm]{geometry}
 \usepackage{xeCJK}
@@ -11,6 +11,7 @@
 \usepackage{ifthen}
 \usepackage{tabularx}
 \usepackage{array}
+\usepackage{tikz}
 
 % Modern Sans-serif setup for Big Tech aesthetic
 \setCJKmainfont[AutoFakeSlant, AutoFakeBold]{Noto Sans CJK SC}
@@ -20,7 +21,7 @@
 \definecolor{primaryColor}{RGB}{0, 79, 144}
 \definecolor{grayText}{RGB}{80, 80, 80}
 
-% Section formatting �?ruled section headers
+% Section formatting
 \titleformat{\section}{\large\bfseries\color{primaryColor}}{}{0em}{}[\vspace{0.2pt}\titlerule]
 \titlespacing*{\section}{0pt}{8pt}{4pt}
 
@@ -37,25 +38,15 @@
 
 \begin{document}
 
-% === HEADER ===
-\noindent
-\begin{minipage}[b]{0.2\textwidth}
-\vspace{0pt}
-\end{minipage}%
-\begin{minipage}[b]{0.6\textwidth}
+% === PHOTO OVERLAY (absolute position, top-right) ===
+{{PHOTO_BLOCK}}
+
+% === HEADER (full-width centered) ===
 \begin{center}
 {\huge\bfseries {{CANDIDATE_NAME}}} \\[8pt]
 {{CANDIDATE_PHONE}} \enspace $\cdot$ \enspace {{CANDIDATE_EMAIL}} {{CONTACT_EXTRA_LINE}} {{LINKS_LINE}} \\[4pt]
 {\small 求职意向：\textbf{{{CANDIDATE_TITLE}}}} \enspace $\cdot$ \enspace {\small\color{grayText} {{PERSONAL_INFO_LINE}}}
-\vspace{4pt}
 \end{center}
-\end{minipage}%
-\begin{minipage}[b]{0.2\textwidth}
-\begin{flushright}
-{{PHOTO_BLOCK}}
-\vspace{0pt}
-\end{flushright}
-\end{minipage}
 
 \vspace{6pt}
 
