@@ -24,7 +24,7 @@
 
 % Section formatting — compact ruled headers
 \titleformat{\section}{\normalsize\bfseries\color{primaryColor}}{}{0em}{}[\vspace{-2pt}{\color{ruleColor}\hrule height 0.6pt}]
-\titlespacing*{\section}{0pt}{6pt}{3pt}
+\titlespacing*{\section}{0pt}{6pt}{1pt}
 
 % Remove page numbers
 \pagestyle{empty}
@@ -35,7 +35,7 @@
 \hypersetup{colorlinks=true, linkcolor=primaryColor, urlcolor=primaryColor}
 
 % List styling — tight and compact
-\setlist[itemize]{nosep, leftmargin=14pt, itemsep=0.5pt, topsep=1pt, parsep=0pt}
+\setlist[itemize]{nosep, leftmargin=14pt, itemsep=1.5pt, topsep=0pt, parsep=0pt, partopsep=0pt}
 \renewcommand\labelitemi{\textcolor{primaryColor}{$\vcenter{\hbox{\footnotesize$\bullet$}}$}}
 
 \begin{document}
@@ -57,12 +57,12 @@
 
 % === SKILLS ===
 \section{专业技能}
-\vspace{-1pt}
+\vspace{-2pt}
 {{SKILLS}}
 
 % === EXPERIENCE ===
 \section{工作经历}
-\vspace{-1pt}
+\vspace{-2pt}
 {{EXPERIENCE_SECTION}}
 
 % === PROJECTS ===

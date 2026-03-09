@@ -129,7 +129,7 @@ function renderExperienceBlock(entry: ExperienceEntry) {
     lines.push("\\end{itemize}");
   }
 
-  lines.push("\\vspace{0.15cm}");
+  lines.push("\\vspace{0.04cm}");
   return lines.join("\n");
 }
 
@@ -147,7 +147,7 @@ function renderEducationBlock(entry: EducationEntry) {
   if (entry.detail?.trim()) {
     lines.push(`\\textit{${entry.detail}}`);
   }
-  lines.push("\\vspace{0.1cm}");
+  lines.push("\\vspace{0.02cm}");
   return lines.join("\n");
 }
 
@@ -177,7 +177,7 @@ function renderProjectBlock(entry: ProjectEntry) {
     lines.push("\\end{itemize}");
   }
 
-  lines.push("\\vspace{0.15cm}");
+  lines.push("\\vspace{0.04cm}");
   return lines.join("\n");
 }
 
@@ -197,12 +197,12 @@ export function renderResumeCNTex(input: RenderResumeCNInput) {
 
   const projectsSection =
     input.projects.length > 0
-      ? `\\section{项目经历}\n\\vspace{0.1cm}\n\n${renderProjects(input.projects)}`
+      ? `\\section{项目经历}\n\\vspace{0.02cm}\n\n${renderProjects(input.projects)}`
       : "";
 
   const educationSection =
     input.education.length > 0
-      ? `\\section{教育背景}\n\\vspace{0.1cm}\n\n${renderEducation(input.education)}`
+      ? `\\section{教育背景}\n\\vspace{0.02cm}\n\n${renderEducation(input.education)}`
       : "";
 
   const rendered = replaceAll(template, {
@@ -223,7 +223,7 @@ export function renderResumeCNTex(input: RenderResumeCNInput) {
   return sanitizeRendered(rendered);
 }
 
-/** Reset internal template cache — for testing only. */
+/** Reset internal template cache �?for testing only. */
 export function __resetTemplateCache() {
   templateCache = undefined;
 }
