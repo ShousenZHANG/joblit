@@ -20,11 +20,11 @@
 % Colors
 \definecolor{primaryColor}{RGB}{0, 79, 144}
 \definecolor{grayText}{RGB}{100, 100, 100}
-\definecolor{ruleColor}{RGB}{180, 195, 210}
+\definecolor{ruleColor}{RGB}{138, 152, 165}
 
 % Section formatting — compact ruled headers
 \titleformat{\section}{\normalsize\bfseries\color{primaryColor}}{}{0em}{}[\vspace{-2pt}{\color{ruleColor}\hrule height 0.6pt}]
-\titlespacing*{\section}{0pt}{6pt}{3pt}
+\titlespacing*{\section}{0pt}{6pt}{5pt}
 
 % Remove page numbers
 \pagestyle{empty}
@@ -35,7 +35,7 @@
 \hypersetup{colorlinks=true, linkcolor=primaryColor, urlcolor=primaryColor}
 
 % List styling — tight and compact
-\setlist[itemize]{nosep, leftmargin=14pt, itemsep=1.5pt, topsep=-2pt, parsep=0pt, partopsep=-2pt}
+\setlist[itemize]{nosep, leftmargin=14pt, itemsep=1.5pt, topsep=-4pt, parsep=0pt, partopsep=-4pt}
 \renewcommand\labelitemi{\textcolor{primaryColor}{$\vcenter{\hbox{\footnotesize$\bullet$}}$}}
 
 \begin{document}
