@@ -11,8 +11,6 @@ const fullProfile = {
     gender: "男",
     age: "28",
     identity: "5年经验",
-    wechat: "zhangsan_wx",
-    qq: "123456789",
   },
   links: [
     { label: "LinkedIn", url: "https://linkedin.com/in/zhangsan" },
@@ -72,8 +70,6 @@ describe("mapResumeProfileCN", () => {
     expect(mapped.personalInfoLine).toContain("男");
     expect(mapped.personalInfoLine).toContain("28");
     expect(mapped.personalInfoLine).toContain("5年经验");
-    expect(mapped.contactExtraLine).toContain("zhangsan\\_wx");
-    expect(mapped.contactExtraLine).toContain("123456789");
 
     // Links line
     expect(mapped.linksLine).toContain("$|$");

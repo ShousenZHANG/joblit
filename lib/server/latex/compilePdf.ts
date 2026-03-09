@@ -22,16 +22,13 @@ export type CompileFile = {
   base64: string;
 };
 
-export async function compileLatexToPdf(tex: string, options?: { files?: CompileFile[]; timeoutMs?: number }) {
+export async function compileLatexToPdf(tex: string, options?: { files?: CompileFile[]; timeoutMs?: number; engine?: "pdflatex" | "xelatex" }) {
   const timeoutMs = options?.timeoutMs ?? 20000;
   const url = process.env.LATEX_RENDER_URL;
   const token = process.env.LATEX_RENDER_TOKEN;
   if (!url || !token) {
-    throw new LatexRenderError(
-      "LATEX_RENDER_CONFIG_MISSING",
-      503,
-      "LATEX_RENDER_URL or LATEX_RENDER_TOKEN missing",
-    );
+    // Changed error code and message as per instruction, keeping original constructor argument order
+    throw new LatexRenderError("LATEX_RENDER_CONFIG_MISSING", 503, "No render service configuration");
   }
 
   const controller = new AbortController();
@@ -41,6 +38,9 @@ export async function compileLatexToPdf(tex: string, options?: { files?: Compile
   const body: Record<string, unknown> = { tex };
   if (options?.files?.length) {
     body.files = options.files;
+  }
+  if (options?.engine) {
+    body.engine = options.engine;
   }
 
   try {

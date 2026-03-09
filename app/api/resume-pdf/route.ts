@@ -157,7 +157,13 @@ export async function POST(req: Request) {
 
   let pdf: Buffer;
   try {
-    pdf = await compileLatexToPdf(tex, files.length > 0 ? { files } : undefined);
+    pdf = await compileLatexToPdf(
+      tex,
+      {
+        files: files.length > 0 ? files : undefined,
+        engine: locale === "zh-CN" ? "xelatex" : "pdflatex",
+      }
+    );
   } catch (err) {
     if (err instanceof LatexRenderError) {
       return NextResponse.json(

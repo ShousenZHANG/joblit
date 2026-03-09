@@ -1,8 +1,8 @@
 \documentclass[10pt, a4paper]{article}
 
 \usepackage[left=1.8cm, right=1.8cm, top=1.5cm, bottom=1.5cm]{geometry}
-\usepackage{CJKutf8}
-\usepackage[T1]{fontenc}
+\usepackage{xeCJK}
+\usepackage{fontspec}
 \usepackage{titlesec}
 \usepackage{enumitem}
 \usepackage{hyperref}
@@ -12,9 +12,13 @@
 \usepackage{tabularx}
 \usepackage{array}
 
+% Modern Sans-serif setup for Big Tech aesthetic
+\setCJKmainfont{FandolHei}
+\setmainfont{FreeSans}[Extension=.otf, UprightFont=*, BoldFont=*Bold, ItalicFont=*Oblique, BoldItalicFont=*BoldOblique, Scale=0.95]
+
 % Colors
 \definecolor{primaryColor}{RGB}{0, 79, 144}
-\definecolor{grayText}{RGB}{100, 100, 100}
+\definecolor{grayText}{RGB}{80, 80, 80}
 
 % Section formatting — ruled section headers
 \titleformat{\section}{\large\bfseries\color{primaryColor}}{}{0em}{}[\vspace{0.2pt}\titlerule]
@@ -32,16 +36,28 @@
 \renewcommand\labelitemi{$\vcenter{\hbox{\small$\bullet$}}$}
 
 \begin{document}
-\begin{CJK}{UTF8}{gbsn}
 
 % === HEADER ===
+\noindent
+\begin{minipage}[b]{0.2\textwidth}
+\vspace{0pt}
+\end{minipage}%
+\begin{minipage}[b]{0.6\textwidth}
 \begin{center}
-{{PHOTO_BLOCK}}
-{\LARGE\bfseries {{CANDIDATE_NAME}}} \quad {\large\color{grayText} {{CANDIDATE_TITLE}}} \\[4pt]
-{{CANDIDATE_PHONE}} \enspace $|$ \enspace {{CANDIDATE_EMAIL}} {{CONTACT_EXTRA_LINE}} {{LINKS_LINE}} \\[2pt]
-{\small\color{grayText} {{PERSONAL_INFO_LINE}}}
+{\huge\bfseries {{CANDIDATE_NAME}}} \\[8pt]
+{{CANDIDATE_PHONE}} \enspace $\cdot$ \enspace {{CANDIDATE_EMAIL}} {{CONTACT_EXTRA_LINE}} {{LINKS_LINE}} \\[4pt]
+{\small 求职意向：\textbf{{{CANDIDATE_TITLE}}}} \enspace $\cdot$ \enspace {\small\color{grayText} {{PERSONAL_INFO_LINE}}}
+\vspace{4pt}
 \end{center}
-\vspace{2pt}
+\end{minipage}%
+\begin{minipage}[b]{0.2\textwidth}
+\begin{flushright}
+{{PHOTO_BLOCK}}
+\vspace{0pt}
+\end{flushright}
+\end{minipage}
+
+\vspace{6pt}
 
 % === SKILLS ===
 \section{专业技能}
@@ -59,5 +75,4 @@
 % === EDUCATION ===
 {{EDUCATION_SECTION}}
 
-\end{CJK}
 \end{document}

@@ -69,18 +69,11 @@ export function mapResumeProfileCN(profile: ResumeProfileLike) {
   const photoUrl = toStringValue(basics.photoUrl).trim();
   const photoBlock =
     photoUrl.length > 0
-      ? `\\includegraphics[width=2.5cm]{photo}\\\\[4pt]`
+      ? `\\includegraphics[height=3.2cm]{photo}`
       : "";
 
   // --- Contact extras (WeChat / QQ) ---
-  const wechat = toStringValue(basics.wechat).trim();
-  const qq = toStringValue(basics.qq).trim();
-  const contactExtraParts: string[] = [];
-  if (wechat) contactExtraParts.push(`微信: ${escapeLatex(wechat)}`);
-  if (qq) contactExtraParts.push(`QQ: ${escapeLatex(qq)}`);
-  const contactExtraLine = contactExtraParts.length > 0
-    ? contactExtraParts.map((p) => ` \\enspace $|$ \\enspace ${p}`).join("")
-    : "";
+  const contactExtraLine = "";
 
   // --- Links line for header ---
   const linkEntries: string[] = [];

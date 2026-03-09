@@ -1,4 +1,4 @@
-﻿
+
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type HTMLAttributes, type ReactNode } from "react";
@@ -502,6 +502,7 @@ export function ResumeForm() {
         );
       }
       if (stepIndex === 1) {
+        if (locale === "zh-CN") return true;
         return hasContent(summary);
       }
       if (stepIndex === 2) {
@@ -1614,6 +1615,18 @@ export function ResumeForm() {
     }
 
     if (currentStep === 1) {
+      if (locale === "zh-CN") {
+        return (
+          <div className="space-y-3">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">自我评价（不需要填写）</h2>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              💡 现代大厂中文极简风格规范中，通常不需要冗长的自我评价。请直接点击“下一步”完善工作经历。
+            </div>
+          </div>
+        );
+      }
       return (
         <div className="space-y-3">
           <div>
