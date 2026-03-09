@@ -24,7 +24,7 @@
 
 % Section formatting — compact ruled headers
 \titleformat{\section}{\normalsize\bfseries\color{primaryColor}}{}{0em}{}[\vspace{-2pt}{\color{ruleColor}\hrule height 0.6pt}]
-\titlespacing*{\section}{0pt}{6pt}{1pt}
+\titlespacing*{\section}{0pt}{6pt}{3pt}
 
 % Remove page numbers
 \pagestyle{empty}
@@ -35,7 +35,7 @@
 \hypersetup{colorlinks=true, linkcolor=primaryColor, urlcolor=primaryColor}
 
 % List styling — tight and compact
-\setlist[itemize]{nosep, leftmargin=14pt, itemsep=1.5pt, topsep=0pt, parsep=0pt, partopsep=0pt}
+\setlist[itemize]{nosep, leftmargin=14pt, itemsep=1.5pt, topsep=-2pt, parsep=0pt, partopsep=-2pt}
 \renewcommand\labelitemi{\textcolor{primaryColor}{$\vcenter{\hbox{\footnotesize$\bullet$}}$}}
 
 \begin{document}
