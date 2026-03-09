@@ -58,6 +58,7 @@ const ResumeSkillSchema = z.object({
 });
 
 const ResumeProfileSchema = z.object({
+  locale: z.string().optional().nullable(),
   basics: ResumeBasicsSchema.optional().nullable(),
   links: z.array(ResumeLinkSchema).max(8).optional().nullable(),
   summary: z.string().trim().min(1).max(2000).optional().nullable(),
