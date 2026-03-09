@@ -90,9 +90,9 @@ function renderSkills(groups: SkillsGroup[]) {
   return groups
     .map((group) => {
       const items = group.items.join(", ");
-      return `\\textbf{${group.label}:} ${items} \\\\`;
+      return `\\textbf{${group.label}:} ${items}`;
     })
-    .join("\n") + "\n\\vspace{0.25cm}";
+    .join(" \\\\\n");
 }
 
 function renderBullets(items: string[]) {
