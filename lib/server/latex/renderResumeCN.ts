@@ -109,10 +109,10 @@ function renderExperienceBlock(entry: ExperienceEntry) {
   const companyParts = [entry.company, entry.location].filter(
     (v) => v.trim().length > 0,
   );
-  let secondLine = companyParts.join(" \\enspace $|$ \\enspace ");
+  let secondLine = companyParts.join(" \\enspace $\\cdot$ \\enspace ");
   if (linksLine) {
     secondLine = secondLine
-      ? `${secondLine} \\enspace $|$ \\enspace ${linksLine}`
+      ? `${secondLine} \\enspace $\\cdot$ \\enspace ${linksLine}`
       : linksLine;
   }
 
@@ -125,7 +125,7 @@ function renderExperienceBlock(entry: ExperienceEntry) {
 
   if (entry.bullets.length > 0) {
     // Tighten gap between experience header lines and first bullet.
-    lines.push("\\vspace{-2pt}");
+    lines.push("\\vspace{-3pt}");
     lines.push("\\begin{itemize}[topsep=0pt]");
     lines.push(renderBullets(entry.bullets));
     lines.push("\\end{itemize}");
@@ -174,7 +174,7 @@ function renderProjectBlock(entry: ProjectEntry) {
   if (entry.bullets.length > 0) {
     // Tighten gap between project header lines and first bullet.
     // Keep consistent with experience bullet spacing.
-    lines.push("\\vspace{-2pt}");
+    lines.push("\\vspace{-3pt}");
     lines.push("\\begin{itemize}[topsep=0pt]");
     lines.push(renderBullets(entry.bullets));
     lines.push("\\end{itemize}");

@@ -30,7 +30,7 @@ function hasText(value: string) {
 function formatSchoolDegree(schoolRaw: unknown, degreeRaw: unknown) {
   const school = escapeLatex(toStringValue(schoolRaw)).trim();
   const degree = escapeLatex(toStringValue(degreeRaw)).trim();
-  if (school && degree) return `${school} \\enspace $|$ \\enspace ${degree}`;
+  if (school && degree) return `${school} \\enspace $\\cdot$ \\enspace ${degree}`;
   return school || degree || "";
 }
 
@@ -73,7 +73,7 @@ export function mapResumeProfileCN(profile: ResumeProfileLike) {
   const photoBlock =
     photoUrl.length > 0
       ? `\\begin{tikzpicture}[remember picture, overlay]
-\\node[anchor=north east, inner sep=0pt] at ([xshift=-1.5cm, yshift=-0.8cm]current page.north east) {\\includegraphics[height=2.6cm]{photo}};
+\\node[anchor=north east, inner sep=0pt] at ([xshift=-1.5cm, yshift=-1.0cm]current page.north east) {\\includegraphics[height=2.6cm]{photo}};
 \\end{tikzpicture}`
       : "";
 
