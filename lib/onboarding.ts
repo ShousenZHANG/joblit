@@ -1,9 +1,4 @@
-export type OnboardingTaskId =
-  | "resume_setup"
-  | "first_fetch"
-  | "triage_first_job"
-  | "generate_first_pdf"
-  | "download_first_pdf";
+export type OnboardingTaskId = "resume_setup" | "first_fetch" | "generate_first_pdf";
 
 export type OnboardingTask = {
   id: OnboardingTaskId;
@@ -26,21 +21,9 @@ export const ONBOARDING_TASKS: OnboardingTask[] = [
     href: "/fetch",
   },
   {
-    id: "triage_first_job",
-    title: "Triage first job",
-    description: "Update one job status to begin your tracking workflow.",
-    href: "/jobs",
-  },
-  {
     id: "generate_first_pdf",
-    title: "Generate first PDF",
-    description: "Generate one CV or cover-letter PDF from a real job.",
-    href: "/jobs",
-  },
-  {
-    id: "download_first_pdf",
-    title: "Download first PDF",
-    description: "Download one generated PDF to complete your first end-to-end loop.",
+    title: "Generate your first CV PDF",
+    description: "Open a job and generate a tailored CV PDF from your master resume.",
     href: "/jobs",
   },
 ];
@@ -51,9 +34,7 @@ export function defaultOnboardingChecklist(): OnboardingChecklist {
   return {
     resume_setup: false,
     first_fetch: false,
-    triage_first_job: false,
     generate_first_pdf: false,
-    download_first_pdf: false,
   };
 }
 
@@ -66,18 +47,10 @@ export function normalizeOnboardingChecklist(value: unknown): OnboardingChecklis
     resume_setup:
       typeof record.resume_setup === "boolean" ? record.resume_setup : fallback.resume_setup,
     first_fetch: typeof record.first_fetch === "boolean" ? record.first_fetch : fallback.first_fetch,
-    triage_first_job:
-      typeof record.triage_first_job === "boolean"
-        ? record.triage_first_job
-        : fallback.triage_first_job,
     generate_first_pdf:
       typeof record.generate_first_pdf === "boolean"
         ? record.generate_first_pdf
         : fallback.generate_first_pdf,
-    download_first_pdf:
-      typeof record.download_first_pdf === "boolean"
-        ? record.download_first_pdf
-        : fallback.download_first_pdf,
   };
 }
 
@@ -89,9 +62,7 @@ export function mergeOnboardingChecklists(
   return {
     resume_setup: base.resume_setup || normalizedIncoming.resume_setup,
     first_fetch: base.first_fetch || normalizedIncoming.first_fetch,
-    triage_first_job: base.triage_first_job || normalizedIncoming.triage_first_job,
     generate_first_pdf: base.generate_first_pdf || normalizedIncoming.generate_first_pdf,
-    download_first_pdf: base.download_first_pdf || normalizedIncoming.download_first_pdf,
   };
 }
 

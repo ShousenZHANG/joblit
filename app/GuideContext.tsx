@@ -121,6 +121,7 @@ export function GuideProvider({ children }: { children: ReactNode }) {
   const [targetMissing, setTargetMissing] = useState(false);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const [welcomeVisible, setWelcomeVisible] = useState(false);
 
   const scrolledTargetKeyRef = useRef<string | null>(null);
 
@@ -135,7 +136,19 @@ export function GuideProvider({ children }: { children: ReactNode }) {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || "Failed to load onboarding state");
       const nextState = json.state as GuideState;
-      setState((prev) => resolveGuideState(prev, nextState, true));
+      setState((prev) => {
+        const resolved = resolveGuideState(prev, nextState, true);
+        const isNewUser =
+          resolved.stage === "NEW_USER" &&
+          !resolved.dismissed &&
+          !resolved.completedAt &&
+          !resolved.isComplete;
+        // Only auto-show welcome card on desktop-sized viewports.
+        if (isNewUser && typeof window !== "undefined" && window.innerWidth >= 1024) {
+          setWelcomeVisible(true);
+        }
+        return resolved;
+      });
     } catch {
       setState(null);
     } finally {
@@ -320,7 +333,10 @@ export function GuideProvider({ children }: { children: ReactNode }) {
     [patchState],
   );
 
-  const openGuide = startTour;
+  const openGuide = useCallback(() => {
+    setWelcomeVisible(false);
+    startTour();
+  }, [startTour]);
   const closeGuide = stopTour;
 
   const isTaskHighlighted = useCallback(
@@ -490,12 +506,48 @@ export function GuideProvider({ children }: { children: ReactNode }) {
       {children}
       {userId ? (
         <>
+          {welcomeVisible && !tourRunning && state && !state.isComplete && !state.dismissed ? (
+            <section
+              data-testid="guide-welcome-card"
+              className="fixed bottom-4 right-4 z-[55] hidden max-w-xs rounded-2xl border border-slate-900/10 bg-white/95 p-4 text-xs text-slate-700 shadow-[0_18px_45px_-30px_rgba(15,23,42,0.6)] backdrop-blur md:block"
+            >
+              <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                <Sparkles className="h-3 w-3" />
+                Quick tour
+              </div>
+              <h3 className="text-sm font-semibold text-slate-900">Get oriented in 3 short steps</h3>
+              <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
+                We&apos;ll walk you through Jobs, Fetch, and your master resume. You can exit anytime.
+              </p>
+              <div className="mt-3 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWelcomeVisible(false);
+                    void patchState({ type: "skip" });
+                  }}
+                  className="rounded-full px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700"
+                >
+                  Maybe later
+                </button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8 rounded-full px-3 text-[11px]"
+                  onClick={openGuide}
+                >
+                  Start 3-step tour
+                </Button>
+              </div>
+            </section>
+          ) : null}
+
           {tourRunning && activeTourTask ? (
             <>
               <div className="pointer-events-none fixed inset-0 z-[60]">
                 {spotlightBox ? (
                   <div
-                    className={`absolute rounded-2xl border-2 border-emerald-400/95 bg-transparent shadow-[0_0_0_9999px_rgba(15,23,42,0.5)] ${
+                    className={`absolute rounded-2xl border border-emerald-300/90 bg-transparent shadow-[0_0_0_9999px_rgba(15,23,42,0.35)] ${
                       prefersReducedMotion ? "" : "transition-all duration-150 ease-out"
                     }`}
                     style={{
@@ -506,7 +558,7 @@ export function GuideProvider({ children }: { children: ReactNode }) {
                     }}
                   />
                 ) : (
-                  <div className="absolute inset-0 bg-slate-900/50" />
+                  <div className="absolute inset-0 bg-slate-900/35" />
                 )}
               </div>
 
@@ -540,7 +592,7 @@ export function GuideProvider({ children }: { children: ReactNode }) {
 
                 <section data-testid="guide-tour-card">
                   <div className="mb-2 flex items-start justify-between gap-3">
-                    <div className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                    <div className="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
                       <Sparkles className="h-3 w-3" />
                       Guide
                     </div>
@@ -555,8 +607,8 @@ export function GuideProvider({ children }: { children: ReactNode }) {
                   </div>
 
                   <div className="mb-2 flex items-center justify-between text-[11px] text-slate-500">
-                    <span>
-                      Step {tourStepNumber}/{tourTotalSteps}
+                    <span className="uppercase tracking-wide">
+                      Step {tourStepNumber} of {tourTotalSteps}
                     </span>
                     {state ? (
                       <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">

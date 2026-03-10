@@ -202,7 +202,7 @@ describe("GuideContext", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("guide-tour-card")).toBeInTheDocument();
-      expect(screen.getByText(/step 1\/5/i)).toBeInTheDocument();
+      expect(screen.getByText(/step 1 of 3/i)).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
