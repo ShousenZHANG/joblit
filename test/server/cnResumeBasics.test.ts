@@ -15,6 +15,7 @@ const full = {
   gender: "男",
   age: "28",
   identity: "3年经验",
+  availabilityMonth: "2026-03",
   wechat: "zhangsan_wx",
   qq: "123456789",
 };
@@ -26,6 +27,7 @@ describe("CnResumeBasicsSchema", () => {
     if (result.success) {
       expect(result.data.age).toBe("28");
       expect(result.data.identity).toBe("3年经验");
+      expect(result.data.availabilityMonth).toBe("2026-03");
       expect(result.data.wechat).toBe("zhangsan_wx");
       expect(result.data.qq).toBe("123456789");
     }
