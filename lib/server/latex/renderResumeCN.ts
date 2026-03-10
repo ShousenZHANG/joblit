@@ -1,4 +1,4 @@
-﻿import fs from "node:fs";
+import fs from "node:fs";
 import path from "node:path";
 
 type CandidateInfo = {
@@ -124,7 +124,8 @@ function renderExperienceBlock(entry: ExperienceEntry) {
   }
 
   if (entry.bullets.length > 0) {
-    lines.push("\\begin{itemize}");
+    // Tighten gap between experience header lines and first bullet.
+    lines.push("\\begin{itemize}[topsep=0pt]");
     lines.push(renderBullets(entry.bullets));
     lines.push("\\end{itemize}");
   }
@@ -170,7 +171,9 @@ function renderProjectBlock(entry: ProjectEntry) {
   }
 
   if (entry.bullets.length > 0) {
-    lines.push("\\begin{itemize}");
+    // Tighten gap between project header lines and first bullet.
+    // Keep consistent with experience bullet spacing.
+    lines.push("\\begin{itemize}[topsep=0pt]");
     lines.push(renderBullets(entry.bullets));
     lines.push("\\end{itemize}");
   }
