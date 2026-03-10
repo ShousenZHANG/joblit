@@ -72,7 +72,7 @@ describe("mapResumeProfileCN", () => {
     expect(mapped.personalInfoLine).toContain("5年经验");
 
     // Links line
-    expect(mapped.linksLine).toContain("$|$");
+    expect(mapped.linksLine).toContain("$\\cdot$");
     expect(mapped.linksLine).toContain("linkedin.com");
 
     // Skills
@@ -142,7 +142,7 @@ describe("mapResumeProfileCN", () => {
     expect(mapped.personalInfoLine).toContain("女");
     expect(mapped.personalInfoLine).toContain("3年经验");
     // Should not have dangling separators for missing fields
-    expect(mapped.personalInfoLine).not.toMatch(/\|\s*\|/);
+    expect(mapped.personalInfoLine).not.toMatch(/\\cdot\$\s*\$\\cdot/);
     // No wechat/qq provided
     expect(mapped.contactExtraLine).toBe("");
   });

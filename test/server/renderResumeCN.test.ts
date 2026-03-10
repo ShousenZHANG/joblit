@@ -15,9 +15,9 @@ const fullInput: RenderResumeCNInput = {
     linkedinText: "LinkedIn",
   },
   photoBlock: "\\includegraphics[width=2.5cm]{photo}\\\\[4pt]",
-  personalInfoLine: "男 $|$ 28 $|$ 5年经验",
+  personalInfoLine: "男 $\\cdot$ 28 $\\cdot$ 5年经验",
   contactExtraLine: "",
-  linksLine: " $|$ \\href{https://linkedin.com/in/zhangsan}{LinkedIn}",
+  linksLine: " $\\cdot$ \\href{https://linkedin.com/in/zhangsan}{LinkedIn}",
   summary: "资深前端工程师",
   skills: [
     { label: "前端", items: ["React", "Vue", "TypeScript"] },
@@ -65,15 +65,29 @@ describe("renderResumeCNTex", () => {
     expect(output).toContain("zhangsan@example.com");
     expect(output).toContain("includegraphics");
     expect(output).toContain("男");
+    // No unresolved tokens should leak into output.
+    expect(output).not.toContain("{{");
+    // CN resume template should not include summary text by default.
+    expect(output).not.toContain(fullInput.summary);
   });
 
-  it("contains expected section headers", () => {
+  it("contains expected section headers in the right order", () => {
     const output = renderResumeCNTex(fullInput);
 
-    expect(output).toContain("专业技能");
+    expect(output).toContain("教育背景");
     expect(output).toContain("工作经历");
     expect(output).toContain("项目经历");
-    expect(output).toContain("教育背景");
+    expect(output).toContain("技能/证书及其他");
+
+    const educationIdx = output.indexOf("教育背景");
+    const experienceIdx = output.indexOf("工作经历");
+    const projectsIdx = output.indexOf("项目经历");
+    const skillsIdx = output.indexOf("技能/证书及其他");
+
+    expect(educationIdx).toBeGreaterThanOrEqual(0);
+    expect(experienceIdx).toBeGreaterThan(educationIdx);
+    expect(projectsIdx).toBeGreaterThan(experienceIdx);
+    expect(skillsIdx).toBeGreaterThan(projectsIdx);
   });
 
   it("renders skills correctly", () => {
@@ -120,9 +134,18 @@ describe("renderResumeCNTex", () => {
 
     const output = renderResumeCNTex(minimal);
 
-    expect(output).toContain("专业技能");
+    // Skills and experience are required sections for the CN template.
+    expect(output).toContain("技能/证书及其他");
     expect(output).toContain("工作经历");
     expect(output).not.toContain("项目经历");
     expect(output).not.toContain("教育背景");
+    // No unresolved tokens should leak into output.
+    expect(output).not.toContain("{{");
+
+    // Required section order should remain stable even when optional sections are empty.
+    const experienceIdx = output.indexOf("工作经历");
+    const skillsIdx = output.indexOf("技能/证书及其他");
+    expect(experienceIdx).toBeGreaterThanOrEqual(0);
+    expect(skillsIdx).toBeGreaterThan(experienceIdx);
   });
 });

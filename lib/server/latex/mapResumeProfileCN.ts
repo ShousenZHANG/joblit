@@ -1,4 +1,4 @@
-﻿import { escapeLatex, escapeLatexWithBold } from "./escapeLatex";
+import { escapeLatex, escapeLatexWithBold } from "./escapeLatex";
 
 type ResumeProfileLike = {
   summary?: string | null;
@@ -63,14 +63,14 @@ export function mapResumeProfileCN(profile: ResumeProfileLike) {
   );
   const personalInfoLine =
     personalParts.length > 0
-      ? escapeLatex(personalParts.join(" | "))
+      ? personalParts.map((v) => escapeLatex(v)).join(" $\\cdot$ ")
       : "";
 
   const photoUrl = toStringValue(basics.photoUrl).trim();
   const photoBlock =
     photoUrl.length > 0
       ? `\\begin{tikzpicture}[remember picture, overlay]
-\\node[anchor=north east, inner sep=0pt] at ([xshift=-1.5cm, yshift=-1.2cm]current page.north east) {\\includegraphics[height=2.8cm]{photo}};
+\\node[anchor=north east, inner sep=0pt] at ([xshift=-0.6cm, yshift=-0.4cm]current page.north east) {\\includegraphics[height=2.4cm]{photo}};
 \\end{tikzpicture}`
       : "";
 
@@ -96,7 +96,7 @@ export function mapResumeProfileCN(profile: ResumeProfileLike) {
   }
   const linksLine =
     linkEntries.length > 0
-      ? linkEntries.map((entry) => ` $|$ ${entry}`).join("")
+      ? linkEntries.map((entry) => ` $\\cdot$ ${entry}`).join("")
       : "";
 
   // --- Skills ---
