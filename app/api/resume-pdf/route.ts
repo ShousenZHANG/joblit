@@ -26,6 +26,10 @@ const ResumeBasicsSchema = z.object({
   identity: z.string().trim().max(60).optional().nullable(),
   wechat: z.string().trim().max(60).optional().nullable(),
   qq: z.string().trim().max(20).optional().nullable(),
+  availabilityMonth: z
+    .union([z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/), z.literal("")])
+    .optional()
+    .nullable(),
 });
 
 const ResumeLinkSchema = z.object({
