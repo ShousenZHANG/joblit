@@ -990,12 +990,14 @@ body::-webkit-scrollbar-thumb:hover,
 }
 
 .jobs-scroll-area [data-radix-scroll-area-viewport] {
-  scrollbar-width: thin;
-  scrollbar-color: var(--jobs-scroll-thumb) transparent;
+  /* Hide native scrollbar; use Radix custom scrollbar instead */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  scrollbar-color: transparent transparent;
 }
 
 .jobs-scroll-area [data-radix-scroll-area-viewport]::-webkit-scrollbar {
-  width: 11px;
+  display: none;
 }
 
 .jobs-scroll-area [data-radix-scroll-area-viewport]::-webkit-scrollbar-track {
