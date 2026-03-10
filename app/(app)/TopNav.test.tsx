@@ -40,7 +40,7 @@ describe("TopNav", () => {
   it("does not render duplicate route progress element", () => {
     const { container } = renderNav();
     expect(screen.getAllByRole("link", { name: "Jobs" }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: "Automation" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "Resume" }).length).toBeGreaterThan(0);
     expect(container.querySelector(".edu-route-progress")).toBeNull();
   });
 

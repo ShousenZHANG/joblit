@@ -35,7 +35,6 @@ export function TopNav() {
     { href: "/jobs", label: t("jobs") },
     { href: "/fetch", label: t("fetch") },
     { href: "/resume", label: t("resume") },
-    { href: "/automation", label: t("automation") },
   ];
   const activeLink = links.find((link) => pathname.startsWith(link.href)) ?? links[0];
   const email = data?.user?.email ?? "";
