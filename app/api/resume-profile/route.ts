@@ -26,6 +26,10 @@ const ResumeBasicsSchema = z.object({
   gender: z.string().max(10).optional().nullable(),
   age: z.string().max(20).optional().nullable(),
   identity: z.string().max(60).optional().nullable(),
+  availabilityMonth: z
+    .union([z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/), z.literal("")])
+    .optional()
+    .nullable(),
 });
 
 const ResumeLinkSchema = z.object({

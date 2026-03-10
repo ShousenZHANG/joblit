@@ -26,6 +26,7 @@ export type ResumeProfileInput = {
     gender?: string | null;
     age?: string | null;
     identity?: string | null;
+    availabilityMonth?: string | null;
   } | null;
   links?: {
     label: string;
