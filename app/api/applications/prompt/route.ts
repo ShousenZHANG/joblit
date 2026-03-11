@@ -14,6 +14,7 @@ import {
   getExpectedJsonShapeForTarget,
 } from "@/lib/server/ai/promptContract";
 import {
+  buildApplicationShortUserPrompt,
   buildApplicationSystemPrompt,
   buildApplicationUserPrompt,
 } from "@/lib/server/ai/applicationPromptBuilder";
@@ -115,11 +116,25 @@ export async function POST(req: Request) {
     resumeSnapshotUpdatedAt: profile.updatedAt.toISOString(),
   });
 
+  const shortUserPrompt = buildApplicationShortUserPrompt({
+    target: parsed.data.target,
+    job: {
+      title: job.title,
+      company: job.company || "the company",
+      description: job.description || "",
+    },
+    resume:
+      parsed.data.target === "resume"
+        ? { baseLatestBullets, coverage }
+        : undefined,
+  });
+
   return NextResponse.json({
     requestId,
     prompt: {
       systemPrompt,
       userPrompt,
+      shortUserPrompt,
     },
     promptMeta,
     expectedJsonShape,

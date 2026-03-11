@@ -465,6 +465,7 @@ export function JobsClient({
   const [externalSkillPackLoading, setExternalSkillPackLoading] = useState(false);
   const [externalTarget, setExternalTarget] = useState<"resume" | "cover">("resume");
   const [externalPromptText, setExternalPromptText] = useState("");
+  const [externalShortPromptText, setExternalShortPromptText] = useState("");
   const [externalModelOutput, setExternalModelOutput] = useState("");
   const [externalGenerating, setExternalGenerating] = useState(false);
   const [externalStep, setExternalStep] = useState<1 | 2 | 3>(1);
@@ -1293,11 +1294,8 @@ export function JobsClient({
     if (!res.ok) {
       throw new Error(json?.error?.message || json?.error || "Failed to build prompt");
     }
-    const promptText = [
-      "You are given SYSTEM and USER instructions below.",
-      "Follow them strictly.",
-      "Output MUST be exactly one valid JSON object.",
-      "Do not add any markdown, code fences, notes, or extra text before/after JSON.",
+    const fullPromptText = [
+      "You are given SYSTEM and USER instructions below. Follow them strictly. Output exactly one valid JSON object (no markdown or code fences).",
       "",
       "=== SYSTEM INSTRUCTIONS START ===",
       json.prompt?.systemPrompt ?? "",
@@ -1306,11 +1304,16 @@ export function JobsClient({
       "=== USER INSTRUCTIONS START ===",
       json.prompt?.userPrompt ?? "",
       "=== USER INSTRUCTIONS END ===",
-      "",
-      "=== JSON OUTPUT CONTRACT ===",
-      JSON.stringify(json.expectedJsonShape ?? {}, null, 2),
-      "=== END CONTRACT ===",
     ].join("\n");
+    const shortPromptText =
+      typeof json.prompt?.shortUserPrompt === "string" && json.prompt.shortUserPrompt.trim().length > 0
+        ? [
+            "Follow your loaded jobflow-tailoring pack. Output exactly one JSON object (no markdown or code fences).",
+            "",
+            json.prompt.shortUserPrompt,
+          ].join("\n")
+        : fullPromptText;
+    const promptText = fullPromptText;
     const promptMeta: ExternalPromptMeta | null =
       json?.promptMeta &&
       typeof json.promptMeta.ruleSetId === "string" &&
@@ -1333,7 +1336,7 @@ export function JobsClient({
             promptHash: typeof json.promptMeta.promptHash === "string" ? json.promptMeta.promptHash : undefined,
           }
         : null;
-    return { promptText, promptMeta };
+    return { promptText, shortPromptText, promptMeta };
   }
 
   async function openExternalGenerateDialog(job: JobItem, target: "resume" | "cover") {
@@ -1342,13 +1345,15 @@ export function JobsClient({
     setExternalStep(1);
     setExternalModelOutput("");
     setExternalPromptText("");
+    setExternalShortPromptText("");
     setExternalPromptMeta(null);
     setExternalSkillPackFresh(false);
     setError(null);
     setExternalPromptLoading(true);
     try {
-      const { promptText, promptMeta } = await loadTailorPrompt(job, target);
+      const { promptText, shortPromptText, promptMeta } = await loadTailorPrompt(job, target);
       setExternalPromptText(promptText);
+      setExternalShortPromptText(shortPromptText);
       setExternalPromptMeta(promptMeta);
       const fresh = isSkillPackFresh(promptMeta);
       setExternalSkillPackFresh(fresh);
@@ -1398,6 +1403,36 @@ export function JobsClient({
     });
   }
 
+  async function copyShortPromptText() {
+    const text = externalShortPromptText.trim();
+    if (!text) return;
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      setExternalStep(3);
+      toast({
+        title: "Short prompt copied",
+        description: "Paste into a chat that already has the skill pack loaded.",
+        duration: 2200,
+        className:
+          "border-emerald-200 bg-emerald-50 text-emerald-900 animate-in fade-in zoom-in-95",
+      });
+      return;
+    }
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "jobflow-tailor-prompt-short.txt";
+    anchor.click();
+    URL.revokeObjectURL(url);
+    toast({
+      title: "Short prompt ready",
+      description: "Clipboard unavailable. File downloaded.",
+      duration: 2200,
+      className: "border-slate-200 bg-slate-50 text-slate-900 animate-in fade-in zoom-in-95",
+    });
+  }
+
   async function downloadSkillPack() {
     if (externalPromptLoading || !externalPromptMeta) {
       return;
@@ -1411,7 +1446,7 @@ export function JobsClient({
         throw new Error(json?.error?.message || json?.error || "Failed to download skill pack");
       }
       const blob = await res.blob();
-      const fallbackName = "jobflow-skill-pack.tar.gz";
+      const fallbackName = "jobflow-tailoring.tar.gz";
       const filename = filenameFromDisposition(res.headers.get("content-disposition")) || fallbackName;
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -1754,7 +1789,7 @@ export function JobsClient({
                     Copy prompt and paste it in ChatGPT/Gemini/Claude with your imported skill pack.
                   </p>
                   <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-                    Prompt length: {externalPromptText.length} chars
+                    Full prompt: {externalPromptText.length} chars · Short (pack loaded): {externalShortPromptText.length} chars
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button
@@ -1766,7 +1801,19 @@ export function JobsClient({
                       className={externalBtnSecondary}
                     >
                       <Copy className="h-4 w-4" />
-                      {externalPromptLoading ? "Building..." : "Copy Prompt"}
+                      {externalPromptLoading ? "Building..." : "Copy full prompt"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={externalPromptLoading || !externalShortPromptText.trim()}
+                      onClick={copyShortPromptText}
+                      className={externalBtnSecondary}
+                      title="Use when the model already has the skill pack in context"
+                    >
+                      <Copy className="h-4 w-4" />
+                      Copy short (pack loaded)
                     </Button>
                     <Button type="button" size="sm" onClick={() => setExternalStep(3)} className={externalBtnPrimary}>
                       Continue

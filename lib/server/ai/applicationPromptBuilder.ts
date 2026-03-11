@@ -104,32 +104,25 @@ function buildCoverStructureBlock() {
     "1) cover.subject: concise role-specific subject line (prefer 'Application for <Role>' only; do NOT append candidate name).",
     "2) cover.candidateTitle (optional): set to role-aligned candidate title for the letter header.",
     "3) cover.date: current or provided date string.",
-    "4) cover.salutation: provide only addressee text (e.g., 'Hiring Team at <Company>'), no leading 'Dear' and no trailing comma.",
-    "5) cover.paragraphOne: application intent + role-fit summary from real resume facts (can be multi-sentence).",
-    "6) cover.paragraphTwo: map to JD responsibilities in priority order with concrete evidence and outcomes.",
-    "6b) Top-3 JD responsibilities must be covered first with explicit, grounded evidence points.",
+    "4) cover.salutation: addressee only (e.g. 'Hiring Team at <Company>'); no leading 'Dear', no trailing comma.",
+    "5) cover.paragraphOne: application intent + role-fit in one to two sentences, anchored in real experience. No generic openers ('I am writing to apply...'); lead with what the candidate brings.",
+    "6) cover.paragraphTwo: map experience to JD responsibilities in priority order with concrete evidence and outcomes. Top-3 JD responsibilities first; lead with what they did and the result. Scannable and evidence-first.",
     "6a) If direct evidence is missing, do not claim it; use only adjacent proven evidence that is factually supportable.",
-    "7) cover.paragraphThree: why this role/company specifically, written in natural first-person candidate voice (specific, not generic).",
-    "8) Bold all JD-critical keywords that appear in the cover output using **keyword** (clean markers only).",
-    "8a) Keep bolding readable: emphasize critical terms without turning full sentences into bold text.",
+    "7) cover.paragraphThree: why this role/company — one or two specific points. Natural first-person; understated Australian tone (e.g. 'The focus on X aligns with where I want to grow'). No generic enthusiasm or 'I would be a great fit'.",
+    "8) Bold all JD-critical keywords in the cover using **keyword** (clean markers only). Keep bolding readable.",
     "9) cover.closing + cover.signatureName: include when possible.",
-    "10) No fabrication, no recruiter voice, no generic filler; keep a strong candidate narrative.",
-    "10a) Keep voice professional but natural, with subtle personality (lightly engaging but still formal).",
-    "11) Run an internal 2-stage process before final output: (a) responsibility-evidence plan, (b) final cover drafting.",
-    "12) After drafting, do exactly one internal rewrite pass to fix weak coverage, weak grounding, or generic motivation.",
-    "13) Locale style: en-AU (concise, grounded, professional) and target 280-360 words across three paragraphs.",
-    "14) Cover target JSON keys allowed: cover only (no cvSummary/latestExperience/skillsFinal).",
+    "10) Australian workplace + big tech standard: direct, concise, understated confidence; collaborative tone; no hype or filler. Sound human and specific. Target 280–360 words across three paragraphs.",
+    "11) Cover target JSON keys allowed: cover only (no cvSummary/latestExperience/skillsFinal).",
   ].join("\n");
 }
 
 export function buildApplicationSystemPrompt(rules: PromptSkillRuleSet) {
   return [
     `You are Jobflow's external AI tailoring assistant (${rules.locale}).`,
-    "Use the imported skill package as the single source of truth.",
-    "Read base resume context from jobflow-skill-pack/context/resume-snapshot.json (use fields like summary, experiences, skills).",
+    "Your job: (1) Resume target — tailor the candidate's existing resume to the role (adapt cvSummary, reorder/add bullets, adapt skills); (2) Cover target — generate a role-specific cover letter using the candidate's resume as the only evidence. In both cases, the candidate's resume context is the single source of truth; do not invent facts.",
+    "Use the imported skill package for rules and output format. Read base resume context from jobflow-tailoring/context/resume-snapshot.json (summary, experiences, skills).",
     "Output strict JSON only (no code fences, no markdown prose outside JSON).",
-    "Markdown bold markers inside JSON strings are allowed when explicitly requested.",
-    "Markdown bold markers inside JSON string values are allowed when requested.",
+    "Markdown bold markers inside JSON string values are allowed when explicitly requested.",
     "Ensure valid JSON strings: use \\n for line breaks and escape quotes.",
     "Do not output file/path diagnostics or process notes.",
     formatRuleBlock("Hard Constraints:", rules.hardConstraints),
@@ -140,8 +133,8 @@ export function buildApplicationUserPrompt(input: BuildApplicationPromptInput) {
   const isResumeTarget = input.target === "resume";
   const requiredJsonShape = JSON.stringify(getExpectedJsonShapeForTarget(input.target), null, 2).split("\n");
   const targetTaskLine = isResumeTarget
-    ? "Generate role-tailored CV summary using the imported skill pack."
-    : "Generate role-tailored Cover Letter content using the imported skill pack.";
+    ? "Tailor the candidate's resume for this role: produce cvSummary, latestExperience.bullets, and skillsFinal from their resume context; preserve existing bullets verbatim, reorder and add only grounded new bullets per rules."
+    : "Generate a cover letter for this role using the candidate's resume as evidence; follow the pack's cover structure and rules.";
   const strictResumeBulletLine = isResumeTarget
     ? "Strict resume bullet rule: preserve every existing latest-experience bullet text verbatim; only reorder existing bullets and add new bullets per rules."
     : "";
@@ -172,6 +165,26 @@ export function buildApplicationUserPrompt(input: BuildApplicationPromptInput) {
     `- Company: ${input.job.company || "the company"}`,
     `- Job description: ${input.job.description || ""}`,
   ].join("\n");
+}
+
+/** Short user prompt for when the model already has the jobflow-tailoring pack loaded. Only job-specific inputs + one-line instruction. */
+export function buildApplicationShortUserPrompt(input: {
+  target: PromptTarget;
+  job: JobInput;
+  resume?: ResumePromptInput;
+}): string {
+  const lines = [
+    `Target: ${input.target}`,
+    "",
+    "Job Input:",
+    `- Job title: ${input.job.title}`,
+    `- Company: ${input.job.company || "the company"}`,
+    `- Job description: ${input.job.description || ""}`,
+  ];
+  if (input.target === "resume" && input.resume) {
+    lines.push("", buildResumeCoverageBlock(input.resume));
+  }
+  return lines.join("\n");
 }
 
 export function getTemplateResumePromptInput(baseLatestBullets: string[]): ResumePromptInput {

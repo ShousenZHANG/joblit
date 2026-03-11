@@ -56,6 +56,7 @@ describe("prompt rules skill pack api", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("application/gzip");
     expect(res.headers.get("content-disposition")).toContain(".tar.gz");
+    expect(res.headers.get("content-disposition")).toMatch(/jobflow-tailoring-/);
     expect(res.headers.get("x-skill-pack-version")?.length).toBe(64);
   });
 

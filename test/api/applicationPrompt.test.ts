@@ -98,9 +98,9 @@ describe("applications prompt api", () => {
     expect(res.status).toBe(200);
     expect(typeof json.prompt.systemPrompt).toBe("string");
     expect(typeof json.prompt.userPrompt).toBe("string");
-    expect(json.prompt.systemPrompt).toContain("Use the imported skill package as the single source of truth.");
+    expect(json.prompt.systemPrompt).toContain("single source of truth");
     expect(json.prompt.systemPrompt).toContain(
-      "Markdown bold markers inside JSON strings are allowed when explicitly requested.",
+      "Markdown bold markers inside JSON string values are allowed when explicitly requested.",
     );
     expect(json.expectedJsonShape.cvSummary).toBe("string");
     expect(Array.isArray(json.expectedJsonShape.latestExperience.bullets)).toBe(true);
@@ -165,6 +165,6 @@ describe("applications prompt api", () => {
     expect(json.prompt.userPrompt).not.toContain("Top-3 Responsibility Coverage (must follow):");
     expect(json.prompt.userPrompt).toContain("Top-3 JD responsibilities");
     expect(json.prompt.userPrompt).toContain("Bold all JD-critical keywords");
-    expect(json.prompt.userPrompt).toContain("professional but natural");
+    expect(json.prompt.userPrompt).toContain("Australian workplace");
   });
 });

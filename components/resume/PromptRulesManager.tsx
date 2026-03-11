@@ -157,7 +157,7 @@ export function PromptRulesManager() {
 
       const blob = await res.blob();
       const disposition = res.headers.get("content-disposition");
-      const fallbackName = "jobflow-skill-pack.tar.gz";
+      const fallbackName = "jobflow-tailoring.tar.gz";
       const filenameMatch = disposition?.match(/filename="?([^"]+)"?/i);
       const filename = filenameMatch?.[1] ?? fallbackName;
       const url = URL.createObjectURL(blob);

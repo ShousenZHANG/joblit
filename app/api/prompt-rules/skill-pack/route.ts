@@ -61,7 +61,7 @@ export async function GET(req: Request) {
   });
   const tarGz = createTarGz(files);
   const today = new Date().toISOString().slice(0, 10);
-  const filename = `jobflow-skill-pack-${safeSegment(rules.id)}-${today}.tar.gz`;
+  const filename = `jobflow-tailoring-${safeSegment(rules.id)}-${today}.tar.gz`;
 
   return new NextResponse(new Uint8Array(tarGz), {
     status: 200,

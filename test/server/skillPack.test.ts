@@ -7,7 +7,7 @@ describe("skill pack cover prompt template", () => {
   it("includes resume summary keyword bolding guidance with JSON-only framing", () => {
     const files = buildGlobalSkillPackFiles(DEFAULT_RULES);
     const resumePrompt = files.find(
-      (file) => file.name === "jobflow-skill-pack/prompts/resume-user-prompt-template.txt",
+      (file) => file.name === "jobflow-tailoring/prompts/resume-user.txt",
     );
 
     expect(resumePrompt).toBeTruthy();
@@ -21,7 +21,7 @@ describe("skill pack cover prompt template", () => {
   it("includes recruiter-style top-3 alignment, full keyword bolding guidance, and natural-professional tone", () => {
     const files = buildGlobalSkillPackFiles(DEFAULT_RULES);
     const coverPrompt = files.find(
-      (file) => file.name === "jobflow-skill-pack/prompts/cover-user-prompt-template.txt",
+      (file) => file.name === "jobflow-tailoring/prompts/cover-user.txt",
     );
 
     expect(coverPrompt).toBeTruthy();
@@ -36,10 +36,10 @@ describe("skill pack cover prompt template", () => {
   it("exports formal JSON schemas for resume and cover contracts", () => {
     const files = buildGlobalSkillPackFiles(DEFAULT_RULES);
     const resumeSchema = files.find(
-      (file) => file.name === "jobflow-skill-pack/schema/output-schema.resume.json",
+      (file) => file.name === "jobflow-tailoring/schema/output.resume.schema.json",
     );
     const coverSchema = files.find(
-      (file) => file.name === "jobflow-skill-pack/schema/output-schema.cover.json",
+      (file) => file.name === "jobflow-tailoring/schema/output.cover.schema.json",
     );
 
     expect(resumeSchema).toBeTruthy();
@@ -67,7 +67,7 @@ describe("skill pack cover prompt template", () => {
       },
       { redactContext: true },
     );
-    const context = files.find((file) => file.name === "jobflow-skill-pack/context/resume-snapshot.json");
+    const context = files.find((file) => file.name === "jobflow-tailoring/context/resume-snapshot.json");
 
     expect(context).toBeTruthy();
     if (!context) return;
@@ -76,5 +76,32 @@ describe("skill pack cover prompt template", () => {
     expect(parsed.summary).toBe("[REDACTED]");
     expect(Array.isArray(parsed.experiences)).toBe(true);
     expect(parsed.experiences).toHaveLength(0);
+  });
+
+  it("does not include any jobflow-skill-pack path prefix", () => {
+    const files = buildGlobalSkillPackFiles(DEFAULT_RULES);
+    expect(files.every((f) => !f.name.startsWith("jobflow-skill-pack/"))).toBe(true);
+  });
+
+  it("includes meta/manifest.json with required fields", () => {
+    const files = buildGlobalSkillPackFiles(DEFAULT_RULES, {
+      resumeSnapshot: { summary: "", experiences: [] },
+      resumeSnapshotUpdatedAt: "2026-02-23T00:00:00.000Z",
+    });
+    const manifestFile = files.find((file) => file.name === "jobflow-tailoring/meta/manifest.json");
+
+    expect(manifestFile).toBeTruthy();
+    if (!manifestFile) return;
+
+    const manifest = JSON.parse(manifestFile.content);
+    expect(manifest.packName).toBe("jobflow-tailoring");
+    expect(manifest.packVersion).toBeDefined();
+    expect(manifest.generatedAt).toBeDefined();
+    expect(typeof manifest.redacted).toBe("boolean");
+    expect(manifest.ruleSetId).toBeDefined();
+    expect(manifest.resumeSnapshotUpdatedAt).toBeDefined();
+    expect(manifest.skillPackVersion).toBeDefined();
+    expect(Array.isArray(manifest.files)).toBe(true);
+    expect(manifest.files).toContain("jobflow-tailoring/meta/manifest.json");
   });
 });
