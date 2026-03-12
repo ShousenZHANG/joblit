@@ -316,7 +316,7 @@ body {
 }
 
 .marketing-edu {
-  background: #f3f2ef;
+  background: #fff8f1;
   font-family: var(--font-edu-body), "Nunito", ui-rounded, system-ui, sans-serif;
 }
 
@@ -334,9 +334,9 @@ body {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 100% 60% at 10% 20%, rgba(10, 102, 194, 0.08), transparent 45%),
-    radial-gradient(ellipse 80% 80% at 90% 80%, rgba(10, 102, 194, 0.06), transparent 45%),
-    linear-gradient(180deg, #f8f9fa 0%, #f3f2ef 50%, #eef0f2 100%);
+    radial-gradient(ellipse 100% 60% at 20% 10%, rgba(94, 234, 212, 0.12), transparent 45%),
+    radial-gradient(ellipse 80% 80% at 85% 90%, rgba(251, 146, 60, 0.1), transparent 45%),
+    linear-gradient(180deg, #fffefb 0%, #fff8f1 50%, #fdf2e7 100%);
   z-index: 0;
 }
 
@@ -356,58 +356,40 @@ body {
   will-change: transform, opacity;
 }
 
-.edu-dynamic-orb--mint,
-.edu-dynamic-orb--blue {
-  background: radial-gradient(circle, rgba(10, 102, 194, 0.35), rgba(10, 102, 194, 0.1), transparent 70%);
+.edu-dynamic-orb--mint {
+  background: radial-gradient(circle, rgba(52, 211, 153, 0.4), rgba(52, 211, 153, 0.1), transparent 70%);
 }
 
-.edu-dynamic-orb--peach,
-.edu-dynamic-orb--slate {
-  background: radial-gradient(circle, rgba(71, 85, 105, 0.2), rgba(71, 85, 105, 0.06), transparent 70%);
+.edu-dynamic-orb--peach {
+  background: radial-gradient(circle, rgba(251, 146, 60, 0.35), rgba(251, 146, 60, 0.08), transparent 70%);
 }
 
 .edu-dynamic-orb--cream {
-  background: radial-gradient(circle, rgba(248, 250, 252, 0.8), rgba(241, 245, 249, 0.3), transparent 70%);
+  background: radial-gradient(circle, rgba(254, 243, 199, 0.5), rgba(253, 230, 138, 0.15), transparent 70%);
 }
 
 .edu-dynamic-orb--1 {
-  width: 380px;
-  height: 380px;
-  top: -120px;
-  left: -100px;
-  animation: orb-float 18s ease-in-out infinite, orb-glow 8s ease-in-out infinite;
+  width: 320px;
+  height: 320px;
+  top: -100px;
+  left: -80px;
+  animation: orb-float 16s ease-in-out infinite;
 }
 
 .edu-dynamic-orb--2 {
   width: 280px;
   height: 280px;
-  top: 30%;
-  left: 50%;
-  animation: orb-float 14s ease-in-out infinite reverse 1s, orb-glow 6s ease-in-out infinite 0.5s;
+  bottom: -120px;
+  right: -80px;
+  animation: orb-float 14s ease-in-out infinite reverse 1s;
 }
 
 .edu-dynamic-orb--3 {
-  width: 420px;
-  height: 420px;
-  bottom: -160px;
-  right: -120px;
-  animation: orb-float 20s ease-in-out infinite 0.3s, orb-glow 9s ease-in-out infinite 1s;
-}
-
-.edu-dynamic-orb--4 {
-  width: 260px;
-  height: 260px;
-  bottom: 25%;
-  right: 60%;
-  animation: orb-float 16s ease-in-out infinite 2s, orb-glow 7s ease-in-out infinite 2s;
-}
-
-.edu-dynamic-orb--5 {
-  width: 320px;
-  height: 320px;
-  top: 50%;
-  left: -80px;
-  animation: orb-float 15s ease-in-out infinite 0.7s, orb-glow 8s ease-in-out infinite 0.2s;
+  width: 240px;
+  height: 240px;
+  top: 45%;
+  left: 50%;
+  animation: orb-float 12s ease-in-out infinite 0.5s;
 }
 
 @keyframes orb-float {
@@ -415,24 +397,18 @@ body {
   100% {
     transform: translate3d(0, 0, 0) scale(1);
   }
-  25% {
-    transform: translate3d(24px, -28px, 0) scale(1.03);
-  }
   50% {
-    transform: translate3d(-16px, 16px, 0) scale(0.97);
-  }
-  75% {
-    transform: translate3d(20px, 20px, 0) scale(1.02);
+    transform: translate3d(12px, -14px, 0) scale(1.02);
   }
 }
 
 @keyframes orb-glow {
   0%,
   100% {
-    opacity: 0.6;
+    opacity: 0.55;
   }
   50% {
-    opacity: 0.85;
+    opacity: 0.75;
   }
 }
 
