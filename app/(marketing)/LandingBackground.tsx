@@ -3,16 +3,17 @@
 import { useReducedMotion } from "framer-motion";
 import { GradientBackground } from "react-gradient-animation";
 
-const MINT = "#34d399";
-const MINT_LIGHT = "#6ee7b7";
-const PEACH = "#fb923c";
-const PEACH_LIGHT = "#fed7aa";
-const CREAM = "#fef3c7";
-const BASE = "#fff8f1";
+/* LinkedIn-style: blue + slate + light gray */
+const LINKEDIN_BLUE = "#0a66c2";
+const BLUE_LIGHT = "#378fe9";
+const BLUE_SOFT = "#e7f0f8";
+const SLATE = "#64748b";
+const SLATE_LIGHT = "#94a3b8";
+const BG = "#f3f2ef";
 
 /**
- * Dynamic gradient background via react-gradient-animation.
- * Mint/peach/cream palette; falls back to static when prefers-reduced-motion.
+ * Dynamic gradient background (LinkedIn-style palette).
+ * Cooler effect: more particles, soft blend; reduced-motion → static orbs.
  */
 export function LandingBackground() {
   const reduceMotion = useReducedMotion();
@@ -20,8 +21,8 @@ export function LandingBackground() {
   if (reduceMotion) {
     return (
       <div className="edu-dynamic-bg edu-dynamic-bg--static" aria-hidden="true">
-        <div className="edu-dynamic-orb edu-dynamic-orb--mint edu-dynamic-orb--1" />
-        <div className="edu-dynamic-orb edu-dynamic-orb--peach edu-dynamic-orb--3" />
+        <div className="edu-dynamic-orb edu-dynamic-orb--blue edu-dynamic-orb--1" />
+        <div className="edu-dynamic-orb edu-dynamic-orb--slate edu-dynamic-orb--3" />
       </div>
     );
   }
@@ -32,19 +33,19 @@ export function LandingBackground() {
       aria-hidden="true"
     >
       <GradientBackground
-        count={12}
-        size={{ min: 400, max: 700, pulse: 0.25 }}
-        speed={{ x: { min: 0.3, max: 1 }, y: { min: 0.3, max: 1 } }}
+        count={18}
+        size={{ min: 350, max: 650, pulse: 0.35 }}
+        speed={{ x: { min: 0.4, max: 1.2 }, y: { min: 0.4, max: 1.2 } }}
         colors={{
-          background: BASE,
-          particles: [MINT, MINT_LIGHT, PEACH, PEACH_LIGHT, CREAM],
+          background: BG,
+          particles: [LINKEDIN_BLUE, BLUE_LIGHT, BLUE_SOFT, SLATE, SLATE_LIGHT],
         }}
-        blending="overlay"
-        opacity={{ center: 0.45, edge: 0 }}
-        skew={-1}
-        shapes={["c"]}
+        blending="soft-light"
+        opacity={{ center: 0.5, edge: 0.05 }}
+        skew={-2}
+        shapes={["c", "s"]}
         style={{
-          opacity: 0.9,
+          opacity: 0.95,
           position: "absolute",
           inset: 0,
           width: "100%",

@@ -91,10 +91,10 @@ export function DemoCard() {
     <>
       <div className="flex items-center gap-2">
         <span
-          className="edu-pill inline-flex items-center gap-1.5 text-xs font-semibold"
+          className="edu-pill-pro inline-flex items-center gap-1.5 text-xs font-semibold"
           aria-hidden="true"
         >
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          <span className="h-1.5 w-1.5 rounded-full bg-[#0a66c2]" />
           Live demo
         </span>
       </div>
@@ -136,7 +136,7 @@ export function DemoCard() {
           </div>
         </div>
       </div>
-      <Button asChild className="edu-cta edu-cta--press mt-5 w-full">
+      <Button asChild className="edu-cta-pro mt-5 w-full">
         <Link href="/jobs">View matches</Link>
       </Button>
     </>

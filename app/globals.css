@@ -316,7 +316,7 @@ body {
 }
 
 .marketing-edu {
-  background: #fff8f1;
+  background: #f3f2ef;
   font-family: var(--font-edu-body), "Nunito", ui-rounded, system-ui, sans-serif;
 }
 
@@ -334,9 +334,9 @@ body {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 120% 80% at 20% 10%, rgba(94, 234, 212, 0.2), transparent 50%),
-    radial-gradient(ellipse 100% 100% at 85% 90%, rgba(251, 146, 60, 0.18), transparent 50%),
-    linear-gradient(180deg, #fffbf7 0%, #fff8f1 50%, #fdf2e7 100%);
+    radial-gradient(ellipse 100% 60% at 10% 20%, rgba(10, 102, 194, 0.08), transparent 45%),
+    radial-gradient(ellipse 80% 80% at 90% 80%, rgba(10, 102, 194, 0.06), transparent 45%),
+    linear-gradient(180deg, #f8f9fa 0%, #f3f2ef 50%, #eef0f2 100%);
   z-index: 0;
 }
 
@@ -356,16 +356,18 @@ body {
   will-change: transform, opacity;
 }
 
-.edu-dynamic-orb--mint {
-  background: radial-gradient(circle, rgba(52, 211, 153, 0.5), rgba(52, 211, 153, 0.15), transparent 70%);
+.edu-dynamic-orb--mint,
+.edu-dynamic-orb--blue {
+  background: radial-gradient(circle, rgba(10, 102, 194, 0.35), rgba(10, 102, 194, 0.1), transparent 70%);
 }
 
-.edu-dynamic-orb--peach {
-  background: radial-gradient(circle, rgba(251, 146, 60, 0.45), rgba(251, 146, 60, 0.12), transparent 70%);
+.edu-dynamic-orb--peach,
+.edu-dynamic-orb--slate {
+  background: radial-gradient(circle, rgba(71, 85, 105, 0.2), rgba(71, 85, 105, 0.06), transparent 70%);
 }
 
 .edu-dynamic-orb--cream {
-  background: radial-gradient(circle, rgba(254, 243, 199, 0.6), rgba(253, 230, 138, 0.2), transparent 70%);
+  background: radial-gradient(circle, rgba(248, 250, 252, 0.8), rgba(241, 245, 249, 0.3), transparent 70%);
 }
 
 .edu-dynamic-orb--1 {
@@ -532,6 +534,32 @@ body {
   background: #c7f9cc;
   color: #14532d;
   padding: 0.35rem 0.75rem;
+}
+
+.edu-pill-pro {
+  border: 1px solid rgba(10, 102, 194, 0.3);
+  background: #e7f0f8;
+  color: #0a66c2;
+  padding: 0.35rem 0.75rem;
+  font-weight: 600;
+}
+
+.edu-cta-pro {
+  background: #0a66c2;
+  color: #fff;
+  border: none;
+  min-height: 48px;
+  padding: 0.65rem 1.4rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 1.5rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.edu-cta-pro:hover {
+  background: #004182;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .edu-nav-link {
@@ -936,11 +964,11 @@ body {
 /* Demo card: warm product-style with press hover */
 .edu-demo-card {
   position: relative;
-  border-radius: 32px;
-  border: 3px solid #1f2937;
-  background: linear-gradient(180deg, #fffbf7 0%, #fdf2e7 100%);
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #ffffff;
   padding: 24px;
-  box-shadow: 0 12px 0 #1f2937;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
     box-shadow 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
   overflow: hidden;
@@ -953,13 +981,13 @@ body {
   left: 0;
   right: 0;
   height: 4px;
-  background: linear-gradient(90deg, #34d399 0%, #6ee7b7 50%, #34d399 100%);
-  border-radius: 32px 32px 0 0;
+  background: linear-gradient(90deg, #0a66c2 0%, #378fe9 50%, #0a66c2 100%);
+  border-radius: 16px 16px 0 0;
 }
 
 .edu-demo-card:hover {
-  transform: translate3d(0, 2px, 0);
-  box-shadow: 0 10px 0 #1f2937;
+  transform: translate3d(0, -1px, 0);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -968,7 +996,7 @@ body {
   }
   .edu-demo-card:hover {
     transform: none;
-    box-shadow: 0 12px 0 #1f2937;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   }
 }
 

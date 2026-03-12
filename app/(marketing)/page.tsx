@@ -1,10 +1,9 @@
-import Link from "next/link";
 import type { Metadata } from "next";
 import { Search } from "lucide-react";
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { HeroSection } from "./HeroSection";
 import { LandingBackground } from "./LandingBackground";
-import { LandingNav } from "./LandingNav";
 
 /* ── SEO ──────────────────────────────────────────────── */
 
@@ -61,7 +60,16 @@ export default async function HomePage() {
         </a>
 
         <div className="edu-page-enter relative z-[2] mx-auto flex w-full max-w-7xl flex-col items-center gap-10 px-4 pb-10 pt-4 text-center sm:gap-14 sm:px-6 sm:pb-12 md:gap-16 md:pt-5 lg:px-8">
-          <LandingNav />
+          <Link
+            href="/"
+            className="edu-landing-logo-only self-start text-[15px] font-semibold tracking-tight text-slate-800 transition-colors hover:text-slate-900 focus-visible:outline focus-visible:ring-2 focus-visible:ring-[#0a66c2] focus-visible:ring-offset-2"
+            aria-label="Jobflow home"
+          >
+            <span className="inline-flex items-center gap-2">
+              <Search className="h-5 w-5 text-[#0a66c2]" strokeWidth={2.25} />
+              Jobflow
+            </span>
+          </Link>
           <main id="main-content">
             <HeroSection
               heroTitle={t("heroTitle")}
@@ -80,7 +88,7 @@ export default async function HomePage() {
                 href="/"
                 className="flex items-center gap-1.5 font-semibold text-slate-900"
               >
-                <Search className="h-4 w-4 text-emerald-700" />
+                <Search className="h-4 w-4 text-[#0a66c2]" />
                 Jobflow
               </Link>
               <span aria-hidden="true">·</span>

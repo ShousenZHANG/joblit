@@ -47,9 +47,9 @@ export function HeroSection({
           animate={visible}
           transition={{ delay: noMotion ? 0 : 0 }}
         >
-          <Badge className="edu-pill">
+          <Badge className="edu-pill-pro">
             <span
-              className="mr-2 inline-block h-2 w-2 rounded-full bg-emerald-500"
+              className="mr-2 inline-block h-2 w-2 rounded-full bg-[#0a66c2]"
               aria-hidden="true"
             />
             {badgeLabel}
@@ -80,7 +80,7 @@ export function HeroSection({
           <Button
             asChild
             size="lg"
-            className="edu-cta edu-cta--press min-h-[48px] min-w-[44px] px-6"
+            className="edu-cta-pro min-h-[48px] min-w-[44px] px-6"
           >
             <Link href="/login">
               {ctaLabel} <ArrowRight className="h-4 w-4 shrink-0" />
