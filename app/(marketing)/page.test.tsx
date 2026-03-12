@@ -41,13 +41,13 @@ describe("HomePage", () => {
     expect(mains).toHaveLength(1);
   });
 
-  it("renders all page sections", async () => {
+  it("renders hero and CTA", async () => {
     await renderPage();
 
-    expect(screen.getByText("How it works")).toBeInTheDocument();
-    expect(
-      screen.getByText("Ready to take control of your job search?"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Find the right roles, faster")).toBeInTheDocument();
+    const ctaLinks = screen.getAllByRole("link", { name: /Start free/i });
+    expect(ctaLinks.length).toBeGreaterThanOrEqual(1);
+    expect(ctaLinks[0]).toHaveAttribute("href", "/login");
   });
 
   it("includes a skip-to-content link for accessibility", async () => {
