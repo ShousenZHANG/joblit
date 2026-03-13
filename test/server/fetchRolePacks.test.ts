@@ -8,20 +8,19 @@ describe("fetch role packs", () => {
       "Software Engineer",
       "Software Developer",
       "Web Developer",
-      "Application Engineer",
-      "Web Application Developer",
       "Full Stack Engineer",
       "Full Stack Developer",
       "Backend Engineer",
       "Backend Developer",
-      "Frontend Engineer",
-      "Frontend Developer",
+      "Full Stack Agentic Engineer",
+      "AI Engineer",
+      "AI Developer",
     ]);
   });
 
   it("dedupes roles while preserving order", () => {
-    const out = expandRoleQueries(["Frontend Engineer", "Software Engineer"]);
-    expect(out[0]).toBe("Frontend Engineer");
+    const out = expandRoleQueries(["Backend Engineer", "Software Engineer"]);
+    expect(out[0]).toBe("Backend Engineer");
     expect(new Set(out).size).toBe(out.length);
   });
 
@@ -44,8 +43,8 @@ describe("fetch role packs", () => {
   });
 
   it("expands long-tail variants via token overlap", () => {
-    const out = expandRoleQueries(["React TypeScript Engineer"]);
-    expect(out).toContain("React TypeScript Engineer");
-    expect(out).toContain("Frontend Engineer");
+    const out = expandRoleQueries(["AI Python Engineer"]);
+    expect(out).toContain("AI Python Engineer");
+    expect(out).toContain("AI Engineer");
   });
 });

@@ -16,38 +16,13 @@
         "Software Engineer",
         "Software Developer",
         "Web Developer",
-        "Application Engineer",
-        "Web Application Developer",
         "Full Stack Engineer",
         "Full Stack Developer",
         "Backend Engineer",
         "Backend Developer",
-        "Frontend Engineer",
-        "Frontend Developer"
-      ]
-    },
-    {
-      "aliases": [
-        "frontend engineer",
-        "frontend developer",
-        "react developer",
-        "ui engineer",
-        "front end engineer",
-        "front end developer",
-        "ui developer",
-        "react engineer",
-        "web frontend developer"
-      ],
-      "roles": [
-        "Frontend Engineer",
-        "Frontend Developer",
-        "Front End Engineer",
-        "Front End Developer",
-        "React Developer",
-        "React Engineer",
-        "UI Developer",
-        "UI Engineer",
-        "Software Engineer"
+        "Full Stack Agentic Engineer",
+        "AI Engineer",
+        "AI Developer"
       ]
     },
     {
@@ -70,8 +45,6 @@
         "Back End Engineer",
         "Back End Developer",
         "API Engineer",
-        "API Developer",
-        "Server Side Engineer",
         "Platform Engineer",
         "Software Engineer"
       ]
@@ -91,10 +64,28 @@
       "roles": [
         "Full Stack Engineer",
         "Full Stack Developer",
-        "Full Stack Web Developer",
         "Software Engineer",
         "Backend Engineer",
-        "Frontend Engineer"
+        "Full Stack Agentic Engineer"
+      ]
+    },
+    {
+      "aliases": [
+        "ai engineer",
+        "ai developer",
+        "agentic engineer",
+        "full stack agentic engineer",
+        "full stack agentic developer",
+        "ml engineer",
+        "machine learning engineer"
+      ],
+      "roles": [
+        "AI Engineer",
+        "AI Developer",
+        "Full Stack Agentic Engineer",
+        "Full Stack Agentic Developer",
+        "Machine Learning Engineer",
+        "Software Engineer"
       ]
     },
     {
