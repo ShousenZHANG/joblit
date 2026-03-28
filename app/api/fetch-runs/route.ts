@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { requireSessionWithEmail, UnauthorizedError } from "@/lib/server/auth/requireSession";
+import type { SessionContextWithEmail } from "@/lib/server/auth/requireSession";
+import { unauthorizedError } from "@/lib/server/api/errorResponse";
 import { z } from "zod";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/auth";
 import { prisma } from "@/lib/server/prisma";
 import { expandRoleQueries } from "@/lib/shared/fetchRolePacks";
 
@@ -74,12 +75,14 @@ const CNSchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
-  const userEmail = session?.user?.email ?? null;
-  if (!userId || !userEmail) {
-    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  let ctx: SessionContextWithEmail;
+  try {
+    ctx = await requireSessionWithEmail();
+  } catch (err) {
+    if (err instanceof UnauthorizedError) return unauthorizedError();
+    throw err;
   }
+  const { userId, userEmail } = ctx;
 
   const json = await req.json().catch(() => null);
   const marketHint =

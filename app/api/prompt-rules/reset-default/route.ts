@@ -1,21 +1,20 @@
-import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/auth";
+import { requireSession, UnauthorizedError } from "@/lib/server/auth/requireSession";
+import type { SessionContext } from "@/lib/server/auth/requireSession";
+import { unauthorizedError } from "@/lib/server/api/errorResponse";
 import { resetPromptRulesToDefault } from "@/lib/server/promptRuleTemplates";
 
 export const runtime = "nodejs";
 
 export async function POST() {
-  const requestId = randomUUID();
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
-  if (!userId) {
-    return NextResponse.json(
-      { error: { code: "UNAUTHORIZED", message: "Unauthorized" }, requestId },
-      { status: 401 },
-    );
+  let ctx: SessionContext;
+  try {
+    ctx = await requireSession();
+  } catch (err) {
+    if (err instanceof UnauthorizedError) return unauthorizedError();
+    throw err;
   }
+  const { userId, requestId } = ctx;
 
   const created = await resetPromptRulesToDefault(userId);
   return NextResponse.json({

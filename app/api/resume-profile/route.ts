@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { requireSession, UnauthorizedError } from "@/lib/server/auth/requireSession";
+import type { SessionContext } from "@/lib/server/auth/requireSession";
+import { unauthorizedError } from "@/lib/server/api/errorResponse";
 import { z } from "zod";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/auth";
 import { Prisma } from "@/lib/generated/prisma";
 import {
   createResumeProfile,
@@ -58,11 +59,6 @@ const ResumeProfilePatchSchema = z.discriminatedUnion("action", [
   }),
 ]);
 
-async function getAuthorizedUserId() {
-  const session = await getServerSession(authOptions);
-  return session?.user?.id ?? null;
-}
-
 async function buildResumeProfileResponse(userId: string, locale: string = "en-AU") {
   const { profiles, activeProfileId } = await listResumeProfiles(userId, locale);
   const activeProfile = activeProfileId
@@ -97,10 +93,14 @@ function parsePrismaError(error: unknown) {
 }
 
 export async function GET(req: Request) {
-  const userId = await getAuthorizedUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  let ctx: SessionContext;
+  try {
+    ctx = await requireSession();
+  } catch (err) {
+    if (err instanceof UnauthorizedError) return unauthorizedError();
+    throw err;
   }
+  const { userId } = ctx;
 
   const { searchParams } = new URL(req.url);
   const rawLocale = searchParams.get("locale") ?? "en-AU";
@@ -111,10 +111,14 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const userId = await getAuthorizedUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  let ctx: SessionContext;
+  try {
+    ctx = await requireSession();
+  } catch (err) {
+    if (err instanceof UnauthorizedError) return unauthorizedError();
+    throw err;
   }
+  const { userId } = ctx;
 
   const json = await req.json().catch(() => null);
   const parsed = ResumeProfileUpsertSchema.safeParse(json);
@@ -160,10 +164,14 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  const userId = await getAuthorizedUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  let ctx: SessionContext;
+  try {
+    ctx = await requireSession();
+  } catch (err) {
+    if (err instanceof UnauthorizedError) return unauthorizedError();
+    throw err;
   }
+  const { userId } = ctx;
 
   const json = await req.json().catch(() => null);
   const parsed = ResumeProfilePatchSchema.safeParse(json);

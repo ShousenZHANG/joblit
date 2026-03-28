@@ -1,8 +1,8 @@
-import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/auth";
+import { requireSession, UnauthorizedError } from "@/lib/server/auth/requireSession";
+import type { SessionContext } from "@/lib/server/auth/requireSession";
+import { unauthorizedError } from "@/lib/server/api/errorResponse";
 import { prisma } from "@/lib/server/prisma";
 import { getResumeProfile } from "@/lib/server/resumeProfile";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
@@ -604,16 +604,14 @@ function parseFilename(candidate: string, role: string, target: "resume" | "cove
 }
 
 export async function POST(req: Request) {
-  const requestId = randomUUID();
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
-
-  if (!userId) {
-    return NextResponse.json(
-      { error: { code: "UNAUTHORIZED", message: "Unauthorized" }, requestId },
-      { status: 401 },
-    );
+  let ctx: SessionContext;
+  try {
+    ctx = await requireSession();
+  } catch (err) {
+    if (err instanceof UnauthorizedError) return unauthorizedError();
+    throw err;
   }
+  const { userId, requestId } = ctx;
 
   const json = await req.json().catch(() => null);
   const parsed = ManualGenerateSchema.safeParse(json);

@@ -4,31 +4,13 @@ import { prisma } from "@/lib/server/prisma";
 import { requireSession, UnauthorizedError } from "@/lib/server/auth/requireSession";
 import type { SessionContext } from "@/lib/server/auth/requireSession";
 import { unauthorizedError } from "@/lib/server/api/errorResponse";
+import { taskProgressFromGroupBy } from "@/lib/server/applicationBatches/batchProgress";
 
 export const runtime = "nodejs";
 
 const ParamsSchema = z.object({
   id: z.string().uuid(),
 });
-
-function toProgress(rows: Array<{ status: string; _count: { _all: number } }>) {
-  const progress = {
-    pending: 0,
-    running: 0,
-    succeeded: 0,
-    failed: 0,
-    skipped: 0,
-  };
-
-  for (const row of rows) {
-    if (row.status === "PENDING") progress.pending = row._count._all;
-    if (row.status === "RUNNING") progress.running = row._count._all;
-    if (row.status === "SUCCEEDED") progress.succeeded = row._count._all;
-    if (row.status === "FAILED") progress.failed = row._count._all;
-    if (row.status === "SKIPPED") progress.skipped = row._count._all;
-  }
-  return progress;
-}
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   let session: SessionContext;
@@ -73,7 +55,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       _all: true,
     },
   });
-  const progress = toProgress(grouped);
+  const progress = taskProgressFromGroupBy(grouped);
 
   const [failedTasks, succeededTasks] = await Promise.all([
     prisma.applicationBatchTask.findMany({

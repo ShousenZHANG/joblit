@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { requireSession, UnauthorizedError } from "@/lib/server/auth/requireSession";
+import type { SessionContext } from "@/lib/server/auth/requireSession";
+import { unauthorizedError } from "@/lib/server/api/errorResponse";
 import { z } from "zod";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/auth";
 import { prisma } from "@/lib/server/prisma";
 import type { Prisma } from "@/lib/generated/prisma";
 
@@ -50,9 +51,14 @@ function withDispatchMeta(raw: unknown, patch: Partial<DispatchMeta>) {
 }
 
 export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
-  if (!userId) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  let session: SessionContext;
+  try {
+    session = await requireSession();
+  } catch (err) {
+    if (err instanceof UnauthorizedError) return unauthorizedError();
+    throw err;
+  }
+  const { userId } = session;
 
   const params = await ctx.params;
   const parsed = ParamsSchema.safeParse(params);

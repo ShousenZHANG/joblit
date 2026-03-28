@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { requireSession, UnauthorizedError } from "@/lib/server/auth/requireSession";
+import type { SessionContext } from "@/lib/server/auth/requireSession";
+import { unauthorizedError } from "@/lib/server/api/errorResponse";
 import { z } from "zod";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/auth";
 import { prisma } from "@/lib/server/prisma";
 
 export const runtime = "nodejs";
@@ -81,11 +82,14 @@ function getTodayRangeUtc(timeZone: string) {
 }
 
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
-  if (!userId) {
-    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  let ctx: SessionContext;
+  try {
+    ctx = await requireSession();
+  } catch (err) {
+    if (err instanceof UnauthorizedError) return unauthorizedError();
+    throw err;
   }
+  const { userId } = ctx;
 
   const tzHeader = req.headers.get("x-user-timezone") ?? undefined;
   const timeZone = TimeZoneSchema.parse(tzHeader);
@@ -120,11 +124,14 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
-  if (!userId) {
-    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  let ctx: SessionContext;
+  try {
+    ctx = await requireSession();
+  } catch (err) {
+    if (err instanceof UnauthorizedError) return unauthorizedError();
+    throw err;
   }
+  const { userId } = ctx;
 
   const tzHeader = req.headers.get("x-user-timezone") ?? undefined;
   const timeZone = TimeZoneSchema.parse(tzHeader);

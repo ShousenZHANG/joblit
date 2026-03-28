@@ -22,3 +22,15 @@ export async function requireSession(): Promise<SessionContext> {
   }
   return { userId, requestId: createRequestId() };
 }
+
+export type SessionContextWithEmail = SessionContext & { userEmail: string };
+
+export async function requireSessionWithEmail(): Promise<SessionContextWithEmail> {
+  const session = await getServerSession(authOptions);
+  const userId = session?.user?.id;
+  const userEmail = session?.user?.email;
+  if (!userId || !userEmail) {
+    throw new UnauthorizedError();
+  }
+  return { userId, userEmail, requestId: createRequestId() };
+}

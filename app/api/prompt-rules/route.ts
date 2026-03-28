@@ -1,8 +1,8 @@
-import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
+import { requireSession, UnauthorizedError } from "@/lib/server/auth/requireSession";
+import type { SessionContext } from "@/lib/server/auth/requireSession";
+import { unauthorizedError } from "@/lib/server/api/errorResponse";
 import { z } from "zod";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/auth";
 import {
   createPromptRuleTemplate,
   listPromptRuleTemplates,
@@ -25,15 +25,14 @@ function normalizeRuleList(value: unknown): string[] {
 }
 
 export async function GET() {
-  const requestId = randomUUID();
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
-  if (!userId) {
-    return NextResponse.json(
-      { error: { code: "UNAUTHORIZED", message: "Unauthorized" }, requestId },
-      { status: 401 },
-    );
+  let ctx: SessionContext;
+  try {
+    ctx = await requireSession();
+  } catch (err) {
+    if (err instanceof UnauthorizedError) return unauthorizedError();
+    throw err;
   }
+  const { userId, requestId } = ctx;
 
   const templates = await listPromptRuleTemplates(userId);
   return NextResponse.json({
@@ -54,15 +53,14 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const requestId = randomUUID();
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
-  if (!userId) {
-    return NextResponse.json(
-      { error: { code: "UNAUTHORIZED", message: "Unauthorized" }, requestId },
-      { status: 401 },
-    );
+  let ctx: SessionContext;
+  try {
+    ctx = await requireSession();
+  } catch (err) {
+    if (err instanceof UnauthorizedError) return unauthorizedError();
+    throw err;
   }
+  const { userId, requestId } = ctx;
 
   const payload = await req.json().catch(() => null);
   const parsed = CreateRuleSchema.safeParse(payload);

@@ -3,30 +3,7 @@ import { prisma } from "@/lib/server/prisma";
 import { requireSession, UnauthorizedError } from "@/lib/server/auth/requireSession";
 import type { SessionContext } from "@/lib/server/auth/requireSession";
 import { unauthorizedError } from "@/lib/server/api/errorResponse";
-
-export const runtime = "nodejs";
-
-function taskProgressFromGroupBy(
-  rows: Array<{ status: string; _count: { _all: number } }>,
-) {
-  const counts = {
-    pending: 0,
-    running: 0,
-    succeeded: 0,
-    failed: 0,
-    skipped: 0,
-  };
-
-  for (const row of rows) {
-    if (row.status === "PENDING") counts.pending = row._count._all;
-    if (row.status === "RUNNING") counts.running = row._count._all;
-    if (row.status === "SUCCEEDED") counts.succeeded = row._count._all;
-    if (row.status === "FAILED") counts.failed = row._count._all;
-    if (row.status === "SKIPPED") counts.skipped = row._count._all;
-  }
-
-  return counts;
-}
+import { taskProgressFromGroupBy } from "@/lib/server/applicationBatches/batchProgress";
 
 export async function GET(
   _req: Request,
