@@ -48,6 +48,18 @@ docs/superpowers/*.html
 .agents/
 skills-lock.json
 
+# Claude Code local config and worktrees
+.claude/
+
+# Everything Claude Code plugin (local tooling)
+everything-claude-code/
+install.cmd
+
+# Generated reports and codemaps
+.reports/
+docs/CODEMAPS/
+docs/refactor-report.md
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
