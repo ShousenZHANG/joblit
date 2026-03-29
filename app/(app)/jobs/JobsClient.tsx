@@ -315,6 +315,26 @@ export function JobsClient({
   const [batchSelectMode, setBatchSelectMode] = useState(false);
   const [batchSelectedIds, setBatchSelectedIds] = useState<Set<string>>(new Set());
   const [batchDeleteConfirmOpen, setBatchDeleteConfirmOpen] = useState(false);
+
+  const prevQueryStringForBatchRef = useRef(queryString);
+  useEffect(() => {
+    if (prevQueryStringForBatchRef.current !== queryString) {
+      prevQueryStringForBatchRef.current = queryString;
+      if (batchSelectMode) {
+        setBatchSelectMode(false);
+        setBatchSelectedIds(new Set());
+      }
+    }
+  }, [queryString, batchSelectMode]);
+
+  useEffect(() => {
+    if (!batchSelectMode || batchSelectedIds.size === 0) return;
+    const currentIds = new Set(items.map((it) => it.id));
+    const pruned = new Set([...batchSelectedIds].filter((id) => currentIds.has(id)));
+    if (pruned.size !== batchSelectedIds.size) {
+      setBatchSelectedIds(pruned);
+    }
+  }, [items, batchSelectMode, batchSelectedIds]);
   const [addJobOpen, setAddJobOpen] = useState(false);
   const [tailorSourceByJob, setTailorSourceByJob] = useState<
     Record<string, { cv?: CvSource; cover?: CoverSource }>
