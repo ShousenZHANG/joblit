@@ -84,6 +84,12 @@ beforeEach(() => {
         headers: { "Content-Type": "application/json" },
       });
     }
+    if (url.startsWith("/api/jobs/suggestions")) {
+      return new Response(JSON.stringify({ suggestions: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
     if (url.startsWith("/api/jobs?limit=50")) {
       return new Response(
         JSON.stringify({ items: [baseJob], nextCursor: null, facets: { jobLevels: ["Mid"] } }),

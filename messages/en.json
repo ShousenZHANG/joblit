@@ -70,7 +70,9 @@
     "jobDetails": "Job details",
     "applied": "Applied",
     "company": "Company",
-    "type": "Type"
+    "type": "Type",
+    "tabDetail": "Detail",
+    "mobileTablistLabel": "Jobs list and detail"
   },
   "fetch": {
     "searchRoles": "Search roles",

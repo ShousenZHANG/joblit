@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -11,93 +11,28 @@ import { Copy, Download, ExternalLink, FileText, MapPin, Search, Trash2 } from "
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { useDebouncedValue } from "@/hooks/useDebouncedValue";
-import { useMarket } from "@/hooks/useMarket";
 import { useGuide } from "@/app/GuideContext";
 import { useFetchStatus, type FetchRunStatus } from "@/app/FetchStatusContext";
 
-const INFINITE_SCROLL_TRIGGER_RATIO = 0.8;
-
-type JobStatus = "NEW" | "APPLIED" | "REJECTED";
-
-type JobItem = {
-  id: string;
-  jobUrl: string;
-  title: string;
-  company: string | null;
-  location: string | null;
-  jobType: string | null;
-  jobLevel: string | null;
-  status: JobStatus;
-  resumePdfUrl?: string | null;
-  resumePdfName?: string | null;
-  coverPdfUrl?: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type JobsResponse = {
-  items: JobItem[];
-  nextCursor: string | null;
-  totalCount?: number;
-  facets?: {
-    jobLevels?: string[];
-  };
-};
-
-type JobsQueryRollbackPatch = {
-  queryHash: string;
-  queryKey: readonly unknown[];
-  previousItem: JobItem;
-  previousIndex: number;
-  previousTotalCount?: number;
-};
-
-type CvSource = "ai" | "base" | "manual_import";
-type CoverSource = "ai" | "fallback" | "manual_import";
-type ResumeImportOutput = {
-  cvSummary: string;
-};
-
-type CoverImportOutput = {
-  cover: {
-    subject?: string;
-    date?: string;
-    salutation?: string;
-    paragraphOne: string;
-    paragraphTwo: string;
-    paragraphThree: string;
-    closing?: string;
-    signatureName?: string;
-  };
-};
-
-type ExternalPromptMeta = {
-  ruleSetId: string;
-  resumeSnapshotUpdatedAt: string;
-  promptTemplateVersion?: string;
-  schemaVersion?: string;
-  skillPackVersion?: string;
-  promptHash?: string;
-};
+import type { JobItem, JobStatus, CvSource, CoverSource, ResumeImportOutput, CoverImportOutput, ExternalPromptMeta } from "./types";
+import { getErrorMessage } from "./types";
+import { useJobFilters } from "./hooks/useJobFilters";
+import { useJobPagination } from "./hooks/useJobPagination";
+import { useJobMutations } from "./hooks/useJobMutations";
+import { useKeyboardNavigation } from "./hooks/useKeyboardNavigation";
+import { JobListItem } from "./components/JobListItem";
+import { VirtualJobList } from "./components/VirtualJobList";
+import { JobDeleteDialog } from "./components/JobDeleteDialog";
+import { JobAddDialog } from "./components/JobAddDialog";
+import { JobSearchBar } from "./components/JobSearchBar";
+import { useSearchHistory } from "./hooks/useSearchHistory";
+import { cn } from "@/lib/utils";
 
 const SKILL_PACK_META_STORAGE_KEY = "jobflow.skill-pack-meta.v1";
 
@@ -153,110 +88,20 @@ function isSkillPackFresh(required: ExternalPromptMeta | null): boolean {
 }
 
 const HIGHLIGHT_KEYWORDS = [
-  "HTML",
-  "CSS",
-  "Sass",
-  "SCSS",
-  "Less",
-  "JavaScript",
-  "TypeScript",
-  "React",
-  "Next.js",
-  "Vue",
-  "Nuxt",
-  "Angular",
-  "Svelte",
-  "SvelteKit",
-  "SolidJS",
-  "Remix",
-  "Node",
-  "Node.js",
-  "Express",
-  "NestJS",
-  "Fastify",
-  "Deno",
-  "Bun",
-  "Python",
-  "Django",
-  "Flask",
-  "FastAPI",
-  "Java",
-  "Spring",
-  "Spring Boot",
-  "Kotlin",
-  "Scala",
-  "C#",
-  ".NET",
-  "ASP.NET",
-  "C++",
-  "Go",
-  "Golang",
-  "Rust",
-  "Ruby",
-  "Rails",
-  "PHP",
-  "Laravel",
-  "GraphQL",
-  "REST",
-  "gRPC",
-  "tRPC",
-  "SQL",
-  "PostgreSQL",
-  "MySQL",
-  "SQLite",
-  "MongoDB",
-  "Redis",
-  "Elasticsearch",
-  "OpenSearch",
-  "Kafka",
-  "RabbitMQ",
-  "SQS",
-  "SNS",
-  "AWS",
-  "Azure",
-  "GCP",
-  "Firebase",
-  "Cloudflare",
-  "Docker",
-  "Kubernetes",
-  "Terraform",
-  "Ansible",
-  "Git",
-  "GitHub Actions",
-  "GitLab CI",
-  "CI/CD",
-  "Linux",
-  "Nginx",
-  "Vercel",
-  "Netlify",
-  "Jest",
-  "Vitest",
-  "Cypress",
-  "Playwright",
-  "Storybook",
-  "Tailwind",
-  "shadcn/ui",
-  "Material UI",
-  "Chakra UI",
-  "Figma",
-  "React Native",
-  "Flutter",
-  "Swift",
-  "SwiftUI",
-  "Android",
-  "iOS",
-  "ML",
-  "AI",
-  "LLM",
-  "OpenAI",
-  "LangChain",
-  "Vector",
-  "Pinecone",
-  "Weaviate",
-  "Snowflake",
-  "Databricks",
-  "Airflow",
-  "dbt",
+  "HTML", "CSS", "Sass", "SCSS", "Less", "JavaScript", "TypeScript", "React",
+  "Next.js", "Vue", "Nuxt", "Angular", "Svelte", "SvelteKit", "SolidJS", "Remix",
+  "Node", "Node.js", "Express", "NestJS", "Fastify", "Deno", "Bun",
+  "Python", "Django", "Flask", "FastAPI", "Java", "Spring", "Spring Boot",
+  "Kotlin", "Scala", "C#", ".NET", "ASP.NET", "C++", "Go", "Golang", "Rust",
+  "Ruby", "Rails", "PHP", "Laravel", "GraphQL", "REST", "gRPC", "tRPC",
+  "SQL", "PostgreSQL", "MySQL", "SQLite", "MongoDB", "Redis", "Elasticsearch",
+  "OpenSearch", "Kafka", "RabbitMQ", "SQS", "SNS", "AWS", "Azure", "GCP",
+  "Firebase", "Cloudflare", "Docker", "Kubernetes", "Terraform", "Ansible",
+  "Git", "GitHub Actions", "GitLab CI", "CI/CD", "Linux", "Nginx", "Vercel", "Netlify",
+  "Jest", "Vitest", "Cypress", "Playwright", "Storybook", "Tailwind", "shadcn/ui",
+  "Material UI", "Chakra UI", "Figma", "React Native", "Flutter", "Swift", "SwiftUI",
+  "Android", "iOS", "ML", "AI", "LLM", "OpenAI", "LangChain", "Vector",
+  "Pinecone", "Weaviate", "Snowflake", "Databricks", "Airflow", "dbt",
 ];
 
 const AU_LOCATION_OPTIONS = [
@@ -283,52 +128,8 @@ const CN_LOCATION_OPTIONS = [
   { value: "Xi'an", label: "西安" },
 ];
 
-const ADD_JOB_EMPTY = "__";
-const ADD_JOB_LOCATION_OPTIONS = [
-  { value: ADD_JOB_EMPTY, label: "—" },
-  ...AU_LOCATION_OPTIONS,
-];
-
-const ADD_JOB_TYPE_OPTIONS = [
-  { value: ADD_JOB_EMPTY, label: "—" },
-  { value: "Full-time", label: "Full-time" },
-  { value: "Part-time", label: "Part-time" },
-  { value: "Contract", label: "Contract" },
-  { value: "Internship", label: "Internship" },
-  { value: "Casual", label: "Casual" },
-];
-
-const ADD_JOB_LEVEL_OPTIONS = [
-  { value: ADD_JOB_EMPTY, label: "—" },
-  { value: "Entry level", label: "Entry level" },
-  { value: "Mid-Senior", label: "Mid-Senior" },
-];
-
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function formatInsertedTime(iso: string) {
-  const createdAt = new Date(iso);
-  if (Number.isNaN(createdAt.getTime())) return "unknown";
-  const diffMs = Date.now() - createdAt.getTime();
-  const diffMinutes = Math.max(1, Math.floor(diffMs / 60000));
-  if (diffMinutes < 60) return `${diffMinutes} min ago`;
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours} hr ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays} day ago`;
-}
-
-function formatLocalDateTime(iso: string, timeZone: string | null) {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "unknown";
-  const options: Intl.DateTimeFormatOptions = {
-    dateStyle: "medium",
-    timeStyle: "short",
-    ...(timeZone ? { timeZone } : {}),
-  };
-  return new Intl.DateTimeFormat(undefined, options).format(date);
 }
 
 function getUserTimeZone() {
@@ -446,14 +247,52 @@ export function JobsClient({
   const { isTaskHighlighted, markTaskComplete } = useGuide();
   const t = useTranslations("jobs");
   const tc = useTranslations("common");
-  const market = useMarket();
+  const tn = useTranslations("nav");
   const { runId: fetchRunId, status: fetchStatus, importedCount: fetchImportedCount } = useFetchStatus();
   const guideHighlightClass =
     "ring-2 ring-emerald-400 ring-offset-2 ring-offset-white shadow-[0_0_0_4px_rgba(16,185,129,0.18)]";
   const queryClient = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
-  const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set());
-  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const { addToHistory } = useSearchHistory();
+
+  const {
+    q, debouncedQ, setQ,
+    statusFilter, setStatusFilter,
+    locationFilter, setLocationFilter,
+    jobLevelFilter, setJobLevelFilter,
+    sortOrder, setSortOrder,
+    market,
+    queryString,
+  } = useJobFilters();
+
+  const [selectedId, setSelectedId] = useState<string | null>(initialItems[0]?.id ?? null);
+  const [mobileTab, setMobileTab] = useState<"list" | "detail">("list");
+  const [timeZone] = useState<string | null>(() => getUserTimeZone() || null);
+  const [isPending, startTransition] = useTransition();
+  const resultsScrollRef = useRef<HTMLDivElement | null>(null);
+  const [suppressedDeletedIds, setSuppressedDeletedIds] = useState<Set<string>>(new Set());
+
+  const {
+    items, totalCount, nextCursor, loading, loadingInitial,
+    pageResponses, loadedCursors, resetPagination, firstQueryError, jobLevelOptions,
+  } = useJobPagination({
+    queryString,
+    initialItems,
+    initialCursor: initialCursor ?? null,
+    suppressedDeletedIds,
+    scrollRef: resultsScrollRef,
+  });
+
+  const {
+    updateStatus, deleteMutation,
+    updatingIds, deletingIds,
+    error: mutationError, setError,
+  } = useJobMutations({
+    items,
+    selectedId,
+    setSelectedId,
+    setSuppressedDeletedIds,
+  });
+
   const [previewOpen, setPreviewOpen] = useState(false);
   const [pdfPreview, setPdfPreview] = useState<{
     url: string;
@@ -473,40 +312,16 @@ export function JobsClient({
   const [externalSkillPackFresh, setExternalSkillPackFresh] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteCandidate, setDeleteCandidate] = useState<{ id: string; title: string } | null>(null);
-  const [suppressedDeletedIds, setSuppressedDeletedIds] = useState<Set<string>>(new Set());
   const [addJobOpen, setAddJobOpen] = useState(false);
-  const [addJobForm, setAddJobForm] = useState({
-    jobUrl: "",
-    title: "",
-    company: "",
-    location: "",
-    jobType: "",
-    jobLevel: "",
-    description: "",
-  });
-  const [addJobError, setAddJobError] = useState<string | null>(null);
-  const [addJobSubmitting, setAddJobSubmitting] = useState(false);
   const [tailorSourceByJob, setTailorSourceByJob] = useState<
     Record<string, { cv?: CvSource; cover?: CoverSource }>
   >({});
-  const [loadedCursors, setLoadedCursors] = useState<(string | null)[]>([null]);
   const lastSeenImportRef = useRef<{
     runId: string | null;
     status: FetchRunStatus | null;
     importedCount: number;
   } | null>(null);
   const lastImportRefreshAtRef = useRef<number>(0);
-
-  const [statusFilter, setStatusFilter] = useState<JobStatus | "ALL">("ALL");
-  const [q, setQ] = useState("");
-  const pageSize = 10;
-  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
-  const [locationFilter, setLocationFilter] = useState("ALL");
-  const [jobLevelFilter, setJobLevelFilter] = useState("ALL");
-  const [selectedId, setSelectedId] = useState<string | null>(initialItems[0]?.id ?? null);
-  const [timeZone] = useState<string | null>(() => getUserTimeZone() || null);
-  const [isPending, startTransition] = useTransition();
-  const resultsScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -518,54 +333,79 @@ export function JobsClient({
     };
   }, []);
 
-  function getErrorMessage(err: unknown, fallback = "Failed") {
-    if (err instanceof Error) return err.message;
-    if (typeof err === "string") return err;
-    return fallback;
+  useEffect(() => {
+    return () => {
+      if (pdfPreview?.url) {
+        URL.revokeObjectURL(pdfPreview.url);
+      }
+    };
+  }, [pdfPreview?.url]);
+
+  const showLoadingOverlay = loading || isPending;
+  const listOpacityClass = showLoadingOverlay ? "opacity-70" : "opacity-100";
+  const isSearchDebouncing = q !== "" && q !== debouncedQ;
+  const showListBackdropOverlay = showLoadingOverlay && !isSearchDebouncing;
+  const queryError = firstQueryError
+    ? getErrorMessage(firstQueryError, "Failed to load jobs")
+    : null;
+  const activeError = mutationError ?? queryError;
+
+  function triggerSearch() {
+    if (q.trim()) addToHistory(q.trim());
+    resetPagination();
+    queryClient.invalidateQueries({ queryKey: ["jobs"] });
   }
 
-  async function submitAddJob() {
-    setAddJobError(null);
-    setAddJobSubmitting(true);
-    try {
-      const res = await fetch("/api/jobs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jobUrl: addJobForm.jobUrl.trim(),
-          title: addJobForm.title.trim(),
-          company: addJobForm.company.trim() || undefined,
-          location: addJobForm.location === ADD_JOB_EMPTY ? undefined : addJobForm.location.trim() || undefined,
-          jobType: addJobForm.jobType === ADD_JOB_EMPTY ? undefined : addJobForm.jobType.trim() || undefined,
-          jobLevel: addJobForm.jobLevel === ADD_JOB_EMPTY ? undefined : addJobForm.jobLevel.trim() || undefined,
-          description: addJobForm.description.trim() || undefined,
-        }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (res.status === 201) {
-        setAddJobOpen(false);
-        setAddJobForm({
-          jobUrl: "",
-          title: "",
-          company: "",
-          location: "",
-          jobType: "",
-          jobLevel: "",
-          description: "",
-        });
-        queryClient.invalidateQueries({ queryKey: ["jobs"], refetchType: "active" });
-        toast?.({ title: "Job added", description: undefined });
-        return;
-      }
-      if (res.status === 409 && json.error === "JOB_URL_EXISTS") {
-        setAddJobError("This job link already exists.");
-        return;
-      }
-      setAddJobError(typeof json?.error === "string" ? json.error : "Failed to add job");
-    } finally {
-      setAddJobSubmitting(false);
+  useEffect(() => {
+    const current = {
+      runId: fetchRunId ?? null,
+      status: (fetchStatus ?? null) as FetchRunStatus | null,
+      importedCount: typeof fetchImportedCount === "number" ? fetchImportedCount : 0,
+    };
+    const previous = lastSeenImportRef.current;
+    lastSeenImportRef.current = current;
+
+    if (!current.runId || !current.status) return;
+    if (!previous || previous.runId !== current.runId) return;
+
+    const delta = current.importedCount - previous.importedCount;
+    if (delta <= 0) return;
+
+    const isTerminal = current.status === "SUCCEEDED" || current.status === "FAILED";
+    const wasTerminal = previous.status === "SUCCEEDED" || previous.status === "FAILED";
+    const justBecameTerminal = isTerminal && !wasTerminal;
+    const isFirstPage = loadedCursors.length === 1 && loadedCursors[0] === null;
+    const inProgress = current.status === "RUNNING" || current.status === "QUEUED";
+
+    if (!justBecameTerminal && !(inProgress && isFirstPage)) return;
+
+    if (!justBecameTerminal) {
+      const now = Date.now();
+      if (now - lastImportRefreshAtRef.current < 5000) return;
+      lastImportRefreshAtRef.current = now;
     }
-  }
+
+    resetPagination();
+    queryClient.invalidateQueries({ queryKey: ["jobs"], refetchType: "active" });
+
+    if (justBecameTerminal) {
+      toast({
+        title: "Jobs imported",
+        description: `Imported ${delta} new job${delta === 1 ? "" : "s"}. Refreshing list.`,
+        duration: 2200,
+        className:
+          "border-emerald-200 bg-emerald-50 text-emerald-900 animate-in fade-in zoom-in-95",
+      });
+    }
+  }, [
+    fetchImportedCount,
+    fetchRunId,
+    fetchStatus,
+    loadedCursors,
+    queryClient,
+    resetPagination,
+    toast,
+  ]);
 
   function parseTailorOutput(
     raw: string,
@@ -710,563 +550,6 @@ export function JobsClient({
             : undefined,
       },
     };
-  }
-
-  const filters = useMemo(
-    () => ({ statusFilter, locationFilter, jobLevelFilter, market, sortOrder, pageSize }),
-    [statusFilter, locationFilter, jobLevelFilter, market, sortOrder, pageSize],
-  );
-  const debouncedSelectFilters = useDebouncedValue(filters, 120);
-  const debouncedQ = useDebouncedValue(q, 320);
-
-  const debouncedFilters = useMemo(
-    () => ({
-      q: debouncedQ,
-      ...debouncedSelectFilters,
-    }),
-    [debouncedQ, debouncedSelectFilters],
-  );
-
-  useEffect(() => {
-    return () => {
-      if (pdfPreview?.url) {
-        URL.revokeObjectURL(pdfPreview.url);
-      }
-    };
-  }, [pdfPreview?.url]);
-
-  const queryString = useMemo(() => {
-    const sp = new URLSearchParams();
-    sp.set("limit", String(debouncedFilters.pageSize));
-    if (debouncedFilters.statusFilter !== "ALL") sp.set("status", debouncedFilters.statusFilter);
-    if (debouncedFilters.q.trim()) sp.set("q", debouncedFilters.q.trim());
-    if (debouncedFilters.locationFilter !== "ALL") sp.set("location", debouncedFilters.locationFilter);
-    if (debouncedFilters.jobLevelFilter !== "ALL") sp.set("jobLevel", debouncedFilters.jobLevelFilter);
-    sp.set("market", debouncedFilters.market);
-    sp.set("sort", debouncedFilters.sortOrder);
-    return sp.toString();
-  }, [debouncedFilters]);
-
-  const initialQueryRef = useRef<string | null>(null);
-  if (initialQueryRef.current === null) {
-    initialQueryRef.current = queryString;
-  }
-  const didHydrateInitialRef = useRef(false);
-
-  // Force SSR-provided initialItems into the first-page cache entry for this query.
-  useLayoutEffect(() => {
-    if (didHydrateInitialRef.current) return;
-    const shouldUseInitial =
-      initialItems.length > 0 &&
-      loadedCursors.length === 1 &&
-      loadedCursors[0] === null &&
-      initialQueryRef.current === queryString;
-    if (!shouldUseInitial) return;
-
-    const initialLevels = Array.from(
-      new Set(
-        initialItems
-          .map((item) => item.jobLevel)
-          .filter((level): level is string => Boolean(level)),
-      ),
-    );
-
-    const key = ["jobs", queryString, null] as const;
-    queryClient.setQueryData<JobsResponse>(key, (old) => ({
-      ...old,
-      items: initialItems,
-      nextCursor: initialCursor ?? null,
-      facets: {
-        ...(old?.facets ?? {}),
-        jobLevels: old?.facets?.jobLevels ?? initialLevels,
-      },
-      totalCount: old?.totalCount,
-    }));
-    didHydrateInitialRef.current = true;
-  }, [initialCursor, initialItems, loadedCursors, queryClient, queryString]);
-
-  const pageQueries = useQueries({
-    queries: loadedCursors.map((loadedCursor, pageIndex) => ({
-      queryKey: ["jobs", queryString, loadedCursor] as const,
-      queryFn: async ({ signal }): Promise<JobsResponse> => {
-        const sp = new URLSearchParams(queryString);
-        if (loadedCursor) sp.set("cursor", loadedCursor);
-        const res = await fetch(`/api/jobs?${sp.toString()}`, { signal });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(json?.error || "Failed to load jobs");
-        return {
-          items: json.items ?? [],
-          nextCursor: json.nextCursor ?? null,
-          totalCount: typeof json.totalCount === "number" ? json.totalCount : undefined,
-          facets: json.facets ?? undefined,
-        };
-      },
-      enabled: Boolean(queryString),
-      placeholderData: (prev: JobsResponse | undefined) => prev,
-      refetchOnWindowFocus: false,
-      staleTime: 60_000,
-      initialData: (): JobsResponse | undefined => {
-        const shouldUseInitial =
-          pageIndex === 0 &&
-          initialItems.length > 0 &&
-          loadedCursor === null &&
-          loadedCursors.length === 1 &&
-          initialQueryRef.current === queryString;
-        if (!shouldUseInitial) return undefined;
-        const initialLevels = Array.from(
-          new Set(
-            initialItems
-              .map((item) => item.jobLevel)
-              .filter((level): level is string => Boolean(level)),
-          ),
-        );
-        return {
-          items: initialItems,
-          nextCursor: initialCursor ?? null,
-          facets: {
-            jobLevels: initialLevels,
-          },
-        };
-      },
-    })),
-  });
-
-  const pageResponses = useMemo(
-    () =>
-      pageQueries
-        .map((query) => query.data)
-        .filter((data): data is JobsResponse => Boolean(data)),
-    [pageQueries],
-  );
-
-  const mergedItems = useMemo(() => {
-    const merged: JobItem[] = [];
-    const seenIds = new Set<string>();
-    for (const page of pageResponses) {
-      for (const item of page.items ?? []) {
-        if (seenIds.has(item.id)) continue;
-        seenIds.add(item.id);
-        merged.push(item);
-      }
-    }
-    return merged;
-  }, [pageResponses]);
-
-  const items = useMemo(
-    () => mergedItems.filter((item) => !suppressedDeletedIds.has(item.id)),
-    [mergedItems, suppressedDeletedIds],
-  );
-
-  const totalCount = pageResponses[0]?.totalCount;
-  const nextCursor = pageResponses.length
-    ? pageResponses[pageResponses.length - 1]?.nextCursor ?? null
-    : null;
-  const loading = pageQueries.some((query) => query.isFetching);
-  const loadingInitial = pageQueries.some((query) => query.isLoading) && items.length === 0;
-  const delayedLoading = useDebouncedValue(loading, 160);
-  const showLoadingOverlay = (loading ? delayedLoading : false) || isPending;
-  const listOpacityClass = showLoadingOverlay ? "opacity-70" : "opacity-100";
-  const firstQueryError = pageQueries.find((query) => query.error)?.error;
-  const queryError = firstQueryError
-    ? getErrorMessage(firstQueryError, "Failed to load jobs")
-    : null;
-  const activeError = error ?? queryError;
-
-  const jobLevelOptions = useMemo(() => {
-    const fromItems = items
-      .map((item) => item.jobLevel)
-      .filter((level): level is string => Boolean(level));
-    const fromFacets = pageResponses[0]?.facets?.jobLevels ?? [];
-    return Array.from(new Set([...fromFacets, ...fromItems]));
-  }, [items, pageResponses]);
-
-  function triggerSearch() {
-    resetPagination();
-    queryClient.invalidateQueries({ queryKey: ["jobs"] });
-  }
-
-  const resetPagination = useMemo(
-    () => () => {
-      setLoadedCursors([null]);
-    },
-    [],
-  );
-
-  useEffect(() => {
-    const root = resultsScrollRef.current;
-    if (!root) return;
-    const viewport = root.querySelector<HTMLElement>("[data-radix-scroll-area-viewport]");
-    if (!viewport) return;
-
-    const tryLoadMore = () => {
-      if (loading || !nextCursor) return;
-      const viewportBottom = viewport.scrollTop + viewport.clientHeight;
-      const triggerPoint = viewport.scrollHeight * INFINITE_SCROLL_TRIGGER_RATIO;
-      const isNearBottom =
-        viewportBottom >= triggerPoint || viewport.scrollHeight <= viewport.clientHeight + 1;
-      if (!isNearBottom) return;
-      setLoadedCursors((prev) => {
-        if (prev.includes(nextCursor)) return prev;
-        return [...prev, nextCursor];
-      });
-    };
-
-    const onScroll = () => {
-      tryLoadMore();
-    };
-
-    viewport.addEventListener("scroll", onScroll, { passive: true });
-    const rafId = window.requestAnimationFrame(tryLoadMore);
-    return () => {
-      viewport.removeEventListener("scroll", onScroll);
-      window.cancelAnimationFrame(rafId);
-    };
-  }, [loading, nextCursor]);
-
-  // If a Fetch Run imports new jobs, refresh the jobs list to surface the newest data quickly.
-  // Terminal state: always reset to page 1 and refresh.
-  // In-progress: refresh only when already on page 1 (throttled) to avoid disrupting browsing.
-  useEffect(() => {
-    const current = {
-      runId: fetchRunId ?? null,
-      status: (fetchStatus ?? null) as FetchRunStatus | null,
-      importedCount: typeof fetchImportedCount === "number" ? fetchImportedCount : 0,
-    };
-    const previous = lastSeenImportRef.current;
-    lastSeenImportRef.current = current;
-
-    if (!current.runId || !current.status) return;
-    if (!previous || previous.runId !== current.runId) return;
-
-    const delta = current.importedCount - previous.importedCount;
-    if (delta <= 0) return;
-
-    const isTerminal = current.status === "SUCCEEDED" || current.status === "FAILED";
-    const wasTerminal = previous.status === "SUCCEEDED" || previous.status === "FAILED";
-    const justBecameTerminal = isTerminal && !wasTerminal;
-    const isFirstPage = loadedCursors.length === 1 && loadedCursors[0] === null;
-    const inProgress = current.status === "RUNNING" || current.status === "QUEUED";
-
-    if (!justBecameTerminal && !(inProgress && isFirstPage)) return;
-
-    if (!justBecameTerminal) {
-      const now = Date.now();
-      if (now - lastImportRefreshAtRef.current < 5000) return;
-      lastImportRefreshAtRef.current = now;
-    }
-
-    resetPagination();
-    queryClient.invalidateQueries({ queryKey: ["jobs"], refetchType: "active" });
-
-    if (justBecameTerminal) {
-      toast({
-        title: "Jobs imported",
-        description: `Imported ${delta} new job${delta === 1 ? "" : "s"}. Refreshing list.`,
-        duration: 2200,
-        className:
-          "border-emerald-200 bg-emerald-50 text-emerald-900 animate-in fade-in zoom-in-95",
-      });
-    }
-  }, [
-    fetchImportedCount,
-    fetchRunId,
-    fetchStatus,
-    loadedCursors,
-    queryClient,
-    resetPagination,
-    toast,
-  ]);
-
-  function getStatusFilterFromJobsQueryKey(queryKey: readonly unknown[]): JobStatus | "ALL" {
-    const serializedQuery = typeof queryKey[1] === "string" ? queryKey[1] : "";
-    const statusParam = new URLSearchParams(serializedQuery).get("status");
-    if (statusParam === "NEW" || statusParam === "APPLIED" || statusParam === "REJECTED") {
-      return statusParam;
-    }
-    return "ALL";
-  }
-
-  function restorePatchedJob(old: JobsResponse | undefined, patch: JobsQueryRollbackPatch) {
-    if (!old || !Array.isArray(old.items)) return old;
-    const nextItems = [...old.items];
-    const currentIndex = nextItems.findIndex((it) => it.id === patch.previousItem.id);
-    if (currentIndex >= 0) {
-      nextItems[currentIndex] = patch.previousItem;
-    } else {
-      const insertAt = Math.max(0, Math.min(patch.previousIndex, nextItems.length));
-      nextItems.splice(insertAt, 0, patch.previousItem);
-    }
-    return {
-      ...old,
-      items: nextItems,
-      totalCount:
-        typeof patch.previousTotalCount === "number" ? patch.previousTotalCount : old.totalCount,
-    };
-  }
-
-  const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: JobStatus }) => {
-      const res = await fetch(`/api/jobs/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || "Failed to update status");
-      return json as {
-        resumeSaved?: boolean;
-        resumePdfUrl?: string | null;
-        resumePdfName?: string | null;
-        saveError?: { code: string; message: string } | null;
-      };
-    },
-    onMutate: async ({ id, status }) => {
-      setError(null);
-      setUpdatingIds((prev) => new Set(prev).add(id));
-      await queryClient.cancelQueries({ queryKey: ["jobs"] });
-
-      const rollbackByQueryHash = new Map<string, JobsQueryRollbackPatch>();
-
-      const queryCache = queryClient.getQueryCache().findAll({ queryKey: ["jobs"] });
-      for (const query of queryCache) {
-        const queryHash = query.queryHash;
-        const key = query.queryKey;
-        const currentFilter = getStatusFilterFromJobsQueryKey(key);
-        const shouldKeep = currentFilter === "ALL" || currentFilter === status;
-
-        queryClient.setQueryData<JobsResponse>(key, (old) => {
-          if (!old || !Array.isArray(old.items)) return old;
-
-          const previousIndex = old.items.findIndex((it) => it.id === id);
-          if (previousIndex === -1) {
-            return old;
-          }
-
-          if (!rollbackByQueryHash.has(queryHash)) {
-            rollbackByQueryHash.set(queryHash, {
-              queryHash,
-              queryKey: key,
-              previousItem: old.items[previousIndex],
-              previousIndex,
-              previousTotalCount:
-                typeof old.totalCount === "number" ? old.totalCount : undefined,
-            });
-          }
-
-          const didRemove = !shouldKeep;
-          return {
-            ...old,
-            items: shouldKeep
-              ? old.items.map((it) => (it.id === id ? { ...it, status } : it))
-              : old.items.filter((it) => it.id !== id),
-            totalCount:
-              didRemove && typeof old.totalCount === "number"
-                ? old.totalCount - 1
-                : old.totalCount,
-          };
-        });
-      }
-
-      return { rollbackPatches: Array.from(rollbackByQueryHash.values()) };
-    },
-    onError: (e, _variables, context) => {
-      for (const patch of context?.rollbackPatches ?? []) {
-        queryClient.setQueryData<JobsResponse>(patch.queryKey, (old) =>
-          restorePatchedJob(old, patch),
-        );
-      }
-      queryClient.invalidateQueries({ queryKey: ["jobs"], refetchType: "active" });
-
-      setError(getErrorMessage(e, "Failed to update status"));
-      toast({
-        title: "Update failed",
-        description: getErrorMessage(e, "The change could not be saved."),
-        variant: "destructive",
-        duration: 2200,
-        className:
-          "border-rose-200 bg-rose-50 text-rose-900 animate-in fade-in zoom-in-95",
-      });
-    },
-    onSuccess: (data, variables) => {
-      // We still invalidate to ensure consistency, but the UI is already correct
-      queryClient.invalidateQueries({ queryKey: ["jobs"], refetchType: "active" });
-      if (data?.resumeSaved || data?.resumePdfUrl) {
-        markTaskComplete("generate_first_pdf");
-      }
-      toast({
-        title: "Status updated",
-        description: `${variables.status}`,
-        duration: 1800,
-        className:
-          "border-emerald-200 bg-emerald-50 text-emerald-900 animate-in fade-in zoom-in-95",
-      });
-
-      if (data?.resumePdfUrl) {
-        const cachedEntries = queryClient.getQueriesData<JobsResponse>({ queryKey: ["jobs"] });
-        for (const [entryKey] of cachedEntries) {
-          queryClient.setQueryData<JobsResponse>(entryKey, (old) => {
-            if (!old || !Array.isArray(old.items)) return old;
-            return {
-              ...old,
-              items: old.items.map((it) =>
-                it.id === variables.id
-                  ? { ...it, resumePdfUrl: data.resumePdfUrl, resumePdfName: data.resumePdfName }
-                  : it,
-              ),
-            };
-          });
-        }
-      }
-
-      if (data?.saveError) {
-        toast({
-          title: "Saved with warnings",
-          description: data.saveError.message,
-          duration: 2400,
-          className:
-            "border-amber-200 bg-amber-50 text-amber-900 animate-in fade-in zoom-in-95",
-        });
-      } else if (data?.resumeSaved) {
-        toast({
-          title: "Resume saved",
-          description: "Saved to your applied job.",
-          duration: 2000,
-          className:
-            "border-emerald-200 bg-emerald-50 text-emerald-900 animate-in fade-in zoom-in-95",
-        });
-      }
-    },
-    onSettled: (_data, _error, variables) => {
-      if (!variables) return;
-      setUpdatingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(variables.id);
-        return next;
-      });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/jobs/${id}`, { method: "DELETE" });
-      if (res.status === 404) {
-        // Idempotent delete: treat already-removed rows as success.
-        return;
-      }
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || "Failed to delete job");
-    },
-    onMutate: async (id) => {
-      setError(null);
-      setSuppressedDeletedIds((prev) => {
-        if (prev.has(id)) return prev;
-        const next = new Set(prev);
-        next.add(id);
-        return next;
-      });
-      setDeletingIds((prev) => new Set(prev).add(id));
-      await queryClient.cancelQueries({ queryKey: ["jobs"] });
-      const previousSelectedId = selectedId;
-      let nextSelectedId = selectedId;
-      if (selectedId === id) {
-        nextSelectedId = items.find((it) => it.id !== id)?.id ?? null;
-      }
-      const rollbackByQueryHash = new Map<string, JobsQueryRollbackPatch>();
-
-      const queryCache = queryClient.getQueryCache().findAll({ queryKey: ["jobs"] });
-      for (const query of queryCache) {
-        const key = query.queryKey;
-        const queryHash = query.queryHash;
-        queryClient.setQueryData<JobsResponse>(key, (old) => {
-          if (!old || !Array.isArray(old.items)) return old;
-
-          const previousIndex = old.items.findIndex((it) => it.id === id);
-          if (previousIndex === -1) {
-            return old;
-          }
-          if (!rollbackByQueryHash.has(queryHash)) {
-            rollbackByQueryHash.set(queryHash, {
-              queryHash,
-              queryKey: key,
-              previousItem: old.items[previousIndex],
-              previousIndex,
-              previousTotalCount:
-                typeof old.totalCount === "number" ? old.totalCount : undefined,
-            });
-          }
-
-          const nextItems = old.items.filter((it) => it.id !== id);
-
-          return {
-            ...old,
-            items: nextItems,
-            totalCount: typeof old.totalCount === "number" ? old.totalCount - 1 : old.totalCount,
-          };
-        });
-      }
-
-      if (selectedId === id) {
-        setSelectedId(nextSelectedId);
-      }
-
-      return {
-        rollbackPatches: Array.from(rollbackByQueryHash.values()),
-        previousSelectedId,
-      };
-    },
-    onError: (e, id, context) => {
-      setError(getErrorMessage(e, "Failed to delete job"));
-      if (id) {
-        setSuppressedDeletedIds((prev) => {
-          if (!prev.has(id)) return prev;
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
-      }
-      for (const patch of context?.rollbackPatches ?? []) {
-        queryClient.setQueryData<JobsResponse>(patch.queryKey, (old) =>
-          restorePatchedJob(old, patch),
-        );
-      }
-      queryClient.invalidateQueries({ queryKey: ["jobs"], refetchType: "active" });
-
-      if (context && "previousSelectedId" in context) {
-        setSelectedId(context.previousSelectedId ?? null);
-      }
-      toast({
-        title: "Delete failed",
-        description: getErrorMessage(e, "The job could not be removed."),
-        variant: "destructive",
-        duration: 2400,
-        className:
-          "border-rose-200 bg-rose-50 text-rose-900 animate-in fade-in zoom-in-95",
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["jobs"], refetchType: "active" });
-      toast({
-        title: "Job deleted",
-        description: "The role was removed.",
-        duration: 1800,
-        className:
-          "border-emerald-200 bg-emerald-50 text-emerald-900 animate-in fade-in zoom-in-95",
-      });
-    },
-    onSettled: (_data, _error, id) => {
-      if (!id) return;
-      setDeletingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-    },
-  });
-
-  async function updateStatus(id: string, status: JobStatus) {
-    const previous = items.find((it) => it.id === id)?.status;
-    if (!previous || previous === status) return;
-    updateStatusMutation.mutate({ id, status });
   }
 
   function filenameFromDisposition(disposition: string | null) {
@@ -1587,6 +870,19 @@ export function JobsClient({
     return items[0]?.id ?? null;
   }, [items, selectedId]);
 
+  const handleSelectJob = useCallback((id: string | null) => {
+    setSelectedId(id);
+    if (id !== null && typeof window !== "undefined" && window.innerWidth < 1024) {
+      setMobileTab("detail");
+    }
+  }, []);
+
+  useKeyboardNavigation({
+    items,
+    selectedId: effectiveSelectedId,
+    onSelect: handleSelectJob,
+  });
+
   const selectedJob = items.find((it) => it.id === effectiveSelectedId) ?? null;
   const selectedTailorSource = selectedJob ? tailorSourceByJob[selectedJob.id] : undefined;
   const isAppliedSelected = selectedJob?.status === "APPLIED";
@@ -1686,8 +982,6 @@ export function JobsClient({
     }
     return children;
   }
-
-
 
   return (
     <>
@@ -1900,150 +1194,7 @@ export function JobsClient({
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={addJobOpen}
-        onOpenChange={(open) => {
-          setAddJobOpen(open);
-          if (!open) setAddJobError(null);
-        }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add job</DialogTitle>
-            <DialogDescription>Add a job from Seek or another site. Paste the job URL and fill in the details.</DialogDescription>
-          </DialogHeader>
-          <form
-            className="flex flex-col gap-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (addJobForm.jobUrl.trim() && addJobForm.title.trim() && !addJobSubmitting) {
-                submitAddJob();
-              }
-            }}
-          >
-            <div className="space-y-2">
-              <Label htmlFor="add-job-url">Job URL *</Label>
-              <Input
-                id="add-job-url"
-                type="url"
-                placeholder="https://www.seek.com.au/job/..."
-                value={addJobForm.jobUrl}
-                onChange={(e) => setAddJobForm((prev) => ({ ...prev, jobUrl: e.target.value }))}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="add-job-title">Title *</Label>
-              <Input
-                id="add-job-title"
-                type="text"
-                placeholder="e.g. Software Engineer"
-                value={addJobForm.title}
-                onChange={(e) => setAddJobForm((prev) => ({ ...prev, title: e.target.value }))}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="add-job-company">Company</Label>
-              <Input
-                id="add-job-company"
-                type="text"
-                placeholder="Company name"
-                value={addJobForm.company}
-                onChange={(e) => setAddJobForm((prev) => ({ ...prev, company: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Location</Label>
-              <Select
-                value={addJobForm.location || ADD_JOB_EMPTY}
-                onValueChange={(v) => setAddJobForm((prev) => ({ ...prev, location: v }))}
-              >
-                <SelectTrigger id="add-job-location">
-                  <SelectValue placeholder="Select location" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ADD_JOB_LOCATION_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Job type</Label>
-                <Select
-                  value={addJobForm.jobType || ADD_JOB_EMPTY}
-                  onValueChange={(v) => setAddJobForm((prev) => ({ ...prev, jobType: v }))}
-                >
-                  <SelectTrigger id="add-job-type">
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ADD_JOB_TYPE_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Job level</Label>
-                <Select
-                  value={addJobForm.jobLevel || ADD_JOB_EMPTY}
-                  onValueChange={(v) => setAddJobForm((prev) => ({ ...prev, jobLevel: v }))}
-                >
-                  <SelectTrigger id="add-job-level">
-                    <SelectValue placeholder="Select level" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ADD_JOB_LEVEL_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="add-job-description">Description</Label>
-              <Textarea
-                id="add-job-description"
-                placeholder="Paste job description (optional)"
-                value={addJobForm.description}
-                onChange={(e) => setAddJobForm((prev) => ({ ...prev, description: e.target.value }))}
-                className="min-h-[120px] max-h-[320px] resize-y overflow-y-auto"
-              />
-            </div>
-            {addJobError ? (
-              <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
-                {addJobError}
-              </div>
-            ) : null}
-            <div className="flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setAddJobOpen(false)}
-                disabled={addJobSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={!addJobForm.jobUrl.trim() || !addJobForm.title.trim() || addJobSubmitting}
-                className="bg-emerald-600 hover:bg-emerald-700"
-              >
-                {addJobSubmitting ? "Adding..." : "Add"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <JobAddDialog open={addJobOpen} onOpenChange={setAddJobOpen} />
 
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent
@@ -2107,25 +1258,29 @@ export function JobsClient({
         className="edu-page-enter relative flex flex-1 min-h-0 flex-col gap-2 pb-0 text-foreground lg:h-full lg:overflow-hidden"
       >
       <div className="flex min-h-0 flex-1 flex-col gap-2 lg:h-full lg:overflow-hidden">
+        <div aria-live="polite" className="sr-only">
+          {totalCount !== undefined ? `${totalCount} jobs found` : "Loading jobs"}
+        </div>
         <div
+        role="search"
+        aria-label="Job search"
         data-testid="jobs-toolbar"
-        className="rounded-3xl border-2 border-slate-900/10 bg-white/80 p-5 shadow-[0_20px_45px_-35px_rgba(15,23,42,0.35)] backdrop-blur transition-shadow duration-200 ease-out hover:shadow-[0_26px_55px_-40px_rgba(15,23,42,0.4)]"
+        className="relative rounded-3xl border-2 border-slate-900/10 bg-white/80 p-5 shadow-[0_20px_45px_-35px_rgba(15,23,42,0.35)] backdrop-blur transition-shadow duration-200 ease-out hover:shadow-[0_26px_55px_-40px_rgba(15,23,42,0.4)]"
       >
+        {loading ? (
+          <div className="absolute top-0 left-0 right-0 z-10 h-0.5 overflow-hidden rounded-t-3xl">
+            <div className="h-full w-1/3 animate-[shimmer_1.2s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-emerald-400 to-transparent" />
+          </div>
+        ) : null}
         <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr_0.8fr_0.8fr_0.9fr_auto] lg:items-end">
           <div className="space-y-2">
             <div className="text-xs text-muted-foreground">{t("titleOrKeywords")}</div>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                className="pl-9"
-                placeholder={t("placeholder")}
-                value={q}
-                onChange={(e) => {
-                  resetPagination();
-                  setQ(e.target.value);
-                }}
-              />
-            </div>
+            <JobSearchBar
+              q={q}
+              onQueryChange={(v) => { resetPagination(); setQ(v); }}
+              onSubmit={triggerSearch}
+              placeholder={t("placeholder")}
+            />
           </div>
           <div className="space-y-2">
             <div className="text-xs text-muted-foreground">{t("location")}</div>
@@ -2227,7 +1382,6 @@ export function JobsClient({
                 variant="ghost"
                 onClick={() => {
                   setAddJobOpen(true);
-                  setAddJobError(null);
                 }}
                 className="h-10 rounded-lg px-4 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 lg:w-auto"
               >
@@ -2253,10 +1407,49 @@ export function JobsClient({
       ) : null}
 
         <section className="relative grid flex-1 min-h-0 gap-3 lg:h-full lg:grid-cols-[380px_1fr] lg:items-stretch">
-        {showLoadingOverlay ? <div className="edu-loading-bar" aria-hidden /> : null}
+        <div
+          className="flex shrink-0 gap-6 border-b border-slate-900/10 px-1 lg:hidden"
+          role="tablist"
+          aria-label={t("mobileTablistLabel")}
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobileTab === "list"}
+            onClick={() => setMobileTab("list")}
+            className={cn(
+              "-mb-px border-b-2 pb-2 text-sm font-medium transition-colors",
+              mobileTab === "list"
+                ? "border-emerald-500 text-emerald-700"
+                : "border-transparent text-slate-500 hover:text-slate-800",
+            )}
+          >
+            {tn("jobs")} (
+            {typeof totalCount === "number" ? totalCount : items.length})
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobileTab === "detail"}
+            onClick={() => setMobileTab("detail")}
+            className={cn(
+              "-mb-px border-b-2 pb-2 text-sm font-medium transition-colors",
+              mobileTab === "detail"
+                ? "border-emerald-500 text-emerald-700"
+                : "border-transparent text-slate-500 hover:text-slate-800",
+            )}
+          >
+            {t("tabDetail")}
+          </button>
+        </div>
+
         <div
           data-testid="jobs-results-panel"
-          className="relative flex min-h-[280px] h-[44dvh] flex-1 flex-col overflow-hidden rounded-3xl border-2 border-slate-900/10 bg-white/80 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] backdrop-blur transition-shadow duration-200 ease-out hover:shadow-[0_24px_50px_-36px_rgba(15,23,42,0.38)] sm:h-[50dvh] lg:h-auto lg:min-h-0"
+          className={cn(
+            "relative flex min-h-[280px] flex-1 min-h-0 flex-col overflow-hidden rounded-3xl border-2 border-slate-900/10 bg-white/80 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] backdrop-blur transition-shadow duration-200 ease-out hover:shadow-[0_24px_50px_-36px_rgba(15,23,42,0.38)] lg:h-auto lg:min-h-0",
+            mobileTab !== "list" && "hidden lg:flex",
+            mobileTab === "list" && "min-h-0 lg:min-h-0",
+          )}
         >
           <div className="flex items-center justify-between border-b px-4 py-3 text-sm font-semibold">
             <span>
@@ -2269,12 +1462,13 @@ export function JobsClient({
             </span>
             <span className="text-xs text-muted-foreground">{items.length} loaded</span>
           </div>
+          <div className="relative flex min-h-0 flex-1 flex-col">
           <ScrollArea
             ref={resultsScrollRef}
             type="always"
             data-testid="jobs-results-scroll"
             data-loading={showLoadingOverlay ? "true" : "false"}
-            data-virtual="false"
+            data-virtual={items.length > 80 ? "true" : "false"}
             className={`jobs-scroll-area max-h-full flex-1 min-h-0 transition-opacity duration-200 ease-out ${listOpacityClass}`}
           >
             {loadingInitial ? (
@@ -2289,49 +1483,40 @@ export function JobsClient({
               </div>
             ) : null}
             {items.length > 0 ? (
-              <div className="space-y-3 p-3">
-                {items.map((it) => {
-                  const active = it.id === effectiveSelectedId;
-                  return (
-                    <button
+              items.length > 80 ? (
+                <VirtualJobList
+                  items={items}
+                  effectiveSelectedId={effectiveSelectedId}
+                  onSelect={setSelectedId}
+                  timeZone={timeZone}
+                  scrollRootRef={resultsScrollRef}
+                />
+              ) : (
+                <div className="space-y-3 p-3">
+                  {items.map((it) => (
+                    <JobListItem
                       key={it.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedId(it.id);
-                      }}
-                      data-perf="cv-auto"
-                      className={`jobflow-list-item w-full rounded-2xl border border-l-4 border-slate-900/10 bg-white/80 px-3 py-3 text-left transition-all duration-200 ease-out hover:-translate-y-[1px] ${
-                        active
-                          ? "border-l-emerald-500 bg-emerald-50/60 shadow-sm"
-                          : "border-l-transparent hover:border-slate-900/20 hover:bg-white"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <Badge className={statusClass[it.status]}>{it.status}</Badge>
-                        <span
-                          className="text-xs text-muted-foreground"
-                          title={formatLocalDateTime(it.createdAt, timeZone)}
-                        >
-                          {formatInsertedTime(it.createdAt)}
-                        </span>
-                      </div>
-                      <div className="mt-2 text-sm font-semibold">{it.title}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {it.company ?? "-"} - {it.location ?? "-"}
-                      </div>
-                      <div className="mt-2 text-[11px] text-muted-foreground">
-                        {it.jobType ?? "Unknown"} - {it.jobLevel ?? "Unknown"}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+                      job={it}
+                      isActive={it.id === effectiveSelectedId}
+                      onSelect={() => handleSelectJob(it.id)}
+                      timeZone={timeZone}
+                    />
+                  ))}
+                </div>
+              )
             ) : !loading ? (
               <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
                 {t("noJobs")}
               </div>
             ) : null}
           </ScrollArea>
+          {showListBackdropOverlay ? (
+            <div
+              className="pointer-events-none absolute inset-0 z-[1] bg-white/60 backdrop-blur-sm"
+              aria-hidden
+            />
+          ) : null}
+          </div>
           <div className="border-t px-4 py-2 text-xs text-muted-foreground">
             {nextCursor ? (loading ? "Loading more jobs..." : "Scroll down to load more") : "End of results"}
           </div>
@@ -2339,7 +1524,10 @@ export function JobsClient({
 
         <div
           data-testid="jobs-details-panel"
-          className="relative flex min-h-[320px] h-[50dvh] flex-1 flex-col overflow-hidden rounded-3xl border-2 border-slate-900/10 bg-white/80 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] backdrop-blur transition-shadow duration-200 ease-out hover:shadow-[0_24px_50px_-36px_rgba(15,23,42,0.38)] sm:h-[58dvh] lg:h-auto lg:min-h-0"
+          className={cn(
+            "relative flex min-h-[320px] h-[50dvh] flex-1 flex-col overflow-hidden rounded-3xl border-2 border-slate-900/10 bg-white/80 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] backdrop-blur transition-shadow duration-200 ease-out hover:shadow-[0_24px_50px_-36px_rgba(15,23,42,0.38)] sm:h-[58dvh] lg:h-auto lg:min-h-0",
+            mobileTab !== "detail" && "hidden lg:flex",
+          )}
         >
           <div className="border-b px-4 py-3">
             {selectedJob ? (
@@ -2608,31 +1796,15 @@ export function JobsClient({
         </section>
       </div>
       </div>
-      <AlertDialog
+      <JobDeleteDialog
         open={deleteConfirmOpen}
         onOpenChange={(open) => {
           setDeleteConfirmOpen(open);
           if (!open) setDeleteCandidate(null);
         }}
-      >
-        <AlertDialogContent className="max-w-md rounded-2xl border-slate-200">
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("deleteConfirmTitle")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("deleteConfirmDesc")}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl">{tc("cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmDeleteCandidate}
-              className="rounded-xl bg-rose-600 text-white hover:bg-rose-700"
-            >
-              {tc("delete")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        candidate={deleteCandidate}
+        onConfirm={confirmDeleteCandidate}
+      />
     </>
   );
 }

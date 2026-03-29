@@ -70,7 +70,9 @@
     "jobDetails": "职位详情",
     "applied": "已投递",
     "company": "公司",
-    "type": "类型"
+    "type": "类型",
+    "tabDetail": "详情",
+    "mobileTablistLabel": "职位列表与详情"
   },
   "fetch": {
     "searchRoles": "搜索职位",
