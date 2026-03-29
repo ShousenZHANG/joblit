@@ -7,7 +7,7 @@ import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import "highlight.js/styles/github.css";
 import "react-day-picker/dist/style.css";
-import { Copy, Download, ExternalLink, FileText, MapPin, Search, Trash2 } from "lucide-react";
+import { ChevronDown, Copy, Download, ExternalLink, FileText, MapPin, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -264,6 +264,7 @@ export function JobsClient({
 
   const [selectedId, setSelectedId] = useState<string | null>(initialItems[0]?.id ?? null);
   const [mobileTab, setMobileTab] = useState<"list" | "detail">("list");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [timeZone] = useState<string | null>(() => getUserTimeZone() || null);
   const [isPending, startTransition] = useTransition();
   const resultsScrollRef = useRef<HTMLDivElement | null>(null);
@@ -346,6 +347,13 @@ export function JobsClient({
     ? getErrorMessage(firstQueryError, "Failed to load jobs")
     : null;
   const activeError = mutationError ?? queryError;
+
+  const activeFilterCount = [
+    locationFilter !== "ALL",
+    jobLevelFilter !== "ALL",
+    statusFilter !== "ALL",
+    sortOrder !== "newest",
+  ].filter(Boolean).length;
 
   function triggerSearch() {
     // Force-refresh on explicit submit (handles same-query re-submit to pick up new jobs)
@@ -1261,14 +1269,129 @@ export function JobsClient({
         role="search"
         aria-label="Job search"
         data-testid="jobs-toolbar"
-        className="relative rounded-3xl border-2 border-slate-900/10 bg-white/80 p-5 shadow-[0_20px_45px_-35px_rgba(15,23,42,0.35)] backdrop-blur transition-shadow duration-200 ease-out hover:shadow-[0_26px_55px_-40px_rgba(15,23,42,0.4)]"
+        className="relative rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur lg:rounded-3xl lg:border-2 lg:border-slate-900/10 lg:bg-white/80 lg:p-5 lg:shadow-[0_20px_45px_-35px_rgba(15,23,42,0.35)]"
       >
         {loading ? (
-          <div className="absolute top-0 left-0 right-0 z-10 h-0.5 overflow-hidden rounded-t-3xl">
+          <div className="absolute top-0 left-0 right-0 z-10 h-0.5 overflow-hidden rounded-t-2xl lg:rounded-t-3xl">
             <div className="h-full w-1/3 animate-[shimmer_1.2s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-emerald-400 to-transparent" />
           </div>
         ) : null}
-        <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr_0.8fr_0.8fr_0.9fr_auto] lg:items-end">
+
+        {/* Mobile: compact search + filter toggle */}
+        <div className="flex flex-col gap-2 lg:hidden">
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <JobSearchBar
+                q={q}
+                onQueryChange={setQ}
+                onSubmit={triggerSearch}
+                placeholder={t("placeholder")}
+                isDebouncing={q !== "" && q !== debouncedQ}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setMobileFiltersOpen((v) => !v)}
+              className={cn(
+                "flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors",
+                mobileFiltersOpen
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-slate-200 bg-white text-slate-600",
+              )}
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              {activeFilterCount > 0 && (
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+            <Button
+              onClick={triggerSearch}
+              disabled={loading}
+              size="sm"
+              className="h-9 shrink-0 rounded-lg bg-emerald-500 px-3 text-xs font-semibold text-white shadow-sm hover:bg-emerald-600 active:scale-[0.97]"
+            >
+              <Search className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+
+          {mobileFiltersOpen && (
+            <div className="grid grid-cols-2 gap-2 rounded-lg border border-slate-100 bg-slate-50/60 p-2.5">
+              <Select
+                value={locationFilter}
+                onValueChange={(v) => { startTransition(() => { setLocationFilter(v); }); }}
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <MapPin className="mr-1 h-3 w-3 shrink-0 text-slate-400" />
+                  <SelectValue placeholder={tc("allLocations")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">{tc("allLocations")}</SelectItem>
+                  {(market === "CN" ? CN_LOCATION_OPTIONS : AU_LOCATION_OPTIONS).map((loc) => (
+                    <SelectItem key={loc.value} value={loc.value}>{loc.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={jobLevelFilter}
+                onValueChange={(v) => { startTransition(() => { setJobLevelFilter(v); }); }}
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder={tc("allLevels")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">{tc("allLevels")}</SelectItem>
+                  {jobLevelOptions.map((level) => (
+                    <SelectItem key={level} value={level}>{level}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={statusFilter}
+                onValueChange={(v) => { startTransition(() => { setStatusFilter(v as JobStatus | "ALL"); }); }}
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder={tc("all")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">{tc("all")}</SelectItem>
+                  <SelectItem value="NEW">{t("statusNew")}</SelectItem>
+                  <SelectItem value="APPLIED">{t("statusApplied")}</SelectItem>
+                  <SelectItem value="REJECTED">{t("statusRejected")}</SelectItem>
+                </SelectContent>
+              </Select>
+              <div data-testid="jobs-sort">
+                <Select
+                  value={sortOrder}
+                  onValueChange={(v) => { startTransition(() => { setSortOrder(v as "newest" | "oldest"); }); }}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder={t("posted")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="newest">{t("newestFirst")}</SelectItem>
+                    <SelectItem value="oldest">{t("oldestFirst")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {market === "AU" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAddJobOpen(true)}
+                  className="col-span-2 h-8 text-xs"
+                >
+                  Add job
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Desktop: full horizontal toolbar */}
+        <div className="hidden lg:grid lg:grid-cols-[1.6fr_1fr_0.8fr_0.8fr_0.9fr_auto] lg:items-end lg:gap-4">
           <div className="space-y-2">
             <div className="text-xs text-muted-foreground">{t("titleOrKeywords")}</div>
             <JobSearchBar
@@ -1285,11 +1408,7 @@ export function JobsClient({
               <MapPin className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Select
                 value={locationFilter}
-                onValueChange={(v) => {
-                  startTransition(() => {
-                    setLocationFilter(v);
-                  });
-                }}
+                onValueChange={(v) => { startTransition(() => { setLocationFilter(v); }); }}
               >
                 <SelectTrigger className="pl-9">
                   <SelectValue placeholder={tc("allLocations")} />
@@ -1297,9 +1416,7 @@ export function JobsClient({
                 <SelectContent>
                   <SelectItem value="ALL">{tc("allLocations")}</SelectItem>
                   {(market === "CN" ? CN_LOCATION_OPTIONS : AU_LOCATION_OPTIONS).map((loc) => (
-                    <SelectItem key={loc.value} value={loc.value}>
-                      {loc.label}
-                    </SelectItem>
+                    <SelectItem key={loc.value} value={loc.value}>{loc.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1309,11 +1426,7 @@ export function JobsClient({
             <div className="text-xs text-muted-foreground">{t("jobLevel")}</div>
             <Select
               value={jobLevelFilter}
-              onValueChange={(v) => {
-                startTransition(() => {
-                  setJobLevelFilter(v);
-                });
-              }}
+              onValueChange={(v) => { startTransition(() => { setJobLevelFilter(v); }); }}
             >
               <SelectTrigger>
                 <SelectValue placeholder={tc("allLevels")} />
@@ -1321,9 +1434,7 @@ export function JobsClient({
               <SelectContent>
                 <SelectItem value="ALL">{tc("allLevels")}</SelectItem>
                 {jobLevelOptions.map((level) => (
-                  <SelectItem key={level} value={level}>
-                    {level}
-                  </SelectItem>
+                  <SelectItem key={level} value={level}>{level}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -1332,11 +1443,7 @@ export function JobsClient({
             <div className="text-xs text-muted-foreground">{t("status")}</div>
             <Select
               value={statusFilter}
-              onValueChange={(v) => {
-                startTransition(() => {
-                  setStatusFilter(v as JobStatus | "ALL");
-                });
-              }}
+              onValueChange={(v) => { startTransition(() => { setStatusFilter(v as JobStatus | "ALL"); }); }}
             >
               <SelectTrigger>
                 <SelectValue placeholder={tc("all")} />
@@ -1353,11 +1460,7 @@ export function JobsClient({
             <div className="text-xs text-muted-foreground">{t("posted")}</div>
             <Select
               value={sortOrder}
-              onValueChange={(v) => {
-                startTransition(() => {
-                  setSortOrder(v as "newest" | "oldest");
-                });
-              }}
+              onValueChange={(v) => { startTransition(() => { setSortOrder(v as "newest" | "oldest"); }); }}
             >
               <SelectTrigger className="h-9 bg-muted/40">
                 <SelectValue placeholder={t("posted")} />
@@ -1373,9 +1476,7 @@ export function JobsClient({
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => {
-                  setAddJobOpen(true);
-                }}
+                onClick={() => setAddJobOpen(true)}
                 className="h-10 rounded-lg px-4 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 lg:w-auto"
               >
                 Add job
@@ -1401,7 +1502,7 @@ export function JobsClient({
 
         <section className="relative flex flex-1 flex-col gap-3 lg:grid lg:min-h-0 lg:h-full lg:grid-cols-[380px_1fr] lg:items-stretch">
         <div
-          className="flex shrink-0 gap-6 border-b border-slate-900/10 px-1 lg:hidden"
+          className="flex shrink-0 items-center rounded-lg bg-slate-100/80 p-0.5 lg:hidden"
           role="tablist"
           aria-label={t("mobileTablistLabel")}
         >
@@ -1411,14 +1512,16 @@ export function JobsClient({
             aria-selected={mobileTab === "list"}
             onClick={() => setMobileTab("list")}
             className={cn(
-              "-mb-px border-b-2 pb-2 text-sm font-medium transition-colors",
+              "flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-150",
               mobileTab === "list"
-                ? "border-emerald-500 text-emerald-700"
-                : "border-transparent text-slate-500 hover:text-slate-800",
+                ? "bg-white text-emerald-700 shadow-sm"
+                : "text-slate-500 active:bg-white/60",
             )}
           >
-            {tn("jobs")} (
-            {typeof totalCount === "number" ? totalCount : items.length})
+            {tn("jobs")}
+            <span className="ml-1 text-[10px] font-normal opacity-70">
+              {typeof totalCount === "number" ? totalCount : items.length}
+            </span>
           </button>
           <button
             type="button"
@@ -1426,10 +1529,10 @@ export function JobsClient({
             aria-selected={mobileTab === "detail"}
             onClick={() => setMobileTab("detail")}
             className={cn(
-              "-mb-px border-b-2 pb-2 text-sm font-medium transition-colors",
+              "flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-150",
               mobileTab === "detail"
-                ? "border-emerald-500 text-emerald-700"
-                : "border-transparent text-slate-500 hover:text-slate-800",
+                ? "bg-white text-emerald-700 shadow-sm"
+                : "text-slate-500 active:bg-white/60",
             )}
           >
             {t("tabDetail")}
@@ -1439,8 +1542,10 @@ export function JobsClient({
         <div
           data-testid="jobs-results-panel"
           className={cn(
-            "relative flex flex-col overflow-hidden rounded-3xl border-2 border-slate-900/10 bg-white/80 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] backdrop-blur transition-shadow duration-200 ease-out hover:shadow-[0_24px_50px_-36px_rgba(15,23,42,0.38)]",
-            "h-[calc(100dvh-280px)] lg:h-auto lg:min-h-0 lg:flex-1",
+            "relative flex flex-col overflow-hidden backdrop-blur transition-shadow duration-200 ease-out",
+            "rounded-2xl border border-slate-200 bg-white/95 shadow-sm",
+            "lg:rounded-3xl lg:border-2 lg:border-slate-900/10 lg:bg-white/80 lg:shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] lg:hover:shadow-[0_24px_50px_-36px_rgba(15,23,42,0.38)]",
+            "h-[calc(100dvh-240px)] lg:h-auto lg:min-h-0 lg:flex-1",
             mobileTab !== "list" && "hidden lg:flex",
           )}
         >
@@ -1521,8 +1626,10 @@ export function JobsClient({
         <div
           data-testid="jobs-details-panel"
           className={cn(
-            "relative flex flex-col overflow-hidden rounded-3xl border-2 border-slate-900/10 bg-white/80 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] backdrop-blur transition-shadow duration-200 ease-out hover:shadow-[0_24px_50px_-36px_rgba(15,23,42,0.38)]",
-            "h-[calc(100dvh-280px)] lg:h-auto lg:min-h-0 lg:flex-1",
+            "relative flex flex-col overflow-hidden backdrop-blur transition-shadow duration-200 ease-out",
+            "rounded-2xl border border-slate-200 bg-white/95 shadow-sm",
+            "lg:rounded-3xl lg:border-2 lg:border-slate-900/10 lg:bg-white/80 lg:shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] lg:hover:shadow-[0_24px_50px_-36px_rgba(15,23,42,0.38)]",
+            "h-[calc(100dvh-240px)] lg:h-auto lg:min-h-0 lg:flex-1",
             mobileTab !== "detail" && "hidden lg:flex",
           )}
         >

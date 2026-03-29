@@ -204,7 +204,7 @@ describe("JobsClient", () => {
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
     const toolbar = screen.getAllByTestId("jobs-toolbar")[0];
-    const input = within(toolbar).getByPlaceholderText("e.g. software engineer");
+    const input = within(toolbar).getAllByPlaceholderText("e.g. software engineer")[0];
     await user.clear(input);
     await user.type(input, "designer");
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -236,7 +236,7 @@ describe("JobsClient", () => {
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
     const toolbar = screen.getAllByTestId("jobs-toolbar")[0];
-    const input = within(toolbar).getByPlaceholderText("e.g. software engineer");
+    const input = within(toolbar).getAllByPlaceholderText("e.g. software engineer")[0];
     await user.clear(input);
     await user.type(input, "designer");
 
