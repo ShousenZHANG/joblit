@@ -1210,6 +1210,8 @@ body::-webkit-scrollbar-thumb:hover,
   scrollbar-width: none;
   -ms-overflow-style: none;
   scrollbar-color: transparent transparent;
+  /* Enable smooth momentum scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
 }
 
 .jobs-scroll-area [data-radix-scroll-area-viewport]::-webkit-scrollbar {

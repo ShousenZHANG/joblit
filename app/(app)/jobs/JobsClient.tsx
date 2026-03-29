@@ -272,7 +272,7 @@ export function JobsClient({
   const [suppressedDeletedIds, setSuppressedDeletedIds] = useState<Set<string>>(new Set());
 
   const {
-    items, totalCount, nextCursor, loading, loadingInitial,
+    items, totalCount, nextCursor, loading, loadingInitial, loadingMore,
     pageResponses, loadedCursors, resetPagination, firstQueryError, jobLevelOptions,
   } = useJobPagination({
     queryString,
@@ -341,10 +341,9 @@ export function JobsClient({
     };
   }, [pdfPreview?.url]);
 
-  const showLoadingOverlay = loading || isPending;
+  // Only dim/overlay during initial load or filter changes — not while appending more pages
+  const showLoadingOverlay = (loading && !loadingMore) || isPending;
   const listOpacityClass = showLoadingOverlay ? "opacity-70" : "opacity-100";
-  const isSearchDebouncing = q !== "" && q !== debouncedQ;
-  const showListBackdropOverlay = showLoadingOverlay && !isSearchDebouncing;
   const queryError = firstQueryError
     ? getErrorMessage(firstQueryError, "Failed to load jobs")
     : null;
@@ -352,7 +351,7 @@ export function JobsClient({
 
   function triggerSearch() {
     if (q.trim()) addToHistory(q.trim());
-    resetPagination();
+    // Force-refresh on explicit submit (handles same-query re-submit to pick up new jobs)
     queryClient.invalidateQueries({ queryKey: ["jobs"] });
   }
 
@@ -1277,7 +1276,7 @@ export function JobsClient({
             <div className="text-xs text-muted-foreground">{t("titleOrKeywords")}</div>
             <JobSearchBar
               q={q}
-              onQueryChange={(v) => { resetPagination(); setQ(v); }}
+              onQueryChange={setQ}
               onSubmit={triggerSearch}
               placeholder={t("placeholder")}
             />
@@ -1290,7 +1289,6 @@ export function JobsClient({
                 value={locationFilter}
                 onValueChange={(v) => {
                   startTransition(() => {
-                    resetPagination();
                     setLocationFilter(v);
                   });
                 }}
@@ -1315,7 +1313,6 @@ export function JobsClient({
               value={jobLevelFilter}
               onValueChange={(v) => {
                 startTransition(() => {
-                  resetPagination();
                   setJobLevelFilter(v);
                 });
               }}
@@ -1339,7 +1336,6 @@ export function JobsClient({
               value={statusFilter}
               onValueChange={(v) => {
                 startTransition(() => {
-                  resetPagination();
                   setStatusFilter(v as JobStatus | "ALL");
                 });
               }}
@@ -1361,7 +1357,6 @@ export function JobsClient({
               value={sortOrder}
               onValueChange={(v) => {
                 startTransition(() => {
-                  resetPagination();
                   setSortOrder(v as "newest" | "oldest");
                 });
               }}
@@ -1406,7 +1401,7 @@ export function JobsClient({
         </div>
       ) : null}
 
-        <section className="relative grid flex-1 min-h-0 gap-3 lg:h-full lg:grid-cols-[380px_1fr] lg:items-stretch">
+        <section className="relative flex flex-1 min-h-0 flex-col gap-3 lg:grid lg:h-full lg:grid-cols-[380px_1fr] lg:items-stretch">
         <div
           className="flex shrink-0 gap-6 border-b border-slate-900/10 px-1 lg:hidden"
           role="tablist"
@@ -1446,9 +1441,8 @@ export function JobsClient({
         <div
           data-testid="jobs-results-panel"
           className={cn(
-            "relative flex min-h-[280px] flex-1 min-h-0 flex-col overflow-hidden rounded-3xl border-2 border-slate-900/10 bg-white/80 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] backdrop-blur transition-shadow duration-200 ease-out hover:shadow-[0_24px_50px_-36px_rgba(15,23,42,0.38)] lg:h-auto lg:min-h-0",
+            "relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border-2 border-slate-900/10 bg-white/80 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] backdrop-blur transition-shadow duration-200 ease-out hover:shadow-[0_24px_50px_-36px_rgba(15,23,42,0.38)] lg:h-auto lg:min-h-0",
             mobileTab !== "list" && "hidden lg:flex",
-            mobileTab === "list" && "min-h-0 lg:min-h-0",
           )}
         >
           <div className="flex items-center justify-between border-b px-4 py-3 text-sm font-semibold">
@@ -1510,22 +1504,25 @@ export function JobsClient({
               </div>
             ) : null}
           </ScrollArea>
-          {showListBackdropOverlay ? (
-            <div
-              className="pointer-events-none absolute inset-0 z-[1] bg-white/60 backdrop-blur-sm"
-              aria-hidden
-            />
-          ) : null}
           </div>
           <div className="border-t px-4 py-2 text-xs text-muted-foreground">
-            {nextCursor ? (loading ? "Loading more jobs..." : "Scroll down to load more") : "End of results"}
+            {loadingMore ? (
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-3 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+                <span>Loading more jobs…</span>
+              </div>
+            ) : nextCursor ? (
+              "Scroll down to load more"
+            ) : (
+              "End of results"
+            )}
           </div>
         </div>
 
         <div
           data-testid="jobs-details-panel"
           className={cn(
-            "relative flex min-h-[320px] h-[50dvh] flex-1 flex-col overflow-hidden rounded-3xl border-2 border-slate-900/10 bg-white/80 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] backdrop-blur transition-shadow duration-200 ease-out hover:shadow-[0_24px_50px_-36px_rgba(15,23,42,0.38)] sm:h-[58dvh] lg:h-auto lg:min-h-0",
+            "relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border-2 border-slate-900/10 bg-white/80 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] backdrop-blur transition-shadow duration-200 ease-out hover:shadow-[0_24px_50px_-36px_rgba(15,23,42,0.38)] lg:h-auto lg:min-h-0",
             mobileTab !== "detail" && "hidden lg:flex",
           )}
         >

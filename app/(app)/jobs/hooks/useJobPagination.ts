@@ -27,6 +27,19 @@ export function useJobPagination({
     [],
   );
 
+  // Reactively reset pagination when the query string (filters/search) changes
+  const prevQueryStringRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (prevQueryStringRef.current === null) {
+      prevQueryStringRef.current = queryString;
+      return;
+    }
+    if (prevQueryStringRef.current !== queryString) {
+      prevQueryStringRef.current = queryString;
+      setLoadedCursors([null]);
+    }
+  }, [queryString]);
+
   const initialQueryRef = useRef<string | null>(null);
   if (initialQueryRef.current === null) {
     initialQueryRef.current = queryString;
@@ -142,6 +155,11 @@ export function useJobPagination({
     : null;
   const loading = pageQueries.some((query) => query.isFetching);
   const loadingInitial = pageQueries.some((query) => query.isLoading) && items.length === 0;
+  // True only when fetching additional pages (not the first page refresh)
+  const loadingMore =
+    pageQueries.length > 1 &&
+    pageQueries[pageQueries.length - 1].isFetching &&
+    !pageQueries[0].isFetching;
 
   const firstQueryError = pageQueries.find((query) => query.error)?.error;
 
@@ -190,6 +208,7 @@ export function useJobPagination({
     nextCursor,
     loading,
     loadingInitial,
+    loadingMore,
     pageResponses,
     loadedCursors,
     resetPagination,

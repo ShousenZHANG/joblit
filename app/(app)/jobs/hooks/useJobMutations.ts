@@ -134,7 +134,6 @@ export function useJobMutations({
       });
     },
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["jobs"], refetchType: "active" });
       if (data?.resumeSaved || data?.resumePdfUrl) {
         markTaskComplete("generate_first_pdf");
       }
@@ -288,7 +287,6 @@ export function useJobMutations({
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["jobs"], refetchType: "active" });
       toast({
         title: "Job deleted",
         description: "The role was removed.",

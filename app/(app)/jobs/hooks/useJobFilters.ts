@@ -17,7 +17,7 @@ export function useJobFilters() {
     [statusFilter, locationFilter, jobLevelFilter, market, sortOrder, pageSize],
   );
   const debouncedSelectFilters = useDebouncedValue(filters, 120);
-  const debouncedQ = useDebouncedValue(q, 320);
+  const debouncedQ = useDebouncedValue(q, 250);
 
   const debouncedFilters = useMemo(
     () => ({

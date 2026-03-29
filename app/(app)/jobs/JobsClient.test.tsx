@@ -522,7 +522,7 @@ describe("JobsClient", () => {
     expect(actionRows[0]).toHaveClass("grid", "grid-cols-1", "sm:grid-cols-2");
   });
 
-  it("keeps a just-deleted job hidden even if a stale refetch returns it once", async () => {
+  it("keeps deleted job hidden without triggering an unnecessary refetch", async () => {
     const user = userEvent.setup();
     let jobsFetchCount = 0;
     const mockFetch = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
@@ -536,7 +536,7 @@ describe("JobsClient", () => {
       }
       if (url.startsWith("/api/jobs?")) {
         jobsFetchCount += 1;
-        // Simulate a stale list response returning the deleted row once.
+        // Return the original list — if a refetch happens it must not un-hide the deleted job.
         return new Response(
           JSON.stringify({ items: [baseJob], nextCursor: null, facets: { jobLevels: ["Mid"] } }),
           { status: 200, headers: { "Content-Type": "application/json" } },
@@ -572,7 +572,8 @@ describe("JobsClient", () => {
       ).not.toBeInTheDocument();
     });
 
-    expect(jobsFetchCount).toBeGreaterThan(0);
+    // Optimistic delete uses suppressedDeletedIds — no refetch is needed or expected.
+    expect(jobsFetchCount).toBe(0);
   });
 
   it("submits only one delete request when delete confirm is double-clicked quickly", async () => {
