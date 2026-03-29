@@ -31,7 +31,6 @@ import { VirtualJobList } from "./components/VirtualJobList";
 import { JobDeleteDialog } from "./components/JobDeleteDialog";
 import { JobAddDialog } from "./components/JobAddDialog";
 import { JobSearchBar } from "./components/JobSearchBar";
-import { useSearchHistory } from "./hooks/useSearchHistory";
 import { cn } from "@/lib/utils";
 
 const SKILL_PACK_META_STORAGE_KEY = "jobflow.skill-pack-meta.v1";
@@ -252,7 +251,6 @@ export function JobsClient({
   const guideHighlightClass =
     "ring-2 ring-emerald-400 ring-offset-2 ring-offset-white shadow-[0_0_0_4px_rgba(16,185,129,0.18)]";
   const queryClient = useQueryClient();
-  const { addToHistory } = useSearchHistory();
 
   const {
     q, debouncedQ, setQ,
@@ -273,7 +271,7 @@ export function JobsClient({
 
   const {
     items, totalCount, nextCursor, loading, loadingInitial, loadingMore,
-    pageResponses, loadedCursors, resetPagination, firstQueryError, jobLevelOptions,
+    loadedCursors, resetPagination, firstQueryError, jobLevelOptions,
   } = useJobPagination({
     queryString,
     initialItems,
@@ -350,7 +348,6 @@ export function JobsClient({
   const activeError = mutationError ?? queryError;
 
   function triggerSearch() {
-    if (q.trim()) addToHistory(q.trim());
     // Force-refresh on explicit submit (handles same-query re-submit to pick up new jobs)
     queryClient.invalidateQueries({ queryKey: ["jobs"] });
   }
@@ -1254,9 +1251,9 @@ export function JobsClient({
 
       <div
         data-testid="jobs-shell"
-        className="edu-page-enter relative flex flex-1 min-h-0 flex-col gap-2 pb-0 text-foreground lg:h-full lg:overflow-hidden"
+        className="edu-page-enter relative flex flex-1 flex-col gap-2 pb-0 text-foreground lg:min-h-0 lg:h-full lg:overflow-hidden"
       >
-      <div className="flex min-h-0 flex-1 flex-col gap-2 lg:h-full lg:overflow-hidden">
+      <div className="flex flex-1 flex-col gap-2 lg:min-h-0 lg:h-full lg:overflow-hidden">
         <div aria-live="polite" className="sr-only">
           {totalCount !== undefined ? `${totalCount} jobs found` : "Loading jobs"}
         </div>
@@ -1279,6 +1276,7 @@ export function JobsClient({
               onQueryChange={setQ}
               onSubmit={triggerSearch}
               placeholder={t("placeholder")}
+              isDebouncing={q !== "" && q !== debouncedQ}
             />
           </div>
           <div className="space-y-2">
@@ -1401,7 +1399,7 @@ export function JobsClient({
         </div>
       ) : null}
 
-        <section className="relative flex flex-1 min-h-0 flex-col gap-3 lg:grid lg:h-full lg:grid-cols-[380px_1fr] lg:items-stretch">
+        <section className="relative flex flex-1 flex-col gap-3 lg:grid lg:min-h-0 lg:h-full lg:grid-cols-[380px_1fr] lg:items-stretch">
         <div
           className="flex shrink-0 gap-6 border-b border-slate-900/10 px-1 lg:hidden"
           role="tablist"
@@ -1441,7 +1439,8 @@ export function JobsClient({
         <div
           data-testid="jobs-results-panel"
           className={cn(
-            "relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border-2 border-slate-900/10 bg-white/80 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] backdrop-blur transition-shadow duration-200 ease-out hover:shadow-[0_24px_50px_-36px_rgba(15,23,42,0.38)] lg:h-auto lg:min-h-0",
+            "relative flex flex-col overflow-hidden rounded-3xl border-2 border-slate-900/10 bg-white/80 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] backdrop-blur transition-shadow duration-200 ease-out hover:shadow-[0_24px_50px_-36px_rgba(15,23,42,0.38)]",
+            "h-[calc(100dvh-280px)] lg:h-auto lg:min-h-0 lg:flex-1",
             mobileTab !== "list" && "hidden lg:flex",
           )}
         >
@@ -1522,7 +1521,8 @@ export function JobsClient({
         <div
           data-testid="jobs-details-panel"
           className={cn(
-            "relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border-2 border-slate-900/10 bg-white/80 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] backdrop-blur transition-shadow duration-200 ease-out hover:shadow-[0_24px_50px_-36px_rgba(15,23,42,0.38)] lg:h-auto lg:min-h-0",
+            "relative flex flex-col overflow-hidden rounded-3xl border-2 border-slate-900/10 bg-white/80 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] backdrop-blur transition-shadow duration-200 ease-out hover:shadow-[0_24px_50px_-36px_rgba(15,23,42,0.38)]",
+            "h-[calc(100dvh-280px)] lg:h-auto lg:min-h-0 lg:flex-1",
             mobileTab !== "detail" && "hidden lg:flex",
           )}
         >
