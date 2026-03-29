@@ -56,9 +56,10 @@ export async function deleteJob(
 
   let blobCleanupFailed = 0;
   let blobCleanupDeleted = 0;
-  if (process.env.BLOB_READ_WRITE_TOKEN && artifactUrls.length > 0) {
+  const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+  if (blobToken && artifactUrls.length > 0) {
     const cleanup = await Promise.allSettled(
-      artifactUrls.map((url) => del(url, { token: process.env.BLOB_READ_WRITE_TOKEN })),
+      artifactUrls.map((url) => del(url, { token: blobToken })),
     );
     blobCleanupDeleted = cleanup.filter((r) => r.status === "fulfilled").length;
     blobCleanupFailed = cleanup.length - blobCleanupDeleted;

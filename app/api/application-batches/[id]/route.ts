@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import { requireSession, UnauthorizedError } from "@/lib/server/auth/requireSession";
 import type { SessionContext } from "@/lib/server/auth/requireSession";
 import { unauthorizedError } from "@/lib/server/api/errorResponse";
 import { taskProgressFromGroupBy } from "@/lib/server/applicationBatches/batchProgress";
+
+const ParamsSchema = z.object({ id: z.string().uuid() });
 
 export async function GET(
   _req: Request,
@@ -20,7 +23,9 @@ export async function GET(
   }
   const { userId } = ctx;
 
-  const { id } = await context.params;
+  const parsedParams = ParamsSchema.safeParse(await context.params);
+  if (!parsedParams.success) return NextResponse.json({ error: "INVALID_PARAMS" }, { status: 400 });
+  const { id } = parsedParams.data;
 
   const batch = await prisma.applicationBatch.findFirst({
     where: {

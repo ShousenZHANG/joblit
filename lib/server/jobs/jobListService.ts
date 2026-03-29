@@ -70,17 +70,17 @@ function buildWhereClause(userId: string, query: JobListQuery): JobWhereClause {
   }
 
   if (location) {
-    const stateKey = location.startsWith("state:")
-      ? (location.replace("state:", "") as StateKey)
-      : null;
-    const locationFilters = stateKey ? STATE_LOCATION_MAP[stateKey] : null;
-
-    if (locationFilters && locationFilters.length) {
-      andClauses.push({
-        OR: locationFilters.map((loc) => ({
-          location: { contains: loc, mode: "insensitive" },
-        })),
-      });
+    if (location.startsWith("state:")) {
+      const stateKey = location.replace("state:", "") as StateKey;
+      const locationFilters = stateKey in STATE_LOCATION_MAP ? STATE_LOCATION_MAP[stateKey] : null;
+      if (locationFilters?.length) {
+        andClauses.push({
+          OR: locationFilters.map((loc) => ({
+            location: { contains: loc, mode: "insensitive" },
+          })),
+        });
+      }
+      // Unknown state code → omit location filter (don't search for literal "state:XXX")
     } else {
       andClauses.push({ location: { contains: location, mode: "insensitive" } });
     }
