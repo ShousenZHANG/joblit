@@ -1,29 +1,34 @@
-export type OnboardingTaskId = "resume_setup" | "first_fetch" | "generate_first_pdf";
+export type OnboardingTaskId =
+  | "resume_setup"
+  | "first_fetch"
+  | "review_jobs"
+  | "generate_first_pdf"
+  | "mark_applied";
 
 export type OnboardingTask = {
   id: OnboardingTaskId;
-  title: string;
-  description: string;
   href: "/resume" | "/fetch" | "/jobs";
 };
 
 export const ONBOARDING_TASKS: OnboardingTask[] = [
   {
     id: "resume_setup",
-    title: "Set up master resume",
-    description: "Save your base resume profile before tailoring any role.",
     href: "/resume",
   },
   {
     id: "first_fetch",
-    title: "Run first fetch",
-    description: "Start one fetch run to import fresh jobs into your workspace.",
     href: "/fetch",
   },
   {
+    id: "review_jobs",
+    href: "/jobs",
+  },
+  {
     id: "generate_first_pdf",
-    title: "Generate your first CV PDF",
-    description: "Open a job and generate a tailored CV PDF from your master resume.",
+    href: "/jobs",
+  },
+  {
+    id: "mark_applied",
     href: "/jobs",
   },
 ];
@@ -34,7 +39,9 @@ export function defaultOnboardingChecklist(): OnboardingChecklist {
   return {
     resume_setup: false,
     first_fetch: false,
+    review_jobs: false,
     generate_first_pdf: false,
+    mark_applied: false,
   };
 }
 
@@ -47,10 +54,14 @@ export function normalizeOnboardingChecklist(value: unknown): OnboardingChecklis
     resume_setup:
       typeof record.resume_setup === "boolean" ? record.resume_setup : fallback.resume_setup,
     first_fetch: typeof record.first_fetch === "boolean" ? record.first_fetch : fallback.first_fetch,
+    review_jobs:
+      typeof record.review_jobs === "boolean" ? record.review_jobs : fallback.review_jobs,
     generate_first_pdf:
       typeof record.generate_first_pdf === "boolean"
         ? record.generate_first_pdf
         : fallback.generate_first_pdf,
+    mark_applied:
+      typeof record.mark_applied === "boolean" ? record.mark_applied : fallback.mark_applied,
   };
 }
 
@@ -62,7 +73,9 @@ export function mergeOnboardingChecklists(
   return {
     resume_setup: base.resume_setup || normalizedIncoming.resume_setup,
     first_fetch: base.first_fetch || normalizedIncoming.first_fetch,
+    review_jobs: base.review_jobs || normalizedIncoming.review_jobs,
     generate_first_pdf: base.generate_first_pdf || normalizedIncoming.generate_first_pdf,
+    mark_applied: base.mark_applied || normalizedIncoming.mark_applied,
   };
 }
 

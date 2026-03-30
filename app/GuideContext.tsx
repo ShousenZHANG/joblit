@@ -12,6 +12,7 @@ import {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { useTranslations } from "next-intl";
 import { Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -111,6 +112,7 @@ export function GuideProvider({ children }: { children: ReactNode }) {
   const { data: session } = useSession();
   const pathname = usePathname();
   const userId = session?.user?.id ?? null;
+  const tg = useTranslations("guide");
 
   const [loading, setLoading] = useState(false);
   const [state, setState] = useState<GuideState | null>(null);
@@ -143,8 +145,7 @@ export function GuideProvider({ children }: { children: ReactNode }) {
           !resolved.dismissed &&
           !resolved.completedAt &&
           !resolved.isComplete;
-        // Only auto-show welcome card on desktop-sized viewports.
-        if (isNewUser && typeof window !== "undefined" && window.innerWidth >= 1024) {
+        if (isNewUser) {
           setWelcomeVisible(true);
         }
         return resolved;
@@ -509,16 +510,24 @@ export function GuideProvider({ children }: { children: ReactNode }) {
           {welcomeVisible && !tourRunning && state && !state.isComplete && !state.dismissed ? (
             <section
               data-testid="guide-welcome-card"
-              className="fixed bottom-4 right-4 z-[55] hidden max-w-xs rounded-2xl border border-slate-900/10 bg-white/95 p-4 text-xs text-slate-700 shadow-[0_18px_45px_-30px_rgba(15,23,42,0.6)] backdrop-blur md:block"
+              className="fixed bottom-4 right-4 z-[55] max-w-xs rounded-2xl border border-slate-900/10 bg-gradient-to-br from-white to-emerald-50/40 p-4 text-xs text-slate-700 shadow-[0_18px_45px_-30px_rgba(15,23,42,0.6)] backdrop-blur"
             >
               <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
                 <Sparkles className="h-3 w-3" />
-                Quick tour
+                {tg("badge")}
               </div>
-              <h3 className="text-sm font-semibold text-slate-900">Get oriented in 3 short steps</h3>
+              <h3 className="text-sm font-semibold text-slate-900">{tg("welcomeTitle")}</h3>
               <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
-                We&apos;ll walk you through Jobs, Fetch, and your master resume. You can exit anytime.
+                {tg("welcomeDesc")}
               </p>
+              <div className="mt-3 flex gap-1">
+                {Array.from({ length: tourTotalSteps }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={`h-1.5 rounded-full transition-all ${i === 0 ? "bg-emerald-400 w-4" : "bg-slate-200 w-1.5"}`}
+                  />
+                ))}
+              </div>
               <div className="mt-3 flex items-center justify-end gap-2">
                 <button
                   type="button"
@@ -528,7 +537,7 @@ export function GuideProvider({ children }: { children: ReactNode }) {
                   }}
                   className="rounded-full px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700"
                 >
-                  Maybe later
+                  {tg("maybeLater")}
                 </button>
                 <Button
                   type="button"
@@ -536,7 +545,7 @@ export function GuideProvider({ children }: { children: ReactNode }) {
                   className="h-8 rounded-full px-3 text-[11px]"
                   onClick={openGuide}
                 >
-                  Start 3-step tour
+                  {tg("startTour")}
                 </Button>
               </div>
             </section>
@@ -594,7 +603,7 @@ export function GuideProvider({ children }: { children: ReactNode }) {
                   <div className="mb-2 flex items-start justify-between gap-3">
                     <div className="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
                       <Sparkles className="h-3 w-3" />
-                      Guide
+                      {tg("tourBadge")}
                     </div>
                     <button
                       type="button"
@@ -608,7 +617,7 @@ export function GuideProvider({ children }: { children: ReactNode }) {
 
                   <div className="mb-2 flex items-center justify-between text-[11px] text-slate-500">
                     <span className="uppercase tracking-wide">
-                      Step {tourStepNumber} of {tourTotalSteps}
+                      {tg("stepOf", { current: tourStepNumber, total: tourTotalSteps })}
                     </span>
                     {state ? (
                       <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
@@ -617,14 +626,23 @@ export function GuideProvider({ children }: { children: ReactNode }) {
                     ) : null}
                   </div>
 
-                  <h3 className="text-sm font-semibold text-slate-900">{activeTourTask.title}</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">{activeTourTask.description}</p>
+                  <div className="mb-2 flex gap-1">
+                    {Array.from({ length: tourTotalSteps }).map((_, i) => (
+                      <div
+                        key={i}
+                        className={`h-1.5 rounded-full transition-all ${i < tourStepNumber ? "bg-emerald-500 w-4" : "bg-slate-200 w-1.5"}`}
+                      />
+                    ))}
+                  </div>
+
+                  <h3 className="text-sm font-semibold text-slate-900">{tg(`task_${activeTourTask.id}_title`)}</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">{tg(`task_${activeTourTask.id}_desc`)}</p>
 
                   {!isTourTaskOnCurrentPage ? (
-                    <p className="mt-2 text-[11px] text-slate-500">Taking you to the right page...</p>
+                    <p className="mt-2 text-[11px] text-slate-500">{tg("navigating")}</p>
                   ) : targetMissing ? (
                     <p className="mt-2 text-[11px] text-slate-500">
-                      Waiting for this element. If you are on Jobs, select a job first.
+                      {tg("waitingForElement")}
                     </p>
                   ) : null}
 
@@ -636,7 +654,7 @@ export function GuideProvider({ children }: { children: ReactNode }) {
                       onClick={stopTour}
                       className="h-9 px-2 text-xs"
                     >
-                      End Tour
+                      {tg("endTour")}
                     </Button>
                     <div className="flex items-center gap-2">
                       <Button
@@ -647,7 +665,7 @@ export function GuideProvider({ children }: { children: ReactNode }) {
                         disabled={tourStepIndex <= 0}
                         className="h-9 rounded-xl px-3 text-xs"
                       >
-                        Back
+                        {tg("back")}
                       </Button>
                       <Button
                         type="button"
@@ -655,11 +673,11 @@ export function GuideProvider({ children }: { children: ReactNode }) {
                         onClick={nextStep}
                         className="h-9 rounded-xl px-3 text-xs"
                       >
-                        {tourStepIndex >= tourTotalSteps - 1 ? "Finish" : "Next"}
+                        {tourStepIndex >= tourTotalSteps - 1 ? tg("finish") : tg("next")}
                       </Button>
                     </div>
                   </div>
-                  <p className="mt-2 text-[11px] text-slate-500">Shortcuts: ← / →, Enter, Esc</p>
+                  <p className="mt-2 text-[11px] text-slate-500">{tg("shortcuts")}</p>
                 </section>
               </section>
             </>

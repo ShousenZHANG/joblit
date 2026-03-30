@@ -16,13 +16,21 @@ import {
 
 export const runtime = "nodejs";
 
-const OnboardingTaskIdSchema = z.enum(["resume_setup", "first_fetch", "generate_first_pdf"]);
+const OnboardingTaskIdSchema = z.enum([
+  "resume_setup",
+  "first_fetch",
+  "review_jobs",
+  "generate_first_pdf",
+  "mark_applied",
+]);
 
 const ChecklistPatchSchema = z
   .object({
     resume_setup: z.boolean(),
     first_fetch: z.boolean(),
+    review_jobs: z.boolean(),
     generate_first_pdf: z.boolean(),
+    mark_applied: z.boolean(),
   })
   .partial();
 

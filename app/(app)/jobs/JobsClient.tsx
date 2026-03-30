@@ -931,10 +931,13 @@ export function JobsClient({
 
   const handleSelectJob = useCallback((id: string | null) => {
     setSelectedId(id);
+    if (id !== null) {
+      markTaskComplete("review_jobs");
+    }
     if (id !== null && typeof window !== "undefined" && window.innerWidth < 1024) {
       setMobileTab("detail");
     }
-  }, []);
+  }, [markTaskComplete]);
 
   useKeyboardNavigation({
     items,
@@ -1693,7 +1696,7 @@ export function JobsClient({
                 <VirtualJobList
                   items={items}
                   effectiveSelectedId={effectiveSelectedId}
-                  onSelect={setSelectedId}
+                  onSelect={handleSelectJob}
                   timeZone={timeZone}
                   scrollRootRef={resultsScrollRef}
                   batchMode={batchSelectMode}

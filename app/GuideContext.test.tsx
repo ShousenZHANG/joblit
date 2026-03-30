@@ -1,6 +1,8 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
 import { GuideProvider, useGuide } from "./GuideContext";
+import messages from "../messages/en.json";
 
 let mockPathname = "/resume";
 const pushMock = vi.fn();
@@ -23,9 +25,9 @@ type GuideStatePayload = {
   checklist: {
     resume_setup: boolean;
     first_fetch: boolean;
-    triage_first_job: boolean;
+    review_jobs: boolean;
     generate_first_pdf: boolean;
-    download_first_pdf: boolean;
+    mark_applied: boolean;
   };
   completedCount: number;
   totalCount: number;
@@ -42,9 +44,9 @@ function createState(overrides?: Partial<GuideStatePayload>): GuideStatePayload 
     checklist: {
       resume_setup: false,
       first_fetch: false,
-      triage_first_job: false,
+      review_jobs: false,
       generate_first_pdf: false,
-      download_first_pdf: false,
+      mark_applied: false,
     },
     completedCount: 0,
     totalCount: 5,
@@ -80,6 +82,14 @@ function Harness() {
   );
 }
 
+function renderWithIntl(ui: React.ReactElement) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={messages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
+
 describe("GuideContext", () => {
   beforeEach(() => {
     window.sessionStorage.clear();
@@ -112,9 +122,9 @@ describe("GuideContext", () => {
                 checklist: {
                   resume_setup: true,
                   first_fetch: false,
-                  triage_first_job: false,
+                  review_jobs: false,
                   generate_first_pdf: false,
-                  download_first_pdf: false,
+                  mark_applied: false,
                 },
                 completedCount: 1,
               }),
@@ -136,7 +146,7 @@ describe("GuideContext", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    render(
+    renderWithIntl(
       <GuideProvider>
         <Harness />
       </GuideProvider>,
@@ -188,7 +198,7 @@ describe("GuideContext", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(
+    renderWithIntl(
       <GuideProvider>
         <Harness />
       </GuideProvider>,
@@ -202,7 +212,7 @@ describe("GuideContext", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("guide-tour-card")).toBeInTheDocument();
-      expect(screen.getByText(/step 1 of 3/i)).toBeInTheDocument();
+      expect(screen.getByText(/step 1 of 5/i)).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /next/i }));

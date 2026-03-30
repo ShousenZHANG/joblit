@@ -137,6 +137,9 @@ export function useJobMutations({
       if (data?.resumeSaved || data?.resumePdfUrl) {
         markTaskComplete("generate_first_pdf");
       }
+      if (variables.status === "APPLIED") {
+        markTaskComplete("mark_applied");
+      }
       toast({
         title: "Status updated",
         description: `${variables.status}`,
