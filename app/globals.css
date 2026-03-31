@@ -1130,8 +1130,9 @@ body {
   display: none;
 }
 
-/* Jobs page locks outer scroll so its own inner panels scroll instead */
-.app-shell.jobs-scroll-lock {
+/* Fixed-height pages lock outer scroll so their inner panels scroll instead */
+.app-shell.jobs-scroll-lock,
+.app-shell.resume-scroll-lock {
   overflow-y: hidden;
 }
 

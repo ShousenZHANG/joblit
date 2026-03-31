@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -238,6 +239,16 @@ function MobilePreviewDialog() {
 
 export function ResumePageLayout() {
   const { activeSection } = useResumeContext();
+
+  /* Lock outer shell scroll — Resume uses fixed-height panels with internal scroll */
+  useEffect(() => {
+    const appShell = document.querySelector<HTMLElement>(".app-shell");
+    if (!appShell) return;
+    appShell.classList.add("resume-scroll-lock");
+    return () => {
+      appShell.classList.remove("resume-scroll-lock");
+    };
+  }, []);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
