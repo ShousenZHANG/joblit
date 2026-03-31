@@ -19,6 +19,8 @@ type ResumeContextValue = UseResumeFormReturn &
     setActiveSection: (section: SectionId) => void;
     previewOpen: boolean;
     setPreviewOpen: (open: boolean) => void;
+    navCollapsed: boolean;
+    setNavCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
     saving: boolean;
     handleSave: () => Promise<void>;
     locale: string;
