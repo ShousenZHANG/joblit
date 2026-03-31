@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CnResumeBasicsSchema } from "@/lib/shared/schemas/cnResumeBasics";
+import { CnResumeBasicsSchema } from "@/lib/shared/schemas/resumeProfile";
 
 const minimal = {
   fullName: "张三",

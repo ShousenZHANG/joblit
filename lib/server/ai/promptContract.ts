@@ -162,7 +162,7 @@ export function getExpectedJsonSchemaForTarget(target: PromptTarget) {
   return target === "resume" ? RESUME_OUTPUT_JSON_SCHEMA : COVER_OUTPUT_JSON_SCHEMA;
 }
 
-export function buildPromptHash(input: {
+function buildPromptHash(input: {
   target: PromptTarget;
   ruleSetId: string;
   resumeSnapshotUpdatedAt: string;

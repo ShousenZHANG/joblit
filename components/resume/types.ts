@@ -77,5 +77,3 @@ export type ResumeProfileSummary = {
 export type ReorderSection = "experience" | "project" | "education" | "skill";
 
 export type PreviewStatus = "idle" | "loading" | "ready" | "error";
-
-export type SaveStatus = "idle" | "saving" | "saved" | "error";

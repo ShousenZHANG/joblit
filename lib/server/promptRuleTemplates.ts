@@ -57,7 +57,7 @@ async function getNextVersion(userId: string) {
   return (latest?.version ?? 0) + 1;
 }
 
-export async function ensureDefaultPromptRuleTemplate(userId: string) {
+async function ensureDefaultPromptRuleTemplate(userId: string) {
   const existing = await prisma.promptRuleTemplate.findFirst({
     where: { userId },
     orderBy: { version: "desc" },

@@ -285,7 +285,7 @@ function parseSentenceCandidates(text: string) {
     .filter((item) => item !== null) as Candidate[];
 }
 
-export function extractResponsibilities(
+function extractResponsibilities(
   description: string | null | undefined,
   limit = 8,
 ) {
@@ -324,7 +324,7 @@ function extractResponsibilityKeywords(line: string) {
   );
 }
 
-export function bulletMatchesResponsibility(bullet: string, responsibility: string) {
+function bulletMatchesResponsibility(bullet: string, responsibility: string) {
   const bulletNorm = normalizeTextForMatch(bullet);
   const keywords = extractResponsibilityKeywords(responsibility);
   if (keywords.length === 0) return false;

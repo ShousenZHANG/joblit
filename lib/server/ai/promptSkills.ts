@@ -8,7 +8,7 @@ export type PromptSkillRuleSet = {
   hardConstraints: string[];
 };
 
-export const DEFAULT_HARD_CONSTRAINTS: string[] = [
+const DEFAULT_HARD_CONSTRAINTS: string[] = [
   "Return JSON only (no code fences, no markdown prose outside JSON). Markdown bold markers inside JSON string values are allowed when explicitly requested.",
   "Do not output LaTeX in model response.",
   "Never invent skills, tools, metrics, employers, or responsibilities not in provided context.",
