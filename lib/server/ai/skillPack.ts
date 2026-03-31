@@ -615,8 +615,45 @@ export function buildSkillPackV2Files(
   const locale = options?.locale ?? rules.locale;
   const prefix = "jobflow-skills-v2";
 
+  // Root-level SKILL.md required by Claude skill upload format
+  const rootSkillMd = [
+    "---",
+    "name: jobflow-tailoring",
+    "description: Generate role-tailored CVs and cover letters from a resume snapshot. Produces strict JSON for Jobflow PDF rendering. Supports en-AU and zh-CN locales.",
+    "---",
+    "",
+    "# Jobflow Tailoring Skill",
+    "",
+    "Use when a job description is provided and tailored CV or Cover Letter JSON is needed for Jobflow import.",
+    "",
+    "## Required Inputs",
+    "- Job title, company, and full job description",
+    "- Resume snapshot (loaded from context/resume-snapshot.json)",
+    "- Target: `resume` or `cover`",
+    "",
+    "## How to Use",
+    "1. Load this skill pack into your AI project",
+    "2. For each job application, paste the job-specific prompt from Jobflow",
+    "3. The AI produces strict JSON matching the output schema",
+    "4. Paste the JSON back into Jobflow to render the PDF",
+    "",
+    "## Key Rules",
+    "- Every claim must be grounded in the resume snapshot — no fabrication",
+    "- Output strict JSON only (no code fences, no markdown outside JSON)",
+    "- Bold JD-critical keywords with **keyword** markers",
+    "- Run the quality gates self-check before returning output",
+    "",
+    `## Pack Version: ${rules.version}`,
+    `## Locale: ${locale}`,
+    "",
+    "See instructions/ for detailed rules, schema/ for output format, examples/ for reference output.",
+  ].join("\n");
+
   const files: { name: string; content: string }[] = [
-    // Root files
+    // Root SKILL.md (required by Claude skill upload)
+    { name: "SKILL.md", content: rootSkillMd },
+
+    // Nested pack files
     { name: `${prefix}/README.md`, content: buildV2ReadmeMd(locale) },
     { name: `${prefix}/CHANGELOG.md`, content: buildV2ChangelogMd() },
 
