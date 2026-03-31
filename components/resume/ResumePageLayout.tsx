@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { Download } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -238,7 +239,7 @@ function MobilePreviewDialog() {
 }
 
 export function ResumePageLayout() {
-  const { activeSection } = useResumeContext();
+  const { activeSection, navCollapsed, setNavCollapsed } = useResumeContext();
 
   /* Lock outer shell scroll — Resume uses fixed-height panels with internal scroll */
   useEffect(() => {
@@ -258,7 +259,14 @@ export function ResumePageLayout() {
       {/* Content area */}
       <div className="flex flex-1 min-h-0">
         {/* Desktop sidebar nav */}
-        <SectionNav className="hidden lg:flex w-56 shrink-0 border-r border-slate-900/10 flex-col p-3 gap-1" />
+        <SectionNav
+          collapsed={navCollapsed}
+          onToggle={() => setNavCollapsed((prev) => !prev)}
+          className={cn(
+            "hidden lg:flex shrink-0 border-r border-slate-900/10 flex-col p-3 gap-1 transition-[width] duration-200",
+            navCollapsed ? "w-14" : "w-56",
+          )}
+        />
 
         {/* Form content area */}
         <div className="flex flex-1 min-h-0 flex-col">
@@ -277,7 +285,10 @@ export function ResumePageLayout() {
         </div>
 
         {/* Desktop preview panel */}
-        <PreviewPanel className="hidden md:flex w-[400px] shrink-0 border-l border-slate-900/10 flex-col" />
+        <PreviewPanel className={cn(
+          "hidden md:flex shrink-0 border-l border-slate-900/10 flex-col transition-[width] duration-200",
+          navCollapsed ? "w-[520px]" : "w-[440px]",
+        )} />
       </div>
 
       {/* Bottom action bar */}

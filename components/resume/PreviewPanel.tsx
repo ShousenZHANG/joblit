@@ -29,17 +29,7 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
         <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
           {t("pdfPreview")}
         </span>
-        <div className="flex items-center gap-1">
-          {pdfUrl && previewStatus === "ready" && (
-            <a
-              href={pdfUrl}
-              download={downloadFilename}
-              className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
-            >
-              <Download className="h-3.5 w-3.5" />
-              {t("download")}
-            </a>
-          )}
+        <div className="flex items-center gap-1.5">
           <Button
             type="button"
             variant="ghost"
@@ -50,6 +40,21 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
           >
             <RefreshCw className={cn("h-3.5 w-3.5", previewStatus === "loading" && "animate-spin")} />
           </Button>
+          {pdfUrl && previewStatus === "ready" ? (
+            <a
+              href={pdfUrl}
+              download={downloadFilename}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.97]"
+            >
+              <Download className="h-3.5 w-3.5" />
+              PDF
+            </a>
+          ) : (
+            <span className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-slate-100 px-3 text-xs font-medium text-slate-400 cursor-not-allowed">
+              <Download className="h-3.5 w-3.5" />
+              PDF
+            </span>
+          )}
         </div>
       </div>
 

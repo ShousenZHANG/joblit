@@ -39,6 +39,7 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
   const [activeSection, setActiveSection] = useState<SectionId>("personal");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState(false);
 
   const form = useResumeForm(locale);
 
@@ -104,6 +105,8 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
         setPreviewOpen,
         saving,
         handleSave,
+        navCollapsed,
+        setNavCollapsed,
         locale,
         t,
         isTaskHighlighted,
