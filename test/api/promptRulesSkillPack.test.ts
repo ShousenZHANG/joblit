@@ -48,16 +48,26 @@ describe("prompt rules skill pack api", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns tar.gz bundle", async () => {
+  it("returns ZIP bundle by default (V2)", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       user: { id: "user-1" },
     });
     const res = await GET(new Request("http://localhost/api/prompt-rules/skill-pack"));
     expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("application/zip");
+    expect(res.headers.get("content-disposition")).toContain(".zip");
+    expect(res.headers.get("content-disposition")).toMatch(/jobflow-skills-v2/);
+    expect(res.headers.get("x-skill-pack-version")?.length).toBe(64);
+  });
+
+  it("returns tar.gz when format=tar.gz (V1 backward compat)", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      user: { id: "user-1" },
+    });
+    const res = await GET(new Request("http://localhost/api/prompt-rules/skill-pack?format=tar.gz"));
+    expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("application/gzip");
     expect(res.headers.get("content-disposition")).toContain(".tar.gz");
-    expect(res.headers.get("content-disposition")).toMatch(/jobflow-tailoring-/);
-    expect(res.headers.get("x-skill-pack-version")?.length).toBe(64);
   });
 
   it("returns global skill pack even if jobId query is provided", async () => {
@@ -68,7 +78,7 @@ describe("prompt rules skill pack api", () => {
       new Request("http://localhost/api/prompt-rules/skill-pack?jobId=550e8400-e29b-41d4-a716-446655440000"),
     );
     expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toBe("application/gzip");
+    expect(res.headers.get("content-type")).toBe("application/zip");
   });
 
   it("supports redacted skill pack download mode", async () => {
@@ -77,7 +87,7 @@ describe("prompt rules skill pack api", () => {
     });
     const res = await GET(new Request("http://localhost/api/prompt-rules/skill-pack?redact=true"));
     expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toBe("application/gzip");
+    expect(res.headers.get("content-type")).toBe("application/zip");
     expect(res.headers.get("x-skill-pack-redacted")).toBe("1");
   });
 });

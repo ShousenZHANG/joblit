@@ -4,6 +4,7 @@ export type PromptTarget = "resume" | "cover";
 
 export const PROMPT_TEMPLATE_VERSION = "2026.02.v1";
 export const PROMPT_SCHEMA_VERSION = "2026-02-22";
+export const SKILL_PACK_SEMANTIC_VERSION = "2.0.0";
 
 export type PromptMeta = {
   ruleSetId: string;

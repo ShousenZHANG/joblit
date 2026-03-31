@@ -32,6 +32,11 @@ import { VirtualJobList } from "./components/VirtualJobList";
 import { JobDeleteDialog } from "./components/JobDeleteDialog";
 import { JobAddDialog } from "./components/JobAddDialog";
 import { JobSearchBar } from "./components/JobSearchBar";
+import { StepIndicator, type DialogPhase } from "./components/StepIndicator";
+import { StepImport } from "./components/StepImport";
+import { JsonInputPanel } from "./components/JsonInputPanel";
+import { GenerateProgress } from "./components/GenerateProgress";
+import { GenerateSuccess } from "./components/GenerateSuccess";
 import { cn } from "@/lib/utils";
 
 const SKILL_PACK_META_STORAGE_KEY = "jobflow.skill-pack-meta.v1";
@@ -310,6 +315,11 @@ export function JobsClient({
   const [externalStep, setExternalStep] = useState<1 | 2 | 3>(1);
   const [externalPromptMeta, setExternalPromptMeta] = useState<ExternalPromptMeta | null>(null);
   const [externalSkillPackFresh, setExternalSkillPackFresh] = useState(false);
+  const [dialogPhase, setDialogPhase] = useState<DialogPhase>(1);
+  const [promptCopied, setPromptCopied] = useState(false);
+  const [generateComplete, setGenerateComplete] = useState(false);
+  const [successPdf, setSuccessPdf] = useState<{ url: string; filename: string } | null>(null);
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteCandidate, setDeleteCandidate] = useState<{ id: string; title: string } | null>(null);
   const [batchSelectMode, setBatchSelectMode] = useState(false);
@@ -655,11 +665,17 @@ export function JobsClient({
     setExternalDialogOpen(true);
     setExternalTarget(target);
     setExternalStep(1);
+    setDialogPhase(1);
     setExternalModelOutput("");
     setExternalPromptText("");
     setExternalShortPromptText("");
     setExternalPromptMeta(null);
     setExternalSkillPackFresh(false);
+    setPromptCopied(false);
+    setGenerateComplete(false);
+    if (successPdf?.url) URL.revokeObjectURL(successPdf.url);
+    setSuccessPdf(null);
+    if (successTimerRef.current) clearTimeout(successTimerRef.current);
     setError(null);
     setExternalPromptLoading(true);
     try {
@@ -669,7 +685,9 @@ export function JobsClient({
       setExternalPromptMeta(promptMeta);
       const fresh = isSkillPackFresh(promptMeta);
       setExternalSkillPackFresh(fresh);
-      setExternalStep(fresh ? 2 : 1);
+      const initialStep = fresh ? 2 : 1;
+      setExternalStep(initialStep as 1 | 2 | 3);
+      setDialogPhase(initialStep as 1 | 2 | 3);
     } catch (e) {
       const message = getErrorMessage(e, "Failed to initialize external AI flow");
       setError(message);
@@ -745,6 +763,41 @@ export function JobsClient({
     });
   }
 
+  /** Smart copy: uses short prompt when skill pack is fresh, full otherwise */
+  async function copySmartPrompt() {
+    const text = externalSkillPackFresh && externalShortPromptText.trim()
+      ? externalShortPromptText
+      : externalPromptText;
+    if (!text.trim()) return;
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 2500);
+      toast({
+        title: "Prompt copied",
+        description: "Paste into Claude/ChatGPT/Gemini, then copy the JSON result.",
+        duration: 2200,
+        className: "border-emerald-200 bg-emerald-50 text-emerald-900 animate-in fade-in zoom-in-95",
+      });
+      return;
+    }
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "jobflow-tailor-prompt.txt";
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setPromptCopied(true);
+    setTimeout(() => setPromptCopied(false), 2500);
+    toast({
+      title: "Prompt downloaded",
+      description: "Clipboard unavailable. Open the file and paste into your AI.",
+      duration: 2200,
+      className: "border-slate-200 bg-slate-50 text-slate-900 animate-in fade-in zoom-in-95",
+    });
+  }
+
   async function downloadSkillPack() {
     if (externalPromptLoading || !externalPromptMeta) {
       return;
@@ -758,7 +811,7 @@ export function JobsClient({
         throw new Error(json?.error?.message || json?.error || "Failed to download skill pack");
       }
       const blob = await res.blob();
-      const fallbackName = "jobflow-tailoring.tar.gz";
+      const fallbackName = "jobflow-skills-v2.zip";
       const filename = filenameFromDisposition(res.headers.get("content-disposition")) || fallbackName;
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -772,6 +825,7 @@ export function JobsClient({
         writeSavedSkillPackMeta(externalPromptMeta);
         setExternalSkillPackFresh(true);
         setExternalStep(2);
+        setDialogPhase(2);
       }
       toast({
         title: "Skill pack downloaded",
@@ -798,6 +852,8 @@ export function JobsClient({
 
   async function generateFromImportedJson(job: JobItem, target: "resume" | "cover", modelOutput: string) {
     setExternalGenerating(true);
+    setDialogPhase("generating");
+    setGenerateComplete(false);
     setError(null);
     try {
       const res = await fetch("/api/applications/manual-generate", {
@@ -825,7 +881,6 @@ export function JobsClient({
       const filename =
         filenameFromDisposition(res.headers.get("content-disposition")) ||
         (target === "resume" ? "resume.pdf" : "cover-letter.pdf");
-      openPdfPreview(blob, filename, target === "resume" ? "Resume preview" : "Cover letter preview");
       markTaskComplete("generate_first_pdf");
 
       if (target === "resume") {
@@ -840,19 +895,17 @@ export function JobsClient({
         }));
       }
 
-      setExternalDialogOpen(false);
+      // Show inline success with PDF preview
+      setGenerateComplete(true);
+      const pdfObjectUrl = URL.createObjectURL(blob);
+      setSuccessPdf({ url: pdfObjectUrl, filename });
+      // Brief delay to show progress completion, then switch to success
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+      successTimerRef.current = setTimeout(() => setDialogPhase("success"), 500);
+
       await queryClient.invalidateQueries({ queryKey: ["jobs"], refetchType: "active" });
-      toast({
-        title: "PDF generated",
-        description:
-          target === "resume"
-            ? "CV generated from imported AI JSON."
-            : "Cover letter generated from imported AI JSON.",
-        duration: 2200,
-        className:
-          "border-emerald-200 bg-emerald-50 text-emerald-900 animate-in fade-in zoom-in-95",
-      });
     } catch (e) {
+      setDialogPhase(3); // Go back to step 3 on error
       const message = getErrorMessage(e, "Failed to generate PDF");
       setError(message);
       toast({
@@ -1047,212 +1100,212 @@ export function JobsClient({
 
   return (
     <>
-      <Dialog open={externalDialogOpen} onOpenChange={setExternalDialogOpen}>
-        <DialogContent className="flex h-[min(88vh,760px)] w-[min(96vw,860px)] max-w-[860px] flex-col overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>
-              {externalTarget === "resume" ? "Generate CV with External AI" : "Generate Cover Letter with External AI"}
+      <Dialog open={externalDialogOpen} onOpenChange={(open) => {
+        if (!open && dialogPhase === "generating") return; // prevent close during generation
+        if (!open) {
+          if (successTimerRef.current) clearTimeout(successTimerRef.current);
+          if (successPdf?.url) URL.revokeObjectURL(successPdf.url);
+        }
+        setExternalDialogOpen(open);
+      }}>
+        <DialogContent className="flex h-[min(90vh,720px)] w-[min(96vw,880px)] max-w-[880px] flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="shrink-0 border-b border-slate-100 px-5 py-4">
+            <DialogTitle className="text-base">
+              {dialogPhase === "success"
+                ? (externalTarget === "resume" ? "Resume PDF Ready" : "Cover Letter Ready")
+                : externalTarget === "resume"
+                  ? "Generate CV with AI"
+                  : "Generate Cover Letter with AI"}
             </DialogTitle>
-            <DialogDescription>
-              Complete three steps, then generate your PDF.
+            <DialogDescription className="text-xs text-slate-500">
+              {dialogPhase === "success"
+                ? "Your PDF has been generated successfully."
+                : dialogPhase === "generating"
+                  ? "Please wait while we generate your PDF..."
+                  : "Three steps: import skill pack, copy prompt, paste AI output."}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex min-h-0 flex-1 flex-col gap-4">
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-              <div className="relative flex items-center justify-between gap-2">
-                <div className="pointer-events-none absolute left-8 right-8 top-4 h-px bg-slate-200" />
-                {externalSteps.map((step) => {
-                  const isActive = externalStep === step.id;
-                  const isDone = externalStep > step.id;
-                  return (
-                    <button
-                      key={step.id}
-                      type="button"
-                      onClick={() => !step.disabled && setExternalStep(step.id)}
-                      disabled={step.disabled}
-                      className={[
-                        "relative z-10 flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg px-2 py-1.5 text-xs font-medium transition-all duration-200 sm:text-sm",
-                        step.disabled ? "cursor-not-allowed text-slate-400" : "text-slate-700 hover:bg-slate-50",
-                        isActive ? "bg-emerald-50 text-emerald-800" : "",
-                      ].join(" ")}
-                    >
-                      <span
-                        className={[
-                          "inline-flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-semibold",
-                          isDone
-                            ? "border-emerald-500 bg-emerald-500 text-white"
-                            : isActive
-                              ? "border-emerald-400 bg-emerald-100 text-emerald-800"
-                              : "border-slate-300 bg-white text-slate-500",
-                        ].join(" ")}
-                      >
-                        {step.id}
-                      </span>
-                      <span className="truncate">{step.label}</span>
-                    </button>
-                  );
-                })}
+          {/* Step indicator — hidden during generating/success */}
+          {dialogPhase !== "generating" && dialogPhase !== "success" && (
+            <div className="shrink-0 border-b border-slate-100 px-5 py-3">
+              <StepIndicator
+                currentStep={dialogPhase}
+                onStepClick={(s) => { setExternalStep(s); setDialogPhase(s); }}
+                canGoToStep2={externalSkillPackFresh}
+                canGoToStep3={externalPromptText.trim().length > 0}
+              />
+            </div>
+          )}
+
+          {/* Step content */}
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4">
+            {/* Step 1: Import */}
+            {dialogPhase === 1 && (
+              <StepImport
+                isFresh={externalSkillPackFresh}
+                isLoading={externalSkillPackLoading}
+                isPromptLoading={externalPromptLoading}
+                hasPromptMeta={!!externalPromptMeta}
+                onDownload={downloadSkillPack}
+                onSkip={() => { setExternalSkillPackFresh(true); setExternalStep(2); setDialogPhase(2); }}
+                onContinue={() => { setExternalStep(2); setDialogPhase(2); }}
+              />
+            )}
+
+            {/* Step 2: Copy Prompt */}
+            {dialogPhase === 2 && (
+              <div className="space-y-4">
+                {/* Job target card */}
+                <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-4 py-3">
+                  <div className="flex items-center gap-2 text-sm">
+                    <FileText className="h-4 w-4 text-slate-500" />
+                    <span className="font-medium text-slate-700">
+                      {externalTarget === "resume" ? "Resume" : "Cover Letter"}
+                    </span>
+                    <span className="text-slate-400">for</span>
+                    <span className="font-medium text-slate-900 truncate">
+                      {selectedJob?.title ?? "..."} at {selectedJob?.company ?? "..."}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Main copy button */}
+                <Button
+                  type="button"
+                  size="lg"
+                  disabled={externalPromptLoading || !externalPromptText.trim()}
+                  onClick={copySmartPrompt}
+                  className={cn(
+                    "h-12 w-full rounded-xl text-sm font-semibold shadow-sm transition-all duration-200 active:translate-y-[1px]",
+                    promptCopied
+                      ? "border-emerald-500 bg-emerald-500 text-white"
+                      : "border-emerald-500 bg-emerald-500 text-white hover:bg-emerald-600"
+                  )}
+                >
+                  {externalPromptLoading ? (
+                    "Building prompt..."
+                  ) : promptCopied ? (
+                    <><Copy className="mr-2 h-4 w-4" /> Copied!</>
+                  ) : (
+                    <><Copy className="mr-2 h-4 w-4" /> Copy Prompt to Clipboard</>
+                  )}
+                </Button>
+
+                {/* Copied hint */}
+                {promptCopied && (
+                  <p className="text-center text-sm text-emerald-700">
+                    Now paste into Claude / ChatGPT / Gemini and copy the JSON result.
+                  </p>
+                )}
+
+                {/* Prompt preview (collapsible) */}
+                <details className="group">
+                  <summary className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700">
+                    <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
+                    Preview prompt ({(externalSkillPackFresh ? externalShortPromptText : externalPromptText).length} chars)
+                  </summary>
+                  <pre className="mt-2 max-h-[200px] overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 font-mono text-[11px] leading-relaxed text-slate-600">
+                    {externalSkillPackFresh ? externalShortPromptText : externalPromptText}
+                  </pre>
+                </details>
+              </div>
+            )}
+
+            {/* Step 3: Paste JSON */}
+            {dialogPhase === 3 && (
+              <JsonInputPanel
+                value={externalModelOutput}
+                onChange={setExternalModelOutput}
+                target={externalTarget}
+                parsedOutput={parsedExternalOutput}
+              />
+            )}
+
+            {/* Generating progress */}
+            {dialogPhase === "generating" && (
+              <GenerateProgress
+                target={externalTarget}
+                isComplete={generateComplete}
+              />
+            )}
+
+            {/* Success */}
+            {dialogPhase === "success" && successPdf && (
+              <GenerateSuccess
+                target={externalTarget}
+                pdfUrl={successPdf.url}
+                pdfFilename={successPdf.filename}
+                onGenerateOther={() => {
+                  const other = externalTarget === "resume" ? "cover" : "resume";
+                  if (selectedJob) openExternalGenerateDialog(selectedJob, other);
+                }}
+                onClose={() => setExternalDialogOpen(false)}
+              />
+            )}
+          </div>
+
+          {/* Footer — only for steps 1-3 */}
+          {typeof dialogPhase === "number" && (
+            <div className="flex shrink-0 items-center justify-between border-t border-slate-100 px-5 py-3">
+              <div>
+                {dialogPhase > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const prev = (dialogPhase === 3 ? 2 : 1) as 1 | 2 | 3;
+                      setExternalStep(prev);
+                      setDialogPhase(prev);
+                    }}
+                    className="h-9 rounded-xl px-3 text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                  >
+                    Back
+                  </Button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setExternalDialogOpen(false)}
+                  className="h-9 rounded-xl px-3 text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                >
+                  Cancel
+                </Button>
+                {dialogPhase === 2 && (
+                  <Button
+                    size="sm"
+                    onClick={() => { setExternalStep(3); setDialogPhase(3); }}
+                    className={externalBtnPrimary}
+                  >
+                    Continue
+                  </Button>
+                )}
+                {dialogPhase === 3 && (
+                  <Button
+                    size="sm"
+                    className={externalBtnPrimary}
+                    disabled={
+                      !selectedJob ||
+                      externalGenerating ||
+                      !parsedExternalOutput ||
+                      externalModelOutput.trim().length < 20
+                    }
+                    data-guide-anchor={externalTarget === "resume" ? "generate_first_pdf" : undefined}
+                    onClick={() =>
+                      selectedJob &&
+                      generateFromImportedJson(selectedJob, externalTarget, externalModelOutput)
+                    }
+                  >
+                    {externalTarget === "resume" ? "Generate CV PDF" : "Generate Cover PDF"}
+                  </Button>
+                )}
               </div>
             </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-slate-900/10 bg-slate-50/40 p-4">
-              {externalStep === 1 ? (
-                <div className="space-y-3">
-                  <p className="text-sm text-slate-700">
-                    {externalSkillPackFresh
-                      ? "Your skill pack is up to date. You can skip to Step 2."
-                      : "Download the latest skill pack before generating content."}
-                  </p>
-                  {!externalSkillPackFresh ? (
-                    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                      Required: latest rules and resume snapshot.
-                    </div>
-                  ) : null}
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={
-                        !selectedJob ||
-                        externalSkillPackLoading ||
-                        externalPromptLoading ||
-                        !externalPromptMeta
-                      }
-                      onClick={() => selectedJob && downloadSkillPack()}
-                      className={externalBtnSecondary}
-                    >
-                      {externalSkillPackLoading
-                        ? "Downloading..."
-                        : externalPromptLoading
-                          ? "Preparing..."
-                        : externalSkillPackFresh
-                          ? "Re-download Skill Pack"
-                          : "Download Skill Pack"}
-                    </Button>
-                    {externalSkillPackFresh ? (
-                      <Button type="button" size="sm" onClick={() => setExternalStep(2)} className={externalBtnPrimary}>
-                        Continue
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-              ) : null}
-
-              {externalStep === 2 ? (
-                <div className="space-y-3">
-                  <p className="text-sm text-slate-700">
-                    Copy prompt and paste it in ChatGPT/Gemini/Claude with your imported skill pack.
-                  </p>
-                  <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-                    Full prompt: {externalPromptText.length} chars · Short (pack loaded): {externalShortPromptText.length} chars
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={externalPromptLoading || !externalPromptText.trim()}
-                      onClick={copyPromptText}
-                      className={externalBtnSecondary}
-                    >
-                      <Copy className="h-4 w-4" />
-                      {externalPromptLoading ? "Building..." : "Copy full prompt"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={externalPromptLoading || !externalShortPromptText.trim()}
-                      onClick={copyShortPromptText}
-                      className={externalBtnSecondary}
-                      title="Use when the model already has the skill pack in context"
-                    >
-                      <Copy className="h-4 w-4" />
-                      Copy short (pack loaded)
-                    </Button>
-                    <Button type="button" size="sm" onClick={() => setExternalStep(3)} className={externalBtnPrimary}>
-                      Continue
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-
-              {externalStep === 3 ? (
-                <div className="space-y-3">
-                  <div className="text-sm font-medium text-slate-900">Paste AI JSON result</div>
-                  <Textarea
-                    value={externalModelOutput}
-                    onChange={(e) => setExternalModelOutput(e.target.value)}
-                    placeholder={
-                      externalTarget === "resume"
-                        ? '{"cvSummary":"...","latestExperience":{"bullets":["..."]},"skillsFinal":[{"label":"...","items":["..."]}]}'
-                        : '{"cover":{"candidateTitle":"...","subject":"Application for <Role>","date":"...","salutation":"Hiring Team at <Company>","paragraphOne":"...","paragraphTwo":"...","paragraphThree":"...","closing":"...","signatureName":"..."}}'
-                    }
-                    className="min-h-[220px] font-mono text-xs"
-                  />
-                  {!externalModelOutput.trim() ? null : parsedExternalOutput ? (
-                    <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 text-xs text-emerald-900">
-                      JSON parsed successfully.
-                    </div>
-                  ) : (
-                    <div className="rounded-lg border border-rose-200 bg-rose-50/60 p-3 text-xs text-rose-900">
-                      JSON parse failed. Keep strict JSON with required keys.
-                    </div>
-                  )}
-
-                </div>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2">
-            {externalStep > 1 ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setExternalStep((prev) => (prev === 3 ? 2 : 1))}
-                disabled={externalGenerating}
-                className={externalBtnSecondary}
-              >
-                Back
-              </Button>
-            ) : null}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setExternalDialogOpen(false)}
-              disabled={externalGenerating}
-              className={externalBtnSecondary}
-            >
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              className={externalBtnPrimary}
-              disabled={
-                !selectedJob ||
-                externalGenerating ||
-                externalStep !== 3 ||
-                !parsedExternalOutput ||
-                externalModelOutput.trim().length < 20
-              }
-              data-guide-anchor={externalTarget === "resume" ? "generate_first_pdf" : undefined}
-              onClick={() =>
-                selectedJob &&
-                generateFromImportedJson(selectedJob, externalTarget, externalModelOutput)
-              }
-            >
-              {externalGenerating
-                ? "Generating..."
-                : externalTarget === "resume"
-                  ? "Generate CV PDF"
-                  : "Generate Cover PDF"}
-            </Button>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
 

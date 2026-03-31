@@ -7,14 +7,15 @@ import { buildTailorPrompts } from "@/lib/server/ai/buildPrompt";
 describe("default prompt rules", () => {
   it("includes recruiter-level and XYZ bullet guidance in CV rules", () => {
     const cvText = DEFAULT_CV_RULES.join("\n").toLowerCase();
-    expect(cvText).toContain("senior recruiter");
+    expect(cvText).toContain("faang senior technical recruiter");
     expect(cvText).toContain("google xyz");
   });
 
   it("enforces recruiter-preferred cover alignment, bold strategy, and natural professional tone", () => {
     const coverText = DEFAULT_COVER_RULES.join("\n").toLowerCase();
-    expect(coverText).toContain("top jd responsibilities first");
-    expect(coverText).toContain("bold all jd-critical keywords");
+    expect(coverText).toContain("top-3 jd responsibilities");
+    expect(coverText).toContain("bold");
+    expect(coverText).toContain("jd-critical keywords");
     expect(coverText).toContain("professional");
     expect(coverText).toContain("natural");
     expect(coverText).toMatch(/australian|understated|evidence-first|scannable/);

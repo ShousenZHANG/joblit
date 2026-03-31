@@ -684,7 +684,27 @@ body {
   }
 }
 
+@keyframes confetti-pop {
+  0% {
+    transform: translateY(0) translateX(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-50px) translateX(var(--confetti-x, 0px)) scale(0.4);
+    opacity: 0;
+  }
+}
+
+.animate-confetti-pop {
+  animation: confetti-pop 0.8s ease-out forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .animate-confetti-pop {
+    animation: none;
+    opacity: 0;
+  }
+
   .edu-page-enter {
     animation: none;
   }

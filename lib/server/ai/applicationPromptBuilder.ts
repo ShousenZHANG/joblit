@@ -1,5 +1,10 @@
 import type { PromptSkillRuleSet } from "@/lib/server/ai/promptSkills";
 import { getExpectedJsonShapeForTarget, type PromptTarget } from "@/lib/server/ai/promptContract";
+import {
+  buildEmbeddedResumeQualityGates,
+  buildEmbeddedCoverQualityGates,
+} from "./qualityGatesEmbed";
+import { getLocaleProfile } from "@/lib/shared/locales";
 
 type JobInput = {
   title: string;
@@ -204,4 +209,258 @@ export function getTemplateResumePromptInput(baseLatestBullets: string[]): Resum
       requiredNewBulletsMax: 3,
     },
   };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * V2 Prompt Builders — XML-tagged sections for reliable LLM parsing
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * V2 system prompt with XML-tagged sections for reliable LLM parsing.
+ */
+export function buildV2SystemPrompt(
+  rules: PromptSkillRuleSet,
+  locale: "en-AU" | "zh-CN" = "en-AU",
+): string {
+  const profile = getLocaleProfile(locale);
+
+  const role = [
+    `You are Jobflow's AI tailoring assistant (${locale}).`,
+    "Your job: tailor the candidate's existing resume to the role OR generate a role-specific cover letter.",
+    "You will receive one target per request (resume or cover) and must produce the matching JSON output.",
+  ].join("\n");
+
+  const sourceOfTruth = [
+    "The candidate's resume snapshot is the ONLY source of truth.",
+    "Do not invent skills, tools, metrics, employers, or responsibilities not in the provided context.",
+    "Use the imported skill package for rules and output format.",
+    "Read base resume context from jobflow-tailoring/context/resume-snapshot.json (summary, experiences, skills).",
+  ].join("\n");
+
+  const hardConstraints = rules.hardConstraints
+    .map((c, i) => `${i + 1}. ${c}`)
+    .join("\n");
+
+  const outputFormat = [
+    "Strict JSON matching the target schema.",
+    "Ensure valid JSON strings: use \\n for line breaks and escape quotes.",
+    "Do not output file/path diagnostics or process notes.",
+  ].join("\n");
+
+  const localeProfile = [
+    `Locale: ${profile.locale} (${profile.label})`,
+    `Cover word range: ${profile.coverWordRange.min}-${profile.coverWordRange.max}`,
+    `Date format: ${profile.dateFormat} (e.g. ${profile.dateExample})`,
+    `Salutation style: ${profile.salutationStyle}`,
+    "Tone rules:",
+    ...profile.toneRules.map((r) => `- ${r}`),
+  ].join("\n");
+
+  return [
+    "<role>",
+    role,
+    "</role>",
+    "",
+    "<source-of-truth>",
+    sourceOfTruth,
+    "</source-of-truth>",
+    "",
+    "<hard-constraints>",
+    hardConstraints,
+    "</hard-constraints>",
+    "",
+    "<output-format>",
+    outputFormat,
+    "</output-format>",
+    "",
+    "<locale-profile>",
+    localeProfile,
+    "</locale-profile>",
+  ].join("\n");
+}
+
+/**
+ * V2 resume user prompt with structured XML sections.
+ */
+export function buildV2ResumeUserPrompt(input: BuildApplicationPromptInput): string {
+  const requiredJsonShape = JSON.stringify(
+    getExpectedJsonShapeForTarget("resume"),
+    null,
+    2,
+  );
+
+  const resumeRules = formatRuleBlock("Resume Rules (critical + high priority):", input.rules.cvRules);
+  const skillsPolicy = buildResumeSkillsPolicyBlock();
+  const qualityGates = buildEmbeddedResumeQualityGates();
+
+  const jobBlock = [
+    `Title: ${input.job.title}`,
+    `Company: ${input.job.company || "the company"}`,
+    `Description:\n${input.job.description || "(not provided)"}`,
+  ].join("\n");
+
+  const coverageBlock = input.resume ? buildV2CoverageAnalysisBlock(input.resume) : "";
+
+  return [
+    "<task>",
+    "Tailor the candidate's resume for this role.",
+    "Produce cvSummary, latestExperience.bullets, and skillsFinal from their resume context.",
+    "Preserve every existing latest-experience bullet verbatim (no paraphrase, no omission). Reorder and add only grounded new bullets per rules.",
+    "</task>",
+    "",
+    "<job>",
+    jobBlock,
+    "</job>",
+    "",
+    ...(coverageBlock ? ["<coverage-analysis>", coverageBlock, "</coverage-analysis>", ""] : []),
+    "<rules>",
+    resumeRules,
+    "</rules>",
+    "",
+    "<skills-policy>",
+    skillsPolicy,
+    "</skills-policy>",
+    "",
+    "<output-schema>",
+    requiredJsonShape,
+    "</output-schema>",
+    "",
+    "<self-check>",
+    qualityGates,
+    "</self-check>",
+  ].join("\n");
+}
+
+/**
+ * V2 cover user prompt with structured XML sections.
+ */
+export function buildV2CoverUserPrompt(input: BuildApplicationPromptInput): string {
+  const locale = input.rules.locale;
+  const requiredJsonShape = JSON.stringify(
+    getExpectedJsonShapeForTarget("cover"),
+    null,
+    2,
+  );
+
+  const coverRules = formatRuleBlock("Cover Letter Rules (critical + high priority):", input.rules.coverRules);
+  const coverStructure = buildCoverStructureBlock();
+  const qualityGates = buildEmbeddedCoverQualityGates(locale);
+
+  const jobBlock = [
+    `Title: ${input.job.title}`,
+    `Company: ${input.job.company || "the company"}`,
+    `Description:\n${input.job.description || "(not provided)"}`,
+  ].join("\n");
+
+  return [
+    "<task>",
+    "Generate a cover letter for this role using the candidate's resume as the only evidence source.",
+    "Follow the cover structure, tone rules, and locale conventions from the system prompt.",
+    "</task>",
+    "",
+    "<job>",
+    jobBlock,
+    "</job>",
+    "",
+    "<rules>",
+    coverRules,
+    "</rules>",
+    "",
+    "<cover-structure>",
+    coverStructure,
+    "</cover-structure>",
+    "",
+    "<output-schema>",
+    requiredJsonShape,
+    "</output-schema>",
+    "",
+    "<self-check>",
+    qualityGates,
+    "</self-check>",
+  ].join("\n");
+}
+
+/**
+ * V2 short user prompt — enriched version that works when skill pack is loaded as context.
+ * Includes constraint reminders and quality gate reference.
+ */
+export function buildV2ShortUserPrompt(input: {
+  target: PromptTarget;
+  job: JobInput;
+  resume?: ResumePromptInput;
+  locale?: "en-AU" | "zh-CN";
+}): string {
+  const locale = input.locale ?? "en-AU";
+  const isResume = input.target === "resume";
+
+  const jobBlock = [
+    `Title: ${input.job.title}`,
+    `Company: ${input.job.company || "the company"}`,
+    `Description:\n${input.job.description || "(not provided)"}`,
+  ].join("\n");
+
+  const coverageBlock =
+    isResume && input.resume ? buildV2CoverageAnalysisBlock(input.resume) : "";
+
+  const constraintReminders = [
+    "- JSON only, no code fences, no markdown prose outside JSON string values.",
+    "- No fabrication — only resume snapshot evidence. If evidence is insufficient, be conservative.",
+    "- Bold JD-critical keywords with clean **keyword** markers (no inner spaces).",
+    isResume
+      ? "- Preserve every base latest-experience bullet verbatim. Only reorder and add grounded new bullets."
+      : `- Three substantial paragraphs within ${getLocaleProfile(locale).coverWordRange.min}-${getLocaleProfile(locale).coverWordRange.max} word range.`,
+    "- Run the quality gates self-check (from skill pack quality-gates.md) before returning.",
+  ].join("\n");
+
+  return [
+    "<task>",
+    `Target: ${input.target}`,
+    isResume
+      ? "Tailor the candidate's resume for this role per skill pack rules."
+      : "Generate a cover letter for this role per skill pack rules.",
+    "</task>",
+    "",
+    "<job>",
+    jobBlock,
+    "</job>",
+    "",
+    ...(coverageBlock
+      ? ["<coverage-analysis>", coverageBlock, "</coverage-analysis>", ""]
+      : []),
+    "<constraint-reminders>",
+    constraintReminders,
+    "</constraint-reminders>",
+  ].join("\n");
+}
+
+/* ── V2 internal helpers ── */
+
+function buildV2CoverageAnalysisBlock(resume: ResumePromptInput): string {
+  const { baseLatestBullets, coverage } = resume;
+
+  return [
+    "Top-3 JD responsibilities (extraction priority: action bullets from Responsibilities, What You'll Do, Key Responsibilities, Required Skills, etc.):",
+    ...(coverage.topResponsibilities.length
+      ? coverage.topResponsibilities.map((item, i) => `${i + 1}. ${item}`)
+      : ["1. (none parsed from JD)"]),
+    "",
+    "Base latest-experience bullets (preserve verbatim, reorder only):",
+    ...(baseLatestBullets.length
+      ? baseLatestBullets.map((item, i) => `${i + 1}. ${item}`)
+      : ["1. (none found in base latest experience)"]),
+    "",
+    "Responsibilities missing from base bullets (gaps):",
+    ...(coverage.missingFromBase.length
+      ? coverage.missingFromBase.map((item, i) => `${i + 1}. ${item}`)
+      : ["1. (none — all covered)"]),
+    "",
+    "Fallback responsibility pool (use when top-3 items require unsupported tech):",
+    ...(coverage.fallbackResponsibilities.length
+      ? coverage.fallbackResponsibilities.map((item, i) => `${i + 1}. ${item}`)
+      : ["1. (none parsed or already covered)"]),
+    "",
+    coverage.missingFromBase.length
+      ? `Suggested additions: ${coverage.requiredNewBulletsMin}-${coverage.requiredNewBulletsMax} grounded new bullets for uncovered responsibilities when supported by base resume evidence.`
+      : "Suggested additions: 0 (reorder existing bullets only).",
+  ].join("\n");
 }

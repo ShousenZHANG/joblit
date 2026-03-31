@@ -17,6 +17,10 @@ import {
   buildApplicationShortUserPrompt,
   buildApplicationSystemPrompt,
   buildApplicationUserPrompt,
+  buildV2SystemPrompt,
+  buildV2ResumeUserPrompt,
+  buildV2CoverUserPrompt,
+  buildV2ShortUserPrompt,
 } from "@/lib/server/ai/applicationPromptBuilder";
 
 export const runtime = "nodejs";
@@ -87,24 +91,18 @@ export async function POST(req: Request) {
     );
   }
 
+  const promptVersion = new URL(req.url).searchParams.get("promptVersion") ?? "v2";
   const rules = await getActivePromptSkillRulesForUser(userId);
   const mappedProfile = mapResumeProfile(profile);
   const baseLatestBullets = mappedProfile.experiences[0]?.bullets ?? [];
   const coverage = computeTop3Coverage(job.description, baseLatestBullets);
-  const systemPrompt = buildApplicationSystemPrompt(rules);
-  const userPrompt = buildApplicationUserPrompt({
-    target: parsed.data.target,
-    rules,
-    job: {
-      title: job.title,
-      company: job.company || "the company",
-      description: job.description || "",
-    },
-    resume: {
-      baseLatestBullets,
-      coverage,
-    },
-  });
+
+  const jobInput = {
+    title: job.title,
+    company: job.company || "the company",
+    description: job.description || "",
+  };
+  const resumeInput = { baseLatestBullets, coverage };
 
   const expectedJsonShape = getExpectedJsonShapeForTarget(parsed.data.target);
   const expectedJsonSchema = getExpectedJsonSchemaForTarget(parsed.data.target);
@@ -114,28 +112,51 @@ export async function POST(req: Request) {
     resumeSnapshotUpdatedAt: profile.updatedAt.toISOString(),
   });
 
+  // V2 prompts: XML-tagged sections with embedded quality gates
+  if (promptVersion === "v2") {
+    const locale = profileLocale as "en-AU" | "zh-CN";
+    const systemPrompt = buildV2SystemPrompt(rules, locale);
+    const userPrompt =
+      parsed.data.target === "resume"
+        ? buildV2ResumeUserPrompt({ target: "resume", rules, job: jobInput, resume: resumeInput })
+        : buildV2CoverUserPrompt({ target: "cover", rules, job: jobInput });
+    const shortUserPrompt = buildV2ShortUserPrompt({
+      target: parsed.data.target,
+      job: jobInput,
+      resume: parsed.data.target === "resume" ? resumeInput : undefined,
+      locale,
+    });
+
+    return NextResponse.json({
+      requestId,
+      prompt: { systemPrompt, userPrompt, shortUserPrompt },
+      promptMeta,
+      expectedJsonShape,
+      expectedJsonSchema,
+      promptVersion: "v2",
+    });
+  }
+
+  // V1 prompts: backward compatible
+  const systemPrompt = buildApplicationSystemPrompt(rules);
+  const userPrompt = buildApplicationUserPrompt({
+    target: parsed.data.target,
+    rules,
+    job: jobInput,
+    resume: resumeInput,
+  });
   const shortUserPrompt = buildApplicationShortUserPrompt({
     target: parsed.data.target,
-    job: {
-      title: job.title,
-      company: job.company || "the company",
-      description: job.description || "",
-    },
-    resume:
-      parsed.data.target === "resume"
-        ? { baseLatestBullets, coverage }
-        : undefined,
+    job: jobInput,
+    resume: parsed.data.target === "resume" ? resumeInput : undefined,
   });
 
   return NextResponse.json({
     requestId,
-    prompt: {
-      systemPrompt,
-      userPrompt,
-      shortUserPrompt,
-    },
+    prompt: { systemPrompt, userPrompt, shortUserPrompt },
     promptMeta,
     expectedJsonShape,
     expectedJsonSchema,
+    promptVersion: "v1",
   });
 }

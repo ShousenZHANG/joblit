@@ -1,4 +1,5 @@
 import type { PromptSkillRuleSet } from "@/lib/server/ai/promptSkills";
+import type { StructuredRuleSet, SkillRule } from "@/lib/server/ai/promptSkills";
 import {
   buildSkillPackVersion,
   PROMPT_SCHEMA_VERSION,
@@ -10,6 +11,13 @@ import {
   buildApplicationUserPrompt,
   getTemplateResumePromptInput,
 } from "@/lib/server/ai/applicationPromptBuilder";
+import { getLocaleProfile } from "@/lib/shared/locales";
+import {
+  buildRealisticResumeExample,
+  buildAnnotatedResumeWalkthrough,
+  buildRealisticCoverExample,
+  buildAnnotatedCoverWalkthrough,
+} from "@/lib/server/ai/skillPackExamples";
 
 type SkillPackContext = {
   resumeSnapshot: unknown;
@@ -312,6 +320,422 @@ ${list(rules.coverRules)}
   };
   files.push({
     name: "jobflow-tailoring/meta/manifest.json",
+    content: JSON.stringify(manifest, null, 2),
+  });
+
+  return files;
+}
+
+/* ── V2 Skill Pack Builder ── */
+
+type SkillPackV2Options = {
+  locale?: "en-AU" | "zh-CN";
+  redactContext?: boolean;
+};
+
+function filterRulesByTarget(rules: SkillRule[], target: "resume" | "cover"): SkillRule[] {
+  return rules.filter((r) => r.appliesTo.includes(target));
+}
+
+function filterRulesByPriority(
+  rules: SkillRule[],
+  priority: "critical" | "high" | "normal",
+): SkillRule[] {
+  return rules.filter((r) => r.priority === priority);
+}
+
+function formatRulesXml(rules: SkillRule[]): string {
+  return rules.map((r) => `- [${r.id}] ${r.text}`).join("\n");
+}
+
+function buildRulesJson(
+  target: "resume" | "cover",
+  rules: SkillRule[],
+): string {
+  const filtered = filterRulesByTarget(rules, target);
+  return JSON.stringify(
+    {
+      version: "2.0.0",
+      rules: filtered.map((r) => ({
+        id: r.id,
+        category: r.category,
+        priority: r.priority,
+        text: r.text,
+      })),
+    },
+    null,
+    2,
+  );
+}
+
+function buildHardConstraintsJson(constraints: SkillRule[]): string {
+  return JSON.stringify(
+    {
+      version: "2.0.0",
+      rules: constraints.map((r) => ({
+        id: r.id,
+        category: r.category,
+        priority: r.priority,
+        text: r.text,
+      })),
+    },
+    null,
+    2,
+  );
+}
+
+function buildLocaleJson(locale: "en-AU" | "zh-CN"): string {
+  const profile = getLocaleProfile(locale);
+  return JSON.stringify(
+    {
+      locale: profile.locale,
+      coverWordRange: profile.coverWordRange,
+      dateFormat: profile.dateFormat,
+      dateExample: profile.dateExample,
+      salutationStyle: profile.salutationStyle,
+      toneRules: profile.toneRules,
+    },
+    null,
+    2,
+  );
+}
+
+function buildV2SystemMd(locale: "en-AU" | "zh-CN"): string {
+  return `<role>You are Jobflow's AI tailoring assistant (${locale}).</role>
+
+<source-of-truth>The candidate's resume snapshot is the ONLY source of truth for all factual claims. Never invent skills, employers, projects, metrics, or responsibilities not present in the snapshot.</source-of-truth>
+
+<hard-constraints>
+1. Return JSON only (no code fences, no markdown prose outside JSON). Markdown **bold** markers inside JSON string values are allowed.
+2. Do not output LaTeX in model response.
+3. Never invent skills, tools, metrics, employers, or responsibilities not in provided context.
+4. Keep edits conservative when JD responsibilities or required skills are unclear.
+</hard-constraints>
+
+<output-format>Strict JSON matching the target schema. Markdown **bold** markers inside JSON string values are allowed.</output-format>`;
+}
+
+function buildV2ResumeSkillMd(rules: SkillRule[]): string {
+  const resumeRules = filterRulesByTarget(rules, "resume");
+  const critical = filterRulesByPriority(resumeRules, "critical");
+  const high = filterRulesByPriority(resumeRules, "high");
+
+  return `---
+name: jobflow-resume-tailoring
+trigger: When a job description is provided and tailored CV JSON is needed
+---
+
+<execution-flow>
+1. Read JD responsibilities and required skills
+2. Tailor cvSummary with JD-aligned keywords (bold with **keyword**)
+3. Reorder latestExperience.bullets to mirror JD priority
+4. Add 2-3 grounded new bullets for coverage gaps
+5. Build skillsFinal (max 5 categories, JD-priority order)
+6. Run self-check from quality-gates.md
+7. Output strict JSON
+</execution-flow>
+
+<rules priority="critical">
+${formatRulesXml(critical)}
+</rules>
+
+<rules priority="high">
+${formatRulesXml(high)}
+</rules>`;
+}
+
+function buildV2CoverSkillMd(rules: SkillRule[]): string {
+  const coverRules = filterRulesByTarget(rules, "cover");
+  const critical = filterRulesByPriority(coverRules, "critical");
+  const high = filterRulesByPriority(coverRules, "high");
+
+  return `---
+name: jobflow-cover-tailoring
+trigger: When a job description is provided and a tailored cover letter JSON is needed
+---
+
+<execution-flow>
+1. Read JD responsibilities and required skills
+2. Draft paragraphOne: application intent + role-fit anchored in real experience
+3. Draft paragraphTwo: map top-3 JD responsibilities with concrete evidence
+4. Draft paragraphThree: why this role/company with specific points
+5. Bold JD-critical keywords with **keyword** across all paragraphs
+6. Populate metadata fields (candidateTitle, subject, date, salutation, closing, signatureName)
+7. Run self-check from quality-gates.md
+8. Output strict JSON
+</execution-flow>
+
+<rules priority="critical">
+${formatRulesXml(critical)}
+</rules>
+
+<rules priority="high">
+${formatRulesXml(high)}
+</rules>`;
+}
+
+function buildV2QualityGatesMd(locale: "en-AU" | "zh-CN"): string {
+  const profile = getLocaleProfile(locale);
+  const wordRange = `${profile.coverWordRange.min}-${profile.coverWordRange.max}`;
+
+  return `# Quality Gates -- Self-Check Protocol
+
+## Resume Target Checks
+- [ ] BULLET_PRESERVATION: Every base bullet appears verbatim
+- [ ] GROUNDING: No new bullet references skills not in snapshot
+- [ ] ADDITION_COUNT: 2-3 new bullets when gaps exist, 0 when covered
+- [ ] BOLD_MARKERS: Clean **keyword** in new bullets and cvSummary
+- [ ] SKILLS_COMPLETE: skillsFinal is complete final list, max 5 categories
+- [ ] JSON_VALID: Strict JSON, no code fences, no markdown outside JSON
+
+## Cover Target Checks
+- [ ] STRUCTURE: Three paragraphs, p1>=60 chars, p2>=90 chars, p3>=60 chars
+- [ ] WORD_COUNT: ${wordRange} words across three paragraphs
+- [ ] RESPONSIBILITY_COVERAGE: Paragraph 2 covers >=2 of top-3 JD responsibilities
+- [ ] EVIDENCE_GROUNDING: Claims overlap with >=3 resume evidence keywords
+- [ ] KEYWORD_BOLDING: >=3 JD-critical keywords bolded with **keyword**
+- [ ] MOTIVATION_SPECIFIC: Paragraph 3 mentions company or specific JD topic`;
+}
+
+function buildV2ResumePromptTemplateMd(): string {
+  return `<task>Tailor the candidate's resume for this role.</task>
+
+<job>
+- Title: {{JOB_TITLE}}
+- Company: {{COMPANY}}
+- Description:
+{{JOB_DESCRIPTION}}
+</job>
+
+<instructions>
+Follow the resume-skill.md rules. Run quality-gates.md self-check before output.
+Output strict JSON matching schema/resume-output.schema.json.
+</instructions>`;
+}
+
+function buildV2CoverPromptTemplateMd(): string {
+  return `<task>Generate a tailored cover letter for this role.</task>
+
+<job>
+- Title: {{JOB_TITLE}}
+- Company: {{COMPANY}}
+- Description:
+{{JOB_DESCRIPTION}}
+</job>
+
+<instructions>
+Follow the cover-skill.md rules. Run quality-gates.md self-check before output.
+Output strict JSON matching schema/cover-output.schema.json.
+</instructions>`;
+}
+
+function buildV2PlatformNotesMd(): string {
+  return `# Platform Import Notes
+
+## Claude Projects
+1. Create a new Project in Claude.
+2. Upload all files from this skill pack as Project Knowledge.
+3. The system.md and skill files will guide Claude's behavior automatically.
+4. Use the prompt templates from prompts/ when providing job descriptions.
+
+## Custom GPTs (OpenAI)
+1. Create a new GPT in the GPT Builder.
+2. Paste instructions/system.md content into the Instructions field.
+3. Upload schema files and rules as Knowledge files.
+4. Use the prompt templates as conversation starters.
+
+## Gemini (Google)
+1. Open Google AI Studio or Gemini Advanced.
+2. Paste instructions/system.md as a system instruction.
+3. Attach rules and schema files as context.
+4. Use the prompt templates when submitting job descriptions.
+
+## General Tips
+- Always include the resume snapshot (context/) for personalized tailoring.
+- The quality-gates.md file helps the AI self-validate before returning output.
+- Schema files enforce strict output structure for Jobflow import compatibility.`;
+}
+
+function buildV2ReadmeMd(locale: "en-AU" | "zh-CN"): string {
+  return `# Jobflow Skills V2
+
+Structured skill pack for AI-powered resume and cover letter tailoring.
+
+## Quick Start
+
+1. Choose your AI platform (Claude Projects, Custom GPTs, Gemini, or any LLM).
+2. Upload the files from this pack as context/knowledge.
+3. Replace placeholders in prompt templates with your job data:
+   - \`{{JOB_TITLE}}\` - Target role title
+   - \`{{COMPANY}}\` - Target company name
+   - \`{{JOB_DESCRIPTION}}\` - Full job description text
+4. Submit the prompt and paste the resulting JSON back into Jobflow.
+
+## Pack Structure
+
+- **instructions/** - System prompt, skill definitions, and quality gates
+- **rules/** - Categorized rules in JSON format with locale overrides
+- **schema/** - JSON Schema for validating output
+- **examples/** - Sample outputs (placeholder stubs)
+- **context/** - Resume snapshot data (when included)
+- **prompts/** - Job-specific prompt templates with placeholders
+- **meta/** - Manifest and platform-specific import notes
+
+## Locale
+
+This pack is configured for: ${locale}
+
+## Version
+
+2.0.0 (2026-03-31)
+`;
+}
+
+function buildV2ChangelogMd(): string {
+  return `# Changelog
+
+## 2.0.0 (2026-03-31)
+
+- Redesigned skill pack with categorized rules and XML-tagged prompts
+- Added self-validation quality gates
+- Added zh-CN locale support
+- Switched to ZIP format
+- Added realistic full examples
+- Separated resume and cover skill definitions
+- Added JSON Schema validation files
+- Added platform import notes for Claude, GPTs, and Gemini
+`;
+}
+
+export function buildSkillPackV2Files(
+  rules: StructuredRuleSet,
+  context?: SkillPackContext,
+  options?: SkillPackV2Options,
+): { name: string; content: string }[] {
+  const locale = options?.locale ?? rules.locale;
+  const prefix = "jobflow-skills-v2";
+
+  const files: { name: string; content: string }[] = [
+    // Root files
+    { name: `${prefix}/README.md`, content: buildV2ReadmeMd(locale) },
+    { name: `${prefix}/CHANGELOG.md`, content: buildV2ChangelogMd() },
+
+    // Instructions
+    { name: `${prefix}/instructions/system.md`, content: buildV2SystemMd(locale) },
+    {
+      name: `${prefix}/instructions/resume-skill.md`,
+      content: buildV2ResumeSkillMd(rules.rules),
+    },
+    {
+      name: `${prefix}/instructions/cover-skill.md`,
+      content: buildV2CoverSkillMd(rules.rules),
+    },
+    {
+      name: `${prefix}/instructions/quality-gates.md`,
+      content: buildV2QualityGatesMd(locale),
+    },
+
+    // Rules
+    {
+      name: `${prefix}/rules/resume-rules.json`,
+      content: buildRulesJson("resume", rules.rules),
+    },
+    {
+      name: `${prefix}/rules/cover-rules.json`,
+      content: buildRulesJson("cover", rules.rules),
+    },
+    {
+      name: `${prefix}/rules/hard-constraints.json`,
+      content: buildHardConstraintsJson(rules.hardConstraints),
+    },
+    {
+      name: `${prefix}/rules/locale/en-AU.json`,
+      content: buildLocaleJson("en-AU"),
+    },
+    {
+      name: `${prefix}/rules/locale/zh-CN.json`,
+      content: buildLocaleJson("zh-CN"),
+    },
+
+    // Schema
+    {
+      name: `${prefix}/schema/resume-output.schema.json`,
+      content: JSON.stringify(getExpectedJsonSchemaForTarget("resume"), null, 2),
+    },
+    {
+      name: `${prefix}/schema/cover-output.schema.json`,
+      content: JSON.stringify(getExpectedJsonSchemaForTarget("cover"), null, 2),
+    },
+
+    // Examples
+    {
+      name: `${prefix}/examples/resume-output.full.json`,
+      content: buildRealisticResumeExample(locale),
+    },
+    {
+      name: `${prefix}/examples/resume-output.annotated.md`,
+      content: buildAnnotatedResumeWalkthrough(locale),
+    },
+    {
+      name: `${prefix}/examples/cover-output.full.json`,
+      content: buildRealisticCoverExample(locale),
+    },
+    {
+      name: `${prefix}/examples/cover-output.annotated.md`,
+      content: buildAnnotatedCoverWalkthrough(locale),
+    },
+
+    // Prompts
+    {
+      name: `${prefix}/prompts/resume-job-prompt.template.md`,
+      content: buildV2ResumePromptTemplateMd(),
+    },
+    {
+      name: `${prefix}/prompts/cover-job-prompt.template.md`,
+      content: buildV2CoverPromptTemplateMd(),
+    },
+
+    // Meta
+    {
+      name: `${prefix}/meta/platform-notes.md`,
+      content: buildV2PlatformNotesMd(),
+    },
+  ];
+
+  // Context (optional)
+  if (context) {
+    const snapshot = options?.redactContext
+      ? redactResumeSnapshot(context.resumeSnapshot)
+      : context.resumeSnapshot ?? {};
+
+    files.push({
+      name: `${prefix}/context/resume-snapshot.json`,
+      content: JSON.stringify(snapshot, null, 2),
+    });
+    files.push({
+      name: `${prefix}/context/snapshot-meta.json`,
+      content: JSON.stringify(
+        {
+          resumeSnapshotUpdatedAt: context.resumeSnapshotUpdatedAt,
+          redacted: !!options?.redactContext,
+        },
+        null,
+        2,
+      ),
+    });
+  }
+
+  // Manifest (always last so file list is complete)
+  const fileList = files.map((f) => f.name).concat(`${prefix}/meta/manifest.json`);
+  const manifest = {
+    packName: "jobflow-skills-v2",
+    packVersion: "2.0.0",
+    locale,
+    generatedAt: new Date().toISOString(),
+    files: fileList,
+  };
+  files.push({
+    name: `${prefix}/meta/manifest.json`,
     content: JSON.stringify(manifest, null, 2),
   });
 

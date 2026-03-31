@@ -819,7 +819,7 @@ describe("JobsClient", () => {
     await user.click(generateCvButton);
 
     const downloadButton = await screen.findByRole("button", {
-      name: /preparing|download skill pack/i,
+      name: /preparing|download zip/i,
     });
     expect(downloadButton).toBeDisabled();
 
@@ -846,7 +846,7 @@ describe("JobsClient", () => {
 
     await user.click(downloadButton);
 
-    expect(await screen.findByText(/copy prompt and paste it/i)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /copy prompt to clipboard/i })).toBeInTheDocument();
     expect(createObjectUrlSpy).toHaveBeenCalled();
     expect(revokeObjectUrlSpy).toHaveBeenCalled();
   });
@@ -920,18 +920,18 @@ describe("JobsClient", () => {
     const generateCvButton = (await screen.findAllByRole("button", { name: /generate cv/i }))[0];
     await user.click(generateCvButton);
 
-    const downloadButton = await screen.findByRole("button", { name: /download skill pack/i });
+    const downloadButton = await screen.findByRole("button", { name: /download zip/i });
     await waitFor(() => {
       expect(downloadButton).toBeEnabled();
     });
     await user.click(downloadButton);
-    expect(await screen.findByText(/copy prompt and paste it/i)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /copy prompt to clipboard/i })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /cancel/i }));
 
     const generateCoverButton = (await screen.findAllByRole("button", { name: /generate cl/i }))[0];
     await user.click(generateCoverButton);
-    expect(await screen.findByText(/copy prompt and paste it/i)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /copy prompt to clipboard/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /download skill pack/i })).not.toBeInTheDocument();
 
     const downloadCalls = mockFetch.mock.calls.filter(([request]) => {

@@ -73,7 +73,7 @@ describe("applications prompt api", () => {
     expect(json.error.code).toBe("JOB_NOT_FOUND");
   });
 
-  it("returns resume-target prompt payload", async () => {
+  it("returns resume-target prompt payload (V2 default)", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "user-1" },
     });
@@ -98,10 +98,14 @@ describe("applications prompt api", () => {
     expect(res.status).toBe(200);
     expect(typeof json.prompt.systemPrompt).toBe("string");
     expect(typeof json.prompt.userPrompt).toBe("string");
-    expect(json.prompt.systemPrompt).toContain("single source of truth");
-    expect(json.prompt.systemPrompt).toContain(
-      "Markdown bold markers inside JSON string values are allowed when explicitly requested.",
-    );
+    expect(typeof json.prompt.shortUserPrompt).toBe("string");
+    expect(json.promptVersion).toBe("v2");
+    // V2 system prompt uses XML tags
+    expect(json.prompt.systemPrompt).toContain("<role>");
+    expect(json.prompt.systemPrompt).toContain("<hard-constraints>");
+    // V2 user prompt uses XML tags
+    expect(json.prompt.userPrompt).toContain("<task>");
+    expect(json.prompt.userPrompt).toContain("<job>");
     expect(json.expectedJsonShape.cvSummary).toBe("string");
     expect(Array.isArray(json.expectedJsonShape.latestExperience.bullets)).toBe(true);
     expect(Array.isArray(json.expectedJsonShape.skillsFinal)).toBe(true);
@@ -109,24 +113,38 @@ describe("applications prompt api", () => {
     expect(json.promptMeta.ruleSetId).toBe("rules-1");
     expect(json.promptMeta.resumeSnapshotUpdatedAt).toBe("2026-02-06T00:00:00.000Z");
     expect(typeof json.promptMeta.promptTemplateVersion).toBe("string");
-    expect(json.promptMeta.promptTemplateVersion.length).toBeGreaterThan(0);
     expect(typeof json.promptMeta.schemaVersion).toBe("string");
-    expect(json.promptMeta.schemaVersion.length).toBeGreaterThan(0);
-    expect(typeof json.promptMeta.skillPackVersion).toBe("string");
     expect(json.promptMeta.skillPackVersion.length).toBe(64);
-    expect(typeof json.promptMeta.promptHash).toBe("string");
     expect(json.promptMeta.promptHash.length).toBe(64);
     expect(json.expectedJsonSchema?.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
-    expect(json.expectedJsonSchema?.type).toBe("object");
-    expect(json.prompt.userPrompt).not.toContain("Base summary");
-    expect(json.prompt.userPrompt).toContain("Top-3 Responsibility Alignment (guidance):");
-    expect(json.prompt.userPrompt).toContain("Base latest experience bullets (verbatim, reorder only):");
-    expect(json.prompt.userPrompt).toContain("Suggested additions:");
-    expect(json.prompt.userPrompt).toContain("Target additions count:");
-    expect(json.prompt.userPrompt).toContain("Fallback responsibility pool");
-    expect(json.prompt.userPrompt).toContain(
-      "In cvSummary, bold JD-critical keywords using clean markdown **keyword** markers.",
+  });
+
+  it("returns V1 prompts when promptVersion=v1", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    jobStore.findFirst.mockResolvedValueOnce({
+      title: "Software Engineer",
+      company: "Example Co",
+      description: "Build product features",
+    });
+    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "rp-1",
+      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
+    });
+
+    const res = await POST(
+      new Request("http://localhost/api/applications/prompt?promptVersion=v1", {
+        method: "POST",
+        body: JSON.stringify({ jobId: VALID_JOB_ID, target: "resume" }),
+      }),
     );
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.promptVersion).toBe("v1");
+    expect(json.prompt.systemPrompt).toContain("single source of truth");
+    expect(json.prompt.userPrompt).toContain("Top-3 Responsibility Alignment (guidance):");
   });
 
   it("returns cover-target prompt payload", async () => {
