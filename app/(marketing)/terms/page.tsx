@@ -4,12 +4,12 @@ import { Search, ArrowLeft } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Jobflow",
-  description: "How Jobflow collects, uses, and protects your data.",
+  title: "Terms of Service — Jobflow",
+  description: "Terms governing use of the Jobflow application.",
 };
 
-export default async function PrivacyPolicyPage() {
-  const t = await getTranslations("privacy");
+export default async function TermsOfServicePage() {
+  const t = await getTranslations("terms");
 
   return (
     <div className="marketing-edu relative min-h-[100dvh] overflow-hidden">
@@ -43,21 +43,7 @@ export default async function PrivacyPolicyPage() {
 
           {/* Section 1 */}
           <h2>{t("s1Title")}</h2>
-
-          <h3>{t("s1_1Title")}</h3>
-          <p>{t("s1_1")}</p>
-
-          <h3>{t("s1_2Title")}</h3>
-          <p>{t("s1_2")}</p>
-
-          <h3>{t("s1_3Title")}</h3>
-          <p>{t("s1_3")}</p>
-
-          <h3>{t("s1_4Title")}</h3>
-          <p>{t("s1_4")}</p>
-
-          <h3>{t("s1_5Title")}</h3>
-          <p>{t("s1_5")}</p>
+          <p>{t("s1")}</p>
 
           {/* Section 2 */}
           <h2>{t("s2Title")}</h2>
@@ -69,20 +55,24 @@ export default async function PrivacyPolicyPage() {
 
           {/* Section 4 */}
           <h2>{t("s4Title")}</h2>
-          <p>{t("s4")}</p>
+          <p>{t("s4Intro")}</p>
+          <ul>
+            <li>{t("s4_1")}</li>
+            <li>{t("s4_2")}</li>
+            <li>{t("s4_3")}</li>
+            <li>{t("s4_4")}</li>
+            <li>{t("s4_5")}</li>
+            <li>{t("s4_6")}</li>
+            <li>{t("s4_7")}</li>
+            <li>{t("s4_8")}</li>
+          </ul>
 
           {/* Section 5 */}
           <h2>{t("s5Title")}</h2>
-          <p>{t("s5Intro")}</p>
-          <ul>
-            <li>{t("s5Google")}</li>
-            <li>{t("s5Github")}</li>
-            <li>{t("s5Vercel")}</li>
-            <li>{t("s5Neon")}</li>
-            <li>{t("s5Gemini")}</li>
-            <li>{t("s5Latex")}</li>
-          </ul>
-          <p>{t("s5Note")}</p>
+          <p>{t("s5_1")}</p>
+          <p>{t("s5_2")}</p>
+          <p>{t("s5_3")}</p>
+          <p>{t("s5_4")}</p>
 
           {/* Section 6 */}
           <h2>{t("s6Title")}</h2>
@@ -98,13 +88,7 @@ export default async function PrivacyPolicyPage() {
 
           {/* Section 9 */}
           <h2>{t("s9Title")}</h2>
-          <p>{t("s9Intro")}</p>
-          <ul>
-            <li>{t("s9Gdpr")}</li>
-            <li>{t("s9Ccpa")}</li>
-            <li>{t("s9Aus")}</li>
-          </ul>
-          <p>{t("s9Exercise")}</p>
+          <p>{t("s9")}</p>
 
           {/* Section 10 */}
           <h2>{t("s10Title")}</h2>
@@ -112,30 +96,24 @@ export default async function PrivacyPolicyPage() {
 
           {/* Section 11 */}
           <h2>{t("s11Title")}</h2>
-          <p>{t("s11Intro")}</p>
-          <ul>
-            <li>{t("s11_1")}</li>
-            <li>{t("s11_2")}</li>
-            <li>{t("s11_3")}</li>
-            <li>{t("s11_4")}</li>
-            <li>{t("s11_5")}</li>
-            <li>{t("s11_6")}</li>
-          </ul>
+          <p>{t("s11")}</p>
 
           {/* Section 12 */}
           <h2>{t("s12Title")}</h2>
-          <p>{t("s12")}</p>
+          <ul>
+            <li>{t("s12_1")}</li>
+            <li>{t("s12_2")}</li>
+            <li>{t("s12_3")}</li>
+            <li>{t("s12_4")}</li>
+            <li>{t("s12_5")}</li>
+          </ul>
 
           {/* Section 13 */}
           <h2>{t("s13Title")}</h2>
           <p>{t("s13")}</p>
-
-          {/* Section 14 */}
-          <h2>{t("s14Title")}</h2>
-          <p>{t("s14")}</p>
           <p>
             <strong>Email:</strong>{" "}
-            <a href={`mailto:${t("s14Email")}`}>{t("s14Email")}</a>
+            <a href={`mailto:${t("s13Email")}`}>{t("s13Email")}</a>
           </p>
         </article>
 
@@ -146,9 +124,9 @@ export default async function PrivacyPolicyPage() {
               Jobflow
             </Link>
             <span aria-hidden="true">&middot;</span>
-            <Link href="/privacy" className="text-emerald-700">Privacy</Link>
+            <Link href="/privacy" className="hover:text-slate-900">Privacy</Link>
             <span aria-hidden="true">&middot;</span>
-            <Link href="/terms" className="hover:text-slate-900">Terms</Link>
+            <Link href="/terms" className="text-emerald-700">Terms</Link>
             <span aria-hidden="true">&middot;</span>
             <span>&copy; {new Date().getFullYear()} All rights reserved.</span>
           </div>
