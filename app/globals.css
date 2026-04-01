@@ -132,7 +132,15 @@ body {
 }
 
 .marketing-edu {
-  background: #fff8f1;
+  background: linear-gradient(
+    180deg,
+    #fffefb 0%,
+    #fff9f3 15%,
+    #fef7ee 35%,
+    #fdf5ea 55%,
+    #fcf3e6 75%,
+    #faf0e1 100%
+  );
   font-family: var(--font-edu-body), "Nunito", ui-rounded, system-ui, sans-serif;
 }
 
@@ -150,9 +158,10 @@ body {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 100% 60% at 20% 10%, rgba(94, 234, 212, 0.12), transparent 45%),
-    radial-gradient(ellipse 80% 80% at 85% 90%, rgba(251, 146, 60, 0.1), transparent 45%),
-    linear-gradient(180deg, #fffefb 0%, #fff8f1 50%, #fdf2e7 100%);
+    radial-gradient(ellipse 120% 60% at 15% 5%, rgba(94, 234, 212, 0.06), transparent 50%),
+    radial-gradient(ellipse 100% 50% at 80% 30%, rgba(167, 243, 208, 0.05), transparent 50%),
+    radial-gradient(ellipse 90% 70% at 85% 85%, rgba(251, 191, 36, 0.04), transparent 50%),
+    radial-gradient(ellipse 80% 60% at 10% 90%, rgba(251, 146, 60, 0.05), transparent 50%);
   z-index: 0;
 }
 
@@ -1330,7 +1339,7 @@ body::-webkit-scrollbar-thumb:hover {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background: radial-gradient(ellipse 600px 400px at center, rgba(16, 185, 129, 0.04), transparent 70%);
+  background: radial-gradient(ellipse 700px 450px at center, rgba(167, 243, 208, 0.035), transparent 70%);
 }
 
 @media (prefers-reduced-motion: reduce) {

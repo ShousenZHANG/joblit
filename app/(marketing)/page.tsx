@@ -84,13 +84,13 @@ export default async function HomePage() {
               ctaLabel={t("cta")}
               badgeLabel={t("badge")}
             />
-            <div className="h-24 w-full bg-gradient-to-b from-transparent via-emerald-100/30 to-transparent" aria-hidden="true" />
+            <div className="h-20 w-full bg-gradient-to-b from-transparent via-amber-50/40 to-transparent" aria-hidden="true" />
             <HowItWorksSection />
-            <div className="h-24 w-full bg-gradient-to-b from-transparent via-emerald-100/30 to-transparent" aria-hidden="true" />
+            <div className="h-20 w-full bg-gradient-to-b from-transparent via-amber-50/40 to-transparent" aria-hidden="true" />
             <FeaturesGrid />
-            <div className="h-24 w-full bg-gradient-to-b from-transparent via-emerald-100/30 to-transparent" aria-hidden="true" />
+            <div className="h-20 w-full bg-gradient-to-b from-transparent via-amber-50/40 to-transparent" aria-hidden="true" />
             <BeforeAfterSection />
-            <div className="h-24 w-full bg-gradient-to-b from-transparent via-emerald-100/30 to-transparent" aria-hidden="true" />
+            <div className="h-20 w-full bg-gradient-to-b from-transparent via-amber-50/40 to-transparent" aria-hidden="true" />
             <FinalCTA />
           </main>
 
