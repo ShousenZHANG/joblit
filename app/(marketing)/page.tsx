@@ -3,25 +3,30 @@ import { Search } from "lucide-react";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { HeroSection } from "./HeroSection";
+import { HowItWorksSection } from "./HowItWorksSection";
+import { FeaturesGrid } from "./FeaturesGrid";
+import { BeforeAfterSection } from "./BeforeAfterSection";
+import { FinalCTA } from "./FinalCTA";
 import { LandingBackground } from "./LandingBackground";
 
 /* ── SEO ──────────────────────────────────────────────── */
 
+const TITLE = "AI-tailored resumes for every job you apply to";
+const DESC = "Fetch roles, generate a custom CV and cover letter matched to each JD, export PDF. One workflow, zero copy-paste.";
+
 export const metadata: Metadata = {
-  title: "Find the right roles, faster",
-  description:
-    "Fetch jobs, tailor your resume and cover letter, export PDF — in one place.",
+  title: TITLE,
+  description: DESC,
   openGraph: {
-    title: "Jobflow — Find the right roles, faster",
-    description:
-      "Fetch jobs, tailor your resume and cover letter, export PDF — in one place.",
+    title: `Jobflow — ${TITLE}`,
+    description: DESC,
     type: "website",
     siteName: "Jobflow",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Jobflow — Find the right roles, faster",
-    description: "Fetch jobs, tailor your resume and cover letter, export PDF — in one place.",
+    title: `Jobflow — ${TITLE}`,
+    description: DESC,
   },
 };
 
@@ -29,8 +34,7 @@ const jsonLd = {
   "@context": "https://schema.org",
   "@type": "WebApplication",
   name: "Jobflow",
-  description:
-    "Fetch jobs, tailor your resume and cover letter, export PDF — in one place.",
+  description: DESC,
   applicationCategory: "BusinessApplication",
   offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
 };
@@ -70,13 +74,17 @@ export default async function HomePage() {
               Jobflow
             </span>
           </Link>
-          <main id="main-content">
+          <main id="main-content" className="flex w-full flex-col items-center">
             <HeroSection
               heroTitle={t("heroTitle")}
               heroSubtitle={t("heroSubtitle")}
               ctaLabel={t("cta")}
               badgeLabel={t("badge")}
             />
+            <HowItWorksSection />
+            <FeaturesGrid />
+            <BeforeAfterSection />
+            <FinalCTA />
           </main>
 
           <footer

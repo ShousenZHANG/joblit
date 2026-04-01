@@ -14,6 +14,26 @@ if (!("ResizeObserver" in globalThis)) {
   ).ResizeObserver = ResizeObserverMock;
 }
 
+class IntersectionObserverMock {
+  readonly root = null;
+  readonly rootMargin = "0px";
+  readonly thresholds: readonly number[] = [0];
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+  takeRecords(): IntersectionObserverEntry[] {
+    return [];
+  }
+}
+
+if (!("IntersectionObserver" in globalThis)) {
+  (
+    globalThis as typeof globalThis & {
+      IntersectionObserver: typeof IntersectionObserverMock;
+    }
+  ).IntersectionObserver = IntersectionObserverMock;
+}
+
 Object.defineProperty(window, "scrollTo", {
   value: () => {},
   writable: true,

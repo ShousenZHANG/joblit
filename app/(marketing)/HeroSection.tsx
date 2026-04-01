@@ -5,7 +5,7 @@ import { ArrowRight } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DemoCard } from "./DemoCard";
+import { TailoringDemoCard } from "./TailoringDemoCard";
 
 const stagger = 0.08;
 const duration = 0.4;
@@ -95,7 +95,7 @@ export function HeroSection({
         animate={visible}
         transition={{ delay: noMotion ? 0 : stagger * 4 }}
       >
-        <DemoCard />
+        <TailoringDemoCard />
       </motion.div>
     </header>
   );

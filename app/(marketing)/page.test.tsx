@@ -26,12 +26,12 @@ async function renderPage() {
 }
 
 describe("HomePage", () => {
-  it("pre-fills the demo fields to avoid an empty flash", async () => {
+  it("renders the new hero title and tailoring demo card", async () => {
     await renderPage();
 
-    expect(screen.getByText("Frontend Engineer")).toBeInTheDocument();
-    expect(screen.getByText("Remote")).toBeInTheDocument();
-    expect(screen.getByText("Mid-level")).toBeInTheDocument();
+    expect(screen.getByText("AI-tailored resumes for every job you apply to")).toBeInTheDocument();
+    // TailoringDemoCard shows JD snippets
+    expect(screen.getByText(/Experience with Kubernetes/i)).toBeInTheDocument();
   });
 
   it("uses correct semantic structure with a single main landmark", async () => {
@@ -41,10 +41,9 @@ describe("HomePage", () => {
     expect(mains).toHaveLength(1);
   });
 
-  it("renders hero and CTA", async () => {
+  it("renders CTA linking to login", async () => {
     await renderPage();
 
-    expect(screen.getByText("Find the right roles, faster")).toBeInTheDocument();
     const ctaLinks = screen.getAllByRole("link", { name: /Start free/i });
     expect(ctaLinks.length).toBeGreaterThanOrEqual(1);
     expect(ctaLinks[0]).toHaveAttribute("href", "/login");
