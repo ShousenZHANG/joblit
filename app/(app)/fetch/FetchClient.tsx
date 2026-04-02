@@ -249,11 +249,7 @@ export function FetchClient() {
     (globalStatus === "RUNNING" || globalStatus === "QUEUED" || globalStatus === null);
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold text-foreground">{t("searchRoles")}</h1>
-      </div>
-
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
       {activeError ? (
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
           {activeError}
@@ -261,21 +257,29 @@ export function FetchClient() {
       ) : null}
 
       {market === "AU" && (
-      <div className="rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm backdrop-blur">
-        {/* Search fields: title, location, hours */}
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="space-y-2">
-            <Label>{t("jobTitle")}</Label>
+      <div className="rounded-2xl border border-slate-200 bg-white/80 shadow-sm backdrop-blur">
+        {/* Card header with title */}
+        <div className="border-b border-slate-100 px-5 py-4">
+          <h1 className="text-lg font-semibold text-slate-900">{t("searchRoles")}</h1>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {t("searchRolesDesc") ?? "Find roles across LinkedIn, Seek, and more. Smart fetch expands to related titles."}
+          </p>
+        </div>
+
+        {/* Search fields */}
+        <div className="space-y-4 px-5 py-4">
+          {/* Primary search: job title (full width, prominent) */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-slate-500">{t("jobTitle")}</Label>
             <Popover open={suggestionsOpen} onOpenChange={setSuggestionsOpen}>
               <PopoverAnchor asChild>
                 <Input
                   placeholder="e.g. Software Engineer, Frontend Engineer | Backend Engineer"
                   value={jobTitle}
                   onChange={(e) => setJobTitle(e.target.value)}
-                  onFocus={() => {
-                    setSuggestionsOpen(true);
-                  }}
+                  onFocus={() => { setSuggestionsOpen(true); }}
                   onBlur={() => setTimeout(() => setSuggestionsOpen(false), 150)}
+                  className="h-11 text-base"
                 />
               </PopoverAnchor>
               <PopoverContent
@@ -309,58 +313,57 @@ export function FetchClient() {
                 </Command>
               </PopoverContent>
             </Popover>
-            <p className="text-xs text-muted-foreground">
-              Smart fetch can auto-expand one title to related roles. You can still separate multiple
-              titles with comma or <code>|</code>.
-            </p>
           </div>
-          <div className="space-y-2">
-            <Label>{t("locationLabel")}</Label>
-            <Input value={location} onChange={(e) => setLocation(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label>{t("hoursOld")}</Label>
-            <Select value={String(hoursOld)} onValueChange={(v) => setHoursOld(Number(v))}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[1, 6, 12, 24, 48, 72].map((h) => (
-                  <SelectItem key={h} value={String(h)}>
-                    {h} hours
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
 
-        {/* Compact toggle row */}
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className={`filter-chip ${smartExpand ? "filter-chip--active" : "filter-chip--inactive"}`}
-            onClick={() => setSmartExpand(!smartExpand)}
-          >
-            <span className={`h-1.5 w-1.5 rounded-full ${smartExpand ? "bg-emerald-500" : "bg-slate-300"}`} />
-            Smart expand
-          </button>
-          <button
-            type="button"
-            className={`filter-chip ${applyExcludes ? "filter-chip--active" : "filter-chip--inactive"}`}
-            onClick={() => setApplyExcludes(!applyExcludes)}
-          >
-            <span className={`h-1.5 w-1.5 rounded-full ${applyExcludes ? "bg-emerald-500" : "bg-slate-300"}`} />
-            Apply exclusions
-          </button>
-        </div>
+          {/* Secondary fields: location + hours on one row */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-slate-500">{t("locationLabel")}</Label>
+              <Input value={location} onChange={(e) => setLocation(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-slate-500">{t("hoursOld")}</Label>
+              <Select value={String(hoursOld)} onValueChange={(v) => setHoursOld(Number(v))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[1, 6, 12, 24, 48, 72].map((h) => (
+                    <SelectItem key={h} value={String(h)}>
+                      {h} hours
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
 
-        {/* Collapsible advanced filters */}
-        {applyExcludes && (
-          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/50 p-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <div className="text-xs text-muted-foreground">Title exclusions</div>
+          {/* Options row: chip toggles */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className={`filter-chip ${smartExpand ? "filter-chip--active" : "filter-chip--inactive"}`}
+              onClick={() => setSmartExpand(!smartExpand)}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${smartExpand ? "bg-emerald-500" : "bg-slate-300"}`} />
+              Smart expand
+            </button>
+            <button
+              type="button"
+              className={`filter-chip ${applyExcludes ? "filter-chip--active" : "filter-chip--inactive"}`}
+              onClick={() => setApplyExcludes(!applyExcludes)}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${applyExcludes ? "bg-emerald-500" : "bg-slate-300"}`} />
+              Apply exclusions
+            </button>
+          </div>
+
+          {/* Collapsible exclusion filters */}
+          {applyExcludes && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <div className="text-xs font-medium text-slate-500">Title exclusions</div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -448,11 +451,34 @@ export function FetchClient() {
             </div>
           </div>
         )}
+        </div>
+
+        {/* Action buttons inside card */}
+        <div className="flex items-center gap-3 border-t border-slate-100 px-5 py-4" data-testid="fetch-actions">
+          <Button
+            onClick={onSubmit}
+            disabled={isSubmitting || isRunning}
+            className={`h-10 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 px-6 text-sm font-semibold text-white shadow-md transition-all duration-200 hover:from-emerald-600 hover:to-emerald-700 hover:shadow-lg active:scale-[0.98] disabled:opacity-50 ${
+              isTaskHighlighted("first_fetch") ? guideHighlightClass : ""
+            }`}
+            data-guide-highlight={isTaskHighlighted("first_fetch") ? "true" : "false"}
+            data-guide-anchor="first_fetch"
+          >
+            {isSubmitting ? t("fetching") : t("startFetch")}
+          </Button>
+          <Button
+            variant="ghost"
+            className="h-10 px-4 text-sm font-medium text-slate-600 hover:text-slate-900"
+            onClick={() => router.push("/jobs")}
+          >
+            {t("viewJobs") ?? "View jobs"} &rarr;
+          </Button>
+        </div>
       </div>
       )}
 
       {market === "CN" && (
-      <div className="rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm backdrop-blur">
+      <div className="rounded-2xl border border-slate-200 bg-white/80 shadow-sm backdrop-blur">
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label>{t("jobTitle")}</Label>
@@ -549,26 +575,29 @@ export function FetchClient() {
       </div>
       )}
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center" data-testid="fetch-actions">
-        <Button
-          onClick={onSubmit}
-          disabled={isSubmitting || isRunning}
-          className={`h-10 w-full rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 px-5 text-sm font-semibold text-white shadow-md transition-all duration-200 hover:from-emerald-600 hover:to-emerald-700 hover:shadow-lg hover:brightness-105 active:scale-[0.98] disabled:opacity-50 sm:w-auto ${
-            isTaskHighlighted("first_fetch") ? guideHighlightClass : ""
-          }`}
-          data-guide-highlight={isTaskHighlighted("first_fetch") ? "true" : "false"}
-          data-guide-anchor="first_fetch"
-        >
-          {isSubmitting ? t("fetching") : t("startFetch")}
-        </Button>
-        <Button
-          variant="outline"
-          className="h-10 w-full rounded-xl border-2 border-slate-700 bg-white px-5 text-sm font-semibold text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-800 hover:bg-slate-50 hover:shadow-md active:scale-[0.98] sm:w-auto"
-          onClick={() => router.push("/jobs")}
-        >
-          View jobs
-        </Button>
-      </div>
+      {/* CN market gets action buttons outside the card (since CN card structure is different) */}
+      {market === "CN" && (
+        <div className="flex items-center gap-3" data-testid="fetch-actions-cn">
+          <Button
+            onClick={onSubmit}
+            disabled={isSubmitting || isRunning}
+            className={`h-10 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 px-6 text-sm font-semibold text-white shadow-md transition-all duration-200 hover:from-emerald-600 hover:to-emerald-700 hover:shadow-lg active:scale-[0.98] disabled:opacity-50 ${
+              isTaskHighlighted("first_fetch") ? guideHighlightClass : ""
+            }`}
+            data-guide-highlight={isTaskHighlighted("first_fetch") ? "true" : "false"}
+            data-guide-anchor="first_fetch"
+          >
+            {isSubmitting ? t("fetching") : t("startFetch")}
+          </Button>
+          <Button
+            variant="ghost"
+            className="h-10 px-4 text-sm font-medium text-slate-600 hover:text-slate-900"
+            onClick={() => router.push("/jobs")}
+          >
+            {t("viewJobs") ?? "View jobs"} &rarr;
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

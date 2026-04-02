@@ -147,13 +147,12 @@ describe("FetchClient", () => {
     expect(body.sourceOptions).toBeUndefined();
   });
 
-  it("uses a mobile-friendly stacked fetch action layout", () => {
+  it("renders fetch action buttons inside the card", () => {
     renderFetch();
 
     const actions = screen.getByTestId("fetch-actions");
-    expect(actions).toHaveClass("flex-col");
+    expect(actions).toBeInTheDocument();
 
-    expect(screen.getByRole("button", { name: /start fetch/i })).toHaveClass("w-full");
-    expect(screen.getByRole("button", { name: /view jobs/i })).toHaveClass("w-full");
+    expect(screen.getByRole("button", { name: /start fetch/i })).toBeInTheDocument();
   });
 });
