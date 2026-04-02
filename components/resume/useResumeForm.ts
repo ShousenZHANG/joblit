@@ -55,10 +55,33 @@ export function useResumeForm(locale: string) {
       const before = currentValue.slice(0, start);
       const selected = currentValue.slice(start, end);
       const after = currentValue.slice(end);
-      const wrapped = `**${selected || "keyword"}**`;
-      const nextValue = `${before}${wrapped}${after}`;
-      const selectionStart = before.length + 2;
-      const selectionEnd = selectionStart + (selected || "keyword").length;
+
+      // Toggle: if selection is already wrapped in **, unwrap it
+      const alreadyBold =
+        start >= 2 &&
+        end + 2 <= currentValue.length &&
+        currentValue.slice(start - 2, start) === "**" &&
+        currentValue.slice(end, end + 2) === "**";
+
+      let nextValue: string;
+      let selectionStart: number;
+      let selectionEnd: number;
+
+      if (alreadyBold && selected.length > 0) {
+        // Unbold: remove the ** markers around the selection
+        nextValue =
+          currentValue.slice(0, start - 2) +
+          selected +
+          currentValue.slice(end + 2);
+        selectionStart = start - 2;
+        selectionEnd = selectionStart + selected.length;
+      } else {
+        // Bold: wrap selection in **
+        const text = selected || "keyword";
+        nextValue = `${before}**${text}**${after}`;
+        selectionStart = before.length + 2;
+        selectionEnd = selectionStart + text.length;
+      }
 
       onChange(nextValue);
       requestAnimationFrame(() => {

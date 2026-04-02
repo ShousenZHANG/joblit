@@ -47,7 +47,7 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
               className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.97]"
             >
               <Download className="h-3.5 w-3.5" />
-              PDF
+              Download PDF
             </a>
           ) : (
             <span className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-slate-100 px-3 text-xs font-medium text-slate-400 cursor-not-allowed">
@@ -63,7 +63,7 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
         {/* A4 skeleton loading state */}
         {previewStatus === "idle" && !pdfUrl && (
           <div className="flex h-full items-center justify-center p-4">
-            <div className="w-full max-w-[280px]">
+            <div className="w-full max-w-[340px]">
               {/* A4 proportioned rectangle (1:1.414) */}
               <div className="aspect-[1/1.414] w-full rounded-sm bg-white shadow-sm border border-slate-200 flex items-center justify-center">
                 <p className="text-xs text-muted-foreground px-4 text-center">
@@ -76,7 +76,7 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
 
         {previewStatus === "loading" && !pdfUrl && (
           <div className="flex h-full items-center justify-center p-4">
-            <div className="w-full max-w-[280px]">
+            <div className="w-full max-w-[340px]">
               <div className="aspect-[1/1.414] w-full animate-pulse rounded-sm bg-slate-200" />
             </div>
           </div>

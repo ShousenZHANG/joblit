@@ -287,7 +287,7 @@ export function ResumePageLayout() {
         {/* Desktop preview panel */}
         <PreviewPanel className={cn(
           "hidden md:flex shrink-0 border-l border-slate-900/10 flex-col transition-[width] duration-200",
-          navCollapsed ? "w-[520px]" : "w-[440px]",
+          navCollapsed ? "w-[580px]" : "w-[480px]",
         )} />
       </div>
 
