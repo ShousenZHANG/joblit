@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -74,7 +73,6 @@ const CN_COMMON_TITLES = [
 ];
 
 export function FetchClient() {
-  const router = useRouter();
   const { data: session } = useSession();
   const userId = session?.user?.id ?? null;
   const t = useTranslations("fetch");
@@ -249,7 +247,7 @@ export function FetchClient() {
     (globalStatus === "RUNNING" || globalStatus === "QUEUED" || globalStatus === null);
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
+    <div className="space-y-4 px-4 py-4 lg:px-6">
       {activeError ? (
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
           {activeError}
@@ -257,17 +255,7 @@ export function FetchClient() {
       ) : null}
 
       {market === "AU" && (
-      <div className="rounded-2xl border border-slate-200 bg-white/80 shadow-sm backdrop-blur">
-        {/* Card header with title */}
-        <div className="border-b border-slate-100 px-5 py-4">
-          <h1 className="text-lg font-semibold text-slate-900">{t("searchRoles")}</h1>
-          <p className="mt-0.5 text-xs text-slate-500">
-            {t("searchRolesDesc") ?? "Find roles across LinkedIn, Seek, and more. Smart fetch expands to related titles."}
-          </p>
-        </div>
-
-        {/* Search fields */}
-        <div className="space-y-4 px-5 py-4">
+      <div className="space-y-4">
           {/* Primary search: job title (full width, prominent) */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-slate-500">{t("jobTitle")}</Label>
@@ -451,10 +439,9 @@ export function FetchClient() {
             </div>
           </div>
         )}
-        </div>
 
-        {/* Action buttons inside card */}
-        <div className="flex items-center gap-3 border-t border-slate-100 px-5 py-4" data-testid="fetch-actions">
+        {/* Start Fetch button */}
+        <div className="pt-2" data-testid="fetch-actions">
           <Button
             onClick={onSubmit}
             disabled={isSubmitting || isRunning}
@@ -466,19 +453,12 @@ export function FetchClient() {
           >
             {isSubmitting ? t("fetching") : t("startFetch")}
           </Button>
-          <Button
-            variant="ghost"
-            className="h-10 px-4 text-sm font-medium text-slate-600 hover:text-slate-900"
-            onClick={() => router.push("/jobs")}
-          >
-            {t("viewJobs") ?? "View jobs"} &rarr;
-          </Button>
         </div>
       </div>
       )}
 
       {market === "CN" && (
-      <div className="rounded-2xl border border-slate-200 bg-white/80 shadow-sm backdrop-blur">
+      <div className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label>{t("jobTitle")}</Label>
@@ -572,12 +552,9 @@ export function FetchClient() {
             />
           </div>
         </div>
-      </div>
-      )}
 
-      {/* CN market gets action buttons outside the card (since CN card structure is different) */}
-      {market === "CN" && (
-        <div className="flex items-center gap-3" data-testid="fetch-actions-cn">
+        {/* Start Fetch button (CN) */}
+        <div className="pt-2" data-testid="fetch-actions-cn">
           <Button
             onClick={onSubmit}
             disabled={isSubmitting || isRunning}
@@ -589,14 +566,8 @@ export function FetchClient() {
           >
             {isSubmitting ? t("fetching") : t("startFetch")}
           </Button>
-          <Button
-            variant="ghost"
-            className="h-10 px-4 text-sm font-medium text-slate-600 hover:text-slate-900"
-            onClick={() => router.push("/jobs")}
-          >
-            {t("viewJobs") ?? "View jobs"} &rarr;
-          </Button>
         </div>
+      </div>
       )}
     </div>
   );
