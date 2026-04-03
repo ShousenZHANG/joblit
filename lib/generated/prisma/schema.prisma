@@ -78,6 +78,7 @@ model User {
   onboardingState       OnboardingState?
   applicationBatches    ApplicationBatch[]
   applicationBatchTasks ApplicationBatchTask[]
+  extensionTokens       ExtensionToken[]
 }
 
 model Account {
@@ -137,12 +138,14 @@ model Job {
 
   applications          Application[]
   applicationBatchTasks ApplicationBatchTask[]
+  // GIN trigram indexes (title, company, location) created via raw SQL migration
 
   @@unique([userId, jobUrl])
   @@index([userId, createdAt])
   @@index([userId, updatedAt])
   @@index([userId, status])
   @@index([userId, market, createdAt])
+  @@index([userId, jobLevel])
 }
 
 model ApplicationBatch {
@@ -326,6 +329,22 @@ model PromptRuleTemplate {
 
   @@unique([userId, version])
   @@index([userId, isActive, updatedAt])
+}
+
+model ExtensionToken {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tokenHash  String    @unique // SHA-256 hash of the actual token
+  name       String    @default("Chrome Extension")
+  lastUsedAt DateTime?
+  expiresAt  DateTime
+  revokedAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, revokedAt])
 }
 
 model OnboardingState {

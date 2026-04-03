@@ -79,6 +79,11 @@ export type Application = $Result.DefaultSelection<Prisma.$ApplicationPayload>
  */
 export type PromptRuleTemplate = $Result.DefaultSelection<Prisma.$PromptRuleTemplatePayload>
 /**
+ * Model ExtensionToken
+ * 
+ */
+export type ExtensionToken = $Result.DefaultSelection<Prisma.$ExtensionTokenPayload>
+/**
  * Model OnboardingState
  * 
  */
@@ -423,6 +428,16 @@ export class PrismaClient<
   get promptRuleTemplate(): Prisma.PromptRuleTemplateDelegate<ExtArgs, ClientOptions>;
 
   /**
+   * `prisma.extensionToken`: Exposes CRUD operations for the **ExtensionToken** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more ExtensionTokens
+    * const extensionTokens = await prisma.extensionToken.findMany()
+    * ```
+    */
+  get extensionToken(): Prisma.ExtensionTokenDelegate<ExtArgs, ClientOptions>;
+
+  /**
    * `prisma.onboardingState`: Exposes CRUD operations for the **OnboardingState** model.
     * Example usage:
     * ```ts
@@ -481,8 +496,8 @@ export namespace Prisma {
   export import Exact = $Public.Exact
 
   /**
-   * Prisma Client JS version: 7.4.2
-   * Query Engine version: 94a226be1cf2967af2541cca5529f0f7ba866919
+   * Prisma Client JS version: 7.6.0
+   * Query Engine version: 75cbdc1eb7150937890ad5465d861175c6624711
    */
   export type PrismaVersion = {
     client: string
@@ -878,6 +893,7 @@ export namespace Prisma {
     ActiveResumeProfile: 'ActiveResumeProfile',
     Application: 'Application',
     PromptRuleTemplate: 'PromptRuleTemplate',
+    ExtensionToken: 'ExtensionToken',
     OnboardingState: 'OnboardingState'
   };
 
@@ -894,7 +910,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "user" | "account" | "session" | "job" | "applicationBatch" | "applicationBatchTask" | "deletedJobUrl" | "dailyCheckin" | "fetchRun" | "resumeProfile" | "activeResumeProfile" | "application" | "promptRuleTemplate" | "onboardingState"
+      modelProps: "user" | "account" | "session" | "job" | "applicationBatch" | "applicationBatchTask" | "deletedJobUrl" | "dailyCheckin" | "fetchRun" | "resumeProfile" | "activeResumeProfile" | "application" | "promptRuleTemplate" | "extensionToken" | "onboardingState"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -1860,6 +1876,80 @@ export namespace Prisma {
           }
         }
       }
+      ExtensionToken: {
+        payload: Prisma.$ExtensionTokenPayload<ExtArgs>
+        fields: Prisma.ExtensionTokenFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.ExtensionTokenFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ExtensionTokenPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.ExtensionTokenFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ExtensionTokenPayload>
+          }
+          findFirst: {
+            args: Prisma.ExtensionTokenFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ExtensionTokenPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.ExtensionTokenFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ExtensionTokenPayload>
+          }
+          findMany: {
+            args: Prisma.ExtensionTokenFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ExtensionTokenPayload>[]
+          }
+          create: {
+            args: Prisma.ExtensionTokenCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ExtensionTokenPayload>
+          }
+          createMany: {
+            args: Prisma.ExtensionTokenCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.ExtensionTokenCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ExtensionTokenPayload>[]
+          }
+          delete: {
+            args: Prisma.ExtensionTokenDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ExtensionTokenPayload>
+          }
+          update: {
+            args: Prisma.ExtensionTokenUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ExtensionTokenPayload>
+          }
+          deleteMany: {
+            args: Prisma.ExtensionTokenDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.ExtensionTokenUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.ExtensionTokenUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ExtensionTokenPayload>[]
+          }
+          upsert: {
+            args: Prisma.ExtensionTokenUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ExtensionTokenPayload>
+          }
+          aggregate: {
+            args: Prisma.ExtensionTokenAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateExtensionToken>
+          }
+          groupBy: {
+            args: Prisma.ExtensionTokenGroupByArgs<ExtArgs>
+            result: $Utils.Optional<ExtensionTokenGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.ExtensionTokenCountArgs<ExtArgs>
+            result: $Utils.Optional<ExtensionTokenCountAggregateOutputType> | number
+          }
+        }
+      }
       OnboardingState: {
         payload: Prisma.$OnboardingStatePayload<ExtArgs>
         fields: Prisma.OnboardingStateFieldRefs
@@ -2055,6 +2145,7 @@ export namespace Prisma {
     activeResumeProfile?: ActiveResumeProfileOmit
     application?: ApplicationOmit
     promptRuleTemplate?: PromptRuleTemplateOmit
+    extensionToken?: ExtensionTokenOmit
     onboardingState?: OnboardingStateOmit
   }
 
@@ -2148,6 +2239,7 @@ export namespace Prisma {
     promptRuleTemplates: number
     applicationBatches: number
     applicationBatchTasks: number
+    extensionTokens: number
   }
 
   export type UserCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -2163,6 +2255,7 @@ export namespace Prisma {
     promptRuleTemplates?: boolean | UserCountOutputTypeCountPromptRuleTemplatesArgs
     applicationBatches?: boolean | UserCountOutputTypeCountApplicationBatchesArgs
     applicationBatchTasks?: boolean | UserCountOutputTypeCountApplicationBatchTasksArgs
+    extensionTokens?: boolean | UserCountOutputTypeCountExtensionTokensArgs
   }
 
   // Custom InputTypes
@@ -2258,6 +2351,13 @@ export namespace Prisma {
    */
   export type UserCountOutputTypeCountApplicationBatchTasksArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: ApplicationBatchTaskWhereInput
+  }
+
+  /**
+   * UserCountOutputType without action
+   */
+  export type UserCountOutputTypeCountExtensionTokensArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: ExtensionTokenWhereInput
   }
 
 
@@ -2569,6 +2669,7 @@ export namespace Prisma {
     onboardingState?: boolean | User$onboardingStateArgs<ExtArgs>
     applicationBatches?: boolean | User$applicationBatchesArgs<ExtArgs>
     applicationBatchTasks?: boolean | User$applicationBatchTasksArgs<ExtArgs>
+    extensionTokens?: boolean | User$extensionTokensArgs<ExtArgs>
     _count?: boolean | UserCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["user"]>
 
@@ -2617,6 +2718,7 @@ export namespace Prisma {
     onboardingState?: boolean | User$onboardingStateArgs<ExtArgs>
     applicationBatches?: boolean | User$applicationBatchesArgs<ExtArgs>
     applicationBatchTasks?: boolean | User$applicationBatchTasksArgs<ExtArgs>
+    extensionTokens?: boolean | User$extensionTokensArgs<ExtArgs>
     _count?: boolean | UserCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type UserIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
@@ -2638,6 +2740,7 @@ export namespace Prisma {
       onboardingState: Prisma.$OnboardingStatePayload<ExtArgs> | null
       applicationBatches: Prisma.$ApplicationBatchPayload<ExtArgs>[]
       applicationBatchTasks: Prisma.$ApplicationBatchTaskPayload<ExtArgs>[]
+      extensionTokens: Prisma.$ExtensionTokenPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -3054,6 +3157,7 @@ export namespace Prisma {
     onboardingState<T extends User$onboardingStateArgs<ExtArgs> = {}>(args?: Subset<T, User$onboardingStateArgs<ExtArgs>>): Prisma__OnboardingStateClient<$Result.GetResult<Prisma.$OnboardingStatePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
     applicationBatches<T extends User$applicationBatchesArgs<ExtArgs> = {}>(args?: Subset<T, User$applicationBatchesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ApplicationBatchPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     applicationBatchTasks<T extends User$applicationBatchTasksArgs<ExtArgs> = {}>(args?: Subset<T, User$applicationBatchTasksArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ApplicationBatchTaskPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    extensionTokens<T extends User$extensionTokensArgs<ExtArgs> = {}>(args?: Subset<T, User$extensionTokensArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ExtensionTokenPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -3286,6 +3390,11 @@ export namespace Prisma {
      * Skip the first `n` Users.
      */
     skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of Users.
+     */
     distinct?: UserScalarFieldEnum | UserScalarFieldEnum[]
   }
 
@@ -3782,6 +3891,30 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: ApplicationBatchTaskScalarFieldEnum | ApplicationBatchTaskScalarFieldEnum[]
+  }
+
+  /**
+   * User.extensionTokens
+   */
+  export type User$extensionTokensArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ExtensionToken
+     */
+    select?: ExtensionTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ExtensionToken
+     */
+    omit?: ExtensionTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ExtensionTokenInclude<ExtArgs> | null
+    where?: ExtensionTokenWhereInput
+    orderBy?: ExtensionTokenOrderByWithRelationInput | ExtensionTokenOrderByWithRelationInput[]
+    cursor?: ExtensionTokenWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: ExtensionTokenScalarFieldEnum | ExtensionTokenScalarFieldEnum[]
   }
 
   /**
@@ -4794,6 +4927,11 @@ export namespace Prisma {
      * Skip the first `n` Accounts.
      */
     skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of Accounts.
+     */
     distinct?: AccountScalarFieldEnum | AccountScalarFieldEnum[]
   }
 
@@ -5865,6 +6003,11 @@ export namespace Prisma {
      * Skip the first `n` Sessions.
      */
     skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of Sessions.
+     */
     distinct?: SessionScalarFieldEnum | SessionScalarFieldEnum[]
   }
 
@@ -7037,6 +7180,11 @@ export namespace Prisma {
      * Skip the first `n` Jobs.
      */
     skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of Jobs.
+     */
     distinct?: JobScalarFieldEnum | JobScalarFieldEnum[]
   }
 
@@ -8248,6 +8396,11 @@ export namespace Prisma {
      * Skip the first `n` ApplicationBatches.
      */
     skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of ApplicationBatches.
+     */
     distinct?: ApplicationBatchScalarFieldEnum | ApplicationBatchScalarFieldEnum[]
   }
 
@@ -9458,6 +9611,11 @@ export namespace Prisma {
      * Skip the first `n` ApplicationBatchTasks.
      */
     skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of ApplicationBatchTasks.
+     */
     distinct?: ApplicationBatchTaskScalarFieldEnum | ApplicationBatchTaskScalarFieldEnum[]
   }
 
@@ -10503,6 +10661,11 @@ export namespace Prisma {
      * Skip the first `n` DeletedJobUrls.
      */
     skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of DeletedJobUrls.
+     */
     distinct?: DeletedJobUrlScalarFieldEnum | DeletedJobUrlScalarFieldEnum[]
   }
 
@@ -11548,6 +11711,11 @@ export namespace Prisma {
      * Skip the first `n` DailyCheckins.
      */
     skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of DailyCheckins.
+     */
     distinct?: DailyCheckinScalarFieldEnum | DailyCheckinScalarFieldEnum[]
   }
 
@@ -12774,6 +12942,11 @@ export namespace Prisma {
      * Skip the first `n` FetchRuns.
      */
     skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FetchRuns.
+     */
     distinct?: FetchRunScalarFieldEnum | FetchRunScalarFieldEnum[]
   }
 
@@ -13969,6 +14142,11 @@ export namespace Prisma {
      * Skip the first `n` ResumeProfiles.
      */
     skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of ResumeProfiles.
+     */
     distinct?: ResumeProfileScalarFieldEnum | ResumeProfileScalarFieldEnum[]
   }
 
@@ -15083,6 +15261,11 @@ export namespace Prisma {
      * Skip the first `n` ActiveResumeProfiles.
      */
     skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of ActiveResumeProfiles.
+     */
     distinct?: ActiveResumeProfileScalarFieldEnum | ActiveResumeProfileScalarFieldEnum[]
   }
 
@@ -16261,6 +16444,11 @@ export namespace Prisma {
      * Skip the first `n` Applications.
      */
     skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of Applications.
+     */
     distinct?: ApplicationScalarFieldEnum | ApplicationScalarFieldEnum[]
   }
 
@@ -17457,6 +17645,11 @@ export namespace Prisma {
      * Skip the first `n` PromptRuleTemplates.
      */
     skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of PromptRuleTemplates.
+     */
     distinct?: PromptRuleTemplateScalarFieldEnum | PromptRuleTemplateScalarFieldEnum[]
   }
 
@@ -17672,6 +17865,1108 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well
      */
     include?: PromptRuleTemplateInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model ExtensionToken
+   */
+
+  export type AggregateExtensionToken = {
+    _count: ExtensionTokenCountAggregateOutputType | null
+    _min: ExtensionTokenMinAggregateOutputType | null
+    _max: ExtensionTokenMaxAggregateOutputType | null
+  }
+
+  export type ExtensionTokenMinAggregateOutputType = {
+    id: string | null
+    userId: string | null
+    tokenHash: string | null
+    name: string | null
+    lastUsedAt: Date | null
+    expiresAt: Date | null
+    revokedAt: Date | null
+    createdAt: Date | null
+  }
+
+  export type ExtensionTokenMaxAggregateOutputType = {
+    id: string | null
+    userId: string | null
+    tokenHash: string | null
+    name: string | null
+    lastUsedAt: Date | null
+    expiresAt: Date | null
+    revokedAt: Date | null
+    createdAt: Date | null
+  }
+
+  export type ExtensionTokenCountAggregateOutputType = {
+    id: number
+    userId: number
+    tokenHash: number
+    name: number
+    lastUsedAt: number
+    expiresAt: number
+    revokedAt: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type ExtensionTokenMinAggregateInputType = {
+    id?: true
+    userId?: true
+    tokenHash?: true
+    name?: true
+    lastUsedAt?: true
+    expiresAt?: true
+    revokedAt?: true
+    createdAt?: true
+  }
+
+  export type ExtensionTokenMaxAggregateInputType = {
+    id?: true
+    userId?: true
+    tokenHash?: true
+    name?: true
+    lastUsedAt?: true
+    expiresAt?: true
+    revokedAt?: true
+    createdAt?: true
+  }
+
+  export type ExtensionTokenCountAggregateInputType = {
+    id?: true
+    userId?: true
+    tokenHash?: true
+    name?: true
+    lastUsedAt?: true
+    expiresAt?: true
+    revokedAt?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type ExtensionTokenAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which ExtensionToken to aggregate.
+     */
+    where?: ExtensionTokenWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ExtensionTokens to fetch.
+     */
+    orderBy?: ExtensionTokenOrderByWithRelationInput | ExtensionTokenOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: ExtensionTokenWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ExtensionTokens from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ExtensionTokens.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned ExtensionTokens
+    **/
+    _count?: true | ExtensionTokenCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: ExtensionTokenMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: ExtensionTokenMaxAggregateInputType
+  }
+
+  export type GetExtensionTokenAggregateType<T extends ExtensionTokenAggregateArgs> = {
+        [P in keyof T & keyof AggregateExtensionToken]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateExtensionToken[P]>
+      : GetScalarType<T[P], AggregateExtensionToken[P]>
+  }
+
+
+
+
+  export type ExtensionTokenGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: ExtensionTokenWhereInput
+    orderBy?: ExtensionTokenOrderByWithAggregationInput | ExtensionTokenOrderByWithAggregationInput[]
+    by: ExtensionTokenScalarFieldEnum[] | ExtensionTokenScalarFieldEnum
+    having?: ExtensionTokenScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: ExtensionTokenCountAggregateInputType | true
+    _min?: ExtensionTokenMinAggregateInputType
+    _max?: ExtensionTokenMaxAggregateInputType
+  }
+
+  export type ExtensionTokenGroupByOutputType = {
+    id: string
+    userId: string
+    tokenHash: string
+    name: string
+    lastUsedAt: Date | null
+    expiresAt: Date
+    revokedAt: Date | null
+    createdAt: Date
+    _count: ExtensionTokenCountAggregateOutputType | null
+    _min: ExtensionTokenMinAggregateOutputType | null
+    _max: ExtensionTokenMaxAggregateOutputType | null
+  }
+
+  type GetExtensionTokenGroupByPayload<T extends ExtensionTokenGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<ExtensionTokenGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof ExtensionTokenGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], ExtensionTokenGroupByOutputType[P]>
+            : GetScalarType<T[P], ExtensionTokenGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type ExtensionTokenSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    userId?: boolean
+    tokenHash?: boolean
+    name?: boolean
+    lastUsedAt?: boolean
+    expiresAt?: boolean
+    revokedAt?: boolean
+    createdAt?: boolean
+    user?: boolean | UserDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["extensionToken"]>
+
+  export type ExtensionTokenSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    userId?: boolean
+    tokenHash?: boolean
+    name?: boolean
+    lastUsedAt?: boolean
+    expiresAt?: boolean
+    revokedAt?: boolean
+    createdAt?: boolean
+    user?: boolean | UserDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["extensionToken"]>
+
+  export type ExtensionTokenSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    userId?: boolean
+    tokenHash?: boolean
+    name?: boolean
+    lastUsedAt?: boolean
+    expiresAt?: boolean
+    revokedAt?: boolean
+    createdAt?: boolean
+    user?: boolean | UserDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["extensionToken"]>
+
+  export type ExtensionTokenSelectScalar = {
+    id?: boolean
+    userId?: boolean
+    tokenHash?: boolean
+    name?: boolean
+    lastUsedAt?: boolean
+    expiresAt?: boolean
+    revokedAt?: boolean
+    createdAt?: boolean
+  }
+
+  export type ExtensionTokenOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "userId" | "tokenHash" | "name" | "lastUsedAt" | "expiresAt" | "revokedAt" | "createdAt", ExtArgs["result"]["extensionToken"]>
+  export type ExtensionTokenInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    user?: boolean | UserDefaultArgs<ExtArgs>
+  }
+  export type ExtensionTokenIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    user?: boolean | UserDefaultArgs<ExtArgs>
+  }
+  export type ExtensionTokenIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    user?: boolean | UserDefaultArgs<ExtArgs>
+  }
+
+  export type $ExtensionTokenPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "ExtensionToken"
+    objects: {
+      user: Prisma.$UserPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      userId: string
+      tokenHash: string
+      name: string
+      lastUsedAt: Date | null
+      expiresAt: Date
+      revokedAt: Date | null
+      createdAt: Date
+    }, ExtArgs["result"]["extensionToken"]>
+    composites: {}
+  }
+
+  type ExtensionTokenGetPayload<S extends boolean | null | undefined | ExtensionTokenDefaultArgs> = $Result.GetResult<Prisma.$ExtensionTokenPayload, S>
+
+  type ExtensionTokenCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<ExtensionTokenFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: ExtensionTokenCountAggregateInputType | true
+    }
+
+  export interface ExtensionTokenDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['ExtensionToken'], meta: { name: 'ExtensionToken' } }
+    /**
+     * Find zero or one ExtensionToken that matches the filter.
+     * @param {ExtensionTokenFindUniqueArgs} args - Arguments to find a ExtensionToken
+     * @example
+     * // Get one ExtensionToken
+     * const extensionToken = await prisma.extensionToken.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends ExtensionTokenFindUniqueArgs>(args: SelectSubset<T, ExtensionTokenFindUniqueArgs<ExtArgs>>): Prisma__ExtensionTokenClient<$Result.GetResult<Prisma.$ExtensionTokenPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one ExtensionToken that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {ExtensionTokenFindUniqueOrThrowArgs} args - Arguments to find a ExtensionToken
+     * @example
+     * // Get one ExtensionToken
+     * const extensionToken = await prisma.extensionToken.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends ExtensionTokenFindUniqueOrThrowArgs>(args: SelectSubset<T, ExtensionTokenFindUniqueOrThrowArgs<ExtArgs>>): Prisma__ExtensionTokenClient<$Result.GetResult<Prisma.$ExtensionTokenPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first ExtensionToken that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ExtensionTokenFindFirstArgs} args - Arguments to find a ExtensionToken
+     * @example
+     * // Get one ExtensionToken
+     * const extensionToken = await prisma.extensionToken.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends ExtensionTokenFindFirstArgs>(args?: SelectSubset<T, ExtensionTokenFindFirstArgs<ExtArgs>>): Prisma__ExtensionTokenClient<$Result.GetResult<Prisma.$ExtensionTokenPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first ExtensionToken that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ExtensionTokenFindFirstOrThrowArgs} args - Arguments to find a ExtensionToken
+     * @example
+     * // Get one ExtensionToken
+     * const extensionToken = await prisma.extensionToken.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends ExtensionTokenFindFirstOrThrowArgs>(args?: SelectSubset<T, ExtensionTokenFindFirstOrThrowArgs<ExtArgs>>): Prisma__ExtensionTokenClient<$Result.GetResult<Prisma.$ExtensionTokenPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more ExtensionTokens that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ExtensionTokenFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all ExtensionTokens
+     * const extensionTokens = await prisma.extensionToken.findMany()
+     * 
+     * // Get first 10 ExtensionTokens
+     * const extensionTokens = await prisma.extensionToken.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const extensionTokenWithIdOnly = await prisma.extensionToken.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends ExtensionTokenFindManyArgs>(args?: SelectSubset<T, ExtensionTokenFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ExtensionTokenPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a ExtensionToken.
+     * @param {ExtensionTokenCreateArgs} args - Arguments to create a ExtensionToken.
+     * @example
+     * // Create one ExtensionToken
+     * const ExtensionToken = await prisma.extensionToken.create({
+     *   data: {
+     *     // ... data to create a ExtensionToken
+     *   }
+     * })
+     * 
+     */
+    create<T extends ExtensionTokenCreateArgs>(args: SelectSubset<T, ExtensionTokenCreateArgs<ExtArgs>>): Prisma__ExtensionTokenClient<$Result.GetResult<Prisma.$ExtensionTokenPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many ExtensionTokens.
+     * @param {ExtensionTokenCreateManyArgs} args - Arguments to create many ExtensionTokens.
+     * @example
+     * // Create many ExtensionTokens
+     * const extensionToken = await prisma.extensionToken.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends ExtensionTokenCreateManyArgs>(args?: SelectSubset<T, ExtensionTokenCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many ExtensionTokens and returns the data saved in the database.
+     * @param {ExtensionTokenCreateManyAndReturnArgs} args - Arguments to create many ExtensionTokens.
+     * @example
+     * // Create many ExtensionTokens
+     * const extensionToken = await prisma.extensionToken.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many ExtensionTokens and only return the `id`
+     * const extensionTokenWithIdOnly = await prisma.extensionToken.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends ExtensionTokenCreateManyAndReturnArgs>(args?: SelectSubset<T, ExtensionTokenCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ExtensionTokenPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a ExtensionToken.
+     * @param {ExtensionTokenDeleteArgs} args - Arguments to delete one ExtensionToken.
+     * @example
+     * // Delete one ExtensionToken
+     * const ExtensionToken = await prisma.extensionToken.delete({
+     *   where: {
+     *     // ... filter to delete one ExtensionToken
+     *   }
+     * })
+     * 
+     */
+    delete<T extends ExtensionTokenDeleteArgs>(args: SelectSubset<T, ExtensionTokenDeleteArgs<ExtArgs>>): Prisma__ExtensionTokenClient<$Result.GetResult<Prisma.$ExtensionTokenPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one ExtensionToken.
+     * @param {ExtensionTokenUpdateArgs} args - Arguments to update one ExtensionToken.
+     * @example
+     * // Update one ExtensionToken
+     * const extensionToken = await prisma.extensionToken.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends ExtensionTokenUpdateArgs>(args: SelectSubset<T, ExtensionTokenUpdateArgs<ExtArgs>>): Prisma__ExtensionTokenClient<$Result.GetResult<Prisma.$ExtensionTokenPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more ExtensionTokens.
+     * @param {ExtensionTokenDeleteManyArgs} args - Arguments to filter ExtensionTokens to delete.
+     * @example
+     * // Delete a few ExtensionTokens
+     * const { count } = await prisma.extensionToken.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends ExtensionTokenDeleteManyArgs>(args?: SelectSubset<T, ExtensionTokenDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more ExtensionTokens.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ExtensionTokenUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many ExtensionTokens
+     * const extensionToken = await prisma.extensionToken.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends ExtensionTokenUpdateManyArgs>(args: SelectSubset<T, ExtensionTokenUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more ExtensionTokens and returns the data updated in the database.
+     * @param {ExtensionTokenUpdateManyAndReturnArgs} args - Arguments to update many ExtensionTokens.
+     * @example
+     * // Update many ExtensionTokens
+     * const extensionToken = await prisma.extensionToken.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more ExtensionTokens and only return the `id`
+     * const extensionTokenWithIdOnly = await prisma.extensionToken.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends ExtensionTokenUpdateManyAndReturnArgs>(args: SelectSubset<T, ExtensionTokenUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ExtensionTokenPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one ExtensionToken.
+     * @param {ExtensionTokenUpsertArgs} args - Arguments to update or create a ExtensionToken.
+     * @example
+     * // Update or create a ExtensionToken
+     * const extensionToken = await prisma.extensionToken.upsert({
+     *   create: {
+     *     // ... data to create a ExtensionToken
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the ExtensionToken we want to update
+     *   }
+     * })
+     */
+    upsert<T extends ExtensionTokenUpsertArgs>(args: SelectSubset<T, ExtensionTokenUpsertArgs<ExtArgs>>): Prisma__ExtensionTokenClient<$Result.GetResult<Prisma.$ExtensionTokenPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of ExtensionTokens.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ExtensionTokenCountArgs} args - Arguments to filter ExtensionTokens to count.
+     * @example
+     * // Count the number of ExtensionTokens
+     * const count = await prisma.extensionToken.count({
+     *   where: {
+     *     // ... the filter for the ExtensionTokens we want to count
+     *   }
+     * })
+    **/
+    count<T extends ExtensionTokenCountArgs>(
+      args?: Subset<T, ExtensionTokenCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], ExtensionTokenCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a ExtensionToken.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ExtensionTokenAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends ExtensionTokenAggregateArgs>(args: Subset<T, ExtensionTokenAggregateArgs>): Prisma.PrismaPromise<GetExtensionTokenAggregateType<T>>
+
+    /**
+     * Group by ExtensionToken.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ExtensionTokenGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends ExtensionTokenGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: ExtensionTokenGroupByArgs['orderBy'] }
+        : { orderBy?: ExtensionTokenGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, ExtensionTokenGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetExtensionTokenGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the ExtensionToken model
+   */
+  readonly fields: ExtensionTokenFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for ExtensionToken.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__ExtensionTokenClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    user<T extends UserDefaultArgs<ExtArgs> = {}>(args?: Subset<T, UserDefaultArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the ExtensionToken model
+   */
+  interface ExtensionTokenFieldRefs {
+    readonly id: FieldRef<"ExtensionToken", 'String'>
+    readonly userId: FieldRef<"ExtensionToken", 'String'>
+    readonly tokenHash: FieldRef<"ExtensionToken", 'String'>
+    readonly name: FieldRef<"ExtensionToken", 'String'>
+    readonly lastUsedAt: FieldRef<"ExtensionToken", 'DateTime'>
+    readonly expiresAt: FieldRef<"ExtensionToken", 'DateTime'>
+    readonly revokedAt: FieldRef<"ExtensionToken", 'DateTime'>
+    readonly createdAt: FieldRef<"ExtensionToken", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * ExtensionToken findUnique
+   */
+  export type ExtensionTokenFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ExtensionToken
+     */
+    select?: ExtensionTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ExtensionToken
+     */
+    omit?: ExtensionTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ExtensionTokenInclude<ExtArgs> | null
+    /**
+     * Filter, which ExtensionToken to fetch.
+     */
+    where: ExtensionTokenWhereUniqueInput
+  }
+
+  /**
+   * ExtensionToken findUniqueOrThrow
+   */
+  export type ExtensionTokenFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ExtensionToken
+     */
+    select?: ExtensionTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ExtensionToken
+     */
+    omit?: ExtensionTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ExtensionTokenInclude<ExtArgs> | null
+    /**
+     * Filter, which ExtensionToken to fetch.
+     */
+    where: ExtensionTokenWhereUniqueInput
+  }
+
+  /**
+   * ExtensionToken findFirst
+   */
+  export type ExtensionTokenFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ExtensionToken
+     */
+    select?: ExtensionTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ExtensionToken
+     */
+    omit?: ExtensionTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ExtensionTokenInclude<ExtArgs> | null
+    /**
+     * Filter, which ExtensionToken to fetch.
+     */
+    where?: ExtensionTokenWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ExtensionTokens to fetch.
+     */
+    orderBy?: ExtensionTokenOrderByWithRelationInput | ExtensionTokenOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for ExtensionTokens.
+     */
+    cursor?: ExtensionTokenWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ExtensionTokens from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ExtensionTokens.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of ExtensionTokens.
+     */
+    distinct?: ExtensionTokenScalarFieldEnum | ExtensionTokenScalarFieldEnum[]
+  }
+
+  /**
+   * ExtensionToken findFirstOrThrow
+   */
+  export type ExtensionTokenFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ExtensionToken
+     */
+    select?: ExtensionTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ExtensionToken
+     */
+    omit?: ExtensionTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ExtensionTokenInclude<ExtArgs> | null
+    /**
+     * Filter, which ExtensionToken to fetch.
+     */
+    where?: ExtensionTokenWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ExtensionTokens to fetch.
+     */
+    orderBy?: ExtensionTokenOrderByWithRelationInput | ExtensionTokenOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for ExtensionTokens.
+     */
+    cursor?: ExtensionTokenWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ExtensionTokens from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ExtensionTokens.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of ExtensionTokens.
+     */
+    distinct?: ExtensionTokenScalarFieldEnum | ExtensionTokenScalarFieldEnum[]
+  }
+
+  /**
+   * ExtensionToken findMany
+   */
+  export type ExtensionTokenFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ExtensionToken
+     */
+    select?: ExtensionTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ExtensionToken
+     */
+    omit?: ExtensionTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ExtensionTokenInclude<ExtArgs> | null
+    /**
+     * Filter, which ExtensionTokens to fetch.
+     */
+    where?: ExtensionTokenWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ExtensionTokens to fetch.
+     */
+    orderBy?: ExtensionTokenOrderByWithRelationInput | ExtensionTokenOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing ExtensionTokens.
+     */
+    cursor?: ExtensionTokenWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ExtensionTokens from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ExtensionTokens.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of ExtensionTokens.
+     */
+    distinct?: ExtensionTokenScalarFieldEnum | ExtensionTokenScalarFieldEnum[]
+  }
+
+  /**
+   * ExtensionToken create
+   */
+  export type ExtensionTokenCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ExtensionToken
+     */
+    select?: ExtensionTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ExtensionToken
+     */
+    omit?: ExtensionTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ExtensionTokenInclude<ExtArgs> | null
+    /**
+     * The data needed to create a ExtensionToken.
+     */
+    data: XOR<ExtensionTokenCreateInput, ExtensionTokenUncheckedCreateInput>
+  }
+
+  /**
+   * ExtensionToken createMany
+   */
+  export type ExtensionTokenCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many ExtensionTokens.
+     */
+    data: ExtensionTokenCreateManyInput | ExtensionTokenCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * ExtensionToken createManyAndReturn
+   */
+  export type ExtensionTokenCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ExtensionToken
+     */
+    select?: ExtensionTokenSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the ExtensionToken
+     */
+    omit?: ExtensionTokenOmit<ExtArgs> | null
+    /**
+     * The data used to create many ExtensionTokens.
+     */
+    data: ExtensionTokenCreateManyInput | ExtensionTokenCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ExtensionTokenIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * ExtensionToken update
+   */
+  export type ExtensionTokenUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ExtensionToken
+     */
+    select?: ExtensionTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ExtensionToken
+     */
+    omit?: ExtensionTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ExtensionTokenInclude<ExtArgs> | null
+    /**
+     * The data needed to update a ExtensionToken.
+     */
+    data: XOR<ExtensionTokenUpdateInput, ExtensionTokenUncheckedUpdateInput>
+    /**
+     * Choose, which ExtensionToken to update.
+     */
+    where: ExtensionTokenWhereUniqueInput
+  }
+
+  /**
+   * ExtensionToken updateMany
+   */
+  export type ExtensionTokenUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update ExtensionTokens.
+     */
+    data: XOR<ExtensionTokenUpdateManyMutationInput, ExtensionTokenUncheckedUpdateManyInput>
+    /**
+     * Filter which ExtensionTokens to update
+     */
+    where?: ExtensionTokenWhereInput
+    /**
+     * Limit how many ExtensionTokens to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * ExtensionToken updateManyAndReturn
+   */
+  export type ExtensionTokenUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ExtensionToken
+     */
+    select?: ExtensionTokenSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the ExtensionToken
+     */
+    omit?: ExtensionTokenOmit<ExtArgs> | null
+    /**
+     * The data used to update ExtensionTokens.
+     */
+    data: XOR<ExtensionTokenUpdateManyMutationInput, ExtensionTokenUncheckedUpdateManyInput>
+    /**
+     * Filter which ExtensionTokens to update
+     */
+    where?: ExtensionTokenWhereInput
+    /**
+     * Limit how many ExtensionTokens to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ExtensionTokenIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * ExtensionToken upsert
+   */
+  export type ExtensionTokenUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ExtensionToken
+     */
+    select?: ExtensionTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ExtensionToken
+     */
+    omit?: ExtensionTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ExtensionTokenInclude<ExtArgs> | null
+    /**
+     * The filter to search for the ExtensionToken to update in case it exists.
+     */
+    where: ExtensionTokenWhereUniqueInput
+    /**
+     * In case the ExtensionToken found by the `where` argument doesn't exist, create a new ExtensionToken with this data.
+     */
+    create: XOR<ExtensionTokenCreateInput, ExtensionTokenUncheckedCreateInput>
+    /**
+     * In case the ExtensionToken was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<ExtensionTokenUpdateInput, ExtensionTokenUncheckedUpdateInput>
+  }
+
+  /**
+   * ExtensionToken delete
+   */
+  export type ExtensionTokenDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ExtensionToken
+     */
+    select?: ExtensionTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ExtensionToken
+     */
+    omit?: ExtensionTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ExtensionTokenInclude<ExtArgs> | null
+    /**
+     * Filter which ExtensionToken to delete.
+     */
+    where: ExtensionTokenWhereUniqueInput
+  }
+
+  /**
+   * ExtensionToken deleteMany
+   */
+  export type ExtensionTokenDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which ExtensionTokens to delete
+     */
+    where?: ExtensionTokenWhereInput
+    /**
+     * Limit how many ExtensionTokens to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * ExtensionToken without action
+   */
+  export type ExtensionTokenDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ExtensionToken
+     */
+    select?: ExtensionTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ExtensionToken
+     */
+    omit?: ExtensionTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ExtensionTokenInclude<ExtArgs> | null
   }
 
 
@@ -18550,6 +19845,11 @@ export namespace Prisma {
      * Skip the first `n` OnboardingStates.
      */
     skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of OnboardingStates.
+     */
     distinct?: OnboardingStateScalarFieldEnum | OnboardingStateScalarFieldEnum[]
   }
 
@@ -18987,6 +20287,20 @@ export namespace Prisma {
   export type PromptRuleTemplateScalarFieldEnum = (typeof PromptRuleTemplateScalarFieldEnum)[keyof typeof PromptRuleTemplateScalarFieldEnum]
 
 
+  export const ExtensionTokenScalarFieldEnum: {
+    id: 'id',
+    userId: 'userId',
+    tokenHash: 'tokenHash',
+    name: 'name',
+    lastUsedAt: 'lastUsedAt',
+    expiresAt: 'expiresAt',
+    revokedAt: 'revokedAt',
+    createdAt: 'createdAt'
+  };
+
+  export type ExtensionTokenScalarFieldEnum = (typeof ExtensionTokenScalarFieldEnum)[keyof typeof ExtensionTokenScalarFieldEnum]
+
+
   export const OnboardingStateScalarFieldEnum: {
     id: 'id',
     userId: 'userId',
@@ -19242,6 +20556,7 @@ export namespace Prisma {
     onboardingState?: XOR<OnboardingStateNullableScalarRelationFilter, OnboardingStateWhereInput> | null
     applicationBatches?: ApplicationBatchListRelationFilter
     applicationBatchTasks?: ApplicationBatchTaskListRelationFilter
+    extensionTokens?: ExtensionTokenListRelationFilter
   }
 
   export type UserOrderByWithRelationInput = {
@@ -19265,6 +20580,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateOrderByWithRelationInput
     applicationBatches?: ApplicationBatchOrderByRelationAggregateInput
     applicationBatchTasks?: ApplicationBatchTaskOrderByRelationAggregateInput
+    extensionTokens?: ExtensionTokenOrderByRelationAggregateInput
   }
 
   export type UserWhereUniqueInput = Prisma.AtLeast<{
@@ -19291,6 +20607,7 @@ export namespace Prisma {
     onboardingState?: XOR<OnboardingStateNullableScalarRelationFilter, OnboardingStateWhereInput> | null
     applicationBatches?: ApplicationBatchListRelationFilter
     applicationBatchTasks?: ApplicationBatchTaskListRelationFilter
+    extensionTokens?: ExtensionTokenListRelationFilter
   }, "id" | "email">
 
   export type UserOrderByWithAggregationInput = {
@@ -20329,6 +21646,76 @@ export namespace Prisma {
     updatedAt?: DateTimeWithAggregatesFilter<"PromptRuleTemplate"> | Date | string
   }
 
+  export type ExtensionTokenWhereInput = {
+    AND?: ExtensionTokenWhereInput | ExtensionTokenWhereInput[]
+    OR?: ExtensionTokenWhereInput[]
+    NOT?: ExtensionTokenWhereInput | ExtensionTokenWhereInput[]
+    id?: UuidFilter<"ExtensionToken"> | string
+    userId?: UuidFilter<"ExtensionToken"> | string
+    tokenHash?: StringFilter<"ExtensionToken"> | string
+    name?: StringFilter<"ExtensionToken"> | string
+    lastUsedAt?: DateTimeNullableFilter<"ExtensionToken"> | Date | string | null
+    expiresAt?: DateTimeFilter<"ExtensionToken"> | Date | string
+    revokedAt?: DateTimeNullableFilter<"ExtensionToken"> | Date | string | null
+    createdAt?: DateTimeFilter<"ExtensionToken"> | Date | string
+    user?: XOR<UserScalarRelationFilter, UserWhereInput>
+  }
+
+  export type ExtensionTokenOrderByWithRelationInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    tokenHash?: SortOrder
+    name?: SortOrder
+    lastUsedAt?: SortOrderInput | SortOrder
+    expiresAt?: SortOrder
+    revokedAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    user?: UserOrderByWithRelationInput
+  }
+
+  export type ExtensionTokenWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    tokenHash?: string
+    AND?: ExtensionTokenWhereInput | ExtensionTokenWhereInput[]
+    OR?: ExtensionTokenWhereInput[]
+    NOT?: ExtensionTokenWhereInput | ExtensionTokenWhereInput[]
+    userId?: UuidFilter<"ExtensionToken"> | string
+    name?: StringFilter<"ExtensionToken"> | string
+    lastUsedAt?: DateTimeNullableFilter<"ExtensionToken"> | Date | string | null
+    expiresAt?: DateTimeFilter<"ExtensionToken"> | Date | string
+    revokedAt?: DateTimeNullableFilter<"ExtensionToken"> | Date | string | null
+    createdAt?: DateTimeFilter<"ExtensionToken"> | Date | string
+    user?: XOR<UserScalarRelationFilter, UserWhereInput>
+  }, "id" | "tokenHash">
+
+  export type ExtensionTokenOrderByWithAggregationInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    tokenHash?: SortOrder
+    name?: SortOrder
+    lastUsedAt?: SortOrderInput | SortOrder
+    expiresAt?: SortOrder
+    revokedAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    _count?: ExtensionTokenCountOrderByAggregateInput
+    _max?: ExtensionTokenMaxOrderByAggregateInput
+    _min?: ExtensionTokenMinOrderByAggregateInput
+  }
+
+  export type ExtensionTokenScalarWhereWithAggregatesInput = {
+    AND?: ExtensionTokenScalarWhereWithAggregatesInput | ExtensionTokenScalarWhereWithAggregatesInput[]
+    OR?: ExtensionTokenScalarWhereWithAggregatesInput[]
+    NOT?: ExtensionTokenScalarWhereWithAggregatesInput | ExtensionTokenScalarWhereWithAggregatesInput[]
+    id?: UuidWithAggregatesFilter<"ExtensionToken"> | string
+    userId?: UuidWithAggregatesFilter<"ExtensionToken"> | string
+    tokenHash?: StringWithAggregatesFilter<"ExtensionToken"> | string
+    name?: StringWithAggregatesFilter<"ExtensionToken"> | string
+    lastUsedAt?: DateTimeNullableWithAggregatesFilter<"ExtensionToken"> | Date | string | null
+    expiresAt?: DateTimeWithAggregatesFilter<"ExtensionToken"> | Date | string
+    revokedAt?: DateTimeNullableWithAggregatesFilter<"ExtensionToken"> | Date | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"ExtensionToken"> | Date | string
+  }
+
   export type OnboardingStateWhereInput = {
     AND?: OnboardingStateWhereInput | OnboardingStateWhereInput[]
     OR?: OnboardingStateWhereInput[]
@@ -20420,6 +21807,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateInput = {
@@ -20443,6 +21831,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserUpdateInput = {
@@ -20466,6 +21855,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateInput = {
@@ -20489,6 +21879,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type UserCreateManyInput = {
@@ -21616,6 +23007,82 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type ExtensionTokenCreateInput = {
+    id?: string
+    tokenHash: string
+    name?: string
+    lastUsedAt?: Date | string | null
+    expiresAt: Date | string
+    revokedAt?: Date | string | null
+    createdAt?: Date | string
+    user: UserCreateNestedOneWithoutExtensionTokensInput
+  }
+
+  export type ExtensionTokenUncheckedCreateInput = {
+    id?: string
+    userId: string
+    tokenHash: string
+    name?: string
+    lastUsedAt?: Date | string | null
+    expiresAt: Date | string
+    revokedAt?: Date | string | null
+    createdAt?: Date | string
+  }
+
+  export type ExtensionTokenUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    tokenHash?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    lastUsedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    user?: UserUpdateOneRequiredWithoutExtensionTokensNestedInput
+  }
+
+  export type ExtensionTokenUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    tokenHash?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    lastUsedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ExtensionTokenCreateManyInput = {
+    id?: string
+    userId: string
+    tokenHash: string
+    name?: string
+    lastUsedAt?: Date | string | null
+    expiresAt: Date | string
+    revokedAt?: Date | string | null
+    createdAt?: Date | string
+  }
+
+  export type ExtensionTokenUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    tokenHash?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    lastUsedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ExtensionTokenUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    tokenHash?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    lastUsedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type OnboardingStateCreateInput = {
     id?: string
     stage?: $Enums.OnboardingStage
@@ -21818,6 +23285,12 @@ export namespace Prisma {
     none?: ApplicationBatchTaskWhereInput
   }
 
+  export type ExtensionTokenListRelationFilter = {
+    every?: ExtensionTokenWhereInput
+    some?: ExtensionTokenWhereInput
+    none?: ExtensionTokenWhereInput
+  }
+
   export type SortOrderInput = {
     sort: SortOrder
     nulls?: NullsOrder
@@ -21868,6 +23341,10 @@ export namespace Prisma {
   }
 
   export type ApplicationBatchTaskOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type ExtensionTokenOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
@@ -22842,6 +24319,39 @@ export namespace Prisma {
     version?: SortOrder
   }
 
+  export type ExtensionTokenCountOrderByAggregateInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    tokenHash?: SortOrder
+    name?: SortOrder
+    lastUsedAt?: SortOrder
+    expiresAt?: SortOrder
+    revokedAt?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type ExtensionTokenMaxOrderByAggregateInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    tokenHash?: SortOrder
+    name?: SortOrder
+    lastUsedAt?: SortOrder
+    expiresAt?: SortOrder
+    revokedAt?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type ExtensionTokenMinOrderByAggregateInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    tokenHash?: SortOrder
+    name?: SortOrder
+    lastUsedAt?: SortOrder
+    expiresAt?: SortOrder
+    revokedAt?: SortOrder
+    createdAt?: SortOrder
+  }
+
   export type EnumOnboardingStageFilter<$PrismaModel = never> = {
     equals?: $Enums.OnboardingStage | EnumOnboardingStageFieldRefInput<$PrismaModel>
     in?: $Enums.OnboardingStage[] | ListEnumOnboardingStageFieldRefInput<$PrismaModel>
@@ -22980,6 +24490,13 @@ export namespace Prisma {
     connect?: ApplicationBatchTaskWhereUniqueInput | ApplicationBatchTaskWhereUniqueInput[]
   }
 
+  export type ExtensionTokenCreateNestedManyWithoutUserInput = {
+    create?: XOR<ExtensionTokenCreateWithoutUserInput, ExtensionTokenUncheckedCreateWithoutUserInput> | ExtensionTokenCreateWithoutUserInput[] | ExtensionTokenUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: ExtensionTokenCreateOrConnectWithoutUserInput | ExtensionTokenCreateOrConnectWithoutUserInput[]
+    createMany?: ExtensionTokenCreateManyUserInputEnvelope
+    connect?: ExtensionTokenWhereUniqueInput | ExtensionTokenWhereUniqueInput[]
+  }
+
   export type AccountUncheckedCreateNestedManyWithoutUserInput = {
     create?: XOR<AccountCreateWithoutUserInput, AccountUncheckedCreateWithoutUserInput> | AccountCreateWithoutUserInput[] | AccountUncheckedCreateWithoutUserInput[]
     connectOrCreate?: AccountCreateOrConnectWithoutUserInput | AccountCreateOrConnectWithoutUserInput[]
@@ -23068,6 +24585,13 @@ export namespace Prisma {
     connectOrCreate?: ApplicationBatchTaskCreateOrConnectWithoutUserInput | ApplicationBatchTaskCreateOrConnectWithoutUserInput[]
     createMany?: ApplicationBatchTaskCreateManyUserInputEnvelope
     connect?: ApplicationBatchTaskWhereUniqueInput | ApplicationBatchTaskWhereUniqueInput[]
+  }
+
+  export type ExtensionTokenUncheckedCreateNestedManyWithoutUserInput = {
+    create?: XOR<ExtensionTokenCreateWithoutUserInput, ExtensionTokenUncheckedCreateWithoutUserInput> | ExtensionTokenCreateWithoutUserInput[] | ExtensionTokenUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: ExtensionTokenCreateOrConnectWithoutUserInput | ExtensionTokenCreateOrConnectWithoutUserInput[]
+    createMany?: ExtensionTokenCreateManyUserInputEnvelope
+    connect?: ExtensionTokenWhereUniqueInput | ExtensionTokenWhereUniqueInput[]
   }
 
   export type StringFieldUpdateOperationsInput = {
@@ -23264,6 +24788,20 @@ export namespace Prisma {
     deleteMany?: ApplicationBatchTaskScalarWhereInput | ApplicationBatchTaskScalarWhereInput[]
   }
 
+  export type ExtensionTokenUpdateManyWithoutUserNestedInput = {
+    create?: XOR<ExtensionTokenCreateWithoutUserInput, ExtensionTokenUncheckedCreateWithoutUserInput> | ExtensionTokenCreateWithoutUserInput[] | ExtensionTokenUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: ExtensionTokenCreateOrConnectWithoutUserInput | ExtensionTokenCreateOrConnectWithoutUserInput[]
+    upsert?: ExtensionTokenUpsertWithWhereUniqueWithoutUserInput | ExtensionTokenUpsertWithWhereUniqueWithoutUserInput[]
+    createMany?: ExtensionTokenCreateManyUserInputEnvelope
+    set?: ExtensionTokenWhereUniqueInput | ExtensionTokenWhereUniqueInput[]
+    disconnect?: ExtensionTokenWhereUniqueInput | ExtensionTokenWhereUniqueInput[]
+    delete?: ExtensionTokenWhereUniqueInput | ExtensionTokenWhereUniqueInput[]
+    connect?: ExtensionTokenWhereUniqueInput | ExtensionTokenWhereUniqueInput[]
+    update?: ExtensionTokenUpdateWithWhereUniqueWithoutUserInput | ExtensionTokenUpdateWithWhereUniqueWithoutUserInput[]
+    updateMany?: ExtensionTokenUpdateManyWithWhereWithoutUserInput | ExtensionTokenUpdateManyWithWhereWithoutUserInput[]
+    deleteMany?: ExtensionTokenScalarWhereInput | ExtensionTokenScalarWhereInput[]
+  }
+
   export type AccountUncheckedUpdateManyWithoutUserNestedInput = {
     create?: XOR<AccountCreateWithoutUserInput, AccountUncheckedCreateWithoutUserInput> | AccountCreateWithoutUserInput[] | AccountUncheckedCreateWithoutUserInput[]
     connectOrCreate?: AccountCreateOrConnectWithoutUserInput | AccountCreateOrConnectWithoutUserInput[]
@@ -23440,6 +24978,20 @@ export namespace Prisma {
     update?: ApplicationBatchTaskUpdateWithWhereUniqueWithoutUserInput | ApplicationBatchTaskUpdateWithWhereUniqueWithoutUserInput[]
     updateMany?: ApplicationBatchTaskUpdateManyWithWhereWithoutUserInput | ApplicationBatchTaskUpdateManyWithWhereWithoutUserInput[]
     deleteMany?: ApplicationBatchTaskScalarWhereInput | ApplicationBatchTaskScalarWhereInput[]
+  }
+
+  export type ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput = {
+    create?: XOR<ExtensionTokenCreateWithoutUserInput, ExtensionTokenUncheckedCreateWithoutUserInput> | ExtensionTokenCreateWithoutUserInput[] | ExtensionTokenUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: ExtensionTokenCreateOrConnectWithoutUserInput | ExtensionTokenCreateOrConnectWithoutUserInput[]
+    upsert?: ExtensionTokenUpsertWithWhereUniqueWithoutUserInput | ExtensionTokenUpsertWithWhereUniqueWithoutUserInput[]
+    createMany?: ExtensionTokenCreateManyUserInputEnvelope
+    set?: ExtensionTokenWhereUniqueInput | ExtensionTokenWhereUniqueInput[]
+    disconnect?: ExtensionTokenWhereUniqueInput | ExtensionTokenWhereUniqueInput[]
+    delete?: ExtensionTokenWhereUniqueInput | ExtensionTokenWhereUniqueInput[]
+    connect?: ExtensionTokenWhereUniqueInput | ExtensionTokenWhereUniqueInput[]
+    update?: ExtensionTokenUpdateWithWhereUniqueWithoutUserInput | ExtensionTokenUpdateWithWhereUniqueWithoutUserInput[]
+    updateMany?: ExtensionTokenUpdateManyWithWhereWithoutUserInput | ExtensionTokenUpdateManyWithWhereWithoutUserInput[]
+    deleteMany?: ExtensionTokenScalarWhereInput | ExtensionTokenScalarWhereInput[]
   }
 
   export type UserCreateNestedOneWithoutAccountsInput = {
@@ -23932,6 +25484,20 @@ export namespace Prisma {
     upsert?: UserUpsertWithoutPromptRuleTemplatesInput
     connect?: UserWhereUniqueInput
     update?: XOR<XOR<UserUpdateToOneWithWhereWithoutPromptRuleTemplatesInput, UserUpdateWithoutPromptRuleTemplatesInput>, UserUncheckedUpdateWithoutPromptRuleTemplatesInput>
+  }
+
+  export type UserCreateNestedOneWithoutExtensionTokensInput = {
+    create?: XOR<UserCreateWithoutExtensionTokensInput, UserUncheckedCreateWithoutExtensionTokensInput>
+    connectOrCreate?: UserCreateOrConnectWithoutExtensionTokensInput
+    connect?: UserWhereUniqueInput
+  }
+
+  export type UserUpdateOneRequiredWithoutExtensionTokensNestedInput = {
+    create?: XOR<UserCreateWithoutExtensionTokensInput, UserUncheckedCreateWithoutExtensionTokensInput>
+    connectOrCreate?: UserCreateOrConnectWithoutExtensionTokensInput
+    upsert?: UserUpsertWithoutExtensionTokensInput
+    connect?: UserWhereUniqueInput
+    update?: XOR<XOR<UserUpdateToOneWithWhereWithoutExtensionTokensInput, UserUpdateWithoutExtensionTokensInput>, UserUncheckedUpdateWithoutExtensionTokensInput>
   }
 
   export type UserCreateNestedOneWithoutOnboardingStateInput = {
@@ -24794,6 +26360,36 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
+  export type ExtensionTokenCreateWithoutUserInput = {
+    id?: string
+    tokenHash: string
+    name?: string
+    lastUsedAt?: Date | string | null
+    expiresAt: Date | string
+    revokedAt?: Date | string | null
+    createdAt?: Date | string
+  }
+
+  export type ExtensionTokenUncheckedCreateWithoutUserInput = {
+    id?: string
+    tokenHash: string
+    name?: string
+    lastUsedAt?: Date | string | null
+    expiresAt: Date | string
+    revokedAt?: Date | string | null
+    createdAt?: Date | string
+  }
+
+  export type ExtensionTokenCreateOrConnectWithoutUserInput = {
+    where: ExtensionTokenWhereUniqueInput
+    create: XOR<ExtensionTokenCreateWithoutUserInput, ExtensionTokenUncheckedCreateWithoutUserInput>
+  }
+
+  export type ExtensionTokenCreateManyUserInputEnvelope = {
+    data: ExtensionTokenCreateManyUserInput | ExtensionTokenCreateManyUserInput[]
+    skipDuplicates?: boolean
+  }
+
   export type AccountUpsertWithWhereUniqueWithoutUserInput = {
     where: AccountWhereUniqueInput
     update: XOR<AccountUpdateWithoutUserInput, AccountUncheckedUpdateWithoutUserInput>
@@ -25209,6 +26805,36 @@ export namespace Prisma {
     updatedAt?: DateTimeFilter<"ApplicationBatchTask"> | Date | string
   }
 
+  export type ExtensionTokenUpsertWithWhereUniqueWithoutUserInput = {
+    where: ExtensionTokenWhereUniqueInput
+    update: XOR<ExtensionTokenUpdateWithoutUserInput, ExtensionTokenUncheckedUpdateWithoutUserInput>
+    create: XOR<ExtensionTokenCreateWithoutUserInput, ExtensionTokenUncheckedCreateWithoutUserInput>
+  }
+
+  export type ExtensionTokenUpdateWithWhereUniqueWithoutUserInput = {
+    where: ExtensionTokenWhereUniqueInput
+    data: XOR<ExtensionTokenUpdateWithoutUserInput, ExtensionTokenUncheckedUpdateWithoutUserInput>
+  }
+
+  export type ExtensionTokenUpdateManyWithWhereWithoutUserInput = {
+    where: ExtensionTokenScalarWhereInput
+    data: XOR<ExtensionTokenUpdateManyMutationInput, ExtensionTokenUncheckedUpdateManyWithoutUserInput>
+  }
+
+  export type ExtensionTokenScalarWhereInput = {
+    AND?: ExtensionTokenScalarWhereInput | ExtensionTokenScalarWhereInput[]
+    OR?: ExtensionTokenScalarWhereInput[]
+    NOT?: ExtensionTokenScalarWhereInput | ExtensionTokenScalarWhereInput[]
+    id?: UuidFilter<"ExtensionToken"> | string
+    userId?: UuidFilter<"ExtensionToken"> | string
+    tokenHash?: StringFilter<"ExtensionToken"> | string
+    name?: StringFilter<"ExtensionToken"> | string
+    lastUsedAt?: DateTimeNullableFilter<"ExtensionToken"> | Date | string | null
+    expiresAt?: DateTimeFilter<"ExtensionToken"> | Date | string
+    revokedAt?: DateTimeNullableFilter<"ExtensionToken"> | Date | string | null
+    createdAt?: DateTimeFilter<"ExtensionToken"> | Date | string
+  }
+
   export type UserCreateWithoutAccountsInput = {
     id?: string
     email?: string | null
@@ -25229,6 +26855,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutAccountsInput = {
@@ -25251,6 +26878,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutAccountsInput = {
@@ -25289,6 +26917,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutAccountsInput = {
@@ -25311,6 +26940,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type UserCreateWithoutSessionsInput = {
@@ -25333,6 +26963,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutSessionsInput = {
@@ -25355,6 +26986,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutSessionsInput = {
@@ -25393,6 +27025,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutSessionsInput = {
@@ -25415,6 +27048,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type UserCreateWithoutJobsInput = {
@@ -25437,6 +27071,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutJobsInput = {
@@ -25459,6 +27094,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutJobsInput = {
@@ -25573,6 +27209,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutJobsInput = {
@@ -25595,6 +27232,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type ApplicationUpsertWithWhereUniqueWithoutJobInput = {
@@ -25649,6 +27287,7 @@ export namespace Prisma {
     promptRuleTemplates?: PromptRuleTemplateCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutApplicationBatchesInput = {
@@ -25671,6 +27310,7 @@ export namespace Prisma {
     promptRuleTemplates?: PromptRuleTemplateUncheckedCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutApplicationBatchesInput = {
@@ -25745,6 +27385,7 @@ export namespace Prisma {
     promptRuleTemplates?: PromptRuleTemplateUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutApplicationBatchesInput = {
@@ -25767,6 +27408,7 @@ export namespace Prisma {
     promptRuleTemplates?: PromptRuleTemplateUncheckedUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type ApplicationBatchTaskUpsertWithWhereUniqueWithoutBatchInput = {
@@ -25836,6 +27478,7 @@ export namespace Prisma {
     promptRuleTemplates?: PromptRuleTemplateCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutApplicationBatchTasksInput = {
@@ -25858,6 +27501,7 @@ export namespace Prisma {
     promptRuleTemplates?: PromptRuleTemplateUncheckedCreateNestedManyWithoutUserInput
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutApplicationBatchTasksInput = {
@@ -25972,6 +27616,7 @@ export namespace Prisma {
     promptRuleTemplates?: PromptRuleTemplateUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutApplicationBatchTasksInput = {
@@ -25994,6 +27639,7 @@ export namespace Prisma {
     promptRuleTemplates?: PromptRuleTemplateUncheckedUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type JobUpsertWithoutApplicationBatchTasksInput = {
@@ -26061,6 +27707,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutDeletedJobUrlsInput = {
@@ -26083,6 +27730,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutDeletedJobUrlsInput = {
@@ -26121,6 +27769,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutDeletedJobUrlsInput = {
@@ -26143,6 +27792,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type UserCreateWithoutDailyCheckinsInput = {
@@ -26165,6 +27815,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutDailyCheckinsInput = {
@@ -26187,6 +27838,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutDailyCheckinsInput = {
@@ -26225,6 +27877,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutDailyCheckinsInput = {
@@ -26247,6 +27900,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type UserCreateWithoutFetchRunsInput = {
@@ -26269,6 +27923,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutFetchRunsInput = {
@@ -26291,6 +27946,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutFetchRunsInput = {
@@ -26329,6 +27985,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutFetchRunsInput = {
@@ -26351,6 +28008,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type UserCreateWithoutResumeProfilesInput = {
@@ -26373,6 +28031,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutResumeProfilesInput = {
@@ -26395,6 +28054,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutResumeProfilesInput = {
@@ -26497,6 +28157,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutResumeProfilesInput = {
@@ -26519,6 +28180,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type ApplicationUpsertWithWhereUniqueWithoutResumeProfileInput = {
@@ -26573,6 +28235,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutActiveResumeProfilesInput = {
@@ -26595,6 +28258,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutActiveResumeProfilesInput = {
@@ -26674,6 +28338,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutActiveResumeProfilesInput = {
@@ -26696,6 +28361,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type ResumeProfileUpsertWithoutActiveSelectionsInput = {
@@ -26765,6 +28431,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutApplicationsInput = {
@@ -26787,6 +28454,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutApplicationsInput = {
@@ -26905,6 +28573,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutApplicationsInput = {
@@ -26927,6 +28596,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type JobUpsertWithoutApplicationsInput = {
@@ -27041,6 +28711,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutPromptRuleTemplatesInput = {
@@ -27063,6 +28734,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutPromptRuleTemplatesInput = {
@@ -27101,6 +28773,7 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutPromptRuleTemplatesInput = {
@@ -27120,6 +28793,115 @@ export namespace Prisma {
     resumeProfiles?: ResumeProfileUncheckedUpdateManyWithoutUserNestedInput
     activeResumeProfiles?: ActiveResumeProfileUncheckedUpdateManyWithoutUserNestedInput
     applications?: ApplicationUncheckedUpdateManyWithoutUserNestedInput
+    onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
+    applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
+    applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
+  }
+
+  export type UserCreateWithoutExtensionTokensInput = {
+    id?: string
+    email?: string | null
+    name?: string | null
+    image?: string | null
+    emailVerified?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    accounts?: AccountCreateNestedManyWithoutUserInput
+    sessions?: SessionCreateNestedManyWithoutUserInput
+    jobs?: JobCreateNestedManyWithoutUserInput
+    fetchRuns?: FetchRunCreateNestedManyWithoutUserInput
+    deletedJobUrls?: DeletedJobUrlCreateNestedManyWithoutUserInput
+    dailyCheckins?: DailyCheckinCreateNestedManyWithoutUserInput
+    resumeProfiles?: ResumeProfileCreateNestedManyWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileCreateNestedManyWithoutUserInput
+    applications?: ApplicationCreateNestedManyWithoutUserInput
+    promptRuleTemplates?: PromptRuleTemplateCreateNestedManyWithoutUserInput
+    onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
+    applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
+    applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
+  }
+
+  export type UserUncheckedCreateWithoutExtensionTokensInput = {
+    id?: string
+    email?: string | null
+    name?: string | null
+    image?: string | null
+    emailVerified?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    accounts?: AccountUncheckedCreateNestedManyWithoutUserInput
+    sessions?: SessionUncheckedCreateNestedManyWithoutUserInput
+    jobs?: JobUncheckedCreateNestedManyWithoutUserInput
+    fetchRuns?: FetchRunUncheckedCreateNestedManyWithoutUserInput
+    deletedJobUrls?: DeletedJobUrlUncheckedCreateNestedManyWithoutUserInput
+    dailyCheckins?: DailyCheckinUncheckedCreateNestedManyWithoutUserInput
+    resumeProfiles?: ResumeProfileUncheckedCreateNestedManyWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedCreateNestedManyWithoutUserInput
+    applications?: ApplicationUncheckedCreateNestedManyWithoutUserInput
+    promptRuleTemplates?: PromptRuleTemplateUncheckedCreateNestedManyWithoutUserInput
+    onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
+    applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
+    applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
+  }
+
+  export type UserCreateOrConnectWithoutExtensionTokensInput = {
+    where: UserWhereUniqueInput
+    create: XOR<UserCreateWithoutExtensionTokensInput, UserUncheckedCreateWithoutExtensionTokensInput>
+  }
+
+  export type UserUpsertWithoutExtensionTokensInput = {
+    update: XOR<UserUpdateWithoutExtensionTokensInput, UserUncheckedUpdateWithoutExtensionTokensInput>
+    create: XOR<UserCreateWithoutExtensionTokensInput, UserUncheckedCreateWithoutExtensionTokensInput>
+    where?: UserWhereInput
+  }
+
+  export type UserUpdateToOneWithWhereWithoutExtensionTokensInput = {
+    where?: UserWhereInput
+    data: XOR<UserUpdateWithoutExtensionTokensInput, UserUncheckedUpdateWithoutExtensionTokensInput>
+  }
+
+  export type UserUpdateWithoutExtensionTokensInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    image?: NullableStringFieldUpdateOperationsInput | string | null
+    emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    accounts?: AccountUpdateManyWithoutUserNestedInput
+    sessions?: SessionUpdateManyWithoutUserNestedInput
+    jobs?: JobUpdateManyWithoutUserNestedInput
+    fetchRuns?: FetchRunUpdateManyWithoutUserNestedInput
+    deletedJobUrls?: DeletedJobUrlUpdateManyWithoutUserNestedInput
+    dailyCheckins?: DailyCheckinUpdateManyWithoutUserNestedInput
+    resumeProfiles?: ResumeProfileUpdateManyWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUpdateManyWithoutUserNestedInput
+    applications?: ApplicationUpdateManyWithoutUserNestedInput
+    promptRuleTemplates?: PromptRuleTemplateUpdateManyWithoutUserNestedInput
+    onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
+    applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
+    applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
+  }
+
+  export type UserUncheckedUpdateWithoutExtensionTokensInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    image?: NullableStringFieldUpdateOperationsInput | string | null
+    emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    accounts?: AccountUncheckedUpdateManyWithoutUserNestedInput
+    sessions?: SessionUncheckedUpdateManyWithoutUserNestedInput
+    jobs?: JobUncheckedUpdateManyWithoutUserNestedInput
+    fetchRuns?: FetchRunUncheckedUpdateManyWithoutUserNestedInput
+    deletedJobUrls?: DeletedJobUrlUncheckedUpdateManyWithoutUserNestedInput
+    dailyCheckins?: DailyCheckinUncheckedUpdateManyWithoutUserNestedInput
+    resumeProfiles?: ResumeProfileUncheckedUpdateManyWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedUpdateManyWithoutUserNestedInput
+    applications?: ApplicationUncheckedUpdateManyWithoutUserNestedInput
+    promptRuleTemplates?: PromptRuleTemplateUncheckedUpdateManyWithoutUserNestedInput
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
@@ -27145,6 +28927,7 @@ export namespace Prisma {
     promptRuleTemplates?: PromptRuleTemplateCreateNestedManyWithoutUserInput
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutOnboardingStateInput = {
@@ -27167,6 +28950,7 @@ export namespace Prisma {
     promptRuleTemplates?: PromptRuleTemplateUncheckedCreateNestedManyWithoutUserInput
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutOnboardingStateInput = {
@@ -27205,6 +28989,7 @@ export namespace Prisma {
     promptRuleTemplates?: PromptRuleTemplateUpdateManyWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutOnboardingStateInput = {
@@ -27227,6 +29012,7 @@ export namespace Prisma {
     promptRuleTemplates?: PromptRuleTemplateUncheckedUpdateManyWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type AccountCreateManyUserInput = {
@@ -27371,6 +29157,16 @@ export namespace Prisma {
     attempt?: number
     createdAt?: Date | string
     updatedAt?: Date | string
+  }
+
+  export type ExtensionTokenCreateManyUserInput = {
+    id?: string
+    tokenHash: string
+    name?: string
+    lastUsedAt?: Date | string | null
+    expiresAt: Date | string
+    revokedAt?: Date | string | null
+    createdAt?: Date | string
   }
 
   export type AccountUpdateWithoutUserInput = {
@@ -27813,6 +29609,36 @@ export namespace Prisma {
     attempt?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ExtensionTokenUpdateWithoutUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    tokenHash?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    lastUsedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ExtensionTokenUncheckedUpdateWithoutUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    tokenHash?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    lastUsedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ExtensionTokenUncheckedUpdateManyWithoutUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    tokenHash?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    lastUsedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type ApplicationCreateManyJobInput = {
