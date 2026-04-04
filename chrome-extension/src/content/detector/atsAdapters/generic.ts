@@ -5,7 +5,7 @@ import type { DetectedField } from "@ext/shared/types";
 export const genericAdapter: AtsAdapter = {
   name: "generic",
 
-  canHandle(): boolean {
+  canHandle(_url: string, _doc: Document): boolean {
     return true; // Catch-all
   },
 

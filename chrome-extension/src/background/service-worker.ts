@@ -1,6 +1,8 @@
 import type { MessageType, MessageResponse } from "@ext/shared/types";
 import { setToken, clearToken, getAuthStatus } from "./auth";
 import { fetchProfile, fetchFlatProfile, postSubmission, fetchSubmissions, fetchFieldMappings, putFieldMapping, matchJob, markJobApplied } from "./api";
+import { enqueue } from "./syncQueue";
+import { processQueue } from "./syncProcessor";
 
 /** Handle messages from content scripts and popup. */
 chrome.runtime.onMessage.addListener(
@@ -50,7 +52,12 @@ async function handleMessage(message: MessageType): Promise<MessageResponse> {
     }
 
     case "RECORD_SUBMISSION": {
-      await postSubmission(message.data as Record<string, unknown>);
+      try {
+        await postSubmission(message.data as Record<string, unknown>);
+      } catch {
+        // Offline or server error — queue for later sync
+        await enqueue("submission", message.data as Record<string, unknown>);
+      }
       return { success: true };
     }
 
@@ -65,8 +72,13 @@ async function handleMessage(message: MessageType): Promise<MessageResponse> {
     }
 
     case "PUT_FIELD_MAPPING": {
-      const mapping = await putFieldMapping(message.data as Record<string, unknown>);
-      return { success: true, data: mapping };
+      try {
+        const mapping = await putFieldMapping(message.data as Record<string, unknown>);
+        return { success: true, data: mapping };
+      } catch {
+        await enqueue("field_mapping", message.data as Record<string, unknown>);
+        return { success: true };
+      }
     }
 
     case "MATCH_JOB": {
@@ -106,3 +118,11 @@ chrome.commands.onCommand.addListener(async (command) => {
     }
   }
 });
+
+/** Process offline sync queue when connectivity is restored. */
+self.addEventListener("online", () => {
+  processQueue();
+});
+
+/** Also process queue on service worker startup (handles restart after being idle). */
+processQueue();

@@ -6,7 +6,7 @@ import { classifyField, buildSelector, getInputType } from "../fieldClassifier";
 export const leverAdapter: AtsAdapter = {
   name: "lever",
 
-  canHandle(url: string): boolean {
+  canHandle(url: string, _doc: Document): boolean {
     return /jobs\.lever\.co/i.test(url);
   },
 

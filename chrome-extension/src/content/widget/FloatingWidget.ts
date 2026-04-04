@@ -5,6 +5,7 @@
 
 import type { DetectedField } from "@ext/shared/types";
 import { FieldCategory, PROFILE_KEY_MAP } from "@ext/shared/fieldTaxonomy";
+import { t } from "@ext/shared/i18n";
 import type { FlatProfile } from "../filler/formFiller";
 
 
@@ -32,8 +33,8 @@ export class FloatingWidget {
     this.render();
   }
 
-  setProfile(profile: FlatProfile): void {
-    this.profile = profile;
+  setProfile(profile: FlatProfile | null | undefined): void {
+    this.profile = profile ?? {};
     this.render();
   }
 
@@ -75,10 +76,19 @@ export class FloatingWidget {
 
     const badge = document.createElement("div");
     badge.className = "jf-collapsed";
-    badge.innerHTML = `
-      <span class="jf-logo">J</span>
-      ${matched > 0 ? `<span class="jf-collapsed-badge">${matched}</span>` : ""}
-    `;
+
+    const logo = document.createElement("span");
+    logo.className = "jf-logo";
+    logo.textContent = "J";
+    badge.appendChild(logo);
+
+    if (matched > 0) {
+      const count = document.createElement("span");
+      count.className = "jf-collapsed-badge";
+      count.textContent = String(matched);
+      badge.appendChild(count);
+    }
+
     badge.addEventListener("click", () => this.toggle());
     this.root.appendChild(badge);
   }
@@ -98,27 +108,42 @@ export class FloatingWidget {
     // Header
     const header = document.createElement("div");
     header.className = "jf-header";
-    header.innerHTML = `
-      <div>
-        <span class="jf-header-title">Jobflow</span>
-        <span class="jf-header-badge">${matched}/${this.fields.length}</span>
-      </div>
-      <div class="jf-header-actions">
-        <button class="jf-header-btn jf-minimize-btn" title="Minimize">_</button>
-        <button class="jf-header-btn jf-close-btn" title="Close">x</button>
-      </div>
-    `;
-    this.root.appendChild(header);
 
-    header.querySelector(".jf-minimize-btn")?.addEventListener("click", () => this.toggle());
-    header.querySelector(".jf-close-btn")?.addEventListener("click", () => this.toggle());
+    const headerLeft = document.createElement("div");
+    const title = document.createElement("span");
+    title.className = "jf-header-title";
+    title.textContent = "Jobflow";
+    const badgeSpan = document.createElement("span");
+    badgeSpan.className = "jf-header-badge";
+    badgeSpan.textContent = `${matched}/${this.fields.length}`;
+    headerLeft.append(title, badgeSpan);
+
+    const headerActions = document.createElement("div");
+    headerActions.className = "jf-header-actions";
+    const minimizeBtn = document.createElement("button");
+    minimizeBtn.className = "jf-header-btn";
+    minimizeBtn.title = "Minimize";
+    minimizeBtn.textContent = "_";
+    minimizeBtn.addEventListener("click", () => this.toggle());
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "jf-header-btn";
+    closeBtn.title = "Close";
+    closeBtn.textContent = "x";
+    closeBtn.addEventListener("click", () => this.toggle());
+    headerActions.append(minimizeBtn, closeBtn);
+
+    header.append(headerLeft, headerActions);
+    this.root.appendChild(header);
 
     // Body — field list
     const body = document.createElement("div");
     body.className = "jf-body";
 
     if (this.fields.length === 0) {
-      body.innerHTML = '<div class="jf-empty">No form fields detected on this page.</div>';
+      const emptyDiv = document.createElement("div");
+      emptyDiv.className = "jf-empty";
+      emptyDiv.textContent = t("widget.noFields");
+      body.appendChild(emptyDiv);
     } else {
       const list = document.createElement("ul");
       list.className = "jf-field-list";
@@ -155,14 +180,18 @@ export class FloatingWidget {
     // Footer
     const footer = document.createElement("div");
     footer.className = "jf-footer";
-    footer.innerHTML = `
-      <button class="jf-btn-primary jf-fill-btn">Fill All</button>
-      <button class="jf-btn-secondary jf-record-btn">Record</button>
-    `;
+    const fillBtn = document.createElement("button");
+    fillBtn.className = "jf-btn-primary jf-fill-btn";
+    fillBtn.textContent = t("widget.fillAll");
+    const recordBtn = document.createElement("button");
+    recordBtn.className = "jf-btn-secondary jf-record-btn";
+    recordBtn.textContent = t("widget.record");
+    footer.appendChild(fillBtn);
+    footer.appendChild(recordBtn);
     this.root.appendChild(footer);
 
-    footer.querySelector(".jf-fill-btn")?.addEventListener("click", () => this.callbacks.onFill());
-    footer.querySelector(".jf-record-btn")?.addEventListener("click", () => this.callbacks.onRecordSubmission());
+    fillBtn.addEventListener("click", () => this.callbacks.onFill());
+    recordBtn.addEventListener("click", () => this.callbacks.onRecordSubmission());
   }
 
   destroy(): void {

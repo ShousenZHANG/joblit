@@ -1,18 +1,36 @@
 import { detectForms } from "./detector/formDetector";
-import { fillFields, type FlatProfile } from "./filler/formFiller";
+import { fillFields, advanceMultiStepForm, type FlatProfile, type HistoricalOverrides } from "./filler/formFiller";
 import { sendMessage } from "@ext/shared/messaging";
 import { mountWidget, unmountWidget, isWidgetMounted } from "./widget/mount";
 import { FloatingWidget } from "./widget/FloatingWidget";
 import { recordSubmission, interceptFormSubmits } from "./recorder/submissionRecorder";
-import type { DetectedField, FormDetectionResult } from "@ext/shared/types";
+import { generateFormSignature, matchFieldsFromHistory } from "./detector/similarity";
+import type { SubmissionRecord, MappingRule } from "./detector/similarity";
+import type { DetectedField, FormDetectionResult, SubmissionQueryParams, FieldMappingQueryParams } from "@ext/shared/types";
+import { STORAGE_KEYS } from "@ext/shared/constants";
 
 let widget: FloatingWidget | null = null;
 let currentDetection: FormDetectionResult | null = null;
 let currentProfile: FlatProfile | null = null;
 let cleanupSubmitListener: (() => void) | null = null;
 
+/** Load user preferences from storage. */
+async function loadPreferences(): Promise<{ autoFill: boolean; showWidget: boolean }> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(STORAGE_KEYS.PREFERENCES, (result) => {
+      const prefs = result[STORAGE_KEYS.PREFERENCES];
+      resolve({
+        autoFill: prefs?.autoFill ?? false,
+        showWidget: prefs?.showWidget ?? true,
+      });
+    });
+  });
+}
+
 /** Main entry point for the content script. */
 async function init() {
+  const prefs = await loadPreferences();
+
   // Listen for messages from background/popup
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === "TRIGGER_FILL") {
@@ -36,29 +54,51 @@ async function init() {
   setTimeout(() => {
     currentDetection = detectForms(document);
     if (currentDetection.fields.length > 0) {
-      initWidget(currentDetection);
+      // Mount widget if preference enabled
+      if (prefs.showWidget) {
+        initWidget(currentDetection);
+      }
+
       // Set up submit interception
       cleanupSubmitListener = interceptFormSubmits(
         currentDetection.fields,
         currentDetection.atsProvider,
       );
+
+      // Auto-fill if preference enabled
+      if (prefs.autoFill) {
+        performFill();
+      }
     }
   }, 1000);
 
   // Watch for SPA navigation / dynamic form loading
+  let lastUrl = window.location.href;
   const observer = new MutationObserver(() => {
-    const newDetection = detectForms(document);
-    if (newDetection.fields.length > 0 && newDetection.fields.length !== currentDetection?.fields.length) {
-      currentDetection = newDetection;
-      if (widget) {
-        widget.setFields(newDetection.fields);
+    try {
+      // Detect SPA URL changes
+      const currentUrl = window.location.href;
+      if (currentUrl !== lastUrl) {
+        lastUrl = currentUrl;
+        currentDetection = null;
+        currentProfile = null;
       }
-      // Re-setup submit interception
-      cleanupSubmitListener?.();
-      cleanupSubmitListener = interceptFormSubmits(
-        newDetection.fields,
-        newDetection.atsProvider,
-      );
+
+      const newDetection = detectForms(document);
+      if (newDetection.fields.length > 0 && newDetection.fields.length !== currentDetection?.fields.length) {
+        currentDetection = newDetection;
+        if (widget) {
+          widget.setFields(newDetection.fields);
+        }
+        // Re-setup submit interception
+        cleanupSubmitListener?.();
+        cleanupSubmitListener = interceptFormSubmits(
+          newDetection.fields,
+          newDetection.atsProvider,
+        );
+      }
+    } catch {
+      // Non-critical — observer fires frequently, don't crash on transient DOM states
     }
   });
 
@@ -108,6 +148,51 @@ function toggleWidget() {
   }
 }
 
+/** Fetch historical overrides for the current form. */
+async function fetchHistoricalOverrides(
+  fields: DetectedField[],
+  atsProvider: string,
+): Promise<HistoricalOverrides> {
+  const overrides: HistoricalOverrides = {};
+  const domain = window.location.hostname;
+  const signature = generateFormSignature(fields);
+
+  try {
+    const [subsResponse, rulesResponse] = await Promise.all([
+      sendMessage<SubmissionRecord[]>({
+        type: "GET_SUBMISSIONS",
+        params: { atsProvider, pageDomain: domain, limit: 20 },
+      }),
+      sendMessage<MappingRule[]>({
+        type: "GET_FIELD_MAPPINGS",
+        params: { atsProvider, pageDomain: domain },
+      }),
+    ]);
+
+    const submissions = Array.isArray(subsResponse.data) ? subsResponse.data : [];
+    const rules = Array.isArray(rulesResponse.data) ? rulesResponse.data : [];
+
+    if (submissions.length === 0 && rules.length === 0) return overrides;
+
+    const matches = matchFieldsFromHistory(
+      fields,
+      signature,
+      domain,
+      atsProvider,
+      submissions,
+      rules,
+    );
+
+    for (const [selector, match] of matches) {
+      overrides[selector] = match.value;
+    }
+  } catch {
+    // Non-critical — fall back to profile-only fill
+  }
+
+  return overrides;
+}
+
 /** Perform form detection and filling. */
 async function performFill() {
   if (!currentDetection) {
@@ -127,11 +212,33 @@ async function performFill() {
     currentProfile = response.data.flat;
   }
 
-  const result = fillFields(currentDetection.fields, currentProfile);
+  // Fetch historical overrides (non-blocking on failure)
+  const historicalOverrides = await fetchHistoricalOverrides(
+    currentDetection.fields,
+    currentDetection.atsProvider,
+  );
+
+  const result = fillFields(currentDetection.fields, currentProfile, historicalOverrides);
 
   // Update widget if present
   if (widget) {
     widget.setFields(currentDetection.fields);
+  }
+
+  // Attempt multi-step form advancement
+  if (result.filled > 0) {
+    setTimeout(() => {
+      const advanced = advanceMultiStepForm(document);
+      if (advanced) {
+        // Re-detect after page transition and fill next step
+        setTimeout(() => {
+          currentDetection = detectForms(document);
+          if (currentDetection.fields.length > 0) {
+            performFill();
+          }
+        }, 1500);
+      }
+    }, 500);
   }
 
   return {

@@ -4,20 +4,20 @@ import { workdayAdapter } from "./workday";
 describe("workdayAdapter", () => {
   describe("canHandle", () => {
     it("matches myworkdayjobs.com URLs", () => {
-      expect(workdayAdapter.canHandle("https://company.myworkdayjobs.com/en-US/jobs/job/city/title")).toBe(true);
+      expect(workdayAdapter.canHandle("https://company.myworkdayjobs.com/en-US/jobs/job/city/title", document)).toBe(true);
     });
 
     it("matches wd-prefixed URLs", () => {
-      expect(workdayAdapter.canHandle("https://company.wd5.myworkdayjobs.com/jobs")).toBe(true);
+      expect(workdayAdapter.canHandle("https://company.wd5.myworkdayjobs.com/jobs", document)).toBe(true);
     });
 
     it("matches workday.com job URLs", () => {
-      expect(workdayAdapter.canHandle("https://company.workday.com/en-US/job/12345")).toBe(true);
+      expect(workdayAdapter.canHandle("https://company.workday.com/en-US/job/12345", document)).toBe(true);
     });
 
     it("rejects non-Workday URLs", () => {
-      expect(workdayAdapter.canHandle("https://example.com/jobs")).toBe(false);
-      expect(workdayAdapter.canHandle("https://jobs.lever.co/company")).toBe(false);
+      expect(workdayAdapter.canHandle("https://example.com/jobs", document)).toBe(false);
+      expect(workdayAdapter.canHandle("https://jobs.lever.co/company", document)).toBe(false);
     });
   });
 

@@ -5,6 +5,9 @@ import { simulateInput, simulateSelect, simulateRadio, simulateCheckbox } from "
 /** Flat profile data from /api/ext/profile/flat. */
 export type FlatProfile = Record<string, string>;
 
+/** Historical override values keyed by field selector. */
+export type HistoricalOverrides = Record<string, string>;
+
 export interface FillResult {
   filled: number;
   skipped: number;
@@ -13,20 +16,55 @@ export interface FillResult {
     category: FieldCategory;
     value: string;
     filled: boolean;
+    source: "profile" | "historical" | "skipped";
   }>;
 }
 
 /** Minimum confidence threshold to auto-fill. */
 const MIN_CONFIDENCE = 0.15;
 
-/** Fill detected form fields with profile data. */
+/**
+ * Fill detected form fields with profile data, with optional historical overrides.
+ * Priority: historical override > profile value.
+ */
 export function fillFields(
   fields: DetectedField[],
   profile: FlatProfile,
+  historicalOverrides?: HistoricalOverrides,
 ): FillResult {
   const result: FillResult = { filled: 0, skipped: 0, fields: [] };
 
   for (const field of fields) {
+    // Skip file upload fields
+    if (field.inputType === "file") {
+      result.skipped++;
+      result.fields.push({
+        selector: field.selector,
+        category: field.category,
+        value: "",
+        filled: false,
+        source: "skipped",
+      });
+      continue;
+    }
+
+    // Check historical override first
+    const historicalValue = historicalOverrides?.[field.selector];
+    if (historicalValue) {
+      const filled = fillSingleField(field, historicalValue);
+      result.fields.push({
+        selector: field.selector,
+        category: field.category,
+        value: historicalValue,
+        filled,
+        source: "historical",
+      });
+      if (filled) result.filled++;
+      else result.skipped++;
+      continue;
+    }
+
+    // Fall back to profile value
     const profileKey = PROFILE_KEY_MAP[field.category];
     const value = profileKey ? (profile[profileKey] ?? "") : "";
 
@@ -37,18 +75,7 @@ export function fillFields(
         category: field.category,
         value: "",
         filled: false,
-      });
-      continue;
-    }
-
-    // Skip file upload fields
-    if (field.inputType === "file") {
-      result.skipped++;
-      result.fields.push({
-        selector: field.selector,
-        category: field.category,
-        value: "",
-        filled: false,
+        source: "skipped",
       });
       continue;
     }
@@ -59,6 +86,7 @@ export function fillFields(
       category: field.category,
       value,
       filled,
+      source: "profile",
     });
     if (filled) result.filled++;
     else result.skipped++;

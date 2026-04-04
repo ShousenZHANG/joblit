@@ -6,7 +6,7 @@ import { classifyField, buildSelector, getInputType } from "../fieldClassifier";
 export const workdayAdapter: AtsAdapter = {
   name: "workday",
 
-  canHandle(url: string): boolean {
+  canHandle(url: string, _doc: Document): boolean {
     return /myworkdayjobs\.com|\.wd[0-9]+\.myworkdayjobs\.com|workday\.com\/.*\/job/i.test(url);
   },
 

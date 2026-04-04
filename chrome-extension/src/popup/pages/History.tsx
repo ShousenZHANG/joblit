@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { t } from "@ext/shared/i18n";
 
 interface SubmissionRecord {
   id: string;
@@ -28,15 +29,15 @@ export function History() {
   }, []);
 
   if (loading) {
-    return <div style={{ textAlign: "center", padding: 24, color: "#888" }}>Loading history...</div>;
+    return <div style={{ textAlign: "center", padding: 24, color: "#888" }}>{t("app.loading")}</div>;
   }
 
   if (submissions.length === 0) {
     return (
       <div style={{ textAlign: "center", padding: 32, color: "#888" }}>
-        <div style={{ fontSize: 28, marginBottom: 8 }}>No submissions yet</div>
+        <div style={{ fontSize: 28, marginBottom: 8 }}>{t("history.empty")}</div>
         <div style={{ fontSize: 13 }}>
-          Fill a form on any ATS site and your submissions will appear here.
+          {t("history.emptyDesc")}
         </div>
       </div>
     );
@@ -45,7 +46,7 @@ export function History() {
   return (
     <div>
       <div style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>
-        {submissions.length} submission{submissions.length !== 1 ? "s" : ""}
+        {submissions.length} {t("history.title").toLowerCase()}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {submissions.map((sub) => (
@@ -86,7 +87,10 @@ function SubmissionCard({ submission }: { submission: SubmissionRecord }) {
         </span>
       </div>
       <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>
-        {submission.filledCount}/{submission.fieldCount} fields filled &middot; {timeAgo}
+        {t("history.fieldsFilled", {
+          filled: submission.filledCount,
+          total: submission.fieldCount,
+        })} &middot; {timeAgo}
       </div>
     </div>
   );

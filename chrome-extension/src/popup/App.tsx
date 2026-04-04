@@ -4,20 +4,22 @@ import { TokenSetup } from "./pages/TokenSetup";
 import { History } from "./pages/History";
 import { ProfileSelect } from "./pages/ProfileSelect";
 import { Options } from "./pages/Options";
+import { useI18n } from "@ext/shared/useI18n";
 
 type AuthState = "loading" | "setup" | "authenticated";
 type Tab = "dashboard" | "history" | "profile" | "options";
 
-const TAB_ITEMS: { key: Tab; label: string }[] = [
-  { key: "dashboard", label: "Home" },
-  { key: "history", label: "History" },
-  { key: "profile", label: "Profile" },
-  { key: "options", label: "Settings" },
-];
-
 export function App() {
+  const { t, ready } = useI18n();
   const [authState, setAuthState] = useState<AuthState>("loading");
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
+
+  const TAB_ITEMS: { key: Tab; label: string }[] = [
+    { key: "dashboard", label: t("tab.home") },
+    { key: "history", label: t("tab.history") },
+    { key: "profile", label: t("tab.profile") },
+    { key: "options", label: t("tab.settings") },
+  ];
 
   const checkAuth = useCallback(() => {
     chrome.runtime.sendMessage({ type: "GET_AUTH_STATUS" }, (response) => {
@@ -30,8 +32,16 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
+    if (ready) checkAuth();
+  }, [checkAuth, ready]);
+
+  if (!ready) {
+    return (
+      <div style={{ width: 360, minHeight: 400, fontFamily: "system-ui, sans-serif", textAlign: "center", padding: 40, color: "#888" }}>
+        {t("app.loading")}
+      </div>
+    );
+  }
 
   return (
     <div style={{ width: 360, minHeight: 400, fontFamily: "system-ui, sans-serif" }}>
@@ -51,7 +61,7 @@ export function App() {
 
       {authState === "loading" && (
         <div style={{ textAlign: "center", padding: 40, color: "#888" }}>
-          Loading...
+          {t("app.loading")}
         </div>
       )}
 

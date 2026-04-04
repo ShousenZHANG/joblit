@@ -6,7 +6,7 @@ import { classifyField, buildSelector, getInputType } from "../fieldClassifier";
 export const greenhouseAdapter: AtsAdapter = {
   name: "greenhouse",
 
-  canHandle(url: string): boolean {
+  canHandle(url: string, _doc: Document): boolean {
     return /boards\.greenhouse\.io|\.greenhouse\.io\/.*\/jobs/i.test(url);
   },
 

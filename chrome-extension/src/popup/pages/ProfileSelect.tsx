@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { STORAGE_KEYS } from "@ext/shared/constants";
+import { t } from "@ext/shared/i18n";
 
 interface ProfileInfo {
   profileName: string;
@@ -13,7 +14,7 @@ interface ProfileInfo {
 
 const SUPPORTED_LOCALES = [
   { value: "en-AU", label: "English (AU)" },
-  { value: "zh-CN", label: "Chinese (CN)" },
+  { value: "zh-CN", label: "中文 (CN)" },
 ] as const;
 
 export function ProfileSelect() {
@@ -37,7 +38,6 @@ export function ProfileSelect() {
   }, []);
 
   useEffect(() => {
-    // Load saved locale preference
     chrome.storage.local.get(STORAGE_KEYS.LOCALE, (result) => {
       const savedLocale = result[STORAGE_KEYS.LOCALE] ?? "en-AU";
       setCurrentLocale(savedLocale);
@@ -49,7 +49,6 @@ export function ProfileSelect() {
     (locale: string) => {
       setCurrentLocale(locale);
       chrome.storage.local.set({ [STORAGE_KEYS.LOCALE]: locale });
-      // Invalidate profile cache
       chrome.storage.local.remove(STORAGE_KEYS.CACHED_PROFILE);
       loadProfile(locale);
     },
@@ -60,7 +59,7 @@ export function ProfileSelect() {
     <div>
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-          Resume Locale
+          {t("profile.locale")}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {SUPPORTED_LOCALES.map(({ value, label }) => (
@@ -94,18 +93,18 @@ export function ProfileSelect() {
         }}
       >
         <div style={{ fontSize: 11, color: "#666", fontWeight: 600, marginBottom: 8 }}>
-          ACTIVE PROFILE
+          {t("profile.active")}
         </div>
 
         {loading ? (
-          <div style={{ color: "#888", fontSize: 13 }}>Loading...</div>
+          <div style={{ color: "#888", fontSize: 13 }}>{t("app.loading")}</div>
         ) : profile ? (
           <>
             <div style={{ fontSize: 14, fontWeight: 600 }}>
               {profile.flat?.fullName ?? "—"}
             </div>
             <div style={{ fontSize: 12, color: "#555", marginTop: 2 }}>
-              {profile.flat?.currentTitle ?? "No title set"}
+              {profile.flat?.currentTitle ?? "—"}
             </div>
             <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>
               {profile.flat?.email ?? "—"} &middot; {profile.profileName}
@@ -113,7 +112,7 @@ export function ProfileSelect() {
           </>
         ) : (
           <div style={{ color: "#888", fontSize: 13 }}>
-            No profile found for this locale. Create one in Jobflow.
+            {t("profile.noProfile")}
           </div>
         )}
       </div>
@@ -129,7 +128,7 @@ export function ProfileSelect() {
           color: "#92400e",
         }}
       >
-        Manage full profile details on Jobflow web &rarr; Resume section.
+        {t("profile.manageHint")}
       </div>
     </div>
   );

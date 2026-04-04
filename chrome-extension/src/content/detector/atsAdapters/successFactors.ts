@@ -6,7 +6,7 @@ import { classifyField, buildSelector, getInputType } from "../fieldClassifier";
 export const successFactorsAdapter: AtsAdapter = {
   name: "successfactors",
 
-  canHandle(url: string): boolean {
+  canHandle(url: string, _doc: Document): boolean {
     return /successfactors\.com|\.successfactors\.|sap\.com\/.*career/i.test(url);
   },
 

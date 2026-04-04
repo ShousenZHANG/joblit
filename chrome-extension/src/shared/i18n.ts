@@ -8,6 +8,12 @@ const messages: Record<Locale, Record<string, string>> = {
     "app.name": "Jobflow AutoFill",
     "app.loading": "Loading...",
 
+    // Tabs
+    "tab.home": "Home",
+    "tab.history": "History",
+    "tab.profile": "Profile",
+    "tab.settings": "Settings",
+
     // Auth
     "auth.connect": "Connect to Jobflow",
     "auth.connectDesc": "Generate an API token from your Jobflow account settings and paste it below.",
@@ -17,6 +23,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "auth.disconnect": "Disconnect",
     "auth.tokenInvalid": "Token is invalid or expired. Please check and try again.",
     "auth.tokenEmpty": "Please enter your API token",
+    "auth.setupHint": "Open Jobflow → Settings → Extension to generate a token",
 
     // Dashboard
     "dashboard.fillNow": "Fill Current Page",
@@ -51,13 +58,20 @@ const messages: Record<Locale, Record<string, string>> = {
     "options.title": "Settings",
     "options.apiBase": "API Base URL",
     "options.apiBaseDesc": "Change only if using a self-hosted Jobflow instance.",
+    "options.behavior": "Behavior",
     "options.autoFill": "Auto-fill on page load",
     "options.showWidget": "Show floating widget",
-    "options.saved": "Settings saved",
+    "options.save": "Save Settings",
+    "options.saved": "Saved!",
   },
   zh: {
     "app.name": "Jobflow 自动填充",
     "app.loading": "加载中...",
+
+    "tab.home": "首页",
+    "tab.history": "历史",
+    "tab.profile": "简历",
+    "tab.settings": "设置",
 
     "auth.connect": "连接 Jobflow",
     "auth.connectDesc": "从 Jobflow 账户设置中生成 API 令牌，粘贴到下方。",
@@ -67,6 +81,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "auth.disconnect": "断开连接",
     "auth.tokenInvalid": "令牌无效或已过期，请检查后重试。",
     "auth.tokenEmpty": "请输入 API 令牌",
+    "auth.setupHint": "打开 Jobflow → 设置 → 扩展 来生成令牌",
 
     "dashboard.fillNow": "填充当前页面",
     "dashboard.toggleWidget": "切换悬浮组件",
@@ -95,9 +110,11 @@ const messages: Record<Locale, Record<string, string>> = {
     "options.title": "设置",
     "options.apiBase": "API 地址",
     "options.apiBaseDesc": "仅在使用自托管 Jobflow 时修改。",
+    "options.behavior": "行为",
     "options.autoFill": "页面加载时自动填充",
     "options.showWidget": "显示悬浮组件",
-    "options.saved": "设置已保存",
+    "options.save": "保存设置",
+    "options.saved": "已保存！",
   },
 };
 

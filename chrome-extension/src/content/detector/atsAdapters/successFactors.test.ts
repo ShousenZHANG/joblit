@@ -4,19 +4,19 @@ import { successFactorsAdapter } from "./successFactors";
 describe("successFactorsAdapter", () => {
   describe("canHandle", () => {
     it("matches successfactors.com URLs", () => {
-      expect(successFactorsAdapter.canHandle("https://career.successfactors.com/apply")).toBe(true);
+      expect(successFactorsAdapter.canHandle("https://career.successfactors.com/apply", document)).toBe(true);
     });
 
     it("matches subdomain successfactors URLs", () => {
-      expect(successFactorsAdapter.canHandle("https://company.successfactors.com/career")).toBe(true);
+      expect(successFactorsAdapter.canHandle("https://company.successfactors.com/career", document)).toBe(true);
     });
 
     it("matches sap.com career URLs", () => {
-      expect(successFactorsAdapter.canHandle("https://jobs.sap.com/en/career/apply/12345")).toBe(true);
+      expect(successFactorsAdapter.canHandle("https://jobs.sap.com/en/career/apply/12345", document)).toBe(true);
     });
 
     it("rejects non-SuccessFactors URLs", () => {
-      expect(successFactorsAdapter.canHandle("https://example.com/jobs")).toBe(false);
+      expect(successFactorsAdapter.canHandle("https://example.com/jobs", document)).toBe(false);
     });
   });
 

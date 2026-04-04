@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { t } from "@ext/shared/i18n";
 
 interface DashboardProps {
   onDisconnect: () => void;
@@ -19,11 +20,19 @@ export function Dashboard({ onDisconnect }: DashboardProps) {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [error, setError] = useState("");
+
   useEffect(() => {
     chrome.runtime.sendMessage({ type: "GET_FLAT_PROFILE" }, (response) => {
       setLoading(false);
+      if (chrome.runtime.lastError) {
+        setError(t("error.network"));
+        return;
+      }
       if (response?.success && response.data) {
         setProfile(response.data);
+      } else if (response?.error) {
+        setError(response.error);
       }
     });
   }, []);
@@ -53,10 +62,10 @@ export function Dashboard({ onDisconnect }: DashboardProps) {
         marginBottom: 16,
       }}>
         <div style={{ fontSize: 11, color: "#0369a1", fontWeight: 600, marginBottom: 4 }}>
-          CONNECTED
+          {t("auth.connected")}
         </div>
         {loading ? (
-          <div style={{ color: "#666", fontSize: 13 }}>Loading profile...</div>
+          <div style={{ color: "#666", fontSize: 13 }}>{t("app.loading")}</div>
         ) : profile ? (
           <>
             <div style={{ fontSize: 15, fontWeight: 600 }}>
@@ -64,15 +73,19 @@ export function Dashboard({ onDisconnect }: DashboardProps) {
             </div>
             <div style={{ fontSize: 13, color: "#555" }}>
               {profile.flat?.currentTitle}
-              {profile.flat?.currentCompany ? ` at ${profile.flat.currentCompany}` : ""}
+              {profile.flat?.currentCompany ? ` @ ${profile.flat.currentCompany}` : ""}
             </div>
             <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>
               {profile.flat?.email} &middot; {profile.profileName} ({profile.locale})
             </div>
           </>
+        ) : error ? (
+          <div style={{ color: "#dc2626", fontSize: 13 }}>
+            {error}
+          </div>
         ) : (
           <div style={{ color: "#666", fontSize: 13 }}>
-            No profile found. Create one in Jobflow first.
+            {t("dashboard.noProfile")}
           </div>
         )}
       </div>
@@ -92,7 +105,7 @@ export function Dashboard({ onDisconnect }: DashboardProps) {
           marginBottom: 8,
         }}
       >
-        Fill Current Page
+        {t("dashboard.fillNow")}
       </button>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
@@ -128,7 +141,7 @@ export function Dashboard({ onDisconnect }: DashboardProps) {
             cursor: "pointer",
           }}
         >
-          Toggle Widget
+          {t("dashboard.toggleWidget")}
         </button>
       </div>
 
@@ -147,7 +160,7 @@ export function Dashboard({ onDisconnect }: DashboardProps) {
           cursor: "pointer",
         }}
       >
-        Disconnect
+        {t("auth.disconnect")}
       </button>
     </div>
   );

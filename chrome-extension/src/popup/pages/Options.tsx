@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { STORAGE_KEYS, DEFAULT_API_BASE } from "@ext/shared/constants";
+import { t } from "@ext/shared/i18n";
 
 interface Preferences {
   autoFill: boolean;
@@ -50,7 +51,7 @@ export function Options() {
     <div>
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-          API Base URL
+          {t("options.apiBase")}
         </div>
         <input
           type="url"
@@ -67,21 +68,21 @@ export function Options() {
           }}
         />
         <div style={{ fontSize: 11, color: "#888", marginTop: 4 }}>
-          Change only if using a self-hosted Jobflow instance.
+          {t("options.apiBaseDesc")}
         </div>
       </div>
 
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-          Behavior
+          {t("options.behavior")}
         </div>
         <ToggleRow
-          label="Auto-fill on page load"
+          label={t("options.autoFill")}
           checked={prefs.autoFill}
           onChange={() => togglePref("autoFill")}
         />
         <ToggleRow
-          label="Show floating widget"
+          label={t("options.showWidget")}
           checked={prefs.showWidget}
           onChange={() => togglePref("showWidget")}
         />
@@ -101,7 +102,7 @@ export function Options() {
           cursor: "pointer",
         }}
       >
-        {saved ? "Saved!" : "Save Settings"}
+        {saved ? t("options.saved") : t("options.save")}
       </button>
     </div>
   );

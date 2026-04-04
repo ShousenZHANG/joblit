@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { t } from "@ext/shared/i18n";
 
 interface TokenSetupProps {
   onConnected: () => void;
@@ -12,7 +13,7 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
   const handleConnect = useCallback(async () => {
     const trimmed = token.trim();
     if (!trimmed) {
-      setError("Please enter your API token");
+      setError(t("auth.tokenEmpty"));
       return;
     }
 
@@ -31,14 +32,14 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
               if (profileResponse?.success) {
                 onConnected();
               } else {
-                setError("Token is invalid or expired. Please check and try again.");
+                setError(t("auth.tokenInvalid"));
                 chrome.runtime.sendMessage({ type: "CLEAR_TOKEN" });
               }
             },
           );
         } else {
           setLoading(false);
-          setError("Failed to save token");
+          setError(t("error.unknown"));
         }
       },
     );
@@ -47,11 +48,10 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
   return (
     <div>
       <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
-        Connect to Jobflow
+        {t("auth.connect")}
       </h2>
       <p style={{ fontSize: 13, color: "#666", marginBottom: 16, lineHeight: 1.5 }}>
-        To get started, generate an API token from your Jobflow account settings
-        and paste it below.
+        {t("auth.connectDesc")}
       </p>
 
       <div style={{ marginBottom: 12 }}>
@@ -59,7 +59,7 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
           type="password"
           value={token}
           onChange={(e) => setToken(e.target.value)}
-          placeholder="jfext_..."
+          placeholder={t("auth.tokenPlaceholder")}
           style={{
             width: "100%",
             padding: "8px 12px",
@@ -95,11 +95,11 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
           cursor: loading ? "wait" : "pointer",
         }}
       >
-        {loading ? "Connecting..." : "Connect"}
+        {loading ? t("auth.connecting") : t("auth.connect")}
       </button>
 
       <p style={{ fontSize: 12, color: "#999", marginTop: 16, textAlign: "center" }}>
-        Open Jobflow &rarr; Settings &rarr; Extension to generate a token
+        {t("auth.setupHint")}
       </p>
     </div>
   );

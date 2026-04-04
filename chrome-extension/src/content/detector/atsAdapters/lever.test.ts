@@ -4,12 +4,12 @@ import { leverAdapter } from "./lever";
 describe("leverAdapter", () => {
   describe("canHandle", () => {
     it("matches jobs.lever.co URLs", () => {
-      expect(leverAdapter.canHandle("https://jobs.lever.co/company/abc-123")).toBe(true);
+      expect(leverAdapter.canHandle("https://jobs.lever.co/company/abc-123", document)).toBe(true);
     });
 
     it("rejects non-Lever URLs", () => {
-      expect(leverAdapter.canHandle("https://example.com/jobs")).toBe(false);
-      expect(leverAdapter.canHandle("https://boards.greenhouse.io/company")).toBe(false);
+      expect(leverAdapter.canHandle("https://example.com/jobs", document)).toBe(false);
+      expect(leverAdapter.canHandle("https://boards.greenhouse.io/company", document)).toBe(false);
     });
   });
 

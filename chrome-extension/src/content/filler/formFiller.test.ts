@@ -139,11 +139,13 @@ describe("fillFields", () => {
       category: FieldCategory.EMAIL,
       filled: true,
       value: "john@example.com",
+      source: "profile",
     });
     expect(result.fields[1]).toMatchObject({
       selector: "#b",
       category: FieldCategory.UNKNOWN,
       filled: false,
+      source: "skipped",
     });
   });
 
@@ -205,6 +207,80 @@ describe("fillFields", () => {
     const result = fillFields(fields, profileWithTerms);
     expect(result.filled).toBe(1);
     expect(el.checked).toBe(true);
+  });
+});
+
+describe("fillFields with historical overrides", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("uses historical override value over profile value", () => {
+    document.body.innerHTML = `<input id="email" />`;
+    const el = document.getElementById("email") as HTMLInputElement;
+
+    const fields: DetectedField[] = [
+      makeField({ element: el, selector: "#email", category: FieldCategory.EMAIL, confidence: 0.8 }),
+    ];
+
+    const result = fillFields(fields, sampleProfile, { "#email": "override@test.com" });
+    expect(result.filled).toBe(1);
+    expect(el.value).toBe("override@test.com");
+    expect(result.fields[0].source).toBe("historical");
+  });
+
+  it("falls back to profile when no historical override exists", () => {
+    document.body.innerHTML = `<input id="name" />`;
+    const el = document.getElementById("name") as HTMLInputElement;
+
+    const fields: DetectedField[] = [
+      makeField({ element: el, selector: "#name", category: FieldCategory.FULL_NAME, confidence: 0.8 }),
+    ];
+
+    const result = fillFields(fields, sampleProfile, {});
+    expect(result.filled).toBe(1);
+    expect(el.value).toBe("John Doe");
+    expect(result.fields[0].source).toBe("profile");
+  });
+
+  it("historical override bypasses confidence threshold and UNKNOWN category", () => {
+    document.body.innerHTML = `<input id="custom" />`;
+    const el = document.getElementById("custom") as HTMLInputElement;
+
+    const fields: DetectedField[] = [
+      makeField({ element: el, selector: "#custom", category: FieldCategory.UNKNOWN, confidence: 0.01 }),
+    ];
+
+    const result = fillFields(fields, sampleProfile, { "#custom": "historical value" });
+    expect(result.filled).toBe(1);
+    expect(el.value).toBe("historical value");
+    expect(result.fields[0].source).toBe("historical");
+  });
+
+  it("marks skipped fields with source 'skipped'", () => {
+    document.body.innerHTML = `<input id="x" />`;
+    const el = document.getElementById("x") as HTMLInputElement;
+
+    const fields: DetectedField[] = [
+      makeField({ element: el, selector: "#x", category: FieldCategory.UNKNOWN, confidence: 0.01 }),
+    ];
+
+    const result = fillFields(fields, sampleProfile);
+    expect(result.skipped).toBe(1);
+    expect(result.fields[0].source).toBe("skipped");
+  });
+
+  it("still skips file inputs even with historical override", () => {
+    document.body.innerHTML = `<input id="resume" type="file" />`;
+    const el = document.getElementById("resume") as HTMLInputElement;
+
+    const fields: DetectedField[] = [
+      makeField({ element: el, selector: "#resume", category: FieldCategory.RESUME_UPLOAD, confidence: 0.8, inputType: "file" }),
+    ];
+
+    const result = fillFields(fields, sampleProfile, { "#resume": "file.pdf" });
+    expect(result.skipped).toBe(1);
+    expect(result.fields[0].source).toBe("skipped");
   });
 });
 
