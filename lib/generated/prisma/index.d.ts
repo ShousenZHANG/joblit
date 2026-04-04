@@ -84,6 +84,16 @@ export type PromptRuleTemplate = $Result.DefaultSelection<Prisma.$PromptRuleTemp
  */
 export type ExtensionToken = $Result.DefaultSelection<Prisma.$ExtensionTokenPayload>
 /**
+ * Model FormSubmission
+ * 
+ */
+export type FormSubmission = $Result.DefaultSelection<Prisma.$FormSubmissionPayload>
+/**
+ * Model FieldMappingRule
+ * 
+ */
+export type FieldMappingRule = $Result.DefaultSelection<Prisma.$FieldMappingRulePayload>
+/**
  * Model OnboardingState
  * 
  */
@@ -436,6 +446,26 @@ export class PrismaClient<
     * ```
     */
   get extensionToken(): Prisma.ExtensionTokenDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.formSubmission`: Exposes CRUD operations for the **FormSubmission** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more FormSubmissions
+    * const formSubmissions = await prisma.formSubmission.findMany()
+    * ```
+    */
+  get formSubmission(): Prisma.FormSubmissionDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.fieldMappingRule`: Exposes CRUD operations for the **FieldMappingRule** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more FieldMappingRules
+    * const fieldMappingRules = await prisma.fieldMappingRule.findMany()
+    * ```
+    */
+  get fieldMappingRule(): Prisma.FieldMappingRuleDelegate<ExtArgs, ClientOptions>;
 
   /**
    * `prisma.onboardingState`: Exposes CRUD operations for the **OnboardingState** model.
@@ -894,6 +924,8 @@ export namespace Prisma {
     Application: 'Application',
     PromptRuleTemplate: 'PromptRuleTemplate',
     ExtensionToken: 'ExtensionToken',
+    FormSubmission: 'FormSubmission',
+    FieldMappingRule: 'FieldMappingRule',
     OnboardingState: 'OnboardingState'
   };
 
@@ -910,7 +942,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "user" | "account" | "session" | "job" | "applicationBatch" | "applicationBatchTask" | "deletedJobUrl" | "dailyCheckin" | "fetchRun" | "resumeProfile" | "activeResumeProfile" | "application" | "promptRuleTemplate" | "extensionToken" | "onboardingState"
+      modelProps: "user" | "account" | "session" | "job" | "applicationBatch" | "applicationBatchTask" | "deletedJobUrl" | "dailyCheckin" | "fetchRun" | "resumeProfile" | "activeResumeProfile" | "application" | "promptRuleTemplate" | "extensionToken" | "formSubmission" | "fieldMappingRule" | "onboardingState"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -1950,6 +1982,154 @@ export namespace Prisma {
           }
         }
       }
+      FormSubmission: {
+        payload: Prisma.$FormSubmissionPayload<ExtArgs>
+        fields: Prisma.FormSubmissionFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.FormSubmissionFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FormSubmissionPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.FormSubmissionFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FormSubmissionPayload>
+          }
+          findFirst: {
+            args: Prisma.FormSubmissionFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FormSubmissionPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.FormSubmissionFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FormSubmissionPayload>
+          }
+          findMany: {
+            args: Prisma.FormSubmissionFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FormSubmissionPayload>[]
+          }
+          create: {
+            args: Prisma.FormSubmissionCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FormSubmissionPayload>
+          }
+          createMany: {
+            args: Prisma.FormSubmissionCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.FormSubmissionCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FormSubmissionPayload>[]
+          }
+          delete: {
+            args: Prisma.FormSubmissionDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FormSubmissionPayload>
+          }
+          update: {
+            args: Prisma.FormSubmissionUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FormSubmissionPayload>
+          }
+          deleteMany: {
+            args: Prisma.FormSubmissionDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.FormSubmissionUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.FormSubmissionUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FormSubmissionPayload>[]
+          }
+          upsert: {
+            args: Prisma.FormSubmissionUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FormSubmissionPayload>
+          }
+          aggregate: {
+            args: Prisma.FormSubmissionAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateFormSubmission>
+          }
+          groupBy: {
+            args: Prisma.FormSubmissionGroupByArgs<ExtArgs>
+            result: $Utils.Optional<FormSubmissionGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.FormSubmissionCountArgs<ExtArgs>
+            result: $Utils.Optional<FormSubmissionCountAggregateOutputType> | number
+          }
+        }
+      }
+      FieldMappingRule: {
+        payload: Prisma.$FieldMappingRulePayload<ExtArgs>
+        fields: Prisma.FieldMappingRuleFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.FieldMappingRuleFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FieldMappingRulePayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.FieldMappingRuleFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FieldMappingRulePayload>
+          }
+          findFirst: {
+            args: Prisma.FieldMappingRuleFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FieldMappingRulePayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.FieldMappingRuleFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FieldMappingRulePayload>
+          }
+          findMany: {
+            args: Prisma.FieldMappingRuleFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FieldMappingRulePayload>[]
+          }
+          create: {
+            args: Prisma.FieldMappingRuleCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FieldMappingRulePayload>
+          }
+          createMany: {
+            args: Prisma.FieldMappingRuleCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.FieldMappingRuleCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FieldMappingRulePayload>[]
+          }
+          delete: {
+            args: Prisma.FieldMappingRuleDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FieldMappingRulePayload>
+          }
+          update: {
+            args: Prisma.FieldMappingRuleUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FieldMappingRulePayload>
+          }
+          deleteMany: {
+            args: Prisma.FieldMappingRuleDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.FieldMappingRuleUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.FieldMappingRuleUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FieldMappingRulePayload>[]
+          }
+          upsert: {
+            args: Prisma.FieldMappingRuleUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FieldMappingRulePayload>
+          }
+          aggregate: {
+            args: Prisma.FieldMappingRuleAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateFieldMappingRule>
+          }
+          groupBy: {
+            args: Prisma.FieldMappingRuleGroupByArgs<ExtArgs>
+            result: $Utils.Optional<FieldMappingRuleGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.FieldMappingRuleCountArgs<ExtArgs>
+            result: $Utils.Optional<FieldMappingRuleCountAggregateOutputType> | number
+          }
+        }
+      }
       OnboardingState: {
         payload: Prisma.$OnboardingStatePayload<ExtArgs>
         fields: Prisma.OnboardingStateFieldRefs
@@ -2146,6 +2326,8 @@ export namespace Prisma {
     application?: ApplicationOmit
     promptRuleTemplate?: PromptRuleTemplateOmit
     extensionToken?: ExtensionTokenOmit
+    formSubmission?: FormSubmissionOmit
+    fieldMappingRule?: FieldMappingRuleOmit
     onboardingState?: OnboardingStateOmit
   }
 
@@ -2240,6 +2422,8 @@ export namespace Prisma {
     applicationBatches: number
     applicationBatchTasks: number
     extensionTokens: number
+    formSubmissions: number
+    fieldMappingRules: number
   }
 
   export type UserCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -2256,6 +2440,8 @@ export namespace Prisma {
     applicationBatches?: boolean | UserCountOutputTypeCountApplicationBatchesArgs
     applicationBatchTasks?: boolean | UserCountOutputTypeCountApplicationBatchTasksArgs
     extensionTokens?: boolean | UserCountOutputTypeCountExtensionTokensArgs
+    formSubmissions?: boolean | UserCountOutputTypeCountFormSubmissionsArgs
+    fieldMappingRules?: boolean | UserCountOutputTypeCountFieldMappingRulesArgs
   }
 
   // Custom InputTypes
@@ -2360,6 +2546,20 @@ export namespace Prisma {
     where?: ExtensionTokenWhereInput
   }
 
+  /**
+   * UserCountOutputType without action
+   */
+  export type UserCountOutputTypeCountFormSubmissionsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: FormSubmissionWhereInput
+  }
+
+  /**
+   * UserCountOutputType without action
+   */
+  export type UserCountOutputTypeCountFieldMappingRulesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: FieldMappingRuleWhereInput
+  }
+
 
   /**
    * Count Type JobCountOutputType
@@ -2368,11 +2568,13 @@ export namespace Prisma {
   export type JobCountOutputType = {
     applications: number
     applicationBatchTasks: number
+    formSubmissions: number
   }
 
   export type JobCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     applications?: boolean | JobCountOutputTypeCountApplicationsArgs
     applicationBatchTasks?: boolean | JobCountOutputTypeCountApplicationBatchTasksArgs
+    formSubmissions?: boolean | JobCountOutputTypeCountFormSubmissionsArgs
   }
 
   // Custom InputTypes
@@ -2398,6 +2600,13 @@ export namespace Prisma {
    */
   export type JobCountOutputTypeCountApplicationBatchTasksArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: ApplicationBatchTaskWhereInput
+  }
+
+  /**
+   * JobCountOutputType without action
+   */
+  export type JobCountOutputTypeCountFormSubmissionsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: FormSubmissionWhereInput
   }
 
 
@@ -2670,6 +2879,8 @@ export namespace Prisma {
     applicationBatches?: boolean | User$applicationBatchesArgs<ExtArgs>
     applicationBatchTasks?: boolean | User$applicationBatchTasksArgs<ExtArgs>
     extensionTokens?: boolean | User$extensionTokensArgs<ExtArgs>
+    formSubmissions?: boolean | User$formSubmissionsArgs<ExtArgs>
+    fieldMappingRules?: boolean | User$fieldMappingRulesArgs<ExtArgs>
     _count?: boolean | UserCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["user"]>
 
@@ -2719,6 +2930,8 @@ export namespace Prisma {
     applicationBatches?: boolean | User$applicationBatchesArgs<ExtArgs>
     applicationBatchTasks?: boolean | User$applicationBatchTasksArgs<ExtArgs>
     extensionTokens?: boolean | User$extensionTokensArgs<ExtArgs>
+    formSubmissions?: boolean | User$formSubmissionsArgs<ExtArgs>
+    fieldMappingRules?: boolean | User$fieldMappingRulesArgs<ExtArgs>
     _count?: boolean | UserCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type UserIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
@@ -2741,6 +2954,8 @@ export namespace Prisma {
       applicationBatches: Prisma.$ApplicationBatchPayload<ExtArgs>[]
       applicationBatchTasks: Prisma.$ApplicationBatchTaskPayload<ExtArgs>[]
       extensionTokens: Prisma.$ExtensionTokenPayload<ExtArgs>[]
+      formSubmissions: Prisma.$FormSubmissionPayload<ExtArgs>[]
+      fieldMappingRules: Prisma.$FieldMappingRulePayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -3158,6 +3373,8 @@ export namespace Prisma {
     applicationBatches<T extends User$applicationBatchesArgs<ExtArgs> = {}>(args?: Subset<T, User$applicationBatchesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ApplicationBatchPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     applicationBatchTasks<T extends User$applicationBatchTasksArgs<ExtArgs> = {}>(args?: Subset<T, User$applicationBatchTasksArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ApplicationBatchTaskPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     extensionTokens<T extends User$extensionTokensArgs<ExtArgs> = {}>(args?: Subset<T, User$extensionTokensArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ExtensionTokenPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    formSubmissions<T extends User$formSubmissionsArgs<ExtArgs> = {}>(args?: Subset<T, User$formSubmissionsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FormSubmissionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    fieldMappingRules<T extends User$fieldMappingRulesArgs<ExtArgs> = {}>(args?: Subset<T, User$fieldMappingRulesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FieldMappingRulePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -3915,6 +4132,54 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: ExtensionTokenScalarFieldEnum | ExtensionTokenScalarFieldEnum[]
+  }
+
+  /**
+   * User.formSubmissions
+   */
+  export type User$formSubmissionsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FormSubmission
+     */
+    select?: FormSubmissionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FormSubmission
+     */
+    omit?: FormSubmissionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FormSubmissionInclude<ExtArgs> | null
+    where?: FormSubmissionWhereInput
+    orderBy?: FormSubmissionOrderByWithRelationInput | FormSubmissionOrderByWithRelationInput[]
+    cursor?: FormSubmissionWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: FormSubmissionScalarFieldEnum | FormSubmissionScalarFieldEnum[]
+  }
+
+  /**
+   * User.fieldMappingRules
+   */
+  export type User$fieldMappingRulesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FieldMappingRule
+     */
+    select?: FieldMappingRuleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FieldMappingRule
+     */
+    omit?: FieldMappingRuleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FieldMappingRuleInclude<ExtArgs> | null
+    where?: FieldMappingRuleWhereInput
+    orderBy?: FieldMappingRuleOrderByWithRelationInput | FieldMappingRuleOrderByWithRelationInput[]
+    cursor?: FieldMappingRuleWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: FieldMappingRuleScalarFieldEnum | FieldMappingRuleScalarFieldEnum[]
   }
 
   /**
@@ -6457,6 +6722,7 @@ export namespace Prisma {
     user?: boolean | UserDefaultArgs<ExtArgs>
     applications?: boolean | Job$applicationsArgs<ExtArgs>
     applicationBatchTasks?: boolean | Job$applicationBatchTasksArgs<ExtArgs>
+    formSubmissions?: boolean | Job$formSubmissionsArgs<ExtArgs>
     _count?: boolean | JobCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["job"]>
 
@@ -6515,6 +6781,7 @@ export namespace Prisma {
     user?: boolean | UserDefaultArgs<ExtArgs>
     applications?: boolean | Job$applicationsArgs<ExtArgs>
     applicationBatchTasks?: boolean | Job$applicationBatchTasksArgs<ExtArgs>
+    formSubmissions?: boolean | Job$formSubmissionsArgs<ExtArgs>
     _count?: boolean | JobCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type JobIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -6530,6 +6797,7 @@ export namespace Prisma {
       user: Prisma.$UserPayload<ExtArgs>
       applications: Prisma.$ApplicationPayload<ExtArgs>[]
       applicationBatchTasks: Prisma.$ApplicationBatchTaskPayload<ExtArgs>[]
+      formSubmissions: Prisma.$FormSubmissionPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -6942,6 +7210,7 @@ export namespace Prisma {
     user<T extends UserDefaultArgs<ExtArgs> = {}>(args?: Subset<T, UserDefaultArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
     applications<T extends Job$applicationsArgs<ExtArgs> = {}>(args?: Subset<T, Job$applicationsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ApplicationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     applicationBatchTasks<T extends Job$applicationBatchTasksArgs<ExtArgs> = {}>(args?: Subset<T, Job$applicationBatchTasksArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ApplicationBatchTaskPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    formSubmissions<T extends Job$formSubmissionsArgs<ExtArgs> = {}>(args?: Subset<T, Job$formSubmissionsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FormSubmissionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -7430,6 +7699,30 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: ApplicationBatchTaskScalarFieldEnum | ApplicationBatchTaskScalarFieldEnum[]
+  }
+
+  /**
+   * Job.formSubmissions
+   */
+  export type Job$formSubmissionsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FormSubmission
+     */
+    select?: FormSubmissionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FormSubmission
+     */
+    omit?: FormSubmissionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FormSubmissionInclude<ExtArgs> | null
+    where?: FormSubmissionWhereInput
+    orderBy?: FormSubmissionOrderByWithRelationInput | FormSubmissionOrderByWithRelationInput[]
+    cursor?: FormSubmissionWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: FormSubmissionScalarFieldEnum | FormSubmissionScalarFieldEnum[]
   }
 
   /**
@@ -18971,6 +19264,2371 @@ export namespace Prisma {
 
 
   /**
+   * Model FormSubmission
+   */
+
+  export type AggregateFormSubmission = {
+    _count: FormSubmissionCountAggregateOutputType | null
+    _min: FormSubmissionMinAggregateOutputType | null
+    _max: FormSubmissionMaxAggregateOutputType | null
+  }
+
+  export type FormSubmissionMinAggregateOutputType = {
+    id: string | null
+    userId: string | null
+    jobId: string | null
+    pageUrl: string | null
+    pageDomain: string | null
+    atsProvider: string | null
+    formSignature: string | null
+    submittedAt: Date | null
+    createdAt: Date | null
+  }
+
+  export type FormSubmissionMaxAggregateOutputType = {
+    id: string | null
+    userId: string | null
+    jobId: string | null
+    pageUrl: string | null
+    pageDomain: string | null
+    atsProvider: string | null
+    formSignature: string | null
+    submittedAt: Date | null
+    createdAt: Date | null
+  }
+
+  export type FormSubmissionCountAggregateOutputType = {
+    id: number
+    userId: number
+    jobId: number
+    pageUrl: number
+    pageDomain: number
+    atsProvider: number
+    formSignature: number
+    fieldValues: number
+    fieldMappings: number
+    submittedAt: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type FormSubmissionMinAggregateInputType = {
+    id?: true
+    userId?: true
+    jobId?: true
+    pageUrl?: true
+    pageDomain?: true
+    atsProvider?: true
+    formSignature?: true
+    submittedAt?: true
+    createdAt?: true
+  }
+
+  export type FormSubmissionMaxAggregateInputType = {
+    id?: true
+    userId?: true
+    jobId?: true
+    pageUrl?: true
+    pageDomain?: true
+    atsProvider?: true
+    formSignature?: true
+    submittedAt?: true
+    createdAt?: true
+  }
+
+  export type FormSubmissionCountAggregateInputType = {
+    id?: true
+    userId?: true
+    jobId?: true
+    pageUrl?: true
+    pageDomain?: true
+    atsProvider?: true
+    formSignature?: true
+    fieldValues?: true
+    fieldMappings?: true
+    submittedAt?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type FormSubmissionAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FormSubmission to aggregate.
+     */
+    where?: FormSubmissionWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FormSubmissions to fetch.
+     */
+    orderBy?: FormSubmissionOrderByWithRelationInput | FormSubmissionOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: FormSubmissionWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FormSubmissions from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FormSubmissions.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned FormSubmissions
+    **/
+    _count?: true | FormSubmissionCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: FormSubmissionMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: FormSubmissionMaxAggregateInputType
+  }
+
+  export type GetFormSubmissionAggregateType<T extends FormSubmissionAggregateArgs> = {
+        [P in keyof T & keyof AggregateFormSubmission]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateFormSubmission[P]>
+      : GetScalarType<T[P], AggregateFormSubmission[P]>
+  }
+
+
+
+
+  export type FormSubmissionGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: FormSubmissionWhereInput
+    orderBy?: FormSubmissionOrderByWithAggregationInput | FormSubmissionOrderByWithAggregationInput[]
+    by: FormSubmissionScalarFieldEnum[] | FormSubmissionScalarFieldEnum
+    having?: FormSubmissionScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: FormSubmissionCountAggregateInputType | true
+    _min?: FormSubmissionMinAggregateInputType
+    _max?: FormSubmissionMaxAggregateInputType
+  }
+
+  export type FormSubmissionGroupByOutputType = {
+    id: string
+    userId: string
+    jobId: string | null
+    pageUrl: string
+    pageDomain: string
+    atsProvider: string | null
+    formSignature: string
+    fieldValues: JsonValue
+    fieldMappings: JsonValue
+    submittedAt: Date
+    createdAt: Date
+    _count: FormSubmissionCountAggregateOutputType | null
+    _min: FormSubmissionMinAggregateOutputType | null
+    _max: FormSubmissionMaxAggregateOutputType | null
+  }
+
+  type GetFormSubmissionGroupByPayload<T extends FormSubmissionGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<FormSubmissionGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof FormSubmissionGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], FormSubmissionGroupByOutputType[P]>
+            : GetScalarType<T[P], FormSubmissionGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type FormSubmissionSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    userId?: boolean
+    jobId?: boolean
+    pageUrl?: boolean
+    pageDomain?: boolean
+    atsProvider?: boolean
+    formSignature?: boolean
+    fieldValues?: boolean
+    fieldMappings?: boolean
+    submittedAt?: boolean
+    createdAt?: boolean
+    user?: boolean | UserDefaultArgs<ExtArgs>
+    job?: boolean | FormSubmission$jobArgs<ExtArgs>
+  }, ExtArgs["result"]["formSubmission"]>
+
+  export type FormSubmissionSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    userId?: boolean
+    jobId?: boolean
+    pageUrl?: boolean
+    pageDomain?: boolean
+    atsProvider?: boolean
+    formSignature?: boolean
+    fieldValues?: boolean
+    fieldMappings?: boolean
+    submittedAt?: boolean
+    createdAt?: boolean
+    user?: boolean | UserDefaultArgs<ExtArgs>
+    job?: boolean | FormSubmission$jobArgs<ExtArgs>
+  }, ExtArgs["result"]["formSubmission"]>
+
+  export type FormSubmissionSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    userId?: boolean
+    jobId?: boolean
+    pageUrl?: boolean
+    pageDomain?: boolean
+    atsProvider?: boolean
+    formSignature?: boolean
+    fieldValues?: boolean
+    fieldMappings?: boolean
+    submittedAt?: boolean
+    createdAt?: boolean
+    user?: boolean | UserDefaultArgs<ExtArgs>
+    job?: boolean | FormSubmission$jobArgs<ExtArgs>
+  }, ExtArgs["result"]["formSubmission"]>
+
+  export type FormSubmissionSelectScalar = {
+    id?: boolean
+    userId?: boolean
+    jobId?: boolean
+    pageUrl?: boolean
+    pageDomain?: boolean
+    atsProvider?: boolean
+    formSignature?: boolean
+    fieldValues?: boolean
+    fieldMappings?: boolean
+    submittedAt?: boolean
+    createdAt?: boolean
+  }
+
+  export type FormSubmissionOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "userId" | "jobId" | "pageUrl" | "pageDomain" | "atsProvider" | "formSignature" | "fieldValues" | "fieldMappings" | "submittedAt" | "createdAt", ExtArgs["result"]["formSubmission"]>
+  export type FormSubmissionInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    user?: boolean | UserDefaultArgs<ExtArgs>
+    job?: boolean | FormSubmission$jobArgs<ExtArgs>
+  }
+  export type FormSubmissionIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    user?: boolean | UserDefaultArgs<ExtArgs>
+    job?: boolean | FormSubmission$jobArgs<ExtArgs>
+  }
+  export type FormSubmissionIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    user?: boolean | UserDefaultArgs<ExtArgs>
+    job?: boolean | FormSubmission$jobArgs<ExtArgs>
+  }
+
+  export type $FormSubmissionPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "FormSubmission"
+    objects: {
+      user: Prisma.$UserPayload<ExtArgs>
+      job: Prisma.$JobPayload<ExtArgs> | null
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      userId: string
+      jobId: string | null
+      pageUrl: string
+      pageDomain: string
+      atsProvider: string | null
+      formSignature: string
+      fieldValues: Prisma.JsonValue
+      fieldMappings: Prisma.JsonValue
+      submittedAt: Date
+      createdAt: Date
+    }, ExtArgs["result"]["formSubmission"]>
+    composites: {}
+  }
+
+  type FormSubmissionGetPayload<S extends boolean | null | undefined | FormSubmissionDefaultArgs> = $Result.GetResult<Prisma.$FormSubmissionPayload, S>
+
+  type FormSubmissionCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<FormSubmissionFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: FormSubmissionCountAggregateInputType | true
+    }
+
+  export interface FormSubmissionDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['FormSubmission'], meta: { name: 'FormSubmission' } }
+    /**
+     * Find zero or one FormSubmission that matches the filter.
+     * @param {FormSubmissionFindUniqueArgs} args - Arguments to find a FormSubmission
+     * @example
+     * // Get one FormSubmission
+     * const formSubmission = await prisma.formSubmission.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends FormSubmissionFindUniqueArgs>(args: SelectSubset<T, FormSubmissionFindUniqueArgs<ExtArgs>>): Prisma__FormSubmissionClient<$Result.GetResult<Prisma.$FormSubmissionPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one FormSubmission that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {FormSubmissionFindUniqueOrThrowArgs} args - Arguments to find a FormSubmission
+     * @example
+     * // Get one FormSubmission
+     * const formSubmission = await prisma.formSubmission.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends FormSubmissionFindUniqueOrThrowArgs>(args: SelectSubset<T, FormSubmissionFindUniqueOrThrowArgs<ExtArgs>>): Prisma__FormSubmissionClient<$Result.GetResult<Prisma.$FormSubmissionPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FormSubmission that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FormSubmissionFindFirstArgs} args - Arguments to find a FormSubmission
+     * @example
+     * // Get one FormSubmission
+     * const formSubmission = await prisma.formSubmission.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends FormSubmissionFindFirstArgs>(args?: SelectSubset<T, FormSubmissionFindFirstArgs<ExtArgs>>): Prisma__FormSubmissionClient<$Result.GetResult<Prisma.$FormSubmissionPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FormSubmission that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FormSubmissionFindFirstOrThrowArgs} args - Arguments to find a FormSubmission
+     * @example
+     * // Get one FormSubmission
+     * const formSubmission = await prisma.formSubmission.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends FormSubmissionFindFirstOrThrowArgs>(args?: SelectSubset<T, FormSubmissionFindFirstOrThrowArgs<ExtArgs>>): Prisma__FormSubmissionClient<$Result.GetResult<Prisma.$FormSubmissionPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more FormSubmissions that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FormSubmissionFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all FormSubmissions
+     * const formSubmissions = await prisma.formSubmission.findMany()
+     * 
+     * // Get first 10 FormSubmissions
+     * const formSubmissions = await prisma.formSubmission.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const formSubmissionWithIdOnly = await prisma.formSubmission.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends FormSubmissionFindManyArgs>(args?: SelectSubset<T, FormSubmissionFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FormSubmissionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a FormSubmission.
+     * @param {FormSubmissionCreateArgs} args - Arguments to create a FormSubmission.
+     * @example
+     * // Create one FormSubmission
+     * const FormSubmission = await prisma.formSubmission.create({
+     *   data: {
+     *     // ... data to create a FormSubmission
+     *   }
+     * })
+     * 
+     */
+    create<T extends FormSubmissionCreateArgs>(args: SelectSubset<T, FormSubmissionCreateArgs<ExtArgs>>): Prisma__FormSubmissionClient<$Result.GetResult<Prisma.$FormSubmissionPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many FormSubmissions.
+     * @param {FormSubmissionCreateManyArgs} args - Arguments to create many FormSubmissions.
+     * @example
+     * // Create many FormSubmissions
+     * const formSubmission = await prisma.formSubmission.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends FormSubmissionCreateManyArgs>(args?: SelectSubset<T, FormSubmissionCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many FormSubmissions and returns the data saved in the database.
+     * @param {FormSubmissionCreateManyAndReturnArgs} args - Arguments to create many FormSubmissions.
+     * @example
+     * // Create many FormSubmissions
+     * const formSubmission = await prisma.formSubmission.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many FormSubmissions and only return the `id`
+     * const formSubmissionWithIdOnly = await prisma.formSubmission.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends FormSubmissionCreateManyAndReturnArgs>(args?: SelectSubset<T, FormSubmissionCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FormSubmissionPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a FormSubmission.
+     * @param {FormSubmissionDeleteArgs} args - Arguments to delete one FormSubmission.
+     * @example
+     * // Delete one FormSubmission
+     * const FormSubmission = await prisma.formSubmission.delete({
+     *   where: {
+     *     // ... filter to delete one FormSubmission
+     *   }
+     * })
+     * 
+     */
+    delete<T extends FormSubmissionDeleteArgs>(args: SelectSubset<T, FormSubmissionDeleteArgs<ExtArgs>>): Prisma__FormSubmissionClient<$Result.GetResult<Prisma.$FormSubmissionPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one FormSubmission.
+     * @param {FormSubmissionUpdateArgs} args - Arguments to update one FormSubmission.
+     * @example
+     * // Update one FormSubmission
+     * const formSubmission = await prisma.formSubmission.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends FormSubmissionUpdateArgs>(args: SelectSubset<T, FormSubmissionUpdateArgs<ExtArgs>>): Prisma__FormSubmissionClient<$Result.GetResult<Prisma.$FormSubmissionPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more FormSubmissions.
+     * @param {FormSubmissionDeleteManyArgs} args - Arguments to filter FormSubmissions to delete.
+     * @example
+     * // Delete a few FormSubmissions
+     * const { count } = await prisma.formSubmission.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends FormSubmissionDeleteManyArgs>(args?: SelectSubset<T, FormSubmissionDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FormSubmissions.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FormSubmissionUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many FormSubmissions
+     * const formSubmission = await prisma.formSubmission.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends FormSubmissionUpdateManyArgs>(args: SelectSubset<T, FormSubmissionUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FormSubmissions and returns the data updated in the database.
+     * @param {FormSubmissionUpdateManyAndReturnArgs} args - Arguments to update many FormSubmissions.
+     * @example
+     * // Update many FormSubmissions
+     * const formSubmission = await prisma.formSubmission.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more FormSubmissions and only return the `id`
+     * const formSubmissionWithIdOnly = await prisma.formSubmission.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends FormSubmissionUpdateManyAndReturnArgs>(args: SelectSubset<T, FormSubmissionUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FormSubmissionPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one FormSubmission.
+     * @param {FormSubmissionUpsertArgs} args - Arguments to update or create a FormSubmission.
+     * @example
+     * // Update or create a FormSubmission
+     * const formSubmission = await prisma.formSubmission.upsert({
+     *   create: {
+     *     // ... data to create a FormSubmission
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the FormSubmission we want to update
+     *   }
+     * })
+     */
+    upsert<T extends FormSubmissionUpsertArgs>(args: SelectSubset<T, FormSubmissionUpsertArgs<ExtArgs>>): Prisma__FormSubmissionClient<$Result.GetResult<Prisma.$FormSubmissionPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of FormSubmissions.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FormSubmissionCountArgs} args - Arguments to filter FormSubmissions to count.
+     * @example
+     * // Count the number of FormSubmissions
+     * const count = await prisma.formSubmission.count({
+     *   where: {
+     *     // ... the filter for the FormSubmissions we want to count
+     *   }
+     * })
+    **/
+    count<T extends FormSubmissionCountArgs>(
+      args?: Subset<T, FormSubmissionCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], FormSubmissionCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a FormSubmission.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FormSubmissionAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends FormSubmissionAggregateArgs>(args: Subset<T, FormSubmissionAggregateArgs>): Prisma.PrismaPromise<GetFormSubmissionAggregateType<T>>
+
+    /**
+     * Group by FormSubmission.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FormSubmissionGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends FormSubmissionGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: FormSubmissionGroupByArgs['orderBy'] }
+        : { orderBy?: FormSubmissionGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, FormSubmissionGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetFormSubmissionGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the FormSubmission model
+   */
+  readonly fields: FormSubmissionFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for FormSubmission.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__FormSubmissionClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    user<T extends UserDefaultArgs<ExtArgs> = {}>(args?: Subset<T, UserDefaultArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    job<T extends FormSubmission$jobArgs<ExtArgs> = {}>(args?: Subset<T, FormSubmission$jobArgs<ExtArgs>>): Prisma__JobClient<$Result.GetResult<Prisma.$JobPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the FormSubmission model
+   */
+  interface FormSubmissionFieldRefs {
+    readonly id: FieldRef<"FormSubmission", 'String'>
+    readonly userId: FieldRef<"FormSubmission", 'String'>
+    readonly jobId: FieldRef<"FormSubmission", 'String'>
+    readonly pageUrl: FieldRef<"FormSubmission", 'String'>
+    readonly pageDomain: FieldRef<"FormSubmission", 'String'>
+    readonly atsProvider: FieldRef<"FormSubmission", 'String'>
+    readonly formSignature: FieldRef<"FormSubmission", 'String'>
+    readonly fieldValues: FieldRef<"FormSubmission", 'Json'>
+    readonly fieldMappings: FieldRef<"FormSubmission", 'Json'>
+    readonly submittedAt: FieldRef<"FormSubmission", 'DateTime'>
+    readonly createdAt: FieldRef<"FormSubmission", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * FormSubmission findUnique
+   */
+  export type FormSubmissionFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FormSubmission
+     */
+    select?: FormSubmissionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FormSubmission
+     */
+    omit?: FormSubmissionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FormSubmissionInclude<ExtArgs> | null
+    /**
+     * Filter, which FormSubmission to fetch.
+     */
+    where: FormSubmissionWhereUniqueInput
+  }
+
+  /**
+   * FormSubmission findUniqueOrThrow
+   */
+  export type FormSubmissionFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FormSubmission
+     */
+    select?: FormSubmissionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FormSubmission
+     */
+    omit?: FormSubmissionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FormSubmissionInclude<ExtArgs> | null
+    /**
+     * Filter, which FormSubmission to fetch.
+     */
+    where: FormSubmissionWhereUniqueInput
+  }
+
+  /**
+   * FormSubmission findFirst
+   */
+  export type FormSubmissionFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FormSubmission
+     */
+    select?: FormSubmissionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FormSubmission
+     */
+    omit?: FormSubmissionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FormSubmissionInclude<ExtArgs> | null
+    /**
+     * Filter, which FormSubmission to fetch.
+     */
+    where?: FormSubmissionWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FormSubmissions to fetch.
+     */
+    orderBy?: FormSubmissionOrderByWithRelationInput | FormSubmissionOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FormSubmissions.
+     */
+    cursor?: FormSubmissionWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FormSubmissions from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FormSubmissions.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FormSubmissions.
+     */
+    distinct?: FormSubmissionScalarFieldEnum | FormSubmissionScalarFieldEnum[]
+  }
+
+  /**
+   * FormSubmission findFirstOrThrow
+   */
+  export type FormSubmissionFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FormSubmission
+     */
+    select?: FormSubmissionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FormSubmission
+     */
+    omit?: FormSubmissionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FormSubmissionInclude<ExtArgs> | null
+    /**
+     * Filter, which FormSubmission to fetch.
+     */
+    where?: FormSubmissionWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FormSubmissions to fetch.
+     */
+    orderBy?: FormSubmissionOrderByWithRelationInput | FormSubmissionOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FormSubmissions.
+     */
+    cursor?: FormSubmissionWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FormSubmissions from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FormSubmissions.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FormSubmissions.
+     */
+    distinct?: FormSubmissionScalarFieldEnum | FormSubmissionScalarFieldEnum[]
+  }
+
+  /**
+   * FormSubmission findMany
+   */
+  export type FormSubmissionFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FormSubmission
+     */
+    select?: FormSubmissionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FormSubmission
+     */
+    omit?: FormSubmissionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FormSubmissionInclude<ExtArgs> | null
+    /**
+     * Filter, which FormSubmissions to fetch.
+     */
+    where?: FormSubmissionWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FormSubmissions to fetch.
+     */
+    orderBy?: FormSubmissionOrderByWithRelationInput | FormSubmissionOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing FormSubmissions.
+     */
+    cursor?: FormSubmissionWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FormSubmissions from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FormSubmissions.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FormSubmissions.
+     */
+    distinct?: FormSubmissionScalarFieldEnum | FormSubmissionScalarFieldEnum[]
+  }
+
+  /**
+   * FormSubmission create
+   */
+  export type FormSubmissionCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FormSubmission
+     */
+    select?: FormSubmissionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FormSubmission
+     */
+    omit?: FormSubmissionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FormSubmissionInclude<ExtArgs> | null
+    /**
+     * The data needed to create a FormSubmission.
+     */
+    data: XOR<FormSubmissionCreateInput, FormSubmissionUncheckedCreateInput>
+  }
+
+  /**
+   * FormSubmission createMany
+   */
+  export type FormSubmissionCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many FormSubmissions.
+     */
+    data: FormSubmissionCreateManyInput | FormSubmissionCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * FormSubmission createManyAndReturn
+   */
+  export type FormSubmissionCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FormSubmission
+     */
+    select?: FormSubmissionSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FormSubmission
+     */
+    omit?: FormSubmissionOmit<ExtArgs> | null
+    /**
+     * The data used to create many FormSubmissions.
+     */
+    data: FormSubmissionCreateManyInput | FormSubmissionCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FormSubmissionIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * FormSubmission update
+   */
+  export type FormSubmissionUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FormSubmission
+     */
+    select?: FormSubmissionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FormSubmission
+     */
+    omit?: FormSubmissionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FormSubmissionInclude<ExtArgs> | null
+    /**
+     * The data needed to update a FormSubmission.
+     */
+    data: XOR<FormSubmissionUpdateInput, FormSubmissionUncheckedUpdateInput>
+    /**
+     * Choose, which FormSubmission to update.
+     */
+    where: FormSubmissionWhereUniqueInput
+  }
+
+  /**
+   * FormSubmission updateMany
+   */
+  export type FormSubmissionUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update FormSubmissions.
+     */
+    data: XOR<FormSubmissionUpdateManyMutationInput, FormSubmissionUncheckedUpdateManyInput>
+    /**
+     * Filter which FormSubmissions to update
+     */
+    where?: FormSubmissionWhereInput
+    /**
+     * Limit how many FormSubmissions to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * FormSubmission updateManyAndReturn
+   */
+  export type FormSubmissionUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FormSubmission
+     */
+    select?: FormSubmissionSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FormSubmission
+     */
+    omit?: FormSubmissionOmit<ExtArgs> | null
+    /**
+     * The data used to update FormSubmissions.
+     */
+    data: XOR<FormSubmissionUpdateManyMutationInput, FormSubmissionUncheckedUpdateManyInput>
+    /**
+     * Filter which FormSubmissions to update
+     */
+    where?: FormSubmissionWhereInput
+    /**
+     * Limit how many FormSubmissions to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FormSubmissionIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * FormSubmission upsert
+   */
+  export type FormSubmissionUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FormSubmission
+     */
+    select?: FormSubmissionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FormSubmission
+     */
+    omit?: FormSubmissionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FormSubmissionInclude<ExtArgs> | null
+    /**
+     * The filter to search for the FormSubmission to update in case it exists.
+     */
+    where: FormSubmissionWhereUniqueInput
+    /**
+     * In case the FormSubmission found by the `where` argument doesn't exist, create a new FormSubmission with this data.
+     */
+    create: XOR<FormSubmissionCreateInput, FormSubmissionUncheckedCreateInput>
+    /**
+     * In case the FormSubmission was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<FormSubmissionUpdateInput, FormSubmissionUncheckedUpdateInput>
+  }
+
+  /**
+   * FormSubmission delete
+   */
+  export type FormSubmissionDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FormSubmission
+     */
+    select?: FormSubmissionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FormSubmission
+     */
+    omit?: FormSubmissionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FormSubmissionInclude<ExtArgs> | null
+    /**
+     * Filter which FormSubmission to delete.
+     */
+    where: FormSubmissionWhereUniqueInput
+  }
+
+  /**
+   * FormSubmission deleteMany
+   */
+  export type FormSubmissionDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FormSubmissions to delete
+     */
+    where?: FormSubmissionWhereInput
+    /**
+     * Limit how many FormSubmissions to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * FormSubmission.job
+   */
+  export type FormSubmission$jobArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Job
+     */
+    select?: JobSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Job
+     */
+    omit?: JobOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: JobInclude<ExtArgs> | null
+    where?: JobWhereInput
+  }
+
+  /**
+   * FormSubmission without action
+   */
+  export type FormSubmissionDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FormSubmission
+     */
+    select?: FormSubmissionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FormSubmission
+     */
+    omit?: FormSubmissionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FormSubmissionInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model FieldMappingRule
+   */
+
+  export type AggregateFieldMappingRule = {
+    _count: FieldMappingRuleCountAggregateOutputType | null
+    _avg: FieldMappingRuleAvgAggregateOutputType | null
+    _sum: FieldMappingRuleSumAggregateOutputType | null
+    _min: FieldMappingRuleMinAggregateOutputType | null
+    _max: FieldMappingRuleMaxAggregateOutputType | null
+  }
+
+  export type FieldMappingRuleAvgAggregateOutputType = {
+    confidence: number | null
+    useCount: number | null
+  }
+
+  export type FieldMappingRuleSumAggregateOutputType = {
+    confidence: number | null
+    useCount: number | null
+  }
+
+  export type FieldMappingRuleMinAggregateOutputType = {
+    id: string | null
+    userId: string | null
+    fieldSelector: string | null
+    fieldLabel: string | null
+    atsProvider: string | null
+    pageDomain: string | null
+    profilePath: string | null
+    staticValue: string | null
+    source: string | null
+    confidence: number | null
+    useCount: number | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type FieldMappingRuleMaxAggregateOutputType = {
+    id: string | null
+    userId: string | null
+    fieldSelector: string | null
+    fieldLabel: string | null
+    atsProvider: string | null
+    pageDomain: string | null
+    profilePath: string | null
+    staticValue: string | null
+    source: string | null
+    confidence: number | null
+    useCount: number | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type FieldMappingRuleCountAggregateOutputType = {
+    id: number
+    userId: number
+    fieldSelector: number
+    fieldLabel: number
+    atsProvider: number
+    pageDomain: number
+    profilePath: number
+    staticValue: number
+    source: number
+    confidence: number
+    useCount: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type FieldMappingRuleAvgAggregateInputType = {
+    confidence?: true
+    useCount?: true
+  }
+
+  export type FieldMappingRuleSumAggregateInputType = {
+    confidence?: true
+    useCount?: true
+  }
+
+  export type FieldMappingRuleMinAggregateInputType = {
+    id?: true
+    userId?: true
+    fieldSelector?: true
+    fieldLabel?: true
+    atsProvider?: true
+    pageDomain?: true
+    profilePath?: true
+    staticValue?: true
+    source?: true
+    confidence?: true
+    useCount?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type FieldMappingRuleMaxAggregateInputType = {
+    id?: true
+    userId?: true
+    fieldSelector?: true
+    fieldLabel?: true
+    atsProvider?: true
+    pageDomain?: true
+    profilePath?: true
+    staticValue?: true
+    source?: true
+    confidence?: true
+    useCount?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type FieldMappingRuleCountAggregateInputType = {
+    id?: true
+    userId?: true
+    fieldSelector?: true
+    fieldLabel?: true
+    atsProvider?: true
+    pageDomain?: true
+    profilePath?: true
+    staticValue?: true
+    source?: true
+    confidence?: true
+    useCount?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type FieldMappingRuleAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FieldMappingRule to aggregate.
+     */
+    where?: FieldMappingRuleWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FieldMappingRules to fetch.
+     */
+    orderBy?: FieldMappingRuleOrderByWithRelationInput | FieldMappingRuleOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: FieldMappingRuleWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FieldMappingRules from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FieldMappingRules.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned FieldMappingRules
+    **/
+    _count?: true | FieldMappingRuleCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: FieldMappingRuleAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: FieldMappingRuleSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: FieldMappingRuleMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: FieldMappingRuleMaxAggregateInputType
+  }
+
+  export type GetFieldMappingRuleAggregateType<T extends FieldMappingRuleAggregateArgs> = {
+        [P in keyof T & keyof AggregateFieldMappingRule]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateFieldMappingRule[P]>
+      : GetScalarType<T[P], AggregateFieldMappingRule[P]>
+  }
+
+
+
+
+  export type FieldMappingRuleGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: FieldMappingRuleWhereInput
+    orderBy?: FieldMappingRuleOrderByWithAggregationInput | FieldMappingRuleOrderByWithAggregationInput[]
+    by: FieldMappingRuleScalarFieldEnum[] | FieldMappingRuleScalarFieldEnum
+    having?: FieldMappingRuleScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: FieldMappingRuleCountAggregateInputType | true
+    _avg?: FieldMappingRuleAvgAggregateInputType
+    _sum?: FieldMappingRuleSumAggregateInputType
+    _min?: FieldMappingRuleMinAggregateInputType
+    _max?: FieldMappingRuleMaxAggregateInputType
+  }
+
+  export type FieldMappingRuleGroupByOutputType = {
+    id: string
+    userId: string
+    fieldSelector: string
+    fieldLabel: string | null
+    atsProvider: string | null
+    pageDomain: string | null
+    profilePath: string
+    staticValue: string | null
+    source: string
+    confidence: number
+    useCount: number
+    createdAt: Date
+    updatedAt: Date
+    _count: FieldMappingRuleCountAggregateOutputType | null
+    _avg: FieldMappingRuleAvgAggregateOutputType | null
+    _sum: FieldMappingRuleSumAggregateOutputType | null
+    _min: FieldMappingRuleMinAggregateOutputType | null
+    _max: FieldMappingRuleMaxAggregateOutputType | null
+  }
+
+  type GetFieldMappingRuleGroupByPayload<T extends FieldMappingRuleGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<FieldMappingRuleGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof FieldMappingRuleGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], FieldMappingRuleGroupByOutputType[P]>
+            : GetScalarType<T[P], FieldMappingRuleGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type FieldMappingRuleSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    userId?: boolean
+    fieldSelector?: boolean
+    fieldLabel?: boolean
+    atsProvider?: boolean
+    pageDomain?: boolean
+    profilePath?: boolean
+    staticValue?: boolean
+    source?: boolean
+    confidence?: boolean
+    useCount?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    user?: boolean | UserDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["fieldMappingRule"]>
+
+  export type FieldMappingRuleSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    userId?: boolean
+    fieldSelector?: boolean
+    fieldLabel?: boolean
+    atsProvider?: boolean
+    pageDomain?: boolean
+    profilePath?: boolean
+    staticValue?: boolean
+    source?: boolean
+    confidence?: boolean
+    useCount?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    user?: boolean | UserDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["fieldMappingRule"]>
+
+  export type FieldMappingRuleSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    userId?: boolean
+    fieldSelector?: boolean
+    fieldLabel?: boolean
+    atsProvider?: boolean
+    pageDomain?: boolean
+    profilePath?: boolean
+    staticValue?: boolean
+    source?: boolean
+    confidence?: boolean
+    useCount?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    user?: boolean | UserDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["fieldMappingRule"]>
+
+  export type FieldMappingRuleSelectScalar = {
+    id?: boolean
+    userId?: boolean
+    fieldSelector?: boolean
+    fieldLabel?: boolean
+    atsProvider?: boolean
+    pageDomain?: boolean
+    profilePath?: boolean
+    staticValue?: boolean
+    source?: boolean
+    confidence?: boolean
+    useCount?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type FieldMappingRuleOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "userId" | "fieldSelector" | "fieldLabel" | "atsProvider" | "pageDomain" | "profilePath" | "staticValue" | "source" | "confidence" | "useCount" | "createdAt" | "updatedAt", ExtArgs["result"]["fieldMappingRule"]>
+  export type FieldMappingRuleInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    user?: boolean | UserDefaultArgs<ExtArgs>
+  }
+  export type FieldMappingRuleIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    user?: boolean | UserDefaultArgs<ExtArgs>
+  }
+  export type FieldMappingRuleIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    user?: boolean | UserDefaultArgs<ExtArgs>
+  }
+
+  export type $FieldMappingRulePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "FieldMappingRule"
+    objects: {
+      user: Prisma.$UserPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      userId: string
+      fieldSelector: string
+      fieldLabel: string | null
+      atsProvider: string | null
+      pageDomain: string | null
+      profilePath: string
+      staticValue: string | null
+      source: string
+      confidence: number
+      useCount: number
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["fieldMappingRule"]>
+    composites: {}
+  }
+
+  type FieldMappingRuleGetPayload<S extends boolean | null | undefined | FieldMappingRuleDefaultArgs> = $Result.GetResult<Prisma.$FieldMappingRulePayload, S>
+
+  type FieldMappingRuleCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<FieldMappingRuleFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: FieldMappingRuleCountAggregateInputType | true
+    }
+
+  export interface FieldMappingRuleDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['FieldMappingRule'], meta: { name: 'FieldMappingRule' } }
+    /**
+     * Find zero or one FieldMappingRule that matches the filter.
+     * @param {FieldMappingRuleFindUniqueArgs} args - Arguments to find a FieldMappingRule
+     * @example
+     * // Get one FieldMappingRule
+     * const fieldMappingRule = await prisma.fieldMappingRule.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends FieldMappingRuleFindUniqueArgs>(args: SelectSubset<T, FieldMappingRuleFindUniqueArgs<ExtArgs>>): Prisma__FieldMappingRuleClient<$Result.GetResult<Prisma.$FieldMappingRulePayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one FieldMappingRule that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {FieldMappingRuleFindUniqueOrThrowArgs} args - Arguments to find a FieldMappingRule
+     * @example
+     * // Get one FieldMappingRule
+     * const fieldMappingRule = await prisma.fieldMappingRule.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends FieldMappingRuleFindUniqueOrThrowArgs>(args: SelectSubset<T, FieldMappingRuleFindUniqueOrThrowArgs<ExtArgs>>): Prisma__FieldMappingRuleClient<$Result.GetResult<Prisma.$FieldMappingRulePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FieldMappingRule that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FieldMappingRuleFindFirstArgs} args - Arguments to find a FieldMappingRule
+     * @example
+     * // Get one FieldMappingRule
+     * const fieldMappingRule = await prisma.fieldMappingRule.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends FieldMappingRuleFindFirstArgs>(args?: SelectSubset<T, FieldMappingRuleFindFirstArgs<ExtArgs>>): Prisma__FieldMappingRuleClient<$Result.GetResult<Prisma.$FieldMappingRulePayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FieldMappingRule that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FieldMappingRuleFindFirstOrThrowArgs} args - Arguments to find a FieldMappingRule
+     * @example
+     * // Get one FieldMappingRule
+     * const fieldMappingRule = await prisma.fieldMappingRule.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends FieldMappingRuleFindFirstOrThrowArgs>(args?: SelectSubset<T, FieldMappingRuleFindFirstOrThrowArgs<ExtArgs>>): Prisma__FieldMappingRuleClient<$Result.GetResult<Prisma.$FieldMappingRulePayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more FieldMappingRules that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FieldMappingRuleFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all FieldMappingRules
+     * const fieldMappingRules = await prisma.fieldMappingRule.findMany()
+     * 
+     * // Get first 10 FieldMappingRules
+     * const fieldMappingRules = await prisma.fieldMappingRule.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const fieldMappingRuleWithIdOnly = await prisma.fieldMappingRule.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends FieldMappingRuleFindManyArgs>(args?: SelectSubset<T, FieldMappingRuleFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FieldMappingRulePayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a FieldMappingRule.
+     * @param {FieldMappingRuleCreateArgs} args - Arguments to create a FieldMappingRule.
+     * @example
+     * // Create one FieldMappingRule
+     * const FieldMappingRule = await prisma.fieldMappingRule.create({
+     *   data: {
+     *     // ... data to create a FieldMappingRule
+     *   }
+     * })
+     * 
+     */
+    create<T extends FieldMappingRuleCreateArgs>(args: SelectSubset<T, FieldMappingRuleCreateArgs<ExtArgs>>): Prisma__FieldMappingRuleClient<$Result.GetResult<Prisma.$FieldMappingRulePayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many FieldMappingRules.
+     * @param {FieldMappingRuleCreateManyArgs} args - Arguments to create many FieldMappingRules.
+     * @example
+     * // Create many FieldMappingRules
+     * const fieldMappingRule = await prisma.fieldMappingRule.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends FieldMappingRuleCreateManyArgs>(args?: SelectSubset<T, FieldMappingRuleCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many FieldMappingRules and returns the data saved in the database.
+     * @param {FieldMappingRuleCreateManyAndReturnArgs} args - Arguments to create many FieldMappingRules.
+     * @example
+     * // Create many FieldMappingRules
+     * const fieldMappingRule = await prisma.fieldMappingRule.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many FieldMappingRules and only return the `id`
+     * const fieldMappingRuleWithIdOnly = await prisma.fieldMappingRule.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends FieldMappingRuleCreateManyAndReturnArgs>(args?: SelectSubset<T, FieldMappingRuleCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FieldMappingRulePayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a FieldMappingRule.
+     * @param {FieldMappingRuleDeleteArgs} args - Arguments to delete one FieldMappingRule.
+     * @example
+     * // Delete one FieldMappingRule
+     * const FieldMappingRule = await prisma.fieldMappingRule.delete({
+     *   where: {
+     *     // ... filter to delete one FieldMappingRule
+     *   }
+     * })
+     * 
+     */
+    delete<T extends FieldMappingRuleDeleteArgs>(args: SelectSubset<T, FieldMappingRuleDeleteArgs<ExtArgs>>): Prisma__FieldMappingRuleClient<$Result.GetResult<Prisma.$FieldMappingRulePayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one FieldMappingRule.
+     * @param {FieldMappingRuleUpdateArgs} args - Arguments to update one FieldMappingRule.
+     * @example
+     * // Update one FieldMappingRule
+     * const fieldMappingRule = await prisma.fieldMappingRule.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends FieldMappingRuleUpdateArgs>(args: SelectSubset<T, FieldMappingRuleUpdateArgs<ExtArgs>>): Prisma__FieldMappingRuleClient<$Result.GetResult<Prisma.$FieldMappingRulePayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more FieldMappingRules.
+     * @param {FieldMappingRuleDeleteManyArgs} args - Arguments to filter FieldMappingRules to delete.
+     * @example
+     * // Delete a few FieldMappingRules
+     * const { count } = await prisma.fieldMappingRule.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends FieldMappingRuleDeleteManyArgs>(args?: SelectSubset<T, FieldMappingRuleDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FieldMappingRules.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FieldMappingRuleUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many FieldMappingRules
+     * const fieldMappingRule = await prisma.fieldMappingRule.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends FieldMappingRuleUpdateManyArgs>(args: SelectSubset<T, FieldMappingRuleUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FieldMappingRules and returns the data updated in the database.
+     * @param {FieldMappingRuleUpdateManyAndReturnArgs} args - Arguments to update many FieldMappingRules.
+     * @example
+     * // Update many FieldMappingRules
+     * const fieldMappingRule = await prisma.fieldMappingRule.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more FieldMappingRules and only return the `id`
+     * const fieldMappingRuleWithIdOnly = await prisma.fieldMappingRule.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends FieldMappingRuleUpdateManyAndReturnArgs>(args: SelectSubset<T, FieldMappingRuleUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FieldMappingRulePayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one FieldMappingRule.
+     * @param {FieldMappingRuleUpsertArgs} args - Arguments to update or create a FieldMappingRule.
+     * @example
+     * // Update or create a FieldMappingRule
+     * const fieldMappingRule = await prisma.fieldMappingRule.upsert({
+     *   create: {
+     *     // ... data to create a FieldMappingRule
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the FieldMappingRule we want to update
+     *   }
+     * })
+     */
+    upsert<T extends FieldMappingRuleUpsertArgs>(args: SelectSubset<T, FieldMappingRuleUpsertArgs<ExtArgs>>): Prisma__FieldMappingRuleClient<$Result.GetResult<Prisma.$FieldMappingRulePayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of FieldMappingRules.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FieldMappingRuleCountArgs} args - Arguments to filter FieldMappingRules to count.
+     * @example
+     * // Count the number of FieldMappingRules
+     * const count = await prisma.fieldMappingRule.count({
+     *   where: {
+     *     // ... the filter for the FieldMappingRules we want to count
+     *   }
+     * })
+    **/
+    count<T extends FieldMappingRuleCountArgs>(
+      args?: Subset<T, FieldMappingRuleCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], FieldMappingRuleCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a FieldMappingRule.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FieldMappingRuleAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends FieldMappingRuleAggregateArgs>(args: Subset<T, FieldMappingRuleAggregateArgs>): Prisma.PrismaPromise<GetFieldMappingRuleAggregateType<T>>
+
+    /**
+     * Group by FieldMappingRule.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FieldMappingRuleGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends FieldMappingRuleGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: FieldMappingRuleGroupByArgs['orderBy'] }
+        : { orderBy?: FieldMappingRuleGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, FieldMappingRuleGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetFieldMappingRuleGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the FieldMappingRule model
+   */
+  readonly fields: FieldMappingRuleFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for FieldMappingRule.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__FieldMappingRuleClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    user<T extends UserDefaultArgs<ExtArgs> = {}>(args?: Subset<T, UserDefaultArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the FieldMappingRule model
+   */
+  interface FieldMappingRuleFieldRefs {
+    readonly id: FieldRef<"FieldMappingRule", 'String'>
+    readonly userId: FieldRef<"FieldMappingRule", 'String'>
+    readonly fieldSelector: FieldRef<"FieldMappingRule", 'String'>
+    readonly fieldLabel: FieldRef<"FieldMappingRule", 'String'>
+    readonly atsProvider: FieldRef<"FieldMappingRule", 'String'>
+    readonly pageDomain: FieldRef<"FieldMappingRule", 'String'>
+    readonly profilePath: FieldRef<"FieldMappingRule", 'String'>
+    readonly staticValue: FieldRef<"FieldMappingRule", 'String'>
+    readonly source: FieldRef<"FieldMappingRule", 'String'>
+    readonly confidence: FieldRef<"FieldMappingRule", 'Float'>
+    readonly useCount: FieldRef<"FieldMappingRule", 'Int'>
+    readonly createdAt: FieldRef<"FieldMappingRule", 'DateTime'>
+    readonly updatedAt: FieldRef<"FieldMappingRule", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * FieldMappingRule findUnique
+   */
+  export type FieldMappingRuleFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FieldMappingRule
+     */
+    select?: FieldMappingRuleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FieldMappingRule
+     */
+    omit?: FieldMappingRuleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FieldMappingRuleInclude<ExtArgs> | null
+    /**
+     * Filter, which FieldMappingRule to fetch.
+     */
+    where: FieldMappingRuleWhereUniqueInput
+  }
+
+  /**
+   * FieldMappingRule findUniqueOrThrow
+   */
+  export type FieldMappingRuleFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FieldMappingRule
+     */
+    select?: FieldMappingRuleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FieldMappingRule
+     */
+    omit?: FieldMappingRuleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FieldMappingRuleInclude<ExtArgs> | null
+    /**
+     * Filter, which FieldMappingRule to fetch.
+     */
+    where: FieldMappingRuleWhereUniqueInput
+  }
+
+  /**
+   * FieldMappingRule findFirst
+   */
+  export type FieldMappingRuleFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FieldMappingRule
+     */
+    select?: FieldMappingRuleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FieldMappingRule
+     */
+    omit?: FieldMappingRuleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FieldMappingRuleInclude<ExtArgs> | null
+    /**
+     * Filter, which FieldMappingRule to fetch.
+     */
+    where?: FieldMappingRuleWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FieldMappingRules to fetch.
+     */
+    orderBy?: FieldMappingRuleOrderByWithRelationInput | FieldMappingRuleOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FieldMappingRules.
+     */
+    cursor?: FieldMappingRuleWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FieldMappingRules from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FieldMappingRules.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FieldMappingRules.
+     */
+    distinct?: FieldMappingRuleScalarFieldEnum | FieldMappingRuleScalarFieldEnum[]
+  }
+
+  /**
+   * FieldMappingRule findFirstOrThrow
+   */
+  export type FieldMappingRuleFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FieldMappingRule
+     */
+    select?: FieldMappingRuleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FieldMappingRule
+     */
+    omit?: FieldMappingRuleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FieldMappingRuleInclude<ExtArgs> | null
+    /**
+     * Filter, which FieldMappingRule to fetch.
+     */
+    where?: FieldMappingRuleWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FieldMappingRules to fetch.
+     */
+    orderBy?: FieldMappingRuleOrderByWithRelationInput | FieldMappingRuleOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FieldMappingRules.
+     */
+    cursor?: FieldMappingRuleWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FieldMappingRules from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FieldMappingRules.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FieldMappingRules.
+     */
+    distinct?: FieldMappingRuleScalarFieldEnum | FieldMappingRuleScalarFieldEnum[]
+  }
+
+  /**
+   * FieldMappingRule findMany
+   */
+  export type FieldMappingRuleFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FieldMappingRule
+     */
+    select?: FieldMappingRuleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FieldMappingRule
+     */
+    omit?: FieldMappingRuleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FieldMappingRuleInclude<ExtArgs> | null
+    /**
+     * Filter, which FieldMappingRules to fetch.
+     */
+    where?: FieldMappingRuleWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FieldMappingRules to fetch.
+     */
+    orderBy?: FieldMappingRuleOrderByWithRelationInput | FieldMappingRuleOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing FieldMappingRules.
+     */
+    cursor?: FieldMappingRuleWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FieldMappingRules from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FieldMappingRules.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FieldMappingRules.
+     */
+    distinct?: FieldMappingRuleScalarFieldEnum | FieldMappingRuleScalarFieldEnum[]
+  }
+
+  /**
+   * FieldMappingRule create
+   */
+  export type FieldMappingRuleCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FieldMappingRule
+     */
+    select?: FieldMappingRuleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FieldMappingRule
+     */
+    omit?: FieldMappingRuleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FieldMappingRuleInclude<ExtArgs> | null
+    /**
+     * The data needed to create a FieldMappingRule.
+     */
+    data: XOR<FieldMappingRuleCreateInput, FieldMappingRuleUncheckedCreateInput>
+  }
+
+  /**
+   * FieldMappingRule createMany
+   */
+  export type FieldMappingRuleCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many FieldMappingRules.
+     */
+    data: FieldMappingRuleCreateManyInput | FieldMappingRuleCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * FieldMappingRule createManyAndReturn
+   */
+  export type FieldMappingRuleCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FieldMappingRule
+     */
+    select?: FieldMappingRuleSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FieldMappingRule
+     */
+    omit?: FieldMappingRuleOmit<ExtArgs> | null
+    /**
+     * The data used to create many FieldMappingRules.
+     */
+    data: FieldMappingRuleCreateManyInput | FieldMappingRuleCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FieldMappingRuleIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * FieldMappingRule update
+   */
+  export type FieldMappingRuleUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FieldMappingRule
+     */
+    select?: FieldMappingRuleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FieldMappingRule
+     */
+    omit?: FieldMappingRuleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FieldMappingRuleInclude<ExtArgs> | null
+    /**
+     * The data needed to update a FieldMappingRule.
+     */
+    data: XOR<FieldMappingRuleUpdateInput, FieldMappingRuleUncheckedUpdateInput>
+    /**
+     * Choose, which FieldMappingRule to update.
+     */
+    where: FieldMappingRuleWhereUniqueInput
+  }
+
+  /**
+   * FieldMappingRule updateMany
+   */
+  export type FieldMappingRuleUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update FieldMappingRules.
+     */
+    data: XOR<FieldMappingRuleUpdateManyMutationInput, FieldMappingRuleUncheckedUpdateManyInput>
+    /**
+     * Filter which FieldMappingRules to update
+     */
+    where?: FieldMappingRuleWhereInput
+    /**
+     * Limit how many FieldMappingRules to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * FieldMappingRule updateManyAndReturn
+   */
+  export type FieldMappingRuleUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FieldMappingRule
+     */
+    select?: FieldMappingRuleSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FieldMappingRule
+     */
+    omit?: FieldMappingRuleOmit<ExtArgs> | null
+    /**
+     * The data used to update FieldMappingRules.
+     */
+    data: XOR<FieldMappingRuleUpdateManyMutationInput, FieldMappingRuleUncheckedUpdateManyInput>
+    /**
+     * Filter which FieldMappingRules to update
+     */
+    where?: FieldMappingRuleWhereInput
+    /**
+     * Limit how many FieldMappingRules to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FieldMappingRuleIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * FieldMappingRule upsert
+   */
+  export type FieldMappingRuleUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FieldMappingRule
+     */
+    select?: FieldMappingRuleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FieldMappingRule
+     */
+    omit?: FieldMappingRuleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FieldMappingRuleInclude<ExtArgs> | null
+    /**
+     * The filter to search for the FieldMappingRule to update in case it exists.
+     */
+    where: FieldMappingRuleWhereUniqueInput
+    /**
+     * In case the FieldMappingRule found by the `where` argument doesn't exist, create a new FieldMappingRule with this data.
+     */
+    create: XOR<FieldMappingRuleCreateInput, FieldMappingRuleUncheckedCreateInput>
+    /**
+     * In case the FieldMappingRule was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<FieldMappingRuleUpdateInput, FieldMappingRuleUncheckedUpdateInput>
+  }
+
+  /**
+   * FieldMappingRule delete
+   */
+  export type FieldMappingRuleDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FieldMappingRule
+     */
+    select?: FieldMappingRuleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FieldMappingRule
+     */
+    omit?: FieldMappingRuleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FieldMappingRuleInclude<ExtArgs> | null
+    /**
+     * Filter which FieldMappingRule to delete.
+     */
+    where: FieldMappingRuleWhereUniqueInput
+  }
+
+  /**
+   * FieldMappingRule deleteMany
+   */
+  export type FieldMappingRuleDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FieldMappingRules to delete
+     */
+    where?: FieldMappingRuleWhereInput
+    /**
+     * Limit how many FieldMappingRules to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * FieldMappingRule without action
+   */
+  export type FieldMappingRuleDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FieldMappingRule
+     */
+    select?: FieldMappingRuleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FieldMappingRule
+     */
+    omit?: FieldMappingRuleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FieldMappingRuleInclude<ExtArgs> | null
+  }
+
+
+  /**
    * Model OnboardingState
    */
 
@@ -20301,6 +22959,42 @@ export namespace Prisma {
   export type ExtensionTokenScalarFieldEnum = (typeof ExtensionTokenScalarFieldEnum)[keyof typeof ExtensionTokenScalarFieldEnum]
 
 
+  export const FormSubmissionScalarFieldEnum: {
+    id: 'id',
+    userId: 'userId',
+    jobId: 'jobId',
+    pageUrl: 'pageUrl',
+    pageDomain: 'pageDomain',
+    atsProvider: 'atsProvider',
+    formSignature: 'formSignature',
+    fieldValues: 'fieldValues',
+    fieldMappings: 'fieldMappings',
+    submittedAt: 'submittedAt',
+    createdAt: 'createdAt'
+  };
+
+  export type FormSubmissionScalarFieldEnum = (typeof FormSubmissionScalarFieldEnum)[keyof typeof FormSubmissionScalarFieldEnum]
+
+
+  export const FieldMappingRuleScalarFieldEnum: {
+    id: 'id',
+    userId: 'userId',
+    fieldSelector: 'fieldSelector',
+    fieldLabel: 'fieldLabel',
+    atsProvider: 'atsProvider',
+    pageDomain: 'pageDomain',
+    profilePath: 'profilePath',
+    staticValue: 'staticValue',
+    source: 'source',
+    confidence: 'confidence',
+    useCount: 'useCount',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type FieldMappingRuleScalarFieldEnum = (typeof FieldMappingRuleScalarFieldEnum)[keyof typeof FieldMappingRuleScalarFieldEnum]
+
+
   export const OnboardingStateScalarFieldEnum: {
     id: 'id',
     userId: 'userId',
@@ -20502,20 +23196,6 @@ export namespace Prisma {
 
 
   /**
-   * Reference to a field of type 'OnboardingStage'
-   */
-  export type EnumOnboardingStageFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'OnboardingStage'>
-    
-
-
-  /**
-   * Reference to a field of type 'OnboardingStage[]'
-   */
-  export type ListEnumOnboardingStageFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'OnboardingStage[]'>
-    
-
-
-  /**
    * Reference to a field of type 'Float'
    */
   export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
@@ -20526,6 +23206,20 @@ export namespace Prisma {
    * Reference to a field of type 'Float[]'
    */
   export type ListFloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float[]'>
+    
+
+
+  /**
+   * Reference to a field of type 'OnboardingStage'
+   */
+  export type EnumOnboardingStageFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'OnboardingStage'>
+    
+
+
+  /**
+   * Reference to a field of type 'OnboardingStage[]'
+   */
+  export type ListEnumOnboardingStageFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'OnboardingStage[]'>
     
   /**
    * Deep Input Types
@@ -20557,6 +23251,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchListRelationFilter
     applicationBatchTasks?: ApplicationBatchTaskListRelationFilter
     extensionTokens?: ExtensionTokenListRelationFilter
+    formSubmissions?: FormSubmissionListRelationFilter
+    fieldMappingRules?: FieldMappingRuleListRelationFilter
   }
 
   export type UserOrderByWithRelationInput = {
@@ -20581,6 +23277,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchOrderByRelationAggregateInput
     applicationBatchTasks?: ApplicationBatchTaskOrderByRelationAggregateInput
     extensionTokens?: ExtensionTokenOrderByRelationAggregateInput
+    formSubmissions?: FormSubmissionOrderByRelationAggregateInput
+    fieldMappingRules?: FieldMappingRuleOrderByRelationAggregateInput
   }
 
   export type UserWhereUniqueInput = Prisma.AtLeast<{
@@ -20608,6 +23306,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchListRelationFilter
     applicationBatchTasks?: ApplicationBatchTaskListRelationFilter
     extensionTokens?: ExtensionTokenListRelationFilter
+    formSubmissions?: FormSubmissionListRelationFilter
+    fieldMappingRules?: FieldMappingRuleListRelationFilter
   }, "id" | "email">
 
   export type UserOrderByWithAggregationInput = {
@@ -20819,6 +23519,7 @@ export namespace Prisma {
     user?: XOR<UserScalarRelationFilter, UserWhereInput>
     applications?: ApplicationListRelationFilter
     applicationBatchTasks?: ApplicationBatchTaskListRelationFilter
+    formSubmissions?: FormSubmissionListRelationFilter
   }
 
   export type JobOrderByWithRelationInput = {
@@ -20838,6 +23539,7 @@ export namespace Prisma {
     user?: UserOrderByWithRelationInput
     applications?: ApplicationOrderByRelationAggregateInput
     applicationBatchTasks?: ApplicationBatchTaskOrderByRelationAggregateInput
+    formSubmissions?: FormSubmissionOrderByRelationAggregateInput
   }
 
   export type JobWhereUniqueInput = Prisma.AtLeast<{
@@ -20861,6 +23563,7 @@ export namespace Prisma {
     user?: XOR<UserScalarRelationFilter, UserWhereInput>
     applications?: ApplicationListRelationFilter
     applicationBatchTasks?: ApplicationBatchTaskListRelationFilter
+    formSubmissions?: FormSubmissionListRelationFilter
   }, "id" | "userId_jobUrl">
 
   export type JobOrderByWithAggregationInput = {
@@ -21716,6 +24419,192 @@ export namespace Prisma {
     createdAt?: DateTimeWithAggregatesFilter<"ExtensionToken"> | Date | string
   }
 
+  export type FormSubmissionWhereInput = {
+    AND?: FormSubmissionWhereInput | FormSubmissionWhereInput[]
+    OR?: FormSubmissionWhereInput[]
+    NOT?: FormSubmissionWhereInput | FormSubmissionWhereInput[]
+    id?: UuidFilter<"FormSubmission"> | string
+    userId?: UuidFilter<"FormSubmission"> | string
+    jobId?: UuidNullableFilter<"FormSubmission"> | string | null
+    pageUrl?: StringFilter<"FormSubmission"> | string
+    pageDomain?: StringFilter<"FormSubmission"> | string
+    atsProvider?: StringNullableFilter<"FormSubmission"> | string | null
+    formSignature?: StringFilter<"FormSubmission"> | string
+    fieldValues?: JsonFilter<"FormSubmission">
+    fieldMappings?: JsonFilter<"FormSubmission">
+    submittedAt?: DateTimeFilter<"FormSubmission"> | Date | string
+    createdAt?: DateTimeFilter<"FormSubmission"> | Date | string
+    user?: XOR<UserScalarRelationFilter, UserWhereInput>
+    job?: XOR<JobNullableScalarRelationFilter, JobWhereInput> | null
+  }
+
+  export type FormSubmissionOrderByWithRelationInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    jobId?: SortOrderInput | SortOrder
+    pageUrl?: SortOrder
+    pageDomain?: SortOrder
+    atsProvider?: SortOrderInput | SortOrder
+    formSignature?: SortOrder
+    fieldValues?: SortOrder
+    fieldMappings?: SortOrder
+    submittedAt?: SortOrder
+    createdAt?: SortOrder
+    user?: UserOrderByWithRelationInput
+    job?: JobOrderByWithRelationInput
+  }
+
+  export type FormSubmissionWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: FormSubmissionWhereInput | FormSubmissionWhereInput[]
+    OR?: FormSubmissionWhereInput[]
+    NOT?: FormSubmissionWhereInput | FormSubmissionWhereInput[]
+    userId?: UuidFilter<"FormSubmission"> | string
+    jobId?: UuidNullableFilter<"FormSubmission"> | string | null
+    pageUrl?: StringFilter<"FormSubmission"> | string
+    pageDomain?: StringFilter<"FormSubmission"> | string
+    atsProvider?: StringNullableFilter<"FormSubmission"> | string | null
+    formSignature?: StringFilter<"FormSubmission"> | string
+    fieldValues?: JsonFilter<"FormSubmission">
+    fieldMappings?: JsonFilter<"FormSubmission">
+    submittedAt?: DateTimeFilter<"FormSubmission"> | Date | string
+    createdAt?: DateTimeFilter<"FormSubmission"> | Date | string
+    user?: XOR<UserScalarRelationFilter, UserWhereInput>
+    job?: XOR<JobNullableScalarRelationFilter, JobWhereInput> | null
+  }, "id">
+
+  export type FormSubmissionOrderByWithAggregationInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    jobId?: SortOrderInput | SortOrder
+    pageUrl?: SortOrder
+    pageDomain?: SortOrder
+    atsProvider?: SortOrderInput | SortOrder
+    formSignature?: SortOrder
+    fieldValues?: SortOrder
+    fieldMappings?: SortOrder
+    submittedAt?: SortOrder
+    createdAt?: SortOrder
+    _count?: FormSubmissionCountOrderByAggregateInput
+    _max?: FormSubmissionMaxOrderByAggregateInput
+    _min?: FormSubmissionMinOrderByAggregateInput
+  }
+
+  export type FormSubmissionScalarWhereWithAggregatesInput = {
+    AND?: FormSubmissionScalarWhereWithAggregatesInput | FormSubmissionScalarWhereWithAggregatesInput[]
+    OR?: FormSubmissionScalarWhereWithAggregatesInput[]
+    NOT?: FormSubmissionScalarWhereWithAggregatesInput | FormSubmissionScalarWhereWithAggregatesInput[]
+    id?: UuidWithAggregatesFilter<"FormSubmission"> | string
+    userId?: UuidWithAggregatesFilter<"FormSubmission"> | string
+    jobId?: UuidNullableWithAggregatesFilter<"FormSubmission"> | string | null
+    pageUrl?: StringWithAggregatesFilter<"FormSubmission"> | string
+    pageDomain?: StringWithAggregatesFilter<"FormSubmission"> | string
+    atsProvider?: StringNullableWithAggregatesFilter<"FormSubmission"> | string | null
+    formSignature?: StringWithAggregatesFilter<"FormSubmission"> | string
+    fieldValues?: JsonWithAggregatesFilter<"FormSubmission">
+    fieldMappings?: JsonWithAggregatesFilter<"FormSubmission">
+    submittedAt?: DateTimeWithAggregatesFilter<"FormSubmission"> | Date | string
+    createdAt?: DateTimeWithAggregatesFilter<"FormSubmission"> | Date | string
+  }
+
+  export type FieldMappingRuleWhereInput = {
+    AND?: FieldMappingRuleWhereInput | FieldMappingRuleWhereInput[]
+    OR?: FieldMappingRuleWhereInput[]
+    NOT?: FieldMappingRuleWhereInput | FieldMappingRuleWhereInput[]
+    id?: UuidFilter<"FieldMappingRule"> | string
+    userId?: UuidFilter<"FieldMappingRule"> | string
+    fieldSelector?: StringFilter<"FieldMappingRule"> | string
+    fieldLabel?: StringNullableFilter<"FieldMappingRule"> | string | null
+    atsProvider?: StringNullableFilter<"FieldMappingRule"> | string | null
+    pageDomain?: StringNullableFilter<"FieldMappingRule"> | string | null
+    profilePath?: StringFilter<"FieldMappingRule"> | string
+    staticValue?: StringNullableFilter<"FieldMappingRule"> | string | null
+    source?: StringFilter<"FieldMappingRule"> | string
+    confidence?: FloatFilter<"FieldMappingRule"> | number
+    useCount?: IntFilter<"FieldMappingRule"> | number
+    createdAt?: DateTimeFilter<"FieldMappingRule"> | Date | string
+    updatedAt?: DateTimeFilter<"FieldMappingRule"> | Date | string
+    user?: XOR<UserScalarRelationFilter, UserWhereInput>
+  }
+
+  export type FieldMappingRuleOrderByWithRelationInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    fieldSelector?: SortOrder
+    fieldLabel?: SortOrderInput | SortOrder
+    atsProvider?: SortOrderInput | SortOrder
+    pageDomain?: SortOrderInput | SortOrder
+    profilePath?: SortOrder
+    staticValue?: SortOrderInput | SortOrder
+    source?: SortOrder
+    confidence?: SortOrder
+    useCount?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    user?: UserOrderByWithRelationInput
+  }
+
+  export type FieldMappingRuleWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    userId_fieldSelector_atsProvider_pageDomain?: FieldMappingRuleUserIdFieldSelectorAtsProviderPageDomainCompoundUniqueInput
+    AND?: FieldMappingRuleWhereInput | FieldMappingRuleWhereInput[]
+    OR?: FieldMappingRuleWhereInput[]
+    NOT?: FieldMappingRuleWhereInput | FieldMappingRuleWhereInput[]
+    userId?: UuidFilter<"FieldMappingRule"> | string
+    fieldSelector?: StringFilter<"FieldMappingRule"> | string
+    fieldLabel?: StringNullableFilter<"FieldMappingRule"> | string | null
+    atsProvider?: StringNullableFilter<"FieldMappingRule"> | string | null
+    pageDomain?: StringNullableFilter<"FieldMappingRule"> | string | null
+    profilePath?: StringFilter<"FieldMappingRule"> | string
+    staticValue?: StringNullableFilter<"FieldMappingRule"> | string | null
+    source?: StringFilter<"FieldMappingRule"> | string
+    confidence?: FloatFilter<"FieldMappingRule"> | number
+    useCount?: IntFilter<"FieldMappingRule"> | number
+    createdAt?: DateTimeFilter<"FieldMappingRule"> | Date | string
+    updatedAt?: DateTimeFilter<"FieldMappingRule"> | Date | string
+    user?: XOR<UserScalarRelationFilter, UserWhereInput>
+  }, "id" | "userId_fieldSelector_atsProvider_pageDomain">
+
+  export type FieldMappingRuleOrderByWithAggregationInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    fieldSelector?: SortOrder
+    fieldLabel?: SortOrderInput | SortOrder
+    atsProvider?: SortOrderInput | SortOrder
+    pageDomain?: SortOrderInput | SortOrder
+    profilePath?: SortOrder
+    staticValue?: SortOrderInput | SortOrder
+    source?: SortOrder
+    confidence?: SortOrder
+    useCount?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: FieldMappingRuleCountOrderByAggregateInput
+    _avg?: FieldMappingRuleAvgOrderByAggregateInput
+    _max?: FieldMappingRuleMaxOrderByAggregateInput
+    _min?: FieldMappingRuleMinOrderByAggregateInput
+    _sum?: FieldMappingRuleSumOrderByAggregateInput
+  }
+
+  export type FieldMappingRuleScalarWhereWithAggregatesInput = {
+    AND?: FieldMappingRuleScalarWhereWithAggregatesInput | FieldMappingRuleScalarWhereWithAggregatesInput[]
+    OR?: FieldMappingRuleScalarWhereWithAggregatesInput[]
+    NOT?: FieldMappingRuleScalarWhereWithAggregatesInput | FieldMappingRuleScalarWhereWithAggregatesInput[]
+    id?: UuidWithAggregatesFilter<"FieldMappingRule"> | string
+    userId?: UuidWithAggregatesFilter<"FieldMappingRule"> | string
+    fieldSelector?: StringWithAggregatesFilter<"FieldMappingRule"> | string
+    fieldLabel?: StringNullableWithAggregatesFilter<"FieldMappingRule"> | string | null
+    atsProvider?: StringNullableWithAggregatesFilter<"FieldMappingRule"> | string | null
+    pageDomain?: StringNullableWithAggregatesFilter<"FieldMappingRule"> | string | null
+    profilePath?: StringWithAggregatesFilter<"FieldMappingRule"> | string
+    staticValue?: StringNullableWithAggregatesFilter<"FieldMappingRule"> | string | null
+    source?: StringWithAggregatesFilter<"FieldMappingRule"> | string
+    confidence?: FloatWithAggregatesFilter<"FieldMappingRule"> | number
+    useCount?: IntWithAggregatesFilter<"FieldMappingRule"> | number
+    createdAt?: DateTimeWithAggregatesFilter<"FieldMappingRule"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"FieldMappingRule"> | Date | string
+  }
+
   export type OnboardingStateWhereInput = {
     AND?: OnboardingStateWhereInput | OnboardingStateWhereInput[]
     OR?: OnboardingStateWhereInput[]
@@ -21808,6 +24697,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateInput = {
@@ -21832,6 +24723,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionUncheckedCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserUpdateInput = {
@@ -21856,6 +24749,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateInput = {
@@ -21880,6 +24775,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUncheckedUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type UserCreateManyInput = {
@@ -22108,6 +25005,7 @@ export namespace Prisma {
     user: UserCreateNestedOneWithoutJobsInput
     applications?: ApplicationCreateNestedManyWithoutJobInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutJobInput
+    formSubmissions?: FormSubmissionCreateNestedManyWithoutJobInput
   }
 
   export type JobUncheckedCreateInput = {
@@ -22126,6 +25024,7 @@ export namespace Prisma {
     updatedAt?: Date | string
     applications?: ApplicationUncheckedCreateNestedManyWithoutJobInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutJobInput
+    formSubmissions?: FormSubmissionUncheckedCreateNestedManyWithoutJobInput
   }
 
   export type JobUpdateInput = {
@@ -22144,6 +25043,7 @@ export namespace Prisma {
     user?: UserUpdateOneRequiredWithoutJobsNestedInput
     applications?: ApplicationUpdateManyWithoutJobNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutJobNestedInput
+    formSubmissions?: FormSubmissionUpdateManyWithoutJobNestedInput
   }
 
   export type JobUncheckedUpdateInput = {
@@ -22162,6 +25062,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     applications?: ApplicationUncheckedUpdateManyWithoutJobNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutJobNestedInput
+    formSubmissions?: FormSubmissionUncheckedUpdateManyWithoutJobNestedInput
   }
 
   export type JobCreateManyInput = {
@@ -23083,6 +25984,213 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type FormSubmissionCreateInput = {
+    id?: string
+    pageUrl: string
+    pageDomain: string
+    atsProvider?: string | null
+    formSignature: string
+    fieldValues: JsonNullValueInput | InputJsonValue
+    fieldMappings: JsonNullValueInput | InputJsonValue
+    submittedAt?: Date | string
+    createdAt?: Date | string
+    user: UserCreateNestedOneWithoutFormSubmissionsInput
+    job?: JobCreateNestedOneWithoutFormSubmissionsInput
+  }
+
+  export type FormSubmissionUncheckedCreateInput = {
+    id?: string
+    userId: string
+    jobId?: string | null
+    pageUrl: string
+    pageDomain: string
+    atsProvider?: string | null
+    formSignature: string
+    fieldValues: JsonNullValueInput | InputJsonValue
+    fieldMappings: JsonNullValueInput | InputJsonValue
+    submittedAt?: Date | string
+    createdAt?: Date | string
+  }
+
+  export type FormSubmissionUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageUrl?: StringFieldUpdateOperationsInput | string
+    pageDomain?: StringFieldUpdateOperationsInput | string
+    atsProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    formSignature?: StringFieldUpdateOperationsInput | string
+    fieldValues?: JsonNullValueInput | InputJsonValue
+    fieldMappings?: JsonNullValueInput | InputJsonValue
+    submittedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    user?: UserUpdateOneRequiredWithoutFormSubmissionsNestedInput
+    job?: JobUpdateOneWithoutFormSubmissionsNestedInput
+  }
+
+  export type FormSubmissionUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    jobId?: NullableStringFieldUpdateOperationsInput | string | null
+    pageUrl?: StringFieldUpdateOperationsInput | string
+    pageDomain?: StringFieldUpdateOperationsInput | string
+    atsProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    formSignature?: StringFieldUpdateOperationsInput | string
+    fieldValues?: JsonNullValueInput | InputJsonValue
+    fieldMappings?: JsonNullValueInput | InputJsonValue
+    submittedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FormSubmissionCreateManyInput = {
+    id?: string
+    userId: string
+    jobId?: string | null
+    pageUrl: string
+    pageDomain: string
+    atsProvider?: string | null
+    formSignature: string
+    fieldValues: JsonNullValueInput | InputJsonValue
+    fieldMappings: JsonNullValueInput | InputJsonValue
+    submittedAt?: Date | string
+    createdAt?: Date | string
+  }
+
+  export type FormSubmissionUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageUrl?: StringFieldUpdateOperationsInput | string
+    pageDomain?: StringFieldUpdateOperationsInput | string
+    atsProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    formSignature?: StringFieldUpdateOperationsInput | string
+    fieldValues?: JsonNullValueInput | InputJsonValue
+    fieldMappings?: JsonNullValueInput | InputJsonValue
+    submittedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FormSubmissionUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    jobId?: NullableStringFieldUpdateOperationsInput | string | null
+    pageUrl?: StringFieldUpdateOperationsInput | string
+    pageDomain?: StringFieldUpdateOperationsInput | string
+    atsProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    formSignature?: StringFieldUpdateOperationsInput | string
+    fieldValues?: JsonNullValueInput | InputJsonValue
+    fieldMappings?: JsonNullValueInput | InputJsonValue
+    submittedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FieldMappingRuleCreateInput = {
+    id?: string
+    fieldSelector: string
+    fieldLabel?: string | null
+    atsProvider?: string | null
+    pageDomain?: string | null
+    profilePath: string
+    staticValue?: string | null
+    source?: string
+    confidence?: number
+    useCount?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    user: UserCreateNestedOneWithoutFieldMappingRulesInput
+  }
+
+  export type FieldMappingRuleUncheckedCreateInput = {
+    id?: string
+    userId: string
+    fieldSelector: string
+    fieldLabel?: string | null
+    atsProvider?: string | null
+    pageDomain?: string | null
+    profilePath: string
+    staticValue?: string | null
+    source?: string
+    confidence?: number
+    useCount?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FieldMappingRuleUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    fieldSelector?: StringFieldUpdateOperationsInput | string
+    fieldLabel?: NullableStringFieldUpdateOperationsInput | string | null
+    atsProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    pageDomain?: NullableStringFieldUpdateOperationsInput | string | null
+    profilePath?: StringFieldUpdateOperationsInput | string
+    staticValue?: NullableStringFieldUpdateOperationsInput | string | null
+    source?: StringFieldUpdateOperationsInput | string
+    confidence?: FloatFieldUpdateOperationsInput | number
+    useCount?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    user?: UserUpdateOneRequiredWithoutFieldMappingRulesNestedInput
+  }
+
+  export type FieldMappingRuleUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    fieldSelector?: StringFieldUpdateOperationsInput | string
+    fieldLabel?: NullableStringFieldUpdateOperationsInput | string | null
+    atsProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    pageDomain?: NullableStringFieldUpdateOperationsInput | string | null
+    profilePath?: StringFieldUpdateOperationsInput | string
+    staticValue?: NullableStringFieldUpdateOperationsInput | string | null
+    source?: StringFieldUpdateOperationsInput | string
+    confidence?: FloatFieldUpdateOperationsInput | number
+    useCount?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FieldMappingRuleCreateManyInput = {
+    id?: string
+    userId: string
+    fieldSelector: string
+    fieldLabel?: string | null
+    atsProvider?: string | null
+    pageDomain?: string | null
+    profilePath: string
+    staticValue?: string | null
+    source?: string
+    confidence?: number
+    useCount?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FieldMappingRuleUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    fieldSelector?: StringFieldUpdateOperationsInput | string
+    fieldLabel?: NullableStringFieldUpdateOperationsInput | string | null
+    atsProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    pageDomain?: NullableStringFieldUpdateOperationsInput | string | null
+    profilePath?: StringFieldUpdateOperationsInput | string
+    staticValue?: NullableStringFieldUpdateOperationsInput | string | null
+    source?: StringFieldUpdateOperationsInput | string
+    confidence?: FloatFieldUpdateOperationsInput | number
+    useCount?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FieldMappingRuleUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    fieldSelector?: StringFieldUpdateOperationsInput | string
+    fieldLabel?: NullableStringFieldUpdateOperationsInput | string | null
+    atsProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    pageDomain?: NullableStringFieldUpdateOperationsInput | string | null
+    profilePath?: StringFieldUpdateOperationsInput | string
+    staticValue?: NullableStringFieldUpdateOperationsInput | string | null
+    source?: StringFieldUpdateOperationsInput | string
+    confidence?: FloatFieldUpdateOperationsInput | number
+    useCount?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type OnboardingStateCreateInput = {
     id?: string
     stage?: $Enums.OnboardingStage
@@ -23291,6 +26399,18 @@ export namespace Prisma {
     none?: ExtensionTokenWhereInput
   }
 
+  export type FormSubmissionListRelationFilter = {
+    every?: FormSubmissionWhereInput
+    some?: FormSubmissionWhereInput
+    none?: FormSubmissionWhereInput
+  }
+
+  export type FieldMappingRuleListRelationFilter = {
+    every?: FieldMappingRuleWhereInput
+    some?: FieldMappingRuleWhereInput
+    none?: FieldMappingRuleWhereInput
+  }
+
   export type SortOrderInput = {
     sort: SortOrder
     nulls?: NullsOrder
@@ -23345,6 +26465,14 @@ export namespace Prisma {
   }
 
   export type ExtensionTokenOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type FormSubmissionOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type FieldMappingRuleOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
@@ -24352,6 +27480,136 @@ export namespace Prisma {
     createdAt?: SortOrder
   }
 
+  export type FormSubmissionCountOrderByAggregateInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    jobId?: SortOrder
+    pageUrl?: SortOrder
+    pageDomain?: SortOrder
+    atsProvider?: SortOrder
+    formSignature?: SortOrder
+    fieldValues?: SortOrder
+    fieldMappings?: SortOrder
+    submittedAt?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type FormSubmissionMaxOrderByAggregateInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    jobId?: SortOrder
+    pageUrl?: SortOrder
+    pageDomain?: SortOrder
+    atsProvider?: SortOrder
+    formSignature?: SortOrder
+    submittedAt?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type FormSubmissionMinOrderByAggregateInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    jobId?: SortOrder
+    pageUrl?: SortOrder
+    pageDomain?: SortOrder
+    atsProvider?: SortOrder
+    formSignature?: SortOrder
+    submittedAt?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type FloatFilter<$PrismaModel = never> = {
+    equals?: number | FloatFieldRefInput<$PrismaModel>
+    in?: number[] | ListFloatFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListFloatFieldRefInput<$PrismaModel>
+    lt?: number | FloatFieldRefInput<$PrismaModel>
+    lte?: number | FloatFieldRefInput<$PrismaModel>
+    gt?: number | FloatFieldRefInput<$PrismaModel>
+    gte?: number | FloatFieldRefInput<$PrismaModel>
+    not?: NestedFloatFilter<$PrismaModel> | number
+  }
+
+  export type FieldMappingRuleUserIdFieldSelectorAtsProviderPageDomainCompoundUniqueInput = {
+    userId: string
+    fieldSelector: string
+    atsProvider: string
+    pageDomain: string
+  }
+
+  export type FieldMappingRuleCountOrderByAggregateInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    fieldSelector?: SortOrder
+    fieldLabel?: SortOrder
+    atsProvider?: SortOrder
+    pageDomain?: SortOrder
+    profilePath?: SortOrder
+    staticValue?: SortOrder
+    source?: SortOrder
+    confidence?: SortOrder
+    useCount?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FieldMappingRuleAvgOrderByAggregateInput = {
+    confidence?: SortOrder
+    useCount?: SortOrder
+  }
+
+  export type FieldMappingRuleMaxOrderByAggregateInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    fieldSelector?: SortOrder
+    fieldLabel?: SortOrder
+    atsProvider?: SortOrder
+    pageDomain?: SortOrder
+    profilePath?: SortOrder
+    staticValue?: SortOrder
+    source?: SortOrder
+    confidence?: SortOrder
+    useCount?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FieldMappingRuleMinOrderByAggregateInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    fieldSelector?: SortOrder
+    fieldLabel?: SortOrder
+    atsProvider?: SortOrder
+    pageDomain?: SortOrder
+    profilePath?: SortOrder
+    staticValue?: SortOrder
+    source?: SortOrder
+    confidence?: SortOrder
+    useCount?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FieldMappingRuleSumOrderByAggregateInput = {
+    confidence?: SortOrder
+    useCount?: SortOrder
+  }
+
+  export type FloatWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | FloatFieldRefInput<$PrismaModel>
+    in?: number[] | ListFloatFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListFloatFieldRefInput<$PrismaModel>
+    lt?: number | FloatFieldRefInput<$PrismaModel>
+    lte?: number | FloatFieldRefInput<$PrismaModel>
+    gt?: number | FloatFieldRefInput<$PrismaModel>
+    gte?: number | FloatFieldRefInput<$PrismaModel>
+    not?: NestedFloatWithAggregatesFilter<$PrismaModel> | number
+    _count?: NestedIntFilter<$PrismaModel>
+    _avg?: NestedFloatFilter<$PrismaModel>
+    _sum?: NestedFloatFilter<$PrismaModel>
+    _min?: NestedFloatFilter<$PrismaModel>
+    _max?: NestedFloatFilter<$PrismaModel>
+  }
+
   export type EnumOnboardingStageFilter<$PrismaModel = never> = {
     equals?: $Enums.OnboardingStage | EnumOnboardingStageFieldRefInput<$PrismaModel>
     in?: $Enums.OnboardingStage[] | ListEnumOnboardingStageFieldRefInput<$PrismaModel>
@@ -24497,6 +27755,20 @@ export namespace Prisma {
     connect?: ExtensionTokenWhereUniqueInput | ExtensionTokenWhereUniqueInput[]
   }
 
+  export type FormSubmissionCreateNestedManyWithoutUserInput = {
+    create?: XOR<FormSubmissionCreateWithoutUserInput, FormSubmissionUncheckedCreateWithoutUserInput> | FormSubmissionCreateWithoutUserInput[] | FormSubmissionUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: FormSubmissionCreateOrConnectWithoutUserInput | FormSubmissionCreateOrConnectWithoutUserInput[]
+    createMany?: FormSubmissionCreateManyUserInputEnvelope
+    connect?: FormSubmissionWhereUniqueInput | FormSubmissionWhereUniqueInput[]
+  }
+
+  export type FieldMappingRuleCreateNestedManyWithoutUserInput = {
+    create?: XOR<FieldMappingRuleCreateWithoutUserInput, FieldMappingRuleUncheckedCreateWithoutUserInput> | FieldMappingRuleCreateWithoutUserInput[] | FieldMappingRuleUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: FieldMappingRuleCreateOrConnectWithoutUserInput | FieldMappingRuleCreateOrConnectWithoutUserInput[]
+    createMany?: FieldMappingRuleCreateManyUserInputEnvelope
+    connect?: FieldMappingRuleWhereUniqueInput | FieldMappingRuleWhereUniqueInput[]
+  }
+
   export type AccountUncheckedCreateNestedManyWithoutUserInput = {
     create?: XOR<AccountCreateWithoutUserInput, AccountUncheckedCreateWithoutUserInput> | AccountCreateWithoutUserInput[] | AccountUncheckedCreateWithoutUserInput[]
     connectOrCreate?: AccountCreateOrConnectWithoutUserInput | AccountCreateOrConnectWithoutUserInput[]
@@ -24592,6 +27864,20 @@ export namespace Prisma {
     connectOrCreate?: ExtensionTokenCreateOrConnectWithoutUserInput | ExtensionTokenCreateOrConnectWithoutUserInput[]
     createMany?: ExtensionTokenCreateManyUserInputEnvelope
     connect?: ExtensionTokenWhereUniqueInput | ExtensionTokenWhereUniqueInput[]
+  }
+
+  export type FormSubmissionUncheckedCreateNestedManyWithoutUserInput = {
+    create?: XOR<FormSubmissionCreateWithoutUserInput, FormSubmissionUncheckedCreateWithoutUserInput> | FormSubmissionCreateWithoutUserInput[] | FormSubmissionUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: FormSubmissionCreateOrConnectWithoutUserInput | FormSubmissionCreateOrConnectWithoutUserInput[]
+    createMany?: FormSubmissionCreateManyUserInputEnvelope
+    connect?: FormSubmissionWhereUniqueInput | FormSubmissionWhereUniqueInput[]
+  }
+
+  export type FieldMappingRuleUncheckedCreateNestedManyWithoutUserInput = {
+    create?: XOR<FieldMappingRuleCreateWithoutUserInput, FieldMappingRuleUncheckedCreateWithoutUserInput> | FieldMappingRuleCreateWithoutUserInput[] | FieldMappingRuleUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: FieldMappingRuleCreateOrConnectWithoutUserInput | FieldMappingRuleCreateOrConnectWithoutUserInput[]
+    createMany?: FieldMappingRuleCreateManyUserInputEnvelope
+    connect?: FieldMappingRuleWhereUniqueInput | FieldMappingRuleWhereUniqueInput[]
   }
 
   export type StringFieldUpdateOperationsInput = {
@@ -24802,6 +28088,34 @@ export namespace Prisma {
     deleteMany?: ExtensionTokenScalarWhereInput | ExtensionTokenScalarWhereInput[]
   }
 
+  export type FormSubmissionUpdateManyWithoutUserNestedInput = {
+    create?: XOR<FormSubmissionCreateWithoutUserInput, FormSubmissionUncheckedCreateWithoutUserInput> | FormSubmissionCreateWithoutUserInput[] | FormSubmissionUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: FormSubmissionCreateOrConnectWithoutUserInput | FormSubmissionCreateOrConnectWithoutUserInput[]
+    upsert?: FormSubmissionUpsertWithWhereUniqueWithoutUserInput | FormSubmissionUpsertWithWhereUniqueWithoutUserInput[]
+    createMany?: FormSubmissionCreateManyUserInputEnvelope
+    set?: FormSubmissionWhereUniqueInput | FormSubmissionWhereUniqueInput[]
+    disconnect?: FormSubmissionWhereUniqueInput | FormSubmissionWhereUniqueInput[]
+    delete?: FormSubmissionWhereUniqueInput | FormSubmissionWhereUniqueInput[]
+    connect?: FormSubmissionWhereUniqueInput | FormSubmissionWhereUniqueInput[]
+    update?: FormSubmissionUpdateWithWhereUniqueWithoutUserInput | FormSubmissionUpdateWithWhereUniqueWithoutUserInput[]
+    updateMany?: FormSubmissionUpdateManyWithWhereWithoutUserInput | FormSubmissionUpdateManyWithWhereWithoutUserInput[]
+    deleteMany?: FormSubmissionScalarWhereInput | FormSubmissionScalarWhereInput[]
+  }
+
+  export type FieldMappingRuleUpdateManyWithoutUserNestedInput = {
+    create?: XOR<FieldMappingRuleCreateWithoutUserInput, FieldMappingRuleUncheckedCreateWithoutUserInput> | FieldMappingRuleCreateWithoutUserInput[] | FieldMappingRuleUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: FieldMappingRuleCreateOrConnectWithoutUserInput | FieldMappingRuleCreateOrConnectWithoutUserInput[]
+    upsert?: FieldMappingRuleUpsertWithWhereUniqueWithoutUserInput | FieldMappingRuleUpsertWithWhereUniqueWithoutUserInput[]
+    createMany?: FieldMappingRuleCreateManyUserInputEnvelope
+    set?: FieldMappingRuleWhereUniqueInput | FieldMappingRuleWhereUniqueInput[]
+    disconnect?: FieldMappingRuleWhereUniqueInput | FieldMappingRuleWhereUniqueInput[]
+    delete?: FieldMappingRuleWhereUniqueInput | FieldMappingRuleWhereUniqueInput[]
+    connect?: FieldMappingRuleWhereUniqueInput | FieldMappingRuleWhereUniqueInput[]
+    update?: FieldMappingRuleUpdateWithWhereUniqueWithoutUserInput | FieldMappingRuleUpdateWithWhereUniqueWithoutUserInput[]
+    updateMany?: FieldMappingRuleUpdateManyWithWhereWithoutUserInput | FieldMappingRuleUpdateManyWithWhereWithoutUserInput[]
+    deleteMany?: FieldMappingRuleScalarWhereInput | FieldMappingRuleScalarWhereInput[]
+  }
+
   export type AccountUncheckedUpdateManyWithoutUserNestedInput = {
     create?: XOR<AccountCreateWithoutUserInput, AccountUncheckedCreateWithoutUserInput> | AccountCreateWithoutUserInput[] | AccountUncheckedCreateWithoutUserInput[]
     connectOrCreate?: AccountCreateOrConnectWithoutUserInput | AccountCreateOrConnectWithoutUserInput[]
@@ -24994,6 +28308,34 @@ export namespace Prisma {
     deleteMany?: ExtensionTokenScalarWhereInput | ExtensionTokenScalarWhereInput[]
   }
 
+  export type FormSubmissionUncheckedUpdateManyWithoutUserNestedInput = {
+    create?: XOR<FormSubmissionCreateWithoutUserInput, FormSubmissionUncheckedCreateWithoutUserInput> | FormSubmissionCreateWithoutUserInput[] | FormSubmissionUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: FormSubmissionCreateOrConnectWithoutUserInput | FormSubmissionCreateOrConnectWithoutUserInput[]
+    upsert?: FormSubmissionUpsertWithWhereUniqueWithoutUserInput | FormSubmissionUpsertWithWhereUniqueWithoutUserInput[]
+    createMany?: FormSubmissionCreateManyUserInputEnvelope
+    set?: FormSubmissionWhereUniqueInput | FormSubmissionWhereUniqueInput[]
+    disconnect?: FormSubmissionWhereUniqueInput | FormSubmissionWhereUniqueInput[]
+    delete?: FormSubmissionWhereUniqueInput | FormSubmissionWhereUniqueInput[]
+    connect?: FormSubmissionWhereUniqueInput | FormSubmissionWhereUniqueInput[]
+    update?: FormSubmissionUpdateWithWhereUniqueWithoutUserInput | FormSubmissionUpdateWithWhereUniqueWithoutUserInput[]
+    updateMany?: FormSubmissionUpdateManyWithWhereWithoutUserInput | FormSubmissionUpdateManyWithWhereWithoutUserInput[]
+    deleteMany?: FormSubmissionScalarWhereInput | FormSubmissionScalarWhereInput[]
+  }
+
+  export type FieldMappingRuleUncheckedUpdateManyWithoutUserNestedInput = {
+    create?: XOR<FieldMappingRuleCreateWithoutUserInput, FieldMappingRuleUncheckedCreateWithoutUserInput> | FieldMappingRuleCreateWithoutUserInput[] | FieldMappingRuleUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: FieldMappingRuleCreateOrConnectWithoutUserInput | FieldMappingRuleCreateOrConnectWithoutUserInput[]
+    upsert?: FieldMappingRuleUpsertWithWhereUniqueWithoutUserInput | FieldMappingRuleUpsertWithWhereUniqueWithoutUserInput[]
+    createMany?: FieldMappingRuleCreateManyUserInputEnvelope
+    set?: FieldMappingRuleWhereUniqueInput | FieldMappingRuleWhereUniqueInput[]
+    disconnect?: FieldMappingRuleWhereUniqueInput | FieldMappingRuleWhereUniqueInput[]
+    delete?: FieldMappingRuleWhereUniqueInput | FieldMappingRuleWhereUniqueInput[]
+    connect?: FieldMappingRuleWhereUniqueInput | FieldMappingRuleWhereUniqueInput[]
+    update?: FieldMappingRuleUpdateWithWhereUniqueWithoutUserInput | FieldMappingRuleUpdateWithWhereUniqueWithoutUserInput[]
+    updateMany?: FieldMappingRuleUpdateManyWithWhereWithoutUserInput | FieldMappingRuleUpdateManyWithWhereWithoutUserInput[]
+    deleteMany?: FieldMappingRuleScalarWhereInput | FieldMappingRuleScalarWhereInput[]
+  }
+
   export type UserCreateNestedOneWithoutAccountsInput = {
     create?: XOR<UserCreateWithoutAccountsInput, UserUncheckedCreateWithoutAccountsInput>
     connectOrCreate?: UserCreateOrConnectWithoutAccountsInput
@@ -25050,6 +28392,13 @@ export namespace Prisma {
     connect?: ApplicationBatchTaskWhereUniqueInput | ApplicationBatchTaskWhereUniqueInput[]
   }
 
+  export type FormSubmissionCreateNestedManyWithoutJobInput = {
+    create?: XOR<FormSubmissionCreateWithoutJobInput, FormSubmissionUncheckedCreateWithoutJobInput> | FormSubmissionCreateWithoutJobInput[] | FormSubmissionUncheckedCreateWithoutJobInput[]
+    connectOrCreate?: FormSubmissionCreateOrConnectWithoutJobInput | FormSubmissionCreateOrConnectWithoutJobInput[]
+    createMany?: FormSubmissionCreateManyJobInputEnvelope
+    connect?: FormSubmissionWhereUniqueInput | FormSubmissionWhereUniqueInput[]
+  }
+
   export type ApplicationUncheckedCreateNestedManyWithoutJobInput = {
     create?: XOR<ApplicationCreateWithoutJobInput, ApplicationUncheckedCreateWithoutJobInput> | ApplicationCreateWithoutJobInput[] | ApplicationUncheckedCreateWithoutJobInput[]
     connectOrCreate?: ApplicationCreateOrConnectWithoutJobInput | ApplicationCreateOrConnectWithoutJobInput[]
@@ -25062,6 +28411,13 @@ export namespace Prisma {
     connectOrCreate?: ApplicationBatchTaskCreateOrConnectWithoutJobInput | ApplicationBatchTaskCreateOrConnectWithoutJobInput[]
     createMany?: ApplicationBatchTaskCreateManyJobInputEnvelope
     connect?: ApplicationBatchTaskWhereUniqueInput | ApplicationBatchTaskWhereUniqueInput[]
+  }
+
+  export type FormSubmissionUncheckedCreateNestedManyWithoutJobInput = {
+    create?: XOR<FormSubmissionCreateWithoutJobInput, FormSubmissionUncheckedCreateWithoutJobInput> | FormSubmissionCreateWithoutJobInput[] | FormSubmissionUncheckedCreateWithoutJobInput[]
+    connectOrCreate?: FormSubmissionCreateOrConnectWithoutJobInput | FormSubmissionCreateOrConnectWithoutJobInput[]
+    createMany?: FormSubmissionCreateManyJobInputEnvelope
+    connect?: FormSubmissionWhereUniqueInput | FormSubmissionWhereUniqueInput[]
   }
 
   export type EnumJobStatusFieldUpdateOperationsInput = {
@@ -25104,6 +28460,20 @@ export namespace Prisma {
     deleteMany?: ApplicationBatchTaskScalarWhereInput | ApplicationBatchTaskScalarWhereInput[]
   }
 
+  export type FormSubmissionUpdateManyWithoutJobNestedInput = {
+    create?: XOR<FormSubmissionCreateWithoutJobInput, FormSubmissionUncheckedCreateWithoutJobInput> | FormSubmissionCreateWithoutJobInput[] | FormSubmissionUncheckedCreateWithoutJobInput[]
+    connectOrCreate?: FormSubmissionCreateOrConnectWithoutJobInput | FormSubmissionCreateOrConnectWithoutJobInput[]
+    upsert?: FormSubmissionUpsertWithWhereUniqueWithoutJobInput | FormSubmissionUpsertWithWhereUniqueWithoutJobInput[]
+    createMany?: FormSubmissionCreateManyJobInputEnvelope
+    set?: FormSubmissionWhereUniqueInput | FormSubmissionWhereUniqueInput[]
+    disconnect?: FormSubmissionWhereUniqueInput | FormSubmissionWhereUniqueInput[]
+    delete?: FormSubmissionWhereUniqueInput | FormSubmissionWhereUniqueInput[]
+    connect?: FormSubmissionWhereUniqueInput | FormSubmissionWhereUniqueInput[]
+    update?: FormSubmissionUpdateWithWhereUniqueWithoutJobInput | FormSubmissionUpdateWithWhereUniqueWithoutJobInput[]
+    updateMany?: FormSubmissionUpdateManyWithWhereWithoutJobInput | FormSubmissionUpdateManyWithWhereWithoutJobInput[]
+    deleteMany?: FormSubmissionScalarWhereInput | FormSubmissionScalarWhereInput[]
+  }
+
   export type ApplicationUncheckedUpdateManyWithoutJobNestedInput = {
     create?: XOR<ApplicationCreateWithoutJobInput, ApplicationUncheckedCreateWithoutJobInput> | ApplicationCreateWithoutJobInput[] | ApplicationUncheckedCreateWithoutJobInput[]
     connectOrCreate?: ApplicationCreateOrConnectWithoutJobInput | ApplicationCreateOrConnectWithoutJobInput[]
@@ -25130,6 +28500,20 @@ export namespace Prisma {
     update?: ApplicationBatchTaskUpdateWithWhereUniqueWithoutJobInput | ApplicationBatchTaskUpdateWithWhereUniqueWithoutJobInput[]
     updateMany?: ApplicationBatchTaskUpdateManyWithWhereWithoutJobInput | ApplicationBatchTaskUpdateManyWithWhereWithoutJobInput[]
     deleteMany?: ApplicationBatchTaskScalarWhereInput | ApplicationBatchTaskScalarWhereInput[]
+  }
+
+  export type FormSubmissionUncheckedUpdateManyWithoutJobNestedInput = {
+    create?: XOR<FormSubmissionCreateWithoutJobInput, FormSubmissionUncheckedCreateWithoutJobInput> | FormSubmissionCreateWithoutJobInput[] | FormSubmissionUncheckedCreateWithoutJobInput[]
+    connectOrCreate?: FormSubmissionCreateOrConnectWithoutJobInput | FormSubmissionCreateOrConnectWithoutJobInput[]
+    upsert?: FormSubmissionUpsertWithWhereUniqueWithoutJobInput | FormSubmissionUpsertWithWhereUniqueWithoutJobInput[]
+    createMany?: FormSubmissionCreateManyJobInputEnvelope
+    set?: FormSubmissionWhereUniqueInput | FormSubmissionWhereUniqueInput[]
+    disconnect?: FormSubmissionWhereUniqueInput | FormSubmissionWhereUniqueInput[]
+    delete?: FormSubmissionWhereUniqueInput | FormSubmissionWhereUniqueInput[]
+    connect?: FormSubmissionWhereUniqueInput | FormSubmissionWhereUniqueInput[]
+    update?: FormSubmissionUpdateWithWhereUniqueWithoutJobInput | FormSubmissionUpdateWithWhereUniqueWithoutJobInput[]
+    updateMany?: FormSubmissionUpdateManyWithWhereWithoutJobInput | FormSubmissionUpdateManyWithWhereWithoutJobInput[]
+    deleteMany?: FormSubmissionScalarWhereInput | FormSubmissionScalarWhereInput[]
   }
 
   export type UserCreateNestedOneWithoutApplicationBatchesInput = {
@@ -25498,6 +28882,58 @@ export namespace Prisma {
     upsert?: UserUpsertWithoutExtensionTokensInput
     connect?: UserWhereUniqueInput
     update?: XOR<XOR<UserUpdateToOneWithWhereWithoutExtensionTokensInput, UserUpdateWithoutExtensionTokensInput>, UserUncheckedUpdateWithoutExtensionTokensInput>
+  }
+
+  export type UserCreateNestedOneWithoutFormSubmissionsInput = {
+    create?: XOR<UserCreateWithoutFormSubmissionsInput, UserUncheckedCreateWithoutFormSubmissionsInput>
+    connectOrCreate?: UserCreateOrConnectWithoutFormSubmissionsInput
+    connect?: UserWhereUniqueInput
+  }
+
+  export type JobCreateNestedOneWithoutFormSubmissionsInput = {
+    create?: XOR<JobCreateWithoutFormSubmissionsInput, JobUncheckedCreateWithoutFormSubmissionsInput>
+    connectOrCreate?: JobCreateOrConnectWithoutFormSubmissionsInput
+    connect?: JobWhereUniqueInput
+  }
+
+  export type UserUpdateOneRequiredWithoutFormSubmissionsNestedInput = {
+    create?: XOR<UserCreateWithoutFormSubmissionsInput, UserUncheckedCreateWithoutFormSubmissionsInput>
+    connectOrCreate?: UserCreateOrConnectWithoutFormSubmissionsInput
+    upsert?: UserUpsertWithoutFormSubmissionsInput
+    connect?: UserWhereUniqueInput
+    update?: XOR<XOR<UserUpdateToOneWithWhereWithoutFormSubmissionsInput, UserUpdateWithoutFormSubmissionsInput>, UserUncheckedUpdateWithoutFormSubmissionsInput>
+  }
+
+  export type JobUpdateOneWithoutFormSubmissionsNestedInput = {
+    create?: XOR<JobCreateWithoutFormSubmissionsInput, JobUncheckedCreateWithoutFormSubmissionsInput>
+    connectOrCreate?: JobCreateOrConnectWithoutFormSubmissionsInput
+    upsert?: JobUpsertWithoutFormSubmissionsInput
+    disconnect?: JobWhereInput | boolean
+    delete?: JobWhereInput | boolean
+    connect?: JobWhereUniqueInput
+    update?: XOR<XOR<JobUpdateToOneWithWhereWithoutFormSubmissionsInput, JobUpdateWithoutFormSubmissionsInput>, JobUncheckedUpdateWithoutFormSubmissionsInput>
+  }
+
+  export type UserCreateNestedOneWithoutFieldMappingRulesInput = {
+    create?: XOR<UserCreateWithoutFieldMappingRulesInput, UserUncheckedCreateWithoutFieldMappingRulesInput>
+    connectOrCreate?: UserCreateOrConnectWithoutFieldMappingRulesInput
+    connect?: UserWhereUniqueInput
+  }
+
+  export type FloatFieldUpdateOperationsInput = {
+    set?: number
+    increment?: number
+    decrement?: number
+    multiply?: number
+    divide?: number
+  }
+
+  export type UserUpdateOneRequiredWithoutFieldMappingRulesNestedInput = {
+    create?: XOR<UserCreateWithoutFieldMappingRulesInput, UserUncheckedCreateWithoutFieldMappingRulesInput>
+    connectOrCreate?: UserCreateOrConnectWithoutFieldMappingRulesInput
+    upsert?: UserUpsertWithoutFieldMappingRulesInput
+    connect?: UserWhereUniqueInput
+    update?: XOR<XOR<UserUpdateToOneWithWhereWithoutFieldMappingRulesInput, UserUpdateWithoutFieldMappingRulesInput>, UserUncheckedUpdateWithoutFieldMappingRulesInput>
   }
 
   export type UserCreateNestedOneWithoutOnboardingStateInput = {
@@ -25900,6 +29336,22 @@ export namespace Prisma {
     _max?: NestedStringNullableFilter<$PrismaModel>
   }
 
+  export type NestedFloatWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | FloatFieldRefInput<$PrismaModel>
+    in?: number[] | ListFloatFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListFloatFieldRefInput<$PrismaModel>
+    lt?: number | FloatFieldRefInput<$PrismaModel>
+    lte?: number | FloatFieldRefInput<$PrismaModel>
+    gt?: number | FloatFieldRefInput<$PrismaModel>
+    gte?: number | FloatFieldRefInput<$PrismaModel>
+    not?: NestedFloatWithAggregatesFilter<$PrismaModel> | number
+    _count?: NestedIntFilter<$PrismaModel>
+    _avg?: NestedFloatFilter<$PrismaModel>
+    _sum?: NestedFloatFilter<$PrismaModel>
+    _min?: NestedFloatFilter<$PrismaModel>
+    _max?: NestedFloatFilter<$PrismaModel>
+  }
+
   export type NestedEnumOnboardingStageFilter<$PrismaModel = never> = {
     equals?: $Enums.OnboardingStage | EnumOnboardingStageFieldRefInput<$PrismaModel>
     in?: $Enums.OnboardingStage[] | ListEnumOnboardingStageFieldRefInput<$PrismaModel>
@@ -26000,6 +29452,7 @@ export namespace Prisma {
     updatedAt?: Date | string
     applications?: ApplicationCreateNestedManyWithoutJobInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutJobInput
+    formSubmissions?: FormSubmissionCreateNestedManyWithoutJobInput
   }
 
   export type JobUncheckedCreateWithoutUserInput = {
@@ -26017,6 +29470,7 @@ export namespace Prisma {
     updatedAt?: Date | string
     applications?: ApplicationUncheckedCreateNestedManyWithoutJobInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutJobInput
+    formSubmissions?: FormSubmissionUncheckedCreateNestedManyWithoutJobInput
   }
 
   export type JobCreateOrConnectWithoutUserInput = {
@@ -26387,6 +29841,82 @@ export namespace Prisma {
 
   export type ExtensionTokenCreateManyUserInputEnvelope = {
     data: ExtensionTokenCreateManyUserInput | ExtensionTokenCreateManyUserInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type FormSubmissionCreateWithoutUserInput = {
+    id?: string
+    pageUrl: string
+    pageDomain: string
+    atsProvider?: string | null
+    formSignature: string
+    fieldValues: JsonNullValueInput | InputJsonValue
+    fieldMappings: JsonNullValueInput | InputJsonValue
+    submittedAt?: Date | string
+    createdAt?: Date | string
+    job?: JobCreateNestedOneWithoutFormSubmissionsInput
+  }
+
+  export type FormSubmissionUncheckedCreateWithoutUserInput = {
+    id?: string
+    jobId?: string | null
+    pageUrl: string
+    pageDomain: string
+    atsProvider?: string | null
+    formSignature: string
+    fieldValues: JsonNullValueInput | InputJsonValue
+    fieldMappings: JsonNullValueInput | InputJsonValue
+    submittedAt?: Date | string
+    createdAt?: Date | string
+  }
+
+  export type FormSubmissionCreateOrConnectWithoutUserInput = {
+    where: FormSubmissionWhereUniqueInput
+    create: XOR<FormSubmissionCreateWithoutUserInput, FormSubmissionUncheckedCreateWithoutUserInput>
+  }
+
+  export type FormSubmissionCreateManyUserInputEnvelope = {
+    data: FormSubmissionCreateManyUserInput | FormSubmissionCreateManyUserInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type FieldMappingRuleCreateWithoutUserInput = {
+    id?: string
+    fieldSelector: string
+    fieldLabel?: string | null
+    atsProvider?: string | null
+    pageDomain?: string | null
+    profilePath: string
+    staticValue?: string | null
+    source?: string
+    confidence?: number
+    useCount?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FieldMappingRuleUncheckedCreateWithoutUserInput = {
+    id?: string
+    fieldSelector: string
+    fieldLabel?: string | null
+    atsProvider?: string | null
+    pageDomain?: string | null
+    profilePath: string
+    staticValue?: string | null
+    source?: string
+    confidence?: number
+    useCount?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FieldMappingRuleCreateOrConnectWithoutUserInput = {
+    where: FieldMappingRuleWhereUniqueInput
+    create: XOR<FieldMappingRuleCreateWithoutUserInput, FieldMappingRuleUncheckedCreateWithoutUserInput>
+  }
+
+  export type FieldMappingRuleCreateManyUserInputEnvelope = {
+    data: FieldMappingRuleCreateManyUserInput | FieldMappingRuleCreateManyUserInput[]
     skipDuplicates?: boolean
   }
 
@@ -26835,6 +30365,74 @@ export namespace Prisma {
     createdAt?: DateTimeFilter<"ExtensionToken"> | Date | string
   }
 
+  export type FormSubmissionUpsertWithWhereUniqueWithoutUserInput = {
+    where: FormSubmissionWhereUniqueInput
+    update: XOR<FormSubmissionUpdateWithoutUserInput, FormSubmissionUncheckedUpdateWithoutUserInput>
+    create: XOR<FormSubmissionCreateWithoutUserInput, FormSubmissionUncheckedCreateWithoutUserInput>
+  }
+
+  export type FormSubmissionUpdateWithWhereUniqueWithoutUserInput = {
+    where: FormSubmissionWhereUniqueInput
+    data: XOR<FormSubmissionUpdateWithoutUserInput, FormSubmissionUncheckedUpdateWithoutUserInput>
+  }
+
+  export type FormSubmissionUpdateManyWithWhereWithoutUserInput = {
+    where: FormSubmissionScalarWhereInput
+    data: XOR<FormSubmissionUpdateManyMutationInput, FormSubmissionUncheckedUpdateManyWithoutUserInput>
+  }
+
+  export type FormSubmissionScalarWhereInput = {
+    AND?: FormSubmissionScalarWhereInput | FormSubmissionScalarWhereInput[]
+    OR?: FormSubmissionScalarWhereInput[]
+    NOT?: FormSubmissionScalarWhereInput | FormSubmissionScalarWhereInput[]
+    id?: UuidFilter<"FormSubmission"> | string
+    userId?: UuidFilter<"FormSubmission"> | string
+    jobId?: UuidNullableFilter<"FormSubmission"> | string | null
+    pageUrl?: StringFilter<"FormSubmission"> | string
+    pageDomain?: StringFilter<"FormSubmission"> | string
+    atsProvider?: StringNullableFilter<"FormSubmission"> | string | null
+    formSignature?: StringFilter<"FormSubmission"> | string
+    fieldValues?: JsonFilter<"FormSubmission">
+    fieldMappings?: JsonFilter<"FormSubmission">
+    submittedAt?: DateTimeFilter<"FormSubmission"> | Date | string
+    createdAt?: DateTimeFilter<"FormSubmission"> | Date | string
+  }
+
+  export type FieldMappingRuleUpsertWithWhereUniqueWithoutUserInput = {
+    where: FieldMappingRuleWhereUniqueInput
+    update: XOR<FieldMappingRuleUpdateWithoutUserInput, FieldMappingRuleUncheckedUpdateWithoutUserInput>
+    create: XOR<FieldMappingRuleCreateWithoutUserInput, FieldMappingRuleUncheckedCreateWithoutUserInput>
+  }
+
+  export type FieldMappingRuleUpdateWithWhereUniqueWithoutUserInput = {
+    where: FieldMappingRuleWhereUniqueInput
+    data: XOR<FieldMappingRuleUpdateWithoutUserInput, FieldMappingRuleUncheckedUpdateWithoutUserInput>
+  }
+
+  export type FieldMappingRuleUpdateManyWithWhereWithoutUserInput = {
+    where: FieldMappingRuleScalarWhereInput
+    data: XOR<FieldMappingRuleUpdateManyMutationInput, FieldMappingRuleUncheckedUpdateManyWithoutUserInput>
+  }
+
+  export type FieldMappingRuleScalarWhereInput = {
+    AND?: FieldMappingRuleScalarWhereInput | FieldMappingRuleScalarWhereInput[]
+    OR?: FieldMappingRuleScalarWhereInput[]
+    NOT?: FieldMappingRuleScalarWhereInput | FieldMappingRuleScalarWhereInput[]
+    id?: UuidFilter<"FieldMappingRule"> | string
+    userId?: UuidFilter<"FieldMappingRule"> | string
+    fieldSelector?: StringFilter<"FieldMappingRule"> | string
+    fieldLabel?: StringNullableFilter<"FieldMappingRule"> | string | null
+    atsProvider?: StringNullableFilter<"FieldMappingRule"> | string | null
+    pageDomain?: StringNullableFilter<"FieldMappingRule"> | string | null
+    profilePath?: StringFilter<"FieldMappingRule"> | string
+    staticValue?: StringNullableFilter<"FieldMappingRule"> | string | null
+    source?: StringFilter<"FieldMappingRule"> | string
+    confidence?: FloatFilter<"FieldMappingRule"> | number
+    useCount?: IntFilter<"FieldMappingRule"> | number
+    createdAt?: DateTimeFilter<"FieldMappingRule"> | Date | string
+    updatedAt?: DateTimeFilter<"FieldMappingRule"> | Date | string
+  }
+
   export type UserCreateWithoutAccountsInput = {
     id?: string
     email?: string | null
@@ -26856,6 +30454,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutAccountsInput = {
@@ -26879,6 +30479,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionUncheckedCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutAccountsInput = {
@@ -26918,6 +30520,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutAccountsInput = {
@@ -26941,6 +30545,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUncheckedUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type UserCreateWithoutSessionsInput = {
@@ -26964,6 +30570,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutSessionsInput = {
@@ -26987,6 +30595,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionUncheckedCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutSessionsInput = {
@@ -27026,6 +30636,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutSessionsInput = {
@@ -27049,6 +30661,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUncheckedUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type UserCreateWithoutJobsInput = {
@@ -27072,6 +30686,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutJobsInput = {
@@ -27095,6 +30711,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionUncheckedCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutJobsInput = {
@@ -27178,6 +30796,42 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
+  export type FormSubmissionCreateWithoutJobInput = {
+    id?: string
+    pageUrl: string
+    pageDomain: string
+    atsProvider?: string | null
+    formSignature: string
+    fieldValues: JsonNullValueInput | InputJsonValue
+    fieldMappings: JsonNullValueInput | InputJsonValue
+    submittedAt?: Date | string
+    createdAt?: Date | string
+    user: UserCreateNestedOneWithoutFormSubmissionsInput
+  }
+
+  export type FormSubmissionUncheckedCreateWithoutJobInput = {
+    id?: string
+    userId: string
+    pageUrl: string
+    pageDomain: string
+    atsProvider?: string | null
+    formSignature: string
+    fieldValues: JsonNullValueInput | InputJsonValue
+    fieldMappings: JsonNullValueInput | InputJsonValue
+    submittedAt?: Date | string
+    createdAt?: Date | string
+  }
+
+  export type FormSubmissionCreateOrConnectWithoutJobInput = {
+    where: FormSubmissionWhereUniqueInput
+    create: XOR<FormSubmissionCreateWithoutJobInput, FormSubmissionUncheckedCreateWithoutJobInput>
+  }
+
+  export type FormSubmissionCreateManyJobInputEnvelope = {
+    data: FormSubmissionCreateManyJobInput | FormSubmissionCreateManyJobInput[]
+    skipDuplicates?: boolean
+  }
+
   export type UserUpsertWithoutJobsInput = {
     update: XOR<UserUpdateWithoutJobsInput, UserUncheckedUpdateWithoutJobsInput>
     create: XOR<UserCreateWithoutJobsInput, UserUncheckedCreateWithoutJobsInput>
@@ -27210,6 +30864,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutJobsInput = {
@@ -27233,6 +30889,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUncheckedUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type ApplicationUpsertWithWhereUniqueWithoutJobInput = {
@@ -27267,6 +30925,22 @@ export namespace Prisma {
     data: XOR<ApplicationBatchTaskUpdateManyMutationInput, ApplicationBatchTaskUncheckedUpdateManyWithoutJobInput>
   }
 
+  export type FormSubmissionUpsertWithWhereUniqueWithoutJobInput = {
+    where: FormSubmissionWhereUniqueInput
+    update: XOR<FormSubmissionUpdateWithoutJobInput, FormSubmissionUncheckedUpdateWithoutJobInput>
+    create: XOR<FormSubmissionCreateWithoutJobInput, FormSubmissionUncheckedCreateWithoutJobInput>
+  }
+
+  export type FormSubmissionUpdateWithWhereUniqueWithoutJobInput = {
+    where: FormSubmissionWhereUniqueInput
+    data: XOR<FormSubmissionUpdateWithoutJobInput, FormSubmissionUncheckedUpdateWithoutJobInput>
+  }
+
+  export type FormSubmissionUpdateManyWithWhereWithoutJobInput = {
+    where: FormSubmissionScalarWhereInput
+    data: XOR<FormSubmissionUpdateManyMutationInput, FormSubmissionUncheckedUpdateManyWithoutJobInput>
+  }
+
   export type UserCreateWithoutApplicationBatchesInput = {
     id?: string
     email?: string | null
@@ -27288,6 +30962,8 @@ export namespace Prisma {
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutApplicationBatchesInput = {
@@ -27311,6 +30987,8 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionUncheckedCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutApplicationBatchesInput = {
@@ -27386,6 +31064,8 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutApplicationBatchesInput = {
@@ -27409,6 +31089,8 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUncheckedUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type ApplicationBatchTaskUpsertWithWhereUniqueWithoutBatchInput = {
@@ -27479,6 +31161,8 @@ export namespace Prisma {
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutApplicationBatchTasksInput = {
@@ -27502,6 +31186,8 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionUncheckedCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutApplicationBatchTasksInput = {
@@ -27524,6 +31210,7 @@ export namespace Prisma {
     updatedAt?: Date | string
     user: UserCreateNestedOneWithoutJobsInput
     applications?: ApplicationCreateNestedManyWithoutJobInput
+    formSubmissions?: FormSubmissionCreateNestedManyWithoutJobInput
   }
 
   export type JobUncheckedCreateWithoutApplicationBatchTasksInput = {
@@ -27541,6 +31228,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     applications?: ApplicationUncheckedCreateNestedManyWithoutJobInput
+    formSubmissions?: FormSubmissionUncheckedCreateNestedManyWithoutJobInput
   }
 
   export type JobCreateOrConnectWithoutApplicationBatchTasksInput = {
@@ -27617,6 +31305,8 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutApplicationBatchTasksInput = {
@@ -27640,6 +31330,8 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUncheckedUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type JobUpsertWithoutApplicationBatchTasksInput = {
@@ -27668,6 +31360,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     user?: UserUpdateOneRequiredWithoutJobsNestedInput
     applications?: ApplicationUpdateManyWithoutJobNestedInput
+    formSubmissions?: FormSubmissionUpdateManyWithoutJobNestedInput
   }
 
   export type JobUncheckedUpdateWithoutApplicationBatchTasksInput = {
@@ -27685,6 +31378,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     applications?: ApplicationUncheckedUpdateManyWithoutJobNestedInput
+    formSubmissions?: FormSubmissionUncheckedUpdateManyWithoutJobNestedInput
   }
 
   export type UserCreateWithoutDeletedJobUrlsInput = {
@@ -27708,6 +31402,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutDeletedJobUrlsInput = {
@@ -27731,6 +31427,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionUncheckedCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutDeletedJobUrlsInput = {
@@ -27770,6 +31468,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutDeletedJobUrlsInput = {
@@ -27793,6 +31493,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUncheckedUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type UserCreateWithoutDailyCheckinsInput = {
@@ -27816,6 +31518,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutDailyCheckinsInput = {
@@ -27839,6 +31543,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionUncheckedCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutDailyCheckinsInput = {
@@ -27878,6 +31584,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutDailyCheckinsInput = {
@@ -27901,6 +31609,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUncheckedUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type UserCreateWithoutFetchRunsInput = {
@@ -27924,6 +31634,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutFetchRunsInput = {
@@ -27947,6 +31659,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionUncheckedCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutFetchRunsInput = {
@@ -27986,6 +31700,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutFetchRunsInput = {
@@ -28009,6 +31725,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUncheckedUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type UserCreateWithoutResumeProfilesInput = {
@@ -28032,6 +31750,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutResumeProfilesInput = {
@@ -28055,6 +31775,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionUncheckedCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutResumeProfilesInput = {
@@ -28158,6 +31880,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutResumeProfilesInput = {
@@ -28181,6 +31905,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUncheckedUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type ApplicationUpsertWithWhereUniqueWithoutResumeProfileInput = {
@@ -28236,6 +31962,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutActiveResumeProfilesInput = {
@@ -28259,6 +31987,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionUncheckedCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutActiveResumeProfilesInput = {
@@ -28339,6 +32069,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutActiveResumeProfilesInput = {
@@ -28362,6 +32094,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUncheckedUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type ResumeProfileUpsertWithoutActiveSelectionsInput = {
@@ -28432,6 +32166,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutApplicationsInput = {
@@ -28455,6 +32191,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionUncheckedCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutApplicationsInput = {
@@ -28477,6 +32215,7 @@ export namespace Prisma {
     updatedAt?: Date | string
     user: UserCreateNestedOneWithoutJobsInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutJobInput
+    formSubmissions?: FormSubmissionCreateNestedManyWithoutJobInput
   }
 
   export type JobUncheckedCreateWithoutApplicationsInput = {
@@ -28494,6 +32233,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutJobInput
+    formSubmissions?: FormSubmissionUncheckedCreateNestedManyWithoutJobInput
   }
 
   export type JobCreateOrConnectWithoutApplicationsInput = {
@@ -28574,6 +32314,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutApplicationsInput = {
@@ -28597,6 +32339,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUncheckedUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type JobUpsertWithoutApplicationsInput = {
@@ -28625,6 +32369,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     user?: UserUpdateOneRequiredWithoutJobsNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutJobNestedInput
+    formSubmissions?: FormSubmissionUpdateManyWithoutJobNestedInput
   }
 
   export type JobUncheckedUpdateWithoutApplicationsInput = {
@@ -28642,6 +32387,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutJobNestedInput
+    formSubmissions?: FormSubmissionUncheckedUpdateManyWithoutJobNestedInput
   }
 
   export type ResumeProfileUpsertWithoutApplicationsInput = {
@@ -28712,6 +32458,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutPromptRuleTemplatesInput = {
@@ -28735,6 +32483,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionUncheckedCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutPromptRuleTemplatesInput = {
@@ -28774,6 +32524,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutPromptRuleTemplatesInput = {
@@ -28797,6 +32549,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUncheckedUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type UserCreateWithoutExtensionTokensInput = {
@@ -28820,6 +32574,8 @@ export namespace Prisma {
     onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutExtensionTokensInput = {
@@ -28843,6 +32599,8 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionUncheckedCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutExtensionTokensInput = {
@@ -28882,6 +32640,8 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutExtensionTokensInput = {
@@ -28905,6 +32665,328 @@ export namespace Prisma {
     onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUncheckedUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUncheckedUpdateManyWithoutUserNestedInput
+  }
+
+  export type UserCreateWithoutFormSubmissionsInput = {
+    id?: string
+    email?: string | null
+    name?: string | null
+    image?: string | null
+    emailVerified?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    accounts?: AccountCreateNestedManyWithoutUserInput
+    sessions?: SessionCreateNestedManyWithoutUserInput
+    jobs?: JobCreateNestedManyWithoutUserInput
+    fetchRuns?: FetchRunCreateNestedManyWithoutUserInput
+    deletedJobUrls?: DeletedJobUrlCreateNestedManyWithoutUserInput
+    dailyCheckins?: DailyCheckinCreateNestedManyWithoutUserInput
+    resumeProfiles?: ResumeProfileCreateNestedManyWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileCreateNestedManyWithoutUserInput
+    applications?: ApplicationCreateNestedManyWithoutUserInput
+    promptRuleTemplates?: PromptRuleTemplateCreateNestedManyWithoutUserInput
+    onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
+    applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
+    applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleCreateNestedManyWithoutUserInput
+  }
+
+  export type UserUncheckedCreateWithoutFormSubmissionsInput = {
+    id?: string
+    email?: string | null
+    name?: string | null
+    image?: string | null
+    emailVerified?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    accounts?: AccountUncheckedCreateNestedManyWithoutUserInput
+    sessions?: SessionUncheckedCreateNestedManyWithoutUserInput
+    jobs?: JobUncheckedCreateNestedManyWithoutUserInput
+    fetchRuns?: FetchRunUncheckedCreateNestedManyWithoutUserInput
+    deletedJobUrls?: DeletedJobUrlUncheckedCreateNestedManyWithoutUserInput
+    dailyCheckins?: DailyCheckinUncheckedCreateNestedManyWithoutUserInput
+    resumeProfiles?: ResumeProfileUncheckedCreateNestedManyWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedCreateNestedManyWithoutUserInput
+    applications?: ApplicationUncheckedCreateNestedManyWithoutUserInput
+    promptRuleTemplates?: PromptRuleTemplateUncheckedCreateNestedManyWithoutUserInput
+    onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
+    applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
+    applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleUncheckedCreateNestedManyWithoutUserInput
+  }
+
+  export type UserCreateOrConnectWithoutFormSubmissionsInput = {
+    where: UserWhereUniqueInput
+    create: XOR<UserCreateWithoutFormSubmissionsInput, UserUncheckedCreateWithoutFormSubmissionsInput>
+  }
+
+  export type JobCreateWithoutFormSubmissionsInput = {
+    id?: string
+    jobUrl: string
+    title: string
+    company?: string | null
+    location?: string | null
+    jobType?: string | null
+    jobLevel?: string | null
+    description?: string | null
+    status?: $Enums.JobStatus
+    market?: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    user: UserCreateNestedOneWithoutJobsInput
+    applications?: ApplicationCreateNestedManyWithoutJobInput
+    applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutJobInput
+  }
+
+  export type JobUncheckedCreateWithoutFormSubmissionsInput = {
+    id?: string
+    userId: string
+    jobUrl: string
+    title: string
+    company?: string | null
+    location?: string | null
+    jobType?: string | null
+    jobLevel?: string | null
+    description?: string | null
+    status?: $Enums.JobStatus
+    market?: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    applications?: ApplicationUncheckedCreateNestedManyWithoutJobInput
+    applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutJobInput
+  }
+
+  export type JobCreateOrConnectWithoutFormSubmissionsInput = {
+    where: JobWhereUniqueInput
+    create: XOR<JobCreateWithoutFormSubmissionsInput, JobUncheckedCreateWithoutFormSubmissionsInput>
+  }
+
+  export type UserUpsertWithoutFormSubmissionsInput = {
+    update: XOR<UserUpdateWithoutFormSubmissionsInput, UserUncheckedUpdateWithoutFormSubmissionsInput>
+    create: XOR<UserCreateWithoutFormSubmissionsInput, UserUncheckedCreateWithoutFormSubmissionsInput>
+    where?: UserWhereInput
+  }
+
+  export type UserUpdateToOneWithWhereWithoutFormSubmissionsInput = {
+    where?: UserWhereInput
+    data: XOR<UserUpdateWithoutFormSubmissionsInput, UserUncheckedUpdateWithoutFormSubmissionsInput>
+  }
+
+  export type UserUpdateWithoutFormSubmissionsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    image?: NullableStringFieldUpdateOperationsInput | string | null
+    emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    accounts?: AccountUpdateManyWithoutUserNestedInput
+    sessions?: SessionUpdateManyWithoutUserNestedInput
+    jobs?: JobUpdateManyWithoutUserNestedInput
+    fetchRuns?: FetchRunUpdateManyWithoutUserNestedInput
+    deletedJobUrls?: DeletedJobUrlUpdateManyWithoutUserNestedInput
+    dailyCheckins?: DailyCheckinUpdateManyWithoutUserNestedInput
+    resumeProfiles?: ResumeProfileUpdateManyWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUpdateManyWithoutUserNestedInput
+    applications?: ApplicationUpdateManyWithoutUserNestedInput
+    promptRuleTemplates?: PromptRuleTemplateUpdateManyWithoutUserNestedInput
+    onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
+    applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
+    applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUpdateManyWithoutUserNestedInput
+  }
+
+  export type UserUncheckedUpdateWithoutFormSubmissionsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    image?: NullableStringFieldUpdateOperationsInput | string | null
+    emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    accounts?: AccountUncheckedUpdateManyWithoutUserNestedInput
+    sessions?: SessionUncheckedUpdateManyWithoutUserNestedInput
+    jobs?: JobUncheckedUpdateManyWithoutUserNestedInput
+    fetchRuns?: FetchRunUncheckedUpdateManyWithoutUserNestedInput
+    deletedJobUrls?: DeletedJobUrlUncheckedUpdateManyWithoutUserNestedInput
+    dailyCheckins?: DailyCheckinUncheckedUpdateManyWithoutUserNestedInput
+    resumeProfiles?: ResumeProfileUncheckedUpdateManyWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedUpdateManyWithoutUserNestedInput
+    applications?: ApplicationUncheckedUpdateManyWithoutUserNestedInput
+    promptRuleTemplates?: PromptRuleTemplateUncheckedUpdateManyWithoutUserNestedInput
+    onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
+    applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
+    applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUncheckedUpdateManyWithoutUserNestedInput
+  }
+
+  export type JobUpsertWithoutFormSubmissionsInput = {
+    update: XOR<JobUpdateWithoutFormSubmissionsInput, JobUncheckedUpdateWithoutFormSubmissionsInput>
+    create: XOR<JobCreateWithoutFormSubmissionsInput, JobUncheckedCreateWithoutFormSubmissionsInput>
+    where?: JobWhereInput
+  }
+
+  export type JobUpdateToOneWithWhereWithoutFormSubmissionsInput = {
+    where?: JobWhereInput
+    data: XOR<JobUpdateWithoutFormSubmissionsInput, JobUncheckedUpdateWithoutFormSubmissionsInput>
+  }
+
+  export type JobUpdateWithoutFormSubmissionsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    jobUrl?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    company?: NullableStringFieldUpdateOperationsInput | string | null
+    location?: NullableStringFieldUpdateOperationsInput | string | null
+    jobType?: NullableStringFieldUpdateOperationsInput | string | null
+    jobLevel?: NullableStringFieldUpdateOperationsInput | string | null
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: EnumJobStatusFieldUpdateOperationsInput | $Enums.JobStatus
+    market?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    user?: UserUpdateOneRequiredWithoutJobsNestedInput
+    applications?: ApplicationUpdateManyWithoutJobNestedInput
+    applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutJobNestedInput
+  }
+
+  export type JobUncheckedUpdateWithoutFormSubmissionsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    jobUrl?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    company?: NullableStringFieldUpdateOperationsInput | string | null
+    location?: NullableStringFieldUpdateOperationsInput | string | null
+    jobType?: NullableStringFieldUpdateOperationsInput | string | null
+    jobLevel?: NullableStringFieldUpdateOperationsInput | string | null
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: EnumJobStatusFieldUpdateOperationsInput | $Enums.JobStatus
+    market?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    applications?: ApplicationUncheckedUpdateManyWithoutJobNestedInput
+    applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutJobNestedInput
+  }
+
+  export type UserCreateWithoutFieldMappingRulesInput = {
+    id?: string
+    email?: string | null
+    name?: string | null
+    image?: string | null
+    emailVerified?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    accounts?: AccountCreateNestedManyWithoutUserInput
+    sessions?: SessionCreateNestedManyWithoutUserInput
+    jobs?: JobCreateNestedManyWithoutUserInput
+    fetchRuns?: FetchRunCreateNestedManyWithoutUserInput
+    deletedJobUrls?: DeletedJobUrlCreateNestedManyWithoutUserInput
+    dailyCheckins?: DailyCheckinCreateNestedManyWithoutUserInput
+    resumeProfiles?: ResumeProfileCreateNestedManyWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileCreateNestedManyWithoutUserInput
+    applications?: ApplicationCreateNestedManyWithoutUserInput
+    promptRuleTemplates?: PromptRuleTemplateCreateNestedManyWithoutUserInput
+    onboardingState?: OnboardingStateCreateNestedOneWithoutUserInput
+    applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
+    applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionCreateNestedManyWithoutUserInput
+  }
+
+  export type UserUncheckedCreateWithoutFieldMappingRulesInput = {
+    id?: string
+    email?: string | null
+    name?: string | null
+    image?: string | null
+    emailVerified?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    accounts?: AccountUncheckedCreateNestedManyWithoutUserInput
+    sessions?: SessionUncheckedCreateNestedManyWithoutUserInput
+    jobs?: JobUncheckedCreateNestedManyWithoutUserInput
+    fetchRuns?: FetchRunUncheckedCreateNestedManyWithoutUserInput
+    deletedJobUrls?: DeletedJobUrlUncheckedCreateNestedManyWithoutUserInput
+    dailyCheckins?: DailyCheckinUncheckedCreateNestedManyWithoutUserInput
+    resumeProfiles?: ResumeProfileUncheckedCreateNestedManyWithoutUserInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedCreateNestedManyWithoutUserInput
+    applications?: ApplicationUncheckedCreateNestedManyWithoutUserInput
+    promptRuleTemplates?: PromptRuleTemplateUncheckedCreateNestedManyWithoutUserInput
+    onboardingState?: OnboardingStateUncheckedCreateNestedOneWithoutUserInput
+    applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
+    applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
+    extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionUncheckedCreateNestedManyWithoutUserInput
+  }
+
+  export type UserCreateOrConnectWithoutFieldMappingRulesInput = {
+    where: UserWhereUniqueInput
+    create: XOR<UserCreateWithoutFieldMappingRulesInput, UserUncheckedCreateWithoutFieldMappingRulesInput>
+  }
+
+  export type UserUpsertWithoutFieldMappingRulesInput = {
+    update: XOR<UserUpdateWithoutFieldMappingRulesInput, UserUncheckedUpdateWithoutFieldMappingRulesInput>
+    create: XOR<UserCreateWithoutFieldMappingRulesInput, UserUncheckedCreateWithoutFieldMappingRulesInput>
+    where?: UserWhereInput
+  }
+
+  export type UserUpdateToOneWithWhereWithoutFieldMappingRulesInput = {
+    where?: UserWhereInput
+    data: XOR<UserUpdateWithoutFieldMappingRulesInput, UserUncheckedUpdateWithoutFieldMappingRulesInput>
+  }
+
+  export type UserUpdateWithoutFieldMappingRulesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    image?: NullableStringFieldUpdateOperationsInput | string | null
+    emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    accounts?: AccountUpdateManyWithoutUserNestedInput
+    sessions?: SessionUpdateManyWithoutUserNestedInput
+    jobs?: JobUpdateManyWithoutUserNestedInput
+    fetchRuns?: FetchRunUpdateManyWithoutUserNestedInput
+    deletedJobUrls?: DeletedJobUrlUpdateManyWithoutUserNestedInput
+    dailyCheckins?: DailyCheckinUpdateManyWithoutUserNestedInput
+    resumeProfiles?: ResumeProfileUpdateManyWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUpdateManyWithoutUserNestedInput
+    applications?: ApplicationUpdateManyWithoutUserNestedInput
+    promptRuleTemplates?: PromptRuleTemplateUpdateManyWithoutUserNestedInput
+    onboardingState?: OnboardingStateUpdateOneWithoutUserNestedInput
+    applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
+    applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUpdateManyWithoutUserNestedInput
+  }
+
+  export type UserUncheckedUpdateWithoutFieldMappingRulesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    image?: NullableStringFieldUpdateOperationsInput | string | null
+    emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    accounts?: AccountUncheckedUpdateManyWithoutUserNestedInput
+    sessions?: SessionUncheckedUpdateManyWithoutUserNestedInput
+    jobs?: JobUncheckedUpdateManyWithoutUserNestedInput
+    fetchRuns?: FetchRunUncheckedUpdateManyWithoutUserNestedInput
+    deletedJobUrls?: DeletedJobUrlUncheckedUpdateManyWithoutUserNestedInput
+    dailyCheckins?: DailyCheckinUncheckedUpdateManyWithoutUserNestedInput
+    resumeProfiles?: ResumeProfileUncheckedUpdateManyWithoutUserNestedInput
+    activeResumeProfiles?: ActiveResumeProfileUncheckedUpdateManyWithoutUserNestedInput
+    applications?: ApplicationUncheckedUpdateManyWithoutUserNestedInput
+    promptRuleTemplates?: PromptRuleTemplateUncheckedUpdateManyWithoutUserNestedInput
+    onboardingState?: OnboardingStateUncheckedUpdateOneWithoutUserNestedInput
+    applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
+    applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
+    extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type UserCreateWithoutOnboardingStateInput = {
@@ -28928,6 +33010,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutOnboardingStateInput = {
@@ -28951,6 +33035,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedCreateNestedManyWithoutUserInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedCreateNestedManyWithoutUserInput
     extensionTokens?: ExtensionTokenUncheckedCreateNestedManyWithoutUserInput
+    formSubmissions?: FormSubmissionUncheckedCreateNestedManyWithoutUserInput
+    fieldMappingRules?: FieldMappingRuleUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutOnboardingStateInput = {
@@ -28990,6 +33076,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutOnboardingStateInput = {
@@ -29013,6 +33101,8 @@ export namespace Prisma {
     applicationBatches?: ApplicationBatchUncheckedUpdateManyWithoutUserNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutUserNestedInput
     extensionTokens?: ExtensionTokenUncheckedUpdateManyWithoutUserNestedInput
+    formSubmissions?: FormSubmissionUncheckedUpdateManyWithoutUserNestedInput
+    fieldMappingRules?: FieldMappingRuleUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type AccountCreateManyUserInput = {
@@ -29169,6 +33259,34 @@ export namespace Prisma {
     createdAt?: Date | string
   }
 
+  export type FormSubmissionCreateManyUserInput = {
+    id?: string
+    jobId?: string | null
+    pageUrl: string
+    pageDomain: string
+    atsProvider?: string | null
+    formSignature: string
+    fieldValues: JsonNullValueInput | InputJsonValue
+    fieldMappings: JsonNullValueInput | InputJsonValue
+    submittedAt?: Date | string
+    createdAt?: Date | string
+  }
+
+  export type FieldMappingRuleCreateManyUserInput = {
+    id?: string
+    fieldSelector: string
+    fieldLabel?: string | null
+    atsProvider?: string | null
+    pageDomain?: string | null
+    profilePath: string
+    staticValue?: string | null
+    source?: string
+    confidence?: number
+    useCount?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
   export type AccountUpdateWithoutUserInput = {
     id?: StringFieldUpdateOperationsInput | string
     type?: StringFieldUpdateOperationsInput | string
@@ -29256,6 +33374,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     applications?: ApplicationUpdateManyWithoutJobNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUpdateManyWithoutJobNestedInput
+    formSubmissions?: FormSubmissionUpdateManyWithoutJobNestedInput
   }
 
   export type JobUncheckedUpdateWithoutUserInput = {
@@ -29273,6 +33392,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     applications?: ApplicationUncheckedUpdateManyWithoutJobNestedInput
     applicationBatchTasks?: ApplicationBatchTaskUncheckedUpdateManyWithoutJobNestedInput
+    formSubmissions?: FormSubmissionUncheckedUpdateManyWithoutJobNestedInput
   }
 
   export type JobUncheckedUpdateManyWithoutUserInput = {
@@ -29641,6 +33761,90 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type FormSubmissionUpdateWithoutUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageUrl?: StringFieldUpdateOperationsInput | string
+    pageDomain?: StringFieldUpdateOperationsInput | string
+    atsProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    formSignature?: StringFieldUpdateOperationsInput | string
+    fieldValues?: JsonNullValueInput | InputJsonValue
+    fieldMappings?: JsonNullValueInput | InputJsonValue
+    submittedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    job?: JobUpdateOneWithoutFormSubmissionsNestedInput
+  }
+
+  export type FormSubmissionUncheckedUpdateWithoutUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    jobId?: NullableStringFieldUpdateOperationsInput | string | null
+    pageUrl?: StringFieldUpdateOperationsInput | string
+    pageDomain?: StringFieldUpdateOperationsInput | string
+    atsProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    formSignature?: StringFieldUpdateOperationsInput | string
+    fieldValues?: JsonNullValueInput | InputJsonValue
+    fieldMappings?: JsonNullValueInput | InputJsonValue
+    submittedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FormSubmissionUncheckedUpdateManyWithoutUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    jobId?: NullableStringFieldUpdateOperationsInput | string | null
+    pageUrl?: StringFieldUpdateOperationsInput | string
+    pageDomain?: StringFieldUpdateOperationsInput | string
+    atsProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    formSignature?: StringFieldUpdateOperationsInput | string
+    fieldValues?: JsonNullValueInput | InputJsonValue
+    fieldMappings?: JsonNullValueInput | InputJsonValue
+    submittedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FieldMappingRuleUpdateWithoutUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    fieldSelector?: StringFieldUpdateOperationsInput | string
+    fieldLabel?: NullableStringFieldUpdateOperationsInput | string | null
+    atsProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    pageDomain?: NullableStringFieldUpdateOperationsInput | string | null
+    profilePath?: StringFieldUpdateOperationsInput | string
+    staticValue?: NullableStringFieldUpdateOperationsInput | string | null
+    source?: StringFieldUpdateOperationsInput | string
+    confidence?: FloatFieldUpdateOperationsInput | number
+    useCount?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FieldMappingRuleUncheckedUpdateWithoutUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    fieldSelector?: StringFieldUpdateOperationsInput | string
+    fieldLabel?: NullableStringFieldUpdateOperationsInput | string | null
+    atsProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    pageDomain?: NullableStringFieldUpdateOperationsInput | string | null
+    profilePath?: StringFieldUpdateOperationsInput | string
+    staticValue?: NullableStringFieldUpdateOperationsInput | string | null
+    source?: StringFieldUpdateOperationsInput | string
+    confidence?: FloatFieldUpdateOperationsInput | number
+    useCount?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FieldMappingRuleUncheckedUpdateManyWithoutUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    fieldSelector?: StringFieldUpdateOperationsInput | string
+    fieldLabel?: NullableStringFieldUpdateOperationsInput | string | null
+    atsProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    pageDomain?: NullableStringFieldUpdateOperationsInput | string | null
+    profilePath?: StringFieldUpdateOperationsInput | string
+    staticValue?: NullableStringFieldUpdateOperationsInput | string | null
+    source?: StringFieldUpdateOperationsInput | string
+    confidence?: FloatFieldUpdateOperationsInput | number
+    useCount?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type ApplicationCreateManyJobInput = {
     id?: string
     userId: string
@@ -29667,6 +33871,19 @@ export namespace Prisma {
     attempt?: number
     createdAt?: Date | string
     updatedAt?: Date | string
+  }
+
+  export type FormSubmissionCreateManyJobInput = {
+    id?: string
+    userId: string
+    pageUrl: string
+    pageDomain: string
+    atsProvider?: string | null
+    formSignature: string
+    fieldValues: JsonNullValueInput | InputJsonValue
+    fieldMappings: JsonNullValueInput | InputJsonValue
+    submittedAt?: Date | string
+    createdAt?: Date | string
   }
 
   export type ApplicationUpdateWithoutJobInput = {
@@ -29751,6 +33968,45 @@ export namespace Prisma {
     attempt?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FormSubmissionUpdateWithoutJobInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageUrl?: StringFieldUpdateOperationsInput | string
+    pageDomain?: StringFieldUpdateOperationsInput | string
+    atsProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    formSignature?: StringFieldUpdateOperationsInput | string
+    fieldValues?: JsonNullValueInput | InputJsonValue
+    fieldMappings?: JsonNullValueInput | InputJsonValue
+    submittedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    user?: UserUpdateOneRequiredWithoutFormSubmissionsNestedInput
+  }
+
+  export type FormSubmissionUncheckedUpdateWithoutJobInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    pageUrl?: StringFieldUpdateOperationsInput | string
+    pageDomain?: StringFieldUpdateOperationsInput | string
+    atsProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    formSignature?: StringFieldUpdateOperationsInput | string
+    fieldValues?: JsonNullValueInput | InputJsonValue
+    fieldMappings?: JsonNullValueInput | InputJsonValue
+    submittedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FormSubmissionUncheckedUpdateManyWithoutJobInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    pageUrl?: StringFieldUpdateOperationsInput | string
+    pageDomain?: StringFieldUpdateOperationsInput | string
+    atsProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    formSignature?: StringFieldUpdateOperationsInput | string
+    fieldValues?: JsonNullValueInput | InputJsonValue
+    fieldMappings?: JsonNullValueInput | InputJsonValue
+    submittedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type ApplicationBatchTaskCreateManyBatchInput = {

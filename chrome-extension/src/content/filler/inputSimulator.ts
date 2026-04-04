@@ -55,15 +55,52 @@ export function simulateInput(el: HTMLElement, value: string): void {
 /** Simulate selecting an option in a <select> element. */
 export function simulateSelect(el: HTMLSelectElement, value: string): boolean {
   const options = Array.from(el.options);
-  const target = options.find(
-    (opt) =>
-      opt.value === value ||
-      opt.textContent?.trim().toLowerCase() === value.toLowerCase(),
-  );
+  const normalized = value.toLowerCase().trim();
+
+  // Try exact value match, then case-insensitive text match, then partial match
+  const target =
+    options.find((opt) => opt.value === value) ??
+    options.find((opt) => opt.textContent?.trim().toLowerCase() === normalized) ??
+    options.find((opt) => opt.textContent?.trim().toLowerCase().includes(normalized));
 
   if (!target) return false;
 
   el.value = target.value;
   el.dispatchEvent(new Event("change", { bubbles: true }));
   return true;
+}
+
+/** Simulate selecting a radio button in a group. */
+export function simulateRadio(
+  radioGroup: HTMLInputElement[],
+  value: string,
+): boolean {
+  const normalized = value.toLowerCase().trim();
+
+  // Match by value, then by associated label text
+  const target =
+    radioGroup.find((r) => r.value.toLowerCase() === normalized) ??
+    radioGroup.find((r) => {
+      const label =
+        r.labels?.[0]?.textContent?.trim().toLowerCase() ??
+        r.parentElement?.textContent?.trim().toLowerCase() ??
+        "";
+      return label === normalized || label.includes(normalized);
+    });
+
+  if (!target) return false;
+
+  target.checked = true;
+  target.dispatchEvent(new Event("change", { bubbles: true }));
+  target.dispatchEvent(new Event("click", { bubbles: true }));
+  return true;
+}
+
+/** Simulate checking/unchecking a checkbox. */
+export function simulateCheckbox(el: HTMLInputElement, checked: boolean): void {
+  if (el.checked !== checked) {
+    el.checked = checked;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    el.dispatchEvent(new Event("click", { bubbles: true }));
+  }
 }

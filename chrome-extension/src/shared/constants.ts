@@ -9,6 +9,7 @@ export const STORAGE_KEYS = {
   CACHED_PROFILE: "cachedProfile",
   PREFERENCES: "preferences",
   API_BASE: "apiBase",
+  LOCALE: "locale",
 } as const;
 
 /** Profile cache TTL in milliseconds (30 minutes). */

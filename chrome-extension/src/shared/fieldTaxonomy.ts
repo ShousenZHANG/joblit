@@ -51,6 +51,10 @@ export enum FieldCategory {
   AGE = "age",
   IDENTITY = "identity",
 
+  // Consent
+  AGREE_TERMS = "agree_terms",
+  AGREE_PRIVACY = "agree_privacy",
+
   UNKNOWN = "unknown",
 }
 
@@ -236,6 +240,19 @@ export const LABEL_PATTERNS: Record<FieldCategory, RegExp[]> = {
     /种族/,
   ],
 
+  [FieldCategory.AGREE_TERMS]: [
+    /agree.*terms/i,
+    /terms.*conditions/i,
+    /accept.*terms/i,
+    /同意.*条款/,
+    /i\s*agree/i,
+  ],
+  [FieldCategory.AGREE_PRIVACY]: [
+    /privacy/i,
+    /data.*consent/i,
+    /隐私/,
+  ],
+
   [FieldCategory.UNKNOWN]: [],
 };
 
@@ -263,4 +280,6 @@ export const PROFILE_KEY_MAP: Partial<Record<FieldCategory, string>> = {
   [FieldCategory.AGE]: "age",
   [FieldCategory.IDENTITY]: "identity",
   [FieldCategory.AVAILABILITY]: "availabilityMonth",
+  [FieldCategory.AGREE_TERMS]: "agreeTerms",
+  [FieldCategory.AGREE_PRIVACY]: "agreePrivacy",
 };

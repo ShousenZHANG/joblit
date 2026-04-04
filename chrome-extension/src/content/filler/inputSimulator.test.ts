@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { simulateInput, simulateSelect } from "./inputSimulator";
+import { simulateInput, simulateSelect, simulateRadio, simulateCheckbox } from "./inputSimulator";
 
 describe("simulateInput", () => {
   beforeEach(() => {
@@ -110,5 +110,97 @@ describe("simulateSelect", () => {
 
     simulateSelect(select, "b");
     expect(changed).toHaveBeenCalledTimes(1);
+  });
+
+  it("matches by partial text when exact fails", () => {
+    document.body.innerHTML = `
+      <select id="edu">
+        <option value="1">Bachelor of Science</option>
+        <option value="2">Master of Science</option>
+      </select>
+    `;
+    const select = document.getElementById("edu") as HTMLSelectElement;
+    expect(simulateSelect(select, "bachelor")).toBe(true);
+    expect(select.value).toBe("1");
+  });
+});
+
+describe("simulateRadio", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("selects radio by value match", () => {
+    document.body.innerHTML = `
+      <form>
+        <input type="radio" name="gender" value="male" />
+        <input type="radio" name="gender" value="female" />
+      </form>
+    `;
+    const radios = Array.from(
+      document.querySelectorAll<HTMLInputElement>('input[name="gender"]'),
+    );
+    expect(simulateRadio(radios, "female")).toBe(true);
+    expect(radios[1].checked).toBe(true);
+  });
+
+  it("returns false when no match", () => {
+    document.body.innerHTML = `
+      <form>
+        <input type="radio" name="x" value="a" />
+      </form>
+    `;
+    const radios = Array.from(
+      document.querySelectorAll<HTMLInputElement>('input[name="x"]'),
+    );
+    expect(simulateRadio(radios, "z")).toBe(false);
+  });
+
+  it("dispatches change event on selected radio", () => {
+    document.body.innerHTML = `
+      <form>
+        <input type="radio" name="q" value="yes" />
+      </form>
+    `;
+    const radio = document.querySelector<HTMLInputElement>('input[value="yes"]')!;
+    const changed = vi.fn();
+    radio.addEventListener("change", changed);
+
+    simulateRadio([radio], "yes");
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("simulateCheckbox", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("checks an unchecked checkbox", () => {
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    document.body.appendChild(cb);
+    simulateCheckbox(cb, true);
+    expect(cb.checked).toBe(true);
+  });
+
+  it("unchecks a checked checkbox", () => {
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = true;
+    document.body.appendChild(cb);
+    simulateCheckbox(cb, false);
+    expect(cb.checked).toBe(false);
+  });
+
+  it("does not dispatch event if state unchanged", () => {
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = true;
+    document.body.appendChild(cb);
+    const changed = vi.fn();
+    cb.addEventListener("change", changed);
+    simulateCheckbox(cb, true);
+    expect(changed).not.toHaveBeenCalled();
   });
 });

@@ -17,7 +17,6 @@ async function getToken(): Promise<string | null> {
 
   if (!token) return null;
   if (expiresAt && Date.now() > expiresAt) {
-    // Token expired, clean up
     await chrome.storage.local.remove([
       STORAGE_KEYS.AUTH_TOKEN,
       STORAGE_KEYS.TOKEN_EXPIRES_AT,
@@ -50,13 +49,11 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
 export async function fetchProfile(locale = "en-AU") {
   const res = await apiFetch(`/api/ext/profile?locale=${encodeURIComponent(locale)}`);
   if (!res.ok) throw new Error(`Profile fetch failed: ${res.status}`);
-  const json = await res.json();
-  return json.data;
+  return (await res.json()).data;
 }
 
 /** Fetch the flattened profile for form filling. Uses cache if fresh. */
 export async function fetchFlatProfile(locale = "en-AU") {
-  // Check cache first
   const cached = await chrome.storage.local.get(STORAGE_KEYS.CACHED_PROFILE);
   const cachedProfile = cached[STORAGE_KEYS.CACHED_PROFILE];
 
@@ -68,12 +65,10 @@ export async function fetchFlatProfile(locale = "en-AU") {
     return cachedProfile.data;
   }
 
-  // Fetch fresh
   const res = await apiFetch(`/api/ext/profile/flat?locale=${encodeURIComponent(locale)}`);
   if (!res.ok) throw new Error(`Flat profile fetch failed: ${res.status}`);
   const json = await res.json();
 
-  // Cache it
   if (json.data) {
     await chrome.storage.local.set({
       [STORAGE_KEYS.CACHED_PROFILE]: {
@@ -85,4 +80,73 @@ export async function fetchFlatProfile(locale = "en-AU") {
   }
 
   return json.data;
+}
+
+/** Post a form submission record. */
+export async function postSubmission(data: Record<string, unknown>) {
+  const res = await apiFetch("/api/ext/submissions", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`Submission recording failed: ${res.status}`);
+  return (await res.json()).data;
+}
+
+/** Fetch submission history. */
+export async function fetchSubmissions(params: {
+  pageDomain?: string;
+  atsProvider?: string;
+  formSignature?: string;
+  limit?: number;
+}) {
+  const qs = new URLSearchParams();
+  if (params.pageDomain) qs.set("pageDomain", params.pageDomain);
+  if (params.atsProvider) qs.set("atsProvider", params.atsProvider);
+  if (params.formSignature) qs.set("formSignature", params.formSignature);
+  if (params.limit) qs.set("limit", String(params.limit));
+
+  const res = await apiFetch(`/api/ext/submissions?${qs.toString()}`);
+  if (!res.ok) throw new Error(`Submissions fetch failed: ${res.status}`);
+  return (await res.json()).data;
+}
+
+/** Fetch field mapping rules. */
+export async function fetchFieldMappings(params: {
+  atsProvider?: string;
+  pageDomain?: string;
+}) {
+  const qs = new URLSearchParams();
+  if (params.atsProvider) qs.set("atsProvider", params.atsProvider);
+  if (params.pageDomain) qs.set("pageDomain", params.pageDomain);
+
+  const res = await apiFetch(`/api/ext/field-mappings?${qs.toString()}`);
+  if (!res.ok) throw new Error(`Mappings fetch failed: ${res.status}`);
+  return (await res.json()).data;
+}
+
+/** Match a job URL to an existing Job in Jobflow. */
+export async function matchJob(url: string) {
+  const res = await apiFetch(`/api/ext/jobs/match?url=${encodeURIComponent(url)}`);
+  if (!res.ok) throw new Error(`Job match failed: ${res.status}`);
+  return (await res.json()).data;
+}
+
+/** Mark a job as APPLIED. */
+export async function markJobApplied(jobId: string) {
+  const res = await apiFetch("/api/ext/jobs/applied", {
+    method: "POST",
+    body: JSON.stringify({ jobId }),
+  });
+  if (!res.ok) throw new Error(`Mark applied failed: ${res.status}`);
+  return (await res.json()).data;
+}
+
+/** Create or update a field mapping rule. */
+export async function putFieldMapping(data: Record<string, unknown>) {
+  const res = await apiFetch("/api/ext/field-mappings", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`Mapping update failed: ${res.status}`);
+  return (await res.json()).data;
 }

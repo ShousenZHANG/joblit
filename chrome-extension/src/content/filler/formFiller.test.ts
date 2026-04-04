@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { FieldCategory } from "@ext/shared/fieldTaxonomy";
 import type { DetectedField } from "@ext/shared/types";
-import { fillFields, type FlatProfile } from "./formFiller";
+import { fillFields, advanceMultiStepForm, type FlatProfile } from "./formFiller";
 
 const sampleProfile: FlatProfile = {
   fullName: "John Doe",
@@ -162,5 +162,74 @@ describe("fillFields", () => {
 
     const result = fillFields(fields, sampleProfile);
     expect(result.skipped).toBe(1);
+  });
+
+  it("fills radio button groups", () => {
+    document.body.innerHTML = `
+      <form>
+        <input type="radio" name="gender" value="male" />
+        <input type="radio" name="gender" value="female" />
+      </form>
+    `;
+    const radios = document.querySelectorAll<HTMLInputElement>('input[name="gender"]');
+    const profileWithGender: FlatProfile = { ...sampleProfile, gender: "male" };
+
+    const fields: DetectedField[] = [
+      makeField({
+        element: radios[0],
+        category: FieldCategory.GENDER,
+        confidence: 0.5,
+        inputType: "radio",
+      }),
+    ];
+
+    const result = fillFields(fields, profileWithGender);
+    expect(result.filled).toBe(1);
+    expect(radios[0].checked).toBe(true);
+  });
+
+  it("fills checkbox fields", () => {
+    document.body.innerHTML = `<input id="terms" type="checkbox" />`;
+    const el = document.getElementById("terms") as HTMLInputElement;
+    const profileWithTerms: FlatProfile = { ...sampleProfile, agreeTerms: "yes" };
+
+    const fields: DetectedField[] = [
+      makeField({
+        element: el,
+        category: FieldCategory.AGREE_TERMS,
+        confidence: 0.5,
+        inputType: "checkbox",
+      }),
+    ];
+
+    const result = fillFields(fields, profileWithTerms);
+    expect(result.filled).toBe(1);
+    expect(el.checked).toBe(true);
+  });
+});
+
+describe("advanceMultiStepForm", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("clicks a Next button", () => {
+    let clicked = false;
+    document.body.innerHTML = `<button type="button">Next</button>`;
+    document.querySelector("button")!.addEventListener("click", () => { clicked = true; });
+    expect(advanceMultiStepForm(document)).toBe(true);
+    expect(clicked).toBe(true);
+  });
+
+  it("clicks a Continue button", () => {
+    let clicked = false;
+    document.body.innerHTML = `<button type="button">Continue</button>`;
+    document.querySelector("button")!.addEventListener("click", () => { clicked = true; });
+    expect(advanceMultiStepForm(document)).toBe(true);
+  });
+
+  it("returns false when no next button found", () => {
+    document.body.innerHTML = `<button type="submit">Submit</button>`;
+    expect(advanceMultiStepForm(document)).toBe(false);
   });
 });

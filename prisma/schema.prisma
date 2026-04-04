@@ -79,6 +79,8 @@ model User {
   applicationBatches ApplicationBatch[]
   applicationBatchTasks ApplicationBatchTask[]
   extensionTokens ExtensionToken[]
+  formSubmissions FormSubmission[]
+  fieldMappingRules FieldMappingRule[]
 }
 
 model Account {
@@ -138,6 +140,7 @@ model Job {
 
   applications Application[]
   applicationBatchTasks ApplicationBatchTask[]
+  formSubmissions FormSubmission[]
 
   @@unique([userId, jobUrl])
   @@index([userId, createdAt])
@@ -345,6 +348,54 @@ model ExtensionToken {
   createdAt DateTime @default(now())
 
   @@index([userId, revokedAt])
+}
+
+model FormSubmission {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  jobId     String?  @db.Uuid
+  job       Job?     @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  pageUrl       String
+  pageDomain    String
+  atsProvider   String?
+  formSignature String
+  fieldValues   Json
+  fieldMappings Json
+  submittedAt   DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, pageDomain, formSignature])
+  @@index([userId, submittedAt])
+  @@index([userId, atsProvider])
+}
+
+model FieldMappingRule {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fieldSelector  String
+  fieldLabel     String?
+  atsProvider    String?
+  pageDomain     String?
+
+  profilePath    String
+  staticValue    String?
+
+  source         String   @default("user")
+  confidence     Float    @default(1.0)
+  useCount       Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, atsProvider, fieldLabel])
+  @@index([userId, pageDomain])
+  @@unique([userId, fieldSelector, atsProvider, pageDomain])
 }
 
 model OnboardingState {

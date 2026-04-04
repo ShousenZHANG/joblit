@@ -38,9 +38,26 @@ export type MessageType =
   | { type: "GET_FLAT_PROFILE"; locale?: string }
   | { type: "FILL_FORM" }
   | { type: "RECORD_SUBMISSION"; data: Record<string, unknown> }
+  | { type: "GET_SUBMISSIONS"; params?: SubmissionQueryParams }
+  | { type: "GET_FIELD_MAPPINGS"; params?: FieldMappingQueryParams }
+  | { type: "PUT_FIELD_MAPPING"; data: Record<string, unknown> }
+  | { type: "MATCH_JOB"; url: string }
+  | { type: "MARK_JOB_APPLIED"; jobId: string }
   | { type: "GET_AUTH_STATUS" }
   | { type: "SET_TOKEN"; token: string }
   | { type: "CLEAR_TOKEN" };
+
+export interface SubmissionQueryParams {
+  pageDomain?: string;
+  atsProvider?: string;
+  formSignature?: string;
+  limit?: number;
+}
+
+export interface FieldMappingQueryParams {
+  atsProvider?: string;
+  pageDomain?: string;
+}
 
 export interface MessageResponse<T = unknown> {
   success: boolean;

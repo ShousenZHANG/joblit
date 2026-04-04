@@ -1,11 +1,18 @@
 import type { AtsAdapter } from "./types";
 import { greenhouseAdapter } from "./greenhouse";
+import { leverAdapter } from "./lever";
+import { workdayAdapter } from "./workday";
+import { icimsAdapter } from "./icims";
+import { successFactorsAdapter } from "./successFactors";
 import { genericAdapter } from "./generic";
 
 /** Ordered list of ATS adapters. First match wins. */
 const adapters: AtsAdapter[] = [
   greenhouseAdapter,
-  // Future: leverAdapter, workdayAdapter, icimsAdapter, ...
+  leverAdapter,
+  workdayAdapter,
+  icimsAdapter,
+  successFactorsAdapter,
   genericAdapter, // Must be last (catch-all)
 ];
 
