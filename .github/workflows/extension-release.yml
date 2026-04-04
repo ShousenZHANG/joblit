@@ -77,7 +77,7 @@ jobs:
             2. Unzip to a folder
             3. Open `chrome://extensions` → enable Developer mode
             4. Click "Load unpacked" → select the unzipped folder
-            5. See the [full installation guide](https://jobflow.app/get-extension) for connecting to your account
+            5. See the [full installation guide](https://jobflow-web.vercel.app/get-extension) for connecting to your account
           files: |
             jobflow-autofill-v${{ steps.version.outputs.version }}.zip
           draft: false
