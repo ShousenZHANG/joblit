@@ -24,6 +24,8 @@ const messages: Record<Locale, Record<string, string>> = {
     "auth.tokenInvalid": "Token is invalid or expired. Please check and try again.",
     "auth.tokenEmpty": "Please enter your API token",
     "auth.setupHint": "Open Jobflow → Settings → Extension to generate a token",
+    "auth.apiBaseHint": "For local dev use http://localhost:3000",
+    "auth.networkError": "Cannot reach {base}. Check the API Base URL is correct.",
 
     // Dashboard
     "dashboard.fillNow": "Fill Current Page",
@@ -82,6 +84,8 @@ const messages: Record<Locale, Record<string, string>> = {
     "auth.tokenInvalid": "令牌无效或已过期，请检查后重试。",
     "auth.tokenEmpty": "请输入 API 令牌",
     "auth.setupHint": "打开 Jobflow → 设置 → 扩展 来生成令牌",
+    "auth.apiBaseHint": "本地开发请使用 http://localhost:3000",
+    "auth.networkError": "无法连接 {base}，请检查 API 地址是否正确。",
 
     "dashboard.fillNow": "填充当前页面",
     "dashboard.toggleWidget": "切换悬浮组件",

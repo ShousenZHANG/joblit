@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { STORAGE_KEYS, DEFAULT_API_BASE } from "@ext/shared/constants";
 import { t } from "@ext/shared/i18n";
 
 interface TokenSetupProps {
@@ -9,6 +10,15 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [apiBase, setApiBase] = useState(DEFAULT_API_BASE);
+
+  useEffect(() => {
+    chrome.storage.local.get(STORAGE_KEYS.API_BASE, (result) => {
+      if (result[STORAGE_KEYS.API_BASE]) {
+        setApiBase(result[STORAGE_KEYS.API_BASE]);
+      }
+    });
+  }, []);
 
   const handleConnect = useCallback(async () => {
     const trimmed = token.trim();
@@ -16,6 +26,15 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
       setError(t("auth.tokenEmpty"));
       return;
     }
+
+    if (!trimmed.startsWith("jfext_")) {
+      setError(t("auth.tokenInvalid"));
+      return;
+    }
+
+    // Save API base before connecting
+    const baseToUse = apiBase.trim() || DEFAULT_API_BASE;
+    await chrome.storage.local.set({ [STORAGE_KEYS.API_BASE]: baseToUse });
 
     setLoading(true);
     setError("");
@@ -32,7 +51,12 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
               if (profileResponse?.success) {
                 onConnected();
               } else {
-                setError(t("auth.tokenInvalid"));
+                const serverError = profileResponse?.error ?? "";
+                if (serverError.includes("fetch") || serverError.includes("network") || serverError.includes("Failed")) {
+                  setError(t("auth.networkError", { base: baseToUse }));
+                } else {
+                  setError(t("auth.tokenInvalid"));
+                }
                 chrome.runtime.sendMessage({ type: "CLEAR_TOKEN" });
               }
             },
@@ -43,7 +67,7 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
         }
       },
     );
-  }, [token, onConnected]);
+  }, [token, apiBase, onConnected]);
 
   return (
     <div>
@@ -55,6 +79,34 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
       </p>
 
       <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>
+          {t("options.apiBase")}
+        </div>
+        <input
+          type="url"
+          value={apiBase}
+          onChange={(e) => setApiBase(e.target.value)}
+          placeholder={DEFAULT_API_BASE}
+          style={{
+            width: "100%",
+            padding: "6px 10px",
+            border: "1px solid #e2e8f0",
+            borderRadius: 6,
+            fontSize: 12,
+            boxSizing: "border-box",
+            color: "#475569",
+            background: "#f8fafc",
+          }}
+        />
+        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
+          {t("auth.apiBaseHint")}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>
+          Token
+        </div>
         <input
           type="password"
           value={token}
@@ -75,7 +127,7 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
       </div>
 
       {error && (
-        <div style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>
+        <div style={{ color: "#dc2626", fontSize: 12, marginBottom: 12, lineHeight: 1.4 }}>
           {error}
         </div>
       )}
