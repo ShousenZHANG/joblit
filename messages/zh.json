@@ -85,7 +85,7 @@
     "downloadTitle": "第一步：下载插件",
     "downloadDesc": "从 GitHub Releases 下载最新版 Joblit AutoFill 插件包（.zip）。",
     "downloadBtn": "下载最新版本",
-    "downloadNote": "插件目前以 .zip 包形式分发，Chrome 应用商店上架即将推出。",
+    "downloadNote": "插件以 .zip 包形式分发。下载后必须解压到文件夹才能安装。Chrome 应用商店上架即将推出。",
     "installTitle": "第二步：安装到 Chrome",
     "installStep1": "将下载的文件解压到电脑上的任意文件夹。",
     "installStep2": "打开 Chrome，在地址栏输入 chrome://extensions。",
@@ -180,10 +180,13 @@
   },
   "guide": {
     "badge": "快速入门",
-    "welcomeTitle": "5 步快速上手",
-    "welcomeDesc": "我们将引导你完成简历设置、职位抓取和生成定制简历。随时可以退出。",
-    "maybeLater": "稍后再说",
-    "startTour": "开始引导",
+    "welcomeTitle": "欢迎使用 Joblit",
+    "welcomeDesc": "你的 AI 求职工作台。让我们带你了解如何抓取职位、定制简历和自动填写申请。",
+    "welcomeFeature1": "从 LinkedIn、Seek 等平台抓取职位信息",
+    "welcomeFeature2": "生成 AI 定制的简历和求职信",
+    "welcomeFeature3": "使用 Chrome 插件自动填写求职申请",
+    "maybeLater": "我自己探索",
+    "startTour": "带我看看",
     "tourBadge": "引导",
     "stepOf": "第 {current} 步，共 {total} 步",
     "endTour": "退出引导",
@@ -202,7 +205,9 @@
     "task_generate_first_pdf_title": "生成定制简历",
     "task_generate_first_pdf_desc": "选择一个职位，基于你的主简历生成定制版 PDF 简历。",
     "task_mark_applied_title": "追踪第一次投递",
-    "task_mark_applied_desc": "将职位状态标记为「已投递」，保持申请状态井然有序。"
+    "task_mark_applied_desc": "将职位状态标记为「已投递」，保持申请状态井然有序。",
+    "task_install_extension_title": "安装自动填写插件",
+    "task_install_extension_desc": "安装 Joblit Chrome 插件，在 Greenhouse、Lever、Workday 等平台一键自动填写求职申请。"
   },
   "resumeForm": {
     "resumeSetup": "简历设置",

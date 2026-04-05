@@ -319,6 +319,118 @@ body {
   outline-offset: 2px;
 }
 
+/* ── Guide system ── */
+.guide-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1.5px solid #e2e8f0;
+  background: #ffffff;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+
+.guide-btn:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.guide-btn--active {
+  border-color: rgba(5, 150, 105, 0.3);
+  background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+  color: #047857;
+  animation: guide-pulse 2.5s ease-in-out infinite;
+}
+
+.guide-btn--active:hover {
+  border-color: rgba(5, 150, 105, 0.5);
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  animation: none;
+}
+
+.guide-btn-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(5, 150, 105, 0.12);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #059669;
+  letter-spacing: 0.02em;
+}
+
+@keyframes guide-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(5, 150, 105, 0);
+  }
+}
+
+/* Guide modal animations */
+.guide-fade-in {
+  animation: guide-fade 200ms ease-out both;
+}
+
+.guide-scale-in {
+  animation: guide-scale 250ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes guide-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes guide-scale {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Tour card entrance */
+.guide-tour-enter {
+  animation: guide-tour-in 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes guide-tour-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guide-fade-in,
+  .guide-scale-in,
+  .guide-tour-enter {
+    animation: none;
+  }
+  .guide-btn--active {
+    animation: none;
+  }
+}
+
 /* ── Legal pages (Privacy / Terms) ── */
 .legal-page {
   display: grid;

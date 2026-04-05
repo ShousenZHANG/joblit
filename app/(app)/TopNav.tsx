@@ -85,20 +85,19 @@ export function TopNav() {
                   {email}
                 </a>
               ) : null}
-              <Button
-                variant="outline"
-                size="sm"
-                className="edu-outline edu-cta--press edu-outline--compact h-9 px-3 text-xs"
+              <button
+                type="button"
                 onClick={openGuide}
+                className={`guide-btn ${state && !state.isComplete ? "guide-btn--active" : ""}`}
               >
-                <CircleHelp className="mr-1 h-3.5 w-3.5" />
-                {t("guide")}
+                <CircleHelp className="h-4 w-4" />
+                <span>{t("guide")}</span>
                 {state ? (
-                  <span className="ml-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                  <span className="guide-btn-badge">
                     {state.completedCount}/{state.totalCount}
                   </span>
                 ) : null}
-              </Button>
+              </button>
               <LocaleSwitcher />
               <Button
                 variant="outline"

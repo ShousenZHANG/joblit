@@ -3,11 +3,12 @@ export type OnboardingTaskId =
   | "first_fetch"
   | "review_jobs"
   | "generate_first_pdf"
-  | "mark_applied";
+  | "mark_applied"
+  | "install_extension";
 
 export type OnboardingTask = {
   id: OnboardingTaskId;
-  href: "/resume" | "/fetch" | "/jobs";
+  href: "/resume" | "/fetch" | "/jobs" | "/extension";
 };
 
 export const ONBOARDING_TASKS: OnboardingTask[] = [
@@ -31,6 +32,10 @@ export const ONBOARDING_TASKS: OnboardingTask[] = [
     id: "mark_applied",
     href: "/jobs",
   },
+  {
+    id: "install_extension",
+    href: "/extension",
+  },
 ];
 
 export type OnboardingChecklist = Record<OnboardingTaskId, boolean>;
@@ -42,6 +47,7 @@ export function defaultOnboardingChecklist(): OnboardingChecklist {
     review_jobs: false,
     generate_first_pdf: false,
     mark_applied: false,
+    install_extension: false,
   };
 }
 
@@ -62,6 +68,10 @@ export function normalizeOnboardingChecklist(value: unknown): OnboardingChecklis
         : fallback.generate_first_pdf,
     mark_applied:
       typeof record.mark_applied === "boolean" ? record.mark_applied : fallback.mark_applied,
+    install_extension:
+      typeof record.install_extension === "boolean"
+        ? record.install_extension
+        : fallback.install_extension,
   };
 }
 
@@ -76,6 +86,7 @@ export function mergeOnboardingChecklists(
     review_jobs: base.review_jobs || normalizedIncoming.review_jobs,
     generate_first_pdf: base.generate_first_pdf || normalizedIncoming.generate_first_pdf,
     mark_applied: base.mark_applied || normalizedIncoming.mark_applied,
+    install_extension: base.install_extension || normalizedIncoming.install_extension,
   };
 }
 

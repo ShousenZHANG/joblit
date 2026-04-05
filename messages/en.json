@@ -85,7 +85,7 @@
     "downloadTitle": "Step 1: Download the Extension",
     "downloadDesc": "Download the latest Joblit AutoFill extension package (.zip) from GitHub Releases.",
     "downloadBtn": "Download Latest Version",
-    "downloadNote": "The extension is currently distributed as a .zip package. Chrome Web Store listing coming soon.",
+    "downloadNote": "The extension is distributed as a .zip package. After downloading, you must unzip it to a folder before installing. Chrome Web Store listing coming soon.",
     "installTitle": "Step 2: Install in Chrome",
     "installStep1": "Unzip the downloaded file to a folder on your computer.",
     "installStep2": "Open Chrome and navigate to chrome://extensions in the address bar.",
@@ -180,10 +180,13 @@
   },
   "guide": {
     "badge": "Quick start",
-    "welcomeTitle": "Get started in 5 steps",
-    "welcomeDesc": "We'll walk you through setting up your resume, fetching jobs, and generating your first tailored CV. Exit anytime.",
-    "maybeLater": "Maybe later",
-    "startTour": "Start guided tour",
+    "welcomeTitle": "Welcome to Joblit",
+    "welcomeDesc": "Your AI-powered job search command center. Let us show you how to fetch roles, tailor your CV, and auto-fill applications.",
+    "welcomeFeature1": "Fetch job listings from LinkedIn, Seek, and more",
+    "welcomeFeature2": "Generate AI-tailored resumes and cover letters",
+    "welcomeFeature3": "Auto-fill applications with the Chrome Extension",
+    "maybeLater": "I'll explore on my own",
+    "startTour": "Show me around",
     "tourBadge": "Guide",
     "stepOf": "Step {current} of {total}",
     "endTour": "End tour",
@@ -202,7 +205,9 @@
     "task_generate_first_pdf_title": "Generate a tailored CV",
     "task_generate_first_pdf_desc": "Select a job and generate a tailored resume PDF from your master resume.",
     "task_mark_applied_title": "Track your first application",
-    "task_mark_applied_desc": "Mark a job as Applied to keep your application status organised."
+    "task_mark_applied_desc": "Mark a job as Applied to keep your application status organised.",
+    "task_install_extension_title": "Install the AutoFill extension",
+    "task_install_extension_desc": "Get the Joblit Chrome Extension to auto-fill job applications on Greenhouse, Lever, Workday, and more — right from your browser."
   },
   "resumeForm": {
     "resumeSetup": "Resume setup",

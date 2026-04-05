@@ -13,7 +13,7 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
-import { Sparkles, X } from "lucide-react";
+import { Sparkles, X, Briefcase, FileText, Puzzle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   ONBOARDING_TASKS,
@@ -59,10 +59,11 @@ type SpotlightRect = {
   height: number;
 };
 
-const GUIDE_CARD_WIDTH = 332;
-const GUIDE_CARD_HEIGHT_ESTIMATE = 244;
+const GUIDE_CARD_WIDTH = 340;
+const GUIDE_CARD_HEIGHT_ESTIMATE = 260;
 const GUIDE_EDGE = 12;
 const SPOTLIGHT_PADDING = 8;
+const WELCOME_SHOWN_KEY = "joblit_guide_welcome_shown";
 
 const GuideContext = createContext<GuideContextValue | null>(null);
 
@@ -145,8 +146,10 @@ export function GuideProvider({ children }: { children: ReactNode }) {
           !resolved.dismissed &&
           !resolved.completedAt &&
           !resolved.isComplete;
-        if (isNewUser) {
+        const alreadyShown = sessionStorage.getItem(WELCOME_SHOWN_KEY) === "1";
+        if (isNewUser && !alreadyShown) {
           setWelcomeVisible(true);
+          sessionStorage.setItem(WELCOME_SHOWN_KEY, "1");
         }
         return resolved;
       });
@@ -508,47 +511,95 @@ export function GuideProvider({ children }: { children: ReactNode }) {
       {userId ? (
         <>
           {welcomeVisible && !tourRunning && state && !state.isComplete && !state.dismissed ? (
-            <section
-              data-testid="guide-welcome-card"
-              className="fixed bottom-4 right-4 z-[55] max-w-xs rounded-2xl border border-slate-900/10 bg-gradient-to-br from-white to-emerald-50/40 p-4 text-xs text-slate-700 shadow-[0_18px_45px_-30px_rgba(15,23,42,0.6)] backdrop-blur"
-            >
-              <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
-                <Sparkles className="h-3 w-3" />
-                {tg("badge")}
-              </div>
-              <h3 className="text-sm font-semibold text-slate-900">{tg("welcomeTitle")}</h3>
-              <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
-                {tg("welcomeDesc")}
-              </p>
-              <div className="mt-3 flex gap-1">
-                {Array.from({ length: tourTotalSteps }).map((_, i) => (
-                  <div
-                    key={i}
-                    className={`h-1.5 rounded-full transition-all ${i === 0 ? "bg-emerald-400 w-4" : "bg-slate-200 w-1.5"}`}
-                  />
-                ))}
-              </div>
-              <div className="mt-3 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setWelcomeVisible(false);
-                    void patchState({ type: "skip" });
-                  }}
-                  className="rounded-full px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700"
-                >
-                  {tg("maybeLater")}
-                </button>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-8 rounded-full px-3 text-[11px]"
-                  onClick={openGuide}
-                >
-                  {tg("startTour")}
-                </Button>
-              </div>
-            </section>
+            <>
+              {/* Overlay */}
+              <div
+                className="fixed inset-0 z-[54] bg-slate-900/40 guide-fade-in"
+                onClick={() => {
+                  setWelcomeVisible(false);
+                  void patchState({ type: "skip" });
+                }}
+              />
+              {/* Centered modal */}
+              <section
+                data-testid="guide-welcome-card"
+                className="fixed inset-0 z-[55] flex items-center justify-center p-4 pointer-events-none"
+              >
+                <div className="pointer-events-auto w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_32px_80px_-20px_rgba(15,23,42,0.35)] guide-scale-in">
+                  {/* Header */}
+                  <div className="mb-4 flex items-center justify-between">
+                    <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+                      <Sparkles className="h-3 w-3" />
+                      {tg("badge")}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWelcomeVisible(false);
+                        void patchState({ type: "skip" });
+                      }}
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                      aria-label="Close"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <h3 className="text-lg font-bold text-slate-900">{tg("welcomeTitle")}</h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
+                    {tg("welcomeDesc")}
+                  </p>
+
+                  {/* Feature highlights */}
+                  <div className="mt-5 space-y-3">
+                    {[
+                      { icon: Briefcase, key: "welcomeFeature1" as const },
+                      { icon: FileText, key: "welcomeFeature2" as const },
+                      { icon: Puzzle, key: "welcomeFeature3" as const },
+                    ].map(({ icon: Icon, key }) => (
+                      <div key={key} className="flex items-start gap-3">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50">
+                          <Icon className="h-4 w-4 text-emerald-600" />
+                        </div>
+                        <p className="pt-1 text-sm text-slate-600">{tg(key)}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Progress dots */}
+                  <div className="mt-5 flex gap-1">
+                    {Array.from({ length: tourTotalSteps }).map((_, i) => (
+                      <div
+                        key={i}
+                        className={`h-1.5 rounded-full transition-all ${i === 0 ? "bg-emerald-400 w-5" : "bg-slate-200 w-1.5"}`}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="mt-5 flex items-center gap-3">
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-10 flex-1 rounded-xl text-sm font-semibold"
+                      onClick={openGuide}
+                    >
+                      {tg("startTour")}
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWelcomeVisible(false);
+                        void patchState({ type: "skip" });
+                      }}
+                      className="h-10 rounded-xl px-4 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+                    >
+                      {tg("maybeLater")}
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </>
           ) : null}
 
           {tourRunning && activeTourTask ? (
@@ -572,7 +623,7 @@ export function GuideProvider({ children }: { children: ReactNode }) {
               </div>
 
               <section
-                className={`fixed z-[70] rounded-2xl border border-slate-900/10 bg-white/95 p-4 shadow-[0_24px_60px_-34px_rgba(15,23,42,0.45)] backdrop-blur ${
+                className={`fixed z-[70] rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-[0_24px_60px_-34px_rgba(15,23,42,0.45)] backdrop-blur guide-tour-enter ${
                   prefersReducedMotion ? "" : "transition-[top,left] duration-150 ease-out"
                 } ${shouldHideCoachUntilAnchored ? "pointer-events-none opacity-0" : ""}`}
                 style={
