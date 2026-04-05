@@ -68,7 +68,7 @@ describe("ExtensionGuidePage", () => {
     });
     expect(downloadLink).toHaveAttribute(
       "href",
-      "https://github.com/ShousenZHANG/joblit-web/releases/latest",
+      "https://github.com/ShousenZHANG/joblit/releases/latest",
     );
     expect(downloadLink).toHaveAttribute("target", "_blank");
   });

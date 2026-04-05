@@ -8,7 +8,7 @@
 
 | 对象 | 位置 | 用途 |
 |------|------|------|
-| **Cursor Skill** | `skills/joblit/SKILL.md` + README + references | Cursor 在 joblit-web 仓库内工作时的指引 |
+| **Cursor Skill** | `skills/joblit/SKILL.md` + README + references | Cursor 在 joblit 仓库内工作时的指引 |
 | **Pack SKILL** | `lib/server/ai/skillPack.ts` 内生成的 `SKILL.md`（包内 `joblit-tailoring/SKILL.md`） | 外部模型使用 skill pack 时的单源真相 |
 | **Pack Prompts** | `lib/server/ai/applicationPromptBuilder.ts` → 包内 `prompts/system.txt`、`resume-user.txt`、`cover-user.txt` | 每次生成 CV/CL 时发给外部模型的 system + user prompt |
 
@@ -32,7 +32,7 @@
 | 项 | 规范要求 | 当前 | 建议 |
 |----|----------|------|------|
 | **description 仅写“何时用”** | 只写触发条件，不写“做什么” | 含 “Provides structure, key paths, and non-negotiable conventions.” | 删除该句，或改为纯触发条件（例如 “Use when working in Joblit repo or when discussing job fetch, tailoring, skill pack, or PDF export.”） |
-| **When NOT to use** | 建议有 | 无 | 可加一句（如 “Do not use for repositories other than joblit-web.”） |
+| **When NOT to use** | 建议有 | 无 | 可加一句（如 “Do not use for repositories other than joblit.”） |
 | **Common Mistakes** | 建议有 | 无 | 可加与 “Non-Negotiable Rules” 对应的易错点（如 “Calling manual-generate without promptMeta” 等） |
 
 ### 2.3 结论（Cursor Skill）

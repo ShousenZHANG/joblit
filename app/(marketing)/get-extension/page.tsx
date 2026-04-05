@@ -97,7 +97,7 @@ export default async function ExtensionGuidePage() {
             </div>
             <p className="mb-4 text-sm text-slate-600">{t("downloadDesc")}</p>
             <a
-              href="https://github.com/ShousenZHANG/joblit-web/releases/latest"
+              href="https://github.com/ShousenZHANG/joblit/releases/latest"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"

@@ -2,7 +2,7 @@
 
 This repo ships a Cursor Skill at `skills/joblit/`. This `cursor-skill/` folder is kept as a **convenience entry point** for users who look for a Cursor skill folder name directly.
 
-Repo: `https://github.com/ShousenZHANG/joblit-web.git`
+Repo: `https://github.com/ShousenZHANG/joblit.git`
 
 ## Install
 
@@ -25,6 +25,6 @@ Copy-Item -Recurse -Force "skills\joblit" "$env:USERPROFILE\.cursor\skills\jobli
 ### Option B — skills CLI
 
 ```bash
-npx skills add https://github.com/ShousenZHANG/joblit-web.git --skill joblit -y -g
+npx skills add https://github.com/ShousenZHANG/joblit.git --skill joblit -y -g
 ```
 

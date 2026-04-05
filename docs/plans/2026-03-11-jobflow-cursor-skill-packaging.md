@@ -24,7 +24,7 @@ Expected: Short skill with triggers, mental model, key paths, non-negotiable rul
 - [ ] **Step 2: Add `skills/joblit/README.md`**
 Expected: Two install options:
 1) manual copy to `~/.cursor/skills/joblit`
-2) `npx skills add https://github.com/ShousenZHANG/joblit-web.git --skill joblit -y -g`
+2) `npx skills add https://github.com/ShousenZHANG/joblit.git --skill joblit -y -g`
 
 - [ ] **Step 3: Add `references/` docs**
 Expected: PATHS and FLOWS contain the high-signal indexes without bloating SKILL.md.
