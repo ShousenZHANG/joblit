@@ -185,6 +185,9 @@ async function fetchHistoricalOverrides(
   const signature = generateFormSignature(fields);
 
   try {
+    // Fetch ALL rules for this user — don't filter by pageDomain on the server
+    // so we get global rules (pageDomain=""), ATS-level rules, and site-specific
+    // rules. The matching logic in matchFieldsFromHistory handles prioritization.
     const [subsResponse, rulesResponse] = await Promise.all([
       sendMessage<SubmissionRecord[]>({
         type: "GET_SUBMISSIONS",
@@ -192,7 +195,7 @@ async function fetchHistoricalOverrides(
       }),
       sendMessage<MappingRule[]>({
         type: "GET_FIELD_MAPPINGS",
-        params: { atsProvider, pageDomain: domain },
+        params: { atsProvider },
       }),
     ]);
 

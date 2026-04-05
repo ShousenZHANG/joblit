@@ -128,9 +128,29 @@ export interface ListMappingRulesParams {
 export async function listFieldMappingRules(params: ListMappingRulesParams) {
   const { userId, atsProvider, pageDomain } = params;
 
-  const where: Record<string, unknown> = { userId };
-  if (atsProvider) where.atsProvider = atsProvider;
-  if (pageDomain) where.pageDomain = pageDomain;
+  // No filters → return ALL rules (web dashboard use case).
+  // With filters → return global + ATS-level + site-specific rules so
+  // the extension always gets the full applicable rule set.
+  let where: Record<string, unknown>;
+
+  if (!atsProvider && !pageDomain) {
+    // Web dashboard: all rules for this user
+    where = { userId };
+  } else {
+    const orConditions: Record<string, unknown>[] = [
+      // Global rules always included
+      { atsProvider: "", pageDomain: "" },
+    ];
+    if (atsProvider) {
+      // ATS-level rules
+      orConditions.push({ atsProvider, pageDomain: "" });
+      if (pageDomain) {
+        // Site-specific rules
+        orConditions.push({ atsProvider, pageDomain });
+      }
+    }
+    where = { userId, OR: orConditions };
+  }
 
   return prisma.fieldMappingRule.findMany({
     where,
