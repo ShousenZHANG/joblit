@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Key,
+  Tag,
   Copy,
   Check,
   Loader2,
@@ -212,7 +213,7 @@ export function ExtensionTokenManager() {
 
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <Key className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+            <Tag className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
             <input
               ref={inputRef}
               type="text"
@@ -221,7 +222,7 @@ export function ExtensionTokenManager() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !creating) handleCreate();
               }}
-              placeholder="Token name (e.g. 'My Laptop Chrome')"
+              placeholder="e.g. My Laptop Chrome"
               className="ext-input pl-9"
             />
           </div>
