@@ -140,6 +140,24 @@ export async function listFieldMappingRules(params: ListMappingRulesParams) {
       source: true,
       confidence: true,
       useCount: true,
+      updatedAt: true,
     },
+  });
+}
+
+export async function deleteFieldMappingRule(userId: string, ruleId: string) {
+  return prisma.fieldMappingRule.deleteMany({
+    where: { id: ruleId, userId },
+  });
+}
+
+export async function updateFieldMappingRule(
+  userId: string,
+  ruleId: string,
+  data: { profilePath?: string; staticValue?: string | null },
+) {
+  return prisma.fieldMappingRule.updateMany({
+    where: { id: ruleId, userId },
+    data,
   });
 }

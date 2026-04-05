@@ -1,4 +1,5 @@
 import type { DetectedField } from "@ext/shared/types";
+import type { FlatProfile } from "../filler/formFiller";
 
 /**
  * Generate a structural fingerprint for a form.
@@ -80,23 +81,44 @@ export function matchFieldsFromHistory(
   currentAts: string,
   submissions: SubmissionRecord[],
   rules: MappingRule[],
+  profile?: FlatProfile | null,
 ): Map<string, HistoricalMatch> {
   const matches = new Map<string, HistoricalMatch>();
 
   // 1. User rules (highest priority)
+  // Match by: exact selector → same label → same category
   for (const field of fields) {
-    const rule = rules.find(
-      (r) =>
-        r.fieldSelector === field.selector ||
-        (r.fieldLabel && normalizeLabel(r.fieldLabel) === normalizeLabel(field.labelText)),
-    );
-    if (rule?.staticValue) {
-      matches.set(field.selector, {
-        fieldSelector: field.selector,
-        value: rule.staticValue,
-        source: "user_rule",
-        confidence: rule.confidence,
-      });
+    // Exact selector match (strongest)
+    let rule = rules.find((r) => r.fieldSelector === field.selector);
+
+    // Same label match
+    if (!rule) {
+      rule = rules.find(
+        (r) =>
+          r.fieldLabel &&
+          normalizeLabel(r.fieldLabel) === normalizeLabel(field.labelText),
+      );
+    }
+
+    // Same category match (cross-domain knowledge)
+    if (!rule) {
+      rule = rules.find(
+        (r) => r.profilePath === field.category && r.source === "user",
+      );
+    }
+
+    if (rule) {
+      // Resolve value: staticValue takes priority, then profilePath lookup
+      const profileValue = profile ? (profile as Record<string, string>)[rule.profilePath] : "";
+      const value = rule.staticValue ?? profileValue ?? "";
+      if (value) {
+        matches.set(field.selector, {
+          fieldSelector: field.selector,
+          value,
+          source: "user_rule",
+          confidence: rule.confidence,
+        });
+      }
     }
   }
 

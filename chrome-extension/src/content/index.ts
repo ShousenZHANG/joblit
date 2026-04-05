@@ -1,8 +1,9 @@
 import { detectForms } from "./detector/formDetector";
 import { fillFields, advanceMultiStepForm, type FlatProfile, type HistoricalOverrides } from "./filler/formFiller";
+import { simulateInput } from "./filler/inputSimulator";
 import { sendMessage } from "@ext/shared/messaging";
 import { mountWidget, unmountWidget, isWidgetMounted } from "./widget/mount";
-import { FloatingWidget } from "./widget/FloatingWidget";
+import { FloatingWidget, type FieldRuleData } from "./widget/FloatingWidget";
 import { recordSubmission, interceptFormSubmits } from "./recorder/submissionRecorder";
 import { generateFormSignature, matchFieldsFromHistory } from "./detector/similarity";
 import type { SubmissionRecord, MappingRule } from "./detector/similarity";
@@ -123,9 +124,35 @@ async function initWidget(detection: FormDetectionResult) {
         data: { type: "CORRECT_MAPPING", fieldSelector, newProfilePath },
       });
     },
+    onSaveRule: (rule: FieldRuleData) => {
+      // Determine scope-based atsProvider/pageDomain
+      const atsProvider = rule.scope === "global" ? "" : rule.atsProvider;
+      const pageDomain = rule.scope === "site" ? rule.pageDomain : "";
+
+      sendMessage({
+        type: "PUT_FIELD_MAPPING",
+        data: {
+          fieldSelector: rule.fieldSelector,
+          fieldLabel: rule.fieldLabel,
+          profilePath: rule.profilePath,
+          staticValue: rule.staticValue ?? null,
+          atsProvider,
+          pageDomain,
+          source: "user",
+        },
+      });
+    },
+    onApplyValue: (fieldSelector: string, value: string) => {
+      // Find the actual DOM element and apply the value
+      const field = currentDetection?.fields.find((f) => f.selector === fieldSelector);
+      if (field?.element) {
+        simulateInput(field.element, value);
+      }
+    },
   });
 
   widget.setFields(detection.fields);
+  widget.setAtsProvider(detection.atsProvider);
 
   // Fetch profile for widget preview
   const response = await sendMessage<{ flat: FlatProfile }>({ type: "GET_FLAT_PROFILE" });
@@ -181,6 +208,7 @@ async function fetchHistoricalOverrides(
       atsProvider,
       submissions,
       rules,
+      currentProfile,
     );
 
     for (const [selector, match] of matches) {

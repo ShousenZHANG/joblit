@@ -312,6 +312,132 @@ function getWidgetStyles(): string {
       font-size: 13px;
     }
 
+    /* ── Review bar ── */
+    .jf-review-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: #ecfdf5;
+      border-bottom: 1px solid #d1fae5;
+      font-size: 11px;
+      font-weight: 500;
+      color: #047857;
+    }
+
+    /* ── Status dots ── */
+    .jf-dot-filled { background: #10b981; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15); }
+    .jf-dot-edited { background: #f59e0b; box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15); }
+    .jf-dot-unfilled { background: #d1d5db; }
+    .jf-dot-unknown { background: #e5e7eb; border: 1.5px dashed #9ca3af; }
+
+    /* ── Field value states ── */
+    .jf-field-value--edited {
+      color: #d97706;
+      font-style: italic;
+    }
+
+    .jf-field-value--empty {
+      color: #d1d5db;
+      cursor: pointer;
+    }
+
+    .jf-field-value--empty:hover {
+      color: #10b981;
+    }
+
+    /* ── Edit button (hover reveal) ── */
+    .jf-edit-btn {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border: none;
+      border-radius: 5px;
+      background: #f3f4f6;
+      color: #6b7280;
+      cursor: pointer;
+      flex-shrink: 0;
+      margin-left: 4px;
+      transition: all 100ms ease;
+    }
+
+    .jf-edit-btn:hover {
+      background: #e5e7eb;
+      color: #374151;
+    }
+
+    .jf-field-item:hover .jf-edit-btn {
+      display: flex;
+    }
+
+    /* ── Inline edit ── */
+    .jf-field-item--editing {
+      background: #f9fafb;
+      margin: 0 -14px;
+      padding: 6px 14px;
+      border-radius: 0;
+    }
+
+    .jf-edit-wrap {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex: 1;
+      min-width: 0;
+      margin-left: auto;
+    }
+
+    .jf-edit-input {
+      flex: 1;
+      min-width: 0;
+      height: 26px;
+      padding: 0 8px;
+      border: 1.5px solid #10b981;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #111827;
+      background: #fff;
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.1);
+    }
+
+    .jf-edit-input::placeholder {
+      color: #d1d5db;
+    }
+
+    .jf-edit-confirm, .jf-edit-cancel {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: all 100ms ease;
+    }
+
+    .jf-edit-confirm {
+      background: #ecfdf5;
+      color: #059669;
+    }
+
+    .jf-edit-confirm:hover {
+      background: #d1fae5;
+    }
+
+    .jf-edit-cancel {
+      background: #fef2f2;
+      color: #dc2626;
+    }
+
+    .jf-edit-cancel:hover {
+      background: #fecaca;
+    }
+
     /* ── Animations ── */
     @keyframes jf-pulse {
       0%, 100% { box-shadow: 0 4px 16px rgba(5, 150, 105, 0.35); }

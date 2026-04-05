@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth";
 import { ExtensionTokenManager } from "./ExtensionTokenManager";
+import { KnowledgeBase } from "./KnowledgeBase";
 import { ArrowUpRight, Chrome } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +41,7 @@ export default async function ExtensionPage() {
         </div>
         <div className="min-h-0 flex-1 overflow-auto px-4 pb-4 lg:px-6 lg:pb-6">
           <ExtensionTokenManager />
+          <KnowledgeBase />
         </div>
       </section>
     </main>
