@@ -165,8 +165,16 @@ async function initWidget(detection: FormDetectionResult) {
 /** Toggle widget visibility. */
 function toggleWidget() {
   if (!isWidgetMounted()) {
-    if (currentDetection && currentDetection.fields.length > 0) {
+    // Detect forms on demand if not yet detected (e.g. user clicks before 1s timeout)
+    if (!currentDetection || currentDetection.fields.length === 0) {
+      currentDetection = detectForms(document);
+    }
+    if (currentDetection.fields.length > 0) {
       initWidget(currentDetection);
+      // Widget starts collapsed — expand it immediately so fields are visible
+      if (widget) {
+        widget.toggle();
+      }
     }
   } else if (widget) {
     widget.toggle();
@@ -258,6 +266,12 @@ async function performFill() {
 
   // Signal fill complete to widget
   if (widget) {
+    // Pass actual fill results (including KB/historical values) so review mode shows them
+    const fillResultsMap = new Map<string, { filled: boolean; source: string; value: string }>();
+    for (const fr of result.fields) {
+      fillResultsMap.set(fr.selector, { filled: fr.filled, source: fr.source, value: fr.value });
+    }
+    widget.setFillResults(fillResultsMap);
     widget.setFillProgress(result.filled, currentDetection.fields.length, "done");
     widget.setFields(currentDetection.fields);
     // Reset progress after showing result

@@ -53,8 +53,8 @@ export class FloatingWidget {
   private edits: Map<string, FieldEdit> = new Map();
   /** Which field is currently being edited (selector) */
   private editingField: string | null = null;
-  /** Filled field results from last fill operation */
-  private fillResults: Map<string, { filled: boolean; source: string }> = new Map();
+  /** Filled field results from last fill operation (includes actual values) */
+  private fillResults: Map<string, { filled: boolean; source: string; value: string }> = new Map();
   /** ATS provider for current page */
   private atsProvider = "";
   /** Page domain for current page */
@@ -89,7 +89,7 @@ export class FloatingWidget {
     this.render();
   }
 
-  setFillResults(results: Map<string, { filled: boolean; source: string }>): void {
+  setFillResults(results: Map<string, { filled: boolean; source: string; value: string }>): void {
     this.fillResults = results;
     this.render();
   }
@@ -109,6 +109,9 @@ export class FloatingWidget {
     // User edit takes priority
     const edit = this.edits.get(field.selector);
     if (edit) return edit.value;
+    // Then fill results (includes KB/historical values)
+    const fillResult = this.fillResults.get(field.selector);
+    if (fillResult?.filled && fillResult.value) return fillResult.value;
     // Then profile
     const profileKey = PROFILE_KEY_MAP[field.category];
     return profileKey ? (this.profile[profileKey] ?? "") : "";
@@ -116,6 +119,9 @@ export class FloatingWidget {
 
   private getFieldStatus(field: DetectedField): "filled" | "edited" | "unfilled" | "unknown" {
     if (this.edits.has(field.selector)) return "edited";
+    // Check fill results (includes KB/historical fills)
+    const fillResult = this.fillResults.get(field.selector);
+    if (fillResult?.filled && fillResult.value) return "filled";
     if (field.category === FieldCategory.UNKNOWN || field.confidence < 0.15) return "unknown";
     const profileKey = PROFILE_KEY_MAP[field.category];
     const value = profileKey ? (this.profile[profileKey] ?? "") : "";
