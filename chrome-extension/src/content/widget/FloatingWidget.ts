@@ -311,18 +311,24 @@ export class FloatingWidget {
       doneBtn.addEventListener("click", () => this.handleDone());
       footer.appendChild(doneBtn);
     } else {
-      // Browse mode: Fill All + Record
+      // Browse mode
+      const hasEdits = this.edits.size > 0;
+
+      if (hasEdits) {
+        // Show Save button when user has made edits in browse mode
+        const saveAllBtn = document.createElement("button");
+        saveAllBtn.className = "jf-btn-primary";
+        saveAllBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7.5l3 3L12 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> ${t("widget.saveAll")} (${this.edits.size})`;
+        saveAllBtn.addEventListener("click", () => this.handleSaveAll());
+        footer.appendChild(saveAllBtn);
+      }
+
       const fillBtn = document.createElement("button");
-      fillBtn.className = "jf-btn-primary jf-fill-btn";
+      fillBtn.className = hasEdits ? "jf-btn-secondary" : "jf-btn-primary jf-fill-btn";
       fillBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 12l3-8h6l3 8M4.5 8h7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> ${t("widget.fillAll")}`;
       fillBtn.addEventListener("click", () => this.callbacks.onFill());
 
-      const recordBtn = document.createElement("button");
-      recordBtn.className = "jf-btn-secondary jf-record-btn";
-      recordBtn.textContent = t("widget.record");
-      recordBtn.addEventListener("click", () => this.callbacks.onRecordSubmission());
-
-      footer.append(fillBtn, recordBtn);
+      footer.appendChild(fillBtn);
     }
 
     this.root.appendChild(footer);
