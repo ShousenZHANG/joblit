@@ -11,6 +11,7 @@ export const STORAGE_KEYS = {
   USER_ID: "userId",
   CACHED_PROFILE: "cachedProfile",
   PREFERENCES: "preferences",
+  DEFAULT_ANSWERS: "defaultAnswers",
   API_BASE: "apiBase",
   LOCALE: "locale",
 } as const;

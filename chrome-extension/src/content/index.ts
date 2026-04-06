@@ -298,12 +298,25 @@ async function performFill() {
     currentDetection.atsProvider,
   );
 
+  // Load default answers from extension storage
+  const defaultAnswers = await new Promise<Record<string, string>>((resolve) => {
+    chrome.storage.local.get(STORAGE_KEYS.DEFAULT_ANSWERS, (result) => {
+      resolve(result[STORAGE_KEYS.DEFAULT_ANSWERS] ?? {});
+    });
+  });
+
+  // Merge default answers into profile (profile values take priority)
+  const mergedProfile: FlatProfile = {
+    ...defaultAnswers,
+    ...currentProfile,
+  };
+
   // Signal fill start to widget
   if (widget) {
     widget.setFillProgress(0, currentDetection.fields.length, "filling");
   }
 
-  const result = fillFields(currentDetection.fields, currentProfile, historicalOverrides);
+  const result = fillFields(currentDetection.fields, mergedProfile, historicalOverrides);
 
   // Signal fill complete to widget
   if (widget) {

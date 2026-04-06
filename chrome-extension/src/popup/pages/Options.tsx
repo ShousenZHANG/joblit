@@ -8,25 +8,43 @@ interface Preferences {
   showWidget: boolean;
 }
 
+interface DefaultAnswers {
+  workAuthorization: string;
+  sponsorshipRequired: string;
+  yearsExperience: string;
+  desiredSalary: string;
+}
+
 const DEFAULT_PREFERENCES: Preferences = {
   autoFill: false,
   showWidget: true,
 };
 
+const DEFAULT_ANSWERS_INIT: DefaultAnswers = {
+  workAuthorization: "Yes",
+  sponsorshipRequired: "No",
+  yearsExperience: "",
+  desiredSalary: "",
+};
+
 export function Options() {
   const [apiBase, setApiBase] = useState(DEFAULT_API_BASE);
   const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFERENCES);
+  const [answers, setAnswers] = useState<DefaultAnswers>(DEFAULT_ANSWERS_INIT);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     chrome.storage.local.get(
-      [STORAGE_KEYS.API_BASE, STORAGE_KEYS.PREFERENCES],
+      [STORAGE_KEYS.API_BASE, STORAGE_KEYS.PREFERENCES, STORAGE_KEYS.DEFAULT_ANSWERS],
       (result) => {
         if (result[STORAGE_KEYS.API_BASE]) {
           setApiBase(result[STORAGE_KEYS.API_BASE]);
         }
         if (result[STORAGE_KEYS.PREFERENCES]) {
           setPrefs({ ...DEFAULT_PREFERENCES, ...result[STORAGE_KEYS.PREFERENCES] });
+        }
+        if (result[STORAGE_KEYS.DEFAULT_ANSWERS]) {
+          setAnswers({ ...DEFAULT_ANSWERS_INIT, ...result[STORAGE_KEYS.DEFAULT_ANSWERS] });
         }
       },
     );
@@ -36,10 +54,11 @@ export function Options() {
     chrome.storage.local.set({
       [STORAGE_KEYS.API_BASE]: apiBase.trim() || DEFAULT_API_BASE,
       [STORAGE_KEYS.PREFERENCES]: prefs,
+      [STORAGE_KEYS.DEFAULT_ANSWERS]: answers,
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
-  }, [apiBase, prefs]);
+  }, [apiBase, prefs, answers]);
 
   const togglePref = useCallback(
     (key: keyof Preferences) => {
@@ -82,6 +101,73 @@ export function Options() {
             checked={prefs.showWidget}
             onChange={() => togglePref("showWidget")}
           />
+        </div>
+      </div>
+
+      {/* Default Answers */}
+      <div>
+        <div className="jl-section-label">Default Answers</div>
+        <div className="jl-card" style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>
+              Authorized to work?
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              {["Yes", "No"].map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setAnswers((p) => ({ ...p, workAuthorization: v }))}
+                  className={`jl-btn ${answers.workAuthorization === v ? "jl-btn--primary" : "jl-btn--outline"}`}
+                  style={{ flex: 1, height: 32, fontSize: 12 }}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>
+              Require visa sponsorship?
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              {["Yes", "No"].map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setAnswers((p) => ({ ...p, sponsorshipRequired: v }))}
+                  className={`jl-btn ${answers.sponsorshipRequired === v ? "jl-btn--primary" : "jl-btn--outline"}`}
+                  style={{ flex: 1, height: 32, fontSize: 12 }}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>
+              Years of experience
+            </div>
+            <input
+              type="text"
+              value={answers.yearsExperience}
+              onChange={(e) => setAnswers((p) => ({ ...p, yearsExperience: e.target.value }))}
+              placeholder="e.g. 3"
+              className="jl-input"
+              style={{ fontSize: 12, height: 32 }}
+            />
+          </div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>
+              Desired salary (optional)
+            </div>
+            <input
+              type="text"
+              value={answers.desiredSalary}
+              onChange={(e) => setAnswers((p) => ({ ...p, desiredSalary: e.target.value }))}
+              placeholder="e.g. 120000"
+              className="jl-input"
+              style={{ fontSize: 12, height: 32 }}
+            />
+          </div>
         </div>
       </div>
 
