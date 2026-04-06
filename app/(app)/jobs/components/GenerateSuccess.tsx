@@ -35,7 +35,7 @@ export function GenerateSuccess({
         <iframe
           title={target === "resume" ? "Resume preview" : "Cover letter preview"}
           src={pdfUrl}
-          sandbox="allow-same-origin"
+          sandbox="allow-scripts allow-same-origin"
           className="h-full w-full"
         />
       </div>
