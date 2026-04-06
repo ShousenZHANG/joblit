@@ -46,10 +46,11 @@ export function simulateInput(el: HTMLElement, value: string): void {
   }
 
   // Dispatch events in the order frameworks expect
-  el.dispatchEvent(new Event("focus", { bubbles: true }));
-  el.dispatchEvent(new Event("input", { bubbles: true }));
+  // Use InputEvent for 'input' — React 16+ listens for this specific type
+  el.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+  el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
   el.dispatchEvent(new Event("change", { bubbles: true }));
-  el.dispatchEvent(new Event("blur", { bubbles: true }));
+  el.dispatchEvent(new FocusEvent("blur", { bubbles: true }));
 }
 
 /** Simulate selecting an option in a <select> element. */

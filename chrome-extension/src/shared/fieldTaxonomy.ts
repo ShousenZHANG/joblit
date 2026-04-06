@@ -280,6 +280,10 @@ export const PROFILE_KEY_MAP: Partial<Record<FieldCategory, string>> = {
   [FieldCategory.AGE]: "age",
   [FieldCategory.IDENTITY]: "identity",
   [FieldCategory.AVAILABILITY]: "availabilityMonth",
+  [FieldCategory.WORK_AUTHORIZATION]: "workAuthorization",
+  [FieldCategory.SPONSORSHIP_REQUIRED]: "sponsorshipRequired",
+  [FieldCategory.YEARS_EXPERIENCE]: "yearsExperience",
+  [FieldCategory.DESIRED_SALARY]: "desiredSalary",
   [FieldCategory.AGREE_TERMS]: "agreeTerms",
   [FieldCategory.AGREE_PRIVACY]: "agreePrivacy",
 };

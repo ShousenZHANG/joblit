@@ -102,7 +102,10 @@ export function fillFields(
 
 /** Fill a single field based on its element type. */
 function fillSingleField(field: DetectedField, value: string): boolean {
-  const el = field.element;
+  // Re-query the element by selector to handle stale references (SPA re-renders)
+  const el = (field.selector
+    ? document.querySelector<HTMLElement>(field.selector) ?? field.element
+    : field.element) as HTMLElement;
 
   // Custom dropdown (React/Vue combobox)
   if (
