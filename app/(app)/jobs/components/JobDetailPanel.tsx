@@ -28,13 +28,13 @@ const statusLabel: Record<JobStatus, string> = {
 };
 
 const markdownStyles = {
-  heading: "text-base font-semibold text-slate-900",
-  subheading: "text-sm font-semibold text-slate-900",
-  paragraph: "text-sm leading-7 text-slate-700",
-  list: "list-disc space-y-1 pl-5 text-sm text-slate-700",
-  listOrdered: "list-decimal space-y-1 pl-5 text-sm text-slate-700",
-  listItem: "text-sm leading-7 text-slate-700",
-  blockquote: "border-l-2 border-slate-200 bg-slate-50/60 px-4 py-2 text-sm text-slate-700",
+  heading: "text-lg font-semibold text-slate-900 border-t border-slate-100 pt-4 mt-4 first:border-0 first:mt-0 first:pt-0",
+  subheading: "text-base font-semibold text-slate-900 mt-3",
+  paragraph: "text-[15px] leading-relaxed text-slate-700",
+  list: "list-disc space-y-1.5 pl-5 text-[15px] text-slate-700",
+  listOrdered: "list-decimal space-y-1.5 pl-5 text-[15px] text-slate-700",
+  listItem: "text-[15px] leading-relaxed text-slate-700",
+  blockquote: "border-l-2 border-emerald-200 bg-emerald-50/40 px-4 py-2 text-sm text-slate-700 rounded-r-lg",
   codeInline: "rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-800",
   pre: "rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800 overflow-auto",
   link: "text-emerald-700 underline-offset-4 hover:underline",
@@ -105,7 +105,7 @@ export function JobDetailPanel({
         return (
           <mark
             key={`${part}-${index}`}
-            className="rounded-sm bg-amber-100/90 px-1 py-0.5 font-medium text-amber-900"
+            className="rounded-sm bg-emerald-50 px-1 py-0.5 font-medium text-emerald-800 ring-1 ring-emerald-200/50"
           >
             {part}
           </mark>
@@ -321,7 +321,7 @@ export function JobDetailPanel({
                   <Skeleton className="h-4 w-3/4" />
                 </div>
               ) : (
-                <div className="rounded-lg border border-dashed border-slate-900/10 bg-transparent p-5">
+                <div className="p-1">
                   {selectedDescription ? (
                     <div className="space-y-3">
                       <div className="space-y-4">
