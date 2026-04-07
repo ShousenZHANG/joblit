@@ -1,18 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
 import { Dashboard } from "./pages/Dashboard";
 import { TokenSetup } from "./pages/TokenSetup";
-import { History } from "./pages/History";
 import { ProfileSelect } from "./pages/ProfileSelect";
 import { Options } from "./pages/Options";
 import { useI18n } from "@ext/shared/useI18n";
 import { logoIconSvg } from "@ext/shared/logo";
 
 type AuthState = "loading" | "setup" | "authenticated";
-type Tab = "dashboard" | "history" | "profile" | "options";
+type Tab = "dashboard" | "profile" | "options";
 
 const TAB_ICONS: Record<Tab, string> = {
   dashboard: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5"/></svg>`,
-  history: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5v4l2.5 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`,
   profile: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5.5" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M2.5 14c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`,
   options: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`,
 };
@@ -24,7 +22,6 @@ export function App() {
 
   const TAB_ITEMS: { key: Tab; label: string }[] = [
     { key: "dashboard", label: t("tab.home") },
-    { key: "history", label: t("tab.history") },
     { key: "profile", label: t("tab.profile") },
     { key: "options", label: t("tab.settings") },
   ];
@@ -103,7 +100,6 @@ export function App() {
           {/* Tab Content */}
           <div className="jl-content" key={activeTab}>
             {activeTab === "dashboard" && <Dashboard onDisconnect={checkAuth} />}
-            {activeTab === "history" && <History />}
             {activeTab === "profile" && <ProfileSelect />}
             {activeTab === "options" && <Options />}
           </div>

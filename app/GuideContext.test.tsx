@@ -28,7 +28,6 @@ type GuideStatePayload = {
     review_jobs: boolean;
     generate_first_pdf: boolean;
     mark_applied: boolean;
-    install_extension: boolean;
   };
   completedCount: number;
   totalCount: number;
@@ -48,10 +47,9 @@ function createState(overrides?: Partial<GuideStatePayload>): GuideStatePayload 
       review_jobs: false,
       generate_first_pdf: false,
       mark_applied: false,
-      install_extension: false,
     },
     completedCount: 0,
-    totalCount: 6,
+    totalCount: 5,
     isComplete: false,
     dismissed: false,
     dismissedAt: null,
@@ -127,8 +125,7 @@ describe("GuideContext", () => {
                   review_jobs: false,
                   generate_first_pdf: false,
                   mark_applied: false,
-                  install_extension: false,
-                },
+                            },
                 completedCount: 1,
               }),
             }),
@@ -156,12 +153,12 @@ describe("GuideContext", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId("guide-count")).toHaveTextContent("0/6");
+      expect(screen.getByTestId("guide-count")).toHaveTextContent("0/5");
     });
 
     fireEvent.click(screen.getByRole("button", { name: "complete-first" }));
     await waitFor(() => {
-      expect(screen.getByTestId("guide-count")).toHaveTextContent("1/6");
+      expect(screen.getByTestId("guide-count")).toHaveTextContent("1/5");
     });
 
     fireEvent.click(screen.getByRole("button", { name: "close-guide" }));
@@ -178,7 +175,7 @@ describe("GuideContext", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId("guide-count")).toHaveTextContent("1/6");
+      expect(screen.getByTestId("guide-count")).toHaveTextContent("1/5");
     });
   });
 
@@ -208,14 +205,14 @@ describe("GuideContext", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId("guide-count")).toHaveTextContent("0/6");
+      expect(screen.getByTestId("guide-count")).toHaveTextContent("0/5");
     });
 
     fireEvent.click(screen.getByRole("button", { name: "open-guide" }));
 
     await waitFor(() => {
       expect(screen.getByTestId("guide-tour-card")).toBeInTheDocument();
-      expect(screen.getByText(/step 1 of 6/i)).toBeInTheDocument();
+      expect(screen.getByText(/step 1 of 5/i)).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /next/i }));

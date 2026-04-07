@@ -9,14 +9,13 @@ import {
 } from "@/lib/onboarding";
 
 describe("onboarding task model", () => {
-  it("defines six ordered guide tasks", () => {
+  it("defines five ordered guide tasks", () => {
     expect(ONBOARDING_TASKS.map((task) => task.id)).toEqual([
       "resume_setup",
       "first_fetch",
       "review_jobs",
       "generate_first_pdf",
       "mark_applied",
-      "install_extension",
     ]);
   });
 
@@ -36,18 +35,16 @@ describe("onboarding task model", () => {
       review_jobs: "/jobs",
       generate_first_pdf: "/jobs",
       mark_applied: "/jobs",
-      install_extension: "/extension",
     });
   });
 
-  it("creates a checklist with all six tasks defaulting to false", () => {
+  it("creates a checklist with all five tasks defaulting to false", () => {
     expect(defaultOnboardingChecklist()).toEqual({
       resume_setup: false,
       first_fetch: false,
       review_jobs: false,
       generate_first_pdf: false,
       mark_applied: false,
-      install_extension: false,
     });
   });
 
@@ -64,7 +61,6 @@ describe("onboarding task model", () => {
       review_jobs: true,
       generate_first_pdf: false,
       mark_applied: false,
-      install_extension: false,
     });
   });
 
@@ -78,18 +74,17 @@ describe("onboarding task model", () => {
     expect(normalizeOnboardingChecklist(42)).toEqual(defaultOnboardingChecklist());
   });
 
-  it("treats onboarding as complete only when all six tasks are done", () => {
+  it("treats onboarding as complete when all five tasks are done", () => {
     const partiallyComplete = {
       resume_setup: true,
       first_fetch: true,
       review_jobs: true,
       generate_first_pdf: true,
-      mark_applied: true,
-      install_extension: false,
+      mark_applied: false,
     };
     const fullyComplete = {
       ...partiallyComplete,
-      install_extension: true,
+      mark_applied: true,
     };
 
     expect(isOnboardingComplete(partiallyComplete)).toBe(false);
@@ -115,7 +110,6 @@ describe("onboarding task model", () => {
       review_jobs: true,
       generate_first_pdf: false,
       mark_applied: false,
-      install_extension: false,
     });
   });
 

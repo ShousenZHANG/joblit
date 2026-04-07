@@ -572,8 +572,9 @@ describe("JobsClient", () => {
       ).not.toBeInTheDocument();
     });
 
-    // Optimistic delete uses suppressedDeletedIds — no refetch is needed or expected.
-    expect(jobsFetchCount).toBe(0);
+    // After successful delete, a refetch is triggered to sync totalCount with server.
+    // At most 1 refetch expected (from invalidateQueries in onSuccess).
+    expect(jobsFetchCount).toBeLessThanOrEqual(1);
   });
 
   it("submits only one delete request when delete confirm is double-clicked quickly", async () => {

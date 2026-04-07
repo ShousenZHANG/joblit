@@ -290,6 +290,7 @@ export function useJobMutations({
       });
     },
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["jobs"], refetchType: "active" });
       toast({
         title: "Job deleted",
         description: "The role was removed.",
@@ -387,6 +388,8 @@ export function useJobMutations({
       });
     },
     onSuccess: (_data, ids) => {
+      // Refetch to get accurate totalCount and reset scroll trigger
+      void queryClient.invalidateQueries({ queryKey: ["jobs"], refetchType: "active" });
       toast({
         title: `${ids.length} ${ids.length === 1 ? "job" : "jobs"} deleted`,
         description: "The selected jobs were removed.",

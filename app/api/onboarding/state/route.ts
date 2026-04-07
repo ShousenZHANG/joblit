@@ -22,7 +22,6 @@ const OnboardingTaskIdSchema = z.enum([
   "review_jobs",
   "generate_first_pdf",
   "mark_applied",
-  "install_extension",
 ]);
 
 const ChecklistPatchSchema = z
@@ -32,7 +31,6 @@ const ChecklistPatchSchema = z
     review_jobs: z.boolean(),
     generate_first_pdf: z.boolean(),
     mark_applied: z.boolean(),
-    install_extension: z.boolean(),
   })
   .partial();
 
