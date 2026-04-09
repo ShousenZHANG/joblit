@@ -317,8 +317,20 @@
   "hotPaths": [
     {
       "path": "chrome-extension\\src\\content\\index.ts",
-      "accessCount": 6,
-      "lastAccessed": 1775734390915,
+      "accessCount": 7,
+      "lastAccessed": 1775734741365,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\popup\\App.tsx",
+      "accessCount": 7,
+      "lastAccessed": 1775734931136,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\popup\\pages\\Dashboard.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1775734939411,
       "type": "file"
     },
     {
@@ -328,9 +340,21 @@
       "type": "file"
     },
     {
+      "path": "chrome-extension\\src\\shared\\i18n.ts",
+      "accessCount": 4,
+      "lastAccessed": 1775734912039,
+      "type": "file"
+    },
+    {
       "path": "app\\layout.tsx",
       "accessCount": 3,
       "lastAccessed": 1775732944836,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\content\\widget\\FloatingWidget.ts",
+      "accessCount": 3,
+      "lastAccessed": 1775734903731,
       "type": "file"
     },
     {
@@ -368,6 +392,42 @@
       "accessCount": 1,
       "lastAccessed": 1775733246985,
       "type": "directory"
+    },
+    {
+      "path": "chrome-extension\\src\\popup\\pages\\Options.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1775734724581,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\popup\\pages\\ProfileSelect.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1775734724865,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\popup\\styles.css",
+      "accessCount": 1,
+      "lastAccessed": 1775734725573,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\shared\\logo.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775734733482,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\content\\widget\\mount.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775734741291,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\popup\\pages\\RulesViewer.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1775734961253,
+      "type": "file"
     }
   ],
   "userDirectives": []

@@ -414,7 +414,22 @@ export class FloatingWidget {
         this.render();
       });
 
-      item.append(dot, label, val, editBtn);
+      // Source badge (only for filled fields)
+      const fillResult = this.fillResults.get(field.selector);
+      if (fillResult?.filled && fillResult.source && fillResult.source !== "skipped") {
+        const badge = document.createElement("span");
+        badge.className = "jf-source-badge";
+        if (fillResult.source === "profile") {
+          badge.style.cssText = "font-size:9px;padding:1px 4px;border-radius:4px;margin-left:4px;background:#f0fdf4;color:#065f46;border:1px solid #d1fae5;";
+          badge.textContent = "profile";
+        } else if (fillResult.source === "historical") {
+          badge.style.cssText = "font-size:9px;padding:1px 4px;border-radius:4px;margin-left:4px;background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;";
+          badge.textContent = "historical";
+        }
+        item.append(dot, label, val, badge, editBtn);
+      } else {
+        item.append(dot, label, val, editBtn);
+      }
     }
 
     return item;

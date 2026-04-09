@@ -12,6 +12,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "tab.home": "Home",
     "tab.history": "History",
     "tab.profile": "Profile",
+    "tab.rules": "Rules",
     "tab.settings": "Settings",
 
     // Auth
@@ -81,6 +82,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "tab.home": "首页",
     "tab.history": "历史",
     "tab.profile": "简历",
+    "tab.rules": "规则",
     "tab.settings": "设置",
 
     "auth.connect": "连接 Joblit",

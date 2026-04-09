@@ -20,7 +20,7 @@ interface ProfileData {
 type FillState =
   | { status: "idle" }
   | { status: "filling" }
-  | { status: "success"; filled: number; total: number; message?: string }
+  | { status: "success"; filled: number; total: number; message?: string; sources?: { profile: number; historical: number; default: number } }
   | { status: "error"; message: string };
 
 export function Dashboard({ onDisconnect }: DashboardProps) {
@@ -61,11 +61,18 @@ export function Dashboard({ onDisconnect }: DashboardProps) {
             return;
           }
           if (response?.filled !== undefined) {
+            const fields = Array.isArray(response.fields) ? response.fields : [];
+            const sources = {
+              profile: fields.filter((f: any) => f.filled && f.source === "profile").length,
+              historical: fields.filter((f: any) => f.filled && f.source === "historical").length,
+              default: 0,
+            };
             setFillState({
               status: "success",
               filled: response.filled ?? 0,
               total: (response.filled ?? 0) + (response.skipped ?? 0),
               message: response.message,
+              sources,
             });
             // Auto-close after showing result
             setTimeout(() => window.close(), 2000);
@@ -193,6 +200,20 @@ export function Dashboard({ onDisconnect }: DashboardProps) {
             {fillState.total > fillState.filled && (
               <div className="jl-badge jl-badge--warning" style={{ fontSize: 11 }}>
                 {fillState.total - fillState.filled} skipped
+              </div>
+            )}
+            {fillState.sources && (fillState.sources.profile > 0 || fillState.sources.historical > 0) && (
+              <div style={{ display: "flex", gap: 4, justifyContent: "center", marginTop: 4 }}>
+                {fillState.sources.profile > 0 && (
+                  <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, background: "#f0fdf4", color: "#065f46", border: "1px solid #d1fae5" }}>
+                    {fillState.sources.profile} from profile
+                  </span>
+                )}
+                {fillState.sources.historical > 0 && (
+                  <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, background: "#eff6ff", color: "#1e40af", border: "1px solid #bfdbfe" }}>
+                    {fillState.sources.historical} from history
+                  </span>
+                )}
               </div>
             )}
             <div style={{ fontSize: 11, color: "var(--jl-text-muted)", marginTop: 2 }}>
