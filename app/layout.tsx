@@ -16,6 +16,7 @@ const geistMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.JOBLIT_WEB_URL ?? "https://www.joblit.tech"),
   title: {
     default: "Joblit Dashboard",
     template: "%s | Joblit",

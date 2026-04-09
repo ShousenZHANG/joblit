@@ -1,0 +1,344 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1775732436048,
+  "projectRoot": "D:\\jobflow\\jobflow",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "name": "TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "tsconfig.json"
+        ]
+      }
+    ],
+    "frameworks": [
+      {
+        "name": "next",
+        "version": "16.1.6",
+        "category": "fullstack"
+      },
+      {
+        "name": "react",
+        "version": "19.2.3",
+        "category": "frontend"
+      },
+      {
+        "name": "react-dom",
+        "version": "19.2.3",
+        "category": "frontend"
+      },
+      {
+        "name": "vitest",
+        "version": "4.0.17",
+        "category": "testing"
+      }
+    ],
+    "packageManager": "npm",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "npm run build",
+    "testCommand": "npm test",
+    "lintCommand": "npm run lint",
+    "devCommand": "npm run dev",
+    "scripts": {
+      "dev": "next dev",
+      "build": "next build",
+      "start": "next start",
+      "lint": "eslint",
+      "test": "vitest run",
+      "test:watch": "vitest",
+      "deps:policy": "node tools/ci/check-dependency-policy.mjs",
+      "deps:audit": "npm audit --omit=dev --audit-level=high",
+      "readme:metrics": "node tools/readme/update-metrics-badges.mjs"
+    }
+  },
+  "conventions": {
+    "namingStyle": "camelCase",
+    "importStyle": "ES modules",
+    "testPattern": "*.test.ts",
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "app",
+      "components",
+      "docs",
+      "lib",
+      "test"
+    ],
+    "gitBranches": {
+      "defaultBranch": "master",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "app": {
+      "path": "app",
+      "purpose": "Application code",
+      "fileCount": 11,
+      "lastAccessed": 1775732435993,
+      "keyFiles": [
+        "favicon.ico",
+        "FetchProgressPanel.test.tsx",
+        "FetchProgressPanel.tsx",
+        "FetchStatusContext.tsx",
+        "globals.css"
+      ]
+    },
+    "chrome-extension": {
+      "path": "chrome-extension",
+      "purpose": null,
+      "fileCount": 8,
+      "lastAccessed": 1775732435993,
+      "keyFiles": [
+        "manifest.json",
+        "package-lock.json",
+        "package.json",
+        "tsconfig.json",
+        "vite.config.ts"
+      ]
+    },
+    "components": {
+      "path": "components",
+      "purpose": "UI components",
+      "fileCount": 1,
+      "lastAccessed": 1775732436009,
+      "keyFiles": [
+        "LocaleSwitcher.tsx"
+      ]
+    },
+    "cursor-skill": {
+      "path": "cursor-skill",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1775732436010,
+      "keyFiles": [
+        "README.md"
+      ]
+    },
+    "design-system": {
+      "path": "design-system",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1775732436010,
+      "keyFiles": []
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 3,
+      "lastAccessed": 1775732436010,
+      "keyFiles": [
+        "refactor-report.md",
+        "search-analysis.md",
+        "search-optimization-plan.md"
+      ]
+    },
+    "everything-claude-code": {
+      "path": "everything-claude-code",
+      "purpose": null,
+      "fileCount": 30,
+      "lastAccessed": 1775732436011,
+      "keyFiles": [
+        "AGENTS.md",
+        "CHANGELOG.md",
+        "CLAUDE.md",
+        "CODE_OF_CONDUCT.md",
+        "commitlint.config.js"
+      ]
+    },
+    "hooks": {
+      "path": "hooks",
+      "purpose": null,
+      "fileCount": 3,
+      "lastAccessed": 1775732436011,
+      "keyFiles": [
+        "use-toast.ts",
+        "useDebouncedValue.ts",
+        "useMarket.ts"
+      ]
+    },
+    "i18n": {
+      "path": "i18n",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1775732436012,
+      "keyFiles": [
+        "request.ts",
+        "routing.ts"
+      ]
+    },
+    "latexTemp": {
+      "path": "latexTemp",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1775732436013,
+      "keyFiles": []
+    },
+    "lib": {
+      "path": "lib",
+      "purpose": "Library code",
+      "fileCount": 3,
+      "lastAccessed": 1775732436013,
+      "keyFiles": [
+        "getQueryClient.ts",
+        "onboarding.ts",
+        "utils.ts"
+      ]
+    },
+    "messages": {
+      "path": "messages",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1775732436014,
+      "keyFiles": [
+        "en.json",
+        "zh.json"
+      ]
+    },
+    "prisma": {
+      "path": "prisma",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1775732436014,
+      "keyFiles": [
+        "schema.prisma"
+      ]
+    },
+    "skills": {
+      "path": "skills",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1775732436014,
+      "keyFiles": []
+    },
+    "test": {
+      "path": "test",
+      "purpose": "Test files",
+      "fileCount": 6,
+      "lastAccessed": 1775732436015,
+      "keyFiles": [
+        "LocaleSwitcher.test.tsx",
+        "mobileLayoutStyles.test.ts",
+        "setup.ts",
+        "useDebouncedValue.test.tsx",
+        "useMarket.test.tsx"
+      ]
+    },
+    "tools": {
+      "path": "tools",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1775732436015,
+      "keyFiles": []
+    },
+    "types": {
+      "path": "types",
+      "purpose": "Type definitions",
+      "fileCount": 1,
+      "lastAccessed": 1775732436015,
+      "keyFiles": [
+        "next-auth.d.ts"
+      ]
+    },
+    "app\\api": {
+      "path": "app\\api",
+      "purpose": "API routes",
+      "fileCount": 0,
+      "lastAccessed": 1775732436016,
+      "keyFiles": []
+    },
+    "chrome-extension\\dist": {
+      "path": "chrome-extension\\dist",
+      "purpose": "Distribution/build output",
+      "fileCount": 2,
+      "lastAccessed": 1775732436016,
+      "keyFiles": [
+        "manifest.json",
+        "service-worker-loader.js"
+      ]
+    },
+    "chrome-extension\\node_modules": {
+      "path": "chrome-extension\\node_modules",
+      "purpose": "Dependencies",
+      "fileCount": 1,
+      "lastAccessed": 1775732436017,
+      "keyFiles": []
+    },
+    "chrome-extension\\public": {
+      "path": "chrome-extension\\public",
+      "purpose": "Public files",
+      "fileCount": 0,
+      "lastAccessed": 1775732436018,
+      "keyFiles": []
+    },
+    "chrome-extension\\scripts": {
+      "path": "chrome-extension\\scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 0,
+      "lastAccessed": 1775732436018,
+      "keyFiles": []
+    },
+    "prisma\\migrations": {
+      "path": "prisma\\migrations",
+      "purpose": "Database migrations",
+      "fileCount": 1,
+      "lastAccessed": 1775732436020,
+      "keyFiles": [
+        "migration_lock.toml"
+      ]
+    },
+    "test\\api": {
+      "path": "test\\api",
+      "purpose": "API routes",
+      "fileCount": 28,
+      "lastAccessed": 1775732436021,
+      "keyFiles": [
+        "adminImport.test.ts",
+        "applicationBatchActive.test.ts",
+        "applicationBatchCancel.test.ts"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "app\\layout.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1775732944836,
+      "type": "file"
+    },
+    {
+      "path": "app\\(marketing)\\page.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1775732997299,
+      "type": "file"
+    },
+    {
+      "path": "app",
+      "accessCount": 1,
+      "lastAccessed": 1775732755883,
+      "type": "directory"
+    },
+    {
+      "path": "app\\(marketing)\\opengraph-image.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1775732976174,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}
