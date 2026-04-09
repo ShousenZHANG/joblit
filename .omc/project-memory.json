@@ -316,15 +316,15 @@
   },
   "hotPaths": [
     {
-      "path": "app\\layout.tsx",
-      "accessCount": 3,
-      "lastAccessed": 1775732944836,
+      "path": "app\\(marketing)\\page.tsx",
+      "accessCount": 4,
+      "lastAccessed": 1775733201477,
       "type": "file"
     },
     {
-      "path": "app\\(marketing)\\page.tsx",
-      "accessCount": 2,
-      "lastAccessed": 1775732997299,
+      "path": "app\\layout.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1775732944836,
       "type": "file"
     },
     {
@@ -338,6 +338,18 @@
       "accessCount": 1,
       "lastAccessed": 1775732976174,
       "type": "file"
+    },
+    {
+      "path": "app\\(marketing)",
+      "accessCount": 1,
+      "lastAccessed": 1775733226430,
+      "type": "directory"
+    },
+    {
+      "path": "app\\(marketing)\\HeroSection.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1775733246985,
+      "type": "directory"
     }
   ],
   "userDirectives": []
