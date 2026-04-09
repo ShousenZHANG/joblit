@@ -328,6 +328,18 @@
       "type": "file"
     },
     {
+      "path": "app\\(app)\\jobs\\JobsClient.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1775733923021,
+      "type": "file"
+    },
+    {
+      "path": "next.config.ts",
+      "accessCount": 2,
+      "lastAccessed": 1775733986142,
+      "type": "file"
+    },
+    {
       "path": "app",
       "accessCount": 1,
       "lastAccessed": 1775732755883,

@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
     optimizePackageImports: [
       "lucide-react",
       "framer-motion",
+      "react-markdown",
+      "@tanstack/react-query",
+      "@tanstack/react-virtual",
       "@radix-ui/react-dialog",
       "@radix-ui/react-select",
       "@radix-ui/react-dropdown-menu",
