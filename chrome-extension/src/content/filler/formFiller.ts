@@ -179,3 +179,62 @@ export function advanceMultiStepForm(doc: Document): boolean {
 
   return false;
 }
+
+/**
+ * Highlight unfilled form fields on the page with a visual indicator.
+ * Adds a pulsing orange outline to fields that were skipped or have no value.
+ */
+export function highlightUnfilledFields(fields: DetectedField[]): () => void {
+  const HIGHLIGHT_CLASS = "joblit-unfilled-highlight";
+  const styleId = "joblit-highlight-style";
+
+  // Inject highlight CSS if not already present
+  if (!document.getElementById(styleId)) {
+    const style = document.createElement("style");
+    style.id = styleId;
+    style.textContent = `
+      .${HIGHLIGHT_CLASS} {
+        outline: 2px solid #f59e0b !important;
+        outline-offset: 2px !important;
+        background-color: rgba(245, 158, 11, 0.05) !important;
+        transition: outline-color 0.3s ease !important;
+      }
+      .${HIGHLIGHT_CLASS}:focus {
+        outline-color: #22c55e !important;
+        background-color: transparent !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  const highlighted: HTMLElement[] = [];
+
+  for (const field of fields) {
+    // Re-query element by selector
+    const el = field.selector
+      ? document.querySelector<HTMLElement>(field.selector)
+      : null;
+    if (!el) continue;
+
+    // Check if field is empty
+    const value = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement
+      ? el.value
+      : el instanceof HTMLSelectElement
+        ? el.value
+        : el.textContent ?? "";
+
+    if (!value.trim()) {
+      el.classList.add(HIGHLIGHT_CLASS);
+      highlighted.push(el);
+    }
+  }
+
+  // Return cleanup function to remove highlights
+  return () => {
+    for (const el of highlighted) {
+      el.classList.remove(HIGHLIGHT_CLASS);
+    }
+    const style = document.getElementById(styleId);
+    if (style) style.remove();
+  };
+}

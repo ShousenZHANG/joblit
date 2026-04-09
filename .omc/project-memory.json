@@ -317,20 +317,38 @@
   "hotPaths": [
     {
       "path": "chrome-extension\\src\\content\\index.ts",
-      "accessCount": 7,
-      "lastAccessed": 1775734741365,
+      "accessCount": 13,
+      "lastAccessed": 1775735705294,
       "type": "file"
     },
     {
       "path": "chrome-extension\\src\\popup\\App.tsx",
-      "accessCount": 7,
-      "lastAccessed": 1775734931136,
+      "accessCount": 8,
+      "lastAccessed": 1775735438997,
       "type": "file"
     },
     {
       "path": "chrome-extension\\src\\popup\\pages\\Dashboard.tsx",
+      "accessCount": 6,
+      "lastAccessed": 1775735410713,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\shared\\i18n.ts",
       "accessCount": 5,
-      "lastAccessed": 1775734939411,
+      "lastAccessed": 1775735415444,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\content\\widget\\FloatingWidget.ts",
+      "accessCount": 5,
+      "lastAccessed": 1775735636911,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\content\\filler\\formFiller.ts",
+      "accessCount": 5,
+      "lastAccessed": 1775735697808,
       "type": "file"
     },
     {
@@ -340,21 +358,15 @@
       "type": "file"
     },
     {
-      "path": "chrome-extension\\src\\shared\\i18n.ts",
-      "accessCount": 4,
-      "lastAccessed": 1775734912039,
-      "type": "file"
-    },
-    {
       "path": "app\\layout.tsx",
       "accessCount": 3,
       "lastAccessed": 1775732944836,
       "type": "file"
     },
     {
-      "path": "chrome-extension\\src\\content\\widget\\FloatingWidget.ts",
+      "path": "chrome-extension\\manifest.json",
       "accessCount": 3,
-      "lastAccessed": 1775734903731,
+      "lastAccessed": 1775735586690,
       "type": "file"
     },
     {
@@ -367,6 +379,24 @@
       "path": "next.config.ts",
       "accessCount": 2,
       "lastAccessed": 1775733986142,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\popup\\pages\\Options.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1775735410853,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\popup\\pages\\ProfileSelect.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1775735432263,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\popup\\pages\\RulesViewer.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1775735432602,
       "type": "file"
     },
     {
@@ -394,18 +424,6 @@
       "type": "directory"
     },
     {
-      "path": "chrome-extension\\src\\popup\\pages\\Options.tsx",
-      "accessCount": 1,
-      "lastAccessed": 1775734724581,
-      "type": "file"
-    },
-    {
-      "path": "chrome-extension\\src\\popup\\pages\\ProfileSelect.tsx",
-      "accessCount": 1,
-      "lastAccessed": 1775734724865,
-      "type": "file"
-    },
-    {
       "path": "chrome-extension\\src\\popup\\styles.css",
       "accessCount": 1,
       "lastAccessed": 1775734725573,
@@ -424,9 +442,123 @@
       "type": "file"
     },
     {
-      "path": "chrome-extension\\src\\popup\\pages\\RulesViewer.tsx",
+      "path": "chrome-extension\\src\\background\\service-worker.ts",
       "accessCount": 1,
-      "lastAccessed": 1775734961253,
+      "lastAccessed": 1775735399062,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\background\\auth.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775735399492,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\background\\api.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775735399806,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\background\\syncQueue.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775735400151,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\background\\syncProcessor.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775735400244,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\content\\detector\\formDetector.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775735405043,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\content\\recorder\\submissionRecorder.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775735405246,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\popup\\pages\\TokenSetup.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1775735410427,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\shared\\constants.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775735411161,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\shared\\types.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775735411276,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\shared\\fieldTaxonomy.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775735415152,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\_locales\\en\\messages.json",
+      "accessCount": 1,
+      "lastAccessed": 1775735415965,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\_locales\\zh_CN\\messages.json",
+      "accessCount": 1,
+      "lastAccessed": 1775735416374,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\package.json",
+      "accessCount": 1,
+      "lastAccessed": 1775735422796,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\popup\\pages\\History.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1775735432074,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\popup\\main.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1775735439384,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\vite.config.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775735440154,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\tsconfig.json",
+      "accessCount": 1,
+      "lastAccessed": 1775735451733,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\popup\\index.html",
+      "accessCount": 1,
+      "lastAccessed": 1775735459215,
+      "type": "file"
+    },
+    {
+      "path": "chrome-extension\\src\\shared\\messaging.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775735460595,
       "type": "file"
     }
   ],

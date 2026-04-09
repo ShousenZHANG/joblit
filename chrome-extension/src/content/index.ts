@@ -1,5 +1,5 @@
 import { detectForms } from "./detector/formDetector";
-import { fillFields, advanceMultiStepForm, type FlatProfile, type HistoricalOverrides } from "./filler/formFiller";
+import { fillFields, advanceMultiStepForm, highlightUnfilledFields, type FlatProfile, type HistoricalOverrides } from "./filler/formFiller";
 import { simulateInput } from "./filler/inputSimulator";
 import { sendMessage } from "@ext/shared/messaging";
 import { mountWidget, unmountWidget, isWidgetMounted } from "./widget/mount";
@@ -321,6 +321,11 @@ async function performFill() {
   }
 
   const result = fillFields(currentDetection.fields, mergedProfile, historicalOverrides);
+
+  // Highlight unfilled fields on the page so user knows what needs manual input
+  const removeHighlights = highlightUnfilledFields(currentDetection.fields);
+  // Auto-remove highlights after 30 seconds
+  setTimeout(removeHighlights, 30000);
 
   // Signal fill complete to widget
   if (widget) {
