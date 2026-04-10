@@ -352,6 +352,12 @@
       "type": "file"
     },
     {
+      "path": "chrome-extension\\src\\popup\\pages\\RulesViewer.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1775789263616,
+      "type": "file"
+    },
+    {
       "path": "app\\(marketing)\\page.tsx",
       "accessCount": 4,
       "lastAccessed": 1775733201477,
@@ -391,12 +397,6 @@
       "path": "chrome-extension\\src\\popup\\pages\\ProfileSelect.tsx",
       "accessCount": 2,
       "lastAccessed": 1775735432263,
-      "type": "file"
-    },
-    {
-      "path": "chrome-extension\\src\\popup\\pages\\RulesViewer.tsx",
-      "accessCount": 2,
-      "lastAccessed": 1775735432602,
       "type": "file"
     },
     {
