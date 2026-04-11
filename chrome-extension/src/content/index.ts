@@ -319,36 +319,40 @@ async function performFill() {
     return { filled: 0, skipped: 0, message: "No form fields detected on this page." };
   }
 
-  // Always fetch fresh profile to ensure latest data
-  const response = await sendMessage<{ flat: FlatProfile }>({ type: "GET_FLAT_PROFILE" });
-  if (!response.success || !response.data?.flat) {
+  // Signal fill start IMMEDIATELY — show progress bar and update fields
+  // BEFORE the slow API calls so the user sees instant feedback.
+  if (widget) {
+    widget.setFields(currentDetection.fields);
+    widget.setFillProgress(0, currentDetection.fields.length, "filling");
+  }
+
+  // Fetch profile + historical overrides + default answers in parallel
+  const [profileResponse, historicalOverrides, defaultAnswers] = await Promise.all([
+    sendMessage<{ flat: FlatProfile }>({ type: "GET_FLAT_PROFILE" }),
+    fetchHistoricalOverrides(currentDetection.fields, currentDetection.atsProvider),
+    new Promise<Record<string, string>>((resolve) => {
+      chrome.storage.local.get(STORAGE_KEYS.DEFAULT_ANSWERS, (result) => {
+        resolve(result[STORAGE_KEYS.DEFAULT_ANSWERS] ?? {});
+      });
+    }),
+  ]);
+
+  if (!profileResponse.success || !profileResponse.data?.flat) {
+    if (widget) widget.setFillProgress(0, 0, "idle");
     return { filled: 0, skipped: 0, message: "Could not load profile. Please check your connection." };
   }
-  currentProfile = response.data.flat;
+  currentProfile = profileResponse.data.flat;
 
-  // Fetch historical overrides (non-blocking on failure)
-  const historicalOverrides = await fetchHistoricalOverrides(
-    currentDetection.fields,
-    currentDetection.atsProvider,
-  );
-
-  // Load default answers from extension storage
-  const defaultAnswers = await new Promise<Record<string, string>>((resolve) => {
-    chrome.storage.local.get(STORAGE_KEYS.DEFAULT_ANSWERS, (result) => {
-      resolve(result[STORAGE_KEYS.DEFAULT_ANSWERS] ?? {});
-    });
-  });
+  // Update widget with fresh profile so field values show during filling
+  if (widget) {
+    widget.setProfile(currentProfile);
+  }
 
   // Merge default answers into profile (profile values take priority)
   const mergedProfile: FlatProfile = {
     ...defaultAnswers,
     ...currentProfile,
   };
-
-  // Signal fill start to widget
-  if (widget) {
-    widget.setFillProgress(0, currentDetection.fields.length, "filling");
-  }
 
   const result = fillFields(currentDetection.fields, mergedProfile, historicalOverrides);
 
