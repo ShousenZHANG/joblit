@@ -93,6 +93,19 @@ export function Dashboard({ onDisconnect }: DashboardProps) {
             return;
           }
           if (response?.filled !== undefined) {
+            const filled = response.filled ?? 0;
+            const skipped = response.skipped ?? 0;
+            const total = filled + skipped;
+
+            if (total === 0) {
+              // No form fields detected — show informative message, don't auto-close
+              setFillState({
+                status: "error",
+                message: response.message || t("widget.noFields"),
+              });
+              return;
+            }
+
             const fields = Array.isArray(response.fields) ? response.fields : [];
             const sources = {
               profile: fields.filter((f: any) => f.filled && f.source === "profile").length,
@@ -101,21 +114,19 @@ export function Dashboard({ onDisconnect }: DashboardProps) {
             };
             setFillState({
               status: "success",
-              filled: response.filled ?? 0,
-              total: (response.filled ?? 0) + (response.skipped ?? 0),
+              filled,
+              total,
               message: response.message,
               sources,
             });
             // Auto-close after showing result
             setTimeout(() => window.close(), 2000);
           } else {
+            // Content script responded without fill data — treat as no fields
             setFillState({
-              status: "success",
-              filled: 0,
-              total: 0,
-              message: "Fill triggered",
+              status: "error",
+              message: t("widget.noFields"),
             });
-            setTimeout(() => window.close(), 1500);
           }
         });
       } else {
