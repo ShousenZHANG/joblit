@@ -21,6 +21,8 @@ let messageListenerRegistered = false;
 let observerRegistered = false;
 /** Prevent concurrent performFill calls from corrupting widget state. */
 let fillInProgress = false;
+/** Timer ID for the post-fill progress reset — cleared when a new fill starts. */
+let progressResetTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Simple debounce — collapses rapid calls into one after `ms` of silence. */
 function debounce(fn: () => void, ms: number): () => void {
@@ -114,7 +116,7 @@ async function init() {
     if (result.fields.length > 0) {
       currentDetection = result;
       if (!isIframe) {
-        initWidget(currentDetection);
+        await initWidget(currentDetection);
       }
       setupSubmitIntercept(currentDetection);
       if (autoFillEnabled) {
@@ -303,6 +305,8 @@ async function performFill() {
   // manual click, or multi-step recursive fill calling performFill again)
   if (fillInProgress) return { filled: 0, skipped: 0, message: "Fill already in progress." };
   fillInProgress = true;
+  // Cancel any pending progress-reset timer from a previous fill
+  if (progressResetTimer) { clearTimeout(progressResetTimer); progressResetTimer = null; }
 
   try {
   // Always re-detect forms fresh — the user may have clicked Fill after
@@ -371,8 +375,9 @@ async function performFill() {
     widget.setFillResults(fillResultsMap);
     widget.setFillProgress(result.filled, currentDetection.fields.length, "done");
     widget.setFields(currentDetection.fields);
-    // Reset progress after showing result
-    setTimeout(() => {
+    // Reset progress bar after showing result (tracked so next fill can cancel it)
+    progressResetTimer = setTimeout(() => {
+      progressResetTimer = null;
       if (widget) widget.setFillProgress(0, 0, "idle");
     }, 3000);
   }
