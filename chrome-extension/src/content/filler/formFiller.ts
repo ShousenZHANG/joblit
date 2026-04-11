@@ -161,31 +161,56 @@ function fillSingleField(field: DetectedField, value: string): boolean {
 }
 
 /**
- * Walk up the DOM from an element to find a custom dropdown container.
- * Returns the container element (to pass to simulateCustomDropdown) or null.
+ * Check if an element is (or lives inside) a custom dropdown component.
+ * Returns the dropdown trigger element, or null for regular inputs.
+ *
+ * CONSERVATIVE: only match on strong ARIA/data indicators, NOT class names.
+ * Class-based heuristics (cls.includes("dropdown")) caused false positives
+ * where regular text inputs inside wrappers with "dropdown" in the class
+ * were treated as dropdowns, leading to simulateCustomDropdown clicking
+ * random options from other dropdowns on the page.
  */
 function findDropdownTrigger(el: HTMLElement): HTMLElement | null {
-  let node: HTMLElement | null = el;
-  for (let depth = 0; depth < 5 && node; depth++) {
-    const role = node.getAttribute("role");
-    const cls = node.className?.toLowerCase?.() ?? "";
-    if (
-      role === "combobox" || role === "listbox" ||
-      node.dataset?.automationId?.includes("Dropdown") ||
-      cls.includes("select-menu") || cls.includes("combobox") ||
-      cls.includes("listbox")
-    ) {
-      return node;
-    }
-    // Also check for common dropdown wrapper class patterns (but avoid overly broad matches)
-    if (
-      (cls.includes("dropdown") || cls.includes("selectcontainer") || cls.includes("select-container")) &&
-      depth > 0 // Don't match the input itself, only parents
-    ) {
-      return node;
-    }
-    node = node.parentElement;
+  // 1. Direct check: element itself has explicit dropdown indicators
+  if (
+    el.getAttribute("role") === "combobox" ||
+    el.getAttribute("role") === "listbox" ||
+    el.getAttribute("aria-haspopup") === "listbox" ||
+    el.dataset?.automationId?.includes("Dropdown")
+  ) {
+    return el;
   }
+
+  // 2. For standard text inputs, only treat as dropdown if they have ARIA dropdown
+  //    attributes. Plain text/email/tel/number inputs are NEVER dropdowns.
+  if (el instanceof HTMLInputElement) {
+    const type = el.type.toLowerCase();
+    if (["text", "email", "tel", "url", "number", "search", "password"].includes(type)) {
+      if (
+        el.getAttribute("aria-expanded") !== null ||
+        el.getAttribute("aria-haspopup") === "listbox" ||
+        el.getAttribute("aria-autocomplete") !== null
+      ) {
+        return el; // Searchable combobox input
+      }
+      return null; // Regular text input — not a dropdown
+    }
+  }
+
+  // 3. Walk up to find a dropdown container (for non-standard elements only)
+  let parent = el.parentElement;
+  for (let i = 0; i < 4 && parent; i++) {
+    if (
+      parent.getAttribute("role") === "combobox" ||
+      parent.getAttribute("role") === "listbox" ||
+      parent.getAttribute("aria-haspopup") === "listbox" ||
+      parent.dataset?.automationId?.includes("Dropdown")
+    ) {
+      return parent;
+    }
+    parent = parent.parentElement;
+  }
+
   return null;
 }
 
@@ -237,14 +262,19 @@ export function highlightUnfilledFields(fields: DetectedField[]): () => void {
     style.id = styleId;
     style.textContent = `
       .${HIGHLIGHT_CLASS} {
-        outline: 2px solid #f59e0b !important;
-        outline-offset: 2px !important;
-        background-color: rgba(245, 158, 11, 0.05) !important;
-        transition: outline-color 0.3s ease !important;
+        box-shadow: 0 0 0 2px #f59e0b, 0 0 0 4px rgba(245, 158, 11, 0.15) !important;
+        background-color: rgba(245, 158, 11, 0.03) !important;
+        transition: all 0.3s ease !important;
+        animation: joblit-pulse 2s ease-in-out infinite !important;
       }
       .${HIGHLIGHT_CLASS}:focus {
-        outline-color: #22c55e !important;
-        background-color: transparent !important;
+        box-shadow: 0 0 0 2px #22c55e, 0 0 0 4px rgba(34, 197, 94, 0.15) !important;
+        background-color: rgba(34, 197, 94, 0.03) !important;
+        animation: none !important;
+      }
+      @keyframes joblit-pulse {
+        0%, 100% { box-shadow: 0 0 0 2px #f59e0b, 0 0 0 4px rgba(245, 158, 11, 0.15); }
+        50% { box-shadow: 0 0 0 2px #fbbf24, 0 0 0 6px rgba(251, 191, 36, 0.08); }
       }
     `;
     document.head.appendChild(style);

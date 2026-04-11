@@ -130,11 +130,12 @@ export async function simulateCustomDropdown(
       ? trigger
       : trigger.querySelector<HTMLElement>('input, [role="combobox"], [tabindex]') ?? trigger;
 
-  // Find a searchable text input inside the container (for type-to-filter)
+  // Find a searchable text input inside the container (for type-to-filter).
+  // Only use inputs that are explicitly searchable (not readonly, not hidden, has autocomplete role).
   const searchInput =
-    clickTarget instanceof HTMLInputElement && !clickTarget.readOnly
+    clickTarget instanceof HTMLInputElement && !clickTarget.readOnly && clickTarget.type !== "hidden"
       ? clickTarget
-      : trigger.querySelector<HTMLInputElement>('input:not([type="hidden"]):not([readonly])');
+      : trigger.querySelector<HTMLInputElement>('input[aria-autocomplete]:not([readonly])');
 
   const optionSelectors = [
     '[role="option"]',
