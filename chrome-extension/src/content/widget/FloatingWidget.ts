@@ -531,6 +531,11 @@ export class FloatingWidget {
       this.showToast(`${savedCount}/${entries.length} saved`);
     }
 
+    // Promote saved edits into fillResults so they persist visually after clearing edits
+    for (const [selector, edit] of entries) {
+      this.fillResults.set(selector, { filled: true, source: "historical", value: edit.value });
+    }
+
     this.edits.clear();
     this.render();
   }
