@@ -69,21 +69,6 @@ export function fillFields(
       continue;
     }
 
-    // Auto-check consent fields (terms, privacy) — always agree
-    if (
-      field.category === FieldCategory.AGREE_TERMS ||
-      field.category === FieldCategory.AGREE_PRIVACY
-    ) {
-      const filled = fillSingleField(field, "true");
-      result.fields.push({
-        selector: field.selector, category: field.category,
-        value: "true", filled, source: "profile",
-      });
-      if (filled) result.filled++;
-      else result.skipped++;
-      continue;
-    }
-
     // Fall back to profile value
     const profileKey = PROFILE_KEY_MAP[field.category];
     const value = profileKey ? (profile[profileKey] ?? "") : "";

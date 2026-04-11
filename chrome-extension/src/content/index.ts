@@ -103,6 +103,8 @@ async function init() {
     return;
   }
 
+  const prefs = await loadPreferences();
+
   // Exponential retry for SPA-rendered forms
   const DETECTION_DELAYS = [500, 1500, 3000, 6000];
   let detected = false;
@@ -112,7 +114,7 @@ async function init() {
     const result = detectForms(document);
     if (result.fields.length > 0) {
       currentDetection = result;
-      if (!isIframe) {
+      if (!isIframe && prefs.showWidget) {
         await initWidget(currentDetection);
       }
       setupSubmitIntercept(currentDetection);
@@ -323,15 +325,10 @@ async function performFill() {
     widget.setFillProgress(0, currentDetection.fields.length, "filling");
   }
 
-  // Fetch profile + historical overrides + default answers in parallel
-  const [profileResponse, historicalOverrides, defaultAnswers] = await Promise.all([
+  // Fetch profile + historical overrides in parallel
+  const [profileResponse, historicalOverrides] = await Promise.all([
     sendMessage<{ flat: FlatProfile }>({ type: "GET_FLAT_PROFILE" }),
     fetchHistoricalOverrides(currentDetection.fields, currentDetection.atsProvider),
-    new Promise<Record<string, string>>((resolve) => {
-      chrome.storage.local.get(STORAGE_KEYS.DEFAULT_ANSWERS, (result) => {
-        resolve(result[STORAGE_KEYS.DEFAULT_ANSWERS] ?? {});
-      });
-    }),
   ]);
 
   if (!profileResponse.success || !profileResponse.data?.flat) {
@@ -345,13 +342,7 @@ async function performFill() {
     widget.setProfile(currentProfile);
   }
 
-  // Merge default answers into profile (profile values take priority)
-  const mergedProfile: FlatProfile = {
-    ...defaultAnswers,
-    ...currentProfile,
-  };
-
-  const result = fillFields(currentDetection.fields, mergedProfile, historicalOverrides);
+  const result = fillFields(currentDetection.fields, currentProfile, historicalOverrides);
 
   // Highlight unfilled fields on the page so user knows what needs manual input
   const removeHighlights = highlightUnfilledFields(currentDetection.fields);
