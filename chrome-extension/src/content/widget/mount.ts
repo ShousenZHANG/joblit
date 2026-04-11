@@ -260,6 +260,14 @@ function getWidgetStyles(): string {
     .jf-btn-secondary:hover { background: #f1f5f9; border-color: #d1d5db; }
     .jf-btn-secondary:active { transform: scale(0.97); }
 
+    .jf-footer-actions {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+    }
+    .jf-footer-actions .jf-btn-primary { flex: 1; }
+    .jf-footer-actions .jf-btn-secondary { flex-shrink: 0; }
+
     /* ── Collapsed badge ── */
     .jf-collapsed {
       width: 48px;

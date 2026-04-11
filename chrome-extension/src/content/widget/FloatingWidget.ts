@@ -339,12 +339,34 @@ export class FloatingWidget {
     footer.className = "jf-footer";
 
     if (this.mode === "review") {
-      // Review mode: user reviews filled fields, edits auto-save on confirm
-      const doneBtn = document.createElement("button");
-      doneBtn.className = "jf-btn-primary";
-      doneBtn.textContent = t("widget.looksGood");
-      doneBtn.addEventListener("click", () => this.handleDone());
-      footer.appendChild(doneBtn);
+      if (this.edits.size > 0) {
+        // Pending edits: show "Save N Changes" + "Skip"
+        const actions = document.createElement("div");
+        actions.className = "jf-footer-actions";
+
+        const saveBtn = document.createElement("button");
+        saveBtn.className = "jf-btn-primary";
+        saveBtn.textContent = t("widget.saveChanges").replace("{count}", String(this.edits.size));
+        saveBtn.addEventListener("click", () => this.saveAllEdits());
+
+        const skipBtn = document.createElement("button");
+        skipBtn.className = "jf-btn-secondary";
+        skipBtn.textContent = t("widget.skip");
+        skipBtn.addEventListener("click", () => {
+          this.edits.clear();
+          this.render();
+        });
+
+        actions.append(saveBtn, skipBtn);
+        footer.appendChild(actions);
+      } else {
+        // No pending edits: show "Looks Good"
+        const doneBtn = document.createElement("button");
+        doneBtn.className = "jf-btn-primary";
+        doneBtn.textContent = t("widget.looksGood");
+        doneBtn.addEventListener("click", () => this.handleDone());
+        footer.appendChild(doneBtn);
+      }
     } else {
       // Browse mode: Fill All
       const fillBtn = document.createElement("button");
@@ -474,22 +496,42 @@ export class FloatingWidget {
     return item;
   }
 
-  /** Commit an edit: apply to form, auto-save to knowledge base. */
-  private async commitEdit(field: DetectedField, value: string): Promise<void> {
+  /** Commit an edit: apply value to form immediately, defer DB save until explicit Save click. */
+  private commitEdit(field: DetectedField, value: string): void {
     const trimmed = value.trim();
 
     if (trimmed) {
       this.edits.set(field.selector, { value: trimmed, source: "user" });
       // Apply value to the actual form field immediately
       this.callbacks.onApplyValue(field.selector, trimmed);
-      // Save to knowledge base and show result
-      const saved = await this.saveFieldRule(field, trimmed);
-      this.showToast(saved ? t("widget.ruleSaved") : t("widget.ruleSaveFailed"));
     } else {
       this.edits.delete(field.selector);
     }
 
     this.editingField = null;
+    this.render();
+  }
+
+  /** Batch-save all pending edits to the knowledge base. */
+  private async saveAllEdits(): Promise<void> {
+    const entries = Array.from(this.edits.entries());
+    if (entries.length === 0) return;
+
+    let savedCount = 0;
+    for (const [selector, edit] of entries) {
+      const field = this.fields.find((f) => f.selector === selector);
+      if (!field) continue;
+      const ok = await this.saveFieldRule(field, edit.value);
+      if (ok) savedCount++;
+    }
+
+    if (savedCount === entries.length) {
+      this.showToast(t("widget.allSaved"));
+    } else {
+      this.showToast(`${savedCount}/${entries.length} saved`);
+    }
+
+    this.edits.clear();
     this.render();
   }
 
