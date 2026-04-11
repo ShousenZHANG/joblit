@@ -1,18 +1,17 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   Brain,
   Search,
   Trash2,
-  Pencil,
   Check,
   X,
   Loader2,
+  ChevronDown,
+  ChevronRight,
   Globe,
-  Monitor,
-  Server,
-  Filter,
+  Pencil,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -40,20 +39,24 @@ interface MappingRule {
   updatedAt: string;
 }
 
-type ScopeFilter = "all" | "global" | "ats" | "site";
+interface RuleGroup {
+  key: string;
+  label: string;
+  rules: MappingRule[];
+}
 
 export function KnowledgeBase() {
   const { toast } = useToast();
   const [rules, setRules] = useState<MappingRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
-  const [editProfilePath, setEditProfilePath] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [deletingRule, setDeletingRule] = useState<MappingRule | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const editInputRef = useRef<HTMLInputElement>(null);
 
   const fetchRules = useCallback(async () => {
     try {
@@ -75,62 +78,101 @@ export function KnowledgeBase() {
     fetchRules();
   }, [fetchRules]);
 
-  const filteredRules = rules.filter((rule) => {
-    const matchesSearch =
-      !searchQuery ||
-      (rule.fieldLabel ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      rule.fieldSelector.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      rule.profilePath.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (rule.staticValue ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (rule.atsProvider ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (rule.pageDomain ?? "").toLowerCase().includes(searchQuery.toLowerCase());
+  // Focus input when editing starts
+  useEffect(() => {
+    if (editingId && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingId]);
 
-    const matchesScope =
-      scopeFilter === "all" ||
-      (scopeFilter === "global" && !rule.atsProvider && !rule.pageDomain) ||
-      (scopeFilter === "ats" && rule.atsProvider && !rule.pageDomain) ||
-      (scopeFilter === "site" && rule.pageDomain);
+  // Filter rules by search query
+  const filteredRules = useMemo(() => {
+    if (!searchQuery) return rules;
+    const q = searchQuery.toLowerCase();
+    return rules.filter(
+      (rule) =>
+        (rule.fieldLabel ?? "").toLowerCase().includes(q) ||
+        (rule.staticValue ?? "").toLowerCase().includes(q) ||
+        (rule.atsProvider ?? "").toLowerCase().includes(q) ||
+        rule.profilePath.toLowerCase().includes(q),
+    );
+  }, [rules, searchQuery]);
 
-    return matchesSearch && matchesScope;
-  });
+  // Group filtered rules by ATS provider
+  const groups: RuleGroup[] = useMemo(() => {
+    const map = new Map<string, MappingRule[]>();
+    for (const rule of filteredRules) {
+      const key = rule.atsProvider || "global";
+      const existing = map.get(key);
+      if (existing) {
+        existing.push(rule);
+      } else {
+        map.set(key, [rule]);
+      }
+    }
+    // Sort groups: most rules first, "global" last
+    return Array.from(map.entries())
+      .sort(([aKey, aRules], [bKey, bRules]) => {
+        if (aKey === "global") return 1;
+        if (bKey === "global") return -1;
+        return bRules.length - aRules.length;
+      })
+      .map(([key, groupRules]) => ({
+        key,
+        label: key === "global" ? "Global" : key,
+        rules: groupRules.sort((a, b) => b.useCount - a.useCount),
+      }));
+  }, [filteredRules]);
+
+  function toggleGroup(key: string) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }
 
   function startEdit(rule: MappingRule) {
     setEditingId(rule.id);
     setEditValue(rule.staticValue ?? "");
-    setEditProfilePath(rule.profilePath);
   }
 
   function cancelEdit() {
     setEditingId(null);
     setEditValue("");
-    setEditProfilePath("");
   }
 
   async function saveEdit(ruleId: string) {
+    if (!editValue.trim()) return;
     setSavingId(ruleId);
     try {
+      const rule = rules.find((r) => r.id === ruleId);
+      if (!rule) return;
       const res = await fetch("/api/field-mappings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: ruleId,
-          profilePath: editProfilePath,
-          staticValue: editValue || null,
+          profilePath: rule.profilePath,
+          staticValue: editValue.trim(),
         }),
       });
       if (!res.ok) throw new Error("Failed to update");
 
       setRules((prev) =>
         prev.map((r) =>
-          r.id === ruleId
-            ? { ...r, profilePath: editProfilePath, staticValue: editValue || null }
-            : r,
+          r.id === ruleId ? { ...r, staticValue: editValue.trim() } : r,
         ),
       );
       setEditingId(null);
-      toast({ title: "Rule updated" });
+      toast({ title: "Answer updated" });
     } catch {
-      toast({ title: "Failed to update rule", variant: "destructive" });
+      toast({ title: "Failed to update", variant: "destructive" });
     } finally {
       setSavingId(null);
     }
@@ -157,30 +199,16 @@ export function KnowledgeBase() {
     }
   }
 
-  function getScopeIcon(rule: MappingRule) {
-    if (rule.pageDomain) return <Monitor className="h-3.5 w-3.5" />;
-    if (rule.atsProvider) return <Server className="h-3.5 w-3.5" />;
-    return <Globe className="h-3.5 w-3.5" />;
+  function handleEditKeyDown(e: React.KeyboardEvent, ruleId: string) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      saveEdit(ruleId);
+    } else if (e.key === "Escape") {
+      cancelEdit();
+    }
   }
 
-  function getScopeLabel(rule: MappingRule) {
-    if (rule.pageDomain) return rule.pageDomain;
-    if (rule.atsProvider) return rule.atsProvider;
-    return "Global";
-  }
-
-  function getScopeBadgeClass(rule: MappingRule) {
-    if (rule.pageDomain) return "kb-scope-badge kb-scope-site";
-    if (rule.atsProvider) return "kb-scope-badge kb-scope-ats";
-    return "kb-scope-badge kb-scope-global";
-  }
-
-  const scopeCounts = {
-    all: rules.length,
-    global: rules.filter((r) => !r.atsProvider && !r.pageDomain).length,
-    ats: rules.filter((r) => r.atsProvider && !r.pageDomain).length,
-    site: rules.filter((r) => !!r.pageDomain).length,
-  };
+  // ── Render ──
 
   if (loading) {
     return (
@@ -207,7 +235,8 @@ export function KnowledgeBase() {
                 AutoFill Knowledge Base
               </h2>
               <p className="text-xs text-slate-500">
-                {rules.length} rule{rules.length !== 1 ? "s" : ""} learned from your corrections
+                {rules.length} rule{rules.length !== 1 ? "s" : ""} learned from
+                your corrections
               </p>
             </div>
           </div>
@@ -220,181 +249,182 @@ export function KnowledgeBase() {
             </div>
             <p className="text-sm font-medium text-slate-500">No rules yet</p>
             <p className="mt-1 text-xs text-slate-400">
-              Edit field values in the browser extension widget and they'll appear here.
+              Use the extension to fill forms — corrections you make will appear
+              here.
             </p>
           </div>
         ) : (
           <>
-            {/* Toolbar: search + scope filters */}
-            <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-3 sm:flex-row sm:items-center">
-              <div className="relative flex-1">
+            {/* Search bar */}
+            <div className="border-b border-slate-100 px-5 py-3">
+              <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search fields, values, ATS..."
+                  placeholder="Search fields, answers, ATS..."
                   className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs text-slate-700 outline-none transition-colors placeholder:text-slate-400 focus:border-emerald-300 focus:bg-white focus:ring-1 focus:ring-emerald-200"
                 />
               </div>
-              <div className="flex items-center gap-1">
-                <Filter className="mr-1 h-3.5 w-3.5 text-slate-400" />
-                {(["all", "global", "ats", "site"] as ScopeFilter[]).map((scope) => (
-                  <button
-                    key={scope}
-                    onClick={() => setScopeFilter(scope)}
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
-                      scopeFilter === scope
-                        ? "bg-emerald-50 text-emerald-700 shadow-sm ring-1 ring-emerald-200"
-                        : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-                    }`}
-                  >
-                    {scope === "all"
-                      ? `All (${scopeCounts.all})`
-                      : scope === "global"
-                        ? `Global (${scopeCounts.global})`
-                        : scope === "ats"
-                          ? `ATS (${scopeCounts.ats})`
-                          : `Site (${scopeCounts.site})`}
-                  </button>
-                ))}
-              </div>
             </div>
 
-            {/* Rules list */}
-            <div className="divide-y divide-slate-50">
-              {filteredRules.length === 0 ? (
-                <div className="px-5 py-8 text-center text-xs text-slate-400">
-                  No rules match your search.
-                </div>
-              ) : (
-                filteredRules.map((rule) => (
-                  <div
-                    key={rule.id}
-                    className="group flex items-start gap-3 px-5 py-3 transition-colors hover:bg-slate-50/50"
-                  >
-                    {/* Scope badge */}
-                    <div className={getScopeBadgeClass(rule)} title={getScopeLabel(rule)}>
-                      {getScopeIcon(rule)}
-                    </div>
-
-                    {/* Content */}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate text-xs font-medium text-slate-800">
-                          {rule.fieldLabel || rule.fieldSelector}
-                        </span>
-                        <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-                          {rule.source}
-                        </span>
-                        <span className="shrink-0 text-[10px] text-slate-400">
-                          {rule.useCount}x used
-                        </span>
-                      </div>
-
-                      {editingId === rule.id ? (
-                        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-                          <input
-                            type="text"
-                            value={editProfilePath}
-                            onChange={(e) => setEditProfilePath(e.target.value)}
-                            placeholder="Profile path (e.g. fullName)"
-                            className="h-7 flex-1 rounded-md border border-slate-200 px-2 text-xs outline-none focus:border-emerald-300 focus:ring-1 focus:ring-emerald-200"
-                          />
-                          <input
-                            type="text"
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            placeholder="Static value (optional)"
-                            className="h-7 flex-1 rounded-md border border-slate-200 px-2 text-xs outline-none focus:border-emerald-300 focus:ring-1 focus:ring-emerald-200"
-                          />
-                          <div className="flex gap-1">
-                            <button
-                              onClick={() => saveEdit(rule.id)}
-                              disabled={!editProfilePath || savingId === rule.id}
-                              className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-50 text-emerald-600 transition-colors hover:bg-emerald-100 disabled:opacity-50"
-                            >
-                              {savingId === rule.id ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <Check className="h-3 w-3" />
-                              )}
-                            </button>
-                            <button
-                              onClick={cancelEdit}
-                              className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
+            {/* Grouped table */}
+            {groups.length === 0 ? (
+              <div className="px-5 py-8 text-center text-xs text-slate-400">
+                No rules match your search.
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {groups.map((group) => {
+                  const isCollapsed = collapsedGroups.has(group.key);
+                  return (
+                    <div key={group.key}>
+                      {/* Group header */}
+                      <button
+                        onClick={() => toggleGroup(group.key)}
+                        className="flex w-full items-center gap-2 px-5 py-2.5 text-left transition-colors hover:bg-slate-50"
+                      >
+                        {isCollapsed ? (
+                          <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+                        ) : (
+                          <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                        )}
+                        {group.key === "global" ? (
+                          <Globe className="h-3.5 w-3.5 text-slate-400" />
+                        ) : (
+                          <div className="flex h-4 w-4 items-center justify-center rounded bg-blue-50 text-[8px] font-bold text-blue-600">
+                            {group.label[0].toUpperCase()}
                           </div>
-                        </div>
-                      ) : (
-                        <div className="mt-0.5 flex items-center gap-2 text-[11px] text-slate-500">
-                          <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[10px]">
-                            {rule.profilePath}
-                          </code>
-                          {rule.staticValue && (
-                            <>
-                              <span className="text-slate-300">=</span>
-                              <span className="truncate italic text-slate-600">
-                                "{rule.staticValue}"
-                              </span>
-                            </>
-                          )}
-                          {rule.atsProvider && (
-                            <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">
-                              {rule.atsProvider}
-                            </span>
-                          )}
-                          {rule.pageDomain && (
-                            <span className="truncate rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">
-                              {rule.pageDomain}
-                            </span>
-                          )}
+                        )}
+                        <span className="text-xs font-semibold text-slate-700">
+                          {group.label}
+                        </span>
+                        <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                          {group.rules.length}
+                        </span>
+                      </button>
+
+                      {/* Table rows */}
+                      {!isCollapsed && (
+                        <div className="pb-1">
+                          {/* Table header */}
+                          <div className="grid grid-cols-[1fr_1.5fr_50px_36px] gap-2 px-5 pb-1 pt-0.5 text-[10px] font-medium uppercase tracking-wider text-slate-400">
+                            <div className="pl-6">Field</div>
+                            <div>Answer</div>
+                            <div className="text-center">Used</div>
+                            <div />
+                          </div>
+
+                          {/* Rules */}
+                          {group.rules.map((rule) => (
+                            <div
+                              key={rule.id}
+                              className="group grid grid-cols-[1fr_1.5fr_50px_36px] items-center gap-2 px-5 py-1.5 transition-colors hover:bg-slate-50/80"
+                            >
+                              {/* Field name */}
+                              <div className="truncate pl-6 text-xs font-medium text-slate-700" title={rule.fieldLabel || rule.fieldSelector}>
+                                {rule.fieldLabel || rule.fieldSelector}
+                              </div>
+
+                              {/* Answer — inline editable */}
+                              {editingId === rule.id ? (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    ref={editInputRef}
+                                    type="text"
+                                    value={editValue}
+                                    onChange={(e) => setEditValue(e.target.value)}
+                                    onKeyDown={(e) => handleEditKeyDown(e, rule.id)}
+                                    onBlur={() => {
+                                      // Small delay so button clicks register
+                                      setTimeout(() => {
+                                        if (editingId === rule.id) cancelEdit();
+                                      }, 150);
+                                    }}
+                                    className="h-6 w-full min-w-0 rounded border border-emerald-300 bg-white px-2 text-xs text-slate-800 outline-none ring-1 ring-emerald-200"
+                                  />
+                                  <button
+                                    onClick={() => saveEdit(rule.id)}
+                                    disabled={savingId === rule.id}
+                                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                                  >
+                                    {savingId === rule.id ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <Check className="h-3 w-3" />
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={cancelEdit}
+                                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-slate-100 text-slate-500 hover:bg-slate-200"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => startEdit(rule)}
+                                  className="group/cell flex items-center gap-1.5 truncate rounded px-1.5 py-0.5 text-left text-xs text-slate-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
+                                  title="Click to edit"
+                                >
+                                  <span className="truncate">
+                                    {rule.staticValue || (
+                                      <span className="italic text-slate-300">
+                                        No value
+                                      </span>
+                                    )}
+                                  </span>
+                                  <Pencil className="h-2.5 w-2.5 shrink-0 text-slate-300 opacity-0 transition-opacity group-hover/cell:opacity-100" />
+                                </button>
+                              )}
+
+                              {/* Use count */}
+                              <div className="text-center text-[11px] text-slate-400">
+                                {rule.useCount}x
+                              </div>
+
+                              {/* Delete */}
+                              <button
+                                onClick={() => setDeletingRule(rule)}
+                                className="flex h-6 w-6 items-center justify-center rounded text-slate-300 opacity-0 transition-all hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
+                                title="Delete"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
-
-                    {/* Actions */}
-                    {editingId !== rule.id && (
-                      <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                        <button
-                          onClick={() => startEdit(rule)}
-                          className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
-                          title="Edit"
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                        <button
-                          onClick={() => setDeletingRule(rule)}
-                          className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </>
         )}
       </div>
 
       {/* Delete confirmation dialog */}
-      <AlertDialog open={!!deletingRule} onOpenChange={(open) => !open && setDeletingRule(null)}>
+      <AlertDialog
+        open={!!deletingRule}
+        onOpenChange={(open) => !open && setDeletingRule(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete mapping rule?</AlertDialogTitle>
+            <AlertDialogTitle>Delete this rule?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove the rule for{" "}
-              <strong>{deletingRule?.fieldLabel || deletingRule?.fieldSelector}</strong>.
-              The extension will no longer auto-fill this field based on this rule.
+              The extension will no longer auto-fill{" "}
+              <strong>
+                {deletingRule?.fieldLabel || deletingRule?.fieldSelector}
+              </strong>{" "}
+              with &quot;{deletingRule?.staticValue}&quot;.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteLoading}>
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
               disabled={deleteLoading}
