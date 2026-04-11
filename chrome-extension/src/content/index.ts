@@ -48,6 +48,33 @@ function setupSubmitIntercept(detection: FormDetectionResult) {
 
 /** Main entry point for the content script. */
 async function init() {
+  // Register message listener ONCE, BEFORE any early returns.
+  // Only the top frame responds to popup fill/toggle requests — prevents iframe
+  // race condition where an empty iframe responds with 0/0 before the top frame
+  // finishes its API calls, causing the popup to show "No fields detected" even
+  // though the top frame successfully fills the form.
+  if (!messageListenerRegistered) {
+    messageListenerRegistered = true;
+    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+      if (message.type === "TRIGGER_FILL") {
+        if (isIframe) return false; // Only top frame responds
+        performFill().then((result) => {
+          sendResponse({ success: true, ...result });
+        }).catch((err: unknown) => {
+          const errorMessage = err instanceof Error ? err.message : "Fill failed";
+          sendResponse({ success: false, error: errorMessage, filled: 0, skipped: 0 });
+        });
+        return true;
+      }
+
+      if (message.type === "TOGGLE_WIDGET") {
+        if (isIframe) return false; // Only top frame responds
+        toggleWidget().then(() => sendResponse({ success: true })).catch(() => sendResponse({ success: true }));
+        return true;
+      }
+    });
+  }
+
   // Known ATS domains — always initialize
   const KNOWN_ATS_PATTERNS = [
     /greenhouse\.io/i, /lever\.co/i, /myworkdayjobs\.com/i, /workday\.com/i,
@@ -71,27 +98,6 @@ async function init() {
   }
 
   const prefs = await loadPreferences();
-
-  // Listen for messages from background/popup — register only once across re-inits
-  if (!messageListenerRegistered) {
-    messageListenerRegistered = true;
-    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-      if (message.type === "TRIGGER_FILL") {
-        performFill().then((result) => {
-          sendResponse({ success: true, ...result });
-        }).catch((err: unknown) => {
-          const errorMessage = err instanceof Error ? err.message : "Fill failed";
-          sendResponse({ success: false, error: errorMessage, filled: 0, skipped: 0 });
-        });
-        return true;
-      }
-
-      if (message.type === "TOGGLE_WIDGET") {
-        toggleWidget().then(() => sendResponse({ success: true })).catch(() => sendResponse({ success: true }));
-        return true;
-      }
-    });
-  }
 
   // Exponential retry for SPA-rendered forms
   const autoFillEnabled = prefs.autoFill;
