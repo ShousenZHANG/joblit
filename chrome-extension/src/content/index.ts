@@ -170,7 +170,6 @@ async function initWidget(detection: FormDetectionResult) {
   if (!mounted) return;
 
   widget = new FloatingWidget(mounted.container, {
-    onFill: () => { performFill().catch(() => { /* handled internally */ }); },
     onRecordSubmission: () => {
       if (currentDetection) {
         recordSubmission(currentDetection.fields, currentDetection.atsProvider);
