@@ -669,40 +669,56 @@ export class FloatingWidget {
 
   /** Walk up from an element to find a dropdown container and read its displayed selection text. */
   private readDropdownDisplayText(el: HTMLElement, labelText: string): string {
-    // Walk up to 4 levels looking for a dropdown container
+    const VALUE_SELECTORS =
+      '[class*="singleValue"], [class*="SingleValue"], ' +
+      '[class*="selected-option"], [class*="selectedOption"], ' +
+      '[class*="current-selection"], [class*="placeholder"], [data-value]';
+
+    // Step 1: Walk up to find the first dropdown container
+    let dropdownNode: HTMLElement | null = null;
     let node: HTMLElement | null = el;
     for (let depth = 0; depth < 4 && node; depth++) {
       const role = node.getAttribute("role");
       const cls = node.className?.toLowerCase?.() ?? "";
-      const isDropdown =
+      if (
         role === "combobox" || role === "listbox" ||
         node.dataset?.automationId?.includes("Dropdown") ||
         cls.includes("select-menu") || cls.includes("dropdown") ||
-        cls.includes("combobox") || cls.includes("listbox");
-
-      if (isDropdown) {
-        // Try specific value display selectors first (React Select, custom UIs)
-        const valueEl = node.querySelector(
-          '[class*="singleValue"], [class*="SingleValue"], ' +
-          '[class*="selected-option"], [class*="selectedOption"], ' +
-          '[class*="current-selection"], [data-value]',
-        );
-        if (valueEl?.textContent?.trim()) return valueEl.textContent.trim();
-
-        // Fallback: full container text minus arrows
-        let text = (node.textContent ?? "")
-          .replace(FloatingWidget.ARROW_RE, "")
-          .replace(/\s+/g, " ")
-          .trim();
-        // Strip label prefix if container includes it
-        if (labelText && text.startsWith(labelText)) {
-          text = text.slice(labelText.length).trim();
-        }
-        if (text) return text;
+        cls.includes("combobox") || cls.includes("listbox")
+      ) {
+        dropdownNode = node;
         break;
       }
       node = node.parentElement;
     }
+    if (!dropdownNode) return "";
+
+    // Step 2: Search for value display text from the dropdown node upward.
+    // React Select puts the singleValue div as a SIBLING of the input, so
+    // when dropdownNode is the input itself we must check parent containers.
+    let container: HTMLElement | null = dropdownNode;
+    for (let up = 0; up < 3 && container; up++) {
+      const valueEl = container.querySelector(VALUE_SELECTORS);
+      const valueText = valueEl?.textContent?.trim();
+      if (valueText && !FloatingWidget.PLACEHOLDER_RE.test(valueText)) {
+        return valueText;
+      }
+      container = container.parentElement;
+    }
+
+    // Step 3: Fallback — read textContent from the dropdown's parent (skip input itself)
+    const textSource = dropdownNode instanceof HTMLInputElement
+      ? (dropdownNode.parentElement ?? dropdownNode)
+      : dropdownNode;
+    let text = (textSource.textContent ?? "")
+      .replace(FloatingWidget.ARROW_RE, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (labelText && text.startsWith(labelText)) {
+      text = text.slice(labelText.length).trim();
+    }
+    if (text && !FloatingWidget.PLACEHOLDER_RE.test(text)) return text;
+
     return "";
   }
 
