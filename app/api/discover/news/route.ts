@@ -9,8 +9,11 @@ const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 const cache = new Map<string, { data: NewsResponse; expiry: number }>();
 
+// Focused on Claude/Anthropic/RAG ecosystem
 const AI_KEYWORDS =
-  /\b(ai|artificial.intelligence|llm|gpt|claude|gemini|machine.learning|deep.learning|neural|transformer|openai|anthropic|agent|copilot|langchain|rag|vector|embedding|diffusion|chatbot|foundation.model|fine.?tun)/i;
+  /\b(claude|anthropic|rag|retrieval.augmented|harness|agent|agentic|mcp|tool.use|function.calling|prompt.engineering|llm|langchain|llamaindex|vector.database|embedding|fine.?tun|context.window)/i;
+
+const MIN_SCORE_THRESHOLD = 20; // Filter out low-engagement posts
 
 // ── Hacker News ──
 
@@ -48,7 +51,12 @@ async function fetchHN(): Promise<DiscoverItem[]> {
   );
 
   return items
-    .filter((it): it is HNItem => it !== null && AI_KEYWORDS.test(it.title))
+    .filter(
+      (it): it is HNItem =>
+        it !== null &&
+        AI_KEYWORDS.test(it.title) &&
+        it.score >= MIN_SCORE_THRESHOLD,
+    )
     .slice(0, 20)
     .map((it) => ({
       id: `hn-${it.id}`,
@@ -109,7 +117,7 @@ async function fetchDevTo(): Promise<DiscoverItem[]> {
 
 // ── Reddit (free public JSON API) ──
 
-const SUBREDDITS = ["artificial", "MachineLearning"];
+const SUBREDDITS = ["ClaudeAI", "anthropic", "LocalLLaMA", "artificial"];
 
 async function fetchReddit(): Promise<DiscoverItem[]> {
   const results: DiscoverItem[] = [];
@@ -118,7 +126,10 @@ async function fetchReddit(): Promise<DiscoverItem[]> {
     try {
       const res = await fetch(
         `https://www.reddit.com/r/${sub}/top.json?t=week&limit=15`,
-        { headers: { "User-Agent": "Joblit-Discover/1.0" } },
+        {
+          headers: { "User-Agent": "Joblit-Discover/1.0 (by /u/joblit-bot)" },
+          signal: AbortSignal.timeout(8000),
+        },
       );
       if (!res.ok) continue;
       const json = await res.json();

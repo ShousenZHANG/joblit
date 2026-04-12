@@ -7,33 +7,49 @@ const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 const cache = new Map<string, { data: MarketsResponse; expiry: number }>();
 
+// Focused on AI/tech — matches Claude, Anthropic, OpenAI, Google AI, etc.
 const AI_TECH_KEYWORDS =
-  /\b(ai|artificial.intelligence|gpt|llm|openai|anthropic|claude|gemini|google|apple|microsoft|meta|nvidia|tesla|spacex|crypto|bitcoin|ethereum|tech|robot|autonomous|quantum|chip|semiconductor)\b/i;
+  /\b(ai\b|artificial.intelligence|gpt|llm|openai|anthropic|claude|gemini|google.ai|deepmind|nvidia|gpu|chip|semiconductor|quantum|robot|autonomous|agi|foundation.model|language.model)/i;
 
 async function fetchPolymarket(): Promise<MarketItem[]> {
+  // Fetch 200 markets to find AI/tech buried below sports/politics
   const res = await fetch(
-    "https://gamma-api.polymarket.com/markets?closed=false&limit=50&order=volume24hr&ascending=false",
-    { headers: { "User-Agent": "Joblit-Discover/1.0" } },
+    "https://gamma-api.polymarket.com/markets?closed=false&limit=200&order=volume24hr&ascending=false",
+    {
+      headers: { "User-Agent": "Joblit-Discover/1.0" },
+      signal: AbortSignal.timeout(10000),
+    },
   );
   if (!res.ok) throw new Error(`Polymarket API ${res.status}`);
 
   const markets: any[] = await res.json();
 
   return markets
-    .filter((m) => AI_TECH_KEYWORDS.test(m.question ?? ""))
+    .filter(
+      (m) =>
+        AI_TECH_KEYWORDS.test(m.question ?? "") ||
+        AI_TECH_KEYWORDS.test(m.description ?? ""),
+    )
     .slice(0, 15)
     .map((m) => {
-      const outcomes: string[] = JSON.parse(m.outcomes ?? "[]");
-      const prices: number[] = JSON.parse(m.outcomePrices ?? "[]").map(Number);
+      let outcomes: string[] = [];
+      let prices: number[] = [];
+      try {
+        outcomes = JSON.parse(m.outcomes ?? "[]");
+        prices = JSON.parse(m.outcomePrices ?? "[]").map(Number);
+      } catch {
+        outcomes = ["Yes", "No"];
+        prices = [0.5, 0.5];
+      }
       const slug = m.events?.[0]?.slug ?? m.slug ?? m.id;
 
       return {
-        id: m.id,
-        question: m.question,
+        id: String(m.id),
+        question: m.question ?? "",
         url: `https://polymarket.com/event/${slug}`,
         outcomes,
         prices,
-        volume24h: m.volume24hr ?? 0,
+        volume24h: Number(m.volume24hr) || 0,
         imageUrl: m.image ?? "",
         endDate: m.endDate ?? "",
       };
