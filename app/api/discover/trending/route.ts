@@ -5,10 +5,45 @@ import type { TrendingRepo, TrendingResponse } from "@/app/(app)/discover/types"
 
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
-const cache = new Map<
-  string,
-  { data: TrendingResponse; expiry: number }
->();
+const cache = new Map<string, { data: TrendingResponse; expiry: number }>();
+
+// ── Primary: OSS Insight Trending API (real weekly/monthly trending by activity score) ──
+
+async function fetchOSSInsight(
+  period: "weekly" | "monthly",
+): Promise<TrendingRepo[]> {
+  const ossPeriod = period === "weekly" ? "past_week" : "past_month";
+  const url = `https://api.ossinsight.io/v1/trends/repos?period=${ossPeriod}&limit=30`;
+
+  const res = await fetch(url, {
+    headers: { Accept: "application/json", "User-Agent": "Joblit-Discover/1.0" },
+  });
+  if (!res.ok) throw new Error(`OSS Insight API ${res.status}`);
+
+  const json = await res.json();
+  const rows: any[] = json?.data?.rows ?? [];
+
+  return rows.map((row) => ({
+    id: Number(row.repo_id),
+    fullName: row.repo_name ?? "",
+    description: row.description ?? null,
+    url: `https://github.com/${row.repo_name}`,
+    stars: Number(row.stars) || 0,
+    forks: Number(row.forks) || 0,
+    language: row.primary_language ?? null,
+    topics: (row.collection_names ?? "")
+      .split(",")
+      .map((s: string) => s.trim())
+      .filter(Boolean)
+      .slice(0, 5),
+    ownerAvatar: row.repo_name
+      ? `https://github.com/${row.repo_name.split("/")[0]}.png?size=64`
+      : "",
+    pushedAt: new Date().toISOString(),
+  }));
+}
+
+// ── Fallback: GitHub Search API ──
 
 function daysAgo(n: number): string {
   const d = new Date();
@@ -16,12 +51,12 @@ function daysAgo(n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-async function fetchTrending(
+async function fetchGitHubSearch(
   period: "weekly" | "monthly",
 ): Promise<TrendingRepo[]> {
   const since = period === "weekly" ? daysAgo(7) : daysAgo(30);
   const url = new URL("https://api.github.com/search/repositories");
-  url.searchParams.set("q", `stars:>50 pushed:>${since}`);
+  url.searchParams.set("q", `created:>${since} stars:>50`);
   url.searchParams.set("sort", "stars");
   url.searchParams.set("order", "desc");
   url.searchParams.set("per_page", "30");
@@ -35,14 +70,12 @@ async function fetchTrending(
   }
 
   const res = await fetch(url.toString(), { headers });
-  if (!res.ok) {
-    throw new Error(`GitHub API ${res.status}: ${res.statusText}`);
-  }
+  if (!res.ok) throw new Error(`GitHub API ${res.status}: ${res.statusText}`);
 
   const json = await res.json();
-  const items: unknown[] = json.items ?? [];
+  const items: any[] = json.items ?? [];
 
-  return items.map((item: any) => ({
+  return items.map((item) => ({
     id: item.id,
     fullName: item.full_name,
     description: item.description ?? null,
@@ -55,6 +88,8 @@ async function fetchTrending(
     pushedAt: item.pushed_at,
   }));
 }
+
+// ── Route handler ──
 
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
@@ -73,7 +108,15 @@ export async function GET(request: Request) {
   }
 
   try {
-    const repos = await fetchTrending(period);
+    // Primary: OSS Insight (real trending by activity score)
+    // Fallback: GitHub Search API (recent high-star repos)
+    let repos: TrendingRepo[];
+    try {
+      repos = await fetchOSSInsight(period);
+    } catch {
+      repos = await fetchGitHubSearch(period);
+    }
+
     const response: TrendingResponse = {
       repos,
       cached: false,

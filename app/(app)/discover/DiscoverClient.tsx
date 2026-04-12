@@ -5,20 +5,20 @@ import { Compass, Github, Newspaper } from "lucide-react";
 import { TrendingRepoList } from "./components/TrendingRepoList";
 import { NewsList } from "./components/NewsList";
 
-const MOBILE_TABS = [
+const TABS = [
   { value: "trending", label: "Trending", icon: Github },
-  { value: "news", label: "News", icon: Newspaper },
+  { value: "news", label: "AI & Tech News", icon: Newspaper },
 ] as const;
 
-type MobileTab = (typeof MOBILE_TABS)[number]["value"];
+type ActiveTab = (typeof TABS)[number]["value"];
 
 export function DiscoverClient() {
-  const [mobileTab, setMobileTab] = useState<MobileTab>("trending");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("trending");
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
       {/* Header */}
-      <div className="shrink-0 px-4 pt-3 pb-2 lg:px-6 lg:pt-6 lg:pb-4">
+      <div className="shrink-0 px-4 pt-3 pb-2 lg:px-6 lg:pt-6 lg:pb-3">
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 ring-1 ring-emerald-100">
             <Compass className="h-4 w-4 text-emerald-600" />
@@ -34,23 +34,23 @@ export function DiscoverClient() {
         </div>
       </div>
 
-      {/* Mobile tabs */}
-      <div className="shrink-0 px-4 pb-3 lg:hidden">
-        <div className="flex rounded-lg bg-slate-100/80 p-0.5">
-          {MOBILE_TABS.map((tab) => {
+      {/* Tab bar — always visible on all breakpoints */}
+      <div className="shrink-0 px-4 pb-3 lg:px-6">
+        <div className="inline-flex rounded-lg bg-slate-100/80 p-0.5">
+          {TABS.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.value}
                 type="button"
-                onClick={() => setMobileTab(tab.value)}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-semibold transition-all duration-150 ${
-                  mobileTab === tab.value
+                onClick={() => setActiveTab(tab.value)}
+                className={`flex items-center gap-1.5 rounded-md px-4 py-1.5 text-xs font-semibold transition-all duration-150 lg:px-5 lg:py-2 lg:text-sm ${
+                  activeTab === tab.value
                     ? "bg-white text-emerald-700 shadow-sm"
-                    : "text-slate-500 active:bg-white/60"
+                    : "text-slate-500 hover:text-slate-700 active:bg-white/60"
                 }`}
               >
-                <Icon className="h-3.5 w-3.5" />
+                <Icon className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
                 {tab.label}
               </button>
             );
@@ -58,18 +58,9 @@ export function DiscoverClient() {
         </div>
       </div>
 
-      {/* Content */}
+      {/* Content — single active tab */}
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 lg:px-6">
-        {/* Desktop: both sections stacked */}
-        <div className="hidden lg:flex lg:flex-col lg:gap-8">
-          <TrendingRepoList />
-          <NewsList />
-        </div>
-
-        {/* Mobile: tab content */}
-        <div className="lg:hidden">
-          {mobileTab === "trending" ? <TrendingRepoList /> : <NewsList />}
-        </div>
+        {activeTab === "trending" ? <TrendingRepoList /> : <NewsList />}
       </div>
     </div>
   );
