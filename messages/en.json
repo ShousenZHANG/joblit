@@ -18,7 +18,8 @@
     "jobs": "Jobs",
     "fetch": "Fetch",
     "resume": "Resume",
-    "guide": "Guide"
+    "guide": "Guide",
+    "discover": "Discover"
   },
   "marketing": {
     "heroTitle": "AI-tailored resumes for every job you apply to",

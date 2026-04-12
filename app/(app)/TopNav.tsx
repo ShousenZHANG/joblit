@@ -35,6 +35,7 @@ export function TopNav() {
     { href: "/jobs", label: t("jobs") },
     { href: "/fetch", label: t("fetch") },
     { href: "/resume", label: t("resume") },
+    { href: "/discover", label: t("discover") },
     { href: "/extension", label: "Extension" },
   ];
   const activeLink = links.find((link) => pathname.startsWith(link.href)) ?? links[0];
