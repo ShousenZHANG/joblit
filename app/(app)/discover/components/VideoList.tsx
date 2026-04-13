@@ -6,6 +6,12 @@ import { useVideos } from "../hooks/useDiscoverData";
 import { VideoCard } from "./VideoCard";
 import { VideoSkeleton } from "./DiscoverSkeleton";
 
+const HEADING = (
+  <h2 className="mb-4 text-base font-semibold text-slate-900 lg:text-lg">
+    AI Videos
+  </h2>
+);
+
 export function VideoList() {
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useVideos();
@@ -13,33 +19,22 @@ export function VideoList() {
   const items = data?.items ?? [];
   const noApiKey = data?.noApiKey === true;
 
-  if (noApiKey && !isLoading) {
-    return (
-      <section>
-        <h2 className="mb-4 text-base font-semibold text-slate-900 lg:text-lg">
-          AI Videos
-        </h2>
+  return (
+    <section>
+      {HEADING}
+
+      {noApiKey && !isLoading ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
           <KeyRound className="h-5 w-5 text-amber-500" />
           <p className="text-sm font-medium text-amber-700">
             YouTube API key required
           </p>
           <p className="text-xs text-amber-600">
-            Add <code className="rounded bg-amber-100 px-1 py-0.5 font-mono text-[11px]">YOUTUBE_API_KEY</code> to your <code className="rounded bg-amber-100 px-1 py-0.5 font-mono text-[11px]">.env.local</code> file.
+            Add <code className="rounded bg-amber-100 px-1 py-0.5 font-mono text-[11px]">YOUTUBE_API_KEY</code> to Vercel environment variables.
             Free tier: 10,000 units/day.
           </p>
         </div>
-      </section>
-    );
-  }
-
-  return (
-    <section>
-      <h2 className="mb-4 text-base font-semibold text-slate-900 lg:text-lg">
-        AI Videos
-      </h2>
-
-      {isLoading ? (
+      ) : isLoading ? (
         <VideoSkeleton />
       ) : error ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 p-6 text-center">

@@ -19,7 +19,7 @@ export function TrendingRepoList() {
       {/* Section header */}
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-base font-semibold text-slate-900 lg:text-lg">
-          Top 20 This Week
+          Top 20 {period === "weekly" ? "This Week" : "This Month"}
         </h2>
         <select
           value={period}

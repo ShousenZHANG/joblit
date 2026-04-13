@@ -40,8 +40,11 @@ async function searchYouTube(
   url.searchParams.set("videoDuration", "medium"); // 4-20 min (skip shorts)
   url.searchParams.set("key", apiKey);
 
-  const res = await fetch(url.toString());
-  if (!res.ok) return [];
+  const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) });
+  if (!res.ok) {
+    console.warn(`YouTube search "${query}" returned ${res.status}`);
+    return [];
+  }
 
   const json = await res.json();
   return (json.items ?? [])
@@ -60,8 +63,8 @@ async function fetchVideoStats(
   url.searchParams.set("id", videoIds.join(","));
   url.searchParams.set("key", apiKey);
 
-  const res = await fetch(url.toString());
-  if (!res.ok) return [];
+  const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error(`YouTube Videos API ${res.status}`);
 
   const json = await res.json();
   return (json.items ?? []).map((item: any) => ({

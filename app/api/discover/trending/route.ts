@@ -17,6 +17,7 @@ async function fetchOSSInsight(
 
   const res = await fetch(url, {
     headers: { Accept: "application/json", "User-Agent": "Joblit-Discover/1.0" },
+    signal: AbortSignal.timeout(8000),
   });
   if (!res.ok) throw new Error(`OSS Insight API ${res.status}`);
 
@@ -69,7 +70,7 @@ async function fetchGitHubSearch(
     headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   }
 
-  const res = await fetch(url.toString(), { headers });
+  const res = await fetch(url.toString(), { headers, signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`GitHub API ${res.status}: ${res.statusText}`);
 
   const json = await res.json();
