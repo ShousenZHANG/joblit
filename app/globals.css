@@ -2082,16 +2082,23 @@ body::-webkit-scrollbar-thumb:hover {
   color: #ffffff;
 }
 
-/* ── Landing: section with Apple-style breathing room ── */
+/* ── Landing: section spacing ── */
 .landing-section {
-  padding-top: 5rem;
-  padding-bottom: 5rem;
+  padding-top: 3rem;
+  padding-bottom: 3rem;
 }
 
 @media (min-width: 640px) {
   .landing-section {
-    padding-top: 7rem;
-    padding-bottom: 7rem;
+    padding-top: 4rem;
+    padding-bottom: 4rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .landing-section {
+    padding-top: 5rem;
+    padding-bottom: 5rem;
   }
 }
 

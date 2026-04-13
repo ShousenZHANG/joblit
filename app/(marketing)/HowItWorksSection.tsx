@@ -26,7 +26,7 @@ export function HowItWorksSection() {
     { number: 3, icon: <FileText className="h-6 w-6 text-emerald-600" aria-hidden="true" />, titleKey: "howItWorksStep3Title", descKey: "howItWorksStep3Desc" },
   ];
 
-  const base = { opacity: 0, y: noMotion ? 0 : 24 };
+  const base = { opacity: 0, y: noMotion ? 0 : 36 };
   const visible = {
     opacity: 1, y: 0,
     transition: { duration: noMotion ? 0 : DURATION, ease: [0.25, 0.4, 0.25, 1] as const },
@@ -39,7 +39,7 @@ export function HowItWorksSection() {
       <motion.h2
         id="how-it-works-heading"
         className="text-center text-[1.75rem] font-bold leading-[1.1] tracking-[-0.01em] text-slate-900 sm:text-[2rem]"
-        initial={base} whileInView={visible} viewport={{ once: true, margin: "-60px" }}
+        initial={base} whileInView={visible} viewport={{ once: true, amount: 0.3 }}
       >
         {t("howItWorksTitle")}
       </motion.h2>

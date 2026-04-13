@@ -56,7 +56,7 @@ export function FeaturesGrid() {
         className="text-center text-[1.75rem] font-bold leading-[1.1] tracking-[-0.01em] text-slate-900 sm:text-[2rem]"
         initial={{ opacity: 0, y: noMotion ? 0 : 20 }}
         whileInView={{ opacity: 1, y: 0, transition: { duration: noMotion ? 0 : DURATION, ease: [0.25, 0.4, 0.25, 1] } }}
-        viewport={{ once: true, margin: "-60px" }}
+        viewport={{ once: true, amount: 0.3 }}
       >
         {t("featuresTitle")}
       </motion.h2>
@@ -66,12 +66,12 @@ export function FeaturesGrid() {
           <motion.div
             key={feature.titleKey}
             className={`landing-card flex items-start gap-4 border-l-[3px] p-4 text-left sm:p-5 ${feature.accent}`}
-            initial={{ opacity: 0, y: noMotion ? 0 : 16, x: noMotion ? 0 : (i % 2 === 0 ? -8 : 8) }}
+            initial={{ opacity: 0, y: noMotion ? 0 : 28, x: noMotion ? 0 : (i % 2 === 0 ? -12 : 12) }}
             whileInView={{
               opacity: 1, y: 0, x: 0,
               transition: { delay: noMotion ? 0 : STAGGER * i, duration: noMotion ? 0 : DURATION, ease: [0.25, 0.4, 0.25, 1] },
             }}
-            viewport={{ once: true, margin: "-30px" }}
+            viewport={{ once: true, amount: 0.15 }}
           >
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50">
               {feature.icon}

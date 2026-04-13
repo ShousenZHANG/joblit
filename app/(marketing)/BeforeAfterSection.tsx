@@ -12,7 +12,7 @@ export function BeforeAfterSection() {
   const reduceMotion = useReducedMotion();
   const noMotion = reduceMotion === true;
 
-  const base = { opacity: 0, y: noMotion ? 0 : 16 };
+  const base = { opacity: 0, y: noMotion ? 0 : 32 };
   const visible = {
     opacity: 1, y: 0,
     transition: { duration: noMotion ? 0 : DURATION, ease: [0.25, 0.4, 0.25, 1] as const },
@@ -34,7 +34,7 @@ export function BeforeAfterSection() {
         {/* Before */}
         <motion.div
           className="landing-card border border-rose-100 bg-rose-50/50 p-4 sm:p-7"
-          initial={{ opacity: 0, x: noMotion ? 0 : -24 }}
+          initial={{ opacity: 0, x: noMotion ? 0 : -36 }}
           whileInView={{ opacity: 1, x: 0 }}
           viewport={{ once: true, amount: 0.15 }}
           transition={{ duration: noMotion ? 0 : DURATION, ease: [0.25, 0.4, 0.25, 1] }}
@@ -71,7 +71,7 @@ export function BeforeAfterSection() {
         {/* After */}
         <motion.div
           className="landing-card border border-emerald-100 bg-emerald-50/50 p-4 sm:p-7"
-          initial={{ opacity: 0, x: noMotion ? 0 : 24 }}
+          initial={{ opacity: 0, x: noMotion ? 0 : 36 }}
           whileInView={{ opacity: 1, x: 0 }}
           viewport={{ once: true, amount: 0.15 }}
           transition={{ delay: noMotion ? 0 : 0.3, duration: noMotion ? 0 : DURATION, ease: [0.25, 0.4, 0.25, 1] }}

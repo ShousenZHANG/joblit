@@ -18,7 +18,7 @@ export function FinalCTA() {
         className="brand-dark-section mx-auto max-w-5xl rounded-xl px-5 py-12 text-center sm:rounded-2xl sm:px-8 sm:py-16 lg:rounded-3xl lg:px-14 lg:py-24"
         initial={{
           opacity: 0,
-          scale: noMotion ? 1 : 0.98,
+          scale: noMotion ? 1 : 0.95,
         }}
         whileInView={{
           opacity: 1, scale: 1,
