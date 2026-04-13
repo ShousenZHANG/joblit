@@ -15,7 +15,7 @@ export function FinalCTA() {
   return (
     <section aria-labelledby="final-cta-heading" className="landing-section relative">
       <motion.div
-        className="brand-dark-section mx-auto max-w-5xl rounded-2xl px-6 py-16 text-center sm:rounded-3xl sm:px-14 sm:py-24"
+        className="brand-dark-section mx-auto max-w-5xl rounded-xl px-5 py-12 text-center sm:rounded-2xl sm:px-8 sm:py-16 lg:rounded-3xl lg:px-14 lg:py-24"
         initial={{
           opacity: 0,
           scale: noMotion ? 1 : 0.98,
@@ -43,7 +43,7 @@ export function FinalCTA() {
         />
 
         {/* Trust badges */}
-        <div className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-[0.8125rem] text-emerald-200/60">
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-emerald-200/60 sm:mt-10 sm:gap-x-8 sm:gap-y-3 sm:text-[0.8125rem]">
           <span className="flex items-center gap-1.5">
             <Shield className="h-3.5 w-3.5" />
             Free forever

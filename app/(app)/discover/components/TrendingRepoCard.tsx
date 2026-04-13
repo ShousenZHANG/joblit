@@ -24,7 +24,7 @@ export function TrendingRepoCard({ repo }: { repo: TrendingRepo }) {
     : null;
 
   return (
-    <article className="group relative rounded-xl border border-slate-200 bg-white p-4 transition-all duration-150 hover:border-slate-300 hover:shadow-md">
+    <article className="group relative rounded-xl border border-slate-200 bg-white p-3 transition-all duration-150 hover:border-slate-300 hover:shadow-md sm:p-4">
       {/* Header: avatar + name + language */}
       <div className="mb-2 flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
@@ -44,7 +44,7 @@ export function TrendingRepoCard({ repo }: { repo: TrendingRepo }) {
           </a>
         </div>
         {repo.language && (
-          <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+          <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-600 sm:text-[11px]">
             {langColor && (
               <span
                 className={`inline-block h-2 w-2 rounded-full ${langColor}`}
@@ -57,7 +57,7 @@ export function TrendingRepoCard({ repo }: { repo: TrendingRepo }) {
 
       {/* Description */}
       {repo.description && (
-        <p className="mb-3 line-clamp-2 text-[13px] leading-relaxed text-slate-600">
+        <p className="mb-3 line-clamp-2 text-sm leading-relaxed text-slate-600 sm:text-[13px]">
           {repo.description}
         </p>
       )}

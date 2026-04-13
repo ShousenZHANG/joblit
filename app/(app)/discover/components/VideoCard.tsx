@@ -32,7 +32,7 @@ export function VideoCard({ item }: { item: VideoItem }) {
         </div>
       </a>
 
-      <div className="p-3">
+      <div className="p-2.5 sm:p-3">
         {/* Title */}
         <a
           href={item.url}
@@ -44,7 +44,7 @@ export function VideoCard({ item }: { item: VideoItem }) {
         </a>
 
         {/* Channel + meta */}
-        <div className="flex items-center gap-2 text-[11px] text-slate-400">
+        <div className="flex items-center gap-2 text-xs text-slate-400 sm:text-[11px]">
           <span className="truncate font-medium text-slate-500">
             {item.channelName}
           </span>

@@ -56,7 +56,7 @@ export function VideoList() {
           No AI videos found this week.
         </p>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3">
           {items.map((item) => (
             <VideoCard key={item.id} item={item} />
           ))}

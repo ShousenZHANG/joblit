@@ -24,7 +24,7 @@ export function DiscoverClient() {
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
       {/* Header */}
-      <div className="shrink-0 px-4 pt-3 pb-2 lg:px-6 lg:pt-6 lg:pb-3">
+      <div className="shrink-0 px-4 pt-4 pb-2 sm:pt-5 lg:px-6 lg:pt-6 lg:pb-3">
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 ring-1 ring-emerald-100">
             <Compass className="h-4 w-4 text-emerald-600" />

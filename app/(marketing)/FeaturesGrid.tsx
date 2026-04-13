@@ -64,7 +64,7 @@ export function FeaturesGrid() {
       </motion.h2>
 
       {/* Apple-style sparse grid: 2 hero + 4 standard */}
-      <div className="mx-auto mt-14 grid max-w-5xl grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-5">
+      <div className="mx-auto mt-12 grid max-w-5xl grid-cols-1 gap-3 sm:mt-14 sm:grid-cols-2 sm:gap-4 lg:gap-5">
         {features.map((feature, i) => (
           <motion.div
             key={feature.titleKey}

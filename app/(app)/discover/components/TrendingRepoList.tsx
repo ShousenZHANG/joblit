@@ -55,7 +55,7 @@ export function TrendingRepoList() {
           No trending repos found.
         </p>
       ) : (
-        <div className="grid gap-3">
+        <div className="grid gap-2 sm:gap-3">
           {repos.map((repo) => (
             <TrendingRepoCard key={repo.id} repo={repo} />
           ))}
