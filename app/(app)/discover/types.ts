@@ -11,20 +11,6 @@ export interface TrendingRepo {
   pushedAt: string;
 }
 
-export interface NewsItem {
-  id: string;
-  source: "hn" | "devto" | "reddit";
-  title: string;
-  url: string;
-  score: number;
-  author: string;
-  publishedAt: string;
-  commentCount: number;
-  coverImage?: string;
-  description?: string;
-  crossSource?: string[];
-}
-
 export interface VideoItem {
   id: string;
   title: string;
@@ -38,12 +24,6 @@ export interface VideoItem {
 
 export interface TrendingResponse {
   repos: TrendingRepo[];
-  cached: boolean;
-  fetchedAt: string;
-}
-
-export interface NewsResponse {
-  items: NewsItem[];
   cached: boolean;
   fetchedAt: string;
 }

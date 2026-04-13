@@ -1,14 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Compass, Github, Newspaper, PlayCircle } from "lucide-react";
+import { Compass, Github, PlayCircle } from "lucide-react";
 import { TrendingRepoList } from "./components/TrendingRepoList";
-import { NewsList } from "./components/NewsList";
 import { VideoList } from "./components/VideoList";
 
 const TABS = [
   { value: "trending", label: "Trending", icon: Github },
-  { value: "news", label: "AI News", icon: Newspaper },
   { value: "videos", label: "Videos", icon: PlayCircle },
 ] as const;
 
@@ -16,7 +14,6 @@ type ActiveTab = (typeof TABS)[number]["value"];
 
 const TAB_CONTENT: Record<ActiveTab, React.ComponentType> = {
   trending: TrendingRepoList,
-  news: NewsList,
   videos: VideoList,
 };
 
@@ -60,7 +57,7 @@ export function DiscoverClient() {
                 }`}
               >
                 <Icon className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
-                <span className="hidden sm:inline">{tab.label}</span>
+                {tab.label}
               </button>
             );
           })}
