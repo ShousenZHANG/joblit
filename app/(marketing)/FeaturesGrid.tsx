@@ -9,10 +9,11 @@ interface Feature {
   icon: ReactNode;
   titleKey: string;
   descKey: string;
+  accent: string;
 }
 
-const STAGGER = 0.1;
-const DURATION = 0.6;
+const STAGGER = 0.08;
+const DURATION = 0.55;
 
 function NumberTicker({ target }: { target: number }) {
   const ref = useRef(null);
@@ -26,9 +27,10 @@ function NumberTicker({ target }: { target: number }) {
 }
 
 function SkillPackDesc({ text }: { text: string }) {
-  const numbers: Record<string, number> = { "35": 35, "29": 29, "18": 18 };
-  const parts = text.split(/(\b(?:35|29|18)\b)/);
-  return <>{parts.map((p, i) => numbers[p] ? <NumberTicker key={i} target={numbers[p]} /> : <span key={i}>{p}</span>)}</>;
+  const ANIMATED_NUMBERS: Record<string, number> = { "35": 35, "29": 29, "18": 18 };
+  const pattern = new RegExp(`(\\b(?:${Object.keys(ANIMATED_NUMBERS).join("|")})\\b)`);
+  const parts = text.split(pattern);
+  return <>{parts.map((p, i) => ANIMATED_NUMBERS[p] ? <NumberTicker key={i} target={ANIMATED_NUMBERS[p]} /> : <span key={i}>{p}</span>)}</>;
 }
 
 export function FeaturesGrid() {
@@ -37,19 +39,13 @@ export function FeaturesGrid() {
   const noMotion = reduceMotion === true;
 
   const features: Feature[] = [
-    { icon: <Sparkles className="h-5 w-5 text-emerald-600" />, titleKey: "featureSkillPackTitle", descKey: "featureSkillPackDesc" },
-    { icon: <Shield className="h-5 w-5 text-emerald-600" />, titleKey: "featureAtsTitle", descKey: "featureAtsDesc" },
-    { icon: <Languages className="h-5 w-5 text-emerald-600" />, titleKey: "featureBilingualTitle", descKey: "featureBilingualDesc" },
-    { icon: <Layers className="h-5 w-5 text-emerald-600" />, titleKey: "featureBatchTitle", descKey: "featureBatchDesc" },
-    { icon: <Cloud className="h-5 w-5 text-emerald-600" />, titleKey: "featureExternalAiTitle", descKey: "featureExternalAiDesc" },
-    { icon: <FileType className="h-5 w-5 text-emerald-600" />, titleKey: "featureLatexTitle", descKey: "featureLatexDesc" },
+    { icon: <Sparkles className="h-5 w-5 text-emerald-600" />, titleKey: "featureSkillPackTitle", descKey: "featureSkillPackDesc", accent: "border-l-emerald-500" },
+    { icon: <Shield className="h-5 w-5 text-teal-600" />, titleKey: "featureAtsTitle", descKey: "featureAtsDesc", accent: "border-l-teal-500" },
+    { icon: <Languages className="h-5 w-5 text-amber-600" />, titleKey: "featureBilingualTitle", descKey: "featureBilingualDesc", accent: "border-l-amber-500" },
+    { icon: <Layers className="h-5 w-5 text-emerald-600" />, titleKey: "featureBatchTitle", descKey: "featureBatchDesc", accent: "border-l-emerald-500" },
+    { icon: <Cloud className="h-5 w-5 text-teal-600" />, titleKey: "featureExternalAiTitle", descKey: "featureExternalAiDesc", accent: "border-l-teal-500" },
+    { icon: <FileType className="h-5 w-5 text-amber-600" />, titleKey: "featureLatexTitle", descKey: "featureLatexDesc", accent: "border-l-amber-500" },
   ];
-
-  const base = { opacity: 0, y: noMotion ? 0 : 20 };
-  const visible = {
-    opacity: 1, y: 0,
-    transition: { duration: noMotion ? 0 : DURATION, ease: [0.25, 0.4, 0.25, 1] as const },
-  };
 
   return (
     <section aria-labelledby="features-heading" className="landing-section relative">
@@ -58,33 +54,38 @@ export function FeaturesGrid() {
       <motion.h2
         id="features-heading"
         className="text-center text-[1.75rem] font-bold leading-[1.1] tracking-[-0.01em] text-slate-900 sm:text-[2rem]"
-        initial={base} whileInView={visible} viewport={{ once: true, margin: "-60px" }}
+        initial={{ opacity: 0, y: noMotion ? 0 : 20 }}
+        whileInView={{ opacity: 1, y: 0, transition: { duration: noMotion ? 0 : DURATION, ease: [0.25, 0.4, 0.25, 1] } }}
+        viewport={{ once: true, margin: "-60px" }}
       >
         {t("featuresTitle")}
       </motion.h2>
 
-      {/* Apple-style sparse grid: 2 hero + 4 standard */}
-      <div className="mx-auto mt-12 grid max-w-5xl grid-cols-1 gap-3 sm:mt-14 sm:grid-cols-2 sm:gap-4 lg:gap-5">
+      <div className="mx-auto mt-10 grid max-w-4xl grid-cols-1 gap-3 sm:mt-12 sm:grid-cols-2 sm:gap-4">
         {features.map((feature, i) => (
           <motion.div
             key={feature.titleKey}
-            className={`landing-card p-6 lg:p-7 ${i < 2 ? "sm:col-span-1 lg:col-span-1" : ""}`}
-            initial={base}
-            whileInView={visible}
-            viewport={{ once: true, margin: "-40px" }}
-            transition={{ delay: noMotion ? 0 : STAGGER * i, duration: noMotion ? 0 : DURATION }}
+            className={`landing-card flex items-start gap-4 border-l-[3px] p-4 text-left sm:p-5 ${feature.accent}`}
+            initial={{ opacity: 0, y: noMotion ? 0 : 16, x: noMotion ? 0 : (i % 2 === 0 ? -8 : 8) }}
+            whileInView={{
+              opacity: 1, y: 0, x: 0,
+              transition: { delay: noMotion ? 0 : STAGGER * i, duration: noMotion ? 0 : DURATION, ease: [0.25, 0.4, 0.25, 1] },
+            }}
+            viewport={{ once: true, margin: "-30px" }}
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50">
               {feature.icon}
             </div>
-            <h3 className="mt-4 text-[1.0625rem] font-semibold leading-tight text-slate-900">
-              {t(feature.titleKey)}
-            </h3>
-            <p className="mt-2 text-[0.9375rem] leading-relaxed text-slate-500">
-              {feature.titleKey === "featureSkillPackTitle"
-                ? <SkillPackDesc text={t(feature.descKey)} />
-                : t(feature.descKey)}
-            </p>
+            <div>
+              <h3 className="text-[0.9375rem] font-semibold leading-snug text-slate-900 sm:text-base">
+                {t(feature.titleKey)}
+              </h3>
+              <p className="mt-1 text-[0.8125rem] leading-relaxed text-slate-500 sm:text-sm">
+                {feature.titleKey === "featureSkillPackTitle"
+                  ? <SkillPackDesc text={t(feature.descKey)} />
+                  : t(feature.descKey)}
+              </p>
+            </div>
           </motion.div>
         ))}
       </div>
