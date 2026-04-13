@@ -5,98 +5,91 @@ import { motion, useReducedMotion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import { renderBoldText } from "./renderBoldText";
 
-const STAGGER = 0.14;
-const DURATION = 0.65;
+const DURATION = 0.6;
 
 export function BeforeAfterSection() {
   const t = useTranslations("marketing");
   const reduceMotion = useReducedMotion();
   const noMotion = reduceMotion === true;
 
-  const base = { opacity: 0, y: noMotion ? 0 : 14 };
+  const base = { opacity: 0, y: noMotion ? 0 : 16 };
   const visible = {
     opacity: 1, y: 0,
     transition: { duration: noMotion ? 0 : DURATION, ease: [0.25, 0.4, 0.25, 1] as const },
   };
 
   return (
-    <section aria-labelledby="before-after-heading" className="relative py-20 sm:py-24">
+    <section aria-labelledby="before-after-heading" className="landing-section relative">
       <motion.div className="section-glow" initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true, amount: 0.15 }} transition={{ duration: 0.8 }} aria-hidden="true" />
 
       <motion.h2
         id="before-after-heading"
-        className="text-center text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl lg:text-[2rem] lg:tracking-[-0.01em]"
+        className="text-center text-[1.75rem] font-bold leading-[1.1] tracking-[-0.01em] text-slate-900 sm:text-[2rem]"
         initial={base} whileInView={visible} viewport={{ once: true, amount: 0.15 }}
       >
         {t("beforeAfterTitle")}
       </motion.h2>
 
-      <div className="mx-auto mt-14 grid max-w-4xl grid-cols-1 gap-6 md:grid-cols-[1fr_auto_1fr]">
-        {/* Before card */}
+      <div className="mx-auto mt-14 grid max-w-4xl grid-cols-1 gap-5 md:grid-cols-[1fr_auto_1fr]">
+        {/* Before */}
         <motion.div
-          className="glass-card rounded-xl border-rose-200/60 bg-rose-50/40 p-7"
-          initial={{ opacity: 0, x: noMotion ? 0 : -30 }}
+          className="landing-card border border-rose-100 bg-rose-50/50 p-7"
+          initial={{ opacity: 0, x: noMotion ? 0 : -24 }}
           whileInView={{ opacity: 1, x: 0 }}
           viewport={{ once: true, amount: 0.15 }}
           transition={{ duration: noMotion ? 0 : DURATION, ease: [0.25, 0.4, 0.25, 1] }}
         >
-          <span className="text-xs font-semibold uppercase tracking-wider text-rose-500">
+          <span className="text-xs font-semibold uppercase tracking-widest text-rose-400">
             {t("beforeLabel")}
           </span>
-          <motion.p
-            className="mt-4 text-base leading-relaxed text-slate-600"
-            whileInView={noMotion ? undefined : { textDecorationLine: "line-through" }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.5, duration: 0.8 }}
-            style={{ textDecorationColor: "rgb(253, 164, 175)" }}
-          >
+          <p className="mt-4 text-[0.9375rem] leading-relaxed text-slate-500 line-through decoration-rose-300/60">
             {t("beforeAfterBefore")}
-          </motion.p>
+          </p>
         </motion.div>
 
-        {/* Wand icon */}
+        {/* Wand — desktop */}
         <motion.div
           className="hidden items-center justify-center md:flex"
           initial={base} whileInView={visible}
           viewport={{ once: true, amount: 0.15 }}
-          transition={{ delay: noMotion ? 0 : STAGGER, duration: noMotion ? 0 : DURATION }}
+          transition={{ delay: noMotion ? 0 : 0.15, duration: noMotion ? 0 : DURATION }}
         >
           <motion.div
-            whileInView={noMotion ? undefined : { rotate: [0, -10, 10, 0], scale: [1, 1.3, 1] }}
-            viewport={{ once: true, amount: 0.15 }}
-            transition={{ delay: 0.3, duration: 0.6 }}
+            whileInView={noMotion ? undefined : { rotate: [0, -8, 8, 0], scale: [1, 1.2, 1] }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.3, duration: 0.5 }}
           >
             <Wand2 className="h-7 w-7 text-emerald-500" aria-hidden="true" />
           </motion.div>
         </motion.div>
 
-        {/* Mobile wand */}
+        {/* Wand — mobile */}
         <div className="flex items-center justify-center md:hidden">
-          <Wand2 className="h-5 w-5 text-emerald-500" aria-hidden="true" />
+          <Wand2 className="h-5 w-5 text-emerald-400" aria-hidden="true" />
         </div>
 
-        {/* After card */}
+        {/* After */}
         <motion.div
-          className="glass-card rounded-xl border-emerald-200/60 bg-emerald-50/40 p-7"
-          initial={{ opacity: 0, x: noMotion ? 0 : 30 }}
+          className="landing-card border border-emerald-100 bg-emerald-50/50 p-7"
+          initial={{ opacity: 0, x: noMotion ? 0 : 24 }}
           whileInView={{ opacity: 1, x: 0 }}
           viewport={{ once: true, amount: 0.15 }}
-          transition={{ delay: noMotion ? 0 : STAGGER * 2, duration: noMotion ? 0 : DURATION, ease: [0.25, 0.4, 0.25, 1] }}
+          transition={{ delay: noMotion ? 0 : 0.3, duration: noMotion ? 0 : DURATION, ease: [0.25, 0.4, 0.25, 1] }}
         >
-          <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600">
+          <span className="text-xs font-semibold uppercase tracking-widest text-emerald-500">
             {t("afterLabel")}
           </span>
-          <p className="mt-4 text-base font-medium leading-relaxed text-slate-900">
+          <p className="mt-4 text-[0.9375rem] font-medium leading-relaxed text-slate-900">
             {renderBoldText(t("beforeAfterAfter"))}
           </p>
         </motion.div>
       </div>
 
       <motion.p
-        className="mt-10 text-center text-base font-medium text-slate-600 sm:text-lg"
+        className="mt-10 text-center text-[1.0625rem] font-medium text-slate-500"
         initial={base} whileInView={visible}
         viewport={{ once: true, amount: 0.15 }}
-        transition={{ delay: noMotion ? 0 : STAGGER * 3, duration: noMotion ? 0 : DURATION }}
+        transition={{ delay: noMotion ? 0 : 0.4, duration: noMotion ? 0 : DURATION }}
       >
         {t("beforeAfterTagline")}
       </motion.p>

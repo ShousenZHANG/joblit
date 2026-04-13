@@ -37,11 +37,11 @@
   --sidebar-border: oklch(0.9 0.01 250);
   --sidebar-ring: oklch(0.73 0.08 255);
 
-  /* Joblit landing — emerald-tinted shadow system (adapted from Stripe DESIGN.md) */
-  --shadow-ambient: 0px 2px 4px rgba(15,23,42,0.04);
-  --shadow-standard: 0px 8px 24px -4px rgba(5,150,105,0.08), 0px 4px 12px -2px rgba(0,0,0,0.04);
-  --shadow-elevated: 0px 20px 40px -12px rgba(5,150,105,0.12), 0px 12px 24px -8px rgba(0,0,0,0.06);
-  --shadow-deep: 0px 30px 50px -16px rgba(5,150,105,0.16), 0px 16px 32px -10px rgba(0,0,0,0.08);
+  /* Joblit landing — shadow system (Apple reductive + Stripe layered, adapted warm) */
+  --shadow-ambient: 0px 1px 3px rgba(0,0,0,0.04);
+  --shadow-card: 3px 5px 30px 0px rgba(5,150,105,0.10);
+  --shadow-elevated: 0px 20px 40px -12px rgba(5,150,105,0.14), 0px 8px 20px -6px rgba(0,0,0,0.05);
+  --shadow-deep: 0px 30px 60px -16px rgba(5,150,105,0.18), 0px 12px 28px -8px rgba(0,0,0,0.06);
 }
 
 @theme inline {
@@ -2062,33 +2062,37 @@ body::-webkit-scrollbar-thumb:hover {
   background: radial-gradient(ellipse 700px 450px at center, rgba(167, 243, 208, 0.035), transparent 70%);
 }
 
-/* ── Landing: glass card (adapted from Stripe elevation system) ── */
-.glass-card {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  box-shadow: var(--shadow-standard);
-  transition: box-shadow 0.25s ease, transform 0.25s ease;
+/* ── Landing: Apple-inspired card (reductive, single soft shadow) ── */
+.landing-card {
+  background: rgba(255, 255, 255, 0.85);
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
 }
 
-.glass-card:hover {
+.landing-card:hover {
   box-shadow: var(--shadow-elevated);
-  transform: translateY(-2px);
+  transform: translateY(-1px);
 }
 
-/* ── Landing: wave section divider ── */
-.wave-divider {
-  display: block;
-  width: 100%;
-  height: 48px;
-  color: rgba(236, 253, 245, 0.5); /* emerald-50 tinted */
-}
-
-/* ── Landing: dark brand section (Stripe-inspired immersion) ── */
+/* ── Landing: dark brand section (Apple cinematic immersion) ── */
 .brand-dark-section {
   background: linear-gradient(180deg, #064e3b 0%, #022c22 100%);
   color: #ffffff;
+}
+
+/* ── Landing: section with Apple-style breathing room ── */
+.landing-section {
+  padding-top: 5rem;
+  padding-bottom: 5rem;
+}
+
+@media (min-width: 640px) {
+  .landing-section {
+    padding-top: 7rem;
+    padding-bottom: 7rem;
+  }
 }
 
 /* ── Fetch: circular progress ring ── */

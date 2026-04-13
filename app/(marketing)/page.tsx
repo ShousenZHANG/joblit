@@ -18,17 +18,8 @@ const DESC = "Fetch roles, generate a custom CV and cover letter matched to each
 export const metadata: Metadata = {
   title: TITLE,
   description: DESC,
-  openGraph: {
-    title: `Joblit — ${TITLE}`,
-    description: DESC,
-    type: "website",
-    siteName: "Joblit",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: `Joblit — ${TITLE}`,
-    description: DESC,
-  },
+  openGraph: { title: `Joblit — ${TITLE}`, description: DESC, type: "website", siteName: "Joblit" },
+  twitter: { card: "summary_large_image", title: `Joblit — ${TITLE}`, description: DESC },
 };
 
 const jsonLd = {
@@ -40,24 +31,6 @@ const jsonLd = {
   offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
 };
 
-/* ── Wave Divider ──────────────────────────────────────── */
-
-function WaveDivider() {
-  return (
-    <div className="relative h-16 w-full sm:h-20" aria-hidden="true">
-      <svg
-        className="wave-divider absolute inset-0"
-        viewBox="0 0 1440 60"
-        preserveAspectRatio="none"
-        fill="currentColor"
-      >
-        <path d="M0,30 C240,55 480,5 720,30 C960,55 1200,5 1440,30 L1440,60 L0,60 Z" opacity="0.3" />
-        <path d="M0,35 C360,10 720,55 1080,25 C1260,15 1380,35 1440,30 L1440,60 L0,60 Z" opacity="0.15" />
-      </svg>
-    </div>
-  );
-}
-
 /* ── Page ─────────────────────────────────────────────── */
 
 export default async function HomePage() {
@@ -65,7 +38,6 @@ export default async function HomePage() {
 
   return (
     <>
-      {/* SAFETY: JSON.stringify produces spec-compliant JSON with no unescaped HTML. */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -84,7 +56,8 @@ export default async function HomePage() {
           {t("skipToContent")}
         </a>
 
-        <div className="edu-page-enter relative z-[2] mx-auto flex w-full max-w-7xl flex-col items-center gap-0 px-4 pb-10 pt-4 text-center sm:px-6 sm:pb-12 md:pt-5 lg:px-8">
+        <div className="edu-page-enter relative z-[2] mx-auto flex w-full max-w-7xl flex-col items-center px-4 pb-10 pt-4 text-center sm:px-6 sm:pb-14 md:pt-5 lg:px-8">
+          {/* Logo */}
           <Link
             href="/"
             className="edu-landing-logo-only self-start text-[15px] font-semibold tracking-tight text-slate-800 transition-colors hover:text-slate-900 focus-visible:outline focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
@@ -96,8 +69,9 @@ export default async function HomePage() {
             </span>
           </Link>
 
+          {/* Sections — Apple-style cinematic breathing with no dividers */}
           <main id="main-content" className="flex w-full flex-col items-center">
-            <div className="pt-8 sm:pt-12">
+            <div className="pt-10 sm:pt-16">
               <HeroSection
                 heroTitle={t("heroTitle")}
                 heroSubtitle={t("heroSubtitle")}
@@ -105,37 +79,25 @@ export default async function HomePage() {
                 badgeLabel={t("badge")}
               />
             </div>
-
-            <WaveDivider />
             <HowItWorksSection />
-            <WaveDivider />
             <FeaturesGrid />
-            <WaveDivider />
             <BeforeAfterSection />
-            <WaveDivider />
             <FinalCTA />
           </main>
 
-          <footer
-            className="edu-footer-slim mt-auto w-full max-w-5xl pt-10 text-center sm:pt-14"
-            role="contentinfo"
-          >
-            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-slate-600">
-              <Link
-                href="/"
-                className="flex items-center gap-1.5 font-semibold text-slate-900"
-              >
+          {/* Footer */}
+          <footer className="edu-footer-slim mt-auto w-full max-w-5xl pt-12 text-center sm:pt-16" role="contentinfo">
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-slate-500">
+              <Link href="/" className="flex items-center gap-1.5 font-semibold text-slate-800">
                 <Search className="h-4 w-4 text-emerald-700" />
                 Joblit
               </Link>
               <span aria-hidden="true">·</span>
-              <Link href="/privacy" className="hover:text-slate-900">Privacy</Link>
+              <Link href="/privacy" className="transition-colors hover:text-slate-700">Privacy</Link>
               <span aria-hidden="true">·</span>
-              <Link href="/terms" className="hover:text-slate-900">Terms</Link>
+              <Link href="/terms" className="transition-colors hover:text-slate-700">Terms</Link>
               <span aria-hidden="true">·</span>
-              <Link href="/get-extension" className="hover:text-slate-900">
-                {t("extensionLink")}
-              </Link>
+              <Link href="/get-extension" className="transition-colors hover:text-slate-700">{t("extensionLink")}</Link>
               <span aria-hidden="true">·</span>
               <span>&copy; {new Date().getFullYear()} {t("allRightsReserved")}</span>
             </div>
