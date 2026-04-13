@@ -12,25 +12,30 @@ interface Step {
   descKey: string;
 }
 
-const stagger = 0.15;
-const duration = 0.7;
-
-/* ── Animated SVG beam connector ───────────────────── */
+const STAGGER = 0.18;
+const DURATION = 0.65;
 
 function AnimatedBeam() {
   return (
-    <div className="mt-5 hidden flex-1 self-center md:block" style={{ minWidth: "2rem" }}>
-      <svg width="100%" height="4" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true">
+    <div className="mt-6 hidden flex-1 self-center md:block" style={{ minWidth: "2rem" }}>
+      <svg width="100%" height="6" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true">
         <motion.line
-          x1="0" y1="2" x2="100" y2="2"
-          stroke="rgb(52 211 153)"
-          strokeWidth="2"
+          x1="0" y1="3" x2="100" y2="3"
+          stroke="url(#beam-grad)"
+          strokeWidth="3"
+          strokeLinecap="round"
           strokeDasharray="100"
           strokeDashoffset={100}
           whileInView={{ strokeDashoffset: 0 }}
           viewport={{ once: true, amount: 0.15 }}
           transition={{ duration: 0.8, ease: "easeInOut" }}
         />
+        <defs>
+          <linearGradient id="beam-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="rgb(52, 211, 153)" stopOpacity="0.8" />
+            <stop offset="100%" stopColor="rgb(20, 184, 166)" stopOpacity="0.4" />
+          </linearGradient>
+        </defs>
       </svg>
     </div>
   );
@@ -42,91 +47,57 @@ export function HowItWorksSection() {
   const noMotion = reduceMotion === true;
 
   const steps: Step[] = [
-    {
-      number: 1,
-      icon: <Search className="mx-auto mt-3 h-6 w-6 text-emerald-600 transition-transform duration-300 group-hover:scale-110" aria-hidden="true" />,
-      titleKey: "howItWorksStep1Title",
-      descKey: "howItWorksStep1Desc",
-    },
-    {
-      number: 2,
-      icon: <Wand2 className="mx-auto mt-3 h-6 w-6 text-emerald-600 transition-transform duration-300 group-hover:scale-110" aria-hidden="true" />,
-      titleKey: "howItWorksStep2Title",
-      descKey: "howItWorksStep2Desc",
-    },
-    {
-      number: 3,
-      icon: <FileText className="mx-auto mt-3 h-6 w-6 text-emerald-600 transition-transform duration-300 group-hover:scale-110" aria-hidden="true" />,
-      titleKey: "howItWorksStep3Title",
-      descKey: "howItWorksStep3Desc",
-    },
+    { number: 1, icon: <Search className="h-6 w-6 text-emerald-600" aria-hidden="true" />, titleKey: "howItWorksStep1Title", descKey: "howItWorksStep1Desc" },
+    { number: 2, icon: <Wand2 className="h-6 w-6 text-emerald-600" aria-hidden="true" />, titleKey: "howItWorksStep2Title", descKey: "howItWorksStep2Desc" },
+    { number: 3, icon: <FileText className="h-6 w-6 text-emerald-600" aria-hidden="true" />, titleKey: "howItWorksStep3Title", descKey: "howItWorksStep3Desc" },
   ];
 
-  const base = {
-    opacity: 0,
-    y: noMotion ? 0 : 40,
-    scale: noMotion ? 1 : 0.95,
-  };
+  const base = { opacity: 0, y: noMotion ? 0 : 30 };
   const visible = {
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    transition: {
-      duration: noMotion ? 0 : duration,
-      ease: [0.25, 0.4, 0.25, 1] as const,
-    },
+    opacity: 1, y: 0,
+    transition: { duration: noMotion ? 0 : DURATION, ease: [0.25, 0.4, 0.25, 1] as const },
   };
 
   return (
-    <section aria-labelledby="how-it-works-heading" className="relative py-16 sm:py-20">
-      <motion.div
-        className="section-glow"
-        initial={{ opacity: 0 }}
-        whileInView={{ opacity: 1 }}
-        viewport={{ once: true, amount: 0.15 }}
-        transition={{ duration: 0.8 }}
-        aria-hidden="true"
-      />
+    <section aria-labelledby="how-it-works-heading" className="relative py-20 sm:py-24">
+      <motion.div className="section-glow" initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true, amount: 0.15 }} transition={{ duration: 0.8 }} aria-hidden="true" />
+
       <motion.h2
         id="how-it-works-heading"
-        className="text-center text-2xl font-bold text-slate-900 sm:text-3xl"
-        initial={base}
-        whileInView={visible}
-        viewport={{ once: true, amount: 0.15 }}
+        className="text-center text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl lg:text-[2rem] lg:tracking-[-0.01em]"
+        initial={base} whileInView={visible} viewport={{ once: true, margin: "-50px" }}
       >
         {t("howItWorksTitle")}
       </motion.h2>
 
-      <div className="mt-12 flex items-start justify-center gap-0">
+      <div className="mt-14 flex items-start justify-center gap-0">
         {steps.map((step, i) => (
           <div key={step.number} className="flex items-start">
             <motion.div
-              className="group flex w-full max-w-xs flex-col items-center text-center"
-              initial={base}
-              whileInView={visible}
+              className="group glass-card flex w-full max-w-xs flex-col items-center rounded-xl p-6 text-center"
+              initial={base} whileInView={visible}
               viewport={{ once: true, amount: 0.15 }}
-              transition={{
-                delay: noMotion ? 0 : stagger * i,
-                duration: noMotion ? 0 : duration,
-              }}
+              transition={{ delay: noMotion ? 0 : STAGGER * i, duration: noMotion ? 0 : DURATION }}
             >
+              {/* Gradient number badge */}
               <motion.div
-                className="step-circle-hover cursor-default mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 font-bold text-emerald-700"
-                whileInView={noMotion ? undefined : { scale: [1, 1.15, 1] }}
+                className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-400 text-sm font-bold text-white shadow-[var(--shadow-standard)]"
+                whileInView={noMotion ? undefined : { scale: [1, 1.12, 1] }}
                 viewport={{ once: true, amount: 0.15 }}
-                transition={{
-                  delay: noMotion ? 0 : stagger * i + 0.3,
-                  duration: 0.4,
-                }}
+                transition={{ delay: noMotion ? 0 : STAGGER * i + 0.3, duration: 0.4 }}
               >
                 <span aria-hidden="true">{step.number}</span>
                 <span className="sr-only">Step {step.number}</span>
               </motion.div>
-              {step.icon}
+
+              <div className="mx-auto mt-4 transition-transform duration-300 group-hover:scale-110">
+                {step.icon}
+              </div>
+
               <h3 className="mt-3 text-center text-base font-semibold text-slate-900">
                 {t(step.titleKey)}
               </h3>
-              <p className="mx-auto mt-1 max-w-xs text-center text-sm sm:text-base text-slate-600">
+              <p className="mx-auto mt-1.5 max-w-xs text-center text-sm text-slate-600 sm:text-base">
                 {t(step.descKey)}
               </p>
             </motion.div>

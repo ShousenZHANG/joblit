@@ -1,13 +1,13 @@
 "use client";
 
-import { useRef, useCallback, useState, useEffect } from "react";
+import { useRef, useCallback } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { TailoringDemoCard } from "./TailoringDemoCard";
 import { SmartCTA } from "./SmartCTA";
 
-const stagger = 0.08;
-const duration = 0.4;
+const WORD_DELAY = 0.05;
+const DURATION = 0.4;
 
 export interface HeroSectionProps {
   heroTitle: string;
@@ -37,63 +37,25 @@ export function HeroSection({
     [noMotion],
   );
 
-  const base = {
-    opacity: 0,
-    y: noMotion ? 0 : 14,
-  };
-  const visible = {
+  const base = { opacity: 0, y: noMotion ? 0 : 18 };
+  const visible = (delay: number) => ({
     opacity: 1,
     y: 0,
     transition: {
-      duration: noMotion ? 0 : duration,
+      duration: noMotion ? 0 : DURATION,
+      delay: noMotion ? 0 : delay,
       ease: [0.25, 0.4, 0.25, 1] as const,
     },
-  };
+  });
 
-  // Typewriter effect for hero title
-  const [displayedTitle, setDisplayedTitle] = useState(noMotion ? heroTitle : "");
-  const [showCursor, setShowCursor] = useState(!noMotion);
-
-  useEffect(() => {
-    if (noMotion) return;
-    let cancelled = false;
-    let i = 0;
-    setDisplayedTitle("");
-    const type = () => {
-      if (cancelled || i >= heroTitle.length) {
-        if (!cancelled) setTimeout(() => setShowCursor(false), 600);
-        return;
-      }
-      i += 1;
-      setDisplayedTitle(heroTitle.slice(0, i));
-      setTimeout(type, 30);
-    };
-    // Start typing after badge animation
-    const delay = setTimeout(type, 400);
-    return () => { cancelled = true; clearTimeout(delay); };
-  }, [heroTitle, noMotion]);
-
-  // Render title with gradient on "AI-tailored" portion
-  function renderTitle(text: string) {
-    const aiMatch = text.match(/^(AI-tailored)/);
-    if (aiMatch) {
-      return (
-        <>
-          <span className="bg-gradient-to-r from-emerald-600 to-teal-500 bg-clip-text text-transparent">
-            {aiMatch[1]}
-          </span>
-          {text.slice(aiMatch[1].length)}
-        </>
-      );
-    }
-    return text;
-  }
+  // Split title into words for staggered reveal
+  const words = heroTitle.split(" ");
 
   return (
     <header
       ref={headerRef}
       onMouseMove={handleMouseMove}
-      className="group relative grid w-full max-w-6xl gap-8 overflow-hidden text-center sm:gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-12 lg:text-left"
+      className="group relative grid w-full max-w-6xl gap-10 overflow-hidden text-center sm:gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-16 lg:text-left"
     >
       {/* Spotlight cursor overlay */}
       <div
@@ -106,50 +68,70 @@ export function HeroSection({
       />
 
       <div className="relative z-[1] flex flex-col items-center lg:items-start">
-        <motion.div
-          initial={base}
-          animate={visible}
-          transition={{ delay: noMotion ? 0 : 0 }}
-        >
+        {/* Badge */}
+        <motion.div initial={base} animate={visible(0)}>
           <Badge className="edu-pill-pro text-sm">
             <span
-              className="mr-2 inline-block h-2 w-2 rounded-full bg-emerald-500"
+              className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500"
               aria-hidden="true"
             />
             {badgeLabel}
           </Badge>
         </motion.div>
-        <h1
-          className="edu-title mt-6 min-h-[3em] text-3xl leading-tight tracking-tight text-slate-900 sm:text-4xl md:text-[2.75rem] lg:text-[3.25rem] lg:leading-[1.15]"
-        >
-          {renderTitle(displayedTitle)}
-          {showCursor && (
-            <span className="edu-caret ml-0.5 inline-block" aria-hidden="true" />
-          )}
+
+        {/* Title — word-by-word staggered fade-in */}
+        <h1 className="mt-7 text-3xl font-bold leading-[1.1] tracking-tight text-slate-900 sm:text-4xl md:text-[2.75rem] lg:text-[3.25rem] lg:leading-[1.08] lg:tracking-[-0.02em]">
+          {words.map((word, i) => {
+            const isGradient = word === "AI-tailored";
+            return (
+              <motion.span
+                key={i}
+                className={`inline-block ${isGradient ? "bg-gradient-to-r from-emerald-600 to-teal-500 bg-clip-text text-transparent" : ""}`}
+                initial={{ opacity: 0, y: noMotion ? 0 : 12, filter: noMotion ? "blur(0px)" : "blur(4px)" }}
+                animate={{
+                  opacity: 1,
+                  y: 0,
+                  filter: "blur(0px)",
+                  transition: {
+                    duration: noMotion ? 0 : 0.35,
+                    delay: noMotion ? 0 : 0.2 + i * WORD_DELAY,
+                    ease: [0.25, 0.4, 0.25, 1],
+                  },
+                }}
+              >
+                {word}&nbsp;
+              </motion.span>
+            );
+          })}
         </h1>
+
+        {/* Subtitle */}
         <motion.p
-          className="mt-4 max-w-xl text-lg leading-relaxed text-slate-600 sm:mt-5 sm:text-xl sm:leading-7"
+          className="mt-5 max-w-xl text-lg leading-relaxed text-slate-600 sm:mt-6 sm:text-xl sm:leading-8"
           initial={base}
-          animate={visible}
-          transition={{ delay: noMotion ? 0 : stagger * 2 }}
+          animate={visible(0.5)}
         >
           {heroSubtitle}
         </motion.p>
+
+        {/* CTA */}
         <motion.div
-          className="mt-6 flex flex-wrap justify-center gap-3 sm:mt-8 lg:justify-start"
+          className="mt-7 flex flex-wrap justify-center gap-3 sm:mt-9 lg:justify-start"
           initial={base}
-          animate={visible}
-          transition={{ delay: noMotion ? 0 : stagger * 3 }}
+          animate={visible(0.6)}
         >
-          <SmartCTA label={ctaLabel} className="edu-cta-shimmer min-h-[48px] min-w-[44px] px-6" />
+          <SmartCTA
+            label={ctaLabel}
+            className="edu-cta-shimmer min-h-[52px] min-w-[44px] px-7 text-base shadow-[var(--shadow-standard)] hover:shadow-[var(--shadow-elevated)]"
+          />
         </motion.div>
       </div>
 
+      {/* Demo card */}
       <motion.div
         className="relative z-[1] flex w-full items-center justify-center lg:justify-end"
         initial={base}
-        animate={visible}
-        transition={{ delay: noMotion ? 0 : stagger * 4 }}
+        animate={visible(0.4)}
       >
         <TailoringDemoCard />
       </motion.div>

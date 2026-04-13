@@ -40,6 +40,24 @@ const jsonLd = {
   offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
 };
 
+/* ── Wave Divider ──────────────────────────────────────── */
+
+function WaveDivider() {
+  return (
+    <div className="relative h-16 w-full sm:h-20" aria-hidden="true">
+      <svg
+        className="wave-divider absolute inset-0"
+        viewBox="0 0 1440 60"
+        preserveAspectRatio="none"
+        fill="currentColor"
+      >
+        <path d="M0,30 C240,55 480,5 720,30 C960,55 1200,5 1440,30 L1440,60 L0,60 Z" opacity="0.3" />
+        <path d="M0,35 C360,10 720,55 1080,25 C1260,15 1380,35 1440,30 L1440,60 L0,60 Z" opacity="0.15" />
+      </svg>
+    </div>
+  );
+}
+
 /* ── Page ─────────────────────────────────────────────── */
 
 export default async function HomePage() {
@@ -47,8 +65,7 @@ export default async function HomePage() {
 
   return (
     <>
-      {/* SAFETY: JSON.stringify produces spec-compliant JSON with no unescaped HTML.
-          This is the standard Next.js pattern for structured data / JSON-LD. */}
+      {/* SAFETY: JSON.stringify produces spec-compliant JSON with no unescaped HTML. */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -60,7 +77,6 @@ export default async function HomePage() {
         <div className="edu-bg" aria-hidden="true" />
         <LandingBackground />
 
-        {/* Skip to content */}
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-xl focus:border-2 focus:border-slate-800 focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-slate-900 focus:shadow-lg focus:outline-none"
@@ -68,7 +84,7 @@ export default async function HomePage() {
           {t("skipToContent")}
         </a>
 
-        <div className="edu-page-enter relative z-[2] mx-auto flex w-full max-w-7xl flex-col items-center gap-10 px-4 pb-10 pt-4 text-center sm:gap-14 sm:px-6 sm:pb-12 md:gap-16 md:pt-5 lg:px-8">
+        <div className="edu-page-enter relative z-[2] mx-auto flex w-full max-w-7xl flex-col items-center gap-0 px-4 pb-10 pt-4 text-center sm:px-6 sm:pb-12 md:pt-5 lg:px-8">
           <Link
             href="/"
             className="edu-landing-logo-only self-start text-[15px] font-semibold tracking-tight text-slate-800 transition-colors hover:text-slate-900 focus-visible:outline focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
@@ -79,25 +95,29 @@ export default async function HomePage() {
               Joblit
             </span>
           </Link>
+
           <main id="main-content" className="flex w-full flex-col items-center">
-            <HeroSection
-              heroTitle={t("heroTitle")}
-              heroSubtitle={t("heroSubtitle")}
-              ctaLabel={t("cta")}
-              badgeLabel={t("badge")}
-            />
-            <div className="h-20 w-full bg-gradient-to-b from-transparent via-amber-50/40 to-transparent" aria-hidden="true" />
+            <div className="pt-8 sm:pt-12">
+              <HeroSection
+                heroTitle={t("heroTitle")}
+                heroSubtitle={t("heroSubtitle")}
+                ctaLabel={t("cta")}
+                badgeLabel={t("badge")}
+              />
+            </div>
+
+            <WaveDivider />
             <HowItWorksSection />
-            <div className="h-20 w-full bg-gradient-to-b from-transparent via-amber-50/40 to-transparent" aria-hidden="true" />
+            <WaveDivider />
             <FeaturesGrid />
-            <div className="h-20 w-full bg-gradient-to-b from-transparent via-amber-50/40 to-transparent" aria-hidden="true" />
+            <WaveDivider />
             <BeforeAfterSection />
-            <div className="h-20 w-full bg-gradient-to-b from-transparent via-amber-50/40 to-transparent" aria-hidden="true" />
+            <WaveDivider />
             <FinalCTA />
           </main>
 
           <footer
-            className="edu-footer-slim mt-auto w-full max-w-5xl pt-8 text-center sm:pt-10"
+            className="edu-footer-slim mt-auto w-full max-w-5xl pt-10 text-center sm:pt-14"
             role="contentinfo"
           >
             <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-slate-600">
@@ -109,21 +129,15 @@ export default async function HomePage() {
                 Joblit
               </Link>
               <span aria-hidden="true">·</span>
-              <Link href="/privacy" className="hover:text-slate-900">
-                Privacy
-              </Link>
+              <Link href="/privacy" className="hover:text-slate-900">Privacy</Link>
               <span aria-hidden="true">·</span>
-              <Link href="/terms" className="hover:text-slate-900">
-                Terms
-              </Link>
+              <Link href="/terms" className="hover:text-slate-900">Terms</Link>
               <span aria-hidden="true">·</span>
               <Link href="/get-extension" className="hover:text-slate-900">
                 {t("extensionLink")}
               </Link>
               <span aria-hidden="true">·</span>
-              <span>
-                &copy; {new Date().getFullYear()} {t("allRightsReserved")}
-              </span>
+              <span>&copy; {new Date().getFullYear()} {t("allRightsReserved")}</span>
             </div>
           </footer>
         </div>
