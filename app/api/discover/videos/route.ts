@@ -4,6 +4,7 @@ import { authOptions } from "@/auth";
 import type {
   VideoItem,
   VideoCategory,
+  VideoTimeWindow,
   VideosResponse,
 } from "@/app/(app)/discover/types";
 import trustedChannelsConfig from "@/lib/shared/trustedChannels.config.json";
@@ -15,9 +16,10 @@ const VALID_CATEGORIES: VideoCategory[] = [
   "anthropic",
   "rag",
   "agents",
-  "mcp",
-  "harness",
+  "agent-skills",
+  "harness-engineering",
 ];
+const VALID_WINDOWS: VideoTimeWindow[] = ["week", "month"];
 
 const cache = new Map<string, { data: VideosResponse; expiry: number }>();
 
@@ -53,15 +55,20 @@ const CATEGORY_QUERIES: Record<Exclude<VideoCategory, "all">, string[]> = {
     "autonomous AI agent",
     "agent framework tutorial",
   ],
-  mcp: [
+  "agent-skills": [
+    "Claude Agent Skills",
+    "Anthropic agent skills",
     "Model Context Protocol",
     "MCP server tutorial",
-    "MCP Anthropic",
+    "agent tool use",
+    "AI agent skill",
   ],
-  harness: [
+  "harness-engineering": [
     "AI harness engineering",
-    "AI coding workflow",
-    "agent harness Claude",
+    "agent harness",
+    "Claude Code harness",
+    "AI coding agent build",
+    "agentic coding workflow",
   ],
 };
 
@@ -94,8 +101,25 @@ const CATEGORY_KEYWORDS: Record<Exclude<VideoCategory, "all">, string[]> = {
     "crewai",
     "autogen",
   ],
-  mcp: ["mcp", "model context protocol"],
-  harness: ["harness", "coding agent", "claude code", "cursor", "cline", "aider"],
+  "agent-skills": [
+    "skill",
+    "mcp",
+    "model context protocol",
+    "tool use",
+    "function call",
+    "claude",
+    "agent",
+  ],
+  "harness-engineering": [
+    "harness",
+    "coding agent",
+    "claude code",
+    "cursor",
+    "cline",
+    "aider",
+    "agentic",
+    "agent workflow",
+  ],
 };
 
 function queriesForCategory(cat: VideoCategory): string[] {
@@ -274,15 +298,16 @@ async function fetchChannelSubscribers(
 
 // ── Pipeline ──────────────────────────────────────────────
 
-const RELEVANCE_THRESHOLD = 0.33; // need at least 1 category keyword hit
-
-async function fetchYouTube(category: VideoCategory): Promise<VideoItem[]> {
+async function fetchYouTube(
+  category: VideoCategory,
+  timeWindow: VideoTimeWindow,
+): Promise<VideoItem[]> {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) return [];
 
   const queries = queriesForCategory(category);
   const perQuery = category === "all" ? 4 : 6;
-  const publishedAfter = daysAgoISO(30);
+  const publishedAfter = daysAgoISO(timeWindow === "week" ? 7 : 30);
 
   const idLists = await Promise.all(
     queries.map((q) => searchYouTube(q, apiKey, publishedAfter, perQuery)),
@@ -333,13 +358,11 @@ async function fetchYouTube(category: VideoCategory): Promise<VideoItem[]> {
     };
   });
 
-  // Secondary relevance filter — drop clearly off-topic results.
-  // Trusted channels get a grace pass (still filter but with looser bar) so
-  // high-authority creators don't get pruned over keyword mismatch.
-  return enriched.filter((v) => {
-    const threshold = v.isTrusted ? RELEVANCE_THRESHOLD * 0.5 : RELEVANCE_THRESHOLD;
-    return v.relevanceScore >= threshold;
-  });
+  // Relevance kept as a ranking signal (trendingScore * 2 weighting on the
+  // client), NOT a hard filter — hard filter was dropping 100% of results
+  // when creators use clickbait titles. Trust that YouTube's own relevance
+  // order + our ranking will sink truly off-topic content.
+  return enriched;
 }
 
 // ── Route ─────────────────────────────────────────────────
@@ -349,6 +372,13 @@ function parseCategory(raw: string | null): VideoCategory {
   return (VALID_CATEGORIES as string[]).includes(v)
     ? (v as VideoCategory)
     : "all";
+}
+
+function parseWindow(raw: string | null): VideoTimeWindow {
+  const v = (raw ?? "month").toLowerCase();
+  return (VALID_WINDOWS as string[]).includes(v)
+    ? (v as VideoTimeWindow)
+    : "month";
 }
 
 export async function GET(request: Request) {
@@ -368,15 +398,16 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const category = parseCategory(searchParams.get("category"));
+  const timeWindow = parseWindow(searchParams.get("window"));
 
-  const cacheKey = `videos:${category}`;
+  const cacheKey = `videos:${category}:${timeWindow}`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() < cached.expiry) {
     return NextResponse.json(cached.data);
   }
 
   try {
-    const items = await fetchYouTube(category);
+    const items = await fetchYouTube(category, timeWindow);
     const response: VideosResponse = {
       items,
       cached: false,

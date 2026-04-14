@@ -17,10 +17,12 @@ export type VideoCategory =
   | "anthropic"
   | "rag"
   | "agents"
-  | "mcp"
-  | "harness";
+  | "agent-skills"
+  | "harness-engineering";
 
 export type VideoSort = "trending" | "latest" | "most_viewed";
+
+export type VideoTimeWindow = "week" | "month";
 
 export interface VideoItem {
   id: string;

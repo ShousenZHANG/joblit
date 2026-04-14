@@ -61,7 +61,7 @@ export function VideoCard({
           <>
             <iframe
               ref={iframeRef}
-              src={`https://www.youtube-nocookie.com/embed/${item.id}?autoplay=1&rel=0&modestbranding=1`}
+              src={`https://www.youtube-nocookie.com/embed/${item.id}?autoplay=1&mute=1&rel=0&modestbranding=1&playsinline=1`}
               title={item.title}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen

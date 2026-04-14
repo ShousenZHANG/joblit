@@ -2,14 +2,19 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, RefreshCw, KeyRound, Star } from "lucide-react";
+import { AlertCircle, RefreshCw, KeyRound, Star, Clock } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useVideos } from "../hooks/useDiscoverData";
 import {
   useFavoritedVideos,
   useWatchedVideos,
 } from "../hooks/useVideoPreferences";
-import type { VideoCategory, VideoSort, VideoItem } from "../types";
+import type {
+  VideoCategory,
+  VideoSort,
+  VideoTimeWindow,
+  VideoItem,
+} from "../types";
 import { VideoCard } from "./VideoCard";
 import { VideoSkeleton } from "./DiscoverSkeleton";
 
@@ -19,8 +24,8 @@ const CATEGORIES: { value: VideoCategory; label: string }[] = [
   { value: "anthropic", label: "Anthropic" },
   { value: "rag", label: "RAG" },
   { value: "agents", label: "Agents" },
-  { value: "mcp", label: "MCP" },
-  { value: "harness", label: "Harness" },
+  { value: "agent-skills", label: "Agent Skills" },
+  { value: "harness-engineering", label: "Harness engineering" },
 ];
 
 const SORTS: { value: VideoSort; label: string }[] = [
@@ -29,8 +34,14 @@ const SORTS: { value: VideoSort; label: string }[] = [
   { value: "most_viewed", label: "Most viewed" },
 ];
 
+const TIME_WINDOWS: { value: VideoTimeWindow; label: string }[] = [
+  { value: "week", label: "This week" },
+  { value: "month", label: "This month" },
+];
+
 const VALID_CATS = new Set<string>(CATEGORIES.map((c) => c.value));
 const VALID_SORTS = new Set<string>(SORTS.map((s) => s.value));
+const VALID_WINDOWS = new Set<string>(TIME_WINDOWS.map((w) => w.value));
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
@@ -79,15 +90,11 @@ function rankVideos(
 ): VideoItem[] {
   const base =
     sort === "latest"
-      ? [...items]
-          .filter(
-            (v) => Date.now() - new Date(v.publishedAt).getTime() < 7 * DAY_MS,
-          )
-          .sort(
-            (a, b) =>
-              new Date(b.publishedAt).getTime() -
-              new Date(a.publishedAt).getTime(),
-          )
+      ? [...items].sort(
+          (a, b) =>
+            new Date(b.publishedAt).getTime() -
+            new Date(a.publishedAt).getTime(),
+        )
       : sort === "most_viewed"
         ? [...items].sort((a, b) => b.viewCount - a.viewCount)
         : [...items]
@@ -117,6 +124,7 @@ export function VideoList() {
 
   const initialCat = searchParams.get("cat");
   const initialSort = searchParams.get("sort");
+  const initialWindow = searchParams.get("window");
   const [category, setCategory] = useState<VideoCategory>(
     initialCat && VALID_CATS.has(initialCat)
       ? (initialCat as VideoCategory)
@@ -127,6 +135,11 @@ export function VideoList() {
       ? (initialSort as VideoSort)
       : "trending",
   );
+  const [timeWindow, setTimeWindow] = useState<VideoTimeWindow>(
+    initialWindow && VALID_WINDOWS.has(initialWindow)
+      ? (initialWindow as VideoTimeWindow)
+      : "month",
+  );
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [playingId, setPlayingId] = useState<string | null>(null);
 
@@ -136,17 +149,19 @@ export function VideoList() {
     else next.set("cat", category);
     if (sort === "trending") next.delete("sort");
     else next.set("sort", sort);
+    if (timeWindow === "month") next.delete("window");
+    else next.set("window", timeWindow);
     const qs = next.toString();
     router.replace(qs ? `?${qs}` : "?", { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, sort]);
+  }, [category, sort, timeWindow]);
 
-  // Close inline player when switching category/sort
+  // Close inline player when switching category/sort/window/favorites
   useEffect(() => {
     setPlayingId(null);
-  }, [category, sort, showFavoritesOnly]);
+  }, [category, sort, timeWindow, showFavoritesOnly]);
 
-  const { data, isLoading, error } = useVideos(category);
+  const { data, isLoading, error } = useVideos(category, timeWindow);
   const rawItems = data?.items ?? [];
   const noApiKey = data?.noApiKey === true;
 
@@ -188,6 +203,30 @@ export function VideoList() {
             </button>
           );
         })}
+      </div>
+
+      {/* Time window pills */}
+      <div className="mb-3 flex items-center gap-2">
+        <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+        <div className="inline-flex gap-0.5 rounded-lg bg-slate-100/80 p-0.5">
+          {TIME_WINDOWS.map((w) => {
+            const active = w.value === timeWindow;
+            return (
+              <button
+                key={w.value}
+                type="button"
+                onClick={() => setTimeWindow(w.value)}
+                className={`rounded-md px-3 py-1 text-[11px] font-semibold transition-all sm:text-xs ${
+                  active
+                    ? "bg-white text-emerald-700 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                {w.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Sort pills + favorites filter */}
