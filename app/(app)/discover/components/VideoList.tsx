@@ -2,9 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, RefreshCw, KeyRound } from "lucide-react";
+import { AlertCircle, RefreshCw, KeyRound, Star } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useVideos } from "../hooks/useDiscoverData";
+import {
+  useFavoritedVideos,
+  useWatchedVideos,
+} from "../hooks/useVideoPreferences";
 import type { VideoCategory, VideoSort, VideoItem } from "../types";
 import { VideoCard } from "./VideoCard";
 import { VideoSkeleton } from "./DiscoverSkeleton";
@@ -27,52 +31,79 @@ const SORTS: { value: VideoSort; label: string }[] = [
 
 const VALID_CATS = new Set<string>(CATEGORIES.map((c) => c.value));
 const VALID_SORTS = new Set<string>(SORTS.map((s) => s.value));
-
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Client-side scoring/sorting. The backend caches one candidate pool per
- * category; switching sort never re-fetches.
+ * Comprehensive trending score combining engagement, freshness, authority,
+ * expertise match, duration sweet-spot, and user signals.
  */
-function rankVideos(items: VideoItem[], sort: VideoSort): VideoItem[] {
-  if (sort === "latest") {
-    return [...items]
-      .filter((v) => Date.now() - new Date(v.publishedAt).getTime() < 7 * DAY_MS)
-      .sort(
-        (a, b) =>
-          new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
-      );
-  }
-  if (sort === "most_viewed") {
-    return [...items].sort((a, b) => b.viewCount - a.viewCount);
-  }
-  // trending
-  return [...items]
-    .map((v) => ({ video: v, score: trendingScore(v) }))
-    .sort((a, b) => b.score - a.score)
-    .map((x) => x.video);
-}
-
-function trendingScore(v: VideoItem): number {
+function trendingScore(v: VideoItem, category: VideoCategory): number {
   const daysOld = Math.max(
     0,
     (Date.now() - new Date(v.publishedAt).getTime()) / DAY_MS,
   );
   const freshness = Math.max(0, 1 - daysOld / 30);
+
   let score =
     Math.log(v.viewCount + 1) * 0.5 +
     Math.log(v.likeCount + 1) * 0.3 +
-    freshness * 5; // weight freshness comparably with log(views)
+    freshness * 5 +
+    v.relevanceScore * 2; // title+desc keyword overlap
 
-  if (v.isTrusted) score += 1.5;
-  if (v.channelSubscriberCount > 50_000) score += 1.0;
-  if (v.durationSeconds >= 5 * 60 && v.durationSeconds <= 30 * 60) score += 0.5;
+  // Authority tiers (from curated trusted channels config)
+  if (v.trustTier === 1) score += 2.5;
+  else if (v.trustTier === 2) score += 1.2;
+  else if (v.trustTier === 3) score += 0.4;
+
+  // Channel matches category expertise
+  if (category !== "all" && v.expertiseTags.includes(category)) {
+    score += 0.8;
+  }
+
+  // Large audience signal
+  if (v.channelSubscriberCount > 50_000) score += 0.6;
+
+  // Duration sweet spot (5-30 min)
+  if (v.durationSeconds >= 5 * 60 && v.durationSeconds <= 30 * 60) {
+    score += 0.3;
+  }
+
   return score;
 }
 
+function rankVideos(
+  items: VideoItem[],
+  sort: VideoSort,
+  category: VideoCategory,
+  watched: Set<string>,
+): VideoItem[] {
+  const base =
+    sort === "latest"
+      ? [...items]
+          .filter(
+            (v) => Date.now() - new Date(v.publishedAt).getTime() < 7 * DAY_MS,
+          )
+          .sort(
+            (a, b) =>
+              new Date(b.publishedAt).getTime() -
+              new Date(a.publishedAt).getTime(),
+          )
+      : sort === "most_viewed"
+        ? [...items].sort((a, b) => b.viewCount - a.viewCount)
+        : [...items]
+            .map((v) => ({ video: v, score: trendingScore(v, category) }))
+            .sort((a, b) => b.score - a.score)
+            .map((x) => x.video);
+
+  // Watched videos sink to bottom (preserves relative order within each group)
+  const unseen = base.filter((v) => !watched.has(v.id));
+  const seen = base.filter((v) => watched.has(v.id));
+  return [...unseen, ...seen];
+}
+
 const HEADING = (
-  <h2 className="mb-4 text-base font-semibold text-slate-900 lg:text-lg">
-    AI Videos
+  <h2 className="mb-4 flex items-center justify-between text-base font-semibold text-slate-900 lg:text-lg">
+    <span>AI Videos</span>
   </h2>
 );
 
@@ -80,6 +111,9 @@ export function VideoList() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+
+  const favorites = useFavoritedVideos();
+  const watched = useWatchedVideos();
 
   const initialCat = searchParams.get("cat");
   const initialSort = searchParams.get("sort");
@@ -93,8 +127,9 @@ export function VideoList() {
       ? (initialSort as VideoSort)
       : "trending",
   );
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [playingId, setPlayingId] = useState<string | null>(null);
 
-  // Sync state → URL (without scroll, replace not push to avoid history pollution)
   useEffect(() => {
     const next = new URLSearchParams(searchParams.toString());
     if (category === "all") next.delete("cat");
@@ -106,17 +141,29 @@ export function VideoList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category, sort]);
 
+  // Close inline player when switching category/sort
+  useEffect(() => {
+    setPlayingId(null);
+  }, [category, sort, showFavoritesOnly]);
+
   const { data, isLoading, error } = useVideos(category);
   const rawItems = data?.items ?? [];
   const noApiKey = data?.noApiKey === true;
 
-  const items = useMemo(() => rankVideos(rawItems, sort), [rawItems, sort]);
+  const items = useMemo(() => {
+    const ranked = rankVideos(rawItems, sort, category, watched.ids);
+    return showFavoritesOnly
+      ? ranked.filter((v) => favorites.has(v.id))
+      : ranked;
+  }, [rawItems, sort, category, watched.ids, favorites, showFavoritesOnly]);
+
+  const favCount = favorites.ids.size;
 
   return (
     <section>
       {HEADING}
 
-      {/* Category tabs — horizontal scroll on mobile */}
+      {/* Category tabs */}
       <div
         role="tablist"
         aria-label="Video categories"
@@ -143,25 +190,53 @@ export function VideoList() {
         })}
       </div>
 
-      {/* Sort pills */}
-      <div className="mb-4 inline-flex gap-0.5 rounded-lg bg-slate-100/80 p-0.5">
-        {SORTS.map((s) => {
-          const active = s.value === sort;
-          return (
-            <button
-              key={s.value}
-              type="button"
-              onClick={() => setSort(s.value)}
-              className={`rounded-md px-3 py-1 text-[11px] font-semibold transition-all sm:text-xs ${
-                active
-                  ? "bg-white text-emerald-700 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {s.label}
-            </button>
-          );
-        })}
+      {/* Sort pills + favorites filter */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="inline-flex gap-0.5 rounded-lg bg-slate-100/80 p-0.5">
+          {SORTS.map((s) => {
+            const active = s.value === sort;
+            return (
+              <button
+                key={s.value}
+                type="button"
+                onClick={() => setSort(s.value)}
+                className={`rounded-md px-3 py-1 text-[11px] font-semibold transition-all sm:text-xs ${
+                  active
+                    ? "bg-white text-emerald-700 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowFavoritesOnly((v) => !v)}
+          aria-pressed={showFavoritesOnly}
+          disabled={favCount === 0}
+          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors sm:text-xs ${
+            showFavoritesOnly
+              ? "bg-amber-100 text-amber-700"
+              : "bg-slate-100 text-slate-500 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
+          }`}
+          title={
+            favCount === 0
+              ? "Star a video to add it here"
+              : showFavoritesOnly
+                ? "Show all"
+                : "Show favorites only"
+          }
+        >
+          <Star
+            className={`h-3 w-3 ${
+              showFavoritesOnly ? "fill-amber-400 text-amber-500" : ""
+            }`}
+          />
+          {showFavoritesOnly ? "All" : `Favorites (${favCount})`}
+        </button>
       </div>
 
       {noApiKey && !isLoading ? (
@@ -199,12 +274,24 @@ export function VideoList() {
         </div>
       ) : items.length === 0 ? (
         <p className="py-8 text-center text-sm text-slate-500">
-          No videos in this category yet. Try a different filter.
+          {showFavoritesOnly
+            ? "No favorites match this category. Switch category or hit the star on a video."
+            : "No videos in this category yet. Try a different filter."}
         </p>
       ) : (
         <div className="grid gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3">
           {items.map((item) => (
-            <VideoCard key={item.id} item={item} />
+            <VideoCard
+              key={item.id}
+              item={item}
+              isWatched={watched.has(item.id)}
+              isFavorited={favorites.has(item.id)}
+              isPlaying={playingId === item.id}
+              onPlay={setPlayingId}
+              onClose={() => setPlayingId(null)}
+              onToggleFavorite={favorites.toggle}
+              onMarkWatched={watched.add}
+            />
           ))}
         </div>
       )}

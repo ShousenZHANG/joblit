@@ -31,11 +31,17 @@ export interface VideoItem {
   channelId: string;
   channelSubscriberCount: number;
   isTrusted: boolean;
+  /** 0 = not trusted, 1/2/3 = tier (1 = highest authority) */
+  trustTier: 0 | 1 | 2 | 3;
+  /** Channel's declared expertise tags (matches VideoCategory values). */
+  expertiseTags: string[];
   viewCount: number;
   likeCount: number;
   publishedAt: string;
   description: string;
   durationSeconds: number;
+  /** 0-1 content relevance from title+description keyword overlap vs category. */
+  relevanceScore: number;
 }
 
 export interface TrendingResponse {

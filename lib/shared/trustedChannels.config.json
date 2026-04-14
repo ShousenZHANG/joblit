@@ -1,0 +1,39 @@
+{
+  "$comment": "Curated AI/engineering creators. tier1 = official/foundational (+2.0), tier2 = top independent voices (+1.0), tier3 = niche experts (+0.3). expertiseTags boost the video inside matching categories by +0.5.",
+  "channels": [
+    { "id": "UCrDwWp7EBBv4NwvScIpBDOA", "name": "Anthropic", "tier": 1, "expertiseTags": ["claude", "anthropic", "agents", "mcp"] },
+    { "id": "UCXZCJLdBC09xxGZ6gcdrc6A", "name": "OpenAI", "tier": 1, "expertiseTags": ["agents", "rag"] },
+    { "id": "UCbfYPyITQ-7l4upoX8nvctg", "name": "Two Minute Papers", "tier": 1, "expertiseTags": [] },
+    { "id": "UCa-vrCLQHviTOVnEKDOdetQ", "name": "LangChain", "tier": 1, "expertiseTags": ["agents", "rag", "harness"] },
+    { "id": "UC9OZ7BfqEW9CW4eU0AsAKKw", "name": "LlamaIndex", "tier": 1, "expertiseTags": ["rag", "agents"] },
+    { "id": "UCv83tO5cePwHMt1952IVVHw", "name": "Hugging Face", "tier": 1, "expertiseTags": [] },
+
+    { "id": "UCawZsQWqfGSbCI5yjkdVkTA", "name": "Matthew Berman", "tier": 2, "expertiseTags": ["agents", "claude"] },
+    { "id": "UCT2x4v1qY7Pdh4hN4Wq3GAA", "name": "Sam Witteveen", "tier": 2, "expertiseTags": ["rag", "agents"] },
+    { "id": "UCJxV-MfgTjK_X-vfPmZpHvA", "name": "Hamel Husain", "tier": 2, "expertiseTags": ["rag", "harness"] },
+    { "id": "UCKelCK4ZaO6HeEI1KQjqzWA", "name": "All About AI", "tier": 2, "expertiseTags": ["agents", "claude"] },
+    { "id": "UCi-g4cjqGV7jvU8aeSuj0jQ", "name": "Greg Kamradt", "tier": 2, "expertiseTags": ["rag", "agents"] },
+    { "id": "UCxgkN3luQgLQOd_L7tbOdhQ", "name": "AI Jason", "tier": 2, "expertiseTags": ["agents", "rag"] },
+    { "id": "UC2WmuBuFq6gL08QYG-JjXKw", "name": "Wes Roth", "tier": 2, "expertiseTags": [] },
+    { "id": "UCvWoRowK2zL5J5wwjqeyqzg", "name": "IndyDevDan", "tier": 2, "expertiseTags": ["claude", "harness", "agents"] },
+    { "id": "UCnyqZ8DqgRBxOyqUUKtt-Vg", "name": "David Ondrej", "tier": 2, "expertiseTags": ["agents"] },
+    { "id": "UCt53yWQpvm9wWpaCFp8X8MA", "name": "Cole Medin", "tier": 2, "expertiseTags": ["agents", "rag", "mcp"] },
+    { "id": "UCYO_jab_esuFRV4b17AJtAw", "name": "3Blue1Brown", "tier": 2, "expertiseTags": [] },
+    { "id": "UCbRP3c757lWg9M-U7TyEkXA", "name": "Yannic Kilcher", "tier": 2, "expertiseTags": [] },
+    { "id": "UCSHZKyawb77ixDdsGog4iWA", "name": "Lex Fridman", "tier": 2, "expertiseTags": [] },
+    { "id": "UCK7tptUDHh-RYDsdxO1-5QQ", "name": "AI Explained", "tier": 2, "expertiseTags": [] },
+    { "id": "UCsBjURrPoezykLs9EqgamOA", "name": "Fireship", "tier": 2, "expertiseTags": ["harness"] },
+    { "id": "UCMpiJbmg_DPvqeWRSCOY1bw", "name": "Theo - t3.gg", "tier": 2, "expertiseTags": ["harness"] },
+    { "id": "UCc_MDTh8kLK4nGAcpvN5NGg", "name": "Underfitted (Santiago)", "tier": 2, "expertiseTags": ["rag", "agents"] },
+
+    { "id": "UCoOae5nYA7VqaXzerajD0lg", "name": "Ali Abdaal", "tier": 3, "expertiseTags": [] },
+    { "id": "UC0oGarQW2lE5PxhGoQAKV7Q", "name": "AssemblyAI", "tier": 3, "expertiseTags": ["rag"] },
+    { "id": "UC8butISFwT-Wl7EV0hUK0BQ", "name": "freeCodeCamp", "tier": 3, "expertiseTags": ["rag", "agents"] },
+    { "id": "UCV0qA-eDDICsRR9rPcnG7tw", "name": "Joma Tech", "tier": 3, "expertiseTags": [] },
+    { "id": "UC4JX40jDee_tINbkjycV4Sg", "name": "Tech with Tim", "tier": 3, "expertiseTags": ["agents"] },
+    { "id": "UC0RhatS1pyxInC00YKjjBqQ", "name": "Neural Breakdown with AVB", "tier": 3, "expertiseTags": ["rag"] },
+    { "id": "UCXUPKJO5MZQN11PqgIvyuvQ", "name": "Andrej Karpathy", "tier": 1, "expertiseTags": [] },
+    { "id": "UC1yBKRuGpC1tSM73A0ZjYjQ", "name": "Simon Willison", "tier": 2, "expertiseTags": ["claude", "harness"] },
+    { "id": "UCuuGPW3-wN5G7yWIV-qLhmg", "name": "Prompt Engineering", "tier": 3, "expertiseTags": ["rag", "agents"] }
+  ]
+}

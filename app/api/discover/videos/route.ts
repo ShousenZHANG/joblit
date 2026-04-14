@@ -6,6 +6,7 @@ import type {
   VideoCategory,
   VideosResponse,
 } from "@/app/(app)/discover/types";
+import trustedChannelsConfig from "@/lib/shared/trustedChannels.config.json";
 
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 const VALID_CATEGORIES: VideoCategory[] = [
@@ -26,7 +27,8 @@ function daysAgoISO(n: number): string {
   return d.toISOString();
 }
 
-// Per-category search query banks. "all" merges deduped union of others.
+// ── Category query banks + relevance keyword sets ─────────
+
 const CATEGORY_QUERIES: Record<Exclude<VideoCategory, "all">, string[]> = {
   claude: [
     "Claude AI tutorial",
@@ -63,6 +65,39 @@ const CATEGORY_QUERIES: Record<Exclude<VideoCategory, "all">, string[]> = {
   ],
 };
 
+/**
+ * Keywords the title+description must plausibly contain for a video to be
+ * "relevant" to each category. Used for secondary relevance filtering —
+ * YouTube relevance ranking is loose, this catches obvious off-topic matches.
+ */
+const CATEGORY_KEYWORDS: Record<Exclude<VideoCategory, "all">, string[]> = {
+  claude: ["claude", "anthropic", "sonnet", "opus", "haiku"],
+  anthropic: ["anthropic", "claude", "constitutional ai"],
+  rag: [
+    "rag",
+    "retrieval",
+    "vector",
+    "embedding",
+    "chroma",
+    "pinecone",
+    "pgvector",
+    "qdrant",
+    "weaviate",
+  ],
+  agents: [
+    "agent",
+    "agentic",
+    "autonomous",
+    "tool use",
+    "function call",
+    "langgraph",
+    "crewai",
+    "autogen",
+  ],
+  mcp: ["mcp", "model context protocol"],
+  harness: ["harness", "coding agent", "claude code", "cursor", "cline", "aider"],
+};
+
 function queriesForCategory(cat: VideoCategory): string[] {
   if (cat === "all") {
     const seen = new Set<string>();
@@ -80,27 +115,56 @@ function queriesForCategory(cat: VideoCategory): string[] {
   return CATEGORY_QUERIES[cat];
 }
 
-// Hand-curated trusted creator/channel IDs (YouTube channelId, starts with UC).
-// Add more over time. Membership boosts ranking but does not gate inclusion.
-const TRUSTED_CHANNEL_IDS = new Set<string>([
-  "UCrDwWp7EBBv4NwvScIpBDOA", // Anthropic
-  "UCawZsQWqfGSbCI5yjkdVkTA", // Matthew Berman
-  "UCT2x4v1qY7Pdh4hN4Wq3GAA", // Sam Witteveen
-  "UCJxV-MfgTjK_X-vfPmZpHvA", // Hamel Husain (parlance-labs)
-  "UCKelCK4ZaO6HeEI1KQjqzWA", // All About AI
-  "UCtxCXg-UvSnTKPOzLH4wJaQ", // Coding in Public
-  "UCi-g4cjqGV7jvU8aeSuj0jQ", // Greg Kamradt
-  "UCxgkN3luQgLQOd_L7tbOdhQ", // AI Jason
-  "UC2WmuBuFq6gL08QYG-JjXKw", // Wes Roth
-  "UCvWoRowK2zL5J5wwjqeyqzg", // IndyDevDan
-  "UCnyqZ8DqgRBxOyqUUKtt-Vg", // David Ondrej
-  "UCWv7vMbMWH4-V0ZXdmDpPBA", // Programming with Mosh (general but high quality)
-  "UCt53yWQpvm9wWpaCFp8X8MA", // Cole Medin
-  "UCa-vrCLQHviTOVnEKDOdetQ", // LangChain
-  "UC9OZ7BfqEW9CW4eU0AsAKKw", // LlamaIndex
-]);
+// ── Trusted channel lookup ────────────────────────────────
 
-// ── YouTube API helpers ──────────────────────────────────
+interface TrustedChannel {
+  id: string;
+  name: string;
+  tier: 1 | 2 | 3;
+  expertiseTags: string[];
+}
+
+const TRUSTED_CHANNEL_MAP: Map<string, TrustedChannel> = (() => {
+  const map = new Map<string, TrustedChannel>();
+  const list =
+    (trustedChannelsConfig as { channels?: TrustedChannel[] }).channels ?? [];
+  for (const ch of list) map.set(ch.id, ch);
+  return map;
+})();
+
+// ── Relevance scoring ─────────────────────────────────────
+
+/**
+ * Keyword-overlap relevance score (0-1). Counts distinct category keywords
+ * found in title+description; saturating at 3 matches = 1.0.
+ */
+function scoreRelevance(
+  text: string,
+  category: VideoCategory,
+): number {
+  if (category === "all") {
+    // For "all", take max across all category keyword sets so a video
+    // clearly about one topic scores well.
+    let best = 0;
+    for (const cat of Object.keys(CATEGORY_KEYWORDS) as Exclude<
+      VideoCategory,
+      "all"
+    >[]) {
+      best = Math.max(best, scoreRelevance(text, cat));
+    }
+    return best;
+  }
+  const keywords = CATEGORY_KEYWORDS[category];
+  const haystack = text.toLowerCase();
+  let hits = 0;
+  for (const kw of keywords) {
+    if (haystack.includes(kw)) hits++;
+    if (hits >= 3) break;
+  }
+  return Math.min(hits / 3, 1);
+}
+
+// ── YouTube API helpers ───────────────────────────────────
 
 async function searchYouTube(
   query: string,
@@ -116,7 +180,7 @@ async function searchYouTube(
   url.searchParams.set("publishedAfter", publishedAfter);
   url.searchParams.set("maxResults", String(maxResults));
   url.searchParams.set("relevanceLanguage", "en");
-  url.searchParams.set("videoDuration", "medium"); // 4-20 min
+  url.searchParams.set("videoDuration", "medium");
   url.searchParams.set("key", apiKey);
 
   const res = await fetch(url.toString(), {
@@ -142,14 +206,12 @@ interface RawVideo {
   durationSeconds: number;
 }
 
-// ISO 8601 duration (PT1H2M3S) → seconds
 function parseISODuration(iso: string): number {
   const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
   if (!m) return 0;
-  const h = Number(m[1] ?? 0);
-  const min = Number(m[2] ?? 0);
-  const s = Number(m[3] ?? 0);
-  return h * 3600 + min * 60 + s;
+  return (
+    Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0)
+  );
 }
 
 async function fetchVideoStats(
@@ -161,7 +223,6 @@ async function fetchVideoStats(
   url.searchParams.set("part", "statistics,snippet,contentDetails");
   url.searchParams.set("id", videoIds.join(","));
   url.searchParams.set("key", apiKey);
-
   const res = await fetch(url.toString(), {
     signal: AbortSignal.timeout(8000),
   });
@@ -179,7 +240,7 @@ async function fetchVideoStats(
     viewCount: Number(item.statistics?.viewCount) || 0,
     likeCount: Number(item.statistics?.likeCount) || 0,
     publishedAt: item.snippet?.publishedAt ?? "",
-    description: (item.snippet?.description ?? "").slice(0, 200),
+    description: item.snippet?.description ?? "",
     durationSeconds: parseISODuration(item.contentDetails?.duration ?? ""),
   }));
 }
@@ -189,7 +250,6 @@ async function fetchChannelSubscribers(
   apiKey: string,
 ): Promise<Map<string, number>> {
   if (channelIds.length === 0) return new Map();
-  // YouTube /channels supports up to 50 IDs per call
   const out = new Map<string, number>();
   for (let i = 0; i < channelIds.length; i += 50) {
     const batch = channelIds.slice(i, i + 50);
@@ -212,14 +272,15 @@ async function fetchChannelSubscribers(
   return out;
 }
 
-// ── Pipeline ─────────────────────────────────────────────
+// ── Pipeline ──────────────────────────────────────────────
+
+const RELEVANCE_THRESHOLD = 0.33; // need at least 1 category keyword hit
 
 async function fetchYouTube(category: VideoCategory): Promise<VideoItem[]> {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) return [];
 
   const queries = queriesForCategory(category);
-  // Fewer per-query results for "all" to keep quota in check
   const perQuery = category === "all" ? 4 : 6;
   const publishedAfter = daysAgoISO(30);
 
@@ -241,27 +302,47 @@ async function fetchYouTube(category: VideoCategory): Promise<VideoItem[]> {
   const stats = await fetchVideoStats(uniqueIds.slice(0, 50), apiKey);
   if (stats.length === 0) return [];
 
-  const channelIds = Array.from(new Set(stats.map((s) => s.channelId).filter(Boolean)));
+  const channelIds = Array.from(
+    new Set(stats.map((s) => s.channelId).filter(Boolean)),
+  );
   const subsByChannel = await fetchChannelSubscribers(channelIds, apiKey);
 
-  return stats.map((s) => ({
-    id: s.id,
-    title: s.title,
-    url: `https://www.youtube.com/watch?v=${s.id}`,
-    thumbnailUrl: s.thumbnailUrl,
-    channelName: s.channelName,
-    channelId: s.channelId,
-    channelSubscriberCount: subsByChannel.get(s.channelId) ?? 0,
-    isTrusted: TRUSTED_CHANNEL_IDS.has(s.channelId),
-    viewCount: s.viewCount,
-    likeCount: s.likeCount,
-    publishedAt: s.publishedAt,
-    description: s.description,
-    durationSeconds: s.durationSeconds,
-  }));
+  const enriched: VideoItem[] = stats.map((s) => {
+    const trusted = TRUSTED_CHANNEL_MAP.get(s.channelId);
+    const relevance = scoreRelevance(
+      `${s.title} ${s.description}`,
+      category,
+    );
+    return {
+      id: s.id,
+      title: s.title,
+      url: `https://www.youtube.com/watch?v=${s.id}`,
+      thumbnailUrl: s.thumbnailUrl,
+      channelName: s.channelName,
+      channelId: s.channelId,
+      channelSubscriberCount: subsByChannel.get(s.channelId) ?? 0,
+      isTrusted: Boolean(trusted),
+      trustTier: (trusted?.tier ?? 0) as 0 | 1 | 2 | 3,
+      expertiseTags: trusted?.expertiseTags ?? [],
+      viewCount: s.viewCount,
+      likeCount: s.likeCount,
+      publishedAt: s.publishedAt,
+      description: s.description.slice(0, 300),
+      durationSeconds: s.durationSeconds,
+      relevanceScore: relevance,
+    };
+  });
+
+  // Secondary relevance filter — drop clearly off-topic results.
+  // Trusted channels get a grace pass (still filter but with looser bar) so
+  // high-authority creators don't get pruned over keyword mismatch.
+  return enriched.filter((v) => {
+    const threshold = v.isTrusted ? RELEVANCE_THRESHOLD * 0.5 : RELEVANCE_THRESHOLD;
+    return v.relevanceScore >= threshold;
+  });
 }
 
-// ── Route ───────────────────────────────────────────────
+// ── Route ─────────────────────────────────────────────────
 
 function parseCategory(raw: string | null): VideoCategory {
   const v = (raw ?? "all").toLowerCase();
