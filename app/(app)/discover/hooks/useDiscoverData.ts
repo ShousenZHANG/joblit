@@ -1,5 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import type { TrendingResponse, VideosResponse } from "../types";
+import type {
+  TrendingResponse,
+  VideosResponse,
+  VideoCategory,
+} from "../types";
 
 export function useTrendingRepos(period: "weekly" | "monthly" = "weekly") {
   return useQuery<TrendingResponse>({
@@ -17,11 +21,17 @@ export function useTrendingRepos(period: "weekly" | "monthly" = "weekly") {
   });
 }
 
-export function useVideos() {
+/**
+ * Fetch videos for a single category. Sort is applied client-side from the
+ * cached candidate pool — switching sort never re-hits the YouTube API.
+ */
+export function useVideos(category: VideoCategory = "all") {
   return useQuery<VideosResponse>({
-    queryKey: ["discover-videos"],
+    queryKey: ["discover-videos", category],
     queryFn: async () => {
-      const res = await fetch("/api/discover/videos");
+      const res = await fetch(
+        `/api/discover/videos?category=${encodeURIComponent(category)}`,
+      );
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
         throw new Error(json?.error ?? "Failed to load videos");

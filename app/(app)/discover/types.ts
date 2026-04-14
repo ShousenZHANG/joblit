@@ -11,15 +11,31 @@ export interface TrendingRepo {
   pushedAt: string;
 }
 
+export type VideoCategory =
+  | "all"
+  | "claude"
+  | "anthropic"
+  | "rag"
+  | "agents"
+  | "mcp"
+  | "harness";
+
+export type VideoSort = "trending" | "latest" | "most_viewed";
+
 export interface VideoItem {
   id: string;
   title: string;
   url: string;
   thumbnailUrl: string;
   channelName: string;
+  channelId: string;
+  channelSubscriberCount: number;
+  isTrusted: boolean;
   viewCount: number;
+  likeCount: number;
   publishedAt: string;
   description: string;
+  durationSeconds: number;
 }
 
 export interface TrendingResponse {

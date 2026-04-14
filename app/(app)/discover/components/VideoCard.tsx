@@ -1,4 +1,4 @@
-import { Play, Eye } from "lucide-react";
+import { Play, Eye, ThumbsUp, BadgeCheck } from "lucide-react";
 import type { VideoItem } from "../types";
 import { relativeTime, formatCount } from "../utils";
 
@@ -10,6 +10,7 @@ export function VideoCard({ item }: { item: VideoItem }) {
         href={item.url}
         target="_blank"
         rel="noopener noreferrer"
+        aria-label={item.title}
         className="relative block aspect-video overflow-hidden bg-slate-100"
       >
         {item.thumbnailUrl ? (
@@ -22,6 +23,16 @@ export function VideoCard({ item }: { item: VideoItem }) {
         ) : (
           <div className="flex h-full items-center justify-center">
             <Play className="h-8 w-8 text-slate-300" />
+          </div>
+        )}
+        {/* Trusted creator badge — top-right corner of thumbnail */}
+        {item.isTrusted && (
+          <div
+            className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-emerald-600/95 px-2 py-0.5 text-[10px] font-semibold text-white shadow-md backdrop-blur"
+            title="Verified AI creator"
+          >
+            <BadgeCheck className="h-3 w-3" />
+            <span>Verified</span>
           </div>
         )}
         {/* Play button overlay */}
@@ -43,18 +54,26 @@ export function VideoCard({ item }: { item: VideoItem }) {
           {item.title}
         </a>
 
-        {/* Channel + meta */}
+        {/* Meta row */}
         <div className="flex items-center gap-2 text-xs text-slate-400 sm:text-[11px]">
           <span className="truncate font-medium text-slate-500">
             {item.channelName}
           </span>
           <span className="shrink-0">{relativeTime(item.publishedAt)}</span>
-          {item.viewCount > 0 && (
-            <span className="ml-auto flex shrink-0 items-center gap-0.5 font-medium text-slate-500">
-              <Eye className="h-3 w-3" />
-              {formatCount(item.viewCount)}
-            </span>
-          )}
+          <span className="ml-auto flex shrink-0 items-center gap-2">
+            {item.viewCount > 0 && (
+              <span className="flex items-center gap-0.5 font-medium text-slate-500">
+                <Eye className="h-3 w-3" />
+                {formatCount(item.viewCount)}
+              </span>
+            )}
+            {item.likeCount > 0 && (
+              <span className="flex items-center gap-0.5 font-medium text-slate-500">
+                <ThumbsUp className="h-3 w-3" />
+                {formatCount(item.likeCount)}
+              </span>
+            )}
+          </span>
         </div>
       </div>
     </article>
