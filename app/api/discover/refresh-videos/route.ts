@@ -21,7 +21,7 @@ import {
 //     when CRON_SECRET is set. We accept that or a matching shared secret
 //     via the x-cron-secret header (for local / manual triggers).
 
-const DB_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const DB_CACHE_TTL_MS = 25 * 60 * 60 * 1000; // 25 h — slightly > 24h cron
 
 export const maxDuration = 60;
 

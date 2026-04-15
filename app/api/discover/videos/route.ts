@@ -15,7 +15,7 @@ import {
   writeCache,
 } from "@/lib/server/discover/videoCache";
 
-const DB_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 h — matches cron cadence
+const DB_CACHE_TTL_MS = 25 * 60 * 60 * 1000; // 25 h — slightly > 24h cron cadence so cache never expires between runs
 
 const VALID_CATEGORIES: VideoCategory[] = [
   "all",
