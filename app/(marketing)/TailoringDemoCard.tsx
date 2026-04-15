@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, useCallback, useRef } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import { ArrowDown, Search, MapPin, BarChart3 } from "lucide-react";
@@ -51,8 +51,6 @@ export function TailoringDemoCard() {
 
   // Crossfade
   const [visible, setVisible] = useState(true);
-
-  const cancelledRef = useRef(false);
 
   const typeText = useCallback(
     async (
@@ -114,55 +112,60 @@ export function TailoringDemoCard() {
   useEffect(() => {
     if (noMotion || reduceMotion === null) return;
 
-    cancelledRef.current = false;
+    // Per-effect-instance cancellation token. Each effect run gets its own
+    // object so that cleanup from a stale run can never "un-cancel" a live
+    // run — the old shared cancelledRef caused a race where the new effect
+    // set it back to false, reviving pending timeouts from the old loop
+    // and producing mixed EN/CN output.
+    const cancelled = { current: false };
 
     const wait = (ms: number) =>
       new Promise<void>((resolve) => {
         setTimeout(() => {
-          if (!cancelledRef.current) resolve();
+          if (!cancelled.current) resolve();
         }, ms);
       });
 
     async function runLoop() {
       let tailorIdx = 0;
 
-      while (!cancelledRef.current) {
+      while (!cancelled.current) {
         // --- Scene A: Job Search ---
         resetSearchState();
         resetTailorState();
         setScene("search");
         setVisible(true);
         await wait(300);
-        if (cancelledRef.current) return;
+        if (cancelled.current) return;
 
         // Type search title
-        await typeText(searchTitle, setSearchTyped, cancelledRef);
-        if (cancelledRef.current) return;
+        await typeText(searchTitle, setSearchTyped, cancelled);
+        if (cancelled.current) return;
 
         // Show tags
         await wait(200);
-        if (cancelledRef.current) return;
+        if (cancelled.current) return;
         setShowTags(true);
         await wait(500);
-        if (cancelledRef.current) return;
+        if (cancelled.current) return;
 
         // Shimmer
         setShowShimmer(true);
         await wait(1000);
-        if (cancelledRef.current) return;
+        if (cancelled.current) return;
         setShowShimmer(false);
 
         // Counter
         setShowCounter(true);
-        await animateCounter(128, 800, cancelledRef);
-        if (cancelledRef.current) return;
+        await animateCounter(128, 800, cancelled);
+        if (cancelled.current) return;
         await wait(1700);
-        if (cancelledRef.current) return;
+        if (cancelled.current) return;
 
         // Crossfade out
         setVisible(false);
         await wait(400);
-        if (cancelledRef.current) return;
+        if (cancelled.current) return;
 
         // --- Scene B: AI Tailoring (cycle through 3 pairs) ---
         for (let pairIdx = 0; pairIdx < 3; pairIdx++) {
@@ -172,25 +175,25 @@ export function TailoringDemoCard() {
           setScene("tailor");
           setVisible(true);
           await wait(300);
-          if (cancelledRef.current) return;
+          if (cancelled.current) return;
 
           // Show JD
           setShowJd(true);
           await wait(500);
-          if (cancelledRef.current) return;
+          if (cancelled.current) return;
 
           // Type output
-          await typeText(sequences[idx].output, setTailorTyped, cancelledRef);
-          if (cancelledRef.current) return;
+          await typeText(sequences[idx].output, setTailorTyped, cancelled);
+          if (cancelled.current) return;
 
           // Pause
           await wait(2000);
-          if (cancelledRef.current) return;
+          if (cancelled.current) return;
 
           // Crossfade out (except after last pair, handled below)
           setVisible(false);
           await wait(400);
-          if (cancelledRef.current) return;
+          if (cancelled.current) return;
         }
 
         tailorIdx = (tailorIdx + 3) % sequences.length;
@@ -199,7 +202,7 @@ export function TailoringDemoCard() {
 
     runLoop();
     return () => {
-      cancelledRef.current = true;
+      cancelled.current = true;
     };
   }, [
     noMotion,
