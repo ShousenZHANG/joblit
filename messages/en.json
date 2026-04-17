@@ -203,8 +203,7 @@
     "fetching": "Fetching…",
     "suggestions": "Suggestions",
     "popular": "Popular",
-    "cnCity": "City",
-    "cnPlatforms": "Platforms",
+    "cnSources": "Sources",
     "cnExcludeKeywords": "Exclude keywords",
     "excludeApplied": "Exclude applied"
   },

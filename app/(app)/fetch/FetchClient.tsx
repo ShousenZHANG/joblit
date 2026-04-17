@@ -48,13 +48,12 @@ const COMMON_TITLES = [
   "Security Engineer",
 ];
 
-const CN_CITIES = ["北京", "上海", "深圳", "杭州", "成都", "南京", "广州", "武汉", "西安", "苏州", "长沙", "郑州", "天津", "重庆"];
-
-const CN_PLATFORMS = [
-  { value: "boss", label: "Boss直聘" },
-  { value: "lagou", label: "拉勾" },
-  { value: "liepin", label: "猎聘" },
-  { value: "zhilian", label: "智联招聘" },
+// New CN source list — aggregator-based, no cookie auth, no Bing proxy.
+// See lib/server/cnFetch for implementation details.
+const CN_SOURCES = [
+  { value: "v2ex", label: "V2EX 酷工作" },
+  { value: "github", label: "GitHub 招聘 Repos" },
+  { value: "rsshub", label: "自建 RSSHub" },
 ];
 
 const CN_COMMON_TITLES = [
@@ -81,8 +80,7 @@ export function FetchClient() {
   const [location, setLocation] = useState("Sydney, New South Wales, Australia");
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const market = useMarket();
-  const [cnCity, setCnCity] = useState("上海");
-  const [cnPlatforms, setCnPlatforms] = useState<string[]>(["boss", "lagou", "liepin", "zhilian"]);
+  const [cnSources, setCnSources] = useState<string[]>(["v2ex", "github"]);
   const [cnExcludeKeywords, setCnExcludeKeywords] = useState("");
   const [hoursOld, setHoursOld] = useState(48);
   const [smartExpand, setSmartExpand] = useState(true);
@@ -188,8 +186,7 @@ export function FetchClient() {
       ? {
           market: "CN",
           queries,
-          city: cnCity,
-          platforms: cnPlatforms,
+          sources: cnSources,
           excludeKeywords: cnExcludeKeywords
             .split(/[,，]/)
             .map((s) => s.trim())
@@ -507,41 +504,38 @@ export function FetchClient() {
             </Popover>
           </div>
           <div className="space-y-2">
-            <Label>{t("cnCity")}</Label>
-            <Select value={cnCity} onValueChange={setCnCity}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {CN_CITIES.map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>{t("cnPlatforms")}</Label>
+            <Label>{t("cnSources")}</Label>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="h-10 w-full justify-between rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 shadow-none">
-                  {cnPlatforms.length ? `已选 (${cnPlatforms.length})` : "选择平台"}
+                <Button
+                  variant="outline"
+                  className="h-10 w-full justify-between rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 shadow-none"
+                >
+                  {cnSources.length ? `已选 (${cnSources.length})` : "选择来源"}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-64">
-                {CN_PLATFORMS.map((p) => (
+                {CN_SOURCES.map((s) => (
                   <DropdownMenuCheckboxItem
-                    key={p.value}
-                    checked={cnPlatforms.includes(p.value)}
+                    key={s.value}
+                    checked={cnSources.includes(s.value)}
                     onSelect={(e) => e.preventDefault()}
                     onCheckedChange={(checked) => {
-                      setCnPlatforms((prev) =>
-                        checked ? [...prev, p.value] : prev.filter((v) => v !== p.value)
+                      setCnSources((prev) =>
+                        checked
+                          ? [...prev, s.value]
+                          : prev.filter((v) => v !== s.value),
                       );
                     }}
                   >
-                    {p.label}
+                    {s.label}
                   </DropdownMenuCheckboxItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+            <p className="text-[11px] text-slate-500">
+              V2EX 主源稳定免费；RSSHub 需自行配置 RSSHUB_URL。
+            </p>
           </div>
           <div className="space-y-2">
             <Label>{t("cnExcludeKeywords")}</Label>

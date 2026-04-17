@@ -203,8 +203,7 @@
     "fetching": "抓取中…",
     "suggestions": "建议",
     "popular": "热门",
-    "cnCity": "城市",
-    "cnPlatforms": "平台",
+    "cnSources": "数据来源",
     "cnExcludeKeywords": "排除关键词",
     "excludeApplied": "排除已投递"
   },

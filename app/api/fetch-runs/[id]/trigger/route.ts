@@ -167,14 +167,48 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     return NextResponse.json({ error: "INVALID_STATE", status: txResult.status }, { status: 409 });
   }
 
-  // txResult.kind === "locked" — we hold the dispatch slot, send GitHub dispatch.
+  // txResult.kind === "locked" — we hold the dispatch slot.
+  //
+  // CN market: the aggregator pipeline runs in-process (Vercel serverless)
+  // via /api/cron/fetch-cn. The GitHub Actions dispatch path + cn-fetch.yml
+  // + Python scraper are retired. We just call the cron endpoint directly
+  // with CRON_SECRET so it processes this user immediately instead of
+  // waiting for the next scheduled sweep.
+  //
+  // AU market: still dispatches to GitHub Actions (JobSpy pipeline).
+  if (txResult.market === "CN") {
+    await prisma.fetchRun.updateMany({
+      where: { id: runId, userId, status: "QUEUED" },
+      data: {
+        queries: withDispatchMeta(txResult.queries, {
+          inFlightAt: undefined,
+          dispatchedAt: new Date().toISOString(),
+        }),
+      },
+    });
+
+    const secret = process.env.CRON_SECRET;
+    const webUrl = process.env.JOBLIT_WEB_URL;
+    if (secret && webUrl) {
+      // Fire-and-forget — the sweep itself updates the FetchRun status.
+      fetch(`${webUrl.replace(/\/$/, "")}/api/cron/fetch-cn`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${secret}`,
+          "Content-Type": "application/json",
+        },
+      }).catch(() => {
+        // Cron will still pick it up on next scheduled tick.
+      });
+    }
+
+    return NextResponse.json({ ok: true });
+  }
+
   const owner = envOrThrow("GITHUB_OWNER");
   const repo = envOrThrow("GITHUB_REPO");
   const token = envOrThrow("GITHUB_TOKEN");
-  const workflow =
-    txResult.market === "CN"
-      ? process.env.GITHUB_CN_WORKFLOW_FILE || "cn-fetch.yml"
-      : process.env.GITHUB_WORKFLOW_FILE || "jobspy-fetch.yml";
+  const workflow = process.env.GITHUB_WORKFLOW_FILE || "jobspy-fetch.yml";
   const ref = process.env.GITHUB_REF || "master";
 
   const ghRes = await fetch(

@@ -62,16 +62,19 @@ const AUSchema = z
     path: ["title"],
   });
 
+// CN schema v2 — replaces the legacy Boss/Lagou/Liepin/Zhilian scraper path.
+// See lib/server/cnFetch/ for the new multi-source aggregator. `platforms`
+// is dropped (cookie-auth scrape retired), `city` is dropped (aggregator
+// output isn't city-partitioned), salary filters are dropped (handled by
+// normalize step). The new knob is `sources`.
 const CNSchema = z.object({
   market: z.literal("CN"),
   queries: z.array(z.string().min(1)).min(1),
-  city: z.string().min(1),
-  platforms: z
-    .array(z.enum(["boss", "lagou", "liepin", "zhilian"]))
-    .min(1),
+  sources: z
+    .array(z.enum(["v2ex", "github", "rsshub"]))
+    .optional()
+    .default(["v2ex", "github"]),
   excludeKeywords: z.array(z.string()).optional().default([]),
-  salaryMin: z.coerce.number().optional(),
-  salaryMax: z.coerce.number().optional(),
 });
 
 export async function POST(req: Request) {
@@ -108,13 +111,10 @@ export async function POST(req: Request) {
         queries: {
           title,
           queries: d.queries,
-          city: d.city,
-          platforms: d.platforms,
+          sources: d.sources,
           excludeKeywords: d.excludeKeywords,
-          salaryMin: d.salaryMin,
-          salaryMax: d.salaryMax,
         },
-        location: d.city,
+        location: null,
         hoursOld: null,
         resultsWanted: null,
         includeFromQueries: false,
