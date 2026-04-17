@@ -32,16 +32,6 @@ export type JobItem = {
   matchBreakdown?: MatchBreakdown | null;
 };
 
-export type MinScoreTier = "any" | "fair" | "good" | "strong";
-
-/** Same thresholds as `lib/shared/matchScore.ts` scoreToTier. */
-export const MIN_SCORE_FOR_TIER: Record<MinScoreTier, number> = {
-  any: 0,
-  fair: 45,
-  good: 65,
-  strong: 80,
-};
-
 export type JobsResponse = {
   items: JobItem[];
   nextCursor: string | null;

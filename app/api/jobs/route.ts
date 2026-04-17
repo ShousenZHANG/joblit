@@ -6,7 +6,6 @@ import type { SessionContext } from "@/lib/server/auth/requireSession";
 import { unauthorizedError } from "@/lib/server/api/errorResponse";
 import { canonicalizeJobUrl } from "@/lib/shared/canonicalizeJobUrl";
 import { listJobs } from "@/lib/server/jobs/jobListService";
-import { MIN_SCORE_FOR_TIER } from "@/app/(app)/jobs/types";
 
 export const runtime = "nodejs";
 
@@ -20,7 +19,6 @@ const QuerySchema = z.object({
   sort: z.enum(["newest", "oldest"]).optional().default("newest"),
   market: z.enum(["AU", "CN"]).optional(),
   platform: z.string().trim().min(1).max(80).optional(),
-  minScoreTier: z.enum(["any", "fair", "good", "strong"]).optional(),
 });
 
 export async function GET(req: Request) {
@@ -43,11 +41,7 @@ export async function GET(req: Request) {
     );
   }
 
-  const { minScoreTier, ...rest } = parsed.data;
-  const result = await listJobs(userId, {
-    ...rest,
-    minScore: minScoreTier ? MIN_SCORE_FOR_TIER[minScoreTier] : undefined,
-  });
+  const result = await listJobs(userId, parsed.data);
 
   if (ifNoneMatch && ifNoneMatch === result.etag) {
     return new NextResponse(null, {

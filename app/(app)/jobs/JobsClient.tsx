@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import "highlight.js/styles/github.css";
-import { CheckSquare, MapPin, Plus, RefreshCw, Search, SlidersHorizontal, Square, Target, Trash2, X } from "lucide-react";
+import { CheckSquare, MapPin, Plus, RefreshCw, Search, SlidersHorizontal, Square, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -44,7 +44,6 @@ export function JobsClient({
   const t = useTranslations("jobs");
   const tc = useTranslations("common");
   const tn = useTranslations("nav");
-  const tMatch = useTranslations("matchScore");
   const { runId: fetchRunId, status: fetchStatus, importedCount: fetchImportedCount } = useFetchStatus();
   const guideHighlightClass =
     "ring-2 ring-emerald-400 ring-offset-2 ring-offset-white shadow-[0_0_0_4px_rgba(16,185,129,0.18)]";
@@ -55,7 +54,6 @@ export function JobsClient({
     statusFilter, setStatusFilter,
     locationFilter, setLocationFilter,
     jobLevelFilter, setJobLevelFilter,
-    minScoreTier, setMinScoreTier,
     market,
     queryString,
   } = useJobFilters();
@@ -213,7 +211,6 @@ export function JobsClient({
     locationFilter !== "ALL",
     jobLevelFilter !== "ALL",
     statusFilter !== "ALL",
-    minScoreTier !== "good",
   ].filter(Boolean).length;
 
   function triggerSearch() {
@@ -508,21 +505,6 @@ export function JobsClient({
                   <SelectItem value="REJECTED">{t("statusRejected")}</SelectItem>
                 </SelectContent>
               </Select>
-              <Select
-                value={minScoreTier}
-                onValueChange={(v) => { startTransition(() => { setMinScoreTier(v as typeof minScoreTier); }); }}
-              >
-                <SelectTrigger className="h-8 text-xs" aria-label={tMatch("filterLabel")}>
-                  <Target className="mr-1 h-3 w-3 shrink-0 text-slate-400" aria-hidden />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="strong">{tMatch("filterOption.strong")}</SelectItem>
-                  <SelectItem value="good">{tMatch("filterOption.good")}</SelectItem>
-                  <SelectItem value="fair">{tMatch("filterOption.fair")}</SelectItem>
-                  <SelectItem value="any">{tMatch("filterOption.any")}</SelectItem>
-                </SelectContent>
-              </Select>
               {market === "AU" && (
                 <Button
                   type="button"
@@ -545,7 +527,7 @@ export function JobsClient({
             detail panels share the remaining viewport height. Each Select
             keeps an accessible name via SelectTrigger's `aria-label` fallback
             through placeholder text. */}
-        <div className="hidden lg:grid lg:grid-cols-[1.6fr_1fr_0.8fr_0.8fr_0.9fr_auto] lg:items-center lg:gap-3">
+        <div className="hidden lg:grid lg:grid-cols-[1.6fr_1fr_0.9fr_0.9fr_auto] lg:items-center lg:gap-3">
           <JobSearchBar
             q={q}
             onQueryChange={setQ}
@@ -598,23 +580,6 @@ export function JobsClient({
               <SelectItem value="REJECTED">{t("statusRejected")}</SelectItem>
             </SelectContent>
           </Select>
-          <div className="relative" data-testid="jobs-match-filter">
-            <Target className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Select
-              value={minScoreTier}
-              onValueChange={(v) => { startTransition(() => { setMinScoreTier(v as typeof minScoreTier); }); }}
-            >
-              <SelectTrigger className="h-9 pl-9 text-sm" aria-label={tMatch("filterLabel")}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="strong">{tMatch("filterOption.strong")}</SelectItem>
-                <SelectItem value="good">{tMatch("filterOption.good")}</SelectItem>
-                <SelectItem value="fair">{tMatch("filterOption.fair")}</SelectItem>
-                <SelectItem value="any">{tMatch("filterOption.any")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           <div className="flex items-center gap-2">
             {market === "AU" && (
               <Button

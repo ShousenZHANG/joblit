@@ -146,11 +146,13 @@ describe("JobsClient", () => {
     expect(fitCalls).toHaveLength(0);
   });
 
-  it("shows the filter toolbar with match filter", () => {
+  it("renders the filter toolbar with a keyword search input", () => {
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
     const toolbar = screen.getAllByTestId("jobs-toolbar")[0];
-    expect(within(toolbar).getByTestId("jobs-match-filter")).toBeInTheDocument();
+    expect(toolbar).toBeInTheDocument();
+    // Toolbar must expose at least the keyword search input for filtering.
+    expect(within(toolbar).getAllByRole("textbox").length).toBeGreaterThan(0);
   });
 
   it("hides setup and batch progress controls on jobs toolbar", async () => {

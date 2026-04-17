@@ -25,8 +25,6 @@ export type JobListQuery = {
   sort: "newest" | "oldest";
   market?: "AU" | "CN";
   platform?: string;
-  /** Inclusive minimum matchScore (0-100). Jobs with null scores always pass. */
-  minScore?: number;
 };
 
 export type JobListItem = {
@@ -62,20 +60,8 @@ type JobWhereClause = Exclude<
 >;
 
 function buildWhereClause(userId: string, query: JobListQuery): JobWhereClause {
-  const { status, q, location, jobLevel, market, minScore } = query;
+  const { status, q, location, jobLevel, market } = query;
   const andClauses: JobWhereClause[] = [];
-
-  if (typeof minScore === "number" && minScore > 0) {
-    // Jobs with null matchScore (not yet scored) are preserved so the user
-    // can still see them while rescore catches up. Only scored jobs that
-    // fall below the tier are hidden.
-    andClauses.push({
-      OR: [
-        { matchScore: null },
-        { matchScore: { gte: minScore } },
-      ],
-    });
-  }
 
   if (q) {
     andClauses.push({
@@ -198,7 +184,6 @@ export async function listJobs(userId: string, query: JobListQuery): Promise<Job
     `jobLevel=${query.jobLevel ?? ""}`,
     `sort=${sort}`,
     `market=${query.market ?? ""}`,
-    `minScore=${query.minScore ?? 0}`,
   ].join("|");
 
   const etag = buildJobsListEtag({

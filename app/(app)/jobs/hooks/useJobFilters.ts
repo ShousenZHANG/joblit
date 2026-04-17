@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useMarket } from "@/hooks/useMarket";
-import type { JobStatus, MinScoreTier } from "../types";
+import type { JobStatus } from "../types";
 
 // Sort is hardcoded to "newest". The user-facing "Posted: newest/oldest"
 // toggle was removed — data is always sorted newest-first, matching the
@@ -14,14 +14,11 @@ export function useJobFilters() {
   const [statusFilter, setStatusFilter] = useState<JobStatus | "ALL">("ALL");
   const [locationFilter, setLocationFilter] = useState("ALL");
   const [jobLevelFilter, setJobLevelFilter] = useState("ALL");
-  // "filter, don't spray" default — hide weak matches out of the gate. Users
-  // who want the raw firehose can still tap the "All" option.
-  const [minScoreTier, setMinScoreTier] = useState<MinScoreTier>("good");
   const pageSize = 10;
 
   const filters = useMemo(
-    () => ({ statusFilter, locationFilter, jobLevelFilter, market, minScoreTier, pageSize }),
-    [statusFilter, locationFilter, jobLevelFilter, market, minScoreTier, pageSize],
+    () => ({ statusFilter, locationFilter, jobLevelFilter, market, pageSize }),
+    [statusFilter, locationFilter, jobLevelFilter, market, pageSize],
   );
   const debouncedSelectFilters = useDebouncedValue(filters, 120);
   const debouncedQ = useDebouncedValue(q, 250);
@@ -43,9 +40,6 @@ export function useJobFilters() {
     if (debouncedFilters.jobLevelFilter !== "ALL") sp.set("jobLevel", debouncedFilters.jobLevelFilter);
     sp.set("market", debouncedFilters.market);
     sp.set("sort", SORT_ORDER);
-    if (debouncedFilters.minScoreTier !== "any") {
-      sp.set("minScoreTier", debouncedFilters.minScoreTier);
-    }
     return sp.toString();
   }, [debouncedFilters]);
 
@@ -59,8 +53,6 @@ export function useJobFilters() {
     setLocationFilter,
     jobLevelFilter,
     setJobLevelFilter,
-    minScoreTier,
-    setMinScoreTier,
     pageSize,
     market,
     queryString,

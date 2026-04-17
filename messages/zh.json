@@ -178,18 +178,11 @@
     "skillDelta": "命中 {matched} / {total} 技能",
     "notScored": "尚未评分",
     "notScoredDesc": "保存简历后点击「重新评分」查看匹配度。",
-    "filterLabel": "匹配度筛选",
     "tier": {
       "strong": "强",
       "good": "良好",
       "fair": "一般",
       "weak": "弱"
-    },
-    "filterOption": {
-      "strong": "强 80+",
-      "good": "良好 65+",
-      "fair": "一般 45+",
-      "any": "全部"
     }
   },
   "fetch": {

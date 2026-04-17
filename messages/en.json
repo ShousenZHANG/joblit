@@ -178,18 +178,11 @@
     "skillDelta": "{matched} of {total} skills",
     "notScored": "Not scored yet",
     "notScoredDesc": "Save a resume profile and click \"Rescore all\" to compute fit.",
-    "filterLabel": "Match filter",
     "tier": {
       "strong": "Strong",
       "good": "Good",
       "fair": "Fair",
       "weak": "Weak"
-    },
-    "filterOption": {
-      "strong": "Strong 80+",
-      "good": "Good 65+",
-      "fair": "Fair 45+",
-      "any": "All"
     }
   },
   "fetch": {
