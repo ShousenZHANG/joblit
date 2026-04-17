@@ -4,11 +4,14 @@
 
 1. UI creates FetchRun: `POST /api/fetch-runs` (market AU or CN).
 2. UI triggers: `POST /api/fetch-runs/:id/trigger`.
-3. API dispatches GitHub Actions workflow:
-   - AU: `jobspy-fetch.yml` (Python `tools/fetcher/run_jobspy.py`)
-   - CN: `cn-fetch.yml` (Python `tools/fetcher/run_cn_fetcher.py`)
-4. Worker pulls config: `GET /api/fetch-runs/:id/config` (guarded by secret).
-5. Worker imports jobs: `POST /api/admin/import` (guarded by `x-import-secret`).
+3. Dispatch path depends on market:
+   - AU: GitHub Actions `jobspy-fetch.yml` (Python `tools/fetcher/run_jobspy.py`)
+   - CN: in-process Vercel cron endpoint `/api/cron/fetch-cn`
+     (no GitHub Actions, no cookie auth — aggregates V2EX / GitHub / RSSHub
+     via `lib/server/cnFetch/`)
+4. AU worker pulls config: `GET /api/fetch-runs/:id/config` (guarded by secret).
+5. AU worker imports jobs: `POST /api/admin/import` (guarded by `x-import-secret`).
+   CN pipeline writes directly via Prisma inside the cron route.
 6. Jobs appear in `GET /api/jobs` and the `/jobs` UI.
 
 ## 2) Manual Add job (Seek) in AU

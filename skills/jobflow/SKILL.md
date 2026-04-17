@@ -30,7 +30,8 @@ Job-search command center: fetch → triage → tailor CV/CL → export PDFs.
 - UI pages: `app/(app)/` (`jobs`, `fetch`, `resume`, `resume/rules`)
 - API routes: `app/api/` (`jobs`, `fetch-runs`, `applications`, `application-batches`, `prompt-rules`, `admin/import`)
 - Server modules: `lib/server/` (AI prompts, LaTeX/PDF, persistence)
-- Fetch workers: `tools/fetcher/` (`run_jobspy.py`, `run_cn_fetcher.py`, `cn_platforms/`)
+- Fetch workers: AU via `tools/fetcher/run_jobspy.py` (GitHub Actions);
+  CN via `lib/server/cnFetch/` (in-process, Vercel cron)
 - Schema: `prisma/schema.prisma`
 
 More: `references/PATHS.md` and `references/FLOWS.md`.

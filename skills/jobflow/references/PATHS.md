@@ -31,9 +31,12 @@ Quick index of the most commonly used locations.
 - `lib/server/latex/*` — LaTeX render for resume/cover
 - `prisma/schema.prisma` — DB models
 
-## Fetch workers (Python)
+## Fetch workers
 
-- `tools/fetcher/run_jobspy.py` — JobSpy runner (currently LinkedIn)
-- `tools/fetcher/run_cn_fetcher.py` — CN platforms runner
-- `tools/fetcher/cn_platforms/*` — boss/lagou/liepin/zhilian + search proxy utilities
+- `tools/fetcher/run_jobspy.py` — AU JobSpy runner (GitHub Actions)
+- `lib/server/cnFetch/` — CN aggregator (in-process, Vercel cron):
+  - `adapters/v2exJobs.ts`, `adapters/githubJobs.ts`, `adapters/rsshub.ts`
+  - `normalize.ts`, `runCnFetch.ts`
+  - Invoked by `/api/cron/fetch-cn` and `/api/fetch-runs/[id]/trigger`.
+  - Retired legacy: `tools/fetcher/run_cn_fetcher.py` + `cn_platforms/*`.
 
