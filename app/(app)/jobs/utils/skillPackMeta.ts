@@ -2,7 +2,7 @@ import type { ExternalPromptMeta } from "../types";
 
 const SKILL_PACK_META_STORAGE_KEY = "joblit.skill-pack-meta.v1";
 
-export function isValidPromptMeta(value: unknown): value is ExternalPromptMeta {
+function isValidPromptMeta(value: unknown): value is ExternalPromptMeta {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
   return (
@@ -18,7 +18,7 @@ export function isValidPromptMeta(value: unknown): value is ExternalPromptMeta {
   );
 }
 
-export function readSavedSkillPackMeta(): ExternalPromptMeta | null {
+function readSavedSkillPackMeta(): ExternalPromptMeta | null {
   if (typeof window === "undefined") return null;
   const raw = window.localStorage.getItem(SKILL_PACK_META_STORAGE_KEY);
   if (!raw) return null;

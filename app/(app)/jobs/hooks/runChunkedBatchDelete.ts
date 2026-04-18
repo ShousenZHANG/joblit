@@ -28,7 +28,7 @@ export interface RunChunkedBatchDeleteOptions {
   }) => void;
 }
 
-export const DEFAULT_CHUNK_SIZE = 25;
+const DEFAULT_CHUNK_SIZE = 25;
 
 /**
  * Orchestrates a bulk-delete user action by splitting the selection into

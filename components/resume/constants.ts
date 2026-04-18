@@ -1,11 +1,5 @@
 import type { ResumeBasics, ResumeLink, ResumeExperience, ResumeProject, ResumeEducation, ResumeSkillGroup } from "./types";
 
-export const stepsEN = ["Personal info", "Summary", "Experience", "Projects", "Education", "Skills"] as const;
-export const stepsCN = ["个人信息", "工作经历", "项目经历", "教育背景", "技能/证书及其他"] as const;
-
-export type StepLabelEN = typeof stepsEN[number];
-export type StepLabelCN = typeof stepsCN[number];
-
 export const emptyBasics: ResumeBasics = {
   fullName: "",
   title: "",

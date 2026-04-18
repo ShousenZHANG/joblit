@@ -1,4 +1,3 @@
-import { arrayMove } from "@dnd-kit/sortable";
 import type { ReorderSection } from "./types";
 
 export function hasContent(value: string): boolean {
@@ -37,5 +36,3 @@ export function remapFocusedIndex(currentIndex: number, from: number, to: number
   if (to < from && currentIndex >= to && currentIndex < from) return currentIndex + 1;
   return currentIndex;
 }
-
-export { arrayMove };
