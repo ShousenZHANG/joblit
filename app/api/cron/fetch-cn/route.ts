@@ -8,14 +8,18 @@ import type { CnSource } from "@/lib/server/cnFetch/types";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// Cron-driven CN job fetcher. Replaces the retired GitHub Actions Python
+// On-demand CN job fetcher. Replaces the retired GitHub Actions Python
 // scraper (tools/fetcher/run_cn_fetcher.py) — see the v2ex / github /
 // rsshub adapters in lib/server/cnFetch for the actual source code.
 //
-// Auth:
-//   - Vercel Cron sends Authorization: Bearer $CRON_SECRET automatically
-//     when CRON_SECRET is set.
-//   - Manual triggers: pass x-cron-secret header with the same value.
+// Invocation model:
+//   - NOT scheduled on Vercel Cron. Vercel's Hobby plan caps cron jobs at
+//     once-per-day, and we already spend our one slot on the Discover
+//     video refresh. CN fetches run instead on user demand: clicking
+//     "Start Fetch" on /fetch hits /api/fetch-runs/[id]/trigger which,
+//     for market=CN, fires a fire-and-forget POST to this endpoint.
+//   - Manual triggers (curl / operator): pass Authorization: Bearer
+//     $CRON_SECRET or x-cron-secret header.
 //
 // Pipeline per user (market="CN" with any FetchRun on record):
 //   1. runCnFetch() — calls every enabled source in parallel, normalizes,
@@ -28,7 +32,7 @@ export const maxDuration = 60;
 //      progress tracking.
 //
 // Per-user work is wrapped in try/catch so one user's failure does not
-// abort the cron sweep.
+// abort the overall sweep.
 
 const USER_SWEEP_CAP = 50;
 const USER_DEDUP_WINDOW_MS = 3 * 60 * 60 * 1000; // skip users fetched < 3h ago

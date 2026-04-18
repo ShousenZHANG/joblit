@@ -4,10 +4,6 @@
     {
       "path": "/api/discover/refresh-videos",
       "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/cron/fetch-cn",
-      "schedule": "0 */4 * * *"
     }
   ]
 }
