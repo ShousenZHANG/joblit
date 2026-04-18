@@ -35,6 +35,42 @@ export interface NormalizedCnJob {
 const MAX_FIELD_LEN = 200;
 const MAX_DESC_LEN = 8000;
 
+// Common Chinese job-title suffixes. Chinese recruitment posts almost
+// always use short-form titles ("前端", "后端", "全栈") inside bracket
+// tags like [Acme][前端][上海], but users type the long formal name
+// ("全栈开发工程师") into the keyword box. Without expansion the include
+// filter drops everything. We strip trailing suffixes so a query like
+// "全栈开发工程师" also matches "全栈" anywhere in title/description.
+const CN_TITLE_SUFFIXES = [
+  "开发工程师",
+  "高级工程师",
+  "工程师",
+  "开发",
+  "程序员",
+  "技术专家",
+  "架构师",
+];
+
+/** Expand each query by adding the suffix-stripped base term. */
+export function expandCnQueries(queries: readonly string[]): string[] {
+  const out = new Set<string>();
+  for (const raw of queries) {
+    const q = raw.trim();
+    if (!q) continue;
+    out.add(q);
+    for (const suffix of CN_TITLE_SUFFIXES) {
+      if (q.endsWith(suffix) && q.length > suffix.length) {
+        const base = q.slice(0, -suffix.length).trim();
+        if (base.length >= 2) {
+          out.add(base);
+          break; // strip only the longest matching suffix
+        }
+      }
+    }
+  }
+  return Array.from(out);
+}
+
 function tightenString(
   value: string | null | undefined,
   max = MAX_FIELD_LEN,
@@ -61,13 +97,14 @@ export function normalizeCnJobs(
   raw: RawCnJob[],
   options: NormalizeOptions = {},
 ): NormalizedCnJob[] {
-  const queries = (options.queries ?? []).map((q) => q.trim()).filter(Boolean);
+  const queries = expandCnQueries(options.queries ?? []);
   const excludeKeywords = (options.excludeKeywords ?? [])
     .map((k) => k.trim())
     .filter(Boolean);
 
   const seen = new Set<string>();
-  const out: NormalizedCnJob[] = [];
+  const strict: NormalizedCnJob[] = []; // passes keyword include filter
+  const relaxed: NormalizedCnJob[] = []; // passes exclude filter only
 
   for (const r of raw) {
     const canonical = canonicalizeJobUrl(r.jobUrl ?? "");
@@ -81,21 +118,15 @@ export function normalizeCnJobs(
     const location = tightenString(r.location);
     const description = tightenString(r.description, MAX_DESC_LEN);
 
-    // Keyword filter: if user supplied queries, require at least one match
-    // in title/description (Chinese + English both work via substring).
-    if (queries.length > 0) {
-      const haystack = `${title} ${description ?? ""}`;
-      if (!containsAny(haystack, queries)) continue;
-    }
-
-    // Exclusion filter: drop on any exclude hit.
+    // Exclusion filter: drop on any exclude hit — applies to BOTH strict
+    // and relaxed pools (never surface explicitly-excluded content).
     if (excludeKeywords.length > 0) {
       const haystack = `${title} ${description ?? ""} ${company ?? ""}`;
       if (containsAny(haystack, excludeKeywords)) continue;
     }
 
     seen.add(canonical);
-    out.push({
+    const normalized: NormalizedCnJob = {
       jobUrl: canonical,
       title,
       company,
@@ -105,8 +136,23 @@ export function normalizeCnJobs(
       description,
       market: "CN",
       source: r.source,
-    });
+    };
+
+    relaxed.push(normalized);
+
+    // Keyword match: at least one expanded query token appears in
+    // title+description (case-insensitive substring). If no queries were
+    // given, the strict pool equals the relaxed pool.
+    if (queries.length === 0) {
+      strict.push(normalized);
+      continue;
+    }
+    const haystack = `${title} ${description ?? ""}`;
+    if (containsAny(haystack, queries)) strict.push(normalized);
   }
 
-  return out;
+  // Soft fallback: on thin aggregator days the strict pool can be empty
+  // even for reasonable queries. Return the full deduped+excluded pool so
+  // the user still sees something actionable instead of "Imported 0".
+  return strict.length > 0 ? strict : relaxed;
 }
