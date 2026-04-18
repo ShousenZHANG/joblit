@@ -18,6 +18,7 @@ export function LocaleSwitcher() {
   function switchLocale(newLocale: string) {
     if (newLocale === optimisticLocale) return;
     localStorage.setItem("locale", newLocale);
+    // eslint-disable-next-line react-hooks/immutability -- setting document.cookie is the browser's prescribed API for persisting cookies from a client component.
     document.cookie = `locale=${newLocale};path=/;max-age=31536000;SameSite=Lax`;
     startTransition(() => {
       setOptimisticLocale(newLocale);
