@@ -5,8 +5,10 @@ import { unauthorizedError } from "@/lib/server/api/errorResponse";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import type { Prisma } from "@/lib/generated/prisma";
+import { processCnFetchRun } from "@/lib/server/cnFetch/processFetchRun";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const ParamsSchema = z.object({ id: z.string().uuid() });
 const IDEMPOTENCY_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
@@ -170,10 +172,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   // txResult.kind === "locked" — we hold the dispatch slot.
   //
   // CN market: the aggregator pipeline runs in-process (Vercel serverless)
-  // via /api/cron/fetch-cn. The GitHub Actions dispatch path + cn-fetch.yml
-  // + Python scraper are retired. We just call the cron endpoint directly
-  // with CRON_SECRET so it processes this user immediately instead of
-  // waiting for the next scheduled sweep.
+  // via processCnFetchRun. The GitHub Actions dispatch path + cn-fetch.yml
+  // + Python scraper are retired, and we no longer hop through an internal
+  // fetch() to /api/cron/fetch-cn (that path silently dropped work when
+  // JOBLIT_WEB_URL was unset and left the UI pinned in "Queued"). We run
+  // the fetch here and return once it completes; the trigger function has
+  // a 60s budget which is ample for the aggregator's typical 5-15s pull.
   //
   // AU market: still dispatches to GitHub Actions (JobSpy pipeline).
   if (txResult.market === "CN") {
@@ -187,22 +191,17 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       },
     });
 
-    const secret = process.env.CRON_SECRET;
-    const webUrl = process.env.JOBLIT_WEB_URL;
-    if (secret && webUrl) {
-      // Fire-and-forget — the sweep itself updates the FetchRun status.
-      fetch(`${webUrl.replace(/\/$/, "")}/api/cron/fetch-cn`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${secret}`,
-          "Content-Type": "application/json",
-        },
-      }).catch(() => {
-        // Cron will still pick it up on next scheduled tick.
-      });
-    }
-
-    return NextResponse.json({ ok: true });
+    const result = await processCnFetchRun(userId, {
+      id: runId,
+      queries: txResult.queries,
+    });
+    return NextResponse.json({
+      ok: result.error === undefined,
+      imported: result.imported,
+      scored: result.scored,
+      discovered: result.discovered,
+      ...(result.error ? { error: result.error } : {}),
+    });
   }
 
   const owner = envOrThrow("GITHUB_OWNER");
