@@ -73,9 +73,10 @@ export function Nav() {
         className={
           "flex w-full items-center justify-between rounded-full px-4 py-2 transition-all duration-300 sm:px-5 " +
           (scrolled
-            ? "border border-border/60 bg-background/80 shadow-md backdrop-blur-xl"
+            ? "scale-[0.97] border border-border/60 bg-background/80 shadow-md backdrop-blur-xl"
             : "bg-transparent")
         }
+        style={{ transformOrigin: "top center" }}
       >
         <Link
           href="/"

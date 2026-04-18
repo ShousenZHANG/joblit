@@ -191,8 +191,9 @@ export function Hero() {
         className="relative mx-auto mt-16 max-w-5xl"
       >
         <div className="relative overflow-hidden rounded-3xl border border-border/60 bg-background shadow-[var(--shadow-elevated-emerald)]">
-          {/* App mock: 3-col grid */}
-          <div className="grid grid-cols-[180px_260px_1fr] min-h-[360px]">
+          {/* App mock: phones get a single stacked column; ≥sm gets
+              list + detail (sidebar hidden); ≥md gets the full 3-col. */}
+          <div className="grid min-h-[360px] grid-cols-1 sm:grid-cols-[260px_1fr] md:grid-cols-[180px_260px_1fr]">
             {/* Sidebar */}
             <div className="hidden border-r border-border/50 bg-muted/30 p-4 text-sm md:block">
               <div className="mb-4 flex items-center gap-2 text-xs font-semibold">
@@ -211,12 +212,22 @@ export function Hero() {
                     47
                   </span>
                 </li>
-                {["Fetch", "Resume", "Discover", "Extension"].map((item) => (
+                {[
+                  { label: "Fetch", badge: 3 },
+                  { label: "Resume", badge: 2 },
+                  { label: "Discover", badge: null },
+                  { label: "Extension", badge: null },
+                ].map((item) => (
                   <li
-                    key={item}
-                    className="rounded-md px-2 py-1.5 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+                    key={item.label}
+                    className="flex items-center justify-between rounded-md px-2 py-1.5 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
                   >
-                    {item}
+                    <span>{item.label}</span>
+                    {item.badge !== null && (
+                      <span className="rounded bg-muted px-1.5 text-[10px]">
+                        {item.badge}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>

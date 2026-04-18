@@ -104,6 +104,7 @@
 
 @theme inline {
   /* Expose the landing tokens as Tailwind v4 utility-aware variables. */
+  --font-serif: var(--font-instrument-serif), "Instrument Serif", Georgia, serif;
   --color-brand-blue: var(--brand-blue);
   --color-brand-emerald: var(--brand-emerald);
   --color-brand-emerald-50: var(--brand-emerald-50);
