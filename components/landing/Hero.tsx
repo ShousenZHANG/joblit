@@ -305,7 +305,7 @@ export function Hero() {
                   {["React", "TypeScript", "Next.js", "A11y"].map((tag) => (
                     <span
                       key={tag}
-                      className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-brand-emerald-800 ring-1 ring-brand-emerald-200"
+                      className="rounded-full bg-background px-2 py-0.5 text-[10px] font-medium text-brand-emerald-800 ring-1 ring-brand-emerald-200"
                     >
                       ✓ {tag}
                     </span>

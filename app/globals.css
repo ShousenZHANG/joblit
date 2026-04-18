@@ -55,8 +55,13 @@
   --brand-emerald: #059669;
   --brand-emerald-50: #ecfdf5;
   --brand-emerald-100: #d1fae5;
+  --brand-emerald-200: #a7f3d0;
+  --brand-emerald-500: #10b981;
   --brand-emerald-600: #059669;
   --brand-emerald-700: #047857;
+  --brand-emerald-800: #065f46;
+  --brand-emerald-900: #064e3b;
+  --brand-emerald-950: #022c22;
 
   /* Match tier palette (cards, badges) */
   --tier-strong-bg: #d1fae5;
@@ -100,6 +105,13 @@
   --tier-fair-fg: #fde68a;
   --tier-weak-bg: rgba(71, 85, 105, 0.25);
   --tier-weak-fg: #cbd5e1;
+  /* Emerald ramp dark overrides: light tints become subtle dark emerald
+     surfaces so landing-page accents stop reading as bright green patches
+     on the dark background. Mid/dark emeralds stay vivid for contrast. */
+  --brand-emerald-50: rgba(6, 95, 70, 0.18);
+  --brand-emerald-100: rgba(6, 95, 70, 0.32);
+  --brand-emerald-200: rgba(16, 185, 129, 0.38);
+  --brand-emerald-800: #a7f3d0;
 }
 
 @theme inline {
@@ -109,8 +121,13 @@
   --color-brand-emerald: var(--brand-emerald);
   --color-brand-emerald-50: var(--brand-emerald-50);
   --color-brand-emerald-100: var(--brand-emerald-100);
+  --color-brand-emerald-200: var(--brand-emerald-200);
+  --color-brand-emerald-500: var(--brand-emerald-500);
   --color-brand-emerald-600: var(--brand-emerald-600);
   --color-brand-emerald-700: var(--brand-emerald-700);
+  --color-brand-emerald-800: var(--brand-emerald-800);
+  --color-brand-emerald-900: var(--brand-emerald-900);
+  --color-brand-emerald-950: var(--brand-emerald-950);
   --color-tier-strong-bg: var(--tier-strong-bg);
   --color-tier-strong-fg: var(--tier-strong-fg);
   --color-tier-good-bg: var(--tier-good-bg);

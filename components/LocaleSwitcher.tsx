@@ -27,7 +27,7 @@ export function LocaleSwitcher() {
   }
 
   return (
-    <div className="flex gap-0.5 rounded-full bg-slate-100 p-0.5">
+    <div className="flex gap-0.5 rounded-full bg-muted p-0.5">
       {options.map((opt) => (
         <button
           key={opt.value}
@@ -35,8 +35,8 @@ export function LocaleSwitcher() {
           onClick={() => switchLocale(opt.value)}
           className={`rounded-full px-3 py-1 text-xs font-semibold tracking-wide transition-all duration-200 ${
             optimisticLocale === opt.value
-              ? "bg-slate-900 text-white shadow-sm"
-              : "text-slate-500 hover:text-slate-700"
+              ? "bg-foreground text-background shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
           }${isPending ? " opacity-70" : ""}`}
         >
           {opt.label}
