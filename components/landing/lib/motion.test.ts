@@ -44,12 +44,19 @@ describe("landing motion variants", () => {
     expect(show.transition.delay).toBe(0.8);
   });
 
-  it("revealOnce fires once with a margin so tall sections trigger early", () => {
+  it("revealOnce fires once when a meaningful slice of the section is visible", () => {
     expect(revealOnce.initial).toBe("hidden");
     expect(revealOnce.whileInView).toBe("show");
     expect(revealOnce.viewport.once).toBe(true);
-    // A negative top margin trips the observer BEFORE the user sees the
-    // raw "hidden" state — crucial on sections taller than the viewport.
-    expect(revealOnce.viewport.margin).toBeDefined();
+    // amount must be low enough that tall cards trigger while still
+    // entering viewport (avoid the late-reveal trap where the section
+    // is mostly visible before any animation runs), but high enough
+    // to feel intentional on short rows.
+    expect(revealOnce.viewport.amount).toBeGreaterThan(0);
+    expect(revealOnce.viewport.amount).toBeLessThanOrEqual(0.25);
+    // Positive bottom margin expands the observer root *below* the
+    // viewport so the reveal pre-fires before the element is on-screen,
+    // producing the "rises into view" feel instead of a late pop.
+    expect(revealOnce.viewport.margin).toMatch(/0px 0px \d+%/);
   });
 });

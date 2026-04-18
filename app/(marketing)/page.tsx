@@ -60,7 +60,11 @@ export default function MarketingPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <main className="relative flex flex-col overflow-x-hidden bg-background text-foreground">
+      {/* Atmosphere: fixed gradient mesh rendered behind the page. Kept
+          outside <main> so no ancestor transform/overflow establishes a
+          new containing block for the fixed Nav inside <main>. */}
+      <div aria-hidden className="landing-atmos" />
+      <main className="relative z-[1] flex flex-col bg-transparent text-foreground">
         <Nav />
         <Hero />
         <LogoBar />

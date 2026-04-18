@@ -11,7 +11,7 @@ export const fadeUp: Variants = {
   show: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.65, ease: SPRING_EASE },
+    transition: { duration: 0.8, ease: SPRING_EASE },
   },
 };
 
@@ -49,16 +49,22 @@ export const floatIn = (delay: number): Variants => ({
 });
 
 /**
- * Standard reveal-on-scroll props. Spread onto any `<motion.*>` element
- * to reveal it once when the section crosses the viewport bottom. The
- * negative top margin fires the observer ~10% before the element enters
- * the viewport so long sections (Features, Pricing) never sit visible
- * in their "hidden" state — critical for the reveal to read as smooth
- * on trackpad scroll. `amount: 0.15` keeps the trigger honest on very
- * tall cards without waiting until the user has already scrolled past.
+ * Standard reveal-on-scroll props. Spread onto any `<motion.*>` element.
+ *
+ * Tuned by trial against Landing.html's reference: `amount: 0.12` keeps
+ * the threshold low enough that tall sections (Features, Pricing) don't
+ * sit visible in their hidden state, and a POSITIVE bottom margin
+ * expands the IntersectionObserver root 15% below the viewport so the
+ * reveal *pre-fires* while the element is still scrolling in — the
+ * user sees a confident "rises into view" instead of a late pop after
+ * they've already parsed the content.
+ *
+ * Note: Motion's rootMargin follows CSS convention where POSITIVE values
+ * EXPAND the root; an earlier iteration used negative values which
+ * silently delayed reveals (looked like animations were dead).
  */
 export const revealOnce = {
   initial: "hidden",
   whileInView: "show",
-  viewport: { once: true, amount: 0.15, margin: "0px 0px -10% 0px" },
+  viewport: { once: true, amount: 0.12, margin: "0px 0px 15% 0px" },
 } as const;
