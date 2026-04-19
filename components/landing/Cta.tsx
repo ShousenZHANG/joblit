@@ -5,6 +5,7 @@ import { ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import { fadeUp, useReveal } from "./lib/motion";
+import { useCtaHref } from "./lib/useCtaHref";
 
 // Final CTA banner. The radial emerald gradients at the corners match
 // Landing.html's `.cta-banner` — implemented as Tailwind gradient utilities
@@ -13,6 +14,7 @@ import { fadeUp, useReveal } from "./lib/motion";
 export function Cta() {
   const reveal = useReveal();
   const t = useTranslations("landing.cta");
+  const cta = useCtaHref();
   return (
     <motion.section
       {...reveal}
@@ -39,8 +41,13 @@ export function Cta() {
 
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
-              href="/login"
-              className="inline-flex h-11 items-center gap-2 rounded-full bg-foreground px-6 text-sm font-semibold text-background transition-transform hover:-translate-y-px hover:bg-foreground/90"
+              href={cta.href}
+              aria-disabled={cta.disabled}
+              tabIndex={cta.disabled ? -1 : undefined}
+              className={
+                "inline-flex h-11 items-center gap-2 rounded-full bg-foreground px-6 text-sm font-semibold text-background transition-transform hover:-translate-y-px hover:bg-foreground/90 " +
+                (cta.disabled ? "pointer-events-none opacity-70" : "")
+              }
             >
               {t("primary")}
               <ArrowRight className="h-4 w-4" aria-hidden />

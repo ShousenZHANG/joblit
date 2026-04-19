@@ -14,6 +14,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { fadeUp, floatIn, stagger } from "./lib/motion";
+import { useCtaHref } from "./lib/useCtaHref";
 
 // Run a layout effect on the client, noop on the server, so we can
 // flip the mount flag before first paint (React would log a warning
@@ -90,6 +91,7 @@ export function Hero() {
   const reduced = useReducedMotion();
   const [activeRow, setActiveRow] = useState(0);
   const t = useTranslations("landing.hero");
+  const cta = useCtaHref();
   // Two-phase mount: SSR paints the hidden state (opacity 0 / y 40),
   // then the layout effect flips `mounted` true on the first client
   // frame so framer-motion runs a real transition from hidden → show.
@@ -194,8 +196,13 @@ export function Hero() {
         className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row"
       >
         <Link
-          href="/login"
-          className="inline-flex h-11 items-center gap-2 rounded-full bg-foreground px-6 text-sm font-semibold text-background transition-transform hover:-translate-y-px hover:bg-foreground/90"
+          href={cta.href}
+          aria-disabled={cta.disabled}
+          tabIndex={cta.disabled ? -1 : undefined}
+          className={
+            "inline-flex h-11 items-center gap-2 rounded-full bg-foreground px-6 text-sm font-semibold text-background transition-transform hover:-translate-y-px hover:bg-foreground/90 " +
+            (cta.disabled ? "pointer-events-none opacity-70" : "")
+          }
         >
           {t("startFree")}
           <ArrowRight className="h-4 w-4" aria-hidden />
