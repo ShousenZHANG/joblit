@@ -28,9 +28,12 @@ function formatLocalDateTime(iso: string, timeZone: string | null) {
 }
 
 const STATUS_CLASS: Record<JobStatus, string> = {
-  NEW: "bg-emerald-100 text-emerald-700",
-  APPLIED: "bg-sky-100 text-sky-700",
-  REJECTED: "bg-slate-200 text-slate-600",
+  // Theme-token driven so statuses read correctly in dark mode.
+  // brand-emerald + tier-* tokens are overridden in the .dark block
+  // of globals.css so these pills stay legible on dark surfaces.
+  NEW: "bg-brand-emerald-100 text-brand-emerald-700",
+  APPLIED: "bg-[theme(colors.tier-good-bg)] text-[theme(colors.tier-good-fg)]",
+  REJECTED: "bg-muted text-muted-foreground",
 };
 
 function JobListItemInner({
@@ -55,12 +58,12 @@ function JobListItemInner({
   return (
     <div role="listitem" aria-current={isActive ? "true" : undefined} aria-label={listLabel} className="w-full">
       <div
-        className={`joblit-list-item flex w-full items-start gap-0 rounded-2xl border border-l-4 border-slate-900/10 bg-white/80 text-left transition-all duration-200 ease-out hover:-translate-y-[1px] ${
+        className={`joblit-list-item flex w-full items-start gap-0 rounded-2xl border border-l-4 border-border/60 bg-background/80 text-left backdrop-blur-sm transition-all duration-200 ease-out hover:-translate-y-[1px] ${
           batchSelected
-            ? "border-l-emerald-500 bg-emerald-50/80 shadow-sm ring-1 ring-emerald-200"
+            ? "border-l-brand-emerald-500 bg-brand-emerald-50/70 shadow-sm ring-1 ring-brand-emerald-200/70"
             : isActive
-              ? "border-l-emerald-500 bg-emerald-50/60 shadow-sm"
-              : "border-l-transparent hover:border-slate-900/20 hover:bg-white"
+              ? "border-l-brand-emerald-500 bg-brand-emerald-50/50 shadow-sm"
+              : "border-l-transparent hover:border-border hover:bg-background"
         }`}
       >
         {batchMode && (
@@ -74,9 +77,9 @@ function JobListItemInner({
             aria-label={batchSelected ? `Deselect ${job.title}` : `Select ${job.title}`}
           >
             {batchSelected ? (
-              <CheckSquare className="h-[18px] w-[18px] text-emerald-600" />
+              <CheckSquare className="h-[18px] w-[18px] text-brand-emerald-600" />
             ) : (
-              <Square className="h-[18px] w-[18px] text-slate-300 transition-colors hover:text-slate-500" />
+              <Square className="h-[18px] w-[18px] text-muted-foreground/60 transition-colors hover:text-foreground/70" />
             )}
           </button>
         )}

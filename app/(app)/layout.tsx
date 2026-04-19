@@ -1,31 +1,19 @@
-import { Fredoka, Nunito } from "next/font/google";
-import { TopNav } from "./TopNav";
+import { AppNav } from "@/components/app-shell/AppNav";
 import { RouteTransition } from "../RouteTransition";
 import { GuideProvider } from "../GuideContext";
 
-const fredoka = Fredoka({
-  subsets: ["latin"],
-  variable: "--font-edu-display",
-  weight: ["400", "500", "600", "700"],
-});
-
-const nunito = Nunito({
-  subsets: ["latin"],
-  variable: "--font-edu-body",
-  weight: ["300", "400", "500", "600", "700"],
-});
-
+// App shell — landing-aligned chrome. Swaps the legacy TopNav + edu-bg
+// blobs for the shared AppNav pill + landing atmosphere gradient so the
+// authenticated area reads as the same product as the marketing page.
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className={`app-edu ${fredoka.variable} ${nunito.variable} relative grid h-dvh grid-rows-[auto_minmax(0,1fr)] overflow-x-hidden overflow-y-auto lg:overflow-hidden`}
-    >
-      <div className="edu-bg" />
-      <div className="edu-blob edu-blob--mint" />
-      <div className="edu-blob edu-blob--peach" />
+    <div className="relative grid h-dvh grid-rows-[auto_minmax(0,1fr)] overflow-x-hidden overflow-y-auto lg:overflow-hidden">
+      {/* Fixed gradient mesh behind the app (emerald/teal/amber wash,
+          dark-mode quieter variant). Same atmosphere as landing. */}
+      <div aria-hidden className="landing-atmos" />
       <GuideProvider>
-        <TopNav />
-        <div className="relative z-10 app-frame app-shell flex min-h-0 flex-col py-2 sm:py-3 md:py-4 lg:h-full">
+        <AppNav />
+        <div className="relative z-[1] app-frame app-shell flex min-h-0 flex-col py-3 sm:py-4 md:py-5 lg:h-full">
           <RouteTransition>{children}</RouteTransition>
         </div>
       </GuideProvider>

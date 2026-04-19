@@ -9,11 +9,29 @@ interface MatchScoreCardProps {
   breakdown: MatchBreakdown | null | undefined;
 }
 
+// Tier accent tokens resolve via the .dark overrides in globals.css so
+// the card chrome stays readable on both light and dark surfaces.
 const TIER_ACCENT: Record<MatchTier, { text: string; bg: string; border: string }> = {
-  strong: { text: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200" },
-  good:   { text: "text-teal-700",    bg: "bg-teal-50",    border: "border-teal-200"    },
-  fair:   { text: "text-amber-700",   bg: "bg-amber-50",   border: "border-amber-200"   },
-  weak:   { text: "text-slate-600",   bg: "bg-slate-50",   border: "border-slate-200"   },
+  strong: {
+    text: "text-brand-emerald-700",
+    bg: "bg-brand-emerald-50",
+    border: "border-brand-emerald-200",
+  },
+  good: {
+    text: "text-[theme(colors.tier-good-fg)]",
+    bg: "bg-[theme(colors.tier-good-bg)]",
+    border: "border-[theme(colors.tier-good-ring)]",
+  },
+  fair: {
+    text: "text-[theme(colors.tier-fair-fg)]",
+    bg: "bg-[theme(colors.tier-fair-bg)]",
+    border: "border-[theme(colors.tier-fair-ring)]",
+  },
+  weak: {
+    text: "text-[theme(colors.tier-weak-fg)]",
+    bg: "bg-[theme(colors.tier-weak-bg)]",
+    border: "border-[theme(colors.tier-weak-ring)]",
+  },
 };
 
 /**
@@ -29,9 +47,11 @@ export function MatchScoreCard({ score, breakdown }: MatchScoreCardProps) {
   // Unscored state — prompt the user to set up their resume.
   if (score === null || score === undefined || !breakdown) {
     return (
-      <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/60 px-3 py-2 text-xs text-slate-600">
-        <span className="font-medium text-slate-700">{t("notScored")}</span>
-        <span className="ml-1 text-slate-500">· {t("notScoredDesc")}</span>
+      <div className="rounded-lg border border-dashed border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">{t("notScored")}</span>
+        <span className="ml-1 text-muted-foreground">
+          · {t("notScoredDesc")}
+        </span>
       </div>
     );
   }
@@ -58,7 +78,7 @@ export function MatchScoreCard({ score, breakdown }: MatchScoreCardProps) {
           {tierLabel}
         </span>
         {total > 0 && (
-          <span className="ml-auto text-[11px] text-slate-500">
+          <span className="ml-auto text-[11px] text-muted-foreground">
             {t("skillDelta", {
               matched: matchedSkills.length,
               total,
@@ -67,13 +87,13 @@ export function MatchScoreCard({ score, breakdown }: MatchScoreCardProps) {
         )}
       </div>
 
-      {/* Inline pill flow — matched (green) then missing (amber) */}
+      {/* Inline pill flow — matched (emerald) then missing (amber tier) */}
       {total > 0 && (
         <div className="mt-1.5 flex flex-wrap gap-1">
           {matchedSkills.map((s) => (
             <span
               key={`m-${s}`}
-              className="inline-flex items-center gap-0.5 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-800"
+              className="inline-flex items-center gap-0.5 rounded-md bg-brand-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-brand-emerald-800"
               title={t("matched")}
             >
               <Check className="h-2.5 w-2.5" aria-hidden />
@@ -83,7 +103,7 @@ export function MatchScoreCard({ score, breakdown }: MatchScoreCardProps) {
           {missingSkills.map((s) => (
             <span
               key={`x-${s}`}
-              className="inline-flex items-center gap-0.5 rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800"
+              className="inline-flex items-center gap-0.5 rounded-md bg-[theme(colors.tier-fair-bg)] px-1.5 py-0.5 text-[11px] font-medium text-[theme(colors.tier-fair-fg)]"
               title={t("missing")}
             >
               <X className="h-2.5 w-2.5" aria-hidden />

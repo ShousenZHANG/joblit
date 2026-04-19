@@ -18,9 +18,9 @@ import { parseExperienceGate } from "../utils/experienceParser";
 import { MatchScoreCard } from "./MatchScoreCard";
 
 const statusClass: Record<JobStatus, string> = {
-  NEW: "bg-emerald-100 text-emerald-700",
-  APPLIED: "bg-sky-100 text-sky-700",
-  REJECTED: "bg-slate-200 text-slate-600",
+  NEW: "bg-brand-emerald-100 text-brand-emerald-700",
+  APPLIED: "bg-[theme(colors.tier-good-bg)] text-[theme(colors.tier-good-fg)]",
+  REJECTED: "bg-muted text-muted-foreground",
 };
 const statusLabel: Record<JobStatus, string> = {
   NEW: "New",
@@ -28,20 +28,26 @@ const statusLabel: Record<JobStatus, string> = {
   REJECTED: "Rejected",
 };
 
+// Theme-token prose styles so the JD body reads cleanly on both light
+// and dark surfaces. The prior slate-700/900 literals went invisible in
+// dark mode; muted-foreground and foreground pull from the CSS theme.
 const markdownStyles = {
-  heading: "text-lg font-semibold text-slate-900 border-t border-slate-100 pt-4 mt-4 first:border-0 first:mt-0 first:pt-0",
-  subheading: "text-base font-semibold text-slate-900 mt-3",
-  paragraph: "text-[15px] leading-relaxed text-slate-700",
-  list: "list-disc space-y-1.5 pl-5 text-[15px] text-slate-700",
-  listOrdered: "list-decimal space-y-1.5 pl-5 text-[15px] text-slate-700",
-  listItem: "text-[15px] leading-relaxed text-slate-700",
-  blockquote: "border-l-2 border-emerald-200 bg-emerald-50/40 px-4 py-2 text-sm text-slate-700 rounded-r-lg",
-  codeInline: "rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-800",
-  pre: "rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800 overflow-auto",
-  link: "text-emerald-700 underline-offset-4 hover:underline",
+  heading:
+    "text-lg font-semibold text-foreground border-t border-border/60 pt-4 mt-4 first:border-0 first:mt-0 first:pt-0",
+  subheading: "text-base font-semibold text-foreground mt-3",
+  paragraph: "text-[15px] leading-relaxed text-foreground/85",
+  list: "list-disc space-y-1.5 pl-5 text-[15px] text-foreground/85",
+  listOrdered: "list-decimal space-y-1.5 pl-5 text-[15px] text-foreground/85",
+  listItem: "text-[15px] leading-relaxed text-foreground/85",
+  blockquote:
+    "border-l-2 border-brand-emerald-200 bg-brand-emerald-50/40 px-4 py-2 text-sm text-foreground/85 rounded-r-lg",
+  codeInline:
+    "rounded bg-muted px-1.5 py-0.5 text-xs text-foreground/90",
+  pre: "rounded-lg border border-border/60 bg-muted/50 p-3 text-xs text-foreground/90 overflow-auto",
+  link: "text-brand-emerald-700 underline-offset-4 hover:underline",
   table: "w-full border-collapse text-sm",
-  th: "border border-slate-200 bg-slate-50 px-3 py-2 text-left font-semibold text-slate-900",
-  td: "border border-slate-200 px-3 py-2 text-slate-700",
+  th: "border border-border/60 bg-muted/50 px-3 py-2 text-left font-semibold text-foreground",
+  td: "border border-border/60 px-3 py-2 text-foreground/85",
 };
 
 interface JobDetailPanelProps {
@@ -106,7 +112,7 @@ export function JobDetailPanel({
         return (
           <mark
             key={`${part}-${index}`}
-            className="rounded-sm bg-emerald-50 px-1 py-0.5 font-medium text-emerald-800 ring-1 ring-emerald-200/50"
+            className="rounded-sm bg-brand-emerald-50 px-1 py-0.5 font-medium text-brand-emerald-800 ring-1 ring-brand-emerald-200/60"
           >
             {part}
           </mark>
@@ -131,8 +137,8 @@ export function JobDetailPanel({
       data-testid="jobs-details-panel"
       className={cn(
         "relative flex flex-col overflow-hidden backdrop-blur transition-shadow duration-200 ease-out",
-        "rounded-2xl border border-slate-200 bg-white/95 shadow-sm",
-        "lg:rounded-3xl lg:border-2 lg:border-slate-900/10 lg:bg-white/80 lg:shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] lg:hover:shadow-[0_24px_50px_-36px_rgba(15,23,42,0.38)]",
+        "rounded-2xl border border-border/70 bg-background/90 shadow-sm",
+        "lg:rounded-3xl lg:border-2 lg:border-border/50 lg:bg-background/85 lg:shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] lg:hover:shadow-[0_24px_50px_-36px_rgba(5,150,105,0.22)]",
         "h-[calc(100dvh-240px)] lg:h-auto lg:min-h-0 lg:flex-1",
         mobileTab !== "detail" && "hidden lg:flex",
       )}
@@ -163,7 +169,7 @@ export function JobDetailPanel({
                   disabled={updatingIds.has(selectedJob.id)}
                 >
                   <SelectTrigger
-                    className={`rounded-xl border-slate-200 bg-white shadow-sm ${
+                    className={`rounded-xl border-border bg-background shadow-sm ${
                       isAppliedSelected ? "h-9 w-full px-3 text-sm sm:w-[118px]" : "h-10 w-full sm:w-[132px]"
                     }`}
                   >
@@ -178,7 +184,7 @@ export function JobDetailPanel({
                 <Button
                   asChild
                   size="sm"
-                  className={`w-full justify-center rounded-xl border border-emerald-500 bg-emerald-500 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:border-emerald-600 hover:bg-emerald-600 active:translate-y-[1px] sm:w-auto ${
+                  className={`w-full justify-center rounded-xl border border-brand-emerald-500 bg-brand-emerald-500 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:border-brand-emerald-600 hover:bg-brand-emerald-600 active:translate-y-[1px] sm:w-auto ${
                     isAppliedSelected ? "h-9 px-3.5" : "h-10 px-4"
                   }`}
                 >
@@ -192,7 +198,7 @@ export function JobDetailPanel({
                   size="sm"
                   disabled={externalPromptLoading}
                   onClick={() => onGenerateResume(selectedJob)}
-                  className={`w-full justify-center rounded-xl border-slate-200 bg-white text-sm font-medium text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none sm:w-auto ${
+                  className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none sm:w-auto ${
                     isAppliedSelected ? "h-9 px-3.5" : "h-10 px-4"
                   } ${highlightGenerate ? guideHighlightClass : ""}`}
                   data-guide-highlight={highlightGenerate ? "true" : "false"}
@@ -206,7 +212,7 @@ export function JobDetailPanel({
                   size="sm"
                   disabled={externalPromptLoading}
                   onClick={() => onGenerateCover(selectedJob)}
-                  className={`w-full justify-center rounded-xl border-slate-200 bg-white text-sm font-medium text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none sm:w-auto ${
+                  className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none sm:w-auto ${
                     isAppliedSelected ? "h-9 px-3.5" : "h-10 px-4"
                   } ${highlightGenerate ? guideHighlightClass : ""}`}
                   data-guide-highlight={highlightGenerate ? "true" : "false"}
@@ -219,7 +225,7 @@ export function JobDetailPanel({
                     variant="outline"
                     size="sm"
                     asChild
-                    className={`w-full justify-center rounded-xl border-slate-200 bg-white text-sm font-medium text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 active:translate-y-[1px] sm:w-auto ${
+                    className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] sm:w-auto ${
                       isAppliedSelected ? "h-9 px-3.5" : "h-10 px-4"
                     }`}
                   >
@@ -233,7 +239,7 @@ export function JobDetailPanel({
                     variant="outline"
                     size="sm"
                     asChild
-                    className={`w-full justify-center rounded-xl border-slate-200 bg-white text-sm font-medium text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 active:translate-y-[1px] sm:w-auto ${
+                    className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] sm:w-auto ${
                       isAppliedSelected ? "h-9 px-3.5" : "h-10 px-4"
                     }`}
                   >
@@ -248,7 +254,7 @@ export function JobDetailPanel({
                   size="sm"
                   disabled={deletingIds.has(selectedJob.id)}
                   onClick={() => onDelete(selectedJob)}
-                  className={`w-full justify-center rounded-xl border-rose-200 bg-rose-50 text-sm font-medium text-rose-700 shadow-sm transition-all duration-200 hover:border-rose-300 hover:bg-rose-100 hover:text-rose-800 active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none sm:ml-auto sm:w-auto ${
+                  className={`w-full justify-center rounded-xl border-destructive/30 bg-destructive/10 text-sm font-medium text-destructive shadow-sm transition-all duration-200 hover:border-destructive/50 hover:bg-destructive/20 hover:text-destructive active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none sm:ml-auto sm:w-auto ${
                     isAppliedSelected ? "h-9 px-3.5" : "h-10 px-4"
                   }`}
                 >
@@ -260,12 +266,12 @@ export function JobDetailPanel({
             {tailorSource ? (
               <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                 {tailorSource.cv ? (
-                  <span className="rounded-full border border-slate-900/10 bg-slate-100/70 px-2 py-0.5">
+                  <span className="rounded-full border border-border/60 bg-muted/60 px-2 py-0.5">
                     CV: {tailorSource.cv === "ai" ? "AI" : tailorSource.cv === "manual_import" ? "Manual" : "Base"}
                   </span>
                 ) : null}
                 {tailorSource.cover ? (
-                  <span className="rounded-full border border-slate-900/10 bg-slate-100/70 px-2 py-0.5">
+                  <span className="rounded-full border border-border/60 bg-muted/60 px-2 py-0.5">
                     Cover: {tailorSource.cover === "ai" ? "AI" : tailorSource.cover === "manual_import" ? "Manual" : "Fallback"}
                   </span>
                 ) : null}
@@ -293,8 +299,8 @@ export function JobDetailPanel({
                 Job Description
               </div>
               {experienceSignals.length ? (
-                <div className="rounded-xl border border-slate-900/10 bg-slate-50/70 p-3">
-                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+                <div className="rounded-xl border border-border/60 bg-muted/40 p-3">
+                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-foreground/90">
                     Experience gate
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -303,8 +309,8 @@ export function JobDetailPanel({
                         key={signal.key}
                         className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${
                           signal.isRequired
-                            ? "border-rose-200 bg-rose-50 text-rose-700"
-                            : "border-amber-200 bg-amber-50 text-amber-800"
+                            ? "border-destructive/40 bg-destructive/10 text-destructive"
+                            : "border-[theme(colors.tier-fair-ring)] bg-[theme(colors.tier-fair-bg)] text-[theme(colors.tier-fair-fg)]"
                         }`}
                         title={signal.evidence}
                       >
@@ -320,7 +326,7 @@ export function JobDetailPanel({
                 </div>
               ) : null}
               {detailLoading ? (
-                <div className="space-y-3 rounded-lg border border-dashed border-slate-900/10 bg-transparent p-4">
+                <div className="space-y-3 rounded-lg border border-dashed border-border/60 bg-transparent p-4">
                   <Skeleton className="h-4 w-2/3" />
                   <Skeleton className="h-4 w-5/6" />
                   <Skeleton className="h-4 w-3/4" />
@@ -360,7 +366,7 @@ export function JobDetailPanel({
                               <blockquote className={markdownStyles.blockquote}>{children}</blockquote>
                             ),
                             strong: ({ children }) => (
-                              <strong className="font-semibold text-slate-900">
+                              <strong className="font-semibold text-foreground">
                                 {renderHighlighted(children)}
                               </strong>
                             ),

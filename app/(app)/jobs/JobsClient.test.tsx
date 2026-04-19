@@ -440,10 +440,12 @@ describe("JobsClient", () => {
       { name: "Requirements" },
       { timeout: 3000 },
     );
-    expect(heading).toHaveClass("text-lg", "font-semibold", "text-slate-900");
+    // Heading now uses theme-token `text-foreground` for dark-mode parity
+    // (migrated from literal text-slate-900).
+    expect(heading).toHaveClass("text-lg", "font-semibold", "text-foreground");
 
     const listItem = await screen.findByText("Ownership");
-    expect(listItem.closest("li")).toHaveClass("text-slate-700");
+    expect(listItem.closest("li")).toHaveClass("text-foreground/85");
 
     const quotes = await screen.findAllByText("Note");
     const quote = quotes.find((node) => node.closest("blockquote")) ?? quotes[0];

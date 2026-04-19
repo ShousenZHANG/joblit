@@ -46,7 +46,7 @@ export function JobsClient({
   const tn = useTranslations("nav");
   const { runId: fetchRunId, status: fetchStatus, importedCount: fetchImportedCount } = useFetchStatus();
   const guideHighlightClass =
-    "ring-2 ring-emerald-400 ring-offset-2 ring-offset-white shadow-[0_0_0_4px_rgba(16,185,129,0.18)]";
+    "ring-2 ring-brand-emerald-500 ring-offset-2 ring-offset-background shadow-[0_0_0_4px_rgba(16,185,129,0.22)]";
   const queryClient = useQueryClient();
 
   const {
@@ -256,7 +256,7 @@ export function JobsClient({
         description: `Imported ${delta} new job${delta === 1 ? "" : "s"}. Refreshing list.`,
         duration: 2200,
         className:
-          "border-emerald-200 bg-emerald-50 text-emerald-900 animate-in fade-in zoom-in-95",
+          "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-900 animate-in fade-in zoom-in-95",
       });
     }
   }, [
@@ -413,11 +413,11 @@ export function JobsClient({
         role="search"
         aria-label="Job search"
         data-testid="jobs-toolbar"
-        className="relative rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur lg:rounded-3xl lg:border-2 lg:border-slate-900/10 lg:bg-white/80 lg:px-4 lg:py-3 lg:shadow-[0_20px_45px_-35px_rgba(15,23,42,0.35)]"
+        className="relative rounded-2xl border border-border/70 bg-background/90 p-3 shadow-sm backdrop-blur lg:rounded-3xl lg:border-2 lg:border-border/50 lg:bg-background/85 lg:px-4 lg:py-3 lg:shadow-[0_20px_45px_-35px_rgba(15,23,42,0.35)]"
       >
         {loading ? (
           <div className="absolute top-0 left-0 right-0 z-10 h-0.5 overflow-hidden rounded-t-2xl lg:rounded-t-3xl">
-            <div className="h-full w-1/3 animate-[shimmer_1.2s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-emerald-400 to-transparent" />
+            <div className="h-full w-1/3 animate-[shimmer_1.2s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-brand-emerald-500 to-transparent" />
           </div>
         ) : null}
 
@@ -439,13 +439,13 @@ export function JobsClient({
               className={cn(
                 "flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors",
                 mobileFiltersOpen
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : "border-slate-200 bg-white text-slate-600",
+                  ? "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-700"
+                  : "border-border bg-background text-foreground/70",
               )}
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
               {activeFilterCount > 0 && (
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-brand-emerald-500 text-[10px] font-bold text-white">
                   {activeFilterCount}
                 </span>
               )}
@@ -454,20 +454,20 @@ export function JobsClient({
               onClick={triggerSearch}
               disabled={loading}
               size="sm"
-              className="h-9 shrink-0 rounded-lg bg-emerald-500 px-3 text-xs font-semibold text-white shadow-sm hover:bg-emerald-600 active:scale-[0.97]"
+              className="h-9 shrink-0 rounded-lg bg-brand-emerald-500 px-3 text-xs font-semibold text-white shadow-sm hover:bg-brand-emerald-600 active:scale-[0.97]"
             >
               <Search className="h-3.5 w-3.5" />
             </Button>
           </div>
 
           {mobileFiltersOpen && (
-            <div className="grid grid-cols-2 gap-2 rounded-lg border border-slate-100 bg-slate-50/60 p-2.5">
+            <div className="grid grid-cols-2 gap-2 rounded-lg border border-border/60 bg-muted/40 p-2.5">
               <Select
                 value={locationFilter}
                 onValueChange={(v) => { startTransition(() => { setLocationFilter(v); }); }}
               >
                 <SelectTrigger className="h-8 text-xs">
-                  <MapPin className="mr-1 h-3 w-3 shrink-0 text-slate-400" />
+                  <MapPin className="mr-1 h-3 w-3 shrink-0 text-muted-foreground" />
                   <SelectValue placeholder={tc("allLocations")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -511,7 +511,7 @@ export function JobsClient({
                   variant="outline"
                   size="sm"
                   onClick={() => setAddJobOpen(true)}
-                  className="col-span-2 h-8 gap-1.5 rounded-lg border-dashed border-slate-300 text-xs font-medium text-slate-600 transition-colors hover:border-emerald-300 hover:bg-emerald-50/60 hover:text-emerald-700"
+                  className="col-span-2 h-8 gap-1.5 rounded-lg border-dashed border-border text-xs font-medium text-muted-foreground transition-colors hover:border-brand-emerald-300 hover:bg-brand-emerald-50/60 hover:text-brand-emerald-700"
                 >
                   <Plus className="h-3 w-3" />
                   Add Job
@@ -586,7 +586,7 @@ export function JobsClient({
                 type="button"
                 variant="outline"
                 onClick={() => setAddJobOpen(true)}
-                className="h-9 shrink-0 gap-1.5 rounded-xl border-dashed border-slate-300 px-3 text-sm font-medium text-slate-600 transition-all duration-150 hover:border-emerald-300 hover:bg-emerald-50/60 hover:text-emerald-700"
+                className="h-9 shrink-0 gap-1.5 rounded-xl border-dashed border-border px-3 text-sm font-medium text-muted-foreground transition-all duration-150 hover:border-brand-emerald-300 hover:bg-brand-emerald-50/60 hover:text-brand-emerald-700"
               >
                 <Plus className="h-3.5 w-3.5" />
                 Add job
@@ -595,7 +595,7 @@ export function JobsClient({
             <Button
               onClick={triggerSearch}
               disabled={loading}
-              className="h-9 shrink-0 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 text-sm font-semibold text-white shadow-md transition-all duration-200 hover:from-emerald-600 hover:to-emerald-700 hover:shadow-lg hover:brightness-105 active:scale-[0.97] disabled:opacity-50"
+              className="h-9 shrink-0 rounded-xl bg-gradient-to-r from-brand-emerald-500 to-brand-emerald-600 px-4 text-sm font-semibold text-white shadow-md transition-all duration-200 hover:from-brand-emerald-600 hover:to-brand-emerald-700 hover:shadow-lg hover:brightness-105 active:scale-[0.97] disabled:opacity-50"
             >
               <Search className="mr-1.5 h-4 w-4" />
               {tc("search")}
@@ -608,7 +608,7 @@ export function JobsClient({
               disabled={rescoring}
               title={t("rescoreAll")}
               aria-label={t("rescoreAll")}
-              className="h-9 w-9 shrink-0 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+              className="h-9 w-9 shrink-0 rounded-xl border border-border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
             >
               <RefreshCw className={`h-4 w-4 ${rescoring ? "animate-spin" : ""}`} />
             </Button>
@@ -624,7 +624,7 @@ export function JobsClient({
 
         <section className="relative flex flex-1 flex-col gap-3 lg:grid lg:min-h-0 lg:h-full lg:grid-cols-[380px_1fr] lg:items-stretch">
         <div
-          className="flex shrink-0 items-center rounded-lg bg-slate-100/80 p-0.5 lg:hidden"
+          className="flex shrink-0 items-center rounded-lg bg-muted/70 p-0.5 lg:hidden"
           role="tablist"
           aria-label={t("mobileTablistLabel")}
         >
@@ -636,8 +636,8 @@ export function JobsClient({
             className={cn(
               "flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-150",
               mobileTab === "list"
-                ? "bg-white text-emerald-700 shadow-sm"
-                : "text-slate-500 active:bg-white/60",
+                ? "bg-background text-brand-emerald-700 shadow-sm"
+                : "text-muted-foreground active:bg-background/60",
             )}
           >
             {tn("jobs")}
@@ -653,8 +653,8 @@ export function JobsClient({
             className={cn(
               "flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-150",
               mobileTab === "detail"
-                ? "bg-white text-emerald-700 shadow-sm"
-                : "text-slate-500 active:bg-white/60",
+                ? "bg-background text-brand-emerald-700 shadow-sm"
+                : "text-muted-foreground active:bg-background/60",
             )}
           >
             {t("tabDetail")}
@@ -666,28 +666,28 @@ export function JobsClient({
           data-testid="jobs-results-panel"
           className={cn(
             "relative flex flex-col overflow-hidden backdrop-blur transition-shadow duration-200 ease-out",
-            "rounded-2xl border border-slate-200 bg-white/95 shadow-sm",
-            "lg:rounded-3xl lg:border-2 lg:border-slate-900/10 lg:bg-white/80 lg:shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] lg:hover:shadow-[0_24px_50px_-36px_rgba(15,23,42,0.38)]",
+            "rounded-2xl border border-border/70 bg-background/90 shadow-sm",
+            "lg:rounded-3xl lg:border-2 lg:border-border/50 lg:bg-background/85 lg:shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] lg:hover:shadow-[0_24px_50px_-36px_rgba(5,150,105,0.22)]",
             "h-[calc(100dvh-240px)] lg:h-auto lg:min-h-0 lg:flex-1",
             mobileTab !== "list" && "hidden lg:flex",
           )}
         >
           {batchSelectMode ? (
-            <div className="flex items-center justify-between border-b bg-emerald-50/60 px-4 py-2.5 text-sm">
+            <div className="flex items-center justify-between border-b bg-brand-emerald-50/60 px-4 py-2.5 text-sm">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={toggleSelectAll}
-                  className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-emerald-100"
+                  className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-foreground/90 transition-colors hover:bg-brand-emerald-100"
                   aria-label={batchSelectedIds.size === items.length ? "Deselect all" : "Select all"}
                 >
                   {batchSelectedIds.size === items.length ? (
-                    <CheckSquare className="h-4 w-4 text-emerald-600" />
+                    <CheckSquare className="h-4 w-4 text-brand-emerald-600" />
                   ) : (
-                    <Square className="h-4 w-4 text-slate-400" />
+                    <Square className="h-4 w-4 text-muted-foreground" />
                   )}
                   {batchSelectedIds.size > 0 ? (
-                    <span className="font-semibold text-emerald-700">{batchSelectedIds.size} selected</span>
+                    <span className="font-semibold text-brand-emerald-700">{batchSelectedIds.size} selected</span>
                   ) : (
                     <span>Select all</span>
                   )}
@@ -698,7 +698,7 @@ export function JobsClient({
                   type="button"
                   disabled={batchSelectedIds.size === 0}
                   onClick={() => setBatchDeleteConfirmOpen(true)}
-                  className="flex items-center gap-1 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-all duration-150 hover:bg-rose-700 active:translate-y-px disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
+                  className="flex items-center gap-1 rounded-lg bg-destructive px-3 py-1.5 text-xs font-semibold text-destructive-foreground shadow-sm transition-all duration-150 hover:bg-destructive/90 active:translate-y-px disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Delete
@@ -706,7 +706,7 @@ export function JobsClient({
                 <button
                   type="button"
                   onClick={exitBatchMode}
-                  className="flex items-center justify-center rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700"
+                  className="flex items-center justify-center rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   aria-label="Exit selection mode"
                 >
                   <X className="h-4 w-4" />
@@ -728,7 +728,7 @@ export function JobsClient({
                 <button
                   type="button"
                   onClick={() => setBatchSelectMode(true)}
-                  className="flex items-center justify-center rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                  className="flex items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   aria-label="Enter selection mode"
                 >
                   <CheckSquare className="h-4 w-4" />
@@ -794,7 +794,7 @@ export function JobsClient({
           <div className="border-t px-4 py-2 text-xs text-muted-foreground">
             {loadingMore ? (
               <div className="flex items-center gap-2">
-                <div className="h-3 w-3 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+                <div className="h-3 w-3 animate-spin rounded-full border-2 border-brand-emerald-500 border-t-transparent" />
                 <span>Loading more jobs…</span>
               </div>
             ) : nextCursor ? (
@@ -840,7 +840,7 @@ export function JobsClient({
         open={batchDeleteConfirmOpen}
         onOpenChange={setBatchDeleteConfirmOpen}
       >
-        <AlertDialogContent className="max-w-md rounded-2xl border-slate-200">
+        <AlertDialogContent className="max-w-md rounded-2xl border-border">
           <AlertDialogHeader>
             <AlertDialogTitle>
               Delete {batchSelectedIds.size} {batchSelectedIds.size === 1 ? "job" : "jobs"}?
@@ -853,7 +853,7 @@ export function JobsClient({
             <AlertDialogCancel className="rounded-xl">{tc("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmBatchDelete}
-              className="rounded-xl bg-rose-600 text-white hover:bg-rose-700"
+              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete {batchSelectedIds.size} {batchSelectedIds.size === 1 ? "job" : "jobs"}
             </AlertDialogAction>
