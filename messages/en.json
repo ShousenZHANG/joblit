@@ -666,6 +666,36 @@
         "text": "The autofill extension just works. I applied to 14 jobs on one coffee break. The PDFs look better than anything I was making in Word.",
         "name": "Ana R.",
         "role": "ML Engineer · 3 offers in 6 weeks"
+      },
+      "t4": {
+        "text": "I was ghosted after 40 applications with my generic resume. Switched to Joblit, tuned the rubric once, and landed two final-round interviews in my first week.",
+        "name": "Priya N.",
+        "role": "Senior Backend · accepted at Plaid"
+      },
+      "t5": {
+        "text": "The evidence-grounding is what won me over. No made-up metrics. Every bullet points to a real PR or project in my profile — recruiters noticed.",
+        "name": "Jonah W.",
+        "role": "Platform Engineer · ex-Datadog"
+      },
+      "t6": {
+        "text": "As a career-switcher the match score told me exactly which roles were realistic. Stopped wasting energy on 40% fits and focused on the 70%+ ones.",
+        "name": "Mei L.",
+        "role": "Data Scientist · career switch"
+      },
+      "t7": {
+        "text": "LaTeX output is the unsung hero. Recruiters at two top-tier firms mentioned how clean the resume looked before we even talked about content.",
+        "name": "Daniel K.",
+        "role": "Research Engineer · DeepMind alum"
+      },
+      "t8": {
+        "text": "I bring my own Claude key and pay $6/mo. Unlimited generations, full control of costs. This is how AI products should be priced.",
+        "name": "Sofía R.",
+        "role": "Full-stack Engineer · Shopify"
+      },
+      "t9": {
+        "text": "The Chrome extension handled a 7-step Workday flow without a single typo. Saved me 20 minutes per application — I got my weekends back.",
+        "name": "Theo B.",
+        "role": "DevOps Lead · Series C fintech"
       }
     },
     "pricing": {

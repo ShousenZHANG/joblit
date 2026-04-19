@@ -215,6 +215,16 @@
   50% { opacity: 0.5; }
 }
 
+/* Horizontal auto-scrolling marquee used by the testimonials strip.
+   Pair the animation with two back-to-back copies of the content so the
+   -50% translate lands on the start of the second copy, producing a
+   seamless loop. Duration is passed via a CSS var so consumers can slow
+   it down on wider viewports. */
+@keyframes landing-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

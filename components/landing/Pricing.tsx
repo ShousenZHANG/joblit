@@ -97,10 +97,14 @@ export function Pricing() {
             key={tier.name}
             variants={fadeUp}
             className={
-              "relative flex flex-col rounded-2xl border p-6 transition-transform duration-300 hover:-translate-y-1 " +
+              // Coordinated hover: all four channels (transform, shadow,
+              // border, background) transition together on a 400ms
+              // spring curve so the lift feels unified instead of each
+              // property settling on its own timeline.
+              "group relative flex flex-col rounded-2xl border p-6 transition-[transform,box-shadow,border-color,background-color] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform hover:-translate-y-2 hover:border-brand-emerald-200 hover:shadow-[0_1px_2px_rgba(15,23,42,0.04),0_28px_56px_-24px_rgba(5,150,105,0.35)] " +
               (tier.featured
-                ? "border-brand-emerald/40 bg-gradient-to-b from-brand-emerald-50/80 to-background shadow-[0_20px_40px_-12px_rgba(5,150,105,0.18)] md:-translate-y-2"
-                : "border-border/60 bg-background shadow-sm")
+                ? "border-brand-emerald/40 bg-gradient-to-b from-brand-emerald-50/80 to-background shadow-[0_20px_40px_-12px_rgba(5,150,105,0.22)] md:-translate-y-2 md:hover:-translate-y-3"
+                : "border-border/60 bg-background shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.08)]")
             }
           >
             {tier.featured && (
@@ -138,10 +142,10 @@ export function Pricing() {
             <Link
               href={tier.ctaHref}
               className={
-                "mt-8 inline-flex h-10 w-full items-center justify-center rounded-full px-5 text-sm font-semibold transition-colors " +
+                "mt-8 inline-flex h-10 w-full items-center justify-center rounded-full px-5 text-sm font-semibold transition-all duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] " +
                 (tier.featured
-                  ? "bg-foreground text-background hover:bg-foreground/90"
-                  : "border border-border bg-background text-foreground hover:bg-muted")
+                  ? "bg-foreground text-background shadow-sm hover:bg-foreground/90 hover:shadow-md group-hover:shadow-md"
+                  : "border border-border bg-background text-foreground hover:border-brand-emerald-200 hover:bg-muted group-hover:border-brand-emerald-200/80")
               }
             >
               {tier.cta}
