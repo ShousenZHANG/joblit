@@ -145,7 +145,12 @@ export function JobDetailPanel({
     >
       <div className="border-b px-4 py-3">
         {selectedJob ? (
-          <div className="relative flex flex-wrap items-start justify-between gap-3">
+          // Always stack the info block above the action row — an earlier
+          // flex-wrap layout sat actions inline for short titles and
+          // wrapped to a new line for long ones, so the button row shifted
+          // position per job. Forcing a two-row layout gives every job the
+          // same "title / company → actions" rhythm.
+          <div className="relative flex flex-col gap-4">
             <div className="space-y-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-lg font-semibold">{selectedJob.title}</h2>
@@ -158,7 +163,7 @@ export function JobDetailPanel({
                 {selectedJob.jobType ?? "Unknown"} · {selectedJob.jobLevel ?? "Unknown"}
               </div>
             </div>
-            <div className="w-full lg:w-auto">
+            <div className="w-full">
               <div
                 data-testid="job-primary-actions"
                 className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center"
