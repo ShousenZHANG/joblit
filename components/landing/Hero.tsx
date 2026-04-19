@@ -94,17 +94,46 @@ export function Hero() {
     return () => window.clearInterval(id);
   }, [reduced]);
 
+  // Orchestrated intro: one stagger parent drives all headline elements
+  // so delays stay in lockstep and motion reads as a single choreographed
+  // reveal instead of five independent fades.
+  const introStagger = {
+    hidden: {},
+    show: {
+      transition: {
+        staggerChildren: 0.09,
+        delayChildren: 0.05,
+      },
+    },
+  };
+  const introItem = reduced
+    ? {
+        hidden: { opacity: 0 },
+        show: { opacity: 1, transition: { duration: 0.4 } },
+      }
+    : {
+        hidden: { opacity: 0, y: 28 },
+        show: {
+          opacity: 1,
+          y: 0,
+          transition: { duration: 0.72, ease: [0.16, 1, 0.3, 1] as const },
+        },
+      };
+
   return (
     <section
       data-testid="landing-hero"
       className="relative mx-auto w-full max-w-6xl px-6 pb-24 pt-16 sm:pt-24 lg:px-10"
     >
+      <motion.div
+        variants={introStagger}
+        initial="hidden"
+        animate="show"
+      >
       {/* Eyebrow — first thing to appear on page load, bolder
           20px rise so the motion reads even on fast connections. */}
       <motion.div
-        initial={reduced ? { opacity: 0 } : { opacity: 0, y: 20, scale: 0.96 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+        variants={introItem}
         className="flex items-center justify-center"
       >
         <span className="inline-flex items-center gap-2 rounded-full border border-brand-emerald-200 bg-brand-emerald-50 px-3 py-1 text-xs font-semibold text-brand-emerald-700">
@@ -124,9 +153,7 @@ export function Hero() {
 
       {/* Title */}
       <motion.h1
-        initial={reduced ? { opacity: 0 } : { opacity: 0, y: 32 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.75, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
+        variants={introItem}
         className="mx-auto mt-6 max-w-3xl text-balance text-center text-5xl font-bold tracking-tight text-foreground sm:text-6xl lg:text-7xl"
       >
         {t("titleLine1")}
@@ -138,9 +165,7 @@ export function Hero() {
 
       {/* Subtitle */}
       <motion.p
-        initial={reduced ? { opacity: 0 } : { opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.18, ease: [0.16, 1, 0.3, 1] }}
+        variants={introItem}
         className="mx-auto mt-6 max-w-2xl text-balance text-center text-base leading-relaxed text-muted-foreground sm:text-lg"
       >
         {t("subtitle")}
@@ -148,9 +173,7 @@ export function Hero() {
 
       {/* CTA */}
       <motion.div
-        initial={reduced ? { opacity: 0 } : { opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.55, delay: 0.28, ease: [0.16, 1, 0.3, 1] }}
+        variants={introItem}
         className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row"
       >
         <Link
@@ -171,9 +194,7 @@ export function Hero() {
 
       {/* Meta */}
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.5, delay: 0.38 }}
+        variants={introItem}
         className="mt-6 flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground sm:flex-row sm:gap-4"
       >
         <span>
@@ -183,12 +204,24 @@ export function Hero() {
         <span>{t("metaFree")}</span>
       </motion.div>
 
-      {/* Canvas — frame lifts in starting just after the CTA so the
-          motion feels continuous with the headline cascade. */}
+      {/* Canvas — frame lifts in with bigger rise + scale so it reads
+          as the hero visual settling into place. Still part of the
+          orchestrated intro cascade via variants. */}
       <motion.div
-        initial={reduced ? { opacity: 0 } : { opacity: 0, y: 56, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.95, delay: 0.35, ease: [0.16, 1, 0.3, 1] }}
+        variants={{
+          hidden: reduced
+            ? { opacity: 0 }
+            : { opacity: 0, y: 56, scale: 0.98 },
+          show: {
+            opacity: 1,
+            y: 0,
+            scale: 1,
+            transition: {
+              duration: 0.95,
+              ease: [0.16, 1, 0.3, 1] as const,
+            },
+          },
+        }}
         className="relative mx-auto mt-16 max-w-5xl"
       >
         <div className="relative overflow-hidden rounded-3xl border border-border/60 bg-background shadow-[var(--shadow-elevated-emerald)]">
@@ -405,6 +438,7 @@ export function Hero() {
             <div className="text-muted-foreground">{t("floats.rolesDesc")}</div>
           </div>
         </motion.div>
+      </motion.div>
       </motion.div>
 
     </section>
