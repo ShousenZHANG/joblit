@@ -6,6 +6,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
+import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { ThemeToggle } from "@/components/providers/ThemeProvider";
 
 // Glass navbar. Sits sticky at top 16px, becomes a touch more compact
@@ -125,6 +126,9 @@ export function Nav() {
         </ul>
 
         <div className="flex items-center gap-2">
+          <div className="hidden sm:inline-flex">
+            <LocaleSwitcher />
+          </div>
           <ThemeToggle className="hidden sm:inline-flex" />
           {status === "unauthenticated" && (
             <Link

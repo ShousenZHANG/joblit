@@ -15,6 +15,13 @@ vi.mock("next-auth/react", () => ({
   useSession: () => ({ data: null, status: "unauthenticated" }),
 }));
 
+// LocaleSwitcher calls useRouter() which requires an App-Router context;
+// mock it here so the Nav can render in isolation.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
+  usePathname: () => "/",
+}));
+
 vi.mock("next-themes", async () => {
   const actual = await vi.importActual<typeof import("next-themes")>(
     "next-themes",
