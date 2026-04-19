@@ -2,18 +2,13 @@
 
 import { Check } from "lucide-react";
 import { motion } from "framer-motion";
+import { useTranslations } from "next-intl";
 import { fadeUp, stagger, useReveal } from "./lib/motion";
 
 // Deep-dive #1 — resume studio before/after. Two stacked card mocks with
 // placeholder bars representing bullet points. Highlight blocks on the
 // "After" side are the emerald call-outs that appear after tailoring.
 
-const BULLETS = [
-  "Keyword density scored against the JD in real time",
-  "One base profile → infinite targeted variants",
-  "Side-by-side diff view with one-click accept / reject",
-  "Exports clean ATS-safe PDF, DOCX, or plain text",
-];
 
 /** Pill-shaped skeleton bar used to mock resume bullet lines. */
 function Bar({ width, highlight = false }: { width: string; highlight?: boolean }) {
@@ -31,6 +26,8 @@ function Bar({ width, highlight = false }: { width: string; highlight?: boolean 
 
 export function DeepDiveResume() {
   const reveal = useReveal();
+  const t = useTranslations("landing.deepDive.resume");
+  const BULLETS = [t("b1"), t("b2"), t("b3"), t("b4")];
   return (
     <motion.section
       {...reveal}
@@ -45,24 +42,22 @@ export function DeepDiveResume() {
             className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-emerald-700"
           >
             <span aria-hidden className="inline-block h-px w-4 bg-brand-emerald-600" />
-            Resume studio
+            {t("kicker")}
           </motion.div>
           <motion.h3
             variants={fadeUp}
             className="text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl"
           >
-            Your resume, re-tailored per job.{" "}
+            {t("titlePrefix")}{" "}
             <em className="font-serif italic text-brand-emerald-700">
-              Automatically.
+              {t("titleItalic")}
             </em>
           </motion.h3>
           <motion.p
             variants={fadeUp}
             className="mt-4 text-base leading-relaxed text-muted-foreground"
           >
-            Stop maintaining 14 versions of the same resume. Joblit reads each
-            JD, rewrites your summary and bullets to emphasize what matters,
-            and keeps a clean diff so you know exactly what changed.
+            {t("lede")}
           </motion.p>
           <motion.ul variants={stagger} className="mt-6 flex flex-col gap-3">
             {BULLETS.map((b) => (
@@ -90,7 +85,7 @@ export function DeepDiveResume() {
           <div className="flex flex-col gap-3 rounded-xl bg-muted/40 p-4">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Before
+                {t("before")}
               </span>
             </div>
             <div>
@@ -98,7 +93,7 @@ export function DeepDiveResume() {
                 Alex Chen
               </div>
               <div className="text-xs text-muted-foreground">
-                Frontend Engineer · 5 yrs
+                {t("roleBefore")}
               </div>
             </div>
             <div className="flex flex-col gap-2 pt-2">
@@ -114,7 +109,7 @@ export function DeepDiveResume() {
           <div className="flex flex-col gap-3 rounded-xl border border-brand-emerald-200 bg-brand-emerald-50/40 p-4">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-brand-emerald-700">
-                After · Stripe JD
+                {t("after")}
               </span>
             </div>
             <div>
@@ -122,18 +117,18 @@ export function DeepDiveResume() {
                 Alex Chen
               </div>
               <div className="text-xs text-brand-emerald-700">
-                Senior Frontend Engineer
+                {t("roleAfter")}
               </div>
             </div>
             <div className="flex flex-col gap-2 pt-2">
               <Bar width="90%" highlight />
               <div className="rounded-md bg-brand-emerald-100 px-2 py-1.5 text-[11px] font-medium text-brand-emerald-800">
-                Led React rewrite of dashboard (↓ 47% bundle)
+                {t("h1")}
               </div>
               <Bar width="70%" highlight />
               <Bar width="50%" />
               <div className="rounded-md bg-brand-emerald-100 px-2 py-1.5 text-[11px] font-medium text-brand-emerald-800">
-                Design systems, A11y, perf
+                {t("h2")}
               </div>
             </div>
           </div>

@@ -2,6 +2,7 @@
 
 import { Check } from "lucide-react";
 import { motion } from "framer-motion";
+import { useTranslations } from "next-intl";
 import { fadeUp, stagger, useReveal } from "./lib/motion";
 
 // Deep-dive #2 — Chrome extension autofills ATS forms. Reverse layout
@@ -10,29 +11,31 @@ import { fadeUp, stagger, useReveal } from "./lib/motion";
 // with 5 mocked form fields; the 4th is in "typing" state with a blinking
 // caret driven by the `landing-caret` keyframe in globals.css.
 
-const BULLETS = [
-  "Shadow-DOM widget — never conflicts with the host page",
-  "File upload, multi-step forms, date pickers, all handled",
-  "Per-field confidence — flagged fields wait for your eyes",
-  "Works offline once your profile is synced",
-];
-
 interface Field {
   label: string;
   value: string;
   state: "filled" | "typing" | "file";
 }
 
-const FIELDS: Field[] = [
-  { label: "Full name", value: "Alex Chen", state: "filled" },
-  { label: "Email", value: "alex.chen@mail.com", state: "filled" },
-  { label: "LinkedIn", value: "linkedin.com/in/alexchen", state: "filled" },
-  { label: "Years of experience", value: "5", state: "typing" },
-  { label: "Upload resume", value: "alex-chen-stripe-2026.pdf", state: "file" },
-];
-
 export function DeepDiveATS() {
   const reveal = useReveal();
+  const t = useTranslations("landing.deepDive.ats");
+  const BULLETS = [t("b1"), t("b2"), t("b3"), t("b4")];
+  const FIELDS: Field[] = [
+    { label: t("fullName"), value: "Alex Chen", state: "filled" },
+    { label: t("email"), value: "alex.chen@mail.com", state: "filled" },
+    {
+      label: t("linkedin"),
+      value: "linkedin.com/in/alexchen",
+      state: "filled",
+    },
+    { label: t("yoe"), value: "5", state: "typing" },
+    {
+      label: t("uploadLabel"),
+      value: t("uploadValue"),
+      state: "file",
+    },
+  ];
   return (
     <motion.section
       {...reveal}
@@ -53,7 +56,7 @@ export function DeepDiveATS() {
               <i className="block h-2.5 w-2.5 rounded-full bg-[#00ca4e]" />
             </span>
             <div className="ml-3 flex-1 rounded-md bg-background px-3 py-1 text-xs text-muted-foreground">
-              stripe.com/careers/apply
+              {t("url")}
             </div>
           </div>
 
@@ -100,24 +103,22 @@ export function DeepDiveATS() {
             className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-emerald-700"
           >
             <span aria-hidden className="inline-block h-px w-4 bg-brand-emerald-600" />
-            Chrome extension
+            {t("kicker")}
           </motion.div>
           <motion.h3
             variants={fadeUp}
             className="text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl"
           >
-            ATS forms that fill{" "}
+            {t("titlePrefix")}{" "}
             <em className="font-serif italic text-brand-emerald-700">
-              themselves.
+              {t("titleItalic")}
             </em>
           </motion.h3>
           <motion.p
             variants={fadeUp}
             className="mt-4 text-base leading-relaxed text-muted-foreground"
           >
-            Workday, Greenhouse, Lever, iCIMS, SuccessFactors — the extension
-            detects the form, maps every field to your profile, and fills it
-            in front of your eyes. Review, edit, submit.
+            {t("lede")}
           </motion.p>
           <motion.ul variants={stagger} className="mt-6 flex flex-col gap-3">
             {BULLETS.map((b) => (

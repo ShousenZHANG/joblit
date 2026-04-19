@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useTranslations } from "next-intl";
 import { fadeIn, useReveal } from "./lib/motion";
 
 // LogoBar — alternating serif-italic / sans render gives the marquee a
@@ -12,6 +13,7 @@ const LOGOS = ["Stripe", "Linear", "Vercel", "Figma", "Notion", "Airbnb"];
 
 export function LogoBar() {
   const reveal = useReveal();
+  const t = useTranslations("landing.logoBar");
   return (
     <motion.section
       {...reveal}
@@ -20,7 +22,7 @@ export function LogoBar() {
       variants={fadeIn}
     >
       <div className="text-center text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-        Trusted by candidates from
+        {t("kicker")}
       </div>
       <ul
         className="mt-6 flex flex-wrap items-center justify-center gap-x-10 gap-y-4 text-2xl text-foreground/60 sm:gap-x-14"

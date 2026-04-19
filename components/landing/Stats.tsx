@@ -1,6 +1,7 @@
 "use client";
 
 import { useInView, motion } from "framer-motion";
+import { useTranslations } from "next-intl";
 import { useRef } from "react";
 import { fadeUp } from "./lib/motion";
 import { useCountUp } from "./lib/useCountUp";
@@ -16,12 +17,6 @@ interface Stat {
   label: string;
 }
 
-const STATS: Stat[] = [
-  { target: 4281, label: "Applications tailored this week" },
-  { target: 4.2, suffix: "s", isFloat: true, label: "Average time from JD to tailored PDF" },
-  { target: 87, suffix: "%", label: "Interview rate on >80% match jobs" },
-  { target: 6, label: "Job boards fetched from in a single run" },
-];
 
 function StatCell({ stat, active }: { stat: Stat; active: boolean }) {
   const value = useCountUp({
@@ -46,6 +41,18 @@ function StatCell({ stat, active }: { stat: Stat; active: boolean }) {
 }
 
 export function Stats() {
+  const t = useTranslations("landing.stats");
+  const STATS: Stat[] = [
+    { target: 4281, label: t("applications") },
+    {
+      target: 4.2,
+      suffix: "s",
+      isFloat: true,
+      label: t("avgTime"),
+    },
+    { target: 87, suffix: "%", label: t("interviewRate") },
+    { target: 6, label: t("boards") },
+  ];
   const ref = useRef<HTMLElement | null>(null);
   // Single observer drives both the fade-up reveal on the section
   // chrome and the count-up animation on the numbers inside.

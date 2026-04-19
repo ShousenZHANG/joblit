@@ -499,5 +499,291 @@
     "terms": "Terms",
     "and": "and",
     "privacyPolicy": "Privacy Policy"
+  },
+  "landing": {
+    "nav": {
+      "product": "Product",
+      "howItWorks": "How it works",
+      "pricing": "Pricing",
+      "faq": "FAQ",
+      "changelog": "Changelog",
+      "startFree": "Start free",
+      "openApp": "Open app",
+      "logIn": "Log in"
+    },
+    "hero": {
+      "eyebrowNew": "New",
+      "eyebrowTagline": "Self-learning extension · v0.1",
+      "titleLine1": "The job search,",
+      "titleItalic": "re-engineered.",
+      "subtitle": "Joblit fetches roles, scores them against your profile, tailors your resume per JD, and auto-fills the applications. One workstation. Zero copy-paste.",
+      "startFree": "Start free",
+      "watchDemo": "Watch demo",
+      "metaCount": "{count} applications tailored this week",
+      "metaFree": "Free forever · no credit card",
+      "floats": {
+        "skillsMatched": "+3 skills matched",
+        "skillsMatchedDesc": "vs. your base resume",
+        "tailored": "Tailored in 4.2s",
+        "tailoredDesc": "ready to export PDF",
+        "roles": "47 roles fetched",
+        "rolesDesc": "from 6 job boards"
+      }
+    },
+    "logoBar": {
+      "kicker": "Trusted by candidates from"
+    },
+    "how": {
+      "kicker": "How it works",
+      "titlePrefix": "Submit-ready applications in",
+      "titleItalic": "three steps",
+      "titleSuffix": ".",
+      "lede": "No prompting, no template-hunting, no per-job copy-paste. You give Joblit your profile; it does the rest.",
+      "steps": {
+        "fetch": {
+          "title": "Fetch",
+          "blurb": "Pull fresh roles from LinkedIn, Greenhouse, Lever, and more. Dedup by URL, sort by match."
+        },
+        "tailor": {
+          "title": "Tailor",
+          "blurb": "Generate a custom resume + cover letter per JD, evidence-grounded in your real experience."
+        },
+        "apply": {
+          "title": "Apply",
+          "blurb": "One-click export to LaTeX PDF or let the Chrome extension auto-fill the ATS form directly."
+        }
+      }
+    },
+    "features": {
+      "kicker": "Why Joblit",
+      "titlePrefix": "Built for the",
+      "titleItalic": "signal-to-noise",
+      "titleSuffix": "problem.",
+      "lede": "Every feature shaves friction off a real step of the hunt — not nice-to-haves, table stakes for job seekers in 2026.",
+      "hero": {
+        "title": "Match scoring, honest",
+        "rubric": "0–100 rubric",
+        "blurb": "Every JD is parsed and scored against your profile on a 0–100 scale. See exactly which skills match, which don't, and what to do about the gaps. No inflated numbers. No gamification. Just a published rubric you can argue with.",
+        "tagCoverage": "Skill coverage",
+        "tagSeniority": "Seniority fit",
+        "tagYoe": "Years of experience",
+        "tagDomain": "Domain overlap"
+      },
+      "atsSafe": {
+        "title": "ATS-safe",
+        "blurb": "Output parses cleanly through Workday, Greenhouse, Lever, iCIMS — no recruiter sees a garbled file."
+      },
+      "evidence": {
+        "title": "Evidence-grounded",
+        "blurb": "Every bullet cites a real line from your past experience. Zero hallucinated claims, ever."
+      },
+      "tailor": {
+        "title": "4-second tailor",
+        "blurb": "Streamed generation — watch the resume compose itself in real time, no loading spinners."
+      },
+      "latex": {
+        "title": "LaTeX-quality PDFs",
+        "blurb": "Typeset output with proper kerning, widow control, and typography — not a Word doc in disguise. EN or CN."
+      },
+      "byoLlm": {
+        "title": "Bring your own LLM",
+        "blurb": "Use Joblit's inference, or plug in your own Gemini / Claude / OpenAI key. Your cost, your latency, your choice."
+      }
+    },
+    "deepDive": {
+      "resume": {
+        "kicker": "Resume studio",
+        "titlePrefix": "Your resume, re-tailored per job.",
+        "titleItalic": "Automatically.",
+        "lede": "Stop maintaining 14 versions of the same resume. Joblit reads each JD, rewrites your summary and bullets to emphasize what matters, and keeps a clean diff so you know exactly what changed.",
+        "b1": "Keyword density scored against the JD in real time",
+        "b2": "One base profile → infinite targeted variants",
+        "b3": "Side-by-side diff view with one-click accept / reject",
+        "b4": "Exports clean ATS-safe PDF, DOCX, or plain text",
+        "before": "Before",
+        "after": "After · Stripe JD",
+        "roleBefore": "Frontend Engineer · 5 yrs",
+        "roleAfter": "Senior Frontend Engineer",
+        "h1": "Led React rewrite of dashboard (↓ 47% bundle)",
+        "h2": "Design systems, A11y, perf"
+      },
+      "ats": {
+        "kicker": "Chrome extension",
+        "titlePrefix": "ATS forms that fill",
+        "titleItalic": "themselves.",
+        "lede": "Workday, Greenhouse, Lever, iCIMS, SuccessFactors — the extension detects the form, maps every field to your profile, and fills it in front of your eyes. Review, edit, submit.",
+        "b1": "Shadow-DOM widget — never conflicts with the host page",
+        "b2": "File upload, multi-step forms, date pickers, all handled",
+        "b3": "Per-field confidence — flagged fields wait for your eyes",
+        "b4": "Works offline once your profile is synced",
+        "url": "stripe.com/careers/apply",
+        "fullName": "Full name",
+        "email": "Email",
+        "linkedin": "LinkedIn",
+        "yoe": "Years of experience",
+        "uploadLabel": "Upload resume",
+        "uploadValue": "alex-chen-stripe-2026.pdf"
+      },
+      "fetch": {
+        "kicker": "Batch fetch",
+        "titlePrefix": "Pull from every board,",
+        "titleItalic": "at once.",
+        "lede": "Don't open twelve tabs. One search runs in parallel across LinkedIn, Greenhouse boards, Lever, Workable, Indeed — dedups by posting URL, sorts by match, filters out what you've already seen.",
+        "b1": "Parallel adapters; atomic run-once API prevents dupes",
+        "b2": "Smart filters: remote, salary floor, seniority, location",
+        "b3": "Scheduled daily fetches — new roles show up in your inbox",
+        "b4": "Export runs as CSV for your own tracking",
+        "header": "Fetch run · now",
+        "statusDone": "done",
+        "statusRunning": "running",
+        "statusQueued": "queued",
+        "total": "Total unique roles"
+      }
+    },
+    "stats": {
+      "kicker": "By the numbers",
+      "applications": "Applications tailored this week",
+      "avgTime": "Average time from JD to tailored PDF",
+      "interviewRate": "Interview rate on >80% match jobs",
+      "boards": "Job boards fetched from in a single run"
+    },
+    "testimonials": {
+      "kicker": "Candidates",
+      "titlePrefix": "Less time applying.",
+      "titleItalic": "More time interviewing.",
+      "t1": {
+        "text": "I spent three weekends a month tweaking resumes for specific roles. Joblit does it in four seconds, and the bullets are actually mine — it pulls evidence from my past work, not thin air.",
+        "name": "Sarah K.",
+        "role": "Staff Engineer · offer at Linear"
+      },
+      "t2": {
+        "text": "The match score is honest. It told me a role was 52% and to skip it. That alone saved me an entire Saturday.",
+        "name": "Marcus T.",
+        "role": "Product Designer · Notion"
+      },
+      "t3": {
+        "text": "The autofill extension just works. I applied to 14 jobs on one coffee break. The PDFs look better than anything I was making in Word.",
+        "name": "Ana R.",
+        "role": "ML Engineer · 3 offers in 6 weeks"
+      }
+    },
+    "pricing": {
+      "kicker": "Pricing",
+      "titlePrefix": "Free to start.",
+      "titleItalic": "Fair when you grow.",
+      "lede": "No credit card to sign up. Your data and your AI keys stay yours.",
+      "mostPopular": "Most popular",
+      "starter": {
+        "name": "Starter",
+        "price": "$0",
+        "cadence": "/mo",
+        "blurb": "For the casual search. Everything you need to run a clean, focused process.",
+        "f1": "Unlimited job fetch",
+        "f2": "20 tailored resumes / month",
+        "f3": "LaTeX PDF export",
+        "f4": "Chrome extension",
+        "cta": "Get started"
+      },
+      "pro": {
+        "name": "Pro",
+        "price": "$12",
+        "cadence": "/mo",
+        "blurb": "For an active search. Unlimited generations, priority models, all adapters.",
+        "f1": "Everything in Starter",
+        "f2": "Unlimited tailored resumes",
+        "f3": "Priority GPT-4 / Claude routing",
+        "f4": "All ATS adapters (Workday, SF, etc.)",
+        "f5": "Scheduled daily fetches",
+        "cta": "Start 14-day trial"
+      },
+      "byol": {
+        "name": "Bring-your-own-LLM",
+        "price": "$6",
+        "cadence": "/mo",
+        "blurb": "Use your own model provider. Pay us for the product, not the tokens.",
+        "f1": "Everything in Pro",
+        "f2": "Your OpenAI / Anthropic / Gemini key",
+        "f3": "Fully local option on roadmap",
+        "f4": "Email support",
+        "cta": "Connect key"
+      }
+    },
+    "faq": {
+      "kicker": "Questions",
+      "titlePrefix": "Honest answers to",
+      "titleItalic": "real",
+      "titleSuffix": "questions.",
+      "items": [
+        {
+          "q": "Is this just ChatGPT with extra steps?",
+          "a": "No. Joblit parses each JD into a structured schema, scores it against your profile, and grounds every bullet in real evidence from your past experience. The LLM is one part of the pipeline — the rest is structured extraction, ATS-safe formatting, and real integrations with job boards."
+        },
+        {
+          "q": "Will my data be used to train models?",
+          "a": "No. Your profile and generated resumes are never used for training. If you bring your own LLM key, data goes direct to that provider under their terms — we never see it."
+        },
+        {
+          "q": "How does the match score work?",
+          "a": "Each JD is parsed for required skills, years of experience, seniority, and domain. We match against your profile with a published rubric you can see and argue with. Strong (80+), Good (65–79), Fair (50–64), Weak (<50)."
+        },
+        {
+          "q": "Does the Chrome extension work on Workday / Greenhouse / Lever?",
+          "a": "Yes, plus iCIMS and SuccessFactors. We ship dedicated adapters per ATS so quirky fields (like Workday's multi-step forms and date pickers) behave correctly."
+        },
+        {
+          "q": "Can I use my own OpenAI / Claude / Gemini key?",
+          "a": "Yes. Bring-your-own-LLM is a first-class path and costs less per month. You pay us for the product; you pay the provider for tokens directly."
+        },
+        {
+          "q": "What if the generated bullets aren't accurate?",
+          "a": "Every bullet is grounded in a line you wrote in your profile. If you don't like a change, one click reverts it. You always own the final text."
+        }
+      ]
+    },
+    "cta": {
+      "titlePrefix": "Stop rewriting your resume.",
+      "titleItalic": "Start getting interviews.",
+      "lede": "Free forever. No credit card. Takes two minutes to import your profile and run your first fetch.",
+      "primary": "Start free",
+      "secondary": "Book a 10-min demo"
+    },
+    "footer": {
+      "tagline": "The AI job-search workstation. Fetch, tailor, apply. Built by people who got tired of the rest.",
+      "product": {
+        "heading": "Product",
+        "jobs": "Jobs",
+        "resume": "Resume studio",
+        "extension": "Chrome extension",
+        "changelog": "Changelog"
+      },
+      "company": {
+        "heading": "Company",
+        "about": "About",
+        "careers": "Careers",
+        "press": "Press",
+        "contact": "Contact"
+      },
+      "resources": {
+        "heading": "Resources",
+        "docs": "Docs",
+        "guide": "Resume guide",
+        "blog": "Blog",
+        "templates": "Templates"
+      },
+      "legal": {
+        "heading": "Legal",
+        "privacy": "Privacy",
+        "terms": "Terms",
+        "security": "Security",
+        "dpa": "DPA"
+      },
+      "copyright": "© 2026 Joblit Labs. All rights reserved.",
+      "designed": "Designed in San Francisco · Built for candidates everywhere"
+    }
+  },
+  "extension": {
+    "title": "Browser Extension",
+    "subtitle": "Manage your Joblit AutoFill extension tokens and view submission history.",
+    "installGuide": "Installation Guide"
   }
 }

@@ -499,5 +499,291 @@
     "terms": "使用条款",
     "and": "和",
     "privacyPolicy": "隐私政策"
+  },
+  "landing": {
+    "nav": {
+      "product": "产品",
+      "howItWorks": "工作原理",
+      "pricing": "定价",
+      "faq": "常见问题",
+      "changelog": "更新日志",
+      "startFree": "免费开始",
+      "openApp": "打开应用",
+      "logIn": "登录"
+    },
+    "hero": {
+      "eyebrowNew": "新",
+      "eyebrowTagline": "自学习扩展 · v0.1",
+      "titleLine1": "求职流程，",
+      "titleItalic": "重新定义。",
+      "subtitle": "Joblit 自动抓取岗位、匹配你的档案、逐个 JD 定制简历、自动填写申请。一个工作台，零复制粘贴。",
+      "startFree": "免费开始",
+      "watchDemo": "观看演示",
+      "metaCount": "本周已定制 {count} 份申请",
+      "metaFree": "永久免费 · 无需信用卡",
+      "floats": {
+        "skillsMatched": "+3 项技能匹配",
+        "skillsMatchedDesc": "相比基础简历",
+        "tailored": "4.2 秒完成定制",
+        "tailoredDesc": "可直接导出 PDF",
+        "roles": "抓取 47 个岗位",
+        "rolesDesc": "来自 6 个招聘平台"
+      }
+    },
+    "logoBar": {
+      "kicker": "来自以下公司的候选人信赖"
+    },
+    "how": {
+      "kicker": "工作原理",
+      "titlePrefix": "提交就绪的申请，只需",
+      "titleItalic": "三步",
+      "titleSuffix": "。",
+      "lede": "不用写提示词，不用找模板，不用为每个岗位复制粘贴。你给 Joblit 你的档案，它完成剩下的。",
+      "steps": {
+        "fetch": {
+          "title": "抓取",
+          "blurb": "从 LinkedIn、Greenhouse、Lever 等平台拉取最新岗位。按 URL 去重，按匹配度排序。"
+        },
+        "tailor": {
+          "title": "定制",
+          "blurb": "为每个 JD 生成定制简历和求职信，基于你真实经历的证据。"
+        },
+        "apply": {
+          "title": "申请",
+          "blurb": "一键导出 LaTeX PDF，或让 Chrome 扩展直接自动填写 ATS 表单。"
+        }
+      }
+    },
+    "features": {
+      "kicker": "为什么选 Joblit",
+      "titlePrefix": "为解决",
+      "titleItalic": "信噪比",
+      "titleSuffix": "问题而生。",
+      "lede": "每一个功能都消除求职流程中的真实摩擦 —— 不是锦上添花，而是 2026 年求职者的基本配置。",
+      "hero": {
+        "title": "真实的匹配评分",
+        "rubric": "0–100 评分体系",
+        "blurb": "每个 JD 按 0–100 分与你的档案匹配评分。清晰展示哪些技能匹配、哪些不匹配、差距如何弥补。不虚增分数、不搞游戏化，只有你可以复核的公开评分规则。",
+        "tagCoverage": "技能覆盖度",
+        "tagSeniority": "资历匹配",
+        "tagYoe": "工作年限",
+        "tagDomain": "领域重合度"
+      },
+      "atsSafe": {
+        "title": "ATS 兼容",
+        "blurb": "输出可被 Workday、Greenhouse、Lever、iCIMS 清晰解析 —— 招聘方不会看到乱码文件。"
+      },
+      "evidence": {
+        "title": "基于证据",
+        "blurb": "每一条要点都引用自你过往经历中的真实内容。零幻觉描述。"
+      },
+      "tailor": {
+        "title": "4 秒极速定制",
+        "blurb": "流式生成 —— 实时看到简历逐字成形，无需等待加载。"
+      },
+      "latex": {
+        "title": "LaTeX 级 PDF",
+        "blurb": "专业排版输出，精准字距、避免孤行、排版考究 —— 不是伪装的 Word 文档。支持中英双语。"
+      },
+      "byoLlm": {
+        "title": "自带模型",
+        "blurb": "使用 Joblit 推理，或接入你自己的 Gemini / Claude / OpenAI 密钥。成本、延迟、选择权都在你手上。"
+      }
+    },
+    "deepDive": {
+      "resume": {
+        "kicker": "简历工作室",
+        "titlePrefix": "按岗位重新定制你的简历，",
+        "titleItalic": "全程自动。",
+        "lede": "不用再维护 14 个版本的简历。Joblit 读取每个 JD、重写你的摘要和要点来突出重点、并保留清晰的差异对比，让你一眼看出改了什么。",
+        "b1": "实时按 JD 评分关键词密度",
+        "b2": "一份基础档案 → 无限量定制版本",
+        "b3": "并排差异视图，一键接受/拒绝",
+        "b4": "导出 ATS 兼容的 PDF、DOCX 或纯文本",
+        "before": "之前",
+        "after": "之后 · Stripe JD",
+        "roleBefore": "前端工程师 · 5 年",
+        "roleAfter": "高级前端工程师",
+        "h1": "主导仪表盘 React 重构(包体 ↓ 47%)",
+        "h2": "设计系统、无障碍、性能"
+      },
+      "ats": {
+        "kicker": "Chrome 扩展",
+        "titlePrefix": "ATS 表单",
+        "titleItalic": "自动填写。",
+        "lede": "Workday、Greenhouse、Lever、iCIMS、SuccessFactors —— 扩展自动识别表单、把每个字段映射到你的档案、在你眼前完成填写。检查、编辑、提交。",
+        "b1": "Shadow-DOM 组件 —— 不会与宿主页面冲突",
+        "b2": "文件上传、多步表单、日期选择器全部支持",
+        "b3": "每个字段的置信度 —— 疑问字段等你确认",
+        "b4": "档案同步后可离线工作",
+        "url": "stripe.com/careers/apply",
+        "fullName": "姓名",
+        "email": "邮箱",
+        "linkedin": "LinkedIn",
+        "yoe": "工作年限",
+        "uploadLabel": "上传简历",
+        "uploadValue": "alex-chen-stripe-2026.pdf"
+      },
+      "fetch": {
+        "kicker": "批量抓取",
+        "titlePrefix": "一次性从所有平台",
+        "titleItalic": "拉取岗位。",
+        "lede": "不用再开十二个标签页。一次搜索并行扫描 LinkedIn、Greenhouse、Lever、Workable、Indeed —— 按 URL 去重、按匹配度排序、过滤已看过的。",
+        "b1": "并行适配器，原子化 API 防止重复",
+        "b2": "智能筛选:远程、薪资下限、资历、地点",
+        "b3": "每日定时抓取 —— 新岗位自动推送",
+        "b4": "导出 CSV 便于自行跟踪",
+        "header": "抓取运行 · 现在",
+        "statusDone": "完成",
+        "statusRunning": "运行中",
+        "statusQueued": "排队中",
+        "total": "独立岗位总数"
+      }
+    },
+    "stats": {
+      "kicker": "数据一览",
+      "applications": "本周定制的申请数",
+      "avgTime": "JD 到定制 PDF 的平均用时",
+      "interviewRate": "匹配度 80%+ 岗位的面试率",
+      "boards": "单次运行抓取的招聘平台数"
+    },
+    "testimonials": {
+      "kicker": "用户评价",
+      "titlePrefix": "少花时间申请,",
+      "titleItalic": "多花时间面试。",
+      "t1": {
+        "text": "我以前每月花三个周末改简历,只为针对特定岗位。Joblit 四秒完成,而且生成的内容确实是我的 —— 从我的真实经历中抽取证据,不凭空捏造。",
+        "name": "Sarah K.",
+        "role": "资深工程师 · 已收到 Linear offer"
+      },
+      "t2": {
+        "text": "匹配评分很真实。它直接告诉我某个岗位只有 52% 匹配、建议跳过,仅此一点就帮我省下了整个周六。",
+        "name": "Marcus T.",
+        "role": "产品设计师 · Notion"
+      },
+      "t3": {
+        "text": "自动填写扩展真的能用。我在一次咖啡时间投了 14 份申请。生成的 PDF 比我用 Word 做出来的好看多了。",
+        "name": "Ana R.",
+        "role": "机器学习工程师 · 6 周收到 3 份 offer"
+      }
+    },
+    "pricing": {
+      "kicker": "定价",
+      "titlePrefix": "免费开始。",
+      "titleItalic": "成长后公平收费。",
+      "lede": "注册无需信用卡。你的数据和 AI 密钥始终归你所有。",
+      "mostPopular": "最受欢迎",
+      "starter": {
+        "name": "入门版",
+        "price": "¥0",
+        "cadence": "/月",
+        "blurb": "适合轻度求职。运行干净、专注流程所需的一切。",
+        "f1": "无限岗位抓取",
+        "f2": "每月 20 份定制简历",
+        "f3": "LaTeX PDF 导出",
+        "f4": "Chrome 扩展",
+        "cta": "开始使用"
+      },
+      "pro": {
+        "name": "专业版",
+        "price": "¥88",
+        "cadence": "/月",
+        "blurb": "适合活跃求职者。无限生成、优先使用顶级模型、全部适配器。",
+        "f1": "包含入门版所有功能",
+        "f2": "无限定制简历",
+        "f3": "优先 GPT-4 / Claude 路由",
+        "f4": "全部 ATS 适配器(Workday、SF 等)",
+        "f5": "每日定时抓取",
+        "cta": "开始 14 天试用"
+      },
+      "byol": {
+        "name": "自带模型",
+        "price": "¥42",
+        "cadence": "/月",
+        "blurb": "使用你自己的模型提供商。为产品付费,不为 token 付费。",
+        "f1": "包含专业版所有功能",
+        "f2": "你自己的 OpenAI / Anthropic / Gemini 密钥",
+        "f3": "本地部署选项(规划中)",
+        "f4": "邮件支持",
+        "cta": "连接密钥"
+      }
+    },
+    "faq": {
+      "kicker": "常见问题",
+      "titlePrefix": "针对",
+      "titleItalic": "真实",
+      "titleSuffix": "问题的坦诚回答。",
+      "items": [
+        {
+          "q": "这只是 ChatGPT 加几步操作吗?",
+          "a": "不是。Joblit 将每个 JD 解析为结构化数据、与你的档案评分匹配、每条要点都基于你过往经历的真实证据。LLM 只是流水线的一部分 —— 其余是结构化提取、ATS 兼容排版、以及与招聘平台的真实集成。"
+        },
+        {
+          "q": "我的数据会被用于训练模型吗?",
+          "a": "不会。你的档案和生成的简历永远不会用于训练。如果你自带 LLM 密钥,数据直接按该提供商条款传输 —— 我们完全看不到。"
+        },
+        {
+          "q": "匹配评分如何运作?",
+          "a": "每个 JD 会解析出所需技能、工作年限、资历、领域。我们用一套公开的评分规则与你的档案进行匹配,你可以查看并提出异议。强(80+)、良(65–79)、一般(50–64)、弱(<50)。"
+        },
+        {
+          "q": "Chrome 扩展支持 Workday / Greenhouse / Lever 吗?",
+          "a": "是的,还支持 iCIMS 和 SuccessFactors。我们为每个 ATS 提供专用适配器,这样 Workday 的多步表单、日期选择器等怪异字段都能正常工作。"
+        },
+        {
+          "q": "可以使用我自己的 OpenAI / Claude / Gemini 密钥吗?",
+          "a": "可以。自带模型是一等公民,每月费用更低。你为产品付费,直接向模型方支付 token 费用。"
+        },
+        {
+          "q": "如果生成的要点不准确怎么办?",
+          "a": "每条要点都基于你档案中写过的内容。如果你不满意,一键即可恢复。最终文字始终归你掌控。"
+        }
+      ]
+    },
+    "cta": {
+      "titlePrefix": "停止重写简历,",
+      "titleItalic": "开始收到面试。",
+      "lede": "永久免费。无需信用卡。两分钟即可导入你的档案并完成首次抓取。",
+      "primary": "免费开始",
+      "secondary": "预约 10 分钟演示"
+    },
+    "footer": {
+      "tagline": "AI 求职工作台。抓取、定制、申请。由厌倦现状的人打造。",
+      "product": {
+        "heading": "产品",
+        "jobs": "岗位",
+        "resume": "简历工作室",
+        "extension": "Chrome 扩展",
+        "changelog": "更新日志"
+      },
+      "company": {
+        "heading": "公司",
+        "about": "关于我们",
+        "careers": "加入我们",
+        "press": "媒体报道",
+        "contact": "联系我们"
+      },
+      "resources": {
+        "heading": "资源",
+        "docs": "文档",
+        "guide": "简历指南",
+        "blog": "博客",
+        "templates": "模板"
+      },
+      "legal": {
+        "heading": "法律",
+        "privacy": "隐私政策",
+        "terms": "使用条款",
+        "security": "安全说明",
+        "dpa": "数据处理协议"
+      },
+      "copyright": "© 2026 Joblit Labs. 保留所有权利。",
+      "designed": "设计于旧金山 · 为全球求职者打造"
+    }
+  },
+  "extension": {
+    "title": "浏览器扩展",
+    "subtitle": "管理你的 Joblit 自动填写扩展令牌,查看提交历史。",
+    "installGuide": "安装指南"
   }
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowRight, Search } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { useSession } from "next-auth/react";
+import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/providers/ThemeProvider";
 
@@ -17,18 +18,19 @@ interface NavLink {
   href: string;
 }
 
-const LINKS: NavLink[] = [
-  { label: "Product", href: "#product" },
-  { label: "How it works", href: "#how" },
-  { label: "Pricing", href: "#pricing" },
-  { label: "FAQ", href: "#faq" },
-  { label: "Changelog", href: "#" },
-];
-
 export function Nav() {
   const { status } = useSession();
   const reduced = useReducedMotion();
   const [scrolled, setScrolled] = useState(false);
+  const t = useTranslations("landing.nav");
+
+  const LINKS: NavLink[] = [
+    { label: t("product"), href: "#product" },
+    { label: t("howItWorks"), href: "#how" },
+    { label: t("pricing"), href: "#pricing" },
+    { label: t("faq"), href: "#faq" },
+    { label: t("changelog"), href: "#" },
+  ];
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -58,7 +60,7 @@ export function Nav() {
         ? "/login"
         : "#";
   const ctaLabel =
-    status === "authenticated" ? "Open app" : "Start free";
+    status === "authenticated" ? t("openApp") : t("startFree");
 
   return (
     // Sticky (not fixed) so the nav genuinely FOLLOWS scroll within the
@@ -129,7 +131,7 @@ export function Nav() {
               href="/login"
               className="hidden rounded-full px-3 py-1.5 text-[13px] font-medium text-foreground/70 transition-colors hover:text-foreground sm:inline-block"
             >
-              Log in
+              {t("logIn")}
             </Link>
           )}
           <Link

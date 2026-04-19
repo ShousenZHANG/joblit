@@ -2,6 +2,7 @@
 
 import { Check } from "lucide-react";
 import { motion } from "framer-motion";
+import { useTranslations } from "next-intl";
 import { fadeUp, stagger, useReveal } from "./lib/motion";
 
 // Deep-dive #3 — parallel fetch across boards. The 5 progress rows
@@ -24,13 +25,6 @@ const ROWS: FetchRow[] = [
   { source: "Indeed", percent: 0, count: null, status: "queued" },
 ];
 
-const BULLETS = [
-  "Parallel adapters; atomic run-once API prevents dupes",
-  "Smart filters: remote, salary floor, seniority, location",
-  "Scheduled daily fetches — new roles show up in your inbox",
-  "Export runs as CSV for your own tracking",
-];
-
 const STATUS_STYLE: Record<FetchRow["status"], string> = {
   done: "bg-brand-emerald-100 text-brand-emerald-700",
   running: "bg-[theme(colors.tier-fair-bg)] text-[theme(colors.tier-fair-fg)]",
@@ -39,6 +33,13 @@ const STATUS_STYLE: Record<FetchRow["status"], string> = {
 
 export function DeepDiveFetch() {
   const reveal = useReveal();
+  const t = useTranslations("landing.deepDive.fetch");
+  const BULLETS = [t("b1"), t("b2"), t("b3"), t("b4")];
+  const STATUS_LABEL: Record<FetchRow["status"], string> = {
+    done: t("statusDone"),
+    running: t("statusRunning"),
+    queued: t("statusQueued"),
+  };
   return (
     <motion.section
       {...reveal}
@@ -53,23 +54,22 @@ export function DeepDiveFetch() {
             className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-emerald-700"
           >
             <span aria-hidden className="inline-block h-px w-4 bg-brand-emerald-600" />
-            Batch fetch
+            {t("kicker")}
           </motion.div>
           <motion.h3
             variants={fadeUp}
             className="text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl"
           >
-            Pull from every board,{" "}
-            <em className="font-serif italic text-brand-emerald-700">at once.</em>
+            {t("titlePrefix")}{" "}
+            <em className="font-serif italic text-brand-emerald-700">
+              {t("titleItalic")}
+            </em>
           </motion.h3>
           <motion.p
             variants={fadeUp}
             className="mt-4 text-base leading-relaxed text-muted-foreground"
           >
-            Don&apos;t open twelve tabs. One search runs in parallel across
-            LinkedIn, Greenhouse boards, Lever, Workable, Indeed — dedups by
-            posting URL, sorts by match, filters out what you&apos;ve already
-            seen.
+            {t("lede")}
           </motion.p>
           <motion.ul variants={stagger} className="mt-6 flex flex-col gap-3">
             {BULLETS.map((b) => (
@@ -94,7 +94,7 @@ export function DeepDiveFetch() {
           className="relative rounded-3xl border border-border/60 bg-background p-6 shadow-[var(--shadow-card-emerald)]"
         >
           <div className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Fetch run · now
+            {t("header")}
           </div>
           <ul className="flex flex-col gap-3" role="list">
             {ROWS.map((row) => (
@@ -126,7 +126,7 @@ export function DeepDiveFetch() {
                     STATUS_STYLE[row.status]
                   }
                 >
-                  {row.status}
+                  {STATUS_LABEL[row.status]}
                 </span>
               </li>
             ))}
@@ -134,7 +134,7 @@ export function DeepDiveFetch() {
 
           <div className="mt-5 flex items-center justify-between rounded-2xl bg-gradient-to-br from-brand-emerald-600 to-brand-emerald-700 px-5 py-4 text-white">
             <span className="text-sm font-semibold uppercase tracking-wider">
-              Total unique roles
+              {t("total")}
             </span>
             <span className="text-3xl font-bold tabular-nums">220</span>
           </div>

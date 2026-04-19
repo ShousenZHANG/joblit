@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useTranslations } from "next-intl";
 import { fadeUp, stagger, useReveal } from "./lib/motion";
 import { SectionKicker } from "./SectionKicker";
 
@@ -15,32 +16,6 @@ interface Quote {
   accent?: "emerald" | "teal" | "amber";
 }
 
-const QUOTES: Quote[] = [
-  {
-    initial: "S",
-    text:
-      "I spent three weekends a month tweaking resumes for specific roles. Joblit does it in four seconds, and the bullets are actually mine — it pulls evidence from my past work, not thin air.",
-    name: "Sarah K.",
-    role: "Staff Engineer · offer at Linear",
-    accent: "emerald",
-  },
-  {
-    initial: "M",
-    text:
-      "The match score is honest. It told me a role was 52% and to skip it. That alone saved me an entire Saturday.",
-    name: "Marcus T.",
-    role: "Product Designer · Notion",
-    accent: "teal",
-  },
-  {
-    initial: "A",
-    text:
-      "The autofill extension just works. I applied to 14 jobs on one coffee break. The PDFs look better than anything I was making in Word.",
-    name: "Ana R.",
-    role: "ML Engineer · 3 offers in 6 weeks",
-    accent: "amber",
-  },
-];
 
 const ACCENT_BG: Record<NonNullable<Quote["accent"]>, string> = {
   emerald: "bg-brand-emerald-100 text-brand-emerald-700",
@@ -50,6 +25,30 @@ const ACCENT_BG: Record<NonNullable<Quote["accent"]>, string> = {
 
 export function Testimonials() {
   const reveal = useReveal();
+  const t = useTranslations("landing.testimonials");
+  const QUOTES: Quote[] = [
+    {
+      initial: t("t1.name").charAt(0),
+      text: t("t1.text"),
+      name: t("t1.name"),
+      role: t("t1.role"),
+      accent: "emerald",
+    },
+    {
+      initial: t("t2.name").charAt(0),
+      text: t("t2.text"),
+      name: t("t2.name"),
+      role: t("t2.role"),
+      accent: "teal",
+    },
+    {
+      initial: t("t3.name").charAt(0),
+      text: t("t3.text"),
+      name: t("t3.name"),
+      role: t("t3.role"),
+      accent: "amber",
+    },
+  ];
   return (
     <motion.section
       {...reveal}
@@ -58,11 +57,11 @@ export function Testimonials() {
       variants={fadeUp}
     >
       <div className="mb-12 text-center">
-        <SectionKicker>Candidates</SectionKicker>
+        <SectionKicker>{t("kicker")}</SectionKicker>
         <h2 className="text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-          Less time applying.{" "}
+          {t("titlePrefix")}{" "}
           <em className="font-serif italic text-brand-emerald-700">
-            More time interviewing.
+            {t("titleItalic")}
           </em>
         </h2>
       </div>

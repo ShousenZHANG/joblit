@@ -3,53 +3,54 @@
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { motion } from "framer-motion";
+import { useTranslations } from "next-intl";
 import { fadeUp, useReveal } from "./lib/motion";
 
 // Footer — 5-column grid (brand + 4 link sections) matching Landing.html
 // `footer.site`. Uses lucide Search glyph for the logo mark, otherwise
 // plain-text lists so translators and tools can reach every link.
 
-const COLUMNS: Array<{ heading: string; links: { label: string; href: string }[] }> = [
-  {
-    heading: "Product",
-    links: [
-      { label: "Jobs", href: "/jobs" },
-      { label: "Resume studio", href: "/resume" },
-      { label: "Chrome extension", href: "/get-extension" },
-      { label: "Changelog", href: "#" },
-    ],
-  },
-  {
-    heading: "Company",
-    links: [
-      { label: "About", href: "#" },
-      { label: "Careers", href: "#" },
-      { label: "Press", href: "#" },
-      { label: "Contact", href: "#" },
-    ],
-  },
-  {
-    heading: "Resources",
-    links: [
-      { label: "Docs", href: "#" },
-      { label: "Resume guide", href: "#" },
-      { label: "Blog", href: "#" },
-      { label: "Templates", href: "#" },
-    ],
-  },
-  {
-    heading: "Legal",
-    links: [
-      { label: "Privacy", href: "/privacy" },
-      { label: "Terms", href: "/terms" },
-      { label: "Security", href: "#" },
-      { label: "DPA", href: "#" },
-    ],
-  },
-];
-
 export function Footer() {
   const reveal = useReveal();
+  const t = useTranslations("landing.footer");
+  const COLUMNS: Array<{ heading: string; links: { label: string; href: string }[] }> = [
+    {
+      heading: t("product.heading"),
+      links: [
+        { label: t("product.jobs"), href: "/jobs" },
+        { label: t("product.resume"), href: "/resume" },
+        { label: t("product.extension"), href: "/get-extension" },
+        { label: t("product.changelog"), href: "#" },
+      ],
+    },
+    {
+      heading: t("company.heading"),
+      links: [
+        { label: t("company.about"), href: "#" },
+        { label: t("company.careers"), href: "#" },
+        { label: t("company.press"), href: "#" },
+        { label: t("company.contact"), href: "#" },
+      ],
+    },
+    {
+      heading: t("resources.heading"),
+      links: [
+        { label: t("resources.docs"), href: "#" },
+        { label: t("resources.guide"), href: "#" },
+        { label: t("resources.blog"), href: "#" },
+        { label: t("resources.templates"), href: "#" },
+      ],
+    },
+    {
+      heading: t("legal.heading"),
+      links: [
+        { label: t("legal.privacy"), href: "/privacy" },
+        { label: t("legal.terms"), href: "/terms" },
+        { label: t("legal.security"), href: "#" },
+        { label: t("legal.dpa"), href: "#" },
+      ],
+    },
+  ];
   return (
     <motion.footer
       {...reveal}
@@ -75,8 +76,7 @@ export function Footer() {
               Joblit
             </Link>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted-foreground">
-              The AI job-search workstation. Fetch, tailor, apply. Built by
-              people who got tired of the rest.
+              {t("tagline")}
             </p>
           </div>
 
@@ -102,8 +102,8 @@ export function Footer() {
         </div>
 
         <div className="mt-12 flex flex-col items-start justify-between gap-2 border-t border-border/60 pt-6 text-xs text-muted-foreground sm:flex-row sm:items-center">
-          <span>© 2026 Joblit Labs. All rights reserved.</span>
-          <span>Designed in San Francisco · Built for candidates everywhere</span>
+          <span>{t("copyright")}</span>
+          <span>{t("designed")}</span>
         </div>
       </div>
     </motion.footer>

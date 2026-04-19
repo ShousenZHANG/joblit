@@ -2,6 +2,7 @@
 
 import { Plus } from "lucide-react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { fadeUp, useReveal } from "./lib/motion";
 import { SectionKicker } from "./SectionKicker";
@@ -16,37 +17,12 @@ interface QA {
   a: string;
 }
 
-const QAS: QA[] = [
-  {
-    q: "Is this just ChatGPT with extra steps?",
-    a: "No. Joblit parses each JD into a structured schema, scores it against your profile, and grounds every bullet in real evidence from your past experience. The LLM is one part of the pipeline — the rest is structured extraction, ATS-safe formatting, and real integrations with job boards.",
-  },
-  {
-    q: "Will my data be used to train models?",
-    a: "No. Your profile and generated resumes are never used for training. If you bring your own LLM key, data goes direct to that provider under their terms — we never see it.",
-  },
-  {
-    q: "How does the match score work?",
-    a: "Each JD is parsed for required skills, years of experience, seniority, and domain. We match against your profile with a published rubric you can see and argue with. Strong (80+), Good (65–79), Fair (50–64), Weak (<50).",
-  },
-  {
-    q: "Does the Chrome extension work on Workday / Greenhouse / Lever?",
-    a: "Yes, plus iCIMS and SuccessFactors. We ship dedicated adapters per ATS so quirky fields (like Workday's multi-step forms and date pickers) behave correctly.",
-  },
-  {
-    q: "Can I use my own OpenAI / Claude / Gemini key?",
-    a: "Yes. Bring-your-own-LLM is a first-class path and costs less per month. You pay us for the product; you pay the provider for tokens directly.",
-  },
-  {
-    q: "What if the generated bullets aren't accurate?",
-    a: "Every bullet is grounded in a line you wrote in your profile. If you don't like a change, one click reverts it. You always own the final text.",
-  },
-];
-
 export function Faq() {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
   const reduced = useReducedMotion();
   const reveal = useReveal();
+  const t = useTranslations("landing.faq");
+  const QAS = t.raw("items") as QA[];
 
   return (
     <motion.section
@@ -57,11 +33,13 @@ export function Faq() {
       variants={fadeUp}
     >
       <div className="mb-12 text-center">
-        <SectionKicker>Questions</SectionKicker>
+        <SectionKicker>{t("kicker")}</SectionKicker>
         <h2 className="text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-          Honest answers to{" "}
-          <em className="font-serif italic text-brand-emerald-700">real</em>{" "}
-          questions.
+          {t("titlePrefix")}{" "}
+          <em className="font-serif italic text-brand-emerald-700">
+            {t("titleItalic")}
+          </em>{" "}
+          {t("titleSuffix")}
         </h2>
       </div>
 

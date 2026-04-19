@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getServerSession } from "next-auth/next";
+import { getTranslations } from "next-intl/server";
 import { authOptions } from "@/auth";
 import { ExtensionTokenManager } from "./ExtensionTokenManager";
 import { KnowledgeBase } from "./KnowledgeBase";
@@ -11,6 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function ExtensionPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect("/login?callbackUrl=/extension");
+  const t = await getTranslations("extension");
 
   return (
     <main className="flex h-full min-h-0 flex-1 flex-col" data-guide-anchor="install_extension">
@@ -19,11 +21,10 @@ export default async function ExtensionPage() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <h1 className="text-lg font-semibold text-foreground lg:text-2xl">
-                Browser Extension
+                {t("title")}
               </h1>
               <p className="text-sm text-muted-foreground">
-                Manage your Joblit AutoFill extension tokens and view submission
-                history.
+                {t("subtitle")}
               </p>
             </div>
             <Link
@@ -34,7 +35,7 @@ export default async function ExtensionPage() {
               <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-brand-emerald-600 shadow-sm transition-transform duration-200 group-hover:scale-110">
                 <Chrome className="h-3.5 w-3.5 text-white" />
               </span>
-              <span className="hidden sm:inline">Installation Guide</span>
+              <span className="hidden sm:inline">{t("installGuide")}</span>
               <ArrowUpRight className="h-3.5 w-3.5 text-brand-emerald-500 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
             </Link>
           </div>

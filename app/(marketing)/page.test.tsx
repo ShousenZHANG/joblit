@@ -1,6 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { NextIntlClientProvider } from "next-intl";
 import MarketingPage from "./page";
+import messages from "../../messages/en.json";
 
 // Mocks —
 //   next-auth: SessionProvider is injected by a production layout, not by
@@ -26,7 +28,11 @@ vi.mock("next-themes", async () => {
 
 describe("MarketingPage", () => {
   it("renders all 14 landing sections", () => {
-    render(<MarketingPage />);
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <MarketingPage />
+      </NextIntlClientProvider>,
+    );
 
     const required = [
       "landing-nav",

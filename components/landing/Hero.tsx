@@ -11,6 +11,7 @@ import {
   Star,
 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
+import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { floatIn } from "./lib/motion";
 
@@ -82,6 +83,7 @@ const TIER_BG: Record<JobRow["tier"], string> = {
 export function Hero() {
   const reduced = useReducedMotion();
   const [activeRow, setActiveRow] = useState(0);
+  const t = useTranslations("landing.hero");
 
   // Rotate the "active" row every 2.6s — matches Landing.html JS.
   useEffect(() => {
@@ -113,9 +115,9 @@ export function Hero() {
             <span className="relative h-1.5 w-1.5 rounded-full bg-brand-emerald-600" />
           </span>
           <span className="rounded-full bg-brand-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
-            New
+            {t("eyebrowNew")}
           </span>
-          Self-learning extension · v0.1
+          {t("eyebrowTagline")}
         </span>
       </motion.div>
 
@@ -126,10 +128,10 @@ export function Hero() {
         transition={{ duration: 0.6, delay: 0.1 }}
         className="mx-auto mt-6 max-w-3xl text-balance text-center text-5xl font-bold tracking-tight text-foreground sm:text-6xl lg:text-7xl"
       >
-        The job search,
+        {t("titleLine1")}
         <br />
         <em className="bg-gradient-to-br from-brand-emerald-700 via-brand-emerald-600 to-[#14b8a6] bg-clip-text font-serif italic text-transparent">
-          re-engineered.
+          {t("titleItalic")}
         </em>
       </motion.h1>
 
@@ -140,9 +142,7 @@ export function Hero() {
         transition={{ duration: 0.5, delay: 0.2 }}
         className="mx-auto mt-6 max-w-2xl text-balance text-center text-base leading-relaxed text-muted-foreground sm:text-lg"
       >
-        Joblit fetches roles, scores them against your profile, tailors your
-        resume per JD, and auto-fills the applications. One workstation. Zero
-        copy-paste.
+        {t("subtitle")}
       </motion.p>
 
       {/* CTA */}
@@ -156,7 +156,7 @@ export function Hero() {
           href="/login"
           className="inline-flex h-11 items-center gap-2 rounded-full bg-foreground px-6 text-sm font-semibold text-background transition-transform hover:-translate-y-px hover:bg-foreground/90"
         >
-          Start free
+          {t("startFree")}
           <ArrowRight className="h-4 w-4" aria-hidden />
         </Link>
         <Link
@@ -164,7 +164,7 @@ export function Hero() {
           className="inline-flex h-11 items-center gap-2 rounded-full border border-border bg-background/70 px-6 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
         >
           <Play className="h-4 w-4" aria-hidden />
-          Watch demo
+          {t("watchDemo")}
         </Link>
       </motion.div>
 
@@ -176,11 +176,10 @@ export function Hero() {
         className="mt-6 flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground sm:flex-row sm:gap-4"
       >
         <span>
-          <strong className="font-semibold text-foreground">4,281</strong>{" "}
-          applications tailored this week
+          {t("metaCount", { count: "4,281" })}
         </span>
         <span aria-hidden className="hidden h-1 w-1 rounded-full bg-border sm:block" />
-        <span>Free forever · no credit card</span>
+        <span>{t("metaFree")}</span>
       </motion.div>
 
       {/* Canvas */}
@@ -349,8 +348,8 @@ export function Hero() {
             <CheckCircle2 className="h-4 w-4" aria-hidden />
           </span>
           <div className="text-xs">
-            <div className="font-semibold text-foreground">+3 skills matched</div>
-            <div className="text-muted-foreground">vs. your base resume</div>
+            <div className="font-semibold text-foreground">{t("floats.skillsMatched")}</div>
+            <div className="text-muted-foreground">{t("floats.skillsMatchedDesc")}</div>
           </div>
         </motion.div>
 
@@ -364,8 +363,8 @@ export function Hero() {
             <Star className="h-4 w-4" aria-hidden />
           </span>
           <div className="text-xs">
-            <div className="font-semibold text-foreground">Tailored in 4.2s</div>
-            <div className="text-muted-foreground">ready to export PDF</div>
+            <div className="font-semibold text-foreground">{t("floats.tailored")}</div>
+            <div className="text-muted-foreground">{t("floats.tailoredDesc")}</div>
           </div>
         </motion.div>
 
@@ -379,8 +378,8 @@ export function Hero() {
             <MapPin className="h-4 w-4" aria-hidden />
           </span>
           <div className="text-xs">
-            <div className="font-semibold text-foreground">47 roles fetched</div>
-            <div className="text-muted-foreground">from 6 job boards</div>
+            <div className="font-semibold text-foreground">{t("floats.roles")}</div>
+            <div className="text-muted-foreground">{t("floats.rolesDesc")}</div>
           </div>
         </motion.div>
       </motion.div>

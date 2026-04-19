@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
+import { useTranslations } from "next-intl";
 import { fadeUp, useReveal } from "./lib/motion";
 
 // Final CTA banner. The radial emerald gradients at the corners match
@@ -11,6 +12,7 @@ import { fadeUp, useReveal } from "./lib/motion";
 
 export function Cta() {
   const reveal = useReveal();
+  const t = useTranslations("landing.cta");
   return (
     <motion.section
       {...reveal}
@@ -25,15 +27,14 @@ export function Cta() {
         />
         <div className="relative mx-auto max-w-2xl">
           <h2 className="text-balance text-3xl font-bold tracking-tight text-foreground sm:text-5xl">
-            Stop rewriting your resume.
+            {t("titlePrefix")}
             <br />
             <em className="font-serif italic text-brand-emerald-700">
-              Start getting interviews.
+              {t("titleItalic")}
             </em>
           </h2>
           <p className="mt-6 text-base text-muted-foreground sm:text-lg">
-            Free forever. No credit card. Takes two minutes to import your
-            profile and run your first fetch.
+            {t("lede")}
           </p>
 
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -41,14 +42,14 @@ export function Cta() {
               href="/login"
               className="inline-flex h-11 items-center gap-2 rounded-full bg-foreground px-6 text-sm font-semibold text-background transition-transform hover:-translate-y-px hover:bg-foreground/90"
             >
-              Start free
+              {t("primary")}
               <ArrowRight className="h-4 w-4" aria-hidden />
             </Link>
             <Link
               href="#how"
               className="inline-flex h-11 items-center rounded-full border border-border bg-background/70 px-6 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
             >
-              Book a 10-min demo
+              {t("secondary")}
             </Link>
           </div>
         </div>

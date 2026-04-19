@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { motion } from "framer-motion";
+import { useTranslations } from "next-intl";
 import { fadeUp, stagger, useReveal } from "./lib/motion";
 import { SectionKicker } from "./SectionKicker";
 
@@ -34,42 +35,6 @@ interface Feature {
   title: string;
   blurb: string;
 }
-
-const SECONDARY: Feature[] = [
-  {
-    icon: CheckCircle2,
-    title: "ATS-safe",
-    blurb:
-      "Output parses cleanly through Workday, Greenhouse, Lever, iCIMS — no recruiter sees a garbled file.",
-  },
-  {
-    icon: Star,
-    title: "Evidence-grounded",
-    blurb:
-      "Every bullet cites a real line from your past experience. Zero hallucinated claims, ever.",
-  },
-  {
-    icon: Clock,
-    title: "4-second tailor",
-    blurb:
-      "Streamed generation — watch the resume compose itself in real time, no loading spinners.",
-  },
-];
-
-const TERTIARY: Feature[] = [
-  {
-    icon: FileText,
-    title: "LaTeX-quality PDFs",
-    blurb:
-      "Typeset output with proper kerning, widow control, and typography — not a Word doc in disguise. EN or CN.",
-  },
-  {
-    icon: Link2,
-    title: "Bring your own LLM",
-    blurb:
-      "Use Joblit's inference, or plug in your own Gemini / Claude / OpenAI key. Your cost, your latency, your choice.",
-  },
-];
 
 /** Standard card chrome shared by hero and grid cards. */
 const CARD_BASE =
@@ -110,6 +75,36 @@ function ScoreGlyph() {
 
 export function Features() {
   const reveal = useReveal();
+  const t = useTranslations("landing.features");
+  const SECONDARY: Feature[] = [
+    {
+      icon: CheckCircle2,
+      title: t("atsSafe.title"),
+      blurb: t("atsSafe.blurb"),
+    },
+    {
+      icon: Star,
+      title: t("evidence.title"),
+      blurb: t("evidence.blurb"),
+    },
+    {
+      icon: Clock,
+      title: t("tailor.title"),
+      blurb: t("tailor.blurb"),
+    },
+  ];
+  const TERTIARY: Feature[] = [
+    {
+      icon: FileText,
+      title: t("latex.title"),
+      blurb: t("latex.blurb"),
+    },
+    {
+      icon: Link2,
+      title: t("byoLlm.title"),
+      blurb: t("byoLlm.blurb"),
+    },
+  ];
   return (
     <motion.section
       {...reveal}
@@ -119,17 +114,16 @@ export function Features() {
       variants={fadeUp}
     >
       <div className="mb-16 text-center">
-        <SectionKicker>Why Joblit</SectionKicker>
+        <SectionKicker>{t("kicker")}</SectionKicker>
         <h2 className="text-balance text-3xl font-bold tracking-tight text-foreground sm:text-[42px] sm:leading-[1.08]">
-          Built for the{" "}
+          {t("titlePrefix")}{" "}
           <em className="font-serif italic text-brand-emerald-700">
-            signal-to-noise
+            {t("titleItalic")}
           </em>{" "}
-          problem.
+          {t("titleSuffix")}
         </h2>
         <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-muted-foreground">
-          Every feature shaves friction off a real step of the hunt — not
-          nice-to-haves, table stakes for job seekers in 2026.
+          {t("lede")}
         </p>
       </div>
 
@@ -157,26 +151,22 @@ export function Features() {
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-3">
                   <h3 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-                    Match scoring, honest
+                    {t("hero.title")}
                   </h3>
                   <span className="inline-flex items-center gap-2 rounded-full border border-brand-emerald-200/70 bg-background/70 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-brand-emerald-700">
                     <ScoreGlyph />
-                    0–100 rubric
+                    {t("hero.rubric")}
                   </span>
                 </div>
                 <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-muted-foreground sm:text-base">
-                  Every JD is parsed and scored against your profile on a
-                  0–100 scale. See exactly which skills match, which
-                  don&apos;t, and what to do about the gaps. No inflated
-                  numbers. No gamification. Just a published rubric you can
-                  argue with.
+                  {t("hero.blurb")}
                 </p>
                 <div className="mt-5 flex flex-wrap gap-2 text-[12px]">
                   {[
-                    "Skill coverage",
-                    "Seniority fit",
-                    "Years of experience",
-                    "Domain overlap",
+                    t("hero.tagCoverage"),
+                    t("hero.tagSeniority"),
+                    t("hero.tagYoe"),
+                    t("hero.tagDomain"),
                   ].map((tag) => (
                     <span
                       key={tag}

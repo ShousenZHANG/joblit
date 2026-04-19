@@ -2,6 +2,7 @@
 
 import { FileEdit, FileText, Search } from "lucide-react";
 import { motion } from "framer-motion";
+import { useTranslations } from "next-intl";
 import type { LucideIcon } from "lucide-react";
 import { fadeUp, stagger, useReveal } from "./lib/motion";
 import { SectionKicker } from "./SectionKicker";
@@ -17,32 +18,29 @@ interface Step {
   icon: LucideIcon;
 }
 
-const STEPS: Step[] = [
-  {
-    num: 1,
-    title: "Fetch",
-    blurb:
-      "Pull fresh roles from LinkedIn, Greenhouse, Lever, and more. Dedup by URL, sort by match.",
-    icon: Search,
-  },
-  {
-    num: 2,
-    title: "Tailor",
-    blurb:
-      "Generate a custom resume + cover letter per JD, evidence-grounded in your real experience.",
-    icon: FileEdit,
-  },
-  {
-    num: 3,
-    title: "Apply",
-    blurb:
-      "One-click export to LaTeX PDF or let the Chrome extension auto-fill the ATS form directly.",
-    icon: FileText,
-  },
-];
-
 export function HowItWorks() {
   const reveal = useReveal();
+  const t = useTranslations("landing.how");
+  const STEPS: Step[] = [
+    {
+      num: 1,
+      title: t("steps.fetch.title"),
+      blurb: t("steps.fetch.blurb"),
+      icon: Search,
+    },
+    {
+      num: 2,
+      title: t("steps.tailor.title"),
+      blurb: t("steps.tailor.blurb"),
+      icon: FileEdit,
+    },
+    {
+      num: 3,
+      title: t("steps.apply.title"),
+      blurb: t("steps.apply.blurb"),
+      icon: FileText,
+    },
+  ];
   return (
     <motion.section
       {...reveal}
@@ -52,17 +50,16 @@ export function HowItWorks() {
       variants={fadeUp}
     >
       <div className="mb-14 text-center">
-        <SectionKicker>How it works</SectionKicker>
+        <SectionKicker>{t("kicker")}</SectionKicker>
         <h2 className="text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-          Submit-ready applications in{" "}
+          {t("titlePrefix")}{" "}
           <em className="font-serif italic text-brand-emerald-700">
-            three steps
+            {t("titleItalic")}
           </em>
-          .
+          {t("titleSuffix")}
         </h2>
         <p className="mx-auto mt-4 max-w-2xl text-base text-muted-foreground">
-          No prompting, no template-hunting, no per-job copy-paste. You give
-          Joblit your profile; it does the rest.
+          {t("lede")}
         </p>
       </div>
 
