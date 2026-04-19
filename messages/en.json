@@ -153,6 +153,7 @@
     "statusNew": "New",
     "statusApplied": "Applied",
     "statusRejected": "Rejected",
+    "statusRemote": "Remote",
     "noJobs": "No jobs found.",
     "deleteConfirmTitle": "Delete this job?",
     "deleteConfirmDesc": "This action cannot be undone.",

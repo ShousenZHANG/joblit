@@ -1004,7 +1004,9 @@ describe("JobsClient", () => {
     const primaryActions = (await screen.findAllByTestId("job-primary-actions"))[0];
     const statusCombobox = within(primaryActions).getByRole("combobox");
     await user.click(statusCombobox);
-    await user.click(await screen.findByText("Applied"));
+    // Scope to option role so we don't accidentally click the new
+    // status FilterPill in the list header (same visible text).
+    await user.click(await screen.findByRole("option", { name: "Applied" }));
 
     await screen.findByText("Update failed");
 

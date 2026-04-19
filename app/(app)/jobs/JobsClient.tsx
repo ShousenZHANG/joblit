@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FilterPill } from "@/components/app-shell/FilterPill";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useGuide } from "@/app/GuideContext";
@@ -175,6 +176,20 @@ export function JobsClient({
       setBatchSelectedIds(pruned);
     }
   }, [items, batchSelectMode, batchSelectedIds]);
+
+  // Status counts derived from loaded items. Not a perfect total (API
+  // doesn't return status facets), but gives the filter-pill row a
+  // useful number for the portion of results the user has scrolled.
+  const statusCounts = useMemo(() => {
+    const counts = { NEW: 0, APPLIED: 0, REJECTED: 0 } as Record<
+      JobStatus,
+      number
+    >;
+    for (const job of items) {
+      if (job.status in counts) counts[job.status] += 1;
+    }
+    return counts;
+  }, [items]);
 
   // Lock scroll on the app shell.
   // Re-apply after any modal closes — Radix AlertDialog temporarily sets
@@ -627,8 +642,8 @@ export function JobsClient({
                   />
                 </Button>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="relative">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1 min-w-0">
                   <MapPin
                     className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
                     aria-hidden
@@ -669,7 +684,7 @@ export function JobsClient({
                   }}
                 >
                   <SelectTrigger
-                    className="h-8 text-xs"
+                    className="h-8 flex-1 min-w-0 text-xs"
                     aria-label={t("jobLevel")}
                   >
                     <SelectValue placeholder={tc("allLevels")} />
@@ -681,29 +696,6 @@ export function JobsClient({
                         {level}
                       </SelectItem>
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-2">
-                <Select
-                  value={statusFilter}
-                  onValueChange={(v) => {
-                    startTransition(() => {
-                      setStatusFilter(v as JobStatus | "ALL");
-                    });
-                  }}
-                >
-                  <SelectTrigger
-                    className="h-8 flex-1 text-xs"
-                    aria-label={t("status")}
-                  >
-                    <SelectValue placeholder={tc("all")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">{tc("all")}</SelectItem>
-                    <SelectItem value="NEW">{t("statusNew")}</SelectItem>
-                    <SelectItem value="APPLIED">{t("statusApplied")}</SelectItem>
-                    <SelectItem value="REJECTED">{t("statusRejected")}</SelectItem>
                   </SelectContent>
                 </Select>
                 {market === "AU" && (
@@ -763,25 +755,81 @@ export function JobsClient({
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-between border-b px-4 py-3 text-sm font-semibold">
-              <span>
-                {t("results")}
-                {typeof totalCount === "number" ? (
-                  <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                    · {totalCount} {totalCount === 1 ? "job" : "jobs"}
+            <div className="border-b">
+              <div className="flex items-center justify-between px-4 py-3 text-sm font-semibold">
+                <span>
+                  {t("results")}
+                  {typeof totalCount === "number" ? (
+                    <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                      · {totalCount} {totalCount === 1 ? "job" : "jobs"}
+                    </span>
+                  ) : null}
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    {items.length} loaded
                   </span>
-                ) : null}
-              </span>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">{items.length} loaded</span>
-                <button
-                  type="button"
-                  onClick={() => setBatchSelectMode(true)}
-                  className="flex items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  aria-label="Enter selection mode"
+                  <button
+                    type="button"
+                    onClick={() => setBatchSelectMode(true)}
+                    className="flex items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    aria-label="Enter selection mode"
+                  >
+                    <CheckSquare className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+              {/* Status filter pills — horizontal-scroll row beneath the
+                  Results header so status filtering is one click away
+                  instead of buried in a select dropdown. */}
+              <div className="no-scrollbar -mt-1 flex items-center gap-1.5 overflow-x-auto px-4 pb-3">
+                <FilterPill
+                  active={statusFilter === "ALL"}
+                  onClick={() =>
+                    startTransition(() => setStatusFilter("ALL"))
+                  }
                 >
-                  <CheckSquare className="h-4 w-4" />
-                </button>
+                  {tc("all")}
+                </FilterPill>
+                <FilterPill
+                  active={statusFilter === "NEW"}
+                  count={statusCounts.NEW}
+                  onClick={() =>
+                    startTransition(() => setStatusFilter("NEW"))
+                  }
+                >
+                  {t("statusNew")}
+                </FilterPill>
+                <FilterPill
+                  active={statusFilter === "APPLIED"}
+                  count={statusCounts.APPLIED}
+                  onClick={() =>
+                    startTransition(() => setStatusFilter("APPLIED"))
+                  }
+                >
+                  {t("statusApplied")}
+                </FilterPill>
+                <FilterPill
+                  active={statusFilter === "REJECTED"}
+                  count={statusCounts.REJECTED}
+                  onClick={() =>
+                    startTransition(() => setStatusFilter("REJECTED"))
+                  }
+                >
+                  {t("statusRejected")}
+                </FilterPill>
+                <FilterPill
+                  active={locationFilter === "REMOTE"}
+                  onClick={() =>
+                    startTransition(() =>
+                      setLocationFilter(
+                        locationFilter === "REMOTE" ? "ALL" : "REMOTE",
+                      ),
+                    )
+                  }
+                >
+                  {t("statusRemote")}
+                </FilterPill>
               </div>
             </div>
           )}

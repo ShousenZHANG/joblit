@@ -153,6 +153,7 @@
     "statusNew": "新职位",
     "statusApplied": "已投递",
     "statusRejected": "已拒绝",
+    "statusRemote": "远程",
     "noJobs": "暂无职位。",
     "deleteConfirmTitle": "删除这个职位？",
     "deleteConfirmDesc": "此操作不可撤销。",
