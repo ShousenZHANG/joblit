@@ -24,7 +24,7 @@ function buildDefaultJobsQueryString(market: "AU" | "CN") {
 function JobsListFallback() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2 lg:h-full lg:overflow-hidden">
-      <div className="rounded-3xl border-2 border-slate-900/10 bg-white/80 p-5 shadow-[0_20px_45px_-35px_rgba(15,23,42,0.35)]">
+      <div className="rounded-3xl border-2 border-border/60 bg-background/85 p-5 shadow-[0_20px_45px_-35px_rgba(15,23,42,0.35)]">
         <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr_0.8fr_0.8fr_0.9fr_auto] lg:items-end">
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
@@ -35,7 +35,7 @@ function JobsListFallback() {
         </div>
       </div>
       <section className="grid flex-1 min-h-0 gap-3 lg:h-full lg:grid-cols-[380px_1fr]">
-        <div className="flex min-h-[280px] flex-1 flex-col overflow-hidden rounded-3xl border-2 border-slate-900/10 bg-white/80 p-4">
+        <div className="flex min-h-[280px] flex-1 flex-col overflow-hidden rounded-3xl border-2 border-border/60 bg-background/85 p-4">
           <Skeleton className="h-6 w-32" />
           <div className="mt-4 space-y-3">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -43,7 +43,7 @@ function JobsListFallback() {
             ))}
           </div>
         </div>
-        <div className="flex min-h-[320px] flex-1 flex-col overflow-hidden rounded-3xl border-2 border-slate-900/10 bg-white/80 p-4">
+        <div className="flex min-h-[320px] flex-1 flex-col overflow-hidden rounded-3xl border-2 border-border/60 bg-background/85 p-4">
           <Skeleton className="h-8 w-2/3" />
           <Skeleton className="mt-4 h-40 w-full" />
         </div>

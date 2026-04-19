@@ -110,7 +110,7 @@ function rankVideos(
 }
 
 const HEADING = (
-  <h2 className="mb-4 flex items-center justify-between text-base font-semibold text-slate-900 lg:text-lg">
+  <h2 className="mb-4 flex items-center justify-between text-base font-semibold text-foreground lg:text-lg">
     <span>AI Videos</span>
   </h2>
 );
@@ -212,7 +212,7 @@ export function VideoList() {
               className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
                 active
                   ? "bg-slate-900 text-white"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  : "bg-muted text-muted-foreground hover:bg-slate-200"
               }`}
             >
               {c.label}
@@ -223,8 +223,8 @@ export function VideoList() {
 
       {/* Time window pills */}
       <div className="mb-3 flex items-center gap-2">
-        <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
-        <div className="inline-flex gap-0.5 rounded-lg bg-slate-100/80 p-0.5">
+        <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden />
+        <div className="inline-flex gap-0.5 rounded-lg bg-muted/70 p-0.5">
           {TIME_WINDOWS.map((w) => {
             const active = w.value === timeWindow;
             return (
@@ -234,8 +234,8 @@ export function VideoList() {
                 onClick={() => setTimeWindow(w.value)}
                 className={`rounded-md px-3 py-1 text-[11px] font-semibold transition-all sm:text-xs ${
                   active
-                    ? "bg-white text-emerald-700 shadow-sm"
-                    : "text-slate-500 hover:text-slate-700"
+                    ? "bg-white text-brand-emerald-700 shadow-sm"
+                    : "text-muted-foreground hover:text-foreground/85"
                 }`}
               >
                 {w.label}
@@ -247,7 +247,7 @@ export function VideoList() {
 
       {/* Sort pills + favorites filter */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="inline-flex gap-0.5 rounded-lg bg-slate-100/80 p-0.5">
+        <div className="inline-flex gap-0.5 rounded-lg bg-muted/70 p-0.5">
           {SORTS.map((s) => {
             const active = s.value === sort;
             return (
@@ -257,8 +257,8 @@ export function VideoList() {
                 onClick={() => setSort(s.value)}
                 className={`rounded-md px-3 py-1 text-[11px] font-semibold transition-all sm:text-xs ${
                   active
-                    ? "bg-white text-emerald-700 shadow-sm"
-                    : "text-slate-500 hover:text-slate-700"
+                    ? "bg-white text-brand-emerald-700 shadow-sm"
+                    : "text-muted-foreground hover:text-foreground/85"
                 }`}
               >
                 {s.label}
@@ -275,7 +275,7 @@ export function VideoList() {
           className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors sm:text-xs ${
             showFavoritesOnly
               ? "bg-amber-100 text-amber-700"
-              : "bg-slate-100 text-slate-500 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
+              : "bg-muted text-muted-foreground hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
           }`}
           title={
             favCount === 0
@@ -311,9 +311,9 @@ export function VideoList() {
       ) : isLoading ? (
         <VideoSkeleton />
       ) : error ? (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 p-6 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-6 text-center">
           <AlertCircle className="h-5 w-5 text-rose-500" />
-          <p className="text-sm text-rose-700">
+          <p className="text-sm text-destructive">
             {error instanceof Error ? error.message : "Failed to load videos"}
           </p>
           <button
@@ -321,14 +321,14 @@ export function VideoList() {
             onClick={() =>
               queryClient.invalidateQueries({ queryKey: ["discover-videos"] })
             }
-            className="flex items-center gap-1.5 rounded-lg bg-rose-100 px-3 py-1.5 text-xs font-medium text-rose-700 transition-colors hover:bg-rose-200"
+            className="flex items-center gap-1.5 rounded-lg bg-destructive/20 px-3 py-1.5 text-xs font-medium text-destructive transition-colors hover:bg-rose-200"
           >
             <RefreshCw className="h-3 w-3" />
             Retry
           </button>
         </div>
       ) : items.length === 0 ? (
-        <p className="py-8 text-center text-sm text-slate-500">
+        <p className="py-8 text-center text-sm text-muted-foreground">
           {showFavoritesOnly
             ? "No favorites match this category. Switch category or hit the star on a video."
             : "No videos in this category yet. Try a different filter."}

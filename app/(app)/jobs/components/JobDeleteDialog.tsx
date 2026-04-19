@@ -31,7 +31,7 @@ export function JobDeleteDialog({
         onOpenChange(nextOpen);
       }}
     >
-      <AlertDialogContent className="max-w-md rounded-2xl border-slate-200">
+      <AlertDialogContent className="max-w-md rounded-2xl border-border">
         <AlertDialogHeader>
           <AlertDialogTitle>{t("deleteConfirmTitle")}</AlertDialogTitle>
           <AlertDialogDescription>
@@ -42,7 +42,7 @@ export function JobDeleteDialog({
           <AlertDialogCancel className="rounded-xl">{tc("cancel")}</AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
-            className="rounded-xl bg-rose-600 text-white hover:bg-rose-700"
+            className="rounded-xl bg-destructive text-white hover:bg-destructive"
           >
             {tc("delete")}
           </AlertDialogAction>

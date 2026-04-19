@@ -45,11 +45,11 @@ function TokenSkeleton() {
       {[1, 2].map((i) => (
         <div
           key={i}
-          className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/50 px-4 py-3"
+          className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/40 px-4 py-3"
         >
           <div className="space-y-2">
             <div className="h-4 w-32 animate-pulse rounded-md bg-slate-200" />
-            <div className="h-3 w-48 animate-pulse rounded-md bg-slate-100" />
+            <div className="h-3 w-48 animate-pulse rounded-md bg-muted" />
           </div>
           <div className="h-8 w-16 animate-pulse rounded-lg bg-slate-200" />
         </div>
@@ -203,17 +203,17 @@ export function ExtensionTokenManager() {
       {/* ── Generate Token ── */}
       <div className="ext-card">
         <div className="flex items-center gap-2 mb-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100">
-            <Plus className="h-4 w-4 text-emerald-700" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-emerald-100">
+            <Plus className="h-4 w-4 text-brand-emerald-700" />
           </div>
-          <h2 className="text-sm font-semibold text-slate-800">
+          <h2 className="text-sm font-semibold text-foreground/90">
             Generate New Token
           </h2>
         </div>
 
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <Tag className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+            <Tag className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/70" />
             <input
               ref={inputRef}
               type="text"
@@ -287,10 +287,10 @@ export function ExtensionTokenManager() {
       <div className="ext-card">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
-              <ShieldCheck className="h-4 w-4 text-slate-600" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
+              <ShieldCheck className="h-4 w-4 text-muted-foreground" />
             </div>
-            <h2 className="text-sm font-semibold text-slate-800">
+            <h2 className="text-sm font-semibold text-foreground/90">
               Active Tokens
             </h2>
             {!loading && tokens.length > 0 && (
@@ -303,11 +303,11 @@ export function ExtensionTokenManager() {
           <TokenSkeleton />
         ) : tokens.length === 0 ? (
           <div className="ext-empty-state">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100">
-              <Key className="h-5 w-5 text-slate-400" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted">
+              <Key className="h-5 w-5 text-muted-foreground/70" />
             </div>
-            <p className="text-sm font-medium text-slate-600">No active tokens</p>
-            <p className="text-xs text-slate-400">
+            <p className="text-sm font-medium text-muted-foreground">No active tokens</p>
+            <p className="text-xs text-muted-foreground/70">
               Generate one above to connect the extension.
             </p>
           </div>
@@ -325,10 +325,10 @@ export function ExtensionTokenManager() {
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`ext-token-dot ${token.lastUsedAt ? "ext-token-dot--active" : ""}`} />
                     <div className="min-w-0">
-                      <div className="text-sm font-medium text-slate-800 truncate">
+                      <div className="text-sm font-medium text-foreground/90 truncate">
                         {token.name || "Unnamed token"}
                       </div>
-                      <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
                         <span>Created {formatRelativeDate(token.createdAt)}</span>
                         <span className="text-slate-300">·</span>
                         <span>
@@ -369,7 +369,7 @@ export function ExtensionTokenManager() {
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
             <ShieldCheck className="h-4 w-4 text-blue-600" />
           </div>
-          <h2 className="text-sm font-semibold text-slate-800">
+          <h2 className="text-sm font-semibold text-foreground/90">
             Setup Instructions
           </h2>
         </div>
@@ -405,7 +405,7 @@ export function ExtensionTokenManager() {
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm">
               This will permanently revoke{" "}
-              <span className="font-medium text-slate-700">
+              <span className="font-medium text-foreground/85">
                 &quot;{revokeTarget?.name || "Unnamed token"}&quot;
               </span>
               . Any extension using this token will be disconnected immediately.

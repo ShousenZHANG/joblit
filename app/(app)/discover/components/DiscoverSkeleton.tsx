@@ -4,7 +4,7 @@ export function TrendingSkeleton() {
   return (
     <div className="grid gap-3">
       {Array.from({ length: 5 }).map((_, i) => (
-        <div key={i} className="rounded-xl border border-slate-200 bg-white p-4">
+        <div key={i} className="rounded-xl border border-border bg-white p-4">
           <div className="mb-2 flex items-center gap-2.5">
             <Skeleton className="h-6 w-6 rounded-md" />
             <Skeleton className="h-4 w-40" />
@@ -26,7 +26,7 @@ export function VideoSkeleton() {
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div key={i} className="overflow-hidden rounded-xl border border-border bg-white">
           <Skeleton className="aspect-video w-full" />
           <div className="p-3">
             <Skeleton className="mb-1.5 h-4 w-full" />

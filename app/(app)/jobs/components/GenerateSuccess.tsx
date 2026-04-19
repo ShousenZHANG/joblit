@@ -25,13 +25,13 @@ export function GenerateSuccess({
       {/* Title with confetti effect */}
       <div className="relative overflow-hidden text-center">
         <ConfettiDots />
-        <h3 className="text-lg font-semibold text-slate-900">
+        <h3 className="text-lg font-semibold text-foreground">
           {target === "resume" ? "Resume PDF generated!" : "Cover Letter generated!"}
         </h3>
       </div>
 
       {/* Inline PDF preview */}
-      <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-white">
         <iframe
           title={target === "resume" ? "Resume preview" : "Cover letter preview"}
           src={pdfUrl}
@@ -44,7 +44,7 @@ export function GenerateSuccess({
         <Button
           asChild
           size="sm"
-          className="h-10 rounded-xl border border-emerald-500 bg-emerald-500 px-5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:border-emerald-600 hover:bg-emerald-600 active:translate-y-[1px]"
+          className="h-10 rounded-xl border border-brand-emerald-500 bg-brand-emerald-500 px-5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:border-brand-emerald-600 hover:bg-brand-emerald-600 active:translate-y-[1px]"
         >
           <a href={pdfUrl} download={pdfFilename}>
             <Download className="mr-1.5 h-4 w-4" />
@@ -56,7 +56,7 @@ export function GenerateSuccess({
           variant="outline"
           size="sm"
           onClick={onGenerateOther}
-          className="h-10 rounded-xl border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 active:translate-y-[1px]"
+          className="h-10 rounded-xl border-border bg-white px-4 text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted/40 active:translate-y-[1px]"
         >
           Generate {otherTarget}
           <ArrowRight className="ml-1.5 h-4 w-4" />
@@ -66,7 +66,7 @@ export function GenerateSuccess({
           variant="ghost"
           size="sm"
           onClick={onClose}
-          className="h-10 rounded-xl px-3 text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+          className="h-10 rounded-xl px-3 text-sm text-muted-foreground hover:bg-muted/40 hover:text-foreground/85"
         >
           Done
         </Button>

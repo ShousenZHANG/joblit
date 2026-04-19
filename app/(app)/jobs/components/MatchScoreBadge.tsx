@@ -10,10 +10,10 @@ interface MatchScoreBadgeProps {
 }
 
 const TIER_STYLE: Record<MatchTier, string> = {
-  strong: "bg-emerald-100 text-emerald-800 ring-emerald-200",
+  strong: "bg-brand-emerald-100 text-brand-emerald-800 ring-brand-emerald-200",
   good: "bg-teal-100 text-teal-800 ring-teal-200",
   fair: "bg-amber-100 text-amber-800 ring-amber-200",
-  weak: "bg-slate-200 text-slate-600 ring-slate-300",
+  weak: "bg-slate-200 text-muted-foreground ring-slate-300",
 };
 
 function scoreToTier(score: number): MatchTier {

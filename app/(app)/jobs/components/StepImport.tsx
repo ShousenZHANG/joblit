@@ -24,16 +24,16 @@ export function StepImport({
 }: StepImportProps) {
   if (isFresh) {
     return (
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-5">
+      <div className="rounded-xl border border-brand-emerald-200 bg-brand-emerald-50/50 p-5">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100">
-            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-emerald-100">
+            <CheckCircle2 className="h-5 w-5 text-brand-emerald-600" />
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-semibold text-emerald-900">
+            <h3 className="text-sm font-semibold text-brand-emerald-900">
               AI instructions are up to date
             </h3>
-            <p className="mt-1 text-sm text-emerald-700/80">
+            <p className="mt-1 text-sm text-brand-emerald-700/80">
               Your skill pack matches the current resume snapshot. No need to
               re-import.
             </p>
@@ -41,7 +41,7 @@ export function StepImport({
               <Button
                 size="sm"
                 onClick={onContinue}
-                className="h-10 rounded-xl border border-emerald-500 bg-emerald-500 px-5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:border-emerald-600 hover:bg-emerald-600 active:translate-y-[1px]"
+                className="h-10 rounded-xl border border-brand-emerald-500 bg-brand-emerald-500 px-5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:border-brand-emerald-600 hover:bg-brand-emerald-600 active:translate-y-[1px]"
               >
                 Continue to Copy Prompt
                 <ArrowRight className="ml-1.5 h-4 w-4" />
@@ -50,7 +50,7 @@ export function StepImport({
                 type="button"
                 onClick={onDownload}
                 disabled={isLoading}
-                className="text-xs text-emerald-600 underline-offset-4 hover:underline disabled:opacity-50"
+                className="text-xs text-brand-emerald-600 underline-offset-4 hover:underline disabled:opacity-50"
               >
                 {isLoading ? "Downloading..." : "Re-download ZIP"}
               </button>
@@ -62,35 +62,35 @@ export function StepImport({
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5">
+    <div className="rounded-xl border border-border bg-white p-5">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100">
-          <Package className="h-5 w-5 text-slate-600" />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+          <Package className="h-5 w-5 text-muted-foreground" />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-slate-900">
+          <h3 className="text-sm font-semibold text-foreground">
             Import AI Instructions
           </h3>
-          <p className="mt-1 text-sm text-slate-600">
+          <p className="mt-1 text-sm text-muted-foreground">
             Download a ZIP file that teaches Claude, ChatGPT, or Gemini how to
             tailor your resume perfectly.
           </p>
 
-          <ol className="mt-3 space-y-1.5 text-sm text-slate-600">
+          <ol className="mt-3 space-y-1.5 text-sm text-muted-foreground">
             <li className="flex items-start gap-2">
-              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-500">
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
                 1
               </span>
               Click &quot;Download ZIP&quot; below
             </li>
             <li className="flex items-start gap-2">
-              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-500">
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
                 2
               </span>
               Open Claude/ChatGPT &rarr; Upload ZIP files as Project Knowledge
             </li>
             <li className="flex items-start gap-2">
-              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-500">
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
                 3
               </span>
               Come back here for Step 2
@@ -102,7 +102,7 @@ export function StepImport({
               size="sm"
               disabled={isLoading || isPromptLoading || !hasPromptMeta}
               onClick={onDownload}
-              className="h-10 rounded-xl border border-emerald-500 bg-emerald-500 px-5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:border-emerald-600 hover:bg-emerald-600 active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none"
+              className="h-10 rounded-xl border border-brand-emerald-500 bg-brand-emerald-500 px-5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:border-brand-emerald-600 hover:bg-brand-emerald-600 active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-slate-200 disabled:text-muted-foreground disabled:shadow-none"
             >
               <Download className="mr-1.5 h-4 w-4" />
               {isLoading
@@ -116,7 +116,7 @@ export function StepImport({
           <button
             type="button"
             onClick={onSkip}
-            className="mt-3 text-xs text-slate-500 underline-offset-4 hover:text-slate-700 hover:underline"
+            className="mt-3 text-xs text-muted-foreground underline-offset-4 hover:text-foreground/85 hover:underline"
           >
             Already imported? Skip to next step &rarr;
           </button>

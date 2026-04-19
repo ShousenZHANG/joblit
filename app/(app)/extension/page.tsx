@@ -14,11 +14,11 @@ export default async function ExtensionPage() {
 
   return (
     <main className="flex h-full min-h-0 flex-1 flex-col" data-guide-anchor="install_extension">
-      <section className="flex h-full min-h-0 flex-1 flex-col rounded-3xl border-2 border-slate-900/10 bg-white/80 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] backdrop-blur overflow-hidden">
+      <section className="flex h-full min-h-0 flex-1 flex-col rounded-3xl border-2 border-border/60 bg-background/85 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] backdrop-blur overflow-hidden">
         <div className="shrink-0 px-4 pt-3 pb-2 lg:px-6 lg:pt-6 lg:pb-4">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h1 className="text-lg font-semibold text-slate-900 lg:text-2xl">
+              <h1 className="text-lg font-semibold text-foreground lg:text-2xl">
                 Browser Extension
               </h1>
               <p className="text-sm text-muted-foreground">
@@ -29,13 +29,13 @@ export default async function ExtensionPage() {
             <Link
               href="/get-extension"
               target="_blank"
-              className="group relative flex shrink-0 items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 shadow-sm transition-all duration-200 hover:border-emerald-300 hover:bg-emerald-100 hover:shadow-md"
+              className="group relative flex shrink-0 items-center gap-2 rounded-xl border border-brand-emerald-200 bg-brand-emerald-50 px-4 py-2 text-sm font-semibold text-brand-emerald-800 shadow-sm transition-all duration-200 hover:border-brand-emerald-300 hover:bg-brand-emerald-100 hover:shadow-md"
             >
-              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-600 shadow-sm transition-transform duration-200 group-hover:scale-110">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-brand-emerald-600 shadow-sm transition-transform duration-200 group-hover:scale-110">
                 <Chrome className="h-3.5 w-3.5 text-white" />
               </span>
               <span className="hidden sm:inline">Installation Guide</span>
-              <ArrowUpRight className="h-3.5 w-3.5 text-emerald-500 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+              <ArrowUpRight className="h-3.5 w-3.5 text-brand-emerald-500 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
             </Link>
           </div>
         </div>

@@ -88,14 +88,14 @@ export function JsonInputPanel({
         {/* Preview panel (desktop: side, mobile: collapsible) */}
         <div className="hidden flex-col md:flex">
           {!hasInput ? (
-            <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/50 p-3">
-              <p className="text-center text-xs text-slate-400">
+            <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 p-3">
+              <p className="text-center text-xs text-muted-foreground/70">
                 Paste your AI output on the left to see a preview here
               </p>
             </div>
           ) : isValid ? (
-            <div className="overflow-y-auto rounded-lg border border-emerald-200 bg-white p-3">
-              <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-emerald-600">
+            <div className="overflow-y-auto rounded-lg border border-brand-emerald-200 bg-white p-3">
+              <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-brand-emerald-600">
                 Preview
               </div>
               {parsedOutput && "cvSummary" in parsedOutput ? (
@@ -105,7 +105,7 @@ export function JsonInputPanel({
               ) : null}
             </div>
           ) : (
-            <div className="flex flex-1 items-center justify-center rounded-lg border border-rose-200 bg-rose-50/50 p-3">
+            <div className="flex flex-1 items-center justify-center rounded-lg border border-destructive/30 bg-destructive/10/50 p-3">
               <p className="text-center text-xs text-rose-500">
                 Invalid JSON &mdash; fix errors to see preview
               </p>
@@ -119,7 +119,7 @@ export function JsonInputPanel({
             <button
               type="button"
               onClick={() => setShowPreview((p) => !p)}
-              className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600"
+              className="flex w-full items-center justify-between rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-muted-foreground"
             >
               {showPreview ? "Hide preview" : "Show preview"}
               {showPreview ? (
@@ -129,7 +129,7 @@ export function JsonInputPanel({
               )}
             </button>
             {showPreview && (
-              <div className="mt-2 rounded-lg border border-emerald-200 bg-white p-3">
+              <div className="mt-2 rounded-lg border border-brand-emerald-200 bg-white p-3">
                 {target === "resume" && "cvSummary" in parsedOutput! ? (
                   <ResumePreviewContent parsed={parsedOutput as ResumeImportOutput} />
                 ) : (
@@ -143,8 +143,8 @@ export function JsonInputPanel({
 
       {/* Validation status bar */}
       {!hasInput ? null : isValid ? (
-        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-800">
-          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+        <div className="flex items-center gap-2 rounded-lg border border-brand-emerald-200 bg-brand-emerald-50/60 px-3 py-2 text-xs text-brand-emerald-800">
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-brand-emerald-600" />
           Valid JSON &mdash; ready to generate
         </div>
       ) : (
@@ -184,9 +184,9 @@ function ResumePreviewContent({ parsed }: { parsed: ResumeImportOutput }) {
   return (
     <div className="space-y-2.5 text-xs">
       <div>
-        <div className="font-medium text-slate-700">Summary</div>
-        <p className="mt-0.5 text-slate-500">{summaryPreview}</p>
-        <span className="text-[10px] text-slate-400">{summaryLength} chars</span>
+        <div className="font-medium text-foreground/85">Summary</div>
+        <p className="mt-0.5 text-muted-foreground">{summaryPreview}</p>
+        <span className="text-[10px] text-muted-foreground/70">{summaryLength} chars</span>
       </div>
     </div>
   );
@@ -198,12 +198,12 @@ function CoverPreviewContent({ parsed }: { parsed: CoverImportOutput }) {
     <div className="space-y-2.5 text-xs">
       {preview.subject && (
         <div>
-          <div className="font-medium text-slate-700">Subject</div>
-          <p className="mt-0.5 text-slate-500">{preview.subject}</p>
+          <div className="font-medium text-foreground/85">Subject</div>
+          <p className="mt-0.5 text-muted-foreground">{preview.subject}</p>
         </div>
       )}
       <div>
-        <div className="font-medium text-slate-700">Paragraphs</div>
+        <div className="font-medium text-foreground/85">Paragraphs</div>
         <div className="mt-1 space-y-1">
           {[
             { ok: preview.hasP1, label: "Intent" },
@@ -212,11 +212,11 @@ function CoverPreviewContent({ parsed }: { parsed: CoverImportOutput }) {
           ].map((p) => (
             <div key={p.label} className="flex items-center gap-1.5">
               {p.ok ? (
-                <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                <CheckCircle2 className="h-3 w-3 text-brand-emerald-500" />
               ) : (
                 <XCircle className="h-3 w-3 text-rose-400" />
               )}
-              <span className={p.ok ? "text-slate-600" : "text-rose-500"}>
+              <span className={p.ok ? "text-muted-foreground" : "text-rose-500"}>
                 {p.label}
               </span>
             </div>
@@ -225,8 +225,8 @@ function CoverPreviewContent({ parsed }: { parsed: CoverImportOutput }) {
       </div>
       {preview.p1Preview && (
         <div>
-          <div className="font-medium text-slate-700">Preview</div>
-          <p className="mt-0.5 text-slate-500">{preview.p1Preview}</p>
+          <div className="font-medium text-foreground/85">Preview</div>
+          <p className="mt-0.5 text-muted-foreground">{preview.p1Preview}</p>
         </div>
       )}
     </div>

@@ -52,7 +52,7 @@ export function GenerateProgress({ target, isComplete }: GenerateProgressProps) 
     <div className="flex flex-1 flex-col items-center justify-center px-4 py-8">
       <div className="w-full max-w-sm space-y-6">
         {/* Title */}
-        <h3 className="text-center text-base font-semibold text-slate-900">
+        <h3 className="text-center text-base font-semibold text-foreground">
           {isComplete
             ? target === "resume"
               ? "Resume PDF ready!"
@@ -73,19 +73,19 @@ export function GenerateProgress({ target, isComplete }: GenerateProgressProps) 
                 className="flex items-center gap-2.5 text-sm"
               >
                 {isDone ? (
-                  <CheckCircle2 className="h-4.5 w-4.5 shrink-0 text-emerald-500" />
+                  <CheckCircle2 className="h-4.5 w-4.5 shrink-0 text-brand-emerald-500" />
                 ) : isActive ? (
-                  <Loader2 className="h-4.5 w-4.5 shrink-0 animate-spin text-emerald-500" />
+                  <Loader2 className="h-4.5 w-4.5 shrink-0 animate-spin text-brand-emerald-500" />
                 ) : (
                   <Circle className="h-4.5 w-4.5 shrink-0 text-slate-300" />
                 )}
                 <span
                   className={
                     isDone
-                      ? "text-emerald-700"
+                      ? "text-brand-emerald-700"
                       : isActive
-                        ? "font-medium text-slate-900"
-                        : "text-slate-400"
+                        ? "font-medium text-foreground"
+                        : "text-muted-foreground/70"
                   }
                 >
                   {step.label}
@@ -96,16 +96,16 @@ export function GenerateProgress({ target, isComplete }: GenerateProgressProps) 
         </div>
 
         {/* Progress bar */}
-        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+        <div className="h-2 overflow-hidden rounded-full bg-muted">
           <div
-            className="h-full rounded-full bg-emerald-500 transition-all duration-300 ease-out"
+            className="h-full rounded-full bg-brand-emerald-500 transition-all duration-300 ease-out"
             style={{ width: `${progress}%` }}
           />
         </div>
 
         {/* Hint */}
         {!isComplete && (
-          <p className="text-center text-xs text-slate-500">
+          <p className="text-center text-xs text-muted-foreground">
             {elapsed > 8000
               ? "Still working... this may take a bit longer"
               : "This usually takes 5\u201310 seconds"}

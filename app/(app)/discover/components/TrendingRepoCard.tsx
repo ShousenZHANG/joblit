@@ -24,7 +24,7 @@ export function TrendingRepoCard({ repo }: { repo: TrendingRepo }) {
     : null;
 
   return (
-    <article className="group relative rounded-xl border border-slate-200 bg-white p-3 transition-all duration-150 hover:border-slate-300 hover:shadow-md sm:p-4">
+    <article className="group relative rounded-xl border border-border bg-white p-3 transition-all duration-150 hover:border-border hover:shadow-md sm:p-4">
       {/* Header: avatar + name + language */}
       <div className="mb-2 flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
@@ -38,13 +38,13 @@ export function TrendingRepoCard({ repo }: { repo: TrendingRepo }) {
             href={repo.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="truncate text-sm font-semibold text-slate-900 transition-colors hover:text-emerald-700"
+            className="truncate text-sm font-semibold text-foreground transition-colors hover:text-brand-emerald-700"
           >
             {repo.fullName}
           </a>
         </div>
         {repo.language && (
-          <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-600 sm:text-[11px]">
+          <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-muted/40 px-2 py-0.5 text-xs font-medium text-muted-foreground sm:text-[11px]">
             {langColor && (
               <span
                 className={`inline-block h-2 w-2 rounded-full ${langColor}`}
@@ -57,7 +57,7 @@ export function TrendingRepoCard({ repo }: { repo: TrendingRepo }) {
 
       {/* Description */}
       {repo.description && (
-        <p className="mb-3 line-clamp-2 text-sm leading-relaxed text-slate-600 sm:text-[13px]">
+        <p className="mb-3 line-clamp-2 text-sm leading-relaxed text-muted-foreground sm:text-[13px]">
           {repo.description}
         </p>
       )}
@@ -68,7 +68,7 @@ export function TrendingRepoCard({ repo }: { repo: TrendingRepo }) {
           {repo.topics.slice(0, 3).map((topic) => (
             <span
               key={topic}
-              className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700"
+              className="rounded-md bg-brand-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-brand-emerald-700"
             >
               {topic}
             </span>
@@ -77,7 +77,7 @@ export function TrendingRepoCard({ repo }: { repo: TrendingRepo }) {
       )}
 
       {/* Stats footer */}
-      <div className="flex items-center justify-between text-[12px] text-slate-500">
+      <div className="flex items-center justify-between text-[12px] text-muted-foreground">
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1 font-semibold text-amber-600">
             <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
@@ -95,7 +95,7 @@ export function TrendingRepoCard({ repo }: { repo: TrendingRepo }) {
           href={repo.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-1 text-[11px] font-medium text-slate-400 transition-colors hover:text-emerald-600"
+          className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground/70 transition-colors hover:text-brand-emerald-600"
           aria-label={`View ${repo.fullName} on GitHub`}
         >
           View

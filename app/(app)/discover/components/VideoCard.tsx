@@ -40,7 +40,7 @@ export function VideoCard({
 
   return (
     <article
-      className={`group relative overflow-hidden rounded-xl border border-slate-200 bg-white transition-all duration-150 hover:border-slate-300 hover:shadow-md ${
+      className={`group relative overflow-hidden rounded-xl border border-border bg-white transition-all duration-150 hover:border-border hover:shadow-md ${
         isWatched ? "opacity-70" : "opacity-100"
       }`}
     >
@@ -51,7 +51,7 @@ export function VideoCard({
         rel="noopener noreferrer"
         onClick={handleOpen}
         aria-label={`Play on YouTube: ${item.title}`}
-        className="group/thumb relative block aspect-video overflow-hidden bg-slate-100"
+        className="group/thumb relative block aspect-video overflow-hidden bg-muted"
       >
         {item.thumbnailUrl ? (
           <img
@@ -82,7 +82,7 @@ export function VideoCard({
           <div
             className={`absolute right-2 top-2 flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-md backdrop-blur ${
               item.trustTier === 1
-                ? "bg-emerald-600/95"
+                ? "bg-brand-emerald-600/95"
                 : item.trustTier === 2
                   ? "bg-teal-600/90"
                   : "bg-slate-600/90"
@@ -122,7 +122,7 @@ export function VideoCard({
             target="_blank"
             rel="noopener noreferrer"
             onClick={handleOpen}
-            className="mb-1 line-clamp-2 flex-1 text-sm font-semibold leading-snug text-slate-900 transition-colors hover:text-emerald-700"
+            className="mb-1 line-clamp-2 flex-1 text-sm font-semibold leading-snug text-foreground transition-colors hover:text-brand-emerald-700"
           >
             {item.title}
           </a>
@@ -137,7 +137,7 @@ export function VideoCard({
               className={`rounded-md p-1 transition-colors ${
                 isFavorited
                   ? "text-amber-500 hover:bg-amber-50"
-                  : "text-slate-300 hover:bg-slate-100 hover:text-amber-500"
+                  : "text-slate-300 hover:bg-muted hover:text-amber-500"
               }`}
             >
               <Star
@@ -150,27 +150,27 @@ export function VideoCard({
               rel="noopener noreferrer"
               onClick={handleOpen}
               aria-label="Open on YouTube"
-              className="rounded-md p-1 text-slate-300 transition-colors hover:bg-slate-100 hover:text-slate-600"
+              className="rounded-md p-1 text-slate-300 transition-colors hover:bg-muted hover:text-muted-foreground"
             >
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-slate-400 sm:text-[11px]">
-          <span className="truncate font-medium text-slate-500">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground/70 sm:text-[11px]">
+          <span className="truncate font-medium text-muted-foreground">
             {item.channelName}
           </span>
           <span className="shrink-0">{relativeTime(item.publishedAt)}</span>
           <span className="ml-auto flex shrink-0 items-center gap-2">
             {item.viewCount > 0 && (
-              <span className="flex items-center gap-0.5 font-medium text-slate-500">
+              <span className="flex items-center gap-0.5 font-medium text-muted-foreground">
                 <Eye className="h-3 w-3" />
                 {formatCount(item.viewCount)}
               </span>
             )}
             {item.likeCount > 0 && (
-              <span className="flex items-center gap-0.5 font-medium text-slate-500">
+              <span className="flex items-center gap-0.5 font-medium text-muted-foreground">
                 <ThumbsUp className="h-3 w-3" />
                 {formatCount(item.likeCount)}
               </span>

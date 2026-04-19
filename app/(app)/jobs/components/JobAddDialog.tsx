@@ -91,12 +91,12 @@ function FieldLabel({
   return (
     <label
       htmlFor={htmlFor}
-      className="mb-1.5 flex items-center gap-1.5 text-[13px] font-medium text-slate-700"
+      className="mb-1.5 flex items-center gap-1.5 text-[13px] font-medium text-foreground/85"
     >
-      <Icon className="h-3.5 w-3.5 text-slate-400" />
+      <Icon className="h-3.5 w-3.5 text-muted-foreground/70" />
       {children}
       {required && (
-        <span className="ml-0.5 text-emerald-500" aria-label="required">*</span>
+        <span className="ml-0.5 text-brand-emerald-500" aria-label="required">*</span>
       )}
     </label>
   );
@@ -198,19 +198,19 @@ export function JobAddDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-xl gap-0 overflow-hidden rounded-2xl border-slate-200/80 p-0 shadow-xl sm:max-w-xl">
+      <DialogContent className="max-w-xl gap-0 overflow-hidden rounded-2xl border-border/80 p-0 shadow-xl sm:max-w-xl">
         {/* ── Header ── */}
-        <div className="border-b border-slate-100 bg-gradient-to-b from-slate-50/80 to-white px-6 pb-4 pt-5">
+        <div className="border-b border-border/60 bg-gradient-to-b from-slate-50/80 to-white px-6 pb-4 pt-5">
           <DialogHeader className="gap-1.5">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 ring-1 ring-emerald-100">
-                <Plus className="h-4 w-4 text-emerald-600" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-emerald-50 ring-1 ring-brand-emerald-100">
+                <Plus className="h-4 w-4 text-brand-emerald-600" />
               </div>
-              <DialogTitle className="text-base font-semibold tracking-tight text-slate-900">
+              <DialogTitle className="text-base font-semibold tracking-tight text-foreground">
                 Add Job
               </DialogTitle>
             </div>
-            <DialogDescription className="pl-[42px] text-[13px] leading-relaxed text-slate-500">
+            <DialogDescription className="pl-[42px] text-[13px] leading-relaxed text-muted-foreground">
               Paste a job URL and fill in the details. Required fields are marked with *.
             </DialogDescription>
           </DialogHeader>
@@ -238,7 +238,7 @@ export function JobAddDialog({
                 value={form.jobUrl}
                 onChange={(e) => updateField("jobUrl", e.target.value)}
                 required
-                className="h-10 rounded-xl border-slate-200 bg-slate-50/60 pl-3 pr-3 text-sm transition-all duration-150 placeholder:text-slate-400 focus-visible:border-emerald-300 focus-visible:bg-white focus-visible:ring-emerald-100"
+                className="h-10 rounded-xl border-border bg-muted/40 pl-3 pr-3 text-sm transition-all duration-150 placeholder:text-muted-foreground/70 focus-visible:border-brand-emerald-300 focus-visible:bg-white focus-visible:ring-brand-emerald-100"
               />
               {urlTrimmed.length > 0 && !isValidUrl(urlTrimmed) && (
                 <p className="mt-1 text-[11px] text-amber-500">
@@ -260,7 +260,7 @@ export function JobAddDialog({
                   value={form.title}
                   onChange={(e) => updateField("title", e.target.value)}
                   required
-                  className="h-10 rounded-xl border-slate-200 bg-slate-50/60 text-sm transition-all duration-150 placeholder:text-slate-400 focus-visible:border-emerald-300 focus-visible:bg-white focus-visible:ring-emerald-100"
+                  className="h-10 rounded-xl border-border bg-muted/40 text-sm transition-all duration-150 placeholder:text-muted-foreground/70 focus-visible:border-brand-emerald-300 focus-visible:bg-white focus-visible:ring-brand-emerald-100"
                 />
               </div>
               <div>
@@ -273,7 +273,7 @@ export function JobAddDialog({
                   placeholder="Company name"
                   value={form.company}
                   onChange={(e) => updateField("company", e.target.value)}
-                  className="h-10 rounded-xl border-slate-200 bg-slate-50/60 text-sm transition-all duration-150 placeholder:text-slate-400 focus-visible:border-emerald-300 focus-visible:bg-white focus-visible:ring-emerald-100"
+                  className="h-10 rounded-xl border-border bg-muted/40 text-sm transition-all duration-150 placeholder:text-muted-foreground/70 focus-visible:border-brand-emerald-300 focus-visible:bg-white focus-visible:ring-brand-emerald-100"
                 />
               </div>
             </div>
@@ -288,7 +288,7 @@ export function JobAddDialog({
                 >
                   <SelectTrigger
                     id="add-job-location"
-                    className="h-10 rounded-xl border-slate-200 bg-slate-50/60 text-sm transition-all duration-150 focus:border-emerald-300 focus:ring-emerald-100 [&>span]:text-slate-600"
+                    className="h-10 rounded-xl border-border bg-muted/40 text-sm transition-all duration-150 focus:border-brand-emerald-300 focus:ring-brand-emerald-100 [&>span]:text-muted-foreground"
                   >
                     <SelectValue placeholder="Select" />
                   </SelectTrigger>
@@ -309,7 +309,7 @@ export function JobAddDialog({
                 >
                   <SelectTrigger
                     id="add-job-type"
-                    className="h-10 rounded-xl border-slate-200 bg-slate-50/60 text-sm transition-all duration-150 focus:border-emerald-300 focus:ring-emerald-100 [&>span]:text-slate-600"
+                    className="h-10 rounded-xl border-border bg-muted/40 text-sm transition-all duration-150 focus:border-brand-emerald-300 focus:ring-brand-emerald-100 [&>span]:text-muted-foreground"
                   >
                     <SelectValue placeholder="Select" />
                   </SelectTrigger>
@@ -330,7 +330,7 @@ export function JobAddDialog({
                 >
                   <SelectTrigger
                     id="add-job-level"
-                    className="h-10 rounded-xl border-slate-200 bg-slate-50/60 text-sm transition-all duration-150 focus:border-emerald-300 focus:ring-emerald-100 [&>span]:text-slate-600"
+                    className="h-10 rounded-xl border-border bg-muted/40 text-sm transition-all duration-150 focus:border-brand-emerald-300 focus:ring-brand-emerald-100 [&>span]:text-muted-foreground"
                   >
                     <SelectValue placeholder="Select" />
                   </SelectTrigger>
@@ -359,7 +359,7 @@ export function JobAddDialog({
                     updateField("description", e.target.value);
                   }
                 }}
-                className="min-h-[100px] max-h-[240px] resize-y rounded-xl border-slate-200 bg-slate-50/60 text-sm transition-all duration-150 placeholder:text-slate-400 focus-visible:border-emerald-300 focus-visible:bg-white focus-visible:ring-emerald-100"
+                className="min-h-[100px] max-h-[240px] resize-y rounded-xl border-border bg-muted/40 text-sm transition-all duration-150 placeholder:text-muted-foreground/70 focus-visible:border-brand-emerald-300 focus-visible:bg-white focus-visible:ring-brand-emerald-100"
               />
               {descLength > 0 && (
                 <div
@@ -368,7 +368,7 @@ export function JobAddDialog({
                       ? "font-medium text-rose-500"
                       : descLength >= DESC_MAX_LENGTH * 0.9
                         ? "text-amber-500"
-                        : "text-slate-400"
+                        : "text-muted-foreground/70"
                   }`}
                 >
                   {descLength.toLocaleString()} / {DESC_MAX_LENGTH.toLocaleString()}
@@ -379,11 +379,11 @@ export function JobAddDialog({
           </div>
 
           {/* ── Footer ── */}
-          <div className="border-t border-slate-100 bg-slate-50/50 px-6 py-4">
+          <div className="border-t border-border/60 bg-muted/40 px-6 py-4">
             {/* Error */}
             {error && (
               <div
-                className="mb-3 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-[13px] text-rose-700"
+                className="mb-3 flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-[13px] text-destructive"
                 role="alert"
               >
                 <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -397,14 +397,14 @@ export function JobAddDialog({
                 variant="ghost"
                 onClick={() => onOpenChange(false)}
                 disabled={submitting}
-                className="h-9 rounded-xl px-4 text-[13px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                className="h-9 rounded-xl px-4 text-[13px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground/85"
               >
                 {tc("cancel")}
               </Button>
               <Button
                 type="submit"
                 disabled={!canSubmit}
-                className="h-9 min-w-[100px] rounded-xl bg-emerald-600 px-5 text-[13px] font-semibold text-white shadow-sm transition-all duration-200 hover:bg-emerald-700 hover:shadow-md active:scale-[0.97] disabled:opacity-50 disabled:shadow-none"
+                className="h-9 min-w-[100px] rounded-xl bg-brand-emerald-600 px-5 text-[13px] font-semibold text-white shadow-sm transition-all duration-200 hover:bg-brand-emerald-700 hover:shadow-md active:scale-[0.97] disabled:opacity-50 disabled:shadow-none"
               >
                 {success ? (
                   <span className="flex items-center gap-1.5">

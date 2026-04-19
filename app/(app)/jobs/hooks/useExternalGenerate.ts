@@ -127,7 +127,7 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
         variant: "destructive",
         duration: 2600,
         className:
-          "border-rose-200 bg-rose-50 text-rose-900 animate-in fade-in zoom-in-95",
+          "border-destructive/30 bg-destructive/10 text-rose-900 animate-in fade-in zoom-in-95",
       });
     } finally {
       setExternalPromptLoading(false);
@@ -148,7 +148,7 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
         title: "Prompt copied",
         description: "Paste into Claude/ChatGPT/Gemini, then copy the JSON result.",
         duration: 2200,
-        className: "border-emerald-200 bg-emerald-50 text-emerald-900 animate-in fade-in zoom-in-95",
+        className: "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-900 animate-in fade-in zoom-in-95",
       });
       return;
     }
@@ -203,7 +203,7 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
         description: "Skill pack marked as up-to-date for current prompt.",
         duration: 2200,
         className:
-          "border-emerald-200 bg-emerald-50 text-emerald-900 animate-in fade-in zoom-in-95",
+          "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-900 animate-in fade-in zoom-in-95",
       });
     } catch (e) {
       const message = getErrorMessage(e, "Failed to download skill pack");
@@ -214,7 +214,7 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
         variant: "destructive",
         duration: 2600,
         className:
-          "border-rose-200 bg-rose-50 text-rose-900 animate-in fade-in zoom-in-95",
+          "border-destructive/30 bg-destructive/10 text-rose-900 animate-in fade-in zoom-in-95",
       });
     } finally {
       setExternalSkillPackLoading(false);
@@ -283,7 +283,7 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
         variant: "destructive",
         duration: 2600,
         className:
-          "border-rose-200 bg-rose-50 text-rose-900 animate-in fade-in zoom-in-95",
+          "border-destructive/30 bg-destructive/10 text-rose-900 animate-in fade-in zoom-in-95",
       });
     } finally {
       setExternalGenerating(false);

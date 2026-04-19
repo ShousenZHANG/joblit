@@ -109,7 +109,7 @@ export function FetchClient() {
   } = useFetchStatus();
   const { isTaskHighlighted, markTaskComplete } = useGuide();
   const guideHighlightClass =
-    "ring-2 ring-emerald-400 ring-offset-2 ring-offset-white shadow-[0_0_0_4px_rgba(16,185,129,0.18)]";
+    "ring-2 ring-brand-emerald-400 ring-offset-2 ring-offset-white shadow-[0_0_0_4px_rgba(16,185,129,0.18)]";
   const prevUserIdRef = useRef<string | null>(null);
 
   const queries = useMemo(() => {
@@ -255,7 +255,7 @@ export function FetchClient() {
       <div className="space-y-4">
           {/* Primary search: job title (full width, prominent) */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-slate-500">{t("jobTitle")}</Label>
+            <Label className="text-xs font-medium text-muted-foreground">{t("jobTitle")}</Label>
             <Popover open={suggestionsOpen} onOpenChange={setSuggestionsOpen}>
               <PopoverAnchor asChild>
                 <Input
@@ -303,11 +303,11 @@ export function FetchClient() {
           {/* Secondary fields: location + hours on one row */}
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-slate-500">{t("locationLabel")}</Label>
+              <Label className="text-xs font-medium text-muted-foreground">{t("locationLabel")}</Label>
               <Input value={location} onChange={(e) => setLocation(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-slate-500">{t("hoursOld")}</Label>
+              <Label className="text-xs font-medium text-muted-foreground">{t("hoursOld")}</Label>
               <Select value={String(hoursOld)} onValueChange={(v) => setHoursOld(Number(v))}>
                 <SelectTrigger>
                   <SelectValue />
@@ -330,7 +330,7 @@ export function FetchClient() {
               className={`filter-chip ${smartExpand ? "filter-chip--active" : "filter-chip--inactive"}`}
               onClick={() => setSmartExpand(!smartExpand)}
             >
-              <span className={`h-1.5 w-1.5 rounded-full ${smartExpand ? "bg-emerald-500" : "bg-slate-300"}`} />
+              <span className={`h-1.5 w-1.5 rounded-full ${smartExpand ? "bg-brand-emerald-500" : "bg-muted-foreground/30"}`} />
               Smart expand
             </button>
             <button
@@ -338,22 +338,22 @@ export function FetchClient() {
               className={`filter-chip ${applyExcludes ? "filter-chip--active" : "filter-chip--inactive"}`}
               onClick={() => setApplyExcludes(!applyExcludes)}
             >
-              <span className={`h-1.5 w-1.5 rounded-full ${applyExcludes ? "bg-emerald-500" : "bg-slate-300"}`} />
+              <span className={`h-1.5 w-1.5 rounded-full ${applyExcludes ? "bg-brand-emerald-500" : "bg-muted-foreground/30"}`} />
               Apply exclusions
             </button>
           </div>
 
           {/* Collapsible exclusion filters */}
           {applyExcludes && (
-            <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
+            <div className="rounded-lg border border-border/60 bg-muted/40 p-3">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <div className="text-xs font-medium text-slate-500">Title exclusions</div>
+                  <div className="text-xs font-medium text-muted-foreground">Title exclusions</div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="outline"
-                      className="h-10 w-full justify-between rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 shadow-none transition-colors hover:bg-slate-50 disabled:opacity-50"
+                      className="h-10 w-full justify-between rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground/85 shadow-none transition-colors hover:bg-muted disabled:opacity-50"
                       disabled={!applyExcludes}
                     >
                       {excludeTitleTerms.length ? `Selected (${excludeTitleTerms.length})` : "Select terms"}
@@ -398,7 +398,7 @@ export function FetchClient() {
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="outline"
-                      className="h-10 w-full justify-between rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 shadow-none transition-colors hover:bg-slate-50 disabled:opacity-50"
+                      className="h-10 w-full justify-between rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground/85 shadow-none transition-colors hover:bg-muted disabled:opacity-50"
                       disabled={!applyExcludes}
                     >
                       {excludeDescriptionRules.length
@@ -509,7 +509,7 @@ export function FetchClient() {
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
-                  className="h-10 w-full justify-between rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 shadow-none"
+                  className="h-10 w-full justify-between rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground/85 shadow-none"
                 >
                   {cnSources.length ? `已选 (${cnSources.length})` : "选择来源"}
                 </Button>
@@ -533,7 +533,7 @@ export function FetchClient() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <p className="text-[11px] text-slate-500">
+            <p className="text-[11px] text-muted-foreground">
               V2EX 主源稳定免费；RSSHub 需自行配置 RSSHUB_URL。
             </p>
           </div>

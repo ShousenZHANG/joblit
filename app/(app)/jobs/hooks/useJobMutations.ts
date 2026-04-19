@@ -131,7 +131,7 @@ export function useJobMutations({
         variant: "destructive",
         duration: 2200,
         className:
-          "border-rose-200 bg-rose-50 text-rose-900 animate-in fade-in zoom-in-95",
+          "border-destructive/30 bg-destructive/10 text-rose-900 animate-in fade-in zoom-in-95",
       });
     },
     onSuccess: (data, variables) => {
@@ -146,7 +146,7 @@ export function useJobMutations({
         description: `${variables.status}`,
         duration: 1800,
         className:
-          "border-emerald-200 bg-emerald-50 text-emerald-900 animate-in fade-in zoom-in-95",
+          "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-900 animate-in fade-in zoom-in-95",
       });
 
       if (data?.resumePdfUrl) {
@@ -180,7 +180,7 @@ export function useJobMutations({
           description: "Saved to your applied job.",
           duration: 2000,
           className:
-            "border-emerald-200 bg-emerald-50 text-emerald-900 animate-in fade-in zoom-in-95",
+            "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-900 animate-in fade-in zoom-in-95",
         });
       }
     },
@@ -287,7 +287,7 @@ export function useJobMutations({
         variant: "destructive",
         duration: 2400,
         className:
-          "border-rose-200 bg-rose-50 text-rose-900 animate-in fade-in zoom-in-95",
+          "border-destructive/30 bg-destructive/10 text-rose-900 animate-in fade-in zoom-in-95",
       });
     },
     onSuccess: () => {
@@ -297,7 +297,7 @@ export function useJobMutations({
         description: "The role was removed.",
         duration: 1800,
         className:
-          "border-emerald-200 bg-emerald-50 text-emerald-900 animate-in fade-in zoom-in-95",
+          "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-900 animate-in fade-in zoom-in-95",
       });
     },
     onSettled: (_data, _error, id) => {
@@ -403,7 +403,7 @@ export function useJobMutations({
         description: getErrorMessage(e, "Some jobs could not be removed."),
         variant: "destructive",
         duration: 2400,
-        className: "border-rose-200 bg-rose-50 text-rose-900 animate-in fade-in zoom-in-95",
+        className: "border-destructive/30 bg-destructive/10 text-rose-900 animate-in fade-in zoom-in-95",
       });
     },
     onSuccess: (data, ids) => {
@@ -435,7 +435,7 @@ export function useJobMutations({
         title: `${deleted} ${deleted === 1 ? "job" : "jobs"} deleted`,
         description: "The selected jobs were removed.",
         duration: 1800,
-        className: "border-emerald-200 bg-emerald-50 text-emerald-900 animate-in fade-in zoom-in-95",
+        className: "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-900 animate-in fade-in zoom-in-95",
       });
     },
     onSettled: (_data, _error, ids) => {

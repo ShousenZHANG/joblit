@@ -13,7 +13,7 @@ import { GenerateProgress } from "./GenerateProgress";
 import { GenerateSuccess } from "./GenerateSuccess";
 
 const externalBtnPrimary =
-  "h-10 rounded-xl border border-emerald-500 bg-emerald-500 px-5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-emerald-600 hover:border-emerald-600 active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none";
+  "h-10 rounded-xl border border-brand-emerald-500 bg-brand-emerald-500 px-5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-brand-emerald-600 hover:border-brand-emerald-600 active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-slate-200 disabled:text-muted-foreground disabled:shadow-none";
 
 interface ExternalGenerateDialogProps {
   open: boolean;
@@ -84,7 +84,7 @@ export function ExternalGenerateDialog({
       onOpenChange(isOpen);
     }}>
       <DialogContent className="flex h-[min(90vh,720px)] w-[min(96vw,880px)] max-w-[880px] flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="shrink-0 border-b border-slate-100 px-5 py-4">
+        <DialogHeader className="shrink-0 border-b border-border/60 px-5 py-4">
           <DialogTitle className="text-base">
             {dialogPhase === "success"
               ? (externalTarget === "resume" ? "Resume PDF Ready" : "Cover Letter Ready")
@@ -92,7 +92,7 @@ export function ExternalGenerateDialog({
                 ? "Generate CV with AI"
                 : "Generate Cover Letter with AI"}
           </DialogTitle>
-          <DialogDescription className="text-xs text-slate-500">
+          <DialogDescription className="text-xs text-muted-foreground">
             {dialogPhase === "success"
               ? "Your PDF has been generated successfully."
               : dialogPhase === "generating"
@@ -102,7 +102,7 @@ export function ExternalGenerateDialog({
         </DialogHeader>
 
         {dialogPhase !== "generating" && dialogPhase !== "success" && (
-          <div className="shrink-0 border-b border-slate-100 px-5 py-3">
+          <div className="shrink-0 border-b border-border/60 px-5 py-3">
             <StepIndicator
               currentStep={dialogPhase}
               onStepClick={(s) => { setExternalStep(s); setDialogPhase(s); }}
@@ -127,14 +127,14 @@ export function ExternalGenerateDialog({
 
           {dialogPhase === 2 && (
             <div className="space-y-4">
-              <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-4 py-3">
+              <div className="rounded-lg border border-border bg-muted/40 px-4 py-3">
                 <div className="flex items-center gap-2 text-sm">
-                  <FileText className="h-4 w-4 text-slate-500" />
-                  <span className="font-medium text-slate-700">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium text-foreground/85">
                     {externalTarget === "resume" ? "Resume" : "Cover Letter"}
                   </span>
-                  <span className="text-slate-400">for</span>
-                  <span className="font-medium text-slate-900 truncate">
+                  <span className="text-muted-foreground/70">for</span>
+                  <span className="font-medium text-foreground truncate">
                     {selectedJob?.title ?? "..."} at {selectedJob?.company ?? "..."}
                   </span>
                 </div>
@@ -148,8 +148,8 @@ export function ExternalGenerateDialog({
                 className={cn(
                   "h-12 w-full rounded-xl text-sm font-semibold shadow-sm transition-all duration-200 active:translate-y-[1px]",
                   promptCopied
-                    ? "border-emerald-500 bg-emerald-500 text-white"
-                    : "border-emerald-500 bg-emerald-500 text-white hover:bg-emerald-600"
+                    ? "border-brand-emerald-500 bg-brand-emerald-500 text-white"
+                    : "border-brand-emerald-500 bg-brand-emerald-500 text-white hover:bg-brand-emerald-600"
                 )}
               >
                 {externalPromptLoading ? (
@@ -162,17 +162,17 @@ export function ExternalGenerateDialog({
               </Button>
 
               {promptCopied && (
-                <p className="text-center text-sm text-emerald-700">
+                <p className="text-center text-sm text-brand-emerald-700">
                   Now paste into Claude / ChatGPT / Gemini and copy the JSON result.
                 </p>
               )}
 
               <details className="group">
-                <summary className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700">
+                <summary className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground/85">
                   <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
                   Preview prompt ({(externalSkillPackFresh ? externalShortPromptText : externalPromptText).length} chars)
                 </summary>
-                <pre className="mt-2 max-h-[200px] overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 font-mono text-[11px] leading-relaxed text-slate-600">
+                <pre className="mt-2 max-h-[200px] overflow-auto rounded-lg border border-border bg-muted/40 p-3 font-mono text-[11px] leading-relaxed text-muted-foreground">
                   {externalSkillPackFresh ? externalShortPromptText : externalPromptText}
                 </pre>
               </details>
@@ -207,7 +207,7 @@ export function ExternalGenerateDialog({
         </div>
 
         {typeof dialogPhase === "number" && (
-          <div className="flex shrink-0 items-center justify-between border-t border-slate-100 px-5 py-3">
+          <div className="flex shrink-0 items-center justify-between border-t border-border/60 px-5 py-3">
             <div>
               {dialogPhase > 1 && (
                 <Button
@@ -219,7 +219,7 @@ export function ExternalGenerateDialog({
                     setExternalStep(prev);
                     setDialogPhase(prev);
                   }}
-                  className="h-9 rounded-xl px-3 text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                  className="h-9 rounded-xl px-3 text-sm text-muted-foreground hover:bg-muted/40 hover:text-foreground/85"
                 >
                   Back
                 </Button>
@@ -231,7 +231,7 @@ export function ExternalGenerateDialog({
                 variant="ghost"
                 size="sm"
                 onClick={() => onOpenChange(false)}
-                className="h-9 rounded-xl px-3 text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                className="h-9 rounded-xl px-3 text-sm text-muted-foreground hover:bg-muted/40 hover:text-foreground/85"
               >
                 Cancel
               </Button>

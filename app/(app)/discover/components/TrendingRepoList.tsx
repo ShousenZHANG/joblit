@@ -18,13 +18,13 @@ export function TrendingRepoList() {
     <section>
       {/* Section header */}
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-slate-900 lg:text-lg">
+        <h2 className="text-base font-semibold text-foreground lg:text-lg">
           Top 20 {period === "weekly" ? "This Week" : "This Month"}
         </h2>
         <select
           value={period}
           onChange={(e) => setPeriod(e.target.value as "weekly" | "monthly")}
-          className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 outline-none transition-colors focus:border-emerald-300 focus:ring-1 focus:ring-emerald-100"
+          className="rounded-lg border border-border bg-white px-2.5 py-1 text-xs font-medium text-muted-foreground outline-none transition-colors focus:border-brand-emerald-300 focus:ring-1 focus:ring-brand-emerald-100"
           aria-label="Time period"
         >
           <option value="weekly">This week</option>
@@ -36,22 +36,22 @@ export function TrendingRepoList() {
       {isLoading ? (
         <TrendingSkeleton />
       ) : error ? (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 p-6 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-6 text-center">
           <AlertCircle className="h-5 w-5 text-rose-500" />
-          <p className="text-sm text-rose-700">
+          <p className="text-sm text-destructive">
             {error instanceof Error ? error.message : "Failed to load trending repos"}
           </p>
           <button
             type="button"
             onClick={() => queryClient.invalidateQueries({ queryKey: ["discover-trending"] })}
-            className="flex items-center gap-1.5 rounded-lg bg-rose-100 px-3 py-1.5 text-xs font-medium text-rose-700 transition-colors hover:bg-rose-200"
+            className="flex items-center gap-1.5 rounded-lg bg-destructive/20 px-3 py-1.5 text-xs font-medium text-destructive transition-colors hover:bg-rose-200"
           >
             <RefreshCw className="h-3 w-3" />
             Retry
           </button>
         </div>
       ) : repos.length === 0 ? (
-        <p className="py-8 text-center text-sm text-slate-500">
+        <p className="py-8 text-center text-sm text-muted-foreground">
           No trending repos found.
         </p>
       ) : (

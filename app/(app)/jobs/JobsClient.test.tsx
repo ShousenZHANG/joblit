@@ -441,7 +441,7 @@ describe("JobsClient", () => {
       { timeout: 3000 },
     );
     // Heading now uses theme-token `text-foreground` for dark-mode parity
-    // (migrated from literal text-slate-900).
+    // (migrated from literal text-foreground).
     expect(heading).toHaveClass("text-lg", "font-semibold", "text-foreground");
 
     const listItem = await screen.findByText("Ownership");

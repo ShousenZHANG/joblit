@@ -75,10 +75,10 @@ export function StepIndicator({
                 className={[
                   "relative flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-all duration-300",
                   isDone
-                    ? "bg-emerald-500 text-white shadow-sm"
+                    ? "bg-brand-emerald-500 text-white shadow-sm"
                     : isActive
-                      ? "border-2 border-emerald-500 bg-emerald-50 text-emerald-700"
-                      : "border border-slate-300 bg-white text-slate-400",
+                      ? "border-2 border-brand-emerald-500 bg-brand-emerald-50 text-brand-emerald-700"
+                      : "border border-border bg-white text-muted-foreground/70",
                 ].join(" ")}
               >
                 {isDone ? (
@@ -94,15 +94,15 @@ export function StepIndicator({
                 className={[
                   "text-[11px] font-semibold leading-tight",
                   isDone
-                    ? "text-emerald-700"
+                    ? "text-brand-emerald-700"
                     : isActive
-                      ? "text-emerald-800"
-                      : "text-slate-400",
+                      ? "text-brand-emerald-800"
+                      : "text-muted-foreground/70",
                 ].join(" ")}
               >
                 {step.label}
               </span>
-              <span className="hidden text-[10px] leading-tight text-slate-400 sm:block">
+              <span className="hidden text-[10px] leading-tight text-muted-foreground/70 sm:block">
                 {step.subtitle}
               </span>
             </button>

@@ -212,8 +212,8 @@ export function KnowledgeBase() {
 
   if (loading) {
     return (
-      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-8">
-        <div className="flex items-center justify-center gap-3 text-sm text-slate-400">
+      <div className="mt-4 rounded-xl border border-border bg-white p-8">
+        <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground/70">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading knowledge base...
         </div>
@@ -223,18 +223,18 @@ export function KnowledgeBase() {
 
   return (
     <>
-      <div className="mt-4 rounded-xl border border-slate-200 bg-white">
+      <div className="mt-4 rounded-xl border border-border bg-white">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50">
-              <Brain className="h-4 w-4 text-emerald-600" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-emerald-50">
+              <Brain className="h-4 w-4 text-brand-emerald-600" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-slate-900">
+              <h2 className="text-sm font-semibold text-foreground">
                 AutoFill Knowledge Base
               </h2>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-muted-foreground">
                 {rules.length} rule{rules.length !== 1 ? "s" : ""} learned from
                 your corrections
               </p>
@@ -244,11 +244,11 @@ export function KnowledgeBase() {
 
         {rules.length === 0 ? (
           <div className="px-5 py-12 text-center">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-50">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted/40">
               <Brain className="h-6 w-6 text-slate-300" />
             </div>
-            <p className="text-sm font-medium text-slate-500">No rules yet</p>
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="text-sm font-medium text-muted-foreground">No rules yet</p>
+            <p className="mt-1 text-xs text-muted-foreground/70">
               Use the extension to fill forms — corrections you make will appear
               here.
             </p>
@@ -256,22 +256,22 @@ export function KnowledgeBase() {
         ) : (
           <>
             {/* Search bar */}
-            <div className="border-b border-slate-100 px-5 py-3">
+            <div className="border-b border-border/60 px-5 py-3">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/70" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search fields, answers, ATS..."
-                  className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs text-slate-700 outline-none transition-colors placeholder:text-slate-400 focus:border-emerald-300 focus:bg-white focus:ring-1 focus:ring-emerald-200"
+                  className="h-8 w-full rounded-lg border border-border bg-muted/40 pl-9 pr-3 text-xs text-foreground/85 outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-brand-emerald-300 focus:bg-white focus:ring-1 focus:ring-brand-emerald-200"
                 />
               </div>
             </div>
 
             {/* Grouped table */}
             {groups.length === 0 ? (
-              <div className="px-5 py-8 text-center text-xs text-slate-400">
+              <div className="px-5 py-8 text-center text-xs text-muted-foreground/70">
                 No rules match your search.
               </div>
             ) : (
@@ -283,24 +283,24 @@ export function KnowledgeBase() {
                       {/* Group header */}
                       <button
                         onClick={() => toggleGroup(group.key)}
-                        className="flex w-full items-center gap-2 px-5 py-2.5 text-left transition-colors hover:bg-slate-50"
+                        className="flex w-full items-center gap-2 px-5 py-2.5 text-left transition-colors hover:bg-muted/40"
                       >
                         {isCollapsed ? (
-                          <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+                          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/70" />
                         ) : (
-                          <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/70" />
                         )}
                         {group.key === "global" ? (
-                          <Globe className="h-3.5 w-3.5 text-slate-400" />
+                          <Globe className="h-3.5 w-3.5 text-muted-foreground/70" />
                         ) : (
                           <div className="flex h-4 w-4 items-center justify-center rounded bg-blue-50 text-[8px] font-bold text-blue-600">
                             {group.label[0].toUpperCase()}
                           </div>
                         )}
-                        <span className="text-xs font-semibold text-slate-700">
+                        <span className="text-xs font-semibold text-foreground/85">
                           {group.label}
                         </span>
-                        <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                           {group.rules.length}
                         </span>
                       </button>
@@ -309,7 +309,7 @@ export function KnowledgeBase() {
                       {!isCollapsed && (
                         <div className="pb-1">
                           {/* Table header */}
-                          <div className="grid grid-cols-[1fr_1.5fr_50px_36px] gap-2 px-5 pb-1 pt-0.5 text-[10px] font-medium uppercase tracking-wider text-slate-400">
+                          <div className="grid grid-cols-[1fr_1.5fr_50px_36px] gap-2 px-5 pb-1 pt-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
                             <div className="pl-6">Field</div>
                             <div>Answer</div>
                             <div className="text-center">Used</div>
@@ -320,10 +320,10 @@ export function KnowledgeBase() {
                           {group.rules.map((rule) => (
                             <div
                               key={rule.id}
-                              className="group grid grid-cols-[1fr_1.5fr_50px_36px] items-center gap-2 px-5 py-1.5 transition-colors hover:bg-slate-50/80"
+                              className="group grid grid-cols-[1fr_1.5fr_50px_36px] items-center gap-2 px-5 py-1.5 transition-colors hover:bg-muted/60"
                             >
                               {/* Field name */}
-                              <div className="truncate pl-6 text-xs font-medium text-slate-700" title={rule.fieldLabel || rule.fieldSelector}>
+                              <div className="truncate pl-6 text-xs font-medium text-foreground/85" title={rule.fieldLabel || rule.fieldSelector}>
                                 {rule.fieldLabel || rule.fieldSelector}
                               </div>
 
@@ -342,12 +342,12 @@ export function KnowledgeBase() {
                                         if (editingId === rule.id) cancelEdit();
                                       }, 150);
                                     }}
-                                    className="h-6 w-full min-w-0 rounded border border-emerald-300 bg-white px-2 text-xs text-slate-800 outline-none ring-1 ring-emerald-200"
+                                    className="h-6 w-full min-w-0 rounded border border-brand-emerald-300 bg-white px-2 text-xs text-foreground/90 outline-none ring-1 ring-brand-emerald-200"
                                   />
                                   <button
                                     onClick={() => saveEdit(rule.id)}
                                     disabled={savingId === rule.id}
-                                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-brand-emerald-50 text-brand-emerald-600 hover:bg-brand-emerald-100"
                                   >
                                     {savingId === rule.id ? (
                                       <Loader2 className="h-3 w-3 animate-spin" />
@@ -357,7 +357,7 @@ export function KnowledgeBase() {
                                   </button>
                                   <button
                                     onClick={cancelEdit}
-                                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-slate-100 text-slate-500 hover:bg-slate-200"
+                                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground hover:bg-slate-200"
                                   >
                                     <X className="h-3 w-3" />
                                   </button>
@@ -365,7 +365,7 @@ export function KnowledgeBase() {
                               ) : (
                                 <button
                                   onClick={() => startEdit(rule)}
-                                  className="group/cell flex items-center gap-1.5 truncate rounded px-1.5 py-0.5 text-left text-xs text-slate-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
+                                  className="group/cell flex items-center gap-1.5 truncate rounded px-1.5 py-0.5 text-left text-xs text-muted-foreground transition-colors hover:bg-brand-emerald-50 hover:text-brand-emerald-700"
                                   title="Click to edit"
                                 >
                                   <span className="truncate">
@@ -380,7 +380,7 @@ export function KnowledgeBase() {
                               )}
 
                               {/* Use count */}
-                              <div className="text-center text-[11px] text-slate-400">
+                              <div className="text-center text-[11px] text-muted-foreground/70">
                                 {rule.useCount}x
                               </div>
 
