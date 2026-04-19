@@ -13,7 +13,7 @@ import {
 import { motion, useReducedMotion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import { floatIn } from "./lib/motion";
+import { fadeUp, floatIn, stagger } from "./lib/motion";
 
 // Hero — the biggest single block on the page. Sections:
 //   1. Eyebrow + pulsing green dot ("New · Self-learning extension").
@@ -191,10 +191,22 @@ export function Hero() {
       >
         <div className="relative overflow-hidden rounded-3xl border border-border/60 bg-background shadow-[var(--shadow-elevated-emerald)]">
           {/* App mock: phones get a single stacked column; ≥sm gets
-              list + detail (sidebar hidden); ≥md gets the full 3-col. */}
-          <div className="grid min-h-[360px] grid-cols-1 sm:grid-cols-[260px_1fr] md:grid-cols-[180px_260px_1fr]">
+              list + detail (sidebar hidden); ≥md gets the full 3-col.
+              Columns mount with a 90/130/170 ms cascade after the
+              canvas frame lifts in, so the product mock reads as
+              "assembling itself" rather than snapping into place. */}
+          <motion.div
+            variants={stagger}
+            initial={reduced ? undefined : "hidden"}
+            animate="show"
+            transition={{ delayChildren: 0.9, staggerChildren: 0.08 }}
+            className="grid min-h-[360px] grid-cols-1 sm:grid-cols-[260px_1fr] md:grid-cols-[180px_260px_1fr]"
+          >
             {/* Sidebar */}
-            <div className="hidden border-r border-border/50 bg-muted/30 p-4 text-sm md:block">
+            <motion.div
+              variants={fadeUp}
+              className="hidden border-r border-border/50 bg-muted/30 p-4 text-sm md:block"
+            >
               <div className="mb-4 flex items-center gap-2 text-xs font-semibold">
                 <span className="flex h-6 w-6 items-center justify-center rounded-md bg-brand-emerald-50 ring-1 ring-brand-emerald-100">
                   <Search className="h-3.5 w-3.5 text-brand-emerald-700" aria-hidden />
@@ -230,17 +242,26 @@ export function Hero() {
                   </li>
                 ))}
               </ul>
-            </div>
+            </motion.div>
 
-            {/* Job list */}
-            <div className="border-r border-border/50 bg-background/40 p-3">
+            {/* Job list — rows stagger in after the column fade, so
+                the results feel like they're loading, not popping. */}
+            <motion.div
+              variants={fadeUp}
+              className="border-r border-border/50 bg-background/40 p-3"
+            >
               <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Results
               </div>
-              <ul className="flex flex-col gap-1.5">
+              <motion.ul
+                variants={stagger}
+                transition={{ delayChildren: 0.15, staggerChildren: 0.07 }}
+                className="flex flex-col gap-1.5"
+              >
                 {JOB_ROWS.map((row, i) => (
-                  <li
+                  <motion.li
                     key={row.title}
+                    variants={fadeUp}
                     className={
                       "rounded-lg border border-l-4 px-3 py-2 transition-colors " +
                       (i === activeRow
@@ -267,13 +288,13 @@ export function Hero() {
                     <div className="truncate text-[10px] text-muted-foreground">
                       {row.company} · {row.location}
                     </div>
-                  </li>
+                  </motion.li>
                 ))}
-              </ul>
-            </div>
+              </motion.ul>
+            </motion.div>
 
             {/* Detail */}
-            <div className="p-5">
+            <motion.div variants={fadeUp} className="p-5">
               <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Detail
               </div>
@@ -333,8 +354,8 @@ export function Hero() {
                   Rewrote summary for design-systems fit
                 </li>
               </ul>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         </div>
 
         {/* Floating callouts */}
