@@ -165,26 +165,7 @@
     "company": "公司",
     "type": "类型",
     "tabDetail": "详情",
-    "mobileTablistLabel": "职位列表与详情",
-    "rescoreAll": "重新评分",
-    "rescoreDone": "已完成 {count} 条评分",
-    "rescoreFailed": "评分失败",
-    "rescoreNoProfile": "请先完善简历",
-    "rescoreNoProfileDesc": "需要你的技能和经验才能计算匹配度。"
-  },
-  "matchScore": {
-    "matchScore": "匹配度",
-    "matched": "命中",
-    "missing": "缺失",
-    "skillDelta": "命中 {matched} / {total} 技能",
-    "notScored": "尚未评分",
-    "notScoredDesc": "保存简历后点击「重新评分」查看匹配度。",
-    "tier": {
-      "strong": "强",
-      "good": "良好",
-      "fair": "一般",
-      "weak": "弱"
-    }
+    "mobileTablistLabel": "职位列表与详情"
   },
   "fetch": {
     "searchRoles": "搜索职位",

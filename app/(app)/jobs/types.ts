@@ -1,19 +1,5 @@
 export type JobStatus = "NEW" | "APPLIED" | "REJECTED";
 
-export type MatchTier = "strong" | "good" | "fair" | "weak";
-
-export type MatchBreakdown = {
-  tier: MatchTier;
-  matchedSkills: string[];
-  missingSkills: string[];
-  breakdown: {
-    skillsScore: number;
-    titleScore: number;
-    levelScore: number;
-    experienceScore: number;
-  };
-};
-
 export type JobItem = {
   id: string;
   jobUrl: string;
@@ -28,8 +14,6 @@ export type JobItem = {
   coverPdfUrl?: string | null;
   createdAt: string;
   updatedAt: string;
-  matchScore?: number | null;
-  matchBreakdown?: MatchBreakdown | null;
 };
 
 export type JobsResponse = {

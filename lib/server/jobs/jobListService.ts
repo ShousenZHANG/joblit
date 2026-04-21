@@ -42,8 +42,6 @@ export type JobListItem = {
   resumePdfUrl: string | null;
   resumePdfName: string | null;
   coverPdfUrl: string | null;
-  matchScore: number | null;
-  matchBreakdown: unknown;
 };
 
 export type JobListResult = {
@@ -145,8 +143,6 @@ export async function listJobs(userId: string, query: JobListQuery): Promise<Job
         createdAt: true,
         updatedAt: true,
         market: true,
-        matchScore: true,
-        matchBreakdown: true,
         applications: {
           select: { resumePdfUrl: true, resumePdfName: true, coverPdfUrl: true },
         },

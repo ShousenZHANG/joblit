@@ -93,16 +93,6 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
       toast({ title: t("toastSaved"), description: t("toastSavedDesc") });
       markTaskComplete("resume_setup");
       preview.schedulePreview(150);
-      // Resume profile changed — rescore all jobs against the new revision.
-      // Fire-and-forget so save UX stays snappy; the next Jobs page visit
-      // will pick up the fresh scores from the DB.
-      void fetch("/api/jobs/rescore", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ force: true }),
-      }).catch(() => {
-        // Non-fatal — rescore can be manually triggered later from Jobs page.
-      });
     } catch {
       toast({
         title: t("toastSaveFailed"),

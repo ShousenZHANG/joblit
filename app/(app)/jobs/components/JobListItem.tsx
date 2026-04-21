@@ -2,7 +2,6 @@ import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { CheckSquare, Square } from "lucide-react";
 import type { JobItem, JobStatus } from "../types";
-import { MatchScoreBadge } from "./MatchScoreBadge";
 
 function formatInsertedTime(iso: string) {
   const createdAt = new Date(iso);
@@ -28,12 +27,19 @@ function formatLocalDateTime(iso: string, timeZone: string | null) {
 }
 
 const STATUS_CLASS: Record<JobStatus, string> = {
-  // Theme-token driven so statuses read correctly in dark mode.
-  // brand-emerald + tier-* tokens are overridden in the .dark block
-  // of globals.css so these pills stay legible on dark surfaces.
-  NEW: "bg-brand-emerald-100 text-brand-emerald-700",
-  APPLIED: "bg-[theme(colors.tier-good-bg)] text-[theme(colors.tier-good-fg)]",
-  REJECTED: "bg-muted text-muted-foreground",
+  // High-contrast semantic badges tuned for both themes:
+  // NEW      — emerald (fresh opportunity, aligns with brand accent)
+  // APPLIED  — sky blue (action taken, in-progress)
+  // REJECTED — rose (terminal, visually distinct from neutral grey)
+  NEW:
+    "border border-emerald-300/60 bg-emerald-100 text-emerald-800 " +
+    "dark:border-emerald-400/30 dark:bg-emerald-500/15 dark:text-emerald-300",
+  APPLIED:
+    "border border-sky-300/60 bg-sky-100 text-sky-800 " +
+    "dark:border-sky-400/30 dark:bg-sky-500/15 dark:text-sky-300",
+  REJECTED:
+    "border border-rose-300/60 bg-rose-100 text-rose-800 " +
+    "dark:border-rose-400/30 dark:bg-rose-500/15 dark:text-rose-300",
 };
 
 function JobListItemInner({
@@ -93,10 +99,6 @@ function JobListItemInner({
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5">
               <Badge className={STATUS_CLASS[job.status]}>{job.status}</Badge>
-              <MatchScoreBadge
-                score={job.matchScore}
-                breakdown={job.matchBreakdown}
-              />
             </div>
             <span
               className="text-xs text-muted-foreground"

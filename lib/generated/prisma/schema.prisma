@@ -135,14 +135,6 @@ model Job {
   status      JobStatus @default(NEW)
   market      String    @default("AU") // "AU" | "CN"
 
-  // Keyword-based job-CV match scoring (computed against active ResumeProfile).
-  // See lib/shared/matchScore.ts for the pure scoring fn and
-  // lib/server/jobs/scoreJobs.ts for the DB write-path.
-  matchScore           Float? // 0-100, null = not yet scored
-  matchBreakdown       Json? // { tier, matchedSkills, missingSkills, breakdown }
-  scoredAt             DateTime?
-  scoredProfileVersion Int? // Mirrors ResumeProfile.revision at scoring time
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -157,7 +149,6 @@ model Job {
   @@index([userId, status])
   @@index([userId, market, createdAt])
   @@index([userId, jobLevel])
-  @@index([userId, matchScore])
 }
 
 model ApplicationBatch {

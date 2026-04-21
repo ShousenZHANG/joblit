@@ -165,26 +165,7 @@
     "company": "Company",
     "type": "Type",
     "tabDetail": "Detail",
-    "mobileTablistLabel": "Jobs list and detail",
-    "rescoreAll": "Rescore all",
-    "rescoreDone": "Scored {count} jobs",
-    "rescoreFailed": "Rescore failed",
-    "rescoreNoProfile": "Set up your resume first",
-    "rescoreNoProfileDesc": "We need your skills and experience to compute match scores."
-  },
-  "matchScore": {
-    "matchScore": "Match score",
-    "matched": "Matched",
-    "missing": "Missing",
-    "skillDelta": "{matched} of {total} skills",
-    "notScored": "Not scored yet",
-    "notScoredDesc": "Save a resume profile and click \"Rescore all\" to compute fit.",
-    "tier": {
-      "strong": "Strong",
-      "good": "Good",
-      "fair": "Fair",
-      "weak": "Weak"
-    }
+    "mobileTablistLabel": "Jobs list and detail"
   },
   "fetch": {
     "searchRoles": "Search roles",

@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import { canonicalizeJobUrl } from "@/lib/shared/canonicalizeJobUrl";
-import { rescoreUserJobs } from "@/lib/server/jobs/scoreJobs";
 
 export const runtime = "nodejs";
 
@@ -141,17 +140,6 @@ export async function POST(req: Request) {
         skipDuplicates: true,
       });
       written += result.count;
-    }
-
-    // Score the newly-imported jobs against the user's active resume profile.
-    // onlyStale=true ensures we only touch rows with matchScore IS NULL (the
-    // fresh inserts). Silent no-op when the user has no profile yet.
-    if (written > 0) {
-      try {
-        await rescoreUserJobs(userId, { onlyStale: true });
-      } catch {
-        // Non-fatal — user can hit "Rescore all" manually.
-      }
     }
 
     return NextResponse.json({ ok: true, imported: written, invalid: invalid.length });

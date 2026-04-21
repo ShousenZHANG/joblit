@@ -53,8 +53,6 @@ export async function listJobsWithRelevance(
     resumePdfUrl: string | null;
     resumePdfName: string | null;
     coverPdfUrl: string | null;
-    matchScore: number | null;
-    matchBreakdown: unknown;
   };
 
   const [rows, countResult] = await Promise.all([
@@ -63,7 +61,6 @@ export async function listJobsWithRelevance(
         j."id", j."jobUrl", j."title", j."company", j."location",
         j."jobType", j."jobLevel", j."status", j."market",
         j."createdAt", j."updatedAt",
-        j."matchScore", j."matchBreakdown",
         a."resumePdfUrl", a."resumePdfName", a."coverPdfUrl"
       FROM "Job" j
       LEFT JOIN LATERAL (

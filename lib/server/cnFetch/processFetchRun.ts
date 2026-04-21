@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/server/prisma";
 import { canonicalizeJobUrl } from "@/lib/shared/canonicalizeJobUrl";
-import { scoreSingleJob } from "@/lib/server/jobs/scoreJobs";
 import { runCnFetch } from "./runCnFetch";
 import type { CnSource } from "./types";
 
@@ -49,7 +48,6 @@ export interface ProcessResult {
   runId: string;
   discovered: number;
   imported: number;
-  scored: number;
   error?: string;
 }
 
@@ -84,7 +82,7 @@ export async function processCnFetchRun(
         where: { id: run.id },
         data: { status: "SUCCEEDED", importedCount: 0 },
       });
-      return { ...base, discovered: 0, imported: 0, scored: 0 };
+      return { ...base, discovered: 0, imported: 0 };
     }
 
     // Tombstone filter — skip URLs the user previously deleted.
@@ -119,34 +117,11 @@ export async function processCnFetchRun(
       imported += res.count;
     }
 
-    // Score fresh (matchScore null) rows against active resume profile.
-    let scored = 0;
-    if (imported > 0) {
-      const fresh = await prisma.job.findMany({
-        where: {
-          userId,
-          market: "CN",
-          matchScore: null,
-          jobUrl: { in: filtered.map((j) => j.jobUrl) },
-        },
-        select: { id: true },
-        take: imported,
-      });
-      for (const row of fresh) {
-        try {
-          await scoreSingleJob(userId, row.id);
-          scored++;
-        } catch {
-          // Non-fatal — job row remains usable without a score.
-        }
-      }
-    }
-
     await prisma.fetchRun.update({
       where: { id: run.id },
       data: { status: "SUCCEEDED", importedCount: imported },
     });
-    return { ...base, discovered, imported, scored };
+    return { ...base, discovered, imported };
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown";
     await prisma.fetchRun
@@ -155,7 +130,7 @@ export async function processCnFetchRun(
         data: { status: "FAILED", error: message },
       })
       .catch(() => {});
-    return { ...base, discovered: 0, imported: 0, scored: 0, error: message };
+    return { ...base, discovered: 0, imported: 0, error: message };
   }
 }
 

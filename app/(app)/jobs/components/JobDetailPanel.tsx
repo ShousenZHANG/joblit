@@ -15,7 +15,6 @@ import { cn } from "@/lib/utils";
 import type { JobItem, JobStatus, CvSource, CoverSource } from "../types";
 import { HIGHLIGHT_KEYWORDS, escapeRegExp } from "../utils/constants";
 import { parseExperienceGate } from "../utils/experienceParser";
-import { MatchScoreCard } from "./MatchScoreCard";
 
 const statusClass: Record<JobStatus, string> = {
   NEW: "bg-brand-emerald-100 text-brand-emerald-700",
@@ -296,10 +295,6 @@ export function JobDetailPanel({
         <div className="p-4">
           {selectedJob ? (
             <div className="space-y-4 text-sm text-muted-foreground">
-              <MatchScoreCard
-                score={selectedJob.matchScore}
-                breakdown={selectedJob.matchBreakdown}
-              />
               <div className="text-xs uppercase tracking-wide text-muted-foreground">
                 Job Description
               </div>

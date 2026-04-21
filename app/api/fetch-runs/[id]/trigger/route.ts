@@ -198,7 +198,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     return NextResponse.json({
       ok: result.error === undefined,
       imported: result.imported,
-      scored: result.scored,
       discovered: result.discovered,
       ...(result.error ? { error: result.error } : {}),
     });

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import "highlight.js/styles/github.css";
-import { CheckSquare, MapPin, Plus, RefreshCw, Search, SlidersHorizontal, Square, Trash2, X } from "lucide-react";
+import { CheckSquare, MapPin, Plus, SlidersHorizontal, Square, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -66,49 +66,6 @@ export function JobsClient({
   const [isPending, startTransition] = useTransition();
   const resultsScrollRef = useRef<HTMLDivElement | null>(null);
   const [suppressedDeletedIds, setSuppressedDeletedIds] = useState<Set<string>>(new Set());
-  const [rescoring, setRescoring] = useState(false);
-
-  const handleRescoreAll = useCallback(async () => {
-    if (rescoring) return;
-    setRescoring(true);
-    try {
-      const res = await fetch("/api/jobs/rescore", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ force: true }),
-      });
-      const json = (await res.json().catch(() => ({}))) as {
-        scored?: number;
-        skippedReason?: "NO_PROFILE" | "NO_JOBS";
-      };
-      if (!res.ok) {
-        toast({
-          title: t("rescoreFailed"),
-          variant: "destructive",
-          duration: 2400,
-        });
-        return;
-      }
-      if (json.skippedReason === "NO_PROFILE") {
-        toast({
-          title: t("rescoreNoProfile"),
-          description: t("rescoreNoProfileDesc"),
-          variant: "destructive",
-          duration: 3200,
-        });
-        return;
-      }
-      toast({
-        title: t("rescoreDone", { count: json.scored ?? 0 }),
-        duration: 1800,
-      });
-      await queryClient.invalidateQueries({ queryKey: ["jobs"] });
-    } catch {
-      toast({ title: t("rescoreFailed"), variant: "destructive", duration: 2400 });
-    } finally {
-      setRescoring(false);
-    }
-  }, [rescoring, queryClient, toast, t]);
 
   const {
     items, totalCount, nextCursor, loading, loadingInitial, loadingMore,
@@ -176,20 +133,6 @@ export function JobsClient({
       setBatchSelectedIds(pruned);
     }
   }, [items, batchSelectMode, batchSelectedIds]);
-
-  // Status counts derived from loaded items. Not a perfect total (API
-  // doesn't return status facets), but gives the filter-pill row a
-  // useful number for the portion of results the user has scrolled.
-  const statusCounts = useMemo(() => {
-    const counts = { NEW: 0, APPLIED: 0, REJECTED: 0 } as Record<
-      JobStatus,
-      number
-    >;
-    for (const job of items) {
-      if (job.status in counts) counts[job.status] += 1;
-    }
-    return counts;
-  }, [items]);
 
   // Lock scroll on the app shell.
   // Re-apply after any modal closes — Radix AlertDialog temporarily sets
@@ -469,14 +412,6 @@ export function JobsClient({
                 </span>
               )}
             </button>
-            <Button
-              onClick={triggerSearch}
-              disabled={loading}
-              size="sm"
-              className="h-9 shrink-0 rounded-lg bg-brand-emerald-500 px-3 text-xs font-semibold text-white shadow-sm hover:bg-brand-emerald-600 active:scale-[0.97]"
-            >
-              <Search className="h-3.5 w-3.5" />
-            </Button>
           </div>
 
           {mobileFiltersOpen && (
@@ -609,39 +544,13 @@ export function JobsClient({
               </div>
             ) : null}
             <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <div className="flex-1">
-                  <JobSearchBar
-                    q={q}
-                    onQueryChange={setQ}
-                    onSubmit={triggerSearch}
-                    placeholder={t("placeholder")}
-                    isDebouncing={q !== "" && q !== debouncedQ}
-                  />
-                </div>
-                <Button
-                  onClick={triggerSearch}
-                  disabled={loading}
-                  className="h-9 shrink-0 rounded-xl bg-gradient-to-r from-brand-emerald-500 to-brand-emerald-600 px-3 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:from-brand-emerald-600 hover:to-brand-emerald-700 hover:shadow-md hover:brightness-105 active:scale-[0.97] disabled:opacity-50"
-                  aria-label={tc("search")}
-                >
-                  <Search className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleRescoreAll}
-                  disabled={rescoring}
-                  title={t("rescoreAll")}
-                  aria-label={t("rescoreAll")}
-                  className="h-9 w-9 shrink-0 rounded-xl border border-border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-                >
-                  <RefreshCw
-                    className={`h-4 w-4 ${rescoring ? "animate-spin" : ""}`}
-                  />
-                </Button>
-              </div>
+              <JobSearchBar
+                q={q}
+                onQueryChange={setQ}
+                onSubmit={triggerSearch}
+                placeholder={t("placeholder")}
+                isDebouncing={q !== "" && q !== debouncedQ}
+              />
               <div className="flex items-center gap-2">
                 <div className="relative flex-1 min-w-0">
                   <MapPin
@@ -793,7 +702,6 @@ export function JobsClient({
                 </FilterPill>
                 <FilterPill
                   active={statusFilter === "NEW"}
-                  count={statusCounts.NEW}
                   onClick={() =>
                     startTransition(() => setStatusFilter("NEW"))
                   }
@@ -802,7 +710,6 @@ export function JobsClient({
                 </FilterPill>
                 <FilterPill
                   active={statusFilter === "APPLIED"}
-                  count={statusCounts.APPLIED}
                   onClick={() =>
                     startTransition(() => setStatusFilter("APPLIED"))
                   }
@@ -811,7 +718,6 @@ export function JobsClient({
                 </FilterPill>
                 <FilterPill
                   active={statusFilter === "REJECTED"}
-                  count={statusCounts.REJECTED}
                   onClick={() =>
                     startTransition(() => setStatusFilter("REJECTED"))
                   }
