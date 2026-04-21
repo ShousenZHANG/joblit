@@ -137,60 +137,6 @@ describe("fetch runs create api", () => {
     expect(payload.resultsWanted).toBeNull();
   });
 
-  it("defaults identityFilter to { region: AU, strictness: balanced }", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1", email: "user@example.com" },
-    });
-
-    await POST(
-      new Request("http://localhost/api/fetch-runs", {
-        method: "POST",
-        body: JSON.stringify({ title: "Software Engineer" }),
-      }),
-    );
-
-    const payload = fetchRunStore.create.mock.calls[0]?.[0]?.data?.queries;
-    expect(payload.identityFilter).toEqual({ region: "AU", strictness: "balanced" });
-  });
-
-  it("persists a custom identityFilter payload", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1", email: "user@example.com" },
-    });
-
-    await POST(
-      new Request("http://localhost/api/fetch-runs", {
-        method: "POST",
-        body: JSON.stringify({
-          title: "Software Engineer",
-          identityFilter: { region: "US", strictness: "strict" },
-        }),
-      }),
-    );
-
-    const payload = fetchRunStore.create.mock.calls[0]?.[0]?.data?.queries;
-    expect(payload.identityFilter).toEqual({ region: "US", strictness: "strict" });
-  });
-
-  it("rejects an invalid identityFilter region", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1", email: "user@example.com" },
-    });
-
-    const res = await POST(
-      new Request("http://localhost/api/fetch-runs", {
-        method: "POST",
-        body: JSON.stringify({
-          title: "Software Engineer",
-          identityFilter: { region: "ZZ" },
-        }),
-      }),
-    );
-
-    expect(res.status).toBe(400);
-    expect(fetchRunStore.create).not.toHaveBeenCalled();
-  });
-
   it("does not persist sourceOptions defaults (single-phase fetch)", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "user-1", email: "user@example.com" },

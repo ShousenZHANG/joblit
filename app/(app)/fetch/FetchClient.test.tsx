@@ -144,7 +144,6 @@ describe("FetchClient", () => {
     ]);
     expect(body.smartExpand).toBe(true);
     expect(body.excludeDescriptionRules).toEqual(["identity_requirement"]);
-    expect(body.identityFilter).toEqual({ region: "AU", strictness: "balanced" });
     expect(body.sourceOptions).toBeUndefined();
   });
 

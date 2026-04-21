@@ -25,16 +25,6 @@ const DESC_EXCLUDE_ALLOWED = new Set([
   "sponsorship_unavailable",
 ]);
 
-const IDENTITY_REGIONS = ["AU", "US", "CA", "UK", "NZ", "EU"] as const;
-const IDENTITY_STRICTNESS = ["strict", "balanced", "loose"] as const;
-
-const IdentityFilterSchema = z
-  .object({
-    region: z.enum(IDENTITY_REGIONS).optional().default("AU"),
-    strictness: z.enum(IDENTITY_STRICTNESS).optional().default("balanced"),
-  })
-  .optional();
-
 const queriesField = z
   .union([z.array(z.string().min(1)), z.string().min(1)])
   .optional()
@@ -66,7 +56,6 @@ const AUSchema = z
       .optional()
       .default([])
       .transform((rules) => rules.filter((rule) => DESC_EXCLUDE_ALLOWED.has(rule))),
-    identityFilter: IdentityFilterSchema,
   })
   .refine((data) => (data.title ?? data.queries?.[0])?.trim(), {
     message: "title is required",
@@ -167,10 +156,6 @@ export async function POST(req: Request) {
         applyExcludes: parsed.data.applyExcludes,
         excludeTitleTerms: parsed.data.excludeTitleTerms,
         excludeDescriptionRules: parsed.data.excludeDescriptionRules,
-        identityFilter: parsed.data.identityFilter ?? {
-          region: "AU",
-          strictness: "balanced",
-        },
       },
       location: parsed.data.location ?? null,
       hoursOld: parsed.data.hoursOld ?? null,

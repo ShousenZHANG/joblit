@@ -32,7 +32,7 @@ import pandas as pd
 RULES_PATH = Path(__file__).parent / "rights_rules.json"
 
 _STRICTNESS = ("strict", "balanced", "loose")
-_VALID_REGIONS = ("AU", "US", "CA", "UK", "NZ", "EU")
+_VALID_REGIONS = ("AU", "US", "CA", "UK", "NZ", "EU", "GLOBAL")
 
 
 @dataclass
@@ -48,7 +48,7 @@ class MatchResult:
 class ExclusionMatcher:
     def __init__(
         self,
-        region: str = "AU",
+        region: str = "GLOBAL",
         strictness: str = "balanced",
         rules: Optional[Sequence[str]] = None,
         rules_path: Optional[Path] = None,
@@ -248,7 +248,7 @@ class ExclusionMatcher:
 
     def _build_rule_id(self) -> str:
         bits = ["identity_requirement"]
-        if self.region != "AU":
+        if self.region != "GLOBAL":
             bits.append(f"region:{self.region}")
         if self.strictness != "balanced":
             bits.append(self.strictness)
@@ -261,7 +261,7 @@ class ExclusionMatcher:
 def filter_description_v2(
     df: pd.DataFrame,
     rules: Sequence[str],
-    region: str = "AU",
+    region: str = "GLOBAL",
     strictness: str = "balanced",
     rules_path: Optional[Path] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:

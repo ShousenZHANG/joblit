@@ -98,10 +98,6 @@ export function FetchClient() {
   const [excludeDescriptionRules, setExcludeDescriptionRules] = useState<string[]>([
     "identity_requirement",
   ]);
-  type IdentityRegion = "AU" | "US" | "CA" | "UK" | "NZ" | "EU";
-  type IdentityStrictness = "strict" | "balanced" | "loose";
-  const [identityRegion, setIdentityRegion] = useState<IdentityRegion>("AU");
-  const [identityStrictness, setIdentityStrictness] = useState<IdentityStrictness>("balanced");
 
   const [localError, setLocalError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -157,19 +153,11 @@ export function FetchClient() {
         location?: string;
         hoursOld?: number;
         smartExpand?: boolean;
-        identityRegion?: IdentityRegion;
-        identityStrictness?: IdentityStrictness;
       };
       if (parsed.title) setJobTitle(parsed.title);
       if (parsed.location) setLocation(parsed.location);
       if (parsed.hoursOld) setHoursOld(parsed.hoursOld);
       if (typeof parsed.smartExpand === "boolean") setSmartExpand(parsed.smartExpand);
-      if (parsed.identityRegion && ["AU", "US", "CA", "UK", "NZ", "EU"].includes(parsed.identityRegion)) {
-        setIdentityRegion(parsed.identityRegion);
-      }
-      if (parsed.identityStrictness && ["strict", "balanced", "loose"].includes(parsed.identityStrictness)) {
-        setIdentityStrictness(parsed.identityStrictness);
-      }
     } catch {
       // ignore invalid local preference payload
     }
@@ -183,11 +171,9 @@ export function FetchClient() {
         location,
         hoursOld,
         smartExpand,
-        identityRegion,
-        identityStrictness,
       }),
     );
-  }, [jobTitle, location, hoursOld, smartExpand, identityRegion, identityStrictness]);
+  }, [jobTitle, location, hoursOld, smartExpand]);
 
   function getErrorMessage(err: unknown, fallback = "Failed") {
     if (err instanceof Error) return err.message;
@@ -216,10 +202,6 @@ export function FetchClient() {
           applyExcludes,
           excludeTitleTerms,
           excludeDescriptionRules,
-          identityFilter: {
-            region: identityRegion,
-            strictness: identityStrictness,
-          },
         };
 
     const res = await fetch("/api/fetch-runs", {
@@ -363,58 +345,7 @@ export function FetchClient() {
 
           {/* Collapsible exclusion filters */}
           {applyExcludes && (
-            <div className="space-y-3 rounded-lg border border-border/60 bg-muted/40 p-3">
-              {/* Work-rights filter — region + strictness controls */}
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <div className="text-xs font-medium text-muted-foreground">Work-rights region</div>
-                  <Select
-                    value={identityRegion}
-                    onValueChange={(v) => setIdentityRegion(v as IdentityRegion)}
-                  >
-                    <SelectTrigger className="h-10" aria-label="Work-rights region">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="AU">Australia</SelectItem>
-                      <SelectItem value="US">United States</SelectItem>
-                      <SelectItem value="CA">Canada</SelectItem>
-                      <SelectItem value="UK">United Kingdom</SelectItem>
-                      <SelectItem value="NZ">New Zealand</SelectItem>
-                      <SelectItem value="EU">European Union</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <div className="text-xs font-medium text-muted-foreground">Filter strictness</div>
-                  <div
-                    role="radiogroup"
-                    aria-label="Filter strictness"
-                    className="flex h-10 items-center gap-1 rounded-lg border border-border bg-background p-1 text-xs font-medium"
-                  >
-                    {(["strict", "balanced", "loose"] as IdentityStrictness[]).map((level) => {
-                      const active = identityStrictness === level;
-                      return (
-                        <button
-                          key={level}
-                          type="button"
-                          role="radio"
-                          aria-checked={active}
-                          onClick={() => setIdentityStrictness(level)}
-                          className={`flex-1 rounded-md px-2 py-1.5 capitalize transition-colors ${
-                            active
-                              ? "bg-brand-emerald-500 text-white shadow-sm"
-                              : "text-muted-foreground hover:bg-muted"
-                          }`}
-                        >
-                          {level}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
+            <div className="rounded-lg border border-border/60 bg-muted/40 p-3">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <div className="text-xs font-medium text-muted-foreground">Title exclusions</div>
