@@ -1987,6 +1987,8 @@ body {
   /* Allow outer scroll for content pages (Fetch, Resume).
      Scrollbar is hidden — content is reachable via wheel/trackpad/touch. */
   overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
   /* Hide scrollbar: Firefox */
   scrollbar-width: none;
   /* Hide scrollbar: IE / legacy Edge */
@@ -2049,6 +2051,8 @@ body::-webkit-scrollbar-thumb:hover {
 
 /* Generic inner card scroll area (desktop) */
 .card-scroll-area {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: rgba(148, 163, 184, 0.6) transparent;
 }
@@ -2093,6 +2097,7 @@ body::-webkit-scrollbar-thumb:hover {
   scrollbar-color: transparent transparent;
   /* Enable smooth momentum scrolling on iOS */
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .jobs-scroll-area [data-radix-scroll-area-viewport]::-webkit-scrollbar {
@@ -2135,6 +2140,21 @@ body::-webkit-scrollbar-thumb:hover {
 
 .jobs-scroll-area .scroll-area-thumb:hover {
   background: var(--jobs-scroll-thumb-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .joblit-list-item {
+    transition: none;
+  }
+
+  .joblit-list-item:hover {
+    transform: none;
+  }
+
+  .jobs-scroll-area .scroll-area-scrollbar[data-orientation="vertical"],
+  .jobs-scroll-area .scroll-area-thumb {
+    transition: none;
+  }
 }
 
 /* ── Shimmer CTA button ────────────────────────────── */

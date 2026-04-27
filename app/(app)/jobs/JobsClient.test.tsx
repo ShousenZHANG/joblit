@@ -173,6 +173,19 @@ describe("JobsClient", () => {
     expect(screen.getAllByTestId("jobs-details-scroll")[0]).toBeInTheDocument();
   });
 
+  it("uses flexible mobile panel sizing instead of a brittle fixed viewport subtraction", () => {
+    renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
+
+    const resultsPanel = screen.getAllByTestId("jobs-results-panel")[0];
+    const detailsPanel = screen.getAllByTestId("jobs-details-panel")[0];
+
+    for (const panel of [resultsPanel, detailsPanel]) {
+      expect(panel).not.toHaveClass("h-[calc(100dvh-240px)]");
+      expect(panel.className).toContain("min-h-[clamp(18rem,calc(100dvh-16rem),32rem)]");
+      expect(panel.className).toContain("max-h-[calc(100dvh-12rem)]");
+    }
+  });
+
   it("applies the page-enter animation on the jobs shell", () => {
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
@@ -1288,4 +1301,3 @@ describe("JobsClient", () => {
   });
 
 });
-
