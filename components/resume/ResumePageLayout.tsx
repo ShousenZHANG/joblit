@@ -279,7 +279,13 @@ export function ResumePageLayout() {
           <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="mx-auto max-w-2xl px-4 py-6 lg:px-8">
               <VersionSelector />
-              <div className="mt-6">
+              {/* `key` resets the subtree on section switch so the
+                  fade-in always replays. `motion-reduce` opts out for
+                  users who prefer reduced motion. */}
+              <div
+                key={activeSection}
+                className="mt-6 animate-in fade-in slide-in-from-bottom-1 duration-200 ease-out motion-reduce:animate-none"
+              >
                 <SectionContent sectionId={activeSection} />
               </div>
             </div>

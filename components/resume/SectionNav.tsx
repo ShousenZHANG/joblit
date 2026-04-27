@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { User, FileText, Briefcase, FolderKanban, GraduationCap, Wrench, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useResumeContext } from "./ResumeContext";
 import type { SectionId } from "./constants";
@@ -27,6 +28,19 @@ export function SectionNav({ className, collapsed, onToggle }: SectionNavProps) 
   const { activeSection, setActiveSection, locale, t } = useResumeContext();
   const visibleSectionIds = getSectionIds(locale);
   const visibleSections = SECTION_CONFIG.filter((s) => visibleSectionIds.includes(s.id));
+
+  // Mobile horizontal tab row: keep the active pill in view as the user
+  // hops between sections so the indicator never disappears off-screen.
+  const mobileTabRefs = useRef<Map<SectionId, HTMLButtonElement | null>>(new Map());
+  useEffect(() => {
+    const node = mobileTabRefs.current.get(activeSection);
+    if (!node) return;
+    node.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  }, [activeSection]);
 
   return (
     <nav
@@ -106,17 +120,26 @@ export function SectionNav({ className, collapsed, onToggle }: SectionNavProps) 
       </div>
 
       {/* Mobile: horizontal scrollable tabs */}
-      <div className="scrollbar-hide flex w-full gap-2 overflow-x-auto px-4 py-2 lg:hidden">
+      <div
+        className="scrollbar-hide flex w-full gap-2 overflow-x-auto scroll-smooth px-4 py-2 lg:hidden"
+        role="tablist"
+      >
         {visibleSections.map(({ id, tKey, icon: Icon }) => {
           const isActive = activeSection === id;
           return (
             <button
               key={id}
+              ref={(node) => {
+                mobileTabRefs.current.set(id, node);
+              }}
               type="button"
               onClick={() => setActiveSection(id)}
               aria-current={isActive ? "page" : undefined}
+              role="tab"
+              aria-selected={isActive}
               className={cn(
-                "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition",
+                "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm",
+                "transition-colors duration-150 ease-out active:scale-[0.97] motion-reduce:active:scale-100 motion-reduce:transition-none",
                 isActive
                   ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
                   : "border-border bg-card text-muted-foreground hover:border-emerald-300",
