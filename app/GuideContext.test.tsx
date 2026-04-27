@@ -179,7 +179,7 @@ describe("GuideContext", () => {
     });
   });
 
-  it("starts the guided tour and navigates steps via Next", async () => {
+  it("opens the Quick Start panel and routes to the active task", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.url;
       if (url === "/api/onboarding/state" && !init?.method) {
@@ -210,21 +210,26 @@ describe("GuideContext", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "open-guide" }));
 
+    // The Quick Start panel renders with all five tasks listed in order.
     await waitFor(() => {
-      expect(screen.getByTestId("guide-tour-card")).toBeInTheDocument();
-      expect(screen.getByText(/step 1 of 5/i)).toBeInTheDocument();
+      expect(screen.getByTestId("guide-quickstart-panel")).toBeInTheDocument();
+    });
+    const list = screen.getByTestId("guide-quickstart-list");
+    expect(list).toHaveTextContent(/Set up your master resume/i);
+    expect(list).toHaveTextContent(/Run your first job fetch/i);
+
+    // Clicking the primary "Take me there" CTA on the current task routes
+    // to its href — for a fresh user that's /resume.
+    const takeMeThere = screen.getAllByRole("button", { name: /take me there/i })[0];
+    fireEvent.click(takeMeThere);
+
+    await waitFor(() => {
+      expect(pushMock).toHaveBeenCalledWith("/resume");
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /next/i }));
-
+    // Routing also closes the panel so the user lands cleanly on the page.
     await waitFor(() => {
-      expect(pushMock).toHaveBeenCalledWith("/fetch");
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /end tour/i }));
-
-    await waitFor(() => {
-      expect(screen.queryByTestId("guide-tour-card")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("guide-quickstart-panel")).not.toBeInTheDocument();
     });
   });
 });
