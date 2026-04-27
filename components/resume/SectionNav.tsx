@@ -29,7 +29,11 @@ export function SectionNav({ className, collapsed, onToggle }: SectionNavProps) 
   const visibleSections = SECTION_CONFIG.filter((s) => visibleSectionIds.includes(s.id));
 
   return (
-    <nav className={cn("flex", className)} aria-label="Resume sections">
+    <nav
+      className={cn("flex", className)}
+      aria-label="Resume sections"
+      style={{ contain: "layout style" }}
+    >
       {/* Desktop: vertical list */}
       <div className="hidden lg:flex lg:w-full lg:flex-col lg:gap-1">
         {visibleSections.map(({ id, tKey, icon: Icon }) => {
@@ -42,24 +46,27 @@ export function SectionNav({ className, collapsed, onToggle }: SectionNavProps) 
               aria-current={isActive ? "page" : undefined}
               title={collapsed ? t(tKey) : undefined}
               className={cn(
-                "transition",
+                "flex h-10 w-full items-center overflow-hidden rounded-xl border text-sm",
+                "[transition-property:width,padding,gap,background-color,border-color,color] duration-200 ease-out",
+                "motion-reduce:transition-none",
                 collapsed
-                  ? cn(
-                      "flex h-10 w-10 items-center justify-center rounded-xl border mx-auto",
-                      isActive
-                        ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-                        : "border-transparent text-muted-foreground hover:border-border hover:bg-muted/60 hover:text-foreground",
-                    )
-                  : cn(
-                      "flex min-h-10 w-full items-center gap-3 rounded-xl border px-3 py-2 text-left text-sm",
-                      isActive
-                        ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-                        : "border-transparent bg-transparent text-muted-foreground hover:border-border hover:bg-muted/60 hover:text-foreground",
-                    ),
+                  ? "justify-center px-0"
+                  : "justify-start gap-3 px-3 text-left",
+                isActive
+                  ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
+                  : "border-transparent bg-transparent text-muted-foreground hover:border-border hover:bg-muted/60 hover:text-foreground",
               )}
             >
               <Icon className="h-4 w-4 shrink-0" />
-              {collapsed ? null : <span>{t(tKey)}</span>}
+              <span
+                className={cn(
+                  "overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 ease-out motion-reduce:transition-none",
+                  collapsed ? "max-w-0 opacity-0" : "max-w-[12rem] opacity-100",
+                )}
+                aria-hidden={collapsed}
+              >
+                {t(tKey)}
+              </span>
             </button>
           );
         })}
@@ -69,20 +76,32 @@ export function SectionNav({ className, collapsed, onToggle }: SectionNavProps) 
           <button
             type="button"
             onClick={onToggle}
-            className={cn(
-              "mt-auto flex items-center rounded-xl border border-transparent px-3 py-2 text-muted-foreground/80 transition hover:border-border hover:bg-muted/60 hover:text-foreground",
-              collapsed ? "h-10 w-10 justify-center mx-auto" : "gap-3 text-sm",
-            )}
+            aria-pressed={collapsed}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className={cn(
+              "mt-auto flex h-10 w-full items-center overflow-hidden rounded-xl border border-transparent text-muted-foreground/80 hover:border-border hover:bg-muted/60 hover:text-foreground",
+              "[transition-property:width,padding,gap,background-color,border-color,color] duration-200 ease-out",
+              "motion-reduce:transition-none",
+              collapsed
+                ? "justify-center px-0"
+                : "justify-start gap-3 px-3 text-sm",
+            )}
           >
             {collapsed ? (
               <PanelLeftOpen className="h-4 w-4 shrink-0" />
             ) : (
-              <>
-                <PanelLeftClose className="h-4 w-4 shrink-0" />
-                <span className="text-xs">Collapse</span>
-              </>
+              <PanelLeftClose className="h-4 w-4 shrink-0" />
             )}
+            <span
+              className={cn(
+                "overflow-hidden whitespace-nowrap text-xs transition-[max-width,opacity] duration-200 ease-out motion-reduce:transition-none",
+                collapsed ? "max-w-0 opacity-0" : "max-w-[8rem] opacity-100",
+              )}
+              aria-hidden={collapsed}
+            >
+              Collapse
+            </span>
           </button>
         ) : null}
       </div>

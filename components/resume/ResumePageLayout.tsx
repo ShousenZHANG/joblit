@@ -263,7 +263,9 @@ export function ResumePageLayout() {
           collapsed={navCollapsed}
           onToggle={() => setNavCollapsed((prev) => !prev)}
           className={cn(
-            "hidden lg:flex shrink-0 border-r border-border flex-col p-3 gap-1 transition-[width] duration-200",
+            "hidden lg:flex shrink-0 border-r border-border flex-col p-3 gap-1",
+            "[transition-property:width] duration-200 ease-out will-change-[width]",
+            "motion-reduce:transition-none",
             navCollapsed ? "w-14" : "w-56",
           )}
         />
@@ -286,7 +288,9 @@ export function ResumePageLayout() {
 
         {/* Desktop preview panel */}
         <PreviewPanel className={cn(
-          "hidden md:flex shrink-0 border-l border-border flex-col transition-[width] duration-200",
+          "hidden md:flex shrink-0 border-l border-border flex-col",
+          "[transition-property:width] duration-200 ease-out will-change-[width]",
+          "motion-reduce:transition-none",
           navCollapsed ? "w-[580px]" : "w-[480px]",
         )} />
       </div>
