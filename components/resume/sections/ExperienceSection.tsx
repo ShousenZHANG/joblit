@@ -81,7 +81,7 @@ export function ExperienceSection({
                 setExpandedIndex(index);
               }
             }}
-            className="rounded-2xl border border-border bg-card/70 p-4"
+            className="rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-shadow hover:shadow-[0_4px_12px_-4px_rgba(0,0,0,0.08)]"
           >
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-1 py-1">
               <div className="min-w-0">

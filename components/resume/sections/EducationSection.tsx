@@ -41,7 +41,7 @@ export function EducationSection({
         section="education"
         onMove={onMove}
         renderItem={(entry, index, dragHandleProps) => (
-          <div className="space-y-3 rounded-2xl border border-border bg-card/70 p-4">
+          <div className="space-y-3 rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-shadow hover:shadow-[0_4px_12px_-4px_rgba(0,0,0,0.08)]">
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-medium text-foreground">
                 {t("educationN", { n: index + 1 })}
