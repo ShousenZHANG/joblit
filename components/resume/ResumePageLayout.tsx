@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { Download } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { Check, Download, Eye, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +17,6 @@ import { useResumeContext } from "./ResumeContext";
 import { SectionNav } from "./SectionNav";
 import { PreviewPanel } from "./PreviewPanel";
 import { VersionSelector } from "./VersionSelector";
-import { ResumeActionBar } from "./ResumeActionBar";
 import { PersonalInfoSection } from "./sections/PersonalInfoSection";
 import { SummarySection } from "./sections/SummarySection";
 import { ExperienceSection } from "./sections/ExperienceSection";
@@ -24,6 +24,97 @@ import { ProjectsSection } from "./sections/ProjectsSection";
 import { EducationSection } from "./sections/EducationSection";
 import { SkillsSection } from "./sections/SkillsSection";
 import type { SectionId } from "./constants";
+
+/**
+ * ResumeHeader — page-level header that consolidates title, save status,
+ * save button, and mobile preview toggle into one row. Replaces the old
+ * sticky ResumeActionBar so the form area gains ~76px of vertical space
+ * and matches the Linear / Notion / Figma "actions live in the header"
+ * pattern rather than the dated bottom-bar.
+ */
+function ResumeHeader() {
+  const {
+    saving,
+    handleSave,
+    setPreviewOpen,
+    hasAnyContent,
+    schedulePreview,
+    isTaskHighlighted,
+    t: tForm,
+  } = useResumeContext();
+  const tResume = useTranslations("resume");
+
+  const guideHighlight = isTaskHighlighted("resume_setup");
+
+  return (
+    <header className="shrink-0 border-b border-border/60 px-4 pb-3 pt-3 lg:px-6 lg:pb-4 lg:pt-5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-lg font-semibold text-foreground lg:text-2xl">
+            {tResume("masterResumes")}
+          </h1>
+          <p className="hidden text-sm text-muted-foreground sm:block">
+            {tResume("masterResumesDesc")}
+          </p>
+        </div>
+
+        {/* Action cluster — stays right-aligned at every viewport */}
+        <div className="flex shrink-0 items-center gap-2">
+          {/* Save status — compact icon + label, hidden when no content yet */}
+          {hasAnyContent ? (
+            <span
+              className="hidden items-center gap-1.5 text-xs font-medium text-muted-foreground sm:inline-flex"
+              aria-live="polite"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                  {tForm("saving")}
+                </>
+              ) : (
+                <>
+                  <Check className="h-3 w-3 text-emerald-500" aria-hidden />
+                  {tForm("toastSaved")}
+                </>
+              )}
+            </span>
+          ) : null}
+
+          {/* Mobile-only preview toggle */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!hasAnyContent}
+            className="md:hidden"
+            aria-label={tForm("preview")}
+            onClick={() => {
+              setPreviewOpen(true);
+              schedulePreview(0);
+            }}
+          >
+            <Eye className="h-3.5 w-3.5" aria-hidden />
+          </Button>
+
+          <Button
+            onClick={handleSave}
+            disabled={saving}
+            size="sm"
+            data-guide-anchor="resume_setup"
+            data-guide-highlight={guideHighlight ? "true" : "false"}
+            className={cn(
+              "edu-cta edu-cta--press min-w-[8rem] whitespace-nowrap",
+              guideHighlight &&
+                "ring-2 ring-emerald-400 ring-offset-2 ring-offset-background shadow-[0_0_0_4px_rgba(16,185,129,0.18)]",
+            )}
+          >
+            {saving ? tForm("saving") : tForm("saveSelectedResume")}
+          </Button>
+        </div>
+      </div>
+    </header>
+  );
+}
 
 function SectionContent({ sectionId }: { sectionId: SectionId }) {
   const {
@@ -253,6 +344,9 @@ export function ResumePageLayout() {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      {/* Page header — title, save status, save action, mobile preview */}
+      <ResumeHeader />
+
       {/* Mobile preview dialog */}
       <MobilePreviewDialog />
 
@@ -300,9 +394,6 @@ export function ResumePageLayout() {
           navCollapsed ? "w-[580px]" : "w-[480px]",
         )} />
       </div>
-
-      {/* Bottom action bar */}
-      <ResumeActionBar />
     </div>
   );
 }
