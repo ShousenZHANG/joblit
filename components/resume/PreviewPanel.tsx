@@ -4,27 +4,10 @@ import { Download, ExternalLink, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useResumeContext } from "./ResumeContext";
+import { ResumePdfPreview } from "./ResumePdfPreview";
 
 interface PreviewPanelProps {
   className?: string;
-}
-
-/**
- * Build a clean PDF viewer URL.
- *
- * Hide the browser's native PDF chrome via URL hash parameters that
- * Chrome / Edge / Firefox built-in viewers honour:
- *   - toolbar=0 / navpanes=0 / scrollbar=0 / statusbar=0 / messages=0
- *     hide every chrome element so the iframe only renders the page.
- *   - view=FitH lets the viewer pick the page-width fit so the content
- *     always scales proportionally to the iframe width.
- *
- * https://developer.mozilla.org/en-US/docs/Web/Media/Formats/Image_types#pdf
- * https://datatracker.ietf.org/doc/html/rfc8118 — PDF URL fragments.
- */
-function buildPdfViewerUrl(blobUrl: string): string {
-  const params = "toolbar=0&navpanes=0&scrollbar=0&statusbar=0&messages=0&view=FitH";
-  return `${blobUrl}#${params}`;
 }
 
 export function PreviewPanel({ className }: PreviewPanelProps) {
@@ -131,27 +114,14 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
         {pdfUrl && (
           <div className="absolute inset-0 overflow-auto px-3 py-4 sm:px-5 sm:py-5">
             {/*
-              A4 sheet: aspect-ratio 1:1.414 locks the visible area to the
-              rendered page shape. We oversize the iframe by a small margin
-              and clip with overflow-hidden so the browser's PDF viewer can
-              never bleed its dark canvas background into the visible
-              preview, regardless of how that viewer chooses to lay out
-              hidden chrome (Chrome adds a few px of bottom padding even
-              with toolbar=0).
+              Canvas-based PDF render via react-pdf / pdfjs. Replaces the
+              old <iframe> embed which always painted a dark gutter below
+              the rendered page (Chrome / Edge PDF viewer behaviour we
+              cannot override across origins). The canvas approach owns
+              every pixel, so there is zero leftover background regardless
+              of page count or paper size.
             */}
-            <div className="relative mx-auto w-full max-w-[760px] aspect-[1/1.414] overflow-hidden rounded-sm bg-white shadow-[0_18px_40px_-22px_rgba(15,23,42,0.20),0_4px_12px_-4px_rgba(15,23,42,0.08)] ring-1 ring-border/60 dark:bg-zinc-100">
-              <iframe
-                title="Resume preview"
-                src={buildPdfViewerUrl(pdfUrl)}
-                className="absolute inset-x-0 top-0 block w-full border-0"
-                style={{
-                  // Slightly oversize the iframe so any phantom dark
-                  // gutter Chrome reserves below the page is pushed past
-                  // the overflow-hidden container edge.
-                  height: "calc(100% + 56px)",
-                }}
-              />
-            </div>
+            <ResumePdfPreview pdfUrl={pdfUrl} maxWidth={760} />
           </div>
         )}
 
