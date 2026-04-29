@@ -1,12 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Download, ExternalLink, RefreshCw, Maximize2, AlignVerticalJustifyCenter } from "lucide-react";
+import { Download, ExternalLink, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useResumeContext } from "./ResumeContext";
-
-type ZoomMode = "page-width" | "page-fit";
 
 interface PreviewPanelProps {
   className?: string;
@@ -15,26 +12,24 @@ interface PreviewPanelProps {
 /**
  * Build a clean PDF viewer URL.
  *
- * Chrome / Edge / Firefox built-in PDF viewers honour these URL hash
- * parameters to hide their native toolbars and pick a default zoom:
+ * Hide the browser's native PDF chrome via URL hash parameters that
+ * Chrome / Edge / Firefox built-in viewers honour:
  *   - toolbar=0 / navpanes=0 / scrollbar=0 / statusbar=0 / messages=0
  *     hide every chrome element so the iframe only renders the page.
- *   - zoom=page-width fits the rendered page to the iframe width
- *     (default — best for fitting on tall narrow viewports).
- *   - zoom=page-fit fits one whole page in the visible area.
+ *   - view=FitH lets the viewer pick the page-width fit so the content
+ *     always scales proportionally to the iframe width.
  *
  * https://developer.mozilla.org/en-US/docs/Web/Media/Formats/Image_types#pdf
  * https://datatracker.ietf.org/doc/html/rfc8118 — PDF URL fragments.
  */
-function buildPdfViewerUrl(blobUrl: string, zoom: ZoomMode): string {
-  const params = `toolbar=0&navpanes=0&scrollbar=0&statusbar=0&messages=0&view=FitH&zoom=${zoom}`;
+function buildPdfViewerUrl(blobUrl: string): string {
+  const params = "toolbar=0&navpanes=0&scrollbar=0&statusbar=0&messages=0&view=FitH";
   return `${blobUrl}#${params}`;
 }
 
 export function PreviewPanel({ className }: PreviewPanelProps) {
   const { pdfUrl, previewStatus, previewError, schedulePreview, basics, locale, t } =
     useResumeContext();
-  const [zoom, setZoom] = useState<ZoomMode>("page-width");
 
   const downloadFilename = (() => {
     const fallback = locale === "zh-CN" ? "未命名简历" : "Unnamed_Resume";
@@ -55,22 +50,6 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
           {t("pdfPreview")}
         </span>
         <div className="ml-auto flex items-center gap-1">
-          {/* Zoom toggle — page-width vs page-fit */}
-          <button
-            type="button"
-            onClick={() => setZoom((z) => (z === "page-width" ? "page-fit" : "page-width"))}
-            aria-label={zoom === "page-width" ? "Fit page" : "Fit width"}
-            title={zoom === "page-width" ? "Fit page" : "Fit width"}
-            disabled={!isReady}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {zoom === "page-width" ? (
-              <AlignVerticalJustifyCenter className="h-3.5 w-3.5" />
-            ) : (
-              <Maximize2 className="h-3.5 w-3.5" />
-            )}
-          </button>
-
           {/* Refresh */}
           <Button
             type="button"
@@ -152,23 +131,25 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
         {pdfUrl && (
           <div className="absolute inset-0 overflow-auto px-3 py-4 sm:px-5 sm:py-5">
             {/*
-              A4 sheet: aspect-ratio 1:1.414 keeps the iframe exactly the
-              same shape as the rendered PDF page, so the browser's PDF
-              viewer never paints a dark gutter below the content.
-              Multi-page documents scroll inside the iframe via the
-              FitH/page-width zoom — the wrapper just guarantees no
-              empty backdrop is ever visible at the bottom.
+              A4 sheet: aspect-ratio 1:1.414 locks the visible area to the
+              rendered page shape. We oversize the iframe by a small margin
+              and clip with overflow-hidden so the browser's PDF viewer can
+              never bleed its dark canvas background into the visible
+              preview, regardless of how that viewer chooses to lay out
+              hidden chrome (Chrome adds a few px of bottom padding even
+              with toolbar=0).
             */}
-            <div
-              className={cn(
-                "mx-auto w-full max-w-[760px] rounded-sm bg-white shadow-[0_18px_40px_-22px_rgba(15,23,42,0.20),0_4px_12px_-4px_rgba(15,23,42,0.08)] ring-1 ring-border/60 dark:bg-zinc-100",
-                zoom === "page-width" ? "aspect-[1/1.414]" : "aspect-[1/1.414] max-h-[calc(100dvh-10rem)]",
-              )}
-            >
+            <div className="relative mx-auto w-full max-w-[760px] aspect-[1/1.414] overflow-hidden rounded-sm bg-white shadow-[0_18px_40px_-22px_rgba(15,23,42,0.20),0_4px_12px_-4px_rgba(15,23,42,0.08)] ring-1 ring-border/60 dark:bg-zinc-100">
               <iframe
                 title="Resume preview"
-                src={buildPdfViewerUrl(pdfUrl, zoom)}
-                className="block h-full w-full rounded-sm border-0"
+                src={buildPdfViewerUrl(pdfUrl)}
+                className="absolute inset-x-0 top-0 block w-full border-0"
+                style={{
+                  // Slightly oversize the iframe so any phantom dark
+                  // gutter Chrome reserves below the page is pushed past
+                  // the overflow-hidden container edge.
+                  height: "calc(100% + 56px)",
+                }}
               />
             </div>
           </div>
