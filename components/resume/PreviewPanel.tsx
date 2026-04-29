@@ -125,11 +125,14 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
           </div>
         )}
 
-        {previewStatus === "loading" && pdfUrl && (
-          <div className="absolute inset-0 flex items-center justify-center bg-background/60 text-xs text-muted-foreground">
-            {t("previewGenerating") ?? "Generating preview…"}
-          </div>
-        )}
+        {/*
+          No "Generating preview…" overlay when a stale preview is on
+          screen — ResumePdfPreview keeps the previous canvas painted
+          while the new document loads in the background, so flashing
+          the overlay on every refresh would actually hide a perfectly
+          good preview behind a translucent card. The toolbar Refresh
+          button already shows a spinning icon for in-flight feedback.
+        */}
 
         {previewStatus === "error" && (
           <div className="absolute inset-x-3 bottom-3 flex items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">

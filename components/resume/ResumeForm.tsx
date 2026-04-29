@@ -1131,15 +1131,21 @@ export function ResumeForm() {
   );
 
   // Auto-generate (and live-update) the PDF preview whenever the draft
-  // payload changes and the form has content. The previous implementation
-  // gated this on `previewOpen` (mobile dialog state) which meant the
-  // desktop PreviewPanel never received auto-updates — users had to
-  // manually click refresh. Removing the gate makes both desktop and
-  // mobile behave like Kickresume/Enhancv: preview updates as you type.
-  // The `shouldSkip` guard inside schedulePreview deduplicates by
-  // payloadKey, so identical payloads never fire twice.
+  // payload changes after the user starts editing. We deliberately skip
+  // the very first effect run — that fire corresponds to the initial
+  // profile hydration coming back from /api/resume-profile, not a real
+  // user edit, and triggering schedulePreview there caused an unwanted
+  // "preview spins as soon as the page loads" flash. The user will
+  // bootstrap the first preview by clicking Refresh, hitting Save, or
+  // editing any field. From the second `previewDraftKey` change onward
+  // the live preview behaves exactly like Kickresume / Enhancv.
+  const hasUserEditedRef = useRef(false);
   useEffect(() => {
     if (!hasAnyContent) return;
+    if (!hasUserEditedRef.current) {
+      hasUserEditedRef.current = true;
+      return;
+    }
     schedulePreview(450, false, {
       payload: previewDraftPayload,
       payloadKey: previewDraftKey,

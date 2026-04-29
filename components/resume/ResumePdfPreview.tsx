@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Document, Page, pdfjs } from "react-pdf";
+import { useEffect, useRef, useState } from "react";
+import type { PDFDocumentProxy } from "pdfjs-dist";
+import { Page, pdfjs } from "react-pdf";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -27,90 +28,128 @@ interface ResumePdfPreviewProps {
 }
 
 /**
- * ResumePdfPreview — canvas-based PDF preview replacing the previous
- * <iframe> approach.
+ * ResumePdfPreview — canvas-based, double-buffered PDF preview.
  *
- * Why canvas instead of iframe:
- *   1. Iframe-embedded browser PDF viewers always reserve a dark canvas
- *      backdrop below the rendered page that we cannot reach into via
- *      cross-origin script. The visible "black gutter" persists even
- *      with `toolbar=0&navpanes=0`.
- *   2. react-pdf renders each page directly onto a <canvas> at a width
- *      we control, so the rendered output matches the page exactly with
- *      zero leftover background.
- *   3. We get the page count from pdfjs metadata for free, so multi-
- *      page resumes scroll through stacked pages naturally.
+ * Why bypass <Document>:
+ *   The high-level <Document> component reloads its internal pdfjs
+ *   instance every time the `file` prop changes, which clears the
+ *   <Page> canvases for a few hundred ms — the user sees the preview
+ *   flash to white on every refresh. By driving pdfjs directly we can
+ *   keep the previous PDFDocumentProxy painted on screen while the
+ *   next one is fetched in the background, then atomically swap the
+ *   reference once the new document is fully loaded. No flicker.
  *
- * The component is responsive: a ResizeObserver tracks the container
- * width and tells react-pdf to re-render at the new resolution, so the
- * preview always fills the available pane without hard-coded breakpoints.
+ * Other niceties:
+ *   - ResizeObserver tracks container width so canvases re-render at
+ *     whatever zoom the panel is currently sized to (capped by
+ *     maxWidth).
+ *   - Text + annotation layers are disabled — purely visual preview,
+ *     ~30% cheaper per-page render and no text-selection styling
+ *     leaking into the canvas.
+ *   - First load shows a centered spinner; subsequent loads keep the
+ *     old pages visible.
  */
 export function ResumePdfPreview({ pdfUrl, maxWidth = 760, className }: ResumePdfPreviewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(maxWidth);
-  const [numPages, setNumPages] = useState<number>(0);
+  // The currently displayed document. Only updates after a new
+  // pdfjs.getDocument() resolves successfully, which gives us a clean
+  // atomic swap instead of a teardown-then-rebuild sequence.
+  const [displayedDoc, setDisplayedDoc] = useState<PDFDocumentProxy | null>(null);
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
 
-  // Track the available width so react-pdf renders at the right zoom.
+  // Track the available width so each Page renders at the right zoom.
   useEffect(() => {
     const node = containerRef.current;
     if (!node) return;
-
     const sync = () => {
       const next = Math.min(node.clientWidth, maxWidth);
       if (next > 0) setContainerWidth(next);
     };
-
     sync();
     const observer = new ResizeObserver(sync);
     observer.observe(node);
     return () => observer.disconnect();
   }, [maxWidth]);
 
-  // Memoise file source so react-pdf does not re-fetch on every render.
-  // It accepts a string or { url } object — we pass an object so the
-  // identity is stable while pdfUrl is unchanged.
-  const fileSource = useMemo(() => ({ url: pdfUrl }), [pdfUrl]);
+  // Drive pdfjs directly so we can keep the previous document on screen
+  // while the next one is fetched. The cancellation flag prevents a
+  // stale resolution from clobbering a newer load that started after.
+  useEffect(() => {
+    if (!pdfUrl) return;
+
+    let cancelled = false;
+    const loadingTask = pdfjs.getDocument({ url: pdfUrl });
+
+    loadingTask.promise
+      .then((doc) => {
+        if (cancelled) {
+          // A newer load took over before this one finished — release
+          // the abandoned document so pdfjs can free its memory.
+          void doc.destroy();
+          return;
+        }
+        setDisplayedDoc((prev) => {
+          // Tear down the previous document only after the new one is
+          // ready to be displayed.
+          if (prev && prev !== doc) {
+            void prev.destroy();
+          }
+          return doc;
+        });
+        setIsFirstLoad(false);
+      })
+      .catch(() => {
+        // Network / parse errors fall through to the idle state — the
+        // surrounding PreviewPanel already surfaces a retry banner.
+      });
+
+    return () => {
+      cancelled = true;
+      void loadingTask.destroy();
+    };
+  }, [pdfUrl]);
+
+  // Drop the latest document on unmount so pdfjs frees its workers.
+  useEffect(() => {
+    return () => {
+      setDisplayedDoc((prev) => {
+        if (prev) void prev.destroy();
+        return null;
+      });
+    };
+  }, []);
+
+  const numPages = displayedDoc?.numPages ?? 0;
 
   return (
     <div
       ref={containerRef}
       className={cn("flex w-full flex-col items-center gap-3", className)}
     >
-      <Document
-        file={fileSource}
-        loading={
-          <div className="flex h-full w-full items-center justify-center py-16 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
-          </div>
-        }
-        error={
-          <div className="px-6 py-8 text-center text-sm text-muted-foreground">
-            Could not render preview.
-          </div>
-        }
-        onLoadSuccess={({ numPages: total }) => setNumPages(total)}
-        // Disable the default white background fill — our wrapper already
-        // ships the paper-white surface, drop-shadow, and border ring.
-        className="flex w-full flex-col items-center gap-3"
-      >
-        {Array.from({ length: numPages }, (_, index) => (
-          <div
-            key={`page_${index + 1}`}
-            className="overflow-hidden rounded-sm bg-white shadow-[0_18px_40px_-22px_rgba(15,23,42,0.20),0_4px_12px_-4px_rgba(15,23,42,0.08)] ring-1 ring-border/60"
-          >
-            <Page
-              pageNumber={index + 1}
-              width={containerWidth}
-              // Disable text + annotation layers — purely visual preview,
-              // skips ~30% of the per-page render cost and avoids text
-              // selection styling leaking into the canvas.
-              renderTextLayer={false}
-              renderAnnotationLayer={false}
-              className="!block"
-            />
-          </div>
-        ))}
-      </Document>
+      {numPages === 0 && isFirstLoad ? (
+        <div className="flex items-center justify-center py-16 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+        </div>
+      ) : null}
+
+      {displayedDoc
+        ? Array.from({ length: numPages }, (_, index) => (
+            <div
+              key={`${pdfUrl}-page-${index + 1}`}
+              className="overflow-hidden rounded-sm bg-white shadow-[0_18px_40px_-22px_rgba(15,23,42,0.20),0_4px_12px_-4px_rgba(15,23,42,0.08)] ring-1 ring-border/60"
+            >
+              <Page
+                pdf={displayedDoc}
+                pageNumber={index + 1}
+                width={containerWidth}
+                renderTextLayer={false}
+                renderAnnotationLayer={false}
+                className="!block"
+              />
+            </div>
+          ))
+        : null}
     </div>
   );
 }
