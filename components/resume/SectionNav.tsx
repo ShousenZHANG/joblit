@@ -119,50 +119,31 @@ export function SectionNav({ className }: SectionNavProps) {
           })}
         </div>
 
-        {/* Rail foot — separator + saved pulse + primary Save button */}
-        <div className="flex w-full flex-col items-center gap-2 px-1">
-          <div aria-hidden className="my-1 h-px w-8 bg-border" />
-
-          {hasAnyContent ? (
+        {/* Rail foot — small saved-state indicator. Primary Save CTA
+            lives in the sticky ResumeSaveBar above the form so it is
+            always discoverable. */}
+        {hasAnyContent ? (
+          <div className="flex w-full flex-col items-center gap-1.5 pb-1">
+            <div aria-hidden className="h-px w-8 bg-border" />
             <span
               aria-live="polite"
               aria-label={saving ? t("saving") : t("toastSaved")}
               title={saving ? t("saving") : t("toastSaved")}
-              className="flex h-5 w-5 items-center justify-center"
+              className={cn(
+                "flex h-7 w-7 items-center justify-center rounded-full",
+                saving
+                  ? "bg-amber-500/10 text-amber-600"
+                  : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+              )}
             >
               {saving ? (
-                <Loader2 className="h-3 w-3 animate-spin text-amber-500" aria-hidden />
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
               ) : (
-                <Check className="h-3 w-3 text-emerald-500" aria-hidden />
+                <Check className="h-3.5 w-3.5" aria-hidden />
               )}
             </span>
-          ) : null}
-
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            aria-label={saving ? t("saving") : t("saveSelectedResume")}
-            title={saving ? t("saving") : t("saveSelectedResume")}
-            data-guide-anchor="resume_setup"
-            data-guide-highlight={guideHighlight ? "true" : "false"}
-            className={cn(
-              "grid h-10 w-10 shrink-0 place-items-center rounded-[9px]",
-              "bg-emerald-600 text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]",
-              "transition-[transform,filter] duration-150 ease-out",
-              "hover:brightness-105 active:scale-[0.97] motion-reduce:active:scale-100",
-              "disabled:cursor-not-allowed disabled:opacity-60",
-              guideHighlight &&
-                "ring-2 ring-emerald-400 ring-offset-2 ring-offset-background shadow-[0_0_0_4px_rgba(16,185,129,0.18)]",
-            )}
-          >
-            {saving ? (
-              <Loader2 className="h-[18px] w-[18px] animate-spin" aria-hidden />
-            ) : (
-              <Save className="h-[18px] w-[18px]" aria-hidden />
-            )}
-          </button>
-        </div>
+          </div>
+        ) : null}
       </div>
 
       {/* Mobile: horizontal scrollable tabs + trailing action cluster */}

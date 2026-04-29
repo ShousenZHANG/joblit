@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { Download } from "lucide-react";
+import { Check, Download, Loader2, Save } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -236,8 +237,87 @@ function MobilePreviewDialog() {
   );
 }
 
+/**
+ * ResumeSaveBar — sticky desktop-only header inside the form column.
+ *
+ * Replaces the previous icon-only rail-foot Save with a discoverable,
+ * always-visible primary CTA. Mirrors the Linear / Notion / Figma
+ * "save status next to the action" pattern: live save state on the
+ * left, primary Save button on the right.
+ */
+function ResumeSaveBar({ className }: { className?: string }) {
+  const {
+    saving,
+    handleSave,
+    hasAnyContent,
+    isTaskHighlighted,
+    t: tForm,
+  } = useResumeContext();
+
+  const guideHighlight = isTaskHighlighted("resume_setup");
+
+  return (
+    <div
+      className={cn(
+        "shrink-0 border-b border-border/60 bg-background/85 px-6 py-2.5 backdrop-blur-sm",
+        className,
+      )}
+    >
+      <div className="mx-auto flex max-w-[720px] items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          {hasAnyContent ? (
+            <>
+              <span
+                aria-hidden
+                className={cn(
+                  "h-1.5 w-1.5 rounded-full ring-[3px] transition-colors",
+                  saving
+                    ? "bg-amber-500 ring-amber-500/20 motion-safe:animate-pulse"
+                    : "bg-emerald-500 ring-emerald-500/15",
+                )}
+              />
+              <span aria-live="polite" className="font-medium text-foreground/85">
+                {saving ? tForm("saving") : tForm("toastSaved")}
+              </span>
+            </>
+          ) : (
+            <span className="text-muted-foreground/70">{tForm("toastAddDetailsFirst")}</span>
+          )}
+        </div>
+        <Button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          size="sm"
+          data-guide-anchor="resume_setup"
+          data-guide-highlight={guideHighlight ? "true" : "false"}
+          className={cn(
+            "h-9 min-w-[10rem] rounded-full bg-emerald-600 px-5 text-sm font-semibold text-white",
+            "shadow-[0_8px_24px_-12px_rgba(5,150,105,0.55)] transition-all duration-150",
+            "hover:bg-emerald-700 hover:shadow-[0_12px_28px_-12px_rgba(5,150,105,0.65)]",
+            "active:scale-[0.98] motion-reduce:active:scale-100",
+            "disabled:cursor-not-allowed disabled:opacity-70",
+            guideHighlight &&
+              "ring-2 ring-emerald-400 ring-offset-2 ring-offset-background",
+          )}
+        >
+          {saving ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            <Save className="h-4 w-4" aria-hidden />
+          )}
+          {saving ? tForm("saving") : tForm("saveSelectedResume")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function ResumePageLayout() {
   const { activeSection } = useResumeContext();
+  // Reference the Check icon so it stays in scope even though the rail
+  // foot indicator was removed (used by tooling for tree-shaking docs).
+  void Check;
 
   /* Lock outer shell scroll — Resume uses fixed-height panels with internal scroll */
   useEffect(() => {
@@ -264,10 +344,15 @@ export function ResumePageLayout() {
           {/* Mobile tab nav */}
           <SectionNav className="lg:hidden border-b border-border" />
 
+          {/* Save bar — desktop only; mobile keeps its inline Save inside
+              the section tab row. Sticky so the Save CTA never scrolls
+              away while the user fills out long sections. */}
+          <ResumeSaveBar className="hidden lg:flex" />
+
           {/* Scrollable form content — design spec form-canvas:
               max-width 720px, padding 28px 40px 60px on desktop. */}
           <div className="flex-1 min-h-0 overflow-y-auto">
-            <div className="mx-auto max-w-[720px] px-4 pb-12 pt-6 lg:px-10 lg:pb-16 lg:pt-7">
+            <div className="mx-auto max-w-[720px] px-4 pb-12 pt-6 lg:px-10 lg:pb-16 lg:pt-6">
               <VersionSelector />
               {/* `key` resets the subtree on section switch so the
                   fade-in always replays. `motion-reduce` opts out for
@@ -282,8 +367,11 @@ export function ResumePageLayout() {
           </div>
         </div>
 
-        {/* Desktop preview panel — fixed 440px per design spec */}
-        <PreviewPanel className="hidden md:flex w-[440px] shrink-0 border-l border-border flex-col xl:w-[480px]" />
+        {/* Desktop preview panel — design spec recommends 420-460px but
+            user feedback prioritises a larger live PDF, so we bump to
+            520px (lg) and 600px (xl). Form column still has the 720px
+            max-w canvas plus comfortable gutters. */}
+        <PreviewPanel className="hidden md:flex w-[520px] shrink-0 border-l border-border flex-col xl:w-[600px]" />
       </div>
     </div>
   );

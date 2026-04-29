@@ -58,6 +58,22 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
     toast,
   });
 
+  // Auto-refresh the live preview when the user switches between EN / 中文.
+  // Locale change reloads the locale-specific profile, which trickles back
+  // through useResumeProfiles → applyProfileToDraft → form watch effect
+  // and would normally fire schedulePreview after a 450ms debounce. We
+  // additionally force-fire here so the preview iframe immediately
+  // re-renders against the new locale's LaTeX template, even when the
+  // payload happens to be byte-identical (e.g. an empty profile).
+  useEffect(() => {
+    if (!form.hasAnyContent) return;
+    preview.schedulePreview(0, false, { force: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally
+    // depending only on `locale` to avoid spamming refreshes on every form
+    // keystroke; routine autosave-driven refreshes are already handled by
+    // the watch effect inside useResumeForm.
+  }, [locale]);
+
   const profiles = useResumeProfiles({
     locale,
     applyProfileToDraft: form.applyProfileToDraft,
