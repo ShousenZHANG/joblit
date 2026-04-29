@@ -262,15 +262,18 @@ export function ResumePageLayout() {
         {/* Desktop section sidebar with persistent save action */}
         <SectionNav className="hidden w-16 shrink-0 flex-col border-r border-border lg:flex" />
 
-        {/* Form content area */}
-        <div className="flex flex-1 min-h-0 flex-col">
+        {/* Form content area — `min-w-0` lets the form column shrink
+            when the viewport narrows so the fixed-width preview pane
+            never gets squeezed. The 720px max-w on the inner canvas
+            prevents the editor from sprawling on ultra-wide screens. */}
+        <div className="flex flex-1 min-w-0 min-h-0 flex-col">
           {/* Mobile tab nav */}
           <SectionNav className="lg:hidden border-b border-border" />
 
           {/* Scrollable form content — design spec form-canvas:
               max-width 720px, padding 28px 40px 60px on desktop. */}
           <div className="flex-1 min-h-0 overflow-y-auto">
-            <div className="mx-auto max-w-[720px] px-4 pb-12 pt-6 lg:px-10 lg:pb-16 lg:pt-6">
+            <div className="mx-auto max-w-[720px] px-4 pb-12 pt-6 lg:px-8 lg:pb-16 lg:pt-6">
               <VersionSelector />
               {/* `key` resets the subtree on section switch so the
                   fade-in always replays. `motion-reduce` opts out for
@@ -285,11 +288,17 @@ export function ResumePageLayout() {
           </div>
         </div>
 
-        {/* Desktop preview panel — design spec recommends 420-460px but
-            user feedback prioritises a larger live PDF, so we bump to
-            520px (lg) and 600px (xl). Form column still has the 720px
-            max-w canvas plus comfortable gutters. */}
-        <PreviewPanel className="hidden md:flex w-[520px] shrink-0 border-l border-border flex-col xl:w-[600px]" />
+        {/* Desktop preview panel — fixed-width column that never
+            shrinks. Three breakpoint stops keep the rendered PDF as
+            large as the viewport allows while leaving a usable form
+            column on each:
+              md  ≥ 768px  → 480px preview
+              lg  ≥ 1024px → 600px preview
+              xl  ≥ 1280px → 720px preview
+              2xl ≥ 1536px → 800px preview
+            `shrink-0` plus the form column's `min-w-0` keep this width
+            stable across every form section / option. */}
+        <PreviewPanel className="hidden md:flex w-[480px] shrink-0 border-l border-border flex-col lg:w-[600px] xl:w-[720px] 2xl:w-[800px]" />
       </div>
     </div>
   );
