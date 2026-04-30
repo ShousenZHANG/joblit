@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Github } from "lucide-react";
 import { JoblitMark } from "@/components/brand/JoblitMark";
 import { motion, useReducedMotion } from "framer-motion";
 import { useSession } from "next-auth/react";
@@ -22,6 +22,8 @@ interface NavLink {
   label: string;
   href: string;
 }
+
+const GITHUB_REPO_URL = "https://github.com/ShousenZHANG/joblit";
 
 export function Nav() {
   const { status } = useSession();
@@ -120,6 +122,17 @@ export function Nav() {
         </ul>
 
         <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+          <a
+            href={GITHUB_REPO_URL}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Star Joblit on GitHub"
+            title="Star Joblit on GitHub"
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-border/70 bg-background/75 px-2.5 text-[13px] font-semibold text-foreground/75 shadow-sm transition-all duration-200 hover:-translate-y-px hover:border-brand-emerald-300 hover:bg-brand-emerald-50/70 hover:text-brand-emerald-800 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 sm:px-3"
+          >
+            <Github className="h-3.5 w-3.5" aria-hidden />
+            <span className="hidden whitespace-nowrap lg:inline">GitHub</span>
+          </a>
           <div className="hidden sm:inline-flex">
             <LocaleSwitcher />
           </div>

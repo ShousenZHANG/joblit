@@ -59,5 +59,14 @@ describe("MarketingPage", () => {
         `missing section: ${testid}`,
       ).toBeInTheDocument();
     }
+
+    const githubLink = screen.getByRole("link", {
+      name: /star joblit on github/i,
+    });
+    expect(githubLink).toHaveAttribute(
+      "href",
+      "https://github.com/ShousenZHANG/joblit",
+    );
+    expect(githubLink).toHaveAttribute("target", "_blank");
   });
 });
