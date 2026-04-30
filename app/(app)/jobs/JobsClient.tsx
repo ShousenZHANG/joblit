@@ -33,6 +33,12 @@ import { JobDetailPanel } from "./components/JobDetailPanel";
 import { cn } from "@/lib/utils";
 import { AU_LOCATION_OPTIONS, CN_LOCATION_OPTIONS, getUserTimeZone } from "./utils/constants";
 
+const desktopFilterSelectTriggerClass =
+  "h-11 w-full min-w-0 justify-between overflow-hidden rounded-xl border-border/80 bg-background px-3 text-sm shadow-xs transition-[background-color,border-color,box-shadow] duration-150 hover:border-brand-emerald-300 focus-visible:border-brand-emerald-500 focus-visible:ring-brand-emerald-500/20 [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate [&_[data-slot=select-value]]:text-left";
+
+const mobileFilterSelectTriggerClass =
+  "h-9 w-full min-w-0 justify-between overflow-hidden rounded-lg px-2.5 text-xs [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate [&_[data-slot=select-value]]:text-left";
+
 export function JobsClient({
   initialItems = [],
   initialCursor = null,
@@ -436,8 +442,11 @@ export function JobsClient({
                 value={locationFilter}
                 onValueChange={(v) => { startTransition(() => { setLocationFilter(v); }); }}
               >
-                <SelectTrigger className="h-8 text-xs">
-                  <MapPin className="mr-1 h-3 w-3 shrink-0 text-muted-foreground" />
+                <SelectTrigger
+                  className={cn(mobileFilterSelectTriggerClass, "gap-1.5")}
+                  aria-label={t("location")}
+                >
+                  <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
                   <SelectValue placeholder={tc("allLocations")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -451,7 +460,10 @@ export function JobsClient({
                 value={jobLevelFilter}
                 onValueChange={(v) => { startTransition(() => { setJobLevelFilter(v); }); }}
               >
-                <SelectTrigger className="h-8 text-xs">
+                <SelectTrigger
+                  className={mobileFilterSelectTriggerClass}
+                  aria-label={t("jobLevel")}
+                >
                   <SelectValue placeholder={tc("allLevels")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -465,7 +477,10 @@ export function JobsClient({
                 value={statusFilter}
                 onValueChange={(v) => { startTransition(() => { setStatusFilter(v as JobStatus | "ALL"); }); }}
               >
-                <SelectTrigger className="h-8 text-xs">
+                <SelectTrigger
+                  className={mobileFilterSelectTriggerClass}
+                  aria-label={t("status")}
+                >
                   <SelectValue placeholder={tc("all")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -481,7 +496,7 @@ export function JobsClient({
                   variant="outline"
                   size="sm"
                   onClick={() => setAddJobOpen(true)}
-                  className="col-span-2 h-8 gap-1.5 rounded-lg border-dashed border-border text-xs font-medium text-muted-foreground transition-colors hover:border-brand-emerald-300 hover:bg-brand-emerald-50/60 hover:text-brand-emerald-700"
+                  className="h-9 gap-1.5 rounded-lg border-dashed border-border text-xs font-medium text-muted-foreground transition-colors hover:border-brand-emerald-300 hover:bg-brand-emerald-50/60 hover:text-brand-emerald-700"
                 >
                   <Plus className="h-3 w-3" />
                   Add Job
@@ -567,39 +582,43 @@ export function JobsClient({
                 placeholder={t("placeholder")}
                 isDebouncing={q !== "" && q !== debouncedQ}
               />
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1 min-w-0">
-                  <MapPin
-                    className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
-                    aria-hidden
-                  />
-                  <Select
-                    value={locationFilter}
-                    onValueChange={(v) => {
-                      startTransition(() => {
-                        setLocationFilter(v);
-                      });
-                    }}
+              <div
+                data-testid="jobs-desktop-filter-row"
+                className={cn(
+                  "grid min-w-0 items-center gap-2",
+                  market === "AU"
+                    ? "grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)_4.75rem]"
+                    : "grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]",
+                )}
+              >
+                <Select
+                  value={locationFilter}
+                  onValueChange={(v) => {
+                    startTransition(() => {
+                      setLocationFilter(v);
+                    });
+                  }}
+                >
+                  <SelectTrigger
+                    data-testid="jobs-location-filter"
+                    className={cn(desktopFilterSelectTriggerClass, "gap-1.5")}
+                    aria-label={t("location")}
                   >
-                    <SelectTrigger
-                      className="h-8 pl-8 text-xs"
-                      aria-label={t("location")}
-                    >
-                      <SelectValue placeholder={tc("allLocations")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">{tc("allLocations")}</SelectItem>
-                      {(market === "CN"
-                        ? CN_LOCATION_OPTIONS
-                        : AU_LOCATION_OPTIONS
-                      ).map((loc) => (
-                        <SelectItem key={loc.value} value={loc.value}>
-                          {loc.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                    <SelectValue placeholder={tc("allLocations")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">{tc("allLocations")}</SelectItem>
+                    {(market === "CN"
+                      ? CN_LOCATION_OPTIONS
+                      : AU_LOCATION_OPTIONS
+                    ).map((loc) => (
+                      <SelectItem key={loc.value} value={loc.value}>
+                        {loc.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Select
                   value={jobLevelFilter}
                   onValueChange={(v) => {
@@ -609,7 +628,8 @@ export function JobsClient({
                   }}
                 >
                   <SelectTrigger
-                    className="h-8 flex-1 min-w-0 text-xs"
+                    data-testid="jobs-level-filter"
+                    className={desktopFilterSelectTriggerClass}
                     aria-label={t("jobLevel")}
                   >
                     <SelectValue placeholder={tc("allLevels")} />
@@ -628,10 +648,10 @@ export function JobsClient({
                     type="button"
                     variant="outline"
                     onClick={() => setAddJobOpen(true)}
-                    className="h-8 shrink-0 gap-1 rounded-lg border-dashed border-border px-2.5 text-xs font-medium text-muted-foreground transition-all duration-150 hover:border-brand-emerald-300 hover:bg-brand-emerald-50/60 hover:text-brand-emerald-700"
+                    className="h-11 w-full justify-center gap-1.5 rounded-xl border-dashed border-border/90 px-0 text-sm font-medium text-muted-foreground transition-all duration-150 hover:border-brand-emerald-300 hover:bg-brand-emerald-50/60 hover:text-brand-emerald-700"
                     aria-label="Add job"
                   >
-                    <Plus className="h-3.5 w-3.5" />
+                    <Plus className="h-4 w-4" />
                     Add
                   </Button>
                 )}

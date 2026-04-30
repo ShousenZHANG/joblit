@@ -155,6 +155,22 @@ describe("JobsClient", () => {
     expect(within(toolbar).getAllByRole("textbox").length).toBeGreaterThan(0);
   });
 
+  it("keeps desktop location and level filters inside bounded grid tracks", () => {
+    renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
+
+    const filterRow = screen.getByTestId("jobs-desktop-filter-row");
+    const locationFilter = screen.getByTestId("jobs-location-filter");
+    const levelFilter = screen.getByTestId("jobs-level-filter");
+
+    expect(filterRow.className).toContain(
+      "grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)_4.75rem]",
+    );
+    for (const trigger of [locationFilter, levelFilter]) {
+      expect(trigger).toHaveClass("w-full", "min-w-0", "overflow-hidden");
+      expect(trigger.className).toContain("[&_[data-slot=select-value]]:truncate");
+    }
+  });
+
   it("hides setup and batch progress controls on jobs toolbar", async () => {
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
     await screen.findAllByText("Frontend Engineer");
