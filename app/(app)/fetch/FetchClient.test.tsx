@@ -155,4 +155,19 @@ describe("FetchClient", () => {
 
     expect(screen.getByRole("button", { name: /start fetch/i })).toBeInTheDocument();
   });
+
+  it("opens title exclusions with polished motion and bounded menu sizing", async () => {
+    const user = userEvent.setup();
+    renderFetch();
+
+    const trigger = screen.getByTestId("title-exclusions-trigger");
+    await user.click(trigger);
+
+    const menu = await screen.findByTestId("title-exclusions-menu");
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(trigger).toHaveClass("h-12", "rounded-2xl");
+    expect(menu.className).toContain("w-[var(--radix-dropdown-menu-trigger-width)]");
+    expect(menu.className).toContain("data-[state=open]:animate-in");
+    expect(menu.className).toContain("data-[state=open]:zoom-in-95");
+  });
 });

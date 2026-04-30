@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
 import { useFetchStatus } from "@/app/FetchStatusContext";
 import { useGuide } from "@/app/GuideContext";
 import { useMarket } from "@/hooks/useMarket";
+import { cn } from "@/lib/utils";
 
 const COMMON_TITLES = [
   "Software Engineer",
@@ -70,6 +72,127 @@ const CN_COMMON_TITLES = [
   "算法工程师",
   "产品经理",
 ];
+
+const TITLE_EXCLUSION_OPTIONS = [
+  { value: "senior", label: "Senior" },
+  { value: "lead", label: "Lead" },
+  { value: "principal", label: "Principal" },
+  { value: "staff", label: "Staff" },
+  { value: "manager", label: "Manager" },
+  { value: "director", label: "Director" },
+  { value: "head", label: "Head" },
+  { value: "architect", label: "Architect" },
+];
+
+const DESCRIPTION_EXCLUSION_OPTIONS = [
+  { value: "identity_requirement", label: "PR/Citizen requirement" },
+  { value: "clearance_requirement", label: "Security clearance required" },
+  { value: "sponsorship_unavailable", label: "No visa sponsorship" },
+];
+
+const exclusionDropdownContentClass =
+  "w-[var(--radix-dropdown-menu-trigger-width)] min-w-[18rem] max-h-[min(22rem,var(--radix-dropdown-menu-content-available-height))] overflow-y-auto rounded-2xl border border-border/70 bg-background/95 p-2 text-foreground shadow-[0_18px_45px_-24px_rgba(15,23,42,0.45),0_8px_20px_-14px_rgba(5,150,105,0.28)] backdrop-blur-xl origin-[var(--radix-dropdown-menu-content-transform-origin)] will-change-[opacity,transform] data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:slide-in-from-top-1 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:slide-out-to-top-1";
+
+const exclusionDropdownItemClass =
+  "min-h-10 rounded-xl py-2 pl-8 pr-2 text-sm transition-colors duration-150 focus:bg-brand-emerald-50 focus:text-brand-emerald-800 data-[state=checked]:bg-brand-emerald-50 data-[state=checked]:text-brand-emerald-800";
+
+type ExclusionOption = {
+  value: string;
+  label: string;
+};
+
+function ExclusionDropdown({
+  label,
+  values,
+  options,
+  placeholder,
+  disabled,
+  testId,
+  onChange,
+}: {
+  label: string;
+  values: string[];
+  options: ExclusionOption[];
+  placeholder: string;
+  disabled?: boolean;
+  testId: string;
+  onChange: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const summary = values.length ? `Selected (${values.length})` : placeholder;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="text-xs font-medium text-muted-foreground">{label}</div>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            className={cn(
+              "group h-12 w-full justify-between rounded-2xl border border-border/80 bg-background px-4 text-sm font-medium text-foreground/85 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-[background-color,border-color,box-shadow,transform] duration-200 hover:border-brand-emerald-300 hover:bg-brand-emerald-50/40 hover:shadow-[0_10px_24px_-18px_rgba(5,150,105,0.55)] focus-visible:border-brand-emerald-500 focus-visible:ring-brand-emerald-500/20 active:scale-[0.995] disabled:opacity-50",
+              open && "border-brand-emerald-300 bg-brand-emerald-50/50 shadow-[0_12px_28px_-20px_rgba(5,150,105,0.6)]",
+            )}
+            disabled={disabled}
+            aria-label={`${label}: ${summary}`}
+            aria-expanded={open}
+            data-testid={`${testId}-trigger`}
+          >
+            <span className="min-w-0 truncate text-left">{summary}</span>
+            <span className="ml-3 flex shrink-0 items-center gap-2">
+              {values.length ? (
+                <span className="rounded-full bg-brand-emerald-100 px-2 py-0.5 text-xs font-semibold text-brand-emerald-700">
+                  {values.length}
+                </span>
+              ) : null}
+              <ChevronDown
+                className={cn(
+                  "h-4 w-4 text-muted-foreground transition-transform duration-200 ease-out group-hover:text-brand-emerald-700",
+                  open && "rotate-180 text-brand-emerald-700",
+                )}
+                aria-hidden
+              />
+            </span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          sideOffset={8}
+          className={exclusionDropdownContentClass}
+          data-testid={`${testId}-menu`}
+        >
+          <div className="px-2 pb-2 pt-1.5">
+            <div className="text-sm font-semibold text-foreground">{label}</div>
+            <div className="mt-0.5 text-xs text-muted-foreground">
+              Keep results focused by hiding matching jobs.
+            </div>
+          </div>
+          <div className="my-1 h-px bg-border/70" />
+          {options.map((opt) => {
+            const checked = values.includes(opt.value);
+            return (
+              <DropdownMenuCheckboxItem
+                key={opt.value}
+                checked={checked}
+                onSelect={(e) => e.preventDefault()}
+                onCheckedChange={(checkedValue) => {
+                  onChange(
+                    checkedValue === true
+                      ? Array.from(new Set([...values, opt.value]))
+                      : values.filter((value) => value !== opt.value),
+                  );
+                }}
+                className={exclusionDropdownItemClass}
+              >
+                {opt.label}
+              </DropdownMenuCheckboxItem>
+            );
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
 
 export function FetchClient() {
   const { data: session } = useSession();
@@ -344,94 +467,27 @@ export function FetchClient() {
 
           {/* Collapsible exclusion filters */}
           {applyExcludes && (
-            <div className="rounded-lg border border-border/60 bg-muted/40 p-3">
+            <div className="rounded-2xl border border-border/60 bg-muted/30 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <div className="text-xs font-medium text-muted-foreground">Title exclusions</div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="h-10 w-full justify-between rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground/85 shadow-none transition-colors hover:bg-muted disabled:opacity-50"
-                      disabled={!applyExcludes}
-                    >
-                      {excludeTitleTerms.length ? `Selected (${excludeTitleTerms.length})` : "Select terms"}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-64">
-                    {[
-                      { value: "senior", label: "Senior" },
-                      { value: "lead", label: "Lead" },
-                      { value: "principal", label: "Principal" },
-                      { value: "staff", label: "Staff" },
-                      { value: "manager", label: "Manager" },
-                      { value: "director", label: "Director" },
-                      { value: "head", label: "Head" },
-                      { value: "architect", label: "Architect" },
-                    ].map((opt) => {
-                      const checked = excludeTitleTerms.includes(opt.value);
-                      return (
-                        <DropdownMenuCheckboxItem
-                          key={opt.value}
-                          checked={checked}
-                          onSelect={(e) => e.preventDefault()}
-                          onCheckedChange={(value) => {
-                            setExcludeTitleTerms((prev) =>
-                              value
-                                ? [...prev, opt.value]
-                                : prev.filter((v) => v !== opt.value),
-                            );
-                          }}
-                        >
-                          {opt.label}
-                        </DropdownMenuCheckboxItem>
-                      );
-                    })}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+                <ExclusionDropdown
+                  label="Title exclusions"
+                  values={excludeTitleTerms}
+                  options={TITLE_EXCLUSION_OPTIONS}
+                  placeholder="Select terms"
+                  disabled={!applyExcludes}
+                  testId="title-exclusions"
+                  onChange={setExcludeTitleTerms}
+                />
 
-              <div className="space-y-2">
-                <div className="text-xs text-muted-foreground">Description exclusions</div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="h-10 w-full justify-between rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground/85 shadow-none transition-colors hover:bg-muted disabled:opacity-50"
-                      disabled={!applyExcludes}
-                    >
-                      {excludeDescriptionRules.length
-                        ? `Selected (${excludeDescriptionRules.length})`
-                        : "Select rules"}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-72">
-                    {[
-                      { value: "identity_requirement", label: "PR/Citizen requirement" },
-                      { value: "clearance_requirement", label: "Security clearance required" },
-                      { value: "sponsorship_unavailable", label: "No visa sponsorship" },
-                    ].map((opt) => {
-                      const checked = excludeDescriptionRules.includes(opt.value);
-                      return (
-                        <DropdownMenuCheckboxItem
-                          key={opt.value}
-                          checked={checked}
-                          onSelect={(e) => e.preventDefault()}
-                          onCheckedChange={(value) => {
-                            setExcludeDescriptionRules((prev) =>
-                              value
-                                ? [...prev, opt.value]
-                                : prev.filter((v) => v !== opt.value),
-                            );
-                          }}
-                        >
-                          {opt.label}
-                        </DropdownMenuCheckboxItem>
-                      );
-                    })}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+                <ExclusionDropdown
+                  label="Description exclusions"
+                  values={excludeDescriptionRules}
+                  options={DESCRIPTION_EXCLUSION_OPTIONS}
+                  placeholder="Select rules"
+                  disabled={!applyExcludes}
+                  testId="description-exclusions"
+                  onChange={setExcludeDescriptionRules}
+                />
             </div>
           </div>
         )}
