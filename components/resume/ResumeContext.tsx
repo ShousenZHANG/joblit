@@ -57,14 +57,7 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
     t: t as unknown as (key: string) => string,
     toast,
   });
-
-  // Locale changes reload the locale-specific profile through
-  // useResumeProfiles → applyProfileToDraft → the form-watch effect in
-  // useResumeForm. That single path is the only auto-refresh trigger;
-  // we no longer force a duplicate `schedulePreview` here. Keeping the
-  // bootstrap quiet matches the user expectation: the preview should
-  // only refresh on explicit Save / Refresh / live edit, not on page
-  // mount or locale toggle.
+  const { schedulePreview } = preview;
 
   const profiles = useResumeProfiles({
     locale,
@@ -76,6 +69,13 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
     t: t as unknown as (key: string, values?: Record<string, string | number>) => string,
     toast,
   });
+
+  useEffect(() => {
+    if (!previewOpen || !form.hasAnyContent) return;
+    // Only live-refresh after the preview is open. useResumePreview keeps
+    // the current PDF painted during debounce/fetch so edits do not flicker.
+    schedulePreview(800);
+  }, [previewOpen, form.hasAnyContent, schedulePreview]);
 
   const handleSave = async () => {
     setSaving(true);

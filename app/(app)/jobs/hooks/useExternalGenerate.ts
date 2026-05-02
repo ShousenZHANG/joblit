@@ -7,6 +7,7 @@ import { getErrorMessage } from "../types";
 import type { DialogPhase } from "../components/StepIndicator";
 import { isSkillPackFresh, writeSavedSkillPackMeta } from "../utils/skillPackMeta";
 import { parseTailorOutput, filenameFromDisposition } from "../utils/tailorParser";
+import { invalidateActiveJobsQueries } from "../utils/jobsQueryCache";
 
 export function useExternalGenerate(setError: (e: string | null) => void) {
   const { toast } = useToast();
@@ -271,7 +272,7 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
       if (successTimerRef.current) clearTimeout(successTimerRef.current);
       successTimerRef.current = setTimeout(() => setDialogPhase("success"), 500);
 
-      await queryClient.invalidateQueries({ queryKey: ["jobs"], refetchType: "active" });
+      await invalidateActiveJobsQueries(queryClient);
     } catch (e) {
       setDialogPhase(3);
       const message = getErrorMessage(e, "Failed to generate PDF");

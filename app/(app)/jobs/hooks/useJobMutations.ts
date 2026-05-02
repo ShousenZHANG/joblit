@@ -2,36 +2,19 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useGuide } from "@/app/GuideContext";
-import type { JobItem, JobsResponse, JobStatus, JobsQueryRollbackPatch } from "../types";
+import type { JobItem, JobStatus } from "../types";
 import { getErrorMessage } from "../types";
 import { runChunkedBatchDelete } from "./runChunkedBatchDelete";
-
-function getStatusFilterFromJobsQueryKey(queryKey: readonly unknown[]): JobStatus | "ALL" {
-  const serializedQuery = typeof queryKey[1] === "string" ? queryKey[1] : "";
-  const statusParam = new URLSearchParams(serializedQuery).get("status");
-  if (statusParam === "NEW" || statusParam === "APPLIED" || statusParam === "REJECTED") {
-    return statusParam;
-  }
-  return "ALL";
-}
-
-function restorePatchedJob(old: JobsResponse | undefined, patch: JobsQueryRollbackPatch) {
-  if (!old || !Array.isArray(old.items)) return old;
-  const nextItems = [...old.items];
-  const currentIndex = nextItems.findIndex((it) => it.id === patch.previousItem.id);
-  if (currentIndex >= 0) {
-    nextItems[currentIndex] = patch.previousItem;
-  } else {
-    const insertAt = Math.max(0, Math.min(patch.previousIndex, nextItems.length));
-    nextItems.splice(insertAt, 0, patch.previousItem);
-  }
-  return {
-    ...old,
-    items: nextItems,
-    totalCount:
-      typeof patch.previousTotalCount === "number" ? patch.previousTotalCount : old.totalCount,
-  };
-}
+import {
+  cancelJobsQueries,
+  invalidateActiveJobsQueries,
+  patchGeneratedJobArtifactInJobsCache,
+  patchJobStatusInJobsCache,
+  removeJobFromJobsCache,
+  removeJobsFromJobsCache,
+  restoreJobsPatches,
+  restoreJobsSnapshots,
+} from "../utils/jobsQueryCache";
 
 export function useJobMutations({
   items,
@@ -70,59 +53,12 @@ export function useJobMutations({
     onMutate: async ({ id, status }) => {
       setError(null);
       setUpdatingIds((prev) => new Set(prev).add(id));
-      await queryClient.cancelQueries({ queryKey: ["jobs"] });
-
-      const rollbackByQueryHash = new Map<string, JobsQueryRollbackPatch>();
-
-      const queryCache = queryClient.getQueryCache().findAll({ queryKey: ["jobs"] });
-      for (const query of queryCache) {
-        const queryHash = query.queryHash;
-        const key = query.queryKey;
-        const currentFilter = getStatusFilterFromJobsQueryKey(key);
-        const shouldKeep = currentFilter === "ALL" || currentFilter === status;
-
-        queryClient.setQueryData<JobsResponse>(key, (old) => {
-          if (!old || !Array.isArray(old.items)) return old;
-
-          const previousIndex = old.items.findIndex((it) => it.id === id);
-          if (previousIndex === -1) {
-            return old;
-          }
-
-          if (!rollbackByQueryHash.has(queryHash)) {
-            rollbackByQueryHash.set(queryHash, {
-              queryHash,
-              queryKey: key,
-              previousItem: old.items[previousIndex],
-              previousIndex,
-              previousTotalCount:
-                typeof old.totalCount === "number" ? old.totalCount : undefined,
-            });
-          }
-
-          const didRemove = !shouldKeep;
-          return {
-            ...old,
-            items: shouldKeep
-              ? old.items.map((it) => (it.id === id ? { ...it, status } : it))
-              : old.items.filter((it) => it.id !== id),
-            totalCount:
-              didRemove && typeof old.totalCount === "number"
-                ? old.totalCount - 1
-                : old.totalCount,
-          };
-        });
-      }
-
-      return { rollbackPatches: Array.from(rollbackByQueryHash.values()) };
+      await cancelJobsQueries(queryClient);
+      return { rollbackPatches: patchJobStatusInJobsCache(queryClient, id, status) };
     },
     onError: (e, _variables, context) => {
-      for (const patch of context?.rollbackPatches ?? []) {
-        queryClient.setQueryData<JobsResponse>(patch.queryKey, (old) =>
-          restorePatchedJob(old, patch),
-        );
-      }
-      queryClient.invalidateQueries({ queryKey: ["jobs"], refetchType: "active" });
+      restoreJobsPatches(queryClient, context?.rollbackPatches);
+      invalidateActiveJobsQueries(queryClient);
 
       setError(getErrorMessage(e, "Failed to update status"));
       toast({
@@ -150,20 +86,14 @@ export function useJobMutations({
       });
 
       if (data?.resumePdfUrl) {
-        const cachedEntries = queryClient.getQueriesData<JobsResponse>({ queryKey: ["jobs"] });
-        for (const [entryKey] of cachedEntries) {
-          queryClient.setQueryData<JobsResponse>(entryKey, (old) => {
-            if (!old || !Array.isArray(old.items)) return old;
-            return {
-              ...old,
-              items: old.items.map((it) =>
-                it.id === variables.id
-                  ? { ...it, resumePdfUrl: data.resumePdfUrl, resumePdfName: data.resumePdfName }
-                  : it,
-              ),
-            };
-          });
-        }
+        patchGeneratedJobArtifactInJobsCache({
+          queryClient,
+          id: variables.id,
+          patch: {
+            resumePdfUrl: data.resumePdfUrl,
+            resumePdfName: data.resumePdfName,
+          },
+        });
       }
 
       if (data?.saveError) {
@@ -212,52 +142,20 @@ export function useJobMutations({
         return next;
       });
       setDeletingIds((prev) => new Set(prev).add(id));
-      await queryClient.cancelQueries({ queryKey: ["jobs"] });
+      await cancelJobsQueries(queryClient);
       const previousSelectedId = selectedId;
       let nextSelectedId = selectedId;
       if (selectedId === id) {
         nextSelectedId = items.find((it) => it.id !== id)?.id ?? null;
       }
-      const rollbackByQueryHash = new Map<string, JobsQueryRollbackPatch>();
-
-      const queryCache = queryClient.getQueryCache().findAll({ queryKey: ["jobs"] });
-      for (const query of queryCache) {
-        const key = query.queryKey;
-        const queryHash = query.queryHash;
-        queryClient.setQueryData<JobsResponse>(key, (old) => {
-          if (!old || !Array.isArray(old.items)) return old;
-
-          const previousIndex = old.items.findIndex((it) => it.id === id);
-          if (previousIndex === -1) {
-            return old;
-          }
-          if (!rollbackByQueryHash.has(queryHash)) {
-            rollbackByQueryHash.set(queryHash, {
-              queryHash,
-              queryKey: key,
-              previousItem: old.items[previousIndex],
-              previousIndex,
-              previousTotalCount:
-                typeof old.totalCount === "number" ? old.totalCount : undefined,
-            });
-          }
-
-          const nextItems = old.items.filter((it) => it.id !== id);
-
-          return {
-            ...old,
-            items: nextItems,
-            totalCount: typeof old.totalCount === "number" ? old.totalCount - 1 : old.totalCount,
-          };
-        });
-      }
+      const rollbackPatches = removeJobFromJobsCache(queryClient, id);
 
       if (selectedId === id) {
         setSelectedId(nextSelectedId);
       }
 
       return {
-        rollbackPatches: Array.from(rollbackByQueryHash.values()),
+        rollbackPatches,
         previousSelectedId,
       };
     },
@@ -271,12 +169,8 @@ export function useJobMutations({
           return next;
         });
       }
-      for (const patch of context?.rollbackPatches ?? []) {
-        queryClient.setQueryData<JobsResponse>(patch.queryKey, (old) =>
-          restorePatchedJob(old, patch),
-        );
-      }
-      queryClient.invalidateQueries({ queryKey: ["jobs"], refetchType: "active" });
+      restoreJobsPatches(queryClient, context?.rollbackPatches);
+      invalidateActiveJobsQueries(queryClient);
 
       if (context && "previousSelectedId" in context) {
         setSelectedId(context.previousSelectedId ?? null);
@@ -291,7 +185,7 @@ export function useJobMutations({
       });
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["jobs"], refetchType: "active" });
+      void invalidateActiveJobsQueries(queryClient);
       toast({
         title: "Job deleted",
         description: "The role was removed.",
@@ -352,7 +246,7 @@ export function useJobMutations({
         for (const id of ids) next.add(id);
         return next;
       });
-      await queryClient.cancelQueries({ queryKey: ["jobs"] });
+      await cancelJobsQueries(queryClient);
 
       const previousSelectedId = selectedId;
       let nextSelectedId = selectedId;
@@ -360,23 +254,7 @@ export function useJobMutations({
         nextSelectedId = items.find((it) => !idSet.has(it.id))?.id ?? null;
       }
 
-      const rollbackSnapshots: Array<{ queryKey: readonly unknown[]; data: JobsResponse | undefined }> = [];
-      const queryCache = queryClient.getQueryCache().findAll({ queryKey: ["jobs"] });
-      for (const query of queryCache) {
-        const key = query.queryKey;
-        const currentData = queryClient.getQueryData<JobsResponse>(key);
-        rollbackSnapshots.push({ queryKey: key, data: currentData });
-
-        queryClient.setQueryData<JobsResponse>(key, (old) => {
-          if (!old || !Array.isArray(old.items)) return old;
-          const removedCount = old.items.filter((it) => idSet.has(it.id)).length;
-          return {
-            ...old,
-            items: old.items.filter((it) => !idSet.has(it.id)),
-            totalCount: typeof old.totalCount === "number" ? old.totalCount - removedCount : old.totalCount,
-          };
-        });
-      }
+      const rollbackSnapshots = removeJobsFromJobsCache(queryClient, idSet);
 
       if (selectedId && idSet.has(selectedId)) {
         setSelectedId(nextSelectedId);
@@ -391,10 +269,8 @@ export function useJobMutations({
         for (const id of ids) next.delete(id);
         return next;
       });
-      for (const snap of context?.rollbackSnapshots ?? []) {
-        queryClient.setQueryData(snap.queryKey, snap.data);
-      }
-      queryClient.invalidateQueries({ queryKey: ["jobs"], refetchType: "active" });
+      restoreJobsSnapshots(queryClient, context?.rollbackSnapshots);
+      invalidateActiveJobsQueries(queryClient);
       if (context?.previousSelectedId) {
         setSelectedId(context.previousSelectedId);
       }
@@ -408,7 +284,7 @@ export function useJobMutations({
     },
     onSuccess: (data, ids) => {
       // Refetch to get accurate totalCount and reset scroll trigger
-      void queryClient.invalidateQueries({ queryKey: ["jobs"], refetchType: "active" });
+      void invalidateActiveJobsQueries(queryClient);
 
       const deleted = data.deleted;
       const failed = data.failedIds.length;

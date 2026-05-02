@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { invalidateActiveJobsQueries } from "../utils/jobsQueryCache";
 
 const ADD_JOB_EMPTY = "__";
 
@@ -171,7 +172,7 @@ export function JobAddDialog({
       const json = await res.json().catch(() => ({}));
       if (res.status === 201) {
         setSuccess(true);
-        queryClient.invalidateQueries({ queryKey: ["jobs"], refetchType: "active" });
+        invalidateActiveJobsQueries(queryClient);
         toast?.({ title: "Job added", description: form.title.trim() });
         // Brief success state, then close (guarded by ref so cleanup can cancel)
         successTimerRef.current = setTimeout(() => {

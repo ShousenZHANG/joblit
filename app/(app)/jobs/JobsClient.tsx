@@ -32,6 +32,11 @@ import { PdfPreviewDialog } from "./components/PdfPreviewDialog";
 import { JobDetailPanel } from "./components/JobDetailPanel";
 import { cn } from "@/lib/utils";
 import { AU_LOCATION_OPTIONS, CN_LOCATION_OPTIONS, getUserTimeZone } from "./utils/constants";
+import {
+  getJobDetailsQueryKey,
+  invalidateActiveJobsQueries,
+  invalidateJobsQueries,
+} from "./utils/jobsQueryCache";
 
 const desktopFilterSelectTriggerClass =
   "h-11 w-full min-w-0 justify-between overflow-hidden rounded-xl border-border/80 bg-background px-3 text-sm shadow-xs transition-[background-color,border-color,box-shadow] duration-150 hover:border-brand-emerald-300 focus-visible:border-brand-emerald-500 focus-visible:ring-brand-emerald-500/20 [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate [&_[data-slot=select-value]]:text-left";
@@ -195,7 +200,7 @@ export function JobsClient({
   ].filter(Boolean).length;
 
   function triggerSearch() {
-    queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    invalidateJobsQueries(queryClient);
   }
 
   // Auto-refresh on fetch import changes
@@ -229,7 +234,7 @@ export function JobsClient({
     }
 
     resetPagination();
-    queryClient.invalidateQueries({ queryKey: ["jobs"], refetchType: "active" });
+    invalidateActiveJobsQueries(queryClient);
 
     if (justBecameTerminal) {
       toast({
@@ -321,7 +326,7 @@ export function JobsClient({
   const highlightGenerate = isTaskHighlighted("generate_first_pdf");
 
   const detailQuery = useQuery({
-    queryKey: ["job-details", effectiveSelectedId],
+    queryKey: getJobDetailsQueryKey(effectiveSelectedId),
     queryFn: async () => {
       const res = await fetch(`/api/jobs/${effectiveSelectedId}`);
       const json = await res.json().catch(() => ({}));

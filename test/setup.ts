@@ -48,6 +48,15 @@ if (!Element.prototype.scrollTo) {
   ).scrollTo = () => {};
 }
 
+// jsdom does not implement Element.scrollIntoView
+if (!Element.prototype.scrollIntoView) {
+  (
+    Element.prototype as Element & {
+      scrollIntoView: (arg?: boolean | ScrollIntoViewOptions) => void;
+    }
+  ).scrollIntoView = () => {};
+}
+
 Object.defineProperty(window, "matchMedia", {
   value: () => ({
     matches: false,

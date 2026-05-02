@@ -1,6 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import type { JobItem, JobsResponse } from "../types";
+import {
+  buildInitialJobsPageData,
+  getJobsPageQueryKey,
+  hydrateInitialJobsPage,
+} from "../utils/jobsQueryCache";
 
 const INFINITE_SCROLL_TRIGGER_RATIO = 0.8;
 
@@ -52,31 +57,18 @@ export function useJobPagination({
       initialQueryRef.current === queryString;
     if (!shouldUseInitial) return;
 
-    const initialLevels = Array.from(
-      new Set(
-        initialItems
-          .map((item) => item.jobLevel)
-          .filter((level): level is string => Boolean(level)),
-      ),
-    );
-
-    const key = ["jobs", queryString, null] as const;
-    queryClient.setQueryData<JobsResponse>(key, (old) => ({
-      ...old,
-      items: initialItems,
-      nextCursor: initialCursor ?? null,
-      facets: {
-        ...(old?.facets ?? {}),
-        jobLevels: old?.facets?.jobLevels ?? initialLevels,
-      },
-      totalCount: old?.totalCount,
-    }));
+    hydrateInitialJobsPage({
+      queryClient,
+      queryString,
+      initialItems,
+      initialCursor: initialCursor ?? null,
+    });
     didHydrateInitialRef.current = true;
   }, [initialCursor, initialItems, loadedCursors, queryClient, queryString]);
 
   const pageQueries = useQueries({
     queries: loadedCursors.map((loadedCursor, pageIndex) => ({
-      queryKey: ["jobs", queryString, loadedCursor] as const,
+      queryKey: getJobsPageQueryKey(queryString, loadedCursor),
       queryFn: async ({ signal }: { signal: AbortSignal }): Promise<JobsResponse> => {
         const sp = new URLSearchParams(queryString);
         if (loadedCursor) sp.set("cursor", loadedCursor);
@@ -102,20 +94,10 @@ export function useJobPagination({
           loadedCursors.length === 1 &&
           initialQueryRef.current === queryString;
         if (!shouldUseInitial) return undefined;
-        const initialLevels = Array.from(
-          new Set(
-            initialItems
-              .map((item) => item.jobLevel)
-              .filter((level): level is string => Boolean(level)),
-          ),
-        );
-        return {
-          items: initialItems,
-          nextCursor: initialCursor ?? null,
-          facets: {
-            jobLevels: initialLevels,
-          },
-        };
+        return buildInitialJobsPageData({
+          initialItems,
+          initialCursor: initialCursor ?? null,
+        });
       },
     })),
   });
