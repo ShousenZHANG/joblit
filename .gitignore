@@ -49,6 +49,7 @@ docs/superpowers/*.html
 # agent/skills (npx skills add; local, do not commit)
 .agent/
 .agents/
+.tabnine/
 skills-lock.json
 
 # Claude Code local config and worktrees
