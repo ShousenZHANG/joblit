@@ -25,6 +25,10 @@ import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
 import { useFetchStatus } from "@/app/FetchStatusContext";
 import { useGuide } from "@/app/GuideContext";
 import { useMarket } from "@/hooks/useMarket";
+import {
+  DESCRIPTION_EXCLUSION_OPTIONS,
+  TITLE_EXCLUSION_OPTIONS,
+} from "@/lib/shared/fetchExclusionCriteria";
 import { cn } from "@/lib/utils";
 
 const COMMON_TITLES = [
@@ -73,23 +77,6 @@ const CN_COMMON_TITLES = [
   "产品经理",
 ];
 
-const TITLE_EXCLUSION_OPTIONS = [
-  { value: "senior", label: "Senior" },
-  { value: "lead", label: "Lead" },
-  { value: "principal", label: "Principal" },
-  { value: "staff", label: "Staff" },
-  { value: "manager", label: "Manager" },
-  { value: "director", label: "Director" },
-  { value: "head", label: "Head" },
-  { value: "architect", label: "Architect" },
-];
-
-const DESCRIPTION_EXCLUSION_OPTIONS = [
-  { value: "identity_requirement", label: "PR/Citizen requirement" },
-  { value: "clearance_requirement", label: "Security clearance required" },
-  { value: "sponsorship_unavailable", label: "No visa sponsorship" },
-];
-
 const exclusionDropdownContentClass =
   "w-[var(--radix-dropdown-menu-trigger-width)] min-w-[18rem] max-h-[min(22rem,var(--radix-dropdown-menu-content-available-height))] overflow-y-auto rounded-2xl border border-border/70 bg-background/95 p-2 text-foreground shadow-[0_18px_45px_-24px_rgba(15,23,42,0.45),0_8px_20px_-14px_rgba(5,150,105,0.28)] backdrop-blur-xl origin-[var(--radix-dropdown-menu-content-transform-origin)] will-change-[opacity,transform] data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:slide-in-from-top-1 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:slide-out-to-top-1";
 
@@ -99,6 +86,7 @@ const exclusionDropdownItemClass =
 type ExclusionOption = {
   value: string;
   label: string;
+  help?: string;
 };
 
 function ExclusionDropdown({
@@ -112,7 +100,7 @@ function ExclusionDropdown({
 }: {
   label: string;
   values: string[];
-  options: ExclusionOption[];
+  options: readonly ExclusionOption[];
   placeholder: string;
   disabled?: boolean;
   testId: string;
@@ -184,7 +172,14 @@ function ExclusionDropdown({
                 }}
                 className={exclusionDropdownItemClass}
               >
-                {opt.label}
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate">{opt.label}</span>
+                  {opt.help ? (
+                    <span className="mt-0.5 line-clamp-2 text-xs font-normal text-muted-foreground">
+                      {opt.help}
+                    </span>
+                  ) : null}
+                </span>
               </DropdownMenuCheckboxItem>
             );
           })}
@@ -332,7 +327,11 @@ export function FetchClient() {
       body: JSON.stringify(body),
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json?.error || "Failed to create run");
+    const message =
+      typeof json?.error === "string"
+        ? json.error
+        : json?.error?.message || "Failed to create run";
+    if (!res.ok) throw new Error(message);
     return json.id as string;
   }
 

@@ -1,29 +1,16 @@
 import { NextResponse } from "next/server";
-import { requireSessionWithEmail, UnauthorizedError } from "@/lib/server/auth/requireSession";
-import type { SessionContextWithEmail } from "@/lib/server/auth/requireSession";
-import { unauthorizedError } from "@/lib/server/api/errorResponse";
 import { z } from "zod";
+import { withEmailSessionRoute, parseJsonValue } from "@/lib/server/api/routeHandler";
 import { prisma } from "@/lib/server/prisma";
 import { expandRoleQueries } from "@/lib/shared/fetchRolePacks";
+import {
+  filterDescriptionExclusionRules,
+  isTitleExclusionTerm,
+} from "@/lib/shared/fetchExclusionCriteria";
 
 export const runtime = "nodejs";
 
-const TitleExcludeEnum = z.enum([
-  "senior",
-  "lead",
-  "principal",
-  "staff",
-  "manager",
-  "director",
-  "head",
-  "architect",
-]);
-
-const DESC_EXCLUDE_ALLOWED = new Set([
-  "identity_requirement",
-  "clearance_requirement",
-  "sponsorship_unavailable",
-]);
+const TitleExcludeSchema = z.string().refine(isTitleExclusionTerm);
 
 const queriesField = z
   .union([z.array(z.string().min(1)), z.string().min(1)])
@@ -50,12 +37,12 @@ const AUSchema = z
     smartExpand: z.coerce.boolean().optional().default(true),
     includeFromQueries: z.coerce.boolean().optional().default(false),
     applyExcludes: z.coerce.boolean().optional().default(true),
-    excludeTitleTerms: z.array(TitleExcludeEnum).optional().default([]),
+    excludeTitleTerms: z.array(TitleExcludeSchema).optional().default([]),
     excludeDescriptionRules: z
       .array(z.string())
       .optional()
       .default([])
-      .transform((rules) => rules.filter((rule) => DESC_EXCLUDE_ALLOWED.has(rule))),
+      .transform(filterDescriptionExclusionRules),
   })
   .refine((data) => (data.title ?? data.queries?.[0])?.trim(), {
     message: "title is required",
@@ -78,94 +65,78 @@ const CNSchema = z.object({
 });
 
 export async function POST(req: Request) {
-  let ctx: SessionContextWithEmail;
-  try {
-    ctx = await requireSessionWithEmail();
-  } catch (err) {
-    if (err instanceof UnauthorizedError) return unauthorizedError();
-    throw err;
-  }
-  const { userId, userEmail } = ctx;
+  return withEmailSessionRoute(async ({ userId, userEmail, requestId }) => {
+    const json = await req.json().catch(() => null);
+    const marketHint =
+      json && typeof json === "object" && "market" in json ? json.market : "AU";
 
-  const json = await req.json().catch(() => null);
-  const marketHint =
-    json && typeof json === "object" && "market" in json ? json.market : "AU";
-
-  if (marketHint === "CN") {
-    const parsed = CNSchema.safeParse(json);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: "INVALID_BODY", details: parsed.error.flatten() },
-        { status: 400 },
-      );
+    if (marketHint === "CN") {
+      const parsed = parseJsonValue(json, CNSchema, requestId);
+      if (!parsed.ok) return parsed.response;
+      const d = parsed.data;
+      const title = d.queries[0] ?? "";
+      const run = await prisma.fetchRun.create({
+        data: {
+          userId,
+          userEmail: userEmail.toLowerCase(),
+          status: "QUEUED",
+          market: "CN",
+          importedCount: 0,
+          queries: {
+            title,
+            queries: d.queries,
+            sources: d.sources,
+            excludeKeywords: d.excludeKeywords,
+          },
+          location: null,
+          hoursOld: null,
+          resultsWanted: null,
+          includeFromQueries: false,
+          filterDescription: false,
+        },
+        select: { id: true },
+      });
+      return NextResponse.json({ id: run.id }, { status: 201 });
     }
-    const d = parsed.data;
-    const title = d.queries[0] ?? "";
+
+    const parsed = parseJsonValue(json, AUSchema, requestId);
+    if (!parsed.ok) return parsed.response;
+    const data = parsed.data;
+
+    const fallbackTitle = data.title ?? data.queries?.[0] ?? "";
+    const baseQueries = data.queries?.length
+      ? data.queries
+      : fallbackTitle
+        ? [fallbackTitle]
+        : [];
+    const queries = data.smartExpand ? expandRoleQueries(baseQueries) : baseQueries;
+    const title = fallbackTitle || queries[0] || "";
+
     const run = await prisma.fetchRun.create({
       data: {
         userId,
         userEmail: userEmail.toLowerCase(),
         status: "QUEUED",
-        market: "CN",
         importedCount: 0,
         queries: {
           title,
-          queries: d.queries,
-          sources: d.sources,
-          excludeKeywords: d.excludeKeywords,
+          queries,
+          smartExpand: data.smartExpand,
+          includeFromQueries: data.includeFromQueries,
+          applyExcludes: data.applyExcludes,
+          excludeTitleTerms: data.excludeTitleTerms,
+          excludeDescriptionRules: data.excludeDescriptionRules,
         },
-        location: null,
-        hoursOld: null,
+        location: data.location ?? null,
+        hoursOld: data.hoursOld ?? null,
         resultsWanted: null,
-        includeFromQueries: false,
-        filterDescription: false,
+        includeFromQueries: data.includeFromQueries,
+        filterDescription: data.applyExcludes,
       },
       select: { id: true },
     });
+
     return NextResponse.json({ id: run.id }, { status: 201 });
-  }
-
-  const parsed = AUSchema.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "INVALID_BODY", details: parsed.error.flatten() },
-      { status: 400 },
-    );
-  }
-
-  const fallbackTitle = parsed.data.title ?? parsed.data.queries?.[0] ?? "";
-  const baseQueries = parsed.data.queries?.length
-    ? parsed.data.queries
-    : fallbackTitle
-      ? [fallbackTitle]
-      : [];
-  const queries = parsed.data.smartExpand ? expandRoleQueries(baseQueries) : baseQueries;
-  const title = fallbackTitle || queries[0] || "";
-
-  const run = await prisma.fetchRun.create({
-    data: {
-      userId,
-      userEmail: userEmail.toLowerCase(),
-      status: "QUEUED",
-      importedCount: 0,
-      queries: {
-        title,
-        queries,
-        smartExpand: parsed.data.smartExpand,
-        includeFromQueries: parsed.data.includeFromQueries,
-        applyExcludes: parsed.data.applyExcludes,
-        excludeTitleTerms: parsed.data.excludeTitleTerms,
-        excludeDescriptionRules: parsed.data.excludeDescriptionRules,
-      },
-      location: parsed.data.location ?? null,
-      hoursOld: parsed.data.hoursOld ?? null,
-      resultsWanted: null,
-      includeFromQueries: parsed.data.includeFromQueries,
-      filterDescription: parsed.data.applyExcludes,
-    },
-    select: { id: true },
   });
-
-  return NextResponse.json({ id: run.id }, { status: 201 });
 }
 

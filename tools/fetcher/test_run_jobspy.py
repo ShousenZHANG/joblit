@@ -305,6 +305,68 @@ class RunJobspyDedupeTests(unittest.TestCase):
         self.assertEqual(len(out), 1)
         self.assertEqual(out.iloc[0]["title"], "Frontend Engineer")
 
+    def test_filter_experience_requirements_drops_only_explicit_minimum_years(self):
+        df = pd.DataFrame(
+            [
+                {
+                    "title": "Senior Backend Engineer",
+                    "description": "Must have 5+ years of professional experience with backend systems.",
+                },
+                {
+                    "title": "Frontend Engineer",
+                    "description": "4 years of experience preferred, but not required.",
+                },
+                {
+                    "title": "Graduate Engineer",
+                    "description": "Suitable for candidates with up to 5 years of experience.",
+                },
+                {
+                    "title": "Full Stack Engineer",
+                    "description": "Looking for 3 years of commercial experience in React.",
+                },
+            ]
+        )
+
+        out, audit = rj.filter_experience_requirements(
+            df,
+            rules=["experience_requirement_5_plus"],
+        )
+
+        self.assertEqual(
+            out["title"].tolist(),
+            ["Frontend Engineer", "Graduate Engineer", "Full Stack Engineer"],
+        )
+        self.assertEqual(audit["rule"].tolist(), ["experience_requirement_5_plus"])
+
+    def test_filter_experience_requirements_supports_four_plus_and_chinese_jd(self):
+        df = pd.DataFrame(
+            [
+                {
+                    "title": "Python Engineer",
+                    "description": "至少4年工作经验，熟悉 Python 和数据平台。",
+                },
+                {
+                    "title": "React Engineer",
+                    "description": "Minimum 4 years experience required building production web apps.",
+                },
+                {
+                    "title": "Junior Engineer",
+                    "description": "1-3 years experience required.",
+                },
+            ]
+        )
+
+        out, audit = rj.filter_experience_requirements(
+            df,
+            rules=["experience_requirement_4_plus"],
+        )
+
+        self.assertEqual(out["title"].tolist(), ["Junior Engineer"])
+        self.assertEqual(
+            audit["rule"].tolist(),
+            ["experience_requirement_4_plus", "experience_requirement_4_plus"],
+        )
+
     def test_clean_description_lightweight_preserves_structure(self):
         raw = "<p>Minimum of 5 years required.</p> Must-have: Python."
         cleaned = rj._clean_description_text(raw)

@@ -15,6 +15,17 @@ export type PromptMeta = {
   promptHash: string;
 };
 
+export type ImportedPromptMeta = Pick<PromptMeta, "ruleSetId" | "resumeSnapshotUpdatedAt"> &
+  Partial<
+    Pick<PromptMeta, "promptTemplateVersion" | "schemaVersion" | "skillPackVersion" | "promptHash">
+  >;
+
+export type PromptMetaMismatch = {
+  field: keyof ImportedPromptMeta;
+  expected: string;
+  received: string;
+};
+
 const RESUME_OUTPUT_SHAPE = {
   cvSummary: "string",
   latestExperience: {
@@ -209,5 +220,55 @@ export function buildPromptMeta(input: {
     schemaVersion: PROMPT_SCHEMA_VERSION,
     skillPackVersion: buildSkillPackVersion(input),
     promptHash: buildPromptHash(input),
+  };
+}
+
+export function validatePromptMetaForImport(input: {
+  expected: PromptMeta;
+  received: ImportedPromptMeta;
+}):
+  | { ok: true }
+  | {
+      ok: false;
+      mismatches: PromptMetaMismatch[];
+      expected: PromptMeta;
+      received: ImportedPromptMeta;
+    } {
+  const mismatches: PromptMetaMismatch[] = [];
+  const compareRequired = (field: "ruleSetId" | "resumeSnapshotUpdatedAt") => {
+    if (input.received[field] !== input.expected[field]) {
+      mismatches.push({
+        field,
+        expected: input.expected[field],
+        received: input.received[field],
+      });
+    }
+  };
+  const compareOptional = (
+    field: "promptTemplateVersion" | "schemaVersion" | "skillPackVersion" | "promptHash",
+  ) => {
+    const received = input.received[field];
+    if (received && received !== input.expected[field]) {
+      mismatches.push({
+        field,
+        expected: input.expected[field],
+        received,
+      });
+    }
+  };
+
+  compareRequired("ruleSetId");
+  compareRequired("resumeSnapshotUpdatedAt");
+  compareOptional("promptTemplateVersion");
+  compareOptional("schemaVersion");
+  compareOptional("skillPackVersion");
+  compareOptional("promptHash");
+
+  if (mismatches.length === 0) return { ok: true };
+  return {
+    ok: false,
+    mismatches,
+    expected: input.expected,
+    received: input.received,
   };
 }

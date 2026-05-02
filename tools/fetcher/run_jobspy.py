@@ -7,6 +7,7 @@ import math
 import random
 import logging
 from html import unescape
+from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit, parse_qs
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
@@ -39,12 +40,193 @@ LINKEDIN_JOB_ID_RE = re.compile(r"linkedin\.com/jobs/view/(\d+)", re.IGNORECASE)
 CANCELLED_ERROR = "Cancelled by user"
 
 TITLE_EXCLUDE_PAT = re.compile(r'(?i)\b(?:senior|sr\.?|lead|principal|architect|manager|head|director|staff)\b')
+FETCH_EXCLUSION_MANIFEST_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "lib"
+    / "shared"
+    / "fetchExclusionCriteria.config.json"
+)
 
 # Description-level rights/clearance/sponsorship filtering lives in
 # rights_filter.ExclusionMatcher (see rights_rules.json). The older regex
 # constants that previously lived here were retired with the v2 matcher —
 # keeping them around created a false safety net where a broken import
 # could silently downgrade filtering quality.
+
+
+def _load_fetch_exclusion_manifest() -> Dict[str, Any]:
+    return json.loads(FETCH_EXCLUSION_MANIFEST_PATH.read_text(encoding="utf-8"))
+
+
+def _description_rules_by_category(category: str) -> List[str]:
+    manifest = _load_fetch_exclusion_manifest()
+    return [
+        str(rule.get("value") or "")
+        for rule in manifest.get("descriptionRules", [])
+        if rule.get("category") == category and rule.get("value")
+    ]
+
+
+def _experience_rule_thresholds() -> Dict[str, int]:
+    manifest = _load_fetch_exclusion_manifest()
+    out: Dict[str, int] = {}
+    for rule in manifest.get("descriptionRules", []):
+        if rule.get("category") != "experience":
+            continue
+        value = str(rule.get("value") or "")
+        years = rule.get("minYears")
+        if value and isinstance(years, int):
+            out[value] = years
+    return out
+
+
+DESCRIPTION_RIGHTS_RULES = set(_description_rules_by_category("rights"))
+EXPERIENCE_RULE_THRESHOLDS = _experience_rule_thresholds()
+
+EXPERIENCE_REQUIREMENT_PATTERNS = [
+    re.compile(
+        r"(?i)\b(?:minimum|min\.?|at\s+least|requires?|required|must\s+have|need(?:ed)?|looking\s+for)\s+"
+        r"(?:a\s+)?(?:minimum\s+of\s+)?(?P<num>\d{1,2})\s*\+?\s*(?:years?|yrs?)\b"
+        r"(?:[^.;]{0,80}\b(?:experience|commercial|professional|development|engineering)\b)?"
+    ),
+    re.compile(
+        r"(?i)\b(?P<num>\d{1,2})\s*\+\s*(?:years?|yrs?)'?\s+"
+        r"(?:of\s+)?(?:commercial\s+|professional\s+|relevant\s+)?experience\b"
+    ),
+    re.compile(
+        r"(?i)\b(?P<num>\d{1,2})\s*(?:years?|yrs?)'?\s+"
+        r"(?:of\s+)?(?:commercial\s+|professional\s+|relevant\s+)?experience\s+"
+        r"(?:is\s+)?(?:required|minimum|needed|essential|must\b)"
+    ),
+    re.compile(
+        r"(?i)\b(?:over|more\s+than)\s+(?P<num>\d{1,2})\s*(?:years?|yrs?)'?\s+"
+        r"(?:of\s+)?(?:commercial\s+|professional\s+|relevant\s+)?experience\b"
+    ),
+    re.compile(
+        r"(?P<num>\d{1,2}|[一二三四五六七八九十]{1,3})\s*年\s*(?:以上|及以上|起)\s*(?:工作)?经验"
+    ),
+    re.compile(
+        r"(?:至少|不少于)\s*(?P<num>\d{1,2}|[一二三四五六七八九十]{1,3})\s*年\s*(?:工作)?经验"
+    ),
+]
+
+EXPERIENCE_SOFT_GUARD_RE = re.compile(
+    r"(?i)\b(?:up\s+to|less\s+than|fewer\s+than|under|within|no\s+more\s+than|maximum|max\.?|preferred|nice\s+to\s+have)\b"
+)
+
+
+def _parse_year_count(raw: str) -> Optional[int]:
+    value = (raw or "").strip()
+    if not value:
+        return None
+    if value.isdigit():
+        return int(value)
+
+    digit_map = {
+        "一": 1,
+        "二": 2,
+        "两": 2,
+        "三": 3,
+        "四": 4,
+        "五": 5,
+        "六": 6,
+        "七": 7,
+        "八": 8,
+        "九": 9,
+        "十": 10,
+    }
+    if value == "十":
+        return 10
+    if value.startswith("十") and len(value) == 2:
+        return 10 + digit_map.get(value[1], 0)
+    if value.endswith("十") and len(value) == 2:
+        return digit_map.get(value[0], 0) * 10
+    if "十" in value and len(value) == 3:
+        return digit_map.get(value[0], 0) * 10 + digit_map.get(value[2], 0)
+    return digit_map.get(value)
+
+
+def _is_soft_or_range_experience_context(text: str, start: int, end: int) -> bool:
+    prefix = text[max(0, start - 28) : start]
+    suffix = text[end : min(len(text), end + 36)]
+    context = f"{prefix} {suffix}"
+    if EXPERIENCE_SOFT_GUARD_RE.search(context):
+        return True
+    if re.search(r"(?i)(?:\d+\s*(?:-|–|to)\s*)$", prefix):
+        return True
+    return False
+
+
+def _experience_snippet(text: str, start: int, end: int, pad: int = 70) -> str:
+    return text[max(0, start - pad) : min(len(text), end + pad)].strip()
+
+
+def _active_experience_thresholds(rules: List[str]) -> List[tuple[str, int]]:
+    active_rules = set(rules or [])
+    active = [
+        (rule, years)
+        for rule, years in EXPERIENCE_RULE_THRESHOLDS.items()
+        if rule in active_rules
+    ]
+    return sorted(active, key=lambda item: item[1])
+
+
+def _find_experience_requirement(
+    text: str,
+    active_thresholds: List[tuple[str, int]],
+) -> Optional[tuple[str, int, str]]:
+    if not text or not active_thresholds:
+        return None
+    body = str(text)
+    for pattern in EXPERIENCE_REQUIREMENT_PATTERNS:
+        for match in pattern.finditer(body):
+            years = _parse_year_count(match.group("num"))
+            if years is None:
+                continue
+            if _is_soft_or_range_experience_context(body, match.start(), match.end()):
+                continue
+            for rule, min_years in active_thresholds:
+                if years >= min_years:
+                    return rule, years, _experience_snippet(body, match.start(), match.end())
+    return None
+
+
+def filter_experience_requirements(
+    df: pd.DataFrame,
+    rules: List[str],
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    audit_cols = list(df.columns) + ["rule", "score", "evidence", "snippet"]
+    active_thresholds = _active_experience_thresholds(rules)
+    if df.empty or "description" not in df.columns or not active_thresholds:
+        return df.copy(), pd.DataFrame(columns=audit_cols)
+
+    keep_idx: List[int] = []
+    audit_rows: List[dict] = []
+    for idx, row in df.iterrows():
+        desc = row["description"] if pd.notna(row["description"]) else ""
+        match = _find_experience_requirement(str(desc), active_thresholds)
+        if not match:
+            keep_idx.append(idx)
+            continue
+        rule, years, snippet = match
+        entry = row.to_dict()
+        entry.update(
+            {
+                "rule": rule,
+                "score": 100,
+                "evidence": f"explicit minimum experience requirement: {years} years",
+                "snippet": snippet,
+            }
+        )
+        audit_rows.append(entry)
+
+    kept = df.loc[keep_idx].copy()
+    audit = (
+        pd.DataFrame(audit_rows, columns=audit_cols)
+        if audit_rows
+        else pd.DataFrame(columns=audit_cols)
+    )
+    return kept, audit
 
 
 def _build_query_phrases(queries: List[str]) -> List[str]:
@@ -795,12 +977,17 @@ def main():
         include_from_queries = bool(raw_queries.get("includeFromQueries") or False)
     proxy_pool = _parse_csv_list(os.environ.get("FETCH_PROXY_POOL", ""))
 
-    exclude_rights = apply_excludes and "identity_requirement" in exclude_desc_rules
-    exclude_clearance = apply_excludes and "clearance_requirement" in exclude_desc_rules
-    exclude_sponsorship = apply_excludes and "sponsorship_unavailable" in exclude_desc_rules
-    filter_desc = apply_excludes and bool(
-        exclude_rights or exclude_clearance or exclude_sponsorship
+    active_rights_rules = (
+        [rule for rule in exclude_desc_rules if rule in DESCRIPTION_RIGHTS_RULES]
+        if apply_excludes
+        else []
     )
+    active_experience_rules = (
+        [rule for rule in exclude_desc_rules if rule in EXPERIENCE_RULE_THRESHOLDS]
+        if apply_excludes
+        else []
+    )
+    filter_desc = bool(active_rights_rules or active_experience_rules)
 
     # Mark running
     requests.patch(
@@ -849,33 +1036,44 @@ def main():
             # v2 matcher — layered regex + weighted scoring with audit trail.
             # Import errors surface loudly; a silent fallback to the retired
             # legacy regex would downgrade filter quality without warning.
-            from rights_filter import filter_description_v2  # type: ignore
-            active_rules: List[str] = []
-            if exclude_rights:
-                active_rules.append("identity_requirement")
-            if exclude_clearance:
-                active_rules.append("clearance_requirement")
-            if exclude_sponsorship:
-                active_rules.append("sponsorship_unavailable")
-            df, audit_df = filter_description_v2(
-                df,
-                rules=active_rules,
-                region=identity_region,
-                strictness=identity_strictness,
-            )
-            if not audit_df.empty:
-                audit_summary = (
-                    audit_df.groupby("rule")["score"].count().to_dict()
-                    if "rule" in audit_df.columns
-                    else {}
+            if active_rights_rules:
+                from rights_filter import filter_description_v2  # type: ignore
+
+                df, audit_df = filter_description_v2(
+                    df,
+                    rules=active_rights_rules,
+                    region=identity_region,
+                    strictness=identity_strictness,
                 )
-                logger.info(
-                    "filter_description_v2 dropped=%s region=%s strictness=%s by_rule=%s",
-                    len(audit_df),
-                    identity_region,
-                    identity_strictness,
-                    audit_summary,
+                if not audit_df.empty:
+                    audit_summary = (
+                        audit_df.groupby("rule")["score"].count().to_dict()
+                        if "rule" in audit_df.columns
+                        else {}
+                    )
+                    logger.info(
+                        "filter_description_v2 dropped=%s region=%s strictness=%s by_rule=%s",
+                        len(audit_df),
+                        identity_region,
+                        identity_strictness,
+                        audit_summary,
+                    )
+            if active_experience_rules:
+                df, experience_audit_df = filter_experience_requirements(
+                    df,
+                    rules=active_experience_rules,
                 )
+                if not experience_audit_df.empty:
+                    experience_summary = (
+                        experience_audit_df.groupby("rule")["score"].count().to_dict()
+                        if "rule" in experience_audit_df.columns
+                        else {}
+                    )
+                    logger.info(
+                        "filter_experience_requirements dropped=%s by_rule=%s",
+                        len(experience_audit_df),
+                        experience_summary,
+                    )
             logger.info("Rows after description filter: %s", len(df))
         df = dedupe_jobs(df)
         items = df.to_dict(orient="records")

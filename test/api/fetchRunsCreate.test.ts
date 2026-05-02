@@ -70,7 +70,7 @@ describe("fetch runs create api", () => {
     expect(payload.smartExpand).toBe(false);
   });
 
-  it("drops experience-based description exclusions from payload", async () => {
+  it("keeps supported experience-based description exclusions from payload", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "user-1", email: "user@example.com" },
     });
@@ -78,15 +78,18 @@ describe("fetch runs create api", () => {
     await POST(
       new Request("http://localhost/api/fetch-runs", {
         method: "POST",
-        body: JSON.stringify({
-          title: "Software Engineer",
-          excludeDescriptionRules: ["identity_requirement", "exp_5"],
+          body: JSON.stringify({
+            title: "Software Engineer",
+          excludeDescriptionRules: ["identity_requirement", "experience_requirement_5_plus"],
         }),
       }),
     );
 
     const payload = fetchRunStore.create.mock.calls[0]?.[0]?.data?.queries;
-    expect(payload.excludeDescriptionRules).toEqual(["identity_requirement"]);
+    expect(payload.excludeDescriptionRules).toEqual([
+      "identity_requirement",
+      "experience_requirement_5_plus",
+    ]);
   });
 
   it("keeps only supported description exclusion rules", async () => {
@@ -103,6 +106,7 @@ describe("fetch runs create api", () => {
             "identity_requirement",
             "clearance_requirement",
             "sponsorship_unavailable",
+            "experience_requirement_4_plus",
             "exp_7",
           ],
         }),
@@ -114,6 +118,7 @@ describe("fetch runs create api", () => {
       "identity_requirement",
       "clearance_requirement",
       "sponsorship_unavailable",
+      "experience_requirement_4_plus",
     ]);
   });
 

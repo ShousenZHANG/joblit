@@ -782,6 +782,44 @@ describe("applications manual generate api", () => {
     expect(json.error.code).toBe("PROMPT_META_MISMATCH");
   });
 
+  it("returns 409 when prompt meta skill pack version does not match current contract", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    jobStore.findFirst.mockResolvedValueOnce({
+      id: VALID_JOB_ID,
+      title: "Software Engineer",
+      company: "Example Co",
+      description: "Build product features",
+    });
+    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "rp-1",
+      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
+    });
+
+    const res = await POST(
+      new Request("http://localhost/api/applications/manual-generate", {
+        method: "POST",
+        body: JSON.stringify({
+          jobId: VALID_JOB_ID,
+          target: "resume",
+          modelOutput: VALID_OUTPUT,
+          promptMeta: {
+            ruleSetId: "rules-1",
+            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+            skillPackVersion: "stale-pack",
+          },
+        }),
+      }),
+    );
+    const json = await res.json();
+    expect(res.status).toBe(409);
+    expect(json.error.code).toBe("PROMPT_META_MISMATCH");
+    expect(json.error.details.mismatches).toEqual([
+      expect.objectContaining({ field: "skillPackVersion", received: "stale-pack" }),
+    ]);
+  });
+
   it("soft-fails quality gate but still generates manual cover pdf", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "user-1" },

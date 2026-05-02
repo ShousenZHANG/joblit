@@ -131,6 +131,21 @@ function writeDismissedCoachmarks(set: Set<string>) {
   }
 }
 
+function requestGuideFrame(callback: FrameRequestCallback): number {
+  if (typeof window !== "undefined" && window.requestAnimationFrame) {
+    return window.requestAnimationFrame(callback);
+  }
+  return window.setTimeout(() => callback(performance.now()), 16);
+}
+
+function cancelGuideFrame(frame: number) {
+  if (typeof window !== "undefined" && window.cancelAnimationFrame) {
+    window.cancelAnimationFrame(frame);
+    return;
+  }
+  window.clearTimeout(frame);
+}
+
 /** Safe guarded read for the once-per-session welcome flag. */
 function welcomeAlreadyShown(): boolean {
   if (typeof window === "undefined") return true;
@@ -196,10 +211,20 @@ export function GuideProvider({ children }: { children: ReactNode }) {
   }, [coachmarkTaskId, coachmarkRect]);
 
   useEffect(() => {
-    const sync = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
+    let frame = 0;
+    const sync = () => {
+      if (frame) cancelGuideFrame(frame);
+      frame = requestGuideFrame(() => {
+        frame = 0;
+        setViewport({ width: window.innerWidth, height: window.innerHeight });
+      });
+    };
     sync();
-    window.addEventListener("resize", sync);
-    return () => window.removeEventListener("resize", sync);
+    window.addEventListener("resize", sync, { passive: true });
+    return () => {
+      if (frame) cancelGuideFrame(frame);
+      window.removeEventListener("resize", sync);
+    };
   }, []);
 
   const fetchState = useCallback(async () => {
@@ -434,8 +459,9 @@ export function GuideProvider({ children }: { children: ReactNode }) {
     }
   }, [coachmarkTaskId, pathname]);
 
-  // Locate the coachmark target. Polls every 200ms so the popover follows
-  // any DOM mutations / scroll-into-view triggered by the page itself.
+  // Locate the coachmark target from observable browser events. This avoids
+  // a permanent polling interval while still following scroll, resize, and
+  // page-level DOM changes triggered by route transitions.
   useEffect(() => {
     if (!coachmarkTaskId) {
       setCoachmarkRect(null);
@@ -447,12 +473,36 @@ export function GuideProvider({ children }: { children: ReactNode }) {
     if (!onTaskPage) return;
 
     // Cap polling at 30 iterations (≈6 s) so a missing or never-rendering
-    // anchor cannot run a 200ms loop forever.
+    // anchor cannot keep scheduling work forever.
     let attempts = 0;
     let timeoutCleared = false;
+    let frame = 0;
+    let retryTimer = 0;
+    let observedTarget: HTMLElement | null = null;
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(() => {
+            scheduleLocate();
+          });
+    const mutationObserver =
+      typeof MutationObserver === "undefined"
+        ? null
+        : new MutationObserver(() => {
+            scheduleLocate();
+          });
+
+    const observeTarget = (target: HTMLElement) => {
+      if (!resizeObserver || observedTarget === target) return;
+      resizeObserver.disconnect();
+      resizeObserver.observe(target);
+      observedTarget = target;
+    };
+
     const locate = () => {
       const target = document.querySelector<HTMLElement>(`[data-guide-anchor="${coachmarkTaskId}"]`);
       if (target) {
+        observeTarget(target);
         const rect = target.getBoundingClientRect();
         if (rect.width >= 1 && rect.height >= 1) {
           setCoachmarkRect((prev) => {
@@ -478,19 +528,38 @@ export function GuideProvider({ children }: { children: ReactNode }) {
       attempts++;
       if (attempts >= 30 && !timeoutCleared) {
         timeoutCleared = true;
-        window.clearInterval(interval);
+        window.clearTimeout(retryTimer);
         setCoachmarkTaskId(null);
+        return;
       }
+      retryTimer = window.setTimeout(scheduleLocate, 200);
     };
 
-    locate();
-    const interval = window.setInterval(locate, 200);
-    window.addEventListener("scroll", locate, true);
-    window.addEventListener("resize", locate);
+    function scheduleLocate() {
+      if (timeoutCleared || frame) return;
+      frame = requestGuideFrame(() => {
+        frame = 0;
+        locate();
+      });
+    }
+
+    scheduleLocate();
+    mutationObserver?.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["class", "style", "data-guide-anchor"],
+    });
+    window.addEventListener("scroll", scheduleLocate, { capture: true, passive: true });
+    window.addEventListener("resize", scheduleLocate, { passive: true });
     return () => {
-      window.clearInterval(interval);
-      window.removeEventListener("scroll", locate, true);
-      window.removeEventListener("resize", locate);
+      timeoutCleared = true;
+      if (frame) cancelGuideFrame(frame);
+      window.clearTimeout(retryTimer);
+      resizeObserver?.disconnect();
+      mutationObserver?.disconnect();
+      window.removeEventListener("scroll", scheduleLocate, true);
+      window.removeEventListener("resize", scheduleLocate);
     };
   }, [coachmarkTaskId, pathname]);
 

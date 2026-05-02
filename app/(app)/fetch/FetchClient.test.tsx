@@ -170,4 +170,14 @@ describe("FetchClient", () => {
     expect(menu.className).toContain("data-[state=open]:animate-in");
     expect(menu.className).toContain("data-[state=open]:zoom-in-95");
   });
+
+  it("shows explicit experience requirement exclusions in the description menu", async () => {
+    const user = userEvent.setup();
+    renderFetch();
+
+    await user.click(screen.getByTestId("description-exclusions-trigger"));
+
+    expect(await screen.findByText("Requires 5+ years experience")).toBeInTheDocument();
+    expect(screen.getByText(/minimum requirement of 5 or more years/i)).toBeInTheDocument();
+  });
 });

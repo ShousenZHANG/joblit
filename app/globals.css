@@ -377,7 +377,7 @@ body {
   height: 320px;
   top: -100px;
   left: -80px;
-  animation: orb-float 16s ease-in-out infinite;
+  animation: none;
 }
 
 .edu-dynamic-orb--2 {
@@ -385,7 +385,7 @@ body {
   height: 280px;
   bottom: -120px;
   right: -80px;
-  animation: orb-float 14s ease-in-out infinite reverse 1s;
+  animation: none;
 }
 
 .edu-dynamic-orb--3 {
@@ -393,7 +393,7 @@ body {
   height: 240px;
   top: 45%;
   left: 50%;
-  animation: orb-float 12s ease-in-out infinite 0.5s;
+  animation: none;
 }
 
 @keyframes orb-float {
@@ -439,14 +439,14 @@ body {
   top: -140px;
   left: -140px;
   background: radial-gradient(circle, rgba(52, 211, 153, 0.45), rgba(52, 211, 153, 0));
-  animation: float-blob 14s ease-in-out infinite;
+  animation: none;
 }
 
 .edu-blob--peach {
   bottom: -180px;
   right: -160px;
   background: radial-gradient(circle, rgba(251, 146, 60, 0.4), rgba(251, 146, 60, 0));
-  animation: float-blob 16s ease-in-out infinite reverse;
+  animation: none;
 }
 
 @keyframes float-blob {
@@ -512,7 +512,12 @@ body {
   font-weight: 600;
   color: #475569;
   cursor: pointer;
-  transition: all 180ms ease;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
 }
 
 .guide-btn:hover {
@@ -525,7 +530,7 @@ body {
   border-color: rgba(5, 150, 105, 0.3);
   background: linear-gradient(135deg, #ecfdf5, #d1fae5);
   color: #047857;
-  animation: guide-pulse 2.5s ease-in-out infinite;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14);
 }
 
 .guide-btn--active:hover {
@@ -741,8 +746,12 @@ body {
   font-weight: 600;
   color: oklch(0.4 0.08 85);
   cursor: pointer;
-  transition: all 150ms ease;
   flex-shrink: 0;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
 }
 .dark .ext-btn-copy {
   border-color: rgba(245, 158, 11, 0.32);
@@ -854,7 +863,11 @@ body {
   color: oklch(0.55 0.2 25);
   cursor: pointer;
   flex-shrink: 0;
-  transition: all 150ms ease;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
 }
 .dark .ext-btn-revoke {
   border-color: rgba(239, 68, 68, 0.32);
@@ -1661,7 +1674,7 @@ body {
 .edu-cta-shimmer {
   background: linear-gradient(110deg, #22c55e 40%, #34d399 50%, #22c55e 60%);
   background-size: 250% 100%;
-  animation: shimmer-sweep 3s ease-in-out infinite;
+  animation: none;
   color: white;
   border: none;
 }
@@ -1691,7 +1704,6 @@ body {
   height: 3px;
   background: linear-gradient(90deg, #22c55e, #14b8a6, #0ea5e9, #22c55e);
   background-size: 300% 100%;
-  animation: border-glow 4s ease infinite;
 }
 
 /* ── Shimmer loading bar ── */
@@ -1713,7 +1725,7 @@ body {
   position: absolute;
   inset: 0;
   background: linear-gradient(90deg, transparent, #22c55e, transparent);
-  animation: shimmer-load 1.2s ease-in-out infinite;
+  animation: none;
 }
 
 /* ── Floating particles ── */
@@ -1728,7 +1740,7 @@ body {
   position: absolute;
   border-radius: 50%;
   will-change: transform;
-  animation: float-particle var(--duration, 12s) ease-in-out infinite;
+  animation: none;
   opacity: var(--opacity, 0.3);
 }
 
@@ -2190,7 +2202,11 @@ body::-webkit-scrollbar-thumb:hover {
     transparent 80%
   );
   transform: translateX(-100%);
-  animation: shimmer-slide 2.4s ease-in-out infinite;
+  animation: none;
+}
+
+.edu-cta-shimmer:hover::after {
+  animation: shimmer-slide 1.1s ease-out;
 }
 
 @keyframes shimmer-slide {
@@ -2205,7 +2221,7 @@ body::-webkit-scrollbar-thumb:hover {
   border-radius: 999px;
   opacity: var(--opacity, 0.25);
   will-change: transform;
-  animation: particle-drift var(--duration, 14s) ease-in-out infinite;
+  animation: none;
 }
 
 @keyframes particle-drift {
@@ -2232,7 +2248,11 @@ body::-webkit-scrollbar-thumb:hover {
 /* ── Feature card glassmorphism glow ── */
 .feature-card-glow {
   position: relative;
-  transition: all 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    box-shadow 0.3s ease,
+    transform 0.3s ease,
+    backdrop-filter 0.3s ease;
 }
 
 .feature-card-glow::before {
@@ -2246,7 +2266,6 @@ body::-webkit-scrollbar-thumb:hover {
   z-index: -1;
   filter: blur(8px);
   transition: opacity 0.4s ease;
-  animation: border-glow 4s ease infinite;
 }
 
 .feature-card-glow:hover::before {
@@ -2262,7 +2281,7 @@ body::-webkit-scrollbar-thumb:hover {
 
 /* ── How it Works step hover pulse ── */
 .step-circle-hover {
-  transition: all 0.3s ease;
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
 }
 
 .step-circle-hover:hover {
@@ -2423,7 +2442,11 @@ body::-webkit-scrollbar-thumb:hover {
   font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    filter 0.15s ease;
   user-select: none;
 }
 
@@ -2444,7 +2467,21 @@ body::-webkit-scrollbar-thumb:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* Landing motion effects deleted entirely; nothing to disable. */
+  .guide-btn--active,
+  .edu-dynamic-orb,
+  .edu-blob--mint,
+  .edu-blob--peach,
+  .edu-demo-card-v2::before,
+  .edu-shimmer-bar::after,
+  .feature-card-glow::before,
+  .card-scan-hover:hover::after {
+    animation: none;
+  }
+
+  .feature-card-glow:hover,
+  .step-circle-hover:hover {
+    transform: none;
+  }
 
   .edu-cta-shimmer::after {
     animation: none;

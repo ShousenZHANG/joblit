@@ -1,0 +1,46 @@
+{
+  "titleTerms": [
+    { "value": "senior", "label": "Senior" },
+    { "value": "lead", "label": "Lead" },
+    { "value": "principal", "label": "Principal" },
+    { "value": "staff", "label": "Staff" },
+    { "value": "manager", "label": "Manager" },
+    { "value": "director", "label": "Director" },
+    { "value": "head", "label": "Head" },
+    { "value": "architect", "label": "Architect" }
+  ],
+  "descriptionRules": [
+    {
+      "value": "identity_requirement",
+      "label": "PR/Citizen requirement",
+      "category": "rights",
+      "help": "Excludes jobs that explicitly require citizenship, permanent residency, or equivalent local work-right status."
+    },
+    {
+      "value": "clearance_requirement",
+      "label": "Security clearance required",
+      "category": "rights",
+      "help": "Excludes jobs with hard security clearance requirements."
+    },
+    {
+      "value": "sponsorship_unavailable",
+      "label": "No visa sponsorship",
+      "category": "rights",
+      "help": "Excludes jobs that explicitly say visa sponsorship is unavailable."
+    },
+    {
+      "value": "experience_requirement_4_plus",
+      "label": "Requires 4+ years experience",
+      "category": "experience",
+      "minYears": 4,
+      "help": "Excludes only when the description states a minimum requirement of 4 or more years of experience."
+    },
+    {
+      "value": "experience_requirement_5_plus",
+      "label": "Requires 5+ years experience",
+      "category": "experience",
+      "minYears": 5,
+      "help": "Excludes only when the description states a minimum requirement of 5 or more years of experience."
+    }
+  ]
+}

@@ -17,6 +17,7 @@ export const ManualGenerateSchema = z.object({
     resumeSnapshotUpdatedAt: z.string().min(1),
     promptTemplateVersion: z.string().min(1).optional(),
     schemaVersion: z.string().min(1).optional(),
+    skillPackVersion: z.string().min(1).optional(),
     promptHash: z.string().min(1).optional(),
   }),
 });

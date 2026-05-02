@@ -262,6 +262,7 @@ describe("GuideContext", () => {
   });
 
   it("renders an inline coachmark on the task page and auto-dismisses on completion", async () => {
+    const setIntervalSpy = vi.spyOn(window, "setInterval");
     const fetchMock = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.url;
       if (url === "/api/onboarding/state" && !init?.method) {
@@ -309,6 +310,7 @@ describe("GuideContext", () => {
       },
       { timeout: 1500 },
     );
+    expect(setIntervalSpy.mock.calls.filter((call) => call[1] === 200)).toHaveLength(0);
 
     // Completing the task auto-dismisses the coachmark.
     fireEvent.click(screen.getByRole("button", { name: "complete-first" }));
