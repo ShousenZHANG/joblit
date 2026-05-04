@@ -131,6 +131,13 @@ async function callProviderWithFallback(params: {
   systemPrompt: string;
   userPrompt: string;
   timeoutMs?: number;
+  /**
+   * Sampling temperature override. Defaults to the provider's own
+   * default (0.2). Cover-only rewrite passes bump this to 0.35 so the
+   * model has a touch more headroom for tone variation without
+   * loosening the resume bullets in the same call.
+   */
+  temperature?: number;
 }) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), params.timeoutMs ?? 12000);
@@ -142,6 +149,7 @@ async function callProviderWithFallback(params: {
         systemPrompt: params.systemPrompt,
         userPrompt: params.userPrompt,
         signal: controller.signal,
+        temperature: params.temperature,
       });
     } catch (error) {
       if (params.normalizedModel !== params.defaultModel) {
@@ -151,6 +159,7 @@ async function callProviderWithFallback(params: {
           systemPrompt: params.systemPrompt,
           userPrompt: params.userPrompt,
           signal: controller.signal,
+          temperature: params.temperature,
         });
       }
       throw error;
@@ -294,6 +303,9 @@ export async function tailorApplicationContent(
           defaultModel,
           systemPrompt,
           userPrompt: rewritePrompt,
+          // Cover-only rewrite — slight headroom for tone variation
+          // (resume bullets are not regenerated in this pass).
+          temperature: 0.35,
         });
 
         const rewrittenRaw = parseTailorModelOutput(content);

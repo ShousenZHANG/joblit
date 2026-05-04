@@ -5,12 +5,23 @@ import {
   buildEmbeddedCoverQualityGates,
 } from "./qualityGatesEmbed";
 import { getLocaleProfile } from "@/lib/shared/locales";
+import { sanitizePromptText } from "./sanitize";
 
 type JobInput = {
   title: string;
   company: string;
   description: string;
 };
+
+/**
+ * Pull the JD description out of `input.job` after running it through
+ * the prompt-injection / control-character scrubber. Centralises the
+ * call so we cannot accidentally feed a raw description into the
+ * prompt at one of the five existing usage sites.
+ */
+function safeJobDescription(job: JobInput): string {
+  return sanitizePromptText(job.description);
+}
 
 type ResponsibilityCoverageInput = {
   topResponsibilities: string[];
@@ -168,7 +179,7 @@ export function buildApplicationUserPrompt(input: BuildApplicationPromptInput) {
     "Job Input:",
     `- Job title: ${input.job.title}`,
     `- Company: ${input.job.company || "the company"}`,
-    `- Job description: ${input.job.description || ""}`,
+    `- Job description: ${safeJobDescription(input.job)}`,
   ].join("\n");
 }
 
@@ -184,7 +195,7 @@ export function buildApplicationShortUserPrompt(input: {
     "Job Input:",
     `- Job title: ${input.job.title}`,
     `- Company: ${input.job.company || "the company"}`,
-    `- Job description: ${input.job.description || ""}`,
+    `- Job description: ${safeJobDescription(input.job)}`,
   ];
   if (input.target === "resume" && input.resume) {
     lines.push("", buildResumeCoverageBlock(input.resume));
@@ -297,7 +308,7 @@ export function buildV2ResumeUserPrompt(input: BuildApplicationPromptInput): str
   const jobBlock = [
     `Title: ${input.job.title}`,
     `Company: ${input.job.company || "the company"}`,
-    `Description:\n${input.job.description || "(not provided)"}`,
+    `Description:\n${safeJobDescription(input.job) || "(not provided)"}`,
   ].join("\n");
 
   const coverageBlock = input.resume ? buildV2CoverageAnalysisBlock(input.resume) : "";
@@ -350,7 +361,7 @@ export function buildV2CoverUserPrompt(input: BuildApplicationPromptInput): stri
   const jobBlock = [
     `Title: ${input.job.title}`,
     `Company: ${input.job.company || "the company"}`,
-    `Description:\n${input.job.description || "(not provided)"}`,
+    `Description:\n${safeJobDescription(input.job) || "(not provided)"}`,
   ].join("\n");
 
   return [
@@ -397,7 +408,7 @@ export function buildV2ShortUserPrompt(input: {
   const jobBlock = [
     `Title: ${input.job.title}`,
     `Company: ${input.job.company || "the company"}`,
-    `Description:\n${input.job.description || "(not provided)"}`,
+    `Description:\n${safeJobDescription(input.job) || "(not provided)"}`,
   ].join("\n");
 
   const coverageBlock =
