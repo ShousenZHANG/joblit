@@ -7,6 +7,7 @@ import { prisma } from "@/lib/server/prisma";
 import { getResumeProfile } from "@/lib/server/resumeProfile";
 import { getActivePromptSkillRulesForUser } from "@/lib/server/promptRuleTemplates";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
+import { marketStringToResumeLocale } from "@/lib/shared/market";
 import { computeTop3Coverage } from "@/lib/server/ai/responsibilityCoverage";
 import {
   buildPromptMeta,
@@ -76,7 +77,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const profileLocale = job.market === "CN" ? "zh-CN" : "en-AU";
+  const profileLocale = marketStringToResumeLocale(job.market);
   const profile = await getResumeProfile(userId, { locale: profileLocale });
   if (!profile) {
     return NextResponse.json(

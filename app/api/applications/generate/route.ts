@@ -7,6 +7,7 @@ import { unauthorizedError } from "@/lib/server/api/errorResponse";
 import { handleLatexError } from "@/lib/server/api/handleLatexError";
 import { getResumeProfile } from "@/lib/server/resumeProfile";
 import { buildResumePdfForJob } from "@/lib/server/applications/buildResumePdf";
+import { marketStringToResumeLocale } from "@/lib/shared/market";
 import { buildPdfFilename } from "@/lib/server/files/pdfFilename";
 
 export const runtime = "nodejs";
@@ -62,7 +63,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const profileLocale = job.market === "CN" ? "zh-CN" : "en-AU";
+  const profileLocale = marketStringToResumeLocale(job.market);
   const profile = await getResumeProfile(userId, { locale: profileLocale });
   if (!profile) {
     return NextResponse.json(

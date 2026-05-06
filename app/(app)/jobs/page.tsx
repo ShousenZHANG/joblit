@@ -8,12 +8,13 @@ import { JobsClient } from "./JobsClient";
 import getQueryClient from "@/lib/getQueryClient";
 import { listJobs } from "@/lib/server/jobs/jobListService";
 import { Skeleton } from "@/components/ui/skeleton";
+import { uiLocaleToMarket, type Market } from "@/lib/shared/market";
 import type { JobItem, JobsResponse } from "./types";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function buildDefaultJobsQueryString(market: "AU" | "CN") {
+function buildDefaultJobsQueryString(market: Market) {
   const sp = new URLSearchParams();
   sp.set("limit", "10");
   sp.set("market", market);
@@ -57,7 +58,7 @@ async function JobsListSection({
   market,
 }: {
   userId: string;
-  market: "AU" | "CN";
+  market: Market;
 }) {
   const queryClient = getQueryClient();
   const queryString = buildDefaultJobsQueryString(market);
@@ -104,8 +105,7 @@ export default async function JobsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect("/login?callbackUrl=/jobs");
   const userId = session.user.id;
-  const locale = await getLocale();
-  const market: "AU" | "CN" = locale === "zh" ? "CN" : "AU";
+  const market = uiLocaleToMarket(await getLocale());
 
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-2 lg:h-full lg:overflow-hidden">

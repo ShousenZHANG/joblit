@@ -9,6 +9,7 @@ import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import { renderCoverLetterTex } from "@/lib/server/latex/renderCoverLetter";
 import { LatexRenderError, compileLatexToPdf } from "@/lib/server/latex/compilePdf";
 import { tailorApplicationContent } from "@/lib/server/ai/tailorApplication";
+import { marketStringToResumeLocale } from "@/lib/shared/market";
 import { buildPdfFilename } from "@/lib/server/files/pdfFilename";
 
 export const runtime = "nodejs";
@@ -64,7 +65,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const profileLocale = job.market === "CN" ? "zh-CN" : "en-AU";
+  const profileLocale = marketStringToResumeLocale(job.market);
   const profile = await getResumeProfile(userId, { locale: profileLocale });
   if (!profile) {
     return NextResponse.json(

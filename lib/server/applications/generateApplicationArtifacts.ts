@@ -4,6 +4,7 @@ import { buildResumePdfForJob } from "@/lib/server/applications/buildResumePdf";
 import { renderCoverLetterTex } from "@/lib/server/latex/renderCoverLetter";
 import { compileLatexToPdf } from "@/lib/server/latex/compilePdf";
 import { tailorApplicationContent } from "@/lib/server/ai/tailorApplication";
+import { marketStringToResumeLocale } from "@/lib/shared/market";
 import { buildPdfFilename } from "@/lib/server/files/pdfFilename";
 import {
   APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
@@ -80,7 +81,7 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
     },
   });
 
-  const profileLocale = job.market === "CN" ? "zh-CN" : "en-AU";
+  const profileLocale = marketStringToResumeLocale(job.market);
   const profile = await getResumeProfile(input.userId, { locale: profileLocale });
   if (!profile) {
     throw new Error("NO_PROFILE");
