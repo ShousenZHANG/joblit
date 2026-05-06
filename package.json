@@ -2,6 +2,31 @@
   "name": "joblit",
   "version": "0.1.0",
   "private": true,
+  "description": "End-to-end job-search workstation: fetch roles, triage, AI-tailor resumes and cover letters per JD, auto-fill ATS forms via a self-learning Chrome extension, and export bilingual LaTeX PDFs.",
+  "homepage": "https://www.joblit.tech",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ShousenZHANG/jobflow-web.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ShousenZHANG/jobflow-web/issues"
+  },
+  "license": "Apache-2.0",
+  "author": "Eddy Zhang <eddy.zhang24@gmail.com>",
+  "keywords": [
+    "job-search",
+    "resume-builder",
+    "ats",
+    "chrome-extension",
+    "ai-tailoring",
+    "latex",
+    "next.js",
+    "prisma"
+  ],
+  "engines": {
+    "node": ">=20.10",
+    "npm": ">=10"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
