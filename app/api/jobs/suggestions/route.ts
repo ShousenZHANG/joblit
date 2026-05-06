@@ -2,9 +2,7 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
-import { requireSession, UnauthorizedError } from "@/lib/server/auth/requireSession";
-import type { SessionContext } from "@/lib/server/auth/requireSession";
-import { unauthorizedError } from "@/lib/server/api/errorResponse";
+import { withSessionRoute } from "@/lib/server/api/routeHandler";
 
 export const runtime = "nodejs";
 
@@ -31,15 +29,7 @@ const FALLBACK_SUGGESTIONS = [
 ];
 
 export async function GET(req: Request) {
-  let ctx: SessionContext;
-  try {
-    ctx = await requireSession();
-  } catch (err) {
-    if (err instanceof UnauthorizedError) return unauthorizedError();
-    throw err;
-  }
-  const { userId } = ctx;
-
+  return withSessionRoute(async ({ userId }) => {
   const url = new URL(req.url);
   const parsed = QuerySchema.safeParse(Object.fromEntries(url.searchParams));
   if (!parsed.success) {
@@ -100,4 +90,5 @@ export async function GET(req: Request) {
   }
 
   return NextResponse.json({ suggestions: combined }, { headers: cacheHeaders });
+  });
 }

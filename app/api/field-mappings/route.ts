@@ -1,24 +1,13 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/auth";
+import { z } from "zod";
+import { parseJsonBody, withSessionRoute } from "@/lib/server/api/routeHandler";
 import {
-  listFieldMappingRules,
   deleteFieldMappingRule,
+  listFieldMappingRules,
   updateFieldMappingRule,
 } from "@/lib/server/extensionSubmission";
-import { z } from "zod";
 
 export const runtime = "nodejs";
-
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const rules = await listFieldMappingRules({ userId: session.user.id });
-  return NextResponse.json({ data: rules });
-}
 
 const UpdateSchema = z.object({
   id: z.string().uuid(),
@@ -26,39 +15,32 @@ const UpdateSchema = z.object({
   staticValue: z.string().max(1000).nullable().optional(),
 });
 
-export async function PATCH(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const body = await req.json().catch(() => ({}));
-  const parsed = UpdateSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid body" }, { status: 400 });
-  }
-
-  const { id, ...data } = parsed.data;
-  await updateFieldMappingRule(session.user.id, id, data);
-  return NextResponse.json({ success: true });
-}
-
 const DeleteSchema = z.object({
   id: z.string().uuid(),
 });
 
+export async function GET() {
+  return withSessionRoute(async ({ userId }) => {
+    const rules = await listFieldMappingRules({ userId });
+    return NextResponse.json({ data: rules });
+  });
+}
+
+export async function PATCH(req: Request) {
+  return withSessionRoute(async ({ userId, requestId }) => {
+    const parsed = await parseJsonBody(req, UpdateSchema, requestId);
+    if (!parsed.ok) return parsed.response;
+    const { id, ...data } = parsed.data;
+    await updateFieldMappingRule(userId, id, data);
+    return NextResponse.json({ success: true });
+  });
+}
+
 export async function DELETE(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const body = await req.json().catch(() => ({}));
-  const parsed = DeleteSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid body" }, { status: 400 });
-  }
-
-  await deleteFieldMappingRule(session.user.id, parsed.data.id);
-  return NextResponse.json({ success: true });
+  return withSessionRoute(async ({ userId, requestId }) => {
+    const parsed = await parseJsonBody(req, DeleteSchema, requestId);
+    if (!parsed.ok) return parsed.response;
+    await deleteFieldMappingRule(userId, parsed.data.id);
+    return NextResponse.json({ success: true });
+  });
 }

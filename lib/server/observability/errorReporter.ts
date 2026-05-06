@@ -110,10 +110,8 @@ function emit(payload: EmitPayload): void {
   // Until then, structured stderr is enough for log-aggregation
   // pipelines (Vercel / Datadog log drains will pick it up).
   if (payload.type === "error") {
-    // eslint-disable-next-line no-console
     console.error(JSON.stringify(payload));
   } else {
-    // eslint-disable-next-line no-console
     console.info(JSON.stringify(payload));
   }
 }
