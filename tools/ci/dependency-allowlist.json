@@ -58,6 +58,7 @@
       "@types/node",
       "@types/react",
       "@types/react-dom",
+      "axe-core",
       "eslint",
       "eslint-config-next",
       "jsdom",
@@ -65,7 +66,8 @@
       "tailwindcss",
       "tw-animate-css",
       "typescript",
-      "vitest"
+      "vitest",
+      "vitest-axe"
     ]
   }
 }
