@@ -1,18 +1,22 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useTranslations } from "next-intl";
 import { fadeIn, useReveal } from "./lib/motion";
 
-// LogoBar — uniform premium typography across logos. Refined gray with
-// subtle hover lift to brand emerald. Text-only by intent (real SVG
-// wordmarks require legal sign-off); the typography itself is the design.
+// Capability strip — replaces the old fake text-wordmark "social proof"
+// (rendering "Stripe"/"Linear" in our own font implied false endorsement
+// and read as a skeleton-loading state). These are honest, verifiable
+// product facts that double as the integration story.
 
-const LOGOS = ["Stripe", "Linear", "Vercel", "Figma", "Notion", "Airbnb"];
+const CAPABILITIES: Array<{ stat: string; label: string }> = [
+  { stat: "8", label: "job boards" },
+  { stat: "5", label: "ATS platforms" },
+  { stat: "GPT · Claude · Gemini", label: "bring your own model" },
+  { stat: "EN · 中文", label: "bilingual resumes" },
+];
 
 export function LogoBar() {
   const reveal = useReveal();
-  const t = useTranslations("landing.logoBar");
   return (
     <motion.section
       {...reveal}
@@ -21,19 +25,20 @@ export function LogoBar() {
       variants={fadeIn}
     >
       <div className="text-center text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground/80">
-        {t("kicker")}
+        Plugs into your whole job hunt
       </div>
       <ul
-        className="mt-8 flex flex-wrap items-center justify-center gap-x-10 gap-y-5 sm:gap-x-14"
+        className="mt-8 grid grid-cols-2 gap-x-6 gap-y-8 sm:flex sm:flex-wrap sm:items-start sm:justify-center sm:gap-x-14"
         role="list"
       >
-        {LOGOS.map((logo) => (
-          <li
-            key={logo}
-            className="text-xl font-semibold tracking-tight text-foreground/35 transition-all duration-300 hover:-translate-y-px hover:text-foreground/85 sm:text-2xl"
-            style={{ letterSpacing: "-0.02em" }}
-          >
-            {logo}
+        {CAPABILITIES.map((cap) => (
+          <li key={cap.label} className="flex flex-col items-center text-center">
+            <span className="text-2xl font-bold tracking-tight text-foreground sm:text-[26px]">
+              {cap.stat}
+            </span>
+            <span className="mt-1 text-xs font-medium text-muted-foreground sm:text-sm">
+              {cap.label}
+            </span>
           </li>
         ))}
       </ul>

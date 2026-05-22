@@ -6,39 +6,32 @@ import { useTranslations } from "next-intl";
 import { JoblitMark } from "@/components/brand/JoblitMark";
 import { fadeUp, useReveal } from "./lib/motion";
 
-// Footer — 5-column grid (brand + 4 link sections) matching Landing.html
-// `footer.site`. Uses lucide Search glyph for the logo mark, otherwise
-// plain-text lists so translators and tools can reach every link.
+// Footer — brand + 3 link columns. Only real, live destinations are
+// listed; placeholder ("#") links were removed because a footer full of
+// dead links reads as pre-launch and tanks credibility. The JoblitMark
+// logo mirrors the Nav for brand consistency.
+
+const REPO_URL = "https://github.com/ShousenZHANG/jobflow-web";
+
+type FooterLink = { label: string; href: string; external?: boolean };
 
 export function Footer() {
   const reveal = useReveal();
   const t = useTranslations("landing.footer");
-  const COLUMNS: Array<{ heading: string; links: { label: string; href: string }[] }> = [
+  const COLUMNS: Array<{ heading: string; links: FooterLink[] }> = [
     {
       heading: t("product.heading"),
       links: [
         { label: t("product.jobs"), href: "/jobs" },
         { label: t("product.resume"), href: "/resume" },
         { label: t("product.extension"), href: "/get-extension" },
-        { label: t("product.changelog"), href: "#" },
-      ],
-    },
-    {
-      heading: t("company.heading"),
-      links: [
-        { label: t("company.about"), href: "#" },
-        { label: t("company.careers"), href: "#" },
-        { label: t("company.press"), href: "#" },
-        { label: t("company.contact"), href: "#" },
       ],
     },
     {
       heading: t("resources.heading"),
       links: [
-        { label: t("resources.docs"), href: "#" },
-        { label: t("resources.guide"), href: "#" },
-        { label: t("resources.blog"), href: "#" },
-        { label: t("resources.templates"), href: "#" },
+        { label: "GitHub", href: REPO_URL, external: true },
+        { label: "Report an issue", href: `${REPO_URL}/issues`, external: true },
       ],
     },
     {
@@ -46,8 +39,6 @@ export function Footer() {
       links: [
         { label: t("legal.privacy"), href: "/privacy" },
         { label: t("legal.terms"), href: "/terms" },
-        { label: t("legal.security"), href: "#" },
-        { label: t("legal.dpa"), href: "#" },
       ],
     },
   ];
@@ -60,7 +51,7 @@ export function Footer() {
       variants={fadeUp}
     >
       <div className="mx-auto w-full max-w-6xl px-6 py-16 sm:px-10">
-        <div className="grid gap-10 md:grid-cols-[1.6fr_repeat(4,1fr)]">
+        <div className="grid gap-10 md:grid-cols-[1.8fr_repeat(3,1fr)]">
           <div>
             <Link
               href="/"
@@ -82,16 +73,29 @@ export function Footer() {
                 {col.heading}
               </h6>
               <ul className="flex flex-col gap-2">
-                {col.links.map((link) => (
-                  <li key={link.label}>
-                    <Link
-                      href={link.href}
-                      className="text-sm text-foreground/80 transition-colors hover:text-foreground"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
+                {col.links.map((link) =>
+                  link.external ? (
+                    <li key={link.label}>
+                      <a
+                        href={link.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-foreground/80 transition-colors hover:text-foreground"
+                      >
+                        {link.label}
+                      </a>
+                    </li>
+                  ) : (
+                    <li key={link.label}>
+                      <Link
+                        href={link.href}
+                        className="text-sm text-foreground/80 transition-colors hover:text-foreground"
+                      >
+                        {link.label}
+                      </Link>
+                    </li>
+                  ),
+                )}
               </ul>
             </div>
           ))}

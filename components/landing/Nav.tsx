@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Github } from "lucide-react";
+import { ArrowRight, Github, Menu, X } from "lucide-react";
 import { JoblitMark } from "@/components/brand/JoblitMark";
-import { motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
@@ -23,20 +23,22 @@ interface NavLink {
   href: string;
 }
 
-const GITHUB_REPO_URL = "https://github.com/ShousenZHANG/joblit";
+const GITHUB_REPO_URL = "https://github.com/ShousenZHANG/jobflow-web";
 
 export function Nav() {
   const { status } = useSession();
   const reduced = useReducedMotion();
   const [scrolled, setScrolled] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const t = useTranslations("landing.nav");
 
+  // Dropped the "Changelog" link — it pointed at a dead "#" anchor, which
+  // reads as pre-launch in a primary nav. Re-add when a real page exists.
   const LINKS: NavLink[] = [
     { label: t("product"), href: "#product" },
     { label: t("howItWorks"), href: "#how" },
     { label: t("pricing"), href: "#pricing" },
     { label: t("faq"), href: "#faq" },
-    { label: t("changelog"), href: "#" },
   ];
 
   useEffect(() => {
@@ -46,8 +48,19 @@ export function Nav() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Close the mobile menu on resize up to desktop so it never gets stuck open.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onResize = () => {
+      if (window.innerWidth >= 768) setMobileOpen(false);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [mobileOpen]);
+
   const handleSmoothScroll = useCallback(
     (href: string) => (e: React.MouseEvent<HTMLAnchorElement>) => {
+      setMobileOpen(false);
       if (!href.startsWith("#") || href === "#") return;
       const el = document.querySelector(href);
       if (!el) return;
@@ -77,7 +90,7 @@ export function Nav() {
     <nav
       data-testid="landing-nav"
       aria-label="Primary"
-      className="sticky top-3 z-50 mx-auto w-full max-w-6xl overflow-hidden px-3 sm:top-4 sm:px-6"
+      className="sticky top-3 z-50 mx-auto w-full max-w-6xl px-3 sm:top-4 sm:px-6"
     >
       {/* Inner pill: backdrop-blur + thin border at rest. Scrolling deepens
           the shadow only — no scale/padding change, no infinite sheen. */}
@@ -160,8 +173,68 @@ export function Nav() {
             <span className="hidden whitespace-nowrap sm:inline">{ctaLabel}</span>
             <ArrowRight className="h-3.5 w-3.5" aria-hidden />
           </Link>
+
+          {/* Mobile menu toggle — only surface under md, where the inline
+              link list is hidden. */}
+          <button
+            type="button"
+            onClick={() => setMobileOpen((v) => !v)}
+            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileOpen}
+            aria-controls="mobile-nav-panel"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background/75 text-foreground/75 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 md:hidden"
+          >
+            {mobileOpen ? (
+              <X className="h-4 w-4" aria-hidden />
+            ) : (
+              <Menu className="h-4 w-4" aria-hidden />
+            )}
+          </button>
         </div>
       </motion.div>
+
+      {/* Mobile dropdown panel */}
+      <AnimatePresence>
+        {mobileOpen ? (
+          <motion.div
+            id="mobile-nav-panel"
+            initial={reduced ? { opacity: 0 } : { opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8 }}
+            transition={{ duration: reduced ? 0 : 0.2, ease: [0.16, 1, 0.3, 1] }}
+            className="mt-2 overflow-hidden rounded-2xl border border-border/60 bg-[var(--landing-nav-bg,rgba(255,255,255,0.92))] p-2 shadow-[0_18px_40px_-20px_rgba(15,23,42,0.25)] backdrop-blur-xl md:hidden"
+          >
+            <ul className="flex flex-col" role="list">
+              {LINKS.map((link) => (
+                <li key={link.label}>
+                  <a
+                    href={link.href}
+                    onClick={handleSmoothScroll(link.href)}
+                    className="block rounded-xl px-4 py-2.5 text-sm font-medium text-foreground/80 transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+              {status === "unauthenticated" ? (
+                <li>
+                  <Link
+                    href="/login"
+                    onClick={() => setMobileOpen(false)}
+                    className="block rounded-xl px-4 py-2.5 text-sm font-medium text-foreground/80 transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    {t("logIn")}
+                  </Link>
+                </li>
+              ) : null}
+            </ul>
+            <div className="mt-1 flex items-center gap-2 border-t border-border/60 px-2 pt-2">
+              <LocaleSwitcher />
+              <ThemeToggle />
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </nav>
   );
 }
