@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, RotateCcw } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -390,6 +390,19 @@ export function FetchClient() {
     }
   }
 
+  // Warn before leaving while a fetch-run create is still in flight, so
+  // the user doesn't abandon a half-dispatched run. Form inputs are
+  // already persisted to localStorage, so only the in-flight submit needs
+  // guarding.
+  useEffect(() => {
+    if (!isSubmitting) return;
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [isSubmitting]);
+
   const activeError = localError ?? globalError;
   const isRunning =
     globalRunId !== null &&
@@ -398,8 +411,22 @@ export function FetchClient() {
   return (
     <div className="space-y-4 px-4 py-4 lg:px-6">
       {activeError ? (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-          {activeError}
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+        >
+          <span>{activeError}</span>
+          {localError ? (
+            <button
+              type="button"
+              onClick={onSubmit}
+              disabled={isSubmitting || isRunning}
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-destructive/40 bg-background/70 px-3 text-xs font-semibold text-destructive transition-colors hover:bg-background disabled:pointer-events-none disabled:opacity-50"
+            >
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+              Retry
+            </button>
+          ) : null}
         </div>
       ) : null}
 

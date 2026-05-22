@@ -1,4 +1,11 @@
 import "@testing-library/jest-dom/vitest";
+import { expect } from "vitest";
+import * as axeMatchers from "vitest-axe/matchers";
+
+// Accessibility assertions: enables `expect(container).toHaveNoViolations()`
+// backed by axe-core. Complements the per-PR Lighthouse accessibility gate
+// (>=0.95) with component-level checks that catch interactive-state issues.
+expect.extend(axeMatchers);
 
 class ResizeObserverMock {
   observe() {}
