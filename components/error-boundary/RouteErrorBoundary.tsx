@@ -41,7 +41,18 @@ export function RouteErrorBoundary({ error, reset }: RouteErrorBoundaryProps) {
   const isChunkError = useMemo(() => isChunkLoadError(error), [error]);
 
   useEffect(() => {
-    console.error(error);
+    // Dev: full error to console for debugging. Prod: log only the
+    // message + digest so raw stack traces / sensitive context don't
+    // surface in end-user DevTools. (A future hook can forward digest
+    // to the server-side errorReporter for aggregation.)
+    if (process.env.NODE_ENV !== "production") {
+      console.error(error);
+    } else {
+      console.error(
+        `[route-error] ${error.name}: ${error.message}`,
+        error.digest ? `(digest ${error.digest})` : "",
+      );
+    }
   }, [error]);
 
   useEffect(() => {

@@ -833,8 +833,37 @@ export function JobsClient({
                 </div>
               )
             ) : !loading ? (
-              <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                {t("noJobs")}
+              <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-border/70 px-6 py-12 text-center">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-emerald-50 text-brand-emerald-600 ring-1 ring-brand-emerald-100">
+                  <MapPin className="h-5 w-5" aria-hidden />
+                </span>
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-foreground">{t("noJobs")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {activeFilterCount > 0
+                      ? "Try clearing filters, or fetch fresh roles."
+                      : "Fetch roles from job boards or add one manually to get started."}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <Button
+                    asChild
+                    size="sm"
+                    className="h-9 rounded-full bg-foreground px-4 text-xs font-semibold text-background hover:bg-foreground/90"
+                  >
+                    <a href="/fetch">Fetch jobs</a>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAddJobOpen(true)}
+                    className="h-9 rounded-full px-4 text-xs font-semibold"
+                  >
+                    <Plus className="mr-1 h-3.5 w-3.5" aria-hidden />
+                    Add manually
+                  </Button>
+                </div>
               </div>
             ) : null}
           </ScrollArea>

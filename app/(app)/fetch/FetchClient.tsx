@@ -305,15 +305,22 @@ export function FetchClient() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(
-      "joblit.fetch.preferences",
-      JSON.stringify({
-        title: jobTitle,
-        location,
-        hoursOld,
-        smartExpand,
-      }),
-    );
+    // Debounce so we write once 500ms after the user stops typing instead
+    // of on every keystroke (jobTitle changes per character). Hammering
+    // localStorage synchronously on each keypress can jank the input on
+    // low-end devices.
+    const id = window.setTimeout(() => {
+      localStorage.setItem(
+        "joblit.fetch.preferences",
+        JSON.stringify({
+          title: jobTitle,
+          location,
+          hoursOld,
+          smartExpand,
+        }),
+      );
+    }, 500);
+    return () => window.clearTimeout(id);
   }, [jobTitle, location, hoursOld, smartExpand]);
 
   function getErrorMessage(err: unknown, fallback = "Failed") {
