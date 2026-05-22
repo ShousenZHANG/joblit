@@ -53,6 +53,11 @@ export function VirtualJobList({
     overscan: ROW_OVERSCAN,
   });
 
+  // Animate row repositioning (e.g. when a row above is deleted, the rows
+  // below slide up smoothly instead of snapping). Disabled mid-scroll so
+  // the transition never lags behind the user's scroll position.
+  const isScrolling = virtualizer.isScrolling;
+
   return (
     <div className="p-3">
       <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
@@ -61,11 +66,15 @@ export function VirtualJobList({
           if (!job) return null;
           return (
             <div
-              key={virtualRow.key}
-              className="absolute left-0 top-0 w-full"
+              key={job.id}
+              className="absolute left-0 top-0 w-full motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200"
               style={{
                 height: `${virtualRow.size}px`,
                 transform: `translateY(${virtualRow.start}px)`,
+                transition: isScrolling
+                  ? "none"
+                  : "transform 220ms cubic-bezier(0.16, 1, 0.3, 1)",
+                willChange: "transform",
               }}
             >
               <JobListItem

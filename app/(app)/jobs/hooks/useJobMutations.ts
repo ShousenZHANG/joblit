@@ -185,7 +185,11 @@ export function useJobMutations({
       });
     },
     onSuccess: () => {
-      void invalidateActiveJobsQueries(queryClient);
+      // No refetch on success. The optimistic removeJobFromJobsCache()
+      // already filtered the row out and decremented totalCount, so an
+      // invalidate here only triggers a redundant network round-trip that
+      // flips `loading` true and dims the whole list (opacity-70) for a
+      // delete the user already saw complete. Trust the optimistic state.
       toast({
         title: "Job deleted",
         description: "The role was removed.",
@@ -283,15 +287,16 @@ export function useJobMutations({
       });
     },
     onSuccess: (data, ids) => {
-      // Refetch to get accurate totalCount and reset scroll trigger
-      void invalidateActiveJobsQueries(queryClient);
-
       const deleted = data.deleted;
       const failed = data.failedIds.length;
 
       if (failed > 0 && deleted > 0) {
-        // Partial success: report what worked + flag what didn't. Failed
-        // ids are un-suppressed so they reappear in the list after refetch.
+        // Partial success only: refetch so the failed (un-suppressed) ids
+        // re-appear with fresh server state. Full success skips the refetch
+        // entirely — the optimistic removeJobsFromJobsCache() already removed
+        // the rows + decremented totalCount, so invalidating would just dim
+        // the list for no reason.
+        void invalidateActiveJobsQueries(queryClient);
         setSuppressedDeletedIds((prev) => {
           const next = new Set(prev);
           for (const id of data.failedIds) next.delete(id);
