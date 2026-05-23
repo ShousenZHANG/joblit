@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect } from "react";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,8 +15,21 @@ import {
 import { useResumeContext } from "./ResumeContext";
 import { SectionNav } from "./SectionNav";
 import { PreviewPanel } from "./PreviewPanel";
-import { ResumePdfPreview } from "./ResumePdfPreview";
 import { VersionSelector } from "./VersionSelector";
+
+// Lazy-load react-pdf (heaviest client dep) — only fetched when the mobile
+// preview dialog opens. ssr:false because pdfjs needs DOM/canvas.
+const ResumePdfPreview = dynamic(
+  () => import("./ResumePdfPreview").then((m) => m.ResumePdfPreview),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full w-full items-center justify-center">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-emerald-500 border-t-transparent" />
+      </div>
+    ),
+  },
+);
 import { PersonalInfoSection } from "./sections/PersonalInfoSection";
 import { SummarySection } from "./sections/SummarySection";
 import { ExperienceSection } from "./sections/ExperienceSection";
