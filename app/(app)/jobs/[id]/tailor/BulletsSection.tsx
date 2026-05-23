@@ -27,7 +27,7 @@ export function BulletsSection({
   }
 
   return (
-    <section className="space-y-3 rounded-[1.35rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_18px_46px_-36px_rgba(15,23,42,0.45),0_1px_0_rgba(255,255,255,0.9)_inset] ring-1 ring-white/80">
+    <section className="space-y-3 rounded-[1.35rem] border border-border/70 bg-card p-4 shadow-[0_18px_46px_-36px_rgba(15,23,42,0.45),0_1px_0_rgba(255,255,255,0.9)_inset] ring-1 ring-border/40">
       <header className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-brand-emerald-50 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-brand-emerald-700 ring-1 ring-brand-emerald-100">
@@ -44,7 +44,7 @@ export function BulletsSection({
       </header>
 
       {addedBullets.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-slate-300/80 bg-slate-50/80 px-3 py-3 text-xs text-muted-foreground">
+        <p className="rounded-xl border border-dashed border-border bg-muted/60 px-3 py-3 text-xs text-muted-foreground">
           No AI-proposed additions for this experience.
         </p>
       ) : (
@@ -80,7 +80,7 @@ function BulletRow({ bullet, onChange }: BulletRowProps) {
         "rounded-2xl border px-3 py-3 transition-all",
         bullet.accepted
           ? "border-brand-emerald-200 bg-brand-emerald-50/60 shadow-[0_14px_34px_-30px_rgba(16,185,129,0.65)]"
-          : "border-slate-200/80 bg-slate-50/70 hover:bg-white",
+          : "border-border/70 bg-muted/50 hover:bg-card",
       )}
     >
       <div className="flex items-start gap-3">
@@ -104,7 +104,7 @@ function BulletRow({ bullet, onChange }: BulletRowProps) {
               })
             }
             rows={2}
-            className="w-full resize-y rounded-xl border border-transparent bg-transparent px-2 py-1.5 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/60 focus-visible:border-brand-emerald-300 focus-visible:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-400/30"
+            className="w-full resize-y rounded-xl border border-transparent bg-transparent px-2 py-1.5 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/60 focus-visible:border-brand-emerald-300 focus-visible:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-400/30"
             aria-label="Bullet text"
           />
           <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px]">
