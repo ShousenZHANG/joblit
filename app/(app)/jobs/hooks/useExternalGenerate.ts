@@ -175,7 +175,7 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
       title: "Prompt downloaded",
       description: "Clipboard unavailable. Open the file and paste into your AI.",
       duration: 2200,
-      className: "border-slate-200 bg-slate-50 text-slate-900 animate-in fade-in zoom-in-95",
+      className: "border-border bg-muted text-foreground animate-in fade-in zoom-in-95",
     });
   }
 
