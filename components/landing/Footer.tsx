@@ -58,7 +58,7 @@ export function Footer() {
               className="inline-flex items-center gap-2 text-base font-semibold tracking-tight text-foreground"
             >
               <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-brand-emerald-50 ring-1 ring-brand-emerald-100">
-                <JoblitMark size={18} color="var(--brand-emerald-700, #047857)" ariaLabel={null} />
+                <JoblitMark size={18} color="var(--brand-emerald-700, #6d28d9)" ariaLabel={null} />
               </span>
               Joblit
             </Link>

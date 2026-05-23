@@ -258,7 +258,7 @@ export function Hero() {
             interferes with mock interactions. */}
         <div
           aria-hidden
-          className="pointer-events-none absolute -inset-x-6 -bottom-8 -z-10 h-72 bg-[radial-gradient(ellipse_60%_50%_at_50%_0%,rgba(16,185,129,0.12),transparent_70%)]"
+          className="pointer-events-none absolute -inset-x-6 -bottom-8 -z-10 h-72 bg-[radial-gradient(ellipse_60%_50%_at_50%_0%,rgba(139,92,246,0.12),transparent_70%)]"
         />
         <div className="relative overflow-hidden rounded-3xl border border-border/60 bg-card shadow-[0_30px_80px_-30px_rgba(15,23,42,0.18)]">
           <div
@@ -340,7 +340,7 @@ export function Hero() {
                     className={
                       "rounded-lg border border-l-4 px-3 py-2 transition-colors " +
                       (i === activeRow
-                        ? "border-l-brand-emerald-500 bg-brand-emerald-50/40 shadow-[0_12px_30px_-24px_rgba(5,150,105,0.55)]"
+                        ? "border-l-brand-emerald-500 bg-brand-emerald-50/40 shadow-[0_12px_30px_-24px_rgba(124,58,237,0.55)]"
                         : "border-l-transparent bg-background/60")
                     }
                   >
@@ -349,7 +349,7 @@ export function Hero() {
                         {i === activeRow && (
                           <span
                             aria-hidden
-                            className="h-1.5 w-1.5 rounded-full bg-brand-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.14)]"
+                            className="h-1.5 w-1.5 rounded-full bg-brand-emerald-500 shadow-[0_0_0_4px_rgba(139,92,246,0.14)]"
                           />
                         )}
                         <span

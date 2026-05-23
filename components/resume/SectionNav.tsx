@@ -139,8 +139,8 @@ export function SectionNav({ className }: SectionNavProps) {
             data-guide-highlight={guideHighlight ? "true" : "false"}
             className={cn(
               "relative grid h-10 w-10 place-items-center rounded-xl bg-emerald-600 text-white",
-              "shadow-[0_10px_24px_-14px_rgba(5,150,105,0.7)] transition-[transform,box-shadow,filter] duration-150 ease-out motion-reduce:transition-none",
-              "hover:brightness-105 hover:shadow-[0_14px_28px_-14px_rgba(5,150,105,0.8)]",
+              "shadow-[0_10px_24px_-14px_rgba(124,58,237,0.7)] transition-[transform,box-shadow,filter] duration-150 ease-out motion-reduce:transition-none",
+              "hover:brightness-105 hover:shadow-[0_14px_28px_-14px_rgba(124,58,237,0.8)]",
               "active:scale-[0.97] motion-reduce:active:scale-100",
               "disabled:cursor-not-allowed disabled:opacity-60",
               guideHighlight &&

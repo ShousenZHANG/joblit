@@ -693,7 +693,7 @@ export function GuideProvider({ children }: { children: ReactNode }) {
               onClick={openGuide}
               data-testid="guide-floating-widget"
               aria-label={tg("panelTitle")}
-              className="group fixed bottom-5 right-5 z-[52] inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-2 text-card-foreground shadow-[0_12px_30px_-15px_rgba(15,23,42,0.45)] transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_20px_40px_-20px_rgba(5,150,105,0.45)] active:scale-[0.97] motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100 motion-reduce:transition-none"
+              className="group fixed bottom-5 right-5 z-[52] inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-2 text-card-foreground shadow-[0_12px_30px_-15px_rgba(15,23,42,0.45)] transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_20px_40px_-20px_rgba(124,58,237,0.45)] active:scale-[0.97] motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100 motion-reduce:transition-none"
               style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
             >
               <span className="relative flex h-7 w-7 items-center justify-center">

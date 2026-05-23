@@ -53,7 +53,7 @@ export default function LoginPage() {
             aria-label="Joblit home"
           >
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-emerald-50 ring-1 ring-brand-emerald-100">
-              <JoblitMark size={18} color="var(--brand-emerald-700, #047857)" ariaLabel={null} />
+              <JoblitMark size={18} color="var(--brand-emerald-700, #6d28d9)" ariaLabel={null} />
             </span>
             Joblit
           </Link>
@@ -70,7 +70,7 @@ export default function LoginPage() {
           className="mt-12 flex flex-1 items-center justify-center"
         >
           <div
-            className="relative w-full max-w-md overflow-hidden rounded-3xl border border-border/60 bg-background/85 p-8 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_20px_42px_-18px_rgba(5,150,105,0.2)] backdrop-blur-sm sm:p-10"
+            className="relative w-full max-w-md overflow-hidden rounded-3xl border border-border/60 bg-background/85 p-8 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_20px_42px_-18px_rgba(124,58,237,0.2)] backdrop-blur-sm sm:p-10"
             data-testid="login-card"
           >
             {/* Corner glow — subtle emerald accent that pairs with the
