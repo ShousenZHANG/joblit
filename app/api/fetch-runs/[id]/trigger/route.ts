@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession, UnauthorizedError } from "@/lib/server/auth/requireSession";
 import type { SessionContext } from "@/lib/server/auth/requireSession";
 import { unauthorizedError } from "@/lib/server/api/errorResponse";
+import { reportError } from "@/lib/server/observability/errorReporter";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import type { Prisma } from "@/lib/generated/prisma";
@@ -209,18 +210,41 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const workflow = process.env.GITHUB_WORKFLOW_FILE || "jobspy-fetch.yml";
   const ref = process.env.GITHUB_REF || "master";
 
-  const ghRes = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflow}/dispatches`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/vnd.github+json",
-        "Content-Type": "application/json",
+  // Timeout the dispatch so a hung api.github.com connection can't pin the
+  // 60s function budget while holding this run's dispatch slot — every other
+  // external call already does this; this one was the gap.
+  const ghController = new AbortController();
+  const ghTimeout = setTimeout(() => ghController.abort(), 10_000);
+  let ghRes: Response;
+  try {
+    ghRes = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflow}/dispatches`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ref, inputs: { runId } }),
+        signal: ghController.signal,
       },
-      body: JSON.stringify({ ref, inputs: { runId } }),
-    },
-  );
+    );
+  } catch (err) {
+    reportError(err, { scope: "fetch-runs.trigger.dispatch", userId, tags: { runId } });
+    // Best-effort unlock so the user can retry.
+    await prisma.fetchRun.updateMany({
+      where: { id: runId, userId, status: "QUEUED" },
+      data: { queries: txResult.queries as Prisma.InputJsonValue },
+    });
+    const timedOut = (err as Error).name === "AbortError";
+    return NextResponse.json(
+      { error: timedOut ? "GITHUB_DISPATCH_TIMEOUT" : "GITHUB_DISPATCH_UNREACHABLE" },
+      { status: 504 },
+    );
+  } finally {
+    clearTimeout(ghTimeout);
+  }
 
   if (!ghRes.ok) {
     const text = await ghRes.text().catch(() => "");

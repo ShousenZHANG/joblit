@@ -75,6 +75,7 @@ type TailorOptions = {
 };
 
 import { truncate } from "@/lib/shared/utils/text";
+import { reportError } from "@/lib/server/observability/errorReporter";
 
 const DEFAULT_PROVIDER: AiProviderName = "gemini";
 
@@ -356,7 +357,17 @@ export async function tailorApplicationContent(
       reason: "ai_ok",
       qualityReport,
     };
-  } catch {
+  } catch (err) {
+    // Degrade to deterministic fallback, but no longer silently — without
+    // this, AI provider failure rate is invisible in prod (the user just
+    // quietly gets base content). severity=warning: the request still
+    // succeeds via fallback, it's not a hard error.
+    reportError(err, {
+      scope: "ai.tailorApplication",
+      severity: "warning",
+      userId: input.userId,
+      tags: { jobTitle: input.jobTitle, company: input.company },
+    });
     return buildFallback(input, "provider_error");
   }
 }
