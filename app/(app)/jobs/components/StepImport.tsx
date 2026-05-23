@@ -102,7 +102,7 @@ export function StepImport({
               size="sm"
               disabled={isLoading || isPromptLoading || !hasPromptMeta}
               onClick={onDownload}
-              className="h-10 rounded-xl border border-brand-emerald-500 bg-brand-emerald-500 px-5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:border-brand-emerald-600 hover:bg-brand-emerald-600 active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-slate-200 disabled:text-muted-foreground disabled:shadow-none"
+              className="h-10 rounded-xl border border-brand-emerald-500 bg-brand-emerald-500 px-5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:border-brand-emerald-600 hover:bg-brand-emerald-600 active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
             >
               <Download className="mr-1.5 h-4 w-4" />
               {isLoading

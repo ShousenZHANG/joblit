@@ -201,7 +201,7 @@ export function JobAddDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-xl gap-0 overflow-hidden rounded-2xl border-border/80 p-0 shadow-xl sm:max-w-xl">
         {/* ── Header ── */}
-        <div className="border-b border-border/60 bg-gradient-to-b from-slate-50/80 to-white px-6 pb-4 pt-5">
+        <div className="border-b border-border/60 bg-gradient-to-b from-muted/40 to-card px-6 pb-4 pt-5">
           <DialogHeader className="gap-1.5">
             <div className="flex items-center gap-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-emerald-50 ring-1 ring-brand-emerald-100">

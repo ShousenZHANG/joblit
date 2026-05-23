@@ -57,8 +57,8 @@ export function StepIndicator({
                   className={[
                     "h-0.5 w-full rounded-full transition-colors duration-500",
                     current > step.id || (current === step.id && idx > 0)
-                      ? "bg-emerald-400"
-                      : "bg-slate-200",
+                      ? "bg-brand-emerald-400"
+                      : "bg-border",
                   ].join(" ")}
                 />
               </div>
@@ -114,8 +114,8 @@ export function StepIndicator({
                   className={[
                     "h-0.5 w-full rounded-full transition-colors duration-500",
                     current > step.id + 1 || (current === step.id + 1)
-                      ? "bg-emerald-400"
-                      : "bg-slate-200",
+                      ? "bg-brand-emerald-400"
+                      : "bg-border",
                   ].join(" ")}
                 />
               </div>

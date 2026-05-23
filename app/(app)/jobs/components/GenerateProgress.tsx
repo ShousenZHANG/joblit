@@ -78,7 +78,7 @@ export function GenerateProgress({ target, isComplete }: GenerateProgressProps) 
                 ) : isActive ? (
                   <Loader2 className="h-4.5 w-4.5 shrink-0 animate-spin text-brand-emerald-500" />
                 ) : (
-                  <Circle className="h-4.5 w-4.5 shrink-0 text-slate-300" />
+                  <Circle className="h-4.5 w-4.5 shrink-0 text-muted-foreground/40" />
                 )}
                 <span
                   className={
