@@ -70,12 +70,33 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
     toast,
   });
 
+  // Whether the always-on desktop preview pane is on screen (md+). On mobile
+  // the pane is hidden and the preview only lives inside the dialog, so we skip
+  // costly PDF renders there unless the dialog is open.
+  const [isPreviewPaneVisible, setIsPreviewPaneVisible] = useState(false);
   useEffect(() => {
-    if (!previewOpen || !form.hasAnyContent) return;
-    // Only live-refresh after the preview is open. useResumePreview keeps
-    // the current PDF painted during debounce/fetch so edits do not flicker.
-    schedulePreview(800);
-  }, [previewOpen, form.hasAnyContent, schedulePreview]);
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(min-width: 768px)");
+    const sync = () => setIsPreviewPaneVisible(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  // Live preview: regenerate the PDF as the user edits (debounced 400ms).
+  // schedulePreview dedups identical payloads and keeps the current PDF painted
+  // during the fetch, so firing on every keystroke is cheap and flicker-free.
+  // Gated to when a preview surface is actually visible — the desktop pane (md+)
+  // or the open mobile dialog — so mobile editing with the dialog closed never
+  // triggers a wasted render.
+  const livePreviewKey = form.hasAnyContent
+    ? JSON.stringify(form.buildPayload("preview"))
+    : "";
+  useEffect(() => {
+    if (!livePreviewKey) return;
+    if (!previewOpen && !isPreviewPaneVisible) return;
+    schedulePreview(400);
+  }, [livePreviewKey, previewOpen, isPreviewPaneVisible, schedulePreview]);
 
   const handleSave = async () => {
     setSaving(true);
