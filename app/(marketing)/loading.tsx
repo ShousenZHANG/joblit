@@ -1,43 +1,43 @@
 export default function MarketingLoading() {
   return (
-    <div className="marketing-edu relative min-h-screen overflow-hidden">
-      <div className="edu-bg" aria-hidden="true" />
-      <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-16 px-6 py-8">
-        {/* Nav skeleton */}
-        <div className="h-[72px] w-full max-w-5xl rounded-full border-3 border-slate-200 bg-white/80" />
+    <div className="relative min-h-screen overflow-hidden bg-background">
+      <div aria-hidden className="landing-atmos" />
+      <div className="relative z-[1] mx-auto flex w-full max-w-6xl flex-col items-center gap-20 px-6 pt-6">
+        {/* Nav pill skeleton */}
+        <div className="h-14 w-full animate-pulse rounded-full border border-border/60 bg-card" />
 
-        {/* Hero skeleton */}
-        <div className="grid w-full max-w-5xl gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
-          <div className="flex flex-col items-center gap-4 lg:items-start">
-            <div className="h-7 w-48 animate-pulse rounded-full bg-slate-200" />
-            <div className="h-14 w-full max-w-md animate-pulse rounded-2xl bg-slate-200" />
-            <div className="h-5 w-64 animate-pulse rounded-lg bg-slate-200" />
-            <div className="mt-2 flex gap-3">
-              <div className="h-12 w-40 animate-pulse rounded-full bg-slate-200" />
-              <div className="h-12 w-36 animate-pulse rounded-full bg-slate-200" />
-            </div>
-            <div className="mt-4 grid w-full max-w-md grid-cols-3 gap-6">
-              <div className="h-14 animate-pulse rounded-xl bg-slate-200" />
-              <div className="h-14 animate-pulse rounded-xl bg-slate-200" />
-              <div className="h-14 animate-pulse rounded-xl bg-slate-200" />
-            </div>
+        {/* Hero skeleton — centered headline + dual CTA + product mock */}
+        <div className="flex w-full flex-col items-center gap-5 pt-10">
+          <div className="h-7 w-56 animate-pulse rounded-full bg-muted" />
+          <div className="h-16 w-full max-w-2xl animate-pulse rounded-2xl bg-muted" />
+          <div className="h-16 w-full max-w-xl animate-pulse rounded-2xl bg-muted" />
+          <div className="h-5 w-80 max-w-full animate-pulse rounded-lg bg-muted/70" />
+          <div className="mt-2 flex gap-3">
+            <div className="h-11 w-32 animate-pulse rounded-full bg-muted" />
+            <div className="h-11 w-32 animate-pulse rounded-full bg-muted/70" />
           </div>
-          <div className="flex justify-center lg:justify-end">
-            <div className="h-[340px] w-full max-w-md animate-pulse rounded-[32px] border-3 border-slate-200 bg-white/60" />
-          </div>
+          {/* Product mock */}
+          <div className="mt-12 h-[360px] w-full max-w-5xl animate-pulse rounded-3xl border border-border/60 bg-card" />
         </div>
 
-        {/* Features skeleton */}
-        <div className="w-full max-w-5xl space-y-6">
-          <div className="mx-auto h-8 w-80 animate-pulse rounded-xl bg-slate-200" />
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-48 animate-pulse rounded-[24px] border-3 border-slate-200 bg-white/60"
-              />
-            ))}
-          </div>
+        {/* Stat strip skeleton */}
+        <div className="flex w-full flex-wrap items-center justify-center gap-10">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex flex-col items-center gap-2">
+              <div className="h-7 w-16 animate-pulse rounded-lg bg-muted" />
+              <div className="h-3 w-20 animate-pulse rounded bg-muted/60" />
+            </div>
+          ))}
+        </div>
+
+        {/* Section card grid skeleton */}
+        <div className="grid w-full gap-5 md:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-44 animate-pulse rounded-2xl border border-border/60 bg-card"
+            />
+          ))}
         </div>
       </div>
     </div>

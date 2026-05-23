@@ -149,7 +149,7 @@ export default async function ExtensionGuidePage() {
                 ),
               )}
             </ol>
-            <div className="mt-4 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800">
+            <div className="mt-4 rounded-lg bg-brand-emerald-50 px-3 py-2 text-xs text-brand-emerald-800">
               <strong>Tip:</strong> {t("installTip")}
             </div>
           </section>

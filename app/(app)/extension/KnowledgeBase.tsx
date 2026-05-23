@@ -293,7 +293,7 @@ export function KnowledgeBase() {
                         {group.key === "global" ? (
                           <Globe className="h-3.5 w-3.5 text-muted-foreground/70" />
                         ) : (
-                          <div className="flex h-4 w-4 items-center justify-center rounded bg-blue-50 text-[8px] font-bold text-blue-600">
+                          <div className="flex h-4 w-4 items-center justify-center rounded bg-brand-emerald-50 text-[8px] font-bold text-brand-emerald-600">
                             {group.label[0].toUpperCase()}
                           </div>
                         )}
