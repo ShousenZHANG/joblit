@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import { canonicalizeJobUrl } from "@/lib/shared/canonicalizeJobUrl";
+import { reportError } from "@/lib/server/observability/errorReporter";
 
 export const runtime = "nodejs";
 
@@ -144,12 +145,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, imported: written, invalid: invalid.length });
   } catch (err: unknown) {
-    return NextResponse.json(
-      {
-        error: "IMPORT_FAILED",
-        details: err instanceof Error ? err.message : String(err),
-      },
-      { status: 500 },
-    );
+    // Log the real cause server-side; return a generic message so DB /
+    // stack internals never reach the client.
+    reportError(err, { scope: "admin.import" });
+    return NextResponse.json({ error: "IMPORT_FAILED" }, { status: 500 });
   }
 }

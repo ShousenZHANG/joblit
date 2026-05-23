@@ -11,6 +11,7 @@ import { LatexRenderError, compileLatexToPdf } from "@/lib/server/latex/compileP
 import { tailorApplicationContent } from "@/lib/server/ai/tailorApplication";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
 import { buildPdfFilename } from "@/lib/server/files/pdfFilename";
+import { enforceAiRateLimit } from "@/lib/server/api/aiRateLimit";
 
 export const runtime = "nodejs";
 
@@ -27,6 +28,9 @@ export async function POST(req: Request) {
     throw err;
   }
   const { userId, requestId } = ctx;
+
+  const limited = enforceAiRateLimit(userId, requestId);
+  if (limited) return limited;
 
   const json = await req.json().catch(() => null);
   const parsed = GenerateSchema.safeParse(json);

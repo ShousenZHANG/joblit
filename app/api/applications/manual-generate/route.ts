@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { del, put } from "@vercel/blob";
 import { errorJson, notFoundError } from "@/lib/server/api/errorResponse";
 import { parseJsonBody, withSessionRoute } from "@/lib/server/api/routeHandler";
+import { enforceAiRateLimit } from "@/lib/server/api/aiRateLimit";
 import { buildPromptMeta, validatePromptMetaForImport } from "@/lib/server/ai/promptContract";
 import {
   APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
@@ -37,6 +38,9 @@ function parseFinalizeFlag(req: Request): boolean {
 export async function POST(req: Request) {
   const finalize = parseFinalizeFlag(req);
   return withSessionRoute(async ({ userId, requestId }) => {
+    const limited = enforceAiRateLimit(userId, requestId);
+    if (limited) return limited;
+
     const parsed = await parseJsonBody(req, ManualGenerateSchema, requestId);
     if (!parsed.ok) return parsed.response;
     const data = parsed.data;

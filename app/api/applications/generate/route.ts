@@ -8,6 +8,7 @@ import { handleLatexError } from "@/lib/server/api/handleLatexError";
 import { getResumeProfile } from "@/lib/server/resumeProfile";
 import { buildResumePdfForJob } from "@/lib/server/applications/buildResumePdf";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
+import { enforceAiRateLimit } from "@/lib/server/api/aiRateLimit";
 import { buildPdfFilename } from "@/lib/server/files/pdfFilename";
 
 export const runtime = "nodejs";
@@ -25,6 +26,9 @@ export async function POST(req: Request) {
     throw err;
   }
   const { userId, requestId } = ctx;
+
+  const limited = enforceAiRateLimit(userId, requestId);
+  if (limited) return limited;
 
   const json = await req.json().catch(() => null);
   const parsed = GenerateSchema.safeParse(json);
