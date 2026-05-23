@@ -23,7 +23,6 @@ import { useKeyboardNavigation } from "./hooks/useKeyboardNavigation";
 import { useExternalGenerate } from "./hooks/useExternalGenerate";
 import { JobListItem } from "./components/JobListItem";
 import { VirtualJobList } from "./components/VirtualJobList";
-import { JobDeleteDialog } from "./components/JobDeleteDialog";
 import { JobBatchDeleteDialog } from "./components/JobBatchDeleteDialog";
 import { JobAddDialog } from "./components/JobAddDialog";
 import { JobSearchBar } from "./components/JobSearchBar";
@@ -43,7 +42,7 @@ const desktopFilterSelectTriggerClass =
   "h-11 w-full min-w-0 justify-between overflow-hidden rounded-xl border-border/80 bg-background px-3 text-sm shadow-xs transition-[background-color,border-color,box-shadow] duration-150 hover:border-brand-emerald-300 focus-visible:border-brand-emerald-500 focus-visible:ring-brand-emerald-500/20 [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate [&_[data-slot=select-value]]:text-left";
 
 const mobileFilterSelectTriggerClass =
-  "h-9 w-full min-w-0 justify-between overflow-hidden rounded-lg px-2.5 text-xs [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate [&_[data-slot=select-value]]:text-left";
+  "h-11 w-full min-w-0 justify-between overflow-hidden rounded-lg px-2.5 text-xs [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate [&_[data-slot=select-value]]:text-left sm:h-9";
 
 export function JobsClient({
   initialItems = [],
@@ -91,7 +90,7 @@ export function JobsClient({
   });
 
   const {
-    updateStatus, deleteMutation, batchDeleteMutation,
+    updateStatus, requestDelete, batchDeleteMutation,
     updatingIds, deletingIds,
     error: mutationError, setError,
   } = useJobMutations({
@@ -113,8 +112,6 @@ export function JobsClient({
 
   const ext = useExternalGenerate(setError);
 
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [deleteCandidate, setDeleteCandidate] = useState<{ id: string; title: string } | null>(null);
   const [batchSelectMode, setBatchSelectMode] = useState(false);
   const [batchSelectedIds, setBatchSelectedIds] = useState<Set<string>>(new Set());
   const [batchDeleteConfirmOpen, setBatchDeleteConfirmOpen] = useState(false);
@@ -168,7 +165,6 @@ export function JobsClient({
   // `overflow: hidden` on <body> while open, which can desync the scroll
   // state of .app-shell when the dialog unmounts.
   const anyDialogOpen =
-    deleteConfirmOpen ||
     batchDeleteConfirmOpen ||
     addJobOpen ||
     previewOpen ||
@@ -291,19 +287,6 @@ export function JobsClient({
     }
     setBatchDeleteConfirmOpen(false);
     exitBatchMode();
-  }
-
-  function scheduleDelete(job: JobItem) {
-    if (deletingIds.has(job.id)) return;
-    setDeleteCandidate({ id: job.id, title: job.title });
-    setDeleteConfirmOpen(true);
-  }
-
-  function confirmDeleteCandidate() {
-    if (!deleteCandidate) return;
-    deleteMutation.mutate(deleteCandidate.id);
-    setDeleteConfirmOpen(false);
-    setDeleteCandidate(null);
   }
 
   const effectiveSelectedId = useMemo(() => {
@@ -442,7 +425,7 @@ export function JobsClient({
               type="button"
               onClick={() => setMobileFiltersOpen((v) => !v)}
               className={cn(
-                "flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors",
+                "flex h-11 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors sm:h-9",
                 mobileFiltersOpen
                   ? "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-700"
                   : "border-border bg-background text-foreground/70",
@@ -517,7 +500,7 @@ export function JobsClient({
                   variant="outline"
                   size="sm"
                   onClick={() => setAddJobOpen(true)}
-                  className="h-9 gap-1.5 rounded-lg border-dashed border-border text-xs font-medium text-muted-foreground transition-colors hover:border-brand-emerald-300 hover:bg-brand-emerald-50/60 hover:text-brand-emerald-700"
+                  className="h-11 gap-1.5 rounded-lg border-dashed border-border text-xs font-medium text-muted-foreground transition-colors hover:border-brand-emerald-300 hover:bg-brand-emerald-50/60 hover:text-brand-emerald-700 sm:h-9"
                 >
                   <Plus className="h-3 w-3" />
                   Add Job
@@ -547,7 +530,7 @@ export function JobsClient({
             aria-selected={mobileTab === "list"}
             onClick={() => setMobileTab("list")}
             className={cn(
-              "flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-150",
+              "flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-150 min-h-[44px]",
               mobileTab === "list"
                 ? "bg-background text-brand-emerald-700 shadow-sm"
                 : "text-muted-foreground active:bg-background/60",
@@ -564,7 +547,7 @@ export function JobsClient({
             aria-selected={mobileTab === "detail"}
             onClick={() => setMobileTab("detail")}
             className={cn(
-              "flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-150",
+              "flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-150 min-h-[44px]",
               mobileTab === "detail"
                 ? "bg-background text-brand-emerald-700 shadow-sm"
                 : "text-muted-foreground active:bg-background/60",
@@ -897,22 +880,13 @@ export function JobsClient({
           externalPromptLoading={ext.externalPromptLoading}
           mobileTab={mobileTab}
           onUpdateStatus={updateStatus}
-          onDelete={scheduleDelete}
+          onDelete={requestDelete}
           onGenerateResume={(job) => ext.openExternalGenerateDialog(job, "resume")}
           onGenerateCover={(job) => ext.openExternalGenerateDialog(job, "cover")}
         />
         </section>
       </div>
       </div>
-      <JobDeleteDialog
-        open={deleteConfirmOpen}
-        onOpenChange={(open) => {
-          setDeleteConfirmOpen(open);
-          if (!open) setDeleteCandidate(null);
-        }}
-        candidate={deleteCandidate}
-        onConfirm={confirmDeleteCandidate}
-      />
       <JobBatchDeleteDialog
         open={batchDeleteConfirmOpen}
         onOpenChange={setBatchDeleteConfirmOpen}

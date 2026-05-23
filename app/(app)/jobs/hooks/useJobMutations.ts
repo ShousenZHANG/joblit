@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { createElement, useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction, type ToastActionElement } from "@/components/ui/toast";
 import { useGuide } from "@/app/GuideContext";
-import type { JobItem, JobStatus } from "../types";
+import type { JobItem, JobStatus, JobsQueryRollbackPatch } from "../types";
 import { getErrorMessage } from "../types";
 import { runChunkedBatchDelete } from "./runChunkedBatchDelete";
 import {
@@ -15,6 +16,15 @@ import {
   restoreJobsPatches,
   restoreJobsSnapshots,
 } from "../utils/jobsQueryCache";
+
+// Undo window for single-job deletes. The server DELETE is deferred until this
+// elapses so the action stays reversible without a confirm modal.
+const UNDO_WINDOW_MS = 5000;
+
+type PendingDelete = {
+  rollbackPatches: JobsQueryRollbackPatch[];
+  timer: ReturnType<typeof setTimeout>;
+};
 
 export function useJobMutations({
   items,
@@ -124,16 +134,82 @@ export function useJobMutations({
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/jobs/${id}`, { method: "DELETE" });
-      if (res.status === 404) {
-        return;
+  // Single-job delete uses a deferred-commit "undo" pattern (Gmail/Linear
+  // style) instead of a confirm modal: the row is optimistically removed and
+  // hidden immediately, an Undo toast shows for UNDO_WINDOW_MS, and the server
+  // DELETE only fires once that window elapses. Undo cancels the timer and
+  // restores the row — no DELETE is sent and no tombstone is written. Pending
+  // deletes are flushed on unmount so navigation can't drop a delete the user
+  // already walked away from.
+  const pendingDeletesRef = useRef<Map<string, PendingDelete>>(new Map());
+
+  const finalizeDelete = useCallback(
+    async (id: string) => {
+      const pending = pendingDeletesRef.current.get(id);
+      if (!pending) return;
+      clearTimeout(pending.timer);
+      pendingDeletesRef.current.delete(id);
+      setDeletingIds((prev) => new Set(prev).add(id));
+      try {
+        const res = await fetch(`/api/jobs/${id}`, { method: "DELETE" });
+        if (res.status !== 404 && !res.ok) {
+          const json = await res.json().catch(() => ({}));
+          throw new Error(json?.error || "Failed to delete job");
+        }
+        // Success: the optimistic removeJobFromJobsCache() already filtered the
+        // row out and decremented totalCount, so no refetch is needed.
+      } catch (e) {
+        // Commit failed — bring the row back and surface the error.
+        restoreJobsPatches(queryClient, pending.rollbackPatches);
+        setSuppressedDeletedIds((prev) => {
+          if (!prev.has(id)) return prev;
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        invalidateActiveJobsQueries(queryClient);
+        setError(getErrorMessage(e, "Failed to delete job"));
+        toast({
+          title: "Delete failed",
+          description: getErrorMessage(e, "The job could not be removed."),
+          variant: "destructive",
+          duration: 2400,
+          className:
+            "border-destructive/30 bg-destructive/10 text-rose-900 animate-in fade-in zoom-in-95",
+        });
+      } finally {
+        setDeletingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
       }
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || "Failed to delete job");
     },
-    onMutate: async (id) => {
+    [queryClient, setSuppressedDeletedIds, toast],
+  );
+
+  const undoDelete = useCallback(
+    (id: string) => {
+      const pending = pendingDeletesRef.current.get(id);
+      if (!pending) return;
+      clearTimeout(pending.timer);
+      pendingDeletesRef.current.delete(id);
+      restoreJobsPatches(queryClient, pending.rollbackPatches);
+      setSuppressedDeletedIds((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      setSelectedId(id);
+    },
+    [queryClient, setSelectedId, setSuppressedDeletedIds],
+  );
+
+  const requestDelete = useCallback(
+    (job: JobItem) => {
+      const id = job.id;
+      if (pendingDeletesRef.current.has(id) || deletingIds.has(id)) return;
       setError(null);
       setSuppressedDeletedIds((prev) => {
         if (prev.has(id)) return prev;
@@ -141,72 +217,55 @@ export function useJobMutations({
         next.add(id);
         return next;
       });
-      setDeletingIds((prev) => new Set(prev).add(id));
-      await cancelJobsQueries(queryClient);
-      const previousSelectedId = selectedId;
-      let nextSelectedId = selectedId;
+      void cancelJobsQueries(queryClient);
       if (selectedId === id) {
-        nextSelectedId = items.find((it) => it.id !== id)?.id ?? null;
+        setSelectedId(items.find((it) => it.id !== id)?.id ?? null);
       }
       const rollbackPatches = removeJobFromJobsCache(queryClient, id);
-
-      if (selectedId === id) {
-        setSelectedId(nextSelectedId);
-      }
-
-      return {
-        rollbackPatches,
-        previousSelectedId,
-      };
-    },
-    onError: (e, id, context) => {
-      setError(getErrorMessage(e, "Failed to delete job"));
-      if (id) {
-        setSuppressedDeletedIds((prev) => {
-          if (!prev.has(id)) return prev;
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
-      }
-      restoreJobsPatches(queryClient, context?.rollbackPatches);
-      invalidateActiveJobsQueries(queryClient);
-
-      if (context && "previousSelectedId" in context) {
-        setSelectedId(context.previousSelectedId ?? null);
-      }
-      toast({
-        title: "Delete failed",
-        description: getErrorMessage(e, "The job could not be removed."),
-        variant: "destructive",
-        duration: 2400,
-        className:
-          "border-destructive/30 bg-destructive/10 text-rose-900 animate-in fade-in zoom-in-95",
-      });
-    },
-    onSuccess: () => {
-      // No refetch on success. The optimistic removeJobFromJobsCache()
-      // already filtered the row out and decremented totalCount, so an
-      // invalidate here only triggers a redundant network round-trip that
-      // flips `loading` true and dims the whole list (opacity-70) for a
-      // delete the user already saw complete. Trust the optimistic state.
+      const timer = setTimeout(() => {
+        void finalizeDelete(id);
+      }, UNDO_WINDOW_MS);
+      pendingDeletesRef.current.set(id, { rollbackPatches, timer });
       toast({
         title: "Job deleted",
-        description: "The role was removed.",
-        duration: 1800,
+        description: job.title,
+        duration: UNDO_WINDOW_MS,
         className:
           "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-900 animate-in fade-in zoom-in-95",
+        // shadcn's ToastActionElement type puts the component in the props
+        // slot, so it only matches JSX; createElement needs the unknown cast.
+        action: createElement(
+          ToastAction,
+          { altText: "Undo delete", onClick: () => undoDelete(id) },
+          "Undo",
+        ) as unknown as ToastActionElement,
       });
     },
-    onSettled: (_data, _error, id) => {
-      if (!id) return;
-      setDeletingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-    },
-  });
+    [
+      deletingIds,
+      items,
+      selectedId,
+      queryClient,
+      setSelectedId,
+      setSuppressedDeletedIds,
+      finalizeDelete,
+      undoDelete,
+      toast,
+    ],
+  );
+
+  // Flush pending deletes when the jobs view unmounts (e.g. navigation) so a
+  // deferred delete the user already walked away from still reaches the server.
+  useEffect(() => {
+    const pending = pendingDeletesRef.current;
+    return () => {
+      for (const [id, entry] of pending) {
+        clearTimeout(entry.timer);
+        void fetch(`/api/jobs/${id}`, { method: "DELETE", keepalive: true });
+      }
+      pending.clear();
+    };
+  }, []);
 
   const batchDeleteMutation = useMutation({
     mutationFn: async (ids: string[]) => {
@@ -337,7 +396,7 @@ export function useJobMutations({
 
   return {
     updateStatus,
-    deleteMutation,
+    requestDelete,
     batchDeleteMutation,
     updatingIds,
     deletingIds,

@@ -327,8 +327,6 @@ describe("JobsClient", () => {
 
     const removeButton = (await screen.findAllByTestId("job-remove-button"))[0];
     await user.click(removeButton);
-    const dialog = await screen.findByRole("alertdialog", { name: /delete this job/i });
-    await user.click(within(dialog).getByRole("button", { name: /^delete$/i }));
 
     const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
     await waitFor(() => {
@@ -608,8 +606,6 @@ describe("JobsClient", () => {
 
     const removeButton = (await screen.findAllByTestId("job-remove-button"))[0];
     await user.click(removeButton);
-    const dialog = await screen.findByRole("alertdialog", { name: /delete this job/i });
-    await user.click(within(dialog).getByRole("button", { name: /^delete$/i }));
 
     const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
     await waitFor(() => {
@@ -623,28 +619,12 @@ describe("JobsClient", () => {
     expect(jobsFetchCount).toBeLessThanOrEqual(1);
   });
 
-  it("submits only one delete request when delete confirm is double-clicked quickly", async () => {
+  it("removes the job optimistically and defers a single DELETE until the view unmounts", async () => {
     const user = userEvent.setup();
     let deleteCalls = 0;
-    let resolveDelete: (() => void) | null = null;
-    const deletePromise = new Promise<Response>((resolve) => {
-      resolveDelete = () =>
-        resolve(
-          new Response(JSON.stringify({ ok: true }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          }),
-        );
-    });
 
     const mockFetch = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.url;
-      if (url.startsWith("/api/jobs?limit=50")) {
-        return new Response(
-          JSON.stringify({ items: [baseJob], nextCursor: null, facets: { jobLevels: ["Mid"] } }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
-      }
       if (url.startsWith("/api/jobs?")) {
         return new Response(
           JSON.stringify({ items: [baseJob], nextCursor: null, facets: { jobLevels: ["Mid"] } }),
@@ -653,7 +633,10 @@ describe("JobsClient", () => {
       }
       if (url.startsWith(`/api/jobs/${baseJob.id}`) && init?.method === "DELETE") {
         deleteCalls += 1;
-        return deletePromise;
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
       }
       if (url.startsWith("/api/jobs/") && (!init || init.method === "GET")) {
         return new Response(
@@ -665,86 +648,108 @@ describe("JobsClient", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
+    const { unmount } = renderWithClient(
+      <JobsClient initialItems={[baseJob]} initialCursor={null} />,
+    );
 
     const removeButton = (await screen.findAllByTestId("job-remove-button"))[0];
     await user.click(removeButton);
-    const dialog = await screen.findByRole("alertdialog", { name: /delete this job/i });
-    const confirm = within(dialog).getByRole("button", { name: /^delete$/i });
-    await user.dblClick(confirm);
 
-    expect(resolveDelete).toBeTruthy();
-    resolveDelete?.();
+    // Optimistic: the row vanishes immediately with no confirm modal, and the
+    // server DELETE is deferred (still within the undo window).
+    const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
+    await waitFor(() => {
+      expect(
+        within(resultsPane).queryByRole("button", { name: /Frontend Engineer/i }),
+      ).not.toBeInTheDocument();
+    });
+    expect(deleteCalls).toBe(0);
 
+    // Navigating away flushes the pending delete exactly once.
+    unmount();
     await waitFor(() => {
       expect(deleteCalls).toBe(1);
     });
+  });
+
+  it("restores the job and sends no DELETE when Undo is clicked", async () => {
+    const user = userEvent.setup();
+    let deleteCalls = 0;
+
+    const mockFetch = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url.startsWith("/api/jobs?")) {
+        return new Response(
+          JSON.stringify({ items: [baseJob], nextCursor: null, facets: { jobLevels: ["Mid"] } }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.startsWith(`/api/jobs/${baseJob.id}`) && init?.method === "DELETE") {
+        deleteCalls += 1;
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.startsWith("/api/jobs/") && (!init || init.method === "GET")) {
+        return new Response(
+          JSON.stringify({ id: baseJob.id, description: "Job description" }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const { unmount } = renderWithClient(
+      <JobsClient initialItems={[baseJob]} initialCursor={null} />,
+    );
+
+    const removeButton = (await screen.findAllByTestId("job-remove-button"))[0];
+    await user.click(removeButton);
+
+    // The Undo action lives in the toast.
+    const undoButton = await screen.findByRole("button", { name: /undo/i });
+    await user.click(undoButton);
+
+    // The row comes back and no DELETE is ever sent — not even on unmount,
+    // because the pending delete was cancelled.
+    const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
+    await waitFor(() => {
+      expect(
+        within(resultsPane).queryByRole("button", { name: /Frontend Engineer/i }),
+      ).toBeInTheDocument();
+    });
+    unmount();
+    expect(deleteCalls).toBe(0);
   });
 
   it("keeps pending-deletion jobs hidden during overlapping delete refetches", async () => {
     const user = userEvent.setup();
     const firstJob = { ...baseJob, id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", title: "Frontend Engineer A" };
     const secondJob = { ...baseJob, id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", title: "Backend Engineer B" };
-    let firstDeleted = false;
-    let secondDeleted = false;
-    let resolveFirstDelete: (() => void) | null = null;
-    let resolveSecondDelete: (() => void) | null = null;
-
-    const firstDeletePromise = new Promise<Response>((resolve) => {
-      resolveFirstDelete = () => {
-        firstDeleted = true;
-        resolve(
-          new Response(JSON.stringify({ ok: true }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          }),
-        );
-      };
-    });
-
-    const secondDeletePromise = new Promise<Response>((resolve) => {
-      resolveSecondDelete = () => {
-        secondDeleted = true;
-        resolve(
-          new Response(JSON.stringify({ ok: true }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          }),
-        );
-      };
-    });
-
-    const listPayload = () => {
-      const items = [firstDeleted ? null : firstJob, secondDeleted ? null : secondJob].filter(
-        (item): item is typeof firstJob => Boolean(item),
-      );
-      return {
-        items,
-        nextCursor: null,
-        totalCount: items.length,
-        facets: { jobLevels: ["Mid"] },
-      };
+    // The server DELETE is deferred (undo window), so the list endpoint keeps
+    // returning both jobs — the suppressed-id set must hide them regardless.
+    const listPayload = {
+      items: [firstJob, secondJob],
+      nextCursor: null,
+      totalCount: 2,
+      facets: { jobLevels: ["Mid"] },
     };
 
     const mockFetch = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.url;
-      if (url.startsWith("/api/jobs?limit=50")) {
-        return new Response(JSON.stringify(listPayload()), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
       if (url.startsWith("/api/jobs?")) {
-        return new Response(JSON.stringify(listPayload()), {
+        return new Response(JSON.stringify(listPayload), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });
       }
-      if (url === `/api/jobs/${firstJob.id}` && init?.method === "DELETE") {
-        return firstDeletePromise;
-      }
-      if (url === `/api/jobs/${secondJob.id}` && init?.method === "DELETE") {
-        return secondDeletePromise;
+      if (url.startsWith("/api/jobs/") && init?.method === "DELETE") {
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
       }
       if (url.startsWith("/api/jobs/") && (!init || init.method === "GET")) {
         const id = url.split("/").at(-1) ?? "";
@@ -760,34 +765,22 @@ describe("JobsClient", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    renderWithClient(<JobsClient initialItems={[firstJob, secondJob]} initialCursor={null} />);
+    const { unmount } = renderWithClient(
+      <JobsClient initialItems={[firstJob, secondJob]} initialCursor={null} />,
+    );
 
     expect((await screen.findAllByText("Frontend Engineer A")).length).toBeGreaterThan(0);
     expect((await screen.findAllByText("Backend Engineer B")).length).toBeGreaterThan(0);
-    const confirmDelete = async () => {
-      const dialog = await screen.findByRole("alertdialog", { name: /delete this job/i });
-      await user.click(within(dialog).getByRole("button", { name: /^delete$/i }));
-    };
-
-    await user.click((await screen.findAllByTestId("job-remove-button"))[0]);
-    await confirmDelete();
-
-    await user.click((await screen.findAllByTestId("job-remove-button"))[0]);
-    await confirmDelete();
-
-    expect(resolveFirstDelete).toBeTruthy();
-    resolveFirstDelete?.();
-
     const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
+
+    await user.click((await screen.findAllByTestId("job-remove-button"))[0]);
     await waitFor(() => {
       expect(
-        within(resultsPane).queryByRole("button", { name: /Backend Engineer B/i }),
+        within(resultsPane).queryByRole("button", { name: /Frontend Engineer A/i }),
       ).not.toBeInTheDocument();
     });
 
-    expect(resolveSecondDelete).toBeTruthy();
-    resolveSecondDelete?.();
-
+    await user.click((await screen.findAllByTestId("job-remove-button"))[0]);
     await waitFor(() => {
       expect(
         within(resultsPane).queryByRole("button", { name: /Frontend Engineer A/i }),
@@ -796,6 +789,8 @@ describe("JobsClient", () => {
         within(resultsPane).queryByRole("button", { name: /Backend Engineer B/i }),
       ).not.toBeInTheDocument();
     });
+
+    unmount();
   });
 
   it("keeps results and details panels both visible on mobile layouts", async () => {
@@ -1124,8 +1119,6 @@ describe("JobsClient", () => {
 
     const removeButton = (await screen.findAllByTestId("job-remove-button"))[0];
     await user.click(removeButton);
-    const dialog = await screen.findByRole("alertdialog", { name: /delete this job/i });
-    await user.click(within(dialog).getByRole("button", { name: /^delete$/i }));
 
     await screen.findByText("Job deleted");
 
