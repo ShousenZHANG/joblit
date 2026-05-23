@@ -30,10 +30,10 @@ export function DiscoverClient() {
             <Compass className="h-4 w-4 text-brand-emerald-600" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold text-foreground lg:text-2xl">
+            <h1 className="text-xl font-semibold tracking-tight text-foreground lg:text-2xl">
               Discover
             </h1>
-            <p className="hidden text-sm text-muted-foreground sm:block">
+            <p className="hidden text-sm leading-relaxed text-muted-foreground sm:block">
               What the industry is building and talking about this week
             </p>
           </div>
