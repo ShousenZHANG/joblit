@@ -43,7 +43,7 @@ const ATS_PLATFORMS = [
 
 function StepNumber({ n }: { n: number }) {
   return (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-emerald-100 text-sm font-bold text-brand-emerald-700">
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-700">
       {n}
     </span>
   );
@@ -64,7 +64,7 @@ export default async function ExtensionGuidePage() {
             href="/"
             className="flex items-center gap-2 text-sm font-semibold text-slate-800 transition-colors hover:text-slate-900"
           >
-            <Search className="h-4 w-4 text-brand-emerald-700" aria-hidden="true" />
+            <Search className="h-4 w-4 text-emerald-700" aria-hidden="true" />
             Joblit
           </Link>
           <Link
@@ -78,8 +78,8 @@ export default async function ExtensionGuidePage() {
 
         {/* Hero */}
         <header className="mb-12 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-emerald-100 shadow-sm">
-            <Chrome className="h-8 w-8 text-brand-emerald-700" />
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 shadow-sm">
+            <Chrome className="h-8 w-8 text-emerald-700" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
             {t("title")}
@@ -96,7 +96,7 @@ export default async function ExtensionGuidePage() {
               <StepNumber n={1} />
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">
-                  <Download className="mr-2 inline-block h-5 w-5 text-brand-emerald-600" />
+                  <Download className="mr-2 inline-block h-5 w-5 text-emerald-600" />
                   {t("downloadTitle")}
                 </h2>
               </div>
@@ -106,7 +106,7 @@ export default async function ExtensionGuidePage() {
               href="https://github.com/ShousenZHANG/joblit/releases/latest"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-lg bg-brand-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-emerald-700"
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
             >
               <Download className="h-4 w-4" />
               {t("downloadBtn")}
@@ -121,7 +121,7 @@ export default async function ExtensionGuidePage() {
             <div className="mb-4 flex items-center gap-3">
               <StepNumber n={2} />
               <h2 className="text-lg font-semibold text-slate-900">
-                <Chrome className="mr-2 inline-block h-5 w-5 text-brand-emerald-600" />
+                <Chrome className="mr-2 inline-block h-5 w-5 text-emerald-600" />
                 {t("installTitle")}
               </h2>
             </div>
@@ -136,7 +136,7 @@ export default async function ExtensionGuidePage() {
                       {key === "installStep2" ? (
                         <>
                           {t("installStep2").split("chrome://extensions")[0]}
-                          <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-mono text-brand-emerald-700">
+                          <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-mono text-emerald-700">
                             chrome://extensions
                           </code>
                           {t("installStep2").split("chrome://extensions")[1]}
@@ -159,7 +159,7 @@ export default async function ExtensionGuidePage() {
             <div className="mb-4 flex items-center gap-3">
               <StepNumber n={3} />
               <h2 className="text-lg font-semibold text-slate-900">
-                <UserPlus className="mr-2 inline-block h-5 w-5 text-brand-emerald-600" />
+                <UserPlus className="mr-2 inline-block h-5 w-5 text-emerald-600" />
                 {t("accountTitle")}
               </h2>
             </div>
@@ -190,7 +190,7 @@ export default async function ExtensionGuidePage() {
             <div className="mb-4 flex items-center gap-3">
               <StepNumber n={4} />
               <h2 className="text-lg font-semibold text-slate-900">
-                <KeyRound className="mr-2 inline-block h-5 w-5 text-brand-emerald-600" />
+                <KeyRound className="mr-2 inline-block h-5 w-5 text-emerald-600" />
                 {t("tokenTitle")}
               </h2>
             </div>
@@ -224,7 +224,7 @@ export default async function ExtensionGuidePage() {
             <div className="mb-4 flex items-center gap-3">
               <StepNumber n={5} />
               <h2 className="text-lg font-semibold text-slate-900">
-                <Link2 className="mr-2 inline-block h-5 w-5 text-brand-emerald-600" />
+                <Link2 className="mr-2 inline-block h-5 w-5 text-emerald-600" />
                 {t("connectTitle")}
               </h2>
             </div>
@@ -243,9 +243,9 @@ export default async function ExtensionGuidePage() {
           </section>
 
           {/* Usage Methods */}
-          <section className="rounded-2xl border border-brand-emerald-200 bg-brand-emerald-50/50 p-6 shadow-sm backdrop-blur">
+          <section className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-6 shadow-sm backdrop-blur">
             <div className="mb-4 flex items-center gap-3">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-emerald-200 text-sm font-bold text-brand-emerald-800">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-200 text-sm font-bold text-emerald-800">
                 <Zap className="h-4 w-4" />
               </span>
               <h2 className="text-lg font-semibold text-slate-900">
@@ -261,9 +261,9 @@ export default async function ExtensionGuidePage() {
               ].map(({ icon: Icon, titleKey, descKey }) => (
                 <div
                   key={titleKey}
-                  className="rounded-xl border border-brand-emerald-200 bg-white p-4 shadow-sm"
+                  className="rounded-xl border border-emerald-200 bg-white p-4 shadow-sm"
                 >
-                  <Icon className="mb-2 h-5 w-5 text-brand-emerald-600" />
+                  <Icon className="mb-2 h-5 w-5 text-emerald-600" />
                   <h3 className="text-sm font-semibold text-slate-900">
                     {t(titleKey)}
                   </h3>
@@ -287,7 +287,7 @@ export default async function ExtensionGuidePage() {
                   key={ats.name}
                   className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50 px-4 py-2.5"
                 >
-                  <span className="flex h-6 w-6 items-center justify-center rounded bg-brand-emerald-100 text-xs font-bold text-brand-emerald-700">
+                  <span className="flex h-6 w-6 items-center justify-center rounded bg-emerald-100 text-xs font-bold text-emerald-700">
                     {ats.name[0]}
                   </span>
                   <div>
@@ -319,7 +319,7 @@ export default async function ExtensionGuidePage() {
                   className="group rounded-lg border border-slate-100 bg-slate-50 px-4 py-3"
                 >
                   <summary className="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-800 [&::-webkit-details-marker]:hidden">
-                    <Icon className="h-4 w-4 shrink-0 text-brand-emerald-600" />
+                    <Icon className="h-4 w-4 shrink-0 text-emerald-600" />
                     {t(q)}
                     <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-90" />
                   </summary>
@@ -337,7 +337,7 @@ export default async function ExtensionGuidePage() {
               href="/"
               className="flex items-center gap-1.5 font-semibold text-slate-900"
             >
-              <Search className="h-4 w-4 text-brand-emerald-700" />
+              <Search className="h-4 w-4 text-emerald-700" />
               Joblit
             </Link>
             <span aria-hidden="true">&middot;</span>

@@ -110,7 +110,7 @@ export function FetchProgressPanel() {
               stroke={
                 status === "FAILED"
                   ? "var(--color-destructive, #ef4444)"
-                  : "var(--color-brand-emerald-500, #71717a)"
+                  : "var(--color-brand-emerald-500, #10b981)"
               }
               strokeWidth="3"
               strokeLinecap="round"
@@ -238,7 +238,7 @@ export function FetchProgressPanel() {
                 value={progressValue}
                 className="h-2 bg-brand-emerald-100/60"
                 indicatorClassName={cn(
-                  "bg-gradient-to-r from-brand-emerald-500 to-brand-emerald-600 shadow-[0_0_10px_rgba(113,113,122,0.4)] transition-all duration-500 ease-out",
+                  "bg-gradient-to-r from-brand-emerald-500 to-brand-emerald-600 shadow-[0_0_10px_rgba(16,185,129,0.4)] transition-all duration-500 ease-out",
                   status === "FAILED" &&
                     "from-destructive to-destructive bg-destructive",
                 )}

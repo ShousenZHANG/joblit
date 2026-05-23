@@ -45,7 +45,7 @@ export default function OgImage() {
               width: 56,
               height: 56,
               borderRadius: 16,
-              background: "linear-gradient(135deg, #52525b 0%, #3f3f46 100%)",
+              background: "linear-gradient(135deg, #059669 0%, #047857 100%)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -78,7 +78,7 @@ export default function OgImage() {
           }}
         >
           <span>
-            <span style={{ color: "#52525b" }}>AI-tailored</span> resumes
+            <span style={{ color: "#059669" }}>AI-tailored</span> resumes
           </span>
           <span>for every job you apply to</span>
         </div>
@@ -105,11 +105,11 @@ export default function OgImage() {
             marginTop: 32,
             padding: "8px 20px",
             borderRadius: 999,
-            border: "1.5px solid #f4f4f5",
-            background: "#fafafa",
+            border: "1.5px solid #d1fae5",
+            background: "#ecfdf5",
             fontSize: 16,
             fontWeight: 600,
-            color: "#27272a",
+            color: "#065f46",
           }}
         >
           <div

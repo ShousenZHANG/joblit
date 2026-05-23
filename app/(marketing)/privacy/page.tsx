@@ -40,7 +40,7 @@ export default async function PrivacyPolicyPage() {
             href="/"
             className="flex items-center gap-2 text-sm font-semibold text-slate-800 transition-colors hover:text-slate-900"
           >
-            <Search className="h-4 w-4 text-brand-emerald-700" />
+            <Search className="h-4 w-4 text-emerald-700" />
             Joblit
           </Link>
           <Link
@@ -249,11 +249,11 @@ export default async function PrivacyPolicyPage() {
         <footer className="legal-footer">
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
             <Link href="/" className="flex items-center gap-1.5 font-semibold text-slate-700">
-              <Search className="h-3.5 w-3.5 text-brand-emerald-700" />
+              <Search className="h-3.5 w-3.5 text-emerald-700" />
               Joblit
             </Link>
             <span aria-hidden="true">&middot;</span>
-            <span className="font-medium text-brand-emerald-700">Privacy</span>
+            <span className="font-medium text-emerald-700">Privacy</span>
             <span aria-hidden="true">&middot;</span>
             <Link href="/terms" className="transition-colors hover:text-slate-600">Terms</Link>
             <span aria-hidden="true">&middot;</span>

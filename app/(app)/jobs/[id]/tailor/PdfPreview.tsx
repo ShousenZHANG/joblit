@@ -94,7 +94,7 @@ export function PdfPreview({
         </span>
         <div className="ml-auto flex items-center gap-1">
           {isPending ? (
-            <span className="hidden rounded-full bg-brand-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-brand-emerald-700 ring-1 ring-brand-emerald-100 sm:inline-flex">
+            <span className="hidden rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-100 sm:inline-flex">
               Updating soon
             </span>
           ) : lastLabel ? (
@@ -134,7 +134,7 @@ export function PdfPreview({
             <a
               href={previewSrc}
               download
-              className="inline-flex h-7 items-center gap-1.5 rounded-md bg-brand-emerald-600 px-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-emerald-700 active:scale-[0.97]"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md bg-emerald-600 px-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.97]"
             >
               <Download className="h-3.5 w-3.5" aria-hidden />
               <span>PDF</span>
