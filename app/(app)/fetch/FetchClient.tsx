@@ -128,10 +128,10 @@ function ExclusionDropdown({
             className={cn(
               "group flex h-11 w-full items-center justify-between gap-3 rounded-2xl border bg-background px-4 text-sm font-medium transition-all duration-200",
               "shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
-              "hover:shadow-[0_8px_22px_-14px_rgba(124,58,237,0.45)]",
+              "hover:shadow-[0_8px_22px_-14px_rgba(91,91,214,0.45)]",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-400/50 focus-visible:ring-offset-1",
               open
-                ? "border-brand-emerald-300 bg-brand-emerald-50/40 shadow-[0_10px_28px_-14px_rgba(124,58,237,0.5)]"
+                ? "border-brand-emerald-300 bg-brand-emerald-50/40 shadow-[0_10px_28px_-14px_rgba(91,91,214,0.5)]"
                 : "border-border/70 hover:border-brand-emerald-300/70",
             )}
           >
@@ -169,7 +169,7 @@ function ExclusionDropdown({
             "w-[var(--radix-dropdown-menu-trigger-width)] min-w-[20rem]",
             "max-h-[min(26rem,var(--radix-dropdown-menu-content-available-height))] overflow-y-auto",
             "rounded-2xl border border-border/60 bg-background/95 p-1.5 backdrop-blur-xl",
-            "shadow-[0_24px_60px_-30px_rgba(15,23,42,0.5),0_8px_24px_-12px_rgba(124,58,237,0.16)]",
+            "shadow-[0_24px_60px_-30px_rgba(15,23,42,0.5),0_8px_24px_-12px_rgba(91,91,214,0.16)]",
             "origin-[var(--radix-dropdown-menu-content-transform-origin)]",
             "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:slide-in-from-top-1",
             "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
@@ -250,7 +250,7 @@ export function FetchClient() {
   } = useFetchStatus();
   const { isTaskHighlighted, markTaskComplete } = useGuide();
   const guideHighlightClass =
-    "ring-2 ring-brand-emerald-400 ring-offset-2 ring-offset-white shadow-[0_0_0_4px_rgba(139,92,246,0.18)]";
+    "ring-2 ring-brand-emerald-400 ring-offset-2 ring-offset-white shadow-[0_0_0_4px_rgba(110,106,222,0.18)]";
   const prevUserIdRef = useRef<string | null>(null);
 
   const queries = useMemo(() => {

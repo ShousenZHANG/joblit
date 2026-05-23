@@ -22,17 +22,17 @@ export function Cta() {
       className="mx-auto my-16 w-full max-w-6xl px-6 sm:my-24 sm:px-10"
       variants={fadeUp}
     >
-      <div className="relative overflow-hidden rounded-3xl border border-border/60 bg-card px-8 py-16 text-center shadow-[0_30px_80px_-40px_rgba(124,58,237,0.30)] sm:px-16 sm:py-24">
+      <div className="relative overflow-hidden rounded-3xl border border-border/60 bg-card px-8 py-16 text-center shadow-[0_30px_80px_-40px_rgba(91,91,214,0.30)] sm:px-16 sm:py-24">
         {/* Multi-layer gradient mesh — three offset radials build atmospheric
             depth without animation. Top emerald glow + bottom warm tint +
             subtle center wash. */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_45%_at_50%_0%,rgba(139,92,246,0.16),transparent_65%)]"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_45%_at_50%_0%,rgba(110,106,222,0.16),transparent_65%)]"
         />
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_55%_35%_at_15%_100%,rgba(124,58,237,0.10),transparent_60%)]"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_55%_35%_at_15%_100%,rgba(91,91,214,0.10),transparent_60%)]"
         />
         <div
           aria-hidden

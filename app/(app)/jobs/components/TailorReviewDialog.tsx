@@ -412,7 +412,7 @@ function TailorReviewDialogBody({
         </div>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 gap-5 overflow-hidden bg-[radial-gradient(circle_at_6%_0%,rgba(139,92,246,0.09),transparent_28%),radial-gradient(circle_at_82%_8%,rgba(59,130,246,0.055),transparent_30%)] p-4 md:p-6 lg:grid-cols-2">
+      <div className="grid min-h-0 flex-1 gap-5 overflow-hidden bg-[radial-gradient(circle_at_6%_0%,rgba(110,106,222,0.09),transparent_28%),radial-gradient(circle_at_82%_8%,rgba(59,130,246,0.055),transparent_30%)] p-4 md:p-6 lg:grid-cols-2">
         <div className="flex min-h-0 flex-col overflow-hidden rounded-[1.65rem] border border-white/80 bg-white/75 p-3 shadow-[0_24px_70px_-48px_rgba(15,23,42,0.55),0_8px_20px_-18px_rgba(15,23,42,0.20)] ring-1 ring-slate-900/5 backdrop-blur">
           <div className="mb-3 flex shrink-0 items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white/80 px-3 py-2.5 shadow-[0_10px_28px_-25px_rgba(15,23,42,0.42)]">
             <div className="min-w-0">
@@ -503,7 +503,7 @@ function TailorReviewDialogBody({
             onClick={handleFinalize}
             disabled={isFinalizing}
             className={cn(
-              "h-10 rounded-full border border-brand-emerald-500 bg-brand-emerald-500 px-5 text-sm font-semibold text-white shadow-[0_14px_30px_-16px_rgba(139,92,246,0.85)] transition-all hover:-translate-y-px hover:border-brand-emerald-600 hover:bg-brand-emerald-600 hover:shadow-[0_18px_34px_-16px_rgba(139,92,246,0.95)] active:translate-y-0",
+              "h-10 rounded-full border border-brand-emerald-500 bg-brand-emerald-500 px-5 text-sm font-semibold text-white shadow-[0_14px_30px_-16px_rgba(110,106,222,0.85)] transition-all hover:-translate-y-px hover:border-brand-emerald-600 hover:bg-brand-emerald-600 hover:shadow-[0_18px_34px_-16px_rgba(110,106,222,0.95)] active:translate-y-0",
               "disabled:border-border disabled:bg-muted disabled:text-muted-foreground",
             )}
           >

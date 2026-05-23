@@ -8,10 +8,10 @@
      stone-tinted borders. Hue shifted from cool blue (250°) to neutral-warm
      (80°) for an upscale, less "tech-blue" feel. Magnitude is small so app
      pages keep their existing contrast. */
-  --accent: oklch(0.967 0.002 250);
-  --muted: oklch(0.967 0.002 250);
+  --accent: oklch(0.956 0.004 286);
+  --muted: oklch(0.956 0.004 286);
   --radius: 0.625rem;
-  --background: oklch(0.99 0.001 250);
+  --background: oklch(0.9913 0.0013 286);
   --foreground: oklch(0.12 0.005 250);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.12 0.005 250);
@@ -21,16 +21,16 @@
      (Button, Badge, Progress, focus ring, input selection) inherits the
      brand hue so the component layer is coherent. Charts keep their own
      hues; --success stays green (universal success semantic). */
-  --primary: oklch(0.54 0.21 290);
+  --primary: oklch(0.54 0.184 278);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0.002 250);
+  --secondary: oklch(0.9827 0.0026 286);
   --secondary-foreground: oklch(0.18 0.005 250);
-  --muted-foreground: oklch(0.48 0.012 250);
+  --muted-foreground: oklch(0.5025 0.0136 264);
   --accent-foreground: oklch(0.18 0.005 250);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.9 0.003 250);
-  --input: oklch(0.9 0.003 250);
-  --ring: oklch(0.62 0.18 290);
+  --border: oklch(0.9068 0.0042 271);
+  --input: oklch(0.9068 0.0042 271);
+  --ring: oklch(0.6 0.16 278);
   --chart-1: oklch(0.56 0.19 255);
   --chart-2: oklch(0.62 0.12 200);
   --chart-3: oklch(0.48 0.08 230);
@@ -38,18 +38,18 @@
   --chart-5: oklch(0.78 0.16 210);
   --sidebar: oklch(0.99 0.004 250);
   --sidebar-foreground: oklch(0.18 0.02 255);
-  --sidebar-primary: oklch(0.54 0.21 290);
+  --sidebar-primary: oklch(0.54 0.184 278);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.96 0.01 250);
   --sidebar-accent-foreground: oklch(0.22 0.02 255);
   --sidebar-border: oklch(0.9 0.01 250);
-  --sidebar-ring: oklch(0.62 0.18 290);
+  --sidebar-ring: oklch(0.6 0.16 278);
 
   /* Joblit landing — shadow system (Apple reductive + Stripe layered, adapted warm) */
   --shadow-ambient: 0px 1px 3px rgba(0,0,0,0.04);
-  --shadow-card: 3px 5px 30px 0px rgba(124,58,237,0.10);
-  --shadow-elevated: 0px 20px 40px -12px rgba(124,58,237,0.14), 0px 8px 20px -6px rgba(0,0,0,0.05);
-  --shadow-deep: 0px 30px 60px -16px rgba(124,58,237,0.18), 0px 12px 28px -8px rgba(0,0,0,0.06);
+  --shadow-card: 3px 5px 30px 0px rgba(91,91,214,0.10);
+  --shadow-elevated: 0px 20px 40px -12px rgba(91,91,214,0.14), 0px 8px 20px -6px rgba(0,0,0,0.05);
+  --shadow-deep: 0px 30px 60px -16px rgba(91,91,214,0.18), 0px 12px 28px -8px rgba(0,0,0,0.06);
 }
 
 /* ========================================================================
@@ -58,23 +58,23 @@
    Used by components/landing/*.tsx (server component page imports clients).
    ======================================================================== */
 :root {
-  /* Brand palette — Apple-style restrained blue (#7c3aed signature accent).
+  /* Brand palette — Apple-style restrained blue (#5b5bd6 signature accent).
      Used SPARINGLY against a near-monochrome cool-neutral system: white +
      #f5f5f7 surfaces, near-black text, blue only for primary actions /
      focus / links. NOTE: token names keep the `brand-emerald-*` identifier
      so the ~50 consuming files don't need a rename; the VALUES are Apple
      blue. */
   --brand-blue: oklch(0.56 0.19 255);
-  --brand-emerald: #7c3aed;
-  --brand-emerald-50: #f5f3ff;
-  --brand-emerald-100: #ede9fe;
-  --brand-emerald-200: #ddd6fe;
-  --brand-emerald-500: #8b5cf6;
-  --brand-emerald-600: #7c3aed;
-  --brand-emerald-700: #6d28d9;
-  --brand-emerald-800: #5b21b6;
-  --brand-emerald-900: #4c1d95;
-  --brand-emerald-950: #2e1065;
+  --brand-emerald: #5b5bd6;
+  --brand-emerald-50: #f5f7ff;
+  --brand-emerald-100: #edf2fe;
+  --brand-emerald-200: #d2deff;
+  --brand-emerald-500: #6e6ade;
+  --brand-emerald-600: #5b5bd6;
+  --brand-emerald-700: #5151cd;
+  --brand-emerald-800: #3a3d8f;
+  --brand-emerald-900: #272962;
+  --brand-emerald-950: #1a1b45;
 
   /* Match tier palette (cards, badges) */
   --tier-strong-bg: #d1fae5;
@@ -96,8 +96,8 @@
   --info: oklch(0.62 0.12 230);
 
   /* Landing shadows (extend existing --shadow-card/elevated/deep) */
-  --shadow-card-emerald: 3px 5px 30px 0 rgba(124, 58, 237, 0.1);
-  --shadow-elevated-emerald: 0 20px 40px -12px rgba(124, 58, 237, 0.14),
+  --shadow-card-emerald: 3px 5px 30px 0 rgba(91, 91, 214, 0.1);
+  --shadow-elevated-emerald: 0 20px 40px -12px rgba(91, 91, 214, 0.14),
     0 8px 20px -6px rgba(0, 0, 0, 0.05);
 
   /* Motion curves (framer-motion + CSS fallback) */
@@ -116,7 +116,7 @@
 .dark {
   --tier-strong-bg: rgba(6, 95, 70, 0.25);
   --tier-strong-fg: #a7f3d0;
-  --tier-strong-ring: rgba(139, 92, 246, 0.35);
+  --tier-strong-ring: rgba(110, 106, 222, 0.35);
   --tier-good-bg: rgba(17, 94, 89, 0.25);
   --tier-good-fg: #99f6e4;
   --tier-fair-bg: rgba(146, 64, 14, 0.25);
@@ -126,10 +126,10 @@
   /* Brand (violet) ramp dark overrides: light tints become subtle dark
      violet surfaces so accents don't read as bright patches on the dark
      background. Mid/dark violets stay vivid for contrast. */
-  --brand-emerald-50: rgba(76, 29, 149, 0.20);
-  --brand-emerald-100: rgba(76, 29, 149, 0.34);
-  --brand-emerald-200: rgba(139, 92, 246, 0.40);
-  --brand-emerald-800: #ddd6fe;
+  --brand-emerald-50: rgba(58, 61, 143, 0.20);
+  --brand-emerald-100: rgba(58, 61, 143, 0.34);
+  --brand-emerald-200: rgba(110, 106, 222, 0.40);
+  --brand-emerald-800: #d2deff;
   /* Nav pill needs a darker translucent base so the blur still reads
      over dark hero gradients. */
   --landing-nav-bg: rgba(15, 23, 42, 0.72);
@@ -176,14 +176,14 @@
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(ellipse 48% 42% at 10% -2%, rgba(139, 92, 246, 0.12), transparent 58%),
+    radial-gradient(ellipse 48% 42% at 10% -2%, rgba(110, 106, 222, 0.12), transparent 58%),
     radial-gradient(ellipse 48% 42% at 90% 4%, rgba(96, 165, 250, 0.10), transparent 58%),
     radial-gradient(ellipse 60% 40% at 50% 0%, rgba(167, 139, 250, 0.05), transparent 60%);
 }
 
 .dark .landing-atmos {
   background:
-    radial-gradient(ellipse 48% 42% at 10% -2%, rgba(139, 92, 246, 0.16), transparent 58%),
+    radial-gradient(ellipse 48% 42% at 10% -2%, rgba(110, 106, 222, 0.16), transparent 58%),
     radial-gradient(ellipse 48% 42% at 90% 4%, rgba(96, 165, 250, 0.12), transparent 58%);
 }
 
@@ -279,7 +279,7 @@ body {
   --card-foreground: oklch(0.98 0.005 250);
   --popover: oklch(0.16 0.005 250);
   --popover-foreground: oklch(0.98 0.005 250);
-  --primary: oklch(0.62 0.2 290);
+  --primary: oklch(0.62 0.18 278);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.26 0.02 255);
   --secondary-foreground: oklch(0.98 0.005 250);
@@ -290,7 +290,7 @@ body {
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.62 0.17 290);
+  --ring: oklch(0.6 0.16 278);
   --chart-1: oklch(0.62 0.18 255);
   --chart-2: oklch(0.68 0.12 200);
   --chart-3: oklch(0.72 0.14 300);
@@ -298,12 +298,12 @@ body {
   --chart-5: oklch(0.7 0.16 210);
   --sidebar: oklch(0.2 0.02 255);
   --sidebar-foreground: oklch(0.98 0.005 250);
-  --sidebar-primary: oklch(0.62 0.2 290);
+  --sidebar-primary: oklch(0.62 0.18 278);
   --sidebar-primary-foreground: oklch(0.98 0.005 250);
   --sidebar-accent: oklch(0.26 0.02 255);
   --sidebar-accent-foreground: oklch(0.98 0.005 250);
   --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: oklch(0.62 0.17 290);
+  --sidebar-ring: oklch(0.6 0.16 278);
 }
 
 @layer base {
@@ -532,15 +532,15 @@ body {
 }
 
 .guide-btn--active {
-  border-color: rgba(124, 58, 237, 0.3);
-  background: linear-gradient(135deg, #f5f3ff, #ede9fe);
-  color: #6d28d9;
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.14);
+  border-color: rgba(91, 91, 214, 0.3);
+  background: linear-gradient(135deg, #f5f7ff, #edf2fe);
+  color: #5151cd;
+  box-shadow: 0 0 0 3px rgba(110, 106, 222, 0.14);
 }
 
 .guide-btn--active:hover {
-  border-color: rgba(124, 58, 237, 0.5);
-  background: linear-gradient(135deg, #ede9fe, #ddd6fe);
+  border-color: rgba(91, 91, 214, 0.5);
+  background: linear-gradient(135deg, #edf2fe, #d2deff);
   animation: none;
 }
 
@@ -552,19 +552,19 @@ body {
   height: 20px;
   padding: 0 6px;
   border-radius: 999px;
-  background: rgba(124, 58, 237, 0.12);
+  background: rgba(91, 91, 214, 0.12);
   font-size: 0.6875rem;
   font-weight: 700;
-  color: #7c3aed;
+  color: #5b5bd6;
   letter-spacing: 0.02em;
 }
 
 @keyframes guide-pulse {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.25);
+    box-shadow: 0 0 0 0 rgba(91, 91, 214, 0.25);
   }
   50% {
-    box-shadow: 0 0 0 6px rgba(124, 58, 237, 0);
+    box-shadow: 0 0 0 6px rgba(91, 91, 214, 0);
   }
 }
 
@@ -614,10 +614,10 @@ body {
 @keyframes guide-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.55), 0 0 0 0 rgba(139, 92, 246, 0.3);
+    box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.55), 0 0 0 0 rgba(110, 106, 222, 0.3);
   }
   50% {
-    box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.55), 0 0 0 6px rgba(139, 92, 246, 0.18);
+    box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.55), 0 0 0 6px rgba(110, 106, 222, 0.18);
   }
 }
 
@@ -667,7 +667,7 @@ body {
 .ext-input:focus {
   outline: none;
   border-color: var(--brand-emerald-500);
-  box-shadow: 0 0 0 3px oklch(0.62 0.2 290 / 0.18);
+  box-shadow: 0 0 0 3px oklch(0.62 0.18 278 / 0.18);
 }
 .ext-input::placeholder {
   color: var(--muted-foreground);
@@ -690,7 +690,7 @@ body {
 }
 .ext-btn-primary:hover:not(:disabled) {
   background: var(--brand-emerald-700);
-  box-shadow: 0 2px 8px -2px oklch(0.54 0.21 290 / 0.45);
+  box-shadow: 0 2px 8px -2px oklch(0.54 0.184 278 / 0.45);
 }
 .ext-btn-primary:active:not(:disabled) {
   transform: scale(0.97);
@@ -850,7 +850,7 @@ body {
 }
 .ext-token-dot--active {
   background: var(--brand-emerald-500);
-  box-shadow: 0 0 0 3px oklch(0.62 0.2 290 / 0.22);
+  box-shadow: 0 0 0 3px oklch(0.62 0.18 278 / 0.22);
 }
 
 /* Revoke button — destructive. Dark variant uses translucent rose. */
@@ -1036,10 +1036,10 @@ body {
 }
 
 .legal-toc-link--active {
-  color: #6d28d9;
+  color: #5151cd;
   font-weight: 600;
-  border-left-color: #7c3aed;
-  background: rgba(124, 58, 237, 0.06);
+  border-left-color: #5b5bd6;
+  background: rgba(91, 91, 214, 0.06);
 }
 
 /* Mobile TOC */
@@ -1111,9 +1111,9 @@ body {
   padding: 0.25rem 0.75rem;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #6d28d9;
-  background: rgba(124, 58, 237, 0.08);
-  border: 1px solid rgba(124, 58, 237, 0.15);
+  color: #5151cd;
+  background: rgba(91, 91, 214, 0.08);
+  border: 1px solid rgba(91, 91, 214, 0.15);
   border-radius: 999px;
   margin-bottom: 1rem;
 }
@@ -1217,12 +1217,12 @@ body {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #7c3aed;
+  background: #5b5bd6;
   opacity: 0.5;
 }
 
 .legal-body a {
-  color: #6d28d9;
+  color: #5151cd;
   text-decoration: none;
   font-weight: 500;
   transition: color 150ms ease;
@@ -1246,21 +1246,21 @@ body {
   padding: 1rem 1.25rem;
   margin-top: 2rem;
   border-radius: 10px;
-  background: rgba(124, 58, 237, 0.04);
-  border: 1px solid rgba(124, 58, 237, 0.12);
+  background: rgba(91, 91, 214, 0.04);
+  border: 1px solid rgba(91, 91, 214, 0.12);
   font-size: 0.875rem;
   color: #334155;
   transition: background-color 150ms ease, border-color 150ms ease;
 }
 
 .legal-cross-link:hover {
-  background: rgba(124, 58, 237, 0.08);
-  border-color: rgba(124, 58, 237, 0.2);
+  background: rgba(91, 91, 214, 0.08);
+  border-color: rgba(91, 91, 214, 0.2);
 }
 
 .legal-cross-link svg {
   flex-shrink: 0;
-  color: #7c3aed;
+  color: #5b5bd6;
 }
 
 /* Legal caps block (limitation of liability) */
@@ -1300,9 +1300,9 @@ body {
 }
 
 .edu-pill-pro {
-  border: 1px solid rgba(124, 58, 237, 0.35);
+  border: 1px solid rgba(91, 91, 214, 0.35);
   background: #d1fae5;
-  color: #6d28d9;
+  color: #5151cd;
   padding: 0.35rem 0.75rem;
   font-weight: 600;
 }
@@ -1389,7 +1389,7 @@ body {
   width: 100%;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(139, 92, 246, 0.12);
+  background: rgba(110, 106, 222, 0.12);
 }
 
 .edu-loading-bar::after {
@@ -1400,7 +1400,7 @@ body {
   height: 100%;
   width: 40%;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgba(139, 92, 246, 0), rgba(139, 92, 246, 0.85), rgba(139, 92, 246, 0));
+  background: linear-gradient(90deg, rgba(110, 106, 222, 0), rgba(110, 106, 222, 0.85), rgba(110, 106, 222, 0));
   animation: edu-loading-sweep 1s ease-in-out infinite;
 }
 
@@ -1439,7 +1439,7 @@ body {
   height: 2px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(139, 92, 246, 0.1);
+  background: rgba(110, 106, 222, 0.1);
   opacity: 0;
   transform: translate3d(0, 2px, 0);
   transition: opacity 160ms ease, transform 160ms ease;
@@ -1454,7 +1454,7 @@ body {
   height: 100%;
   width: 38%;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgba(139, 92, 246, 0), rgba(139, 92, 246, 0.92), rgba(139, 92, 246, 0));
+  background: linear-gradient(90deg, rgba(110, 106, 222, 0), rgba(110, 106, 222, 0.92), rgba(110, 106, 222, 0));
   animation: edu-route-progress-sweep 0.95s cubic-bezier(0.22, 1, 0.36, 1) infinite;
 }
 
@@ -1489,7 +1489,7 @@ body {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: #8b5cf6;
+  background: #6e6ade;
   opacity: 0.35;
   transform: scale(0.72);
   animation: edu-dot-pop 900ms ease-in-out infinite;
@@ -2245,7 +2245,7 @@ body::-webkit-scrollbar-thumb:hover {
   left: 0;
   right: 0;
   height: 3px;
-  background: linear-gradient(90deg, #8b5cf6, #14b8a6);
+  background: linear-gradient(90deg, #6e6ade, #14b8a6);
   transform-origin: 0%;
   z-index: 9999;
 }
@@ -2281,7 +2281,7 @@ body::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(8px);
   transform: translateY(-4px);
-  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.12);
+  box-shadow: 0 8px 32px rgba(110, 106, 222, 0.12);
 }
 
 /* ── How it Works step hover pulse ── */
@@ -2290,7 +2290,7 @@ body::-webkit-scrollbar-thumb:hover {
 }
 
 .step-circle-hover:hover {
-  box-shadow: 0 0 0 6px rgba(139, 92, 246, 0.15), 0 0 0 12px rgba(139, 92, 246, 0.05);
+  box-shadow: 0 0 0 6px rgba(110, 106, 222, 0.15), 0 0 0 12px rgba(110, 106, 222, 0.05);
   transform: scale(1.1);
 }
 
@@ -2358,8 +2358,8 @@ body::-webkit-scrollbar-thumb:hover {
 
 .landing-canvas-grid {
   background-image:
-    linear-gradient(rgba(139, 92, 246, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(139, 92, 246, 0.07) 1px, transparent 1px);
+    linear-gradient(rgba(110, 106, 222, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(110, 106, 222, 0.07) 1px, transparent 1px);
   background-size: 34px 34px;
   -webkit-mask-image: radial-gradient(ellipse 72% 58% at 50% 42%, black 0%, transparent 76%);
   mask-image: radial-gradient(ellipse 72% 58% at 50% 42%, black 0%, transparent 76%);
@@ -2386,13 +2386,13 @@ body::-webkit-scrollbar-thumb:hover {
   border: 1px solid rgba(255, 255, 255, 0.55);
   box-shadow:
     inset 0 1px 1px rgba(255, 255, 255, 0.6),
-    0 8px 24px -12px rgba(124, 58, 237, 0.18),
+    0 8px 24px -12px rgba(91, 91, 214, 0.18),
     0 2px 6px -2px rgba(15, 23, 42, 0.04);
 }
 
 /* ── Landing: dark brand section (Apple cinematic immersion) ── */
 .brand-dark-section {
-  background: linear-gradient(180deg, #4c1d95 0%, #2e1065 100%);
+  background: linear-gradient(180deg, #272962 0%, #1a1b45 100%);
   color: #ffffff;
 }
 
