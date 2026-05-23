@@ -313,12 +313,13 @@ body {
   body {
     @apply bg-background text-foreground;
   }
-  /* Universal keyboard-focus indicator. Components that opt into a ring-based
-     focus style use `focus-visible:outline-none` (a utility, higher layer than
-     base) so they keep their ring with no double indicator; every other
-     interactive element — hand-rolled buttons, links, summaries, [tabindex] —
-     inherits this visible 2px ring. :focus-visible is keyboard/programmatic
-     only, so mouse clicks never trigger it. --ring flips in dark mode. */
+  /* Universal keyboard-focus indicator. shadcn primitives set `outline-none`
+     (a utility in @layer utilities, higher priority than this base rule) plus
+     their own box-shadow ring, so they override this outline and show no double
+     indicator; every other interactive element — hand-rolled buttons, links,
+     summaries, [tabindex] — inherits this visible 2px ring. :focus-visible is
+     keyboard/programmatic only, so mouse clicks never trigger it. --ring flips
+     in dark mode. */
   :focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
