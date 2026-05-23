@@ -33,7 +33,7 @@ interface Feature {
 // matching HowItWorks and Pricing so the sections read as one designed
 // system rather than separately-styled blocks.
 const CARD_BASE =
-  "group relative flex h-full flex-col rounded-2xl border border-border/60 bg-card p-7 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-300 hover:-translate-y-1 hover:border-brand-emerald-200/70 hover:shadow-[0_18px_36px_-18px_rgba(91,91,214,0.22)] sm:p-8";
+  "group relative flex h-full flex-col rounded-2xl border border-border/60 bg-card p-7 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-300 hover:-translate-y-1 hover:border-brand-emerald-200/70 hover:shadow-[0_18px_36px_-18px_rgba(82,82,91,0.22)] sm:p-8";
 
 function IconChip({ icon: Icon }: { icon: LucideIcon }) {
   return (

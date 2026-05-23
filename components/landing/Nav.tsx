@@ -115,7 +115,7 @@ export function Nav() {
           aria-label="Joblit home"
         >
           <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-emerald-50 ring-1 ring-brand-emerald-100">
-            <JoblitMark size={18} color="var(--brand-emerald-700, #5151cd)" ariaLabel={null} />
+            <JoblitMark size={18} color="var(--brand-emerald-700, #3f3f46)" ariaLabel={null} />
           </span>
           Joblit
         </Link>
