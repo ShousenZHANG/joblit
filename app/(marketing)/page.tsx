@@ -70,13 +70,20 @@ export default function MarketingPage() {
           Kept outside <main> so no ancestor transform/overflow establishes
           a new containing block for the fixed Nav inside <main>. */}
       <div aria-hidden className="landing-atmos" />
-      <main className="relative z-[1] flex flex-col bg-transparent text-foreground">
+      <main className="relative z-[1] flex flex-col bg-background text-foreground">
         <Nav />
         <Hero />
         <LogoBar />
-        <HowItWorks />
+        {/* Apple-style alternating bands: white → cool-gray → white. The
+            gray bands (HowItWorks, Pricing) are full-bleed; each section
+            keeps its own centered max-w container. */}
+        <div className="bg-muted/60">
+          <HowItWorks />
+        </div>
         <Features />
-        <Pricing />
+        <div className="bg-muted/60">
+          <Pricing />
+        </div>
         <Faq />
         <Cta />
         <Footer />
