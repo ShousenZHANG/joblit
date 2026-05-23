@@ -239,7 +239,7 @@ export function JobAddDialog({
                 value={form.jobUrl}
                 onChange={(e) => updateField("jobUrl", e.target.value)}
                 required
-                className="h-10 rounded-xl border-border bg-muted/40 pl-3 pr-3 text-sm transition-all duration-150 placeholder:text-muted-foreground/70 focus-visible:border-brand-emerald-300 focus-visible:bg-white focus-visible:ring-brand-emerald-100"
+                className="h-10 rounded-xl border-border bg-muted/40 pl-3 pr-3 text-sm transition-all duration-150 placeholder:text-muted-foreground/70 focus-visible:border-brand-emerald-300 focus-visible:bg-background focus-visible:ring-brand-emerald-100"
               />
               {urlTrimmed.length > 0 && !isValidUrl(urlTrimmed) && (
                 <p className="mt-1 text-[11px] text-amber-500">
@@ -261,7 +261,7 @@ export function JobAddDialog({
                   value={form.title}
                   onChange={(e) => updateField("title", e.target.value)}
                   required
-                  className="h-10 rounded-xl border-border bg-muted/40 text-sm transition-all duration-150 placeholder:text-muted-foreground/70 focus-visible:border-brand-emerald-300 focus-visible:bg-white focus-visible:ring-brand-emerald-100"
+                  className="h-10 rounded-xl border-border bg-muted/40 text-sm transition-all duration-150 placeholder:text-muted-foreground/70 focus-visible:border-brand-emerald-300 focus-visible:bg-background focus-visible:ring-brand-emerald-100"
                 />
               </div>
               <div>
@@ -274,7 +274,7 @@ export function JobAddDialog({
                   placeholder="Company name"
                   value={form.company}
                   onChange={(e) => updateField("company", e.target.value)}
-                  className="h-10 rounded-xl border-border bg-muted/40 text-sm transition-all duration-150 placeholder:text-muted-foreground/70 focus-visible:border-brand-emerald-300 focus-visible:bg-white focus-visible:ring-brand-emerald-100"
+                  className="h-10 rounded-xl border-border bg-muted/40 text-sm transition-all duration-150 placeholder:text-muted-foreground/70 focus-visible:border-brand-emerald-300 focus-visible:bg-background focus-visible:ring-brand-emerald-100"
                 />
               </div>
             </div>
@@ -360,7 +360,7 @@ export function JobAddDialog({
                     updateField("description", e.target.value);
                   }
                 }}
-                className="min-h-[100px] max-h-[240px] resize-y rounded-xl border-border bg-muted/40 text-sm transition-all duration-150 placeholder:text-muted-foreground/70 focus-visible:border-brand-emerald-300 focus-visible:bg-white focus-visible:ring-brand-emerald-100"
+                className="min-h-[100px] max-h-[240px] resize-y rounded-xl border-border bg-muted/40 text-sm transition-all duration-150 placeholder:text-muted-foreground/70 focus-visible:border-brand-emerald-300 focus-visible:bg-background focus-visible:ring-brand-emerald-100"
               />
               {descLength > 0 && (
                 <div

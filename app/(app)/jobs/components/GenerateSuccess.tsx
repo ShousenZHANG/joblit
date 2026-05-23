@@ -31,7 +31,7 @@ export function GenerateSuccess({
       </div>
 
       {/* Inline PDF preview */}
-      <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-white">
+      <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-card">
         <iframe
           title={target === "resume" ? "Resume preview" : "Cover letter preview"}
           src={pdfUrl}
@@ -56,7 +56,7 @@ export function GenerateSuccess({
           variant="outline"
           size="sm"
           onClick={onGenerateOther}
-          className="h-10 rounded-xl border-border bg-white px-4 text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted/40 active:translate-y-[1px]"
+          className="h-10 rounded-xl border-border bg-card px-4 text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted/40 active:translate-y-[1px]"
         >
           Generate {otherTarget}
           <ArrowRight className="ml-1.5 h-4 w-4" />

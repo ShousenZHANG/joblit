@@ -78,7 +78,7 @@ export function StepIndicator({
                     ? "bg-brand-emerald-500 text-white shadow-sm"
                     : isActive
                       ? "border-2 border-brand-emerald-500 bg-brand-emerald-50 text-brand-emerald-700"
-                      : "border border-border bg-white text-muted-foreground/70",
+                      : "border border-border bg-card text-muted-foreground/70",
                 ].join(" ")}
               >
                 {isDone ? (

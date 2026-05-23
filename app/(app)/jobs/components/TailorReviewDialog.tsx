@@ -69,7 +69,7 @@ export function TailorReviewDialog({
     <Dialog open={open && !!draft} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="fixed left-2 top-2 flex h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-none translate-x-0 translate-y-0 grid-rows-none flex-col gap-0 overflow-hidden rounded-[1.65rem] border border-white/70 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_44%,#edf7f2_100%)] p-0 shadow-[0_34px_110px_-44px_rgba(15,23,42,0.70),0_16px_42px_-34px_rgba(15,23,42,0.45)] ring-1 ring-slate-900/5 sm:left-4 sm:top-4 sm:h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)] sm:max-w-none sm:rounded-[2rem]"
+        className="fixed left-2 top-2 flex h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-none translate-x-0 translate-y-0 grid-rows-none flex-col gap-0 overflow-hidden rounded-[1.65rem] border border-white/70 dark:border-border/60 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_44%,#edf7f2_100%)] dark:bg-none dark:bg-card p-0 shadow-[0_34px_110px_-44px_rgba(15,23,42,0.70),0_16px_42px_-34px_rgba(15,23,42,0.45)] ring-1 ring-slate-900/5 dark:ring-white/10 sm:left-4 sm:top-4 sm:h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)] sm:max-w-none sm:rounded-[2rem]"
       >
         {draft ? (
           <TailorReviewDialogBody
@@ -369,7 +369,7 @@ function TailorReviewDialogBody({
 
   return (
     <>
-      <DialogHeader className="relative shrink-0 border-b border-slate-200/70 bg-white/90 px-5 py-4 text-left shadow-[0_12px_34px_-32px_rgba(15,23,42,0.55)] backdrop-blur-xl md:px-7">
+      <DialogHeader className="relative shrink-0 border-b border-border/70 bg-card/90 px-5 py-4 text-left shadow-[0_12px_34px_-32px_rgba(15,23,42,0.55)] backdrop-blur-xl md:px-7">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-x-8 bottom-0 h-px bg-gradient-to-r from-transparent via-brand-emerald-300/70 to-transparent"
@@ -394,7 +394,7 @@ function TailorReviewDialogBody({
               size="icon-sm"
               disabled={!canClose}
               onClick={onClose}
-              className="rounded-full text-muted-foreground transition-all hover:bg-slate-100 hover:text-foreground active:scale-95"
+              className="rounded-full text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-95"
               aria-label="Close review dialog"
             >
               <X className="h-4 w-4" />
@@ -413,15 +413,15 @@ function TailorReviewDialogBody({
       ) : null}
 
       <div className="grid min-h-0 flex-1 gap-5 overflow-hidden bg-[radial-gradient(circle_at_6%_0%,rgba(16,185,129,0.09),transparent_28%),radial-gradient(circle_at_82%_8%,rgba(59,130,246,0.055),transparent_30%)] p-4 md:p-6 lg:grid-cols-2">
-        <div className="flex min-h-0 flex-col overflow-hidden rounded-[1.65rem] border border-white/80 bg-white/75 p-3 shadow-[0_24px_70px_-48px_rgba(15,23,42,0.55),0_8px_20px_-18px_rgba(15,23,42,0.20)] ring-1 ring-slate-900/5 backdrop-blur">
-          <div className="mb-3 flex shrink-0 items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white/80 px-3 py-2.5 shadow-[0_10px_28px_-25px_rgba(15,23,42,0.42)]">
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-[1.65rem] border border-border/60 bg-card/75 p-3 shadow-[0_24px_70px_-48px_rgba(15,23,42,0.55),0_8px_20px_-18px_rgba(15,23,42,0.20)] ring-1 ring-border/40 backdrop-blur">
+          <div className="mb-3 flex shrink-0 items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card/80 px-3 py-2.5 shadow-[0_10px_28px_-25px_rgba(15,23,42,0.42)]">
             <div className="min-w-0">
               <p className="text-sm font-semibold text-foreground">AI proposals</p>
               <p className="truncate text-xs text-muted-foreground">
                 Review edits, then the preview renders the accepted version.
               </p>
             </div>
-            <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">
+            <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground ring-1 ring-border">
               {previewStatusLabel}
             </span>
           </div>
@@ -465,8 +465,8 @@ function TailorReviewDialogBody({
         </div>
       </div>
 
-      <div className="flex shrink-0 flex-col gap-3 border-t border-slate-200/70 bg-white/90 px-5 py-4 shadow-[0_-18px_48px_-42px_rgba(15,23,42,0.55)] backdrop-blur-xl md:flex-row md:items-center md:justify-between md:px-7">
-        <div className="inline-flex items-center gap-2 rounded-full border border-slate-200/70 bg-white/80 px-3 py-2 text-xs text-muted-foreground shadow-sm">
+      <div className="flex shrink-0 flex-col gap-3 border-t border-border/70 bg-card/90 px-5 py-4 shadow-[0_-18px_48px_-42px_rgba(15,23,42,0.55)] backdrop-blur-xl md:flex-row md:items-center md:justify-between md:px-7">
+        <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/80 px-3 py-2 text-xs text-muted-foreground shadow-sm">
           <FileText className="h-4 w-4 text-brand-emerald-700" />
           <span className="hidden sm:inline">
             {previewSyncStatus === "pending"
@@ -482,7 +482,7 @@ function TailorReviewDialogBody({
             size="sm"
             onClick={handleDiscard}
             disabled={isDiscarding}
-            className="h-10 rounded-full border-slate-200 bg-white px-4 text-sm font-semibold text-foreground/85 shadow-sm transition-all hover:-translate-y-px hover:bg-slate-50 hover:shadow-md active:translate-y-0"
+            className="h-10 rounded-full border-border bg-card px-4 text-sm font-semibold text-foreground/85 shadow-sm transition-all hover:-translate-y-px hover:bg-muted/60 hover:shadow-md active:translate-y-0"
           >
             <RotateCcw className="h-4 w-4" />
             {isDiscarding ? "Discarding..." : "Discard"}
@@ -493,7 +493,7 @@ function TailorReviewDialogBody({
             size="sm"
             onClick={canClose ? onClose : undefined}
             disabled={!canClose}
-            className="h-10 rounded-full border-slate-200 bg-white px-4 text-sm font-semibold text-foreground/85 shadow-sm transition-all hover:-translate-y-px hover:bg-slate-50 hover:shadow-md active:translate-y-0"
+            className="h-10 rounded-full border-border bg-card px-4 text-sm font-semibold text-foreground/85 shadow-sm transition-all hover:-translate-y-px hover:bg-muted/60 hover:shadow-md active:translate-y-0"
           >
             Close
           </Button>

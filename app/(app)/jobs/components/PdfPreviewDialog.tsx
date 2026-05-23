@@ -22,7 +22,7 @@ export function PdfPreviewDialog({ open, onOpenChange, pdfPreview }: PdfPreviewD
           <DialogDescription>Preview the generated PDF.</DialogDescription>
         </DialogHeader>
         <div className="flex h-full flex-col">
-          <div className="flex h-11 items-center justify-between border-b border-slate-900/10 bg-white/90 px-3">
+          <div className="flex h-11 items-center justify-between border-b border-border bg-card/90 px-3">
             <div className="text-xs font-medium text-muted-foreground">
               {pdfPreview?.label ?? "PDF preview"}
             </div>
@@ -32,7 +32,7 @@ export function PdfPreviewDialog({ open, onOpenChange, pdfPreview }: PdfPreviewD
                   asChild
                   size="sm"
                   variant="outline"
-                  className="h-9 rounded-xl border-border bg-white px-3 text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted/40 active:translate-y-[1px]"
+                  className="h-9 rounded-xl border-border bg-card px-3 text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted/40 active:translate-y-[1px]"
                 >
                   <a href={pdfPreview.url} download={pdfPreview.filename}>
                     <Download className="mr-1.5 h-4 w-4" />
@@ -45,7 +45,7 @@ export function PdfPreviewDialog({ open, onOpenChange, pdfPreview }: PdfPreviewD
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="h-9 rounded-xl border-border bg-white px-3 text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted/40 active:translate-y-[1px]"
+                  className="h-9 rounded-xl border-border bg-card px-3 text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted/40 active:translate-y-[1px]"
                 >
                   Close
                 </Button>
