@@ -17,7 +17,12 @@
   --card-foreground: oklch(0.12 0.005 250);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.12 0.005 250);
-  --primary: oklch(0.56 0.19 255);
+  /* Primary + ring aligned to brand emerald (was blue hue 255). The blue
+     substrate fought the emerald brand: every shadcn default (Button,
+     Badge, Progress, focus ring, input selection) rendered blue, forcing
+     manual bg-brand-emerald overrides across the app. Emerald primary makes
+     the whole component layer brand-coherent. Charts keep their own hues. */
+  --primary: oklch(0.55 0.16 160);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.965 0.005 80);
   --secondary-foreground: oklch(0.18 0.005 250);
@@ -26,7 +31,7 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.92 0.005 80);
   --input: oklch(0.92 0.005 80);
-  --ring: oklch(0.73 0.08 255);
+  --ring: oklch(0.65 0.14 160);
   --chart-1: oklch(0.56 0.19 255);
   --chart-2: oklch(0.62 0.12 200);
   --chart-3: oklch(0.48 0.08 230);
@@ -34,12 +39,12 @@
   --chart-5: oklch(0.78 0.16 210);
   --sidebar: oklch(0.99 0.004 250);
   --sidebar-foreground: oklch(0.18 0.02 255);
-  --sidebar-primary: oklch(0.56 0.19 255);
+  --sidebar-primary: oklch(0.55 0.16 160);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.96 0.01 250);
   --sidebar-accent-foreground: oklch(0.22 0.02 255);
   --sidebar-border: oklch(0.9 0.01 250);
-  --sidebar-ring: oklch(0.73 0.08 255);
+  --sidebar-ring: oklch(0.65 0.14 160);
 
   /* Joblit landing — shadow system (Apple reductive + Stripe layered, adapted warm) */
   --shadow-ambient: 0px 1px 3px rgba(0,0,0,0.04);
@@ -274,8 +279,8 @@ body {
   --card-foreground: oklch(0.98 0.005 250);
   --popover: oklch(0.16 0.005 250);
   --popover-foreground: oklch(0.98 0.005 250);
-  --primary: oklch(0.7 0.16 255);
-  --primary-foreground: oklch(0.2 0.02 255);
+  --primary: oklch(0.72 0.15 160);
+  --primary-foreground: oklch(0.18 0.03 160);
   --secondary: oklch(0.26 0.02 255);
   --secondary-foreground: oklch(0.98 0.005 250);
   --muted: oklch(0.26 0.02 255);
@@ -285,7 +290,7 @@ body {
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.7 0.12 255);
+  --ring: oklch(0.7 0.13 160);
   --chart-1: oklch(0.62 0.18 255);
   --chart-2: oklch(0.68 0.12 200);
   --chart-3: oklch(0.72 0.14 300);
@@ -293,12 +298,12 @@ body {
   --chart-5: oklch(0.7 0.16 210);
   --sidebar: oklch(0.2 0.02 255);
   --sidebar-foreground: oklch(0.98 0.005 250);
-  --sidebar-primary: oklch(0.62 0.18 255);
+  --sidebar-primary: oklch(0.72 0.15 160);
   --sidebar-primary-foreground: oklch(0.98 0.005 250);
   --sidebar-accent: oklch(0.26 0.02 255);
   --sidebar-accent-foreground: oklch(0.98 0.005 250);
   --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: oklch(0.7 0.12 255);
+  --sidebar-ring: oklch(0.7 0.13 160);
 }
 
 @layer base {
