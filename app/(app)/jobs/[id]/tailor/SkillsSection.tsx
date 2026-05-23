@@ -43,7 +43,7 @@ export function SkillsSection({ skillsAdditions, onChange }: SkillsSectionProps)
             className={cn(
               "flex items-start gap-3 rounded-2xl border px-3 py-2.5 transition-all",
               group.accepted
-                ? "border-brand-emerald-200 bg-brand-emerald-50/60 shadow-[0_14px_34px_-30px_rgba(43,138,239,0.65)]"
+                ? "border-brand-emerald-200 bg-brand-emerald-50/60 shadow-[0_14px_34px_-30px_rgba(139,92,246,0.65)]"
                 : "border-slate-200/80 bg-slate-50/70 hover:bg-white",
             )}
           >

@@ -135,7 +135,7 @@ export function JobDetailPanel({
       className={cn(
         "relative flex flex-col overflow-hidden backdrop-blur transition-shadow duration-200 ease-out",
         "rounded-2xl border border-border/70 bg-background/90 shadow-sm",
-        "lg:rounded-3xl lg:border-2 lg:border-border/50 lg:bg-background/85 lg:shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] lg:hover:shadow-[0_24px_50px_-36px_rgba(0,113,227,0.22)]",
+        "lg:rounded-3xl lg:border-2 lg:border-border/50 lg:bg-background/85 lg:shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] lg:hover:shadow-[0_24px_50px_-36px_rgba(124,58,237,0.22)]",
         "min-h-[clamp(18rem,calc(100dvh-16rem),32rem)] max-h-[calc(100dvh-12rem)] lg:h-auto lg:min-h-0 lg:max-h-none lg:flex-1",
         mobileTab !== "detail" && "hidden lg:flex",
       )}

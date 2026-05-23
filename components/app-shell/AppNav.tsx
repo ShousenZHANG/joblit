@@ -85,8 +85,8 @@ export function AppNav() {
           paddingTop: scrolled ? 7 : 9,
           paddingBottom: scrolled ? 7 : 9,
           boxShadow: scrolled
-            ? "0 14px 36px -16px rgba(0, 113, 227, 0.26), 0 4px 12px -4px rgba(15, 23, 42, 0.08)"
-            : "0 8px 24px -12px rgba(0, 113, 227, 0.14), 0 2px 6px -2px rgba(15, 23, 42, 0.04)",
+            ? "0 14px 36px -16px rgba(124, 58, 237, 0.26), 0 4px 12px -4px rgba(15, 23, 42, 0.08)"
+            : "0 8px 24px -12px rgba(124, 58, 237, 0.14), 0 2px 6px -2px rgba(15, 23, 42, 0.04)",
         }}
         transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
         className="flex w-full items-center justify-between gap-3 rounded-full border border-border/60 bg-[var(--landing-nav-bg,rgba(255,255,255,0.82))] px-3 backdrop-blur-xl backdrop-saturate-150 sm:px-4"
@@ -101,7 +101,7 @@ export function AppNav() {
             onClick={resetScroll}
           >
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-emerald-50 ring-1 ring-brand-emerald-100">
-              <JoblitMark size={18} color="var(--brand-emerald-700, #0061c4)" ariaLabel={null} />
+              <JoblitMark size={18} color="var(--brand-emerald-700, #6d28d9)" ariaLabel={null} />
             </span>
             Joblit
           </Link>

@@ -77,11 +77,11 @@ export default function MarketingPage() {
         {/* Apple-style alternating bands: white → cool-gray → white. The
             gray bands (HowItWorks, Pricing) are full-bleed; each section
             keeps its own centered max-w container. */}
-        <div className="bg-muted/60">
+        <div className="bg-muted/40">
           <HowItWorks />
         </div>
         <Features />
-        <div className="bg-muted/60">
+        <div className="bg-muted/40">
           <Pricing />
         </div>
         <Faq />

@@ -130,7 +130,7 @@ export function Pricing() {
               className={
                 "group relative flex flex-col rounded-2xl border p-6 " +
                 (tier.featured
-                  ? "border-brand-emerald/40 bg-gradient-to-b from-brand-emerald-50/80 to-background shadow-[0_20px_40px_-12px_rgba(0,113,227,0.22)]"
+                  ? "border-brand-emerald/40 bg-gradient-to-b from-brand-emerald-50/80 to-background shadow-[0_20px_40px_-12px_rgba(124,58,237,0.22)]"
                   : "border-border/60 bg-background shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.08)]")
               }
             >
@@ -143,11 +143,11 @@ export function Pricing() {
                 className="pointer-events-none absolute inset-0 rounded-2xl"
                 style={{
                   background: tier.featured
-                    ? "radial-gradient(120% 80% at 50% 0%, rgba(0,113,227,0.16), transparent 60%)"
-                    : "radial-gradient(120% 80% at 50% 0%, rgba(0,113,227,0.12), transparent 55%)",
+                    ? "radial-gradient(120% 80% at 50% 0%, rgba(124,58,237,0.16), transparent 60%)"
+                    : "radial-gradient(120% 80% at 50% 0%, rgba(124,58,237,0.12), transparent 55%)",
                   boxShadow: tier.featured
-                    ? "0 36px 72px -28px rgba(0,113,227,0.38)"
-                    : "0 28px 56px -24px rgba(0,113,227,0.28)",
+                    ? "0 36px 72px -28px rgba(124,58,237,0.38)"
+                    : "0 28px 56px -24px rgba(124,58,237,0.28)",
                 }}
               />
 
