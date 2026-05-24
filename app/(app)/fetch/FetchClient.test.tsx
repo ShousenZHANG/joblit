@@ -174,14 +174,16 @@ describe("FetchClient", () => {
     expect(menu.className).toContain("data-[state=open]:zoom-in-95");
   });
 
-  it("shows the experience requirement exclusion in the description menu", async () => {
+  it("defaults the minimum-experience filter to 4+ and lists rights rules separately", async () => {
     const user = userEvent.setup();
     renderFetch();
 
-    await user.click(screen.getByTestId("description-exclusions-trigger"));
+    // Experience is now its own select, defaulted to 4+ years.
+    expect(screen.getByText("Requires 4+ years experience")).toBeInTheDocument();
 
-    expect(await screen.findByText("Requires 4+ years experience")).toBeInTheDocument();
-    expect(screen.getByText(/minimum requirement of 4 or more years/i)).toBeInTheDocument();
+    // The description-rules dropdown now holds rights rules only.
+    await user.click(screen.getByTestId("description-exclusions-trigger"));
+    expect(await screen.findByText("No visa sponsorship")).toBeInTheDocument();
   });
 
   it("lists recent fetches and re-runs one back into the form", async () => {
@@ -230,5 +232,39 @@ describe("FetchClient", () => {
       )[0] as HTMLInputElement;
       expect(titleInput.value).toBe("Platform Engineer");
     });
+  });
+
+  it("sends custom title terms, remote-only and min salary in the run body", async () => {
+    const user = userEvent.setup();
+    renderFetch();
+
+    const customInput = screen.getByLabelText(/add custom title exclusion term/i);
+    await user.type(customInput, "intern");
+    await user.click(screen.getByRole("button", { name: /^add$/i }));
+
+    await user.click(screen.getByRole("button", { name: /remote only/i }));
+
+    fireEvent.change(screen.getByLabelText(/min salary/i), {
+      target: { value: "120000" },
+    });
+
+    await user.click(screen.getByRole("button", { name: /start fetch/i }));
+    await waitFor(() => {
+      expect(startRunMock).toHaveBeenCalledWith("run-1");
+    });
+
+    const fetchMock = global.fetch as unknown as {
+      mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> };
+    };
+    const createCall = fetchMock.mock.calls.find(
+      ([url, init]) => url === "/api/fetch-runs" && init?.method === "POST",
+    );
+    const body = JSON.parse(String(createCall?.[1]?.body ?? "{}"));
+
+    expect(body.excludeTitleTerms).toContain("intern");
+    expect(body.remoteOnly).toBe(true);
+    expect(body.minSalary).toBe(120000);
+    expect(body.strictness).toBe("balanced");
+    expect(body.excludeDescriptionRules).toContain("experience_requirement_4_plus");
   });
 });

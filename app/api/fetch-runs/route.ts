@@ -3,14 +3,14 @@ import { z } from "zod";
 import { withEmailSessionRoute, parseJsonValue } from "@/lib/server/api/routeHandler";
 import { prisma } from "@/lib/server/prisma";
 import { expandRoleQueries } from "@/lib/shared/fetchRolePacks";
-import {
-  filterDescriptionExclusionRules,
-  isTitleExclusionTerm,
-} from "@/lib/shared/fetchExclusionCriteria";
+import { filterDescriptionExclusionRules } from "@/lib/shared/fetchExclusionCriteria";
 
 export const runtime = "nodejs";
 
-const TitleExcludeSchema = z.string().refine(isTitleExclusionTerm);
+// Title exclusions allow any user term (presets + custom). Lower-cased and
+// length-bounded; the worker escapes each term before building its regex, so
+// arbitrary input is injection-safe.
+const TitleExcludeSchema = z.string().trim().toLowerCase().min(1).max(40);
 
 const queriesField = z
   .union([z.array(z.string().min(1)), z.string().min(1)])
@@ -37,12 +37,22 @@ const AUSchema = z
     smartExpand: z.coerce.boolean().optional().default(true),
     includeFromQueries: z.coerce.boolean().optional().default(false),
     applyExcludes: z.coerce.boolean().optional().default(true),
-    excludeTitleTerms: z.array(TitleExcludeSchema).optional().default([]),
+    excludeTitleTerms: z.array(TitleExcludeSchema).max(24).optional().default([]),
     excludeDescriptionRules: z
       .array(z.string())
       .optional()
       .default([])
       .transform(filterDescriptionExclusionRules),
+    excludeJobTypes: z
+      .array(
+        z.enum(["internship", "contract", "temporary", "parttime", "volunteer"]),
+      )
+      .max(5)
+      .optional()
+      .default([]),
+    remoteOnly: z.coerce.boolean().optional().default(false),
+    minSalary: z.coerce.number().int().min(0).max(10_000_000).optional(),
+    strictness: z.enum(["strict", "balanced", "loose"]).optional().default("balanced"),
   })
   .refine((data) => (data.title ?? data.queries?.[0])?.trim(), {
     message: "title is required",
@@ -169,6 +179,10 @@ export async function POST(req: Request) {
           applyExcludes: data.applyExcludes,
           excludeTitleTerms: data.excludeTitleTerms,
           excludeDescriptionRules: data.excludeDescriptionRules,
+          excludeJobTypes: data.excludeJobTypes,
+          remoteOnly: data.remoteOnly,
+          minSalary: data.minSalary ?? null,
+          strictness: data.strictness,
         },
         location: data.location ?? null,
         hoursOld: data.hoursOld ?? null,

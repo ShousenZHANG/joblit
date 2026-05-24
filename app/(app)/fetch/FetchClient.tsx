@@ -28,9 +28,24 @@ import { useMarket } from "@/hooks/useMarket";
 import {
   DESCRIPTION_EXCLUSION_OPTIONS,
   TITLE_EXCLUSION_OPTIONS,
+  TITLE_EXCLUSION_VALUES,
 } from "@/lib/shared/fetchExclusionCriteria";
 import { expandRoleQueries } from "@/lib/shared/fetchRolePacks";
 import { cn } from "@/lib/utils";
+
+const RIGHTS_EXCLUSION_OPTIONS = DESCRIPTION_EXCLUSION_OPTIONS.filter(
+  (o) => o.category === "rights",
+);
+const EXPERIENCE_EXCLUSION_OPTIONS = DESCRIPTION_EXCLUSION_OPTIONS.filter(
+  (o) => o.category === "experience",
+);
+const JOB_TYPE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "internship", label: "Internship" },
+  { value: "contract", label: "Contract" },
+  { value: "temporary", label: "Temporary / Casual" },
+  { value: "parttime", label: "Part-time" },
+  { value: "volunteer", label: "Volunteer" },
+];
 
 const COMMON_TITLES = [
   "Software Engineer",
@@ -210,6 +225,79 @@ function ExclusionDropdown({
           })}
         </DropdownMenuContent>
       </DropdownMenu>
+    </div>
+  );
+}
+
+// Freeform add-on for title exclusions: lets the user add custom terms beyond
+// the presets. Custom terms (those not in the preset list) render as removable
+// chips so they're visible even though the preset dropdown can't show them.
+function CustomTermAdder({
+  terms,
+  presets,
+  onChange,
+}: {
+  terms: string[];
+  presets: readonly string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const presetSet = new Set(presets);
+  const customTerms = terms.filter((t) => !presetSet.has(t));
+
+  function add() {
+    const value = draft.trim().toLowerCase();
+    if (!value) return;
+    if (!terms.includes(value)) onChange([...terms, value]);
+    setDraft("");
+  }
+
+  return (
+    <div className="mt-2 space-y-1.5">
+      <div className="flex gap-2">
+        <Input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+          placeholder="Add custom term…"
+          aria-label="Add custom title exclusion term"
+          className="h-9 text-sm"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={add}
+          className="h-9 shrink-0"
+        >
+          Add
+        </Button>
+      </div>
+      {customTerms.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {customTerms.map((t) => (
+            <span
+              key={t}
+              className="inline-flex items-center gap-1 rounded-full border border-brand-emerald-200 bg-brand-emerald-50 px-2.5 py-1 text-[11px] font-medium text-brand-emerald-700"
+            >
+              {t}
+              <button
+                type="button"
+                onClick={() => onChange(terms.filter((x) => x !== t))}
+                aria-label={`Remove ${t}`}
+                className="text-brand-emerald-500 transition-colors hover:text-brand-emerald-800"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -430,13 +518,22 @@ export function FetchClient() {
     "head",
     "architect",
   ]);
+  // Rights-type description rules only (identity/clearance/sponsorship).
   const [excludeDescriptionRules, setExcludeDescriptionRules] = useState<string[]>([
     "identity_requirement",
-    // Default-on alongside the title-seniority exclusions: this product targets
-    // early-career roles, so jobs demanding 4+ years are filtered unless the
-    // user opts out.
-    "experience_requirement_4_plus",
   ]);
+  // Minimum-experience exclusion is a single choice ("" = off). Default-on at
+  // 4+ alongside the title-seniority exclusions since this product targets
+  // early-career roles.
+  const [experienceRule, setExperienceRule] = useState<string>(
+    "experience_requirement_4_plus",
+  );
+  const [excludeJobTypes, setExcludeJobTypes] = useState<string[]>([]);
+  const [remoteOnly, setRemoteOnly] = useState(false);
+  const [minSalary, setMinSalary] = useState("");
+  const [strictness, setStrictness] = useState<"strict" | "balanced" | "loose">(
+    "balanced",
+  );
   const [deselectedExpansions, setDeselectedExpansions] = useState<Set<string>>(
     new Set(),
   );
@@ -576,7 +673,17 @@ export function FetchClient() {
           smartExpand: userTrimmedExpansion ? false : smartExpand,
           applyExcludes,
           excludeTitleTerms,
-          excludeDescriptionRules,
+          excludeDescriptionRules: [
+            ...excludeDescriptionRules,
+            ...(experienceRule ? [experienceRule] : []),
+          ],
+          excludeJobTypes,
+          remoteOnly,
+          minSalary:
+            minSalary.trim() && Number.isFinite(Number(minSalary))
+              ? Number(minSalary)
+              : undefined,
+          strictness,
         };
 
     const res = await fetch("/api/fetch-runs", {
@@ -838,25 +945,110 @@ export function FetchClient() {
 
           {/* Collapsible exclusion filters */}
           {applyExcludes && (
-            <div className="rounded-2xl border border-border/60 bg-muted/30 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
+            <div className="space-y-3 rounded-2xl border border-border/60 bg-muted/30 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
               <div className="grid gap-3 sm:grid-cols-2">
-                <ExclusionDropdown
-                  label="Title exclusions"
-                  values={excludeTitleTerms}
-                  options={TITLE_EXCLUSION_OPTIONS}
-                  placeholder="Select terms"
-                  testId="title-exclusions"
-                  onChange={setExcludeTitleTerms}
-                />
+                <div>
+                  <ExclusionDropdown
+                    label="Title exclusions"
+                    values={excludeTitleTerms}
+                    options={TITLE_EXCLUSION_OPTIONS}
+                    placeholder="Select terms"
+                    testId="title-exclusions"
+                    onChange={setExcludeTitleTerms}
+                  />
+                  <CustomTermAdder
+                    terms={excludeTitleTerms}
+                    presets={TITLE_EXCLUSION_VALUES}
+                    onChange={setExcludeTitleTerms}
+                  />
+                </div>
                 <ExclusionDropdown
                   label="Description exclusions"
                   values={excludeDescriptionRules}
-                  options={DESCRIPTION_EXCLUSION_OPTIONS}
+                  options={RIGHTS_EXCLUSION_OPTIONS}
                   placeholder="Select rules"
                   testId="description-exclusions"
                   onChange={setExcludeDescriptionRules}
                 />
               </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="fetch-experience" className="text-xs font-medium text-muted-foreground">
+                    Minimum experience
+                  </Label>
+                  <Select
+                    value={experienceRule || "off"}
+                    onValueChange={(v) => setExperienceRule(v === "off" ? "" : v)}
+                  >
+                    <SelectTrigger id="fetch-experience">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="off">No experience filter</SelectItem>
+                      {EXPERIENCE_EXCLUSION_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <ExclusionDropdown
+                  label="Exclude job types"
+                  values={excludeJobTypes}
+                  options={JOB_TYPE_OPTIONS}
+                  placeholder="None"
+                  testId="jobtype-exclusions"
+                  onChange={setExcludeJobTypes}
+                />
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="fetch-min-salary" className="text-xs font-medium text-muted-foreground">
+                    Min salary (annual)
+                  </Label>
+                  <Input
+                    id="fetch-min-salary"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    step={5000}
+                    value={minSalary}
+                    onChange={(e) => setMinSalary(e.target.value)}
+                    placeholder="e.g. 100000"
+                    className="h-11"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="fetch-strictness" className="text-xs font-medium text-muted-foreground">
+                    Rights filter strictness
+                  </Label>
+                  <Select
+                    value={strictness}
+                    onValueChange={(v) => setStrictness(v as "strict" | "balanced" | "loose")}
+                  >
+                    <SelectTrigger id="fetch-strictness">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="loose">Loose (fewer drops)</SelectItem>
+                      <SelectItem value="balanced">Balanced</SelectItem>
+                      <SelectItem value="strict">Strict (more drops)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className={`filter-chip ${remoteOnly ? "filter-chip--active" : "filter-chip--inactive"}`}
+                onClick={() => setRemoteOnly(!remoteOnly)}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${remoteOnly ? "bg-brand-emerald-500" : "bg-muted-foreground/30"}`} />
+                Remote only
+              </button>
             </div>
           )}
 
