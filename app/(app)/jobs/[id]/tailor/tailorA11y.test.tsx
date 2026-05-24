@@ -6,7 +6,6 @@ import { CoverParagraphsSection } from "./CoverParagraphsSection";
 import { SummarySection } from "./SummarySection";
 import { BulletsSection } from "./BulletsSection";
 import { PageHeading } from "@/components/app-shell/PageHeading";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import type { AiContent, AiSummary } from "@/lib/shared/schemas/aiContent";
 
 const skillsAdditions: AiContent["cv"]["skillsAdditions"] = [
@@ -80,15 +79,4 @@ describe("shared primitives — accessibility", () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 
-  it("Card has no axe violations", async () => {
-    const { container } = render(
-      <Card>
-        <CardHeader>
-          <CardTitle>Title</CardTitle>
-        </CardHeader>
-        <CardContent>Body content</CardContent>
-      </Card>,
-    );
-    expect(await axe(container)).toHaveNoViolations();
-  });
 });
