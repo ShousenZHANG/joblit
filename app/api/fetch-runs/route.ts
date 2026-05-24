@@ -64,6 +64,49 @@ const CNSchema = z.object({
   excludeKeywords: z.array(z.string()).optional().default([]),
 });
 
+export async function GET() {
+  return withEmailSessionRoute(async ({ userId }) => {
+    const runs = await prisma.fetchRun.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take: 8,
+      select: {
+        id: true,
+        status: true,
+        market: true,
+        importedCount: true,
+        queries: true,
+        location: true,
+        hoursOld: true,
+        createdAt: true,
+      },
+    });
+
+    return NextResponse.json({
+      runs: runs.map((r) => {
+        const q = (r.queries ?? {}) as Record<string, unknown>;
+        const queryList = Array.isArray(q.queries) ? (q.queries as string[]) : [];
+        return {
+          id: r.id,
+          status: r.status,
+          market: r.market ?? "AU",
+          importedCount: r.importedCount,
+          title: typeof q.title === "string" ? q.title : queryList[0] ?? null,
+          queryCount: queryList.length,
+          location: r.location,
+          hoursOld: r.hoursOld,
+          smartExpand: typeof q.smartExpand === "boolean" ? q.smartExpand : null,
+          sources: Array.isArray(q.sources) ? (q.sources as string[]) : null,
+          excludeKeywords: Array.isArray(q.excludeKeywords)
+            ? (q.excludeKeywords as string[])
+            : null,
+          createdAt: r.createdAt.toISOString(),
+        };
+      }),
+    });
+  });
+}
+
 export async function POST(req: Request) {
   return withEmailSessionRoute(async ({ userId, userEmail, requestId }) => {
     const json = await req.json().catch(() => null);

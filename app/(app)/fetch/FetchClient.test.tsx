@@ -180,4 +180,52 @@ describe("FetchClient", () => {
     expect(await screen.findByText("Requires 4+ years experience")).toBeInTheDocument();
     expect(screen.getByText(/minimum requirement of 4 or more years/i)).toBeInTheDocument();
   });
+
+  it("lists recent fetches and re-runs one back into the form", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url === "/api/fetch-runs" && init?.method !== "POST") {
+        return new Response(
+          JSON.stringify({
+            runs: [
+              {
+                id: "r1",
+                status: "SUCCEEDED",
+                market: "AU",
+                importedCount: 7,
+                title: "Platform Engineer",
+                queryCount: 3,
+                location: "Melbourne, Victoria, Australia",
+                hoursOld: 24,
+                smartExpand: true,
+                sources: null,
+                excludeKeywords: null,
+                createdAt: new Date().toISOString(),
+              },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderFetch();
+
+    expect(await screen.findByText("Platform Engineer")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /re-run platform engineer/i }));
+
+    await waitFor(() => {
+      const titleInput = screen.getAllByPlaceholderText(
+        /e\.g\. software engineer/i,
+      )[0] as HTMLInputElement;
+      expect(titleInput.value).toBe("Platform Engineer");
+    });
+  });
 });

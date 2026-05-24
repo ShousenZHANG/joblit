@@ -119,12 +119,14 @@ export function FetchProgressPanel() {
               transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             />
           </svg>
-          <span className="absolute text-[10px] font-bold text-foreground">
+          <span className="absolute text-[11px] font-bold tabular-nums text-foreground">
             {status === "SUCCEEDED"
               ? "\u2713"
               : status === "FAILED"
                 ? "\u2715"
-                : `${progressValue}%`}
+                : importedCount > 0
+                  ? importedCount
+                  : "\u22ef"}
           </span>
           {isRunning && (
             <span className="pointer-events-none absolute inset-0 animate-ping rounded-full border-2 border-brand-emerald-400 opacity-20" />
@@ -206,6 +208,14 @@ export function FetchProgressPanel() {
                     : "Queued and starting soon."}
             </div>
 
+            {/* Live import count — real signal while the worker streams results
+                in, instead of relying on the time-based progress bar alone. */}
+            {isRunning && importedCount > 0 ? (
+              <div className="text-sm font-semibold text-brand-emerald-700">
+                Imported {importedCount} so far…
+              </div>
+            ) : null}
+
             {/* Query terms panel */}
             {queryTerms.length ? (
               <div className="rounded-xl border border-border/60 bg-muted/40 p-3">
@@ -244,30 +254,61 @@ export function FetchProgressPanel() {
                 )}
               />
               <div className="flex items-center justify-between text-[11px] text-muted-foreground tabular-nums">
+                {/* No fake percentage — show the real state instead. The bar
+                    itself is ambient motion, the numbers below are truthful. */}
                 <span className="font-medium text-foreground/80">
-                  {progressValue}%
+                  {status === "SUCCEEDED"
+                    ? "Done"
+                    : status === "FAILED"
+                      ? "Stopped"
+                      : isRunning && importedCount > 0
+                        ? `${importedCount} imported`
+                        : "Working…"}
                 </span>
                 <span>Elapsed {elapsedSeconds}s</span>
               </div>
             </div>
 
-            {/* Success / error footer */}
+            {/* Success footer — celebrate only when there's something to
+                celebrate. A run that imported 0 new roles gets a calm
+                "nothing new" state with a nudge to widen filters, not confetti
+                over an empty result. */}
             {status === "SUCCEEDED" ? (
-              <>
-                <div className="relative overflow-hidden rounded-lg bg-brand-emerald-50/60 py-3 text-center">
-                  <ConfettiDots />
-                  <div className="text-sm font-semibold text-brand-emerald-700">
-                    Imported {importedCount} new jobs
+              importedCount > 0 ? (
+                <>
+                  <div className="relative overflow-hidden rounded-lg bg-brand-emerald-50/60 py-3 text-center">
+                    <ConfettiDots />
+                    <div className="text-sm font-semibold text-brand-emerald-700">
+                      Imported {importedCount} new jobs
+                    </div>
                   </div>
-                </div>
-                <Button
-                  className="h-10 w-full rounded-full bg-brand-emerald-600 text-[13px] font-semibold text-white shadow-sm hover:bg-brand-emerald-700"
-                  onClick={() => setOpen(false)}
-                  asChild
-                >
-                  <a href="/jobs">View Jobs</a>
-                </Button>
-              </>
+                  <Button
+                    className="h-10 w-full rounded-full bg-brand-emerald-600 text-[13px] font-semibold text-white shadow-sm hover:bg-brand-emerald-700"
+                    onClick={() => setOpen(false)}
+                    asChild
+                  >
+                    <a href="/jobs">View Jobs</a>
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="rounded-lg border border-border/60 bg-muted/40 px-3 py-3 text-center">
+                    <div className="text-sm font-semibold text-foreground">
+                      No new roles found
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Widen the time window or remove some exclusions, then fetch again.
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="h-10 w-full rounded-full text-[13px] font-semibold"
+                    onClick={() => setOpen(false)}
+                  >
+                    Dismiss
+                  </Button>
+                </>
+              )
             ) : null}
 
             {error ? (

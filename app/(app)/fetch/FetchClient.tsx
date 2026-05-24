@@ -29,6 +29,7 @@ import {
   DESCRIPTION_EXCLUSION_OPTIONS,
   TITLE_EXCLUSION_OPTIONS,
 } from "@/lib/shared/fetchExclusionCriteria";
+import { expandRoleQueries } from "@/lib/shared/fetchRolePacks";
 import { cn } from "@/lib/utils";
 
 const COMMON_TITLES = [
@@ -213,6 +214,199 @@ function ExclusionDropdown({
   );
 }
 
+// Location presets — pick-or-type. AU JobSpy wants region/state strings; the
+// list mirrors the Jobs page state options while still allowing a free-typed
+// city (e.g. "Sydney, New South Wales, Australia").
+const AU_LOCATIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "Sydney, New South Wales, Australia", label: "Sydney" },
+  { value: "Melbourne, Victoria, Australia", label: "Melbourne" },
+  { value: "Brisbane, Queensland, Australia", label: "Brisbane" },
+  { value: "Perth, Western Australia, Australia", label: "Perth" },
+  { value: "Adelaide, South Australia, Australia", label: "Adelaide" },
+  { value: "Canberra, Australian Capital Territory, Australia", label: "Canberra" },
+  { value: "New South Wales, Australia", label: "New South Wales" },
+  { value: "Victoria, Australia", label: "Victoria" },
+  { value: "Queensland, Australia", label: "Queensland" },
+  { value: "Australia", label: "All of Australia" },
+];
+
+function LocationCombobox({
+  id,
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  id: string;
+  value: string;
+  onChange: (next: string) => void;
+  options: ReadonlyArray<{ value: string; label: string }>;
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const query = value.trim().toLowerCase();
+  const list = query
+    ? options.filter(
+        (o) =>
+          o.label.toLowerCase().includes(query) ||
+          o.value.toLowerCase().includes(query),
+      )
+    : options;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverAnchor asChild>
+        <Input
+          id={id}
+          value={value}
+          placeholder={placeholder}
+          onChange={(e) => onChange(e.target.value)}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          className="h-11"
+        />
+      </PopoverAnchor>
+      <PopoverContent
+        align="start"
+        className="w-[var(--radix-popover-trigger-width)] p-0"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        <Command shouldFilter={false}>
+          <CommandList className="max-h-64 p-1">
+            {list.length ? (
+              <CommandGroup heading="Locations">
+                {list.map((o) => (
+                  <CommandItem
+                    key={o.value}
+                    value={o.value}
+                    onSelect={() => {
+                      onChange(o.value);
+                      setOpen(false);
+                    }}
+                  >
+                    {o.label}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ) : (
+              <CommandEmpty>Type a custom location.</CommandEmpty>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+type FetchRunListItem = {
+  id: string;
+  status: "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
+  market: string;
+  importedCount: number;
+  title: string | null;
+  queryCount: number;
+  location: string | null;
+  hoursOld: number | null;
+  smartExpand: boolean | null;
+  sources: string[] | null;
+  excludeKeywords: string[] | null;
+  createdAt: string;
+};
+
+function relativeTime(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+const STATUS_DOT: Record<string, string> = {
+  SUCCEEDED: "bg-brand-emerald-500",
+  RUNNING: "bg-amber-500",
+  QUEUED: "bg-amber-400",
+  FAILED: "bg-destructive",
+};
+
+// Recent fetch history — lets the user see past runs and re-run one with a
+// single click. Fails soft: if the list endpoint errors, it renders nothing
+// rather than blocking the page. Refetches whenever a run starts or finishes
+// so a just-completed fetch appears without a manual refresh.
+function FetchHistory({ onRerun }: { onRerun: (run: FetchRunListItem) => void }) {
+  const { runId, status } = useFetchStatus();
+  const [runs, setRuns] = useState<FetchRunListItem[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/fetch-runs", { cache: "no-store" });
+        if (!res.ok) return;
+        const json = await res.json().catch(() => null);
+        if (alive && json && Array.isArray(json.runs)) {
+          setRuns(json.runs as FetchRunListItem[]);
+        }
+      } catch {
+        // history is non-critical — stay silent on failure
+      } finally {
+        if (alive) setLoaded(true);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [runId, status]);
+
+  if (!loaded || runs.length === 0) return null;
+
+  return (
+    <div className="space-y-2 border-t border-border/60 pt-4">
+      <div className="text-xs font-medium text-muted-foreground">Recent fetches</div>
+      <ul className="space-y-1.5">
+        {runs.map((run) => (
+          <li
+            key={run.id}
+            className="flex items-center gap-3 rounded-xl border border-border/60 bg-card/60 px-3 py-2"
+          >
+            <span
+              className={cn(
+                "h-2 w-2 shrink-0 rounded-full",
+                STATUS_DOT[run.status] ?? "bg-muted-foreground/40",
+              )}
+              aria-hidden
+            />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-medium text-foreground">
+                {run.title ?? "Untitled search"}
+              </div>
+              <div className="truncate text-[11px] text-muted-foreground">
+                {run.queryCount > 1 ? `${run.queryCount} roles · ` : ""}
+                {run.status === "SUCCEEDED"
+                  ? `${run.importedCount} imported`
+                  : run.status.toLowerCase()}
+                {" · "}
+                {relativeTime(run.createdAt)}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onRerun(run)}
+              aria-label={`Re-run ${run.title ?? "search"}`}
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border px-3 text-xs font-semibold text-foreground/80 transition-colors hover:border-brand-emerald-300 hover:bg-brand-emerald-50/60 hover:text-brand-emerald-700"
+            >
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+              Re-run
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function FetchClient() {
   const { data: session } = useSession();
   const userId = session?.user?.id ?? null;
@@ -239,6 +433,9 @@ export function FetchClient() {
   const [excludeDescriptionRules, setExcludeDescriptionRules] = useState<string[]>([
     "identity_requirement",
   ]);
+  const [deselectedExpansions, setDeselectedExpansions] = useState<Set<string>>(
+    new Set(),
+  );
 
   const [localError, setLocalError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -250,8 +447,9 @@ export function FetchClient() {
   } = useFetchStatus();
   const { isTaskHighlighted, markTaskComplete } = useGuide();
   const guideHighlightClass =
-    "ring-2 ring-brand-emerald-400 ring-offset-2 ring-offset-white shadow-[0_0_0_4px_rgba(16,185,129,0.18)]";
+    "ring-2 ring-brand-emerald-400 ring-offset-2 ring-offset-background shadow-[0_0_0_4px_rgba(16,185,129,0.18)]";
   const prevUserIdRef = useRef<string | null>(null);
+  const topRef = useRef<HTMLDivElement>(null);
 
   const queries = useMemo(() => {
     const parts = jobTitle
@@ -260,6 +458,23 @@ export function FetchClient() {
       .filter(Boolean);
     return Array.from(new Set(parts));
   }, [jobTitle]);
+
+  // Smart-expand preview — what role queries this fetch will actually search.
+  // Uses the SAME shared expander the server runs, so the preview is exact.
+  // Users can deselect roles they don't want before fetching.
+  const expandedQueries = useMemo(
+    () => (smartExpand ? expandRoleQueries(queries) : queries),
+    [smartExpand, queries],
+  );
+  const expansionGrew = smartExpand && expandedQueries.length > queries.length;
+  const finalQueries = expandedQueries.filter((q) => !deselectedExpansions.has(q));
+  const userTrimmedExpansion =
+    smartExpand && expandedQueries.some((q) => deselectedExpansions.has(q));
+
+  // Drop stale deselections when the base titles or the toggle change.
+  useEffect(() => {
+    setDeselectedExpansions(new Set());
+  }, [queries, smartExpand]);
 
   const suggestionQuery = useMemo(() => {
     const segments = jobTitle.split(/[\n,|]/);
@@ -343,10 +558,18 @@ export function FetchClient() {
       : {
           market: "AU",
           title: queries[0] ?? jobTitle.trim(),
-          queries,
+          // When the user trimmed the smart-expand preview, send the exact
+          // kept list already-expanded (smartExpand:false) so the server
+          // honours their choice. Otherwise keep the original contract: send
+          // base titles and let the server expand.
+          queries: userTrimmedExpansion
+            ? finalQueries.length
+              ? finalQueries
+              : queries
+            : queries,
           location,
           hoursOld,
-          smartExpand,
+          smartExpand: userTrimmedExpansion ? false : smartExpand,
           applyExcludes,
           excludeTitleTerms,
           excludeDescriptionRules,
@@ -403,13 +626,43 @@ export function FetchClient() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [isSubmitting]);
 
+  function handleRerun(run: FetchRunListItem) {
+    if (run.title) setJobTitle(run.title);
+    if (run.market === "CN") {
+      if (run.sources?.length) setCnSources(run.sources);
+      if (run.excludeKeywords) setCnExcludeKeywords(run.excludeKeywords.join(", "));
+    } else {
+      if (run.location) setLocation(run.location);
+      if (typeof run.hoursOld === "number") setHoursOld(run.hoursOld);
+      if (typeof run.smartExpand === "boolean") setSmartExpand(run.smartExpand);
+    }
+    setLocalError(null);
+    topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   const activeError = localError ?? globalError;
   const isRunning =
     globalRunId !== null &&
     (globalStatus === "RUNNING" || globalStatus === "QUEUED" || globalStatus === null);
 
   return (
-    <div className="space-y-4 px-4 py-4 lg:px-6">
+    <div
+      ref={topRef}
+      className="space-y-4 px-4 py-4 lg:px-6"
+      onKeyDown={(e) => {
+        // Cmd/Ctrl+Enter submits from anywhere in the form — editor-grade
+        // shortcut. Plain Enter stays free for picking title suggestions.
+        if (
+          (e.metaKey || e.ctrlKey) &&
+          e.key === "Enter" &&
+          !isSubmitting &&
+          !isRunning
+        ) {
+          e.preventDefault();
+          void onSubmit();
+        }
+      }}
+    >
       {activeError ? (
         <div
           role="alert"
@@ -434,10 +687,11 @@ export function FetchClient() {
       <div className="space-y-4">
           {/* Primary search: job title (full width, prominent) */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">{t("jobTitle")}</Label>
+            <Label htmlFor="fetch-job-title" className="text-xs font-medium text-muted-foreground">{t("jobTitle")}</Label>
             <Popover open={suggestionsOpen} onOpenChange={setSuggestionsOpen}>
               <PopoverAnchor asChild>
                 <Input
+                  id="fetch-job-title"
                   placeholder="e.g. Software Engineer, Frontend Engineer | Backend Engineer"
                   value={jobTitle}
                   onChange={(e) => setJobTitle(e.target.value)}
@@ -482,13 +736,19 @@ export function FetchClient() {
           {/* Secondary fields: location + hours on one row */}
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground">{t("locationLabel")}</Label>
-              <Input value={location} onChange={(e) => setLocation(e.target.value)} />
+              <Label htmlFor="fetch-location" className="text-xs font-medium text-muted-foreground">{t("locationLabel")}</Label>
+              <LocationCombobox
+                id="fetch-location"
+                value={location}
+                onChange={setLocation}
+                options={AU_LOCATIONS}
+                placeholder="State or city, e.g. Sydney"
+              />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground">{t("hoursOld")}</Label>
+              <Label htmlFor="fetch-hours" className="text-xs font-medium text-muted-foreground">{t("hoursOld")}</Label>
               <Select value={String(hoursOld)} onValueChange={(v) => setHoursOld(Number(v))}>
-                <SelectTrigger>
+                <SelectTrigger id="fetch-hours">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -521,6 +781,56 @@ export function FetchClient() {
               Apply exclusions
             </button>
           </div>
+
+          {/* Smart-expand preview — exact roles this fetch will search, with
+              per-role opt-out so the user controls the final query set. */}
+          {expansionGrew && (
+            <div className="rounded-2xl border border-border/60 bg-muted/20 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Searching {finalQueries.length} related role
+                  {finalQueries.length === 1 ? "" : "s"}
+                </span>
+                {deselectedExpansions.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setDeselectedExpansions(new Set())}
+                    className="text-[11px] font-semibold text-brand-emerald-700 hover:underline"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {expandedQueries.map((q) => {
+                  const off = deselectedExpansions.has(q);
+                  return (
+                    <button
+                      key={q}
+                      type="button"
+                      aria-pressed={!off}
+                      onClick={() =>
+                        setDeselectedExpansions((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(q)) next.delete(q);
+                          else next.add(q);
+                          return next;
+                        })
+                      }
+                      className={cn(
+                        "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+                        off
+                          ? "border-border/60 bg-transparent text-muted-foreground/60 line-through"
+                          : "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-700 hover:bg-brand-emerald-100",
+                      )}
+                    >
+                      {q}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Collapsible exclusion filters */}
           {applyExcludes && (
@@ -672,6 +982,8 @@ export function FetchClient() {
         </div>
       </div>
       )}
+
+      <FetchHistory onRerun={handleRerun} />
     </div>
   );
 }
