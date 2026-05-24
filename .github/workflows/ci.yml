@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+# Dummy values so `next build` (and any test that reads env) passes without
+# real secrets. These are NOT credentials --they only satisfy module-load
+# guards like prisma.ts's DATABASE_URL check; no service is contacted in CI.
+env:
+  DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+  AUTH_SECRET: ci-dummy-auth-secret-not-real
+  APP_ENC_KEY: dGVzdHRlc3R0ZXN0dGVzdHRlc3R0ZXN0dGVzdDEyMw==
+  IMPORT_SECRET: ci-dummy
+  FETCH_RUN_SECRET: ci-dummy
+  LATEX_RENDER_URL: https://example.com/render
+  LATEX_RENDER_TOKEN: ci-dummy
+  GOOGLE_CLIENT_ID: ci-dummy
+  GOOGLE_CLIENT_SECRET: ci-dummy
+  GITHUB_ID: ci-dummy
+  GITHUB_SECRET: ci-dummy
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
