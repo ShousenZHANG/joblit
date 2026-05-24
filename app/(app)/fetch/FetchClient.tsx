@@ -432,6 +432,10 @@ export function FetchClient() {
   ]);
   const [excludeDescriptionRules, setExcludeDescriptionRules] = useState<string[]>([
     "identity_requirement",
+    // Default-on alongside the title-seniority exclusions: this product targets
+    // early-career roles, so jobs demanding 4+ years are filtered unless the
+    // user opts out.
+    "experience_requirement_4_plus",
   ]);
   const [deselectedExpansions, setDeselectedExpansions] = useState<Set<string>>(
     new Set(),

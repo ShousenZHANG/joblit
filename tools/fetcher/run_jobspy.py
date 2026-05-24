@@ -39,7 +39,9 @@ LINKEDIN_JOB_ID_RE = re.compile(r"linkedin\.com/jobs/view/(\d+)", re.IGNORECASE)
 
 CANCELLED_ERROR = "Cancelled by user"
 
-TITLE_EXCLUDE_PAT = re.compile(r'(?i)\b(?:senior|sr\.?|lead|principal|architect|manager|head|director|staff)\b')
+# Title exclusion regex is built per-run from the user's selected terms in
+# `_build_exclude_title_re` — there is no hardcoded title pattern, so the UI
+# selection is the single source of truth.
 FETCH_EXCLUSION_MANIFEST_PATH = (
     Path(__file__).resolve().parents[2]
     / "lib"
