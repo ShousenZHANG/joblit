@@ -247,7 +247,16 @@ class ExclusionMatcher:
         return not (a[1] <= b[0] or b[1] <= a[0])
 
     def _build_rule_id(self) -> str:
-        bits = ["identity_requirement"]
+        active = [
+            r
+            for r in (
+                "identity_requirement",
+                "clearance_requirement",
+                "sponsorship_unavailable",
+            )
+            if r in self.rules
+        ]
+        bits = ["+".join(active) if active else "identity_requirement"]
         if self.region != "GLOBAL":
             bits.append(f"region:{self.region}")
         if self.strictness != "balanced":
