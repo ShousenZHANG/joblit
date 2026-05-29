@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import { canonicalizeJobUrl } from "@/lib/shared/canonicalizeJobUrl";
 import { reportError } from "@/lib/server/observability/errorReporter";
+import { constantTimeEqual } from "@/lib/server/auth/constantTimeEqual";
 
 export const runtime = "nodejs";
 
@@ -37,7 +38,7 @@ function requireImportSecret(req: Request) {
     throw new Error("IMPORT_SECRET is not set");
   }
   const got = req.headers.get("x-import-secret");
-  return got === expected;
+  return constantTimeEqual(got, expected);
 }
 
 export async function POST(req: Request) {

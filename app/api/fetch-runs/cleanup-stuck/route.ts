@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
+import { constantTimeEqual } from "@/lib/server/auth/constantTimeEqual";
 
 export const runtime = "nodejs";
 
@@ -28,7 +29,7 @@ export async function GET(req: Request) {
   if (!secret) {
     return NextResponse.json({ error: "NOT_CONFIGURED" }, { status: 503 });
   }
-  if (provided !== secret) {
+  if (!constantTimeEqual(provided, secret)) {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
 

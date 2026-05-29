@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { processAllQueuedCnRuns } from "@/lib/server/cnFetch/processFetchRun";
+import { constantTimeEqual } from "@/lib/server/auth/constantTimeEqual";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -25,9 +26,9 @@ function authorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false;
   const bearer = request.headers.get("authorization");
-  if (bearer === `Bearer ${secret}`) return true;
+  if (constantTimeEqual(bearer, `Bearer ${secret}`)) return true;
   const explicit = request.headers.get("x-cron-secret");
-  return explicit === secret;
+  return constantTimeEqual(explicit, secret);
 }
 
 export async function GET(request: Request) {

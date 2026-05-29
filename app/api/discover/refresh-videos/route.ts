@@ -9,6 +9,7 @@ import {
   isQuotaExceededError,
   writeCache,
 } from "@/lib/server/discover/videoCache";
+import { constantTimeEqual } from "@/lib/server/auth/constantTimeEqual";
 
 // Cron pre-warmer for the video cache. Vercel's cron dispatcher invokes
 // this endpoint on the schedule declared in vercel.json. Running on cron
@@ -29,9 +30,9 @@ function authorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false; // fail-closed: never run unauthenticated
   const bearer = request.headers.get("authorization");
-  if (bearer === `Bearer ${secret}`) return true;
+  if (constantTimeEqual(bearer, `Bearer ${secret}`)) return true;
   const explicit = request.headers.get("x-cron-secret");
-  return explicit === secret;
+  return constantTimeEqual(explicit, secret);
 }
 
 interface RefreshResult {
