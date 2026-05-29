@@ -4,7 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import { JoblitMark } from "@/components/brand/JoblitMark";
-import { fadeUp, useReveal } from "./lib/motion";
+import { revealUp, useReveal } from "./lib/motion";
 
 // Footer — brand + 3 link columns. Only real, live destinations are
 // listed; placeholder ("#") links were removed because a footer full of
@@ -48,7 +48,7 @@ export function Footer() {
       data-testid="landing-footer"
       role="contentinfo"
       className="border-t border-border/60 bg-background"
-      variants={fadeUp}
+      variants={revealUp}
     >
       <div className="mx-auto w-full max-w-6xl px-6 py-16 sm:px-10">
         <div className="grid gap-10 md:grid-cols-[1.8fr_repeat(3,1fr)]">

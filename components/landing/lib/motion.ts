@@ -1,6 +1,6 @@
 "use client";
 
-import { type Variants } from "framer-motion";
+import { type Variants, useReducedMotion } from "framer-motion";
 import { useRef, type RefObject } from "react";
 
 // Shared framer-motion variants for the marketing landing. Import these
@@ -51,6 +51,21 @@ export const floatIn = (delay: number): Variants => ({
   },
 });
 
+// TRANSFORM-ONLY reveal for on-scroll body sections. opacity is intentionally
+// never touched, so even if the IntersectionObserver misses (hydration race,
+// no-JS) the content is fully readable — worst case it sits 16px low. This is
+// what makes re-enabling scroll reveal safe after the earlier opacity-based
+// version left content transparent on fast scroll.
+export const revealUp: Variants = {
+  hidden: { y: 16 },
+  show: { y: 0, transition: { duration: 0.5, ease: SPRING_EASE } },
+};
+
+export const revealStagger: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.06, delayChildren: 0.04 } },
+};
+
 /**
  * Standard reveal-on-scroll props. Spread onto any `<motion.*>` element.
  *
@@ -75,24 +90,35 @@ export const revealOnce = {
 export interface RevealProps {
   ref: RefObject<HTMLElement | null>;
   initial: "hidden" | "show";
-  animate: "hidden" | "show";
+  animate?: "hidden" | "show";
+  whileInView?: "hidden" | "show";
+  viewport?: { once: boolean; amount: number; margin?: string };
 }
 
 /**
- * Deterministic reveal props for long landing pages. Sections mount visible
- * instead of waiting for an observer so fast scroll and hydration timing never
- * leave content transparent in the viewport. Hero keeps the richer entrance
- * animation; body sections prioritize scroll responsiveness.
+ * Scroll-reveal props for long landing pages. Body sections start at the
+ * `hidden` transform and slide to `show` once they scroll into view (observed
+ * once). MUST be paired with a TRANSFORM-ONLY variant ({@link revealUp}) so
+ * the content is never transparent — that was the bug that made the previous
+ * opacity-based reveal unsafe. `prefers-reduced-motion` drops the animation
+ * entirely (mounts shown). Hero keeps its own richer entrance.
  *
  * Usage:
  *   const reveal = useReveal();
- *   return <motion.section {...reveal} variants={fadeUp}>...</motion.section>;
+ *   return <motion.section {...reveal} variants={revealUp}>...</motion.section>;
  */
 export function useReveal(): RevealProps {
+  const reduced = useReducedMotion();
   const ref = useRef<HTMLElement | null>(null);
+  if (reduced) {
+    return { ref, initial: "show", animate: "show" };
+  }
   return {
     ref,
-    initial: "show",
-    animate: "show",
+    initial: "hidden",
+    whileInView: "show",
+    // Fire slightly before fully in view so the slide completes as the section
+    // arrives. once:true = reveal stays put after the first intersection.
+    viewport: { once: true, amount: 0.15, margin: "0px 0px -10% 0px" },
   };
 }

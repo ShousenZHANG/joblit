@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
-import { fadeUp, useReveal } from "./lib/motion";
+import { revealUp, useReveal } from "./lib/motion";
 import { useCtaHref } from "./lib/useCtaHref";
 
 // Final CTA banner. The radial emerald gradients at the corners match
@@ -20,7 +20,7 @@ export function Cta() {
       {...reveal}
       data-testid="landing-cta"
       className="mx-auto my-16 w-full max-w-6xl px-6 sm:my-24 sm:px-10"
-      variants={fadeUp}
+      variants={revealUp}
     >
       <div className="relative overflow-hidden rounded-3xl border border-border/60 bg-card px-8 py-16 text-center shadow-[0_30px_80px_-40px_rgba(5,150,105,0.30)] sm:px-16 sm:py-24">
         {/* Multi-layer gradient mesh — three offset radials build atmospheric

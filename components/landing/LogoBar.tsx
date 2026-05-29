@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { fadeIn, useReveal } from "./lib/motion";
+import { revealUp, useReveal } from "./lib/motion";
 
 // Capability strip — replaces the old fake text-wordmark "social proof"
 // (rendering "Stripe"/"Linear" in our own font implied false endorsement
@@ -22,7 +22,7 @@ export function LogoBar() {
       {...reveal}
       data-testid="landing-logobar"
       className="mx-auto w-full max-w-6xl px-6 py-12 sm:px-10 sm:py-16"
-      variants={fadeIn}
+      variants={revealUp}
     >
       <div className="text-center text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground/80">
         Plugs into your whole job hunt

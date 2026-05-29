@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { fadeUp, useReveal } from "./lib/motion";
+import { revealUp, useReveal } from "./lib/motion";
 import { SectionKicker } from "./SectionKicker";
 
 // FAQ accordion. Controlled (single-open) because Landing.html only
@@ -30,7 +30,7 @@ export function Faq() {
       data-testid="landing-faq"
       id="faq"
       className="mx-auto w-full max-w-3xl px-6 py-24 sm:px-10"
-      variants={fadeUp}
+      variants={revealUp}
     >
       <div className="mb-12 text-center">
         <SectionKicker>{t("kicker")}</SectionKicker>

@@ -9,7 +9,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
-import { fadeUp, stagger, useReveal } from "./lib/motion";
+import { revealUp, revealStagger, useReveal } from "./lib/motion";
 import { SectionKicker } from "./SectionKicker";
 
 // Features — 2×2 equal grid, Linear-style. Four differentiators, each
@@ -79,7 +79,7 @@ export function Features() {
       data-testid="landing-features"
       id="product"
       className="mx-auto w-full max-w-6xl px-6 py-24 sm:px-10"
-      variants={fadeUp}
+      variants={revealUp}
     >
       <div className="mb-16 text-center">
         <SectionKicker>{t("kicker")}</SectionKicker>
@@ -96,12 +96,12 @@ export function Features() {
       </div>
 
       <motion.ul
-        variants={stagger}
+        variants={revealStagger}
         className="grid auto-rows-fr gap-5 md:grid-cols-2"
         role="list"
       >
         {FEATURES.map(({ icon, title, blurb }) => (
-          <motion.li key={title} variants={fadeUp} className="list-none">
+          <motion.li key={title} variants={revealUp} className="list-none">
             <div className={CARD_BASE}>
               <IconChip icon={icon} />
               <div className="mt-6 text-[19px] font-semibold tracking-tight text-foreground">

@@ -4,7 +4,7 @@ import { FileEdit, FileText, Search } from "lucide-react";
 import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import type { LucideIcon } from "lucide-react";
-import { fadeUp, stagger, useReveal } from "./lib/motion";
+import { revealUp, revealStagger, useReveal } from "./lib/motion";
 import { SectionKicker } from "./SectionKicker";
 
 // HowItWorks — 3 numbered steps connected by a faint gradient rail (only
@@ -47,7 +47,7 @@ export function HowItWorks() {
       data-testid="landing-howitworks"
       id="how"
       className="mx-auto w-full max-w-6xl px-6 py-24 sm:px-10"
-      variants={fadeUp}
+      variants={revealUp}
     >
       <div className="mb-14 text-center">
         <SectionKicker>{t("kicker")}</SectionKicker>
@@ -64,7 +64,7 @@ export function HowItWorks() {
       </div>
 
       <motion.ol
-        variants={stagger}
+        variants={revealStagger}
         className="relative grid gap-8 md:grid-cols-3"
       >
         {/* Connecting rail — static gradient line, no animation. */}
@@ -76,7 +76,7 @@ export function HowItWorks() {
         {STEPS.map(({ num, title, blurb, icon: Icon }) => (
           <motion.li
             key={num}
-            variants={fadeUp}
+            variants={revealUp}
             className="group relative flex flex-col rounded-2xl border border-border/60 bg-card p-7 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-300 hover:-translate-y-1 hover:border-brand-emerald-200/70 hover:shadow-[0_18px_36px_-18px_rgba(5,150,105,0.22)]"
           >
             <div className="mb-5 flex items-center gap-3">

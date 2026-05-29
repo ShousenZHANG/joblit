@@ -5,7 +5,7 @@ import { Check } from "lucide-react";
 import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { fadeUp, stagger, useReveal } from "./lib/motion";
+import { revealUp, revealStagger, useReveal } from "./lib/motion";
 import { SectionKicker } from "./SectionKicker";
 
 // Pricing — three tiers. Hover interaction is driven by framer-motion
@@ -86,7 +86,7 @@ export function Pricing() {
       data-testid="landing-pricing"
       id="pricing"
       className="mx-auto w-full max-w-6xl px-6 py-24 sm:px-10"
-      variants={fadeUp}
+      variants={revealUp}
     >
       <div className="mb-14 text-center">
         <SectionKicker>{t("kicker")}</SectionKicker>
@@ -102,7 +102,7 @@ export function Pricing() {
       </div>
 
       <motion.ul
-        variants={stagger}
+        variants={revealStagger}
         className="grid gap-6 md:grid-cols-3"
         role="list"
         onMouseLeave={() => setHovered(null)}
@@ -116,7 +116,7 @@ export function Pricing() {
           return (
             <motion.li
               key={tier.name}
-              variants={fadeUp}
+              variants={revealUp}
               onHoverStart={() => setHovered(i)}
               onFocus={() => setHovered(i)}
               onBlur={() => setHovered(null)}

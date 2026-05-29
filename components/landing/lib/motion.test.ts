@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { fadeUp, fadeIn, stagger, floatIn, revealOnce } from "./motion";
+import {
+  fadeUp,
+  fadeIn,
+  stagger,
+  floatIn,
+  revealOnce,
+  revealUp,
+  revealStagger,
+} from "./motion";
 
 // These assertions lock in the motion contract the landing sections
 // depend on. Movement should stay visible but small enough to avoid
@@ -38,6 +46,26 @@ describe("landing motion variants", () => {
     };
     expect(show.transition.staggerChildren).toBeGreaterThan(0);
     expect(show.transition.staggerChildren).toBeLessThan(0.12);
+  });
+
+  it("revealUp is TRANSFORM-ONLY — never touches opacity (content stays visible)", () => {
+    const hidden = revealUp.hidden as { opacity?: number; y: number };
+    // The whole point: opacity is never set, so a missed observer / no-JS /
+    // hydration race leaves the section fully readable (worst case 16px low).
+    expect(hidden.opacity).toBeUndefined();
+    expect(hidden.y).toBeGreaterThanOrEqual(12);
+    expect(hidden.y).toBeLessThanOrEqual(20);
+    const show = revealUp.show as { opacity?: number; y: number };
+    expect(show.opacity).toBeUndefined();
+    expect(show.y).toBe(0);
+  });
+
+  it("revealStagger propagates to children without an opacity gate", () => {
+    expect(revealStagger.hidden).toEqual({});
+    const show = revealStagger.show as {
+      transition: { staggerChildren: number };
+    };
+    expect(show.transition.staggerChildren).toBeGreaterThan(0);
   });
 
   it("floatIn accepts a delay argument and returns valid variants", () => {
