@@ -151,11 +151,12 @@ export function Hero() {
         aria-hidden
         className="landing-canvas-grid pointer-events-none absolute inset-x-0 top-10 -z-10 h-[620px] opacity-80"
       />
-      <motion.div
-        variants={introStagger}
-        initial="hidden"
-        animate={mounted ? "show" : "hidden"}
-      >
+      {/* LCP-safe: the headline block renders VISIBLE at SSR (initial=false →
+          framer paints the `show` state immediately, no opacity:0 gate waiting
+          on hydration). The decorative product mock below keeps its JS-driven
+          reveal. Gating the largest contentful element behind a rAF mount flag
+          previously delayed LCP until the bundle hydrated. */}
+      <motion.div variants={introStagger} initial={false} animate="show">
       {/* Eyebrow — first thing to appear on page load, bolder
           20px rise so the motion reads even on fast connections. */}
       <motion.div
@@ -237,6 +238,8 @@ export function Hero() {
       {/* Canvas — frame lifts in with a single rise + scale settle, no
           infinite floating animation behind it. */}
       <motion.div
+        initial="hidden"
+        animate={mounted ? "show" : "hidden"}
         variants={{
           hidden: reduced
             ? { opacity: 0 }

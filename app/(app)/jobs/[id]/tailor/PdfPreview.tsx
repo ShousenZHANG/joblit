@@ -1,9 +1,25 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { Download, ExternalLink, FileText, RefreshCcw } from "lucide-react";
-import { ResumePdfPreview } from "@/components/resume/ResumePdfPreview";
 import { cn } from "@/lib/utils";
+
+// react-pdf + pdfjs (~120KB gzip) is the heaviest client dep. Lazy-load it so
+// it's only fetched when this preview actually mounts, matching the boundary
+// already used in components/resume/PreviewPanel.tsx. ssr:false — pdfjs needs
+// DOM/canvas.
+const ResumePdfPreview = dynamic(
+  () => import("@/components/resume/ResumePdfPreview").then((m) => m.ResumePdfPreview),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full w-full items-center justify-center">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-emerald-500 border-t-transparent" />
+      </div>
+    ),
+  },
+);
 
 interface PdfPreviewProps {
   /** Current rendered PDF URL. May be null on first load. */

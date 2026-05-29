@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import "highlight.js/styles/github.css";
 import { CheckSquare, MapPin, Plus, SlidersHorizontal, Square, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
