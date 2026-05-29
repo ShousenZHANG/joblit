@@ -8,6 +8,7 @@ import {
   type SessionContextWithEmail,
 } from "@/lib/server/auth/requireSession";
 import { unauthorizedError, validationError } from "@/lib/server/api/errorResponse";
+import { reportError } from "@/lib/server/observability/errorReporter";
 
 type SessionRouteHandler<TContext extends SessionContext> = (
   context: TContext,
@@ -20,6 +21,9 @@ export async function withSessionRoute(
     return await handler(await requireSession());
   } catch (err) {
     if (err instanceof UnauthorizedError) return unauthorizedError();
+    // Unexpected error reaching the wrapper — capture via the seam before it
+    // bubbles to Next's 500 so it isn't invisible in prod.
+    reportError(err, { scope: "route.session" });
     throw err;
   }
 }
@@ -31,6 +35,7 @@ export async function withEmailSessionRoute(
     return await handler(await requireSessionWithEmail());
   } catch (err) {
     if (err instanceof UnauthorizedError) return unauthorizedError();
+    reportError(err, { scope: "route.emailSession" });
     throw err;
   }
 }
