@@ -104,7 +104,7 @@ export function JsonInputPanel({
               ) : null}
             </div>
           ) : (
-            <div className="flex flex-1 items-center justify-center rounded-lg border border-destructive/30 bg-destructive/10/50 p-3">
+            <div className="flex flex-1 items-center justify-center rounded-lg border border-destructive/30 bg-destructive/10 p-3">
               <p className="text-center text-xs text-rose-500">
                 Invalid JSON &mdash; fix errors to see preview
               </p>

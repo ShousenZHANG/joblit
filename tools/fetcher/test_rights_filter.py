@@ -61,6 +61,14 @@ class MatcherCorePhraseTests(unittest.TestCase):
         # PR disambiguation — must NOT trigger on public-relations / PR-friendly
         ("PR-friendly culture and modern media stack.", "AU", "balanced", False, "keep_pr_friendly_culture"),
 
+        # Soft-qualifier adjacency — a soft qualifier softens ONLY the requirement
+        # it immediately follows, within the same sentence.
+        ("Security clearance preferred but not essential.", "AU", "balanced", False, "keep_soft_clearance_preferred"),
+        # ...but a trailing soft qualifier on a DIFFERENT clause (across a period)
+        # must NOT rescue a hard citizenship gate. (regression for audit rank-7)
+        ("Must be an Australian citizen. AWS certification preferred.", "AU", "balanced", True, "drop_hard_citizen_then_soft_cert"),
+        ("Applicants must hold Australian PR. A finance background is a plus.", "AU", "balanced", True, "drop_hard_pr_then_soft_finance"),
+
         # Clearance pack (Five Eyes) — drops under AU because AU region enables clearance
         ("Citizens of the Five Eyes nations may apply.", "US", "balanced", True, "five_eyes"),
     ]

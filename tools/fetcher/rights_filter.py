@@ -76,6 +76,7 @@ class ExclusionMatcher:
         self._anchor_re = self._compile_union(anchors)
 
         self._negation_re = self._compile_union(cfg["negation_guards"])
+        self._soft_qualifier_re = self._compile_union(cfg.get("soft_qualifier_guards", []))
         self._soft_invite_re = self._compile_union(cfg["soft_invite"])
 
         region_cfg = cfg["regions"].get(self.region, {"tokens": [], "standalone_tokens": []})
@@ -106,12 +107,31 @@ class ExclusionMatcher:
     # ── Scoring helpers ─────────────────────────────────────────────────
 
     def _is_negated(self, text: str, start: int, end: int) -> bool:
-        if self._negation_re is None:
-            return False
         window = self._proximity["negation_window_chars"]
         lo = max(0, start - window)
         hi = min(len(text), end + window)
-        return bool(self._negation_re.search(text[lo:hi]))
+        win = text[lo:hi]
+        if self._negation_re is not None and self._negation_re.search(win):
+            return True
+        return self._is_soft_negated(text, end)
+
+    def _is_soft_negated(self, text: str, end: int) -> bool:
+        """A soft qualifier (preferred / nice to have / a plus) only softens a
+        requirement when it sits immediately AFTER the matched token within the
+        same sentence. This stops 'Must be an Australian citizen. AWS
+        certification preferred.' from being wrongly negated (the 'preferred'
+        belongs to a different clause across the period) while still keeping
+        'Security clearance preferred.'"""
+        if self._soft_qualifier_re is None:
+            return False
+        trailing_window = self._proximity.get("soft_qualifier_window_chars", 40)
+        segment = text[end : min(len(text), end + trailing_window)]
+        # Stop at a sentence boundary — a qualifier after a period modifies a
+        # different clause, not this requirement.
+        boundary = re.search(r"[.;!?\n]", segment)
+        if boundary:
+            segment = segment[: boundary.start()]
+        return bool(self._soft_qualifier_re.search(segment))
 
     def _find_anchor_spans(self, text: str) -> List[Tuple[int, int]]:
         if self._anchor_re is None:

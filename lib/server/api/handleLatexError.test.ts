@@ -11,14 +11,15 @@ describe("handleLatexError", () => {
     expect(res).not.toBeNull();
     expect(res!.status).toBe(502);
     const body = await res!.json();
+    // Raw upstream details must NOT leak to the client — only code + message.
     expect(body).toEqual({
       error: {
         code: "LATEX_RENDER_FAILED",
         message: "Render failed",
-        details: { log: "some error log" },
       },
       requestId: "req-123",
     });
+    expect(body.error.details).toBeUndefined();
   });
 
   it("returns null for non-LatexRenderError", () => {

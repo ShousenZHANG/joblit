@@ -48,12 +48,17 @@
     "visa sponsorship (?:is )?(?:available|provided|offered|supported)",
     "(?:we will|happy to|glad to) sponsor",
     "(?:sponsors|provides|offers) (?:work )?visas?",
-    "relocation (?:assistance|support) (?:available|provided)",
-    "\\b(?:is\\s+)?preferred\\b",
-    "\\bnice\\s+to\\s+have\\b",
-    "\\ba\\s+plus\\b",
-    "\\bgood\\s+to\\s+have\\b",
-    "\\bbonus\\b"
+    "relocation (?:assistance|support) (?:available|provided)"
+  ],
+  "_soft_qualifier_comment": "Soften a token ONLY when the qualifier sits right after it with no sentence boundary between (see _is_soft_negated). Kept separate from negation_guards so 'Must be a citizen. AWS cert preferred.' still DROPS (preferred modifies a different clause across a period) while 'Security clearance preferred.' is KEPT.",
+  "soft_qualifier_guards": [
+    "(?:is\\s+)?preferred\\b",
+    "nice\\s+to\\s+have\\b",
+    "a\\s+plus\\b",
+    "good\\s+to\\s+have\\b",
+    "\\bbonus\\b",
+    "advantageous\\b",
+    "desirable\\b"
   ],
   "soft_invite": [
     "citizens of the world welcome",
@@ -270,6 +275,7 @@
   },
   "proximity": {
     "anchor_to_token_chars": 60,
-    "negation_window_chars": 80
+    "negation_window_chars": 80,
+    "soft_qualifier_window_chars": 40
   }
 }

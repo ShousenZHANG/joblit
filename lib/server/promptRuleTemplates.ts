@@ -48,13 +48,41 @@ function normalizeTemplateInput(input: PromptRuleTemplateInput): PromptRuleTempl
   };
 }
 
-async function getNextVersion(userId: string) {
-  const latest = await prisma.promptRuleTemplate.findFirst({
+type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
+async function getNextVersion(client: TxClient, userId: string) {
+  const latest = await client.promptRuleTemplate.findFirst({
     where: { userId },
     orderBy: { version: "desc" },
     select: { version: true },
   });
   return (latest?.version ?? 0) + 1;
+}
+
+// `version` is `@@unique([userId, version])`, so a read-then-insert across two
+// concurrent saves races into a P2002. Compute the version inside the same
+// transaction and retry the whole unit on the unique violation so the loser
+// re-reads the now-higher max instead of throwing an unhandled 500.
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: unknown }).code === "P2002"
+  );
+}
+
+async function withVersionRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      lastErr = err;
+    }
+  }
+  throw lastErr;
 }
 
 async function ensureDefaultPromptRuleTemplate(userId: string) {
@@ -104,19 +132,23 @@ export async function getActivePromptSkillRulesForUser(userId: string): Promise<
 
 export async function createPromptRuleTemplate(userId: string, input: PromptRuleTemplateInput) {
   const normalized = normalizeTemplateInput(input);
-  const nextVersion = await getNextVersion(userId);
-  return prisma.promptRuleTemplate.create({
-    data: {
-      userId,
-      name: normalized.name,
-      version: nextVersion,
-      locale: DEFAULT_RULES.locale,
-      cvRules: normalized.cvRules,
-      coverRules: normalized.coverRules,
-      hardConstraints: normalized.hardConstraints,
-      isActive: false,
-    },
-  });
+  return withVersionRetry(() =>
+    prisma.$transaction(async (tx) => {
+      const nextVersion = await getNextVersion(tx, userId);
+      return tx.promptRuleTemplate.create({
+        data: {
+          userId,
+          name: normalized.name,
+          version: nextVersion,
+          locale: DEFAULT_RULES.locale,
+          cvRules: normalized.cvRules,
+          coverRules: normalized.coverRules,
+          hardConstraints: normalized.hardConstraints,
+          isActive: false,
+        },
+      });
+    }),
+  );
 }
 
 export async function activatePromptRuleTemplate(userId: string, templateId: string) {
@@ -139,23 +171,25 @@ export async function activatePromptRuleTemplate(userId: string, templateId: str
 }
 
 export async function resetPromptRulesToDefault(userId: string) {
-  const nextVersion = await getNextVersion(userId);
-  return prisma.$transaction(async (tx) => {
-    await tx.promptRuleTemplate.updateMany({
-      where: { userId, isActive: true },
-      data: { isActive: false },
-    });
-    return tx.promptRuleTemplate.create({
-      data: {
-        userId,
-        name: "Default rules",
-        version: nextVersion,
-        locale: DEFAULT_RULES.locale,
-        cvRules: DEFAULT_RULES.cvRules,
-        coverRules: DEFAULT_RULES.coverRules,
-        hardConstraints: DEFAULT_RULES.hardConstraints,
-        isActive: true,
-      },
-    });
-  });
+  return withVersionRetry(() =>
+    prisma.$transaction(async (tx) => {
+      const nextVersion = await getNextVersion(tx, userId);
+      await tx.promptRuleTemplate.updateMany({
+        where: { userId, isActive: true },
+        data: { isActive: false },
+      });
+      return tx.promptRuleTemplate.create({
+        data: {
+          userId,
+          name: "Default rules",
+          version: nextVersion,
+          locale: DEFAULT_RULES.locale,
+          cvRules: DEFAULT_RULES.cvRules,
+          coverRules: DEFAULT_RULES.coverRules,
+          hardConstraints: DEFAULT_RULES.hardConstraints,
+          isActive: true,
+        },
+      });
+    }),
+  );
 }

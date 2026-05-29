@@ -10,6 +10,7 @@ import { buildResumePdfForJob } from "@/lib/server/applications/buildResumePdf";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
 import { enforceAiRateLimit } from "@/lib/server/api/aiRateLimit";
 import { buildPdfFilename } from "@/lib/server/files/pdfFilename";
+import { reportError } from "@/lib/server/observability/errorReporter";
 
 export const runtime = "nodejs";
 
@@ -88,6 +89,9 @@ export async function POST(req: Request) {
   } catch (err) {
     const latexRes = handleLatexError(err, requestId);
     if (latexRes) return latexRes;
+    // Non-LaTeX failure (AI / build) — report so the failure rate is visible
+    // in prod instead of vanishing into a generic 500.
+    reportError(err, { scope: "applications.generate", userId, requestId });
     return NextResponse.json(
       { error: { code: "UNKNOWN_ERROR", message: "Unknown render error" }, requestId },
       { status: 500 },
