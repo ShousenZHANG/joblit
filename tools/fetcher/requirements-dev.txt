@@ -1,0 +1,3 @@
+# Dev/CI-only deps for the fetcher worker test suite.
+-r requirements.txt
+pytest>=8,<9

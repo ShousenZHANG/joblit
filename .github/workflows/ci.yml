@@ -43,8 +43,24 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Test
-        run: npm run test
+      - name: Test (with coverage ratchet)
+        run: npm run test:coverage
 
       - name: Build
         run: npm run build
+
+  python-worker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install worker deps
+        run: pip install -r tools/fetcher/requirements-dev.txt
+
+      - name: Test fetcher
+        run: python -m pytest tools/fetcher -q

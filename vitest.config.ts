@@ -13,6 +13,32 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./test/setup.ts"],
     css: false,
+    coverage: {
+      provider: "v8",
+      reporter: ["text-summary", "html"],
+      include: ["lib/**", "app/**", "components/**"],
+      exclude: [
+        "lib/generated/**",
+        "**/*.test.{ts,tsx}",
+        "**/*.d.ts",
+        "app/**/layout.tsx",
+        "app/**/loading.tsx",
+        "app/**/error.tsx",
+        "app/**/not-found.tsx",
+        "app/**/global-error.tsx",
+      ],
+      // RATCHET FLOOR, not an aspirational gate. Set just under the current
+      // measured coverage so it cannot regress, then bump upward as suites
+      // grow toward the 80% target in CLAUDE.md. A hard 80% today would be a
+      // false gate (much app/ UI is still untested); locking the floor is the
+      // honest move and still blocks any drop.
+      thresholds: {
+        statements: 53,
+        branches: 43,
+        functions: 50,
+        lines: 56,
+      },
+    },
     // Vitest 4 default `forks` pool fails to register suites on Windows in this
     // project (suites resolve before the worker registers them). `vmThreads`
     // is stable here and keeps memory bounded.

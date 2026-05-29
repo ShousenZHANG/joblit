@@ -34,6 +34,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "deps:policy": "node tools/ci/check-dependency-policy.mjs",
     "deps:audit": "npm audit --omit=dev --audit-level=high",
     "readme:metrics": "node tools/readme/update-metrics-badges.mjs"
@@ -87,6 +88,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^4.1.7",
     "axe-core": "^4.11.4",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
