@@ -58,6 +58,7 @@
       "@types/node",
       "@types/react",
       "@types/react-dom",
+      "@vitest/coverage-v8",
       "axe-core",
       "eslint",
       "eslint-config-next",
