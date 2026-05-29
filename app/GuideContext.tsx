@@ -190,14 +190,88 @@ export function GuideProvider({ children }: { children: ReactNode }) {
   const panelRef = useRef<HTMLElement | null>(null);
   const coachmarkRef = useRef<HTMLElement | null>(null);
 
+  // Full modal focus management for the aria-modal Quick Start panel:
+  //   1. capture the element that had focus before the panel opened and
+  //      restore it when the panel closes (WCAG 2.4.3 Focus Order),
+  //   2. move focus into the panel on open,
+  //   3. trap Tab / Shift+Tab so focus cycles between the first and last
+  //      focusable descendant instead of escaping to the page behind the
+  //      modal overlay (ARIA Authoring Practices — Dialog Modal pattern).
+  // Escape-to-close is handled by the global "?" shortcut listener below; we
+  // also guard Escape here so it works even when no userId path is active.
   useEffect(() => {
     if (!panelOpen) return;
     const node = panelRef.current;
     if (!node) return;
-    const focusable = node.querySelector<HTMLElement>(
-      "button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])",
-    );
-    focusable?.focus();
+
+    const previouslyFocused =
+      typeof document !== "undefined"
+        ? (document.activeElement as HTMLElement | null)
+        : null;
+
+    const FOCUSABLE_SELECTOR =
+      "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])";
+
+    const getFocusable = (): HTMLElement[] => {
+      const candidates = Array.from(
+        node.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+      ).filter((el) => !el.hasAttribute("hidden"));
+      // `offsetParent` is the cheap browser visibility check, but jsdom (and
+      // any no-layout environment) returns null for everything. Only filter
+      // on it when at least one candidate reports layout — otherwise keep all
+      // candidates so the trap still works under test renderers.
+      const layoutAvailable = candidates.some((el) => el.offsetParent !== null);
+      return layoutAvailable
+        ? candidates.filter(
+            (el) => el.offsetParent !== null || el === document.activeElement,
+          )
+        : candidates;
+    };
+
+    // Move focus into the panel on open.
+    const initial = getFocusable()[0] ?? node;
+    initial.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setPanelOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusable = getFocusable();
+      if (focusable.length === 0) {
+        // Nothing focusable inside — keep focus on the panel itself.
+        event.preventDefault();
+        node.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+
+      if (event.shiftKey) {
+        if (active === first || !node.contains(active)) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !node.contains(active)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    node.addEventListener("keydown", onKeyDown);
+    return () => {
+      node.removeEventListener("keydown", onKeyDown);
+      // Restore focus to the trigger that opened the panel, when it is still
+      // in the document and focusable.
+      if (previouslyFocused && typeof previouslyFocused.focus === "function") {
+        previouslyFocused.focus();
+      }
+    };
   }, [panelOpen]);
 
   useEffect(() => {
@@ -740,7 +814,8 @@ export function GuideProvider({ children }: { children: ReactNode }) {
                 aria-modal="true"
                 aria-labelledby="guide-panel-title"
                 data-testid="guide-quickstart-panel"
-                className="fixed inset-x-0 bottom-0 z-[61] flex max-h-[85dvh] flex-col rounded-t-2xl border border-border bg-card text-card-foreground shadow-[0_24px_60px_-30px_rgba(15,23,42,0.45)] guide-scale-in md:bottom-5 md:left-auto md:right-5 md:top-auto md:max-h-[min(640px,calc(100dvh-2.5rem))] md:w-[380px] md:rounded-2xl"
+                tabIndex={-1}
+                className="fixed inset-x-0 bottom-0 z-[61] flex max-h-[85dvh] flex-col rounded-t-2xl border border-border bg-card text-card-foreground shadow-[0_24px_60px_-30px_rgba(15,23,42,0.45)] guide-scale-in md:bottom-5 md:left-auto md:right-5 md:top-auto md:max-h-[min(640px,calc(100dvh-2.5rem))] md:w-[380px] md:rounded-2xl focus:outline-none"
                 style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
               >
                 {/* Header */}
