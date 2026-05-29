@@ -4,23 +4,29 @@ import createNextIntlPlugin from "next-intl/plugin";
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 
 /**
- * Content-Security-Policy. Shipped in Report-Only mode first so a missed
- * source surfaces as a console report instead of a broken page. After
- * verifying zero violations across the core flows (fetch / generate /
- * PDF preview / discover), flip the header name to `Content-Security-Policy`
- * to enforce.
+ * Content-Security-Policy — ENFORCED (was Report-Only, which gave zero actual
+ * protection in prod). Enforcing now activates the high-value directives:
+ * object-src 'none' (blocks plugin/flash injection), base-uri 'self' (blocks
+ * <base> tag hijack), frame-ancestors 'none' (clickjacking), form-action 'self'
+ * (form-target exfiltration), and the connect-src allowlist (data exfil).
  *
- * unsafe-inline / unsafe-eval on script-src are required by Next.js's
- * inline hydration bootstrap without a nonce pipeline; style-src needs
- * unsafe-inline for Tailwind + framer-motion injected styles.
+ * script-src / style-src still carry 'unsafe-inline' (+ 'unsafe-eval' for
+ * scripts) because Next.js's inline hydration bootstrap and Tailwind/
+ * framer-motion injected styles require it without a per-request nonce
+ * pipeline. Next step to fully harden script-src: add nonce middleware and
+ * drop 'unsafe-inline'/'unsafe-eval' — tracked as a follow-up. Enforcing the
+ * rest now is the high-value, low-regression-risk move.
  */
-const cspReportOnly = [
+const csp = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://i.ytimg.com https://github.com https://avatars.githubusercontent.com https://*.public.blob.vercel-storage.com",
   "font-src 'self' data:",
-  "connect-src 'self' https://generativelanguage.googleapis.com https://*.public.blob.vercel-storage.com https://vitals.vercel-insights.com",
+  // blob: is required so pdfjs/react-pdf can fetch the object URL it creates
+  // from the rendered PDF blob (would silently break under an enforced policy
+  // otherwise — Report-Only never surfaced it).
+  "connect-src 'self' blob: https://generativelanguage.googleapis.com https://*.public.blob.vercel-storage.com https://vitals.vercel-insights.com",
   "frame-src 'self' blob:",
   "frame-ancestors 'none'",
   "base-uri 'self'",
@@ -40,7 +46,7 @@ const securityHeaders = [
     key: "Permissions-Policy",
     value: "camera=(), microphone=(), geolocation=(), browsing-topics=()",
   },
-  { key: "Content-Security-Policy-Report-Only", value: cspReportOnly },
+  { key: "Content-Security-Policy", value: csp },
 ];
 
 const nextConfig: NextConfig = {
