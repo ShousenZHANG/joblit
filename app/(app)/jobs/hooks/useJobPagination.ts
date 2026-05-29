@@ -179,7 +179,11 @@ export function useJobPagination({
       viewport.removeEventListener("scroll", onScroll);
       window.cancelAnimationFrame(rafId);
     };
-  }, [loading, nextCursor, scrollRef]);
+    // `items.length` is in the deps so that when a delete (single or batch)
+    // shrinks the list below the viewport, the underfill check re-runs and
+    // auto-loads the next page to backfill the gap — via the existing
+    // append-page path, so no dim and no totalCount flicker.
+  }, [loading, nextCursor, scrollRef, items.length]);
 
   return {
     items,

@@ -30,7 +30,6 @@ import {
   TITLE_EXCLUSION_OPTIONS,
   TITLE_EXCLUSION_VALUES,
 } from "@/lib/shared/fetchExclusionCriteria";
-import { expandRoleQueries } from "@/lib/shared/fetchRolePacks";
 import { cn } from "@/lib/utils";
 
 const RIGHTS_EXCLUSION_OPTIONS = DESCRIPTION_EXCLUSION_OPTIONS.filter(
@@ -534,10 +533,6 @@ export function FetchClient() {
   const [strictness, setStrictness] = useState<"strict" | "balanced" | "loose">(
     "balanced",
   );
-  const [deselectedExpansions, setDeselectedExpansions] = useState<Set<string>>(
-    new Set(),
-  );
-
   const [localError, setLocalError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const {
@@ -559,23 +554,6 @@ export function FetchClient() {
       .filter(Boolean);
     return Array.from(new Set(parts));
   }, [jobTitle]);
-
-  // Smart-expand preview — what role queries this fetch will actually search.
-  // Uses the SAME shared expander the server runs, so the preview is exact.
-  // Users can deselect roles they don't want before fetching.
-  const expandedQueries = useMemo(
-    () => (smartExpand ? expandRoleQueries(queries) : queries),
-    [smartExpand, queries],
-  );
-  const expansionGrew = smartExpand && expandedQueries.length > queries.length;
-  const finalQueries = expandedQueries.filter((q) => !deselectedExpansions.has(q));
-  const userTrimmedExpansion =
-    smartExpand && expandedQueries.some((q) => deselectedExpansions.has(q));
-
-  // Drop stale deselections when the base titles or the toggle change.
-  useEffect(() => {
-    setDeselectedExpansions(new Set());
-  }, [queries, smartExpand]);
 
   const suggestionQuery = useMemo(() => {
     const segments = jobTitle.split(/[\n,|]/);
@@ -659,18 +637,10 @@ export function FetchClient() {
       : {
           market: "AU",
           title: queries[0] ?? jobTitle.trim(),
-          // When the user trimmed the smart-expand preview, send the exact
-          // kept list already-expanded (smartExpand:false) so the server
-          // honours their choice. Otherwise keep the original contract: send
-          // base titles and let the server expand.
-          queries: userTrimmedExpansion
-            ? finalQueries.length
-              ? finalQueries
-              : queries
-            : queries,
+          queries,
           location,
           hoursOld,
-          smartExpand: userTrimmedExpansion ? false : smartExpand,
+          smartExpand,
           applyExcludes,
           excludeTitleTerms,
           excludeDescriptionRules: [
@@ -892,56 +862,6 @@ export function FetchClient() {
               Apply exclusions
             </button>
           </div>
-
-          {/* Smart-expand preview — exact roles this fetch will search, with
-              per-role opt-out so the user controls the final query set. */}
-          {expansionGrew && (
-            <div className="rounded-2xl border border-border/60 bg-muted/20 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium text-muted-foreground">
-                  Searching {finalQueries.length} related role
-                  {finalQueries.length === 1 ? "" : "s"}
-                </span>
-                {deselectedExpansions.size > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setDeselectedExpansions(new Set())}
-                    className="text-[11px] font-semibold text-brand-emerald-700 hover:underline"
-                  >
-                    Reset
-                  </button>
-                )}
-              </div>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {expandedQueries.map((q) => {
-                  const off = deselectedExpansions.has(q);
-                  return (
-                    <button
-                      key={q}
-                      type="button"
-                      aria-pressed={!off}
-                      onClick={() =>
-                        setDeselectedExpansions((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(q)) next.delete(q);
-                          else next.add(q);
-                          return next;
-                        })
-                      }
-                      className={cn(
-                        "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
-                        off
-                          ? "border-border/60 bg-transparent text-muted-foreground/60 line-through"
-                          : "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-700 hover:bg-brand-emerald-100",
-                      )}
-                    >
-                      {q}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
           {/* Collapsible exclusion filters */}
           {applyExcludes && (
