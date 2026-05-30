@@ -1,11 +1,24 @@
-import { FieldCategory, LABEL_PATTERNS } from "@ext/shared/fieldTaxonomy";
+import {
+  FieldCategory,
+  LABEL_PATTERNS,
+  INPUT_TYPE_MAP,
+  categoryFromAutocomplete,
+} from "@ext/shared/fieldTaxonomy";
 import type { DetectedField } from "@ext/shared/types";
 
-/** Signal weights for multi-signal field classification. */
+/** Signal weights for multi-signal field classification.
+ *
+ * `autocomplete` dominates (a WHATWG-spec token is authoritative — it's what
+ * Chrome / 1Password / Dashlane match on first), so a standards-compliant
+ * field is classified almost entirely from it; the text heuristics carry the
+ * rest when no autocomplete/type hint is present. Weights feed an argmax, not
+ * a probability, so they need not sum to 1. */
 const WEIGHTS = {
-  nameId: 0.3,
-  label: 0.35,
-  placeholder: 0.15,
+  autocomplete: 0.6,
+  type: 0.2,
+  nameId: 0.28,
+  label: 0.32,
+  placeholder: 0.14,
   aria: 0.1,
   adjacentText: 0.1,
 } as const;
@@ -86,12 +99,19 @@ export function classifyField(el: HTMLElement): Pick<DetectedField, "category" |
   const labelText = findLabelText(el);
   const adjacentText = findAdjacentText(el);
 
+  // Authoritative attribute signals (WHATWG autocomplete + input type).
+  const autocompleteCategory = categoryFromAutocomplete(el.getAttribute("autocomplete"));
+  const rawType = (el as HTMLInputElement).type ?? "";
+  const typeCategory = INPUT_TYPE_MAP[rawType.toLowerCase()] ?? null;
+
   let bestCategory = FieldCategory.UNKNOWN;
   let bestScore = 0;
 
   for (const category of Object.values(FieldCategory)) {
     if (category === FieldCategory.UNKNOWN) continue;
 
+    const autocompleteScore = autocompleteCategory === category ? 1 : 0;
+    const typeScore = typeCategory === category ? 1 : 0;
     const nameIdScore = Math.max(matchScore(nameAttr, category), matchScore(idAttr, category));
     const labelScore = matchScore(labelText, category);
     const placeholderScore = matchScore(placeholder, category);
@@ -99,6 +119,8 @@ export function classifyField(el: HTMLElement): Pick<DetectedField, "category" |
     const adjScore = matchScore(adjacentText, category);
 
     const weighted =
+      autocompleteScore * WEIGHTS.autocomplete +
+      typeScore * WEIGHTS.type +
       nameIdScore * WEIGHTS.nameId +
       labelScore * WEIGHTS.label +
       placeholderScore * WEIGHTS.placeholder +
@@ -110,6 +132,12 @@ export function classifyField(el: HTMLElement): Pick<DetectedField, "category" |
       bestCategory = category;
     }
   }
+
+  // Clamp to 1 (an autocomplete hit plus text matches can sum past 1). Raw
+  // per-signal magnitudes are preserved so existing downstream confidence
+  // thresholds keep their meaning; autocomplete just lifts spec-compliant
+  // fields decisively above them.
+  bestScore = Math.min(1, bestScore);
 
   return {
     category: bestCategory,

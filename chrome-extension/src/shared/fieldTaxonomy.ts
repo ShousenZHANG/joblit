@@ -256,6 +256,57 @@ export const LABEL_PATTERNS: Record<FieldCategory, RegExp[]> = {
   [FieldCategory.UNKNOWN]: [],
 };
 
+/**
+ * HTML `autocomplete` attribute tokens → FieldCategory. The autocomplete token
+ * is the single most authoritative field signal (WHATWG spec; what Chrome,
+ * 1Password and Dashlane match on first), so a hit here should dominate the
+ * label/name heuristics. Tokens are matched case-insensitively and the
+ * attribute may carry section/scope prefixes ("shipping street-address") — the
+ * classifier checks each space-separated token against this map.
+ */
+export const AUTOCOMPLETE_MAP: Record<string, FieldCategory> = {
+  name: FieldCategory.FULL_NAME,
+  "given-name": FieldCategory.FIRST_NAME,
+  "additional-name": FieldCategory.FIRST_NAME,
+  "family-name": FieldCategory.LAST_NAME,
+  email: FieldCategory.EMAIL,
+  tel: FieldCategory.PHONE,
+  "tel-national": FieldCategory.PHONE,
+  "street-address": FieldCategory.ADDRESS,
+  "address-line1": FieldCategory.ADDRESS,
+  "address-line2": FieldCategory.ADDRESS,
+  "address-level2": FieldCategory.CITY,
+  "address-level1": FieldCategory.STATE,
+  "postal-code": FieldCategory.ZIPCODE,
+  country: FieldCategory.COUNTRY,
+  "country-name": FieldCategory.COUNTRY,
+  organization: FieldCategory.CURRENT_COMPANY,
+  "organization-title": FieldCategory.CURRENT_TITLE,
+  url: FieldCategory.WEBSITE_URL,
+  sex: FieldCategory.GENDER,
+};
+
+/** Strong `type`-attribute hints. type=email/tel/url are near-authoritative. */
+export const INPUT_TYPE_MAP: Record<string, FieldCategory> = {
+  email: FieldCategory.EMAIL,
+  tel: FieldCategory.PHONE,
+  url: FieldCategory.WEBSITE_URL,
+};
+
+/** Resolve an `autocomplete` attribute value to a category, or null. */
+export function categoryFromAutocomplete(
+  autocomplete: string | null | undefined,
+): FieldCategory | null {
+  if (!autocomplete) return null;
+  const value = autocomplete.toLowerCase().trim();
+  if (!value || value === "off" || value === "on") return null;
+  for (const token of value.split(/\s+/)) {
+    const hit = AUTOCOMPLETE_MAP[token];
+    if (hit) return hit;
+  }
+  return null;
+}
+
 /** Maps FieldCategory → flat profile key for auto-fill. */
 export const PROFILE_KEY_MAP: Partial<Record<FieldCategory, string>> = {
   [FieldCategory.FULL_NAME]: "fullName",

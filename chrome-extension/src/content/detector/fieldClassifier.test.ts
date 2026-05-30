@@ -228,3 +228,59 @@ describe("getInputType", () => {
     expect(getInputType(document.getElementById("i")!)).toBe("text");
   });
 });
+
+describe("classifyField — authoritative attribute signals", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("classifies from autocomplete token even when name/label are ambiguous", () => {
+    document.body.innerHTML = `<input id="f" name="field_7b" autocomplete="family-name" />`;
+    const input = document.getElementById("f")!;
+    const result = classifyField(input);
+    expect(result.category).toBe(FieldCategory.LAST_NAME);
+    expect(result.confidence).toBeGreaterThanOrEqual(0.6);
+  });
+
+  it("parses scoped/multi-token autocomplete values", () => {
+    document.body.innerHTML = `<input id="f" autocomplete="shipping address-level2" />`;
+    const input = document.getElementById("f")!;
+    expect(classifyField(input).category).toBe(FieldCategory.CITY);
+  });
+
+  it("maps organization/organization-title autocomplete", () => {
+    document.body.innerHTML = `
+      <input id="co" autocomplete="organization" />
+      <input id="ti" autocomplete="organization-title" />
+    `;
+    expect(classifyField(document.getElementById("co")!).category).toBe(
+      FieldCategory.CURRENT_COMPANY,
+    );
+    expect(classifyField(document.getElementById("ti")!).category).toBe(
+      FieldCategory.CURRENT_TITLE,
+    );
+  });
+
+  it("uses type=email / type=tel as a strong hint", () => {
+    document.body.innerHTML = `
+      <input id="e" type="email" name="contact" />
+      <input id="p" type="tel" name="contact2" />
+    `;
+    expect(classifyField(document.getElementById("e")!).category).toBe(FieldCategory.EMAIL);
+    expect(classifyField(document.getElementById("p")!).category).toBe(FieldCategory.PHONE);
+  });
+
+  it("autocomplete overrides a misleading label", () => {
+    document.body.innerHTML = `
+      <label for="x">Company</label>
+      <input id="x" autocomplete="email" />
+    `;
+    expect(classifyField(document.getElementById("x")!).category).toBe(FieldCategory.EMAIL);
+  });
+
+  it("ignores autocomplete=off / on", () => {
+    document.body.innerHTML = `<input id="f" name="email" autocomplete="off" />`;
+    // Falls back to name heuristic → still EMAIL, not broken by off.
+    expect(classifyField(document.getElementById("f")!).category).toBe(FieldCategory.EMAIL);
+  });
+});
