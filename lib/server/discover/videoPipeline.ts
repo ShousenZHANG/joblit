@@ -196,6 +196,54 @@ export function scoreRelevance(
   return Math.min(hits / 3, 1);
 }
 
+// ── Trending composite quality score ─────────────────────
+//
+// The default "trending" view previously returned videos in raw YouTube
+// search order — relevanceScore and trustTier were computed but never used to
+// rank, so off-topic / low-engagement / untrusted videos could top the feed.
+// This composite ranks by the signals that actually mean "worth watching":
+// topical relevance, channel trust, engagement, and recency.
+
+export interface ScorableVideo {
+  relevanceScore: number;
+  trustTier: 0 | 1 | 2 | 3;
+  viewCount: number;
+  likeCount: number;
+  publishedAt: string;
+}
+
+export function trustScore(tier: 0 | 1 | 2 | 3): number {
+  return tier === 1 ? 1 : tier === 2 ? 0.7 : tier === 3 ? 0.4 : 0;
+}
+
+// log-scaled views (≈1.0 at 1M) blended with like ratio so a small but highly
+// engaging video isn't buried under a viral-but-shallow one.
+export function engagementScore(views: number, likes: number): number {
+  const viewPart = Math.min(Math.log10(Math.max(0, views) + 1) / 6, 1);
+  const likeRatio = views > 0 ? Math.min(likes / views, 0.1) / 0.1 : 0;
+  return 0.7 * viewPart + 0.3 * likeRatio;
+}
+
+export function recencyScore(publishedAt: string, windowDays: number): number {
+  const ts = Date.parse(publishedAt);
+  if (Number.isNaN(ts)) return 0;
+  const ageDays = (Date.now() - ts) / 86_400_000;
+  if (ageDays <= 0) return 1;
+  return Math.max(0, 1 - ageDays / Math.max(1, windowDays));
+}
+
+export function computeTrendingScore(
+  v: ScorableVideo,
+  windowDays: number,
+): number {
+  return (
+    0.4 * v.relevanceScore +
+    0.25 * trustScore(v.trustTier) +
+    0.25 * engagementScore(v.viewCount, v.likeCount) +
+    0.1 * recencyScore(v.publishedAt, windowDays)
+  );
+}
+
 // ── YouTube API calls ─────────────────────────────────────
 
 function daysAgoISO(n: number): string {
@@ -447,7 +495,20 @@ export async function fetchVideosFromYouTube(
           new Date(a.publishedAt).getTime(),
     );
   }
-  return videos;
+  // Default "trending": rank by the composite quality score so the feed leads
+  // with relevant, trusted, well-engaged, recent videos instead of raw search
+  // order. Cache the score to avoid recomputing in the comparator.
+  const windowDays = timeWindow === "week" ? 7 : 30;
+  const scored = videos.map((v) => ({
+    v,
+    score: computeTrendingScore(v, windowDays),
+  }));
+  scored.sort(
+    (a, b) =>
+      b.score - a.score ||
+      new Date(b.v.publishedAt).getTime() - new Date(a.v.publishedAt).getTime(),
+  );
+  return scored.map((s) => s.v);
 }
 
 /** Every combination the cron pre-warmer needs to cover. */

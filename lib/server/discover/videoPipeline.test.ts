@@ -4,6 +4,11 @@ import {
   scoreRelevance,
   searchOrderForSort,
   ALL_VIDEO_CACHE_COMBOS,
+  trustScore,
+  engagementScore,
+  recencyScore,
+  computeTrendingScore,
+  type ScorableVideo,
 } from "./videoPipeline";
 
 describe("queriesForCategory", () => {
@@ -107,5 +112,57 @@ describe("ALL_VIDEO_CACHE_COMBOS", () => {
       (c) => `${c.category}:${c.timeWindow}`,
     );
     expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+describe("video trending score", () => {
+  const base: ScorableVideo = {
+    relevanceScore: 0.5,
+    trustTier: 0,
+    viewCount: 1000,
+    likeCount: 50,
+    publishedAt: new Date().toISOString(),
+  };
+
+  it("trustScore ranks tier 1 > 2 > 3 > untrusted", () => {
+    expect(trustScore(1)).toBeGreaterThan(trustScore(2));
+    expect(trustScore(2)).toBeGreaterThan(trustScore(3));
+    expect(trustScore(3)).toBeGreaterThan(trustScore(0));
+    expect(trustScore(0)).toBe(0);
+  });
+
+  it("engagementScore rises with views and like ratio, bounded 0..1", () => {
+    expect(engagementScore(1_000_000, 50_000)).toBeGreaterThan(
+      engagementScore(100, 1),
+    );
+    expect(engagementScore(0, 0)).toBe(0);
+    expect(engagementScore(10_000_000, 1_000_000)).toBeLessThanOrEqual(1);
+  });
+
+  it("recencyScore decays from 1 (new) toward 0 (window edge)", () => {
+    const fresh = recencyScore(new Date().toISOString(), 30);
+    const old = recencyScore(
+      new Date(Date.now() - 29 * 86_400_000).toISOString(),
+      30,
+    );
+    expect(fresh).toBeGreaterThan(old);
+    expect(fresh).toBeLessThanOrEqual(1);
+    expect(old).toBeGreaterThanOrEqual(0);
+  });
+
+  it("a relevant trusted high-engagement video outranks an off-topic untrusted one", () => {
+    const good = computeTrendingScore(
+      { ...base, relevanceScore: 1, trustTier: 1, viewCount: 500_000, likeCount: 30_000 },
+      30,
+    );
+    const bad = computeTrendingScore(
+      { ...base, relevanceScore: 0, trustTier: 0, viewCount: 200, likeCount: 1 },
+      30,
+    );
+    expect(good).toBeGreaterThan(bad);
+  });
+
+  it("handles an unparseable publish date without throwing", () => {
+    expect(recencyScore("not-a-date", 30)).toBe(0);
   });
 });
