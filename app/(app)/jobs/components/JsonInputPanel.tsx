@@ -71,7 +71,7 @@ export function JsonInputPanel({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       {/* Input + Preview grid */}
-      <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-[1fr,240px]">
+      <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_240px]">
         {/* Textarea */}
         <Textarea
           value={value}

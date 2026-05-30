@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { Plus, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -174,48 +175,56 @@ export function PersonalInfoSection({
         )}
 
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
               <h3 className="text-sm font-semibold text-foreground">{t("links")}</h3>
               <p className="text-sm text-muted-foreground">{t("linksDesc")}</p>
             </div>
-            <Button type="button" variant="secondary" onClick={addLink}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0 gap-1.5"
+              onClick={addLink}
+            >
+              <Plus className="h-3.5 w-3.5" aria-hidden />
               {t("addLink")}
             </Button>
           </div>
-          <div className="space-y-3">
+          {/* Compact one-row-per-link layout (LinkedIn/Notion style): label +
+              URL inline, no repeated per-row text labels, icon-only remove.
+              The grid uses underscore separators — `grid-cols-[a,b,c]` with
+              commas is invalid Tailwind and silently collapses to a stacked
+              full-width column. */}
+          <div className="space-y-2">
             {links.map((link, index) => (
-              <div key={`link-${index}`} className="grid gap-3 md:grid-cols-[180px,1fr,auto]">
-                <div className="space-y-2">
-                  <Label htmlFor={`link-label-${index}`}>{t("label")}</Label>
-                  <Input
-                    id={`link-label-${index}`}
-                    value={link.label}
-                    onChange={(e) => updateLink(index, "label", e.target.value)}
-                    placeholder={t("linkLabelPlaceholder")}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor={`link-url-${index}`}>{t("url")}</Label>
-                  <Input
-                    id={`link-url-${index}`}
-                    value={link.url}
-                    onChange={(e) => updateLink(index, "url", e.target.value)}
-                    placeholder={t("linkUrlPlaceholder")}
-                  />
-                </div>
-                {links.length > 1 ? (
-                  <div className="flex items-end">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="text-xs text-red-600 hover:text-red-600"
-                      onClick={() => removeLink(index)}
-                    >
-                      {t("remove")}
-                    </Button>
-                  </div>
-                ) : null}
+              <div
+                key={`link-${index}`}
+                className="grid items-center gap-2 sm:grid-cols-[minmax(0,150px)_minmax(0,1fr)_auto]"
+              >
+                <Input
+                  aria-label={`${t("label")} ${index + 1}`}
+                  value={link.label}
+                  onChange={(e) => updateLink(index, "label", e.target.value)}
+                  placeholder={t("linkLabelPlaceholder")}
+                />
+                <Input
+                  aria-label={`${t("url")} ${index + 1}`}
+                  value={link.url}
+                  onChange={(e) => updateLink(index, "url", e.target.value)}
+                  placeholder={t("linkUrlPlaceholder")}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`${t("remove")} ${link.label || index + 1}`}
+                  disabled={links.length <= 1}
+                  onClick={() => removeLink(index)}
+                  className="justify-self-end text-muted-foreground hover:text-destructive disabled:opacity-30"
+                >
+                  <X className="h-4 w-4" aria-hidden />
+                </Button>
               </div>
             ))}
           </div>
