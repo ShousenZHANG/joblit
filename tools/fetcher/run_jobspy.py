@@ -231,126 +231,6 @@ def filter_experience_requirements(
     return kept, audit
 
 
-JOB_TYPE_ALIASES: Dict[str, tuple] = {
-    "internship": ("intern", "internship", "实习", "trainee"),
-    "contract": ("contract", "contractor", "外包", "合同工"),
-    "temporary": ("temp", "temporary", "casual", "seasonal", "临时"),
-    "parttime": ("part-time", "part time", "parttime", "兼职"),
-    "volunteer": ("volunteer", "voluntary", "志愿"),
-}
-
-VALID_STRICTNESS = ("strict", "balanced", "loose")
-
-
-def filter_job_type(df: pd.DataFrame, exclude_types: List[str]) -> pd.DataFrame:
-    """Drop rows whose employment type matches any excluded category.
-
-    Defensive: if no type column exists, keep every row rather than wrongly
-    dropping — a missing column must never silently empty the result."""
-    if df.empty or not exclude_types:
-        return df
-    col = (
-        "job_type"
-        if "job_type" in df.columns
-        else "employment_type"
-        if "employment_type" in df.columns
-        else None
-    )
-    if col is None:
-        return df
-    needles: List[str] = []
-    for t in exclude_types:
-        needles.extend(JOB_TYPE_ALIASES.get(str(t).lower(), (str(t).lower(),)))
-    needles = [n for n in needles if n]
-    if not needles:
-        return df
-
-    def is_excluded(value: Any) -> bool:
-        s = str(value or "").lower()
-        return any(n in s for n in needles)
-
-    return df[~df[col].apply(is_excluded)].copy()
-
-
-_REMOTE_TEXT_RE = re.compile(r"(?i)\b(?:remote|work\s+from\s+home|wfh|anywhere)\b")
-
-
-def filter_remote_only(df: pd.DataFrame) -> pd.DataFrame:
-    """Keep only remote roles. Uses jobspy's `is_remote` flag when present,
-    else falls back to a title/location/description text heuristic. Opt-in, so
-    the aggressiveness is the user's explicit choice."""
-    if df.empty:
-        return df
-    if "is_remote" in df.columns:
-        text_cols = [c for c in ("title", "location", "description") if c in df.columns]
-
-        def keep(row: Any) -> bool:
-            flag = row.get("is_remote")
-            if flag is True:
-                return True
-            if pd.isna(flag):
-                # Unknown flag — fall back to text evidence.
-                return any(_REMOTE_TEXT_RE.search(str(row.get(c) or "")) for c in text_cols)
-            return bool(flag)
-
-        return df[df.apply(keep, axis=1)].copy()
-
-    text_cols = [c for c in ("title", "location", "description") if c in df.columns]
-    if not text_cols:
-        return df
-    mask = df.apply(
-        lambda row: any(_REMOTE_TEXT_RE.search(str(row.get(c) or "")) for c in text_cols),
-        axis=1,
-    )
-    return df[mask].copy()
-
-
-def _annualize_salary(amount: float, interval: str) -> float:
-    iv = (interval or "yearly").lower()
-    if "hour" in iv:
-        return amount * 2080
-    if "month" in iv:
-        return amount * 12
-    if "week" in iv:
-        return amount * 52
-    if "day" in iv:
-        return amount * 260
-    return amount
-
-
-def filter_min_salary(df: pd.DataFrame, min_salary: float) -> pd.DataFrame:
-    """Drop rows whose stated max salary is below the floor (annualised).
-    Rows with no salary data are KEPT — a floor must not hide every job that
-    simply didn't publish pay."""
-    if df.empty or not min_salary or min_salary <= 0:
-        return df
-    amount_col = (
-        "max_amount"
-        if "max_amount" in df.columns
-        else "min_amount"
-        if "min_amount" in df.columns
-        else None
-    )
-    if amount_col is None:
-        return df
-    interval_col = "interval" if "interval" in df.columns else None
-
-    def keep(row: Any) -> bool:
-        raw = row.get(amount_col)
-        if raw is None or (isinstance(raw, float) and pd.isna(raw)):
-            return True
-        try:
-            value = float(raw)
-        except (TypeError, ValueError):
-            return True
-        if value <= 0:
-            return True
-        interval = str(row.get(interval_col) if interval_col else "yearly")
-        return _annualize_salary(value, interval) >= float(min_salary)
-
-    return df[df.apply(keep, axis=1)].copy()
-
-
 def _build_query_phrases(queries: List[str]) -> List[str]:
     phrases: List[str] = []
     for q in queries or []:
@@ -1076,10 +956,6 @@ def main():
         exclude_title_terms: List[str] = []
         exclude_desc_rules: List[str] = []
         source_options: Dict[str, Any] = {}
-        exclude_job_types: List[str] = []
-        remote_only = False
-        min_salary = 0.0
-        identity_strictness = "balanced"
     elif isinstance(raw_queries, dict):
         title_query = (raw_queries.get("title") or "").strip()
         queries = raw_queries.get("queries") or ([title_query] if title_query else [])
@@ -1087,22 +963,14 @@ def main():
         exclude_title_terms = raw_queries.get("excludeTitleTerms") or []
         exclude_desc_rules = raw_queries.get("excludeDescriptionRules") or []
         source_options = raw_queries.get("sourceOptions") or {}
-        exclude_job_types = raw_queries.get("excludeJobTypes") or []
-        remote_only = bool(raw_queries.get("remoteOnly"))
-        try:
-            min_salary = float(raw_queries.get("minSalary") or 0)
-        except (TypeError, ValueError):
-            min_salary = 0.0
-        strictness_raw = str(raw_queries.get("strictness") or "balanced").lower()
-        identity_strictness = (
-            strictness_raw if strictness_raw in VALID_STRICTNESS else "balanced"
-        )
     else:
         raise RuntimeError("run.queries must be a list or object")
 
-    # v2 matcher region — GLOBAL (unions all country packs) maximizes recall.
-    # Strictness is user-controllable (default balanced, set above).
+    # v2 matcher: GLOBAL region (unions all country packs) maximizes recall,
+    # balanced strictness is the calibrated default. Both fixed — the
+    # user-facing strictness knob was removed as a confusing power-user control.
     identity_region = "GLOBAL"
+    identity_strictness = "balanced"
 
     location = run.get("location") or "Sydney, New South Wales, Australia"
     hours_old = int(run.get("hoursOld") or 48)
@@ -1164,15 +1032,6 @@ def main():
             exclude_terms=exclude_title_terms if apply_excludes else None,
         )
         logger.info("Rows after title filter: %s", len(df))
-        if apply_excludes:
-            if exclude_job_types:
-                df = filter_job_type(df, exclude_job_types)
-            if remote_only:
-                df = filter_remote_only(df)
-            if min_salary and min_salary > 0:
-                df = filter_min_salary(df, min_salary)
-            if exclude_job_types or remote_only or (min_salary and min_salary > 0):
-                logger.info("Rows after type/remote/salary filters: %s", len(df))
         df = keep_columns(df)
         # Clean before description exclusion for more consistent matching
         df = clean_description(df)

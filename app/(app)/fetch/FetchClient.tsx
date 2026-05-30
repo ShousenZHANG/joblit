@@ -38,13 +38,6 @@ const RIGHTS_EXCLUSION_OPTIONS = DESCRIPTION_EXCLUSION_OPTIONS.filter(
 const EXPERIENCE_EXCLUSION_OPTIONS = DESCRIPTION_EXCLUSION_OPTIONS.filter(
   (o) => o.category === "experience",
 );
-const JOB_TYPE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "internship", label: "Internship" },
-  { value: "contract", label: "Contract" },
-  { value: "temporary", label: "Temporary / Casual" },
-  { value: "parttime", label: "Part-time" },
-  { value: "volunteer", label: "Volunteer" },
-];
 
 const COMMON_TITLES = [
   "Software Engineer",
@@ -527,12 +520,6 @@ export function FetchClient() {
   const [experienceRule, setExperienceRule] = useState<string>(
     "experience_requirement_4_plus",
   );
-  const [excludeJobTypes, setExcludeJobTypes] = useState<string[]>([]);
-  const [remoteOnly, setRemoteOnly] = useState(false);
-  const [minSalary, setMinSalary] = useState("");
-  const [strictness, setStrictness] = useState<"strict" | "balanced" | "loose">(
-    "balanced",
-  );
   const [localError, setLocalError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const {
@@ -647,13 +634,6 @@ export function FetchClient() {
             ...excludeDescriptionRules,
             ...(experienceRule ? [experienceRule] : []),
           ],
-          excludeJobTypes,
-          remoteOnly,
-          minSalary:
-            minSalary.trim() && Number.isFinite(Number(minSalary))
-              ? Number(minSalary)
-              : undefined,
-          strictness,
         };
 
     const res = await fetch("/api/fetch-runs", {
@@ -892,83 +872,27 @@ export function FetchClient() {
                 />
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="fetch-experience" className="text-xs font-medium text-muted-foreground">
-                    Minimum experience
-                  </Label>
-                  <Select
-                    value={experienceRule || "off"}
-                    onValueChange={(v) => setExperienceRule(v === "off" ? "" : v)}
-                  >
-                    <SelectTrigger id="fetch-experience">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="off">No experience filter</SelectItem>
-                      {EXPERIENCE_EXCLUSION_OPTIONS.map((o) => (
-                        <SelectItem key={o.value} value={o.value}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <ExclusionDropdown
-                  label="Exclude job types"
-                  values={excludeJobTypes}
-                  options={JOB_TYPE_OPTIONS}
-                  placeholder="None"
-                  testId="jobtype-exclusions"
-                  onChange={setExcludeJobTypes}
-                />
+              <div className="space-y-1.5 sm:max-w-xs">
+                <Label htmlFor="fetch-experience" className="text-xs font-medium text-muted-foreground">
+                  Minimum experience
+                </Label>
+                <Select
+                  value={experienceRule || "off"}
+                  onValueChange={(v) => setExperienceRule(v === "off" ? "" : v)}
+                >
+                  <SelectTrigger id="fetch-experience">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="off">No experience filter</SelectItem>
+                    {EXPERIENCE_EXCLUSION_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="fetch-min-salary" className="text-xs font-medium text-muted-foreground">
-                    Min salary (annual)
-                  </Label>
-                  <Input
-                    id="fetch-min-salary"
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    step={5000}
-                    value={minSalary}
-                    onChange={(e) => setMinSalary(e.target.value)}
-                    placeholder="e.g. 100000"
-                    className="h-11"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="fetch-strictness" className="text-xs font-medium text-muted-foreground">
-                    Rights filter strictness
-                  </Label>
-                  <Select
-                    value={strictness}
-                    onValueChange={(v) => setStrictness(v as "strict" | "balanced" | "loose")}
-                  >
-                    <SelectTrigger id="fetch-strictness">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="loose">Loose (fewer drops)</SelectItem>
-                      <SelectItem value="balanced">Balanced</SelectItem>
-                      <SelectItem value="strict">Strict (more drops)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                className={`filter-chip ${remoteOnly ? "filter-chip--active" : "filter-chip--inactive"}`}
-                onClick={() => setRemoteOnly(!remoteOnly)}
-              >
-                <span className={`h-1.5 w-1.5 rounded-full ${remoteOnly ? "bg-brand-emerald-500" : "bg-muted-foreground/30"}`} />
-                Remote only
-              </button>
             </div>
           )}
 

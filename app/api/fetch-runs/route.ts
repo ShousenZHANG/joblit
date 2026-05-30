@@ -43,16 +43,6 @@ const AUSchema = z
       .optional()
       .default([])
       .transform(filterDescriptionExclusionRules),
-    excludeJobTypes: z
-      .array(
-        z.enum(["internship", "contract", "temporary", "parttime", "volunteer"]),
-      )
-      .max(5)
-      .optional()
-      .default([]),
-    remoteOnly: z.coerce.boolean().optional().default(false),
-    minSalary: z.coerce.number().int().min(0).max(10_000_000).optional(),
-    strictness: z.enum(["strict", "balanced", "loose"]).optional().default("balanced"),
   })
   .refine((data) => (data.title ?? data.queries?.[0])?.trim(), {
     message: "title is required",
@@ -179,10 +169,6 @@ export async function POST(req: Request) {
           applyExcludes: data.applyExcludes,
           excludeTitleTerms: data.excludeTitleTerms,
           excludeDescriptionRules: data.excludeDescriptionRules,
-          excludeJobTypes: data.excludeJobTypes,
-          remoteOnly: data.remoteOnly,
-          minSalary: data.minSalary ?? null,
-          strictness: data.strictness,
         },
         location: data.location ?? null,
         hoursOld: data.hoursOld ?? null,

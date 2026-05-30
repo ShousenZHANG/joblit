@@ -234,19 +234,13 @@ describe("FetchClient", () => {
     });
   });
 
-  it("sends custom title terms, remote-only and min salary in the run body", async () => {
+  it("sends a custom title term and the default experience exclusion in the run body", async () => {
     const user = userEvent.setup();
     renderFetch();
 
     const customInput = screen.getByLabelText(/add custom title exclusion term/i);
     await user.type(customInput, "intern");
     await user.click(screen.getByRole("button", { name: /^add$/i }));
-
-    await user.click(screen.getByRole("button", { name: /remote only/i }));
-
-    fireEvent.change(screen.getByLabelText(/min salary/i), {
-      target: { value: "120000" },
-    });
 
     await user.click(screen.getByRole("button", { name: /start fetch/i }));
     await waitFor(() => {
@@ -262,9 +256,11 @@ describe("FetchClient", () => {
     const body = JSON.parse(String(createCall?.[1]?.body ?? "{}"));
 
     expect(body.excludeTitleTerms).toContain("intern");
-    expect(body.remoteOnly).toBe(true);
-    expect(body.minSalary).toBe(120000);
-    expect(body.strictness).toBe("balanced");
     expect(body.excludeDescriptionRules).toContain("experience_requirement_4_plus");
+    // Removed filters must no longer be sent.
+    expect(body.remoteOnly).toBeUndefined();
+    expect(body.minSalary).toBeUndefined();
+    expect(body.strictness).toBeUndefined();
+    expect(body.excludeJobTypes).toBeUndefined();
   });
 });
