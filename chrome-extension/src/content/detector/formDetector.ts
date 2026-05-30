@@ -43,14 +43,40 @@ function isVisible(el: HTMLElement): boolean {
   return true;
 }
 
+/**
+ * Collect matching elements across the light DOM AND any OPEN shadow roots,
+ * recursively. Plain `querySelectorAll` does not pierce shadow boundaries, so
+ * forms built from web components (Salesforce LWC, design-system inputs, etc.)
+ * were invisible to detection. Closed shadow roots remain inaccessible by
+ * design — no script can reach them. Cross-origin iframes are handled
+ * separately by the content script's `all_frames` injection.
+ */
+function queryInputsDeep(
+  root: Document | ShadowRoot,
+  selector: string,
+  out: HTMLElement[],
+  depth = 0,
+): void {
+  if (depth > 8) return; // guard against pathological shadow nesting
+  for (const el of Array.from(root.querySelectorAll<HTMLElement>(selector))) {
+    out.push(el);
+  }
+  for (const el of Array.from(root.querySelectorAll<HTMLElement>("*"))) {
+    const shadow = el.shadowRoot;
+    if (shadow) queryInputsDeep(shadow, selector, out, depth + 1);
+  }
+}
+
 /** Detect all fillable fields in a document. */
 export function detectFields(doc: Document, adapter: AtsAdapter): DetectedField[] {
   // Try ATS-specific detection first; fall through to generic if no fields found
   const atsFields = adapter.detectFields(doc);
   if (atsFields.length > 0) return atsFields;
 
-  // Fallback: generic detection (also used when ATS adapter returns 0 fields)
-  const elements = doc.querySelectorAll<HTMLElement>(INPUT_SELECTOR);
+  // Fallback: generic detection (also used when ATS adapter returns 0 fields).
+  // Deep-collect so web-component (shadow DOM) forms are reachable.
+  const elements: HTMLElement[] = [];
+  queryInputsDeep(doc, INPUT_SELECTOR, elements);
   const fields: DetectedField[] = [];
 
   for (const el of elements) {

@@ -86,3 +86,36 @@ describe("detectForms", () => {
     expect(field.placeholder).toBe("Enter first name");
   });
 });
+
+describe("detectForms — shadow DOM coverage", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("detects inputs inside an open shadow root", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const shadow = host.attachShadow({ mode: "open" });
+    shadow.innerHTML = `<input id="sd-email" type="email" name="email" />`;
+
+    const result = detectForms(document);
+    const emailField = result.fields.find((f) => f.category === FieldCategory.EMAIL);
+    expect(emailField).toBeDefined();
+    // The element reference is kept so the filler can still target it even
+    // though a light-DOM querySelector can't reach into the shadow root.
+    expect(emailField?.element).toBe(shadow.querySelector("#sd-email"));
+  });
+
+  it("detects inputs nested in shadow roots within shadow roots", () => {
+    const outer = document.createElement("div");
+    document.body.appendChild(outer);
+    const outerShadow = outer.attachShadow({ mode: "open" });
+    const inner = document.createElement("div");
+    outerShadow.appendChild(inner);
+    const innerShadow = inner.attachShadow({ mode: "open" });
+    innerShadow.innerHTML = `<input id="deep" autocomplete="tel" />`;
+
+    const result = detectForms(document);
+    expect(result.fields.some((f) => f.category === FieldCategory.PHONE)).toBe(true);
+  });
+});
