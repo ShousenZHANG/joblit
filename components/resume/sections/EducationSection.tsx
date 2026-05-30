@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { GripVertical, MoveDown, MoveUp, Plus } from "lucide-react";
+import { GripVertical, MoveDown, MoveUp, Plus, Trash2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -47,13 +47,14 @@ export function EducationSection({
               <p className="text-sm font-medium text-foreground">
                 {t("educationN", { n: index + 1 })}
               </p>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5 text-muted-foreground">
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon-sm"
                   aria-label="Move education up"
                   disabled={index === 0}
+                  className="text-muted-foreground hover:text-foreground"
                   onClick={() => onMove(index, index - 1)}
                 >
                   <MoveUp className="h-4 w-4" />
@@ -64,6 +65,7 @@ export function EducationSection({
                   size="icon-sm"
                   aria-label="Move education down"
                   disabled={index === education.length - 1}
+                  className="text-muted-foreground hover:text-foreground"
                   onClick={() => onMove(index, index + 1)}
                 >
                   <MoveDown className="h-4 w-4" />
@@ -73,20 +75,25 @@ export function EducationSection({
                   variant="ghost"
                   size="icon-sm"
                   aria-label="Drag to reorder education"
-                  className="cursor-grab active:cursor-grabbing"
+                  className="cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
                   {...dragHandleProps}
                 >
                   <GripVertical className="h-4 w-4" />
                 </Button>
                 {education.length > 1 ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="text-xs text-destructive hover:text-destructive"
-                    onClick={() => removeEducation(index)}
-                  >
-                    {t("remove")}
-                  </Button>
+                  <>
+                    <span aria-hidden className="mx-0.5 h-4 w-px bg-border" />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={t("remove")}
+                      className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => removeEducation(index)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </>
                 ) : null}
               </div>
             </div>

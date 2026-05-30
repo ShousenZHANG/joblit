@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { ChevronDown, ChevronRight, GripVertical, MoveDown, MoveUp, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, GripVertical, MoveDown, MoveUp, Plus, Trash2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -96,13 +96,14 @@ export function ExperienceSection({
                     : t("draft")}
                 </p>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5 text-muted-foreground">
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon-sm"
                   aria-label="Move experience up"
                   disabled={index === 0}
+                  className="text-muted-foreground hover:text-foreground"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -117,6 +118,7 @@ export function ExperienceSection({
                   size="icon-sm"
                   aria-label="Move experience down"
                   disabled={index === experiences.length - 1}
+                  className="text-muted-foreground hover:text-foreground"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -130,7 +132,7 @@ export function ExperienceSection({
                   variant="ghost"
                   size="icon-sm"
                   aria-label="Drag to reorder experience"
-                  className="cursor-grab active:cursor-grabbing"
+                  className="cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -140,24 +142,31 @@ export function ExperienceSection({
                   <GripVertical className="h-4 w-4" />
                 </Button>
                 {experiences.length > 1 ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="text-xs text-destructive hover:text-destructive"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      removeExperience(index);
-                    }}
-                  >
-                    {t("remove")}
-                  </Button>
+                  <>
+                    <span aria-hidden className="mx-0.5 h-4 w-px bg-border" />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={t("remove")}
+                      className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        removeExperience(index);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </>
                 ) : null}
-                {expandedIndex === index ? (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                )}
+                <span className="ml-1 inline-flex h-8 w-6 items-center justify-center">
+                  {expandedIndex === index ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </span>
               </div>
             </summary>
 
