@@ -169,6 +169,20 @@ describe("simulateRadio", () => {
     simulateRadio([radio], "yes");
     expect(changed).toHaveBeenCalledTimes(1);
   });
+
+  it("matches a country full name to a code-valued radio via aliases", () => {
+    document.body.innerHTML = `
+      <form>
+        <label><input type="radio" name="c" value="AU" /> Australia</label>
+        <label><input type="radio" name="c" value="NZ" /> New Zealand</label>
+      </form>
+    `;
+    const radios = Array.from(
+      document.querySelectorAll<HTMLInputElement>('input[name="c"]'),
+    );
+    expect(simulateRadio(radios, "Australia")).toBe(true);
+    expect(radios[0].checked).toBe(true);
+  });
 });
 
 describe("simulateCheckbox", () => {

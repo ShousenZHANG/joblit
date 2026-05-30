@@ -90,20 +90,23 @@ export function simulateRadio(
   radioGroup: HTMLInputElement[],
   value: string,
 ): boolean {
-  const normalized = value.toLowerCase().trim();
+  if (radioGroup.length === 0) return false;
 
-  // Match by value, then by associated label text
-  const target =
-    radioGroup.find((r) => r.value.toLowerCase() === normalized) ??
-    radioGroup.find((r) => {
-      const label =
-        r.labels?.[0]?.textContent?.trim().toLowerCase() ??
-        r.parentElement?.textContent?.trim().toLowerCase() ??
-        "";
-      return label === normalized || label.includes(normalized);
-    });
-
-  if (!target) return false;
+  // Same alias/normalization-aware matcher as selects: a radio's "text" is its
+  // associated label, its "value" is the input value. Handles Yes/No, country
+  // and code↔name radio groups, with guarded substring fallback.
+  const idx = findBestOptionIndex(
+    radioGroup.map((r) => ({
+      value: r.value,
+      text:
+        r.labels?.[0]?.textContent?.trim() ??
+        r.parentElement?.textContent?.trim() ??
+        "",
+    })),
+    value,
+  );
+  if (idx === -1) return false;
+  const target = radioGroup[idx];
 
   target.checked = true;
   target.dispatchEvent(new Event("change", { bubbles: true }));
