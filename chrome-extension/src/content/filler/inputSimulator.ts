@@ -6,6 +6,8 @@
  * prototype setter + synthetic events to work around this.
  */
 
+import { findBestOptionIndex } from "./selectOptionMatch";
+
 /** Get the native value setter for an input element. */
 function getNativeInputValueSetter(): ((this: HTMLInputElement, v: string) => void) | undefined {
   const descriptor = Object.getOwnPropertyDescriptor(
@@ -59,15 +61,16 @@ export function simulateInput(el: HTMLElement, value: string): void {
 /** Simulate selecting an option in a <select> element. */
 export function simulateSelect(el: HTMLSelectElement, value: string): boolean {
   const options = Array.from(el.options);
-  const normalized = value.toLowerCase().trim();
 
-  // Try exact value match, then case-insensitive text match, then partial match
-  const target =
-    options.find((opt) => opt.value === value) ??
-    options.find((opt) => opt.textContent?.trim().toLowerCase() === normalized) ??
-    options.find((opt) => opt.textContent?.trim().toLowerCase().includes(normalized));
-
-  if (!target) return false;
+  // Alias/normalization-aware matching: handles country/state code <-> full
+  // name ("Australia" <-> "AU", "New South Wales" <-> "NSW") and guards loose
+  // substring matches against short-value false positives.
+  const idx = findBestOptionIndex(
+    options.map((opt) => ({ value: opt.value, text: opt.textContent ?? "" })),
+    value,
+  );
+  if (idx === -1) return false;
+  const target = options[idx];
 
   // Use native setter for React controlled selects (same pattern as simulateInput)
   const nativeSetter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
@@ -132,7 +135,6 @@ export async function simulateCustomDropdown(
   value: string,
 ): Promise<boolean> {
   const DELAYS = [200, 500, 1000];
-  const normalizedValue = value.toLowerCase().trim();
 
   // Find the best element to click to open the dropdown.
   // If trigger is a container div, look for an input or focusable child inside it.
@@ -171,18 +173,20 @@ export async function simulateCustomDropdown(
     // Wait for options to render
     await new Promise((resolve) => setTimeout(resolve, delay));
 
-    // Search for matching option across the entire document
-    // (many frameworks render dropdown portals at document body)
+    // Search for a matching option across the entire document (many frameworks
+    // render dropdown portals at document.body). Use the same alias-aware
+    // matcher as native <select> so "Australia" hits an "AU" option, etc.
     for (const selector of optionSelectors) {
-      const options = document.querySelectorAll(selector);
-      for (const option of options) {
-        const text = (option.textContent ?? "").trim().toLowerCase();
-        const dataValue = (option as HTMLElement).dataset.value?.toLowerCase();
-        if (text === normalizedValue || dataValue === normalizedValue || text.includes(normalizedValue)) {
-          (option as HTMLElement).click();
-          trigger.dispatchEvent(new Event("change", { bubbles: true }));
-          return true;
-        }
+      const optionEls = Array.from(document.querySelectorAll<HTMLElement>(selector));
+      if (optionEls.length === 0) continue;
+      const idx = findBestOptionIndex(
+        optionEls.map((o) => ({ value: o.dataset.value ?? "", text: o.textContent ?? "" })),
+        value,
+      );
+      if (idx !== -1) {
+        optionEls[idx].click();
+        trigger.dispatchEvent(new Event("change", { bubbles: true }));
+        return true;
       }
     }
   }
