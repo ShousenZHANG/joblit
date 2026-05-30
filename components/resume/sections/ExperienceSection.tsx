@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { ChevronDown, ChevronRight, GripVertical, MoveDown, MoveUp } from "lucide-react";
+import { ChevronDown, ChevronRight, GripVertical, MoveDown, MoveUp, Plus } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -65,7 +65,8 @@ export function ExperienceSection({
       title={t("experience")}
       description={t("experienceDesc")}
       action={
-        <Button type="button" variant="secondary" onClick={addExperience}>
+        <Button type="button" variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={addExperience}>
+          <Plus className="h-3.5 w-3.5" aria-hidden />
           {t("addExperience")}
         </Button>
       }
@@ -142,7 +143,7 @@ export function ExperienceSection({
                   <Button
                     type="button"
                     variant="ghost"
-                    className="text-xs text-red-600 hover:text-red-600"
+                    className="text-xs text-destructive hover:text-destructive"
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
