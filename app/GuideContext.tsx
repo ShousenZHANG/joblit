@@ -50,20 +50,8 @@ type GuideContextValue = {
   loading: boolean;
   state: GuideState | null;
   activeTaskId: OnboardingTaskId | null;
-  /**
-   * @deprecated Retained for backwards compatibility with components that
-   * still consume tour APIs. The new design uses a single panel and never
-   * runs a step-by-step tour.
-   */
-  tourRunning: boolean;
-  tourTaskId: OnboardingTaskId | null;
-  tourStep: number;
   openGuide: () => void;
   closeGuide: () => void;
-  startTour: () => void;
-  stopTour: () => void;
-  nextStep: () => void;
-  prevStep: () => void;
   markTaskComplete: (taskId: OnboardingTaskId) => void;
   isTaskHighlighted: (taskId: OnboardingTaskId) => boolean;
 };
@@ -492,31 +480,19 @@ export function GuideProvider({ children }: { children: ReactNode }) {
     [coachmarkTaskId, pathname],
   );
 
-  const noopStep = useCallback(() => {
-    // No-op — the new design has no sequential step navigation.
-  }, []);
-
   const value = useMemo<GuideContextValue>(
     () => ({
       loading,
       state,
       activeTaskId,
-      tourRunning: panelOpen,
-      tourTaskId: activeTaskId,
-      tourStep: state ? state.completedCount + 1 : 0,
       openGuide,
       closeGuide,
-      startTour: openGuide,
-      stopTour: closeGuide,
-      nextStep: noopStep,
-      prevStep: noopStep,
       markTaskComplete,
-      // Drives the existing emerald ring on ResumeActionBar /
-      // FetchClient run buttons / JobDetailPanel generate when the
-      // matching coachmark is active.
+      // Drives the emerald highlight ring on the resume Save / fetch run /
+      // job generate controls when the matching coachmark is active.
       isTaskHighlighted,
     }),
-    [activeTaskId, closeGuide, isTaskHighlighted, loading, markTaskComplete, noopStep, openGuide, panelOpen, state],
+    [activeTaskId, closeGuide, isTaskHighlighted, loading, markTaskComplete, openGuide, state],
   );
 
   // Clear the coachmark if the user navigates to a page that isn't the
@@ -989,19 +965,9 @@ export function useGuide() {
     loading: false,
     state: null,
     activeTaskId: null,
-    tourRunning: false,
-    tourTaskId: null,
-    tourStep: 0,
     openGuide: () => {},
     closeGuide: () => {},
-    startTour: () => {},
-    stopTour: () => {},
-    nextStep: () => {},
-    prevStep: () => {},
     markTaskComplete: () => {},
     isTaskHighlighted: () => false,
   };
 }
-
-// Internal helper retained for type compatibility with existing consumers.
-export type { OnboardingTask };
