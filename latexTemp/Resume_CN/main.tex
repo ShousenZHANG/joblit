@@ -30,9 +30,11 @@
 \definecolor{grayText}{RGB}{100, 100, 100}
 \definecolor{ruleColor}{RGB}{138, 152, 165}
 
-% Section formatting — compact ruled headers
-\titleformat{\section}{\normalsize\bfseries\color{primaryColor}}{}{0em}{}[\vspace{1pt}{\color{ruleColor}\hrule height 0.5pt}]
-\titlespacing*{\section}{0pt}{3pt}{3pt}
+% Section formatting — ruled headers. More space ABOVE the header than below
+% so each section reads as a clear boundary (big-tech scannability) rather than
+% running into the previous block.
+\titleformat{\section}{\normalsize\bfseries\color{primaryColor}}{}{0em}{}[\vspace{2pt}{\color{ruleColor}\hrule height 0.5pt}]
+\titlespacing*{\section}{0pt}{9pt}{4pt}
 
 % Remove page numbers
 \pagestyle{empty}
@@ -42,8 +44,10 @@
 % Hyperlink styling
 \hypersetup{colorlinks=true, linkcolor=primaryColor, urlcolor=primaryColor}
 
-% List styling — tight and compact
-\setlist[itemize]{nosep, leftmargin=13pt, itemsep=1.2pt, topsep=2pt, parsep=0pt, partopsep=0pt}
+% List styling — bullets get a little breathing room between lines for
+% readability (the page has vertical headroom, so density isn't the
+% constraint; legibility is).
+\setlist[itemize]{leftmargin=13pt, itemsep=3pt, topsep=2.5pt, parsep=0pt, partopsep=0pt}
 \renewcommand\labelitemi{\textcolor{primaryColor}{$\vcenter{\hbox{\footnotesize$\bullet$}}$}}
 
 \begin{document}
