@@ -19,7 +19,8 @@
     "fetch": "抓取",
     "resume": "简历",
     "guide": "引导",
-    "discover": "发现"
+    "discover": "发现",
+    "extension": "插件"
   },
   "marketing": {
     "heroTitle": "AI 为每份工作定制专属简历",
@@ -165,7 +166,15 @@
     "company": "公司",
     "type": "类型",
     "tabDetail": "详情",
-    "mobileTablistLabel": "职位列表与详情"
+    "mobileTablistLabel": "职位列表与详情",
+    "openJob": "打开职位",
+    "generateCv": "生成简历",
+    "generateCl": "生成求职信",
+    "savedCv": "已存简历",
+    "savedCl": "已存求职信",
+    "remove": "删除",
+    "selectJobToPreview": "选择一个职位查看详情。",
+    "selectJobHint": "从左侧列表选择职位。"
   },
   "fetch": {
     "searchRoles": "搜索职位",

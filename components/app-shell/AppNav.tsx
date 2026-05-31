@@ -10,6 +10,7 @@ import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 
 import { LocaleSwitcher } from "@/components/LocaleSwitcher";
+import { useMarket } from "@/hooks/useMarket";
 import { ThemeToggle } from "@/components/providers/ThemeProvider";
 import {
   DropdownMenu,
@@ -61,12 +62,15 @@ export function AppNav() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // CN market doesn't use the autofill browser extension (Chinese boards
+  // aren't ATS-form based), so its nav entry is hidden there.
+  const isCN = useMarket() === "CN";
   const links: NavLink[] = [
     { href: "/jobs", label: t("jobs") },
     { href: "/fetch", label: t("fetch") },
     { href: "/resume", label: t("resume") },
     { href: "/discover", label: t("discover") },
-    { href: "/extension", label: "Extension" },
+    ...(isCN ? [] : [{ href: "/extension", label: t("extension") }]),
   ];
   const email = data?.user?.email ?? "";
 

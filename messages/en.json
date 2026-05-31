@@ -19,7 +19,8 @@
     "fetch": "Fetch",
     "resume": "Resume",
     "guide": "Guide",
-    "discover": "Discover"
+    "discover": "Discover",
+    "extension": "Extension"
   },
   "marketing": {
     "heroTitle": "AI-tailored resumes for every job you apply to",
@@ -165,7 +166,15 @@
     "company": "Company",
     "type": "Type",
     "tabDetail": "Detail",
-    "mobileTablistLabel": "Jobs list and detail"
+    "mobileTablistLabel": "Jobs list and detail",
+    "openJob": "Open job",
+    "generateCv": "Generate CV",
+    "generateCl": "Generate CL",
+    "savedCv": "Saved CV",
+    "savedCl": "Saved CL",
+    "remove": "Remove",
+    "selectJobToPreview": "Select a job to preview details.",
+    "selectJobHint": "Use the list on the left to choose a job."
   },
   "fetch": {
     "searchRoles": "Search roles",

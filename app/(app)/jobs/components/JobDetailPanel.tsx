@@ -2,7 +2,9 @@
 
 import { useMemo } from "react";
 import dynamic from "next/dynamic";
+import { useTranslations } from "next-intl";
 import { ExternalLink, FileText, Trash2 } from "lucide-react";
+import { useMarket } from "@/hooks/useMarket";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -33,11 +35,6 @@ const statusClass: Record<JobStatus, string> = {
   NEW: "bg-brand-emerald-100 text-brand-emerald-700",
   APPLIED: "bg-[theme(colors.tier-good-bg)] text-[theme(colors.tier-good-fg)]",
   REJECTED: "bg-muted text-muted-foreground",
-};
-const statusLabel: Record<JobStatus, string> = {
-  NEW: "New",
-  APPLIED: "Applied",
-  REJECTED: "Rejected",
 };
 
 interface JobDetailPanelProps {
@@ -77,6 +74,15 @@ export function JobDetailPanel({
   onGenerateResume,
   onGenerateCover,
 }: JobDetailPanelProps) {
+  const t = useTranslations("jobs");
+  // CN market ships a single Chinese résumé end-to-end — no AI CV tailoring or
+  // cover-letter generation — so those actions are hidden there.
+  const isCN = useMarket() === "CN";
+  const statusLabel: Record<JobStatus, string> = {
+    NEW: t("statusNew"),
+    APPLIED: t("statusApplied"),
+    REJECTED: t("statusRejected"),
+  };
   const isAppliedSelected = selectedJob?.status === "APPLIED";
   const listOpacityClass = showLoadingOverlay ? "opacity-70" : "opacity-100";
 
@@ -134,9 +140,9 @@ export function JobDetailPanel({
                     <span className="truncate">{statusLabel[selectedJob.status]}</span>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="NEW">New</SelectItem>
-                    <SelectItem value="APPLIED">Applied</SelectItem>
-                    <SelectItem value="REJECTED">Rejected</SelectItem>
+                    <SelectItem value="NEW">{t("statusNew")}</SelectItem>
+                    <SelectItem value="APPLIED">{t("statusApplied")}</SelectItem>
+                    <SelectItem value="REJECTED">{t("statusRejected")}</SelectItem>
                   </SelectContent>
                 </Select>
                 <Button
@@ -148,37 +154,41 @@ export function JobDetailPanel({
                 >
                   <a href={selectedJob.jobUrl} target="_blank" rel="noreferrer">
                     <ExternalLink className="mr-1 h-4 w-4" />
-                    Open job
+                    {t("openJob")}
                   </a>
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={externalPromptLoading}
-                  onClick={() => onGenerateResume(selectedJob)}
-                  className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none sm:w-auto ${
-                    isAppliedSelected ? "h-9 px-3.5" : "h-10 px-4"
-                  } ${highlightGenerate ? guideHighlightClass : ""}`}
-                  data-guide-highlight={highlightGenerate ? "true" : "false"}
-                  data-guide-anchor="generate_first_pdf"
-                >
-                  <FileText className="mr-1 h-4 w-4" />
-                  Generate CV
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={externalPromptLoading}
-                  onClick={() => onGenerateCover(selectedJob)}
-                  className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none sm:w-auto ${
-                    isAppliedSelected ? "h-9 px-3.5" : "h-10 px-4"
-                  } ${highlightGenerate ? guideHighlightClass : ""}`}
-                  data-guide-highlight={highlightGenerate ? "true" : "false"}
-                >
-                  <FileText className="mr-1 h-4 w-4" />
-                  Generate CL
-                </Button>
-                {selectedJob.resumePdfUrl ? (
+                {!isCN ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={externalPromptLoading}
+                      onClick={() => onGenerateResume(selectedJob)}
+                      className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none sm:w-auto ${
+                        isAppliedSelected ? "h-9 px-3.5" : "h-10 px-4"
+                      } ${highlightGenerate ? guideHighlightClass : ""}`}
+                      data-guide-highlight={highlightGenerate ? "true" : "false"}
+                      data-guide-anchor="generate_first_pdf"
+                    >
+                      <FileText className="mr-1 h-4 w-4" />
+                      {t("generateCv")}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={externalPromptLoading}
+                      onClick={() => onGenerateCover(selectedJob)}
+                      className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none sm:w-auto ${
+                        isAppliedSelected ? "h-9 px-3.5" : "h-10 px-4"
+                      } ${highlightGenerate ? guideHighlightClass : ""}`}
+                      data-guide-highlight={highlightGenerate ? "true" : "false"}
+                    >
+                      <FileText className="mr-1 h-4 w-4" />
+                      {t("generateCl")}
+                    </Button>
+                  </>
+                ) : null}
+                {!isCN && selectedJob.resumePdfUrl ? (
                   <Button
                     variant="outline"
                     size="sm"
@@ -188,11 +198,11 @@ export function JobDetailPanel({
                     }`}
                   >
                     <a href={selectedJob.resumePdfUrl} target="_blank" rel="noreferrer">
-                      Saved CV
+                      {t("savedCv")}
                     </a>
                   </Button>
                 ) : null}
-                {selectedJob.coverPdfUrl ? (
+                {!isCN && selectedJob.coverPdfUrl ? (
                   <Button
                     variant="outline"
                     size="sm"
@@ -202,7 +212,7 @@ export function JobDetailPanel({
                     }`}
                   >
                     <a href={selectedJob.coverPdfUrl} target="_blank" rel="noreferrer">
-                      Saved CL
+                      {t("savedCl")}
                     </a>
                   </Button>
                 ) : null}
@@ -217,7 +227,7 @@ export function JobDetailPanel({
                   }`}
                 >
                   <Trash2 className="mr-1 h-4 w-4" />
-                  Remove
+                  {t("remove")}
                 </Button>
               </div>
             </div>
@@ -237,7 +247,7 @@ export function JobDetailPanel({
             ) : null}
           </div>
         ) : (
-          <div className="text-sm text-muted-foreground">Select a job to preview details.</div>
+          <div className="text-sm text-muted-foreground">{t("selectJobToPreview")}</div>
         )}
       </div>
       <ScrollArea
@@ -299,7 +309,7 @@ export function JobDetailPanel({
             </div>
           ) : (
             <div className="text-sm text-muted-foreground">
-              Use the list on the left to choose a job.
+              {t("selectJobHint")}
             </div>
           )}
         </div>
