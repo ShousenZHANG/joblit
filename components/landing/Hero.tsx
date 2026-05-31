@@ -3,10 +3,16 @@
 import Link from "next/link";
 import {
   ArrowRight,
+  BarChart3,
   Briefcase,
-  CheckCircle2,
+  Building2,
+  ExternalLink,
+  FileText,
+  MapPin,
   Play,
   Search,
+  ShieldAlert,
+  Sparkles,
 } from "lucide-react";
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { useTranslations } from "next-intl";
@@ -21,30 +27,19 @@ const useIsomorphicLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 // Hero — Linear/Vercel pattern: centered headline, dual CTA, full-width
-// product mock as the visual anchor. Sections:
-//   1. Eyebrow + pulsing green dot.
-//   2. Hero title (huge, two lines, italic serif emphasis on second line).
-//   3. Subtitle.
-//   4. Dual CTA — primary "Start free" + secondary "Watch demo".
-//   5. Meta — "Free forever · Bring your own LLM key".
-//   6. Hero canvas: 3-column product mock (sidebar + job list + detail).
-//      Score bar fills 0 → 88% on enter view. Active job row rotates
-//      every 2.6s so the demo feels alive.
-//
-// Floating callouts ("Skills matched / Tailored / Roles found") have been
-// removed — they distracted from the mock itself and the value they
-// signaled is already visible inside the mock's detail panel.
-//
-// All infinite CSS animations on this section have been removed (no more
-// landing-scanline / landing-depth-lift / landing-dynamic-frame). The
-// only motion that runs at steady state is the eyebrow dot pulse.
+// product mock as the visual anchor. The mock mirrors the REAL Jobs surface
+// (list of fetched roles + a detail panel with status, meta chips, the
+// Open/Generate actions, an experience-gate insight, and the JD) — it does
+// NOT show a fabricated match score or skill-fit, because the product has no
+// scoring feature. The only steady-state motion is the active-row rotation
+// and a gentle Sparkles pulse on the Generate action; everything else is the
+// one-shot intro choreography.
 
 interface JobRow {
   title: string;
   company: string;
   location: string;
-  score: number;
-  tier: "strong" | "good" | "fair" | "weak";
+  status: "NEW" | "APPLIED";
   timeAgo: string;
 }
 
@@ -53,42 +48,43 @@ const JOB_ROWS: JobRow[] = [
     title: "Sr. Frontend Engineer",
     company: "Stripe",
     location: "San Francisco",
-    score: 88,
-    tier: "strong",
+    status: "NEW",
     timeAgo: "3h",
   },
   {
     title: "Staff Product Designer",
     company: "Linear",
     location: "Remote",
-    score: 74,
-    tier: "good",
+    status: "NEW",
     timeAgo: "5h",
   },
   {
     title: "Design Engineer",
     company: "Figma",
     location: "New York",
-    score: 81,
-    tier: "strong",
+    status: "APPLIED",
     timeAgo: "1d",
   },
   {
     title: "Platform Engineer",
     company: "PlanetScale",
     location: "Remote",
-    score: 52,
-    tier: "fair",
+    status: "NEW",
     timeAgo: "2d",
   },
 ];
 
-const TIER_BG: Record<JobRow["tier"], string> = {
-  strong: "bg-brand-emerald-100 text-brand-emerald-700",
-  good: "bg-[theme(colors.tier-good-bg)] text-[theme(colors.tier-good-fg)]",
-  fair: "bg-[theme(colors.tier-fair-bg)] text-[theme(colors.tier-fair-fg)]",
-  weak: "bg-[theme(colors.tier-weak-bg)] text-[theme(colors.tier-weak-fg)]",
+const STATUS_BG: Record<JobRow["status"], string> = {
+  NEW: "bg-brand-emerald-100 text-brand-emerald-700",
+  APPLIED: "bg-[theme(colors.tier-good-bg)] text-[theme(colors.tier-good-fg)]",
 };
+
+const META_CHIPS = [
+  { icon: Building2, label: "Stripe" },
+  { icon: MapPin, label: "San Francisco" },
+  { icon: Briefcase, label: "Full-time" },
+  { icon: BarChart3, label: "Senior" },
+];
 
 export function Hero() {
   const reduced = useReducedMotion();
@@ -116,7 +112,7 @@ export function Hero() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // Rotate the "active" row every 2.6s — matches Landing.html JS.
+  // Rotate the "active" row every 2.6s so the demo feels alive.
   useEffect(() => {
     if (reduced) return;
     const id = window.setInterval(() => {
@@ -334,7 +330,8 @@ export function Hero() {
             </motion.div>
 
             {/* Job list — rows stagger in after the column fade, so
-                the results feel like they're loading, not popping. */}
+                the results feel like they're loading, not popping. Rows
+                show STATUS (matching the real product), not a match score. */}
             <motion.div
               variants={fadeUp}
               className="border-r border-border/50 bg-background/40 p-3"
@@ -369,10 +366,10 @@ export function Hero() {
                         <span
                           className={
                             "rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider " +
-                            TIER_BG[row.tier]
+                            STATUS_BG[row.status]
                           }
                         >
-                          {row.score}%
+                          {row.status}
                         </span>
                       </span>
                       <span className="text-[10px] text-muted-foreground">
@@ -390,67 +387,73 @@ export function Hero() {
               </motion.ul>
             </motion.div>
 
-            {/* Detail */}
+            {/* Detail — mirrors the real JobDetailPanel: title + status,
+                meta chips, the Open/Generate action row, a Job Description
+                header, an experience-gate insight, and JD text. No score. */}
             <motion.div variants={fadeUp} className="p-5">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Detail
-              </div>
-              <div className="mt-1 text-base font-semibold text-foreground">
-                Sr. Frontend Engineer
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Stripe · San Francisco · Full-time
+              <div className="flex items-center gap-2">
+                <div className="text-base font-semibold text-foreground">
+                  Sr. Frontend Engineer
+                </div>
+                <span className="rounded-full bg-brand-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-brand-emerald-700">
+                  New
+                </span>
               </div>
 
-              {/* Score card */}
-              <div className="mt-4 rounded-xl border border-brand-emerald-200 bg-brand-emerald-50/60 p-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-brand-emerald-800">
-                    Match score
+              {/* Meta chips — icon + label, matching the real header. */}
+              <div className="mt-2 flex flex-wrap gap-1">
+                {META_CHIPS.map(({ icon: Icon, label }) => (
+                  <span
+                    key={label}
+                    className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/70 px-1.5 py-0.5 text-[10px] font-medium text-foreground/70"
+                  >
+                    <Icon className="h-3 w-3 text-brand-emerald-600" aria-hidden />
+                    {label}
                   </span>
-                  <span className="text-brand-emerald-700">88%</span>
-                </div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-brand-emerald-100">
-                  <motion.div
-                    initial={reduced ? { width: "88%" } : { width: 0 }}
-                    animate={{ width: "88%" }}
-                    transition={{ duration: 1.4, delay: 0.6, ease: [0.16, 1, 0.3, 1] }}
-                    className="h-full rounded-full bg-brand-emerald-600"
-                  />
-                </div>
-                <div className="mt-3 flex flex-wrap gap-1">
-                  {["React", "TypeScript", "Next.js", "A11y"].map((tag) => (
-                    <span
-                      key={tag}
-                      className="rounded-full bg-background px-2 py-0.5 text-[10px] font-medium text-brand-emerald-800 ring-1 ring-brand-emerald-200"
-                    >
-                      ✓ {tag}
-                    </span>
-                  ))}
-                  <span className="rounded-full bg-[theme(colors.tier-fair-bg)] px-2 py-0.5 text-[10px] font-medium text-[theme(colors.tier-fair-fg)]">
-                    — Ruby
-                  </span>
-                </div>
+                ))}
               </div>
 
-              <ul className="mt-4 flex flex-col gap-1.5 text-xs text-muted-foreground">
-                <li className="flex items-start gap-1.5">
-                  <CheckCircle2
-                    className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-emerald-600"
-                    strokeWidth={2.5}
+              {/* Action row — Open job (primary) + Generate CV/CL with a
+                  gentle Sparkles pulse to signal the AI action. */}
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                <span className="inline-flex items-center gap-1 rounded-lg bg-brand-emerald-500 px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm">
+                  <ExternalLink className="h-3 w-3" aria-hidden />
+                  Open job
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-lg border border-brand-emerald-200 bg-brand-emerald-50/60 px-2.5 py-1 text-[10px] font-semibold text-brand-emerald-800">
+                  <Sparkles
+                    className="h-3 w-3 animate-[landing-pulse_2.4s_ease-in-out_infinite] motion-reduce:animate-none"
                     aria-hidden
                   />
-                  Added 3 React perf bullets
-                </li>
-                <li className="flex items-start gap-1.5">
-                  <CheckCircle2
-                    className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-emerald-600"
-                    strokeWidth={2.5}
-                    aria-hidden
-                  />
-                  Rewrote summary for design-systems fit
-                </li>
-              </ul>
+                  Generate CV
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-lg border border-brand-emerald-200 bg-brand-emerald-50/60 px-2.5 py-1 text-[10px] font-semibold text-brand-emerald-800">
+                  <Sparkles className="h-3 w-3" aria-hidden />
+                  Generate CL
+                </span>
+              </div>
+
+              {/* Job description header — icon medallion + hairline. */}
+              <div className="mt-4 flex items-center gap-1.5">
+                <span className="flex h-5 w-5 items-center justify-center rounded-md bg-brand-emerald-50 text-brand-emerald-700 ring-1 ring-brand-emerald-100">
+                  <FileText className="h-3 w-3" aria-hidden />
+                </span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground/70">
+                  Job description
+                </span>
+                <span className="h-px flex-1 bg-gradient-to-r from-border to-transparent" aria-hidden />
+              </div>
+
+              {/* Experience-gate insight chip — a real product feature. */}
+              <div className="mt-2 inline-flex items-center gap-1 rounded-lg border border-[theme(colors.tier-fair-ring)] bg-[theme(colors.tier-fair-bg)] px-2 py-1 text-[10px] font-medium text-[theme(colors.tier-fair-fg)]">
+                <ShieldAlert className="h-3 w-3" aria-hidden />
+                5+ years preferred
+              </div>
+
+              <div className="mt-2 space-y-1 text-[10px] leading-relaxed text-muted-foreground">
+                <p>Ship accessible, high-performance UI across the platform.</p>
+                <p>Partner with design-systems and product teams end to end.</p>
+              </div>
             </motion.div>
           </motion.div>
         </div>
