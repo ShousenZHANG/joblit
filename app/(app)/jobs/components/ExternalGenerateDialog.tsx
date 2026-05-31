@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Copy, FileText } from "lucide-react";
+import { Check, ChevronDown, Copy, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -10,7 +10,6 @@ import { StepIndicator } from "./StepIndicator";
 import { StepImport } from "./StepImport";
 import { JsonInputPanel } from "./JsonInputPanel";
 import { GenerateProgress } from "./GenerateProgress";
-import { GenerateSuccess } from "./GenerateSuccess";
 
 const externalBtnPrimary =
   "h-10 rounded-xl border border-brand-emerald-500 bg-brand-emerald-500 px-5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-brand-emerald-600 hover:border-brand-emerald-600 active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none";
@@ -34,15 +33,11 @@ interface ExternalGenerateDialogProps {
   externalModelOutput: string;
   setExternalModelOutput: (value: string) => void;
   externalGenerating: boolean;
-  generateComplete: boolean;
-  successPdf: { url: string; filename: string } | null;
-  successTimerRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
   parsedExternalOutput: ResumeImportOutput | CoverImportOutput | null;
   selectedJob: JobItem | null;
   onCopySmartPrompt: () => void;
   onDownloadSkillPack: () => void;
   onGenerate: (job: JobItem, target: "resume" | "cover", modelOutput: string) => void;
-  onGenerateOther: () => void;
 }
 
 export function ExternalGenerateDialog({
@@ -64,44 +59,32 @@ export function ExternalGenerateDialog({
   externalModelOutput,
   setExternalModelOutput,
   externalGenerating,
-  generateComplete,
-  successPdf,
-  successTimerRef,
   parsedExternalOutput,
   selectedJob,
   onCopySmartPrompt,
   onDownloadSkillPack,
   onGenerate,
-  onGenerateOther,
 }: ExternalGenerateDialogProps) {
   return (
     <Dialog open={open} onOpenChange={(isOpen) => {
       if (!isOpen && dialogPhase === "generating") return;
-      if (!isOpen) {
-        if (successTimerRef.current) clearTimeout(successTimerRef.current);
-        if (successPdf?.url) URL.revokeObjectURL(successPdf.url);
-      }
       onOpenChange(isOpen);
     }}>
       <DialogContent className="flex h-[min(90vh,720px)] w-[min(96vw,880px)] max-w-[880px] flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="shrink-0 border-b border-border/60 px-5 py-4">
           <DialogTitle className="text-base">
-            {dialogPhase === "success"
-              ? (externalTarget === "resume" ? "Resume PDF Ready" : "Cover Letter Ready")
-              : externalTarget === "resume"
-                ? "Generate CV with AI"
-                : "Generate Cover Letter with AI"}
+            {externalTarget === "resume"
+              ? "Generate CV with AI"
+              : "Generate Cover Letter with AI"}
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            {dialogPhase === "success"
-              ? "Your PDF has been generated successfully."
-              : dialogPhase === "generating"
-                ? "Please wait while we generate your PDF..."
-                : "Three steps: import skill pack, copy prompt, paste AI output."}
+            {dialogPhase === "generating"
+              ? "Please wait while we generate your PDF..."
+              : "Three steps: import skill pack, copy prompt, paste AI output."}
           </DialogDescription>
         </DialogHeader>
 
-        {dialogPhase !== "generating" && dialogPhase !== "success" && (
+        {dialogPhase !== "generating" && (
           <div className="shrink-0 border-b border-border/60 px-5 py-3">
             <StepIndicator
               currentStep={dialogPhase}
@@ -155,7 +138,7 @@ export function ExternalGenerateDialog({
                 {externalPromptLoading ? (
                   "Building prompt..."
                 ) : promptCopied ? (
-                  <><Copy className="mr-2 h-4 w-4" /> Copied!</>
+                  <><Check className="mr-2 h-4 w-4 animate-in zoom-in-50 duration-200" /> Copied!</>
                 ) : (
                   <><Copy className="mr-2 h-4 w-4" /> Copy Prompt to Clipboard</>
                 )}
@@ -167,15 +150,22 @@ export function ExternalGenerateDialog({
                 </p>
               )}
 
-              <details className="group">
-                <summary className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground/85">
-                  <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
-                  Preview prompt ({(externalSkillPackFresh ? externalShortPromptText : externalPromptText).length} chars)
-                </summary>
-                <pre className="mt-2 max-h-[200px] overflow-auto rounded-lg border border-border bg-muted/40 p-3 font-mono text-[11px] leading-relaxed text-muted-foreground">
-                  {externalSkillPackFresh ? externalShortPromptText : externalPromptText}
-                </pre>
-              </details>
+              {externalPromptLoading ? (
+                <div className="space-y-2" aria-hidden>
+                  <div className="h-3 w-40 animate-pulse rounded bg-muted" />
+                  <div className="h-24 w-full animate-pulse rounded-lg bg-muted/60" />
+                </div>
+              ) : (
+                <details className="group">
+                  <summary className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground/85">
+                    <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
+                    Preview prompt ({(externalSkillPackFresh ? externalShortPromptText : externalPromptText).length} chars)
+                  </summary>
+                  <pre className="mt-2 max-h-[200px] overflow-auto rounded-lg border border-border bg-muted/40 p-3 font-mono text-[11px] leading-relaxed text-muted-foreground">
+                    {externalSkillPackFresh ? externalShortPromptText : externalPromptText}
+                  </pre>
+                </details>
+              )}
             </div>
           )}
 
@@ -189,20 +179,7 @@ export function ExternalGenerateDialog({
           )}
 
           {dialogPhase === "generating" && (
-            <GenerateProgress
-              target={externalTarget}
-              isComplete={generateComplete}
-            />
-          )}
-
-          {dialogPhase === "success" && successPdf && (
-            <GenerateSuccess
-              target={externalTarget}
-              pdfUrl={successPdf.url}
-              pdfFilename={successPdf.filename}
-              onGenerateOther={onGenerateOther}
-              onClose={() => onOpenChange(false)}
-            />
+            <GenerateProgress target={externalTarget} />
           )}
         </div>
 

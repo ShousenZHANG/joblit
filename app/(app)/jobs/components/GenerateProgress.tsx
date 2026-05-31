@@ -5,78 +5,54 @@ import { CheckCircle2, Loader2, Circle } from "lucide-react";
 
 type GenerateProgressProps = {
   target: "resume" | "cover";
-  isComplete: boolean;
 };
 
 const STEPS = [
   { label: "Validating JSON structure", delay: 0 },
-  { label: "Processing content", delay: 600 },
-  { label: "Rendering template", delay: 1400 },
-  { label: "Compiling PDF", delay: 2800 },
+  { label: "Processing content", delay: 700 },
+  { label: "Rendering template", delay: 1800 },
+  { label: "Compiling PDF", delay: 3200 },
 ];
 
-const PROGRESS_KEYFRAMES = [
-  { time: 0, value: 5 },
-  { time: 500, value: 25 },
-  { time: 1200, value: 50 },
-  { time: 2500, value: 75 },
-  { time: 4000, value: 82 },
-];
-
-export function GenerateProgress({ target, isComplete }: GenerateProgressProps) {
+export function GenerateProgress({ target }: GenerateProgressProps) {
   const [elapsed, setElapsed] = useState(0);
   // useState lazy initializer is allowed to be impure and runs only once.
   const [start] = useState(() => Date.now());
 
   useEffect(() => {
-    if (isComplete) return;
-    const id = setInterval(() => {
-      setElapsed(Date.now() - start);
-    }, 100);
+    const id = setInterval(() => setElapsed(Date.now() - start), 120);
     return () => clearInterval(id);
-  }, [isComplete, start]);
+  }, [start]);
 
-  const activeStepIndex = isComplete
-    ? STEPS.length
-    : STEPS.findLastIndex((s) => elapsed >= s.delay);
-
-  const progress = isComplete
-    ? 100
-    : (() => {
-        for (let i = PROGRESS_KEYFRAMES.length - 1; i >= 0; i--) {
-          if (elapsed >= PROGRESS_KEYFRAMES[i].time) return PROGRESS_KEYFRAMES[i].value;
-        }
-        return 0;
-      })();
+  // Illustrative step sequence. The LAST step stays in-progress until the real
+  // completion event swaps this whole phase out for the review dialog — so we
+  // never show a fake percentage that stalls or lies about progress.
+  const activeStepIndex = Math.min(
+    STEPS.length - 1,
+    Math.max(0, STEPS.findLastIndex((s) => elapsed >= s.delay)),
+  );
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-4 py-8">
       <div className="w-full max-w-sm space-y-6">
         {/* Title */}
         <h3 className="text-center text-base font-semibold text-foreground">
-          {isComplete
-            ? target === "resume"
-              ? "Resume PDF ready!"
-              : "Cover Letter ready!"
-            : target === "resume"
-              ? "Generating your Resume PDF"
-              : "Generating your Cover Letter"}
+          {target === "resume"
+            ? "Generating your Resume PDF"
+            : "Generating your Cover Letter"}
         </h3>
 
         {/* Step list */}
         <div className="space-y-2.5">
           {STEPS.map((step, idx) => {
             const isDone = idx < activeStepIndex;
-            const isActive = idx === activeStepIndex && !isComplete;
+            const isActive = idx === activeStepIndex;
             return (
-              <div
-                key={step.label}
-                className="flex items-center gap-2.5 text-sm"
-              >
+              <div key={step.label} className="flex items-center gap-2.5 text-sm">
                 {isDone ? (
                   <CheckCircle2 className="h-4.5 w-4.5 shrink-0 text-brand-emerald-500" />
                 ) : isActive ? (
-                  <Loader2 className="h-4.5 w-4.5 shrink-0 animate-spin text-brand-emerald-500" />
+                  <Loader2 className="h-4.5 w-4.5 shrink-0 animate-spin text-brand-emerald-500 motion-reduce:animate-none" />
                 ) : (
                   <Circle className="h-4.5 w-4.5 shrink-0 text-muted-foreground/40" />
                 )}
@@ -96,22 +72,22 @@ export function GenerateProgress({ target, isComplete }: GenerateProgressProps) 
           })}
         </div>
 
-        {/* Progress bar */}
-        <div className="h-2 overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full rounded-full bg-brand-emerald-500 transition-all duration-300 ease-out"
-            style={{ width: `${progress}%` }}
-          />
+        {/* Indeterminate shimmer — communicates "working" honestly without a
+            fake percentage that could stall partway. */}
+        <div
+          className="h-2 overflow-hidden rounded-full bg-muted"
+          role="progressbar"
+          aria-label="Generating PDF"
+        >
+          <div className="progress-indeterminate h-full w-1/3 rounded-full bg-brand-emerald-500 motion-reduce:w-full motion-reduce:animate-none" />
         </div>
 
         {/* Hint */}
-        {!isComplete && (
-          <p className="text-center text-xs text-muted-foreground">
-            {elapsed > 8000
-              ? "Still working... this may take a bit longer"
-              : "This usually takes 5\u201310 seconds"}
-          </p>
-        )}
+        <p className="text-center text-xs text-muted-foreground">
+          {elapsed > 8000
+            ? "Still working... this may take a bit longer"
+            : "This usually takes 5–10 seconds"}
+        </p>
       </div>
     </div>
   );

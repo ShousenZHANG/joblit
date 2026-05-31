@@ -14,7 +14,7 @@ const STEPS: StepDef[] = [
   { id: 3, label: "Generate", subtitle: "Paste & create PDF" },
 ];
 
-export type DialogPhase = 1 | 2 | 3 | "generating" | "success";
+export type DialogPhase = 1 | 2 | 3 | "generating";
 
 type StepIndicatorProps = {
   currentStep: DialogPhase;
@@ -24,7 +24,7 @@ type StepIndicatorProps = {
 };
 
 function numericStep(phase: DialogPhase): number {
-  if (phase === "generating" || phase === "success") return 4;
+  if (phase === "generating") return 4;
   return phase;
 }
 
@@ -87,7 +87,10 @@ export function StepIndicator({
                   step.id
                 )}
                 {isActive && (
-                  <span className="absolute inset-0 animate-ping rounded-full border-2 border-emerald-400 opacity-30" />
+                  <span
+                    aria-hidden
+                    className="absolute -inset-1 rounded-full ring-2 ring-emerald-400/40 animate-pulse motion-reduce:animate-none"
+                  />
                 )}
               </div>
               <span

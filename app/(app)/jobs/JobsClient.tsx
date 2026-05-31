@@ -353,18 +353,11 @@ export function JobsClient({
         externalModelOutput={ext.externalModelOutput}
         setExternalModelOutput={ext.setExternalModelOutput}
         externalGenerating={ext.externalGenerating}
-        generateComplete={ext.generateComplete}
-        successPdf={ext.successPdf}
-        successTimerRef={ext.successTimerRef}
         parsedExternalOutput={ext.parsedExternalOutput}
         selectedJob={selectedJob}
         onCopySmartPrompt={ext.copySmartPrompt}
         onDownloadSkillPack={ext.downloadSkillPack}
         onGenerate={ext.generateFromImportedJson}
-        onGenerateOther={() => {
-          const other = ext.externalTarget === "resume" ? "cover" : "resume";
-          if (selectedJob) ext.openExternalGenerateDialog(selectedJob, other);
-        }}
       />
 
       <JobAddDialog open={addJobOpen} onOpenChange={setAddJobOpen} />

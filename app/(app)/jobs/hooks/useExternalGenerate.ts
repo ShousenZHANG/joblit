@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useGuide } from "@/app/GuideContext";
@@ -35,9 +35,6 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
   const [externalSkillPackFresh, setExternalSkillPackFresh] = useState(false);
   const [dialogPhase, setDialogPhase] = useState<DialogPhase>(1);
   const [promptCopied, setPromptCopied] = useState(false);
-  const [generateComplete, setGenerateComplete] = useState(false);
-  const [successPdf, setSuccessPdf] = useState<{ url: string; filename: string } | null>(null);
-  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [tailorSourceByJob, setTailorSourceByJob] = useState<
     Record<string, { cv?: CvSource; cover?: CoverSource }>
   >({});
@@ -113,10 +110,6 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
     setExternalPromptMeta(null);
     setExternalSkillPackFresh(false);
     setPromptCopied(false);
-    setGenerateComplete(false);
-    if (successPdf?.url) URL.revokeObjectURL(successPdf.url);
-    setSuccessPdf(null);
-    if (successTimerRef.current) clearTimeout(successTimerRef.current);
     setError(null);
     setExternalPromptLoading(true);
     try {
@@ -143,7 +136,7 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
     } finally {
       setExternalPromptLoading(false);
     }
-  }, [successPdf?.url, setError, toast]);
+  }, [setError, toast]);
 
   async function copySmartPrompt() {
     const text = externalSkillPackFresh && externalShortPromptText.trim()
@@ -234,7 +227,6 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
   async function generateFromImportedJson(job: JobItem, target: "resume" | "cover", modelOutput: string) {
     setExternalGenerating(true);
     setDialogPhase("generating");
-    setGenerateComplete(false);
     setError(null);
     try {
       // Phase 2 unified flow: both resume and cover targets enter the
@@ -378,9 +370,6 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
     externalSkillPackFresh, setExternalSkillPackFresh,
     dialogPhase, setDialogPhase,
     promptCopied,
-    generateComplete,
-    successPdf,
-    successTimerRef,
     tailorSourceByJob,
     tailorReviewDraft,
     parsedExternalOutput,

@@ -553,6 +553,21 @@ body {
   }
 }
 
+/* Indeterminate progress sweep — honest "working" bar for PDF generation
+   (no fake percentage). Reduced-motion callers swap to a static full bar. */
+.progress-indeterminate {
+  animation: progress-indeterminate 1.15s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(420%);
+  }
+}
+
 /* ── Extension token manager ──
    Token-driven so cards, inputs, and token rows adapt to .dark via the
    oklch palette defined in :root / .dark at the top of this file.   */
