@@ -657,6 +657,32 @@ body {
   }
 }
 
+/* Undo-toast countdown bar — drains left→right over the undo window so the
+   user can see how long a delete stays reversible (Gmail/Linear pattern).
+   animation-duration is set inline to match the JS timer. */
+.toast-countdown-bar {
+  transform-origin: left;
+  animation-name: toast-countdown;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes toast-countdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-countdown-bar {
+    animation: none;
+    opacity: 0.45;
+  }
+}
+
 /* ── Extension token manager ──
    Token-driven so cards, inputs, and token rows adapt to .dark via the
    oklch palette defined in :root / .dark at the top of this file.   */

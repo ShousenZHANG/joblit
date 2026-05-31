@@ -174,7 +174,10 @@
     "savedCl": "已存求职信",
     "remove": "删除",
     "selectJobToPreview": "选择一个职位查看详情。",
-    "selectJobHint": "从左侧列表选择职位。"
+    "selectJobHint": "从左侧列表选择职位。",
+    "jobDeleted": "职位已删除",
+    "undo": "撤销",
+    "undoAria": "撤销删除"
   },
   "fetch": {
     "searchRoles": "搜索职位",

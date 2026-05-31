@@ -1,5 +1,6 @@
-import { createElement, useCallback, useEffect, useRef, useState } from "react";
+import { createElement, Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction, type ToastActionElement } from "@/components/ui/toast";
 import { useGuide } from "@/app/GuideContext";
@@ -39,6 +40,7 @@ export function useJobMutations({
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const t = useTranslations("jobs");
   const { markTaskComplete } = useGuide();
   const [error, setError] = useState<string | null>(null);
   const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set());
@@ -226,20 +228,42 @@ export function useJobMutations({
         void finalizeDelete(id);
       }, UNDO_WINDOW_MS);
       pendingDeletesRef.current.set(id, { rollbackPatches, timer });
-      toast({
-        title: "Job deleted",
-        description: job.title,
+      // Premium undo toast (Gmail/Linear): a NEUTRAL surface — a delete isn't a
+      // "success", so the previous emerald-green styling was semantically
+      // wrong — an emerald Undo that pops, and a countdown bar that visibly
+      // drains over the undo window so the user can see how long the action
+      // stays reversible. `dismissThis` lets Undo close the toast immediately
+      // rather than lingering with a stale "deleted" message after restore.
+      let dismissThis = () => {};
+      const countdownBar = createElement("span", {
+        "aria-hidden": true,
+        className:
+          "toast-countdown-bar pointer-events-none absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-gradient-to-r from-brand-emerald-400 to-brand-emerald-500",
+        style: { animationDuration: `${UNDO_WINDOW_MS}ms` },
+      });
+      const handle = toast({
+        title: t("jobDeleted"),
+        description: createElement(Fragment, null, job.title, countdownBar),
         duration: UNDO_WINDOW_MS,
         className:
-          "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-900 animate-in fade-in zoom-in-95",
+          "group border-border/60 bg-card/95 text-foreground shadow-[0_20px_50px_-20px_rgba(15,23,42,0.45)] backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2",
         // shadcn's ToastActionElement type puts the component in the props
         // slot, so it only matches JSX; createElement needs the unknown cast.
         action: createElement(
           ToastAction,
-          { altText: "Undo delete", onClick: () => undoDelete(id) },
-          "Undo",
+          {
+            altText: t("undoAria"),
+            onClick: () => {
+              undoDelete(id);
+              dismissThis();
+            },
+            className:
+              "border-brand-emerald-500 bg-brand-emerald-500 text-white shadow-sm transition-colors hover:border-brand-emerald-600 hover:bg-brand-emerald-600",
+          },
+          t("undo"),
         ) as unknown as ToastActionElement,
       });
+      dismissThis = handle.dismiss;
     },
     [
       deletingIds,
@@ -251,6 +275,7 @@ export function useJobMutations({
       finalizeDelete,
       undoDelete,
       toast,
+      t,
     ],
   );
 

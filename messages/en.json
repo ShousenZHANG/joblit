@@ -174,7 +174,10 @@
     "savedCl": "Saved CL",
     "remove": "Remove",
     "selectJobToPreview": "Select a job to preview details.",
-    "selectJobHint": "Use the list on the left to choose a job."
+    "selectJobHint": "Use the list on the left to choose a job.",
+    "jobDeleted": "Job deleted",
+    "undo": "Undo",
+    "undoAria": "Undo delete"
   },
   "fetch": {
     "searchRoles": "Search roles",
