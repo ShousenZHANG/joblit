@@ -3,19 +3,22 @@
  * Uses emerald gradient to match the web app's brand identity.
  */
 
-/** Small logo icon (for header, collapsed widget). Returns an SVG string. */
+/**
+ * Small logo icon (header, collapsed widget). Emerald-gradient rounded tile
+ * with a white "J" monogram (top bar + rounded hook) — same geometry as the
+ * web app's JoblitMark, so the extension and product share one brand mark.
+ */
 export function logoIconSvg(size: number = 20): string {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <defs>
-      <linearGradient id="jl-grad" x1="4" y1="4" x2="20" y2="20" gradientUnits="userSpaceOnUse">
+      <linearGradient id="jl-grad" x1="3" y1="3" x2="21" y2="21" gradientUnits="userSpaceOnUse">
         <stop offset="0%" stop-color="#10b981"/>
         <stop offset="100%" stop-color="#059669"/>
       </linearGradient>
     </defs>
-    <rect width="24" height="24" rx="6" fill="url(#jl-grad)"/>
-    <circle cx="11" cy="11" r="5" stroke="white" stroke-width="2" fill="none"/>
-    <line x1="14.5" y1="14.5" x2="18" y2="18" stroke="white" stroke-width="2" stroke-linecap="round"/>
-    <path d="M9 11h4M11 9v4" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+    <rect width="24" height="24" rx="6.5" fill="url(#jl-grad)"/>
+    <path d="M9.5 7.5 H15.5" stroke="white" stroke-width="2.3" stroke-linecap="round"/>
+    <path d="M14 7.5 V13 a4.6 4.6 0 0 1 -9.2 0" stroke="white" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>`;
 }
 

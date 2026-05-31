@@ -52,9 +52,13 @@ export default function OgImage() {
             }}
           >
             <svg width="36" height="36" viewBox="0 0 64 64" fill="none">
+              <path d="M27 16 H47" stroke="#FFFFFF" strokeWidth={9} strokeLinecap="round" />
               <path
-                d="M 44 12 L 44 38 a 12 12 0 0 1 -12 12 a 12 12 0 0 1 -12 -12 L 20 36 a 8 8 0 0 0 8 8 a 8 8 0 0 0 8 -8 L 36 22 Z"
-                fill="#FFFFFF"
+                d="M39 16 V35 a14 14 0 0 1 -28 0"
+                stroke="#FFFFFF"
+                strokeWidth={9}
+                strokeLinecap="round"
+                strokeLinejoin="round"
               />
             </svg>
           </div>
