@@ -5,7 +5,7 @@
  * reads naturally instead of character-by-character noise.
  */
 
-export type DiffSegmentType = "equal" | "added" | "removed";
+type DiffSegmentType = "equal" | "added" | "removed";
 
 export interface DiffSegment {
   type: DiffSegmentType;
