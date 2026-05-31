@@ -689,5 +689,24 @@
     "title": "浏览器扩展",
     "subtitle": "管理你的 Joblit 自动填写扩展令牌,查看提交历史。",
     "installGuide": "安装指南"
+  },
+  "discover": {
+    "title": "发现",
+    "subtitle": "了解本周业界在构建和讨论什么",
+    "tabTrending": "趋势",
+    "tabVideos": "视频",
+    "topThisWeek": "本周 Top 20",
+    "topThisMonth": "本月 Top 20",
+    "periodWeek": "本周",
+    "periodMonth": "本月",
+    "updated": "更新于",
+    "view": "查看",
+    "retry": "重试",
+    "noRepos": "暂无趋势仓库。",
+    "errorRepos": "加载趋势仓库失败",
+    "videosTitle": "AI 视频",
+    "sortTrending": "热门",
+    "sortLatest": "最新",
+    "sortMostViewed": "最多观看"
   }
 }

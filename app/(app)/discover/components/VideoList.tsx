@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, RefreshCw, KeyRound, Star, Info } from "lucide-react";
 import {
@@ -37,15 +38,15 @@ const CATEGORIES: { value: VideoCategory; label: string }[] = [
   { value: "harness-engineering", label: "Harness engineering" },
 ];
 
-const SORTS: { value: VideoSort; label: string }[] = [
-  { value: "trending", label: "Trending" },
-  { value: "latest", label: "Latest" },
-  { value: "most_viewed", label: "Most viewed" },
+const SORTS: { value: VideoSort; key: string }[] = [
+  { value: "trending", key: "sortTrending" },
+  { value: "latest", key: "sortLatest" },
+  { value: "most_viewed", key: "sortMostViewed" },
 ];
 
-const TIME_WINDOWS: { value: VideoTimeWindow; label: string }[] = [
-  { value: "week", label: "This week" },
-  { value: "month", label: "This month" },
+const TIME_WINDOWS: { value: VideoTimeWindow; key: string }[] = [
+  { value: "week", key: "periodWeek" },
+  { value: "month", key: "periodMonth" },
 ];
 
 const VALID_CATS = new Set<string>(CATEGORIES.map((c) => c.value));
@@ -124,6 +125,7 @@ function rankVideos(
 
 
 export function VideoList() {
+  const t = useTranslations("discover");
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
@@ -207,7 +209,7 @@ export function VideoList() {
           row stays under 44px tall on every viewport. */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-base font-semibold text-foreground lg:text-lg">
-          AI Videos
+          {t("videosTitle")}
         </h2>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <Select value={sort} onValueChange={(v) => setSort(v as VideoSort)}>
@@ -220,7 +222,7 @@ export function VideoList() {
             <SelectContent align="end">
               {SORTS.map((s) => (
                 <SelectItem key={s.value} value={s.value} className="text-xs">
-                  {s.label}
+                  {t(s.key)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -238,7 +240,7 @@ export function VideoList() {
             <SelectContent align="end">
               {TIME_WINDOWS.map((w) => (
                 <SelectItem key={w.value} value={w.value} className="text-xs">
-                  {w.label}
+                  {t(w.key)}
                 </SelectItem>
               ))}
             </SelectContent>

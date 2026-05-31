@@ -1,12 +1,17 @@
-/** Relative time display: "just now", "3h ago", "5d ago" */
-export function relativeTime(iso: string): string {
+/**
+ * Locale-aware relative time ("3h ago" / "3小时前"). Uses the platform
+ * Intl.RelativeTimeFormat so time units are never hand-translated. `locale`
+ * defaults to English; callers pass the active UI locale.
+ */
+export function relativeTime(iso: string, locale: string = "en"): string {
   if (!iso) return "";
   const ms = new Date(iso).getTime();
   if (isNaN(ms)) return "";
   const hours = Math.floor((Date.now() - ms) / (1000 * 60 * 60));
-  if (hours < 1) return "just now";
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  if (hours < 1) return rtf.format(0, "second");
+  if (hours < 24) return rtf.format(-hours, "hour");
+  return rtf.format(-Math.floor(hours / 24), "day");
 }
 
 /** Format large numbers: 1000 → "1k", 1200 → "1.2k", 500 → "500" */

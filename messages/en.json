@@ -689,5 +689,24 @@
     "title": "Browser Extension",
     "subtitle": "Manage your Joblit AutoFill extension tokens and view submission history.",
     "installGuide": "Installation Guide"
+  },
+  "discover": {
+    "title": "Discover",
+    "subtitle": "What the industry is building and talking about this week",
+    "tabTrending": "Trending",
+    "tabVideos": "Videos",
+    "topThisWeek": "Top 20 This Week",
+    "topThisMonth": "Top 20 This Month",
+    "periodWeek": "This week",
+    "periodMonth": "This month",
+    "updated": "Updated",
+    "view": "View",
+    "retry": "Retry",
+    "noRepos": "No trending repos found.",
+    "errorRepos": "Failed to load trending repos",
+    "videosTitle": "AI Videos",
+    "sortTrending": "Trending",
+    "sortLatest": "Latest",
+    "sortMostViewed": "Most viewed"
   }
 }

@@ -1,4 +1,7 @@
+"use client";
+
 import Image from "next/image";
+import { useLocale, useTranslations } from "next-intl";
 import { Star, GitFork, ExternalLink } from "lucide-react";
 import type { TrendingRepo } from "../types";
 import { relativeTime, formatCount } from "../utils";
@@ -20,6 +23,8 @@ const LANG_COLORS: Record<string, string> = {
 };
 
 export function TrendingRepoCard({ repo }: { repo: TrendingRepo }) {
+  const t = useTranslations("discover");
+  const locale = useLocale();
   const langColor = repo.language
     ? LANG_COLORS[repo.language] ?? "bg-slate-400"
     : null;
@@ -98,7 +103,7 @@ export function TrendingRepoCard({ repo }: { repo: TrendingRepo }) {
             {formatCount(repo.forks)}
           </span>
           {repo.pushedAt && (
-            <span>Updated {relativeTime(repo.pushedAt)}</span>
+            <span>{t("updated")} {relativeTime(repo.pushedAt, locale)}</span>
           )}
         </div>
         <a
@@ -108,7 +113,7 @@ export function TrendingRepoCard({ repo }: { repo: TrendingRepo }) {
           className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground/70 transition-colors hover:text-brand-emerald-600"
           aria-label={`View ${repo.fullName} on GitHub`}
         >
-          View
+          {t("view")}
           <ExternalLink className="h-3 w-3" />
         </a>
       </div>

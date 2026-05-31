@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Compass, Github, PlayCircle } from "lucide-react";
 import { TrendingRepoList } from "./components/TrendingRepoList";
 import { VideoList } from "./components/VideoList";
 
 const TABS = [
-  { value: "trending", label: "Trending", icon: Github },
-  { value: "videos", label: "Videos", icon: PlayCircle },
+  { value: "trending", labelKey: "tabTrending", icon: Github },
+  { value: "videos", labelKey: "tabVideos", icon: PlayCircle },
 ] as const;
 
 type ActiveTab = (typeof TABS)[number]["value"];
@@ -18,6 +19,7 @@ const TAB_CONTENT: Record<ActiveTab, React.ComponentType> = {
 };
 
 export function DiscoverClient() {
+  const t = useTranslations("discover");
   const [activeTab, setActiveTab] = useState<ActiveTab>("trending");
   const Content = TAB_CONTENT[activeTab];
 
@@ -31,10 +33,10 @@ export function DiscoverClient() {
           </div>
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-foreground lg:text-2xl">
-              Discover
+              {t("title")}
             </h1>
             <p className="hidden text-sm leading-relaxed text-muted-foreground sm:block">
-              What the industry is building and talking about this week
+              {t("subtitle")}
             </p>
           </div>
         </div>
@@ -60,7 +62,7 @@ export function DiscoverClient() {
                 }`}
               >
                 <Icon className="h-3.5 w-3.5 lg:h-4 lg:w-4" aria-hidden="true" />
-                {tab.label}
+                {t(tab.labelKey)}
               </button>
             );
           })}
