@@ -78,3 +78,6 @@ next-env.d.ts
 docs/design-references/
 DESIGN.md
 design-system/
+
+# Packaged extension build artifacts
+*.zip
