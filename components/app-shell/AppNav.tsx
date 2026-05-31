@@ -158,8 +158,32 @@ export function AppNav() {
             <CircleHelp className="h-3.5 w-3.5" aria-hidden />
             <span>{t("guide")}</span>
             {state ? (
-              <span className="rounded-full bg-brand-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-brand-emerald-700">
-                {state.completedCount}/{state.totalCount}
+              <span className="inline-flex items-center gap-1 text-brand-emerald-600">
+                <svg className="h-3.5 w-3.5 -rotate-90" viewBox="0 0 16 16" aria-hidden>
+                  <circle
+                    cx="8"
+                    cy="8"
+                    r="6.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeOpacity="0.2"
+                    strokeWidth="2.5"
+                  />
+                  <circle
+                    cx="8"
+                    cy="8"
+                    r="6.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeDasharray={`${(state.completedCount / state.totalCount) * 40.84} 40.84`}
+                    className="transition-[stroke-dasharray] duration-500 ease-out"
+                  />
+                </svg>
+                <span className="text-[10px] font-semibold text-brand-emerald-700">
+                  {state.completedCount}/{state.totalCount}
+                </span>
               </span>
             ) : null}
           </button>

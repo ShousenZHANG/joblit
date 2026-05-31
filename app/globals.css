@@ -486,10 +486,66 @@ body {
   }
 }
 
+/* Staggered list/feature entrance — paired with inline animation-delay. */
+.guide-rise {
+  animation: guide-rise 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes guide-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Beacon — breathing spotlight ring drawn over the coachmark target / the
+   completion medallion halo. */
+.guide-beacon {
+  animation: guide-beacon 2000ms ease-out infinite;
+}
+
+@keyframes guide-beacon {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5), 0 0 0 1px rgba(16, 185, 129, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(16, 185, 129, 0), 0 0 0 1px rgba(16, 185, 129, 0.4);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0), 0 0 0 1px rgba(16, 185, 129, 0.25);
+  }
+}
+
+/* Spring pop for the welcome / completion medallion. */
+.guide-checkpop {
+  animation: guide-checkpop 520ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes guide-checkpop {
+  0% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  60% {
+    transform: scale(1.12);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .guide-fade-in,
   .guide-scale-in,
-  .guide-tour-enter {
+  .guide-tour-enter,
+  .guide-rise,
+  .guide-beacon,
+  .guide-checkpop {
     animation: none;
   }
   .guide-btn--active {
