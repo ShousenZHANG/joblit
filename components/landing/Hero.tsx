@@ -8,9 +8,9 @@ import {
   Play,
   Search,
 } from "lucide-react";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { useTranslations } from "next-intl";
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { fadeUp, stagger } from "./lib/motion";
 import { useCtaHref } from "./lib/useCtaHref";
 
@@ -95,6 +95,15 @@ export function Hero() {
   const [activeRow, setActiveRow] = useState(0);
   const t = useTranslations("landing.hero");
   const cta = useCtaHref();
+  // Scroll parallax for the decorative canvas grid — drifts down slightly
+  // slower than the page so the hero gains depth as it scrolls away. Tracks
+  // the hero's own scroll range; reduced-motion pins it (y = 0).
+  const heroRef = useRef<HTMLElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: heroRef,
+    offset: ["start start", "end start"],
+  });
+  const gridY = useTransform(scrollYProgress, [0, 1], [0, 90]);
   // Two-phase mount: SSR paints the hidden state (opacity 0 / y 40),
   // then the layout effect flips `mounted` true on the first client
   // frame so framer-motion runs a real transition from hidden → show.
@@ -144,11 +153,13 @@ export function Hero() {
 
   return (
     <section
+      ref={heroRef}
       data-testid="landing-hero"
       className="relative isolate mx-auto w-full max-w-6xl overflow-hidden px-6 pb-24 pt-16 sm:pt-24 lg:px-10"
     >
-      <div
+      <motion.div
         aria-hidden
+        style={{ y: reduced ? 0 : gridY }}
         className="landing-canvas-grid pointer-events-none absolute inset-x-0 top-10 -z-10 h-[620px] opacity-80"
       />
       {/* LCP-safe: the headline block renders VISIBLE at SSR (initial=false →

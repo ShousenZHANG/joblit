@@ -8,6 +8,7 @@ import { HowItWorks } from "@/components/landing/HowItWorks";
 import { LogoBar } from "@/components/landing/LogoBar";
 import { Nav } from "@/components/landing/Nav";
 import { Pricing } from "@/components/landing/Pricing";
+import { ScrollProgress } from "@/components/landing/ScrollProgress";
 
 /* ── SEO ──────────────────────────────────────────────── */
 
@@ -66,6 +67,7 @@ export default function MarketingPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
+      <ScrollProgress />
       {/* Atmosphere: fixed layers rendered behind the page. Kept outside
           <main> so no ancestor transform/overflow establishes a new containing
           block for the fixed Nav inside <main>. Order back→front: aurora
