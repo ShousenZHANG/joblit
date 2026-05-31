@@ -3,7 +3,18 @@
 import { useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
-import { ExternalLink, FileText, Trash2 } from "lucide-react";
+import {
+  BarChart3,
+  Briefcase,
+  Building2,
+  ClipboardList,
+  ExternalLink,
+  FileText,
+  MapPin,
+  ShieldAlert,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import { useMarket } from "@/hooks/useMarket";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,9 +43,10 @@ const JobDescriptionMarkdown = dynamic(
 );
 
 const statusClass: Record<JobStatus, string> = {
-  NEW: "bg-brand-emerald-100 text-brand-emerald-700",
-  APPLIED: "bg-[theme(colors.tier-good-bg)] text-[theme(colors.tier-good-fg)]",
-  REJECTED: "bg-muted text-muted-foreground",
+  NEW: "bg-brand-emerald-100 text-brand-emerald-700 ring-1 ring-brand-emerald-200",
+  APPLIED:
+    "bg-[theme(colors.tier-good-bg)] text-[theme(colors.tier-good-fg)] ring-1 ring-[theme(colors.tier-good-ring)]",
+  REJECTED: "bg-muted text-muted-foreground ring-1 ring-border",
 };
 
 interface JobDetailPanelProps {
@@ -54,6 +66,19 @@ interface JobDetailPanelProps {
   onDelete: (job: JobItem) => void;
   onGenerateResume: (job: JobItem) => void;
   onGenerateCover: (job: JobItem) => void;
+}
+
+/** Small icon + label pill for the header meta row. Renders nothing when the
+ *  value is empty so the row stays tight. */
+function MetaChip({ icon: Icon, value }: { icon: React.ElementType; value?: string | null }) {
+  const text = value?.trim();
+  if (!text) return null;
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/70 px-2.5 py-1 text-xs font-medium text-foreground/75 shadow-sm">
+      <Icon className="h-3.5 w-3.5 shrink-0 text-brand-emerald-600 dark:text-brand-emerald-400" aria-hidden />
+      <span className="truncate">{text}</span>
+    </span>
+  );
 }
 
 export function JobDetailPanel({
@@ -85,6 +110,7 @@ export function JobDetailPanel({
   };
   const isAppliedSelected = selectedJob?.status === "APPLIED";
   const listOpacityClass = showLoadingOverlay ? "opacity-70" : "opacity-100";
+  const actionHeight = isAppliedSelected ? "h-9" : "h-10";
 
   const experienceSignals = useMemo(
     () => parseExperienceGate(selectedDescription),
@@ -102,24 +128,41 @@ export function JobDetailPanel({
         mobileTab !== "detail" && "hidden lg:flex",
       )}
     >
-      <div className="border-b px-4 py-3">
+      {/* Top accent hairline — premium emerald sheen across the panel edge. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-px bg-gradient-to-r from-transparent via-brand-emerald-400/70 to-transparent"
+      />
+
+      <div className="relative border-b border-border/60 px-4 py-4">
+        {/* Soft gradient wash behind the header for depth. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand-emerald-50/60 via-transparent to-transparent dark:from-brand-emerald-500/[0.06]"
+        />
         {selectedJob ? (
           // Always stack the info block above the action row — an earlier
           // flex-wrap layout sat actions inline for short titles and
           // wrapped to a new line for long ones, so the button row shifted
           // position per job. Forcing a two-row layout gives every job the
           // same "title / company → actions" rhythm.
-          <div className="relative flex flex-col gap-4">
-            <div className="space-y-1">
+          <div className="relative flex flex-col gap-3.5">
+            <div className="space-y-2.5">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-semibold">{selectedJob.title}</h2>
-                <Badge className={statusClass[selectedJob.status]}>{selectedJob.status}</Badge>
+                <h2 className="text-xl font-bold tracking-tight text-foreground">
+                  {selectedJob.title}
+                </h2>
+                <Badge className={cn("rounded-full px-2.5 text-[10px] font-bold uppercase tracking-wider", statusClass[selectedJob.status])}>
+                  {selectedJob.status}
+                </Badge>
               </div>
-              <div className="text-sm text-muted-foreground">
-                {selectedJob.company ?? "-"} · {selectedJob.location ?? "-"}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {selectedJob.jobType ?? "Unknown"} · {selectedJob.jobLevel ?? "Unknown"}
+              {/* Meta as icon chips — replaces the flat dotted text line for a
+                  scannable, premium header. */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <MetaChip icon={Building2} value={selectedJob.company} />
+                <MetaChip icon={MapPin} value={selectedJob.location} />
+                <MetaChip icon={Briefcase} value={selectedJob.jobType} />
+                <MetaChip icon={BarChart3} value={selectedJob.jobLevel} />
               </div>
             </div>
             <div className="w-full">
@@ -148,9 +191,7 @@ export function JobDetailPanel({
                 <Button
                   asChild
                   size="sm"
-                  className={`w-full justify-center rounded-xl border border-brand-emerald-500 bg-brand-emerald-500 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:border-brand-emerald-600 hover:bg-brand-emerald-600 active:translate-y-[1px] sm:w-auto ${
-                    isAppliedSelected ? "h-9 px-3.5" : "h-10 px-4"
-                  }`}
+                  className={`w-full justify-center rounded-xl border border-brand-emerald-500 bg-brand-emerald-500 text-sm font-semibold text-white shadow-[0_10px_24px_-14px_rgba(5,150,105,0.8)] transition-all duration-200 hover:border-brand-emerald-600 hover:bg-brand-emerald-600 hover:shadow-[0_14px_28px_-14px_rgba(5,150,105,0.9)] active:translate-y-[1px] sm:w-auto ${actionHeight} px-4`}
                 >
                   <a href={selectedJob.jobUrl} target="_blank" rel="noreferrer">
                     <ExternalLink className="mr-1 h-4 w-4" />
@@ -164,13 +205,11 @@ export function JobDetailPanel({
                       size="sm"
                       disabled={externalPromptLoading}
                       onClick={() => onGenerateResume(selectedJob)}
-                      className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none sm:w-auto ${
-                        isAppliedSelected ? "h-9 px-3.5" : "h-10 px-4"
-                      } ${highlightGenerate ? guideHighlightClass : ""}`}
+                      className={`w-full justify-center rounded-xl border-brand-emerald-200 bg-brand-emerald-50/60 text-sm font-semibold text-brand-emerald-800 shadow-sm transition-all duration-200 hover:border-brand-emerald-300 hover:bg-brand-emerald-100/70 active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none dark:bg-brand-emerald-500/10 dark:text-brand-emerald-300 sm:w-auto ${actionHeight} px-4 ${highlightGenerate ? guideHighlightClass : ""}`}
                       data-guide-highlight={highlightGenerate ? "true" : "false"}
                       data-guide-anchor="generate_first_pdf"
                     >
-                      <FileText className="mr-1 h-4 w-4" />
+                      <Sparkles className="mr-1 h-4 w-4" />
                       {t("generateCv")}
                     </Button>
                     <Button
@@ -178,12 +217,10 @@ export function JobDetailPanel({
                       size="sm"
                       disabled={externalPromptLoading}
                       onClick={() => onGenerateCover(selectedJob)}
-                      className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none sm:w-auto ${
-                        isAppliedSelected ? "h-9 px-3.5" : "h-10 px-4"
-                      } ${highlightGenerate ? guideHighlightClass : ""}`}
+                      className={`w-full justify-center rounded-xl border-brand-emerald-200 bg-brand-emerald-50/60 text-sm font-semibold text-brand-emerald-800 shadow-sm transition-all duration-200 hover:border-brand-emerald-300 hover:bg-brand-emerald-100/70 active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none dark:bg-brand-emerald-500/10 dark:text-brand-emerald-300 sm:w-auto ${actionHeight} px-4 ${highlightGenerate ? guideHighlightClass : ""}`}
                       data-guide-highlight={highlightGenerate ? "true" : "false"}
                     >
-                      <FileText className="mr-1 h-4 w-4" />
+                      <Sparkles className="mr-1 h-4 w-4" />
                       {t("generateCl")}
                     </Button>
                   </>
@@ -193,9 +230,7 @@ export function JobDetailPanel({
                     variant="outline"
                     size="sm"
                     asChild
-                    className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] sm:w-auto ${
-                      isAppliedSelected ? "h-9 px-3.5" : "h-10 px-4"
-                    }`}
+                    className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] sm:w-auto ${actionHeight} px-4`}
                   >
                     <a href={selectedJob.resumePdfUrl} target="_blank" rel="noreferrer">
                       {t("savedCv")}
@@ -207,9 +242,7 @@ export function JobDetailPanel({
                     variant="outline"
                     size="sm"
                     asChild
-                    className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] sm:w-auto ${
-                      isAppliedSelected ? "h-9 px-3.5" : "h-10 px-4"
-                    }`}
+                    className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] sm:w-auto ${actionHeight} px-4`}
                   >
                     <a href={selectedJob.coverPdfUrl} target="_blank" rel="noreferrer">
                       {t("savedCl")}
@@ -222,9 +255,7 @@ export function JobDetailPanel({
                   size="sm"
                   disabled={deletingIds.has(selectedJob.id)}
                   onClick={() => onDelete(selectedJob)}
-                  className={`w-full justify-center rounded-xl border-destructive/30 bg-destructive/10 text-sm font-medium text-destructive shadow-sm transition-all duration-200 hover:border-destructive/50 hover:bg-destructive/20 hover:text-destructive active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none sm:ml-auto sm:w-auto ${
-                    isAppliedSelected ? "h-9 px-3.5" : "h-10 px-4"
-                  }`}
+                  className={`w-full justify-center rounded-xl border-destructive/30 bg-destructive/10 text-sm font-medium text-destructive shadow-sm transition-all duration-200 hover:border-destructive/50 hover:bg-destructive/20 hover:text-destructive active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none sm:ml-auto sm:w-auto ${actionHeight} px-4`}
                 >
                   <Trash2 className="mr-1 h-4 w-4" />
                   {t("remove")}
@@ -232,7 +263,7 @@ export function JobDetailPanel({
               </div>
             </div>
             {tailorSource ? (
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                 {tailorSource.cv ? (
                   <span className="rounded-full border border-border/60 bg-muted/60 px-2 py-0.5">
                     CV: {tailorSource.cv === "ai" ? "AI" : tailorSource.cv === "manual_import" ? "Manual" : "Base"}
@@ -247,7 +278,7 @@ export function JobDetailPanel({
             ) : null}
           </div>
         ) : (
-          <div className="text-sm text-muted-foreground">{t("selectJobToPreview")}</div>
+          <div className="relative text-sm text-muted-foreground">{t("selectJobToPreview")}</div>
         )}
       </div>
       <ScrollArea
@@ -259,12 +290,20 @@ export function JobDetailPanel({
         <div className="p-4">
           {selectedJob ? (
             <div className="space-y-4 text-sm text-muted-foreground">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                Job Description
+              {/* Premium section header — icon + label + hairline rule. */}
+              <div className="flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-brand-emerald-50 text-brand-emerald-700 ring-1 ring-brand-emerald-100 dark:bg-brand-emerald-500/10 dark:text-brand-emerald-300">
+                  <FileText className="h-3.5 w-3.5" aria-hidden />
+                </span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-foreground/80">
+                  Job Description
+                </span>
+                <span className="h-px flex-1 bg-gradient-to-r from-border to-transparent" aria-hidden />
               </div>
               {experienceSignals.length ? (
-                <div className="rounded-xl border border-border/60 bg-muted/40 p-3">
-                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-foreground/90">
+                <div className="rounded-2xl border border-border/60 bg-gradient-to-br from-muted/50 to-muted/20 p-3.5 shadow-[0_10px_30px_-26px_rgba(15,23,42,0.5)]">
+                  <div className="mb-2.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground/90">
+                    <ShieldAlert className="h-3.5 w-3.5 text-amber-500" aria-hidden />
                     Experience gate
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -308,8 +347,13 @@ export function JobDetailPanel({
               )}
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground">
-              {t("selectJobHint")}
+            // Premium empty state — a medallion + copy instead of a bare line,
+            // so the panel reads as "designed" before a job is selected.
+            <div className="flex min-h-[16rem] flex-col items-center justify-center gap-3 px-6 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-emerald-50 to-brand-emerald-100 text-brand-emerald-600 shadow-[0_16px_32px_-18px_rgba(5,150,105,0.5)] ring-1 ring-brand-emerald-100 dark:from-brand-emerald-500/10 dark:to-brand-emerald-500/5 dark:text-brand-emerald-300">
+                <ClipboardList className="h-6 w-6" aria-hidden />
+              </span>
+              <p className="max-w-[18rem] text-sm text-muted-foreground">{t("selectJobHint")}</p>
             </div>
           )}
         </div>
