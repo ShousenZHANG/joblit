@@ -17,6 +17,14 @@
 \setCJKmainfont[BoldFont=Noto Sans CJK SC Bold, AutoFakeSlant]{Noto Sans CJK SC}
 \renewcommand{\familydefault}{\sfdefault}
 
+% Typography polish (CJK font left untouched). microtype adds character
+% protrusion under XeLaTeX so Latin runs (tech stacks, URLs, English terms)
+% have cleaner optical margins; frenchspacing enforces single spacing after
+% periods. Both are no-risk: microtype is already used by the EN template, so
+% the render service has it.
+\usepackage{microtype}
+\frenchspacing
+
 % Colors
 \definecolor{primaryColor}{RGB}{0, 79, 144}
 \definecolor{grayText}{RGB}{100, 100, 100}
