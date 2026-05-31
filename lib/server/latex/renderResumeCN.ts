@@ -115,14 +115,14 @@ function renderExperienceBlock(entry: ExperienceEntry) {
 
   if (entry.bullets.length > 0) {
     // Tighten gap between experience header lines and first bullet.
-    lines.push("\\vspace{-2pt}");
-    lines.push("\\begin{itemize}");
+    lines.push("\\vspace{-4pt}");
+    lines.push("\\begin{itemize}[topsep=0pt]");
     lines.push(renderBullets(entry.bullets));
     lines.push("\\end{itemize}");
   }
 
   // Unified block spacing between experience entries / next section.
-  lines.push("\\vspace{0.18cm}");
+  lines.push("\\vspace{0.14cm}");
   return lines.join("\n");
 }
 
@@ -144,7 +144,7 @@ function renderEducationBlock(entry: EducationEntry) {
   if (detailStr) {
     lines.push(`${detailStr} \\par`);
     // Only add extra spacing when there is a detail line; otherwise rely on section spacing.
-    lines.push("\\vspace{0.18cm}");
+    lines.push("\\vspace{0.14cm}");
   }
   return lines.join("\n");
 }
@@ -172,14 +172,14 @@ function renderProjectBlock(entry: ProjectEntry) {
   if (entry.bullets.length > 0) {
     // Tighten gap between project header lines and first bullet.
     // Keep consistent with experience bullet spacing.
-    lines.push("\\vspace{-2pt}");
-    lines.push("\\begin{itemize}");
+    lines.push("\\vspace{-4pt}");
+    lines.push("\\begin{itemize}[topsep=0pt]");
     lines.push(renderBullets(entry.bullets));
     lines.push("\\end{itemize}");
   }
 
   // Unified block spacing between project entries / next section.
-  lines.push("\\vspace{0.18cm}");
+  lines.push("\\vspace{0.14cm}");
   return lines.join("\n");
 }
 
