@@ -26,7 +26,9 @@ type SectionTranslationKey =
   | "education"
   | "skills";
 
-const SECTION_CONFIG: Array<{ id: SectionId; tKey: SectionTranslationKey; icon: ElementType }> = [
+type SectionConfig = { id: SectionId; tKey: SectionTranslationKey; icon: ElementType };
+
+const SECTION_CONFIG: SectionConfig[] = [
   { id: "personal", tKey: "personalInfo", icon: User },
   { id: "summary", tKey: "summary", icon: FileText },
   { id: "experience", tKey: "experience", icon: Briefcase },
@@ -34,6 +36,8 @@ const SECTION_CONFIG: Array<{ id: SectionId; tKey: SectionTranslationKey; icon: 
   { id: "education", tKey: "education", icon: GraduationCap },
   { id: "skills", tKey: "skills", icon: Wrench },
 ];
+
+const SECTION_CONFIG_BY_ID = new Map(SECTION_CONFIG.map((s) => [s.id, s] as const));
 
 interface SectionNavProps {
   className?: string;
@@ -67,8 +71,13 @@ export function SectionNav({ className }: SectionNavProps) {
     isTaskHighlighted,
   } = useResumeContext();
 
-  const visibleSectionIds = getSectionIds(locale);
-  const visibleSections = SECTION_CONFIG.filter((s) => visibleSectionIds.includes(s.id));
+  // Drive both nav order AND visibility from getSectionIds(locale) so the rail
+  // matches the resume's per-locale module order (CN: Education before
+  // Experience). Mapping over the locale id list — instead of filtering the
+  // fixed SECTION_CONFIG — is what preserves that order.
+  const visibleSections = getSectionIds(locale)
+    .map((id) => SECTION_CONFIG_BY_ID.get(id))
+    .filter((s): s is SectionConfig => s !== undefined);
   const guideHighlight = isTaskHighlighted("resume_setup");
 
   const mobileTabRefs = useRef<Map<SectionId, HTMLButtonElement | null>>(new Map());
