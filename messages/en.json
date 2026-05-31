@@ -480,7 +480,11 @@
     "s12_3": "Waiver: Our failure to enforce any right or provision of these Terms shall not constitute a waiver of such right or provision.",
     "s12_4": "Assignment: You may not assign or transfer these Terms without our prior written consent. We may assign these Terms without restriction.",
     "s12_5": "Force Majeure: We shall not be liable for any failure or delay in performance resulting from circumstances beyond our reasonable control, including but not limited to natural disasters, government actions, internet outages, or third-party service failures.",
-    "s13Title": "13. Contact Us",
+    "sWarrantyTitle": "13. Disclaimer of Warranties",
+    "sWarranty": "THE SERVICE IS PROVIDED ON AN \"AS IS\" AND \"AS AVAILABLE\" BASIS WITHOUT WARRANTIES OF ANY KIND, WHETHER EXPRESS, IMPLIED, OR STATUTORY. TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, WE DISCLAIM ALL WARRANTIES, INCLUDING THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT. WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, TIMELY, SECURE, OR ERROR-FREE, THAT DEFECTS WILL BE CORRECTED, OR THAT JOB LISTINGS OR AI-GENERATED CONTENT WILL BE ACCURATE, CURRENT, OR RELIABLE. YOU USE THE SERVICE AND RELY ON ANY CONTENT AT YOUR OWN RISK. NOTHING IN THESE TERMS EXCLUDES, RESTRICTS, OR MODIFIES ANY CONSUMER GUARANTEE, RIGHT, OR REMEDY UNDER THE AUSTRALIAN CONSUMER LAW OR ANY OTHER LAW THAT CANNOT BE LAWFULLY EXCLUDED. WHERE OUR LIABILITY FOR BREACH OF SUCH A NON-EXCLUDABLE GUARANTEE CAN BE LIMITED, IT IS LIMITED TO RE-SUPPLYING THE SERVICE OR PAYING THE COST OF HAVING IT RE-SUPPLIED.",
+    "sChangesTitle": "14. Changes to These Terms",
+    "sChanges": "We may revise these Terms from time to time. When we make material changes, we will update the \"Last updated\" date above and, where appropriate, provide additional notice (such as an in-app notice or email). Your continued use of the Service after the revised Terms take effect constitutes your acceptance of them. If you do not agree to the revised Terms, you must stop using the Service.",
+    "s13Title": "15. Contact Us",
     "s13": "If you have questions about these Terms, please contact us at:",
     "s13Email": "eddy@joblit.tech"
   },

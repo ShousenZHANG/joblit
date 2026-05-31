@@ -187,6 +187,95 @@
   );
 }
 
+/* Aurora — premium "living" background layered BEHIND .landing-atmos. Three
+   slow-drifting blurred emerald/teal blobs. Animates TRANSFORM ONLY (GPU
+   composited, blur is a static layer), so unlike the paint-heavy effects that
+   were removed earlier this adds no scroll-time paint cost. Reduced-motion
+   freezes the drift; the blobs stay as a soft static gradient. */
+.landing-aurora {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  contain: layout paint;
+}
+
+.landing-aurora-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(72px);
+  opacity: 0.55;
+  will-change: transform;
+}
+
+.landing-aurora-blob--1 {
+  width: 44vw;
+  height: 44vw;
+  left: -6vw;
+  top: -8vw;
+  background: radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.2), transparent 68%);
+  animation: aurora-drift-1 24s ease-in-out infinite;
+}
+
+.landing-aurora-blob--2 {
+  width: 40vw;
+  height: 40vw;
+  right: -8vw;
+  top: 2vw;
+  background: radial-gradient(circle at 50% 50%, rgba(45, 212, 191, 0.16), transparent 68%);
+  animation: aurora-drift-2 30s ease-in-out infinite;
+}
+
+.landing-aurora-blob--3 {
+  width: 50vw;
+  height: 50vw;
+  left: 18vw;
+  top: 26vw;
+  background: radial-gradient(circle at 50% 50%, rgba(52, 211, 153, 0.12), transparent 70%);
+  animation: aurora-drift-3 36s ease-in-out infinite;
+}
+
+.dark .landing-aurora-blob {
+  opacity: 0.34;
+}
+
+@keyframes aurora-drift-1 {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(7vw, 5vw, 0) scale(1.14); }
+}
+
+@keyframes aurora-drift-2 {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1.05); }
+  50% { transform: translate3d(-6vw, 7vw, 0) scale(1); }
+}
+
+@keyframes aurora-drift-3 {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-5vw, -6vw, 0) scale(1.1); }
+}
+
+/* Fine grain overlay — static premium texture sitting over the aurora,
+   still behind page content (z-0 < main z-1). */
+.landing-grain {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.dark .landing-grain {
+  opacity: 0.05;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-aurora-blob {
+    animation: none;
+  }
+}
+
 /* Landing keyframes used by Tailwind animate-[...] arbitrary utilities. */
 @keyframes landing-fill-bar {
   from { width: 0%; }

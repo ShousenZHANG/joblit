@@ -22,7 +22,9 @@ const TOC_ITEMS = [
   { id: "termination", label: "10. Termination" },
   { id: "governing-law", label: "11. Governing Law" },
   { id: "general", label: "12. General Provisions" },
-  { id: "contact", label: "13. Contact Us" },
+  { id: "warranty", label: "13. Disclaimer of Warranties" },
+  { id: "changes", label: "14. Changes to Terms" },
+  { id: "contact", label: "15. Contact Us" },
 ];
 
 export default async function TermsOfServicePage() {
@@ -191,7 +193,23 @@ export default async function TermsOfServicePage() {
               </div>
             </section>
 
-            {/* Section 13 */}
+            {/* Section 13 — Disclaimer of Warranties (conspicuous, all-caps) */}
+            <section id="warranty" className="legal-section">
+              <h2 className="legal-section-title">{t("sWarrantyTitle")}</h2>
+              <div className="legal-body legal-caps">
+                <p>{t("sWarranty")}</p>
+              </div>
+            </section>
+
+            {/* Section 14 — Changes to Terms */}
+            <section id="changes" className="legal-section">
+              <h2 className="legal-section-title">{t("sChangesTitle")}</h2>
+              <div className="legal-body">
+                <p>{t("sChanges")}</p>
+              </div>
+            </section>
+
+            {/* Section 15 */}
             <section id="contact" className="legal-section">
               <h2 className="legal-section-title">{t("s13Title")}</h2>
               <div className="legal-body">

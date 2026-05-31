@@ -66,10 +66,18 @@ export default function MarketingPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      {/* Atmosphere: fixed single-radial gradient rendered behind the page.
-          Kept outside <main> so no ancestor transform/overflow establishes
-          a new containing block for the fixed Nav inside <main>. */}
+      {/* Atmosphere: fixed layers rendered behind the page. Kept outside
+          <main> so no ancestor transform/overflow establishes a new containing
+          block for the fixed Nav inside <main>. Order back→front: aurora
+          (drifting blobs) → atmos (radial wash) → grain (texture). All z-0,
+          so <main> (z-1) always sits on top. */}
+      <div aria-hidden className="landing-aurora">
+        <span className="landing-aurora-blob landing-aurora-blob--1" />
+        <span className="landing-aurora-blob landing-aurora-blob--2" />
+        <span className="landing-aurora-blob landing-aurora-blob--3" />
+      </div>
       <div aria-hidden className="landing-atmos" />
+      <div aria-hidden className="landing-grain" />
       <main className="relative z-[1] flex flex-col bg-transparent text-foreground">
         <Nav />
         <Hero />
