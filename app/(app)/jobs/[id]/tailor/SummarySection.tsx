@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronDown, RotateCcw, Sparkles } from "lucide-react";
 import type { AiSummary } from "@/lib/shared/schemas/aiContent";
 import { cn } from "@/lib/utils";
+import { InlineDiff, useDiffStats } from "./InlineDiff";
 
 interface SummarySectionProps {
   summary: AiSummary;
@@ -11,9 +12,11 @@ interface SummarySectionProps {
 }
 
 export function SummarySection({ summary, onChange }: SummarySectionProps) {
-  const [showOriginal, setShowOriginal] = useState(false);
+  const [showDiff, setShowDiff] = useState(false);
   const value = summary.userEdit ?? summary.aiText;
   const isUserEdited = summary.userEdit !== undefined && summary.userEdit !== summary.aiText;
+  const original = summary.originalText ?? "";
+  const diffStats = useDiffStats(original, value);
 
   return (
     <section className="space-y-3 rounded-[1.35rem] border border-border/70 bg-card p-4 shadow-[0_18px_46px_-36px_rgba(15,23,42,0.45),0_1px_0_rgba(255,255,255,0.9)_inset] ring-1 ring-border/40">
@@ -56,27 +59,41 @@ export function SummarySection({ summary, onChange }: SummarySectionProps) {
         aria-label="Resume summary"
       />
 
-      {summary.originalText && summary.originalText !== summary.aiText ? (
+      {original && diffStats.hasChanges ? (
         <div>
           <button
             type="button"
-            onClick={() => setShowOriginal((v) => !v)}
-            className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-            aria-expanded={showOriginal}
+            onClick={() => setShowDiff((v) => !v)}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            aria-expanded={showDiff}
           >
             <ChevronDown
               className={cn(
                 "h-3.5 w-3.5 transition-transform duration-200",
-                showOriginal && "rotate-180",
+                showDiff && "rotate-180",
               )}
               aria-hidden
             />
-            See original
+            {showDiff ? "Hide changes" : "Compare changes"}
+            <span className="ml-0.5 inline-flex items-center gap-1 text-[10px] font-semibold tabular-nums">
+              <span className="text-brand-emerald-600">+{diffStats.added}</span>
+              <span className="text-rose-500">&minus;{diffStats.removed}</span>
+            </span>
           </button>
-          {showOriginal ? (
-            <p className="mt-2 rounded-xl border border-dashed border-border bg-muted/60 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-              {summary.originalText}
-            </p>
+          {showDiff ? (
+            <div className="mt-2 rounded-xl border border-dashed border-border bg-muted/40 px-3 py-2.5">
+              <div className="mb-1.5 flex flex-wrap items-center gap-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-[2px] bg-rose-300" aria-hidden />
+                  Your original
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-[2px] bg-brand-emerald-300" aria-hidden />
+                  AI &amp; your edits
+                </span>
+              </div>
+              <InlineDiff original={original} revised={value} />
+            </div>
           ) : null}
         </div>
       ) : null}
