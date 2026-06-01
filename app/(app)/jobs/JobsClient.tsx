@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { motion, useReducedMotion } from "framer-motion";
 import { CheckSquare, MapPin, Plus, SlidersHorizontal, Square, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -78,7 +79,7 @@ export function JobsClient({
   const [suppressedDeletedIds, setSuppressedDeletedIds] = useState<Set<string>>(new Set());
 
   const {
-    items, totalCount, nextCursor, loading, loadingInitial, loadingMore,
+    items, totalCount, nextCursor, loading, loadingInitial, showEmpty, loadingMore,
     loadedCursors, resetPagination, firstQueryError, jobLevelOptions,
   } = useJobPagination({
     queryString,
@@ -188,6 +189,7 @@ export function JobsClient({
     };
   }, [pdfPreview?.url]);
 
+  const reducedMotion = useReducedMotion();
   const showLoadingOverlay = (loading && !loadingMore) || isPending;
   const listOpacityClass = showLoadingOverlay ? "opacity-70" : "opacity-100";
   const queryError = firstQueryError
@@ -793,21 +795,40 @@ export function JobsClient({
                 />
               ) : (
                 <div className="space-y-3 p-3">
-                  {items.map((it) => (
-                    <JobListItem
-                      key={it.id}
-                      job={it}
-                      isActive={it.id === effectiveSelectedId}
-                      onSelect={() => handleSelectJob(it.id)}
-                      timeZone={timeZone}
-                      batchMode={batchSelectMode}
-                      batchSelected={batchSelectedIds.has(it.id)}
-                      onBatchToggle={toggleBatchSelect}
-                    />
-                  ))}
+                  {items.map((it) => {
+                    const row = (
+                      <JobListItem
+                        job={it}
+                        isActive={it.id === effectiveSelectedId}
+                        onSelect={() => handleSelectJob(it.id)}
+                        timeZone={timeZone}
+                        batchMode={batchSelectMode}
+                        batchSelected={batchSelectedIds.has(it.id)}
+                        onBatchToggle={toggleBatchSelect}
+                      />
+                    );
+                    // `layout="position"` slides the surviving rows up smoothly
+                    // when one above is deleted (and reorders), instead of a
+                    // hard snap — the "silky update" the bare list lacked. No
+                    // AnimatePresence/exit so deleted rows still unmount
+                    // immediately (keeps delete/undo behavior + tests intact).
+                    return reducedMotion ? (
+                      <div key={it.id}>{row}</div>
+                    ) : (
+                      <motion.div
+                        key={it.id}
+                        layout="position"
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                      >
+                        {row}
+                      </motion.div>
+                    );
+                  })}
                 </div>
               )
-            ) : !loading ? (
+            ) : showEmpty ? (
               <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-border/70 px-6 py-12 text-center">
                 <span className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-emerald-50 text-brand-emerald-600 ring-1 ring-brand-emerald-100">
                   <MapPin className="h-5 w-5" aria-hidden />

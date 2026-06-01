@@ -133,7 +133,20 @@ export function useJobPagination({
     ? pageResponses[pageResponses.length - 1]?.nextCursor ?? null
     : null;
   const loading = pageQueries.some((query) => query.isFetching);
-  const loadingInitial = pageQueries.some((query) => query.isLoading) && items.length === 0;
+  const firstQuery = pageQueries[0];
+  // The current filter's first page has truly "resolved" only once real
+  // (non-placeholder) data arrives for its query key. Gating the empty state
+  // on this — rather than on `!loading` — kills the "No jobs" flash that
+  // appeared in the 1-frame gap between a filter switch resetting the cursor
+  // list and React Query starting the next fetch (isFetching false + 0 items).
+  const firstPageResolved = Boolean(
+    firstQuery && firstQuery.isSuccess && !firstQuery.isPlaceholderData,
+  );
+  // Skeleton only when nothing is on screen yet and the page hasn't resolved.
+  const loadingInitial = !firstPageResolved && items.length === 0;
+  // Empty state only when the resolved first page genuinely has zero items —
+  // never during a transition or while showing kept-previous (placeholder) data.
+  const showEmpty = firstPageResolved && items.length === 0;
   // True only when fetching additional pages (not the first page refresh)
   const loadingMore =
     pageQueries.length > 1 &&
@@ -191,6 +204,7 @@ export function useJobPagination({
     nextCursor,
     loading,
     loadingInitial,
+    showEmpty,
     loadingMore,
     pageResponses,
     loadedCursors,
