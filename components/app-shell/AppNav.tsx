@@ -62,16 +62,21 @@ export function AppNav() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // CN market doesn't use the autofill browser extension (Chinese boards
-  // aren't ATS-form based), so its nav entry is hidden there.
+  // CN market support is temporarily limited to Resume + Discover. Jobs/Fetch
+  // (and the autofill Extension) are hidden there until CN-market search ships.
   const isCN = useMarket() === "CN";
-  const links: NavLink[] = [
-    { href: "/jobs", label: t("jobs") },
-    { href: "/fetch", label: t("fetch") },
-    { href: "/resume", label: t("resume") },
-    { href: "/discover", label: t("discover") },
-    ...(isCN ? [] : [{ href: "/extension", label: t("extension") }]),
-  ];
+  const links: NavLink[] = isCN
+    ? [
+        { href: "/resume", label: t("resume") },
+        { href: "/discover", label: t("discover") },
+      ]
+    : [
+        { href: "/jobs", label: t("jobs") },
+        { href: "/fetch", label: t("fetch") },
+        { href: "/resume", label: t("resume") },
+        { href: "/discover", label: t("discover") },
+        { href: "/extension", label: t("extension") },
+      ];
   const email = data?.user?.email ?? "";
 
   return (

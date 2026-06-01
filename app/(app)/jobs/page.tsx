@@ -106,6 +106,9 @@ export default async function JobsPage() {
   if (!session?.user) redirect("/login?callbackUrl=/jobs");
   const userId = session.user.id;
   const market = uiLocaleToMarket(await getLocale());
+  // CN market search isn't supported yet — Jobs is hidden from the nav and
+  // direct navigation redirects to the Resume workspace.
+  if (market === "CN") redirect("/resume");
 
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-2 lg:h-full lg:overflow-hidden">

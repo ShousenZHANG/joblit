@@ -1,13 +1,17 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
-import { getTranslations } from "next-intl/server";
+import { getTranslations, getLocale } from "next-intl/server";
 import { authOptions } from "@/auth";
 import { PageHeading } from "@/components/app-shell/PageHeading";
+import { uiLocaleToMarket } from "@/lib/shared/market";
 import { FetchClient } from "./FetchClient";
 
 export default async function FetchPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect("/login?callbackUrl=/fetch");
+  // CN market search isn't supported yet — Fetch is hidden from the nav and
+  // direct navigation redirects to the Resume workspace.
+  if (uiLocaleToMarket(await getLocale()) === "CN") redirect("/resume");
   const t = await getTranslations("fetch");
 
   return (
