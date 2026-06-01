@@ -1,156 +1,190 @@
 import type { AdapterResult, RawCnJob } from "../types";
 
-// Nowcoder (牛客) is the single CN job source. Nowcoder has no public API, so we
-// read its public job board through a user-hosted RSSHub instance (RSSHUB_URL)
-// via the /nowcoder/jobcenter routes — 社招广场 (recruitType 2) + 实习广场 (1) —
-// then parse each RSS row and enrich it: the company is split out of the
-// "Company | Title" title and the city is best-effort matched from the
-// description. All pure helpers are unit tested.
+// Nowcoder (牛客) is the single CN job source. Its job board (牛客优聘) is a
+// client-rendered SPA, but Nowcoder server-renders the full listing for crawler
+// User-Agents (for SEO) and embeds the data as a `window.__INITIAL_STATE__`
+// JSON blob. We fetch the 社招广场 + 实习广场 pages directly with an honest bot
+// UA (Nowcoder serves SSR to any `compatible; *Bot` UA — no Googlebot spoofing)
+// and parse that JSON. No RSSHub, no auth, no headless browser. Public,
+// non-personal listing data.
 
-const NOWCODER_ROUTES = ["/nowcoder/jobcenter/2", "/nowcoder/jobcenter/1"];
-const DEFAULT_TIMEOUT_MS = 10_000;
-
-// Cities Nowcoder's job center filters by, plus common extras.
-const CN_CITIES = [
-  "北京", "上海", "广州", "深圳", "杭州", "南京", "成都", "厦门", "武汉",
-  "西安", "长沙", "哈尔滨", "合肥", "苏州", "天津", "重庆", "青岛", "大连",
-  "郑州", "无锡", "宁波", "佛山", "东莞", "珠海", "济南", "福州", "昆明",
-  "沈阳", "长春", "石家庄", "南昌", "贵阳", "兰州", "太原",
+const CENTERS = [
+  "https://www.nowcoder.com/jobs/fulltime/center", // 社招广场
+  "https://www.nowcoder.com/jobs/intern/center", // 实习广场
 ];
+const UA = "Mozilla/5.0 (compatible; JoblitBot/1.0; +https://www.joblit.tech)";
+const DEFAULT_TIMEOUT_MS = 12_000;
+const STATE_MARKER = "__INITIAL_STATE__=";
 
-function safeHost(url: string): string {
-  try {
-    return new URL(url).host;
-  } catch {
-    return "";
-  }
+interface NcJobData {
+  id?: number;
+  jobName?: string;
+  jobCity?: string;
+  jobCityList?: string[];
+  companyId?: number;
+  ext?: string;
+  recruitType?: number;
 }
 
-export function isNowcoderUrl(url: string): boolean {
-  return /(^|\.)nowcoder\.com$/i.test(safeHost(url));
-}
-
-/** Nowcoder RSSHub title is "Company | Job Title" (full- or half-width bar). */
-export function parseNowcoderTitle(rawTitle: string): {
-  company: string | null;
-  title: string;
-} {
-  const raw = (rawTitle ?? "").trim();
-  const half = raw.indexOf("|");
-  const full = raw.indexOf("｜");
-  const barIdx = half === -1 ? full : full === -1 ? half : Math.min(half, full);
-  if (barIdx > 0) {
-    const company = raw.slice(0, barIdx).trim();
-    const title = raw.slice(barIdx + 1).trim();
-    if (company && title) return { company, title };
-  }
-  return { company: null, title: raw };
-}
-
-/** Best-effort city extraction from the (HTML) description text. */
-export function extractCnCity(text: string | null): string | null {
-  if (!text) return null;
-  const plain = text.replace(/<[^>]*>/g, " ");
-  for (const city of CN_CITIES) {
-    if (plain.includes(city)) return city;
+/** Pull the `window.__INITIAL_STATE__={...}` object out of the SSR HTML via a
+ *  string-aware brace match (regex can't balance nested braces safely). */
+export function extractInitialState(html: string): unknown | null {
+  const at = html.indexOf(STATE_MARKER);
+  if (at === -1) return null;
+  const start = html.indexOf("{", at);
+  if (start === -1) return null;
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < html.length; i++) {
+    const ch = html[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') inStr = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) {
+        try {
+          return JSON.parse(html.slice(start, i + 1));
+        } catch {
+          return null;
+        }
+      }
+    }
   }
   return null;
 }
 
-/** Refine a raw Nowcoder RSS row: company from title, city from description. */
-export function enrichNowcoderJob(job: RawCnJob): RawCnJob {
-  if (!isNowcoderUrl(job.jobUrl)) return job;
-  const { company, title } = parseNowcoderTitle(job.title);
+/** Recursively collect job rows — any object with a `data.id` + `data.jobName`. */
+export function collectJobItems(state: unknown): NcJobData[] {
+  const out: NcJobData[] = [];
+  const walk = (node: unknown) => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const x of node) walk(x);
+      return;
+    }
+    const rec = node as Record<string, unknown>;
+    const data = rec.data as Record<string, unknown> | undefined;
+    if (
+      data &&
+      typeof data === "object" &&
+      (typeof data.id === "number" || typeof data.id === "string") &&
+      typeof data.jobName === "string"
+    ) {
+      out.push(data as NcJobData);
+    }
+    for (const key of Object.keys(rec)) walk(rec[key]);
+  };
+  walk(state);
+  return out;
+}
+
+/** Recursively build a companyId -> companyName map from the state tree. */
+export function collectCompanyNames(state: unknown): Map<number, string> {
+  const map = new Map<number, string>();
+  const walk = (node: unknown) => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const x of node) walk(x);
+      return;
+    }
+    const rec = node as Record<string, unknown>;
+    const id = rec.companyId;
+    const name = rec.companyName;
+    if (typeof id === "number" && typeof name === "string" && name.trim() && !map.has(id)) {
+      map.set(id, name.trim());
+    }
+    for (const key of Object.keys(rec)) walk(rec[key]);
+  };
+  walk(state);
+  return map;
+}
+
+function parseExtDescription(ext?: string): string | null {
+  if (!ext) return null;
+  try {
+    const obj = JSON.parse(ext) as { infos?: string; requirements?: string };
+    const text = [obj.infos, obj.requirements].filter(Boolean).join("\n\n").trim();
+    return text ? text.slice(0, 4000) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function mapNowcoderJob(
+  data: NcJobData,
+  companies: Map<number, string>,
+): RawCnJob | null {
+  if (data.id == null || !data.jobName) return null;
+  const location = data.jobCity?.trim()
+    ? data.jobCity.split(/[，,]/).map((c) => c.trim()).filter(Boolean).join(" · ")
+    : data.jobCityList?.length
+      ? data.jobCityList.join(" · ")
+      : null;
   return {
-    ...job,
-    title,
-    company: job.company ?? company,
-    location: job.location ?? extractCnCity(job.description),
+    jobUrl: `https://www.nowcoder.com/jobs/detail/${data.id}`,
+    title: data.jobName.trim(),
+    company: (data.companyId != null && companies.get(data.companyId)) || null,
+    location,
+    jobType: data.recruitType === 1 ? "internship" : null,
+    jobLevel: null,
+    description: parseExtDescription(data.ext),
+    publishedAt: null,
+    source: "nowcoder",
   };
 }
 
-function extractTag(body: string, tag: string): string | null {
-  const cdata = new RegExp(`<${tag}><!\\[CDATA\\[(.*?)]]></${tag}>`, "s").exec(body);
-  if (cdata) return cdata[1].trim();
-  const plain = new RegExp(`<${tag}>(.*?)</${tag}>`, "s").exec(body);
-  return plain ? plain[1].trim() : null;
-}
-
-function safeIso(raw: string): string | null {
-  const d = new Date(raw);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
-
-/** Minimal RSS 2.0 parser for RSSHub's Nowcoder output; each item is enriched
- *  into structured company/location. */
-export function parseRssItems(xml: string): RawCnJob[] {
-  if (!xml) return [];
-  const items: RawCnJob[] = [];
-  const itemRe = /<item>([\s\S]*?)<\/item>/g;
-  let match: RegExpExecArray | null;
-  while ((match = itemRe.exec(xml)) !== null) {
-    const body = match[1];
-    const title = extractTag(body, "title");
-    const link = extractTag(body, "link");
-    const description = extractTag(body, "description");
-    const pubDate = extractTag(body, "pubDate");
-    if (!title || !link) continue;
-    items.push(
-      enrichNowcoderJob({
-        jobUrl: link,
-        title,
-        company: null,
-        location: null,
-        jobType: null,
-        jobLevel: null,
-        description: description ? description.slice(0, 4000) : null,
-        publishedAt: pubDate ? safeIso(pubDate) : null,
-        source: "nowcoder",
-      }),
-    );
+/** Parse one SSR center page into deduped job rows. Pure + tested. */
+export function parseNowcoderHtml(html: string): RawCnJob[] {
+  const state = extractInitialState(html);
+  if (!state) return [];
+  const companies = collectCompanyNames(state);
+  const seen = new Set<string>();
+  const out: RawCnJob[] = [];
+  for (const item of collectJobItems(state)) {
+    const job = mapNowcoderJob(item, companies);
+    if (!job || seen.has(job.jobUrl)) continue;
+    seen.add(job.jobUrl);
+    out.push(job);
   }
-  return items;
+  return out;
 }
 
 export interface NowcoderAdapterOptions {
   fetchImpl?: typeof fetch;
-  /** RSSHub base, defaults to RSSHUB_URL. No-op when unset. */
-  baseUrl?: string;
-  routes?: string[];
+  centers?: string[];
   timeoutMs?: number;
 }
 
-/**
- * Fetch Nowcoder jobs via the configured RSSHub instance. Returns an empty
- * (ok) result when RSSHUB_URL is not set — Nowcoder requires self-hosted RSSHub.
- */
+/** Fetch + parse Nowcoder's 社招/实习 job centers directly (no RSSHub). */
 export async function fetchNowcoderJobs(
   options: NowcoderAdapterOptions = {},
 ): Promise<AdapterResult> {
-  const baseUrl = options.baseUrl ?? process.env.RSSHUB_URL;
-  if (!baseUrl) {
-    return { source: "nowcoder", ok: true, jobs: [] }; // Silent no-op when RSSHub not configured.
-  }
   const fetchImpl = options.fetchImpl ?? fetch;
+  const centers = options.centers ?? CENTERS;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const routes = options.routes ?? NOWCODER_ROUTES;
 
   const all: RawCnJob[] = [];
   const errors: string[] = [];
-  for (const route of routes) {
-    const url = `${baseUrl.replace(/\/$/, "")}${route.startsWith("/") ? route : `/${route}`}`;
+  for (const url of centers) {
     try {
       const res = await fetchImpl(url, {
         signal: AbortSignal.timeout(timeoutMs),
-        headers: { Accept: "application/rss+xml,text/xml", "User-Agent": "Joblit/1.0 (+cn-fetch)" },
+        headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml" },
       });
       if (!res.ok) {
-        errors.push(`${route}_${res.status}`);
+        errors.push(`${res.status}`);
         continue;
       }
-      all.push(...parseRssItems(await res.text()));
+      all.push(...parseNowcoderHtml(await res.text()));
     } catch (err) {
-      errors.push(`${route}_${err instanceof Error ? err.message : "error"}`);
+      errors.push(err instanceof Error ? err.message : "error");
     }
   }
 
@@ -163,7 +197,7 @@ export async function fetchNowcoderJobs(
 
   return {
     source: "nowcoder",
-    ok: errors.length < routes.length || unique.length > 0,
+    ok: errors.length < centers.length || unique.length > 0,
     jobs: unique,
     error: errors.length ? errors.join(",") : undefined,
   };

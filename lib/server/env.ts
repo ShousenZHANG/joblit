@@ -35,7 +35,6 @@ const serverEnvSchema = z.object({
   GITHUB_TOKEN: z.string().optional(),
   GITHUB_WORKFLOW_FILE: z.string().optional(),
   JOBLIT_WEB_URL: z.string().optional(),
-  RSSHUB_URL: z.string().optional(),
   NEXTAUTH_URL: z.string().optional(),
 });
 

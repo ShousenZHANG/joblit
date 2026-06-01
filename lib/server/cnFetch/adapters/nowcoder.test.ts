@@ -1,138 +1,131 @@
 import { describe, it, expect, vi } from "vitest";
 import {
-  isNowcoderUrl,
-  parseNowcoderTitle,
-  extractCnCity,
-  enrichNowcoderJob,
-  parseRssItems,
+  extractInitialState,
+  collectJobItems,
+  collectCompanyNames,
+  mapNowcoderJob,
+  parseNowcoderHtml,
   fetchNowcoderJobs,
 } from "./nowcoder";
-import type { RawCnJob } from "../types";
 
-function row(over: Partial<RawCnJob> = {}): RawCnJob {
-  return {
-    jobUrl: "https://www.nowcoder.com/jobs/detail/123",
-    title: "字节跳动 | 后端开发工程师",
-    company: null,
-    location: null,
-    jobType: null,
-    jobLevel: null,
-    description: "<div>岗位职责... 工作地点：上海 薪资 25k</div>",
-    publishedAt: null,
-    source: "nowcoder",
-    ...over,
-  };
+// Build SSR HTML the way Nowcoder embeds it: window.__INITIAL_STATE__={...}.
+function htmlWithState(state: unknown): string {
+  return `<html><body><script>window.__INITIAL_STATE__=${JSON.stringify(state)};</script></body></html>`;
 }
 
-describe("isNowcoderUrl", () => {
-  it("matches nowcoder hosts", () => {
-    expect(isNowcoderUrl("https://www.nowcoder.com/jobs/detail/1")).toBe(true);
-    expect(isNowcoderUrl("https://nowcoder.com/x")).toBe(true);
+const STATE = {
+  store: {
+    jobList: [
+      {
+        data: {
+          id: 111,
+          jobName: "后端工程师",
+          companyId: 665,
+          jobCity: "北京,上海",
+          ext: JSON.stringify({ infos: "职责A", requirements: "要求B" }),
+          recruitType: 3,
+        },
+      },
+      {
+        data: {
+          id: 222,
+          jobName: "前端实习生",
+          companyId: 900,
+          jobCityList: ["深圳"],
+          recruitType: 1,
+        },
+      },
+    ],
+    boss: { identity: [{ companyId: 665, companyName: "字节跳动" }] },
+  },
+};
+
+describe("extractInitialState", () => {
+  it("extracts the embedded JSON object", () => {
+    const state = extractInitialState(htmlWithState({ a: 1, nested: { b: "}" } }));
+    expect(state).toEqual({ a: 1, nested: { b: "}" } });
   });
-  it("rejects other hosts and junk", () => {
-    expect(isNowcoderUrl("https://v2ex.com/t/1")).toBe(false);
-    expect(isNowcoderUrl("not-a-url")).toBe(false);
-    expect(isNowcoderUrl("https://nowcoder.com.evil.com/x")).toBe(false);
+  it("returns null when the marker is absent", () => {
+    expect(extractInitialState("<html>no state</html>")).toBeNull();
   });
 });
 
-describe("parseNowcoderTitle", () => {
-  it("splits 'Company | Title' on a half-width bar", () => {
-    expect(parseNowcoderTitle("字节跳动 | 后端开发工程师")).toEqual({
+describe("collectJobItems / collectCompanyNames", () => {
+  it("collects job rows by data.id + data.jobName", () => {
+    const items = collectJobItems(STATE);
+    expect(items.map((d) => d.id)).toEqual([111, 222]);
+  });
+  it("builds a companyId -> name map", () => {
+    const map = collectCompanyNames(STATE);
+    expect(map.get(665)).toBe("字节跳动");
+    expect(map.has(900)).toBe(false);
+  });
+});
+
+describe("mapNowcoderJob", () => {
+  const companies = collectCompanyNames(STATE);
+  it("maps a full-time row with company + city + description", () => {
+    const job = mapNowcoderJob(collectJobItems(STATE)[0], companies)!;
+    expect(job).toMatchObject({
+      jobUrl: "https://www.nowcoder.com/jobs/detail/111",
+      title: "后端工程师",
       company: "字节跳动",
-      title: "后端开发工程师",
-    });
-  });
-  it("splits on a full-width bar", () => {
-    expect(parseNowcoderTitle("阿里巴巴｜前端工程师")).toEqual({
-      company: "阿里巴巴",
-      title: "前端工程师",
-    });
-  });
-  it("falls back to the whole string when there is no bar", () => {
-    expect(parseNowcoderTitle("后端开发工程师")).toEqual({
-      company: null,
-      title: "后端开发工程师",
-    });
-  });
-});
-
-describe("extractCnCity", () => {
-  it("finds a city in the description", () => {
-    expect(extractCnCity("工作地点：上海，全职")).toBe("上海");
-    expect(extractCnCity("<p>深圳 · 社招</p>")).toBe("深圳");
-  });
-  it("returns null when no known city is present", () => {
-    expect(extractCnCity("远程办公")).toBeNull();
-    expect(extractCnCity(null)).toBeNull();
-  });
-});
-
-describe("enrichNowcoderJob", () => {
-  it("pulls company from the title and city from the description", () => {
-    const out = enrichNowcoderJob(row());
-    expect(out.company).toBe("字节跳动");
-    expect(out.title).toBe("后端开发工程师");
-    expect(out.location).toBe("上海");
-  });
-  it("does not overwrite a company/location already present", () => {
-    const out = enrichNowcoderJob(row({ company: "已知公司", location: "北京" }));
-    expect(out.company).toBe("已知公司");
-    expect(out.location).toBe("北京");
-  });
-});
-
-describe("parseRssItems", () => {
-  const xml = `<rss><channel>
-    <item>
-      <title>腾讯 | 高级前端工程师</title>
-      <link>https://www.nowcoder.com/jobs/detail/1</link>
-      <description><![CDATA[<div>工作地点：深圳 · 社招</div>]]></description>
-      <pubDate>Mon, 01 Jun 2026 10:00:00 GMT</pubDate>
-    </item>
-    <item>
-      <title>美团 | 数据工程师</title>
-      <link>https://www.nowcoder.com/jobs/detail/2</link>
-      <description>北京岗位</description>
-    </item>
-  </channel></rss>`;
-
-  it("parses + enriches each RSS item", () => {
-    const items = parseRssItems(xml);
-    expect(items).toHaveLength(2);
-    expect(items[0]).toMatchObject({
-      jobUrl: "https://www.nowcoder.com/jobs/detail/1",
-      company: "腾讯",
-      title: "高级前端工程师",
-      location: "深圳",
+      location: "北京 · 上海",
+      jobType: null,
       source: "nowcoder",
     });
-    expect(items[1]).toMatchObject({ company: "美团", title: "数据工程师", location: "北京" });
+    expect(job.description).toContain("职责A");
+    expect(job.description).toContain("要求B");
   });
+  it("maps an intern row, leaves company null when unknown", () => {
+    const job = mapNowcoderJob(collectJobItems(STATE)[1], companies)!;
+    expect(job).toMatchObject({
+      jobUrl: "https://www.nowcoder.com/jobs/detail/222",
+      title: "前端实习生",
+      company: null,
+      location: "深圳",
+      jobType: "internship",
+    });
+  });
+});
 
-  it("returns [] for empty input", () => {
-    expect(parseRssItems("")).toEqual([]);
+describe("parseNowcoderHtml", () => {
+  it("parses SSR HTML into deduped jobs", () => {
+    const jobs = parseNowcoderHtml(htmlWithState(STATE));
+    expect(jobs).toHaveLength(2);
+    expect(jobs[0].company).toBe("字节跳动");
+  });
+  it("returns [] when no state present", () => {
+    expect(parseNowcoderHtml("<html>nothing</html>")).toEqual([]);
   });
 });
 
 describe("fetchNowcoderJobs", () => {
-  it("is a silent no-op when RSSHUB_URL / baseUrl is unset", async () => {
-    const res = await fetchNowcoderJobs({ baseUrl: undefined });
-    expect(res).toEqual({ source: "nowcoder", ok: true, jobs: [] });
+  it("fetches + dedups across centers with an honest bot UA", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(htmlWithState(STATE), {
+        status: 200,
+        headers: { "Content-Type": "text/html" },
+      }),
+    );
+    const res = await fetchNowcoderJobs({ fetchImpl });
+    // Two centers fetched; identical jobs deduped to 2.
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const ua = fetchImpl.mock.calls[0][1].headers["User-Agent"];
+    expect(ua).toMatch(/JoblitBot/);
+    expect(res.source).toBe("nowcoder");
+    expect(res.jobs).toHaveLength(2);
   });
 
-  it("fetches + dedups across routes when a baseUrl is given", async () => {
-    const xml = `<rss><channel><item>
-      <title>腾讯 | 前端</title><link>https://www.nowcoder.com/jobs/detail/1</link>
-      <description>深圳</description></item></channel></rss>`;
-    const fetchImpl = vi.fn().mockResolvedValue(
-      new Response(xml, { status: 200, headers: { "Content-Type": "text/xml" } }),
-    );
-    const res = await fetchNowcoderJobs({ baseUrl: "https://rss.example", fetchImpl });
-    // Two default routes, same single job URL → deduped to 1.
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
-    expect(res.source).toBe("nowcoder");
-    expect(res.jobs).toHaveLength(1);
-    expect(res.jobs[0].company).toBe("腾讯");
+  it("reports an error but stays ok when a center fails", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(htmlWithState(STATE), { status: 200, headers: { "Content-Type": "text/html" } }),
+      )
+      .mockResolvedValueOnce(new Response("nope", { status: 503 }));
+    const res = await fetchNowcoderJobs({ fetchImpl });
+    expect(res.jobs).toHaveLength(2);
+    expect(res.error).toContain("503");
   });
 });
