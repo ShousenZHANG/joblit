@@ -87,22 +87,35 @@ describe("normalizeCnJobs", () => {
     expect(row.description?.length).toBe(8000);
   });
 
-  it("keyword include filter requires at least one match", () => {
+  it("ranks keyword matches first but keeps every row (never empties the feed)", () => {
     const input = [
-      makeRaw({
-        jobUrl: "https://example.com/1",
-        title: "前端工程师",
-        description: "React experience",
-      }),
       makeRaw({
         jobUrl: "https://example.com/2",
         title: "产品经理",
         description: "",
       }),
+      makeRaw({
+        jobUrl: "https://example.com/1",
+        title: "前端工程师",
+        description: "React experience",
+      }),
     ];
     const rows = normalizeCnJobs(input, { queries: ["前端"] });
-    expect(rows).toHaveLength(1);
+    // Both kept; the keyword hit floats to the top (rank, not hard filter).
+    expect(rows).toHaveLength(2);
     expect(rows[0].jobUrl).toBe("https://example.com/1");
+  });
+
+  it("hard-filters by location when provided", () => {
+    const rows = normalizeCnJobs(
+      [
+        makeRaw({ jobUrl: "https://example.com/a", title: "A", location: "北京 · 上海" }),
+        makeRaw({ jobUrl: "https://example.com/b", title: "B", location: "深圳" }),
+      ],
+      { locations: ["上海"] },
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].location).toBe("北京 · 上海");
   });
 
   it("keyword include match works case-insensitively on English", () => {

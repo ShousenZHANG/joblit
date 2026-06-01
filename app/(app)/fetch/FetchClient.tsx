@@ -488,6 +488,7 @@ export function FetchClient() {
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const market = useMarket();
   const [cnExcludeKeywords, setCnExcludeKeywords] = useState("");
+  const [cnLocation, setCnLocation] = useState("");
   const [hoursOld, setHoursOld] = useState(48);
   const [smartExpand, setSmartExpand] = useState(true);
   const [applyExcludes, setApplyExcludes] = useState(true);
@@ -608,6 +609,10 @@ export function FetchClient() {
           queries,
           sources: ["nowcoder"],
           excludeKeywords: cnExcludeKeywords
+            .split(/[,，]/)
+            .map((s) => s.trim())
+            .filter(Boolean),
+          locations: cnLocation
             .split(/[,，]/)
             .map((s) => s.trim())
             .filter(Boolean),
@@ -969,6 +974,14 @@ export function FetchClient() {
             <p className="text-[11px] text-muted-foreground">
               职位均来自牛客网招聘广场。
             </p>
+          </div>
+          <div className="space-y-2">
+            <Label>{t("cnLocation")}</Label>
+            <Input
+              placeholder="可选，逗号分隔，例如 北京,上海,深圳"
+              value={cnLocation}
+              onChange={(e) => setCnLocation(e.target.value)}
+            />
           </div>
           <div className="space-y-2">
             <Label>{t("cnExcludeKeywords")}</Label>

@@ -62,6 +62,7 @@ const CNSchema = z.object({
     .optional()
     .default(["nowcoder"]),
   excludeKeywords: z.array(z.string()).optional().default([]),
+  locations: z.array(z.string()).optional().default([]),
 });
 
 export async function GET() {
@@ -130,6 +131,7 @@ export async function POST(req: Request) {
             queries: d.queries,
             sources: d.sources,
             excludeKeywords: d.excludeKeywords,
+            locations: d.locations,
           },
           location: null,
           hoursOld: null,

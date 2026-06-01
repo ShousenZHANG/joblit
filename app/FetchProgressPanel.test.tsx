@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import messages from "../messages/en.json";
 import { FetchProgressPanel } from "./FetchProgressPanel";
 
 vi.mock("./FetchStatusContext", () => ({
@@ -21,7 +23,11 @@ vi.mock("./FetchStatusContext", () => ({
 
 describe("FetchProgressPanel", () => {
   it("shows the real role queries used by smart fetch", () => {
-    render(<FetchProgressPanel />);
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <FetchProgressPanel />
+      </NextIntlClientProvider>,
+    );
 
     expect(screen.getAllByText(/software engineer/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/frontend engineer/i)).toBeInTheDocument();

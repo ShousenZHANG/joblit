@@ -12,10 +12,12 @@ export type CnFetchAdapter = (signal?: AbortSignal) => Promise<AdapterResult>;
 export interface RunCnFetchOptions {
   /** Sources to include. Only "nowcoder" is supported; defaults to it. */
   sources?: CnSource[];
-  /** User's keyword filter (applied in normalize). */
+  /** User's keyword filter (ranks results in normalize). */
   queries?: string[];
   /** User's exclusion filter (applied in normalize). */
   excludeKeywords?: string[];
+  /** Optional city filter (applied in normalize). */
+  locations?: string[];
   /** Test seam: override adapters by source. */
   adapters?: Partial<Record<CnSource, () => Promise<AdapterResult>>>;
 }
@@ -67,6 +69,7 @@ export async function runCnFetch(
   const normalized = normalizeCnJobs(rawJobs, {
     queries: options.queries,
     excludeKeywords: options.excludeKeywords,
+    locations: options.locations,
   });
 
   return {

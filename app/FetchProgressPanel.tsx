@@ -3,6 +3,7 @@
 import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, ChevronDown, Loader2, Minus, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
@@ -39,6 +40,7 @@ export function FetchProgressPanel() {
     setOpen,
     cancelRun,
   } = useFetchStatus();
+  const t = useTranslations("fetchProgress");
 
   const isRunning = status === "RUNNING" || status === "QUEUED";
   const progressValue =
@@ -52,14 +54,14 @@ export function FetchProgressPanel() {
 
   const statusLabel =
     status === "RUNNING"
-      ? "Running"
+      ? t("statusRunning")
       : status === "QUEUED"
-        ? "Queued"
+        ? t("statusQueued")
         : status === "SUCCEEDED"
-          ? "Completed"
+          ? t("statusCompleted")
           : status === "FAILED"
-            ? "Failed"
-            : "Starting";
+            ? t("statusFailed")
+            : t("statusStarting");
 
   const statusTone =
     status === "FAILED"
@@ -90,7 +92,7 @@ export function FetchProgressPanel() {
           exit={{ opacity: 0, scale: 0.85, y: 12 }}
           transition={SPRING}
           onClick={() => setOpen(true)}
-          aria-label="Open fetch progress"
+          aria-label={t("openAria")}
           className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full border border-border/60 bg-background/95 shadow-lg backdrop-blur transition-shadow hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-500"
         >
           <svg className="h-11 w-11 -rotate-90" viewBox="0 0 48 48">
@@ -158,7 +160,7 @@ export function FetchProgressPanel() {
                 />
               ) : null}
               <div className="truncate text-sm font-semibold text-foreground">
-                Fetch progress
+                {t("title")}
               </div>
               <span
                 className={cn(
@@ -174,8 +176,8 @@ export function FetchProgressPanel() {
                 type="button"
                 onClick={() => setOpen(false)}
                 className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-500"
-                aria-label="Minimize"
-                title="Minimize"
+                aria-label={t("minimize")}
+                title={t("minimize")}
               >
                 <Minus className="h-4 w-4" aria-hidden />
               </button>
@@ -184,8 +186,8 @@ export function FetchProgressPanel() {
                   type="button"
                   onClick={() => setOpen(false)}
                   className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
-                  aria-label="Close"
-                  title="Close"
+                  aria-label={t("close")}
+                  title={t("close")}
                 >
                   <X className="h-4 w-4" aria-hidden />
                 </button>
@@ -200,19 +202,19 @@ export function FetchProgressPanel() {
             {/* Status line */}
             <div className="text-xs text-muted-foreground">
               {status === "RUNNING"
-                ? "Collecting and importing results…"
+                ? t("lineRunning")
                 : status === "SUCCEEDED"
-                  ? "Completed successfully."
+                  ? t("lineCompleted")
                   : status === "FAILED"
-                    ? "Fetch failed or cancelled."
-                    : "Queued and starting soon."}
+                    ? t("lineFailed")
+                    : t("lineQueued")}
             </div>
 
             {/* Live import count — real signal while the worker streams results
                 in, instead of relying on the time-based progress bar alone. */}
             {isRunning && importedCount > 0 ? (
               <div className="text-sm font-semibold text-brand-emerald-700">
-                Imported {importedCount} so far…
+                {t("importedSoFar", { n: importedCount })}
               </div>
             ) : null}
 
@@ -221,8 +223,8 @@ export function FetchProgressPanel() {
               <div className="rounded-xl border border-border/60 bg-muted/40 p-3">
                 <div className="text-[11px] text-muted-foreground">
                   {smartExpand && queryTitle
-                    ? `Smart fetch expanded "${queryTitle}" into ${queryTerms.length} role queries.`
-                    : `Role queries in this run (${queryTerms.length}).`}
+                    ? t("smartExpanded", { title: queryTitle, n: queryTerms.length })
+                    : t("roleQueries", { n: queryTerms.length })}
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1">
                   {shownTerms.map((term) => (
@@ -235,7 +237,7 @@ export function FetchProgressPanel() {
                   ))}
                   {hiddenTerms ? (
                     <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-muted-foreground">
-                      +{hiddenTerms} more
+                      {t("moreTerms", { n: hiddenTerms })}
                     </span>
                   ) : null}
                 </div>
@@ -258,14 +260,14 @@ export function FetchProgressPanel() {
                     itself is ambient motion, the numbers below are truthful. */}
                 <span className="font-medium text-foreground/80">
                   {status === "SUCCEEDED"
-                    ? "Done"
+                    ? t("barDone")
                     : status === "FAILED"
-                      ? "Stopped"
+                      ? t("barStopped")
                       : isRunning && importedCount > 0
-                        ? `${importedCount} imported`
-                        : "Working…"}
+                        ? t("barImported", { n: importedCount })
+                        : t("barWorking")}
                 </span>
-                <span>Elapsed {elapsedSeconds}s</span>
+                <span>{t("elapsed", { n: elapsedSeconds })}</span>
               </div>
             </div>
 
@@ -279,7 +281,7 @@ export function FetchProgressPanel() {
                   <div className="relative overflow-hidden rounded-lg bg-brand-emerald-50/60 py-3 text-center">
                     <ConfettiDots />
                     <div className="text-sm font-semibold text-brand-emerald-700">
-                      Imported {importedCount} new jobs
+                      {t("importedNew", { n: importedCount })}
                     </div>
                   </div>
                   <Button
@@ -287,17 +289,17 @@ export function FetchProgressPanel() {
                     onClick={() => setOpen(false)}
                     asChild
                   >
-                    <a href="/jobs">View Jobs</a>
+                    <a href="/jobs">{t("viewJobs")}</a>
                   </Button>
                 </>
               ) : (
                 <>
                   <div className="rounded-lg border border-border/60 bg-muted/40 px-3 py-3 text-center">
                     <div className="text-sm font-semibold text-foreground">
-                      No new roles found
+                      {t("noNew")}
                     </div>
                     <div className="mt-1 text-xs text-muted-foreground">
-                      Widen the time window or remove some exclusions, then fetch again.
+                      {t("noNewHint")}
                     </div>
                   </div>
                   <Button
@@ -305,7 +307,7 @@ export function FetchProgressPanel() {
                     className="h-10 w-full rounded-full text-[13px] font-semibold"
                     onClick={() => setOpen(false)}
                   >
-                    Dismiss
+                    {t("dismiss")}
                   </Button>
                 </>
               )
@@ -323,7 +325,7 @@ export function FetchProgressPanel() {
                 className="h-10 w-full rounded-full border-destructive/30 bg-destructive/5 text-[13px] font-semibold text-destructive shadow-sm transition-colors hover:border-destructive/50 hover:bg-destructive/15 hover:text-destructive"
                 onClick={cancelRun}
               >
-                Cancel fetch
+                {t("cancel")}
               </Button>
             ) : null}
           </div>
@@ -334,19 +336,20 @@ export function FetchProgressPanel() {
 }
 
 function StepIndicator({ status }: { status: string | null }) {
+  const t = useTranslations("fetchProgress");
   const steps = [
     {
-      label: "Queued",
+      label: t("stepQueued"),
       done: status !== "QUEUED",
       active: status === "QUEUED",
     },
     {
-      label: "Fetching",
+      label: t("stepFetching"),
       done: status === "SUCCEEDED" || status === "FAILED",
       active: status === "RUNNING",
     },
     {
-      label: "Done",
+      label: t("stepDone"),
       done: status === "SUCCEEDED",
       active: false,
     },

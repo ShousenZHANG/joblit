@@ -13,11 +13,15 @@ import type { RawCnJob } from "./types";
 // Pure TypeScript — no I/O. Safe to unit-test.
 
 export interface NormalizeOptions {
-  /** User's query keywords. If non-empty, the job must match at least one
-   *  (case-insensitive, anywhere in title/description). */
+  /** User's query keywords. Used to RANK (matched first), never to hard-filter:
+   *  Nowcoder's recommended feed is small (~40), so emptying it on a keyword
+   *  reads as "nothing found". Matches float to the top; the rest follow. */
   queries?: string[];
-  /** User's exclude keywords. Any match drops the job. */
+  /** User's exclude keywords. Any match drops the job (hard filter). */
   excludeKeywords?: string[];
+  /** Optional city filter. When non-empty, the job's location must contain one
+   *  of these (hard filter — the user explicitly asked for that city). */
+  locations?: string[];
 }
 
 export interface NormalizedCnJob {
@@ -101,10 +105,13 @@ export function normalizeCnJobs(
   const excludeKeywords = (options.excludeKeywords ?? [])
     .map((k) => k.trim())
     .filter(Boolean);
+  const locations = (options.locations ?? [])
+    .map((k) => k.trim())
+    .filter(Boolean);
 
   const seen = new Set<string>();
-  const strict: NormalizedCnJob[] = []; // passes keyword include filter
-  const relaxed: NormalizedCnJob[] = []; // passes exclude filter only
+  const matched: NormalizedCnJob[] = []; // keyword hit — ranked first
+  const rest: NormalizedCnJob[] = []; // kept but no keyword hit
 
   for (const r of raw) {
     const canonical = canonicalizeJobUrl(r.jobUrl ?? "");
@@ -118,11 +125,15 @@ export function normalizeCnJobs(
     const location = tightenString(r.location);
     const description = tightenString(r.description, MAX_DESC_LEN);
 
-    // Exclusion filter: drop on any exclude hit — applies to BOTH strict
-    // and relaxed pools (never surface explicitly-excluded content).
+    // Exclusion filter — drop on any exclude hit (never surface excluded content).
     if (excludeKeywords.length > 0) {
       const haystack = `${title} ${description ?? ""} ${company ?? ""}`;
       if (containsAny(haystack, excludeKeywords)) continue;
+    }
+
+    // Location filter — hard filter when the user named cities.
+    if (locations.length > 0 && !containsAny(location ?? "", locations)) {
+      continue;
     }
 
     seen.add(canonical);
@@ -138,21 +149,16 @@ export function normalizeCnJobs(
       source: r.source,
     };
 
-    relaxed.push(normalized);
-
-    // Keyword match: at least one expanded query token appears in
-    // title+description (case-insensitive substring). If no queries were
-    // given, the strict pool equals the relaxed pool.
+    // Keyword RANKING (not filtering): a hit in title/company/description
+    // floats the row to the top; everything else still ships so the small
+    // recommended feed is never emptied by a keyword.
     if (queries.length === 0) {
-      strict.push(normalized);
+      matched.push(normalized);
       continue;
     }
-    const haystack = `${title} ${description ?? ""}`;
-    if (containsAny(haystack, queries)) strict.push(normalized);
+    const haystack = `${title} ${company ?? ""} ${description ?? ""}`;
+    (containsAny(haystack, queries) ? matched : rest).push(normalized);
   }
 
-  // Soft fallback: on thin aggregator days the strict pool can be empty
-  // even for reasonable queries. Return the full deduped+excluded pool so
-  // the user still sees something actionable instead of "Imported 0".
-  return strict.length > 0 ? strict : relaxed;
+  return [...matched, ...rest];
 }

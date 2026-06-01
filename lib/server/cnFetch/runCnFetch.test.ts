@@ -58,7 +58,7 @@ describe("runCnFetch", () => {
     });
   });
 
-  it("applies the query filter via normalize", async () => {
+  it("ranks keyword matches first but keeps the full feed (never empties)", async () => {
     const result = await runCnFetch({
       queries: ["前端"],
       adapters: {
@@ -66,14 +66,33 @@ describe("runCnFetch", () => {
           source: "nowcoder",
           ok: true,
           jobs: [
-            job(1, { jobUrl: "https://nowcoder.example/a", title: "前端工程师" }),
             job(2, { jobUrl: "https://nowcoder.example/b", title: "产品经理" }),
+            job(1, { jobUrl: "https://nowcoder.example/a", title: "前端工程师" }),
+          ],
+        }),
+      },
+    });
+    // Both kept (small feed never emptied); the keyword match floats to the top.
+    expect(result.jobs).toHaveLength(2);
+    expect(result.jobs[0].title).toBe("前端工程师");
+  });
+
+  it("hard-filters by location when given", async () => {
+    const result = await runCnFetch({
+      locations: ["上海"],
+      adapters: {
+        nowcoder: vi.fn().mockResolvedValue({
+          source: "nowcoder",
+          ok: true,
+          jobs: [
+            job(1, { jobUrl: "https://nowcoder.example/a", title: "A", location: "北京 · 上海" }),
+            job(2, { jobUrl: "https://nowcoder.example/b", title: "B", location: "深圳" }),
           ],
         }),
       },
     });
     expect(result.jobs).toHaveLength(1);
-    expect(result.jobs[0].title).toBe("前端工程师");
+    expect(result.jobs[0].location).toBe("北京 · 上海");
   });
 
   it("applies the excludeKeywords filter via normalize", async () => {

@@ -15,6 +15,7 @@ interface CnRunConfig {
   queries: string[];
   sources: CnSource[];
   excludeKeywords: string[];
+  locations: string[];
 }
 
 /**
@@ -32,12 +33,16 @@ export function readCnRunConfig(raw: unknown): CnRunConfig {
         (q): q is string => typeof q === "string",
       )
     : [];
+  const locations = Array.isArray(obj.locations)
+    ? (obj.locations as unknown[]).filter((q): q is string => typeof q === "string")
+    : [];
   const rawSources = Array.isArray(obj.sources) ? (obj.sources as unknown[]) : [];
   const sources = rawSources.filter((s): s is CnSource => s === "nowcoder");
   return {
     queries,
     sources: sources.length > 0 ? sources : ["nowcoder"],
     excludeKeywords,
+    locations,
   };
 }
 
@@ -72,6 +77,7 @@ export async function processCnFetchRun(
       sources: config.sources,
       queries: config.queries,
       excludeKeywords: config.excludeKeywords,
+      locations: config.locations,
     });
 
     const discovered = result.jobs.length;
