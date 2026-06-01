@@ -683,6 +683,37 @@ body {
   }
 }
 
+/* Landing scroll-progress bar — driven by the browser's native scroll timeline
+   (zero JS, zero main-thread work) instead of a framer useScroll listener.
+   Progressive enhancement: where `animation-timeline` is unsupported the bar
+   stays empty (it's decorative), and reduced-motion disables it. */
+.scroll-progress-native {
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+@supports (animation-timeline: scroll()) {
+  .scroll-progress-native {
+    animation: scroll-progress-grow linear both;
+    animation-timeline: scroll(root block);
+  }
+}
+
+@keyframes scroll-progress-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-progress-native {
+    animation: none;
+  }
+}
+
 /* ── Extension token manager ──
    Token-driven so cards, inputs, and token rows adapt to .dark via the
    oklch palette defined in :root / .dark at the top of this file.   */

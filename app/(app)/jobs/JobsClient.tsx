@@ -764,7 +764,7 @@ export function JobsClient({
           <div className="relative flex min-h-0 flex-1 flex-col">
           <ScrollArea
             ref={resultsScrollRef}
-            type="always"
+            type="scroll"
             data-testid="jobs-results-scroll"
             data-loading={showLoadingOverlay ? "true" : "false"}
             data-virtual={items.length > 80 ? "true" : "false"}

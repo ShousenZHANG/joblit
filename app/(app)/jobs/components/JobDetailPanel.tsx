@@ -282,7 +282,7 @@ export function JobDetailPanel({
         )}
       </div>
       <ScrollArea
-        type="always"
+        type="scroll"
         data-testid="jobs-details-scroll"
         data-loading={showLoadingOverlay ? "true" : "false"}
         className={`jobs-scroll-area max-h-full flex-1 min-h-0 transition-opacity duration-200 ease-out ${listOpacityClass}`}
