@@ -65,9 +65,9 @@ const COMMON_TITLES = [
 // New CN source list — aggregator-based, no cookie auth, no Bing proxy.
 // See lib/server/cnFetch for implementation details.
 const CN_SOURCES = [
-  { value: "v2ex", label: "V2EX 酷工作" },
-  { value: "github", label: "GitHub 招聘 Repos" },
-  { value: "rsshub", label: "自建 RSSHub" },
+  { value: "v2ex", label: "V2EX 酷工作", hint: "稳定免费主源" },
+  { value: "github", label: "GitHub 招聘 Repos", hint: "社区维护 · 内推 / 校招" },
+  { value: "rsshub", label: "自建 RSSHub", hint: "牛客等官方源 · 需配置 RSSHUB_URL" },
 ];
 
 const CN_COMMON_TITLES = [
@@ -971,12 +971,19 @@ export function FetchClient() {
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
-                  className="h-10 w-full justify-between rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground/85 shadow-none"
+                  className="h-10 w-full justify-between gap-2 rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground/85 shadow-none"
                 >
-                  {cnSources.length ? `已选 (${cnSources.length})` : "选择来源"}
+                  <span className="truncate text-left">
+                    {cnSources.length
+                      ? CN_SOURCES.filter((s) => cnSources.includes(s.value))
+                          .map((s) => s.label)
+                          .join("、")
+                      : "选择来源"}
+                  </span>
+                  <ChevronDown className="h-4 w-4 shrink-0 opacity-60" aria-hidden />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-64">
+              <DropdownMenuContent align="start" className="w-72">
                 {CN_SOURCES.map((s) => (
                   <DropdownMenuCheckboxItem
                     key={s.value}
@@ -989,8 +996,14 @@ export function FetchClient() {
                           : prev.filter((v) => v !== s.value),
                       );
                     }}
+                    className="items-start gap-1 py-2"
                   >
-                    {s.label}
+                    <span className="flex flex-col">
+                      <span className="text-sm font-medium text-foreground">{s.label}</span>
+                      <span className="text-[11px] leading-snug text-muted-foreground">
+                        {s.hint}
+                      </span>
+                    </span>
                   </DropdownMenuCheckboxItem>
                 ))}
               </DropdownMenuContent>

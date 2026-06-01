@@ -1,4 +1,5 @@
 import type { AdapterResult, RawCnJob } from "../types";
+import { enrichNowcoderJob } from "./nowcoder";
 
 // Optional RSSHub adapter. Enabled only when RSSHUB_URL env var is set
 // (user-hosted instance — we don't run one ourselves). Consumes the
@@ -45,17 +46,21 @@ export function parseRssItems(xml: string): RawCnJob[] {
     const description = extractTag(body, "description");
     const pubDate = extractTag(body, "pubDate");
     if (!title || !link) continue;
-    items.push({
-      jobUrl: link,
-      title,
-      company: null,
-      location: null,
-      jobType: null,
-      jobLevel: null,
-      description: description ? description.slice(0, 4000) : null,
-      publishedAt: pubDate ? safeIso(pubDate) : null,
-      source: "rsshub",
-    });
+    // Nowcoder rows arrive as "Company | Title" + city-in-description; enrich
+    // pulls those into structured company/location (no-op for other sources).
+    items.push(
+      enrichNowcoderJob({
+        jobUrl: link,
+        title,
+        company: null,
+        location: null,
+        jobType: null,
+        jobLevel: null,
+        description: description ? description.slice(0, 4000) : null,
+        publishedAt: pubDate ? safeIso(pubDate) : null,
+        source: "rsshub",
+      }),
+    );
   }
   return items;
 }
