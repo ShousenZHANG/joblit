@@ -191,7 +191,10 @@ export function JobsClient({
 
   const reducedMotion = useReducedMotion();
   const showLoadingOverlay = (loading && !loadingMore) || isPending;
-  const listOpacityClass = showLoadingOverlay ? "opacity-70" : "opacity-100";
+  // Keep the list near-solid during loads/transitions — with keepPreviousData
+  // holding the previous rows, a heavy dim just reads as a flicker on fast
+  // filter switches. A barely-there fade still signals "working".
+  const listOpacityClass = showLoadingOverlay ? "opacity-95" : "opacity-100";
   const queryError = firstQueryError
     ? getErrorMessage(firstQueryError, "Failed to load jobs")
     : null;

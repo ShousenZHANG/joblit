@@ -8,6 +8,9 @@ import {
 } from "../utils/jobsQueryCache";
 
 const INFINITE_SCROLL_TRIGGER_RATIO = 0.8;
+// Below this many loaded rows, pull the next page even if the list still
+// overflows — keeps the list replenished as the user deletes.
+const REPLENISH_WATERMARK = 8;
 
 export function useJobPagination({
   queryString,
@@ -175,7 +178,13 @@ export function useJobPagination({
       const triggerPoint = viewport.scrollHeight * INFINITE_SCROLL_TRIGGER_RATIO;
       const isNearBottom =
         viewportBottom >= triggerPoint || viewport.scrollHeight <= viewport.clientHeight + 1;
-      if (!isNearBottom) return;
+      // Low-watermark replenish: pixel-based underfill only fires once the list
+      // is shorter than the viewport. When the user deletes from a still-
+      // overflowing list it would otherwise drain row by row. Top it back up
+      // whenever the loaded count drops below the watermark and pages remain.
+      // The `prev.includes(nextCursor)` dedupe below makes this loop-safe.
+      const belowWatermark = items.length < REPLENISH_WATERMARK;
+      if (!isNearBottom && !belowWatermark) return;
       setLoadedCursors((prev) => {
         if (prev.includes(nextCursor)) return prev;
         return [...prev, nextCursor];
