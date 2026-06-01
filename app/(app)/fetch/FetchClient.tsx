@@ -1023,7 +1023,10 @@ export function FetchClient() {
       </div>
       )}
 
-      <FetchHistory onRerun={handleRerun} />
+      {/* Recent fetches history is an AU-market feature (LinkedIn/Seek runs).
+          The CN market fetches from different sources and doesn't surface a
+          run history here, so hide it entirely. */}
+      {market !== "CN" ? <FetchHistory onRerun={handleRerun} /> : null}
     </div>
   );
 }
