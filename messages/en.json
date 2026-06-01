@@ -698,6 +698,8 @@
     "topThisMonth": "Top 20 This Month",
     "periodWeek": "This week",
     "periodMonth": "This month",
+    "hideNoise": "Hide noise",
+    "hideNoiseHint": "Filter out awesome-lists, tutorials, and non-English listings",
     "updated": "Updated",
     "view": "View",
     "starsRecently": "Stars gained this period",

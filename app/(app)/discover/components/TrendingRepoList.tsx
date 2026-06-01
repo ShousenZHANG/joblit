@@ -11,27 +11,45 @@ import { TrendingSkeleton } from "./DiscoverSkeleton";
 export function TrendingRepoList() {
   const t = useTranslations("discover");
   const [period, setPeriod] = useState<"weekly" | "monthly">("weekly");
+  const [clean, setClean] = useState(false);
   const queryClient = useQueryClient();
-  const { data, isLoading, error } = useTrendingRepos(period);
+  const { data, isLoading, error } = useTrendingRepos(period, clean);
 
   const repos = data?.repos ?? [];
 
   return (
     <section>
       {/* Section header */}
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between gap-2">
         <h2 className="text-base font-semibold text-foreground lg:text-lg">
           {period === "weekly" ? t("topThisWeek") : t("topThisMonth")}
         </h2>
-        <select
-          value={period}
-          onChange={(e) => setPeriod(e.target.value as "weekly" | "monthly")}
-          className="rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground outline-none transition-colors focus:border-brand-emerald-300 focus:ring-1 focus:ring-brand-emerald-100"
-          aria-label="Time period"
-        >
-          <option value="weekly">{t("periodWeek")}</option>
-          <option value="monthly">{t("periodMonth")}</option>
-        </select>
+        <div className="flex items-center gap-2">
+          {/* Optional noise filter — off = exact github.com/trending parity. */}
+          <button
+            type="button"
+            onClick={() => setClean((c) => !c)}
+            aria-pressed={clean}
+            title={t("hideNoiseHint")}
+            className={
+              "rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors " +
+              (clean
+                ? "border-brand-emerald-300 bg-brand-emerald-50 text-brand-emerald-700"
+                : "border-border bg-card text-muted-foreground hover:border-brand-emerald-200")
+            }
+          >
+            {t("hideNoise")}
+          </button>
+          <select
+            value={period}
+            onChange={(e) => setPeriod(e.target.value as "weekly" | "monthly")}
+            className="rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground outline-none transition-colors focus:border-brand-emerald-300 focus:ring-1 focus:ring-brand-emerald-100"
+            aria-label="Time period"
+          >
+            <option value="weekly">{t("periodWeek")}</option>
+            <option value="monthly">{t("periodMonth")}</option>
+          </select>
+        </div>
       </div>
 
       {/* Content */}

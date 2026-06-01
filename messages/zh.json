@@ -698,6 +698,8 @@
     "topThisMonth": "本月 Top 20",
     "periodWeek": "本周",
     "periodMonth": "本月",
+    "hideNoise": "过滤噪音",
+    "hideNoiseHint": "过滤掉 awesome 列表、教程及非英文项目",
     "updated": "更新于",
     "view": "查看",
     "starsRecently": "本周期新增 star",

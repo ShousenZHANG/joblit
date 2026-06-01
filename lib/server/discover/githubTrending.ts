@@ -116,6 +116,49 @@ export function parseTrendingHtml(html: string): TrendingRepo[] {
   return repos;
 }
 
+// ── Optional noise filter ───────────────────────────────────────────────
+// Off by default (the feed is official-parity). When enabled it drops the
+// archetypes that flood the official board but aren't reusable software:
+// predominantly-CJK listings, awesome-lists / roadmaps / interview-prep, and
+// description-less rows. The result is still an official-order subset.
+
+const CJK_RE = /[぀-ヿ㐀-䶿一-鿿豈-﫿ｦ-ﾟ]/g;
+const CJK_RATIO_THRESHOLD = 0.2;
+
+export function cjkRatio(text: string): number {
+  const stripped = (text || "").replace(/\s/g, "");
+  if (stripped.length === 0) return 0;
+  const cjk = stripped.match(CJK_RE)?.length ?? 0;
+  return cjk / stripped.length;
+}
+
+export function isMostlyCjk(text: string): boolean {
+  return cjkRatio(text) >= CJK_RATIO_THRESHOLD;
+}
+
+const LOW_SIGNAL_NAME_RE =
+  /(^awesome[-_])|(-?roadmap)|(tutorials?)|(interview)|(cheat[-_]?sheets?)|(free-programming)|(-?books?$)|(coding-?challenge)|(study-?notes?)|(learn(ing)?-?notes?)|(教程|面试|学习|指南|笔记|资料|导航|手册)/i;
+
+const LOW_SIGNAL_DESC_RE =
+  /(curated list)|(a list of)|(collection of (free|awesome|resources))|(awesome list)|(面试题)|(学习路线)/i;
+
+export function isLowSignalRepo(fullName: string, description: string | null): boolean {
+  const shortName = (fullName.split("/")[1] ?? fullName).toLowerCase();
+  if (LOW_SIGNAL_NAME_RE.test(shortName)) return true;
+  if (description && LOW_SIGNAL_DESC_RE.test(description)) return true;
+  return false;
+}
+
+/** Drop low-signal / mostly-CJK / description-less rows. Pure + tested. */
+export function filterTrendingNoise(repos: TrendingRepo[]): TrendingRepo[] {
+  return repos.filter((r) => {
+    if (!r.description || r.description.trim().length === 0) return false;
+    if (isMostlyCjk(`${r.fullName} ${r.description}`)) return false;
+    if (isLowSignalRepo(r.fullName, r.description)) return false;
+    return true;
+  });
+}
+
 /**
  * Fetch github.com/trending for the given period and parse it. No auth needed
  * (public HTML). `_token` is accepted for call-site compatibility but unused.

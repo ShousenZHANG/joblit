@@ -1,5 +1,28 @@
 import { describe, it, expect } from "vitest";
-import { parseTrendingHtml } from "./githubTrending";
+import {
+  parseTrendingHtml,
+  filterTrendingNoise,
+  isMostlyCjk,
+  isLowSignalRepo,
+} from "./githubTrending";
+import type { TrendingRepo } from "@/app/(app)/discover/types";
+
+function fakeRepo(over: Partial<TrendingRepo> = {}): TrendingRepo {
+  return {
+    id: 1,
+    fullName: "acme/widget",
+    description: "A fast widget framework.",
+    url: "https://github.com/acme/widget",
+    stars: 1000,
+    forks: 10,
+    starsGained: 100,
+    language: "TypeScript",
+    topics: [],
+    ownerAvatar: "",
+    pushedAt: "",
+    ...over,
+  };
+}
 
 // Minimal fixture mirroring the github.com/trending row markup.
 function article({
@@ -90,5 +113,40 @@ describe("parseTrendingHtml", () => {
 
   it("returns an empty array for markup with no repo rows", () => {
     expect(parseTrendingHtml("<div>nothing here</div>")).toEqual([]);
+  });
+});
+
+describe("filterTrendingNoise", () => {
+  it("keeps a genuine software repo", () => {
+    const kept = filterTrendingNoise([fakeRepo()]);
+    expect(kept).toHaveLength(1);
+  });
+
+  it("drops mostly-CJK listings", () => {
+    expect(isMostlyCjk("最全面的前端面试题学习资料")).toBe(true);
+    const out = filterTrendingNoise([
+      fakeRepo({ fullName: "x/interview-cn", description: "最全面的前端面试题学习资料大全" }),
+    ]);
+    expect(out).toHaveLength(0);
+  });
+
+  it("drops awesome-list / roadmap archetypes", () => {
+    expect(isLowSignalRepo("foo/awesome-python", "x")).toBe(true);
+    const out = filterTrendingNoise([
+      fakeRepo({ fullName: "foo/awesome-python", description: "A curated list of Python." }),
+    ]);
+    expect(out).toHaveLength(0);
+  });
+
+  it("drops description-less rows", () => {
+    expect(filterTrendingNoise([fakeRepo({ description: null })])).toHaveLength(0);
+  });
+
+  it("keeps a mostly-English repo with a couple CJK chars", () => {
+    expect(isMostlyCjk("Vite plugin for 中文 docs")).toBe(false);
+    const out = filterTrendingNoise([
+      fakeRepo({ fullName: "v/vite-cn", description: "Vite plugin for 中文 docs" }),
+    ]);
+    expect(out).toHaveLength(1);
   });
 });

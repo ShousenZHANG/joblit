@@ -53,6 +53,9 @@ export interface TrendingResponse {
   repos: TrendingRepo[];
   cached: boolean;
   fetchedAt: string;
+  /** True when a live fetch failed and we served the last-known-good payload
+   *  from cache regardless of its TTL (resilience fallback). */
+  stale?: boolean;
 }
 
 export interface VideosResponse {

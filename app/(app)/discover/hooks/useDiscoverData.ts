@@ -7,11 +7,16 @@ import type {
   VideoTimeWindow,
 } from "../types";
 
-export function useTrendingRepos(period: "weekly" | "monthly" = "weekly") {
+export function useTrendingRepos(
+  period: "weekly" | "monthly" = "weekly",
+  clean = false,
+) {
   return useQuery<TrendingResponse>({
-    queryKey: ["discover-trending", period],
+    queryKey: ["discover-trending", period, clean],
     queryFn: async () => {
-      const res = await fetch(`/api/discover/trending?period=${period}`);
+      const res = await fetch(
+        `/api/discover/trending?period=${period}${clean ? "&clean=1" : ""}`,
+      );
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
         throw new Error(json?.error ?? "Failed to load trending repos");
