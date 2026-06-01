@@ -9,7 +9,16 @@ import type { AdapterResult, RawCnJob } from "../types";
 //                    comma-separated path-only values like "/boss/foo,/liepin/..."
 // Defaults to a small curated set of recruitment routes.
 
-const DEFAULT_ROUTES = ["/liepin/campus"];
+// Nowcoder (牛客) is the most reliable official CN recruiting source RSSHub
+// maintains a route for: /nowcoder/jobcenter/:recruitType (2 = 社招广场 full-time,
+// 1 = 实习广场 internships). Liepin campus kept as a secondary. BOSS直聘 / 51job /
+// 智联 are intentionally NOT here — no maintained route, aggressive anti-bot,
+// and scraping them risks China's AUCL Art.13 / PIPL (see commit notes).
+const DEFAULT_ROUTES = [
+  "/nowcoder/jobcenter/2",
+  "/nowcoder/jobcenter/1",
+  "/liepin/campus",
+];
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 export interface RsshubAdapterOptions {

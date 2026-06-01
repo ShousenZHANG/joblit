@@ -9,10 +9,11 @@ import type { AdapterResult, RawCnJob } from "../types";
 // GITHUB_CN_JOB_REPOS (comma-separated "owner/repo" strings) if the user
 // wants to point at their own curated list.
 
-const DEFAULT_REPOS = [
-  "xtuhcy/china-it-jobs",
-  "xiaoymin/spring-boot-api-project-seed",
-];
+// Curated "China IT jobs / 内推 / 校招" aggregator repos whose README is a
+// parseable job table or bullet list. Override with GITHUB_CN_JOB_REPOS.
+// (The old `spring-boot-api-project-seed` entry was a code template, not a job
+// list — removed; it only produced parse noise.)
+const DEFAULT_REPOS = ["xtuhcy/china-it-jobs"];
 const DEFAULT_TIMEOUT_MS = 8000;
 
 export interface GithubAdapterOptions {
