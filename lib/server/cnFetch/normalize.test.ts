@@ -46,21 +46,21 @@ function makeRaw(partial: Partial<RawCnJob>): RawCnJob {
     jobLevel: null,
     description: null,
     publishedAt: null,
-    source: "v2ex",
+    source: "nowcoder",
     ...partial,
   };
 }
 
 describe("normalizeCnJobs", () => {
-  it("canonicalizes URLs and dedups cross-source", () => {
+  it("canonicalizes URLs and dedups duplicates", () => {
     const rows = normalizeCnJobs([
       makeRaw({
-        jobUrl: "https://example.com/job/1?utm_source=v2ex",
-        source: "v2ex",
+        jobUrl: "https://example.com/job/1?utm_source=nowcoder",
+        source: "nowcoder",
       }),
       makeRaw({
         jobUrl: "https://example.com/job/1?utm_campaign=foo",
-        source: "github",
+        source: "nowcoder",
       }),
     ]);
     expect(rows).toHaveLength(1);
@@ -181,15 +181,10 @@ describe("normalizeCnJobs", () => {
 
   it("preserves source tag", () => {
     const rows = normalizeCnJobs([
-      makeRaw({ jobUrl: "https://example.com/v", source: "v2ex" }),
-      makeRaw({ jobUrl: "https://example.com/g", source: "github" }),
-      makeRaw({ jobUrl: "https://example.com/r", source: "rsshub" }),
+      makeRaw({ jobUrl: "https://example.com/a", source: "nowcoder" }),
+      makeRaw({ jobUrl: "https://example.com/b", source: "nowcoder" }),
     ]);
-    expect(rows.map((r) => r.source).sort()).toEqual([
-      "github",
-      "rsshub",
-      "v2ex",
-    ]);
+    expect(rows.every((r) => r.source === "nowcoder")).toBe(true);
   });
 
   it("always emits market='CN'", () => {

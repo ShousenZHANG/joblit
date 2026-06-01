@@ -1,133 +1,73 @@
 import { describe, it, expect, vi } from "vitest";
 import { runCnFetch } from "./runCnFetch";
-import type { AdapterResult } from "./types";
+import type { AdapterResult, RawCnJob } from "./types";
 
-function ok(source: AdapterResult["source"], count: number): AdapterResult {
+function job(i: number, over: Partial<RawCnJob> = {}): RawCnJob {
   return {
-    source,
-    ok: true,
-    jobs: Array.from({ length: count }, (_, i) => ({
-      jobUrl: `https://${source}.example/job/${i}`,
-      title: `Role ${i}`,
-      company: null,
-      location: null,
-      jobType: null,
-      jobLevel: null,
-      description: null,
-      publishedAt: null,
-      source,
-    })),
+    jobUrl: `https://nowcoder.example/job/${i}`,
+    title: `Role ${i}`,
+    company: null,
+    location: null,
+    jobType: null,
+    jobLevel: null,
+    description: null,
+    publishedAt: null,
+    source: "nowcoder",
+    ...over,
   };
 }
 
-function fail(source: AdapterResult["source"], error: string): AdapterResult {
-  return { source, ok: false, jobs: [], error };
+function ok(count: number): AdapterResult {
+  return {
+    source: "nowcoder",
+    ok: true,
+    jobs: Array.from({ length: count }, (_, i) => job(i)),
+  };
+}
+
+function fail(error: string): AdapterResult {
+  return { source: "nowcoder", ok: false, jobs: [], error };
 }
 
 describe("runCnFetch", () => {
-  it("merges jobs from all enabled sources", async () => {
+  it("returns jobs from the nowcoder source", async () => {
     const result = await runCnFetch({
-      sources: ["v2ex", "github"],
-      adapters: {
-        v2ex: vi.fn().mockResolvedValue(ok("v2ex", 3)),
-        github: vi.fn().mockResolvedValue(ok("github", 2)),
-      },
+      adapters: { nowcoder: vi.fn().mockResolvedValue(ok(3)) },
     });
-    expect(result.jobs).toHaveLength(5);
-    expect(result.diagnostics).toEqual([
-      { source: "v2ex", ok: true, raw: 3 },
-      { source: "github", ok: true, raw: 2 },
-    ]);
+    expect(result.jobs).toHaveLength(3);
+    expect(result.diagnostics).toEqual([{ source: "nowcoder", ok: true, raw: 3 }]);
   });
 
-  it("keeps running when one source fails", async () => {
+  it("reports a failed source without throwing", async () => {
     const result = await runCnFetch({
-      sources: ["v2ex", "github"],
-      adapters: {
-        v2ex: vi.fn().mockResolvedValue(fail("v2ex", "v2ex_503")),
-        github: vi.fn().mockResolvedValue(ok("github", 2)),
-      },
-    });
-    expect(result.jobs).toHaveLength(2);
-    expect(result.diagnostics[0]).toMatchObject({ ok: false, error: "v2ex_503" });
-    expect(result.diagnostics[1]).toMatchObject({ ok: true, raw: 2 });
-  });
-
-  it("all sources fail => empty jobs + diagnostics preserved", async () => {
-    const result = await runCnFetch({
-      sources: ["v2ex", "github"],
-      adapters: {
-        v2ex: vi.fn().mockResolvedValue(fail("v2ex", "down")),
-        github: vi.fn().mockResolvedValue(fail("github", "down")),
-      },
+      adapters: { nowcoder: vi.fn().mockResolvedValue(fail("nowcoder_503")) },
     });
     expect(result.jobs).toEqual([]);
-    expect(result.diagnostics.every((d) => !d.ok)).toBe(true);
+    expect(result.diagnostics[0]).toMatchObject({ ok: false, error: "nowcoder_503" });
   });
 
-  it("adapter throw is caught and reported", async () => {
+  it("catches an adapter throw and reports it", async () => {
     const result = await runCnFetch({
-      sources: ["v2ex"],
-      adapters: {
-        v2ex: vi.fn().mockRejectedValue(new Error("boom")),
-      },
+      adapters: { nowcoder: vi.fn().mockRejectedValue(new Error("boom")) },
     });
     expect(result.jobs).toEqual([]);
     expect(result.diagnostics[0]).toMatchObject({
-      source: "v2ex",
+      source: "nowcoder",
       ok: false,
       error: "boom",
     });
   });
 
-  it("runs adapters in parallel (not sequential)", async () => {
-    let inflight = 0;
-    let maxInflight = 0;
-    const slow = vi.fn(async () => {
-      inflight++;
-      maxInflight = Math.max(maxInflight, inflight);
-      await new Promise((r) => setTimeout(r, 10));
-      inflight--;
-      return ok("v2ex", 1);
-    });
-    await runCnFetch({
-      sources: ["v2ex", "github", "rsshub"],
-      adapters: { v2ex: slow, github: slow, rsshub: slow },
-    });
-    expect(maxInflight).toBeGreaterThanOrEqual(2);
-  });
-
-  it("applies query filter via normalize", async () => {
+  it("applies the query filter via normalize", async () => {
     const result = await runCnFetch({
-      sources: ["v2ex"],
       queries: ["前端"],
       adapters: {
-        v2ex: vi.fn().mockResolvedValue({
-          source: "v2ex",
+        nowcoder: vi.fn().mockResolvedValue({
+          source: "nowcoder",
           ok: true,
           jobs: [
-            {
-              jobUrl: "https://v2ex.example/1",
-              title: "前端工程师",
-              company: null,
-              location: null,
-              jobType: null,
-              jobLevel: null,
-              description: null,
-              publishedAt: null,
-              source: "v2ex" as const,
-            },
-            {
-              jobUrl: "https://v2ex.example/2",
-              title: "产品经理",
-              company: null,
-              location: null,
-              jobType: null,
-              jobLevel: null,
-              description: null,
-              publishedAt: null,
-              source: "v2ex" as const,
-            },
+            job(1, { jobUrl: "https://nowcoder.example/a", title: "前端工程师" }),
+            job(2, { jobUrl: "https://nowcoder.example/b", title: "产品经理" }),
           ],
         }),
       },
@@ -136,37 +76,16 @@ describe("runCnFetch", () => {
     expect(result.jobs[0].title).toBe("前端工程师");
   });
 
-  it("applies excludeKeywords filter via normalize", async () => {
+  it("applies the excludeKeywords filter via normalize", async () => {
     const result = await runCnFetch({
-      sources: ["v2ex"],
       excludeKeywords: ["实习"],
       adapters: {
-        v2ex: vi.fn().mockResolvedValue({
-          source: "v2ex",
+        nowcoder: vi.fn().mockResolvedValue({
+          source: "nowcoder",
           ok: true,
           jobs: [
-            {
-              jobUrl: "https://v2ex.example/a",
-              title: "实习前端",
-              company: null,
-              location: null,
-              jobType: null,
-              jobLevel: null,
-              description: null,
-              publishedAt: null,
-              source: "v2ex" as const,
-            },
-            {
-              jobUrl: "https://v2ex.example/b",
-              title: "正式前端",
-              company: null,
-              location: null,
-              jobType: null,
-              jobLevel: null,
-              description: null,
-              publishedAt: null,
-              source: "v2ex" as const,
-            },
+            job(1, { jobUrl: "https://nowcoder.example/a", title: "实习前端" }),
+            job(2, { jobUrl: "https://nowcoder.example/b", title: "正式前端" }),
           ],
         }),
       },
@@ -175,13 +94,9 @@ describe("runCnFetch", () => {
     expect(result.jobs[0].title).toBe("正式前端");
   });
 
-  it("defaults to v2ex + github when sources omitted", async () => {
-    const v2exAdapter = vi.fn().mockResolvedValue(ok("v2ex", 1));
-    const githubAdapter = vi.fn().mockResolvedValue(ok("github", 1));
-    await runCnFetch({
-      adapters: { v2ex: v2exAdapter, github: githubAdapter },
-    });
-    expect(v2exAdapter).toHaveBeenCalledOnce();
-    expect(githubAdapter).toHaveBeenCalledOnce();
+  it("defaults to the nowcoder source when sources omitted", async () => {
+    const adapter = vi.fn().mockResolvedValue(ok(1));
+    await runCnFetch({ adapters: { nowcoder: adapter } });
+    expect(adapter).toHaveBeenCalledOnce();
   });
 });

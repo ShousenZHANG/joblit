@@ -1,7 +1,7 @@
 // Shared types across the CN fetch pipeline. Kept separate from Prisma
 // models so the adapters stay pure and unit-testable without a DB.
 
-export type CnSource = "v2ex" | "github" | "rsshub";
+export type CnSource = "nowcoder";
 
 /** Raw job discovered by an adapter before dedup / DB write. */
 export interface RawCnJob {

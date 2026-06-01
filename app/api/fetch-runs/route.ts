@@ -58,9 +58,9 @@ const CNSchema = z.object({
   market: z.literal("CN"),
   queries: z.array(z.string().min(1)).min(1),
   sources: z
-    .array(z.enum(["v2ex", "github", "rsshub"]))
+    .array(z.enum(["nowcoder"]))
     .optional()
-    .default(["v2ex", "github"]),
+    .default(["nowcoder"]),
   excludeKeywords: z.array(z.string()).optional().default([]),
 });
 

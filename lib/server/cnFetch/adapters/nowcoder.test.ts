@@ -1,9 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   isNowcoderUrl,
   parseNowcoderTitle,
   extractCnCity,
   enrichNowcoderJob,
+  parseRssItems,
+  fetchNowcoderJobs,
 } from "./nowcoder";
 import type { RawCnJob } from "../types";
 
@@ -17,7 +19,7 @@ function row(over: Partial<RawCnJob> = {}): RawCnJob {
     jobLevel: null,
     description: "<div>岗位职责... 工作地点：上海 薪资 25k</div>",
     publishedAt: null,
-    source: "rsshub",
+    source: "nowcoder",
     ...over,
   };
 }
@@ -73,13 +75,64 @@ describe("enrichNowcoderJob", () => {
     expect(out.title).toBe("后端开发工程师");
     expect(out.location).toBe("上海");
   });
-  it("is a no-op for non-nowcoder rows", () => {
-    const input = row({ jobUrl: "https://v2ex.com/t/1", title: "A | B" });
-    expect(enrichNowcoderJob(input)).toEqual(input);
-  });
   it("does not overwrite a company/location already present", () => {
     const out = enrichNowcoderJob(row({ company: "已知公司", location: "北京" }));
     expect(out.company).toBe("已知公司");
     expect(out.location).toBe("北京");
+  });
+});
+
+describe("parseRssItems", () => {
+  const xml = `<rss><channel>
+    <item>
+      <title>腾讯 | 高级前端工程师</title>
+      <link>https://www.nowcoder.com/jobs/detail/1</link>
+      <description><![CDATA[<div>工作地点：深圳 · 社招</div>]]></description>
+      <pubDate>Mon, 01 Jun 2026 10:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>美团 | 数据工程师</title>
+      <link>https://www.nowcoder.com/jobs/detail/2</link>
+      <description>北京岗位</description>
+    </item>
+  </channel></rss>`;
+
+  it("parses + enriches each RSS item", () => {
+    const items = parseRssItems(xml);
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({
+      jobUrl: "https://www.nowcoder.com/jobs/detail/1",
+      company: "腾讯",
+      title: "高级前端工程师",
+      location: "深圳",
+      source: "nowcoder",
+    });
+    expect(items[1]).toMatchObject({ company: "美团", title: "数据工程师", location: "北京" });
+  });
+
+  it("returns [] for empty input", () => {
+    expect(parseRssItems("")).toEqual([]);
+  });
+});
+
+describe("fetchNowcoderJobs", () => {
+  it("is a silent no-op when RSSHUB_URL / baseUrl is unset", async () => {
+    const res = await fetchNowcoderJobs({ baseUrl: undefined });
+    expect(res).toEqual({ source: "nowcoder", ok: true, jobs: [] });
+  });
+
+  it("fetches + dedups across routes when a baseUrl is given", async () => {
+    const xml = `<rss><channel><item>
+      <title>腾讯 | 前端</title><link>https://www.nowcoder.com/jobs/detail/1</link>
+      <description>深圳</description></item></channel></rss>`;
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(xml, { status: 200, headers: { "Content-Type": "text/xml" } }),
+    );
+    const res = await fetchNowcoderJobs({ baseUrl: "https://rss.example", fetchImpl });
+    // Two default routes, same single job URL → deduped to 1.
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(res.source).toBe("nowcoder");
+    expect(res.jobs).toHaveLength(1);
+    expect(res.jobs[0].company).toBe("腾讯");
   });
 });

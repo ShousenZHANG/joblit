@@ -1,7 +1,5 @@
 import type { AdapterResult, CnSource } from "./types";
-import { fetchV2exJobs } from "./adapters/v2exJobs";
-import { fetchGithubJobs } from "./adapters/githubJobs";
-import { fetchRsshubJobs } from "./adapters/rsshub";
+import { fetchNowcoderJobs } from "./adapters/nowcoder";
 import { normalizeCnJobs, type NormalizedCnJob } from "./normalize";
 
 // Multi-source orchestrator. Runs each enabled adapter in parallel (so a
@@ -12,7 +10,7 @@ import { normalizeCnJobs, type NormalizedCnJob } from "./normalize";
 export type CnFetchAdapter = (signal?: AbortSignal) => Promise<AdapterResult>;
 
 export interface RunCnFetchOptions {
-  /** Sources to include. Defaults to ["v2ex", "github"]. */
+  /** Sources to include. Only "nowcoder" is supported; defaults to it. */
   sources?: CnSource[];
   /** User's keyword filter (applied in normalize). */
   queries?: string[];
@@ -32,17 +30,11 @@ export interface RunCnFetchResult {
   }>;
 }
 
-const DEFAULT_SOURCES: CnSource[] = ["v2ex", "github"];
+const DEFAULT_SOURCES: CnSource[] = ["nowcoder"];
 
-function defaultAdapterFor(source: CnSource): () => Promise<AdapterResult> {
-  switch (source) {
-    case "v2ex":
-      return () => fetchV2exJobs();
-    case "github":
-      return () => fetchGithubJobs();
-    case "rsshub":
-      return () => fetchRsshubJobs();
-  }
+function defaultAdapterFor(_source: CnSource): () => Promise<AdapterResult> {
+  // Nowcoder is the only source.
+  return () => fetchNowcoderJobs();
 }
 
 export async function runCnFetch(

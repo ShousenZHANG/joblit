@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, RotateCcw } from "lucide-react";
+import { Briefcase, ChevronDown, RotateCcw } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -60,14 +60,6 @@ const COMMON_TITLES = [
   "Mobile Developer",
   "Product Engineer",
   "Security Engineer",
-];
-
-// New CN source list — aggregator-based, no cookie auth, no Bing proxy.
-// See lib/server/cnFetch for implementation details.
-const CN_SOURCES = [
-  { value: "v2ex", label: "V2EX 酷工作", hint: "稳定免费主源" },
-  { value: "github", label: "GitHub 招聘 Repos", hint: "社区维护 · 内推 / 校招" },
-  { value: "rsshub", label: "自建 RSSHub", hint: "牛客等官方源 · 需配置 RSSHUB_URL" },
 ];
 
 const CN_COMMON_TITLES = [
@@ -495,10 +487,6 @@ export function FetchClient() {
   const [location, setLocation] = useState("Sydney, New South Wales, Australia");
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const market = useMarket();
-  // rsshub is selected by default so that once RSSHUB_URL is configured the
-  // Nowcoder (牛客) routes flow with zero extra UI steps ("self-host → works").
-  // When RSSHUB_URL is unset the adapter is a silent no-op, so this is harmless.
-  const [cnSources, setCnSources] = useState<string[]>(["v2ex", "github", "rsshub"]);
   const [cnExcludeKeywords, setCnExcludeKeywords] = useState("");
   const [hoursOld, setHoursOld] = useState(48);
   const [smartExpand, setSmartExpand] = useState(true);
@@ -618,7 +606,7 @@ export function FetchClient() {
       ? {
           market: "CN",
           queries,
-          sources: cnSources,
+          sources: ["nowcoder"],
           excludeKeywords: cnExcludeKeywords
             .split(/[,，]/)
             .map((s) => s.trim())
@@ -693,7 +681,6 @@ export function FetchClient() {
   function handleRerun(run: FetchRunListItem) {
     if (run.title) setJobTitle(run.title);
     if (run.market === "CN") {
-      if (run.sources?.length) setCnSources(run.sources);
       if (run.excludeKeywords) setCnExcludeKeywords(run.excludeKeywords.join(", "));
     } else {
       if (run.location) setLocation(run.location);
@@ -967,49 +954,20 @@ export function FetchClient() {
           </div>
           <div className="space-y-2">
             <Label>{t("cnSources")}</Label>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="h-10 w-full justify-between gap-2 rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground/85 shadow-none"
-                >
-                  <span className="truncate text-left">
-                    {cnSources.length
-                      ? CN_SOURCES.filter((s) => cnSources.includes(s.value))
-                          .map((s) => s.label)
-                          .join("、")
-                      : "选择来源"}
-                  </span>
-                  <ChevronDown className="h-4 w-4 shrink-0 opacity-60" aria-hidden />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-72">
-                {CN_SOURCES.map((s) => (
-                  <DropdownMenuCheckboxItem
-                    key={s.value}
-                    checked={cnSources.includes(s.value)}
-                    onSelect={(e) => e.preventDefault()}
-                    onCheckedChange={(checked) => {
-                      setCnSources((prev) =>
-                        checked
-                          ? [...prev, s.value]
-                          : prev.filter((v) => v !== s.value),
-                      );
-                    }}
-                    className="items-start gap-1 py-2"
-                  >
-                    <span className="flex flex-col">
-                      <span className="text-sm font-medium text-foreground">{s.label}</span>
-                      <span className="text-[11px] leading-snug text-muted-foreground">
-                        {s.hint}
-                      </span>
-                    </span>
-                  </DropdownMenuCheckboxItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {/* Single fixed source — Nowcoder. A read-only indicator, not a
+                picker: all CN job data comes from 牛客网 via the configured
+                RSSHub instance, so there is nothing to choose. */}
+            <div className="flex h-10 items-center gap-2.5 rounded-lg border border-border bg-muted/30 px-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-brand-emerald-50 text-brand-emerald-700 ring-1 ring-brand-emerald-100">
+                <Briefcase className="h-3.5 w-3.5" aria-hidden />
+              </span>
+              <span className="text-sm font-medium text-foreground">牛客网</span>
+              <span className="ml-auto rounded-full bg-brand-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-brand-emerald-700 ring-1 ring-brand-emerald-100">
+                官方源
+              </span>
+            </div>
             <p className="text-[11px] text-muted-foreground">
-              V2EX 主源稳定免费；RSSHub 需自行配置 RSSHUB_URL。
+              职位均来自牛客网招聘广场。
             </p>
           </div>
           <div className="space-y-2">

@@ -19,8 +19,8 @@ interface CnRunConfig {
 
 /**
  * Parse the FetchRun.queries JSON into the shape the aggregator expects.
- * Defaults to V2EX + GitHub when sources is missing or malformed so a
- * stale run from before the CN aggregator migration still works.
+ * Defaults to Nowcoder when sources is missing or malformed (the only CN
+ * source) so stale runs from before the single-source migration still work.
  */
 export function readCnRunConfig(raw: unknown): CnRunConfig {
   const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
@@ -33,12 +33,10 @@ export function readCnRunConfig(raw: unknown): CnRunConfig {
       )
     : [];
   const rawSources = Array.isArray(obj.sources) ? (obj.sources as unknown[]) : [];
-  const sources = rawSources.filter(
-    (s): s is CnSource => s === "v2ex" || s === "github" || s === "rsshub",
-  );
+  const sources = rawSources.filter((s): s is CnSource => s === "nowcoder");
   return {
     queries,
-    sources: sources.length > 0 ? sources : ["v2ex", "github"],
+    sources: sources.length > 0 ? sources : ["nowcoder"],
     excludeKeywords,
   };
 }
