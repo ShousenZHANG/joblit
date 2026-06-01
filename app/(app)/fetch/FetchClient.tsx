@@ -495,7 +495,10 @@ export function FetchClient() {
   const [location, setLocation] = useState("Sydney, New South Wales, Australia");
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const market = useMarket();
-  const [cnSources, setCnSources] = useState<string[]>(["v2ex", "github"]);
+  // rsshub is selected by default so that once RSSHUB_URL is configured the
+  // Nowcoder (牛客) routes flow with zero extra UI steps ("self-host → works").
+  // When RSSHUB_URL is unset the adapter is a silent no-op, so this is harmless.
+  const [cnSources, setCnSources] = useState<string[]>(["v2ex", "github", "rsshub"]);
   const [cnExcludeKeywords, setCnExcludeKeywords] = useState("");
   const [hoursOld, setHoursOld] = useState(48);
   const [smartExpand, setSmartExpand] = useState(true);
