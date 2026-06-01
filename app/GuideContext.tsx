@@ -12,6 +12,7 @@ import {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { useMarket } from "@/hooks/useMarket";
 import { useTranslations } from "next-intl";
 import {
   ArrowRight,
@@ -150,6 +151,9 @@ export function GuideProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const userId = session?.user?.id ?? null;
+  // CN market support is limited to Resume + Discover; the onboarding guide is
+  // a Jobs/Fetch-centric flow, so it's disabled there entirely.
+  const isCN = useMarket() === "CN";
   const tg = useTranslations("guide");
 
   const [loading, setLoading] = useState(false);
@@ -287,7 +291,7 @@ export function GuideProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const fetchState = useCallback(async () => {
-    if (!userId) {
+    if (!userId || isCN) {
       setState(null);
       return;
     }
@@ -319,7 +323,7 @@ export function GuideProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, isCN]);
 
   useEffect(() => {
     void fetchState();
@@ -441,7 +445,7 @@ export function GuideProvider({ children }: { children: ReactNode }) {
   // is not typing in an input. Mirrors the Linear / Vercel / GitHub
   // convention.
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || isCN) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.repeat) return;
@@ -466,7 +470,7 @@ export function GuideProvider({ children }: { children: ReactNode }) {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [panelOpen, userId]);
+  }, [panelOpen, userId, isCN]);
 
   // Stable callback so consumers passing isTaskHighlighted into
   // React.memo'd children don't blow their memo cache on every render.

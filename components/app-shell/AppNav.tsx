@@ -155,6 +155,7 @@ export function AppNav() {
               {email}
             </a>
           ) : null}
+          {!isCN ? (
           <button
             type="button"
             onClick={openGuide}
@@ -192,6 +193,7 @@ export function AppNav() {
               </span>
             ) : null}
           </button>
+          ) : null}
 
           <div className="hidden lg:inline-flex">
             <LocaleSwitcher />
@@ -238,15 +240,17 @@ export function AppNav() {
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={openGuide}>
-                <CircleHelp className="mr-2 h-4 w-4" />
-                <span>{t("guide")}</span>
-                {state ? (
-                  <span className="ml-auto rounded-full bg-brand-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-brand-emerald-700">
-                    {state.completedCount}/{state.totalCount}
-                  </span>
-                ) : null}
-              </DropdownMenuItem>
+              {!isCN ? (
+                <DropdownMenuItem onClick={openGuide}>
+                  <CircleHelp className="mr-2 h-4 w-4" />
+                  <span>{t("guide")}</span>
+                  {state ? (
+                    <span className="ml-auto rounded-full bg-brand-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-brand-emerald-700">
+                      {state.completedCount}/{state.totalCount}
+                    </span>
+                  ) : null}
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem asChild>
                 <div className="flex flex-col gap-1 py-1">
                   <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
