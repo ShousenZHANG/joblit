@@ -1,93 +1,94 @@
 import { describe, it, expect } from "vitest";
-import {
-  cjkRatio,
-  isMostlyCjk,
-  isLowSignalRepo,
-  passesQualityGate,
-  rankRepos,
-} from "./githubTrending";
-import type { TrendingRepo } from "@/app/(app)/discover/types";
+import { parseTrendingHtml } from "./githubTrending";
 
-function repo(over: Partial<TrendingRepo & { archived: boolean }> = {}) {
-  return {
-    id: 1,
-    fullName: "acme/widget",
-    description: "A fast widget framework.",
-    url: "https://github.com/acme/widget",
-    stars: 1000,
-    forks: 10,
-    language: "TypeScript",
-    topics: [],
-    ownerAvatar: "",
-    pushedAt: "",
-    archived: false,
-    ...over,
-  };
+// Minimal fixture mirroring the github.com/trending row markup.
+function article({
+  owner,
+  repo,
+  desc,
+  lang,
+  stars,
+  forks,
+  gained,
+}: {
+  owner: string;
+  repo: string;
+  desc: string;
+  lang?: string;
+  stars: string;
+  forks: string;
+  gained: string;
+}): string {
+  const langSpan = lang
+    ? `<span class="d-inline-block ml-0 mr-3"><span class="repo-language-color" style="background-color: #3178c6"></span><span itemprop="programmingLanguage">${lang}</span></span>`
+    : "";
+  return `<article class="Box-row">
+    <h2 class="h3 lh-condensed">
+      <a href="/${owner}/${repo}" class="Link"><span class="text-normal">${owner} /</span>${repo}</a>
+    </h2>
+    <p class="col-9 color-fg-muted my-1 pr-4">${desc}</p>
+    <div class="f6 color-fg-muted mt-2">
+      ${langSpan}
+      <a href="/${owner}/${repo}/stargazers" class="Link--muted d-inline-block mr-3"><svg></svg>${stars}</a>
+      <a href="/${owner}/${repo}/forks" class="Link--muted d-inline-block mr-3"><svg></svg>${forks}</a>
+      <span class="d-inline-block float-sm-right"><svg></svg>${gained} stars this month</span>
+    </div>
+  </article>`;
 }
 
-describe("cjkRatio / isMostlyCjk", () => {
-  it("is ~0 for English text", () => {
-    expect(cjkRatio("A fast widget framework")).toBeLessThan(0.05);
-    expect(isMostlyCjk("A fast widget framework")).toBe(false);
-  });
-  it("flags predominantly Chinese text", () => {
-    expect(isMostlyCjk("最全面的前端面试题学习资料")).toBe(true);
-  });
-  it("keeps a mostly-English repo that has a couple CJK chars", () => {
-    expect(isMostlyCjk("Vite plugin for 中文 docs")).toBe(false);
-  });
-});
+const FIXTURE = `<div class="Box">
+  ${article({ owner: "openai", repo: "whisper", desc: "Robust speech recognition via &amp; large-scale weak supervision.", lang: "Python", stars: "75,123", forks: "8,901", gained: "1,234" })}
+  ${article({ owner: "vercel", repo: "next.js", desc: "The React Framework.", lang: "TypeScript", stars: "120,000", forks: "25,000", gained: "987" })}
+</div>`;
 
-describe("isLowSignalRepo", () => {
-  it("drops awesome lists, roadmaps, interview/tutorial repos", () => {
-    expect(isLowSignalRepo("sindresorhus/awesome-nodejs", "A curated list")).toBe(true);
-    expect(isLowSignalRepo("kamranahmedse/developer-roadmap", "Roadmaps")).toBe(true);
-    expect(isLowSignalRepo("user/coding-interview-university", "prep")).toBe(true);
-    expect(isLowSignalRepo("EbookFoundation/free-programming-books", "books")).toBe(true);
-  });
-  it("keeps real software", () => {
-    expect(isLowSignalRepo("vercel/next.js", "The React framework")).toBe(false);
-    expect(isLowSignalRepo("acme/widget", "A fast widget framework.")).toBe(false);
-  });
-});
-
-describe("passesQualityGate", () => {
-  it("requires a description", () => {
-    expect(passesQualityGate(repo({ description: null }), 100)).toBe(false);
-    expect(passesQualityGate(repo({ description: "" }), 100)).toBe(false);
-  });
-  it("drops archived + below-floor + mostly-CJK + low-signal", () => {
-    expect(passesQualityGate(repo({ archived: true }), 100)).toBe(false);
-    expect(passesQualityGate(repo({ stars: 40 }), 100)).toBe(false);
-    expect(
-      passesQualityGate(repo({ fullName: "x/面试", description: "最全面试题资料库" }), 100),
-    ).toBe(false);
-    expect(
-      passesQualityGate(repo({ fullName: "x/awesome-go", description: "A curated list" }), 100),
-    ).toBe(false);
-  });
-  it("passes a genuinely popular project", () => {
-    expect(passesQualityGate(repo({ stars: 2500 }), 100)).toBe(true);
-  });
-});
-
-describe("rankRepos", () => {
-  it("filters noise, sorts by stars desc, trims to 20", () => {
-    const input = [
-      repo({ id: 1, fullName: "a/awesome-x", description: "curated", stars: 9000 }),
-      repo({ id: 2, fullName: "b/real", description: "Real tool", stars: 300 }),
-      repo({ id: 3, fullName: "c/real2", description: "Another", stars: 800 }),
-      repo({ id: 4, fullName: "d/noDesc", description: null, stars: 5000 }),
-    ];
-    const out = rankRepos(input, "weekly");
-    expect(out.map((r) => r.id)).toEqual([3, 2]); // awesome + noDesc dropped, sorted desc
-    // archived helper field is stripped from the public shape
-    expect((out[0] as Record<string, unknown>).archived).toBeUndefined();
+describe("parseTrendingHtml", () => {
+  it("parses repos in document order", () => {
+    const repos = parseTrendingHtml(FIXTURE);
+    expect(repos).toHaveLength(2);
+    expect(repos.map((r) => r.fullName)).toEqual(["openai/whisper", "vercel/next.js"]);
   });
 
-  it("applies the higher monthly floor", () => {
-    const input = [repo({ id: 1, description: "Real", stars: 300 })];
-    expect(rankRepos(input, "weekly").length).toBe(1); // floor 100
-    expect(rankRepos(input, "monthly").length).toBe(0); // floor 500
+  it("extracts the core fields per repo", () => {
+    const [whisper] = parseTrendingHtml(FIXTURE);
+    expect(whisper.fullName).toBe("openai/whisper");
+    expect(whisper.url).toBe("https://github.com/openai/whisper");
+    expect(whisper.language).toBe("Python");
+    expect(whisper.stars).toBe(75123);
+    expect(whisper.forks).toBe(8901);
+    expect(whisper.starsGained).toBe(1234);
+    expect(whisper.ownerAvatar).toBe("https://github.com/openai.png?size=48");
+  });
+
+  it("decodes HTML entities in the description", () => {
+    const [whisper] = parseTrendingHtml(FIXTURE);
+    expect(whisper.description).toBe(
+      "Robust speech recognition via & large-scale weak supervision.",
+    );
+  });
+
+  it("derives a stable numeric id from the full name", () => {
+    const a = parseTrendingHtml(FIXTURE);
+    const b = parseTrendingHtml(FIXTURE);
+    expect(a[0].id).toBe(b[0].id);
+    expect(a[0].id).not.toBe(a[1].id);
+    expect(Number.isInteger(a[0].id)).toBe(true);
+  });
+
+  it("handles a repo with no language gracefully", () => {
+    const html = article({
+      owner: "torvalds",
+      repo: "linux",
+      desc: "Linux kernel source tree.",
+      stars: "180,000",
+      forks: "53,000",
+      gained: "450",
+    });
+    const [linux] = parseTrendingHtml(`<div>${html}</div>`);
+    expect(linux.language).toBeNull();
+    expect(linux.stars).toBe(180000);
+  });
+
+  it("returns an empty array for markup with no repo rows", () => {
+    expect(parseTrendingHtml("<div>nothing here</div>")).toEqual([]);
   });
 });

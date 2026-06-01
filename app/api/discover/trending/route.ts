@@ -28,10 +28,9 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Authoritative GitHub Search source + quality gate (see githubTrending.ts):
-    // real star counts, raised star floor, drops archived / mostly-CJK /
-    // awesome-list-and-tutorial noise so the feed reads as genuinely popular.
-    const repos = await fetchTrendingRepos(period, process.env.GITHUB_TOKEN);
+    // Scrapes github.com/trending?since={period} for exact parity with the
+    // official leaderboard (no public API exists; see githubTrending.ts).
+    const repos = await fetchTrendingRepos(period);
 
     const response: TrendingResponse = {
       repos,

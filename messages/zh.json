@@ -700,6 +700,7 @@
     "periodMonth": "本月",
     "updated": "更新于",
     "view": "查看",
+    "starsRecently": "本周期新增 star",
     "retry": "重试",
     "noRepos": "暂无趋势仓库。",
     "errorRepos": "加载趋势仓库失败",

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
-import { Star, GitFork, ExternalLink } from "lucide-react";
+import { Star, GitFork, ExternalLink, TrendingUp } from "lucide-react";
 import type { TrendingRepo } from "../types";
 import { relativeTime, formatCount } from "../utils";
 
@@ -102,6 +102,15 @@ export function TrendingRepoCard({ repo }: { repo: TrendingRepo }) {
             <GitFork className="h-3 w-3" />
             {formatCount(repo.forks)}
           </span>
+          {repo.starsGained > 0 && (
+            <span
+              className="flex items-center gap-1 font-semibold text-brand-emerald-600"
+              title={t("starsRecently")}
+            >
+              <TrendingUp className="h-3 w-3" />
+              {formatCount(repo.starsGained)}
+            </span>
+          )}
           {repo.pushedAt && (
             <span>{t("updated")} {relativeTime(repo.pushedAt, locale)}</span>
           )}

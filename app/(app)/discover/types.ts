@@ -5,6 +5,8 @@ export interface TrendingRepo {
   url: string;
   stars: number;
   forks: number;
+  /** Stars gained in the selected period (matches github.com/trending). */
+  starsGained: number;
   language: string | null;
   topics: string[];
   ownerAvatar: string;

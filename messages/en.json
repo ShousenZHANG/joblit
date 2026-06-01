@@ -700,6 +700,7 @@
     "periodMonth": "This month",
     "updated": "Updated",
     "view": "View",
+    "starsRecently": "Stars gained this period",
     "retry": "Retry",
     "noRepos": "No trending repos found.",
     "errorRepos": "Failed to load trending repos",
