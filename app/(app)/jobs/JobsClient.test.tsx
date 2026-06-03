@@ -1071,17 +1071,27 @@ describe("JobsClient", () => {
       status: "APPLIED" as const,
       title: "Applied role",
     };
-    const appliedFilterKey = ["jobs", "limit=50&status=APPLIED&sort=newest", null] as const;
+    // The jobs list is backed by useInfiniteQuery, so a cached filter is an
+    // InfiniteData payload keyed by ["jobs", queryString] (no cursor segment).
+    const appliedFilterKey = ["jobs", "limit=50&status=APPLIED&sort=newest"] as const;
     client.setQueryData<{
-      items: typeof baseJob[];
-      nextCursor: string | null;
-      totalCount?: number;
-      facets?: { jobLevels?: string[] };
+      pages: Array<{
+        items: Array<{ id: string; status: string }>;
+        nextCursor: string | null;
+        totalCount?: number;
+        facets?: { jobLevels?: string[] };
+      }>;
+      pageParams: Array<string | null>;
     }>(appliedFilterKey, {
-      items: [appliedOnlyJob],
-      nextCursor: null,
-      totalCount: 5,
-      facets: { jobLevels: ["Mid"] },
+      pages: [
+        {
+          items: [appliedOnlyJob],
+          nextCursor: null,
+          totalCount: 5,
+          facets: { jobLevels: ["Mid"] },
+        },
+      ],
+      pageParams: [null],
     });
 
     const mockFetch = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
@@ -1124,12 +1134,11 @@ describe("JobsClient", () => {
 
     await waitFor(() => {
       const cache = client.getQueryData<{
-        items: Array<{ id: string; status: string }>;
-        totalCount?: number;
+        pages: Array<{ items: Array<{ id: string; status: string }>; totalCount?: number }>;
       }>(appliedFilterKey);
-      expect(cache?.items).toHaveLength(1);
-      expect(cache?.items[0]?.id).toBe(appliedOnlyJob.id);
-      expect(cache?.totalCount).toBe(5);
+      expect(cache?.pages[0]?.items).toHaveLength(1);
+      expect(cache?.pages[0]?.items[0]?.id).toBe(appliedOnlyJob.id);
+      expect(cache?.pages[0]?.totalCount).toBe(5);
     });
   });
 

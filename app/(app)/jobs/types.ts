@@ -25,14 +25,6 @@ export type JobsResponse = {
   };
 };
 
-export type JobsQueryRollbackPatch = {
-  queryHash: string;
-  queryKey: readonly unknown[];
-  previousItem: JobItem;
-  previousIndex: number;
-  previousTotalCount?: number;
-};
-
 export type CvSource = "ai" | "base" | "manual_import";
 export type CoverSource = "ai" | "fallback" | "manual_import";
 

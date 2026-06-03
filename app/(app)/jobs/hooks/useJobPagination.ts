@@ -1,10 +1,10 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef } from "react";
+import { keepPreviousData, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import type { JobItem, JobsResponse } from "../types";
 import {
-  buildInitialJobsPageData,
-  getJobsPageQueryKey,
-  hydrateInitialJobsPage,
+  buildInitialJobsInfiniteData,
+  getJobsListQueryKey,
+  type JobsInfiniteData,
 } from "../utils/jobsQueryCache";
 
 const INFINITE_SCROLL_TRIGGER_RATIO = 0.8;
@@ -26,97 +26,62 @@ export function useJobPagination({
   scrollRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const queryClient = useQueryClient();
-  const [loadedCursors, setLoadedCursors] = useState<(string | null)[]>([null]);
 
-  const resetPagination = useMemo(
-    () => () => {
-      setLoadedCursors([null]);
-    },
-    [],
-  );
-
-  // Reset pagination when filters/search change. Adjusting state during
-  // render via the "store info from previous renders" pattern avoids the
-  // cascading-render side-effect of doing this work in useEffect.
-  // https://react.dev/reference/react/useState#storing-information-from-previous-renders
-  const [prevQueryString, setPrevQueryString] = useState(queryString);
-  if (prevQueryString !== queryString) {
-    setPrevQueryString(queryString);
-    setLoadedCursors([null]);
-  }
-
+  // The SSR payload only seeds the very first filter the page mounts with.
   const initialQueryRef = useRef<string | null>(null);
   if (initialQueryRef.current === null) {
     initialQueryRef.current = queryString;
   }
-  const didHydrateInitialRef = useRef(false);
 
-  useLayoutEffect(() => {
-    if (didHydrateInitialRef.current) return;
-    const shouldUseInitial =
-      initialItems.length > 0 &&
-      loadedCursors.length === 1 &&
-      loadedCursors[0] === null &&
-      initialQueryRef.current === queryString;
-    if (!shouldUseInitial) return;
-
-    hydrateInitialJobsPage({
-      queryClient,
-      queryString,
-      initialItems,
-      initialCursor: initialCursor ?? null,
-    });
-    didHydrateInitialRef.current = true;
-  }, [initialCursor, initialItems, loadedCursors, queryClient, queryString]);
-
-  const pageQueries = useQueries({
-    queries: loadedCursors.map((loadedCursor, pageIndex) => ({
-      queryKey: getJobsPageQueryKey(queryString, loadedCursor),
-      queryFn: async ({ signal }: { signal: AbortSignal }): Promise<JobsResponse> => {
-        const sp = new URLSearchParams(queryString);
-        if (loadedCursor) sp.set("cursor", loadedCursor);
-        const res = await fetch(`/api/jobs?${sp.toString()}`, { signal });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(json?.error || "Failed to load jobs");
-        return {
-          items: json.items ?? [],
-          nextCursor: json.nextCursor ?? null,
-          totalCount: typeof json.totalCount === "number" ? json.totalCount : undefined,
-          facets: json.facets ?? undefined,
-        };
-      },
-      enabled: Boolean(queryString),
-      placeholderData: (prev: JobsResponse | undefined) => prev,
-      refetchOnWindowFocus: false,
-      staleTime: 60_000,
-      initialData: (): JobsResponse | undefined => {
-        const shouldUseInitial =
-          pageIndex === 0 &&
-          initialItems.length > 0 &&
-          loadedCursor === null &&
-          loadedCursors.length === 1 &&
-          initialQueryRef.current === queryString;
-        if (!shouldUseInitial) return undefined;
-        return buildInitialJobsPageData({
-          initialItems,
-          initialCursor: initialCursor ?? null,
-        });
-      },
-    })),
+  // One infinite query per filter. `placeholderData: keepPreviousData` keeps
+  // the ENTIRE previous filter's pages on screen while the new filter loads —
+  // no cursor-array shrink, no per-slot observer remap, so switching filters
+  // can no longer truncate the list, flash a skeleton, or surface the wrong
+  // filter's rows. Pagination + delete-backfill go through `fetchNextPage`.
+  const query = useInfiniteQuery({
+    queryKey: getJobsListQueryKey(queryString),
+    queryFn: async ({
+      pageParam,
+      signal,
+    }: {
+      pageParam: string | null;
+      signal: AbortSignal;
+    }): Promise<JobsResponse> => {
+      const sp = new URLSearchParams(queryString);
+      if (pageParam) sp.set("cursor", pageParam);
+      const res = await fetch(`/api/jobs?${sp.toString()}`, { signal });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || "Failed to load jobs");
+      return {
+        items: json.items ?? [],
+        nextCursor: json.nextCursor ?? null,
+        totalCount: typeof json.totalCount === "number" ? json.totalCount : undefined,
+        facets: json.facets ?? undefined,
+      };
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: Boolean(queryString),
+    placeholderData: keepPreviousData,
+    refetchOnWindowFocus: false,
+    staleTime: 60_000,
+    initialData: (): JobsInfiniteData | undefined => {
+      if (initialItems.length === 0 || initialQueryRef.current !== queryString) {
+        return undefined;
+      }
+      return buildInitialJobsInfiniteData({
+        initialItems,
+        initialCursor: initialCursor ?? null,
+      });
+    },
   });
 
-  const pageResponses = useMemo(
-    () =>
-      pageQueries
-        .map((query) => query.data)
-        .filter((data): data is JobsResponse => Boolean(data)),
-    [pageQueries],
-  );
+  const queryData = query.data;
 
   const mergedItems = useMemo(() => {
     const merged: JobItem[] = [];
     const seenIds = new Set<string>();
-    for (const page of pageResponses) {
+    for (const page of queryData?.pages ?? []) {
       for (const item of page.items ?? []) {
         if (seenIds.has(item.id)) continue;
         seenIds.add(item.id);
@@ -124,47 +89,62 @@ export function useJobPagination({
       }
     }
     return merged;
-  }, [pageResponses]);
+  }, [queryData]);
 
   const items = useMemo(
     () => mergedItems.filter((item) => !suppressedDeletedIds.has(item.id)),
     [mergedItems, suppressedDeletedIds],
   );
 
-  const totalCount = pageResponses[0]?.totalCount;
-  const nextCursor = pageResponses.length
-    ? pageResponses[pageResponses.length - 1]?.nextCursor ?? null
+  const firstPage = queryData?.pages[0];
+  const totalCount = firstPage?.totalCount;
+  const nextCursor = query.hasNextPage
+    ? queryData?.pages[queryData.pages.length - 1]?.nextCursor ?? null
     : null;
-  const loading = pageQueries.some((query) => query.isFetching);
-  const firstQuery = pageQueries[0];
-  // The current filter's first page has truly "resolved" only once real
-  // (non-placeholder) data arrives for its query key. Gating the empty state
-  // on this — rather than on `!loading` — kills the "No jobs" flash that
-  // appeared in the 1-frame gap between a filter switch resetting the cursor
-  // list and React Query starting the next fetch (isFetching false + 0 items).
-  const firstPageResolved = Boolean(
-    firstQuery && firstQuery.isSuccess && !firstQuery.isPlaceholderData,
-  );
-  // Skeleton only when nothing is on screen yet and the page hasn't resolved.
+  const loading = query.isFetching;
+  // First page has truly resolved only once real (non-placeholder) data lands.
+  // Gating empty/skeleton on this — not on `!loading` — kills both the "No
+  // jobs" flash during a filter switch and the wrong-filter rows that the old
+  // per-cursor placeholder could surface.
+  const firstPageResolved = query.isSuccess && !query.isPlaceholderData;
   const loadingInitial = !firstPageResolved && items.length === 0;
-  // Empty state only when the resolved first page genuinely has zero items —
-  // never during a transition or while showing kept-previous (placeholder) data.
   const showEmpty = firstPageResolved && items.length === 0;
-  // True only when fetching additional pages (not the first page refresh)
-  const loadingMore =
-    pageQueries.length > 1 &&
-    pageQueries[pageQueries.length - 1].isFetching &&
-    !pageQueries[0].isFetching;
+  const loadingMore = query.isFetchingNextPage;
 
-  const firstQueryError = pageQueries.find((query) => query.error)?.error;
+  const firstQueryError = query.error;
+
+  // Synthesized for JobsClient's import-refresh detector, which checks "are we
+  // on the first page only?". pageParams[0] is always null (first page).
+  const loadedCursors = queryData?.pageParams ?? [null];
+
+  // Reset to the first page (used after a fetch import lands). Slicing the
+  // cached pages down to page 0 lets the subsequent invalidate refetch a
+  // single page instead of replaying every loaded page.
+  const resetPagination = useMemo(
+    () => () => {
+      queryClient.setQueryData<JobsInfiniteData>(
+        getJobsListQueryKey(queryString),
+        (old) => {
+          if (!old || old.pages.length <= 1) return old;
+          return {
+            pages: old.pages.slice(0, 1),
+            pageParams: old.pageParams.slice(0, 1),
+          };
+        },
+      );
+    },
+    [queryClient, queryString],
+  );
 
   const jobLevelOptions = useMemo(() => {
     const fromItems = items
       .map((item) => item.jobLevel)
       .filter((level): level is string => Boolean(level));
-    const fromFacets = pageResponses[0]?.facets?.jobLevels ?? [];
+    const fromFacets = firstPage?.facets?.jobLevels ?? [];
     return Array.from(new Set([...fromFacets, ...fromItems]));
-  }, [items, pageResponses]);
+  }, [items, firstPage]);
+
+  const { fetchNextPage, hasNextPage } = query;
 
   useEffect(() => {
     const root = scrollRef.current;
@@ -173,22 +153,19 @@ export function useJobPagination({
     if (!viewport) return;
 
     const tryLoadMore = () => {
-      if (loading || !nextCursor) return;
+      if (loading || !hasNextPage) return;
       const viewportBottom = viewport.scrollTop + viewport.clientHeight;
       const triggerPoint = viewport.scrollHeight * INFINITE_SCROLL_TRIGGER_RATIO;
       const isNearBottom =
         viewportBottom >= triggerPoint || viewport.scrollHeight <= viewport.clientHeight + 1;
-      // Low-watermark replenish: pixel-based underfill only fires once the list
-      // is shorter than the viewport. When the user deletes from a still-
-      // overflowing list it would otherwise drain row by row. Top it back up
-      // whenever the loaded count drops below the watermark and pages remain.
-      // The `prev.includes(nextCursor)` dedupe below makes this loop-safe.
+      // Low-watermark replenish: the pixel-based underfill check only fires
+      // once the list is shorter than the viewport, so deleting from a still-
+      // overflowing list would drain it row by row. Top it back up whenever the
+      // loaded count drops below the watermark and pages remain. fetchNextPage
+      // is internally de-duped by React Query, so this can't double-fetch.
       const belowWatermark = items.length < REPLENISH_WATERMARK;
       if (!isNearBottom && !belowWatermark) return;
-      setLoadedCursors((prev) => {
-        if (prev.includes(nextCursor)) return prev;
-        return [...prev, nextCursor];
-      });
+      void fetchNextPage();
     };
 
     const onScroll = () => {
@@ -201,11 +178,9 @@ export function useJobPagination({
       viewport.removeEventListener("scroll", onScroll);
       window.cancelAnimationFrame(rafId);
     };
-    // `items.length` is in the deps so that when a delete (single or batch)
-    // shrinks the list below the viewport, the underfill check re-runs and
-    // auto-loads the next page to backfill the gap — via the existing
-    // append-page path, so no dim and no totalCount flicker.
-  }, [loading, nextCursor, scrollRef, items.length]);
+    // `items.length` is a dep so that when a delete (single or batch) shrinks
+    // the list, the underfill/watermark check re-runs and backfills the gap.
+  }, [loading, hasNextPage, fetchNextPage, scrollRef, items.length]);
 
   return {
     items,
@@ -215,7 +190,7 @@ export function useJobPagination({
     loadingInitial,
     showEmpty,
     loadingMore,
-    pageResponses,
+    pageResponses: queryData?.pages ?? [],
     loadedCursors,
     resetPagination,
     firstQueryError,

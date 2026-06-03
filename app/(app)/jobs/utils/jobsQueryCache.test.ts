@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
 import type { JobItem, JobsResponse } from "../types";
 import {
-  buildInitialJobsPageData,
-  getJobsPageQueryKey,
-  hydrateInitialJobsPage,
+  buildInitialJobsInfiniteData,
+  getJobsListQueryKey,
   patchGeneratedJobArtifactInJobsCache,
   patchJobStatusInJobsCache,
+  removeJobFromJobsCache,
   removeJobsFromJobsCache,
-  restoreJobsPatches,
   restoreJobsSnapshots,
+  type JobsInfiniteData,
 } from "./jobsQueryCache";
 
 const baseJob: JobItem = {
@@ -25,6 +25,12 @@ const baseJob: JobItem = {
   updatedAt: new Date().toISOString(),
 };
 
+const appliedOnlyJob = {
+  ...baseJob,
+  id: "22222222-2222-2222-2222-222222222222",
+  status: "APPLIED" as const,
+};
+
 function createClient() {
   return new QueryClient({
     defaultOptions: {
@@ -33,87 +39,76 @@ function createClient() {
   });
 }
 
+// Build an InfiniteData payload from one or more page responses. The first
+// page param is always null (the first page is fetched with no cursor).
+function infinite(...pages: JobsResponse[]): JobsInfiniteData {
+  return {
+    pages,
+    pageParams: pages.map((_, index) => (index === 0 ? null : `cursor-${index}`)),
+  };
+}
+
 describe("jobs query cache helpers", () => {
-  it("hydrates the first jobs page from SSR data and keeps existing facets stable", () => {
-    const client = createClient();
-    const key = getJobsPageQueryKey("status=ALL", null);
-    client.setQueryData<JobsResponse>(key, {
-      items: [{ ...baseJob, id: "old", title: "Old cache" }],
-      nextCursor: null,
-      totalCount: 99,
-      facets: { jobLevels: ["Senior"] },
-    });
-
-    hydrateInitialJobsPage({
-      queryClient: client,
-      queryString: "status=ALL",
-      initialItems: [baseJob],
-      initialCursor: "next",
-    });
-
-    expect(client.getQueryData<JobsResponse>(key)).toMatchObject({
-      items: [baseJob],
-      nextCursor: "next",
-      totalCount: 99,
-      facets: { jobLevels: ["Senior"] },
-    });
-  });
-
-  it("builds initial page data with job-level facets from the current payload", () => {
+  it("builds initial infinite data with job-level facets from the current payload", () => {
     expect(
-      buildInitialJobsPageData({
+      buildInitialJobsInfiniteData({
         initialItems: [baseJob, { ...baseJob, id: "2", jobLevel: "Senior" }],
         initialCursor: null,
       }),
     ).toMatchObject({
-      items: [baseJob, { ...baseJob, id: "2", jobLevel: "Senior" }],
-      nextCursor: null,
-      facets: { jobLevels: ["Mid", "Senior"] },
+      pages: [
+        {
+          items: [baseJob, { ...baseJob, id: "2", jobLevel: "Senior" }],
+          nextCursor: null,
+          facets: { jobLevels: ["Mid", "Senior"] },
+        },
+      ],
+      pageParams: [null],
     });
   });
 
-  it("patches status-filtered caches and rolls back the exact touched queries", () => {
+  it("patches status-filtered caches and rolls back via snapshots", () => {
     const client = createClient();
-    const allKey = getJobsPageQueryKey("status=ALL", null);
-    const newKey = getJobsPageQueryKey("status=NEW", null);
-    const appliedKey = getJobsPageQueryKey("status=APPLIED", null);
-    const appliedOnlyJob = { ...baseJob, id: "22222222-2222-2222-2222-222222222222", status: "APPLIED" as const };
+    const allKey = getJobsListQueryKey("status=ALL");
+    const newKey = getJobsListQueryKey("status=NEW");
+    const appliedKey = getJobsListQueryKey("status=APPLIED");
 
-    client.setQueryData<JobsResponse>(allKey, {
-      items: [baseJob],
-      nextCursor: null,
-      totalCount: 1,
-    });
-    client.setQueryData<JobsResponse>(newKey, {
-      items: [baseJob],
-      nextCursor: null,
-      totalCount: 1,
-    });
-    client.setQueryData<JobsResponse>(appliedKey, {
-      items: [appliedOnlyJob],
-      nextCursor: null,
-      totalCount: 5,
-    });
+    client.setQueryData<JobsInfiniteData>(
+      allKey,
+      infinite({ items: [baseJob], nextCursor: null, totalCount: 1 }),
+    );
+    client.setQueryData<JobsInfiniteData>(
+      newKey,
+      infinite({ items: [baseJob], nextCursor: null, totalCount: 1 }),
+    );
+    client.setQueryData<JobsInfiniteData>(
+      appliedKey,
+      infinite({ items: [appliedOnlyJob], nextCursor: null, totalCount: 5 }),
+    );
 
-    const patches = patchJobStatusInJobsCache(client, baseJob.id, "APPLIED");
+    const snapshots = patchJobStatusInJobsCache(client, baseJob.id, "APPLIED");
 
-    expect(client.getQueryData<JobsResponse>(allKey)?.items[0]?.status).toBe("APPLIED");
-    expect(client.getQueryData<JobsResponse>(newKey)).toMatchObject({
+    expect(
+      client.getQueryData<JobsInfiniteData>(allKey)?.pages[0]?.items[0]?.status,
+    ).toBe("APPLIED");
+    // Moving NEW→APPLIED drops the row from the NEW-only cache and decrements it.
+    expect(client.getQueryData<JobsInfiniteData>(newKey)?.pages[0]).toMatchObject({
       items: [],
       totalCount: 0,
     });
-    expect(client.getQueryData<JobsResponse>(appliedKey)).toMatchObject({
+    // The APPLIED cache holds a different job and must stay untouched.
+    expect(client.getQueryData<JobsInfiniteData>(appliedKey)?.pages[0]).toMatchObject({
       items: [appliedOnlyJob],
       totalCount: 5,
     });
 
-    restoreJobsPatches(client, patches);
+    restoreJobsSnapshots(client, snapshots);
 
-    expect(client.getQueryData<JobsResponse>(allKey)).toMatchObject({
+    expect(client.getQueryData<JobsInfiniteData>(allKey)?.pages[0]).toMatchObject({
       items: [baseJob],
       totalCount: 1,
     });
-    expect(client.getQueryData<JobsResponse>(newKey)).toMatchObject({
+    expect(client.getQueryData<JobsInfiniteData>(newKey)?.pages[0]).toMatchObject({
       items: [baseJob],
       totalCount: 1,
     });
@@ -121,54 +116,75 @@ describe("jobs query cache helpers", () => {
 
   it("removes selected ids without decrementing unrelated cached queries", () => {
     const client = createClient();
-    const allKey = getJobsPageQueryKey("status=ALL", null);
-    const appliedKey = getJobsPageQueryKey("status=APPLIED", null);
-    const appliedOnlyJob = { ...baseJob, id: "22222222-2222-2222-2222-222222222222", status: "APPLIED" as const };
+    const allKey = getJobsListQueryKey("status=ALL");
+    const appliedKey = getJobsListQueryKey("status=APPLIED");
 
-    client.setQueryData<JobsResponse>(allKey, {
-      items: [baseJob, appliedOnlyJob],
-      nextCursor: null,
-      totalCount: 2,
-    });
-    client.setQueryData<JobsResponse>(appliedKey, {
-      items: [appliedOnlyJob],
-      nextCursor: null,
-      totalCount: 5,
-    });
+    client.setQueryData<JobsInfiniteData>(
+      allKey,
+      infinite({ items: [baseJob, appliedOnlyJob], nextCursor: null, totalCount: 2 }),
+    );
+    client.setQueryData<JobsInfiniteData>(
+      appliedKey,
+      infinite({ items: [appliedOnlyJob], nextCursor: null, totalCount: 5 }),
+    );
 
     const snapshots = removeJobsFromJobsCache(client, new Set([baseJob.id]));
 
-    expect(client.getQueryData<JobsResponse>(allKey)).toMatchObject({
+    expect(client.getQueryData<JobsInfiniteData>(allKey)?.pages[0]).toMatchObject({
       items: [appliedOnlyJob],
       totalCount: 1,
     });
-    expect(client.getQueryData<JobsResponse>(appliedKey)).toMatchObject({
+    expect(client.getQueryData<JobsInfiniteData>(appliedKey)?.pages[0]).toMatchObject({
       items: [appliedOnlyJob],
       totalCount: 5,
     });
 
     restoreJobsSnapshots(client, snapshots);
 
-    expect(client.getQueryData<JobsResponse>(allKey)).toMatchObject({
+    expect(client.getQueryData<JobsInfiniteData>(allKey)?.pages[0]).toMatchObject({
       items: [baseJob, appliedOnlyJob],
       totalCount: 2,
     });
   });
 
+  it("removes a job from whichever page holds it and decrements page-0 totalCount", () => {
+    const client = createClient();
+    const allKey = getJobsListQueryKey("status=ALL");
+    const page2Job = { ...baseJob, id: "33333333-3333-3333-3333-333333333333" };
+
+    client.setQueryData<JobsInfiniteData>(
+      allKey,
+      infinite(
+        { items: [baseJob], nextCursor: "cursor-1", totalCount: 2 },
+        { items: [page2Job], nextCursor: null },
+      ),
+    );
+
+    const snapshots = removeJobFromJobsCache(client, page2Job.id);
+
+    const data = client.getQueryData<JobsInfiniteData>(allKey);
+    expect(data?.pages[0]).toMatchObject({ items: [baseJob], totalCount: 1 });
+    expect(data?.pages[1]?.items).toEqual([]);
+
+    restoreJobsSnapshots(client, snapshots);
+
+    const restored = client.getQueryData<JobsInfiniteData>(allKey);
+    expect(restored?.pages[0]?.totalCount).toBe(2);
+    expect(restored?.pages[1]?.items).toEqual([page2Job]);
+  });
+
   it("patches generated artifact metadata across every cached jobs page", () => {
     const client = createClient();
-    const allKey = getJobsPageQueryKey("status=ALL", null);
-    const newKey = getJobsPageQueryKey("status=NEW", "cursor-1");
-    client.setQueryData<JobsResponse>(allKey, {
-      items: [baseJob],
-      nextCursor: "cursor-1",
-      totalCount: 1,
-    });
-    client.setQueryData<JobsResponse>(newKey, {
-      items: [baseJob],
-      nextCursor: null,
-      totalCount: 1,
-    });
+    const allKey = getJobsListQueryKey("status=ALL");
+    const newKey = getJobsListQueryKey("status=NEW");
+    client.setQueryData<JobsInfiniteData>(
+      allKey,
+      infinite({ items: [baseJob], nextCursor: "cursor-1", totalCount: 1 }),
+    );
+    client.setQueryData<JobsInfiniteData>(
+      newKey,
+      infinite({ items: [baseJob], nextCursor: null, totalCount: 1 }),
+    );
 
     patchGeneratedJobArtifactInJobsCache({
       queryClient: client,
@@ -180,7 +196,7 @@ describe("jobs query cache helpers", () => {
     });
 
     for (const key of [allKey, newKey]) {
-      expect(client.getQueryData<JobsResponse>(key)?.items[0]).toMatchObject({
+      expect(client.getQueryData<JobsInfiniteData>(key)?.pages[0]?.items[0]).toMatchObject({
         resumePdfUrl: "blob:https://example.com/resume.pdf",
         resumePdfName: "resume.pdf",
       });

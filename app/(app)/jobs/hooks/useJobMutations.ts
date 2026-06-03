@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction, type ToastActionElement } from "@/components/ui/toast";
 import { useGuide } from "@/app/GuideContext";
-import type { JobItem, JobStatus, JobsQueryRollbackPatch } from "../types";
+import type { JobItem, JobStatus } from "../types";
 import { getErrorMessage } from "../types";
 import { runChunkedBatchDelete } from "./runChunkedBatchDelete";
 import {
@@ -14,8 +14,8 @@ import {
   patchJobStatusInJobsCache,
   removeJobFromJobsCache,
   removeJobsFromJobsCache,
-  restoreJobsPatches,
   restoreJobsSnapshots,
+  type JobsQuerySnapshot,
 } from "../utils/jobsQueryCache";
 
 // Undo window for single-job deletes. The server DELETE is deferred until this
@@ -23,7 +23,7 @@ import {
 const UNDO_WINDOW_MS = 5000;
 
 type PendingDelete = {
-  rollbackPatches: JobsQueryRollbackPatch[];
+  rollbackSnapshots: JobsQuerySnapshot[];
   timer: ReturnType<typeof setTimeout>;
 };
 
@@ -66,10 +66,10 @@ export function useJobMutations({
       setError(null);
       setUpdatingIds((prev) => new Set(prev).add(id));
       await cancelJobsQueries(queryClient);
-      return { rollbackPatches: patchJobStatusInJobsCache(queryClient, id, status) };
+      return { rollbackSnapshots: patchJobStatusInJobsCache(queryClient, id, status) };
     },
     onError: (e, _variables, context) => {
-      restoreJobsPatches(queryClient, context?.rollbackPatches);
+      restoreJobsSnapshots(queryClient, context?.rollbackSnapshots);
       invalidateActiveJobsQueries(queryClient);
 
       setError(getErrorMessage(e, "Failed to update status"));
@@ -162,7 +162,7 @@ export function useJobMutations({
         // row out and decremented totalCount, so no refetch is needed.
       } catch (e) {
         // Commit failed — bring the row back and surface the error.
-        restoreJobsPatches(queryClient, pending.rollbackPatches);
+        restoreJobsSnapshots(queryClient, pending.rollbackSnapshots);
         setSuppressedDeletedIds((prev) => {
           if (!prev.has(id)) return prev;
           const next = new Set(prev);
@@ -196,7 +196,7 @@ export function useJobMutations({
       if (!pending) return;
       clearTimeout(pending.timer);
       pendingDeletesRef.current.delete(id);
-      restoreJobsPatches(queryClient, pending.rollbackPatches);
+      restoreJobsSnapshots(queryClient, pending.rollbackSnapshots);
       setSuppressedDeletedIds((prev) => {
         if (!prev.has(id)) return prev;
         const next = new Set(prev);
@@ -223,11 +223,11 @@ export function useJobMutations({
       if (selectedId === id) {
         setSelectedId(items.find((it) => it.id !== id)?.id ?? null);
       }
-      const rollbackPatches = removeJobFromJobsCache(queryClient, id);
+      const rollbackSnapshots = removeJobFromJobsCache(queryClient, id);
       const timer = setTimeout(() => {
         void finalizeDelete(id);
       }, UNDO_WINDOW_MS);
-      pendingDeletesRef.current.set(id, { rollbackPatches, timer });
+      pendingDeletesRef.current.set(id, { rollbackSnapshots, timer });
       // Premium undo toast (Gmail/Linear): a NEUTRAL surface — a delete isn't a
       // "success", so the previous emerald-green styling was semantically
       // wrong — an emerald Undo that pops, and a countdown bar that visibly

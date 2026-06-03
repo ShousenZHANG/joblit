@@ -1,10 +1,15 @@
-import type { QueryClient, QueryKey } from "@tanstack/react-query";
-import type { JobItem, JobsQueryRollbackPatch, JobsResponse, JobStatus } from "../types";
+import type { InfiniteData, QueryClient, QueryKey } from "@tanstack/react-query";
+import type { JobItem, JobsResponse, JobStatus } from "../types";
 
 export const JOBS_QUERY_KEY = ["jobs"] as const;
 
-export function getJobsPageQueryKey(queryString: string, cursor: string | null) {
-  return [JOBS_QUERY_KEY[0], queryString, cursor] as const;
+// One infinite query per filter (queryString). Pages are nested under
+// `data.pages`; `data.pageParams[0]` is always `null` (the first page is
+// fetched with no cursor). totalCount/facets live on page 0.
+export type JobsInfiniteData = InfiniteData<JobsResponse, string | null>;
+
+export function getJobsListQueryKey(queryString: string) {
+  return [JOBS_QUERY_KEY[0], queryString] as const;
 }
 
 export function getJobDetailsQueryKey(jobId: string | null) {
@@ -50,178 +55,64 @@ function decrementCount(count: number | undefined, by: number) {
   return typeof count === "number" ? Math.max(0, count - by) : count;
 }
 
-export function hydrateInitialJobsPage({
-  queryClient,
-  queryString,
+function isInfiniteJobsData(data: unknown): data is JobsInfiniteData {
+  return Boolean(data) && Array.isArray((data as JobsInfiniteData).pages);
+}
+
+// Apply a per-page transform across every loaded page. The returned `removed`
+// counts are summed and subtracted from page 0's totalCount (the server total
+// for the filter), so the displayed count stays correct after optimistic edits.
+function mapJobsPages(
+  data: JobsInfiniteData,
+  transform: (items: JobItem[]) => { items: JobItem[]; removed: number },
+): JobsInfiniteData {
+  let totalRemoved = 0;
+  const pages = data.pages.map((page) => {
+    const result = transform(page.items ?? []);
+    totalRemoved += result.removed;
+    return { ...page, items: result.items };
+  });
+  if (totalRemoved > 0 && pages.length > 0) {
+    pages[0] = {
+      ...pages[0],
+      totalCount: decrementCount(pages[0].totalCount, totalRemoved),
+    };
+  }
+  return { ...data, pages };
+}
+
+export function buildInitialJobsInfiniteData({
   initialItems,
   initialCursor,
 }: {
-  queryClient: QueryClient;
-  queryString: string;
   initialItems: JobItem[];
   initialCursor: string | null;
-}) {
-  const initialLevels = getJobLevels(initialItems);
-  const key = getJobsPageQueryKey(queryString, null);
-  queryClient.setQueryData<JobsResponse>(key, (old) => ({
-    ...old,
-    items: initialItems,
-    nextCursor: initialCursor,
-    facets: {
-      ...(old?.facets ?? {}),
-      jobLevels: old?.facets?.jobLevels ?? initialLevels,
-    },
-    totalCount: old?.totalCount,
-  }));
-}
-
-export function buildInitialJobsPageData({
-  initialItems,
-  initialCursor,
-}: {
-  initialItems: JobItem[];
-  initialCursor: string | null;
-}): JobsResponse {
+}): JobsInfiniteData {
   return {
-    items: initialItems,
-    nextCursor: initialCursor,
-    facets: {
-      jobLevels: getJobLevels(initialItems),
-    },
+    pages: [
+      {
+        items: initialItems,
+        nextCursor: initialCursor,
+        facets: { jobLevels: getJobLevels(initialItems) },
+      },
+    ],
+    pageParams: [null],
   };
-}
-
-export function restoreJobsPatch(old: JobsResponse | undefined, patch: JobsQueryRollbackPatch) {
-  if (!old || !Array.isArray(old.items)) return old;
-  const nextItems = [...old.items];
-  const currentIndex = nextItems.findIndex((it) => it.id === patch.previousItem.id);
-  if (currentIndex >= 0) {
-    nextItems[currentIndex] = patch.previousItem;
-  } else {
-    const insertAt = Math.max(0, Math.min(patch.previousIndex, nextItems.length));
-    nextItems.splice(insertAt, 0, patch.previousItem);
-  }
-  return {
-    ...old,
-    items: nextItems,
-    totalCount:
-      typeof patch.previousTotalCount === "number" ? patch.previousTotalCount : old.totalCount,
-  };
-}
-
-export function restoreJobsPatches(
-  queryClient: QueryClient,
-  patches: JobsQueryRollbackPatch[] | undefined,
-) {
-  for (const patch of patches ?? []) {
-    queryClient.setQueryData<JobsResponse>(patch.queryKey, (old) => restoreJobsPatch(old, patch));
-  }
-}
-
-export function patchJobStatusInJobsCache(
-  queryClient: QueryClient,
-  id: string,
-  status: JobStatus,
-) {
-  const rollbackByQueryHash = new Map<string, JobsQueryRollbackPatch>();
-
-  for (const query of getJobsQueryEntries(queryClient)) {
-    const key = query.queryKey;
-    const queryHash = query.queryHash;
-    const currentFilter = readJobsQueryStatusFilter(key);
-    const shouldKeep = currentFilter === "ALL" || currentFilter === status;
-
-    queryClient.setQueryData<JobsResponse>(key, (old) => {
-      if (!old || !Array.isArray(old.items)) return old;
-
-      const previousIndex = old.items.findIndex((it) => it.id === id);
-      if (previousIndex === -1) return old;
-
-      if (!rollbackByQueryHash.has(queryHash)) {
-        rollbackByQueryHash.set(queryHash, {
-          queryHash,
-          queryKey: key,
-          previousItem: old.items[previousIndex],
-          previousIndex,
-          previousTotalCount:
-            typeof old.totalCount === "number" ? old.totalCount : undefined,
-        });
-      }
-
-      const didRemove = !shouldKeep;
-      return {
-        ...old,
-        items: shouldKeep
-          ? old.items.map((it) => (it.id === id ? { ...it, status } : it))
-          : old.items.filter((it) => it.id !== id),
-        totalCount: didRemove ? decrementCount(old.totalCount, 1) : old.totalCount,
-      };
-    });
-  }
-
-  return Array.from(rollbackByQueryHash.values());
-}
-
-export function removeJobFromJobsCache(queryClient: QueryClient, id: string) {
-  const rollbackByQueryHash = new Map<string, JobsQueryRollbackPatch>();
-
-  for (const query of getJobsQueryEntries(queryClient)) {
-    const key = query.queryKey;
-    const queryHash = query.queryHash;
-
-    queryClient.setQueryData<JobsResponse>(key, (old) => {
-      if (!old || !Array.isArray(old.items)) return old;
-
-      const previousIndex = old.items.findIndex((it) => it.id === id);
-      if (previousIndex === -1) return old;
-
-      if (!rollbackByQueryHash.has(queryHash)) {
-        rollbackByQueryHash.set(queryHash, {
-          queryHash,
-          queryKey: key,
-          previousItem: old.items[previousIndex],
-          previousIndex,
-          previousTotalCount:
-            typeof old.totalCount === "number" ? old.totalCount : undefined,
-        });
-      }
-
-      return {
-        ...old,
-        items: old.items.filter((it) => it.id !== id),
-        totalCount: decrementCount(old.totalCount, 1),
-      };
-    });
-  }
-
-  return Array.from(rollbackByQueryHash.values());
 }
 
 export type JobsQuerySnapshot = {
   queryKey: QueryKey;
-  data: JobsResponse | undefined;
+  data: JobsInfiniteData | undefined;
 };
 
-export function removeJobsFromJobsCache(queryClient: QueryClient, ids: Set<string>) {
-  const rollbackSnapshots: JobsQuerySnapshot[] = [];
-
-  for (const query of getJobsQueryEntries(queryClient)) {
-    const key = query.queryKey;
-    const currentData = queryClient.getQueryData<JobsResponse>(key);
-    rollbackSnapshots.push({ queryKey: key, data: currentData });
-
-    queryClient.setQueryData<JobsResponse>(key, (old) => {
-      if (!old || !Array.isArray(old.items)) return old;
-      const removedCount = old.items.filter((it) => ids.has(it.id)).length;
-      return {
-        ...old,
-        items: old.items.filter((it) => !ids.has(it.id)),
-        totalCount: decrementCount(old.totalCount, removedCount),
-      };
-    });
-  }
-
-  return rollbackSnapshots;
+// Snapshot every cached jobs query so an optimistic mutation can be rolled
+// back to the EXACT prior state (pages, params, counts) on failure/undo —
+// strictly more accurate than the old per-item index patches.
+function snapshotJobsQueries(queryClient: QueryClient): JobsQuerySnapshot[] {
+  return getJobsQueryEntries(queryClient).map((query) => ({
+    queryKey: query.queryKey,
+    data: queryClient.getQueryData<JobsInfiniteData>(query.queryKey),
+  }));
 }
 
 export function restoreJobsSnapshots(
@@ -233,6 +124,73 @@ export function restoreJobsSnapshots(
   }
 }
 
+export function patchJobStatusInJobsCache(
+  queryClient: QueryClient,
+  id: string,
+  status: JobStatus,
+): JobsQuerySnapshot[] {
+  const snapshots = snapshotJobsQueries(queryClient);
+
+  for (const query of getJobsQueryEntries(queryClient)) {
+    const currentFilter = readJobsQueryStatusFilter(query.queryKey);
+    const shouldKeep = currentFilter === "ALL" || currentFilter === status;
+
+    queryClient.setQueryData<JobsInfiniteData>(query.queryKey, (old) => {
+      if (!isInfiniteJobsData(old)) return old;
+      return mapJobsPages(old, (items) => {
+        if (shouldKeep) {
+          return {
+            items: items.map((it) => (it.id === id ? { ...it, status } : it)),
+            removed: 0,
+          };
+        }
+        const next = items.filter((it) => it.id !== id);
+        return { items: next, removed: items.length - next.length };
+      });
+    });
+  }
+
+  return snapshots;
+}
+
+export function removeJobFromJobsCache(
+  queryClient: QueryClient,
+  id: string,
+): JobsQuerySnapshot[] {
+  const snapshots = snapshotJobsQueries(queryClient);
+
+  for (const query of getJobsQueryEntries(queryClient)) {
+    queryClient.setQueryData<JobsInfiniteData>(query.queryKey, (old) => {
+      if (!isInfiniteJobsData(old)) return old;
+      return mapJobsPages(old, (items) => {
+        const next = items.filter((it) => it.id !== id);
+        return { items: next, removed: items.length - next.length };
+      });
+    });
+  }
+
+  return snapshots;
+}
+
+export function removeJobsFromJobsCache(
+  queryClient: QueryClient,
+  ids: Set<string>,
+): JobsQuerySnapshot[] {
+  const snapshots = snapshotJobsQueries(queryClient);
+
+  for (const query of getJobsQueryEntries(queryClient)) {
+    queryClient.setQueryData<JobsInfiniteData>(query.queryKey, (old) => {
+      if (!isInfiniteJobsData(old)) return old;
+      return mapJobsPages(old, (items) => {
+        const next = items.filter((it) => !ids.has(it.id));
+        return { items: next, removed: items.length - next.length };
+      });
+    });
+  }
+
+  return snapshots;
+}
+
 export function patchGeneratedJobArtifactInJobsCache({
   queryClient,
   id,
@@ -242,13 +200,13 @@ export function patchGeneratedJobArtifactInJobsCache({
   id: string;
   patch: Partial<Pick<JobItem, "resumePdfUrl" | "resumePdfName" | "coverPdfUrl">>;
 }) {
-  for (const [key] of queryClient.getQueriesData<JobsResponse>({ queryKey: JOBS_QUERY_KEY })) {
-    queryClient.setQueryData<JobsResponse>(key, (old) => {
-      if (!old || !Array.isArray(old.items)) return old;
-      return {
-        ...old,
-        items: old.items.map((it) => (it.id === id ? { ...it, ...patch } : it)),
-      };
+  for (const query of getJobsQueryEntries(queryClient)) {
+    queryClient.setQueryData<JobsInfiniteData>(query.queryKey, (old) => {
+      if (!isInfiniteJobsData(old)) return old;
+      return mapJobsPages(old, (items) => ({
+        items: items.map((it) => (it.id === id ? { ...it, ...patch } : it)),
+        removed: 0,
+      }));
     });
   }
 }
