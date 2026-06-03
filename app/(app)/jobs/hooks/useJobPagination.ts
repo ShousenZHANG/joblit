@@ -108,7 +108,11 @@ export function useJobPagination({
   // per-cursor placeholder could surface.
   const firstPageResolved = query.isSuccess && !query.isPlaceholderData;
   const loadingInitial = !firstPageResolved && items.length === 0;
-  const showEmpty = firstPageResolved && items.length === 0;
+  // Empty state keys on `mergedItems` (the actual fetched result), NOT `items`
+  // (which also strips ids in `suppressedDeletedIds`). Otherwise a list whose
+  // rows are mid-delete — still present in cache but suppressed — would read as
+  // "No jobs found" even though the query returned rows.
+  const showEmpty = firstPageResolved && mergedItems.length === 0;
   const loadingMore = query.isFetchingNextPage;
 
   const firstQueryError = query.error;

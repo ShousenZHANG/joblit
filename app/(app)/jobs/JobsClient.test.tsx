@@ -144,6 +144,29 @@ describe("JobsClient", () => {
     expect((await screen.findAllByText("Frontend Engineer")).length).toBeGreaterThan(0);
   });
 
+  it("keeps jobs visible (no false empty) when switching status filters and back to All", async () => {
+    // Regression: switching to a status filter and back to All used to flash /
+    // stick on "No jobs found" because the per-cursor useQueries placeholder
+    // broke on filter change. With useInfiniteQuery + keepPreviousData the
+    // previous rows must stay until the new filter resolves, and the empty
+    // state must never appear while rows exist.
+    const user = userEvent.setup();
+    renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
+    expect((await screen.findAllByText("Frontend Engineer")).length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("button", { name: messages.jobs.statusNew }));
+    await waitFor(() => {
+      expect(screen.queryByText(messages.jobs.noJobs)).not.toBeInTheDocument();
+      expect(screen.getAllByText("Frontend Engineer").length).toBeGreaterThan(0);
+    });
+
+    await user.click(screen.getByRole("button", { name: messages.common.all }));
+    await waitFor(() => {
+      expect(screen.queryByText(messages.jobs.noJobs)).not.toBeInTheDocument();
+      expect(screen.getAllByText("Frontend Engineer").length).toBeGreaterThan(0);
+    });
+  });
+
   it("does not render fit snapshot UI and never requests fit-analysis", async () => {
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
     await screen.findAllByText("Frontend Engineer");

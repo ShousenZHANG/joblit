@@ -9,7 +9,8 @@ import getQueryClient from "@/lib/getQueryClient";
 import { listJobs } from "@/lib/server/jobs/jobListService";
 import { Skeleton } from "@/components/ui/skeleton";
 import { uiLocaleToMarket, type Market } from "@/lib/shared/market";
-import type { JobItem, JobsResponse } from "./types";
+import { getJobsListQueryKey } from "./utils/jobsQueryCache";
+import type { JobItem } from "./types";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -85,14 +86,22 @@ async function JobsListSection({
     updatedAt: it.updatedAt.toISOString(),
   }));
 
-  const jobsResponse: JobsResponse = {
-    items,
-    nextCursor: result.nextCursor,
-    totalCount: result.totalCount,
-    facets: result.facets,
-  };
-
-  queryClient.setQueryData(["jobs", queryString, null], jobsResponse);
+  // Seed the infinite query — key ["jobs", queryString], a single-page
+  // InfiniteData payload — so the client hydrates the first page with no
+  // flash. This MUST match the key/shape useInfiniteQuery reads; the old
+  // ["jobs", queryString, null] flat-shape write became a dead orphan after
+  // the list migrated off the per-cursor useQueries design.
+  queryClient.setQueryData(getJobsListQueryKey(queryString), {
+    pages: [
+      {
+        items,
+        nextCursor: result.nextCursor,
+        totalCount: result.totalCount,
+        facets: result.facets,
+      },
+    ],
+    pageParams: [null],
+  });
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
