@@ -1,4 +1,8 @@
+import json
+import sys
+
 import pytest
+import requests
 
 import run_seek as rs
 
@@ -9,55 +13,120 @@ REAL_RAW = {
     "advertiser": {"description": "Opus"},
     "locations": [{"label": "Sydney NSW"}],
     "workTypes": ["Full time"],
-    "salaryLabel": "$200,000 – $300,000 per year",
     "teaser": "Forefront of AI",
     "bulletPoints": ["$200,000 - $300,000", "Be part of a global AI Leader"],
 }
 
 
-def test_seek_job_url():
+# ── Test doubles ───────────────────────────────────────────────────────────
+class Clock:
+    def __init__(self, t=0.0):
+        self.t = t
+
+    def __call__(self):
+        return self.t
+
+
+class FakeResp:
+    def __init__(self, status=200, text="{}", json_data=None, ct="application/json",
+                 headers=None, raise_json=False):
+        self.status_code = status
+        self.text = text
+        self._json = {} if json_data is None else json_data
+        self._raise_json = raise_json
+        self.headers = {"content-type": ct}
+        if headers:
+            self.headers.update(headers)
+        self.ok = 200 <= status < 300
+
+    def json(self):
+        if self._raise_json:
+            raise ValueError("no json")
+        return self._json
+
+
+class FakeSession:
+    def __init__(self, responses):
+        self._responses = list(responses)
+        self.headers = {}
+        self.calls = []
+
+    def get(self, url, params=None, timeout=None, **kw):
+        self.calls.append((url, params))
+        item = self._responses.pop(0) if self._responses else FakeResp()
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+
+@pytest.fixture
+def fast(monkeypatch):
+    monkeypatch.setenv("SEEK_FETCH_ENABLED", "true")
+    monkeypatch.setattr(rs.time, "sleep", lambda *a, **k: None)
+    monkeypatch.setattr(rs.random, "uniform", lambda *a, **k: 0.0)
+
+
+# ── Pure helpers ───────────────────────────────────────────────────────────
+def test_seek_job_url_valid_and_invalid():
     assert rs.seek_job_url("123") == "https://au.seek.com/job/123"
+    assert rs.seek_job_url("1/../x") == ""
+    assert rs.seek_job_url("") == ""
 
 
-def test_build_search_params_includes_keywords_class_daterange():
-    p = rs.build_search_params(
-        keywords="software engineer", classification="6281", page=2, daterange_days=1
-    )
+def test_is_valid_seek_id():
+    assert rs.is_valid_seek_id("92521602") is True
+    assert rs.is_valid_seek_id("12ab") is False
+    assert rs.is_valid_seek_id(None) is False
+
+
+def test_is_seek_host():
+    assert rs.is_seek_host("https://au.seek.com/job/1") is True
+    assert rs.is_seek_host("https://evil.com/job/1") is False
+    assert rs.is_seek_host("https://au.seek.com.evil.com/x") is False
+
+
+def test_build_search_params_includes_and_omits():
+    p = rs.build_search_params(keywords="software engineer", classification="6281", page=2, daterange_days=1)
     assert p["keywords"] == "software engineer"
     assert p["classification"] == "6281"
     assert p["page"] == "2"
     assert p["daterange"] == "1"
     assert p["siteKey"] == "AU-Main"
     assert p["pageSize"] == "100"
-
-
-def test_build_search_params_omits_empty_and_zero_daterange():
-    p = rs.build_search_params(daterange_days=0)
-    assert "keywords" not in p
-    assert "classification" not in p
-    assert "daterange" not in p
+    bare = rs.build_search_params(daterange_days=0)
+    assert "keywords" not in bare and "classification" not in bare and "daterange" not in bare
 
 
 @pytest.mark.parametrize(
     "status,ct,body,expected",
     [
-        (200, "application/json; charset=utf-8", "{}", False),
-        (403, "text/html", "x", True),
-        (429, "application/json", "{}", True),
-        (503, "application/json", "{}", True),
-        (200, "text/html", "<title>Just a moment...</title>", True),
-        (200, "text/html", "<html>challenges.cloudflare.com</html>", True),
-        (200, "text/html", "<html>ok</html>", False),
+        (200, "application/json", "{}", "ok"),
+        (200, "text/html", "<html>jobs</html>", "ok"),  # warm-up page is fine
+        (403, "text/html", "blocked", "challenge"),
+        (200, "text/html", "<title>Just a moment...</title>", "challenge"),
+        (200, "text/html", "cf-mitigated", "challenge"),
+        (200, "text/html", "Attention Required", "challenge"),
+        (429, "application/json", "{}", "transient"),
+        (503, "application/json", "{}", "transient"),
+        (500, "text/plain", "err", "transient"),
+        (404, "application/json", "{}", "client_error"),
+        (400, "application/json", "{}", "client_error"),
     ],
 )
-def test_is_challenge_response(status, ct, body, expected):
-    assert rs.is_challenge_response(status, ct, body) is expected
+def test_classify_response(status, ct, body, expected):
+    assert rs.classify_response(status, ct, body) == expected
+
+
+def test_retry_after_seconds():
+    assert rs.retry_after_seconds({"Retry-After": "10"}) == 10.0
+    assert rs.retry_after_seconds({"Retry-After": "99999"}) == rs.RETRY_AFTER_CAP_SEC
+    assert rs.retry_after_seconds({}) is None
+    assert rs.retry_after_seconds({"Retry-After": "soon"}) is None
 
 
 def test_parse_search_payload():
     out = rs.parse_search_payload({"totalCount": 5, "data": [{"id": 1}]})
-    assert out["total_count"] == 5
-    assert len(out["jobs"]) == 1
+    assert out["total_count"] == 5 and len(out["jobs"]) == 1
     assert rs.parse_search_payload({}) == {"total_count": 0, "jobs": []}
     assert rs.parse_search_payload("x")["jobs"] == []
 
@@ -69,26 +138,37 @@ def test_map_job_real_record():
     assert m["company"] == "Opus Recruitment Solutions"
     assert m["location"] == "Sydney NSW"
     assert m["job_type"] == "Full time"
-    assert m["job_level"] == ""
     assert "Forefront of AI" in m["description"]
     assert "$200,000 - $300,000" in m["description"]
 
 
 def test_map_job_company_fallback_to_advertiser():
-    raw = {"id": "1", "title": "T", "advertiser": {"description": "AdCo"}}
-    assert rs.map_job(raw)["company"] == "AdCo"
+    assert rs.map_job({"id": "1", "title": "T", "advertiser": {"description": "AdCo"}})["company"] == "AdCo"
 
 
-def test_map_job_rejects_missing_id_or_title():
+def test_map_job_rejects_missing_or_nonnumeric_id():
     assert rs.map_job({"title": "T"}) is None
     assert rs.map_job({"id": "1"}) is None
+    assert rs.map_job({"id": "1/../evil", "title": "T"}) is None  # SSRF guard
+    assert rs.map_job({"id": "abc", "title": "T"}) is None
     assert rs.map_job("x") is None
+
+
+def test_map_job_truncates_long_title():
+    assert len(rs.map_job({"id": "1", "title": "A" * 1000})["title"]) == rs.MAX_TITLE
 
 
 def test_dedupe_by_url():
     items = [{"job_url": "a"}, {"job_url": "a"}, {"job_url": "b"}, {"job_url": ""}]
-    out = rs.dedupe_by_url(items)
-    assert [i["job_url"] for i in out] == ["a", "b"]
+    assert [i["job_url"] for i in rs.dedupe_by_url(items)] == ["a", "b"]
+
+
+def test_find_description_depth_guard_and_nested():
+    node = {"description": "deep"}
+    for _ in range(rs.MAX_RECURSION_DEPTH + 5):
+        node = {"x": node}
+    assert rs._find_description(node) == ""  # too deep to reach
+    assert rs._find_description({"a": {"b": {"description": "found"}}}) == "found"
 
 
 def test_extract_jsonld_description():
@@ -98,74 +178,338 @@ def test_extract_jsonld_description():
     )
     assert rs.extract_jsonld_description(html) == "Hello world"
     assert rs.extract_jsonld_description("") == ""
+    assert rs.extract_jsonld_description('<script type="application/ld+json">{bad json</script>') == ""
 
 
-class FakeFetcher:
-    def __init__(self, pages):
-        self.pages = pages
+# ── Network layer: warm-up / clock ─────────────────────────────────────────
+def test_warm_up_success_sets_timestamp(fast):
+    sess = FakeSession([FakeResp(200, text="<html>jobs</html>", ct="text/html")])
+    f = rs.SeekFetcher(session=sess, clock=Clock(123.0))
+    f.warm_up()
+    assert f._warmed_at == 123.0
+    assert f._needs_warm() is False
+
+
+def test_warm_up_challenge_raises(fast):
+    sess = FakeSession([FakeResp(200, text="Just a moment...", ct="text/html")])
+    with pytest.raises(rs.SeekChallengeError):
+        rs.SeekFetcher(session=sess, clock=Clock(0)).warm_up()
+
+
+def test_warm_up_is_gated_by_env(monkeypatch):
+    monkeypatch.delenv("SEEK_FETCH_ENABLED", raising=False)
+    with pytest.raises(RuntimeError, match="SEEK_FETCH_ENABLED"):
+        rs.SeekFetcher().warm_up()
+
+
+def test_needs_warm_expiry():
+    clk = Clock(0)
+    f = rs.SeekFetcher(session=FakeSession([]), clock=clk)
+    assert f._needs_warm() is True  # never warmed
+    f._warmed_at = 0.0
+    assert f._needs_warm() is False
+    clk.t = rs.WARM_TTL_SEC + 1
+    assert f._needs_warm() is True  # cookie aged out
+
+
+# ── Network layer: _get_json ───────────────────────────────────────────────
+def test_get_json_success_when_prewarmed(fast):
+    sess = FakeSession([FakeResp(json_data={"totalCount": 1, "data": []})])
+    f = rs.SeekFetcher(session=sess, clock=Clock(0))
+    f._warmed_at = 0.0
+    assert f._get_json("u", {})["totalCount"] == 1
+    assert len(sess.calls) == 1
+
+
+def test_get_json_warms_when_needed(fast):
+    sess = FakeSession([FakeResp(200, text="<html>", ct="text/html"), FakeResp(json_data={"ok": 1})])
+    f = rs.SeekFetcher(session=sess, clock=Clock(0))  # not pre-warmed
+    assert f._get_json("u", {}) == {"ok": 1}
+    assert len(sess.calls) == 2  # warm-up + search
+
+
+def test_get_json_retries_transient_then_succeeds(fast):
+    sess = FakeSession([FakeResp(503, ct="application/json"), FakeResp(json_data={"ok": 1})])
+    f = rs.SeekFetcher(session=sess, clock=Clock(0))
+    f._warmed_at = 0.0
+    assert f._get_json("u", {}) == {"ok": 1}
+    assert len(sess.calls) == 2
+
+
+def test_get_json_retries_connection_error(fast):
+    sess = FakeSession([requests.ConnectionError("boom"), FakeResp(json_data={"ok": 1})])
+    f = rs.SeekFetcher(session=sess, clock=Clock(0))
+    f._warmed_at = 0.0
+    assert f._get_json("u", {}) == {"ok": 1}
+
+
+def test_get_json_transient_exhausts_to_runtime_error(fast):
+    sess = FakeSession([FakeResp(503, ct="application/json") for _ in range(3)])
+    f = rs.SeekFetcher(session=sess, clock=Clock(0))
+    f._warmed_at = 0.0
+    with pytest.raises(RuntimeError, match="failed after retries"):
+        f._get_json("u", {})
+    assert len(sess.calls) == 3
+
+
+def test_get_json_client_error_no_retry(fast):
+    sess = FakeSession([FakeResp(404, text="missing", ct="application/json")])
+    f = rs.SeekFetcher(session=sess, clock=Clock(0))
+    f._warmed_at = 0.0
+    with pytest.raises(RuntimeError, match="client error"):
+        f._get_json("u", {})
+    assert len(sess.calls) == 1
+
+
+def test_get_json_non_json_ok_raises(fast):
+    sess = FakeSession([FakeResp(200, text="<html>", ct="text/html", raise_json=True)])
+    f = rs.SeekFetcher(session=sess, clock=Clock(0))
+    f._warmed_at = 0.0
+    with pytest.raises(RuntimeError, match="non-JSON"):
+        f._get_json("u", {})
+
+
+def test_get_json_challenge_rewarms_once_then_stops(fast):
+    chal = FakeResp(403, text="blocked", ct="text/html")
+    warm = FakeResp(200, text="<html>", ct="text/html")
+    sess = FakeSession([chal, warm, chal])
+    f = rs.SeekFetcher(session=sess, clock=Clock(0))
+    f._warmed_at = 0.0
+    with pytest.raises(rs.SeekChallengeError):
+        f._get_json("u", {})
+    assert len(sess.calls) == 3  # challenge, re-warm, challenge
+
+
+def test_get_json_challenge_rewarm_then_recovers(fast):
+    chal = FakeResp(403, text="blocked", ct="text/html")
+    warm = FakeResp(200, text="<html>", ct="text/html")
+    data = FakeResp(json_data={"ok": 1})
+    sess = FakeSession([chal, warm, data])
+    f = rs.SeekFetcher(session=sess, clock=Clock(0))
+    f._warmed_at = 0.0
+    assert f._get_json("u", {}) == {"ok": 1}
+    assert len(sess.calls) == 3
+
+
+# ── Network layer: search_paginated ────────────────────────────────────────
+def _patch_get_json(monkeypatch, fetcher, seq):
+    def fake_get(url, params):
+        item = seq.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+    monkeypatch.setattr(fetcher, "_get_json", fake_get)
+
+
+def test_search_paginated_stops_on_empty(monkeypatch, fast):
+    f = rs.SeekFetcher(session=FakeSession([]), clock=Clock(0))
+    f._warmed_at = 0.0
+    _patch_get_json(monkeypatch, f, [
+        {"totalCount": 300, "data": [{"id": i} for i in range(100)]},
+        {"totalCount": 300, "data": [{"id": 100 + i} for i in range(100)]},
+        {"totalCount": 300, "data": []},
+    ])
+    assert len(f.search_paginated(max_pages=5)) == 200
+
+
+def test_search_paginated_caps_at_five_pages(monkeypatch, fast):
+    f = rs.SeekFetcher(session=FakeSession([]), clock=Clock(0))
+    f._warmed_at = 0.0
+    monkeypatch.setattr(f, "_get_json", lambda url, params: {"totalCount": 9999, "data": [{"id": 1}]})
+    assert len(f.search_paginated(max_pages=99)) == rs.SEEK_PAGE_CEILING
+
+
+def test_search_paginated_keeps_partial_on_page_error(monkeypatch, fast):
+    f = rs.SeekFetcher(session=FakeSession([]), clock=Clock(0))
+    f._warmed_at = 0.0
+    _patch_get_json(monkeypatch, f, [
+        {"totalCount": 300, "data": [{"id": i} for i in range(100)]},
+        RuntimeError("boom"),
+    ])
+    assert len(f.search_paginated(max_pages=5)) == 100  # page 1 kept
+
+
+def test_search_paginated_propagates_challenge(monkeypatch, fast):
+    f = rs.SeekFetcher(session=FakeSession([]), clock=Clock(0))
+    f._warmed_at = 0.0
+    _patch_get_json(monkeypatch, f, [rs.SeekChallengeError("blocked")])
+    with pytest.raises(rs.SeekChallengeError):
+        f.search_paginated(max_pages=5)
+
+
+# ── Network layer: enrich_description (SSRF) ───────────────────────────────
+def test_enrich_skips_non_seek_host(fast):
+    sess = FakeSession([])
+    f = rs.SeekFetcher(session=sess, clock=Clock(0))
+    f._warmed_at = 0.0
+    assert f.enrich_description("https://evil.com/job/1") == ""
+    assert len(sess.calls) == 0  # never fetched
+
+
+def test_enrich_ok_returns_description(fast):
+    html = '<script type="application/ld+json">{"@type":"JobPosting","description":"Hi <b>there</b>"}</script>'
+    f = rs.SeekFetcher(session=FakeSession([FakeResp(200, text=html, ct="text/html")]), clock=Clock(0))
+    f._warmed_at = 0.0
+    assert f.enrich_description("https://au.seek.com/job/5") == "Hi there"
+
+
+def test_enrich_challenge_returns_empty(fast):
+    f = rs.SeekFetcher(session=FakeSession([FakeResp(403, text="blocked")]), clock=Clock(0))
+    f._warmed_at = 0.0
+    assert f.enrich_description("https://au.seek.com/job/5") == ""
+
+
+def test_enrich_exception_returns_empty(fast):
+    f = rs.SeekFetcher(session=FakeSession([requests.Timeout("slow")]), clock=Clock(0))
+    f._warmed_at = 0.0
+    assert f.enrich_description("https://au.seek.com/job/5") == ""
+
+
+# ── Orchestration: collect_jobs ────────────────────────────────────────────
+class _Fetcher:
+    def __init__(self, per_query, enrich_val="FULL"):
+        self._per_query = per_query
+        self._i = 0
         self.enriched = []
+        self._enrich_val = enrich_val
 
     def search_paginated(self, **q):
-        return self.pages
+        item = self._per_query[self._i]
+        self._i += 1
+        if isinstance(item, Exception):
+            raise item
+        return item
 
     def enrich_description(self, url):
         self.enriched.append(url)
-        return "FULL " + url
+        return self._enrich_val
 
 
 def test_collect_jobs_maps_and_dedupes():
     raw = [REAL_RAW, dict(REAL_RAW), {"id": "2", "title": "Dev", "companyName": "X"}]
-    out = rs.collect_jobs(FakeFetcher(raw), [{}])
+    out = rs.collect_jobs(_Fetcher([raw]), [{}])
     assert [r["job_url"] for r in out] == [
         "https://au.seek.com/job/92521602",
         "https://au.seek.com/job/2",
     ]
 
 
-def test_collect_jobs_enrich_fills_empty_description():
-    raw = [{"id": "2", "title": "Dev", "companyName": "X"}]  # no teaser => empty desc
-    fetcher = FakeFetcher(raw)
-    out = rs.collect_jobs(fetcher, [{}], enrich=True)
-    assert out[0]["description"].startswith("FULL ")
-    assert fetcher.enriched == ["https://au.seek.com/job/2"]
+def test_collect_jobs_stops_on_challenge_keeps_partial():
+    f = _Fetcher([[{"id": "1", "title": "A"}], rs.SeekChallengeError("blocked"), [{"id": "9", "title": "B"}]])
+    out = rs.collect_jobs(f, [{}, {}, {}])
+    assert [r["job_url"] for r in out] == ["https://au.seek.com/job/1"]
 
 
-def test_search_paginated_stops_on_empty_and_respects_ceiling(monkeypatch):
-    fetcher = rs.SeekFetcher()
-    monkeypatch.setattr(fetcher, "_ensure_enabled", lambda: None)
-    fetcher._warmed = True
-    monkeypatch.setattr(rs.time, "sleep", lambda s: None)
-    pages = [
-        {"totalCount": 300, "data": [{"id": i, "title": "t"} for i in range(100)]},
-        {"totalCount": 300, "data": [{"id": 100 + i, "title": "t"} for i in range(100)]},
-        {"totalCount": 300, "data": []},  # empty => stop
-    ]
-    calls = {"n": 0}
-
-    def fake_get(url, params):
-        result = pages[calls["n"]]
-        calls["n"] += 1
-        return result
-
-    monkeypatch.setattr(fetcher, "_get_json", fake_get)
-    out = fetcher.search_paginated(keywords="x", max_pages=5)
-    assert len(out) == 200
-    assert calls["n"] == 3
+def test_collect_jobs_skips_failed_query_keeps_rest():
+    f = _Fetcher([RuntimeError("oops"), [{"id": "9", "title": "B"}]])
+    out = rs.collect_jobs(f, [{}, {}])
+    assert [r["job_url"] for r in out] == ["https://au.seek.com/job/9"]
 
 
-def test_search_paginated_caps_at_five_pages(monkeypatch):
-    fetcher = rs.SeekFetcher()
-    monkeypatch.setattr(fetcher, "_ensure_enabled", lambda: None)
-    fetcher._warmed = True
-    monkeypatch.setattr(rs.time, "sleep", lambda s: None)
-    monkeypatch.setattr(
-        fetcher, "_get_json", lambda url, params: {"totalCount": 9999, "data": [{"id": 1, "title": "t"}]}
-    )
-    out = fetcher.search_paginated(max_pages=99)
-    assert len(out) == rs.SEEK_PAGE_CEILING  # clamped to 5
+def test_collect_jobs_enrich_fills_empty_with_new_dict():
+    f = _Fetcher([[{"id": "2", "title": "Dev", "companyName": "X"}]], enrich_val="FULLTEXT")
+    out = rs.collect_jobs(f, [{}], enrich=True)
+    assert out[0]["description"] == "FULLTEXT"
+    assert f.enriched == ["https://au.seek.com/job/2"]
 
 
-def test_live_fetch_is_gated_by_env(monkeypatch):
-    monkeypatch.delenv("SEEK_FETCH_ENABLED", raising=False)
-    with pytest.raises(RuntimeError, match="SEEK_FETCH_ENABLED"):
-        rs.SeekFetcher().warm_up()
+def test_collect_jobs_enrich_skips_present_description():
+    f = _Fetcher([[REAL_RAW]])
+    out = rs.collect_jobs(f, [{}], enrich=True)
+    assert "Forefront of AI" in out[0]["description"]
+    assert f.enriched == []  # already had a description
+
+
+def test_collect_jobs_respects_max_total():
+    raw = [{"id": str(i), "title": "t"} for i in range(10)]
+    assert len(rs.collect_jobs(_Fetcher([raw]), [{}], max_total=3)) == 3
+
+
+# ── Orchestration: import_items ────────────────────────────────────────────
+def test_import_items_requires_secret(monkeypatch):
+    monkeypatch.delenv("IMPORT_SECRET", raising=False)
+    with pytest.raises(RuntimeError, match="IMPORT_SECRET"):
+        rs.import_items("https://x", "e", [{"job_url": "a"}])
+
+
+def test_validate_import_base():
+    assert rs._validate_import_base("https://w/") == "https://w"
+    assert rs._validate_import_base("http://localhost:3000/") == "http://localhost:3000"
+    with pytest.raises(RuntimeError, match="non-HTTPS"):
+        rs._validate_import_base("http://evil.com")
+
+
+def test_import_items_batches_and_sums(monkeypatch):
+    monkeypatch.setenv("IMPORT_SECRET", "s")
+    posts = []
+
+    def fake_post(url, headers=None, data=None, timeout=None):
+        body = json.loads(data)
+        posts.append(body)
+        return FakeResp(200, json_data={"imported": len(body["items"])})
+
+    monkeypatch.setattr(rs.requests, "post", fake_post)
+    items = [{"job_url": str(i)} for i in range(120)]
+    assert rs.import_items("https://x", "e@x", items) == 120
+    assert len(posts) == 3  # 50 + 50 + 20
+    assert posts[0]["userEmail"] == "e@x"
+
+
+def test_import_items_retries_then_succeeds(monkeypatch):
+    monkeypatch.setenv("IMPORT_SECRET", "s")
+    monkeypatch.setattr(rs.time, "sleep", lambda *a, **k: None)
+    seq = [FakeResp(502, text="bad"), FakeResp(200, json_data={"imported": 1})]
+    monkeypatch.setattr(rs.requests, "post", lambda *a, **k: seq.pop(0))
+    assert rs.import_items("https://x", "e", [{"job_url": "a"}]) == 1
+
+
+def test_import_items_permanent_failure_raises(monkeypatch):
+    monkeypatch.setenv("IMPORT_SECRET", "s")
+    monkeypatch.setattr(rs.time, "sleep", lambda *a, **k: None)
+    monkeypatch.setattr(rs.requests, "post", lambda *a, **k: FakeResp(500, text="err"))
+    with pytest.raises(RuntimeError, match="import status=500"):
+        rs.import_items("https://x", "e", [{"job_url": "a"}])
+
+
+# ── main ───────────────────────────────────────────────────────────────────
+def test_main_dry_run_skips_import(monkeypatch):
+    monkeypatch.setattr(rs, "collect_jobs", lambda *a, **k: [
+        {"title": "T", "company": "C", "location": "L", "job_url": "u"}
+    ])
+    spy = []
+    monkeypatch.setattr(rs, "import_items", lambda *a, **k: spy.append(1) or 0)
+    monkeypatch.setattr(sys, "argv", ["run_seek.py", "--keywords", "x", "--dry-run"])
+    assert rs.main() == 0
+    assert spy == []
+
+
+def test_main_imports_when_args_present(monkeypatch):
+    monkeypatch.setattr(rs, "collect_jobs", lambda *a, **k: [
+        {"title": "T", "company": "C", "location": "L", "job_url": "u"}
+    ])
+    called = []
+    monkeypatch.setattr(rs, "import_items", lambda base, email, items: called.append((base, email, len(items))) or 5)
+    monkeypatch.setattr(sys, "argv",
+                        ["run_seek.py", "--keywords", "x", "--import-base", "https://w", "--user-email", "e@x"])
+    assert rs.main() == 0
+    assert called == [("https://w", "e@x", 1)]
+
+
+def test_main_missing_email_falls_to_dry_run(monkeypatch):
+    monkeypatch.delenv("SEEK_USER_EMAIL", raising=False)
+    monkeypatch.delenv("JOBLIT_WEB_URL", raising=False)
+    monkeypatch.setattr(rs, "collect_jobs", lambda *a, **k: [])
+    spy = []
+    monkeypatch.setattr(rs, "import_items", lambda *a, **k: spy.append(1) or 0)
+    monkeypatch.setattr(sys, "argv", ["run_seek.py", "--import-base", "https://w"])
+    assert rs.main() == 0
+    assert spy == []
+
+
+def test_main_returns_1_on_failure(monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setattr(rs, "collect_jobs", boom)
+    monkeypatch.setattr(sys, "argv", ["run_seek.py", "--keywords", "x", "--dry-run"])
+    assert rs.main() == 1
