@@ -5,7 +5,7 @@ const prismaStore = vi.hoisted(() => ({
   // Seek creation runs inside an advisory-locked transaction; the mock runs the
   // callback against a tx that shares the same fetchRun mocks.
   $transaction: vi.fn(async (cb: (tx: unknown) => unknown) =>
-    cb({ $queryRaw: async () => [], fetchRun: prismaStore.fetchRun }),
+    cb({ $executeRaw: async () => 0, fetchRun: prismaStore.fetchRun }),
   ),
 }));
 

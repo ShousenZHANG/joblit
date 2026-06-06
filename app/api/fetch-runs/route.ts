@@ -236,7 +236,12 @@ export async function POST(req: Request) {
     if (data.source === "seek") {
       const lockKey = userIdToAdvisoryKey(userId);
       const created = await prisma.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(${lockKey}::bigint)`;
+        // pg_advisory_xact_lock() returns `void`; the Neon driver adapter can't
+        // deserialize a void result column ("UnsupportedNativeDataType"), so use
+        // $executeRaw (returns a row count, never maps result columns). The lock
+        // is still taken — the function runs server-side regardless of how the
+        // client reads the result.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey}::bigint)`;
         const active = await tx.fetchRun.count({
           where: {
             userId,
