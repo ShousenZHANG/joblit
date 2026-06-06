@@ -648,7 +648,11 @@ def run_from_config(run_id: str) -> int:
     started = time.monotonic()
     try:
         raw = run.get("queries") if isinstance(run.get("queries"), dict) else {}
-        items = collect_jobs(SeekFetcher(), build_queries_from_config(run), enrich=True)
+        # Bulk runs do NOT fetch full descriptions: one detail request per job is
+        # the biggest anti-bot risk + slowest step, and the teaser + bulletPoints
+        # already give a usable preview ("Open job" shows the full JD on Seek).
+        # Full JD is best fetched on-demand when a job is actually tailored.
+        items = collect_jobs(SeekFetcher(), build_queries_from_config(run), enrich=False)
         # Honour the same title exclusions the JobSpy pipeline applies.
         if bool(raw.get("applyExcludes", True)):
             before = len(items)
