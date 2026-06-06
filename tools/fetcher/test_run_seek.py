@@ -253,10 +253,12 @@ def test_filter_relevant_titles_generic_query_keeps_all():
     assert rs.filter_relevant_titles(items, ["Engineer"]) == items
 
 
-def test_filter_relevant_titles_never_empties():
-    # Nothing matches the domain at all -> fall back to the full list.
+def test_filter_relevant_titles_drops_all_when_nothing_matches():
+    # Nothing carries the domain token -> return NOTHING, not the full list.
+    # Dumping the unfiltered list here is what surfaced unrelated roles (e.g.
+    # "Network Engineer" for a "Software Engineer" query).
     items = [{"title": "Elixir Developer"}]
-    assert rs.filter_relevant_titles(items, ["AI Engineer"]) == items
+    assert rs.filter_relevant_titles(items, ["AI Engineer"]) == []
 
 
 def test_token_boundary_handles_tech_symbols():
@@ -572,7 +574,7 @@ def test_main_dry_run_skips_import(monkeypatch):
 
 def test_main_imports_when_args_present(monkeypatch):
     monkeypatch.setattr(rs, "collect_jobs", lambda *a, **k: [
-        {"title": "T", "company": "C", "location": "L", "job_url": "u"}
+        {"title": "X Engineer", "company": "C", "location": "L", "job_url": "u"}
     ])
     called = []
     monkeypatch.setattr(rs, "import_items", lambda base, email, items: called.append((base, email, len(items))) or 5)
@@ -652,7 +654,9 @@ def test_run_from_config_success(monkeypatch):
     monkeypatch.setattr(rs, "fetch_run_config", lambda *a, **k: run)
     updates = []
     monkeypatch.setattr(rs, "update_run", lambda base, rid, h, payload: updates.append(payload))
-    monkeypatch.setattr(rs, "collect_jobs", lambda fetcher, queries, **k: [{"job_url": "u", "title": "t"}])
+    # Title must carry the query token ("dev") — relevance now drops non-matches
+    # instead of dumping the full list.
+    monkeypatch.setattr(rs, "collect_jobs", lambda fetcher, queries, **k: [{"job_url": "u", "title": "Dev Engineer"}])
     monkeypatch.setattr(rs, "import_items", lambda base, email, items: 7)
     assert rs.run_from_config("rid") == 0
     assert {"status": "RUNNING"} in updates

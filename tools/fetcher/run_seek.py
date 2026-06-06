@@ -360,10 +360,16 @@ def extract_domain_tokens(keywords: Iterable[str]) -> set:
 
 def filter_relevant_titles(items: List[Dict[str, str]], keywords: Iterable[str]) -> List[Dict[str, str]]:
     """Keep only results whose title actually matches the search domain. Seek's
-    keyword search is broad — an "AI Engineer" query returns unrelated roles
-    (e.g. "Elixir Developer", "Systems Engineer") — so require the domain tokens
-    of the query in the title. Never empties: falls back to any-token match, then
-    to the full list, so a generic or unusual query can't wipe the results."""
+    keyword search is broad — an "AI Engineer" query also returns unrelated roles
+    (e.g. "Elixir Developer", "Systems Engineer") because Seek matches the
+    teaser/skills, not just the title — so require the query's domain tokens in
+    the title. Tries all-token matches first, then any-token.
+
+    May return an EMPTY list when nothing matches — that is deliberate. The old
+    behaviour fell back to the FULL unfiltered list when no title matched, which
+    dumped Seek's broad keyword matches and surfaced unrelated roles (e.g.
+    "Network Engineer" for a "Software Engineer" query). A query with no domain
+    tokens (e.g. just "Engineer") is not filtered at all."""
     domain = extract_domain_tokens(keywords)
     if not domain:
         return items
@@ -378,8 +384,9 @@ def filter_relevant_titles(items: List[Dict[str, str]], keywords: Iterable[str])
     strict = [it for it in items if matches(it.get("title", ""), True)]
     if strict:
         return strict
-    loose = [it for it in items if matches(it.get("title", ""), False)]
-    return loose or items
+    # Any-token fallback. We NEVER fall back to the full list: dumping every raw
+    # row is what surfaced unrelated roles for broad Seek keyword searches.
+    return [it for it in items if matches(it.get("title", ""), False)]
 
 
 # ── Network layer (gated, polite, no bypass) ───────────────────────────────
