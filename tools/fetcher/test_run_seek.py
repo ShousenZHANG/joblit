@@ -516,14 +516,28 @@ def test_main_returns_1_on_failure(monkeypatch):
 
 
 # ── Run-config mode ────────────────────────────────────────────────────────
+def test_normalize_seek_where():
+    # LinkedIn-style "City, State, Country" -> Seek city token (the bug fix).
+    assert rs.normalize_seek_where("Sydney, New South Wales, Australia") == "Sydney"
+    assert rs.normalize_seek_where("Sydney NSW") == "Sydney NSW"
+    assert rs.normalize_seek_where("All Australia") == "All Australia"
+    assert rs.normalize_seek_where("") == rs.DEFAULT_WHERE
+    assert rs.normalize_seek_where(None) == rs.DEFAULT_WHERE
+
+
 def test_build_queries_from_config():
-    run = {"location": "Sydney NSW", "queries": {"queries": ["dev", "data"], "classification": "6281", "daterange": 3}}
+    # The UI sends a LinkedIn-style location; the worker must normalize it to a
+    # Seek-accepted `where` token, else Seek returns zero results.
+    run = {
+        "location": "Sydney, New South Wales, Australia",
+        "queries": {"queries": ["dev", "data"], "classification": "6281", "daterange": 3},
+    }
     qs = rs.build_queries_from_config(run)
     assert len(qs) == 2
     assert qs[0] == {
         "keywords": "dev",
         "classification": "6281",
-        "where": "Sydney NSW",
+        "where": "Sydney",
         "daterange_days": 3,
         "max_pages": rs.SEEK_PAGE_CEILING,
     }

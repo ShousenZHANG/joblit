@@ -118,6 +118,18 @@ def is_seek_host(url: str) -> bool:
         return False
 
 
+def normalize_seek_where(location: Any) -> str:
+    """Seek's `where` expects a Seek location token ("All Australia", "Sydney",
+    "Sydney NSW"), NOT the LinkedIn-style "City, State, Country" string — which
+    returns ZERO results. Take the leading segment (the city) and fall back to
+    All Australia when empty."""
+    text = str(location or "").strip()
+    if not text:
+        return DEFAULT_WHERE
+    first = text.split(",")[0].strip()
+    return first or DEFAULT_WHERE
+
+
 def build_search_params(
     *,
     keywords: str = "",
@@ -593,7 +605,7 @@ def build_queries_from_config(run: Dict[str, Any]) -> List[Dict[str, Any]]:
         daterange_days = int(raw.get("daterange") or DEFAULT_DATERANGE_DAYS)
     except (TypeError, ValueError):
         daterange_days = DEFAULT_DATERANGE_DAYS
-    where = str(run.get("location") or DEFAULT_WHERE)
+    where = normalize_seek_where(run.get("location"))
     return [
         {
             "keywords": kw,
@@ -660,7 +672,7 @@ def main() -> int:
             {
                 "keywords": args.keywords,
                 "classification": args.classification,
-                "where": args.where,
+                "where": normalize_seek_where(args.where),
                 "daterange_days": args.daterange,
                 "max_pages": args.max_pages,
             }
