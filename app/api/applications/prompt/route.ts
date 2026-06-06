@@ -15,9 +15,6 @@ import {
   getExpectedJsonShapeForTarget,
 } from "@/lib/server/ai/promptContract";
 import {
-  buildApplicationShortUserPrompt,
-  buildApplicationSystemPrompt,
-  buildApplicationUserPrompt,
   buildV2SystemPrompt,
   buildV2ResumeUserPrompt,
   buildV2CoverUserPrompt,
@@ -92,7 +89,6 @@ export async function POST(req: Request) {
     );
   }
 
-  const promptVersion = new URL(req.url).searchParams.get("promptVersion") ?? "v2";
   const rules = await getActivePromptSkillRulesForUser(userId);
   const mappedProfile = mapResumeProfile(profile);
   const baseLatestBullets = mappedProfile.experiences[0]?.bullets ?? [];
@@ -113,43 +109,18 @@ export async function POST(req: Request) {
     resumeSnapshotUpdatedAt: profile.updatedAt.toISOString(),
   });
 
-  // V2 prompts: XML-tagged sections with embedded quality gates
-  if (promptVersion === "v2") {
-    const locale = profileLocale as "en-AU" | "zh-CN";
-    const systemPrompt = buildV2SystemPrompt(rules, locale);
-    const userPrompt =
-      parsed.data.target === "resume"
-        ? buildV2ResumeUserPrompt({ target: "resume", rules, job: jobInput, resume: resumeInput })
-        : buildV2CoverUserPrompt({ target: "cover", rules, job: jobInput });
-    const shortUserPrompt = buildV2ShortUserPrompt({
-      target: parsed.data.target,
-      job: jobInput,
-      resume: parsed.data.target === "resume" ? resumeInput : undefined,
-      locale,
-    });
-
-    return NextResponse.json({
-      requestId,
-      prompt: { systemPrompt, userPrompt, shortUserPrompt },
-      promptMeta,
-      expectedJsonShape,
-      expectedJsonSchema,
-      promptVersion: "v2",
-    });
-  }
-
-  // V1 prompts: backward compatible
-  const systemPrompt = buildApplicationSystemPrompt(rules);
-  const userPrompt = buildApplicationUserPrompt({
-    target: parsed.data.target,
-    rules,
-    job: jobInput,
-    resume: resumeInput,
-  });
-  const shortUserPrompt = buildApplicationShortUserPrompt({
+  // XML-tagged sections with embedded quality gates (single canonical version).
+  const locale = profileLocale as "en-AU" | "zh-CN";
+  const systemPrompt = buildV2SystemPrompt(rules, locale);
+  const userPrompt =
+    parsed.data.target === "resume"
+      ? buildV2ResumeUserPrompt({ target: "resume", rules, job: jobInput, resume: resumeInput })
+      : buildV2CoverUserPrompt({ target: "cover", rules, job: jobInput });
+  const shortUserPrompt = buildV2ShortUserPrompt({
     target: parsed.data.target,
     job: jobInput,
     resume: parsed.data.target === "resume" ? resumeInput : undefined,
+    locale,
   });
 
   return NextResponse.json({
@@ -158,6 +129,6 @@ export async function POST(req: Request) {
     promptMeta,
     expectedJsonShape,
     expectedJsonSchema,
-    promptVersion: "v1",
+    promptVersion: "v2",
   });
 }

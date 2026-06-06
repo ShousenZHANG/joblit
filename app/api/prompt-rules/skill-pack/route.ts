@@ -3,19 +3,13 @@ import { requireSession, UnauthorizedError } from "@/lib/server/auth/requireSess
 import type { SessionContext } from "@/lib/server/auth/requireSession";
 import { unauthorizedError } from "@/lib/server/api/errorResponse";
 import { getActivePromptSkillRulesForUser } from "@/lib/server/promptRuleTemplates";
-import { buildGlobalSkillPackFiles, buildSkillPackV2Files } from "@/lib/server/ai/skillPack";
+import { buildSkillPackV2Files } from "@/lib/server/ai/skillPack";
 import { getStructuredSkillRules } from "@/lib/server/ai/promptSkills";
-import { createTarGz } from "@/lib/server/archive/tar";
 import { createZip } from "@/lib/server/archive/zip";
 import { getResumeProfile } from "@/lib/server/resumeProfile";
 import { buildSkillPackVersion } from "@/lib/server/ai/promptContract";
 
 export const runtime = "nodejs";
-
-function safeSegment(value: string) {
-  const normalized = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  return normalized || "rules";
-}
 
 function buildResumeContext(profile: {
   summary?: string | null;
@@ -52,7 +46,6 @@ export async function GET(req: Request) {
   const { userId, requestId } = ctx;
 
   const url = new URL(req.url);
-  const format = url.searchParams.get("format") ?? "zip";
   const rawLocale = url.searchParams.get("locale") ?? "en-AU";
   const locale: "en-AU" | "zh-CN" = rawLocale === "zh-CN" ? "zh-CN" : "en-AU";
   const redactContext = url.searchParams.get("redact") === "true";
@@ -66,26 +59,6 @@ export async function GET(req: Request) {
     resumeSnapshotUpdatedAt,
   });
 
-  // V1 tar.gz format (backward compatible)
-  if (format === "tar.gz") {
-    const files = buildGlobalSkillPackFiles(rules, context, { redactContext });
-    const tarGz = createTarGz(files);
-    const today = new Date().toISOString().slice(0, 10);
-    const filename = `joblit-tailoring-${safeSegment(rules.id)}-${today}.tar.gz`;
-
-    return new NextResponse(new Uint8Array(tarGz), {
-      status: 200,
-      headers: {
-        "content-type": "application/gzip",
-        "content-disposition": `attachment; filename="${filename}"`,
-        "x-request-id": requestId,
-        "x-skill-pack-redacted": redactContext ? "1" : "0",
-        "x-skill-pack-version": skillPackVersion,
-      },
-    });
-  }
-
-  // V2 ZIP format (default)
   const structuredRules = getStructuredSkillRules(locale);
   const v2Files = buildSkillPackV2Files(structuredRules, context, {
     locale,

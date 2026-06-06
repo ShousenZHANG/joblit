@@ -183,26 +183,6 @@ export function buildApplicationUserPrompt(input: BuildApplicationPromptInput) {
   ].join("\n");
 }
 
-/** Short user prompt for when the model already has the joblit-tailoring pack loaded. Only job-specific inputs + one-line instruction. */
-export function buildApplicationShortUserPrompt(input: {
-  target: PromptTarget;
-  job: JobInput;
-  resume?: ResumePromptInput;
-}): string {
-  const lines = [
-    `Target: ${input.target}`,
-    "",
-    "Job Input:",
-    `- Job title: ${input.job.title}`,
-    `- Company: ${input.job.company || "the company"}`,
-    `- Job description: ${safeJobDescription(input.job)}`,
-  ];
-  if (input.target === "resume" && input.resume) {
-    lines.push("", buildResumeCoverageBlock(input.resume));
-  }
-  return lines.join("\n");
-}
-
 export function getTemplateResumePromptInput(baseLatestBullets: string[]): ResumePromptInput {
   return {
     baseLatestBullets: baseLatestBullets.length
@@ -225,6 +205,41 @@ export function getTemplateResumePromptInput(baseLatestBullets: string[]): Resum
 /* ═══════════════════════════════════════════════════════════════════════════
  * V2 Prompt Builders — XML-tagged sections for reliable LLM parsing
  * ═══════════════════════════════════════════════════════════════════════════ */
+
+// Compact one-shot anchors. The schema tells the model the SHAPE; these show the
+// STYLE (clean bold markers, grounded bullets, ATS-priority skills, candidate
+// voice) so quality holds even for users who never load the full skill pack.
+// Kept short on purpose — full worked examples live in the pack's examples/.
+const RESUME_FEWSHOT_EXAMPLE = [
+  "Example (shape + style reference only — do NOT copy this content):",
+  "{",
+  '  "cvSummary": "Platform-focused engineer with 6+ years delivering **cloud-native** services; led **Kubernetes** migration across a 200-service estate, improving deploy frequency 40%.",',
+  '  "latestExperience": {',
+  '    "bullets": [',
+  '      "Designed **Kubernetes** service mesh cutting inter-service latency 15% across 40+ services",',
+  '      "Built **Terraform** modules enabling zero-downtime multi-region AWS deployments"',
+  "    ]",
+  "  },",
+  '  "skillsFinal": [',
+  '    { "label": "Cloud & Infrastructure", "items": ["AWS", "GCP", "Terraform", "Kubernetes"] }',
+  "  ]",
+  "}",
+].join("\n");
+
+const COVER_FEWSHOT_EXAMPLE = [
+  "Example (shape + tone reference only — do NOT copy this content):",
+  "{",
+  '  "cover": {',
+  '    "subject": "Application for Platform Engineer",',
+  '    "salutation": "Hiring Team at Acme Cloud",',
+  '    "paragraphOne": "My recent work building **cloud-native platforms** at scale maps directly to your Platform Engineer role; over three years I led **Kubernetes** migrations and set observability standards across a 200-service estate.",',
+  '    "paragraphTwo": "Your priorities — **infrastructure automation** and **developer experience** — are areas where I delivered measurable outcomes: **Terraform** modules enabling zero-downtime deploys (60% fewer rollbacks) and a **GitHub Actions** migration cutting builds 45→12 min.",',
+  '    "paragraphThree": "Acme Cloud\'s focus on treating internal platforms as a product resonates with how I work. I\'d welcome the chance to discuss how my platform background fits your priorities.",',
+  '    "closing": "Yours sincerely,",',
+  '    "signatureName": "Alex Chen"',
+  "  }",
+  "}",
+].join("\n");
 
 /**
  * V2 system prompt with XML-tagged sections for reliable LLM parsing.
@@ -337,6 +352,10 @@ export function buildV2ResumeUserPrompt(input: BuildApplicationPromptInput): str
     requiredJsonShape,
     "</output-schema>",
     "",
+    "<example>",
+    RESUME_FEWSHOT_EXAMPLE,
+    "</example>",
+    "",
     "<self-check>",
     qualityGates,
     "</self-check>",
@@ -385,6 +404,10 @@ export function buildV2CoverUserPrompt(input: BuildApplicationPromptInput): stri
     "<output-schema>",
     requiredJsonShape,
     "</output-schema>",
+    "",
+    "<example>",
+    COVER_FEWSHOT_EXAMPLE,
+    "</example>",
     "",
     "<self-check>",
     qualityGates,

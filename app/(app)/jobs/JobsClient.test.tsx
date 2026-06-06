@@ -870,7 +870,7 @@ describe("JobsClient", () => {
         return new Response(new Blob(["skill-pack"]), {
           status: 200,
           headers: {
-            "content-disposition": 'attachment; filename="joblit-tailoring.tar.gz"',
+            "content-disposition": 'attachment; filename="joblit-skills-v2.zip"',
           },
         });
       }
@@ -971,7 +971,7 @@ describe("JobsClient", () => {
         return new Response(new Blob(["skill-pack"]), {
           status: 200,
           headers: {
-            "content-disposition": 'attachment; filename="joblit-tailoring.tar.gz"',
+            "content-disposition": 'attachment; filename="joblit-skills-v2.zip"',
             "x-skill-pack-version": "spv-1",
           },
         });

@@ -118,7 +118,7 @@ export function StepImport({
             onClick={onSkip}
             className="mt-3 text-xs text-muted-foreground underline-offset-4 hover:text-foreground/85 hover:underline"
           >
-            Already imported? Skip to next step &rarr;
+            Already loaded this pack in your AI? Use the short prompt &rarr;
           </button>
         </div>
       </div>

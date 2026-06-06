@@ -60,16 +60,6 @@ describe("prompt rules skill pack api", () => {
     expect(res.headers.get("x-skill-pack-version")?.length).toBe(64);
   });
 
-  it("returns tar.gz when format=tar.gz (V1 backward compat)", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      user: { id: "user-1" },
-    });
-    const res = await GET(new Request("http://localhost/api/prompt-rules/skill-pack?format=tar.gz"));
-    expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toBe("application/gzip");
-    expect(res.headers.get("content-disposition")).toContain(".tar.gz");
-  });
-
   it("returns global skill pack even if jobId query is provided", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       user: { id: "user-1" },

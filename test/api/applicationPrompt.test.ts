@@ -119,34 +119,6 @@ describe("applications prompt api", () => {
     expect(json.expectedJsonSchema?.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
   });
 
-  it("returns V1 prompts when promptVersion=v1", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
-    jobStore.findFirst.mockResolvedValueOnce({
-      title: "Software Engineer",
-      company: "Example Co",
-      description: "Build product features",
-    });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
-
-    const res = await POST(
-      new Request("http://localhost/api/applications/prompt?promptVersion=v1", {
-        method: "POST",
-        body: JSON.stringify({ jobId: VALID_JOB_ID, target: "resume" }),
-      }),
-    );
-    const json = await res.json();
-
-    expect(res.status).toBe(200);
-    expect(json.promptVersion).toBe("v1");
-    expect(json.prompt.systemPrompt).toContain("single source of truth");
-    expect(json.prompt.userPrompt).toContain("Top-3 Responsibility Alignment (guidance):");
-  });
-
   it("returns cover-target prompt payload", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "user-1" },
