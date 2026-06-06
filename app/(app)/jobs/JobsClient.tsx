@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
-import { CheckSquare, MapPin, Plus, SlidersHorizontal, Square, Trash2, X } from "lucide-react";
+import { ArrowRight, CheckSquare, Compass, MapPin, SlidersHorizontal, Square, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -24,7 +24,6 @@ import { useExternalGenerate } from "./hooks/useExternalGenerate";
 import { JobListItem } from "./components/JobListItem";
 import { VirtualJobList } from "./components/VirtualJobList";
 import { JobBatchDeleteDialog } from "./components/JobBatchDeleteDialog";
-import { JobAddDialog } from "./components/JobAddDialog";
 import { JobSearchBar } from "./components/JobSearchBar";
 import { ExternalGenerateDialog } from "./components/ExternalGenerateDialog";
 import { PdfPreviewDialog } from "./components/PdfPreviewDialog";
@@ -115,7 +114,6 @@ export function JobsClient({
   const [batchSelectMode, setBatchSelectMode] = useState(false);
   const [batchSelectedIds, setBatchSelectedIds] = useState<Set<string>>(new Set());
   const [batchDeleteConfirmOpen, setBatchDeleteConfirmOpen] = useState(false);
-  const [addJobOpen, setAddJobOpen] = useState(false);
 
   const lastSeenImportRef = useRef<{
     runId: string | null;
@@ -166,7 +164,6 @@ export function JobsClient({
   // state of .app-shell when the dialog unmounts.
   const anyDialogOpen =
     batchDeleteConfirmOpen ||
-    addJobOpen ||
     previewOpen ||
     ext.externalDialogOpen ||
     !!ext.tailorReviewDraft;
@@ -365,8 +362,6 @@ export function JobsClient({
         onGenerate={ext.generateFromImportedJson}
       />
 
-      <JobAddDialog open={addJobOpen} onOpenChange={setAddJobOpen} />
-
       <TailorReviewDialog
         open={!!ext.tailorReviewDraft}
         draft={ext.tailorReviewDraft}
@@ -491,18 +486,6 @@ export function JobsClient({
                   <SelectItem value="REJECTED">{t("statusRejected")}</SelectItem>
                 </SelectContent>
               </Select>
-              {market === "AU" && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setAddJobOpen(true)}
-                  className="h-11 gap-1.5 rounded-lg border-dashed border-border text-xs font-medium text-muted-foreground transition-colors hover:border-brand-emerald-300 hover:bg-brand-emerald-50/60 hover:text-brand-emerald-700 sm:h-9"
-                >
-                  <Plus className="h-3 w-3" />
-                  Add Job
-                </Button>
-              )}
             </div>
           )}
         </div>
@@ -644,18 +627,6 @@ export function JobsClient({
                     ))}
                   </SelectContent>
                 </Select>
-                {market === "AU" && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setAddJobOpen(true)}
-                    className="h-11 w-full justify-center gap-1.5 rounded-xl border-dashed border-border/90 px-0 text-sm font-medium text-muted-foreground transition-all duration-150 hover:border-brand-emerald-300 hover:bg-brand-emerald-50/60 hover:text-brand-emerald-700"
-                    aria-label="Add job"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add
-                  </Button>
-                )}
               </div>
             </div>
           </div>
@@ -832,37 +803,77 @@ export function JobsClient({
                 </div>
               )
             ) : showEmpty ? (
-              <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-border/70 px-6 py-12 text-center">
-                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-emerald-50 text-brand-emerald-600 ring-1 ring-brand-emerald-100">
-                  <MapPin className="h-5 w-5" aria-hidden />
-                </span>
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-foreground">{t("noJobs")}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {activeFilterCount > 0
-                      ? "Try clearing filters, or fetch fresh roles."
-                      : "Fetch roles from job boards or add one manually to get started."}
+              <div className="flex h-full min-h-[440px] flex-col items-center justify-center px-6 py-12 text-center">
+                <motion.div
+                  initial={reducedMotion ? false : { opacity: 0, y: 10, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                  className="flex flex-col items-center"
+                >
+                  {/* Layered emblem: soft glow + concentric rings + a crisp tile */}
+                  <div className="relative mb-6 flex h-20 w-20 items-center justify-center">
+                    <span
+                      aria-hidden
+                      className="absolute inset-0 rounded-full bg-brand-emerald-400/20 blur-2xl"
+                    />
+                    <span
+                      aria-hidden
+                      className="absolute inset-0 rounded-full ring-1 ring-brand-emerald-100"
+                    />
+                    <span
+                      aria-hidden
+                      className="absolute inset-[7px] rounded-full ring-1 ring-brand-emerald-100/70"
+                    />
+                    {!reducedMotion && (
+                      <span
+                        aria-hidden
+                        className="absolute inset-0 rounded-full ring-1 ring-brand-emerald-300/50 motion-safe:animate-ping [animation-duration:3s]"
+                      />
+                    )}
+                    <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-emerald-50 to-white text-brand-emerald-600 shadow-sm ring-1 ring-brand-emerald-100">
+                      <Compass className="h-6 w-6" aria-hidden />
+                    </span>
+                  </div>
+                  <h3 className="text-base font-semibold tracking-tight text-foreground">
+                    {activeFilterCount > 0 ? t("emptyHeadlineFiltered") : t("emptyHeadline")}
+                  </h3>
+                  <p className="mt-1.5 max-w-xs text-sm leading-relaxed text-muted-foreground">
+                    {activeFilterCount > 0 ? t("emptySubtextFiltered") : t("emptySubtext")}
                   </p>
-                </div>
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  <Button
-                    asChild
-                    size="sm"
-                    className="h-9 rounded-full bg-foreground px-4 text-xs font-semibold text-background hover:bg-foreground/90"
-                  >
-                    <a href="/fetch">Fetch jobs</a>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setAddJobOpen(true)}
-                    className="h-9 rounded-full px-4 text-xs font-semibold"
-                  >
-                    <Plus className="mr-1 h-3.5 w-3.5" aria-hidden />
-                    Add manually
-                  </Button>
-                </div>
+                  <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
+                    <Button
+                      asChild
+                      size="sm"
+                      className="group h-10 gap-1.5 rounded-full bg-brand-emerald-600 px-5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-brand-emerald-700 hover:shadow-md"
+                    >
+                      <a href="/fetch">
+                        {t("emptyFetchCta")}
+                        <ArrowRight
+                          className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
+                          aria-hidden
+                        />
+                      </a>
+                    </Button>
+                    {activeFilterCount > 0 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          startTransition(() => {
+                            setStatusFilter("ALL");
+                            setLocationFilter("ALL");
+                            setJobLevelFilter("ALL");
+                            setQ("");
+                          })
+                        }
+                        className="h-10 rounded-full px-4 text-sm font-medium text-muted-foreground hover:text-foreground"
+                      >
+                        {t("emptyClearFilters")}
+                      </Button>
+                    )}
+                  </div>
+                </motion.div>
               </div>
             ) : null}
           </ScrollArea>

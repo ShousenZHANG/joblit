@@ -14,17 +14,7 @@
    CN pipeline writes directly via Prisma inside the cron route.
 6. Jobs appear in `GET /api/jobs` and the `/jobs` UI.
 
-## 2) Manual Add job (Seek) in AU
-
-1. In `/jobs` (EN/AU), user clicks **Add job**.
-2. Client submits `POST /api/jobs` with `{ jobUrl, title, ... }`.
-3. API:
-   - Canonicalizes URL
-   - Rejects duplicates with `409 JOB_URL_EXISTS`
-   - Creates job otherwise
-4. Client invalidates `jobs` queries and the job appears in list.
-
-## 3) External model CV/CL generation (skill pack + strict JSON import)
+## 2) External model CV/CL generation (skill pack + strict JSON import)
 
 1. Download skill pack: `GET /api/prompt-rules/skill-pack` (optional `?redact=true`).
 2. Build a per-job prompt: `POST /api/applications/prompt` with `{ jobId, target }`.

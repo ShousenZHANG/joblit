@@ -789,7 +789,7 @@ describe("JobsClient", () => {
     // hidden via suppression but still cached, `items` is empty while
     // `mergedItems` is not; the list must still render the empty affordance.
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /add manually/i })).toBeInTheDocument();
+      expect(screen.getByText(/no jobs yet/i)).toBeInTheDocument();
     });
   });
 
