@@ -20,6 +20,11 @@ import {
   buildV2CoverUserPrompt,
   buildV2ShortUserPrompt,
 } from "@/lib/server/ai/applicationPromptBuilder";
+import {
+  fetchSeekJobDescription,
+  isSeekJobUrl,
+  SEEK_THIN_DESCRIPTION,
+} from "@/lib/server/seek/fetchJobDescription";
 
 export const runtime = "nodejs";
 
@@ -64,6 +69,7 @@ export async function POST(req: Request) {
       company: true,
       description: true,
       market: true,
+      jobUrl: true,
     },
   });
 
@@ -92,12 +98,28 @@ export async function POST(req: Request) {
   const rules = await getActivePromptSkillRulesForUser(userId);
   const mappedProfile = mapResumeProfile(profile);
   const baseLatestBullets = mappedProfile.experiences[0]?.bullets ?? [];
-  const coverage = computeTop3Coverage(job.description, baseLatestBullets);
+
+  // Seek bulk fetches store only a short teaser. When tailoring a Seek job,
+  // upgrade to the full JD once (server-side, single request) and persist it so
+  // the matching/coverage gets the complete description. Best-effort: on any
+  // failure we keep the teaser.
+  let description = job.description || "";
+  if (isSeekJobUrl(job.jobUrl) && description.trim().length < SEEK_THIN_DESCRIPTION) {
+    const fullDescription = await fetchSeekJobDescription(job.jobUrl);
+    if (fullDescription && fullDescription.length > description.length) {
+      description = fullDescription;
+      await prisma.job
+        .update({ where: { id: parsed.data.jobId }, data: { description: fullDescription } })
+        .catch(() => {});
+    }
+  }
+
+  const coverage = computeTop3Coverage(description, baseLatestBullets);
 
   const jobInput = {
     title: job.title,
     company: job.company || "the company",
-    description: job.description || "",
+    description,
   };
   const resumeInput = { baseLatestBullets, coverage };
 
