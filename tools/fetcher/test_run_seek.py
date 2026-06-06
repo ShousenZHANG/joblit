@@ -177,6 +177,35 @@ def test_apply_title_exclusions():
     assert rs.apply_title_exclusions(items, []) == items
 
 
+def test_extract_domain_tokens():
+    assert rs.extract_domain_tokens(["AI Engineer"]) == {"ai"}
+    assert rs.extract_domain_tokens(["Software Engineer"]) == {"software"}
+    assert rs.extract_domain_tokens(["Engineer"]) == set()  # all-generic -> no domain
+    assert rs.extract_domain_tokens(["Machine Learning"]) == {"machine", "learning"}
+
+
+def test_filter_relevant_titles_drops_broad_match_noise():
+    items = [
+        {"title": "AI Software Engineer"},
+        {"title": "Elixir Developer"},
+        {"title": "Systems Engineer"},
+        {"title": "Graduate AI Engineer"},
+    ]
+    out = rs.filter_relevant_titles(items, ["AI Engineer"])
+    assert [i["title"] for i in out] == ["AI Software Engineer", "Graduate AI Engineer"]
+
+
+def test_filter_relevant_titles_generic_query_keeps_all():
+    items = [{"title": "Backend Developer"}, {"title": "Systems Engineer"}]
+    assert rs.filter_relevant_titles(items, ["Engineer"]) == items
+
+
+def test_filter_relevant_titles_never_empties():
+    # Nothing matches the domain at all -> fall back to the full list.
+    items = [{"title": "Elixir Developer"}]
+    assert rs.filter_relevant_titles(items, ["AI Engineer"]) == items
+
+
 def test_find_description_depth_guard_and_nested():
     node = {"description": "deep"}
     for _ in range(rs.MAX_RECURSION_DEPTH + 5):

@@ -284,6 +284,50 @@ def apply_title_exclusions(items: List[Dict[str, str]], exclude_terms: Iterable[
     return [it for it in items if not pattern.search(it.get("title", ""))]
 
 
+# Generic role/seniority suffixes — dropped when judging title relevance so the
+# DOMAIN tokens of a query (e.g. "ai", "data") are what must appear in a title.
+RELEVANCE_GENERIC = {
+    "the", "and", "for", "with", "of", "in", "to", "or", "at", "a", "an",
+    "engineer", "engineers", "engineering", "developer", "developers", "programmer",
+    "programmers", "manager", "management", "analyst", "analysts", "specialist",
+    "consultant", "scientist", "designer", "administrator", "coordinator", "officer",
+    "lead", "senior", "junior", "graduate", "intern", "internship", "staff",
+    "principal", "director", "head", "architect", "role", "roles", "expert",
+}
+
+
+def extract_domain_tokens(keywords: Iterable[str]) -> set:
+    tokens: set = set()
+    for kw in keywords or []:
+        for tok in re.split(r"[^a-z0-9+#]+", str(kw or "").lower()):
+            tok = tok.strip()
+            if len(tok) >= 2 and tok not in RELEVANCE_GENERIC:
+                tokens.add(tok)
+    return tokens
+
+
+def filter_relevant_titles(items: List[Dict[str, str]], keywords: Iterable[str]) -> List[Dict[str, str]]:
+    """Keep only results whose title actually matches the search domain. Seek's
+    keyword search is broad — an "AI Engineer" query returns unrelated roles
+    (e.g. "Elixir Developer", "Systems Engineer") — so require the domain tokens
+    of the query in the title. Never empties: falls back to any-token match, then
+    to the full list, so a generic or unusual query can't wipe the results."""
+    domain = extract_domain_tokens(keywords)
+    if not domain:
+        return items
+
+    def matches(title: str, require_all: bool) -> bool:
+        low = (title or "").lower()
+        hits = [bool(re.search(r"\b" + re.escape(tok) + r"\b", low)) for tok in domain]
+        return all(hits) if require_all else any(hits)
+
+    strict = [it for it in items if matches(it.get("title", ""), True)]
+    if strict:
+        return strict
+    loose = [it for it in items if matches(it.get("title", ""), False)]
+    return loose or items
+
+
 def _find_description(payload: Any, depth: int = 0) -> str:
     if depth > MAX_RECURSION_DEPTH:
         return ""
@@ -653,6 +697,16 @@ def run_from_config(run_id: str) -> int:
         # already give a usable preview ("Open job" shows the full JD on Seek).
         # Full JD is best fetched on-demand when a job is actually tailored.
         items = collect_jobs(SeekFetcher(), build_queries_from_config(run), enrich=False)
+        # Relevance: Seek keyword search is broad, so drop titles that do not
+        # match the search domain (e.g. "Elixir Developer" for an "AI Engineer"
+        # query) before any other filtering.
+        keywords = [str(k) for k in (raw.get("queries") or []) if str(k).strip()]
+        if not keywords and raw.get("title"):
+            keywords = [str(raw.get("title"))]
+        relevance_before = len(items)
+        items = filter_relevant_titles(items, keywords)
+        if len(items) != relevance_before:
+            logger.info("Seek relevance filter dropped %s -> %s", relevance_before, len(items))
         # Honour the same title exclusions the JobSpy pipeline applies.
         if bool(raw.get("applyExcludes", True)):
             before = len(items)
@@ -705,6 +759,7 @@ def main() -> int:
             }
         ]
         items = collect_jobs(fetcher, queries, enrich=args.enrich)
+        items = filter_relevant_titles(items, [args.keywords])
 
         if args.dry_run or not args.import_base or not args.user_email:
             logger.info("DRY RUN - %s items (first 5 shown)", len(items))
