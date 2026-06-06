@@ -491,6 +491,9 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
   // when the server-side Seek kill-switch is on (seekEnabled prop).
   const [source, setSource] = useState<"jobspy" | "seek">("jobspy");
   const [seekClassification, setSeekClassification] = useState("");
+  // Seek only supports title exclusions — no smart-expand, no description-level
+  // (rights / minimum-experience) filtering.
+  const isSeek = seekEnabled && source === "seek";
   const [cnExcludeKeywords, setCnExcludeKeywords] = useState("");
   const [cnLocation, setCnLocation] = useState("");
   const [hoursOld, setHoursOld] = useState(48);
@@ -627,15 +630,19 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
           queries,
           location,
           hoursOld,
-          smartExpand,
+          // Seek honours only title exclusions — force smart-expand off and drop
+          // description-level rules for Seek runs.
+          smartExpand: isSeek ? false : smartExpand,
           applyExcludes,
           excludeTitleTerms,
-          excludeDescriptionRules: [
-            ...excludeDescriptionRules,
-            ...(experienceRule ? [experienceRule] : []),
-          ],
+          excludeDescriptionRules: isSeek
+            ? []
+            : [
+                ...excludeDescriptionRules,
+                ...(experienceRule ? [experienceRule] : []),
+              ],
           source: seekEnabled ? source : "jobspy",
-          ...(seekEnabled && source === "seek"
+          ...(isSeek
             ? {
                 classification: seekClassification.trim() || undefined,
                 // Seek windows by day; reuse the hoursOld control (48h -> 2d).
@@ -874,14 +881,16 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
 
           {/* Options row: chip toggles */}
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className={`filter-chip ${smartExpand ? "filter-chip--active" : "filter-chip--inactive"}`}
-              onClick={() => setSmartExpand(!smartExpand)}
-            >
-              <span className={`h-1.5 w-1.5 rounded-full ${smartExpand ? "bg-brand-emerald-500" : "bg-muted-foreground/30"}`} />
-              Smart expand
-            </button>
+            {!isSeek && (
+              <button
+                type="button"
+                className={`filter-chip ${smartExpand ? "filter-chip--active" : "filter-chip--inactive"}`}
+                onClick={() => setSmartExpand(!smartExpand)}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${smartExpand ? "bg-brand-emerald-500" : "bg-muted-foreground/30"}`} />
+                Smart expand
+              </button>
+            )}
             <button
               type="button"
               className={`filter-chip ${applyExcludes ? "filter-chip--active" : "filter-chip--inactive"}`}
@@ -911,37 +920,41 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
                     onChange={setExcludeTitleTerms}
                   />
                 </div>
-                <ExclusionDropdown
-                  label="Description exclusions"
-                  values={excludeDescriptionRules}
-                  options={RIGHTS_EXCLUSION_OPTIONS}
-                  placeholder="Select rules"
-                  testId="description-exclusions"
-                  onChange={setExcludeDescriptionRules}
-                />
+                {!isSeek && (
+                  <ExclusionDropdown
+                    label="Description exclusions"
+                    values={excludeDescriptionRules}
+                    options={RIGHTS_EXCLUSION_OPTIONS}
+                    placeholder="Select rules"
+                    testId="description-exclusions"
+                    onChange={setExcludeDescriptionRules}
+                  />
+                )}
               </div>
 
-              <div className="space-y-1.5 sm:max-w-xs">
-                <Label htmlFor="fetch-experience" className="text-xs font-medium text-muted-foreground">
-                  Minimum experience
-                </Label>
-                <Select
-                  value={experienceRule || "off"}
-                  onValueChange={(v) => setExperienceRule(v === "off" ? "" : v)}
-                >
-                  <SelectTrigger id="fetch-experience">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="off">No experience filter</SelectItem>
-                    {EXPERIENCE_EXCLUSION_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {!isSeek && (
+                <div className="space-y-1.5 sm:max-w-xs">
+                  <Label htmlFor="fetch-experience" className="text-xs font-medium text-muted-foreground">
+                    Minimum experience
+                  </Label>
+                  <Select
+                    value={experienceRule || "off"}
+                    onValueChange={(v) => setExperienceRule(v === "off" ? "" : v)}
+                  >
+                    <SelectTrigger id="fetch-experience">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="off">No experience filter</SelectItem>
+                      {EXPERIENCE_EXCLUSION_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           )}
 
