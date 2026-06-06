@@ -18,7 +18,9 @@
 const SEEK_HOST = "au.seek.com";
 const SEEK_ORIGIN = `https://${SEEK_HOST}`;
 const SEEK_GRAPHQL_URL = `${SEEK_ORIGIN}/graphql`;
-const REQUEST_TIMEOUT_MS = 12_000;
+// On the Generate CV/CL hot path — keep tight so a slow Seek can't add much
+// latency before falling back to the teaser.
+const REQUEST_TIMEOUT_MS = 5_000;
 const MAX_DESCRIPTION = 50_000;
 
 // Below this many chars a stored Seek description is treated as a teaser worth

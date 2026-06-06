@@ -14,6 +14,14 @@ function isSeekEnabled(): boolean {
   return v === "1" || v === "true" || v === "yes";
 }
 
+// 31-bit positive hash of a userId for a Postgres pg_advisory_xact_lock(bigint),
+// used to serialise per-user Seek run creation (atomic one-in-flight guard).
+function userIdToAdvisoryKey(userId: string): number {
+  let h = 5381;
+  for (let i = 0; i < userId.length; i++) h = ((h << 5) + h + userId.charCodeAt(i)) | 0;
+  return h & 0x7fffffff;
+}
+
 // Title exclusions allow any user term (presets + custom). Lower-cased and
 // length-bounded; the worker escapes each term before building its regex, so
 // arbitrary input is injection-safe.
@@ -109,6 +117,8 @@ export async function GET() {
           hoursOld: r.hoursOld,
           smartExpand: typeof q.smartExpand === "boolean" ? q.smartExpand : null,
           sources: Array.isArray(q.sources) ? (q.sources as string[]) : null,
+          source: typeof q.source === "string" ? (q.source as string) : null,
+          classification: typeof q.classification === "string" ? (q.classification as string) : null,
           excludeKeywords: Array.isArray(q.excludeKeywords)
             ? (q.excludeKeywords as string[])
             : null,
@@ -159,23 +169,8 @@ export async function POST(req: Request) {
     if (!parsed.ok) return parsed.response;
     const data = parsed.data;
 
-    if (data.source === "seek") {
-      if (!isSeekEnabled()) {
-        return NextResponse.json({ error: "SEEK_DISABLED" }, { status: 403 });
-      }
-      // Abuse guard: one in-flight Seek run per user. Seek shares a single
-      // egress IP under Cloudflare, so unbounded concurrent runs would get the
-      // whole product IP-blocked. Scoped to seek only — jobspy is unaffected.
-      const activeSeek = await prisma.fetchRun.count({
-        where: {
-          userId,
-          status: { in: ["QUEUED", "RUNNING"] },
-          queries: { path: ["source"], equals: "seek" },
-        },
-      });
-      if (activeSeek > 0) {
-        return NextResponse.json({ error: "SEEK_RUN_IN_PROGRESS" }, { status: 429 });
-      }
+    if (data.source === "seek" && !isSeekEnabled()) {
+      return NextResponse.json({ error: "SEEK_DISABLED" }, { status: 403 });
     }
 
     const fallbackTitle = data.title ?? data.queries?.[0] ?? "";
@@ -187,34 +182,56 @@ export async function POST(req: Request) {
     const queries = data.smartExpand ? expandRoleQueries(baseQueries) : baseQueries;
     const title = fallbackTitle || queries[0] || "";
 
-    const run = await prisma.fetchRun.create({
-      data: {
-        userId,
-        userEmail: userEmail.toLowerCase(),
-        status: "QUEUED",
-        importedCount: 0,
-        queries: {
-          title,
-          queries,
-          smartExpand: data.smartExpand,
-          includeFromQueries: data.includeFromQueries,
-          applyExcludes: data.applyExcludes,
-          excludeTitleTerms: data.excludeTitleTerms,
-          excludeDescriptionRules: data.excludeDescriptionRules,
-          source: data.source,
-          ...(data.source === "seek"
-            ? { classification: data.classification ?? "", daterange: data.daterange ?? 2 }
-            : {}),
-        },
-        location: data.location ?? null,
-        hoursOld: data.hoursOld ?? null,
-        resultsWanted: null,
+    const createData = {
+      userId,
+      userEmail: userEmail.toLowerCase(),
+      status: "QUEUED" as const,
+      importedCount: 0,
+      queries: {
+        title,
+        queries,
+        smartExpand: data.smartExpand,
         includeFromQueries: data.includeFromQueries,
-        filterDescription: data.applyExcludes,
+        applyExcludes: data.applyExcludes,
+        excludeTitleTerms: data.excludeTitleTerms,
+        excludeDescriptionRules: data.excludeDescriptionRules,
+        source: data.source,
+        ...(data.source === "seek"
+          ? { classification: data.classification ?? "", daterange: data.daterange ?? 2 }
+          : {}),
       },
-      select: { id: true },
-    });
+      location: data.location ?? null,
+      hoursOld: data.hoursOld ?? null,
+      resultsWanted: null,
+      includeFromQueries: data.includeFromQueries,
+      filterDescription: data.applyExcludes,
+    };
 
+    // Seek: enforce one in-flight run per user ATOMICALLY. Seek shares one
+    // egress IP under Cloudflare, so a TOCTOU between count and create would let
+    // concurrent requests both pass an empty check and both dispatch. A per-user
+    // advisory lock inside the transaction serialises the check + insert.
+    if (data.source === "seek") {
+      const lockKey = userIdToAdvisoryKey(userId);
+      const created = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(${lockKey}::bigint)`;
+        const active = await tx.fetchRun.count({
+          where: {
+            userId,
+            status: { in: ["QUEUED", "RUNNING"] },
+            queries: { path: ["source"], equals: "seek" },
+          },
+        });
+        if (active > 0) return null;
+        return tx.fetchRun.create({ data: createData, select: { id: true } });
+      });
+      if (!created) {
+        return NextResponse.json({ error: "SEEK_RUN_IN_PROGRESS" }, { status: 429 });
+      }
+      return NextResponse.json({ id: created.id }, { status: 201 });
+    }
+
+    const run = await prisma.fetchRun.create({ data: createData, select: { id: true } });
     return NextResponse.json({ id: run.id }, { status: 201 });
   });
 }

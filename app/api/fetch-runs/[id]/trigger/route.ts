@@ -222,11 +222,16 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   // jobspy (LinkedIn, default — unchanged) or seek (au.seek.com worker).
   const source = readRunSource(txResult.queries);
   if (source === "seek" && !isSeekEnabled()) {
-    // Kill-switch flipped after this run was created — release the slot so the
-    // run can be retried (or cleaned up) rather than wedged in QUEUED.
+    // Kill-switch flipped after this run was created — mark it FAILED (terminal)
+    // rather than releasing it back to QUEUED, where it could never succeed and
+    // would wedge until the stuck-run reaper sweeps it.
     await prisma.fetchRun.updateMany({
       where: { id: runId, userId, status: "QUEUED" },
-      data: { queries: txResult.queries as Prisma.InputJsonValue },
+      data: {
+        status: "FAILED",
+        error: "SEEK_DISABLED",
+        queries: txResult.queries as Prisma.InputJsonValue,
+      },
     });
     return NextResponse.json({ error: "SEEK_DISABLED" }, { status: 403 });
   }

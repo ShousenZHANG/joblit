@@ -108,8 +108,12 @@ export async function POST(req: Request) {
     const fullDescription = await fetchSeekJobDescription(job.jobUrl);
     if (fullDescription && fullDescription.length > description.length) {
       description = fullDescription;
+      // updateMany re-asserts ownership (id + userId) at write time.
       await prisma.job
-        .update({ where: { id: parsed.data.jobId }, data: { description: fullDescription } })
+        .updateMany({
+          where: { id: parsed.data.jobId, userId },
+          data: { description: fullDescription },
+        })
         .catch(() => {});
     }
   }

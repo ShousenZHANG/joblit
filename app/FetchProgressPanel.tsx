@@ -315,7 +315,13 @@ export function FetchProgressPanel() {
 
             {error ? (
               <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {error}
+                {/(challenge|cloudflare|status=403|status=429)/i.test(error)
+                  ? "The job source is rate-limiting us right now — wait a moment and try again, or switch source."
+                  : /seek_disabled/i.test(error)
+                    ? "Seek fetching is currently turned off. Use LinkedIn, or try again later."
+                    : /(request failed|timeout|connectionpool|unreachable)/i.test(error)
+                      ? "Couldn't reach the job source. Please retry shortly."
+                      : error}
               </div>
             ) : null}
 

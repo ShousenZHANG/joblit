@@ -381,6 +381,8 @@ type FetchRunListItem = {
   hoursOld: number | null;
   smartExpand: boolean | null;
   sources: string[] | null;
+  source: string | null;
+  classification: string | null;
   excludeKeywords: string[] | null;
   createdAt: string;
 };
@@ -710,6 +712,12 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
       if (run.location) setLocation(run.location);
       if (typeof run.hoursOld === "number") setHoursOld(run.hoursOld);
       if (typeof run.smartExpand === "boolean") setSmartExpand(run.smartExpand);
+      // Restore the Seek selection so re-running a Seek run doesn't silently
+      // revert to LinkedIn.
+      if (seekEnabled && (run.source === "seek" || run.source === "jobspy")) {
+        setSource(run.source);
+      }
+      if (typeof run.classification === "string") setSeekClassification(run.classification);
     }
     setLocalError(null);
     topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });

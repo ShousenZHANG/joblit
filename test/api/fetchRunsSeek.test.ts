@@ -2,6 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const prismaStore = vi.hoisted(() => ({
   fetchRun: { create: vi.fn(), count: vi.fn() },
+  // Seek creation runs inside an advisory-locked transaction; the mock runs the
+  // callback against a tx that shares the same fetchRun mocks.
+  $transaction: vi.fn(async (cb: (tx: unknown) => unknown) =>
+    cb({ $queryRaw: async () => [], fetchRun: prismaStore.fetchRun }),
+  ),
 }));
 
 vi.mock("@/lib/server/prisma", () => ({ prisma: prismaStore }));

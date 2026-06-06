@@ -93,6 +93,15 @@ class SeekChallengeError(RuntimeError):
     design (after one re-warm) rather than circumventing the measure."""
 
 
+class PartialImportError(RuntimeError):
+    """Raised when some import batches committed before a later batch failed.
+    Carries the count actually imported so the run status doesn't lie."""
+
+    def __init__(self, imported: int, cause: object) -> None:
+        self.imported = imported
+        super().__init__(str(cause))
+
+
 # ── Pure helpers (network-free, unit-tested) ───────────────────────────────
 def _truncate(value: Any, limit: int) -> str:
     text = str(value or "").strip()
@@ -162,8 +171,12 @@ def classify_response(status_code: int, content_type: str, body: str) -> str:
     transient  -> 429/5xx: retry with backoff (+ Retry-After if given).
     client_error -> other 4xx / non-JSON 2xx mismatch: fail fast, no retry.
     """
+    # Cloudflare interstitials are HTML. A legitimate JSON 2xx body can contain a
+    # needle phrase (e.g. a job title "Attention Required: Safety Officer"), so
+    # only scan non-JSON bodies for challenge markers.
+    is_json = "application/json" in (content_type or "").lower()
     text = (body or "")[:2000].lower()
-    if any(n in text for n in CHALLENGE_NEEDLES):
+    if not is_json and any(n in text for n in CHALLENGE_NEEDLES):
         return "challenge"
     if status_code == 403:
         return "challenge"
@@ -268,13 +281,21 @@ def dedupe_by_url(items: Iterable[Dict[str, str]]) -> List[Dict[str, str]]:
     return out
 
 
+# Token boundary that respects tech symbols: \b breaks inside "c++"/"c#" (no word
+# char after +/#), silently disabling those exclusions/relevance terms. Use
+# lookarounds against the token charset instead so "c++"/"c#"/"node.js" match.
+_TOKEN_LB = r"(?<![a-z0-9#+])"
+_TOKEN_LA = r"(?![a-z0-9#+])"
+
+
 def build_exclude_title_re(terms: Iterable[str]):
-    """Word-boundary, case-insensitive regex of exclusion terms (mirrors the
-    JobSpy worker's title filter so Seek honours the same exclusions)."""
+    """Boundary-anchored, case-insensitive regex of exclusion terms (mirrors the
+    JobSpy worker's title filter so Seek honours the same exclusions). Boundaries
+    are symbol-aware so terms like "c++" are not silently dropped."""
     cleaned = [re.escape(t.strip().lower()) for t in (terms or []) if t and t.strip()]
     if not cleaned:
         return None
-    return re.compile(r"(?i)\b(?:" + "|".join(cleaned) + r")\b")
+    return re.compile(r"(?i)" + _TOKEN_LB + r"(?:" + "|".join(cleaned) + r")" + _TOKEN_LA)
 
 
 def apply_title_exclusions(items: List[Dict[str, str]], exclude_terms: Iterable[str]) -> List[Dict[str, str]]:
@@ -301,7 +322,8 @@ def extract_domain_tokens(keywords: Iterable[str]) -> set:
     for kw in keywords or []:
         for tok in re.split(r"[^a-z0-9+#]+", str(kw or "").lower()):
             tok = tok.strip()
-            if len(tok) >= 2 and tok not in RELEVANCE_GENERIC:
+            # Keep single-char domain tokens ("r", "c", "go") — only drop generics.
+            if len(tok) >= 1 and tok not in RELEVANCE_GENERIC:
                 tokens.add(tok)
     return tokens
 
@@ -318,7 +340,9 @@ def filter_relevant_titles(items: List[Dict[str, str]], keywords: Iterable[str])
 
     def matches(title: str, require_all: bool) -> bool:
         low = (title or "").lower()
-        hits = [bool(re.search(r"\b" + re.escape(tok) + r"\b", low)) for tok in domain]
+        hits = [
+            bool(re.search(_TOKEN_LB + re.escape(tok) + _TOKEN_LA, low)) for tok in domain
+        ]
         return all(hits) if require_all else any(hits)
 
     strict = [it for it in items if matches(it.get("title", ""), True)]
@@ -614,7 +638,7 @@ def import_items(base_url: str, user_email: str, items: List[Dict[str, str]]) ->
                 "Seek import failed at offset=%s (imported %s before failure): %s",
                 offset, imported, last_err,
             )
-            raise last_err
+            raise PartialImportError(imported, last_err)
     return imported
 
 
@@ -720,6 +744,16 @@ def run_from_config(run_id: str) -> int:
         update_run(base, run_id, fetch_headers, {"status": "SUCCEEDED", "importedCount": imported, "error": None})
         logger.info("Seek run SUCCEEDED imported=%s elapsed=%.1fs", imported, time.monotonic() - started)
         return 0
+    except PartialImportError as err:
+        logger.error("Seek run FAILED after partial import imported=%s: %s", err.imported, err)
+        try:
+            update_run(
+                base, run_id, fetch_headers,
+                {"status": "FAILED", "importedCount": err.imported, "error": str(err)},
+            )
+        except Exception:  # noqa: BLE001 — best-effort status write
+            pass
+        return 1
     except Exception as err:  # noqa: BLE001 — always report a terminal status
         logger.error("Seek run FAILED elapsed=%.1fs error=%s", time.monotonic() - started, err)
         try:

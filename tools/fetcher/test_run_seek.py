@@ -206,6 +206,57 @@ def test_filter_relevant_titles_never_empties():
     assert rs.filter_relevant_titles(items, ["AI Engineer"]) == items
 
 
+def test_token_boundary_handles_tech_symbols():
+    # \b breaks inside c++/c#; lookaround boundaries must keep them working for
+    # both exclusions and relevance, and single-char domain tokens (r) survive.
+    rx = rs.build_exclude_title_re(["c++"])
+    assert rx.search("C++ Lead Engineer")
+    assert not rx.search("C Sharp Engineer")
+    items = [{"title": "C++ Engineer"}, {"title": "Python Developer"}]
+    assert [i["title"] for i in rs.filter_relevant_titles(items, ["C++ Engineer"])] == ["C++ Engineer"]
+    assert rs.extract_domain_tokens(["R Developer"]) == {"r"}
+
+
+def test_classify_response_ignores_needle_in_json_body():
+    assert rs.classify_response(200, "application/json", '{"title":"Attention Required: Officer"}') == "ok"
+    assert rs.classify_response(200, "text/html", "Attention Required") == "challenge"
+
+
+def test_import_items_partial_failure_preserves_count(monkeypatch):
+    monkeypatch.setenv("IMPORT_SECRET", "s")
+    monkeypatch.setattr(rs.time, "sleep", lambda *a, **k: None)
+    calls = {"n": 0}
+
+    def fake_post(url, headers=None, data=None, timeout=None):
+        calls["n"] += 1
+        body = json.loads(data)
+        if calls["n"] == 1:
+            return FakeResp(200, json_data={"imported": len(body["items"])})
+        return FakeResp(500, text="err")
+
+    monkeypatch.setattr(rs.requests, "post", fake_post)
+    items = [{"job_url": str(i)} for i in range(60)]  # 50 + 10
+    with pytest.raises(rs.PartialImportError) as excinfo:
+        rs.import_items("https://x", "e", items)
+    assert excinfo.value.imported == 50
+
+
+def test_run_from_config_reports_partial_import_count(monkeypatch):
+    monkeypatch.setenv("JOBLIT_WEB_URL", "https://w")
+    monkeypatch.setenv("FETCH_RUN_SECRET", "s")
+    monkeypatch.setattr(rs, "fetch_run_config", lambda *a, **k: {"userEmail": "e@x", "queries": {"queries": ["ai"]}})
+    updates = []
+    monkeypatch.setattr(rs, "update_run", lambda base, rid, h, payload: updates.append(payload))
+    monkeypatch.setattr(rs, "collect_jobs", lambda *a, **k: [{"job_url": "u", "title": "AI Engineer"}])
+
+    def boom(*a, **k):
+        raise rs.PartialImportError(50, RuntimeError("import status=500"))
+
+    monkeypatch.setattr(rs, "import_items", boom)
+    assert rs.run_from_config("rid") == 1
+    assert any(u.get("status") == "FAILED" and u.get("importedCount") == 50 for u in updates)
+
+
 def test_find_description_depth_guard_and_nested():
     node = {"description": "deep"}
     for _ in range(rs.MAX_RECURSION_DEPTH + 5):
