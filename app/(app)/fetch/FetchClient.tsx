@@ -488,6 +488,36 @@ function FetchHistory({ onRerun }: { onRerun: (run: FetchRunListItem) => void })
   );
 }
 
+// Seek top-level job categories (classification id -> label), harvested + id-
+// verified from Seek's live search taxonomy. Sorted by label for the picker.
+const SEEK_CLASSIFICATIONS: { id: string; label: string }[] = [
+  { id: "1200", label: "Accounting" },
+  { id: "6251", label: "Administration & Office Support" },
+  { id: "6304", label: "Advertising, Arts & Media" },
+  { id: "1203", label: "Banking & Financial Services" },
+  { id: "1204", label: "Call Centre & Customer Service" },
+  { id: "6163", label: "Community Services & Development" },
+  { id: "1206", label: "Construction" },
+  { id: "6263", label: "Design & Architecture" },
+  { id: "6123", label: "Education & Training" },
+  { id: "1209", label: "Engineering" },
+  { id: "6205", label: "Farming, Animals & Conservation" },
+  { id: "1210", label: "Government & Defence" },
+  { id: "1211", label: "Healthcare & Medical" },
+  { id: "1212", label: "Hospitality & Tourism" },
+  { id: "6317", label: "Human Resources & Recruitment" },
+  { id: "6281", label: "Information & Communication Technology" },
+  { id: "1216", label: "Legal" },
+  { id: "6092", label: "Manufacturing, Transport & Logistics" },
+  { id: "6008", label: "Marketing & Communications" },
+  { id: "6058", label: "Mining, Resources & Energy" },
+  { id: "1220", label: "Real Estate & Property" },
+  { id: "6043", label: "Retail & Consumer Products" },
+  { id: "6362", label: "Sales" },
+  { id: "1223", label: "Science & Technology" },
+  { id: "1225", label: "Trades & Services" },
+];
+
 export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) {
   const { data: session } = useSession();
   const userId = session?.user?.id ?? null;
@@ -810,12 +840,22 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
                   </button>
                 </div>
                 {source === "seek" && (
-                  <Input
-                    value={seekClassification}
-                    onChange={(e) => setSeekClassification(e.target.value)}
-                    placeholder="Seek category id — 6281 = IT. Clear for all categories."
-                    className="h-9 max-w-md text-sm"
-                  />
+                  <Select
+                    value={seekClassification || "all"}
+                    onValueChange={(v) => setSeekClassification(v === "all" ? "" : v)}
+                  >
+                    <SelectTrigger className="h-9 max-w-md text-sm" aria-label="Seek category">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All categories</SelectItem>
+                      {SEEK_CLASSIFICATIONS.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
               </div>
             </div>
