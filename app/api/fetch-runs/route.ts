@@ -7,6 +7,13 @@ import { filterDescriptionExclusionRules } from "@/lib/shared/fetchExclusionCrit
 
 export const runtime = "nodejs";
 
+// Product-level kill-switch for the Seek source — flip the env off to disable
+// Seek instantly (no deploy) if its anti-bot blocks us at scale.
+function isSeekEnabled(): boolean {
+  const v = (process.env.SEEK_FETCH_ENABLED || "").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
 // Title exclusions allow any user term (presets + custom). Lower-cased and
 // length-bounded; the worker escapes each term before building its regex, so
 // arbitrary input is injection-safe.
@@ -43,6 +50,10 @@ const AUSchema = z
       .optional()
       .default([])
       .transform(filterDescriptionExclusionRules),
+    // Pipeline selector: "jobspy" (LinkedIn, default, unchanged) or "seek".
+    source: z.enum(["jobspy", "seek"]).optional().default("jobspy"),
+    classification: z.string().trim().max(40).optional(),
+    daterange: z.coerce.number().int().min(1).max(31).optional(),
   })
   .refine((data) => (data.title ?? data.queries?.[0])?.trim(), {
     message: "title is required",
@@ -148,6 +159,25 @@ export async function POST(req: Request) {
     if (!parsed.ok) return parsed.response;
     const data = parsed.data;
 
+    if (data.source === "seek") {
+      if (!isSeekEnabled()) {
+        return NextResponse.json({ error: "SEEK_DISABLED" }, { status: 403 });
+      }
+      // Abuse guard: one in-flight Seek run per user. Seek shares a single
+      // egress IP under Cloudflare, so unbounded concurrent runs would get the
+      // whole product IP-blocked. Scoped to seek only — jobspy is unaffected.
+      const activeSeek = await prisma.fetchRun.count({
+        where: {
+          userId,
+          status: { in: ["QUEUED", "RUNNING"] },
+          queries: { path: ["source"], equals: "seek" },
+        },
+      });
+      if (activeSeek > 0) {
+        return NextResponse.json({ error: "SEEK_RUN_IN_PROGRESS" }, { status: 429 });
+      }
+    }
+
     const fallbackTitle = data.title ?? data.queries?.[0] ?? "";
     const baseQueries = data.queries?.length
       ? data.queries
@@ -171,6 +201,10 @@ export async function POST(req: Request) {
           applyExcludes: data.applyExcludes,
           excludeTitleTerms: data.excludeTitleTerms,
           excludeDescriptionRules: data.excludeDescriptionRules,
+          source: data.source,
+          ...(data.source === "seek"
+            ? { classification: data.classification ?? "", daterange: data.daterange ?? 2 }
+            : {}),
         },
         location: data.location ?? null,
         hoursOld: data.hoursOld ?? null,

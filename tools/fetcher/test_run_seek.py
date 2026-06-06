@@ -513,3 +513,75 @@ def test_main_returns_1_on_failure(monkeypatch):
     monkeypatch.setattr(rs, "collect_jobs", boom)
     monkeypatch.setattr(sys, "argv", ["run_seek.py", "--keywords", "x", "--dry-run"])
     assert rs.main() == 1
+
+
+# ── Run-config mode ────────────────────────────────────────────────────────
+def test_build_queries_from_config():
+    run = {"location": "Sydney NSW", "queries": {"queries": ["dev", "data"], "classification": "6281", "daterange": 3}}
+    qs = rs.build_queries_from_config(run)
+    assert len(qs) == 2
+    assert qs[0] == {
+        "keywords": "dev",
+        "classification": "6281",
+        "where": "Sydney NSW",
+        "daterange_days": 3,
+        "max_pages": rs.SEEK_PAGE_CEILING,
+    }
+
+
+def test_build_queries_from_config_falls_back_to_title():
+    qs = rs.build_queries_from_config({"queries": {"title": "engineer"}})
+    assert qs[0]["keywords"] == "engineer"
+    assert qs[0]["where"] == rs.DEFAULT_WHERE
+    assert qs[0]["daterange_days"] == rs.DEFAULT_DATERANGE_DAYS
+
+
+def test_is_cancelled():
+    assert rs.is_cancelled({"status": "FAILED", "error": "Cancelled by user"}) is True
+    assert rs.is_cancelled({"status": "RUNNING"}) is False
+
+
+def test_run_from_config_success(monkeypatch):
+    monkeypatch.setenv("JOBLIT_WEB_URL", "https://w")
+    monkeypatch.setenv("FETCH_RUN_SECRET", "s")
+    run = {"userEmail": "e@x", "location": "Sydney NSW", "queries": {"queries": ["dev"]}}
+    monkeypatch.setattr(rs, "fetch_run_config", lambda *a, **k: run)
+    updates = []
+    monkeypatch.setattr(rs, "update_run", lambda base, rid, h, payload: updates.append(payload))
+    monkeypatch.setattr(rs, "collect_jobs", lambda fetcher, queries, **k: [{"job_url": "u", "title": "t"}])
+    monkeypatch.setattr(rs, "import_items", lambda base, email, items: 7)
+    assert rs.run_from_config("rid") == 0
+    assert {"status": "RUNNING"} in updates
+    assert any(u.get("status") == "SUCCEEDED" and u.get("importedCount") == 7 for u in updates)
+
+
+def test_run_from_config_cancelled_before_start(monkeypatch):
+    monkeypatch.setenv("JOBLIT_WEB_URL", "https://w")
+    monkeypatch.setenv("FETCH_RUN_SECRET", "s")
+    monkeypatch.setattr(rs, "fetch_run_config", lambda *a, **k: {"status": "FAILED", "error": "Cancelled by user"})
+    updates = []
+    monkeypatch.setattr(rs, "update_run", lambda *a, **k: updates.append(a))
+    assert rs.run_from_config("rid") == 0
+    assert updates == []  # never marked RUNNING
+
+
+def test_run_from_config_failure_marks_failed(monkeypatch):
+    monkeypatch.setenv("JOBLIT_WEB_URL", "https://w")
+    monkeypatch.setenv("FETCH_RUN_SECRET", "s")
+    monkeypatch.setattr(rs, "fetch_run_config", lambda *a, **k: {"userEmail": "e@x", "queries": {"queries": ["dev"]}})
+    updates = []
+    monkeypatch.setattr(rs, "update_run", lambda base, rid, h, payload: updates.append(payload))
+
+    def boom(*a, **k):
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setattr(rs, "collect_jobs", boom)
+    assert rs.run_from_config("rid") == 1
+    assert any(u.get("status") == "FAILED" for u in updates)
+
+
+def test_main_dispatches_run_config_when_run_id_set(monkeypatch):
+    monkeypatch.setenv("RUN_ID", "rid")
+    monkeypatch.setattr(rs, "run_from_config", lambda rid: 0 if rid == "rid" else 1)
+    monkeypatch.setattr(sys, "argv", ["run_seek.py"])
+    assert rs.main() == 0

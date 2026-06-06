@@ -13,6 +13,9 @@ export default async function FetchPage() {
   // direct navigation redirects to the Resume workspace.
   if (uiLocaleToMarket(await getLocale()) === "CN") redirect("/resume");
   const t = await getTranslations("fetch");
+  const seekEnabled = ["1", "true", "yes"].includes(
+    (process.env.SEEK_FETCH_ENABLED || "").trim().toLowerCase(),
+  );
 
   return (
     <main className="flex h-full min-h-0 flex-1 flex-col">
@@ -24,7 +27,7 @@ export default async function FetchPage() {
           />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <FetchClient />
+          <FetchClient seekEnabled={seekEnabled} />
         </div>
       </section>
     </main>

@@ -479,7 +479,7 @@ function FetchHistory({ onRerun }: { onRerun: (run: FetchRunListItem) => void })
   );
 }
 
-export function FetchClient() {
+export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) {
   const { data: session } = useSession();
   const userId = session?.user?.id ?? null;
   const t = useTranslations("fetch");
@@ -487,6 +487,10 @@ export function FetchClient() {
   const [location, setLocation] = useState("Sydney, New South Wales, Australia");
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const market = useMarket();
+  // AU pipeline selector: "jobspy" (LinkedIn, default) or "seek". Only offered
+  // when the server-side Seek kill-switch is on (seekEnabled prop).
+  const [source, setSource] = useState<"jobspy" | "seek">("jobspy");
+  const [seekClassification, setSeekClassification] = useState("");
   const [cnExcludeKeywords, setCnExcludeKeywords] = useState("");
   const [cnLocation, setCnLocation] = useState("");
   const [hoursOld, setHoursOld] = useState(48);
@@ -630,6 +634,14 @@ export function FetchClient() {
             ...excludeDescriptionRules,
             ...(experienceRule ? [experienceRule] : []),
           ],
+          source: seekEnabled ? source : "jobspy",
+          ...(seekEnabled && source === "seek"
+            ? {
+                classification: seekClassification.trim() || undefined,
+                // Seek windows by day; reuse the hoursOld control (48h -> 2d).
+                daterange: Math.max(1, Math.min(31, Math.ceil(hoursOld / 24))),
+              }
+            : {}),
         };
 
     const res = await fetch("/api/fetch-runs", {
@@ -741,6 +753,48 @@ export function FetchClient() {
 
       {market === "AU" && (
       <div className="space-y-4">
+          {seekEnabled && (
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">Source</Label>
+              <div className="flex flex-col gap-1.5">
+                <div className="inline-flex w-fit rounded-lg border border-border bg-muted/40 p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setSource("jobspy")}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
+                      source === "jobspy"
+                        ? "bg-background text-brand-emerald-700 shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    LinkedIn
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSource("seek")}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
+                      source === "seek"
+                        ? "bg-background text-brand-emerald-700 shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    Seek
+                  </button>
+                </div>
+                {source === "seek" && (
+                  <Input
+                    value={seekClassification}
+                    onChange={(e) => setSeekClassification(e.target.value)}
+                    placeholder="Seek classification id (optional, e.g. 6281 for IT)"
+                    className="h-9 max-w-md text-sm"
+                  />
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Primary search: job title (full width, prominent) */}
           <div className="space-y-1.5">
             <Label htmlFor="fetch-job-title" className="text-xs font-medium text-muted-foreground">{t("jobTitle")}</Label>

@@ -20,6 +20,20 @@ function envOrThrow(key: string) {
   return v;
 }
 
+function readRunSource(raw: unknown): "jobspy" | "seek" {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    if ((raw as Record<string, unknown>).source === "seek") return "seek";
+  }
+  return "jobspy";
+}
+
+// Product-level kill-switch for the Seek source. Flipping this env off disables
+// Seek instantly (no deploy) — used when Seek's anti-bot blocks us at scale.
+function isSeekEnabled(): boolean {
+  const v = (process.env.SEEK_FETCH_ENABLED || "").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
 type DispatchMeta = {
   inFlightAt?: string;
   dispatchedAt?: string;
@@ -204,10 +218,26 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     });
   }
 
+  // AU market dispatches to GitHub Actions. `source` selects the pipeline:
+  // jobspy (LinkedIn, default — unchanged) or seek (au.seek.com worker).
+  const source = readRunSource(txResult.queries);
+  if (source === "seek" && !isSeekEnabled()) {
+    // Kill-switch flipped after this run was created — release the slot so the
+    // run can be retried (or cleaned up) rather than wedged in QUEUED.
+    await prisma.fetchRun.updateMany({
+      where: { id: runId, userId, status: "QUEUED" },
+      data: { queries: txResult.queries as Prisma.InputJsonValue },
+    });
+    return NextResponse.json({ error: "SEEK_DISABLED" }, { status: 403 });
+  }
+
   const owner = envOrThrow("GITHUB_OWNER");
   const repo = envOrThrow("GITHUB_REPO");
   const token = envOrThrow("GITHUB_TOKEN");
-  const workflow = process.env.GITHUB_WORKFLOW_FILE || "jobspy-fetch.yml";
+  const workflow =
+    source === "seek"
+      ? process.env.SEEK_GITHUB_WORKFLOW_FILE || "seek-fetch.yml"
+      : process.env.GITHUB_WORKFLOW_FILE || "jobspy-fetch.yml";
   const ref = process.env.GITHUB_REF || "master";
 
   // Timeout the dispatch so a hung api.github.com connection can't pin the

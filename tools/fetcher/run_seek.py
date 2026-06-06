@@ -546,7 +546,101 @@ def import_items(base_url: str, user_email: str, items: List[Dict[str, str]]) ->
     return imported
 
 
+# ── Run-config mode (production worker; parallels run_jobspy.py) ───────────
+CANCELLED_ERROR = "Cancelled by user"
+
+
+def _api_base() -> str:
+    base = os.environ.get("JOBLIT_WEB_URL", "").strip().rstrip("/")
+    if not base:
+        raise RuntimeError("JOBLIT_WEB_URL is not set")
+    return _validate_import_base(base)
+
+
+def _secret_headers(secret_env: str, header: str) -> Dict[str, str]:
+    secret = os.environ.get(secret_env, "").strip()
+    if not secret:
+        raise RuntimeError(f"{secret_env} is not set")
+    return {header: secret, "Content-Type": "application/json"}
+
+
+def fetch_run_config(base: str, run_id: str, headers: Dict[str, str]) -> Dict[str, Any]:
+    res = requests.get(f"{base}/api/fetch-runs/{run_id}/config", headers=headers, timeout=30)
+    res.raise_for_status()
+    return res.json()["run"]
+
+
+def update_run(base: str, run_id: str, headers: Dict[str, str], payload: Dict[str, Any]) -> None:
+    res = requests.patch(
+        f"{base}/api/fetch-runs/{run_id}/update", headers=headers, data=json.dumps(payload), timeout=30
+    )
+    res.raise_for_status()
+
+
+def is_cancelled(run: Dict[str, Any]) -> bool:
+    return (run or {}).get("status") == "FAILED" and (run or {}).get("error") == CANCELLED_ERROR
+
+
+def build_queries_from_config(run: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Derive the Seek query fan-out (one query per keyword) from a FetchRun."""
+    raw = run.get("queries") if isinstance(run.get("queries"), dict) else {}
+    keywords = [k for k in (raw.get("queries") or []) if isinstance(k, str) and k.strip()]
+    if not keywords:
+        title = raw.get("title")
+        keywords = [title] if isinstance(title, str) and title.strip() else [""]
+    classification = str(raw.get("classification") or "")
+    try:
+        daterange_days = int(raw.get("daterange") or DEFAULT_DATERANGE_DAYS)
+    except (TypeError, ValueError):
+        daterange_days = DEFAULT_DATERANGE_DAYS
+    where = str(run.get("location") or DEFAULT_WHERE)
+    return [
+        {
+            "keywords": kw,
+            "classification": classification,
+            "where": where,
+            "daterange_days": daterange_days,
+            "max_pages": SEEK_PAGE_CEILING,
+        }
+        for kw in keywords
+    ]
+
+
+def run_from_config(run_id: str) -> int:
+    """Production entrypoint: read the FetchRun, report RUNNING/SUCCEEDED/FAILED,
+    fetch + import, with a cancellation checkpoint before writing."""
+    base = _api_base()
+    fetch_headers = _secret_headers("FETCH_RUN_SECRET", "x-fetch-run-secret")
+    run = fetch_run_config(base, run_id, fetch_headers)
+    if is_cancelled(run):
+        logger.info("Seek run already cancelled before start; exiting.")
+        return 0
+    user_email = run["userEmail"]
+    update_run(base, run_id, fetch_headers, {"status": "RUNNING"})
+    started = time.monotonic()
+    try:
+        items = collect_jobs(SeekFetcher(), build_queries_from_config(run), enrich=True)
+        if is_cancelled(fetch_run_config(base, run_id, fetch_headers)):
+            logger.info("Seek run cancelled before import; exiting.")
+            return 0
+        imported = import_items(base, user_email, items) if items else 0
+        update_run(base, run_id, fetch_headers, {"status": "SUCCEEDED", "importedCount": imported, "error": None})
+        logger.info("Seek run SUCCEEDED imported=%s elapsed=%.1fs", imported, time.monotonic() - started)
+        return 0
+    except Exception as err:  # noqa: BLE001 — always report a terminal status
+        logger.error("Seek run FAILED elapsed=%.1fs error=%s", time.monotonic() - started, err)
+        try:
+            update_run(base, run_id, fetch_headers, {"status": "FAILED", "error": str(err)})
+        except Exception:  # noqa: BLE001 — best-effort status write
+            pass
+        return 1
+
+
 def main() -> int:
+    run_id = os.environ.get("RUN_ID", "").strip()
+    if run_id:
+        return run_from_config(run_id)
+
     parser = argparse.ArgumentParser(description="Seek incremental job fetcher")
     parser.add_argument("--keywords", default="")
     parser.add_argument("--classification", default="")
