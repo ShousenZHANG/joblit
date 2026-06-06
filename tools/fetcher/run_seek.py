@@ -240,6 +240,17 @@ def _teaser_description(raw: Dict[str, Any]) -> str:
     return _truncate("\n".join(parts), MAX_DESCRIPTION)
 
 
+def _work_arrangement(raw: Dict[str, Any]) -> str:
+    wa = raw.get("workArrangements")
+    if isinstance(wa, dict):
+        data = wa.get("data")
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            label = data[0].get("label")
+            if isinstance(label, str):
+                return _truncate(label, MAX_TEXT_FIELD)
+    return ""
+
+
 def map_job(raw: Any) -> Optional[Dict[str, str]]:
     """Map one Seek v5 result to Joblit's /api/admin/import row schema. Rejects
     rows without a numeric id / title (numeric id also closes the SSRF vector)."""
@@ -263,6 +274,9 @@ def map_job(raw: Any) -> Optional[Dict[str, str]]:
         "job_type": job_type,
         "job_level": "",  # Seek search payload has no seniority field.
         "description": _teaser_description(raw),
+        "salary": _truncate(raw.get("salaryLabel", ""), MAX_TEXT_FIELD),
+        "work_arrangement": _work_arrangement(raw),
+        "listing_date": str(raw.get("listingDate") or "").strip(),
     }
 
 

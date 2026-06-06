@@ -24,6 +24,11 @@ const BodySchema = z.object({
           job_level: z.string().optional().nullable(),
           jobLevel: z.string().optional().nullable(),
           description: z.string().optional().nullable(),
+          salary: z.string().optional().nullable(),
+          work_arrangement: z.string().optional().nullable(),
+          workArrangement: z.string().optional().nullable(),
+          listing_date: z.string().optional().nullable(),
+          listingDate: z.string().optional().nullable(),
           market: z.string().optional().default("AU"),
           site: z.string().optional().nullable(),
         })
@@ -80,6 +85,10 @@ export async function POST(req: Request) {
           invalid.push({ reason: "missing_title" });
           return null;
         }
+        const rawListing = it.listingDate ?? it.listing_date ?? null;
+        const parsedListing = rawListing ? new Date(rawListing) : null;
+        const listingDate =
+          parsedListing && !Number.isNaN(parsedListing.getTime()) ? parsedListing : null;
         return {
           jobUrl,
           title,
@@ -88,6 +97,9 @@ export async function POST(req: Request) {
           jobType: it.jobType ?? it.job_type ?? null,
           jobLevel: it.jobLevel ?? it.job_level ?? null,
           description: it.description ?? null,
+          salary: it.salary ?? null,
+          workArrangement: it.workArrangement ?? it.work_arrangement ?? null,
+          listingDate,
           market: it.market ?? "AU",
         };
       })
@@ -99,6 +111,9 @@ export async function POST(req: Request) {
       jobType: string | null;
       jobLevel: string | null;
       description: string | null;
+      salary: string | null;
+      workArrangement: string | null;
+      listingDate: Date | null;
       market: string;
     }>;
 
@@ -136,6 +151,9 @@ export async function POST(req: Request) {
           jobType: current.jobType,
           jobLevel: current.jobLevel,
           description: current.description,
+          salary: current.salary,
+          workArrangement: current.workArrangement,
+          listingDate: current.listingDate,
           market: current.market,
           status: "NEW",
         })),

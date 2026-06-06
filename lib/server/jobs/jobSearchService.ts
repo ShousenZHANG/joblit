@@ -46,6 +46,9 @@ export async function listJobsWithRelevance(
     location: string | null;
     jobType: string | null;
     jobLevel: string | null;
+    salary: string | null;
+    workArrangement: string | null;
+    listingDate: Date | null;
     status: string;
     market: string | null;
     createdAt: Date;
@@ -59,7 +62,8 @@ export async function listJobsWithRelevance(
     prisma.$queryRaw<RawRow[]>`
       SELECT
         j."id", j."jobUrl", j."title", j."company", j."location",
-        j."jobType", j."jobLevel", j."status", j."market",
+        j."jobType", j."jobLevel", j."salary", j."workArrangement", j."listingDate",
+        j."status", j."market",
         j."createdAt", j."updatedAt",
         a."resumePdfUrl", a."resumePdfName", a."coverPdfUrl"
       FROM "Job" j

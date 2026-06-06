@@ -111,8 +111,17 @@ function JobListItemInner({
           <div className="mt-1 text-xs text-muted-foreground">
             {job.company ?? "-"} - {job.location ?? "-"}
           </div>
-          <div className="mt-2 text-[11px] text-muted-foreground">
-            {job.jobType ?? "Unknown"} - {job.jobLevel ?? "Unknown"}
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+            <span>{job.jobType ?? "Unknown"}</span>
+            {job.jobLevel ? <span>· {job.jobLevel}</span> : null}
+            {job.workArrangement ? (
+              <span className="rounded-full bg-brand-emerald-50 px-1.5 py-0.5 font-medium text-brand-emerald-700 ring-1 ring-brand-emerald-100">
+                {job.workArrangement}
+              </span>
+            ) : null}
+            {job.salary ? (
+              <span className="font-medium text-foreground/75">{job.salary}</span>
+            ) : null}
           </div>
         </button>
       </div>

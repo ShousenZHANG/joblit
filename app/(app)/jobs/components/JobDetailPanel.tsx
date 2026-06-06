@@ -7,13 +7,16 @@ import {
   BarChart3,
   Briefcase,
   Building2,
+  CalendarDays,
   ClipboardList,
+  DollarSign,
   ExternalLink,
   FileText,
   MapPin,
   ShieldAlert,
   Sparkles,
   Trash2,
+  Wifi,
 } from "lucide-react";
 import { useMarket } from "@/hooks/useMarket";
 import { Badge } from "@/components/ui/badge";
@@ -163,6 +166,19 @@ export function JobDetailPanel({
                 <MetaChip icon={MapPin} value={selectedJob.location} />
                 <MetaChip icon={Briefcase} value={selectedJob.jobType} />
                 <MetaChip icon={BarChart3} value={selectedJob.jobLevel} />
+                <MetaChip icon={DollarSign} value={selectedJob.salary} />
+                <MetaChip icon={Wifi} value={selectedJob.workArrangement} />
+                <MetaChip
+                  icon={CalendarDays}
+                  value={
+                    selectedJob.listingDate
+                      ? `Posted ${new Date(selectedJob.listingDate).toLocaleDateString(undefined, {
+                          day: "numeric",
+                          month: "short",
+                        })}`
+                      : null
+                  }
+                />
               </div>
             </div>
             <div className="w-full">

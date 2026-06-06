@@ -8,6 +8,9 @@ export type JobItem = {
   location: string | null;
   jobType: string | null;
   jobLevel: string | null;
+  salary?: string | null;
+  workArrangement?: string | null;
+  listingDate?: string | null;
   status: JobStatus;
   resumePdfUrl?: string | null;
   resumePdfName?: string | null;

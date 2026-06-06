@@ -142,6 +142,19 @@ def test_map_job_real_record():
     assert "$200,000 - $300,000" in m["description"]
 
 
+def test_map_job_captures_salary_arrangement_listing():
+    raw = {
+        **REAL_RAW,
+        "salaryLabel": "$200,000 - $300,000 per year",
+        "workArrangements": {"data": [{"label": "Remote"}]},
+        "listingDate": "2026-06-04T09:56:12Z",
+    }
+    m = rs.map_job(raw)
+    assert m["salary"] == "$200,000 - $300,000 per year"
+    assert m["work_arrangement"] == "Remote"
+    assert m["listing_date"] == "2026-06-04T09:56:12Z"
+
+
 def test_map_job_company_fallback_to_advertiser():
     assert rs.map_job({"id": "1", "title": "T", "advertiser": {"description": "AdCo"}})["company"] == "AdCo"
 

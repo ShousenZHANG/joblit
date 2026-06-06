@@ -6614,6 +6614,9 @@ export namespace Prisma {
     jobType: string | null
     jobLevel: string | null
     description: string | null
+    salary: string | null
+    workArrangement: string | null
+    listingDate: Date | null
     status: $Enums.JobStatus | null
     market: string | null
     createdAt: Date | null
@@ -6630,6 +6633,9 @@ export namespace Prisma {
     jobType: string | null
     jobLevel: string | null
     description: string | null
+    salary: string | null
+    workArrangement: string | null
+    listingDate: Date | null
     status: $Enums.JobStatus | null
     market: string | null
     createdAt: Date | null
@@ -6646,6 +6652,9 @@ export namespace Prisma {
     jobType: number
     jobLevel: number
     description: number
+    salary: number
+    workArrangement: number
+    listingDate: number
     status: number
     market: number
     createdAt: number
@@ -6664,6 +6673,9 @@ export namespace Prisma {
     jobType?: true
     jobLevel?: true
     description?: true
+    salary?: true
+    workArrangement?: true
+    listingDate?: true
     status?: true
     market?: true
     createdAt?: true
@@ -6680,6 +6692,9 @@ export namespace Prisma {
     jobType?: true
     jobLevel?: true
     description?: true
+    salary?: true
+    workArrangement?: true
+    listingDate?: true
     status?: true
     market?: true
     createdAt?: true
@@ -6696,6 +6711,9 @@ export namespace Prisma {
     jobType?: true
     jobLevel?: true
     description?: true
+    salary?: true
+    workArrangement?: true
+    listingDate?: true
     status?: true
     market?: true
     createdAt?: true
@@ -6785,6 +6803,9 @@ export namespace Prisma {
     jobType: string | null
     jobLevel: string | null
     description: string | null
+    salary: string | null
+    workArrangement: string | null
+    listingDate: Date | null
     status: $Enums.JobStatus
     market: string
     createdAt: Date
@@ -6818,6 +6839,9 @@ export namespace Prisma {
     jobType?: boolean
     jobLevel?: boolean
     description?: boolean
+    salary?: boolean
+    workArrangement?: boolean
+    listingDate?: boolean
     status?: boolean
     market?: boolean
     createdAt?: boolean
@@ -6839,6 +6863,9 @@ export namespace Prisma {
     jobType?: boolean
     jobLevel?: boolean
     description?: boolean
+    salary?: boolean
+    workArrangement?: boolean
+    listingDate?: boolean
     status?: boolean
     market?: boolean
     createdAt?: boolean
@@ -6856,6 +6883,9 @@ export namespace Prisma {
     jobType?: boolean
     jobLevel?: boolean
     description?: boolean
+    salary?: boolean
+    workArrangement?: boolean
+    listingDate?: boolean
     status?: boolean
     market?: boolean
     createdAt?: boolean
@@ -6873,13 +6903,16 @@ export namespace Prisma {
     jobType?: boolean
     jobLevel?: boolean
     description?: boolean
+    salary?: boolean
+    workArrangement?: boolean
+    listingDate?: boolean
     status?: boolean
     market?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type JobOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "userId" | "jobUrl" | "title" | "company" | "location" | "jobType" | "jobLevel" | "description" | "status" | "market" | "createdAt" | "updatedAt", ExtArgs["result"]["job"]>
+  export type JobOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "userId" | "jobUrl" | "title" | "company" | "location" | "jobType" | "jobLevel" | "description" | "salary" | "workArrangement" | "listingDate" | "status" | "market" | "createdAt" | "updatedAt", ExtArgs["result"]["job"]>
   export type JobInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     user?: boolean | UserDefaultArgs<ExtArgs>
     applications?: boolean | Job$applicationsArgs<ExtArgs>
@@ -6912,6 +6945,9 @@ export namespace Prisma {
       jobType: string | null
       jobLevel: string | null
       description: string | null
+      salary: string | null
+      workArrangement: string | null
+      listingDate: Date | null
       status: $Enums.JobStatus
       market: string
       createdAt: Date
@@ -7352,6 +7388,9 @@ export namespace Prisma {
     readonly jobType: FieldRef<"Job", 'String'>
     readonly jobLevel: FieldRef<"Job", 'String'>
     readonly description: FieldRef<"Job", 'String'>
+    readonly salary: FieldRef<"Job", 'String'>
+    readonly workArrangement: FieldRef<"Job", 'String'>
+    readonly listingDate: FieldRef<"Job", 'DateTime'>
     readonly status: FieldRef<"Job", 'JobStatus'>
     readonly market: FieldRef<"Job", 'String'>
     readonly createdAt: FieldRef<"Job", 'DateTime'>
@@ -23916,6 +23955,9 @@ export namespace Prisma {
     jobType: 'jobType',
     jobLevel: 'jobLevel',
     description: 'description',
+    salary: 'salary',
+    workArrangement: 'workArrangement',
+    listingDate: 'listingDate',
     status: 'status',
     market: 'market',
     createdAt: 'createdAt',
@@ -24660,6 +24702,9 @@ export namespace Prisma {
     jobType?: StringNullableFilter<"Job"> | string | null
     jobLevel?: StringNullableFilter<"Job"> | string | null
     description?: StringNullableFilter<"Job"> | string | null
+    salary?: StringNullableFilter<"Job"> | string | null
+    workArrangement?: StringNullableFilter<"Job"> | string | null
+    listingDate?: DateTimeNullableFilter<"Job"> | Date | string | null
     status?: EnumJobStatusFilter<"Job"> | $Enums.JobStatus
     market?: StringFilter<"Job"> | string
     createdAt?: DateTimeFilter<"Job"> | Date | string
@@ -24680,6 +24725,9 @@ export namespace Prisma {
     jobType?: SortOrderInput | SortOrder
     jobLevel?: SortOrderInput | SortOrder
     description?: SortOrderInput | SortOrder
+    salary?: SortOrderInput | SortOrder
+    workArrangement?: SortOrderInput | SortOrder
+    listingDate?: SortOrderInput | SortOrder
     status?: SortOrder
     market?: SortOrder
     createdAt?: SortOrder
@@ -24704,6 +24752,9 @@ export namespace Prisma {
     jobType?: StringNullableFilter<"Job"> | string | null
     jobLevel?: StringNullableFilter<"Job"> | string | null
     description?: StringNullableFilter<"Job"> | string | null
+    salary?: StringNullableFilter<"Job"> | string | null
+    workArrangement?: StringNullableFilter<"Job"> | string | null
+    listingDate?: DateTimeNullableFilter<"Job"> | Date | string | null
     status?: EnumJobStatusFilter<"Job"> | $Enums.JobStatus
     market?: StringFilter<"Job"> | string
     createdAt?: DateTimeFilter<"Job"> | Date | string
@@ -24724,6 +24775,9 @@ export namespace Prisma {
     jobType?: SortOrderInput | SortOrder
     jobLevel?: SortOrderInput | SortOrder
     description?: SortOrderInput | SortOrder
+    salary?: SortOrderInput | SortOrder
+    workArrangement?: SortOrderInput | SortOrder
+    listingDate?: SortOrderInput | SortOrder
     status?: SortOrder
     market?: SortOrder
     createdAt?: SortOrder
@@ -24746,6 +24800,9 @@ export namespace Prisma {
     jobType?: StringNullableWithAggregatesFilter<"Job"> | string | null
     jobLevel?: StringNullableWithAggregatesFilter<"Job"> | string | null
     description?: StringNullableWithAggregatesFilter<"Job"> | string | null
+    salary?: StringNullableWithAggregatesFilter<"Job"> | string | null
+    workArrangement?: StringNullableWithAggregatesFilter<"Job"> | string | null
+    listingDate?: DateTimeNullableWithAggregatesFilter<"Job"> | Date | string | null
     status?: EnumJobStatusWithAggregatesFilter<"Job"> | $Enums.JobStatus
     market?: StringWithAggregatesFilter<"Job"> | string
     createdAt?: DateTimeWithAggregatesFilter<"Job"> | Date | string
@@ -26208,6 +26265,9 @@ export namespace Prisma {
     jobType?: string | null
     jobLevel?: string | null
     description?: string | null
+    salary?: string | null
+    workArrangement?: string | null
+    listingDate?: Date | string | null
     status?: $Enums.JobStatus
     market?: string
     createdAt?: Date | string
@@ -26228,6 +26288,9 @@ export namespace Prisma {
     jobType?: string | null
     jobLevel?: string | null
     description?: string | null
+    salary?: string | null
+    workArrangement?: string | null
+    listingDate?: Date | string | null
     status?: $Enums.JobStatus
     market?: string
     createdAt?: Date | string
@@ -26246,6 +26309,9 @@ export namespace Prisma {
     jobType?: NullableStringFieldUpdateOperationsInput | string | null
     jobLevel?: NullableStringFieldUpdateOperationsInput | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
+    salary?: NullableStringFieldUpdateOperationsInput | string | null
+    workArrangement?: NullableStringFieldUpdateOperationsInput | string | null
+    listingDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumJobStatusFieldUpdateOperationsInput | $Enums.JobStatus
     market?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -26266,6 +26332,9 @@ export namespace Prisma {
     jobType?: NullableStringFieldUpdateOperationsInput | string | null
     jobLevel?: NullableStringFieldUpdateOperationsInput | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
+    salary?: NullableStringFieldUpdateOperationsInput | string | null
+    workArrangement?: NullableStringFieldUpdateOperationsInput | string | null
+    listingDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumJobStatusFieldUpdateOperationsInput | $Enums.JobStatus
     market?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -26285,6 +26354,9 @@ export namespace Prisma {
     jobType?: string | null
     jobLevel?: string | null
     description?: string | null
+    salary?: string | null
+    workArrangement?: string | null
+    listingDate?: Date | string | null
     status?: $Enums.JobStatus
     market?: string
     createdAt?: Date | string
@@ -26300,6 +26372,9 @@ export namespace Prisma {
     jobType?: NullableStringFieldUpdateOperationsInput | string | null
     jobLevel?: NullableStringFieldUpdateOperationsInput | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
+    salary?: NullableStringFieldUpdateOperationsInput | string | null
+    workArrangement?: NullableStringFieldUpdateOperationsInput | string | null
+    listingDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumJobStatusFieldUpdateOperationsInput | $Enums.JobStatus
     market?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -26316,6 +26391,9 @@ export namespace Prisma {
     jobType?: NullableStringFieldUpdateOperationsInput | string | null
     jobLevel?: NullableStringFieldUpdateOperationsInput | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
+    salary?: NullableStringFieldUpdateOperationsInput | string | null
+    workArrangement?: NullableStringFieldUpdateOperationsInput | string | null
+    listingDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumJobStatusFieldUpdateOperationsInput | $Enums.JobStatus
     market?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -28025,6 +28103,9 @@ export namespace Prisma {
     jobType?: SortOrder
     jobLevel?: SortOrder
     description?: SortOrder
+    salary?: SortOrder
+    workArrangement?: SortOrder
+    listingDate?: SortOrder
     status?: SortOrder
     market?: SortOrder
     createdAt?: SortOrder
@@ -28041,6 +28122,9 @@ export namespace Prisma {
     jobType?: SortOrder
     jobLevel?: SortOrder
     description?: SortOrder
+    salary?: SortOrder
+    workArrangement?: SortOrder
+    listingDate?: SortOrder
     status?: SortOrder
     market?: SortOrder
     createdAt?: SortOrder
@@ -28057,6 +28141,9 @@ export namespace Prisma {
     jobType?: SortOrder
     jobLevel?: SortOrder
     description?: SortOrder
+    salary?: SortOrder
+    workArrangement?: SortOrder
+    listingDate?: SortOrder
     status?: SortOrder
     market?: SortOrder
     createdAt?: SortOrder
@@ -30790,6 +30877,9 @@ export namespace Prisma {
     jobType?: string | null
     jobLevel?: string | null
     description?: string | null
+    salary?: string | null
+    workArrangement?: string | null
+    listingDate?: Date | string | null
     status?: $Enums.JobStatus
     market?: string
     createdAt?: Date | string
@@ -30808,6 +30898,9 @@ export namespace Prisma {
     jobType?: string | null
     jobLevel?: string | null
     description?: string | null
+    salary?: string | null
+    workArrangement?: string | null
+    listingDate?: Date | string | null
     status?: $Enums.JobStatus
     market?: string
     createdAt?: Date | string
@@ -31363,6 +31456,9 @@ export namespace Prisma {
     jobType?: StringNullableFilter<"Job"> | string | null
     jobLevel?: StringNullableFilter<"Job"> | string | null
     description?: StringNullableFilter<"Job"> | string | null
+    salary?: StringNullableFilter<"Job"> | string | null
+    workArrangement?: StringNullableFilter<"Job"> | string | null
+    listingDate?: DateTimeNullableFilter<"Job"> | Date | string | null
     status?: EnumJobStatusFilter<"Job"> | $Enums.JobStatus
     market?: StringFilter<"Job"> | string
     createdAt?: DateTimeFilter<"Job"> | Date | string
@@ -32563,6 +32659,9 @@ export namespace Prisma {
     jobType?: string | null
     jobLevel?: string | null
     description?: string | null
+    salary?: string | null
+    workArrangement?: string | null
+    listingDate?: Date | string | null
     status?: $Enums.JobStatus
     market?: string
     createdAt?: Date | string
@@ -32582,6 +32681,9 @@ export namespace Prisma {
     jobType?: string | null
     jobLevel?: string | null
     description?: string | null
+    salary?: string | null
+    workArrangement?: string | null
+    listingDate?: Date | string | null
     status?: $Enums.JobStatus
     market?: string
     createdAt?: Date | string
@@ -32713,6 +32815,9 @@ export namespace Prisma {
     jobType?: NullableStringFieldUpdateOperationsInput | string | null
     jobLevel?: NullableStringFieldUpdateOperationsInput | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
+    salary?: NullableStringFieldUpdateOperationsInput | string | null
+    workArrangement?: NullableStringFieldUpdateOperationsInput | string | null
+    listingDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumJobStatusFieldUpdateOperationsInput | $Enums.JobStatus
     market?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -32732,6 +32837,9 @@ export namespace Prisma {
     jobType?: NullableStringFieldUpdateOperationsInput | string | null
     jobLevel?: NullableStringFieldUpdateOperationsInput | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
+    salary?: NullableStringFieldUpdateOperationsInput | string | null
+    workArrangement?: NullableStringFieldUpdateOperationsInput | string | null
+    listingDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumJobStatusFieldUpdateOperationsInput | $Enums.JobStatus
     market?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -33574,6 +33682,9 @@ export namespace Prisma {
     jobType?: string | null
     jobLevel?: string | null
     description?: string | null
+    salary?: string | null
+    workArrangement?: string | null
+    listingDate?: Date | string | null
     status?: $Enums.JobStatus
     market?: string
     createdAt?: Date | string
@@ -33593,6 +33704,9 @@ export namespace Prisma {
     jobType?: string | null
     jobLevel?: string | null
     description?: string | null
+    salary?: string | null
+    workArrangement?: string | null
+    listingDate?: Date | string | null
     status?: $Enums.JobStatus
     market?: string
     createdAt?: Date | string
@@ -33728,6 +33842,9 @@ export namespace Prisma {
     jobType?: NullableStringFieldUpdateOperationsInput | string | null
     jobLevel?: NullableStringFieldUpdateOperationsInput | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
+    salary?: NullableStringFieldUpdateOperationsInput | string | null
+    workArrangement?: NullableStringFieldUpdateOperationsInput | string | null
+    listingDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumJobStatusFieldUpdateOperationsInput | $Enums.JobStatus
     market?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -33747,6 +33864,9 @@ export namespace Prisma {
     jobType?: NullableStringFieldUpdateOperationsInput | string | null
     jobLevel?: NullableStringFieldUpdateOperationsInput | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
+    salary?: NullableStringFieldUpdateOperationsInput | string | null
+    workArrangement?: NullableStringFieldUpdateOperationsInput | string | null
+    listingDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumJobStatusFieldUpdateOperationsInput | $Enums.JobStatus
     market?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -34098,6 +34218,9 @@ export namespace Prisma {
     jobType?: string | null
     jobLevel?: string | null
     description?: string | null
+    salary?: string | null
+    workArrangement?: string | null
+    listingDate?: Date | string | null
     status?: $Enums.JobStatus
     market?: string
     createdAt?: Date | string
@@ -34117,6 +34240,9 @@ export namespace Prisma {
     jobType?: string | null
     jobLevel?: string | null
     description?: string | null
+    salary?: string | null
+    workArrangement?: string | null
+    listingDate?: Date | string | null
     status?: $Enums.JobStatus
     market?: string
     createdAt?: Date | string
@@ -34211,6 +34337,9 @@ export namespace Prisma {
     jobType?: NullableStringFieldUpdateOperationsInput | string | null
     jobLevel?: NullableStringFieldUpdateOperationsInput | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
+    salary?: NullableStringFieldUpdateOperationsInput | string | null
+    workArrangement?: NullableStringFieldUpdateOperationsInput | string | null
+    listingDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumJobStatusFieldUpdateOperationsInput | $Enums.JobStatus
     market?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -34230,6 +34359,9 @@ export namespace Prisma {
     jobType?: NullableStringFieldUpdateOperationsInput | string | null
     jobLevel?: NullableStringFieldUpdateOperationsInput | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
+    salary?: NullableStringFieldUpdateOperationsInput | string | null
+    workArrangement?: NullableStringFieldUpdateOperationsInput | string | null
+    listingDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumJobStatusFieldUpdateOperationsInput | $Enums.JobStatus
     market?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -34503,6 +34635,9 @@ export namespace Prisma {
     jobType?: string | null
     jobLevel?: string | null
     description?: string | null
+    salary?: string | null
+    workArrangement?: string | null
+    listingDate?: Date | string | null
     status?: $Enums.JobStatus
     market?: string
     createdAt?: Date | string
@@ -34736,6 +34871,9 @@ export namespace Prisma {
     jobType?: NullableStringFieldUpdateOperationsInput | string | null
     jobLevel?: NullableStringFieldUpdateOperationsInput | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
+    salary?: NullableStringFieldUpdateOperationsInput | string | null
+    workArrangement?: NullableStringFieldUpdateOperationsInput | string | null
+    listingDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumJobStatusFieldUpdateOperationsInput | $Enums.JobStatus
     market?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -34754,6 +34892,9 @@ export namespace Prisma {
     jobType?: NullableStringFieldUpdateOperationsInput | string | null
     jobLevel?: NullableStringFieldUpdateOperationsInput | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
+    salary?: NullableStringFieldUpdateOperationsInput | string | null
+    workArrangement?: NullableStringFieldUpdateOperationsInput | string | null
+    listingDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumJobStatusFieldUpdateOperationsInput | $Enums.JobStatus
     market?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -34772,6 +34913,9 @@ export namespace Prisma {
     jobType?: NullableStringFieldUpdateOperationsInput | string | null
     jobLevel?: NullableStringFieldUpdateOperationsInput | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
+    salary?: NullableStringFieldUpdateOperationsInput | string | null
+    workArrangement?: NullableStringFieldUpdateOperationsInput | string | null
+    listingDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumJobStatusFieldUpdateOperationsInput | $Enums.JobStatus
     market?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string

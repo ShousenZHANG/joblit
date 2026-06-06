@@ -137,6 +137,9 @@ model Job {
   jobType     String?
   jobLevel    String?
   description String?
+  salary          String?   // e.g. "$120,000 – $150,000 per year" (source-provided label)
+  workArrangement String?   // "Remote" | "Hybrid" | "On-site"
+  listingDate     DateTime? // when the source posted the role
   status      JobStatus @default(NEW)
   market      String    @default("AU") // "AU" | "CN"
 

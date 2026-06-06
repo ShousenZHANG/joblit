@@ -35,6 +35,9 @@ export type JobListItem = {
   location: string | null;
   jobType: string | null;
   jobLevel: string | null;
+  salary: string | null;
+  workArrangement: string | null;
+  listingDate: Date | null;
   status: string;
   createdAt: Date;
   updatedAt: Date;
@@ -139,6 +142,9 @@ export async function listJobs(userId: string, query: JobListQuery): Promise<Job
         location: true,
         jobType: true,
         jobLevel: true,
+        salary: true,
+        workArrangement: true,
+        listingDate: true,
         status: true,
         createdAt: true,
         updatedAt: true,
