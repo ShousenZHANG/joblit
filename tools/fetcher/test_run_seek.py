@@ -108,11 +108,33 @@ def test_build_search_params_work_type_and_salary():
     assert "salaryrange" not in p2
 
 
+def test_build_search_params_subclassification():
+    # Subclass rides along only with a parent classification, numeric-only.
+    p = rs.build_search_params(classification="6281", sub_classification="6290")
+    assert p["classification"] == "6281"
+    assert p["subclassification"] == "6290"
+    # No parent -> subclass dropped (meaningless + the param is never set alone).
+    p2 = rs.build_search_params(sub_classification="6290")
+    assert "subclassification" not in p2 and "classification" not in p2
+    # Non-numeric subclass is ignored (URL-injection guard).
+    p3 = rs.build_search_params(classification="6281", sub_classification="6290&foo=1")
+    assert "subclassification" not in p3
+
+
 def test_build_queries_from_config_threads_filters():
-    run = {"queries": {"queries": ["dev"], "workType": "242", "salaryMin": 120000}}
+    run = {
+        "queries": {
+            "queries": ["dev"],
+            "classification": "6281",
+            "subClassification": "6290",
+            "workType": "242",
+            "salaryMin": 120000,
+        }
+    }
     q = rs.build_queries_from_config(run)[0]
     assert q["work_type"] == "242"
     assert q["salary_min"] == "120000"
+    assert q["sub_classification"] == "6290"
 
 
 @pytest.mark.parametrize(
@@ -602,6 +624,7 @@ def test_build_queries_from_config():
     assert qs[0] == {
         "keywords": "dev",
         "classification": "6281",
+        "sub_classification": "",
         "where": "Sydney",
         "daterange_days": 3,
         "max_pages": rs.SEEK_PAGE_CEILING,

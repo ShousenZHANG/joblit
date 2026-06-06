@@ -30,6 +30,7 @@ import {
   TITLE_EXCLUSION_OPTIONS,
   TITLE_EXCLUSION_VALUES,
 } from "@/lib/shared/fetchExclusionCriteria";
+import { SEEK_SUBCLASSIFICATIONS } from "@/lib/shared/seekSubclassifications";
 import { cn } from "@/lib/utils";
 
 const RIGHTS_EXCLUSION_OPTIONS = DESCRIPTION_EXCLUSION_OPTIONS.filter(
@@ -383,6 +384,7 @@ type FetchRunListItem = {
   sources: string[] | null;
   source: string | null;
   classification: string | null;
+  subClassification: string | null;
   workType: string | null;
   salaryMin: number | null;
   excludeKeywords: string[] | null;
@@ -552,8 +554,13 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
   // roles instead of diluting it across all categories. Clear it for all-category
   // search.
   const [seekClassification, setSeekClassification] = useState("6281");
+  const [seekSubClass, setSeekSubClass] = useState(""); // "" = all subcategories
   const [seekWorkType, setSeekWorkType] = useState(""); // "" = any
   const [seekSalaryMin, setSeekSalaryMin] = useState(""); // "" = any
+  // Subcategories for the chosen parent (empty for "All categories").
+  const seekSubClassOptions = seekClassification
+    ? SEEK_SUBCLASSIFICATIONS[seekClassification] ?? []
+    : [];
   // Seek only supports title exclusions — no smart-expand, no description-level
   // (rights / minimum-experience) filtering.
   const isSeek = seekEnabled && source === "seek";
@@ -708,6 +715,9 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
           ...(isSeek
             ? {
                 classification: seekClassification.trim() || undefined,
+                // Subclass only travels with a chosen parent category.
+                subClassification:
+                  seekClassification.trim() && seekSubClass ? seekSubClass : undefined,
                 // Seek windows by day; reuse the hoursOld control (48h -> 2d).
                 daterange: Math.max(1, Math.min(31, Math.ceil(hoursOld / 24))),
                 workType: seekWorkType || undefined,
@@ -780,7 +790,14 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
       if (seekEnabled && (run.source === "seek" || run.source === "jobspy")) {
         setSource(run.source);
       }
-      if (typeof run.classification === "string") setSeekClassification(run.classification);
+      const reParent = typeof run.classification === "string" ? run.classification : "";
+      if (reParent) setSeekClassification(reParent);
+      // Restore subclass only if it still belongs to the restored parent.
+      const reSubValid =
+        reParent &&
+        typeof run.subClassification === "string" &&
+        (SEEK_SUBCLASSIFICATIONS[reParent] ?? []).some((s) => s.id === run.subClassification);
+      setSeekSubClass(reSubValid ? (run.subClassification as string) : "");
       setSeekWorkType(typeof run.workType === "string" ? run.workType : "");
       setSeekSalaryMin(
         typeof run.salaryMin === "number" && run.salaryMin > 0 ? String(run.salaryMin) : "",
@@ -869,7 +886,11 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
                   <div className="flex flex-wrap gap-2">
                     <Select
                       value={seekClassification || "all"}
-                      onValueChange={(v) => setSeekClassification(v === "all" ? "" : v)}
+                      onValueChange={(v) => {
+                        // Parent change invalidates any chosen subclass — reset it.
+                        setSeekClassification(v === "all" ? "" : v);
+                        setSeekSubClass("");
+                      }}
                     >
                       <SelectTrigger className="h-9 w-full max-w-xs text-sm" aria-label="Seek category">
                         <SelectValue />
@@ -883,6 +904,27 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
                         ))}
                       </SelectContent>
                     </Select>
+                    {seekSubClassOptions.length > 0 && (
+                      <Select
+                        value={seekSubClass || "any"}
+                        onValueChange={(v) => setSeekSubClass(v === "any" ? "" : v)}
+                      >
+                        <SelectTrigger
+                          className="h-9 w-full max-w-xs text-sm"
+                          aria-label="Seek subcategory"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="any">All subcategories</SelectItem>
+                          {seekSubClassOptions.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                     <Select
                       value={seekWorkType || "any"}
                       onValueChange={(v) => setSeekWorkType(v === "any" ? "" : v)}

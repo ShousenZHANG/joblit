@@ -55,18 +55,53 @@ describe("fetch-runs POST — Seek source gating", () => {
     expect(prismaStore.fetchRun.create).not.toHaveBeenCalled();
   });
 
-  it("creates a seek run and persists source + classification + daterange", async () => {
+  it("creates a seek run and persists source + classification + filters", async () => {
     vi.stubEnv("SEEK_FETCH_ENABLED", "true");
     prismaStore.fetchRun.count.mockResolvedValue(0);
     prismaStore.fetchRun.create.mockResolvedValue({ id: "run-1" });
     const res = await POST(
-      auReq({ source: "seek", classification: "6281", daterange: 3, smartExpand: false }),
+      auReq({
+        source: "seek",
+        classification: "6281",
+        subClassification: "6290",
+        workType: "242",
+        salaryMin: 120000,
+        daterange: 3,
+        smartExpand: false,
+      }),
     );
     expect(res.status).toBe(201);
     const data = prismaStore.fetchRun.create.mock.calls[0][0].data;
     expect(data.queries.source).toBe("seek");
     expect(data.queries.classification).toBe("6281");
+    expect(data.queries.subClassification).toBe("6290");
+    expect(data.queries.workType).toBe("242");
+    expect(data.queries.salaryMin).toBe(120000);
     expect(data.queries.daterange).toBe(3);
+  });
+
+  it("drops the subclassification when no parent category is chosen", async () => {
+    vi.stubEnv("SEEK_FETCH_ENABLED", "true");
+    prismaStore.fetchRun.count.mockResolvedValue(0);
+    prismaStore.fetchRun.create.mockResolvedValue({ id: "run-3" });
+    // subclass without a classification is meaningless — must not be persisted.
+    const res = await POST(
+      auReq({ source: "seek", subClassification: "6290", smartExpand: false }),
+    );
+    expect(res.status).toBe(201);
+    const data = prismaStore.fetchRun.create.mock.calls[0][0].data;
+    expect(data.queries.classification).toBe("");
+    expect(data.queries.subClassification).toBe("");
+  });
+
+  it("rejects a non-numeric subclassification (URL-injection guard)", async () => {
+    vi.stubEnv("SEEK_FETCH_ENABLED", "true");
+    prismaStore.fetchRun.count.mockResolvedValue(0);
+    const res = await POST(
+      auReq({ source: "seek", classification: "6281", subClassification: "6290&x=1" }),
+    );
+    expect(res.status).toBe(400);
+    expect(prismaStore.fetchRun.create).not.toHaveBeenCalled();
   });
 
   it("defaults to jobspy and skips the seek guard (backward compatible)", async () => {

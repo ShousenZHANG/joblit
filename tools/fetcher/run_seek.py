@@ -145,6 +145,7 @@ def build_search_params(
     *,
     keywords: str = "",
     classification: str = "",
+    sub_classification: str = "",
     where: str = DEFAULT_WHERE,
     page: int = 1,
     page_size: int = DEFAULT_PAGE_SIZE,
@@ -163,6 +164,11 @@ def build_search_params(
         params["keywords"] = keywords.strip()
     if str(classification).strip():
         params["classification"] = str(classification).strip()
+        # Subclassification refines a parent; it is meaningless without one and
+        # is numeric-only (guards against URL injection / SSRF on the Seek call).
+        sub = str(sub_classification or "").strip()
+        if sub.isdigit():
+            params["subclassification"] = sub
     if daterange_days and daterange_days > 0:
         params["daterange"] = str(daterange_days)
     if str(work_type).strip() in SEEK_WORK_TYPE_IDS:
@@ -463,6 +469,7 @@ class SeekFetcher:
         *,
         keywords: str = "",
         classification: str = "",
+        sub_classification: str = "",
         where: str = DEFAULT_WHERE,
         daterange_days: Optional[int] = DEFAULT_DATERANGE_DAYS,
         max_pages: int = SEEK_PAGE_CEILING,
@@ -478,6 +485,7 @@ class SeekFetcher:
             params = build_search_params(
                 keywords=keywords,
                 classification=classification,
+                sub_classification=sub_classification,
                 where=where,
                 page=page,
                 page_size=page_size,
@@ -641,6 +649,7 @@ def build_queries_from_config(run: Dict[str, Any]) -> List[Dict[str, Any]]:
         title = raw.get("title")
         keywords = [title] if isinstance(title, str) and title.strip() else [""]
     classification = str(raw.get("classification") or "")
+    sub_classification = str(raw.get("subClassification") or "")
     try:
         daterange_days = int(raw.get("daterange") or DEFAULT_DATERANGE_DAYS)
     except (TypeError, ValueError):
@@ -652,6 +661,7 @@ def build_queries_from_config(run: Dict[str, Any]) -> List[Dict[str, Any]]:
         {
             "keywords": kw,
             "classification": classification,
+            "sub_classification": sub_classification,
             "where": where,
             "daterange_days": daterange_days,
             "max_pages": SEEK_PAGE_CEILING,
@@ -730,6 +740,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Seek incremental job fetcher")
     parser.add_argument("--keywords", default="")
     parser.add_argument("--classification", default="")
+    parser.add_argument("--sub-classification", default="", help="Seek subclassification id (numeric)")
     parser.add_argument("--where", default=DEFAULT_WHERE)
     parser.add_argument("--daterange", type=int, default=DEFAULT_DATERANGE_DAYS)
     parser.add_argument("--max-pages", type=int, default=SEEK_PAGE_CEILING)
@@ -747,6 +758,7 @@ def main() -> int:
             {
                 "keywords": args.keywords,
                 "classification": args.classification,
+                "sub_classification": args.sub_classification,
                 "where": normalize_seek_where(args.where),
                 "daterange_days": args.daterange,
                 "max_pages": args.max_pages,

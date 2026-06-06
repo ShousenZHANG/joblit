@@ -65,6 +65,14 @@ const AUSchema = z
     // Seek work-type id (242 Full / 243 Part / 244 Contract / 245 Casual), "" = any.
     workType: z.enum(["", "242", "243", "244", "245"]).optional().default(""),
     salaryMin: z.coerce.number().int().min(0).max(1_000_000).optional(),
+    // Seek subclassification id (numeric, refines `classification`). Empty = none.
+    // Numeric-only so it can never inject extra query params into the Seek URL.
+    subClassification: z
+      .string()
+      .trim()
+      .max(6)
+      .regex(/^\d*$/, "subClassification must be numeric")
+      .optional(),
   })
   .refine((data) => (data.title ?? data.queries?.[0])?.trim(), {
     message: "title is required",
@@ -122,6 +130,8 @@ export async function GET() {
           sources: Array.isArray(q.sources) ? (q.sources as string[]) : null,
           source: typeof q.source === "string" ? (q.source as string) : null,
           classification: typeof q.classification === "string" ? (q.classification as string) : null,
+          subClassification:
+            typeof q.subClassification === "string" ? (q.subClassification as string) : null,
           workType: typeof q.workType === "string" ? (q.workType as string) : null,
           salaryMin: typeof q.salaryMin === "number" ? (q.salaryMin as number) : null,
           excludeKeywords: Array.isArray(q.excludeKeywords)
@@ -204,6 +214,8 @@ export async function POST(req: Request) {
         ...(data.source === "seek"
           ? {
               classification: data.classification ?? "",
+              // Subclass only refines a chosen parent; drop it when "All categories".
+              subClassification: data.classification ? data.subClassification ?? "" : "",
               daterange: data.daterange ?? 2,
               workType: data.workType ?? "",
               salaryMin: data.salaryMin ?? null,
