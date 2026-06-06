@@ -6,6 +6,7 @@ import {
   getJobsListQueryKey,
   type JobsInfiniteData,
 } from "../utils/jobsQueryCache";
+import { visibleTotalCount } from "../utils/visibleTotalCount";
 
 const INFINITE_SCROLL_TRIGGER_RATIO = 0.8;
 // Below this many loaded rows, pull the next page even if the list still
@@ -97,7 +98,13 @@ export function useJobPagination({
   );
 
   const firstPage = queryData?.pages[0];
-  const totalCount = firstPage?.totalCount;
+  // Rows hidden by an in-flight (undo-window) delete are filtered out of
+  // `items` but still live in the cache, so subtract them from the server total
+  // — this keeps the count dropping on delete and returning on undo WITHOUT
+  // mutating the cache during the window (which is what lets concurrent pending
+  // deletes/undos and background refetches stay consistent). See
+  // visibleTotalCount for the derivation.
+  const totalCount = visibleTotalCount(firstPage?.totalCount, mergedItems.length, items.length);
   const nextCursor = query.hasNextPage
     ? queryData?.pages[queryData.pages.length - 1]?.nextCursor ?? null
     : null;

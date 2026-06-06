@@ -16,7 +16,6 @@ import {
   removeJobFromJobsCache,
   removeJobsFromJobsCache,
   restoreJobsSnapshots,
-  type JobsQuerySnapshot,
 } from "../utils/jobsQueryCache";
 
 // Undo window for single-job deletes. The server DELETE is deferred until this
@@ -24,7 +23,6 @@ import {
 const UNDO_WINDOW_MS = 5000;
 
 type PendingDelete = {
-  rollbackSnapshots: JobsQuerySnapshot[];
   timer: ReturnType<typeof setTimeout>;
 };
 
@@ -138,12 +136,15 @@ export function useJobMutations({
   });
 
   // Single-job delete uses a deferred-commit "undo" pattern (Gmail/Linear
-  // style) instead of a confirm modal: the row is optimistically removed and
-  // hidden immediately, an Undo toast shows for UNDO_WINDOW_MS, and the server
-  // DELETE only fires once that window elapses. Undo cancels the timer and
-  // restores the row — no DELETE is sent and no tombstone is written. Pending
-  // deletes are flushed on unmount so navigation can't drop a delete the user
-  // already walked away from.
+  // style) instead of a confirm modal. During the undo window the row is hidden
+  // purely via `suppressedDeletedIds` — the react-query cache is NOT mutated and
+  // NO snapshot is taken. This is what makes concurrent pending deletes safe:
+  // each row is hidden/unhidden independently, so undoing one delete can't
+  // clobber another (the old whole-cache snapshot/restore could resurrect or
+  // drop sibling pending rows when undone out of order). The cache is mutated
+  // only once a commit succeeds (finalizeDelete). Undo cancels the timer and
+  // un-hides the row — no DELETE, no tombstone. Pending deletes are flushed on
+  // unmount/pagehide so leaving the page can't drop a delete in its window.
   const pendingDeletesRef = useRef<Map<string, PendingDelete>>(new Map());
   // Serialises the deferred commits so a burst of rapidly-deleted rows can't
   // fire parallel DELETEs and spike Neon's connection pool — one in flight at
@@ -163,11 +164,14 @@ export function useJobMutations({
           const json = await res.json().catch(() => ({}));
           throw new Error(json?.error || "Failed to delete job");
         }
-        // Success: the optimistic removeJobFromJobsCache() already filtered the
-        // row out and decremented totalCount, so no refetch is needed.
+        // Commit succeeded — only NOW remove the row from the cache and
+        // decrement totalCount. Up to here the row was merely hidden via
+        // suppressedDeletedIds, so the cache stayed untouched and concurrent
+        // pending deletes/undos never interfered with each other.
+        removeJobFromJobsCache(queryClient, id);
       } catch (e) {
-        // Commit failed — bring the row back and surface the error.
-        restoreJobsSnapshots(queryClient, pending.rollbackSnapshots);
+        // Commit failed — un-hide so the row reappears. The cache was never
+        // mutated during the window, so there is no snapshot to restore.
         setSuppressedDeletedIds((prev) => {
           if (!prev.has(id)) return prev;
           const next = new Set(prev);
@@ -201,7 +205,9 @@ export function useJobMutations({
       if (!pending) return;
       clearTimeout(pending.timer);
       pendingDeletesRef.current.delete(id);
-      restoreJobsSnapshots(queryClient, pending.rollbackSnapshots);
+      // Cache was never mutated (row only hidden via suppressedDeletedIds), so
+      // undo just un-hides it. No snapshot restore => overlapping undos in any
+      // order can't clobber each other.
       setSuppressedDeletedIds((prev) => {
         if (!prev.has(id)) return prev;
         const next = new Set(prev);
@@ -210,7 +216,7 @@ export function useJobMutations({
       });
       setSelectedId(id);
     },
-    [queryClient, setSelectedId, setSuppressedDeletedIds],
+    [setSelectedId, setSuppressedDeletedIds],
   );
 
   const requestDelete = useCallback(
@@ -228,13 +234,14 @@ export function useJobMutations({
       if (selectedId === id) {
         setSelectedId(items.find((it) => it.id !== id)?.id ?? null);
       }
-      const rollbackSnapshots = removeJobFromJobsCache(queryClient, id);
+      // No cache mutation here — the row is hidden via suppressedDeletedIds
+      // above. The cache is only touched if/when the commit succeeds.
       const timer = setTimeout(() => {
         // Route through the serial runner so simultaneous timer expiries commit
         // one-at-a-time instead of bursting parallel requests at the backend.
         void commitRunnerRef.current(() => finalizeDelete(id));
       }, UNDO_WINDOW_MS);
-      pendingDeletesRef.current.set(id, { rollbackSnapshots, timer });
+      pendingDeletesRef.current.set(id, { timer });
       // Premium undo toast (Gmail/Linear): a NEUTRAL surface — a delete isn't a
       // "success", so the previous emerald-green styling was semantically
       // wrong — an emerald Undo that pops, and a countdown bar that visibly
