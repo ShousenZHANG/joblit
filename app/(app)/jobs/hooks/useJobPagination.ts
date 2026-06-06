@@ -114,12 +114,22 @@ export function useJobPagination({
   // jobs" flash during a filter switch and the wrong-filter rows that the old
   // per-cursor placeholder could surface.
   const firstPageResolved = query.isSuccess && !query.isPlaceholderData;
-  const loadingInitial = !firstPageResolved && items.length === 0;
-  // Empty state keys on `mergedItems` (the actual fetched result), NOT `items`
-  // (which also strips ids in `suppressedDeletedIds`). Otherwise a list whose
-  // rows are mid-delete — still present in cache but suppressed — would read as
-  // "No jobs found" even though the query returned rows.
-  const showEmpty = firstPageResolved && mergedItems.length === 0;
+  // Terminal empty: settled, nothing VISIBLE, and nothing left to backfill the
+  // list with. This keys on `items` (the visible set), not `mergedItems`,
+  // because rows mid-delete stay in the cache but hidden via
+  // `suppressedDeletedIds`. !hasNextPage/!isFetchingNextPage prevents an empty
+  // flash while the watermark effect pulls the next page to backfill the gap.
+  const showEmpty =
+    firstPageResolved &&
+    items.length === 0 &&
+    !query.hasNextPage &&
+    !query.isFetchingNextPage;
+  // Skeleton whenever nothing is visible and we are not terminally empty. This
+  // covers BOTH the initial load AND the gap where every loaded row is hidden
+  // (e.g. all rows mid-delete) while a backfill page is pending — without it
+  // the list would render a dead blank (rows in cache, all filtered out of
+  // `items`, so neither the list nor the empty state renders).
+  const loadingInitial = items.length === 0 && !showEmpty;
   const loadingMore = query.isFetchingNextPage;
 
   const firstQueryError = query.error;

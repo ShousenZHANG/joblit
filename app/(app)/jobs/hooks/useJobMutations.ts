@@ -169,6 +169,16 @@ export function useJobMutations({
         // suppressedDeletedIds, so the cache stayed untouched and concurrent
         // pending deletes/undos never interfered with each other.
         removeJobFromJobsCache(queryClient, id);
+        // The row is gone from every cached filter now, so drop it from the
+        // suppression set too. This keeps the set == the live pending-delete set
+        // (bounded; no stale ids lingering that could hide a future same-id row
+        // or, combined with cache placeholders, blank out a filter on switch).
+        setSuppressedDeletedIds((prev) => {
+          if (!prev.has(id)) return prev;
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
       } catch (e) {
         // Commit failed — un-hide so the row reappears. The cache was never
         // mutated during the window, so there is no snapshot to restore.

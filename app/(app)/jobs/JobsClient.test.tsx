@@ -746,6 +746,53 @@ describe("JobsClient", () => {
     });
   });
 
+  it("shows the empty state (not a blank list) after the last visible job is deleted", async () => {
+    const user = userEvent.setup();
+
+    const mockFetch = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url.startsWith("/api/jobs?")) {
+        return new Response(
+          JSON.stringify({ items: [baseJob], nextCursor: null, facets: { jobLevels: ["Mid"] } }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.startsWith(`/api/jobs/${baseJob.id}`) && init?.method === "DELETE") {
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.startsWith("/api/jobs/") && (!init || init.method === "GET")) {
+        return new Response(JSON.stringify({ id: baseJob.id, description: "d" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
+
+    const removeButton = (await screen.findAllByTestId("job-remove-button"))[0];
+    await user.click(removeButton);
+
+    // The row is gone from the list...
+    const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
+    await waitFor(() => {
+      expect(
+        within(resultsPane).queryByRole("button", { name: /Frontend Engineer/i }),
+      ).not.toBeInTheDocument();
+    });
+    // ...and the empty state must show — NOT a dead blank list. With the row
+    // hidden via suppression but still cached, `items` is empty while
+    // `mergedItems` is not; the list must still render the empty affordance.
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /add manually/i })).toBeInTheDocument();
+    });
+  });
+
   it("restores the job and sends no DELETE when Undo is clicked", async () => {
     const user = userEvent.setup();
     let deleteCalls = 0;
