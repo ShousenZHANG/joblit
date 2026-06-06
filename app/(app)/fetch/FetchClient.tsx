@@ -453,8 +453,15 @@ function FetchHistory({ onRerun }: { onRerun: (run: FetchRunListItem) => void })
               aria-hidden
             />
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium text-foreground">
-                {run.title ?? "Untitled search"}
+              <div className="flex items-center gap-1.5">
+                <div className="truncate text-sm font-medium text-foreground">
+                  {run.title ?? "Untitled search"}
+                </div>
+                {run.source === "seek" ? (
+                  <span className="shrink-0 rounded-full bg-brand-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-brand-emerald-700 ring-1 ring-brand-emerald-100">
+                    Seek
+                  </span>
+                ) : null}
               </div>
               <div className="truncate text-[11px] text-muted-foreground">
                 {run.queryCount > 1 ? `${run.queryCount} roles · ` : ""}
