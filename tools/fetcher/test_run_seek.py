@@ -163,6 +163,20 @@ def test_dedupe_by_url():
     assert [i["job_url"] for i in rs.dedupe_by_url(items)] == ["a", "b"]
 
 
+def test_build_exclude_title_re_word_boundary():
+    rx = rs.build_exclude_title_re(["lead"])
+    assert rx.search("Tech Lead")
+    assert not rx.search("Leadership Program")  # word-boundary, not a prefix match
+    assert rs.build_exclude_title_re([]) is None
+
+
+def test_apply_title_exclusions():
+    items = [{"title": "Senior Manager, AI"}, {"title": "AI Engineer"}, {"title": "Principal Architect"}]
+    out = rs.apply_title_exclusions(items, ["senior", "manager", "principal", "architect"])
+    assert [i["title"] for i in out] == ["AI Engineer"]
+    assert rs.apply_title_exclusions(items, []) == items
+
+
 def test_find_description_depth_guard_and_nested():
     node = {"description": "deep"}
     for _ in range(rs.MAX_RECURSION_DEPTH + 5):
@@ -413,11 +427,19 @@ def test_collect_jobs_enrich_fills_empty_with_new_dict():
     assert f.enriched == ["https://au.seek.com/job/2"]
 
 
-def test_collect_jobs_enrich_skips_present_description():
-    f = _Fetcher([[REAL_RAW]])
+def test_collect_jobs_enrich_replaces_teaser_with_full():
+    # The teaser is only a preview — the full JD must replace it.
+    f = _Fetcher([[REAL_RAW]], enrich_val="FULL JD TEXT")
     out = rs.collect_jobs(f, [{}], enrich=True)
-    assert "Forefront of AI" in out[0]["description"]
-    assert f.enriched == []  # already had a description
+    assert out[0]["description"] == "FULL JD TEXT"
+    assert f.enriched == ["https://au.seek.com/job/92521602"]
+
+
+def test_collect_jobs_enrich_keeps_teaser_when_detail_empty():
+    f = _Fetcher([[REAL_RAW]], enrich_val="")
+    out = rs.collect_jobs(f, [{}], enrich=True)
+    assert "Forefront of AI" in out[0]["description"]  # fallback to teaser
+    assert f.enriched == ["https://au.seek.com/job/92521602"]
 
 
 def test_collect_jobs_respects_max_total():
@@ -592,6 +614,25 @@ def test_run_from_config_failure_marks_failed(monkeypatch):
     monkeypatch.setattr(rs, "collect_jobs", boom)
     assert rs.run_from_config("rid") == 1
     assert any(u.get("status") == "FAILED" for u in updates)
+
+
+def test_run_from_config_applies_title_exclusions(monkeypatch):
+    monkeypatch.setenv("JOBLIT_WEB_URL", "https://w")
+    monkeypatch.setenv("FETCH_RUN_SECRET", "s")
+    run = {
+        "userEmail": "e@x",
+        "queries": {"queries": ["ai"], "applyExcludes": True, "excludeTitleTerms": ["manager"]},
+    }
+    monkeypatch.setattr(rs, "fetch_run_config", lambda *a, **k: run)
+    monkeypatch.setattr(rs, "update_run", lambda *a, **k: None)
+    monkeypatch.setattr(rs, "collect_jobs", lambda *a, **k: [
+        {"job_url": "u1", "title": "Senior Manager AI"},
+        {"job_url": "u2", "title": "AI Engineer"},
+    ])
+    captured = {}
+    monkeypatch.setattr(rs, "import_items", lambda base, email, items: captured.update(items=items) or len(items))
+    assert rs.run_from_config("rid") == 0
+    assert [i["title"] for i in captured["items"]] == ["AI Engineer"]  # "manager" excluded
 
 
 def test_main_dispatches_run_config_when_run_id_set(monkeypatch):

@@ -268,6 +268,22 @@ def dedupe_by_url(items: Iterable[Dict[str, str]]) -> List[Dict[str, str]]:
     return out
 
 
+def build_exclude_title_re(terms: Iterable[str]):
+    """Word-boundary, case-insensitive regex of exclusion terms (mirrors the
+    JobSpy worker's title filter so Seek honours the same exclusions)."""
+    cleaned = [re.escape(t.strip().lower()) for t in (terms or []) if t and t.strip()]
+    if not cleaned:
+        return None
+    return re.compile(r"(?i)\b(?:" + "|".join(cleaned) + r")\b")
+
+
+def apply_title_exclusions(items: List[Dict[str, str]], exclude_terms: Iterable[str]) -> List[Dict[str, str]]:
+    pattern = build_exclude_title_re(exclude_terms)
+    if not pattern:
+        return items
+    return [it for it in items if not pattern.search(it.get("title", ""))]
+
+
 def _find_description(payload: Any, depth: int = 0) -> str:
     if depth > MAX_RECURSION_DEPTH:
         return ""
@@ -497,14 +513,14 @@ def collect_jobs(
             break
 
     if enrich:
+        # The search-result `teaser` is only a 1-2 line preview, so ALWAYS fetch
+        # the full JD from the job page. The teaser stays as a fallback when the
+        # detail fetch is empty (e.g. a challenge on that page).
         enriched: List[Dict[str, str]] = []
         for row in items:
-            if row.get("description"):
-                enriched.append(row)
-                continue
-            description = fetcher.enrich_description(row["job_url"])
-            stats["enrich_ok" if description else "enrich_fail"] += 1
-            enriched.append({**row, "description": description})  # new dict — no mutation
+            full = fetcher.enrich_description(row["job_url"])
+            stats["enrich_ok" if full else "enrich_fail"] += 1
+            enriched.append({**row, "description": full or row.get("description", "")})
         items = enriched
 
     logger.info("Seek summary: %s", stats)
@@ -631,7 +647,14 @@ def run_from_config(run_id: str) -> int:
     update_run(base, run_id, fetch_headers, {"status": "RUNNING"})
     started = time.monotonic()
     try:
+        raw = run.get("queries") if isinstance(run.get("queries"), dict) else {}
         items = collect_jobs(SeekFetcher(), build_queries_from_config(run), enrich=True)
+        # Honour the same title exclusions the JobSpy pipeline applies.
+        if bool(raw.get("applyExcludes", True)):
+            before = len(items)
+            items = apply_title_exclusions(items, raw.get("excludeTitleTerms") or [])
+            if len(items) != before:
+                logger.info("Seek title-exclusion dropped %s -> %s", before, len(items))
         if is_cancelled(fetch_run_config(base, run_id, fetch_headers)):
             logger.info("Seek run cancelled before import; exiting.")
             return 0
