@@ -7,6 +7,7 @@ import { useGuide } from "@/app/GuideContext";
 import type { JobItem, JobStatus } from "../types";
 import { getErrorMessage } from "../types";
 import { runChunkedBatchDelete } from "./runChunkedBatchDelete";
+import { createSerialRunner } from "./serialRunner";
 import {
   cancelJobsQueries,
   invalidateActiveJobsQueries,
@@ -144,6 +145,10 @@ export function useJobMutations({
   // deletes are flushed on unmount so navigation can't drop a delete the user
   // already walked away from.
   const pendingDeletesRef = useRef<Map<string, PendingDelete>>(new Map());
+  // Serialises the deferred commits so a burst of rapidly-deleted rows can't
+  // fire parallel DELETEs and spike Neon's connection pool — one in flight at
+  // a time, in click order. (Exit flushes bypass this; see the unmount effect.)
+  const commitRunnerRef = useRef(createSerialRunner());
 
   const finalizeDelete = useCallback(
     async (id: string) => {
@@ -225,7 +230,9 @@ export function useJobMutations({
       }
       const rollbackSnapshots = removeJobFromJobsCache(queryClient, id);
       const timer = setTimeout(() => {
-        void finalizeDelete(id);
+        // Route through the serial runner so simultaneous timer expiries commit
+        // one-at-a-time instead of bursting parallel requests at the backend.
+        void commitRunnerRef.current(() => finalizeDelete(id));
       }, UNDO_WINDOW_MS);
       pendingDeletesRef.current.set(id, { rollbackSnapshots, timer });
       // Premium undo toast (Gmail/Linear): a NEUTRAL surface — a delete isn't a
@@ -279,16 +286,30 @@ export function useJobMutations({
     ],
   );
 
-  // Flush pending deletes when the jobs view unmounts (e.g. navigation) so a
-  // deferred delete the user already walked away from still reaches the server.
+  // Flush pending deletes when the user actually leaves the page, so a deferred
+  // delete inside its undo window still reaches the server. Two triggers:
+  //   - React unmount (SPA navigation away from the jobs view), and
+  //   - `pagehide` (tab close, reload, or full navigation) — without it, a
+  //     delete + close-tab within the 5s window would silently resurrect on
+  //     next load because the timer never fired.
+  // `keepalive` lets the request outlive the document. We deliberately do NOT
+  // listen to `visibilitychange`, since a mere tab switch is recoverable and
+  // must not prematurely finalise a still-undoable delete. Flushed requests are
+  // fire-and-forget + server-idempotent, so a double-send (pagehide then
+  // unmount) is harmless — clearing the map after the first flush prevents it.
   useEffect(() => {
     const pending = pendingDeletesRef.current;
-    return () => {
+    const flush = () => {
       for (const [id, entry] of pending) {
         clearTimeout(entry.timer);
         void fetch(`/api/jobs/${id}`, { method: "DELETE", keepalive: true });
       }
       pending.clear();
+    };
+    window.addEventListener("pagehide", flush);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      flush();
     };
   }, []);
 

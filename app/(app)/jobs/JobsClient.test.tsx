@@ -695,6 +695,57 @@ describe("JobsClient", () => {
     });
   });
 
+  it("flushes the pending delete on pagehide (tab close within the undo window)", async () => {
+    const user = userEvent.setup();
+    let deleteCalls = 0;
+
+    const mockFetch = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url.startsWith("/api/jobs?")) {
+        return new Response(
+          JSON.stringify({ items: [baseJob], nextCursor: null, facets: { jobLevels: ["Mid"] } }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.startsWith(`/api/jobs/${baseJob.id}`) && init?.method === "DELETE") {
+        deleteCalls += 1;
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.startsWith("/api/jobs/") && (!init || init.method === "GET")) {
+        return new Response(
+          JSON.stringify({ id: baseJob.id, description: "Job description" }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
+
+    const removeButton = (await screen.findAllByTestId("job-remove-button"))[0];
+    await user.click(removeButton);
+
+    const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
+    await waitFor(() => {
+      expect(
+        within(resultsPane).queryByRole("button", { name: /Frontend Engineer/i }),
+      ).not.toBeInTheDocument();
+    });
+    expect(deleteCalls).toBe(0);
+
+    // The user closes the tab inside the undo window — pagehide must commit the
+    // deferred delete (no timer/unmount fired). Without the listener this delete
+    // would be silently lost and the row would resurrect on next load.
+    window.dispatchEvent(new Event("pagehide"));
+    await waitFor(() => {
+      expect(deleteCalls).toBe(1);
+    });
+  });
+
   it("restores the job and sends no DELETE when Undo is clicked", async () => {
     const user = userEvent.setup();
     let deleteCalls = 0;
