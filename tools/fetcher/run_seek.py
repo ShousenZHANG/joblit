@@ -30,7 +30,6 @@ import time
 import random
 import logging
 import argparse
-from html import unescape
 from typing import Any, Callable, Dict, Iterable, List, Optional
 from urllib.parse import urlsplit
 
@@ -73,8 +72,6 @@ WARM_TTL_SEC = 25 * 60
 MAX_TITLE = 512
 MAX_TEXT_FIELD = 256
 MAX_DESCRIPTION = 50_000
-MAX_JSONLD_BYTES = 2_000_000
-MAX_RECURSION_DEPTH = 24
 MAX_TOTAL_ROWS = 20_000
 
 SEEK_ID_RE = re.compile(r"^[0-9]+$")  # Seek job ids are numeric — pin this.
@@ -352,51 +349,6 @@ def filter_relevant_titles(items: List[Dict[str, str]], keywords: Iterable[str])
     return loose or items
 
 
-def _find_description(payload: Any, depth: int = 0) -> str:
-    if depth > MAX_RECURSION_DEPTH:
-        return ""
-    if isinstance(payload, dict):
-        desc = payload.get("description")
-        if isinstance(desc, str) and desc.strip():
-            return desc
-        for value in payload.values():
-            nested = _find_description(value, depth + 1)
-            if nested:
-                return nested
-    elif isinstance(payload, list):
-        for item in payload:
-            nested = _find_description(item, depth + 1)
-            if nested:
-                return nested
-    return ""
-
-
-def _clean_html(text: str) -> str:
-    text = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", text or "")
-    text = re.sub(r"(?is)<[^>]+>", " ", text)
-    text = unescape(text)
-    return re.sub(r"\s+", " ", text).strip()
-
-
-def extract_jsonld_description(html_text: str) -> str:
-    """Pull the JobPosting description from a job page's JSON-LD (size-bounded)."""
-    if not html_text:
-        return ""
-    html_text = html_text[:MAX_JSONLD_BYTES]
-    for snippet in re.findall(
-        r'(?is)<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
-        html_text,
-    ):
-        try:
-            payload = json.loads(snippet.strip())
-        except (ValueError, RecursionError):
-            continue
-        found = _find_description(payload)
-        if found:
-            return _truncate(_clean_html(found), MAX_DESCRIPTION)
-    return ""
-
-
 # ── Network layer (gated, polite, no bypass) ───────────────────────────────
 class SeekFetcher:
     def __init__(
@@ -522,39 +474,23 @@ class SeekFetcher:
             time.sleep(REQUEST_DELAY_SEC)
         return collected
 
-    def enrich_description(self, job_url: str) -> str:
-        """Fetch a job page and extract its JSON-LD description. SSRF-guarded:
-        only fetches au.seek.com URLs; returns "" on any challenge/error."""
-        if not is_seek_host(job_url):
-            logger.warning("enrich skipped non-Seek url: %s", job_url)
-            return ""
-        try:
-            self._ensure_enabled()
-            if self._needs_warm():
-                self.warm_up()
-            res = self.session.get(job_url, timeout=REQUEST_TIMEOUT_SEC)
-            kind = classify_response(res.status_code, res.headers.get("content-type", ""), res.text)
-            return extract_jsonld_description(res.text) if kind == "ok" else ""
-        except (requests.RequestException, SeekChallengeError) as err:
-            logger.warning("enrich failed url=%s err=%s", job_url, err)
-            return ""
-        finally:
-            time.sleep(REQUEST_DELAY_SEC)
-
 
 # ── Orchestration ──────────────────────────────────────────────────────────
 def collect_jobs(
     fetcher: SeekFetcher,
     queries: List[Dict[str, Any]],
     *,
-    enrich: bool = False,
     max_total: int = MAX_TOTAL_ROWS,
 ) -> List[Dict[str, str]]:
     """Stream each query through map + dedupe (bounded memory, immutable rows).
-    A challenge stops further queries but keeps everything collected so far."""
+    A challenge stops further queries but keeps everything collected so far.
+
+    Note: full job descriptions are intentionally NOT fetched here — bulk runs
+    keep only the teaser to stay light against Seek's anti-bot. The full JD is
+    fetched on-demand at tailoring time (lib/server/seek/fetchJobDescription.ts)."""
     seen: set = set()
     items: List[Dict[str, str]] = []
-    stats = {"queries": 0, "raw": 0, "mapped": 0, "challenges": 0, "enrich_ok": 0, "enrich_fail": 0}
+    stats = {"queries": 0, "raw": 0, "mapped": 0, "challenges": 0}
     for query in queries:
         stats["queries"] += 1
         try:
@@ -579,17 +515,6 @@ def collect_jobs(
                 break
         if len(items) >= max_total:
             break
-
-    if enrich:
-        # The search-result `teaser` is only a 1-2 line preview, so ALWAYS fetch
-        # the full JD from the job page. The teaser stays as a fallback when the
-        # detail fetch is empty (e.g. a challenge on that page).
-        enriched: List[Dict[str, str]] = []
-        for row in items:
-            full = fetcher.enrich_description(row["job_url"])
-            stats["enrich_ok" if full else "enrich_fail"] += 1
-            enriched.append({**row, "description": full or row.get("description", "")})
-        items = enriched
 
     logger.info("Seek summary: %s", stats)
     return items
@@ -716,11 +641,10 @@ def run_from_config(run_id: str) -> int:
     started = time.monotonic()
     try:
         raw = run.get("queries") if isinstance(run.get("queries"), dict) else {}
-        # Bulk runs do NOT fetch full descriptions: one detail request per job is
-        # the biggest anti-bot risk + slowest step, and the teaser + bulletPoints
-        # already give a usable preview ("Open job" shows the full JD on Seek).
-        # Full JD is best fetched on-demand when a job is actually tailored.
-        items = collect_jobs(SeekFetcher(), build_queries_from_config(run), enrich=False)
+        # Bulk runs do NOT fetch full descriptions (the teaser is enough here);
+        # the full JD is fetched on-demand at tailoring time. This keeps the bulk
+        # run light against Seek's anti-bot.
+        items = collect_jobs(SeekFetcher(), build_queries_from_config(run))
         # Relevance: Seek keyword search is broad, so drop titles that do not
         # match the search domain (e.g. "Elixir Developer" for an "AI Engineer"
         # query) before any other filtering.
@@ -774,7 +698,6 @@ def main() -> int:
     parser.add_argument("--where", default=DEFAULT_WHERE)
     parser.add_argument("--daterange", type=int, default=DEFAULT_DATERANGE_DAYS)
     parser.add_argument("--max-pages", type=int, default=SEEK_PAGE_CEILING)
-    parser.add_argument("--enrich", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--import-base", default=os.environ.get("JOBLIT_WEB_URL", ""))
     parser.add_argument("--user-email", default=os.environ.get("SEEK_USER_EMAIL", ""))
@@ -792,7 +715,7 @@ def main() -> int:
                 "max_pages": args.max_pages,
             }
         ]
-        items = collect_jobs(fetcher, queries, enrich=args.enrich)
+        items = collect_jobs(fetcher, queries)
         items = filter_relevant_titles(items, [args.keywords])
 
         if args.dry_run or not args.import_base or not args.user_email:

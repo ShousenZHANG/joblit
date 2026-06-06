@@ -257,24 +257,6 @@ def test_run_from_config_reports_partial_import_count(monkeypatch):
     assert any(u.get("status") == "FAILED" and u.get("importedCount") == 50 for u in updates)
 
 
-def test_find_description_depth_guard_and_nested():
-    node = {"description": "deep"}
-    for _ in range(rs.MAX_RECURSION_DEPTH + 5):
-        node = {"x": node}
-    assert rs._find_description(node) == ""  # too deep to reach
-    assert rs._find_description({"a": {"b": {"description": "found"}}}) == "found"
-
-
-def test_extract_jsonld_description():
-    html = (
-        '<script type="application/ld+json">'
-        '{"@type":"JobPosting","description":"Hello <b>world</b>"}</script>'
-    )
-    assert rs.extract_jsonld_description(html) == "Hello world"
-    assert rs.extract_jsonld_description("") == ""
-    assert rs.extract_jsonld_description('<script type="application/ld+json">{bad json</script>') == ""
-
-
 # ── Network layer: warm-up / clock ─────────────────────────────────────────
 def test_warm_up_success_sets_timestamp(fast):
     sess = FakeSession([FakeResp(200, text="<html>jobs</html>", ct="text/html")])
@@ -431,34 +413,6 @@ def test_search_paginated_propagates_challenge(monkeypatch, fast):
         f.search_paginated(max_pages=5)
 
 
-# ── Network layer: enrich_description (SSRF) ───────────────────────────────
-def test_enrich_skips_non_seek_host(fast):
-    sess = FakeSession([])
-    f = rs.SeekFetcher(session=sess, clock=Clock(0))
-    f._warmed_at = 0.0
-    assert f.enrich_description("https://evil.com/job/1") == ""
-    assert len(sess.calls) == 0  # never fetched
-
-
-def test_enrich_ok_returns_description(fast):
-    html = '<script type="application/ld+json">{"@type":"JobPosting","description":"Hi <b>there</b>"}</script>'
-    f = rs.SeekFetcher(session=FakeSession([FakeResp(200, text=html, ct="text/html")]), clock=Clock(0))
-    f._warmed_at = 0.0
-    assert f.enrich_description("https://au.seek.com/job/5") == "Hi there"
-
-
-def test_enrich_challenge_returns_empty(fast):
-    f = rs.SeekFetcher(session=FakeSession([FakeResp(403, text="blocked")]), clock=Clock(0))
-    f._warmed_at = 0.0
-    assert f.enrich_description("https://au.seek.com/job/5") == ""
-
-
-def test_enrich_exception_returns_empty(fast):
-    f = rs.SeekFetcher(session=FakeSession([requests.Timeout("slow")]), clock=Clock(0))
-    f._warmed_at = 0.0
-    assert f.enrich_description("https://au.seek.com/job/5") == ""
-
-
 # ── Orchestration: collect_jobs ────────────────────────────────────────────
 class _Fetcher:
     def __init__(self, per_query, enrich_val="FULL"):
@@ -498,28 +452,6 @@ def test_collect_jobs_skips_failed_query_keeps_rest():
     f = _Fetcher([RuntimeError("oops"), [{"id": "9", "title": "B"}]])
     out = rs.collect_jobs(f, [{}, {}])
     assert [r["job_url"] for r in out] == ["https://au.seek.com/job/9"]
-
-
-def test_collect_jobs_enrich_fills_empty_with_new_dict():
-    f = _Fetcher([[{"id": "2", "title": "Dev", "companyName": "X"}]], enrich_val="FULLTEXT")
-    out = rs.collect_jobs(f, [{}], enrich=True)
-    assert out[0]["description"] == "FULLTEXT"
-    assert f.enriched == ["https://au.seek.com/job/2"]
-
-
-def test_collect_jobs_enrich_replaces_teaser_with_full():
-    # The teaser is only a preview — the full JD must replace it.
-    f = _Fetcher([[REAL_RAW]], enrich_val="FULL JD TEXT")
-    out = rs.collect_jobs(f, [{}], enrich=True)
-    assert out[0]["description"] == "FULL JD TEXT"
-    assert f.enriched == ["https://au.seek.com/job/92521602"]
-
-
-def test_collect_jobs_enrich_keeps_teaser_when_detail_empty():
-    f = _Fetcher([[REAL_RAW]], enrich_val="")
-    out = rs.collect_jobs(f, [{}], enrich=True)
-    assert "Forefront of AI" in out[0]["description"]  # fallback to teaser
-    assert f.enriched == ["https://au.seek.com/job/92521602"]
 
 
 def test_collect_jobs_respects_max_total():
