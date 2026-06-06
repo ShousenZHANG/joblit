@@ -499,7 +499,11 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
   // AU pipeline selector: "jobspy" (LinkedIn, default) or "seek". Only offered
   // when the server-side Seek kill-switch is on (seekEnabled prop).
   const [source, setSource] = useState<"jobspy" | "seek">("jobspy");
-  const [seekClassification, setSeekClassification] = useState("");
+  // Default to Seek classification 6281 (Information & Communication Technology)
+  // since Joblit is a tech-focused product — scopes Seek's 500-result cap to IT
+  // roles instead of diluting it across all categories. Clear it for all-category
+  // search.
+  const [seekClassification, setSeekClassification] = useState("6281");
   // Seek only supports title exclusions — no smart-expand, no description-level
   // (rights / minimum-experience) filtering.
   const isSeek = seekEnabled && source === "seek";
@@ -809,7 +813,7 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
                   <Input
                     value={seekClassification}
                     onChange={(e) => setSeekClassification(e.target.value)}
-                    placeholder="Seek classification id (optional, e.g. 6281 for IT)"
+                    placeholder="Seek category id — 6281 = IT. Clear for all categories."
                     className="h-9 max-w-md text-sm"
                   />
                 )}
