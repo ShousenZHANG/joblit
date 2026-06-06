@@ -97,6 +97,24 @@ def test_build_search_params_includes_and_omits():
     assert "keywords" not in bare and "classification" not in bare and "daterange" not in bare
 
 
+def test_build_search_params_work_type_and_salary():
+    p = rs.build_search_params(work_type="242", salary_min="100000")
+    assert p["worktype"] == "242"
+    assert p["salaryrange"] == "100000-999999"
+    assert p["salarytype"] == "annual"
+    # invalid worktype id / non-numeric salary are ignored
+    p2 = rs.build_search_params(work_type="999", salary_min="abc")
+    assert "worktype" not in p2
+    assert "salaryrange" not in p2
+
+
+def test_build_queries_from_config_threads_filters():
+    run = {"queries": {"queries": ["dev"], "workType": "242", "salaryMin": 120000}}
+    q = rs.build_queries_from_config(run)[0]
+    assert q["work_type"] == "242"
+    assert q["salary_min"] == "120000"
+
+
 @pytest.mark.parametrize(
     "status,ct,body,expected",
     [
@@ -587,6 +605,8 @@ def test_build_queries_from_config():
         "where": "Sydney",
         "daterange_days": 3,
         "max_pages": rs.SEEK_PAGE_CEILING,
+        "work_type": "",
+        "salary_min": "",
     }
 
 

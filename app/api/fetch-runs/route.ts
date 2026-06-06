@@ -62,6 +62,9 @@ const AUSchema = z
     source: z.enum(["jobspy", "seek"]).optional().default("jobspy"),
     classification: z.string().trim().max(40).optional(),
     daterange: z.coerce.number().int().min(1).max(31).optional(),
+    // Seek work-type id (242 Full / 243 Part / 244 Contract / 245 Casual), "" = any.
+    workType: z.enum(["", "242", "243", "244", "245"]).optional().default(""),
+    salaryMin: z.coerce.number().int().min(0).max(1_000_000).optional(),
   })
   .refine((data) => (data.title ?? data.queries?.[0])?.trim(), {
     message: "title is required",
@@ -119,6 +122,8 @@ export async function GET() {
           sources: Array.isArray(q.sources) ? (q.sources as string[]) : null,
           source: typeof q.source === "string" ? (q.source as string) : null,
           classification: typeof q.classification === "string" ? (q.classification as string) : null,
+          workType: typeof q.workType === "string" ? (q.workType as string) : null,
+          salaryMin: typeof q.salaryMin === "number" ? (q.salaryMin as number) : null,
           excludeKeywords: Array.isArray(q.excludeKeywords)
             ? (q.excludeKeywords as string[])
             : null,
@@ -197,7 +202,12 @@ export async function POST(req: Request) {
         excludeDescriptionRules: data.excludeDescriptionRules,
         source: data.source,
         ...(data.source === "seek"
-          ? { classification: data.classification ?? "", daterange: data.daterange ?? 2 }
+          ? {
+              classification: data.classification ?? "",
+              daterange: data.daterange ?? 2,
+              workType: data.workType ?? "",
+              salaryMin: data.salaryMin ?? null,
+            }
           : {}),
       },
       location: data.location ?? null,

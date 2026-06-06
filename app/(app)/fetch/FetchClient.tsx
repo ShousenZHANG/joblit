@@ -383,6 +383,8 @@ type FetchRunListItem = {
   sources: string[] | null;
   source: string | null;
   classification: string | null;
+  workType: string | null;
+  salaryMin: number | null;
   excludeKeywords: string[] | null;
   createdAt: string;
 };
@@ -518,6 +520,22 @@ const SEEK_CLASSIFICATIONS: { id: string; label: string }[] = [
   { id: "1225", label: "Trades & Services" },
 ];
 
+const SEEK_WORK_TYPES: { id: string; label: string }[] = [
+  { id: "242", label: "Full time" },
+  { id: "243", label: "Part time" },
+  { id: "244", label: "Contract / Temp" },
+  { id: "245", label: "Casual / Vacation" },
+];
+
+const SEEK_SALARY_MINS: { id: string; label: string }[] = [
+  { id: "60000", label: "$60k+" },
+  { id: "80000", label: "$80k+" },
+  { id: "100000", label: "$100k+" },
+  { id: "120000", label: "$120k+" },
+  { id: "150000", label: "$150k+" },
+  { id: "200000", label: "$200k+" },
+];
+
 export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) {
   const { data: session } = useSession();
   const userId = session?.user?.id ?? null;
@@ -534,6 +552,8 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
   // roles instead of diluting it across all categories. Clear it for all-category
   // search.
   const [seekClassification, setSeekClassification] = useState("6281");
+  const [seekWorkType, setSeekWorkType] = useState(""); // "" = any
+  const [seekSalaryMin, setSeekSalaryMin] = useState(""); // "" = any
   // Seek only supports title exclusions — no smart-expand, no description-level
   // (rights / minimum-experience) filtering.
   const isSeek = seekEnabled && source === "seek";
@@ -690,6 +710,8 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
                 classification: seekClassification.trim() || undefined,
                 // Seek windows by day; reuse the hoursOld control (48h -> 2d).
                 daterange: Math.max(1, Math.min(31, Math.ceil(hoursOld / 24))),
+                workType: seekWorkType || undefined,
+                salaryMin: seekSalaryMin ? Number(seekSalaryMin) : undefined,
               }
             : {}),
         };
@@ -759,6 +781,10 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
         setSource(run.source);
       }
       if (typeof run.classification === "string") setSeekClassification(run.classification);
+      setSeekWorkType(typeof run.workType === "string" ? run.workType : "");
+      setSeekSalaryMin(
+        typeof run.salaryMin === "number" && run.salaryMin > 0 ? String(run.salaryMin) : "",
+      );
     }
     setLocalError(null);
     topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -840,22 +866,56 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
                   </button>
                 </div>
                 {source === "seek" && (
-                  <Select
-                    value={seekClassification || "all"}
-                    onValueChange={(v) => setSeekClassification(v === "all" ? "" : v)}
-                  >
-                    <SelectTrigger className="h-9 max-w-md text-sm" aria-label="Seek category">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All categories</SelectItem>
-                      {SEEK_CLASSIFICATIONS.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex flex-wrap gap-2">
+                    <Select
+                      value={seekClassification || "all"}
+                      onValueChange={(v) => setSeekClassification(v === "all" ? "" : v)}
+                    >
+                      <SelectTrigger className="h-9 w-full max-w-xs text-sm" aria-label="Seek category">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All categories</SelectItem>
+                        {SEEK_CLASSIFICATIONS.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={seekWorkType || "any"}
+                      onValueChange={(v) => setSeekWorkType(v === "any" ? "" : v)}
+                    >
+                      <SelectTrigger className="h-9 w-40 text-sm" aria-label="Work type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="any">Any type</SelectItem>
+                        {SEEK_WORK_TYPES.map((w) => (
+                          <SelectItem key={w.id} value={w.id}>
+                            {w.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={seekSalaryMin || "any"}
+                      onValueChange={(v) => setSeekSalaryMin(v === "any" ? "" : v)}
+                    >
+                      <SelectTrigger className="h-9 w-32 text-sm" aria-label="Minimum salary">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="any">Any salary</SelectItem>
+                        {SEEK_SALARY_MINS.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 )}
               </div>
             </div>

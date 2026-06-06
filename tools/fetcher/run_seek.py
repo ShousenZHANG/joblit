@@ -136,6 +136,11 @@ def normalize_seek_where(location: Any) -> str:
     return first or DEFAULT_WHERE
 
 
+# Verified Seek work-type ids: 242 Full time, 243 Part time, 244 Contract/Temp,
+# 245 Casual/Vacation.
+SEEK_WORK_TYPE_IDS = {"242", "243", "244", "245"}
+
+
 def build_search_params(
     *,
     keywords: str = "",
@@ -144,6 +149,8 @@ def build_search_params(
     page: int = 1,
     page_size: int = DEFAULT_PAGE_SIZE,
     daterange_days: Optional[int] = DEFAULT_DATERANGE_DAYS,
+    work_type: str = "",
+    salary_min: str = "",
 ) -> Dict[str, str]:
     params: Dict[str, str] = {
         "siteKey": DEFAULT_SITE_KEY,
@@ -158,6 +165,12 @@ def build_search_params(
         params["classification"] = str(classification).strip()
     if daterange_days and daterange_days > 0:
         params["daterange"] = str(daterange_days)
+    if str(work_type).strip() in SEEK_WORK_TYPE_IDS:
+        params["worktype"] = str(work_type).strip()
+    salary_floor = str(salary_min or "").strip()
+    if salary_floor.isdigit() and int(salary_floor) > 0:
+        params["salaryrange"] = f"{salary_floor}-999999"
+        params["salarytype"] = "annual"
     return params
 
 
@@ -454,6 +467,8 @@ class SeekFetcher:
         daterange_days: Optional[int] = DEFAULT_DATERANGE_DAYS,
         max_pages: int = SEEK_PAGE_CEILING,
         page_size: int = DEFAULT_PAGE_SIZE,
+        work_type: str = "",
+        salary_min: str = "",
     ) -> List[Dict[str, Any]]:
         """Page through one query up to the Seek 5-page / ~500-result ceiling.
         A challenge stops the run; any other page error keeps the prior pages."""
@@ -467,6 +482,8 @@ class SeekFetcher:
                 page=page,
                 page_size=page_size,
                 daterange_days=daterange_days,
+                work_type=work_type,
+                salary_min=salary_min,
             )
             try:
                 parsed = parse_search_payload(self._get_json(SEEK_SEARCH_URL, params))
@@ -629,6 +646,8 @@ def build_queries_from_config(run: Dict[str, Any]) -> List[Dict[str, Any]]:
     except (TypeError, ValueError):
         daterange_days = DEFAULT_DATERANGE_DAYS
     where = normalize_seek_where(run.get("location"))
+    work_type = str(raw.get("workType") or "")
+    salary_min = str(raw.get("salaryMin") or "")
     return [
         {
             "keywords": kw,
@@ -636,6 +655,8 @@ def build_queries_from_config(run: Dict[str, Any]) -> List[Dict[str, Any]]:
             "where": where,
             "daterange_days": daterange_days,
             "max_pages": SEEK_PAGE_CEILING,
+            "work_type": work_type,
+            "salary_min": salary_min,
         }
         for kw in keywords
     ]
@@ -712,6 +733,8 @@ def main() -> int:
     parser.add_argument("--where", default=DEFAULT_WHERE)
     parser.add_argument("--daterange", type=int, default=DEFAULT_DATERANGE_DAYS)
     parser.add_argument("--max-pages", type=int, default=SEEK_PAGE_CEILING)
+    parser.add_argument("--work-type", default="", help="Seek worktype id (242/243/244/245)")
+    parser.add_argument("--salary-min", default="", help="Minimum annual salary")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--import-base", default=os.environ.get("JOBLIT_WEB_URL", ""))
     parser.add_argument("--user-email", default=os.environ.get("SEEK_USER_EMAIL", ""))
@@ -727,6 +750,8 @@ def main() -> int:
                 "where": normalize_seek_where(args.where),
                 "daterange_days": args.daterange,
                 "max_pages": args.max_pages,
+                "work_type": args.work_type,
+                "salary_min": args.salary_min,
             }
         ]
         items = collect_jobs(fetcher, queries)
