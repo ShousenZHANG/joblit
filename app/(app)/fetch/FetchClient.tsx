@@ -538,7 +538,7 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
   const market = useMarket();
   // AU pipeline selector: "jobspy" (LinkedIn, default) or "seek". Only offered
   // when the server-side Seek kill-switch is on (seekEnabled prop).
-  const [source, setSource] = useState<"jobspy" | "seek">("jobspy");
+  const [source, setSource] = useState<"jobspy" | "seek" | "both">("jobspy");
   // Default to Seek classification 6281 (Information & Communication Technology)
   // since Joblit is a tech-focused product — scopes Seek's 500-result cap to IT
   // roles instead of diluting it across all categories. Clear it for all-category
@@ -553,6 +553,10 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
   // Seek only supports title exclusions — no smart-expand, no description-level
   // (rights / minimum-experience) filtering.
   const isSeek = seekEnabled && source === "seek";
+  // Seek-specific options (classification / work type / sub-class) show for the
+  // Seek source AND for "Both" (the Seek lane uses them). jobspy-only UI keys on
+  // `!isSeek`, which already covers jobspy + both.
+  const showSeekOptions = seekEnabled && (source === "seek" || source === "both");
   const [cnExcludeKeywords, setCnExcludeKeywords] = useState("");
   const [cnLocation, setCnLocation] = useState("");
   const [hoursOld, setHoursOld] = useState(48);
@@ -581,7 +585,7 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
   const [localError, setLocalError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const {
-    startRun,
+    startRuns,
     status: globalStatus,
     runId: globalRunId,
     error: globalError,
@@ -668,7 +672,8 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
     return fallback;
   }
 
-  async function createRun() {
+  async function createRun(targetSource: "jobspy" | "seek") {
+    const isSeekRun = targetSource === "seek";
     const body = market === "CN"
       ? {
           market: "CN",
@@ -691,17 +696,17 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
           hoursOld,
           // Seek honours only title exclusions — force smart-expand off and drop
           // description-level rules for Seek runs.
-          smartExpand: isSeek ? false : smartExpand,
+          smartExpand: isSeekRun ? false : smartExpand,
           applyExcludes,
           excludeTitleTerms,
-          excludeDescriptionRules: isSeek
+          excludeDescriptionRules: isSeekRun
             ? []
             : [
                 ...excludeDescriptionRules,
                 ...(experienceRule ? [experienceRule] : []),
               ],
-          source: seekEnabled ? source : "jobspy",
-          ...(isSeek
+          source: targetSource,
+          ...(isSeekRun
             ? {
                 classification: seekClassification.trim() || undefined,
                 // Subclass only travels with a chosen parent category.
@@ -741,9 +746,45 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
       if (!queries.length) {
         throw new Error("Please enter at least one job title to search.");
       }
-      const id = await createRun();
-      startRun(id);
-      await triggerRun(id);
+      // CN has no source toggle. AU resolves the selected source(s); "Both"
+      // launches one run per source so LinkedIn + Seek scrape in parallel.
+      const targets: ("jobspy" | "seek")[] =
+        market === "CN"
+          ? ["jobspy"]
+          : source === "both"
+            ? ["jobspy", "seek"]
+            : source === "seek"
+              ? ["seek"]
+              : ["jobspy"];
+
+      // Create runs independently — one source failing (e.g. Seek already in
+      // flight) must not block the other. A failed createRun never creates a
+      // server run, so there are no orphaned runs to clean up.
+      const settled = await Promise.allSettled(
+        targets.map(async (s) => ({ id: await createRun(s), source: s })),
+      );
+      const created = settled
+        .filter(
+          (r): r is PromiseFulfilledResult<{ id: string; source: "jobspy" | "seek" }> =>
+            r.status === "fulfilled",
+        )
+        .map((r) => r.value);
+
+      if (!created.length) {
+        const firstError = settled.find((r) => r.status === "rejected");
+        throw (firstError as PromiseRejectedResult | undefined)?.reason ??
+          new Error("Failed to start fetch");
+      }
+
+      startRuns(created);
+      await Promise.all(created.map((r) => triggerRun(r.id)));
+
+      // Partial success (one of "Both" failed): proceed with the started run(s)
+      // but surface why the other didn't launch.
+      const failed = settled.find((r) => r.status === "rejected");
+      if (failed) {
+        setLocalError(getErrorMessage((failed as PromiseRejectedResult).reason));
+      }
       markTaskComplete("first_fetch");
     } catch (e: unknown) {
       setLocalError(getErrorMessage(e));
@@ -866,8 +907,20 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
                   >
                     Seek
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setSource("both")}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
+                      source === "both"
+                        ? "bg-background text-brand-emerald-700 shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    Both
+                  </button>
                 </div>
-                {source === "seek" && (
+                {showSeekOptions && (
                   <div className="flex flex-wrap gap-2">
                     <Select
                       value={seekClassification || "all"}

@@ -2,12 +2,14 @@
 
 import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { CheckCircle2, ChevronDown, Loader2, Minus, X } from "lucide-react";
+import { CheckCircle2, ChevronDown, Loader2, Minus, X, XCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { useFetchStatus } from "./FetchStatusContext";
+import { useFetchStatus, type FetchRunLane } from "./FetchStatusContext";
+
+const SOURCE_LABEL: Record<string, string> = { jobspy: "LinkedIn", seek: "Seek" };
 
 // Fetch progress panel — bottom-right floating surface that tracks a
 // fetch run through queued → running → done. Supports three visual
@@ -36,6 +38,7 @@ export function FetchProgressPanel() {
     queryTerms,
     smartExpand,
     elapsedSeconds,
+    lanes,
     open,
     setOpen,
     cancelRun,
@@ -198,6 +201,11 @@ export function FetchProgressPanel() {
           <div className="space-y-3 px-4 py-4">
             {/* Step indicator */}
             <StepIndicator status={status} />
+
+            {/* Per-source lanes — only when more than one source is running
+                (e.g. "Both"). Each lane shows its own live status + import count
+                so a stalled or rate-limited source is visible independently. */}
+            {lanes.length > 1 ? <SourceLanes lanes={lanes} /> : null}
 
             {/* Status line */}
             <div className="text-xs text-muted-foreground">
@@ -399,6 +407,54 @@ function StepIndicator({ status }: { status: string | null }) {
         </React.Fragment>
       ))}
     </div>
+  );
+}
+
+function SourceLanes({ lanes }: { lanes: FetchRunLane[] }) {
+  const t = useTranslations("fetchProgress");
+  return (
+    <ul className="space-y-1.5" aria-label="Sources">
+      {lanes.map((lane) => {
+        const active = lane.status === "RUNNING" || lane.status === "QUEUED";
+        const label =
+          lane.status === "RUNNING"
+            ? t("statusRunning")
+            : lane.status === "QUEUED"
+              ? t("statusQueued")
+              : lane.status === "SUCCEEDED"
+                ? t("statusCompleted")
+                : t("statusFailed");
+        return (
+          <li
+            key={lane.id}
+            className="flex items-center justify-between gap-2 rounded-lg border border-border/50 bg-muted/30 px-2.5 py-1.5"
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              {active ? (
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-brand-emerald-600" aria-hidden />
+              ) : lane.status === "SUCCEEDED" ? (
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-brand-emerald-600" aria-hidden />
+              ) : (
+                <XCircle className="h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden />
+              )}
+              <span className="truncate text-xs font-semibold text-foreground">
+                {SOURCE_LABEL[lane.source] ?? lane.source}
+              </span>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {lane.importedCount > 0 ? (
+                <span className="text-[11px] font-semibold tabular-nums text-brand-emerald-700">
+                  +{lane.importedCount}
+                </span>
+              ) : null}
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                {label}
+              </span>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

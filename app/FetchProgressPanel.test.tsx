@@ -9,6 +9,7 @@ vi.mock("./FetchStatusContext", () => ({
     runId: "run-1",
     status: "RUNNING",
     importedCount: 0,
+    lanes: [],
     error: null,
     elapsedSeconds: 12,
     open: true,

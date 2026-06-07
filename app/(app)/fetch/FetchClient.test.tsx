@@ -39,7 +39,7 @@ vi.mock("@/app/GuideContext", () => ({
 
 vi.mock("@/app/FetchStatusContext", () => ({
   useFetchStatus: () => ({
-    startRun: startRunMock,
+    startRuns: startRunMock,
     status: null,
     runId: null,
     error: null,
@@ -102,7 +102,7 @@ describe("FetchClient", () => {
     await user.click(screen.getByRole("button", { name: /start fetch/i }));
 
     await waitFor(() => {
-      expect(startRunMock).toHaveBeenCalledWith("run-1");
+      expect(startRunMock).toHaveBeenCalledWith([{ id: "run-1", source: "jobspy" }]);
     });
 
     const pollingCalls = setIntervalSpy.mock.calls.filter((call) => call[1] === 3000);
@@ -123,7 +123,7 @@ describe("FetchClient", () => {
     await user.click(screen.getByRole("button", { name: /start fetch/i }));
 
     await waitFor(() => {
-      expect(startRunMock).toHaveBeenCalledWith("run-1");
+      expect(startRunMock).toHaveBeenCalledWith([{ id: "run-1", source: "jobspy" }]);
     });
 
     const fetchMock = global.fetch as unknown as {
@@ -244,7 +244,7 @@ describe("FetchClient", () => {
 
     await user.click(screen.getByRole("button", { name: /start fetch/i }));
     await waitFor(() => {
-      expect(startRunMock).toHaveBeenCalledWith("run-1");
+      expect(startRunMock).toHaveBeenCalledWith([{ id: "run-1", source: "jobspy" }]);
     });
 
     const fetchMock = global.fetch as unknown as {
