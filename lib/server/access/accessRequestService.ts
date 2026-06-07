@@ -35,6 +35,26 @@ export async function isSignInAllowed(email: string | null | undefined): Promise
 }
 
 /**
+ * Whether an email is already cleared to sign in via the invite gate — a
+ * configured admin OR an APPROVED request. Deliberately does NOT consider
+ * existing User rows: the apply form uses this to route "already approved"
+ * visitors straight to sign-in, and we don't want that path to reveal whether
+ * an arbitrary email has an account (it only reveals invite-approval status,
+ * which is low-sensitivity and rate-limited). The real boundary is the OAuth
+ * signIn gate (isSignInAllowed), not this.
+ */
+export async function isApproved(email: string | null | undefined): Promise<boolean> {
+  if (!email) return false;
+  const e = normalizeEmail(email);
+  if (isAdminEmail(e)) return true;
+  const approved = await prisma.accessRequest.findFirst({
+    where: { email: e, status: "APPROVED" },
+    select: { id: true },
+  });
+  return Boolean(approved);
+}
+
+/**
  * Record an access request. Idempotent via the unique email: re-applying never
  * creates a duplicate and never downgrades an already-APPROVED row back to
  * PENDING (the update only touches an optional note).

@@ -9,7 +9,7 @@ import { SectionKicker } from "./SectionKicker";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-type Phase = "idle" | "submitting" | "success" | "error";
+type Phase = "idle" | "submitting" | "success" | "redirecting" | "error";
 
 // Access — replaces the old pricing grid now that the product is fully free +
 // invite-only. A single focused card: one email field → POST /api/access-requests.
@@ -42,7 +42,15 @@ export function Access() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: value }),
       });
-      if (!res.ok && res.status !== 202) throw new Error("failed");
+      if (!res.ok) throw new Error("failed");
+      const json = (await res.json().catch(() => ({}))) as { status?: string };
+      if (json.status === "approved") {
+        // Already cleared — go straight to OAuth sign-in (the gate confirms the
+        // email on the third-party login). Full nav so NextAuth owns the flow.
+        setPhase("redirecting");
+        window.location.href = "/login";
+        return;
+      }
       setPhase("success");
     } catch {
       setPhase("error");
@@ -81,9 +89,9 @@ export function Access() {
         />
 
         <AnimatePresence mode="wait" initial={false}>
-          {phase === "success" ? (
+          {phase === "success" || phase === "redirecting" ? (
             <motion.div
-              key="success"
+              key="done"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
@@ -91,11 +99,17 @@ export function Access() {
               className="flex flex-col items-center py-4 text-center"
             >
               <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-emerald-50 text-brand-emerald-600 ring-1 ring-brand-emerald-100">
-                <CheckCircle2 className="h-6 w-6" aria-hidden />
+                {phase === "redirecting" ? (
+                  <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
+                ) : (
+                  <CheckCircle2 className="h-6 w-6" aria-hidden />
+                )}
               </span>
-              <p className="mt-4 text-base font-semibold text-foreground">{t("successTitle")}</p>
+              <p className="mt-4 text-base font-semibold text-foreground">
+                {phase === "redirecting" ? t("approvedTitle") : t("successTitle")}
+              </p>
               <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-muted-foreground">
-                {t("successBody")}
+                {phase === "redirecting" ? t("approvedBody") : t("successBody")}
               </p>
             </motion.div>
           ) : (

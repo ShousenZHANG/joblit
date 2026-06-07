@@ -214,7 +214,7 @@ export function Hero() {
         className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row"
       >
         <Link
-          href={cta.href}
+          href={cta.disabled ? "#" : cta.href === "/login" ? "#access" : cta.href}
           aria-disabled={cta.disabled}
           tabIndex={cta.disabled ? -1 : undefined}
           className={

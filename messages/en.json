@@ -20,7 +20,8 @@
     "resume": "Resume",
     "guide": "Guide",
     "discover": "Discover",
-    "extension": "Extension"
+    "extension": "Extension",
+    "admin": "Admin"
   },
   "marketing": {
     "heroTitle": "AI-tailored resumes for every job you apply to",
@@ -558,7 +559,7 @@
       "eyebrowTagline": "Self-learning extension · v0.1",
       "titleLine1": "The job search,",
       "titleItalic": "re-engineered.",
-      "subtitle": "Joblit fetches roles, scores them against your profile, tailors your resume per JD, and auto-fills the applications. One workstation. Zero copy-paste.",
+      "subtitle": "Joblit fetches roles from Seek and LinkedIn, tailors your CV and cover letter to each JD, exports clean LaTeX PDFs, and auto-fills the applications. One workstation. Zero copy-paste.",
       "startFree": "Start free",
       "watchDemo": "Watch demo",
       "metaFree": "Free forever · Bring your own LLM key"
@@ -621,6 +622,8 @@
       "submitting": "Sending…",
       "successTitle": "You're on the list",
       "successBody": "We'll approve your email shortly — then sign in with the Google or GitHub account on that address.",
+      "approvedTitle": "You're already approved",
+      "approvedBody": "Taking you to sign-in — use the Google or GitHub account on that email.",
       "errorBody": "Something went wrong. Please try again.",
       "invalidEmail": "Enter a valid email address.",
       "perks": "No credit card · No paywalls · Your data and AI keys stay yours"

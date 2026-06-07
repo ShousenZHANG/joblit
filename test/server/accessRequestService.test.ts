@@ -13,6 +13,7 @@ const store = vi.hoisted(() => ({
 vi.mock("@/lib/server/prisma", () => ({ prisma: store }));
 
 import {
+  isApproved,
   isSignInAllowed,
   submitAccessRequest,
 } from "@/lib/server/access/accessRequestService";
@@ -72,6 +73,33 @@ describe("isSignInAllowed", () => {
   it("denies empty / missing email", async () => {
     expect(await isSignInAllowed(null)).toBe(false);
     expect(await isSignInAllowed("")).toBe(false);
+  });
+});
+
+describe("isApproved (apply-form routing — must not leak account existence)", () => {
+  it("is true for a configured admin without a DB hit", async () => {
+    vi.stubEnv("ADMIN_EMAILS", "boss@x.com");
+    expect(await isApproved("Boss@X.com")).toBe(true);
+    expect(store.accessRequest.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("is true for an APPROVED request", async () => {
+    vi.stubEnv("ADMIN_EMAILS", "");
+    store.accessRequest.findFirst.mockResolvedValue({ id: "1" });
+    expect(await isApproved("a@b.com")).toBe(true);
+  });
+
+  it("is false for pending/unknown and NEVER queries the User table", async () => {
+    vi.stubEnv("ADMIN_EMAILS", "");
+    store.accessRequest.findFirst.mockResolvedValue(null);
+    expect(await isApproved("a@b.com")).toBe(false);
+    // Unlike the sign-in gate, the apply form must not reveal whether an email
+    // already has an account — only invite-approval status.
+    expect(store.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("is false for an empty email", async () => {
+    expect(await isApproved("")).toBe(false);
   });
 });
 

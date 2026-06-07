@@ -4,6 +4,7 @@ import GitHubProvider from "next-auth/providers/github";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "@/lib/server/prisma";
 import { isSignInAllowed } from "@/lib/server/access/accessRequestService";
+import { isAdminEmail } from "@/lib/server/auth/adminAccess";
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -46,7 +47,13 @@ export const authOptions: NextAuthOptions = {
       return isSignInAllowed(user?.email);
     },
     session({ session, user }) {
-      if (session.user) session.user.id = user.id;
+      if (session.user) {
+        session.user.id = user.id;
+        // Surface admin status to the client (nav shows the admin link only for
+        // admins). isAdminEmail reads ADMIN_EMAILS server-side; the API routes
+        // re-check it, so this flag is UX only, never the security boundary.
+        session.user.isAdmin = isAdminEmail(user.email);
+      }
       return session;
     },
   },

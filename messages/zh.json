@@ -20,7 +20,8 @@
     "resume": "简历",
     "guide": "引导",
     "discover": "发现",
-    "extension": "插件"
+    "extension": "插件",
+    "admin": "管理"
   },
   "marketing": {
     "heroTitle": "AI 为每份工作定制专属简历",
@@ -558,7 +559,7 @@
       "eyebrowTagline": "自学习扩展 · v0.1",
       "titleLine1": "求职流程，",
       "titleItalic": "重新定义。",
-      "subtitle": "Joblit 自动抓取岗位、匹配你的档案、逐个 JD 定制简历、自动填写申请。一个工作台，零复制粘贴。",
+      "subtitle": "Joblit 从 Seek 和 LinkedIn 抓取岗位、按每个 JD 定制简历与求职信、导出干净的 LaTeX PDF、自动填写申请。一个工作台，零复制粘贴。",
       "startFree": "免费开始",
       "watchDemo": "观看演示",
       "metaFree": "永久免费 · 自带 LLM key"
@@ -621,6 +622,8 @@
       "submitting": "提交中…",
       "successTitle": "已加入名单",
       "successBody": "我们会尽快通过你的邮箱 —— 届时用该邮箱的 Google 或 GitHub 账号登录即可。",
+      "approvedTitle": "你已获批",
+      "approvedBody": "正在带你前往登录 —— 用该邮箱的 Google 或 GitHub 账号即可。",
       "errorBody": "出错了,请重试。",
       "invalidEmail": "请输入有效邮箱。",
       "perks": "无需信用卡 · 无付费墙 · 数据与 AI 密钥始终归你"
