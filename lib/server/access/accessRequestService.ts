@@ -3,7 +3,8 @@ import { isAdminEmail } from "@/lib/server/auth/adminAccess";
 
 const MAX_NOTE = 500;
 
-export function normalizeEmail(email: string): string {
+// Internal: callers go through the exported helpers below.
+function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
