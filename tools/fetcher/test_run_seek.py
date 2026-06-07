@@ -252,6 +252,14 @@ def test_filter_relevant_titles_recall_keeps_role_family_drops_unrelated():
     ]
 
 
+def test_filter_relevant_titles_matches_on_token_boundary_not_substring():
+    # "ai" must NOT match inside "Maintainer" — relevance is token-anchored, not
+    # a naive substring search (the precompiled boundary regex guarantees this).
+    items = [{"title": "Maintainer"}, {"title": "AI Specialist"}]
+    out = [i["title"] for i in rs.filter_relevant_titles(items, ["AI Engineer"])]
+    assert out == ["AI Specialist"]
+
+
 def test_filter_relevant_titles_generic_query_keeps_all():
     items = [{"title": "Backend Developer"}, {"title": "Systems Engineer"}]
     assert rs.filter_relevant_titles(items, ["Engineer"]) == items

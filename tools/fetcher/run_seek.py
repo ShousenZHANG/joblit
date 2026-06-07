@@ -316,14 +316,21 @@ _TOKEN_LB = r"(?<![a-z0-9#+])"
 _TOKEN_LA = r"(?![a-z0-9#+])"
 
 
-def build_exclude_title_re(terms: Iterable[str]):
-    """Boundary-anchored, case-insensitive regex of exclusion terms (mirrors the
-    JobSpy worker's title filter so Seek honours the same exclusions). Boundaries
-    are symbol-aware so terms like "c++" are not silently dropped."""
+def _boundary_alternation_re(terms: Iterable[str]):
+    """Compile a case-insensitive regex matching ANY term as a symbol-aware
+    token, so "c++"/"c#"/"node.js" match where ``\\b`` would break. Returns None
+    when there are no usable terms. Shared by the title-exclusion and the
+    relevance matchers so both anchor tokens identically."""
     cleaned = [re.escape(t.strip().lower()) for t in (terms or []) if t and t.strip()]
     if not cleaned:
         return None
     return re.compile(r"(?i)" + _TOKEN_LB + r"(?:" + "|".join(cleaned) + r")" + _TOKEN_LA)
+
+
+def build_exclude_title_re(terms: Iterable[str]):
+    """Boundary-anchored, case-insensitive regex of exclusion terms (mirrors the
+    JobSpy worker's title filter so Seek honours the same exclusions)."""
+    return _boundary_alternation_re(terms)
 
 
 def apply_title_exclusions(items: List[Dict[str, str]], exclude_terms: Iterable[str]) -> List[Dict[str, str]]:
@@ -345,17 +352,6 @@ RELEVANCE_GENERIC = {
 }
 
 
-def extract_domain_tokens(keywords: Iterable[str]) -> set:
-    tokens: set = set()
-    for kw in keywords or []:
-        for tok in re.split(r"[^a-z0-9+#]+", str(kw or "").lower()):
-            tok = tok.strip()
-            # Keep single-char domain tokens ("r", "c", "go") — only drop generics.
-            if len(tok) >= 1 and tok not in RELEVANCE_GENERIC:
-                tokens.add(tok)
-    return tokens
-
-
 # Unlike RELEVANCE_GENERIC, this drops ONLY true stopwords — role words
 # (engineer/developer/...) are KEPT so a title in the same role family still
 # matches. Used for recall-oriented relevance (favour volume over precision).
@@ -364,14 +360,28 @@ RELEVANCE_STOPWORDS = {
 }
 
 
-def extract_query_tokens(keywords: Iterable[str]) -> set:
+def _tokenize(keywords: Iterable[str], drop: set) -> set:
+    """Lower-case, split on non-token chars, keep tokens (incl. single chars like
+    "r"/"go") that are not in `drop`. `+`/`#` stay in-token so "c++"/"c#" survive."""
     tokens: set = set()
     for kw in keywords or []:
         for tok in re.split(r"[^a-z0-9+#]+", str(kw or "").lower()):
             tok = tok.strip()
-            if len(tok) >= 1 and tok not in RELEVANCE_STOPWORDS:
+            if len(tok) >= 1 and tok not in drop:
                 tokens.add(tok)
     return tokens
+
+
+def extract_domain_tokens(keywords: Iterable[str]) -> set:
+    """Distinctive domain words of a query (role/seniority words removed) — what
+    a title MUST relate to, e.g. "ai"/"data" from "AI Engineer"/"Data Analyst"."""
+    return _tokenize(keywords, RELEVANCE_GENERIC)
+
+
+def extract_query_tokens(keywords: Iterable[str]) -> set:
+    """All meaningful query words (only true stopwords removed) — keeps role
+    words so same-family titles still match (recall-oriented)."""
+    return _tokenize(keywords, RELEVANCE_STOPWORDS)
 
 
 def filter_relevant_titles(items: List[Dict[str, str]], keywords: Iterable[str]) -> List[Dict[str, str]]:
@@ -388,17 +398,14 @@ def filter_relevant_titles(items: List[Dict[str, str]], keywords: Iterable[str])
     so it is left untouched."""
     if not extract_domain_tokens(keywords):
         return items
-    query_tokens = extract_query_tokens(keywords)
-    if not query_tokens:
+    # One precompiled, boundary-anchored regex for all query tokens (same builder
+    # the exclusion filter uses) — search each title once instead of rebuilding a
+    # pattern per token per row. `pattern` is only None when there are no query
+    # tokens, which can't happen once domain tokens exist, but guard anyway.
+    pattern = _boundary_alternation_re(extract_query_tokens(keywords))
+    if pattern is None:
         return items
-
-    def matches(title: str) -> bool:
-        low = (title or "").lower()
-        return any(
-            re.search(_TOKEN_LB + re.escape(tok) + _TOKEN_LA, low) for tok in query_tokens
-        )
-
-    return [it for it in items if matches(it.get("title", ""))]
+    return [it for it in items if pattern.search(it.get("title") or "")]
 
 
 # ── Network layer (gated, polite, no bypass) ───────────────────────────────
