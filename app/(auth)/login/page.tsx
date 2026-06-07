@@ -4,31 +4,58 @@ import { signIn, useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Github } from "lucide-react";
+import { ArrowRight, Github, Loader2 } from "lucide-react";
 import { JoblitMark } from "@/components/brand/JoblitMark";
 import { useTranslations } from "next-intl";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion, type Variants } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
 import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { ThemeToggle } from "@/components/providers/ThemeProvider";
 
-// Landing-aligned auth page:
-// - Fixed emerald/teal atmosphere mesh behind content (same as marketing)
-// - Single centered surface card with serif italic emphasis on the
-//   welcome headline, matching the landing hero voice
-// - Theme-token chrome everywhere so dark mode renders cleanly
-// - Kept the existing OAuth flow verbatim — only the shell changed
+// Landing-aligned auth page. Single centered surface card, theme-token chrome,
+// staggered entrance, and per-provider "connecting" feedback so a click lands
+// with immediate response instead of a frozen button during the OAuth redirect.
+
+type Provider = "google" | "github";
+
+// Google's 4-colour "G" — brand-correct mark for provider parity (GitHub already
+// carries its glyph). Inline SVG so there's no extra request / asset to manage.
+function GoogleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 48 48" aria-hidden focusable="false">
+      <path
+        fill="#EA4335"
+        d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+      />
+      <path
+        fill="#4285F4"
+        d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+      />
+      <path
+        fill="#34A853"
+        d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+      />
+    </svg>
+  );
+}
 
 export default function LoginPage() {
   const { status } = useSession();
   const router = useRouter();
   const t = useTranslations("loginPage");
+  const reduced = useReducedMotion();
   // NextAuth routes the invite-gate rejection here as ?error=AccessDenied
   // (pages.error = "/login"). Surfacing it turns the old silent login loop into
   // a clear "request access" path. Read from the URL (not useSearchParams) to
   // avoid a Suspense boundary requirement on this client page.
   const [authError, setAuthError] = useState<string | null>(null);
+  const [loadingProvider, setLoadingProvider] = useState<Provider | null>(null);
+
   useEffect(() => {
     setAuthError(new URLSearchParams(window.location.search).get("error"));
   }, []);
@@ -41,11 +68,28 @@ export default function LoginPage() {
     }
   }, [status, router]);
 
-  function handleSignIn(provider: "google" | "github") {
+  function handleSignIn(provider: Provider) {
+    if (loadingProvider) return;
     const sp = new URLSearchParams(window.location.search);
     const callbackUrl = sp.get("callbackUrl") || "/jobs";
-    signIn(provider, { callbackUrl });
+    // Feedback BEFORE the redirect — the button shows "Connecting…" during the
+    // hop to the provider instead of sitting frozen.
+    setLoadingProvider(provider);
+    void signIn(provider, { callbackUrl });
   }
+
+  const container: Variants = {
+    hidden: {},
+    show: { transition: { staggerChildren: 0.07, delayChildren: 0.08 } },
+  };
+  const item: Variants = reduced
+    ? { hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.3 } } }
+    : {
+        hidden: { opacity: 0, y: 12 },
+        show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } },
+      };
+
+  const busy = loadingProvider !== null;
 
   return (
     <main className="relative min-h-screen overflow-hidden px-6 pb-16 pt-8 sm:px-10">
@@ -57,7 +101,7 @@ export default function LoginPage() {
         <div className="flex items-center justify-between">
           <Link
             href="/"
-            className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-foreground transition-colors hover:text-brand-emerald-700"
+            className="flex items-center gap-2 rounded-lg text-[15px] font-semibold tracking-tight text-foreground transition-colors hover:text-brand-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-500 focus-visible:ring-offset-2"
             aria-label="Joblit home"
           >
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-emerald-50 ring-1 ring-brand-emerald-100">
@@ -72,8 +116,8 @@ export default function LoginPage() {
         </div>
 
         <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, y: 16, scale: reduced ? 1 : 0.985 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
           className="mt-12 flex flex-1 items-center justify-center"
         >
@@ -87,18 +131,26 @@ export default function LoginPage() {
               aria-hidden
               className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-gradient-to-br from-brand-emerald-200/40 to-transparent blur-2xl"
             />
+            {/* Top hairline, matching the hero canvas + access card. */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-emerald-400/60 to-transparent"
+            />
 
-            <div className="relative">
-              <span className="inline-flex items-center gap-2 rounded-full border border-brand-emerald-200 bg-brand-emerald-50 px-3 py-1 text-[11px] font-semibold text-brand-emerald-700">
+            <motion.div variants={container} initial="hidden" animate="show" className="relative">
+              <motion.span
+                variants={item}
+                className="inline-flex items-center gap-2 rounded-full border border-brand-emerald-200 bg-brand-emerald-50 px-3 py-1 text-[11px] font-semibold text-brand-emerald-700"
+              >
                 <span
                   aria-hidden
                   className="flex h-1.5 w-1.5 rounded-full bg-brand-emerald-600"
                 />
                 {t("secureSignIn")}
-              </span>
+              </motion.span>
 
               {authError === "AccessDenied" ? (
-                <>
+                <motion.div variants={item}>
                   <h1 className="mt-5 text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl sm:leading-[1.1]">
                     {t("deniedTitle")}
                   </h1>
@@ -117,9 +169,9 @@ export default function LoginPage() {
                   <p className="mt-6 text-xs font-medium text-muted-foreground">
                     {t("tryAnother")}
                   </p>
-                </>
+                </motion.div>
               ) : (
-                <>
+                <motion.div variants={item}>
                   <h1 className="mt-5 text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl sm:leading-[1.1]">
                     {t("welcomeBack")}
                   </h1>
@@ -131,28 +183,53 @@ export default function LoginPage() {
                       {t("genericError")}
                     </div>
                   ) : null}
-                </>
+                </motion.div>
               )}
 
-              <div className="mt-7 flex flex-col gap-3">
+              <motion.div variants={item} className="mt-7 flex flex-col gap-3">
                 <Button
                   onClick={() => handleSignIn("google")}
-                  className="h-11 w-full justify-center gap-2 rounded-full bg-foreground text-[13px] font-semibold text-background transition-transform hover:-translate-y-px hover:bg-foreground/90"
+                  disabled={busy}
+                  aria-busy={loadingProvider === "google"}
+                  className="h-11 w-full justify-center gap-2.5 rounded-full bg-foreground text-[13px] font-semibold text-background transition-all hover:-translate-y-px hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-500 focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.99] disabled:translate-y-0 disabled:opacity-60"
                 >
-                  {t("continueGoogle")}
-                  <ArrowRight className="h-4 w-4" aria-hidden />
+                  {loadingProvider === "google" ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                      {t("connecting")}
+                    </>
+                  ) : (
+                    <>
+                      <GoogleIcon className="h-[18px] w-[18px]" />
+                      {t("continueGoogle")}
+                    </>
+                  )}
                 </Button>
                 <Button
                   onClick={() => handleSignIn("github")}
+                  disabled={busy}
+                  aria-busy={loadingProvider === "github"}
                   variant="outline"
-                  className="h-11 w-full justify-center gap-2 rounded-full border-border bg-background text-[13px] font-semibold text-foreground hover:bg-muted"
+                  className="h-11 w-full justify-center gap-2.5 rounded-full border-border bg-background text-[13px] font-semibold text-foreground transition-all hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-500 focus-visible:ring-offset-2 active:scale-[0.99] disabled:opacity-60"
                 >
-                  <Github className="h-4 w-4" aria-hidden />
-                  {t("continueGithub")}
+                  {loadingProvider === "github" ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                      {t("connecting")}
+                    </>
+                  ) : (
+                    <>
+                      <Github className="h-4 w-4" aria-hidden />
+                      {t("continueGithub")}
+                    </>
+                  )}
                 </Button>
-              </div>
+              </motion.div>
 
-              <p className="mt-6 text-xs leading-relaxed text-muted-foreground">
+              <motion.p
+                variants={item}
+                className="mt-6 text-xs leading-relaxed text-muted-foreground"
+              >
                 {t("agreementPrefix")}{" "}
                 <Link
                   href="/terms"
@@ -167,8 +244,8 @@ export default function LoginPage() {
                 >
                   {t("privacyPolicy")}
                 </Link>
-              </p>
-            </div>
+              </motion.p>
+            </motion.div>
           </div>
         </motion.div>
       </div>
