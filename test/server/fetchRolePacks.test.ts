@@ -6,15 +6,11 @@ describe("fetch role packs", () => {
     const out = expandRoleQueries(["Software Engineer"]);
     expect(out).toEqual([
       "Software Engineer",
-      "Software Developer",
-      "Web Developer",
+      "Forward Deployed Engineer",
+      "Agent Engineer",
+      "Solutions Architect",
       "Full Stack Engineer",
-      "Full Stack Developer",
-      "Backend Engineer",
-      "Backend Developer",
-      "Full Stack Agentic Engineer",
       "AI Engineer",
-      "AI Developer",
     ]);
   });
 
@@ -27,7 +23,7 @@ describe("fetch role packs", () => {
   it("resolves config aliases like swe", () => {
     const out = expandRoleQueries(["SWE"]);
     expect(out).toContain("Software Engineer");
-    expect(out).toContain("Backend Engineer");
+    expect(out).toContain("Forward Deployed Engineer");
   });
 
   it("falls back to original role when no pack is defined", () => {
@@ -38,7 +34,7 @@ describe("fetch role packs", () => {
   it("expands when query partially matches an alias phrase", () => {
     const out = expandRoleQueries(["Software Engineer Java"]);
     expect(out).toContain("Software Engineer Java");
-    expect(out).toContain("Backend Engineer");
+    expect(out).toContain("Forward Deployed Engineer");
     expect(out).toContain("Software Engineer");
   });
 
