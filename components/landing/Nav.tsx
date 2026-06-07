@@ -73,11 +73,14 @@ export function Nav() {
     [reduced],
   );
 
+  // Invite-only: unauthenticated visitors go to the apply section, not straight
+  // to /login (where the gate would reject an un-approved email). Approved /
+  // existing users use the separate "Log in" link. Authenticated → straight in.
   const ctaHref =
     status === "authenticated"
       ? "/jobs"
       : status === "unauthenticated"
-        ? "/login"
+        ? "#access"
         : "#";
   const ctaLabel =
     status === "authenticated" ? t("openApp") : t("startFree");

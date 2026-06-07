@@ -12,6 +12,11 @@ export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: { strategy: "database" },
   secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
+  // Route NextAuth's sign-in + error screens to our own /login (default is the
+  // bare /api/auth/* pages). Critical for the invite gate: when signIn returns
+  // false the user lands on /login?error=AccessDenied, where we render a clear
+  // "request access" path instead of a dead-end NextAuth error page.
+  pages: { signIn: "/login", error: "/login" },
   // Explicit cookie hardening (defense-in-depth atop NextAuth defaults). In
   // production the session token gets the __Secure- prefix + Secure flag so it
   // only travels over HTTPS; httpOnly blocks JS access (XSS token theft) and

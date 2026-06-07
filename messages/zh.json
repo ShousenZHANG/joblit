@@ -541,7 +541,12 @@
     "agreementPrefix": "登录即表示你同意我们的",
     "terms": "使用条款",
     "and": "和",
-    "privacyPolicy": "隐私政策"
+    "privacyPolicy": "隐私政策",
+    "deniedTitle": "你的邮箱还未获邀",
+    "deniedBody": "Joblit 扩容期间为邀请制。用你的邮箱申请使用，我们会帮你开通账号。",
+    "requestAccess": "申请使用",
+    "tryAnother": "用错账号了？换一个登录：",
+    "genericError": "登录失败，请重试。"
   },
   "landing": {
     "nav": {

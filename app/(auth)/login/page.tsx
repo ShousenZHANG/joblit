@@ -1,7 +1,7 @@
 "use client";
 
 import { signIn, useSession } from "next-auth/react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, Github } from "lucide-react";
@@ -24,6 +24,14 @@ export default function LoginPage() {
   const { status } = useSession();
   const router = useRouter();
   const t = useTranslations("loginPage");
+  // NextAuth routes the invite-gate rejection here as ?error=AccessDenied
+  // (pages.error = "/login"). Surfacing it turns the old silent login loop into
+  // a clear "request access" path. Read from the URL (not useSearchParams) to
+  // avoid a Suspense boundary requirement on this client page.
+  const [authError, setAuthError] = useState<string | null>(null);
+  useEffect(() => {
+    setAuthError(new URLSearchParams(window.location.search).get("error"));
+  }, []);
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -89,12 +97,42 @@ export default function LoginPage() {
                 {t("secureSignIn")}
               </span>
 
-              <h1 className="mt-5 text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl sm:leading-[1.1]">
-                {t("welcomeBack")}
-              </h1>
-              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                {t("subtitle")}
-              </p>
+              {authError === "AccessDenied" ? (
+                <>
+                  <h1 className="mt-5 text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl sm:leading-[1.1]">
+                    {t("deniedTitle")}
+                  </h1>
+                  <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                    {t("deniedBody")}
+                  </p>
+                  <Button
+                    asChild
+                    className="mt-6 h-11 w-full justify-center gap-2 rounded-full bg-brand-emerald-600 text-[13px] font-semibold text-white transition-colors hover:bg-brand-emerald-700"
+                  >
+                    <Link href="/#access">
+                      {t("requestAccess")}
+                      <ArrowRight className="h-4 w-4" aria-hidden />
+                    </Link>
+                  </Button>
+                  <p className="mt-6 text-xs font-medium text-muted-foreground">
+                    {t("tryAnother")}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h1 className="mt-5 text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl sm:leading-[1.1]">
+                    {t("welcomeBack")}
+                  </h1>
+                  <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                    {t("subtitle")}
+                  </p>
+                  {authError ? (
+                    <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                      {t("genericError")}
+                    </div>
+                  ) : null}
+                </>
+              )}
 
               <div className="mt-7 flex flex-col gap-3">
                 <Button

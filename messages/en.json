@@ -541,7 +541,12 @@
     "agreementPrefix": "By signing in, you agree to our",
     "terms": "Terms",
     "and": "and",
-    "privacyPolicy": "Privacy Policy"
+    "privacyPolicy": "Privacy Policy",
+    "deniedTitle": "You're not on the invite list yet",
+    "deniedBody": "Joblit is invite-only while we scale. Request access with your email and we'll switch your account on.",
+    "requestAccess": "Request access",
+    "tryAnother": "Used the wrong account? Try a different one:",
+    "genericError": "We couldn't sign you in. Please try again."
   },
   "landing": {
     "nav": {
