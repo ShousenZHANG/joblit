@@ -64,7 +64,6 @@ const AUSchema = z
     daterange: z.coerce.number().int().min(1).max(31).optional(),
     // Seek work-type id (242 Full / 243 Part / 244 Contract / 245 Casual), "" = any.
     workType: z.enum(["", "242", "243", "244", "245"]).optional().default(""),
-    salaryMin: z.coerce.number().int().min(0).max(1_000_000).optional(),
     // Seek subclassification id (numeric, refines `classification`). Empty = none.
     // Numeric-only so it can never inject extra query params into the Seek URL.
     subClassification: z
@@ -133,7 +132,6 @@ export async function GET() {
           subClassification:
             typeof q.subClassification === "string" ? (q.subClassification as string) : null,
           workType: typeof q.workType === "string" ? (q.workType as string) : null,
-          salaryMin: typeof q.salaryMin === "number" ? (q.salaryMin as number) : null,
           excludeKeywords: Array.isArray(q.excludeKeywords)
             ? (q.excludeKeywords as string[])
             : null,
@@ -218,7 +216,6 @@ export async function POST(req: Request) {
               subClassification: data.classification ? data.subClassification ?? "" : "",
               daterange: data.daterange ?? 2,
               workType: data.workType ?? "",
-              salaryMin: data.salaryMin ?? null,
             }
           : {}),
       },

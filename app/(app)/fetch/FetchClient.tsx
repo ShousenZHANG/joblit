@@ -386,7 +386,6 @@ type FetchRunListItem = {
   classification: string | null;
   subClassification: string | null;
   workType: string | null;
-  salaryMin: number | null;
   excludeKeywords: string[] | null;
   createdAt: string;
 };
@@ -529,15 +528,6 @@ const SEEK_WORK_TYPES: { id: string; label: string }[] = [
   { id: "245", label: "Casual / Vacation" },
 ];
 
-const SEEK_SALARY_MINS: { id: string; label: string }[] = [
-  { id: "60000", label: "$60k+" },
-  { id: "80000", label: "$80k+" },
-  { id: "100000", label: "$100k+" },
-  { id: "120000", label: "$120k+" },
-  { id: "150000", label: "$150k+" },
-  { id: "200000", label: "$200k+" },
-];
-
 export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) {
   const { data: session } = useSession();
   const userId = session?.user?.id ?? null;
@@ -556,7 +546,6 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
   const [seekClassification, setSeekClassification] = useState("6281");
   const [seekSubClass, setSeekSubClass] = useState(""); // "" = all subcategories
   const [seekWorkType, setSeekWorkType] = useState(""); // "" = any
-  const [seekSalaryMin, setSeekSalaryMin] = useState(""); // "" = any
   // Subcategories for the chosen parent (empty for "All categories").
   const seekSubClassOptions = seekClassification
     ? SEEK_SUBCLASSIFICATIONS[seekClassification] ?? []
@@ -721,7 +710,6 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
                 // Seek windows by day; reuse the hoursOld control (48h -> 2d).
                 daterange: Math.max(1, Math.min(31, Math.ceil(hoursOld / 24))),
                 workType: seekWorkType || undefined,
-                salaryMin: seekSalaryMin ? Number(seekSalaryMin) : undefined,
               }
             : {}),
         };
@@ -799,9 +787,6 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
         (SEEK_SUBCLASSIFICATIONS[reParent] ?? []).some((s) => s.id === run.subClassification);
       setSeekSubClass(reSubValid ? (run.subClassification as string) : "");
       setSeekWorkType(typeof run.workType === "string" ? run.workType : "");
-      setSeekSalaryMin(
-        typeof run.salaryMin === "number" && run.salaryMin > 0 ? String(run.salaryMin) : "",
-      );
     }
     setLocalError(null);
     topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -937,22 +922,6 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
                         {SEEK_WORK_TYPES.map((w) => (
                           <SelectItem key={w.id} value={w.id}>
                             {w.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select
-                      value={seekSalaryMin || "any"}
-                      onValueChange={(v) => setSeekSalaryMin(v === "any" ? "" : v)}
-                    >
-                      <SelectTrigger className="h-9 w-32 text-sm" aria-label="Minimum salary">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="any">Any salary</SelectItem>
-                        {SEEK_SALARY_MINS.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.label}
                           </SelectItem>
                         ))}
                       </SelectContent>

@@ -65,7 +65,6 @@ describe("fetch-runs POST — Seek source gating", () => {
         classification: "6281",
         subClassification: "6290",
         workType: "242",
-        salaryMin: 120000,
         daterange: 3,
         smartExpand: false,
       }),
@@ -76,7 +75,7 @@ describe("fetch-runs POST — Seek source gating", () => {
     expect(data.queries.classification).toBe("6281");
     expect(data.queries.subClassification).toBe("6290");
     expect(data.queries.workType).toBe("242");
-    expect(data.queries.salaryMin).toBe(120000);
+    expect(data.queries.salaryMin).toBeUndefined();
     expect(data.queries.daterange).toBe(3);
   });
 

@@ -97,15 +97,14 @@ def test_build_search_params_includes_and_omits():
     assert "keywords" not in bare and "classification" not in bare and "daterange" not in bare
 
 
-def test_build_search_params_work_type_and_salary():
-    p = rs.build_search_params(work_type="242", salary_min="100000")
+def test_build_search_params_work_type():
+    p = rs.build_search_params(work_type="242")
     assert p["worktype"] == "242"
-    assert p["salaryrange"] == "100000-999999"
-    assert p["salarytype"] == "annual"
-    # invalid worktype id / non-numeric salary are ignored
-    p2 = rs.build_search_params(work_type="999", salary_min="abc")
+    # Salary is intentionally never filtered (Seek drops unsalaried listings).
+    assert "salaryrange" not in p and "salarytype" not in p
+    # invalid worktype id is ignored
+    p2 = rs.build_search_params(work_type="999")
     assert "worktype" not in p2
-    assert "salaryrange" not in p2
 
 
 def test_build_search_params_subclassification():
@@ -128,13 +127,12 @@ def test_build_queries_from_config_threads_filters():
             "classification": "6281",
             "subClassification": "6290",
             "workType": "242",
-            "salaryMin": 120000,
         }
     }
     q = rs.build_queries_from_config(run)[0]
     assert q["work_type"] == "242"
-    assert q["salary_min"] == "120000"
     assert q["sub_classification"] == "6290"
+    assert "salary_min" not in q
 
 
 @pytest.mark.parametrize(
@@ -237,15 +235,21 @@ def test_extract_domain_tokens():
     assert rs.extract_domain_tokens(["Machine Learning"]) == {"machine", "learning"}
 
 
-def test_filter_relevant_titles_drops_broad_match_noise():
+def test_filter_relevant_titles_recall_keeps_role_family_drops_unrelated():
+    # Recall-oriented: a title sharing ANY query token (domain word "ai" OR role
+    # word "engineer") is kept; only titles sharing no token are dropped.
     items = [
-        {"title": "AI Software Engineer"},
-        {"title": "Elixir Developer"},
-        {"title": "Systems Engineer"},
-        {"title": "Graduate AI Engineer"},
+        {"title": "AI Software Engineer"},  # ai + engineer
+        {"title": "Elixir Developer"},       # shares nothing -> dropped
+        {"title": "Systems Engineer"},       # engineer -> kept (role family)
+        {"title": "Graduate AI Engineer"},   # ai + engineer
     ]
     out = rs.filter_relevant_titles(items, ["AI Engineer"])
-    assert [i["title"] for i in out] == ["AI Software Engineer", "Graduate AI Engineer"]
+    assert [i["title"] for i in out] == [
+        "AI Software Engineer",
+        "Systems Engineer",
+        "Graduate AI Engineer",
+    ]
 
 
 def test_filter_relevant_titles_generic_query_keeps_all():
@@ -631,7 +635,6 @@ def test_build_queries_from_config():
         "daterange_days": 3,
         "max_pages": rs.SEEK_PAGE_CEILING,
         "work_type": "",
-        "salary_min": "",
     }
 
 

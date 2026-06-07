@@ -151,7 +151,6 @@ def build_search_params(
     page_size: int = DEFAULT_PAGE_SIZE,
     daterange_days: Optional[int] = DEFAULT_DATERANGE_DAYS,
     work_type: str = "",
-    salary_min: str = "",
 ) -> Dict[str, str]:
     params: Dict[str, str] = {
         "siteKey": DEFAULT_SITE_KEY,
@@ -173,10 +172,9 @@ def build_search_params(
         params["daterange"] = str(daterange_days)
     if str(work_type).strip() in SEEK_WORK_TYPE_IDS:
         params["worktype"] = str(work_type).strip()
-    salary_floor = str(salary_min or "").strip()
-    if salary_floor.isdigit() and int(salary_floor) > 0:
-        params["salaryrange"] = f"{salary_floor}-999999"
-        params["salarytype"] = "annual"
+    # NOTE: no salary filter. Seek's `salaryrange` filters server-side and drops
+    # every listing that does not advertise a salary (the majority), which gutted
+    # result volume — so salary filtering is intentionally not applied.
     return params
 
 
@@ -358,35 +356,49 @@ def extract_domain_tokens(keywords: Iterable[str]) -> set:
     return tokens
 
 
-def filter_relevant_titles(items: List[Dict[str, str]], keywords: Iterable[str]) -> List[Dict[str, str]]:
-    """Keep only results whose title actually matches the search domain. Seek's
-    keyword search is broad — an "AI Engineer" query also returns unrelated roles
-    (e.g. "Elixir Developer", "Systems Engineer") because Seek matches the
-    teaser/skills, not just the title — so require the query's domain tokens in
-    the title. Tries all-token matches first, then any-token.
+# Unlike RELEVANCE_GENERIC, this drops ONLY true stopwords — role words
+# (engineer/developer/...) are KEPT so a title in the same role family still
+# matches. Used for recall-oriented relevance (favour volume over precision).
+RELEVANCE_STOPWORDS = {
+    "the", "and", "for", "with", "of", "in", "to", "or", "at", "a", "an", "role", "roles",
+}
 
-    May return an EMPTY list when nothing matches — that is deliberate. The old
-    behaviour fell back to the FULL unfiltered list when no title matched, which
-    dumped Seek's broad keyword matches and surfaced unrelated roles (e.g.
-    "Network Engineer" for a "Software Engineer" query). A query with no domain
-    tokens (e.g. just "Engineer") is not filtered at all."""
-    domain = extract_domain_tokens(keywords)
-    if not domain:
+
+def extract_query_tokens(keywords: Iterable[str]) -> set:
+    tokens: set = set()
+    for kw in keywords or []:
+        for tok in re.split(r"[^a-z0-9+#]+", str(kw or "").lower()):
+            tok = tok.strip()
+            if len(tok) >= 1 and tok not in RELEVANCE_STOPWORDS:
+                tokens.add(tok)
+    return tokens
+
+
+def filter_relevant_titles(items: List[Dict[str, str]], keywords: Iterable[str]) -> List[Dict[str, str]]:
+    """Keep results whose title shares at least one meaningful token with the
+    query — recall-oriented. Domain words (ai, software, python) AND role words
+    (engineer, developer) all count; only true stopwords are ignored. This keeps
+    same-family roles (e.g. "Backend Engineer" for a "Software Engineer" query)
+    while dropping clearly-unrelated roles that share no token.
+
+    Returns an EMPTY list when nothing shares a token — never the FULL unfiltered
+    list. (Dumping every raw row is what surfaced unrelated roles, since Seek's
+    keyword search matches the teaser/skills, not just the title.) A query with
+    no DOMAIN word (e.g. just "Engineer") is too generic to filter meaningfully,
+    so it is left untouched."""
+    if not extract_domain_tokens(keywords):
+        return items
+    query_tokens = extract_query_tokens(keywords)
+    if not query_tokens:
         return items
 
-    def matches(title: str, require_all: bool) -> bool:
+    def matches(title: str) -> bool:
         low = (title or "").lower()
-        hits = [
-            bool(re.search(_TOKEN_LB + re.escape(tok) + _TOKEN_LA, low)) for tok in domain
-        ]
-        return all(hits) if require_all else any(hits)
+        return any(
+            re.search(_TOKEN_LB + re.escape(tok) + _TOKEN_LA, low) for tok in query_tokens
+        )
 
-    strict = [it for it in items if matches(it.get("title", ""), True)]
-    if strict:
-        return strict
-    # Any-token fallback. We NEVER fall back to the full list: dumping every raw
-    # row is what surfaced unrelated roles for broad Seek keyword searches.
-    return [it for it in items if matches(it.get("title", ""), False)]
+    return [it for it in items if matches(it.get("title", ""))]
 
 
 # ── Network layer (gated, polite, no bypass) ───────────────────────────────
@@ -482,7 +494,6 @@ class SeekFetcher:
         max_pages: int = SEEK_PAGE_CEILING,
         page_size: int = DEFAULT_PAGE_SIZE,
         work_type: str = "",
-        salary_min: str = "",
     ) -> List[Dict[str, Any]]:
         """Page through one query up to the Seek 5-page / ~500-result ceiling.
         A challenge stops the run; any other page error keeps the prior pages."""
@@ -498,7 +509,6 @@ class SeekFetcher:
                 page_size=page_size,
                 daterange_days=daterange_days,
                 work_type=work_type,
-                salary_min=salary_min,
             )
             try:
                 parsed = parse_search_payload(self._get_json(SEEK_SEARCH_URL, params))
@@ -663,7 +673,6 @@ def build_queries_from_config(run: Dict[str, Any]) -> List[Dict[str, Any]]:
         daterange_days = DEFAULT_DATERANGE_DAYS
     where = normalize_seek_where(run.get("location"))
     work_type = str(raw.get("workType") or "")
-    salary_min = str(raw.get("salaryMin") or "")
     return [
         {
             "keywords": kw,
@@ -673,7 +682,6 @@ def build_queries_from_config(run: Dict[str, Any]) -> List[Dict[str, Any]]:
             "daterange_days": daterange_days,
             "max_pages": SEEK_PAGE_CEILING,
             "work_type": work_type,
-            "salary_min": salary_min,
         }
         for kw in keywords
     ]
@@ -752,7 +760,6 @@ def main() -> int:
     parser.add_argument("--daterange", type=int, default=DEFAULT_DATERANGE_DAYS)
     parser.add_argument("--max-pages", type=int, default=SEEK_PAGE_CEILING)
     parser.add_argument("--work-type", default="", help="Seek worktype id (242/243/244/245)")
-    parser.add_argument("--salary-min", default="", help="Minimum annual salary")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--import-base", default=os.environ.get("JOBLIT_WEB_URL", ""))
     parser.add_argument("--user-email", default=os.environ.get("SEEK_USER_EMAIL", ""))
@@ -770,7 +777,6 @@ def main() -> int:
                 "daterange_days": args.daterange,
                 "max_pages": args.max_pages,
                 "work_type": args.work_type,
-                "salary_min": args.salary_min,
             }
         ]
         items = collect_jobs(fetcher, queries)
