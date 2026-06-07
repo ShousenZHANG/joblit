@@ -46,7 +46,7 @@ describe("fetch runs create api", () => {
     expect(res.status).toBe(201);
     const payload = fetchRunStore.create.mock.calls[0]?.[0]?.data?.queries;
     expect(payload.title).toBe("Software Engineer");
-    expect(payload.queries).toContain("Backend Engineer");
+    expect(payload.queries).toContain("Forward Deployed Engineer");
     expect(payload.queries).toContain("Full Stack Engineer");
   });
 
