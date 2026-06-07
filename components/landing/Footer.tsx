@@ -69,9 +69,9 @@ export function Footer() {
 
           {COLUMNS.map((col) => (
             <div key={col.heading}>
-              <h6 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {col.heading}
-              </h6>
+              </h3>
               <ul className="flex flex-col gap-2">
                 {col.links.map((link) =>
                   link.external ? (

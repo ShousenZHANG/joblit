@@ -46,13 +46,17 @@ export function Faq() {
       <ul className="flex flex-col divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/60 bg-background">
         {QAS.map((qa, i) => {
           const open = openIndex === i;
+          const triggerId = `faq-trigger-${i}`;
+          const panelId = `faq-panel-${i}`;
           return (
             <li key={qa.q}>
               <button
                 type="button"
+                id={triggerId}
                 aria-expanded={open}
+                aria-controls={panelId}
                 onClick={() => setOpenIndex(open ? null : i)}
-                className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition-colors hover:bg-muted/50"
+                className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-emerald-500"
               >
                 <span className="text-base font-semibold text-foreground">
                   {qa.q}
@@ -71,6 +75,9 @@ export function Faq() {
                 {open && (
                   <motion.div
                     key="answer"
+                    id={panelId}
+                    role="region"
+                    aria-labelledby={triggerId}
                     initial={reduced ? false : { height: 0, opacity: 0 }}
                     animate={{ height: "auto", opacity: 1 }}
                     exit={reduced ? { opacity: 0 } : { height: 0, opacity: 0 }}

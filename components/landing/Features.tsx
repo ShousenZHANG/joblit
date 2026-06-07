@@ -4,7 +4,7 @@ import {
   Bolt,
   CheckCircle2,
   FileText,
-  MapPin,
+  ShieldAlert,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { motion } from "framer-motion";
@@ -12,12 +12,12 @@ import { useTranslations } from "next-intl";
 import { revealUp, revealStagger, useReveal } from "./lib/motion";
 import { SectionKicker } from "./SectionKicker";
 
-// Features — 2×2 equal grid, Linear-style. Four differentiators, each
-// carrying a distinct piece of the value prop:
-//   1. Honest match scoring   — what makes the score trustworthy
-//   2. Trustworthy by design  — ATS-safe + evidence-grounded combined
-//   3. Tailored in seconds    — speed
-//   4. Pro-grade output       — LaTeX + BYO LLM combined
+// Features — 2×2 equal grid, Linear-style. Four REAL differentiators (no
+// fabricated "match score" — the product has no scoring feature):
+//   1. Experience-gate insight — flags seniority/years gaps per JD
+//   2. Trustworthy by design   — ATS-safe + evidence-grounded combined
+//   3. Tailored in seconds     — speed
+//   4. Pro-grade output        — LaTeX + BYO LLM combined
 //
 // No hero card, no row hierarchy, no infinite animations. Cards are flat
 // surfaces with a single neutral hover lift. Color is reserved for the
@@ -52,9 +52,9 @@ export function Features() {
 
   const FEATURES: Feature[] = [
     {
-      icon: MapPin,
-      title: t("matchScoring.title"),
-      blurb: t("matchScoring.blurb"),
+      icon: ShieldAlert,
+      title: t("experienceGate.title"),
+      blurb: t("experienceGate.blurb"),
     },
     {
       icon: CheckCircle2,

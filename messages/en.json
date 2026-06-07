@@ -581,7 +581,7 @@
       "steps": {
         "fetch": {
           "title": "Fetch",
-          "blurb": "Pull fresh roles from LinkedIn, Greenhouse, Lever, and more. Dedup by URL, sort by match."
+          "blurb": "Pull fresh roles from Seek, LinkedIn, and more. Deduped by URL, newest first."
         },
         "tailor": {
           "title": "Tailor",
@@ -599,9 +599,9 @@
       "titleItalic": "signal-to-noise",
       "titleSuffix": "problem.",
       "lede": "Every feature shaves friction off a real step of the hunt — not nice-to-haves, table stakes for job seekers in 2026.",
-      "matchScoring": {
-        "title": "Honest match scoring",
-        "blurb": "Every JD is parsed and scored against your profile on a 0–100 scale. See which skills match, which don't, and what to do about it. No inflated numbers — just a published rubric."
+      "experienceGate": {
+        "title": "Experience-gate insight",
+        "blurb": "Joblit reads each JD's seniority and years-of-experience demands and surfaces them up front — so you spend effort on the roles you actually clear, not the ones that auto-reject."
       },
       "trustworthy": {
         "title": "Trustworthy by design",
@@ -648,8 +648,8 @@
           "a": "No. Your profile and generated resumes are never used for training. If you bring your own LLM key, data goes direct to that provider under their terms — we never see it."
         },
         {
-          "q": "How does the match score work?",
-          "a": "Each JD is parsed for required skills, years of experience, seniority, and domain. We match against your profile with a published rubric you can see and argue with. Strong (80+), Good (65–79), Fair (50–64), Weak (<50)."
+          "q": "Is Joblit really free?",
+          "a": "Yes — every feature is free: role fetching, AI-tailored CVs and cover letters, LaTeX PDF export, and the Chrome extension. It's invite-only while we scale, so request access with your email and we'll switch your account on."
         },
         {
           "q": "Does the Chrome extension work on Workday / Greenhouse / Lever?",
@@ -657,7 +657,7 @@
         },
         {
           "q": "Can I use my own OpenAI / Claude / Gemini key?",
-          "a": "Yes. Bring-your-own-LLM is a first-class path and costs less per month. You pay us for the product; you pay the provider for tokens directly."
+          "a": "Yes. Bring-your-own-LLM is a first-class path — your data goes straight to your provider and you pay them for tokens directly. Joblit itself is free."
         },
         {
           "q": "What if the generated bullets aren't accurate?",

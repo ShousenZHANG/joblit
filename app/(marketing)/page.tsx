@@ -80,7 +80,7 @@ export default function MarketingPage() {
       </div>
       <div aria-hidden className="landing-atmos" />
       <div aria-hidden className="landing-grain" />
-      <main className="relative z-[1] flex flex-col bg-transparent text-foreground">
+      <main id="main-content" className="relative z-[1] flex flex-col bg-transparent text-foreground">
         <Nav />
         <Hero />
         <LogoBar />
