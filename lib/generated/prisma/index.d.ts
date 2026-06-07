@@ -103,6 +103,11 @@ export type OnboardingState = $Result.DefaultSelection<Prisma.$OnboardingStatePa
  * 
  */
 export type DiscoverVideoCache = $Result.DefaultSelection<Prisma.$DiscoverVideoCachePayload>
+/**
+ * Model AccessRequest
+ * 
+ */
+export type AccessRequest = $Result.DefaultSelection<Prisma.$AccessRequestPayload>
 
 /**
  * Enums
@@ -173,6 +178,15 @@ export const ApplicationStatus: {
 
 export type ApplicationStatus = (typeof ApplicationStatus)[keyof typeof ApplicationStatus]
 
+
+export const AccessRequestStatus: {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED'
+};
+
+export type AccessRequestStatus = (typeof AccessRequestStatus)[keyof typeof AccessRequestStatus]
+
 }
 
 export type JobStatus = $Enums.JobStatus
@@ -202,6 +216,10 @@ export const ApplicationBatchTaskStatus: typeof $Enums.ApplicationBatchTaskStatu
 export type ApplicationStatus = $Enums.ApplicationStatus
 
 export const ApplicationStatus: typeof $Enums.ApplicationStatus
+
+export type AccessRequestStatus = $Enums.AccessRequestStatus
+
+export const AccessRequestStatus: typeof $Enums.AccessRequestStatus
 
 /**
  * ##  Prisma Client ʲˢ
@@ -503,6 +521,16 @@ export class PrismaClient<
     * ```
     */
   get discoverVideoCache(): Prisma.DiscoverVideoCacheDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.accessRequest`: Exposes CRUD operations for the **AccessRequest** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more AccessRequests
+    * const accessRequests = await prisma.accessRequest.findMany()
+    * ```
+    */
+  get accessRequest(): Prisma.AccessRequestDelegate<ExtArgs, ClientOptions>;
 }
 
 export namespace Prisma {
@@ -954,7 +982,8 @@ export namespace Prisma {
     FormSubmission: 'FormSubmission',
     FieldMappingRule: 'FieldMappingRule',
     OnboardingState: 'OnboardingState',
-    DiscoverVideoCache: 'DiscoverVideoCache'
+    DiscoverVideoCache: 'DiscoverVideoCache',
+    AccessRequest: 'AccessRequest'
   };
 
   export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -970,7 +999,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "user" | "account" | "session" | "job" | "applicationBatch" | "applicationBatchTask" | "deletedJobUrl" | "dailyCheckin" | "fetchRun" | "resumeProfile" | "activeResumeProfile" | "application" | "promptRuleTemplate" | "extensionToken" | "formSubmission" | "fieldMappingRule" | "onboardingState" | "discoverVideoCache"
+      modelProps: "user" | "account" | "session" | "job" | "applicationBatch" | "applicationBatchTask" | "deletedJobUrl" | "dailyCheckin" | "fetchRun" | "resumeProfile" | "activeResumeProfile" | "application" | "promptRuleTemplate" | "extensionToken" | "formSubmission" | "fieldMappingRule" | "onboardingState" | "discoverVideoCache" | "accessRequest"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -2306,6 +2335,80 @@ export namespace Prisma {
           }
         }
       }
+      AccessRequest: {
+        payload: Prisma.$AccessRequestPayload<ExtArgs>
+        fields: Prisma.AccessRequestFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.AccessRequestFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AccessRequestPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.AccessRequestFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AccessRequestPayload>
+          }
+          findFirst: {
+            args: Prisma.AccessRequestFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AccessRequestPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.AccessRequestFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AccessRequestPayload>
+          }
+          findMany: {
+            args: Prisma.AccessRequestFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AccessRequestPayload>[]
+          }
+          create: {
+            args: Prisma.AccessRequestCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AccessRequestPayload>
+          }
+          createMany: {
+            args: Prisma.AccessRequestCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.AccessRequestCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AccessRequestPayload>[]
+          }
+          delete: {
+            args: Prisma.AccessRequestDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AccessRequestPayload>
+          }
+          update: {
+            args: Prisma.AccessRequestUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AccessRequestPayload>
+          }
+          deleteMany: {
+            args: Prisma.AccessRequestDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.AccessRequestUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.AccessRequestUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AccessRequestPayload>[]
+          }
+          upsert: {
+            args: Prisma.AccessRequestUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AccessRequestPayload>
+          }
+          aggregate: {
+            args: Prisma.AccessRequestAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateAccessRequest>
+          }
+          groupBy: {
+            args: Prisma.AccessRequestGroupByArgs<ExtArgs>
+            result: $Utils.Optional<AccessRequestGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.AccessRequestCountArgs<ExtArgs>
+            result: $Utils.Optional<AccessRequestCountAggregateOutputType> | number
+          }
+        }
+      }
     }
   } & {
     other: {
@@ -2432,6 +2535,7 @@ export namespace Prisma {
     fieldMappingRule?: FieldMappingRuleOmit
     onboardingState?: OnboardingStateOmit
     discoverVideoCache?: DiscoverVideoCacheOmit
+    accessRequest?: AccessRequestOmit
   }
 
   /* Types for Logging */
@@ -23887,6 +23991,1032 @@ export namespace Prisma {
 
 
   /**
+   * Model AccessRequest
+   */
+
+  export type AggregateAccessRequest = {
+    _count: AccessRequestCountAggregateOutputType | null
+    _min: AccessRequestMinAggregateOutputType | null
+    _max: AccessRequestMaxAggregateOutputType | null
+  }
+
+  export type AccessRequestMinAggregateOutputType = {
+    id: string | null
+    email: string | null
+    status: $Enums.AccessRequestStatus | null
+    note: string | null
+    createdAt: Date | null
+    reviewedAt: Date | null
+    reviewedByEmail: string | null
+  }
+
+  export type AccessRequestMaxAggregateOutputType = {
+    id: string | null
+    email: string | null
+    status: $Enums.AccessRequestStatus | null
+    note: string | null
+    createdAt: Date | null
+    reviewedAt: Date | null
+    reviewedByEmail: string | null
+  }
+
+  export type AccessRequestCountAggregateOutputType = {
+    id: number
+    email: number
+    status: number
+    note: number
+    createdAt: number
+    reviewedAt: number
+    reviewedByEmail: number
+    _all: number
+  }
+
+
+  export type AccessRequestMinAggregateInputType = {
+    id?: true
+    email?: true
+    status?: true
+    note?: true
+    createdAt?: true
+    reviewedAt?: true
+    reviewedByEmail?: true
+  }
+
+  export type AccessRequestMaxAggregateInputType = {
+    id?: true
+    email?: true
+    status?: true
+    note?: true
+    createdAt?: true
+    reviewedAt?: true
+    reviewedByEmail?: true
+  }
+
+  export type AccessRequestCountAggregateInputType = {
+    id?: true
+    email?: true
+    status?: true
+    note?: true
+    createdAt?: true
+    reviewedAt?: true
+    reviewedByEmail?: true
+    _all?: true
+  }
+
+  export type AccessRequestAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which AccessRequest to aggregate.
+     */
+    where?: AccessRequestWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AccessRequests to fetch.
+     */
+    orderBy?: AccessRequestOrderByWithRelationInput | AccessRequestOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: AccessRequestWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AccessRequests from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AccessRequests.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned AccessRequests
+    **/
+    _count?: true | AccessRequestCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: AccessRequestMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: AccessRequestMaxAggregateInputType
+  }
+
+  export type GetAccessRequestAggregateType<T extends AccessRequestAggregateArgs> = {
+        [P in keyof T & keyof AggregateAccessRequest]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateAccessRequest[P]>
+      : GetScalarType<T[P], AggregateAccessRequest[P]>
+  }
+
+
+
+
+  export type AccessRequestGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: AccessRequestWhereInput
+    orderBy?: AccessRequestOrderByWithAggregationInput | AccessRequestOrderByWithAggregationInput[]
+    by: AccessRequestScalarFieldEnum[] | AccessRequestScalarFieldEnum
+    having?: AccessRequestScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: AccessRequestCountAggregateInputType | true
+    _min?: AccessRequestMinAggregateInputType
+    _max?: AccessRequestMaxAggregateInputType
+  }
+
+  export type AccessRequestGroupByOutputType = {
+    id: string
+    email: string
+    status: $Enums.AccessRequestStatus
+    note: string | null
+    createdAt: Date
+    reviewedAt: Date | null
+    reviewedByEmail: string | null
+    _count: AccessRequestCountAggregateOutputType | null
+    _min: AccessRequestMinAggregateOutputType | null
+    _max: AccessRequestMaxAggregateOutputType | null
+  }
+
+  type GetAccessRequestGroupByPayload<T extends AccessRequestGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<AccessRequestGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof AccessRequestGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], AccessRequestGroupByOutputType[P]>
+            : GetScalarType<T[P], AccessRequestGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type AccessRequestSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    email?: boolean
+    status?: boolean
+    note?: boolean
+    createdAt?: boolean
+    reviewedAt?: boolean
+    reviewedByEmail?: boolean
+  }, ExtArgs["result"]["accessRequest"]>
+
+  export type AccessRequestSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    email?: boolean
+    status?: boolean
+    note?: boolean
+    createdAt?: boolean
+    reviewedAt?: boolean
+    reviewedByEmail?: boolean
+  }, ExtArgs["result"]["accessRequest"]>
+
+  export type AccessRequestSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    email?: boolean
+    status?: boolean
+    note?: boolean
+    createdAt?: boolean
+    reviewedAt?: boolean
+    reviewedByEmail?: boolean
+  }, ExtArgs["result"]["accessRequest"]>
+
+  export type AccessRequestSelectScalar = {
+    id?: boolean
+    email?: boolean
+    status?: boolean
+    note?: boolean
+    createdAt?: boolean
+    reviewedAt?: boolean
+    reviewedByEmail?: boolean
+  }
+
+  export type AccessRequestOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "email" | "status" | "note" | "createdAt" | "reviewedAt" | "reviewedByEmail", ExtArgs["result"]["accessRequest"]>
+
+  export type $AccessRequestPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "AccessRequest"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      email: string
+      status: $Enums.AccessRequestStatus
+      note: string | null
+      createdAt: Date
+      reviewedAt: Date | null
+      reviewedByEmail: string | null
+    }, ExtArgs["result"]["accessRequest"]>
+    composites: {}
+  }
+
+  type AccessRequestGetPayload<S extends boolean | null | undefined | AccessRequestDefaultArgs> = $Result.GetResult<Prisma.$AccessRequestPayload, S>
+
+  type AccessRequestCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<AccessRequestFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: AccessRequestCountAggregateInputType | true
+    }
+
+  export interface AccessRequestDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['AccessRequest'], meta: { name: 'AccessRequest' } }
+    /**
+     * Find zero or one AccessRequest that matches the filter.
+     * @param {AccessRequestFindUniqueArgs} args - Arguments to find a AccessRequest
+     * @example
+     * // Get one AccessRequest
+     * const accessRequest = await prisma.accessRequest.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends AccessRequestFindUniqueArgs>(args: SelectSubset<T, AccessRequestFindUniqueArgs<ExtArgs>>): Prisma__AccessRequestClient<$Result.GetResult<Prisma.$AccessRequestPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one AccessRequest that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {AccessRequestFindUniqueOrThrowArgs} args - Arguments to find a AccessRequest
+     * @example
+     * // Get one AccessRequest
+     * const accessRequest = await prisma.accessRequest.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends AccessRequestFindUniqueOrThrowArgs>(args: SelectSubset<T, AccessRequestFindUniqueOrThrowArgs<ExtArgs>>): Prisma__AccessRequestClient<$Result.GetResult<Prisma.$AccessRequestPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first AccessRequest that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AccessRequestFindFirstArgs} args - Arguments to find a AccessRequest
+     * @example
+     * // Get one AccessRequest
+     * const accessRequest = await prisma.accessRequest.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends AccessRequestFindFirstArgs>(args?: SelectSubset<T, AccessRequestFindFirstArgs<ExtArgs>>): Prisma__AccessRequestClient<$Result.GetResult<Prisma.$AccessRequestPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first AccessRequest that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AccessRequestFindFirstOrThrowArgs} args - Arguments to find a AccessRequest
+     * @example
+     * // Get one AccessRequest
+     * const accessRequest = await prisma.accessRequest.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends AccessRequestFindFirstOrThrowArgs>(args?: SelectSubset<T, AccessRequestFindFirstOrThrowArgs<ExtArgs>>): Prisma__AccessRequestClient<$Result.GetResult<Prisma.$AccessRequestPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more AccessRequests that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AccessRequestFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all AccessRequests
+     * const accessRequests = await prisma.accessRequest.findMany()
+     * 
+     * // Get first 10 AccessRequests
+     * const accessRequests = await prisma.accessRequest.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const accessRequestWithIdOnly = await prisma.accessRequest.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends AccessRequestFindManyArgs>(args?: SelectSubset<T, AccessRequestFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AccessRequestPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a AccessRequest.
+     * @param {AccessRequestCreateArgs} args - Arguments to create a AccessRequest.
+     * @example
+     * // Create one AccessRequest
+     * const AccessRequest = await prisma.accessRequest.create({
+     *   data: {
+     *     // ... data to create a AccessRequest
+     *   }
+     * })
+     * 
+     */
+    create<T extends AccessRequestCreateArgs>(args: SelectSubset<T, AccessRequestCreateArgs<ExtArgs>>): Prisma__AccessRequestClient<$Result.GetResult<Prisma.$AccessRequestPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many AccessRequests.
+     * @param {AccessRequestCreateManyArgs} args - Arguments to create many AccessRequests.
+     * @example
+     * // Create many AccessRequests
+     * const accessRequest = await prisma.accessRequest.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends AccessRequestCreateManyArgs>(args?: SelectSubset<T, AccessRequestCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many AccessRequests and returns the data saved in the database.
+     * @param {AccessRequestCreateManyAndReturnArgs} args - Arguments to create many AccessRequests.
+     * @example
+     * // Create many AccessRequests
+     * const accessRequest = await prisma.accessRequest.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many AccessRequests and only return the `id`
+     * const accessRequestWithIdOnly = await prisma.accessRequest.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends AccessRequestCreateManyAndReturnArgs>(args?: SelectSubset<T, AccessRequestCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AccessRequestPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a AccessRequest.
+     * @param {AccessRequestDeleteArgs} args - Arguments to delete one AccessRequest.
+     * @example
+     * // Delete one AccessRequest
+     * const AccessRequest = await prisma.accessRequest.delete({
+     *   where: {
+     *     // ... filter to delete one AccessRequest
+     *   }
+     * })
+     * 
+     */
+    delete<T extends AccessRequestDeleteArgs>(args: SelectSubset<T, AccessRequestDeleteArgs<ExtArgs>>): Prisma__AccessRequestClient<$Result.GetResult<Prisma.$AccessRequestPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one AccessRequest.
+     * @param {AccessRequestUpdateArgs} args - Arguments to update one AccessRequest.
+     * @example
+     * // Update one AccessRequest
+     * const accessRequest = await prisma.accessRequest.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends AccessRequestUpdateArgs>(args: SelectSubset<T, AccessRequestUpdateArgs<ExtArgs>>): Prisma__AccessRequestClient<$Result.GetResult<Prisma.$AccessRequestPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more AccessRequests.
+     * @param {AccessRequestDeleteManyArgs} args - Arguments to filter AccessRequests to delete.
+     * @example
+     * // Delete a few AccessRequests
+     * const { count } = await prisma.accessRequest.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends AccessRequestDeleteManyArgs>(args?: SelectSubset<T, AccessRequestDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more AccessRequests.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AccessRequestUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many AccessRequests
+     * const accessRequest = await prisma.accessRequest.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends AccessRequestUpdateManyArgs>(args: SelectSubset<T, AccessRequestUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more AccessRequests and returns the data updated in the database.
+     * @param {AccessRequestUpdateManyAndReturnArgs} args - Arguments to update many AccessRequests.
+     * @example
+     * // Update many AccessRequests
+     * const accessRequest = await prisma.accessRequest.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more AccessRequests and only return the `id`
+     * const accessRequestWithIdOnly = await prisma.accessRequest.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends AccessRequestUpdateManyAndReturnArgs>(args: SelectSubset<T, AccessRequestUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AccessRequestPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one AccessRequest.
+     * @param {AccessRequestUpsertArgs} args - Arguments to update or create a AccessRequest.
+     * @example
+     * // Update or create a AccessRequest
+     * const accessRequest = await prisma.accessRequest.upsert({
+     *   create: {
+     *     // ... data to create a AccessRequest
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the AccessRequest we want to update
+     *   }
+     * })
+     */
+    upsert<T extends AccessRequestUpsertArgs>(args: SelectSubset<T, AccessRequestUpsertArgs<ExtArgs>>): Prisma__AccessRequestClient<$Result.GetResult<Prisma.$AccessRequestPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of AccessRequests.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AccessRequestCountArgs} args - Arguments to filter AccessRequests to count.
+     * @example
+     * // Count the number of AccessRequests
+     * const count = await prisma.accessRequest.count({
+     *   where: {
+     *     // ... the filter for the AccessRequests we want to count
+     *   }
+     * })
+    **/
+    count<T extends AccessRequestCountArgs>(
+      args?: Subset<T, AccessRequestCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], AccessRequestCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a AccessRequest.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AccessRequestAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends AccessRequestAggregateArgs>(args: Subset<T, AccessRequestAggregateArgs>): Prisma.PrismaPromise<GetAccessRequestAggregateType<T>>
+
+    /**
+     * Group by AccessRequest.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AccessRequestGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends AccessRequestGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: AccessRequestGroupByArgs['orderBy'] }
+        : { orderBy?: AccessRequestGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, AccessRequestGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetAccessRequestGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the AccessRequest model
+   */
+  readonly fields: AccessRequestFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for AccessRequest.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__AccessRequestClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the AccessRequest model
+   */
+  interface AccessRequestFieldRefs {
+    readonly id: FieldRef<"AccessRequest", 'String'>
+    readonly email: FieldRef<"AccessRequest", 'String'>
+    readonly status: FieldRef<"AccessRequest", 'AccessRequestStatus'>
+    readonly note: FieldRef<"AccessRequest", 'String'>
+    readonly createdAt: FieldRef<"AccessRequest", 'DateTime'>
+    readonly reviewedAt: FieldRef<"AccessRequest", 'DateTime'>
+    readonly reviewedByEmail: FieldRef<"AccessRequest", 'String'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * AccessRequest findUnique
+   */
+  export type AccessRequestFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccessRequest
+     */
+    select?: AccessRequestSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccessRequest
+     */
+    omit?: AccessRequestOmit<ExtArgs> | null
+    /**
+     * Filter, which AccessRequest to fetch.
+     */
+    where: AccessRequestWhereUniqueInput
+  }
+
+  /**
+   * AccessRequest findUniqueOrThrow
+   */
+  export type AccessRequestFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccessRequest
+     */
+    select?: AccessRequestSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccessRequest
+     */
+    omit?: AccessRequestOmit<ExtArgs> | null
+    /**
+     * Filter, which AccessRequest to fetch.
+     */
+    where: AccessRequestWhereUniqueInput
+  }
+
+  /**
+   * AccessRequest findFirst
+   */
+  export type AccessRequestFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccessRequest
+     */
+    select?: AccessRequestSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccessRequest
+     */
+    omit?: AccessRequestOmit<ExtArgs> | null
+    /**
+     * Filter, which AccessRequest to fetch.
+     */
+    where?: AccessRequestWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AccessRequests to fetch.
+     */
+    orderBy?: AccessRequestOrderByWithRelationInput | AccessRequestOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for AccessRequests.
+     */
+    cursor?: AccessRequestWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AccessRequests from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AccessRequests.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of AccessRequests.
+     */
+    distinct?: AccessRequestScalarFieldEnum | AccessRequestScalarFieldEnum[]
+  }
+
+  /**
+   * AccessRequest findFirstOrThrow
+   */
+  export type AccessRequestFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccessRequest
+     */
+    select?: AccessRequestSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccessRequest
+     */
+    omit?: AccessRequestOmit<ExtArgs> | null
+    /**
+     * Filter, which AccessRequest to fetch.
+     */
+    where?: AccessRequestWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AccessRequests to fetch.
+     */
+    orderBy?: AccessRequestOrderByWithRelationInput | AccessRequestOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for AccessRequests.
+     */
+    cursor?: AccessRequestWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AccessRequests from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AccessRequests.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of AccessRequests.
+     */
+    distinct?: AccessRequestScalarFieldEnum | AccessRequestScalarFieldEnum[]
+  }
+
+  /**
+   * AccessRequest findMany
+   */
+  export type AccessRequestFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccessRequest
+     */
+    select?: AccessRequestSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccessRequest
+     */
+    omit?: AccessRequestOmit<ExtArgs> | null
+    /**
+     * Filter, which AccessRequests to fetch.
+     */
+    where?: AccessRequestWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AccessRequests to fetch.
+     */
+    orderBy?: AccessRequestOrderByWithRelationInput | AccessRequestOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing AccessRequests.
+     */
+    cursor?: AccessRequestWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AccessRequests from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AccessRequests.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of AccessRequests.
+     */
+    distinct?: AccessRequestScalarFieldEnum | AccessRequestScalarFieldEnum[]
+  }
+
+  /**
+   * AccessRequest create
+   */
+  export type AccessRequestCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccessRequest
+     */
+    select?: AccessRequestSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccessRequest
+     */
+    omit?: AccessRequestOmit<ExtArgs> | null
+    /**
+     * The data needed to create a AccessRequest.
+     */
+    data: XOR<AccessRequestCreateInput, AccessRequestUncheckedCreateInput>
+  }
+
+  /**
+   * AccessRequest createMany
+   */
+  export type AccessRequestCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many AccessRequests.
+     */
+    data: AccessRequestCreateManyInput | AccessRequestCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * AccessRequest createManyAndReturn
+   */
+  export type AccessRequestCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccessRequest
+     */
+    select?: AccessRequestSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccessRequest
+     */
+    omit?: AccessRequestOmit<ExtArgs> | null
+    /**
+     * The data used to create many AccessRequests.
+     */
+    data: AccessRequestCreateManyInput | AccessRequestCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * AccessRequest update
+   */
+  export type AccessRequestUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccessRequest
+     */
+    select?: AccessRequestSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccessRequest
+     */
+    omit?: AccessRequestOmit<ExtArgs> | null
+    /**
+     * The data needed to update a AccessRequest.
+     */
+    data: XOR<AccessRequestUpdateInput, AccessRequestUncheckedUpdateInput>
+    /**
+     * Choose, which AccessRequest to update.
+     */
+    where: AccessRequestWhereUniqueInput
+  }
+
+  /**
+   * AccessRequest updateMany
+   */
+  export type AccessRequestUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update AccessRequests.
+     */
+    data: XOR<AccessRequestUpdateManyMutationInput, AccessRequestUncheckedUpdateManyInput>
+    /**
+     * Filter which AccessRequests to update
+     */
+    where?: AccessRequestWhereInput
+    /**
+     * Limit how many AccessRequests to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * AccessRequest updateManyAndReturn
+   */
+  export type AccessRequestUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccessRequest
+     */
+    select?: AccessRequestSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccessRequest
+     */
+    omit?: AccessRequestOmit<ExtArgs> | null
+    /**
+     * The data used to update AccessRequests.
+     */
+    data: XOR<AccessRequestUpdateManyMutationInput, AccessRequestUncheckedUpdateManyInput>
+    /**
+     * Filter which AccessRequests to update
+     */
+    where?: AccessRequestWhereInput
+    /**
+     * Limit how many AccessRequests to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * AccessRequest upsert
+   */
+  export type AccessRequestUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccessRequest
+     */
+    select?: AccessRequestSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccessRequest
+     */
+    omit?: AccessRequestOmit<ExtArgs> | null
+    /**
+     * The filter to search for the AccessRequest to update in case it exists.
+     */
+    where: AccessRequestWhereUniqueInput
+    /**
+     * In case the AccessRequest found by the `where` argument doesn't exist, create a new AccessRequest with this data.
+     */
+    create: XOR<AccessRequestCreateInput, AccessRequestUncheckedCreateInput>
+    /**
+     * In case the AccessRequest was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<AccessRequestUpdateInput, AccessRequestUncheckedUpdateInput>
+  }
+
+  /**
+   * AccessRequest delete
+   */
+  export type AccessRequestDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccessRequest
+     */
+    select?: AccessRequestSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccessRequest
+     */
+    omit?: AccessRequestOmit<ExtArgs> | null
+    /**
+     * Filter which AccessRequest to delete.
+     */
+    where: AccessRequestWhereUniqueInput
+  }
+
+  /**
+   * AccessRequest deleteMany
+   */
+  export type AccessRequestDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which AccessRequests to delete
+     */
+    where?: AccessRequestWhereInput
+    /**
+     * Limit how many AccessRequests to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * AccessRequest without action
+   */
+  export type AccessRequestDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccessRequest
+     */
+    select?: AccessRequestSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccessRequest
+     */
+    omit?: AccessRequestOmit<ExtArgs> | null
+  }
+
+
+  /**
    * Enums
    */
 
@@ -24185,6 +25315,19 @@ export namespace Prisma {
   export type DiscoverVideoCacheScalarFieldEnum = (typeof DiscoverVideoCacheScalarFieldEnum)[keyof typeof DiscoverVideoCacheScalarFieldEnum]
 
 
+  export const AccessRequestScalarFieldEnum: {
+    id: 'id',
+    email: 'email',
+    status: 'status',
+    note: 'note',
+    createdAt: 'createdAt',
+    reviewedAt: 'reviewedAt',
+    reviewedByEmail: 'reviewedByEmail'
+  };
+
+  export type AccessRequestScalarFieldEnum = (typeof AccessRequestScalarFieldEnum)[keyof typeof AccessRequestScalarFieldEnum]
+
+
   export const SortOrder: {
     asc: 'asc',
     desc: 'desc'
@@ -24410,6 +25553,20 @@ export namespace Prisma {
    * Reference to a field of type 'OnboardingStage[]'
    */
   export type ListEnumOnboardingStageFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'OnboardingStage[]'>
+    
+
+
+  /**
+   * Reference to a field of type 'AccessRequestStatus'
+   */
+  export type EnumAccessRequestStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'AccessRequestStatus'>
+    
+
+
+  /**
+   * Reference to a field of type 'AccessRequestStatus[]'
+   */
+  export type ListEnumAccessRequestStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'AccessRequestStatus[]'>
     
   /**
    * Deep Input Types
@@ -25940,6 +27097,68 @@ export namespace Prisma {
     payload?: JsonWithAggregatesFilter<"DiscoverVideoCache">
     fetchedAt?: DateTimeWithAggregatesFilter<"DiscoverVideoCache"> | Date | string
     expiresAt?: DateTimeWithAggregatesFilter<"DiscoverVideoCache"> | Date | string
+  }
+
+  export type AccessRequestWhereInput = {
+    AND?: AccessRequestWhereInput | AccessRequestWhereInput[]
+    OR?: AccessRequestWhereInput[]
+    NOT?: AccessRequestWhereInput | AccessRequestWhereInput[]
+    id?: UuidFilter<"AccessRequest"> | string
+    email?: StringFilter<"AccessRequest"> | string
+    status?: EnumAccessRequestStatusFilter<"AccessRequest"> | $Enums.AccessRequestStatus
+    note?: StringNullableFilter<"AccessRequest"> | string | null
+    createdAt?: DateTimeFilter<"AccessRequest"> | Date | string
+    reviewedAt?: DateTimeNullableFilter<"AccessRequest"> | Date | string | null
+    reviewedByEmail?: StringNullableFilter<"AccessRequest"> | string | null
+  }
+
+  export type AccessRequestOrderByWithRelationInput = {
+    id?: SortOrder
+    email?: SortOrder
+    status?: SortOrder
+    note?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    reviewedAt?: SortOrderInput | SortOrder
+    reviewedByEmail?: SortOrderInput | SortOrder
+  }
+
+  export type AccessRequestWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    email?: string
+    AND?: AccessRequestWhereInput | AccessRequestWhereInput[]
+    OR?: AccessRequestWhereInput[]
+    NOT?: AccessRequestWhereInput | AccessRequestWhereInput[]
+    status?: EnumAccessRequestStatusFilter<"AccessRequest"> | $Enums.AccessRequestStatus
+    note?: StringNullableFilter<"AccessRequest"> | string | null
+    createdAt?: DateTimeFilter<"AccessRequest"> | Date | string
+    reviewedAt?: DateTimeNullableFilter<"AccessRequest"> | Date | string | null
+    reviewedByEmail?: StringNullableFilter<"AccessRequest"> | string | null
+  }, "id" | "email">
+
+  export type AccessRequestOrderByWithAggregationInput = {
+    id?: SortOrder
+    email?: SortOrder
+    status?: SortOrder
+    note?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    reviewedAt?: SortOrderInput | SortOrder
+    reviewedByEmail?: SortOrderInput | SortOrder
+    _count?: AccessRequestCountOrderByAggregateInput
+    _max?: AccessRequestMaxOrderByAggregateInput
+    _min?: AccessRequestMinOrderByAggregateInput
+  }
+
+  export type AccessRequestScalarWhereWithAggregatesInput = {
+    AND?: AccessRequestScalarWhereWithAggregatesInput | AccessRequestScalarWhereWithAggregatesInput[]
+    OR?: AccessRequestScalarWhereWithAggregatesInput[]
+    NOT?: AccessRequestScalarWhereWithAggregatesInput | AccessRequestScalarWhereWithAggregatesInput[]
+    id?: UuidWithAggregatesFilter<"AccessRequest"> | string
+    email?: StringWithAggregatesFilter<"AccessRequest"> | string
+    status?: EnumAccessRequestStatusWithAggregatesFilter<"AccessRequest"> | $Enums.AccessRequestStatus
+    note?: StringNullableWithAggregatesFilter<"AccessRequest"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"AccessRequest"> | Date | string
+    reviewedAt?: DateTimeNullableWithAggregatesFilter<"AccessRequest"> | Date | string | null
+    reviewedByEmail?: StringNullableWithAggregatesFilter<"AccessRequest"> | string | null
   }
 
   export type UserCreateInput = {
@@ -27625,6 +28844,76 @@ export namespace Prisma {
     expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type AccessRequestCreateInput = {
+    id?: string
+    email: string
+    status?: $Enums.AccessRequestStatus
+    note?: string | null
+    createdAt?: Date | string
+    reviewedAt?: Date | string | null
+    reviewedByEmail?: string | null
+  }
+
+  export type AccessRequestUncheckedCreateInput = {
+    id?: string
+    email: string
+    status?: $Enums.AccessRequestStatus
+    note?: string | null
+    createdAt?: Date | string
+    reviewedAt?: Date | string | null
+    reviewedByEmail?: string | null
+  }
+
+  export type AccessRequestUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    status?: EnumAccessRequestStatusFieldUpdateOperationsInput | $Enums.AccessRequestStatus
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reviewedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    reviewedByEmail?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type AccessRequestUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    status?: EnumAccessRequestStatusFieldUpdateOperationsInput | $Enums.AccessRequestStatus
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reviewedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    reviewedByEmail?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type AccessRequestCreateManyInput = {
+    id?: string
+    email: string
+    status?: $Enums.AccessRequestStatus
+    note?: string | null
+    createdAt?: Date | string
+    reviewedAt?: Date | string | null
+    reviewedByEmail?: string | null
+  }
+
+  export type AccessRequestUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    status?: EnumAccessRequestStatusFieldUpdateOperationsInput | $Enums.AccessRequestStatus
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reviewedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    reviewedByEmail?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type AccessRequestUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    status?: EnumAccessRequestStatusFieldUpdateOperationsInput | $Enums.AccessRequestStatus
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reviewedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    reviewedByEmail?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
   export type UuidFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel>
     in?: string[] | ListStringFieldRefInput<$PrismaModel>
@@ -29068,6 +30357,53 @@ export namespace Prisma {
     expiresAt?: SortOrder
   }
 
+  export type EnumAccessRequestStatusFilter<$PrismaModel = never> = {
+    equals?: $Enums.AccessRequestStatus | EnumAccessRequestStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.AccessRequestStatus[] | ListEnumAccessRequestStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.AccessRequestStatus[] | ListEnumAccessRequestStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumAccessRequestStatusFilter<$PrismaModel> | $Enums.AccessRequestStatus
+  }
+
+  export type AccessRequestCountOrderByAggregateInput = {
+    id?: SortOrder
+    email?: SortOrder
+    status?: SortOrder
+    note?: SortOrder
+    createdAt?: SortOrder
+    reviewedAt?: SortOrder
+    reviewedByEmail?: SortOrder
+  }
+
+  export type AccessRequestMaxOrderByAggregateInput = {
+    id?: SortOrder
+    email?: SortOrder
+    status?: SortOrder
+    note?: SortOrder
+    createdAt?: SortOrder
+    reviewedAt?: SortOrder
+    reviewedByEmail?: SortOrder
+  }
+
+  export type AccessRequestMinOrderByAggregateInput = {
+    id?: SortOrder
+    email?: SortOrder
+    status?: SortOrder
+    note?: SortOrder
+    createdAt?: SortOrder
+    reviewedAt?: SortOrder
+    reviewedByEmail?: SortOrder
+  }
+
+  export type EnumAccessRequestStatusWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.AccessRequestStatus | EnumAccessRequestStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.AccessRequestStatus[] | ListEnumAccessRequestStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.AccessRequestStatus[] | ListEnumAccessRequestStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumAccessRequestStatusWithAggregatesFilter<$PrismaModel> | $Enums.AccessRequestStatus
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumAccessRequestStatusFilter<$PrismaModel>
+    _max?: NestedEnumAccessRequestStatusFilter<$PrismaModel>
+  }
+
   export type AccountCreateNestedManyWithoutUserInput = {
     create?: XOR<AccountCreateWithoutUserInput, AccountUncheckedCreateWithoutUserInput> | AccountCreateWithoutUserInput[] | AccountUncheckedCreateWithoutUserInput[]
     connectOrCreate?: AccountCreateOrConnectWithoutUserInput | AccountCreateOrConnectWithoutUserInput[]
@@ -30368,6 +31704,10 @@ export namespace Prisma {
     update?: XOR<XOR<UserUpdateToOneWithWhereWithoutOnboardingStateInput, UserUpdateWithoutOnboardingStateInput>, UserUncheckedUpdateWithoutOnboardingStateInput>
   }
 
+  export type EnumAccessRequestStatusFieldUpdateOperationsInput = {
+    set?: $Enums.AccessRequestStatus
+  }
+
   export type NestedUuidFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel>
     in?: string[] | ListStringFieldRefInput<$PrismaModel>
@@ -30798,6 +32138,23 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedEnumOnboardingStageFilter<$PrismaModel>
     _max?: NestedEnumOnboardingStageFilter<$PrismaModel>
+  }
+
+  export type NestedEnumAccessRequestStatusFilter<$PrismaModel = never> = {
+    equals?: $Enums.AccessRequestStatus | EnumAccessRequestStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.AccessRequestStatus[] | ListEnumAccessRequestStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.AccessRequestStatus[] | ListEnumAccessRequestStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumAccessRequestStatusFilter<$PrismaModel> | $Enums.AccessRequestStatus
+  }
+
+  export type NestedEnumAccessRequestStatusWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.AccessRequestStatus | EnumAccessRequestStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.AccessRequestStatus[] | ListEnumAccessRequestStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.AccessRequestStatus[] | ListEnumAccessRequestStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumAccessRequestStatusWithAggregatesFilter<$PrismaModel> | $Enums.AccessRequestStatus
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumAccessRequestStatusFilter<$PrismaModel>
+    _max?: NestedEnumAccessRequestStatusFilter<$PrismaModel>
   }
 
   export type AccountCreateWithoutUserInput = {

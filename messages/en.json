@@ -546,7 +546,7 @@
     "nav": {
       "product": "Product",
       "howItWorks": "How it works",
-      "pricing": "Pricing",
+      "access": "Access",
       "faq": "FAQ",
       "changelog": "Changelog",
       "startFree": "Start free",
@@ -610,46 +610,20 @@
         "blurb": "LaTeX-typeset PDFs with proper kerning and widow control, locale-aware templates (EN / CN), and bring-your-own LLM key — Gemini, Claude, or OpenAI."
       }
     },
-    "pricing": {
-      "kicker": "Pricing",
-      "titlePrefix": "Free to start.",
-      "titleItalic": "Fair when you grow.",
-      "lede": "No credit card to sign up. Your data and your AI keys stay yours.",
-      "mostPopular": "Most popular",
-      "starter": {
-        "name": "Starter",
-        "price": "$0",
-        "cadence": "/mo",
-        "blurb": "For the casual search. Everything you need to run a clean, focused process.",
-        "f1": "Unlimited job fetch",
-        "f2": "20 tailored resumes / month",
-        "f3": "LaTeX PDF export",
-        "f4": "Chrome extension",
-        "cta": "Get started"
-      },
-      "pro": {
-        "name": "Pro",
-        "price": "$12",
-        "cadence": "/mo",
-        "blurb": "For an active search. Unlimited generations, priority models, all adapters.",
-        "f1": "Everything in Starter",
-        "f2": "Unlimited tailored resumes",
-        "f3": "Priority GPT-4 / Claude routing",
-        "f4": "All ATS adapters (Workday, SF, etc.)",
-        "f5": "Scheduled daily fetches",
-        "cta": "Start 14-day trial"
-      },
-      "byol": {
-        "name": "Bring-your-own-LLM",
-        "price": "$6",
-        "cadence": "/mo",
-        "blurb": "Use your own model provider. Pay us for the product, not the tokens.",
-        "f1": "Everything in Pro",
-        "f2": "Your OpenAI / Anthropic / Gemini key",
-        "f3": "Fully local option on roadmap",
-        "f4": "Email support",
-        "cta": "Connect key"
-      }
+    "access": {
+      "kicker": "Free & invite-only",
+      "titlePrefix": "Completely free.",
+      "titleItalic": "Invite-only while we scale.",
+      "lede": "Every feature is free — role fetching, AI-tailored CV & cover letters, LaTeX PDF export, the Chrome extension. We onboard in waves: drop your email and we'll switch your account on.",
+      "emailLabel": "Email",
+      "emailPlaceholder": "you@example.com",
+      "submit": "Request access",
+      "submitting": "Sending…",
+      "successTitle": "You're on the list",
+      "successBody": "We'll approve your email shortly — then sign in with the Google or GitHub account on that address.",
+      "errorBody": "Something went wrong. Please try again.",
+      "invalidEmail": "Enter a valid email address.",
+      "perks": "No credit card · No paywalls · Your data and AI keys stay yours"
     },
     "faq": {
       "kicker": "Questions",
@@ -721,7 +695,7 @@
         "dpa": "DPA"
       },
       "copyright": "© 2026 Joblit Labs. All rights reserved.",
-      "designed": "Designed in San Francisco · Built for candidates everywhere"
+      "designed": "Designed in Sydney · Built for candidates everywhere"
     }
   },
   "extension": {

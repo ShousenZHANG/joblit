@@ -3,6 +3,7 @@ import GoogleProvider from "next-auth/providers/google";
 import GitHubProvider from "next-auth/providers/github";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "@/lib/server/prisma";
+import { isSignInAllowed } from "@/lib/server/access/accessRequestService";
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -38,6 +39,12 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
+    // Invite-only gate: only configured admins, APPROVED access requests, and
+    // already-existing users may sign in. Returning false aborts sign-in BEFORE
+    // the adapter creates a User row, so an unapproved email gets no account.
+    async signIn({ user }) {
+      return isSignInAllowed(user?.email);
+    },
     session({ session, user }) {
       if (session.user) session.user.id = user.id;
       return session;

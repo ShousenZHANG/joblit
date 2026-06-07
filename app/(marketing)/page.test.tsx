@@ -47,7 +47,7 @@ describe("MarketingPage", () => {
       "landing-logobar",
       "landing-howitworks",
       "landing-features",
-      "landing-pricing",
+      "landing-access",
       "landing-faq",
       "landing-cta",
       "landing-footer",

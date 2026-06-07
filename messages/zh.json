@@ -546,7 +546,7 @@
     "nav": {
       "product": "产品",
       "howItWorks": "工作原理",
-      "pricing": "定价",
+      "access": "申请使用",
       "faq": "常见问题",
       "changelog": "更新日志",
       "startFree": "免费开始",
@@ -610,46 +610,20 @@
         "blurb": "LaTeX 级 PDF，精准字距、避免孤行；中英双语本地化模板；自带 LLM key —— Gemini / Claude / OpenAI 任选。"
       }
     },
-    "pricing": {
-      "kicker": "定价",
-      "titlePrefix": "免费开始。",
-      "titleItalic": "成长后公平收费。",
-      "lede": "注册无需信用卡。你的数据和 AI 密钥始终归你所有。",
-      "mostPopular": "最受欢迎",
-      "starter": {
-        "name": "入门版",
-        "price": "¥0",
-        "cadence": "/月",
-        "blurb": "适合轻度求职。运行干净、专注流程所需的一切。",
-        "f1": "无限岗位抓取",
-        "f2": "每月 20 份定制简历",
-        "f3": "LaTeX PDF 导出",
-        "f4": "Chrome 扩展",
-        "cta": "开始使用"
-      },
-      "pro": {
-        "name": "专业版",
-        "price": "¥88",
-        "cadence": "/月",
-        "blurb": "适合活跃求职者。无限生成、优先使用顶级模型、全部适配器。",
-        "f1": "包含入门版所有功能",
-        "f2": "无限定制简历",
-        "f3": "优先 GPT-4 / Claude 路由",
-        "f4": "全部 ATS 适配器(Workday、SF 等)",
-        "f5": "每日定时抓取",
-        "cta": "开始 14 天试用"
-      },
-      "byol": {
-        "name": "自带模型",
-        "price": "¥42",
-        "cadence": "/月",
-        "blurb": "使用你自己的模型提供商。为产品付费,不为 token 付费。",
-        "f1": "包含专业版所有功能",
-        "f2": "你自己的 OpenAI / Anthropic / Gemini 密钥",
-        "f3": "本地部署选项(规划中)",
-        "f4": "邮件支持",
-        "cta": "连接密钥"
-      }
+    "access": {
+      "kicker": "完全免费 · 邀请制",
+      "titlePrefix": "完全免费。",
+      "titleItalic": "扩容期间邀请制。",
+      "lede": "所有功能全免费 —— 岗位抓取、AI 定制简历与求职信、LaTeX PDF 导出、Chrome 扩展。我们分批开放:留下邮箱,我们帮你开通账号。",
+      "emailLabel": "邮箱",
+      "emailPlaceholder": "you@example.com",
+      "submit": "申请使用",
+      "submitting": "提交中…",
+      "successTitle": "已加入名单",
+      "successBody": "我们会尽快通过你的邮箱 —— 届时用该邮箱的 Google 或 GitHub 账号登录即可。",
+      "errorBody": "出错了,请重试。",
+      "invalidEmail": "请输入有效邮箱。",
+      "perks": "无需信用卡 · 无付费墙 · 数据与 AI 密钥始终归你"
     },
     "faq": {
       "kicker": "常见问题",
@@ -721,7 +695,7 @@
         "dpa": "数据处理协议"
       },
       "copyright": "© 2026 Joblit Labs. 保留所有权利。",
-      "designed": "设计于旧金山 · 为全球求职者打造"
+      "designed": "设计于悉尼 · 为全球求职者打造"
     }
   },
   "extension": {

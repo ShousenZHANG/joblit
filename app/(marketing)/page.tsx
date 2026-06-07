@@ -6,8 +6,8 @@ import { Footer } from "@/components/landing/Footer";
 import { Hero } from "@/components/landing/Hero";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { LogoBar } from "@/components/landing/LogoBar";
+import { Access } from "@/components/landing/Access";
 import { Nav } from "@/components/landing/Nav";
-import { Pricing } from "@/components/landing/Pricing";
 import { ScrollProgress } from "@/components/landing/ScrollProgress";
 
 /* ── SEO ──────────────────────────────────────────────── */
@@ -55,7 +55,7 @@ const jsonLd = {
  *   LogoBar    — credibility (job boards + LLM providers)
  *   HowItWorks — 3-step flow
  *   Features   — 2×2 differentiators
- *   Pricing    — single free plan
+ *   Access     — free + invite-only apply form
  *   Faq        — objections
  *   Cta        — final push
  *   Footer     — links + legal
@@ -86,7 +86,7 @@ export default function MarketingPage() {
         <LogoBar />
         <HowItWorks />
         <Features />
-        <Pricing />
+        <Access />
         <Faq />
         <Cta />
         <Footer />

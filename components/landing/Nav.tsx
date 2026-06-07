@@ -37,7 +37,7 @@ export function Nav() {
   const LINKS: NavLink[] = [
     { label: t("product"), href: "#product" },
     { label: t("howItWorks"), href: "#how" },
-    { label: t("pricing"), href: "#pricing" },
+    { label: t("access"), href: "#access" },
     { label: t("faq"), href: "#faq" },
   ];
 
