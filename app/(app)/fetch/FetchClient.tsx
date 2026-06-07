@@ -920,8 +920,23 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
                     Both
                   </button>
                 </div>
+                {source === "both" && (
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    Running LinkedIn + Seek together.{" "}
+                    <span className="font-medium text-foreground/80">Smart expand</span>, description
+                    filters and minimum experience apply to{" "}
+                    <span className="font-medium text-foreground/80">LinkedIn</span> only — Seek uses
+                    title exclusions plus the category / work type below. Title exclusions, location
+                    and time window apply to both.
+                  </p>
+                )}
                 {showSeekOptions && (
                   <div className="flex flex-wrap gap-2">
+                    {source === "both" && (
+                      <span className="w-full text-[10px] font-semibold uppercase tracking-wider text-brand-emerald-700">
+                        Seek
+                      </span>
+                    )}
                     <Select
                       value={seekClassification || "all"}
                       onValueChange={(v) => {
@@ -1072,6 +1087,11 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
               >
                 <span className={`h-1.5 w-1.5 rounded-full ${smartExpand ? "bg-brand-emerald-500" : "bg-muted-foreground/30"}`} />
                 Smart expand
+                {source === "both" && (
+                  <span className="ml-1 rounded bg-muted px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    LinkedIn
+                  </span>
+                )}
               </button>
             )}
             <button
