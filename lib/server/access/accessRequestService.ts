@@ -19,15 +19,19 @@ export type AccessReviewStatus = "APPROVED" | "REJECTED";
 export async function isSignInAllowed(email: string | null | undefined): Promise<boolean> {
   if (!email) return false;
   const e = normalizeEmail(email);
+  // Checked cheapest/safest first and short-circuited so the AccessRequest
+  // table is only queried for a brand-new email. This keeps admins AND existing
+  // users able to sign in even if the AccessRequest migration has not run yet on
+  // a freshly-deployed environment (the gate degrades to "existing users only"
+  // instead of breaking sign-in for everyone).
   if (isAdminEmail(e)) return true;
-  const [approved, existing] = await Promise.all([
-    prisma.accessRequest.findFirst({
-      where: { email: e, status: "APPROVED" },
-      select: { id: true },
-    }),
-    prisma.user.findUnique({ where: { email: e }, select: { id: true } }),
-  ]);
-  return Boolean(approved || existing);
+  const existing = await prisma.user.findUnique({ where: { email: e }, select: { id: true } });
+  if (existing) return true;
+  const approved = await prisma.accessRequest.findFirst({
+    where: { email: e, status: "APPROVED" },
+    select: { id: true },
+  });
+  return Boolean(approved);
 }
 
 /**

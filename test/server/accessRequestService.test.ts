@@ -53,11 +53,13 @@ describe("isSignInAllowed", () => {
     expect(await isSignInAllowed("a@b.com")).toBe(true);
   });
 
-  it("grandfathers an email that already has a User row", async () => {
+  it("grandfathers an existing User WITHOUT querying AccessRequest (degrades safely pre-migration)", async () => {
     vi.stubEnv("ADMIN_EMAILS", "");
-    store.accessRequest.findFirst.mockResolvedValue(null);
     store.user.findUnique.mockResolvedValue({ id: "u" });
     expect(await isSignInAllowed("a@b.com")).toBe(true);
+    // Short-circuited before the AccessRequest table is touched, so a missing
+    // AccessRequest table can't break sign-in for existing users.
+    expect(store.accessRequest.findFirst).not.toHaveBeenCalled();
   });
 
   it("denies an unknown, unapproved email", async () => {
