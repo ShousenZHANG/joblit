@@ -1,8 +1,8 @@
 "use client";
 
 import { signIn, useSession } from "next-auth/react";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, Github, Loader2 } from "lucide-react";
 import { JoblitMark } from "@/components/brand/JoblitMark";
@@ -44,34 +44,29 @@ function GoogleIcon({ className }: { className?: string }) {
   );
 }
 
-export default function LoginPage() {
+function LoginPageInner() {
   const { status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const t = useTranslations("loginPage");
   const reduced = useReducedMotion();
-  // NextAuth routes the invite-gate rejection here as ?error=AccessDenied
-  // (pages.error = "/login"). Surfacing it turns the old silent login loop into
-  // a clear "request access" path. Read from the URL (not useSearchParams) to
-  // avoid a Suspense boundary requirement on this client page.
-  const [authError, setAuthError] = useState<string | null>(null);
   const [loadingProvider, setLoadingProvider] = useState<Provider | null>(null);
 
-  useEffect(() => {
-    setAuthError(new URLSearchParams(window.location.search).get("error"));
-  }, []);
+  // NextAuth routes the invite-gate rejection here as ?error=AccessDenied
+  // (pages.error = "/login"). Read it straight from the (reactive) search params
+  // — no effect + setState, so there's no cascading render and no hydration
+  // drift. The page is wrapped in <Suspense> below, as useSearchParams requires.
+  const authError = searchParams.get("error");
+  const callbackUrl = searchParams.get("callbackUrl") || "/jobs";
 
   useEffect(() => {
     if (status === "authenticated") {
-      const sp = new URLSearchParams(window.location.search);
-      const callbackUrl = sp.get("callbackUrl") || "/jobs";
       router.replace(callbackUrl);
     }
-  }, [status, router]);
+  }, [status, router, callbackUrl]);
 
   function handleSignIn(provider: Provider) {
     if (loadingProvider) return;
-    const sp = new URLSearchParams(window.location.search);
-    const callbackUrl = sp.get("callbackUrl") || "/jobs";
     // Feedback BEFORE the redirect — the button shows "Connecting…" during the
     // hop to the provider instead of sitting frozen.
     setLoadingProvider(provider);
@@ -250,5 +245,16 @@ export default function LoginPage() {
         </motion.div>
       </div>
     </main>
+  );
+}
+
+// useSearchParams must be inside a Suspense boundary (Next renders the params-
+// dependent subtree on the client). The fallback is null — the card's entrance
+// animation already covers the brief first paint.
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginPageInner />
+    </Suspense>
   );
 }
