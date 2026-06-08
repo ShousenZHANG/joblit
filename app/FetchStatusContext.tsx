@@ -67,6 +67,12 @@ const ENDED_AT_KEY = "joblit_fetch_ended_at";
 // when no lane has terms — avoids churning the context value's useMemo deps.
 const EMPTY_TERMS: string[] = [];
 
+// Hard ceiling on how long we poll one run set. A GitHub Actions runner that is
+// cancelled or hard-killed never reaches its status callback, leaving the DB row
+// stuck on RUNNING forever — without this cap the panel would poll (and show
+// "Running") indefinitely. 8 min sits well beyond a normal fetch (~1–2 min).
+const MAX_POLL_MS = 8 * 60 * 1000;
+
 const isTerminal = (s: FetchRunStatus) => s === "SUCCEEDED" || s === "FAILED";
 
 /** Aggregate many lane statuses into one: any active → running/queued; else a
@@ -300,17 +306,42 @@ export function FetchStatusProvider({ children }: { children: React.ReactNode })
         return r?.status === "fulfilled" && isTerminal(r.value.snap.status);
       });
 
+      const startedRaw = localStorage.getItem(storageKeys.startedAt);
+      const startedMs = startedRaw ? Number(startedRaw) : NaN;
+
       if (allTerminal) {
         localStorage.setItem(storageKeys.endedAt, String(Date.now()));
-        const startedRaw = localStorage.getItem(storageKeys.startedAt);
-        const startedMs = startedRaw ? Number(startedRaw) : null;
-        if (startedMs && !Number.isNaN(startedMs)) {
+        if (!Number.isNaN(startedMs)) {
           setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startedMs) / 1000)));
         }
+        // Keep an actionable success (new jobs to view) on screen until the user
+        // acts — only auto-minimize the calm "nothing new" / failed outcomes so
+        // the success message + View Jobs CTA never flashes past unseen.
+        const anyImported = ids.some((id) => {
+          const r = results.find((x) => x.status === "fulfilled" && x.value.id === id);
+          return r?.status === "fulfilled" && (r.value.snap.importedCount ?? 0) > 0;
+        });
         if (autoCloseTimer.current) clearTimeout(autoCloseTimer.current);
-        autoCloseTimer.current = setTimeout(() => setOpen(false), 3500);
+        if (!anyImported) {
+          autoCloseTimer.current = setTimeout(() => setOpen(false), 3500);
+        }
         return; // stop polling
       }
+
+      // Hard ceiling: a cancelled / killed runner can leave the DB on RUNNING
+      // forever. Give up rather than poll indefinitely, and mark the unsettled
+      // lanes failed with an honest timeout so the panel never hangs.
+      const basisMs = Number.isNaN(startedMs) ? pollingStartedAt : startedMs;
+      if (Date.now() - basisMs > MAX_POLL_MS) {
+        localStorage.setItem(storageKeys.endedAt, String(Date.now()));
+        setLanes((prev) =>
+          prev.map((l) =>
+            isTerminal(l.status) ? l : { ...l, status: "FAILED", error: "FETCH_TIMEOUT" },
+          ),
+        );
+        return; // give up polling
+      }
+
       if (alive) pollTimer = setTimeout(() => void poll(), nextDelayMs());
     };
 

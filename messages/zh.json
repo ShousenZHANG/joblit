@@ -233,7 +233,9 @@
     "stepDone": "完成",
     "openAria": "打开抓取进度",
     "minimize": "最小化",
-    "close": "关闭"
+    "close": "关闭",
+    "partialNote": "{sources} 未完成 — 这些结果未包含。",
+    "timeoutHint": "比平常久一些。已找到的结果可能已导入 — 去 Jobs 页查看。"
   },
   "resume": {
     "masterResumes": "主简历",

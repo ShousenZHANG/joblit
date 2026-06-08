@@ -46,6 +46,16 @@ export function FetchProgressPanel() {
   const t = useTranslations("fetchProgress");
 
   const isRunning = status === "RUNNING" || status === "QUEUED";
+  // Partial outcome: aggregate reads SUCCEEDED but at least one source failed
+  // (e.g. Seek rate-limited while LinkedIn imported). Celebrate calmly, name the
+  // source that dropped, and never imply a clean full run.
+  const failedSources = lanes
+    .filter((l) => l.status === "FAILED")
+    .map((l) => SOURCE_LABEL[l.source] ?? l.source);
+  const isPartial =
+    status === "SUCCEEDED" &&
+    failedSources.length > 0 &&
+    lanes.some((l) => l.status === "SUCCEEDED");
   const progressValue =
     status === "SUCCEEDED"
       ? 100
@@ -287,10 +297,15 @@ export function FetchProgressPanel() {
               importedCount > 0 ? (
                 <>
                   <div className="relative overflow-hidden rounded-lg bg-brand-emerald-50/60 py-3 text-center">
-                    <ConfettiDots />
+                    {isPartial ? null : <ConfettiDots />}
                     <div className="text-sm font-semibold text-brand-emerald-700">
                       {t("importedNew", { n: importedCount })}
                     </div>
+                    {isPartial ? (
+                      <div className="mt-1 text-xs font-medium text-muted-foreground">
+                        {t("partialNote", { sources: failedSources.join(", ") })}
+                      </div>
+                    ) : null}
                   </div>
                   <Button
                     className="h-10 w-full rounded-full bg-brand-emerald-600 text-[13px] font-semibold text-white shadow-sm hover:bg-brand-emerald-700"
@@ -323,13 +338,15 @@ export function FetchProgressPanel() {
 
             {error ? (
               <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {/(challenge|cloudflare|status=403|status=429)/i.test(error)
-                  ? "The job source is rate-limiting us right now — wait a moment and try again, or switch source."
-                  : /seek_disabled/i.test(error)
-                    ? "Seek fetching is currently turned off. Use LinkedIn, or try again later."
-                    : /(request failed|timeout|connectionpool|unreachable)/i.test(error)
-                      ? "Couldn't reach the job source. Please retry shortly."
-                      : error}
+                {/FETCH_TIMEOUT/.test(error)
+                  ? t("timeoutHint")
+                  : /(challenge|cloudflare|status=403|status=429)/i.test(error)
+                    ? "The job source is rate-limiting us right now — wait a moment and try again, or switch source."
+                    : /seek_disabled/i.test(error)
+                      ? "Seek fetching is currently turned off. Use LinkedIn, or try again later."
+                      : /(request failed|timeout|connectionpool|unreachable)/i.test(error)
+                        ? "Couldn't reach the job source. Please retry shortly."
+                        : error}
               </div>
             ) : null}
 

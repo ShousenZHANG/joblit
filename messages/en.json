@@ -233,7 +233,9 @@
     "stepDone": "Done",
     "openAria": "Open fetch progress",
     "minimize": "Minimize",
-    "close": "Close"
+    "close": "Close",
+    "partialNote": "{sources} didn't finish — those results aren't included.",
+    "timeoutHint": "This is taking longer than usual. Any results found may already be imported — check the Jobs page."
   },
   "resume": {
     "masterResumes": "Master resumes",
