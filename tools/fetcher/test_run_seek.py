@@ -334,9 +334,27 @@ def test_warm_up_success_sets_timestamp(fast):
 
 
 def test_warm_up_challenge_raises(fast):
-    sess = FakeSession([FakeResp(200, text="Just a moment...", ct="text/html")])
+    # A challenge that persists across EVERY warm-up attempt still stops the run.
+    sess = FakeSession(
+        [FakeResp(200, text="Just a moment...", ct="text/html") for _ in range(rs.WARMUP_MAX_ATTEMPTS)]
+    )
     with pytest.raises(rs.SeekChallengeError):
         rs.SeekFetcher(session=sess, clock=Clock(0)).warm_up()
+    assert len(sess.calls) == rs.WARMUP_MAX_ATTEMPTS  # retried, not first-hit death
+
+
+def test_warm_up_retries_then_succeeds(fast):
+    # A transient first-hit challenge must NOT kill the run: warm-up retries and
+    # succeeds on a later attempt — the real-world flaky-challenge case that made
+    # Seek intermittently return zero jobs.
+    sess = FakeSession([
+        FakeResp(200, text="Just a moment...", ct="text/html"),
+        FakeResp(200, text="<html>jobs</html>", ct="text/html"),
+    ])
+    f = rs.SeekFetcher(session=sess, clock=Clock(7.0))
+    f.warm_up()
+    assert f._warmed_at == 7.0
+    assert len(sess.calls) == 2
 
 
 def test_warm_up_is_gated_by_env(monkeypatch):

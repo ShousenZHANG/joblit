@@ -11,8 +11,9 @@ DELIBERATELY the mild variant:
   * It uses only the `__cf_bm` cookie Seek freely hands out on a normal page
     load — it does NOT solve Cloudflare challenges, spoof TLS/JA3 fingerprints,
     or rotate residential proxies.
-  * On any anti-bot challenge it re-warms ONCE and then STOPS the run, rather
-    than attempting to bypass the measure.
+  * On an anti-bot challenge it re-warms a few times with polite backoff and
+    then STOPS the run, rather than attempting to bypass the measure — no
+    challenge is ever solved and no fingerprint is spoofed.
   * It identifies honestly by default (User-Agent `Joblit-Fetcher/...`). An
     operator may override `SEEK_USER_AGENT` for browser compatibility, but that
     is a conscious choice, not built-in evasion.
@@ -63,6 +64,11 @@ WARMUP_DELAY_SEC = 0.8
 REQUEST_TIMEOUT_SEC = 25.0
 MAX_RETRIES = 2
 RETRY_BACKOFF_SEC = 3.0
+# A Cloudflare warm-up challenge is frequently transient (decided per request),
+# so retry the warm-up politely before giving up — the difference between a whole
+# run yielding ZERO and one that just waited a few seconds. No challenge is solved;
+# a challenge that persists across every attempt still stops the run.
+WARMUP_MAX_ATTEMPTS = 3
 RETRY_AFTER_CAP_SEC = 60.0
 IMPORT_RETRIES = 2
 # __cf_bm clearance lives ~30 min; re-warm well before it lapses.
@@ -445,13 +451,38 @@ class SeekFetcher:
         time.sleep(base + random.uniform(0, base * 0.5))  # jitter avoids lockstep
 
     def warm_up(self) -> None:
-        """Load a normal page so Seek issues the __cf_bm clearance cookie."""
+        """Load a normal page so Seek issues the __cf_bm clearance cookie.
+
+        Retries politely on a challenge: Cloudflare challenges per request, so a
+        first-hit interstitial is often transient and clears on a later try a few
+        seconds on. This is resilience, not evasion — no challenge is solved, and
+        a challenge that persists across every attempt still stops the run."""
         self._ensure_enabled()
-        res = self.session.get(SEEK_WARMUP_URL, timeout=REQUEST_TIMEOUT_SEC)
-        if classify_response(res.status_code, res.headers.get("content-type", ""), res.text) == "challenge":
-            raise SeekChallengeError("Challenged on warm-up; stopping (no bypass by design).")
-        self._warmed_at = self._clock()
-        time.sleep(WARMUP_DELAY_SEC)
+        for attempt in range(WARMUP_MAX_ATTEMPTS):
+            try:
+                res = self.session.get(SEEK_WARMUP_URL, timeout=REQUEST_TIMEOUT_SEC)
+            except (requests.ConnectionError, requests.Timeout):
+                if attempt + 1 >= WARMUP_MAX_ATTEMPTS:
+                    raise
+                self._sleep_backoff(attempt)
+                continue
+            kind = classify_response(
+                res.status_code, res.headers.get("content-type", ""), res.text
+            )
+            if kind != "challenge":
+                self._warmed_at = self._clock()
+                time.sleep(WARMUP_DELAY_SEC)
+                return
+            if attempt + 1 < WARMUP_MAX_ATTEMPTS:
+                logger.info(
+                    "Warm-up challenged (attempt %s/%s) — backing off before retry.",
+                    attempt + 1, WARMUP_MAX_ATTEMPTS,
+                )
+                self._sleep_backoff(attempt)
+        raise SeekChallengeError(
+            f"Challenged on warm-up after {WARMUP_MAX_ATTEMPTS} attempts; "
+            "stopping (no bypass by design)."
+        )
 
     def _get_json(self, url: str, params: Dict[str, str]) -> Dict[str, Any]:
         self._ensure_enabled()
@@ -731,7 +762,14 @@ def run_from_config(run_id: str) -> int:
         if is_cancelled(fetch_run_config(base, run_id, fetch_headers)):
             logger.info("Seek run cancelled before import; exiting.")
             return 0
+        candidates = len(items)
         imported = import_items(base, user_email, items) if items else 0
+        if candidates and imported < candidates:
+            logger.info(
+                "Seek import kept %s of %s candidates; the rest were already "
+                "imported or previously removed (tombstoned) — skipped by design.",
+                imported, candidates,
+            )
         update_run(base, run_id, fetch_headers, {"status": "SUCCEEDED", "importedCount": imported, "error": None})
         logger.info("Seek run SUCCEEDED imported=%s elapsed=%.1fs", imported, time.monotonic() - started)
         return 0
