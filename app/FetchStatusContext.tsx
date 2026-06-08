@@ -270,18 +270,13 @@ export function FetchStatusProvider({ children }: { children: React.ReactNode })
       );
       if (!alive) return;
 
-      let allTerminal = true;
       setLanes((prev) =>
         prev.map((lane) => {
           const r = results.find(
             (x) => x.status === "fulfilled" && x.value.id === lane.id,
           );
-          if (!r || r.status !== "fulfilled") {
-            if (!isTerminal(lane.status)) allTerminal = false;
-            return lane;
-          }
+          if (!r || r.status !== "fulfilled") return lane; // keep prior on a failed poll
           const s = r.value.snap;
-          if (!isTerminal(s.status)) allTerminal = false;
           return {
             ...lane,
             status: s.status,
@@ -293,6 +288,17 @@ export function FetchStatusProvider({ children }: { children: React.ReactNode })
           };
         }),
       );
+
+      // Settled only when EVERY id resolved to a terminal snapshot THIS round.
+      // Derived from `results` — NOT mutated inside the setState updater above.
+      // Reading such a flag right after setState is racy (React can run the
+      // updater later), which was prematurely writing endedAt and freezing the
+      // elapsed timer while lanes were still RUNNING. A failed poll counts as
+      // not-terminal, so it's simply re-polled.
+      const allTerminal = ids.every((id) => {
+        const r = results.find((x) => x.status === "fulfilled" && x.value.id === id);
+        return r?.status === "fulfilled" && isTerminal(r.value.snap.status);
+      });
 
       if (allTerminal) {
         localStorage.setItem(storageKeys.endedAt, String(Date.now()));
