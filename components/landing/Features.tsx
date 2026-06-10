@@ -78,7 +78,7 @@ export function Features() {
       {...reveal}
       data-testid="landing-features"
       id="product"
-      className="mx-auto w-full max-w-6xl px-6 py-24 sm:px-10"
+      className="mx-auto w-full max-w-6xl scroll-mt-8 px-6 py-24 sm:px-10"
       variants={revealUp}
     >
       <div className="mb-16 text-center">

@@ -61,7 +61,7 @@ export function Cta() {
               aria-disabled={cta.disabled}
               tabIndex={cta.disabled ? -1 : undefined}
               className={
-                "inline-flex h-11 items-center gap-2 rounded-full bg-foreground px-6 text-sm font-semibold text-background shadow-[0_8px_20px_-8px_rgba(15,23,42,0.4)] transition-all duration-200 hover:-translate-y-px hover:bg-foreground/90 hover:shadow-[0_12px_28px_-10px_rgba(15,23,42,0.5)] " +
+                "inline-flex h-11 items-center gap-2 rounded-full bg-foreground px-6 text-sm font-semibold text-background shadow-[0_8px_20px_-8px_rgba(15,23,42,0.4)] transition-all duration-200 hover:-translate-y-px hover:bg-foreground/90 hover:shadow-[0_12px_28px_-10px_rgba(15,23,42,0.5)] active:translate-y-0 active:scale-[0.98] " +
                 (cta.disabled ? "pointer-events-none opacity-70" : "")
               }
             >
@@ -70,7 +70,7 @@ export function Cta() {
             </Link>
             <Link
               href="#how"
-              className="inline-flex h-11 items-center rounded-full border border-border/70 bg-background/80 px-6 text-sm font-semibold text-foreground backdrop-blur-sm transition-colors hover:border-brand-emerald-300/60 hover:bg-muted"
+              className="inline-flex h-11 items-center rounded-full border border-border/70 bg-background/80 px-6 text-sm font-semibold text-foreground backdrop-blur-sm transition-[background-color,border-color,transform] duration-200 hover:border-brand-emerald-300/60 hover:bg-muted active:scale-[0.98]"
             >
               {t("secondary")}
             </Link>

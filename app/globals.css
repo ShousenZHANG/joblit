@@ -399,8 +399,33 @@ body {
   * {
     @apply border-border outline-ring/50;
   }
+  /* Native smooth scrolling for every in-page anchor (hero CTAs, nav links,
+     footer, CTA banner) — one engine instead of per-link JS handlers, so all
+     anchor jumps feel identical. Reduced-motion gets instant jumps below. */
+  html {
+    scroll-behavior: smooth;
+    /* Kill the grey/blue tap flash on iOS/Android — press feedback comes from
+       the elements' own active states instead of the UA rectangle. */
+    -webkit-tap-highlight-color: transparent;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
   body {
     @apply bg-background text-foreground;
+  }
+  /* Tailwind v4 preflight ships `button { cursor: default }`. On the web the
+     expected affordance for an enabled button is still a pointer — restore it
+     once here instead of per-component utilities. */
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+  /* Brand-tinted text selection — emerald wash with readable foreground in
+     both themes. */
+  ::selection {
+    background: rgba(16, 185, 129, 0.22);
   }
   /* Universal keyboard-focus indicator. shadcn primitives set `outline-none`
      (a utility in @layer utilities, higher priority than this base rule) plus

@@ -573,7 +573,13 @@
       "metaFree": "永久免费 · 自带 LLM key"
     },
     "logoBar": {
-      "kicker": "来自以下公司的候选人信赖"
+      "heading": "贯通你的整个求职流程",
+      "items": {
+        "boards": "招聘平台",
+        "ats": "ATS 平台",
+        "byom": "自带模型",
+        "bilingual": "中英双语简历"
+      }
     },
     "how": {
       "kicker": "工作原理",

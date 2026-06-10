@@ -63,7 +63,7 @@ export function Access() {
       {...reveal}
       data-testid="landing-access"
       id="access"
-      className="mx-auto w-full max-w-3xl px-6 py-24 sm:px-10"
+      className="mx-auto w-full max-w-3xl scroll-mt-8 px-6 py-24 sm:px-10"
       variants={revealUp}
     >
       <div className="mb-10 text-center">
@@ -144,7 +144,7 @@ export function Access() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="group inline-flex h-11 items-center justify-center gap-1.5 rounded-full bg-brand-emerald-600 px-6 text-sm font-semibold text-white shadow-sm transition-all hover:bg-brand-emerald-700 hover:shadow-md disabled:opacity-70"
+                  className="group inline-flex h-11 items-center justify-center gap-1.5 rounded-full bg-brand-emerald-600 px-6 text-sm font-semibold text-white shadow-sm transition-all hover:bg-brand-emerald-700 hover:shadow-md active:scale-[0.98] disabled:opacity-70"
                 >
                   {submitting ? (
                     <>

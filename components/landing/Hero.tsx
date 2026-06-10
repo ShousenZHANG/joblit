@@ -218,7 +218,7 @@ export function Hero() {
           aria-disabled={cta.disabled}
           tabIndex={cta.disabled ? -1 : undefined}
           className={
-            "inline-flex h-11 items-center gap-2 rounded-full bg-foreground px-6 text-sm font-semibold text-background transition-transform hover:-translate-y-px hover:bg-foreground/90 " +
+            "inline-flex h-11 items-center gap-2 rounded-full bg-foreground px-6 text-sm font-semibold text-background transition-transform hover:-translate-y-px hover:bg-foreground/90 active:translate-y-0 active:scale-[0.98] " +
             (cta.disabled ? "pointer-events-none opacity-70" : "")
           }
         >
@@ -227,7 +227,7 @@ export function Hero() {
         </Link>
         <Link
           href="#how"
-          className="inline-flex h-11 items-center gap-2 rounded-full border border-border bg-background/70 px-6 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+          className="inline-flex h-11 items-center gap-2 rounded-full border border-border bg-background/70 px-6 text-sm font-semibold text-foreground transition-[background-color,transform] duration-200 hover:bg-muted active:scale-[0.98]"
         >
           <Play className="h-4 w-4" aria-hidden />
           {t("watchDemo")}

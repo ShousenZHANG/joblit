@@ -48,14 +48,22 @@ export function Nav() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Close the mobile menu on resize up to desktop so it never gets stuck open.
+  // Close the mobile menu on resize up to desktop so it never gets stuck open,
+  // and on Escape — the dismissal keyboard users expect from any popover.
   useEffect(() => {
     if (!mobileOpen) return;
     const onResize = () => {
       if (window.innerWidth >= 768) setMobileOpen(false);
     };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileOpen(false);
+    };
     window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("keydown", onKeyDown);
+    };
   }, [mobileOpen]);
 
   const handleSmoothScroll = useCallback(
@@ -144,7 +152,7 @@ export function Nav() {
             rel="noreferrer"
             aria-label="Star Joblit on GitHub"
             title="Star Joblit on GitHub"
-            className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-border/70 bg-background/75 px-2.5 text-[13px] font-semibold text-foreground/75 shadow-sm transition-all duration-200 hover:-translate-y-px hover:border-brand-emerald-300 hover:bg-brand-emerald-50/70 hover:text-brand-emerald-800 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 sm:px-3"
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-border/70 bg-background/75 px-2.5 text-[13px] font-semibold text-foreground/75 shadow-sm transition-all duration-200 hover:-translate-y-px hover:border-brand-emerald-300 hover:bg-brand-emerald-50/70 hover:text-brand-emerald-800 hover:shadow-md active:translate-y-0 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 sm:px-3"
           >
             <Github className="h-3.5 w-3.5" aria-hidden />
             <span className="hidden whitespace-nowrap lg:inline">GitHub</span>
@@ -169,7 +177,7 @@ export function Nav() {
             aria-disabled={status === "loading"}
             tabIndex={status === "loading" ? -1 : undefined}
             className={
-              "inline-flex shrink-0 items-center gap-1 rounded-full bg-foreground px-3 py-1.5 text-[13px] font-semibold text-background shadow-sm transition-all hover:-translate-y-px hover:bg-foreground/90 hover:shadow-md sm:px-4 " +
+              "inline-flex shrink-0 items-center gap-1 rounded-full bg-foreground px-3 py-1.5 text-[13px] font-semibold text-background shadow-sm transition-all hover:-translate-y-px hover:bg-foreground/90 hover:shadow-md active:translate-y-0 active:scale-[0.97] sm:px-4 " +
               (status === "loading" ? "pointer-events-none opacity-60" : "")
             }
           >

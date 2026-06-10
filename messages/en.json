@@ -573,7 +573,13 @@
       "metaFree": "Free forever · Bring your own LLM key"
     },
     "logoBar": {
-      "kicker": "Trusted by candidates from"
+      "heading": "Plugs into your whole job hunt",
+      "items": {
+        "boards": "job boards",
+        "ats": "ATS platforms",
+        "byom": "bring your own model",
+        "bilingual": "bilingual resumes"
+      }
     },
     "how": {
       "kicker": "How it works",
