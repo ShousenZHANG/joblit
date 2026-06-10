@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
 import { JobsClient } from "./JobsClient";
+import { sessionDeletedJobIds } from "./hooks/useJobMutations";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Toaster } from "@/components/ui/toaster";
 import messages from "../../../messages/en.json";
@@ -64,6 +65,9 @@ function renderWithClient(ui: React.ReactElement) {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  // The session-tombstone set is module-level by design (it must survive
+  // JobsClient remounts) — tests share the module instance, so isolate here.
+  sessionDeletedJobIds.clear();
   fetchStatusMock.state = { runId: null, status: null, importedCount: 0 };
   if (!HTMLElement.prototype.hasPointerCapture) {
     Object.defineProperty(HTMLElement.prototype, "hasPointerCapture", {

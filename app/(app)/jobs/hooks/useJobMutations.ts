@@ -22,6 +22,16 @@ import {
 // elapses so the action stays reversible without a confirm modal.
 const UNDO_WINDOW_MS = 5000;
 
+// Session-scoped tombstones: every id whose delete COMMITTED this session.
+// Module-level so it survives JobsClient unmount/remount (SPA nav away and
+// back) — the component-level suppression set dies with the component, and a
+// flushed DELETE can still be in flight when the remounted list refetches,
+// briefly resurrecting the row without this seed. Ids are never reused
+// (cuid + DeletedJobUrl import tombstone), so entries can only ever mask
+// genuinely-deleted rows. Cleared by a full page load, where the server is
+// the source of truth anyway.
+export const sessionDeletedJobIds = new Set<string>();
+
 type PendingDelete = {
   timer: ReturnType<typeof setTimeout>;
 };
@@ -142,9 +152,12 @@ export function useJobMutations({
   // each row is hidden/unhidden independently, so undoing one delete can't
   // clobber another (the old whole-cache snapshot/restore could resurrect or
   // drop sibling pending rows when undone out of order). The cache is mutated
-  // only once a commit succeeds (finalizeDelete). Undo cancels the timer and
-  // un-hides the row — no DELETE, no tombstone. Pending deletes are flushed on
-  // unmount/pagehide so leaving the page can't drop a delete in its window.
+  // only once a commit succeeds (finalizeDelete) — and after a successful
+  // commit the id stays suppressed for the rest of the session (a tombstone,
+  // matching the batch-delete path) so a stale in-flight list response can
+  // never resurrect the row. Undo cancels the timer and un-hides the row — no
+  // DELETE, no tombstone. Pending deletes are flushed on unmount/pagehide so
+  // leaving the page can't drop a delete in its window.
   const pendingDeletesRef = useRef<Map<string, PendingDelete>>(new Map());
   // Serialises the deferred commits so a burst of rapidly-deleted rows can't
   // fire parallel DELETEs and spike Neon's connection pool — one in flight at
@@ -164,21 +177,26 @@ export function useJobMutations({
           const json = await res.json().catch(() => ({}));
           throw new Error(json?.error || "Failed to delete job");
         }
-        // Commit succeeded — only NOW remove the row from the cache and
-        // decrement totalCount. Up to here the row was merely hidden via
-        // suppressedDeletedIds, so the cache stayed untouched and concurrent
-        // pending deletes/undos never interfered with each other.
+        // Commit succeeded — kill any in-flight list fetches FIRST. They were
+        // dispatched before the server delete, so their (stale) payload still
+        // contains this row; letting them land after the cache edit below
+        // would write the deleted row straight back.
+        await cancelJobsQueries(queryClient);
+        // Only NOW remove the row from the cache and decrement totalCount. Up
+        // to here the row was merely hidden via suppressedDeletedIds, so the
+        // cache stayed untouched and concurrent pending deletes/undos never
+        // interfered with each other.
         removeJobFromJobsCache(queryClient, id);
-        // The row is gone from every cached filter now, so drop it from the
-        // suppression set too. This keeps the set == the live pending-delete set
-        // (bounded; no stale ids lingering that could hide a future same-id row
-        // or, combined with cache placeholders, blank out a filter on switch).
-        setSuppressedDeletedIds((prev) => {
-          if (!prev.has(id)) return prev;
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
+        // The id stays in suppressedDeletedIds for the rest of the session —
+        // a tombstone, exactly like the batch-delete success path. This is the
+        // rapid-delete resurrection fix: a list response that raced past the
+        // cancel above (or any later stale payload) may re-insert the row into
+        // the cache, but the render layer filters suppressed ids out of both
+        // the rows and the visible count, so it can never reappear. Un-hiding
+        // here (the previous behaviour) opened exactly that window. The set is
+        // session-bounded and ids are never reused (cuid + DeletedJobUrl
+        // tombstone keeps re-imports out), so nothing legitimate is masked.
+        sessionDeletedJobIds.add(id);
       } catch (e) {
         // Commit failed — un-hide so the row reappears. The cache was never
         // mutated during the window, so there is no snapshot to restore.
@@ -319,6 +337,11 @@ export function useJobMutations({
     const flush = () => {
       for (const [id, entry] of pending) {
         clearTimeout(entry.timer);
+        // Tombstone BEFORE the fire-and-forget DELETE: if the user SPA-navigates
+        // back to Jobs while this request is still in flight, the remounted
+        // list seeds its suppression set from sessionDeletedJobIds and the row
+        // can't flash back while the server catches up.
+        sessionDeletedJobIds.add(id);
         void fetch(`/api/jobs/${id}`, { method: "DELETE", keepalive: true });
       }
       pending.clear();
@@ -411,6 +434,14 @@ export function useJobMutations({
     onSuccess: (data, ids) => {
       const deleted = data.deleted;
       const failed = data.failedIds.length;
+
+      // Committed ids become session tombstones (same contract as the single
+      // delete): survives JobsClient remounts so a stale or in-flight list
+      // payload can never resurrect them.
+      const failedSet = new Set(data.failedIds);
+      for (const id of ids) {
+        if (!failedSet.has(id)) sessionDeletedJobIds.add(id);
+      }
 
       if (failed > 0 && deleted > 0) {
         // Partial success only: refetch so the failed (un-suppressed) ids

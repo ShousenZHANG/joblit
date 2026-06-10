@@ -18,7 +18,7 @@ import type { JobItem, JobStatus } from "./types";
 import { getErrorMessage } from "./types";
 import { useJobFilters } from "./hooks/useJobFilters";
 import { useJobPagination } from "./hooks/useJobPagination";
-import { useJobMutations } from "./hooks/useJobMutations";
+import { sessionDeletedJobIds, useJobMutations } from "./hooks/useJobMutations";
 import { useKeyboardNavigation } from "./hooks/useKeyboardNavigation";
 import { useExternalGenerate } from "./hooks/useExternalGenerate";
 import { JobListItem } from "./components/JobListItem";
@@ -75,7 +75,12 @@ export function JobsClient({
   const [timeZone] = useState<string | null>(() => getUserTimeZone() || null);
   const [isPending, startTransition] = useTransition();
   const resultsScrollRef = useRef<HTMLDivElement | null>(null);
-  const [suppressedDeletedIds, setSuppressedDeletedIds] = useState<Set<string>>(new Set());
+  // Seed from the session tombstones so a remount (SPA nav away and back)
+  // keeps already-committed deletes hidden even while a flushed DELETE is
+  // still in flight — see sessionDeletedJobIds in useJobMutations.
+  const [suppressedDeletedIds, setSuppressedDeletedIds] = useState<Set<string>>(
+    () => new Set(sessionDeletedJobIds),
+  );
 
   const {
     items, totalCount, nextCursor, loading, loadingInitial, showEmpty, loadingMore,
