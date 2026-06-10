@@ -60,7 +60,9 @@ const CATEGORY_QUERIES: Record<
     "RAG system build",
   ],
   agents: [
-    "AI agent building 2026",
+    // No year in queries — publishedAfter already bounds freshness, and a
+    // hardcoded year silently rots the query as the calendar moves on.
+    "AI agent building",
     "agentic workflow",
     "autonomous AI agent",
     "agent framework tutorial",
@@ -275,7 +277,11 @@ async function searchYouTube(
   url.searchParams.set("publishedAfter", publishedAfter);
   url.searchParams.set("maxResults", String(maxResults));
   url.searchParams.set("relevanceLanguage", "en");
-  url.searchParams.set("videoDuration", "medium");
+  // No videoDuration filter: "medium" (4–20 min) was silently dropping the
+  // highest-value content in this space — conference keynotes, Karpathy-style
+  // lectures, deep-dive courses are all >20 min. Shorts are still excluded by
+  // the MIN_VIDEO_SECONDS post-filter, and the ranking's duration sweet-spot
+  // keeps practical-length videos competitive without amputating long-form.
   url.searchParams.set("key", apiKey);
 
   const res = await fetch(url.toString(), {

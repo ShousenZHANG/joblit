@@ -11,7 +11,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import type { VideoItem } from "../types";
-import { relativeTime, formatCount } from "../utils";
+import { relativeTime, formatCount, formatDuration } from "../utils";
 
 interface VideoCardProps {
   item: VideoItem;
@@ -119,6 +119,14 @@ export function VideoCard({
                   : "Expert"}
             </span>
           </div>
+        )}
+
+        {/* Duration badge — bottom-right, the YouTube-standard affordance for
+            "how long is this" at a glance. Hidden when duration is unknown. */}
+        {item.durationSeconds > 0 && (
+          <span className="absolute bottom-2 right-2 rounded bg-black/80 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-white">
+            {formatDuration(item.durationSeconds)}
+          </span>
         )}
 
         {/* Play overlay — purely visual affordance */}

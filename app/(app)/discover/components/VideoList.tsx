@@ -52,74 +52,18 @@ const TIME_WINDOWS: { value: VideoTimeWindow; key: string }[] = [
 const VALID_CATS = new Set<string>(CATEGORIES.map((c) => c.value));
 const VALID_SORTS = new Set<string>(SORTS.map((s) => s.value));
 const VALID_WINDOWS = new Set<string>(TIME_WINDOWS.map((w) => w.value));
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Comprehensive trending score combining engagement, freshness, authority,
- * expertise match, duration sweet-spot, and user signals.
+ * Ranking is server-owned. The pipeline computes the composite trending score
+ * (relevance + trust + engagement + recency) and every sort variant is cached
+ * pre-sorted per (category, window, sort) key — a second client-side formula
+ * here silently overrode all of that and the two inevitably drifted. The
+ * client's only reordering concern is the USER's own signal: watched videos
+ * sink to the bottom (stable within each group).
  */
-function trendingScore(v: VideoItem, category: VideoCategory): number {
-  const daysOld = Math.max(
-    0,
-    (Date.now() - new Date(v.publishedAt).getTime()) / DAY_MS,
-  );
-  const freshness = Math.max(0, 1 - daysOld / 30);
-
-  let score =
-    Math.log(v.viewCount + 1) * 0.5 +
-    Math.log(v.likeCount + 1) * 0.3 +
-    freshness * 5 +
-    v.relevanceScore * 2; // title+desc keyword overlap
-
-  // Authority tiers (from curated trusted channels config)
-  if (v.trustTier === 1) score += 2.5;
-  else if (v.trustTier === 2) score += 1.2;
-  else if (v.trustTier === 3) score += 0.4;
-
-  // Channel matches category expertise
-  if (category !== "all" && v.expertiseTags.includes(category)) {
-    score += 0.8;
-  }
-
-  // Large audience signal
-  if (v.channelSubscriberCount > 50_000) score += 0.6;
-
-  // Duration sweet spot (5-30 min)
-  if (v.durationSeconds >= 5 * 60 && v.durationSeconds <= 30 * 60) {
-    score += 0.3;
-  }
-
-  return score;
-}
-
-function rankVideos(
-  items: VideoItem[],
-  sort: VideoSort,
-  category: VideoCategory,
-  watched: Set<string>,
-): VideoItem[] {
-  const base =
-    sort === "latest"
-      ? [...items].sort(
-          (a, b) =>
-            new Date(b.publishedAt).getTime() -
-            new Date(a.publishedAt).getTime(),
-        )
-      : sort === "most_viewed"
-        ? [...items].sort(
-            (a, b) =>
-              b.viewCount - a.viewCount ||
-              new Date(b.publishedAt).getTime() -
-                new Date(a.publishedAt).getTime(),
-          )
-        : [...items]
-            .map((v) => ({ video: v, score: trendingScore(v, category) }))
-            .sort((a, b) => b.score - a.score)
-            .map((x) => x.video);
-
-  // Watched videos sink to bottom (preserves relative order within each group)
-  const unseen = base.filter((v) => !watched.has(v.id));
-  const seen = base.filter((v) => watched.has(v.id));
+function sinkWatched(items: VideoItem[], watched: Set<string>): VideoItem[] {
+  const unseen = items.filter((v) => !watched.has(v.id));
+  const seen = items.filter((v) => watched.has(v.id));
   return [...unseen, ...seen];
 }
 
@@ -187,17 +131,12 @@ export function VideoList() {
   }
 
   const items = useMemo(() => {
-    const ranked = rankVideos(
-      rawItems,
-      sort,
-      category,
-      watchedSnapshotRef.current,
-    );
+    const ranked = sinkWatched(rawItems, watchedSnapshotRef.current);
     return showFavoritesOnly
       ? ranked.filter((v) => favorites.has(v.id))
       : ranked;
     // watched.ids intentionally omitted — see snapshotKey comment above.
-  }, [rawItems, sort, category, favorites, showFavoritesOnly]);
+  }, [rawItems, favorites, showFavoritesOnly]);
 
   const favCount = favorites.ids.size;
 
