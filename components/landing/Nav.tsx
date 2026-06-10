@@ -9,6 +9,7 @@ import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { ThemeToggle } from "@/components/providers/ThemeProvider";
+import { Magnetic } from "./lib/interactive";
 
 // Glass navbar. Sticky at top 16px, gains a deeper shadow once the user
 // scrolls past 20px. Smooth scroll handler hijacks clicks on `#anchor`
@@ -171,19 +172,21 @@ export function Nav() {
               {t("logIn")}
             </Link>
           )}
-          <Link
-            href={ctaHref}
-            aria-label={ctaLabel}
-            aria-disabled={status === "loading"}
-            tabIndex={status === "loading" ? -1 : undefined}
-            className={
-              "inline-flex shrink-0 items-center gap-1 rounded-full bg-foreground px-3 py-1.5 text-[13px] font-semibold text-background shadow-sm transition-all hover:-translate-y-px hover:bg-foreground/90 hover:shadow-md active:translate-y-0 active:scale-[0.97] sm:px-4 " +
-              (status === "loading" ? "pointer-events-none opacity-60" : "")
-            }
-          >
-            <span className="hidden whitespace-nowrap sm:inline">{ctaLabel}</span>
-            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-          </Link>
+          <Magnetic strength={5}>
+            <Link
+              href={ctaHref}
+              aria-label={ctaLabel}
+              aria-disabled={status === "loading"}
+              tabIndex={status === "loading" ? -1 : undefined}
+              className={
+                "inline-flex shrink-0 items-center gap-1 rounded-full bg-foreground px-3 py-1.5 text-[13px] font-semibold text-background shadow-sm transition-all hover:-translate-y-px hover:bg-foreground/90 hover:shadow-md active:translate-y-0 active:scale-[0.97] sm:px-4 " +
+                (status === "loading" ? "pointer-events-none opacity-60" : "")
+              }
+            >
+              <span className="hidden whitespace-nowrap sm:inline">{ctaLabel}</span>
+              <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+            </Link>
+          </Magnetic>
 
           {/* Mobile menu toggle — only surface under md, where the inline
               link list is hidden. */}

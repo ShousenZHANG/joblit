@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
+import { CountUp } from "./lib/interactive";
 import { revealUp, useReveal } from "./lib/motion";
 
 // Capability strip — replaces the old fake text-wordmark "social proof"
@@ -30,16 +31,22 @@ export function LogoBar() {
         className="mt-8 grid grid-cols-2 gap-x-6 gap-y-8 sm:flex sm:flex-wrap sm:items-start sm:justify-center sm:gap-x-14"
         role="list"
       >
-        {CAPABILITY_KEYS.map((key, i) => (
-          <li key={key} className="flex flex-col items-center text-center">
-            <span className="text-2xl font-bold tracking-tight text-foreground sm:text-[26px]">
-              {CAPABILITY_STATS[i]}
-            </span>
-            <span className="mt-1 text-xs font-medium text-muted-foreground sm:text-sm">
-              {t(`items.${key}`)}
-            </span>
-          </li>
-        ))}
+        {CAPABILITY_KEYS.map((key, i) => {
+          const stat = CAPABILITY_STATS[i];
+          const numeric = /^\d+$/.test(stat);
+          return (
+            <li key={key} className="flex flex-col items-center text-center">
+              <span className="text-2xl font-bold tracking-tight text-foreground sm:text-[26px]">
+                {/* Real numbers tick up once on first view; non-numeric stats
+                    (model names, locales) stay static. */}
+                {numeric ? <CountUp to={Number(stat)} /> : stat}
+              </span>
+              <span className="mt-1 text-xs font-medium text-muted-foreground sm:text-sm">
+                {t(`items.${key}`)}
+              </span>
+            </li>
+          );
+        })}
       </ul>
     </motion.section>
   );

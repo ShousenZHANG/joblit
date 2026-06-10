@@ -9,6 +9,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
+import { useSpotlight } from "./lib/interactive";
 import { revealUp, revealStagger, useReveal } from "./lib/motion";
 import { SectionKicker } from "./SectionKicker";
 
@@ -33,7 +34,24 @@ interface Feature {
 // matching HowItWorks and Pricing so the sections read as one designed
 // system rather than separately-styled blocks.
 const CARD_BASE =
-  "group relative flex h-full flex-col rounded-2xl border border-border/60 bg-card p-7 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-300 hover:-translate-y-1 hover:border-brand-emerald-200/70 hover:shadow-[0_18px_36px_-18px_rgba(5,150,105,0.22)] sm:p-8";
+  "spotlight-card group relative flex h-full flex-col rounded-2xl border border-border/60 bg-card p-7 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-300 hover:-translate-y-1 hover:border-brand-emerald-200/70 hover:shadow-[0_18px_36px_-18px_rgba(5,150,105,0.22)] sm:p-8";
+
+/** One feature card — split out so each card owns its pointer-spotlight ref. */
+function FeatureCard({ feature }: { feature: Feature }) {
+  const spot = useSpotlight<HTMLDivElement>();
+  const { icon, title, blurb } = feature;
+  return (
+    <div ref={spot} className={CARD_BASE}>
+      <IconChip icon={icon} />
+      <div className="mt-6 text-[19px] font-semibold tracking-tight text-foreground">
+        {title}
+      </div>
+      <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
+        {blurb}
+      </p>
+    </div>
+  );
+}
 
 function IconChip({ icon: Icon }: { icon: LucideIcon }) {
   return (
@@ -100,17 +118,9 @@ export function Features() {
         className="grid auto-rows-fr gap-5 md:grid-cols-2"
         role="list"
       >
-        {FEATURES.map(({ icon, title, blurb }) => (
-          <motion.li key={title} variants={revealUp} className="list-none">
-            <div className={CARD_BASE}>
-              <IconChip icon={icon} />
-              <div className="mt-6 text-[19px] font-semibold tracking-tight text-foreground">
-                {title}
-              </div>
-              <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
-                {blurb}
-              </p>
-            </div>
+        {FEATURES.map((feature) => (
+          <motion.li key={feature.title} variants={revealUp} className="list-none">
+            <FeatureCard feature={feature} />
           </motion.li>
         ))}
       </motion.ul>

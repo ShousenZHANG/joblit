@@ -1,10 +1,24 @@
+import { Instrument_Serif } from "next/font/google";
+
+// Editorial display serif for the landing's italic accent words ("re-engineered.",
+// "three steps", …). Loaded ONLY on marketing routes — the app workspace never
+// pays for it. One style (400 italic) keeps the payload tiny; .marketing-serif
+// in globals.css scopes the override to descendants of this layout.
+const marketingSerif = Instrument_Serif({
+  weight: "400",
+  style: "italic",
+  subsets: ["latin"],
+  variable: "--font-marketing-serif",
+  display: "swap",
+});
+
 export default function MarketingLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <>
+    <div className={`${marketingSerif.variable} marketing-serif contents`}>
       {/* Skip link — first focusable element so keyboard/screen-reader users can
           jump past the sticky nav straight to the page content. Visually hidden
           until focused. */}
@@ -15,6 +29,6 @@ export default function MarketingLayout({
         Skip to content
       </a>
       {children}
-    </>
+    </div>
   );
 }

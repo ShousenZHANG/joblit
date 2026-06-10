@@ -17,6 +17,7 @@ import {
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { useTranslations } from "next-intl";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Magnetic, TiltCard, useSpotlight } from "./lib/interactive";
 import { fadeUp, stagger } from "./lib/motion";
 import { useCtaHref } from "./lib/useCtaHref";
 
@@ -91,6 +92,8 @@ export function Hero() {
   const [activeRow, setActiveRow] = useState(0);
   const t = useTranslations("landing.hero");
   const cta = useCtaHref();
+  // Pointer spotlight on the product-mock frame (border glow + inner wash).
+  const frameSpot = useSpotlight<HTMLDivElement>();
   // Scroll parallax for the decorative canvas grid — drifts down slightly
   // slower than the page so the hero gains depth as it scrolls away. Tracks
   // the hero's own scroll range; reduced-motion pins it (y = 0).
@@ -195,9 +198,28 @@ export function Hero() {
       >
         {t("titleLine1")}
         <br />
-        <em className="font-serif italic text-foreground">
-          {t("titleItalic")}
-        </em>
+        <span className="relative inline-block">
+          <em className="font-serif italic text-foreground">
+            {t("titleItalic")}
+          </em>
+          {/* Hand-drawn emerald underline — draws itself once after the intro
+              settles (see .hero-underline in globals.css). Decorative only. */}
+          <svg
+            aria-hidden
+            viewBox="0 0 220 14"
+            preserveAspectRatio="none"
+            className="hero-underline absolute -bottom-2 left-0 h-[0.14em] w-full text-brand-emerald-500 sm:-bottom-3"
+          >
+            <path
+              d="M4 10 C 60 2, 150 2, 216 8"
+              pathLength="1"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="5"
+              strokeLinecap="round"
+            />
+          </svg>
+        </span>
       </motion.h1>
 
       {/* Subtitle */}
@@ -213,18 +235,23 @@ export function Hero() {
         variants={introItem}
         className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row"
       >
-        <Link
-          href={cta.disabled ? "#" : cta.href === "/login" ? "#access" : cta.href}
-          aria-disabled={cta.disabled}
-          tabIndex={cta.disabled ? -1 : undefined}
-          className={
-            "inline-flex h-11 items-center gap-2 rounded-full bg-foreground px-6 text-sm font-semibold text-background transition-transform hover:-translate-y-px hover:bg-foreground/90 active:translate-y-0 active:scale-[0.98] " +
-            (cta.disabled ? "pointer-events-none opacity-70" : "")
-          }
-        >
-          {t("startFree")}
-          <ArrowRight className="h-4 w-4" aria-hidden />
-        </Link>
+        <Magnetic strength={7}>
+          <Link
+            href={cta.disabled ? "#" : cta.href === "/login" ? "#access" : cta.href}
+            aria-disabled={cta.disabled}
+            tabIndex={cta.disabled ? -1 : undefined}
+            className={
+              "group inline-flex h-11 items-center gap-2 rounded-full bg-foreground px-6 text-sm font-semibold text-background transition-transform hover:-translate-y-px hover:bg-foreground/90 active:translate-y-0 active:scale-[0.98] " +
+              (cta.disabled ? "pointer-events-none opacity-70" : "")
+            }
+          >
+            {t("startFree")}
+            <ArrowRight
+              className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
+              aria-hidden
+            />
+          </Link>
+        </Magnetic>
         <Link
           href="#how"
           className="inline-flex h-11 items-center gap-2 rounded-full border border-border bg-background/70 px-6 text-sm font-semibold text-foreground transition-[background-color,transform] duration-200 hover:bg-muted active:scale-[0.98]"
@@ -270,6 +297,11 @@ export function Hero() {
           aria-hidden
           className="pointer-events-none absolute -inset-x-6 -bottom-8 -z-10 h-72 bg-[radial-gradient(ellipse_60%_50%_at_50%_0%,rgba(16,185,129,0.12),transparent_70%)]"
         />
+        <TiltCard max={3}>
+        <div
+          ref={frameSpot}
+          className="spotlight-card spotlight-wide rounded-3xl"
+        >
         <div className="relative overflow-hidden rounded-3xl border border-border/60 bg-card shadow-[0_30px_80px_-30px_rgba(15,23,42,0.18)]">
           <div
             aria-hidden
@@ -457,6 +489,8 @@ export function Hero() {
             </motion.div>
           </motion.div>
         </div>
+        </div>
+        </TiltCard>
 
       </motion.div>
       </motion.div>

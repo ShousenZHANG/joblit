@@ -309,6 +309,105 @@
    it down on wider viewports. */
 /* landing-marquee keyframe removed — Testimonials section was cut. */
 
+/* ── Pointer spotlight (landing interactivity) ──────────────────────────────
+   Consumed with the `useSpotlight` hook (components/landing/lib/interactive),
+   which mirrors the pointer into --gx/--gy. Idles at zero cost: both layers
+   are opacity:0 until :hover, so there is no steady-state paint. Touch devices
+   never hover; reduced-motion users never get the vars set (hook no-ops), so
+   the gradient stays centered and the card reads as a plain hover state. */
+.spotlight-card {
+  position: relative;
+}
+/* Border glow — a 1px ring of emerald light that follows the pointer. The
+   mask keeps ONLY the ring visible (padding-box XOR), so the gradient never
+   washes over the card content. */
+.spotlight-card::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: radial-gradient(
+    180px circle at var(--gx, 50%) var(--gy, 50%),
+    var(--spotlight-ring, rgba(16, 185, 129, 0.55)),
+    transparent 70%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  pointer-events: none;
+}
+/* Inner ambience — a soft wash inside the card under the pointer. */
+.spotlight-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    240px circle at var(--gx, 50%) var(--gy, 50%),
+    var(--spotlight-glow, rgba(16, 185, 129, 0.08)),
+    transparent 65%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  pointer-events: none;
+}
+.spotlight-card:hover::before,
+.spotlight-card:hover::after {
+  opacity: 1;
+}
+/* Wide variant for hero-scale surfaces (product mock frame, CTA banner). */
+.spotlight-wide::before {
+  background: radial-gradient(
+    320px circle at var(--gx, 50%) var(--gy, 50%),
+    var(--spotlight-ring, rgba(16, 185, 129, 0.45)),
+    transparent 70%
+  );
+}
+.spotlight-wide::after {
+  background: radial-gradient(
+    460px circle at var(--gx, 50%) var(--gy, 50%),
+    var(--spotlight-glow, rgba(16, 185, 129, 0.07)),
+    transparent 65%
+  );
+}
+.dark .spotlight-card {
+  --spotlight-ring: rgba(52, 211, 153, 0.4);
+  --spotlight-glow: rgba(52, 211, 153, 0.07);
+}
+
+/* One-shot hand-drawn underline beneath the hero's italic word. pathLength=1
+   normalises the dash math; the draw starts after the intro stagger lands.
+   Reduced-motion paints it fully drawn, no animation. */
+.hero-underline path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: hero-underline-draw 0.9s cubic-bezier(0.16, 1, 0.3, 1) 1s forwards;
+}
+@keyframes hero-underline-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-underline path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Editorial display serif for the landing's italic accent words. The variable
+   is provided by the marketing layout (next/font Instrument Serif); app
+   surfaces never load it, so this selector only ever matches on marketing
+   pages. Falls back to the previous ui-serif stack. */
+.marketing-serif .font-serif {
+  font-family: var(--font-marketing-serif, ui-serif, Georgia, serif);
+  letter-spacing: -0.01em;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
