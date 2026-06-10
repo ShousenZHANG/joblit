@@ -10,6 +10,7 @@ import {
   writeCache,
 } from "@/lib/server/discover/videoCache";
 import { constantTimeEqual } from "@/lib/server/auth/constantTimeEqual";
+import { reportError } from "@/lib/server/observability/errorReporter";
 
 // Cron pre-warmer for the video cache. Vercel's cron dispatcher invokes
 // this endpoint on the schedule declared in vercel.json. Running on cron
@@ -39,7 +40,6 @@ interface RefreshResult {
   key: string;
   status: "ok" | "quota" | "error";
   itemCount?: number;
-  error?: string;
 }
 
 export async function GET(request: Request) {
@@ -86,11 +86,10 @@ export async function GET(request: Request) {
         results.push({ key, status: "quota" });
         continue;
       }
-      results.push({
-        key,
-        status: "error",
-        error: err instanceof Error ? err.message : String(err),
-      });
+      // Detail goes to the error reporter; the cron response only needs to
+      // know WHICH key failed, not upstream text (which can carry internals).
+      reportError(err, { scope: "discover.refresh-videos", tags: { key } });
+      results.push({ key, status: "error" });
     }
   }
 

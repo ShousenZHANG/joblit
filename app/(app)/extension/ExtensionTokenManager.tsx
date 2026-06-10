@@ -23,6 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
 interface ExtensionToken {
@@ -87,6 +88,7 @@ function formatExpiryDate(dateStr: string): { text: string; urgent: boolean } {
 export function ExtensionTokenManager() {
   const [tokens, setTokens] = useState<ExtensionToken[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [newToken, setNewToken] = useState<NewTokenResult | null>(null);
   const [creating, setCreating] = useState(false);
   const [tokenName, setTokenName] = useState("");
@@ -100,10 +102,16 @@ export function ExtensionTokenManager() {
   const { toast } = useToast();
 
   const fetchTokens = useCallback(async () => {
+    setLoadError(false);
     try {
       const res = await fetch("/api/ext/auth/token");
+      if (!res.ok) throw new Error(`status=${res.status}`);
       const json = await res.json();
       if (json.data) setTokens(json.data);
+    } catch {
+      // Without this the failure renders as "No active tokens" — an honest
+      // error + retry beats a misleading empty state.
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -301,6 +309,27 @@ export function ExtensionTokenManager() {
 
         {loading ? (
           <TokenSkeleton />
+        ) : loadError ? (
+          <div className="ext-empty-state">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-destructive/10">
+              <Key className="h-5 w-5 text-destructive/70" />
+            </div>
+            <p className="text-sm font-medium text-foreground">Couldn&apos;t load tokens</p>
+            <p className="text-xs text-muted-foreground/70">
+              Check your connection and try again.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-1"
+              onClick={() => {
+                setLoading(true);
+                void fetchTokens();
+              }}
+            >
+              Retry
+            </Button>
+          </div>
         ) : tokens.length === 0 ? (
           <div className="ext-empty-state">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted">

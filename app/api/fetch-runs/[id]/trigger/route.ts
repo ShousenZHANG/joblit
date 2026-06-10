@@ -283,8 +283,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   if (!ghRes.ok) {
     const text = await ghRes.text().catch(() => "");
-    // Log upstream detail server-side only — never forward to client.
-    console.error("[trigger] GitHub dispatch failed", { status: ghRes.status, runId, body: text });
+    // Upstream detail goes to the error reporter (structured, server-side
+    // only) — never forwarded to the client.
+    reportError(new Error("GitHub dispatch failed"), {
+      scope: "fetch-runs.trigger",
+      userId,
+      tags: { status: ghRes.status, runId },
+      extra: { body: text.slice(0, 500) },
+    });
     // Best-effort unlock so the user can retry.
     await prisma.fetchRun.updateMany({
       where: { id: runId, userId, status: "QUEUED" },

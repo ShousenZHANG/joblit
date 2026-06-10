@@ -10,7 +10,7 @@ Job-search command center: fetch → triage → tailor CV/CL → export PDFs.
 ## When to Use
 
 - You are in the `ShousenZHANG/joblit` repo, or the user mentions Joblit/joblit.
-- The task involves job intake (JobSpy/LinkedIn, Seek manual add, CN platforms), prompt rules/skill pack, CV/CL generation, batch workflows, or PDF export.
+- The task involves job intake (JobSpy/LinkedIn, Seek fetch, CN platforms), prompt rules/skill pack, CV/CL generation, batch workflows, or PDF export.
 
 ## When NOT to Use
 

@@ -9,6 +9,7 @@ import type {
   VideosResponse,
 } from "@/app/(app)/discover/types";
 import { fetchVideosFromYouTube } from "@/lib/server/discover/videoPipeline";
+import { reportError } from "@/lib/server/observability/errorReporter";
 import {
   buildCacheKey,
   isFresh,
@@ -165,8 +166,9 @@ export async function GET(request: Request) {
         );
       }
     }
-    const message =
-      err instanceof Error ? err.message : "Failed to fetch videos";
-    return NextResponse.json({ error: message }, { status: 502 });
+    // Upstream (YouTube/network) error text stays server-side — it can carry
+    // internal URLs or key fragments. The client gets a stable code.
+    reportError(err, { scope: "discover.videos" });
+    return NextResponse.json({ error: "VIDEOS_UNAVAILABLE" }, { status: 502 });
   }
 }

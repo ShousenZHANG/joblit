@@ -44,8 +44,13 @@ export const defaultLinks: ResumeLink[] = [
   { label: "Portfolio", url: "" },
 ];
 
-export const SECTION_IDS = ["personal", "summary", "experience", "projects", "education", "skills"] as const;
-export type SectionId = typeof SECTION_IDS[number];
+export type SectionId =
+  | "personal"
+  | "summary"
+  | "experience"
+  | "projects"
+  | "education"
+  | "skills";
 
 /** EN: Personal → Summary → Experience → Projects → Education → Skills */
 const SECTION_IDS_EN: readonly SectionId[] = ["personal", "summary", "experience", "projects", "education", "skills"];

@@ -1,7 +1,7 @@
 import type { InfiniteData, QueryClient, QueryKey } from "@tanstack/react-query";
 import type { JobItem, JobsResponse, JobStatus } from "../types";
 
-export const JOBS_QUERY_KEY = ["jobs"] as const;
+const JOBS_QUERY_KEY = ["jobs"] as const;
 
 // One infinite query per filter (queryString). Pages are nested under
 // `data.pages`; `data.pageParams[0]` is always `null` (the first page is
@@ -16,7 +16,7 @@ export function getJobDetailsQueryKey(jobId: string | null) {
   return ["job-details", jobId] as const;
 }
 
-export function readJobsQueryStatusFilter(queryKey: QueryKey): JobStatus | "ALL" {
+function readJobsQueryStatusFilter(queryKey: QueryKey): JobStatus | "ALL" {
   const serializedQuery = typeof queryKey[1] === "string" ? queryKey[1] : "";
   const statusParam = new URLSearchParams(serializedQuery).get("status");
   if (statusParam === "NEW" || statusParam === "APPLIED" || statusParam === "REJECTED") {

@@ -12,7 +12,7 @@ Quick index of the most commonly used locations.
 
 ## API routes
 
-- `GET/POST /api/jobs` — list jobs; manual add job (POST) in AU
+- `GET /api/jobs` — list jobs
 - `GET/PATCH/DELETE /api/jobs/[id]` — job detail, status update, delete
 - `POST /api/fetch-runs` — create FetchRun
 - `POST /api/fetch-runs/[id]/trigger` — dispatch GitHub Actions workflow

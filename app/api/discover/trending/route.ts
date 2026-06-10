@@ -7,6 +7,7 @@ import {
   filterTrendingNoise,
   type TrendingPeriod,
 } from "@/lib/server/discover/githubTrending";
+import { reportError } from "@/lib/server/observability/errorReporter";
 
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
@@ -59,8 +60,8 @@ export async function GET(request: Request) {
     if (fallback) {
       return NextResponse.json({ ...fallback, stale: true });
     }
-    const message =
-      err instanceof Error ? err.message : "Failed to fetch trending repos";
-    return NextResponse.json({ error: message }, { status: 502 });
+    // Upstream error text stays server-side; the client gets a stable code.
+    reportError(err, { scope: "discover.trending" });
+    return NextResponse.json({ error: "TRENDING_UNAVAILABLE" }, { status: 502 });
   }
 }

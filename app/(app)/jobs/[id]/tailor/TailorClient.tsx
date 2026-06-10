@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, RotateCcw } from "lucide-react";
+import { ArrowLeft, ArrowRight, RotateCcw, X } from "lucide-react";
 import { fetchJson, ApiError } from "@/lib/api/fetchJson";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
 import { cn } from "@/lib/utils";
@@ -246,9 +246,19 @@ export function TailorClient({
       {actionError ? (
         <div
           role="alert"
-          className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive"
+          className="flex items-start justify-between gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive"
         >
-          {actionError}
+          <span className="min-w-0">{actionError}</span>
+          {/* Dismiss — otherwise a stale error hangs over the editor for the
+              rest of the session. */}
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            aria-label="Dismiss error"
+            className="shrink-0 rounded-md p-0.5 transition-colors hover:bg-destructive/15"
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </button>
         </div>
       ) : null}
 

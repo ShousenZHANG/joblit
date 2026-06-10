@@ -26,15 +26,6 @@ export const fadeIn: Variants = {
   },
 };
 
-export const scaleIn: Variants = {
-  hidden: { opacity: 0, scale: 0.98 },
-  show: {
-    opacity: 1,
-    scale: 1,
-    transition: { duration: 0.36, ease: SPRING_EASE },
-  },
-};
-
 export const stagger: Variants = {
   hidden: {},
   show: {

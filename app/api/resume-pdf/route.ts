@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession, UnauthorizedError } from "@/lib/server/auth/requireSession";
 import type { SessionContext } from "@/lib/server/auth/requireSession";
 import { unauthorizedError } from "@/lib/server/api/errorResponse";
+import { checkRateLimit, rateLimitHeaders } from "@/lib/server/api/rateLimit";
 import { getResumeProfile } from "@/lib/server/resumeProfile";
 import { renderResumeTex } from "@/lib/server/latex/renderResume";
 import { renderResumeCNTex } from "@/lib/server/latex/renderResumeCN";
@@ -27,6 +28,19 @@ export async function POST(req: Request) {
     throw err;
   }
   const { userId, requestId } = ctx;
+
+  // LaTeX compilation is the most expensive request this app serves — cap it
+  // per user so one runaway client can't monopolise the render service.
+  const rl = checkRateLimit(`resume-pdf:${userId}`, { limit: 10, windowSeconds: 60 });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      {
+        error: { code: "RATE_LIMITED", message: "Too many PDF renders — try again shortly." },
+        requestId,
+      },
+      { status: 429, headers: rateLimitHeaders(rl) },
+    );
+  }
 
   const json = await req.json().catch(() => null);
   let sourceProfile: unknown = null;
