@@ -1035,6 +1035,23 @@ def main():
         df = keep_columns(df)
         # Clean before description exclusion for more consistent matching
         df = clean_description(df)
+        # Phase2 JD backfill — JobSpy's linkedin_fetch_description hits the
+        # logged-out job page per row and LinkedIn increasingly answers it with
+        # 429/999/login-walls, which JobSpy reports as a SILENT empty
+        # description. This backfill re-fetches only the empty rows through the
+        # jobs-guest API (a different endpoint with its own rate budget) and
+        # must run BEFORE the description filters below: an empty JD would
+        # otherwise sail past every rights/experience rule unchecked, and the
+        # imported job renders "No description available" in the detail panel.
+        empty_before = int((df["description"].astype(str).str.strip() == "").sum())
+        if empty_before > 0:
+            df = _enrich_descriptions_for_urls(df, proxy_pool=proxy_pool)
+            df = clean_description(df)  # normalize backfilled HTML; idempotent
+            empty_after = int((df["description"].astype(str).str.strip() == "").sum())
+            logger.info(
+                "Description coverage: rows=%s empty_before=%s empty_after=%s",
+                len(df), empty_before, empty_after,
+            )
         if filter_desc:
             # v2 matcher — layered regex + weighted scoring with audit trail.
             # Import errors surface loudly; a silent fallback to the retired
