@@ -225,7 +225,17 @@ def retry_after_seconds(headers: Any) -> Optional[float]:
 def parse_search_payload(payload: Any) -> Dict[str, Any]:
     if not isinstance(payload, dict):
         return {"total_count": 0, "jobs": []}
-    jobs = payload.get("data")
+    # Seek v5 returns the listing array under "data". Tolerate a key rename
+    # (their API has shifted shape before) by falling back to known alternates —
+    # otherwise a single upstream rename turns EVERY run into a silent zero with
+    # no error, which is exactly the "always returns 0 jobs" failure mode. The
+    # caller logs when totalCount > 0 but no rows parsed, surfacing the drift.
+    jobs: Any = None
+    for key in ("data", "results", "jobs", "items"):
+        candidate = payload.get(key)
+        if isinstance(candidate, list):
+            jobs = candidate
+            break
     return {
         "total_count": int(payload.get("totalCount") or 0),
         "jobs": jobs if isinstance(jobs, list) else [],
@@ -559,6 +569,15 @@ class SeekFetcher:
                 break
             jobs = parsed["jobs"]
             if not jobs:
+                # totalCount > 0 but nothing parsed = the response carried
+                # listings under a key we don't recognise (Seek changed shape).
+                # Distinct from a genuine empty page (totalCount 0).
+                if parsed["total_count"] > 0:
+                    logger.warning(
+                        "Seek page=%s query=%r reported totalCount=%s but 0 parsable "
+                        "rows — search-payload shape likely changed.",
+                        page, keywords, parsed["total_count"],
+                    )
                 break  # past the result ceiling for this query
             collected.extend(jobs)
             logger.info(
@@ -575,9 +594,16 @@ def collect_jobs(
     queries: List[Dict[str, Any]],
     *,
     max_total: int = MAX_TOTAL_ROWS,
+    stats_out: Optional[Dict[str, int]] = None,
 ) -> List[Dict[str, str]]:
     """Stream each query through map + dedupe (bounded memory, immutable rows).
     A challenge stops further queries but keeps everything collected so far.
+
+    When `stats_out` is given it is populated with the run funnel
+    (queries/raw/mapped/challenges) so the caller can tell a genuine empty
+    result (raw=0, challenges=0) apart from an anti-bot block (challenges>0,
+    raw=0) — the difference between "no new jobs" and "Seek blocked us", which
+    must NOT both surface as a silent empty success.
 
     Note: full job descriptions are intentionally NOT fetched here — bulk runs
     keep only the teaser to stay light against Seek's anti-bot. The full JD is
@@ -611,6 +637,8 @@ def collect_jobs(
             break
 
     logger.info("Seek summary: %s", stats)
+    if stats_out is not None:
+        stats_out.update(stats)
     return items
 
 
@@ -742,7 +770,39 @@ def run_from_config(run_id: str) -> int:
         # Bulk runs do NOT fetch full descriptions (the teaser is enough here);
         # the full JD is fetched on-demand at tailoring time. This keeps the bulk
         # run light against Seek's anti-bot.
-        items = collect_jobs(SeekFetcher(), build_queries_from_config(run))
+        fetch_stats: Dict[str, int] = {}
+        items = collect_jobs(
+            SeekFetcher(), build_queries_from_config(run), stats_out=fetch_stats
+        )
+        # Honest status: an anti-bot challenge (Cloudflare interstitial on the
+        # warm-up, or a persistent 403 on the search endpoint — both common from
+        # a datacenter/CI IP) that blocked us BEFORE a single row arrived is NOT
+        # an empty success. Reporting it as SUCCEEDED imported=0 is exactly why
+        # this read as "Seek always finds nothing" with no explanation. Surface
+        # it as FAILED with a challenge marker so the UI's existing
+        # rate-limit/challenge message fires instead of a silent zero. A genuine
+        # empty result (challenges=0, raw=0) stays a clean SUCCEEDED-0, and a
+        # challenge that hit only after some rows were collected keeps the
+        # partial harvest below.
+        if fetch_stats.get("raw", 0) == 0 and fetch_stats.get("challenges", 0) > 0:
+            update_run(
+                base, run_id, fetch_headers,
+                {
+                    "status": "FAILED",
+                    "importedCount": 0,
+                    "error": (
+                        "seek_challenge: Seek's anti-bot blocked automated access "
+                        "(status=403 / Cloudflare challenge) before any results. "
+                        "Try again later, or use LinkedIn."
+                    ),
+                },
+            )
+            logger.warning(
+                "Seek run BLOCKED by anti-bot challenge (raw=0, challenges=%s); "
+                "reported FAILED. elapsed=%.1fs",
+                fetch_stats.get("challenges", 0), time.monotonic() - started,
+            )
+            return 1
         # Relevance: Seek keyword search is broad, so drop titles that do not
         # match the search domain (e.g. "Elixir Developer" for an "AI Engineer"
         # query) before any other filtering.

@@ -324,6 +324,60 @@ def test_run_from_config_reports_partial_import_count(monkeypatch):
     assert any(u.get("status") == "FAILED" and u.get("importedCount") == 50 for u in updates)
 
 
+def test_run_from_config_reports_blocked_when_challenge_and_no_rows(monkeypatch):
+    # Anti-bot challenge before any row arrived must surface as FAILED with a
+    # challenge marker (so the UI shows "blocked / rate-limited"), NOT a silent
+    # SUCCEEDED imported=0 that reads as "Seek finds nothing".
+    monkeypatch.setenv("JOBLIT_WEB_URL", "https://w")
+    monkeypatch.setenv("FETCH_RUN_SECRET", "s")
+    monkeypatch.setattr(rs, "fetch_run_config", lambda *a, **k: {"userEmail": "e@x", "queries": {"queries": ["ai"]}})
+    updates = []
+    monkeypatch.setattr(rs, "update_run", lambda base, rid, h, payload: updates.append(payload))
+
+    def blocked(fetcher, queries, *, stats_out=None, **k):
+        if stats_out is not None:
+            stats_out.update({"queries": 1, "raw": 0, "mapped": 0, "challenges": 1})
+        return []
+
+    monkeypatch.setattr(rs, "collect_jobs", blocked)
+    assert rs.run_from_config("rid") == 1
+    assert any(
+        u.get("status") == "FAILED" and "challenge" in (u.get("error") or "")
+        for u in updates
+    )
+
+
+def test_run_from_config_genuine_empty_stays_succeeded(monkeypatch):
+    # No challenge + zero rows = a real "no new jobs" result. Must stay a clean
+    # SUCCEEDED imported=0, never the blocked/FAILED path.
+    monkeypatch.setenv("JOBLIT_WEB_URL", "https://w")
+    monkeypatch.setenv("FETCH_RUN_SECRET", "s")
+    monkeypatch.setattr(rs, "fetch_run_config", lambda *a, **k: {"userEmail": "e@x", "queries": {"queries": ["ai"]}})
+    updates = []
+    monkeypatch.setattr(rs, "update_run", lambda base, rid, h, payload: updates.append(payload))
+
+    def empty(fetcher, queries, *, stats_out=None, **k):
+        if stats_out is not None:
+            stats_out.update({"queries": 1, "raw": 0, "mapped": 0, "challenges": 0})
+        return []
+
+    monkeypatch.setattr(rs, "collect_jobs", empty)
+    assert rs.run_from_config("rid") == 0
+    assert any(u.get("status") == "SUCCEEDED" and u.get("importedCount") == 0 for u in updates)
+    assert not any(u.get("status") == "FAILED" for u in updates)
+
+
+def test_parse_search_payload_tolerates_list_key_rename():
+    # A Seek payload-shape drift (listings under a renamed key) must still parse,
+    # otherwise every run silently returns zero.
+    assert rs.parse_search_payload({"totalCount": 2, "results": [{"id": "1"}, {"id": "2"}]})["jobs"] == [
+        {"id": "1"},
+        {"id": "2"},
+    ]
+    assert rs.parse_search_payload({"totalCount": 1, "data": [{"id": "9"}]})["jobs"] == [{"id": "9"}]
+    assert rs.parse_search_payload({"totalCount": 5})["jobs"] == []
+
+
 # ── Network layer: warm-up / clock ─────────────────────────────────────────
 def test_warm_up_success_sets_timestamp(fast):
     sess = FakeSession([FakeResp(200, text="<html>jobs</html>", ct="text/html")])
