@@ -44,6 +44,12 @@
       "css": [],
       "run_at": "document_idle",
       "all_frames": true
+    },
+    {
+      "matches": ["https://au.seek.com/*"],
+      "js": ["src/content/seek/seekInterceptMain.ts"],
+      "run_at": "document_start",
+      "world": "MAIN"
     }
   ],
   "commands": {

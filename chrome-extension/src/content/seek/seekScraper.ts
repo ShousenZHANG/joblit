@@ -1,27 +1,21 @@
-// Seek import button — injected on au.seek.com search pages. On click it issues
-// the JobSearchV6 graphql query FROM THE USER'S OWN BROWSER (credentials:
-// "include" → their session cookie, their residential IP, a real browser
-// fingerprint), which is what clears Cloudflare where the server-side worker
-// can't (ADR-0003). Mapped rows go to the background worker → /api/ext/jobs/import.
+// Seek import button — injected on au.seek.com search pages. It does NOT replay
+// the JobSearchV6 query (Seek's gateway rejects that as UNSTABLE_QUERY_ERROR).
+// Instead the MAIN-world interceptor (seekInterceptMain) captures the rows the
+// Seek frontend itself loads as the user browses, and posts them here; this
+// button imports the captured rows to Joblit via the background worker →
+// /api/ext/jobs/import. Credentials never leave the browser.
 
 import { sendMessage } from "@ext/shared/messaging";
 import type { SeekImportItem } from "@ext/shared/types";
-import {
-  JOB_SEARCH_V6_QUERY,
-  SEEK_GRAPHQL_URL,
-  buildSeekVariables,
-  extractSeekKeywords,
-  isSeekSearchUrl,
-  mapSeekJob,
-  parseJobSearchV6,
-} from "./seekClient";
+import { isSeekSearchUrl, mapSeekJob } from "./seekClient";
 
 const BTN_ID = "joblit-seek-import-btn";
-const MAX_PAGES = 5; // Seek caps a search at ~5 pages × 100.
-const PAGE_SIZE = 100;
 const IMPORT_CHUNK = 200; // matches the endpoint's per-call cap.
 
-const IDLE_LABEL = "Import to Joblit";
+// Rows captured from the page's own JobSearchV6 responses, deduped by URL.
+// Cleared after a successful import.
+const captured = new Map<string, SeekImportItem>();
+let busy = false;
 
 function styleButton(btn: HTMLButtonElement) {
   Object.assign(btn.style, {
@@ -40,57 +34,49 @@ function styleButton(btn: HTMLButtonElement) {
     fontFamily: "system-ui, sans-serif",
     boxShadow: "0 10px 30px -10px rgba(5,150,105,0.6)",
     cursor: "pointer",
-    transition: "transform 0.15s ease, background 0.15s ease",
+    transition: "background 0.15s ease, opacity 0.15s ease",
   } satisfies Partial<CSSStyleDeclaration>);
 }
 
-function setLabel(btn: HTMLButtonElement, text: string, busy: boolean) {
+function setLabel(btn: HTMLButtonElement, text: string, isBusy: boolean) {
   btn.textContent = text;
-  btn.disabled = busy;
-  btn.style.opacity = busy ? "0.75" : "1";
-  btn.style.cursor = busy ? "default" : "pointer";
+  btn.disabled = isBusy;
+  btn.style.opacity = isBusy ? "0.75" : "1";
+  btn.style.cursor = isBusy ? "default" : "pointer";
 }
 
-async function fetchSeekPage(keywords: string, page: number): Promise<unknown[]> {
-  const res = await fetch(SEEK_GRAPHQL_URL, {
-    method: "POST",
-    credentials: "include", // the user's own Seek session cookie
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({
-      operationName: "JobSearchV6",
-      query: JOB_SEARCH_V6_QUERY,
-      variables: buildSeekVariables(keywords, page, PAGE_SIZE),
-    }),
-  });
-  if (!res.ok) throw new Error(`Seek responded ${res.status}`);
-  return parseJobSearchV6(await res.json()).jobs;
+function idleLabel(): string {
+  return captured.size > 0
+    ? `Import ${captured.size} to Joblit`
+    : "Joblit: scroll Seek to capture";
 }
 
-async function scrapeAndImport(btn: HTMLButtonElement) {
-  const keywords = extractSeekKeywords(location.href);
-  setLabel(btn, "Collecting…", true);
+function refresh() {
+  const btn = document.getElementById(BTN_ID) as HTMLButtonElement | null;
+  if (btn && !busy) setLabel(btn, idleLabel(), false);
+}
+
+function onPageMessage(e: MessageEvent) {
+  if (e.source !== window) return;
+  const d = e.data as { __joblitSeek?: boolean; jobs?: unknown[] } | null;
+  if (!d || d.__joblitSeek !== true || !Array.isArray(d.jobs)) return;
+  let added = 0;
+  for (const raw of d.jobs) {
+    const item = mapSeekJob(raw);
+    if (item && !captured.has(item.jobUrl)) {
+      captured.set(item.jobUrl, item);
+      added += 1;
+    }
+  }
+  if (added) refresh();
+}
+
+async function importCaptured(btn: HTMLButtonElement) {
+  if (busy || captured.size === 0) return;
+  busy = true;
+  const items = [...captured.values()];
+  setLabel(btn, `Importing ${items.length}…`, true);
   try {
-    const seen = new Set<string>();
-    const items: SeekImportItem[] = [];
-    for (let page = 1; page <= MAX_PAGES; page += 1) {
-      const rows = await fetchSeekPage(keywords, page);
-      if (rows.length === 0) break;
-      for (const row of rows) {
-        const item = mapSeekJob(row);
-        if (item && !seen.has(item.jobUrl)) {
-          seen.add(item.jobUrl);
-          items.push(item);
-        }
-      }
-      if (rows.length < PAGE_SIZE) break; // last page
-    }
-
-    if (items.length === 0) {
-      setLabel(btn, "No jobs found", false);
-      return;
-    }
-
-    setLabel(btn, `Importing ${items.length}…`, true);
     let imported = 0;
     for (let i = 0; i < items.length; i += IMPORT_CHUNK) {
       const chunk = items.slice(i, i + IMPORT_CHUNK);
@@ -101,14 +87,14 @@ async function scrapeAndImport(btn: HTMLButtonElement) {
       if (!resp.success) throw new Error(resp.error || "Import failed");
       imported += resp.data?.imported ?? 0;
     }
+    captured.clear();
     setLabel(btn, `Imported ${imported} ✓`, false);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Import failed";
-    // A 403 here would be surprising (this is the user's real browser) but
-    // surface it honestly rather than silently doing nothing.
-    setLabel(btn, /403|challenge/i.test(msg) ? "Seek blocked — refresh & retry" : "Import failed", false);
+    setLabel(btn, /not authenticated|401/i.test(msg) ? "Connect Joblit first" : "Import failed", false);
   } finally {
-    setTimeout(() => setLabel(btn, IDLE_LABEL, false), 4000);
+    busy = false;
+    setTimeout(refresh, 4000);
   }
 }
 
@@ -117,10 +103,8 @@ function mountButton() {
   const btn = document.createElement("button");
   btn.id = BTN_ID;
   styleButton(btn);
-  setLabel(btn, IDLE_LABEL, false);
-  btn.addEventListener("click", () => {
-    if (!btn.disabled) void scrapeAndImport(btn);
-  });
+  setLabel(btn, idleLabel(), false);
+  btn.addEventListener("click", () => void importCaptured(btn));
   document.body.appendChild(btn);
 }
 
@@ -128,10 +112,14 @@ function removeButton() {
   document.getElementById(BTN_ID)?.remove();
 }
 
-/** Show the import button on Seek search pages, tracking SPA navigation. */
+/** Listen for captured rows and show the import button on Seek search pages. */
 export function initSeekScraper() {
   if (window !== window.top) return; // top frame only
   if (location.hostname.toLowerCase() !== "au.seek.com") return;
+
+  // Rows arrive from the MAIN-world interceptor (seekInterceptMain) as the user
+  // browses; accumulate them even before the button mounts.
+  window.addEventListener("message", onPageMessage);
 
   const ensure = () => {
     if (isSeekSearchUrl(location.href)) mountButton();
@@ -139,9 +127,7 @@ export function initSeekScraper() {
   };
   ensure();
 
-  // Seek is a SPA — the URL changes without a full navigation. Poll for it
-  // (cheap, 1s) so the button appears/disappears as the user moves between the
-  // search results and a job detail page.
+  // Seek is a SPA — poll for URL changes so the button follows search <-> detail.
   let last = location.href;
   setInterval(() => {
     if (location.href !== last) {
