@@ -158,6 +158,17 @@ export async function markJobApplied(jobId: string) {
   return (await res.json()).data;
 }
 
+/** Import Seek jobs scraped from the user's own logged-in browser session
+ *  (see ADR-0003). The endpoint applies tombstone + dedupe server-side. */
+export async function importSeekJobs(items: unknown[]) {
+  const res = await apiFetch("/api/ext/jobs/import", {
+    method: "POST",
+    body: JSON.stringify({ items }),
+  });
+  if (!res.ok) throw new Error(`Seek import failed: ${res.status}`);
+  return (await res.json()).data as { imported: number; invalid: number };
+}
+
 /** Create or update a field mapping rule. */
 export async function putFieldMapping(data: Record<string, unknown>) {
   const res = await apiFetch("/api/ext/field-mappings", {

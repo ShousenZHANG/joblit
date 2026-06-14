@@ -1,6 +1,6 @@
 import type { MessageType, MessageResponse } from "@ext/shared/types";
 import { setToken, clearToken, getAuthStatus } from "./auth";
-import { fetchProfile, fetchFlatProfile, postSubmission, fetchSubmissions, fetchFieldMappings, putFieldMapping, matchJob, markJobApplied } from "./api";
+import { fetchProfile, fetchFlatProfile, postSubmission, fetchSubmissions, fetchFieldMappings, putFieldMapping, matchJob, markJobApplied, importSeekJobs } from "./api";
 import { enqueue } from "./syncQueue";
 import { processQueue } from "./syncProcessor";
 
@@ -90,6 +90,11 @@ async function handleMessage(message: MessageType): Promise<MessageResponse> {
 
     case "MARK_JOB_APPLIED": {
       const result = await markJobApplied(message.jobId);
+      return { success: true, data: result };
+    }
+
+    case "IMPORT_SEEK_JOBS": {
+      const result = await importSeekJobs(message.data.items);
       return { success: true, data: result };
     }
 

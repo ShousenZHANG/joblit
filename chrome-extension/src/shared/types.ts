@@ -33,6 +33,20 @@ export interface FormDetectionResult {
 }
 
 /** Message types for chrome.runtime messaging. */
+/** A Seek job row mapped for /api/ext/jobs/import (web camelCase field names). */
+export interface SeekImportItem {
+  jobUrl: string;
+  title: string;
+  company?: string | null;
+  location?: string | null;
+  jobType?: string | null;
+  description?: string | null;
+  salary?: string | null;
+  workArrangement?: string | null;
+  listingDate?: string | null;
+  site?: string;
+}
+
 export type MessageType =
   | { type: "GET_PROFILE"; locale?: string }
   | { type: "GET_FLAT_PROFILE"; locale?: string; force?: boolean }
@@ -43,6 +57,7 @@ export type MessageType =
   | { type: "PUT_FIELD_MAPPING"; data: Record<string, unknown> }
   | { type: "MATCH_JOB"; url: string }
   | { type: "MARK_JOB_APPLIED"; jobId: string }
+  | { type: "IMPORT_SEEK_JOBS"; data: { items: SeekImportItem[] } }
   | { type: "GET_AUTH_STATUS" }
   | { type: "SET_TOKEN"; token: string }
   | { type: "CLEAR_TOKEN" };

@@ -9,6 +9,7 @@ import { generateFormSignature, matchFieldsFromHistory } from "./detector/simila
 import type { SubmissionRecord, MappingRule } from "./detector/similarity";
 import type { DetectedField, FormDetectionResult } from "@ext/shared/types";
 import { STORAGE_KEYS } from "@ext/shared/constants";
+import { initSeekScraper } from "./seek/seekScraper";
 
 let widget: FloatingWidget | null = null;
 let currentDetection: FormDetectionResult | null = null;
@@ -397,3 +398,5 @@ async function performFill() {
 
 // Run
 init();
+// Seek import button (au.seek.com search pages only — no-ops elsewhere).
+initSeekScraper();
