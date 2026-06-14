@@ -45,7 +45,12 @@ logger = logging.getLogger("seek_runner")
 SEEK_HOST = "au.seek.com"
 SEEK_ORIGIN = f"https://{SEEK_HOST}"
 SEEK_WARMUP_URL = f"{SEEK_ORIGIN}/jobs"
-SEEK_SEARCH_URL = f"{SEEK_ORIGIN}/api/jobsearch/v5/search"
+SEEK_SEARCH_URL = f"{SEEK_ORIGIN}/api/jobsearch/v5/search"  # legacy v5 (Cloudflare-walled)
+# Current Seek search stack: the consumer graphql BFF (same endpoint the
+# on-demand JD fetch uses). A JSON API POST, NOT the /jobs HTML page — so it
+# sidesteps the Cloudflare JS-challenge that walls the warm-up + v5 REST path
+# from a datacenter IP. operationName JobSearchV6, input JobSearchV6QueryInput.
+SEEK_GRAPHQL_URL = f"{SEEK_ORIGIN}/graphql"
 SEEK_JOB_URL_TEMPLATE = f"{SEEK_ORIGIN}/job/{{job_id}}"
 
 # ── Search params ──────────────────────────────────────────────────────────
@@ -242,6 +247,69 @@ def parse_search_payload(payload: Any) -> Dict[str, Any]:
     }
 
 
+# ── graphql JobSearchV6 (current Seek search stack) ────────────────────────
+#
+# A trimmed selection of the real browser query — we request only the fields
+# map_job consumes (graphql lets a client under-select). One request per page,
+# no warm-up. `params` carries only fields confirmed from a live capture
+# (keywords / siteKey / page / pageSize / locale / source / channel / include):
+# we deliberately do NOT guess unverified input fields (where / classification
+# / workType) — those are applied client-side from the returned rows instead,
+# so we never fabricate an API contract.
+JOB_SEARCH_V6_QUERY = (
+    "query JobSearchV6($params: JobSearchV6QueryInput!) {"
+    " jobSearchV6(params: $params) {"
+    " data { id title teaser companyName salaryLabel workTypes"
+    " advertiser { description } bulletPoints"
+    " listingDate { dateTimeUtc } locations { label }"
+    " workArrangements { displayText } }"
+    " totalCount } }"
+)
+
+GRAPHQL_PAGE_SIZE = 100  # Seek serves up to 100/page on the BFF too.
+
+
+def build_graphql_variables(
+    *, keywords: str = "", page: int = 1, page_size: int = GRAPHQL_PAGE_SIZE
+) -> Dict[str, Any]:
+    """Build JobSearchV6 variables from only live-captured input fields."""
+    params: Dict[str, Any] = {
+        "channel": "web",
+        "include": ["seoData", "gptTargeting", "relatedSearches"],
+        "locale": "en-AU",
+        "page": page,
+        "pageSize": page_size,
+        "siteKey": "AU",
+        "source": "FE_SERP",
+    }
+    if keywords.strip():
+        params["keywords"] = keywords.strip()
+    return {"params": params}
+
+
+def parse_graphql_payload(payload: Any) -> Dict[str, Any]:
+    """Pull the listings array + totalCount out of a JobSearchV6 response.
+    Tolerant: any shape drift collapses to an empty page, surfaced by the
+    caller's totalCount>0-but-no-rows warning."""
+    if not isinstance(payload, dict):
+        return {"total_count": 0, "jobs": []}
+    if isinstance(payload.get("errors"), list) and payload["errors"]:
+        # graphql transport-200 with an errors[] body — treat as no rows; the
+        # caller logs it. (e.g. an input field Seek no longer accepts.)
+        first = payload["errors"][0]
+        msg = first.get("message") if isinstance(first, dict) else str(first)
+        return {"total_count": 0, "jobs": [], "error": str(msg or "graphql error")}
+    root = payload.get("data")
+    root = root.get("jobSearchV6") if isinstance(root, dict) else None
+    if not isinstance(root, dict):
+        return {"total_count": 0, "jobs": []}
+    jobs = root.get("data")
+    return {
+        "total_count": int(root.get("totalCount") or 0),
+        "jobs": jobs if isinstance(jobs, list) else [],
+    }
+
+
 def _first_company(raw: Dict[str, Any]) -> str:
     name = raw.get("companyName")
     if isinstance(name, str) and name.strip():
@@ -276,12 +344,26 @@ def _teaser_description(raw: Dict[str, Any]) -> str:
 def _work_arrangement(raw: Dict[str, Any]) -> str:
     wa = raw.get("workArrangements")
     if isinstance(wa, dict):
+        # graphql JobSearchV6 shape: { displayText }
+        display = wa.get("displayText")
+        if isinstance(display, str) and display.strip():
+            return _truncate(display, MAX_TEXT_FIELD)
+        # legacy v5 shape: { data: [{ label }] }
         data = wa.get("data")
         if isinstance(data, list) and data and isinstance(data[0], dict):
             label = data[0].get("label")
             if isinstance(label, str):
                 return _truncate(label, MAX_TEXT_FIELD)
     return ""
+
+
+def _listing_date(raw: Dict[str, Any]) -> str:
+    """listingDate is a string in the legacy v5 payload but { dateTimeUtc } in
+    the graphql JobSearchV6 payload — normalise both to an ISO string."""
+    ld = raw.get("listingDate")
+    if isinstance(ld, dict):
+        return str(ld.get("dateTimeUtc") or "").strip()
+    return str(ld or "").strip()
 
 
 def map_job(raw: Any) -> Optional[Dict[str, str]]:
@@ -309,7 +391,7 @@ def map_job(raw: Any) -> Optional[Dict[str, str]]:
         "description": _teaser_description(raw),
         "salary": _truncate(raw.get("salaryLabel", ""), MAX_TEXT_FIELD),
         "work_arrangement": _work_arrangement(raw),
-        "listing_date": str(raw.get("listingDate") or "").strip(),
+        "listing_date": _listing_date(raw),
     }
 
 
@@ -587,6 +669,95 @@ class SeekFetcher:
             time.sleep(REQUEST_DELAY_SEC)
         return collected
 
+    def search_graphql(self, variables: Dict[str, Any]) -> Dict[str, Any]:
+        """POST one JobSearchV6 query to the graphql BFF. No warm-up: this is a
+        JSON API POST, not the Cloudflare-JS-challenged /jobs HTML page, so it
+        sidesteps the warm-up challenge that walls the v5 path from a datacenter
+        IP. A challenge (403 / interstitial) raises SeekChallengeError; 429/5xx
+        retry with backoff."""
+        self._ensure_enabled()
+        headers = {
+            "Content-Type": "application/json",
+            "Origin": SEEK_ORIGIN,
+            "Referer": f"{SEEK_ORIGIN}/jobs",
+        }
+        body = json.dumps(
+            {"operationName": "JobSearchV6", "query": JOB_SEARCH_V6_QUERY, "variables": variables}
+        )
+        last_err: Optional[Exception] = None
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                res = self.session.post(
+                    SEEK_GRAPHQL_URL, data=body, headers=headers, timeout=REQUEST_TIMEOUT_SEC
+                )
+            except (requests.ConnectionError, requests.Timeout) as err:
+                last_err = err
+                if attempt < MAX_RETRIES:
+                    self._sleep_backoff(attempt)
+                continue
+            kind = classify_response(res.status_code, res.headers.get("content-type", ""), res.text)
+            if kind == "challenge":
+                raise SeekChallengeError(
+                    f"graphql challenge (status={res.status_code}); stopping (no bypass by design)."
+                )
+            if kind == "transient":
+                last_err = RuntimeError(f"transient status={res.status_code}")
+                if attempt < MAX_RETRIES:
+                    self._sleep_backoff(attempt, retry_after=retry_after_seconds(res.headers))
+                continue
+            if kind == "client_error":
+                raise RuntimeError(f"graphql client error status={res.status_code} (not retried).")
+            try:
+                return res.json()
+            except ValueError as err:
+                raise RuntimeError(f"graphql returned a non-JSON ok body: {err}")
+        raise RuntimeError(f"graphql request failed after retries: {last_err}")
+
+    def search_graphql_paginated(
+        self,
+        *,
+        keywords: str = "",
+        max_pages: int = SEEK_PAGE_CEILING,
+        page_size: int = GRAPHQL_PAGE_SIZE,
+        **_ignored: Any,
+    ) -> List[Dict[str, Any]]:
+        """Page one keyword query through the graphql BFF up to the Seek ceiling.
+        `**_ignored` swallows the legacy where/classification/work_type/
+        daterange_days kwargs from build_queries_from_config — those are NOT
+        sent as (unverified) graphql input fields; relevance is applied
+        downstream from the returned rows. A challenge stops the run; any other
+        page error keeps the prior pages."""
+        pages = max(1, min(int(max_pages), SEEK_PAGE_CEILING))
+        collected: List[Dict[str, Any]] = []
+        for page in range(1, pages + 1):
+            variables = build_graphql_variables(keywords=keywords, page=page, page_size=page_size)
+            try:
+                parsed = parse_graphql_payload(self.search_graphql(variables))
+            except SeekChallengeError:
+                raise
+            except Exception as err:  # noqa: BLE001 — keep partial pages on any other error
+                logger.warning(
+                    "Seek graphql page=%s failed (keeping %s prior rows): %s",
+                    page, len(collected), err,
+                )
+                break
+            jobs = parsed["jobs"]
+            if not jobs:
+                if parsed["total_count"] > 0 or parsed.get("error"):
+                    logger.warning(
+                        "Seek graphql page=%s query=%r: 0 rows (totalCount=%s error=%s) — "
+                        "payload shape may have changed.",
+                        page, keywords, parsed["total_count"], parsed.get("error"),
+                    )
+                break
+            collected.extend(jobs)
+            logger.info(
+                "Seek graphql page=%s query=%r -> %s rows (totalCount=%s)",
+                page, keywords, len(jobs), parsed["total_count"],
+            )
+            time.sleep(REQUEST_DELAY_SEC)
+        return collected
+
 
 # ── Orchestration ──────────────────────────────────────────────────────────
 def collect_jobs(
@@ -614,7 +785,7 @@ def collect_jobs(
     for query in queries:
         stats["queries"] += 1
         try:
-            rows = fetcher.search_paginated(**query)
+            rows = fetcher.search_graphql_paginated(**query)
         except SeekChallengeError as err:
             stats["challenges"] += 1
             logger.warning("Seek query stopped on challenge (kept %s rows): %s", len(items), err)

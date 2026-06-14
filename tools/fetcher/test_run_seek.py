@@ -58,6 +58,13 @@ class FakeSession:
             raise item
         return item
 
+    def post(self, url, data=None, headers=None, timeout=None, **kw):
+        self.calls.append((url, data))
+        item = self._responses.pop(0) if self._responses else FakeResp()
+        if isinstance(item, Exception):
+            raise item
+        return item
+
 
 @pytest.fixture
 def fast(monkeypatch):
@@ -560,7 +567,7 @@ class _Fetcher:
         self.enriched = []
         self._enrich_val = enrich_val
 
-    def search_paginated(self, **q):
+    def search_graphql_paginated(self, **q):
         item = self._per_query[self._i]
         self._i += 1
         if isinstance(item, Exception):
@@ -596,6 +603,96 @@ def test_collect_jobs_skips_failed_query_keeps_rest():
 def test_collect_jobs_respects_max_total():
     raw = [{"id": str(i), "title": "t"} for i in range(10)]
     assert len(rs.collect_jobs(_Fetcher([raw]), [{}], max_total=3)) == 3
+
+
+# ── graphql JobSearchV6 (current Seek search stack) ────────────────────────
+REAL_GQL = {
+    "id": "92319306",
+    "title": "Software engineer",
+    "teaser": "Flynt is a new ERP platform.",
+    "companyName": "Sorensen Engineering",
+    "advertiser": {"description": "Sorensen Engineering"},
+    "bulletPoints": ["Get in early", "See your work"],
+    "salaryLabel": "",
+    "workTypes": ["Contract/Temp"],
+    "listingDate": {"dateTimeUtc": "2026-05-25T08:56:36.000Z"},
+    "locations": [{"label": "Brookvale, Sydney NSW"}],
+    "workArrangements": {"displayText": "Hybrid"},
+}
+
+
+def test_build_graphql_variables_uses_only_confirmed_fields():
+    v = rs.build_graphql_variables(keywords="software engineer", page=2, page_size=50)
+    p = v["params"]
+    assert p["keywords"] == "software engineer"
+    assert p["siteKey"] == "AU"  # not the legacy "AU-Main"
+    assert p["page"] == 2 and p["pageSize"] == 50
+    assert p["source"] == "FE_SERP"
+    # No unverified filter fields are guessed into the input.
+    for guessed in ("where", "classification", "subclassification", "workType", "dateRange"):
+        assert guessed not in p
+
+
+def test_build_graphql_variables_omits_blank_keywords():
+    assert "keywords" not in rs.build_graphql_variables(keywords="  ")["params"]
+
+
+def test_parse_graphql_payload_extracts_rows_and_total():
+    payload = {"data": {"jobSearchV6": {"data": [REAL_GQL], "totalCount": 1784}}}
+    parsed = rs.parse_graphql_payload(payload)
+    assert parsed["total_count"] == 1784
+    assert parsed["jobs"] == [REAL_GQL]
+
+
+def test_parse_graphql_payload_surfaces_errors_as_empty():
+    parsed = rs.parse_graphql_payload({"errors": [{"message": "Unknown field where"}]})
+    assert parsed["jobs"] == [] and parsed["total_count"] == 0
+    assert "where" in (parsed.get("error") or "")
+
+
+def test_parse_graphql_payload_tolerates_garbage():
+    assert rs.parse_graphql_payload({})["jobs"] == []
+    assert rs.parse_graphql_payload(None)["jobs"] == []
+    assert rs.parse_graphql_payload({"data": {"jobSearchV6": None}})["jobs"] == []
+
+
+def test_map_job_handles_graphql_shape():
+    row = rs.map_job(REAL_GQL)
+    assert row is not None
+    assert row["job_url"] == "https://au.seek.com/job/92319306"
+    assert row["title"] == "Software engineer"
+    assert row["company"] == "Sorensen Engineering"
+    assert row["location"] == "Brookvale, Sydney NSW"
+    assert row["work_arrangement"] == "Hybrid"  # graphql displayText
+    assert row["listing_date"] == "2026-05-25T08:56:36.000Z"  # graphql dateTimeUtc
+    assert row["job_type"] == "Contract/Temp"
+
+
+def test_search_graphql_returns_json_when_ok(fast):
+    sess = FakeSession([FakeResp(json_data={"data": {"jobSearchV6": {"data": [REAL_GQL], "totalCount": 1}}})])
+    f = rs.SeekFetcher(session=sess, clock=Clock(0))
+    out = f.search_graphql(rs.build_graphql_variables(keywords="x"))
+    assert out["data"]["jobSearchV6"]["totalCount"] == 1
+    assert sess.calls[0][0] == rs.SEEK_GRAPHQL_URL  # hit the BFF, not /jobs or v5
+
+
+def test_search_graphql_challenge_raises(fast):
+    sess = FakeSession([FakeResp(403, text="blocked", ct="text/html")])
+    with pytest.raises(rs.SeekChallengeError):
+        rs.SeekFetcher(session=sess, clock=Clock(0)).search_graphql({"params": {}})
+
+
+def test_search_graphql_paginated_no_warmup_stops_on_empty(fast):
+    # graphql path must NOT warm up (/jobs) — it should go straight to the BFF,
+    # and stop paginating on the first empty page.
+    sess = FakeSession([
+        FakeResp(json_data={"data": {"jobSearchV6": {"data": [REAL_GQL], "totalCount": 1}}}),
+        FakeResp(json_data={"data": {"jobSearchV6": {"data": [], "totalCount": 1}}}),
+    ])
+    f = rs.SeekFetcher(session=sess, clock=Clock(0))
+    rows = f.search_graphql_paginated(keywords="software engineer", where="Sydney")
+    assert [r["id"] for r in rows] == ["92319306"]
+    assert all(c[0] == rs.SEEK_GRAPHQL_URL for c in sess.calls)  # no /jobs warm-up
 
 
 # ── Orchestration: import_items ────────────────────────────────────────────
