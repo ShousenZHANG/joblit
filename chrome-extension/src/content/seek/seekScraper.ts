@@ -77,7 +77,9 @@ async function importCaptured(btn: HTMLButtonElement) {
   const items = [...captured.values()];
   setLabel(btn, `Importing ${items.length}…`, true);
   try {
+    const sent = items.length;
     let imported = 0;
+    let invalid = 0;
     for (let i = 0; i < items.length; i += IMPORT_CHUNK) {
       const chunk = items.slice(i, i + IMPORT_CHUNK);
       const resp = await sendMessage<{ imported: number; invalid: number }>({
@@ -86,9 +88,14 @@ async function importCaptured(btn: HTMLButtonElement) {
       });
       if (!resp.success) throw new Error(resp.error || "Import failed");
       imported += resp.data?.imported ?? 0;
+      invalid += resp.data?.invalid ?? 0;
     }
     captured.clear();
-    setLabel(btn, `Imported ${imported} ✓`, false);
+    // Transparency: sent = captured rows we posted; imported = genuinely new;
+    // the rest were already in your list or previously deleted (tombstoned).
+    const known = Math.max(0, sent - imported - invalid);
+    const extra = known > 0 ? ` · ${known} already in list` : "";
+    setLabel(btn, `Imported ${imported} of ${sent}${extra} ✓`, false);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Import failed";
     setLabel(btn, /not authenticated|401/i.test(msg) ? "Connect Joblit first" : "Import failed", false);
