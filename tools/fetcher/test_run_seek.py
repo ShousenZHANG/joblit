@@ -347,7 +347,10 @@ def test_run_from_config_reports_blocked_when_challenge_and_no_rows(monkeypatch)
         return []
 
     monkeypatch.setattr(rs, "collect_jobs", blocked)
-    assert rs.run_from_config("rid") == 1
+    # Exit 0: an upstream anti-bot block is not a worker fault, so it must not
+    # red the CI run — but the DB run is still marked FAILED with a challenge
+    # marker so the app surfaces it.
+    assert rs.run_from_config("rid") == 0
     assert any(
         u.get("status") == "FAILED" and "challenge" in (u.get("error") or "")
         for u in updates

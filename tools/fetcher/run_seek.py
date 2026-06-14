@@ -973,7 +973,13 @@ def run_from_config(run_id: str) -> int:
                 "reported FAILED. elapsed=%.1fs",
                 fetch_stats.get("challenges", 0), time.monotonic() - started,
             )
-            return 1
+            # Exit 0, NOT 1: the worker did its job correctly — it reached Seek,
+            # detected the upstream anti-bot block, and reported a FAILED run to
+            # the DB (the app surfaces "rate-limited / try later"). An IP-level
+            # Cloudflare block from a datacenter runner is an expected external
+            # condition, not a worker fault, so it must not red the CI run on
+            # every manual dispatch. Genuine worker faults still return 1 below.
+            return 0
         # Relevance: Seek keyword search is broad, so drop titles that do not
         # match the search domain (e.g. "Elixir Developer" for an "AI Engineer"
         # query) before any other filtering.
