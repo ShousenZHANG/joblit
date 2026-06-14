@@ -23,7 +23,11 @@ export default async function FetchPage() {
         <div className="shrink-0 px-4 pt-3 pb-2 lg:px-6 lg:pt-6 lg:pb-4">
           <PageHeading
             title={t("searchRoles")}
-            description="Find roles across LinkedIn, Seek, and more. Smart fetch expands to related titles."
+            description={
+              seekEnabled
+                ? "Find roles across LinkedIn, Seek, and more. Smart fetch expands to related titles."
+                : "Find roles across LinkedIn and more. Smart fetch expands to related titles."
+            }
           />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">

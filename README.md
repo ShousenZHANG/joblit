@@ -301,7 +301,7 @@ A complete template lives in [`.env.example`](./.env.example).
 | Variable | Purpose |
 |---|---|
 | `ADMIN_EMAILS` | Comma-separated admin emails — unlocks `/admin/access` and bypasses the invite gate |
-| `SEEK_FETCH_ENABLED` | Kill-switch for the Seek fetch source (`1` / `true` to enable) |
+| `SEEK_FETCH_ENABLED` | Kill-switch for **server-side** Seek fetching (`1` / `true` to enable). **Off by default** — Seek is unreachable from datacenter / CI IPs (Cloudflare blocks every endpoint); the supported path is the browser extension. See [ADR-0003](docs/adr/0003-seek-fetch-via-browser-extension.md). |
 | `GEMINI_API_KEY` / `GEMINI_MODEL` | AI provider |
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob storage |
 | `GITHUB_OWNER` / `GITHUB_REPO` / `GITHUB_TOKEN` / `GITHUB_WORKFLOW_FILE` | Fetch workflow dispatch |
