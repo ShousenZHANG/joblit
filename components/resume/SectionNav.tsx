@@ -64,6 +64,7 @@ export function SectionNav({ className }: SectionNavProps) {
     locale,
     t,
     saving,
+    saveState,
     handleSave,
     hasAnyContent,
     setPreviewOpen,
@@ -91,11 +92,17 @@ export function SectionNav({ className }: SectionNavProps) {
     });
   }, [activeSection]);
 
-  const saveStatusLabel = saving
-    ? t("saving")
-    : hasAnyContent
-      ? t("toastSaved")
-      : t("toastAddDetailsFirst");
+  // Honest three-state indicator (dirty / saving / saved) — never claim
+  // "Saved" while the live draft differs from the last persisted snapshot.
+  // Empty form has nothing to save yet, so it prompts for details instead.
+  const saveStatusLabel = !hasAnyContent
+    ? t("toastAddDetailsFirst")
+    : saveState === "saving"
+      ? t("saving")
+      : saveState === "dirty"
+        ? t("unsavedChanges")
+        : t("toastSaved");
+  const isSaved = hasAnyContent && saveState === "saved";
   const saveButtonLabel = saving ? t("saving") : t("saveSelectedResume");
 
   return (
@@ -163,7 +170,8 @@ export function SectionNav({ className }: SectionNavProps) {
             )}
             {/* Status badge — sits at the corner of the Save button so its
                 meaning is always tied to the action itself. Saved state
-                shows a check, saving shows a pulsing amber dot, empty
+                shows a green check; saving OR unsaved edits show a pulsing
+                amber dot (so we never falsely claim "Saved" mid-edit); empty
                 state hides it entirely so we never display a mystery
                 indicator floating in the sidebar. */}
             {hasAnyContent ? (
@@ -171,12 +179,12 @@ export function SectionNav({ className }: SectionNavProps) {
                 aria-hidden
                 className={cn(
                   "absolute -top-1 -right-1 grid h-4 w-4 place-items-center rounded-full ring-2 ring-card",
-                  saving
-                    ? "bg-amber-500 motion-safe:animate-pulse"
-                    : "bg-emerald-500",
+                  isSaved
+                    ? "bg-emerald-500"
+                    : "bg-amber-500 motion-safe:animate-pulse",
                 )}
               >
-                {!saving ? (
+                {isSaved ? (
                   <Check className="h-2.5 w-2.5 text-white" aria-hidden />
                 ) : null}
               </span>

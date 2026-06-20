@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, ChevronDown, Copy, FileText } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -65,6 +66,8 @@ export function ExternalGenerateDialog({
   onDownloadSkillPack,
   onGenerate,
 }: ExternalGenerateDialogProps) {
+  const t = useTranslations("jobs.external");
+  const tc = useTranslations("common");
   return (
     <Dialog open={open} onOpenChange={(isOpen) => {
       if (!isOpen && dialogPhase === "generating") return;
@@ -74,13 +77,13 @@ export function ExternalGenerateDialog({
         <DialogHeader className="shrink-0 border-b border-border/60 px-5 py-4">
           <DialogTitle className="text-base">
             {externalTarget === "resume"
-              ? "Generate CV with AI"
-              : "Generate Cover Letter with AI"}
+              ? t("dialogTitleResume")
+              : t("dialogTitleCover")}
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
             {dialogPhase === "generating"
-              ? "Please wait while we generate your PDF..."
-              : "Three steps: import skill pack, copy prompt, paste AI output."}
+              ? t("dialogDescGenerating")
+              : t("dialogDesc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -113,12 +116,15 @@ export function ExternalGenerateDialog({
               <div className="rounded-lg border border-border bg-muted/40 px-4 py-3">
                 <div className="flex items-center gap-2 text-sm">
                   <FileText className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium text-foreground/85">
-                    {externalTarget === "resume" ? "Resume" : "Cover Letter"}
-                  </span>
-                  <span className="text-muted-foreground/70">for</span>
-                  <span className="font-medium text-foreground truncate">
-                    {selectedJob?.title ?? "..."} at {selectedJob?.company ?? "..."}
+                  <span className="text-foreground/85 truncate">
+                    {t.rich("docForJobAtCompany", {
+                      doc: externalTarget === "resume" ? t("docResume") : t("docCover"),
+                      job: selectedJob?.title ?? "...",
+                      company: selectedJob?.company ?? "...",
+                      strong: (chunks) => (
+                        <span className="font-medium text-foreground">{chunks}</span>
+                      ),
+                    })}
                   </span>
                 </div>
               </div>
@@ -136,17 +142,17 @@ export function ExternalGenerateDialog({
                 )}
               >
                 {externalPromptLoading ? (
-                  "Building prompt..."
+                  t("buildingPrompt")
                 ) : promptCopied ? (
-                  <><Check className="mr-2 h-4 w-4 animate-in zoom-in-50 duration-200" /> Copied!</>
+                  <><Check className="mr-2 h-4 w-4 animate-in zoom-in-50 duration-200" /> {t("copied")}</>
                 ) : (
-                  <><Copy className="mr-2 h-4 w-4" /> Copy Prompt to Clipboard</>
+                  <><Copy className="mr-2 h-4 w-4" /> {t("copyPrompt")}</>
                 )}
               </Button>
 
               {promptCopied && (
                 <p className="text-center text-sm text-brand-emerald-700">
-                  Now paste into Claude / ChatGPT / Gemini and copy the JSON result.
+                  {t("pasteHint")}
                 </p>
               )}
 
@@ -159,7 +165,9 @@ export function ExternalGenerateDialog({
                 <details className="group">
                   <summary className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground/85">
                     <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
-                    Preview prompt ({(externalSkillPackFresh ? externalShortPromptText : externalPromptText).length} chars)
+                    {t("previewPrompt", {
+                      count: (externalSkillPackFresh ? externalShortPromptText : externalPromptText).length,
+                    })}
                   </summary>
                   <pre className="mt-2 max-h-[200px] overflow-auto rounded-lg border border-border bg-muted/40 p-3 font-mono text-[11px] leading-relaxed text-muted-foreground">
                     {externalSkillPackFresh ? externalShortPromptText : externalPromptText}
@@ -198,7 +206,7 @@ export function ExternalGenerateDialog({
                   }}
                   className="h-9 rounded-xl px-3 text-sm text-muted-foreground hover:bg-muted/40 hover:text-foreground/85"
                 >
-                  Back
+                  {t("back")}
                 </Button>
               )}
             </div>
@@ -210,7 +218,7 @@ export function ExternalGenerateDialog({
                 onClick={() => onOpenChange(false)}
                 className="h-9 rounded-xl px-3 text-sm text-muted-foreground hover:bg-muted/40 hover:text-foreground/85"
               >
-                Cancel
+                {tc("cancel")}
               </Button>
               {dialogPhase === 2 && (
                 <Button
@@ -218,7 +226,7 @@ export function ExternalGenerateDialog({
                   onClick={() => { setExternalStep(3); setDialogPhase(3); }}
                   className={externalBtnPrimary}
                 >
-                  Continue
+                  {t("continue")}
                 </Button>
               )}
               {dialogPhase === 3 && (
@@ -237,7 +245,7 @@ export function ExternalGenerateDialog({
                     onGenerate(selectedJob, externalTarget, externalModelOutput)
                   }
                 >
-                  {externalTarget === "resume" ? "Generate CV PDF" : "Generate Cover PDF"}
+                  {externalTarget === "resume" ? t("generateCvPdf") : t("generateCoverPdf")}
                 </Button>
               )}
             </div>

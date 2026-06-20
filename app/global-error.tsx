@@ -2,6 +2,33 @@
 
 import { useEffect } from "react";
 
+// global-error replaces the entire document and renders OUTSIDE the
+// NextIntlClientProvider, so it cannot use useTranslations. We read the
+// `locale` cookie (same cookie i18n/request.ts uses: values "en" | "zh") and
+// pick a self-contained inline string table. These mirror the catalog
+// `errors.route.*` keys but are inlined here intentionally.
+const STRINGS = {
+  en: {
+    title: "Something went wrong",
+    message:
+      "The app hit an unexpected error. Try again — if it keeps happening, reload the page.",
+    tryAgain: "Try again",
+    backToJobs: "Back to jobs",
+  },
+  zh: {
+    title: "出错了",
+    message: "应用遇到意外错误。请重试 —— 如果仍然发生，请刷新页面。",
+    tryAgain: "重试",
+    backToJobs: "返回职位",
+  },
+} as const;
+
+function readLocale(): "en" | "zh" {
+  if (typeof document === "undefined") return "en";
+  const match = document.cookie.match(/(?:^|;\s*)locale=(en|zh)/);
+  return match?.[1] === "zh" ? "zh" : "en";
+}
+
 // Root-layout crash fallback. global-error replaces the entire document, so it
 // must render its own <html>/<body> and cannot rely on app providers or theme
 // tokens being mounted — styles are inlined and self-contained.
@@ -23,8 +50,11 @@ export default function GlobalError({
     }
   }, [error]);
 
+  const locale = readLocale();
+  const t = STRINGS[locale];
+
   return (
-    <html lang="en">
+    <html lang={locale === "zh" ? "zh-CN" : "en"}>
       <body
         style={{
           margin: 0,
@@ -52,7 +82,7 @@ export default function GlobalError({
           }}
         >
           <h1 style={{ fontSize: "1.5rem", fontWeight: 600, margin: 0 }}>
-            Something went wrong
+            {t.title}
           </h1>
           <p
             style={{
@@ -62,8 +92,7 @@ export default function GlobalError({
               color: "#64748b",
             }}
           >
-            The app hit an unexpected error. Try again — if it keeps happening,
-            reload the page.
+            {t.message}
           </p>
           <div
             style={{
@@ -88,7 +117,7 @@ export default function GlobalError({
                 cursor: "pointer",
               }}
             >
-              Try again
+              {t.tryAgain}
             </button>
             <a
               href="/jobs"
@@ -105,7 +134,7 @@ export default function GlobalError({
                 textDecoration: "none",
               }}
             >
-              Back to jobs
+              {t.backToJobs}
             </a>
           </div>
         </div>

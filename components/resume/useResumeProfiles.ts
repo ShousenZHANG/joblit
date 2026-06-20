@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ResumeProfilePayload, ResumeProfileSummary } from "./types";
 
 interface UseResumeProfilesParams {
@@ -31,6 +31,7 @@ export function useResumeProfiles({
   const [profileSwitching, setProfileSwitching] = useState(false);
   const [profileCreating, setProfileCreating] = useState(false);
   const [profileDeleting, setProfileDeleting] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   const hydrateFromResumeApi = useCallback(
     (json: unknown) => {
@@ -62,20 +63,41 @@ export function useResumeProfiles({
     [applyProfileToDraft],
   );
 
+  // Initial load — mirrors ExtensionTokenManager.fetchTokens: a failed fetch
+  // must surface as an explicit error + retry, not a silent blank form that
+  // reads as "no saved resume". `loadError` drives that UI; `retryLoad` lets
+  // the surface re-attempt. The `aliveRef` guard prevents a stale locale's
+  // response (or one resolving after unmount) from clobbering current state.
+  const aliveRef = useRef(true);
   useEffect(() => {
-    let active = true;
-    const load = async () => {
-      const res = await fetch(`/api/resume-profile?locale=${locale}`);
-      if (!res.ok) return;
-      const json = await res.json();
-      if (!active) return;
-      hydrateFromResumeApi(json);
-    };
-    load();
+    aliveRef.current = true;
     return () => {
-      active = false;
+      aliveRef.current = false;
     };
-  }, [locale, hydrateFromResumeApi]);
+  }, []);
+
+  const loadProfiles = useCallback(async () => {
+    setLoadError(false);
+    try {
+      const res = await fetch(`/api/resume-profile?locale=${locale}`);
+      if (!res.ok) throw new Error(`status=${res.status}`);
+      const json = await res.json();
+      if (!aliveRef.current) return;
+      hydrateFromResumeApi(json);
+    } catch {
+      if (!aliveRef.current) return;
+      setLoadError(true);
+      toast({
+        title: t("toastCouldNotLoad"),
+        description: t("toastTryAgain"),
+        variant: "destructive",
+      });
+    }
+  }, [locale, hydrateFromResumeApi, toast, t]);
+
+  useEffect(() => {
+    void loadProfiles();
+  }, [loadProfiles]);
 
   const resetPreviewState = useCallback(() => {
     setPdfUrl((prev) => {
@@ -262,6 +284,8 @@ export function useResumeProfiles({
     profileSwitching,
     profileCreating,
     profileDeleting,
+    loadError,
+    retryLoad: loadProfiles,
     hydrateFromResumeApi,
     handleCreateProfile,
     handleDeleteProfile,

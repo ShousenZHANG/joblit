@@ -1,30 +1,16 @@
+"use client";
+
 import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { CheckSquare, Square } from "lucide-react";
+import { useFormatter, useNow, useTranslations } from "next-intl";
 import type { JobItem, JobStatus } from "../types";
 
-function formatInsertedTime(iso: string) {
-  const createdAt = new Date(iso);
-  if (Number.isNaN(createdAt.getTime())) return "unknown";
-  const diffMs = Date.now() - createdAt.getTime();
-  const diffMinutes = Math.max(1, Math.floor(diffMs / 60000));
-  if (diffMinutes < 60) return `${diffMinutes} min ago`;
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours} hr ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays} day ago`;
-}
-
-function formatLocalDateTime(iso: string, timeZone: string | null) {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "unknown";
-  const options: Intl.DateTimeFormatOptions = {
-    dateStyle: "medium",
-    timeStyle: "short",
-    ...(timeZone ? { timeZone } : {}),
-  };
-  return new Intl.DateTimeFormat(undefined, options).format(date);
-}
+const STATUS_LABEL_KEY: Record<JobStatus, "statusNew" | "statusApplied" | "statusRejected"> = {
+  NEW: "statusNew",
+  APPLIED: "statusApplied",
+  REJECTED: "statusRejected",
+};
 
 const STATUS_CLASS: Record<JobStatus, string> = {
   // High-contrast semantic badges tuned for both themes:
@@ -59,7 +45,23 @@ function JobListItemInner({
   batchSelected?: boolean;
   onBatchToggle?: (id: string) => void;
 }) {
-  const listLabel = `${job.title} at ${job.company || "Unknown"}`;
+  const t = useTranslations("jobs");
+  const format = useFormatter();
+  const now = useNow();
+
+  const companyName = job.company || t("unknownCompany");
+  const listLabel = t("listItemAria", { title: job.title, company: companyName });
+
+  const createdAt = new Date(job.createdAt);
+  const createdAtValid = !Number.isNaN(createdAt.getTime());
+  const relativeCreatedAt = createdAtValid ? format.relativeTime(createdAt, now) : t("unknownTime");
+  const exactCreatedAt = createdAtValid
+    ? format.dateTime(createdAt, {
+        dateStyle: "medium",
+        timeStyle: "short",
+        ...(timeZone ? { timeZone } : {}),
+      })
+    : t("unknownTime");
 
   return (
     <div role="listitem" aria-current={isActive ? "true" : undefined} aria-label={listLabel} className="w-full">
@@ -80,7 +82,7 @@ function JobListItemInner({
               onBatchToggle?.(job.id);
             }}
             className="flex shrink-0 items-center justify-center py-3 pl-3 pr-1"
-            aria-label={batchSelected ? `Deselect ${job.title}` : `Select ${job.title}`}
+            aria-label={batchSelected ? t("deselectJob", { title: job.title }) : t("selectJob", { title: job.title })}
           >
             {batchSelected ? (
               <CheckSquare className="h-[18px] w-[18px] text-brand-emerald-600" />
@@ -98,13 +100,13 @@ function JobListItemInner({
         >
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5">
-              <Badge className={STATUS_CLASS[job.status]}>{job.status}</Badge>
+              <Badge className={STATUS_CLASS[job.status]}>{t(STATUS_LABEL_KEY[job.status])}</Badge>
             </div>
             <span
               className="text-xs text-muted-foreground"
-              title={formatLocalDateTime(job.createdAt, timeZone)}
+              title={exactCreatedAt}
             >
-              {formatInsertedTime(job.createdAt)}
+              {relativeCreatedAt}
             </span>
           </div>
           <div className="mt-2 text-sm font-semibold">{job.title}</div>
@@ -112,7 +114,7 @@ function JobListItemInner({
             {job.company ?? "-"} - {job.location ?? "-"}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-            <span>{job.jobType ?? "Unknown"}</span>
+            <span>{job.jobType ?? t("unknownJobType")}</span>
             {job.jobLevel ? <span>· {job.jobLevel}</span> : null}
             {job.workArrangement ? (
               <span className="rounded-full bg-brand-emerald-50 px-1.5 py-0.5 font-medium text-brand-emerald-700 ring-1 ring-brand-emerald-100">

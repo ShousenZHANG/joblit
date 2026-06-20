@@ -32,12 +32,21 @@ const messages: Record<Locale, Record<string, string>> = {
     "dashboard.fillNow": "Fill Current Page",
     "dashboard.toggleWidget": "Toggle Widget",
     "dashboard.noProfile": "No profile found. Create one in Joblit first.",
+    "dashboard.refreshProfile": "Refresh profile",
+    "dashboard.fillingFields": "Filling form fields...",
+    "dashboard.fieldsSkipped": "{count} skipped",
+    "dashboard.fromProfile": "{count} from profile",
+    "dashboard.fromHistory": "{count} from history",
+    "dashboard.closingSoon": "Closing in a moment...",
+    "dashboard.tryAgain": "Try Again",
+    "dashboard.confirmDisconnect": "Click again to confirm disconnect",
 
     // History
     "history.title": "Submission History",
     "history.empty": "No submissions yet",
     "history.emptyDesc": "Fill a form on any ATS site and your submissions will appear here.",
     "history.fieldsFilled": "{filled}/{total} fields filled",
+    "history.justNow": "just now",
 
     // Profile
     "profile.locale": "Resume Locale",
@@ -63,6 +72,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "widget.allSaved": "All changes saved",
     "widget.partialSaved": "{saved}/{total} changes saved",
     "widget.skip": "Skip",
+    "widget.openAria": "Open Joblit autofill",
 
     // Errors
     "error.network": "Network error. Please check your connection.",
@@ -70,6 +80,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "error.profileLoad": "Could not load profile. Please check your connection.",
     "error.fillFailed": "Form fill failed. Please try again.",
     "error.unknown": "An unexpected error occurred.",
+    "error.noActiveTab": "No active tab found.",
 
     // Options
     "options.title": "Settings",
@@ -106,11 +117,20 @@ const messages: Record<Locale, Record<string, string>> = {
     "dashboard.fillNow": "填充当前页面",
     "dashboard.toggleWidget": "切换悬浮组件",
     "dashboard.noProfile": "未找到简历。请先在 Joblit 中创建。",
+    "dashboard.refreshProfile": "刷新简历",
+    "dashboard.fillingFields": "正在填充表单字段...",
+    "dashboard.fieldsSkipped": "跳过 {count} 项",
+    "dashboard.fromProfile": "{count} 项来自简历",
+    "dashboard.fromHistory": "{count} 项来自历史",
+    "dashboard.closingSoon": "即将关闭...",
+    "dashboard.tryAgain": "重试",
+    "dashboard.confirmDisconnect": "再次点击确认断开连接",
 
     "history.title": "提交历史",
     "history.empty": "暂无提交记录",
     "history.emptyDesc": "在 ATS 网站填写表单后，提交记录将显示在这里。",
     "history.fieldsFilled": "已填充 {filled}/{total} 个字段",
+    "history.justNow": "刚刚",
 
     "profile.locale": "简历语言",
     "profile.active": "当前简历",
@@ -134,12 +154,14 @@ const messages: Record<Locale, Record<string, string>> = {
     "widget.allSaved": "所有修改已保存",
     "widget.partialSaved": "已保存 {saved}/{total} 项",
     "widget.skip": "跳过",
+    "widget.openAria": "打开 Joblit 自动填充",
 
     "error.network": "网络错误，请检查网络连接。",
     "error.notAuthenticated": "未认证，请连接 Joblit 账户。",
     "error.profileLoad": "无法加载简历，请检查网络连接。",
     "error.fillFailed": "表单填充失败，请重试。",
     "error.unknown": "发生意外错误。",
+    "error.noActiveTab": "未找到活动标签页。",
 
     "options.title": "设置",
     "options.apiBase": "API 地址",

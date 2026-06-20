@@ -11,7 +11,7 @@ export type SaveStatus =
   | { kind: "saved"; at: number }
   | { kind: "dirty" }
   | { kind: "saving" }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string; conflict?: boolean };
 
 export interface UseTailorDraftOptions {
   applicationId: string;
@@ -19,7 +19,15 @@ export interface UseTailorDraftOptions {
   initialAiContentHash: string | null;
   /** Debounce window for autosave, ms. */
   debounceMs?: number;
+  /** Localized message shown when another tab updated the draft (409). */
+  conflictMessage?: string;
+  /** Localized fallback message shown when a save fails. */
+  saveFailedMessage?: string;
 }
+
+const DEFAULT_CONFLICT_MESSAGE =
+  "Another tab updated this draft. Reload to continue.";
+const DEFAULT_SAVE_FAILED_MESSAGE = "Save failed — retry";
 
 export interface UseTailorDraftReturn {
   aiContent: AiContent;
@@ -37,6 +45,8 @@ export function useTailorDraft({
   initialAiContent,
   initialAiContentHash,
   debounceMs = 2000,
+  conflictMessage = DEFAULT_CONFLICT_MESSAGE,
+  saveFailedMessage = DEFAULT_SAVE_FAILED_MESSAGE,
 }: UseTailorDraftOptions): UseTailorDraftReturn {
   const [aiContent, setAiContentState] = useState<AiContent>(initialAiContent);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>(() => ({
@@ -80,17 +90,18 @@ export function useTailorDraft({
         if (err instanceof ApiError && err.status === 409) {
           setSaveStatus({
             kind: "error",
-            message: "Another tab updated this draft. Reload to continue.",
+            message: conflictMessage,
+            conflict: true,
           });
           return lastSavedHashRef.current;
         }
         const message =
-          err instanceof Error ? err.message : "Save failed — retry";
+          err instanceof Error ? err.message : saveFailedMessage;
         setSaveStatus({ kind: "error", message });
         return lastSavedHashRef.current;
       }
     },
-    [applicationId],
+    [applicationId, conflictMessage, saveFailedMessage],
   );
 
   const startPersist = useCallback(

@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type {
   TrendingResponse,
   VideosResponse,
@@ -25,6 +25,9 @@ export function useTrendingRepos(
     },
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
+    // Hold the previous period's grid in place while the new one loads, so a
+    // weekly/monthly switch dims rather than collapsing back to a skeleton.
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -51,5 +54,8 @@ export function useVideos(
     },
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
+    // Hold the previous grid in place across category/sort/window switches so
+    // it dims instead of unmounting back to a full skeleton.
+    placeholderData: keepPreviousData,
   });
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Sparkles } from "lucide-react";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
 import { cn } from "@/lib/utils";
@@ -10,6 +11,7 @@ interface SkillsSectionProps {
 }
 
 export function SkillsSection({ skillsAdditions, onChange }: SkillsSectionProps) {
+  const t = useTranslations("tailor");
   if (skillsAdditions.length === 0) {
     return null;
   }
@@ -25,14 +27,17 @@ export function SkillsSection({ skillsAdditions, onChange }: SkillsSectionProps)
         <div className="flex items-center gap-2">
           <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-brand-emerald-50 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-brand-emerald-700 ring-1 ring-brand-emerald-100">
             <Sparkles className="h-3 w-3" aria-hidden />
-            AI proposed
+            {t("badge.aiProposed")}
           </span>
           <h2 className="text-sm font-semibold tracking-tight text-foreground">
-            Skills additions
+            {t("skills.title")}
           </h2>
         </div>
         <span className="text-[11px] font-medium text-muted-foreground">
-          {totalAccepted} of {skillsAdditions.length} accepted
+          {t("acceptedCount", {
+            accepted: totalAccepted,
+            total: skillsAdditions.length,
+          })}
         </span>
       </header>
 
@@ -52,7 +57,7 @@ export function SkillsSection({ skillsAdditions, onChange }: SkillsSectionProps)
               checked={group.accepted}
               onChange={(e) => toggle(i, e.target.checked)}
               className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-border/80 text-brand-emerald-600 focus:ring-brand-emerald-400/40"
-              aria-label={`Accept skill addition for ${group.label}`}
+              aria-label={t("skills.acceptAria", { label: group.label })}
             />
             <div className="min-w-0 flex-1">
               <div className="text-sm font-medium text-foreground">

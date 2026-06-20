@@ -2,19 +2,22 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle2, Loader2, Circle } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 type GenerateProgressProps = {
   target: "resume" | "cover";
 };
 
-const STEPS = [
-  { label: "Validating JSON structure", delay: 0 },
-  { label: "Processing content", delay: 700 },
-  { label: "Rendering template", delay: 1800 },
-  { label: "Compiling PDF", delay: 3200 },
-];
+const STEP_DELAYS = [0, 700, 1800, 3200];
 
 export function GenerateProgress({ target }: GenerateProgressProps) {
+  const t = useTranslations("jobs.external");
+  const STEPS = [
+    { label: t("phaseValidating"), delay: STEP_DELAYS[0] },
+    { label: t("phaseProcessing"), delay: STEP_DELAYS[1] },
+    { label: t("phaseRendering"), delay: STEP_DELAYS[2] },
+    { label: t("phaseCompiling"), delay: STEP_DELAYS[3] },
+  ];
   const [elapsed, setElapsed] = useState(0);
   // useState lazy initializer is allowed to be impure and runs only once.
   const [start] = useState(() => Date.now());
@@ -38,8 +41,8 @@ export function GenerateProgress({ target }: GenerateProgressProps) {
         {/* Title */}
         <h3 className="text-center text-base font-semibold text-foreground">
           {target === "resume"
-            ? "Generating your Resume PDF"
-            : "Generating your Cover Letter"}
+            ? t("generatingResumeTitle")
+            : t("generatingCoverTitle")}
         </h3>
 
         {/* Step list */}
@@ -77,16 +80,14 @@ export function GenerateProgress({ target }: GenerateProgressProps) {
         <div
           className="h-2 overflow-hidden rounded-full bg-muted"
           role="progressbar"
-          aria-label="Generating PDF"
+          aria-label={t("progressAriaLabel")}
         >
           <div className="progress-indeterminate h-full w-1/3 rounded-full bg-brand-emerald-500 motion-reduce:w-full motion-reduce:animate-none" />
         </div>
 
         {/* Hint */}
         <p className="text-center text-xs text-muted-foreground">
-          {elapsed > 8000
-            ? "Still working... this may take a bit longer"
-            : "This usually takes 5–10 seconds"}
+          {elapsed > 8000 ? t("hintStillWorking") : t("hintUsualDuration")}
         </p>
       </div>
     </div>

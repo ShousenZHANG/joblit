@@ -215,6 +215,7 @@ export function useJobPagination({
     loadedCursors,
     resetPagination,
     firstQueryError,
+    refetch: query.refetch,
     jobLevelOptions,
   };
 }

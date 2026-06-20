@@ -2,7 +2,7 @@ import * as React from "react";
 
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
 
-const TOAST_LIMIT = 1;
+const TOAST_LIMIT = 3;
 const TOAST_REMOVE_DELAY = 1000000;
 
 type ToastPayload = ToastProps & {
@@ -137,6 +137,18 @@ function toast({ ...props }: Omit<ToastPayload, "id">) {
   return { id, dismiss, update };
 }
 
+/**
+ * Clear all toasts and any pending removal timers. The toast store is
+ * module-level (it must survive component remounts), so tests that render
+ * toast-producing components share one instance — call this in a test
+ * beforeEach/afterEach to keep cases isolated.
+ */
+function resetToasts() {
+  toastTimeouts.forEach((timeout) => clearTimeout(timeout));
+  toastTimeouts.clear();
+  dispatch({ type: actionTypes.REMOVE_TOAST });
+}
+
 function useToast() {
   const [state, setState] = React.useState<State>(memoryState);
 
@@ -155,4 +167,4 @@ function useToast() {
   };
 }
 
-export { useToast, toast };
+export { useToast, toast, resetToasts };

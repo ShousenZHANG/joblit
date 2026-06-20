@@ -1,19 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useFormatter, useNow, useTranslations } from "next-intl";
 import { CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import type { SaveStatus } from "./useTailorDraft";
 
 interface SaveIndicatorProps {
   status: SaveStatus;
-}
-
-function formatRelative(at: number): string {
-  const diff = Math.max(0, Date.now() - at);
-  if (diff < 5_000) return "just now";
-  if (diff < 60_000) return `${Math.floor(diff / 1_000)}s ago`;
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-  return `${Math.floor(diff / 3_600_000)}h ago`;
+  /** Re-trigger a save when the previous attempt failed. */
+  onRetry?: () => void;
 }
 
 /**
@@ -21,27 +16,26 @@ function formatRelative(at: number): string {
  * / 'Save failed'. Updates every 5s while idle so the relative text
  * stays fresh.
  */
-export function SaveIndicator({ status }: SaveIndicatorProps) {
-  const [savedLabel, setSavedLabel] = useState<string>("just now");
+export function SaveIndicator({ status, onRetry }: SaveIndicatorProps) {
+  const t = useTranslations("tailor");
+  const format = useFormatter();
+  const now = useNow();
+  // Re-render every 5s while saved so the relative label stays fresh.
+  const [, setTick] = useState(0);
   useEffect(() => {
     if (status.kind !== "saved") return;
-    const at = status.at;
-    function tick() {
-      setSavedLabel(formatRelative(at));
-    }
-    const initial = setTimeout(tick, 0);
-    const id = setInterval(tick, 5_000);
-    return () => {
-      clearTimeout(initial);
-      clearInterval(id);
-    };
+    const id = setInterval(() => setTick((n) => n + 1), 5_000);
+    return () => clearInterval(id);
   }, [status]);
 
   if (status.kind === "saving") {
     return (
       <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-        Saving…
+        <Loader2
+          className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
+          aria-hidden
+        />
+        {t("save.saving")}
       </span>
     );
   }
@@ -52,25 +46,27 @@ export function SaveIndicator({ status }: SaveIndicatorProps) {
           aria-hidden
           className="h-1.5 w-1.5 rounded-full bg-amber-500"
         />
-        Unsaved changes
+        {t("save.unsaved")}
       </span>
     );
   }
   if (status.kind === "error") {
     return (
-      <span
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-destructive"
+      <button
+        type="button"
+        onClick={onRetry}
+        className="inline-flex items-center gap-1.5 rounded-full text-xs font-medium text-destructive transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
         title={status.message}
       >
         <AlertCircle className="h-3.5 w-3.5" aria-hidden />
-        Save failed — retry
-      </span>
+        {t("save.failedRetry")}
+      </button>
     );
   }
   return (
     <span className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-emerald-700">
       <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-      Saved {savedLabel}
+      {t("save.savedAt", { time: format.relativeTime(new Date(status.at), now) })}
     </span>
   );
 }

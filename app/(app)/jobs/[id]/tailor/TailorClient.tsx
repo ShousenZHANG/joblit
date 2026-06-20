@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { ArrowLeft, ArrowRight, RotateCcw, X } from "lucide-react";
 import { fetchJson, ApiError } from "@/lib/api/fetchJson";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
@@ -55,10 +56,14 @@ export function TailorClient({
   job,
 }: TailorClientProps) {
   const router = useRouter();
+  const t = useTranslations("tailor");
+  const tc = useTranslations("common");
   const draft = useTailorDraft({
     applicationId,
     initialAiContent,
     initialAiContentHash,
+    conflictMessage: t("save.conflict"),
+    saveFailedMessage: t("save.failedRetry"),
   });
 
   const [docTab, setDocTab] = useState<DocTab>("resume");
@@ -95,10 +100,7 @@ export function TailorClient({
 
   // Surface 409 saves as the conflict dialog (Phase 3).
   useEffect(() => {
-    if (
-      draft.saveStatus.kind === "error" &&
-      draft.saveStatus.message.includes("Another tab")
-    ) {
+    if (draft.saveStatus.kind === "error" && draft.saveStatus.conflict) {
       setShowConflictDialog(true);
     }
   }, [draft.saveStatus]);
@@ -155,7 +157,7 @@ export function TailorClient({
       }
       setStatus("FINAL");
     } catch (err: unknown) {
-      setActionError(extractMessage(err, "Refresh failed"));
+      setActionError(extractMessage(err, t("refreshFailed")));
     } finally {
       setIsRefreshing(false);
     }
@@ -171,7 +173,7 @@ export function TailorClient({
       setStatus("FINAL");
       router.push("/jobs");
     } catch (err: unknown) {
-      setActionError(extractMessage(err, "Finalize failed"));
+      setActionError(extractMessage(err, t("finalizeFailed")));
     } finally {
       setIsFinalizing(false);
     }
@@ -189,7 +191,7 @@ export function TailorClient({
       draft.replaceFromServer(data.aiContent, data.aiContentHash);
       setStatus("DRAFT");
     } catch (err: unknown) {
-      setActionError(extractMessage(err, "Discard failed"));
+      setActionError(extractMessage(err, t("discardFailed")));
     } finally {
       setIsDiscarding(false);
     }
@@ -207,7 +209,7 @@ export function TailorClient({
           className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden />
-          Back to jobs
+          {t("backToJobs")}
         </Link>
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-lg font-semibold tracking-tight text-foreground sm:text-xl">
@@ -223,23 +225,35 @@ export function TailorClient({
           ) : null}
         </div>
         <div className="flex items-center gap-3">
-          <StatusPill status={status} />
-          <SaveIndicator status={draft.saveStatus} />
+          <StatusPill
+            status={status}
+            label={status === "FINAL" ? t("statusFinal") : t("statusDraft")}
+          />
+          <SaveIndicator
+            status={draft.saveStatus}
+            onRetry={() => void draft.flushNow()}
+          />
         </div>
       </header>
 
-      <DocTabs docTab={docTab} setDocTab={setDocTab} />
+      <DocTabs
+        docTab={docTab}
+        setDocTab={setDocTab}
+        label={t("docTablistLabel")}
+        resumeLabel={t("docResume")}
+        coverLabel={t("docCover")}
+      />
 
       {/* Mobile Edit/Preview switcher (only visible <lg). */}
       <div className="flex items-center gap-1 rounded-full border border-border/70 bg-background p-1 lg:hidden">
         <ViewTabBtn active={viewTab === "edit"} onClick={() => setViewTab("edit")}>
-          Edit
+          {t("viewEdit")}
         </ViewTabBtn>
         <ViewTabBtn
           active={viewTab === "preview"}
           onClick={() => setViewTab("preview")}
         >
-          Preview
+          {t("viewPreview")}
         </ViewTabBtn>
       </div>
 
@@ -254,7 +268,7 @@ export function TailorClient({
           <button
             type="button"
             onClick={() => setActionError(null)}
-            aria-label="Dismiss error"
+            aria-label={t("dismissError")}
             className="shrink-0 rounded-md p-0.5 transition-colors hover:bg-destructive/15"
           >
             <X className="h-4 w-4" aria-hidden />
@@ -319,7 +333,7 @@ export function TailorClient({
             )}
           >
             <RotateCcw className="h-4 w-4" aria-hidden />
-            {isDiscarding ? "Discarding…" : "Discard changes"}
+            {isDiscarding ? t("discarding") : t("discardChanges")}
           </button>
           <button
             type="button"
@@ -331,8 +345,10 @@ export function TailorClient({
             )}
           >
             {isFinalizing
-              ? "Finalizing…"
-              : `Finalize ${docTab === "resume" ? "Resume" : "Cover Letter"}`}
+              ? t("finalizing")
+              : t("finalizeDoc", {
+                  doc: docTab === "resume" ? t("docResume") : t("docCover"),
+                })}
             <ArrowRight className="h-4 w-4" aria-hidden />
           </button>
         </div>
@@ -356,19 +372,20 @@ export function TailorClient({
       <AlertDialog open={discardDialogOpen} onOpenChange={setDiscardDialogOpen}>
         <AlertDialogContent className="max-w-md rounded-2xl border-border">
           <AlertDialogHeader>
-            <AlertDialogTitle>Discard draft changes?</AlertDialogTitle>
+            <AlertDialogTitle>{t("discardConfirmTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This resets the draft to the original AI proposal. Your current
-              edits in this review step will be lost.
+              {t("discardConfirmBody")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-xl">
+              {tc("cancel")}
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => void handleDiscard()}
               className="rounded-xl bg-destructive text-white hover:bg-destructive"
             >
-              Discard changes
+              {t("discardChanges")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -380,27 +397,33 @@ export function TailorClient({
 function DocTabs({
   docTab,
   setDocTab,
+  label,
+  resumeLabel,
+  coverLabel,
 }: {
   docTab: DocTab;
   setDocTab: (v: DocTab) => void;
+  label: string;
+  resumeLabel: string;
+  coverLabel: string;
 }) {
   return (
     <div
       role="tablist"
-      aria-label="Document"
+      aria-label={label}
       className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-background p-1"
     >
       <DocTabBtn
         active={docTab === "resume"}
         onClick={() => setDocTab("resume")}
       >
-        Resume
+        {resumeLabel}
       </DocTabBtn>
       <DocTabBtn
         active={docTab === "cover"}
         onClick={() => setDocTab("cover")}
       >
-        Cover Letter
+        {coverLabel}
       </DocTabBtn>
     </div>
   );
@@ -458,7 +481,13 @@ function ViewTabBtn({
   );
 }
 
-function StatusPill({ status }: { status: "DRAFT" | "FINAL" }) {
+function StatusPill({
+  status,
+  label,
+}: {
+  status: "DRAFT" | "FINAL";
+  label: string;
+}) {
   return (
     <span
       className={cn(
@@ -468,7 +497,7 @@ function StatusPill({ status }: { status: "DRAFT" | "FINAL" }) {
           : "bg-amber-100 text-amber-800",
       )}
     >
-      {status}
+      {label}
     </span>
   );
 }

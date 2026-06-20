@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useTranslations, useFormatter } from "next-intl";
 import {
   Key,
   Tag,
@@ -59,30 +60,42 @@ function TokenSkeleton() {
   );
 }
 
-function formatRelativeDate(dateStr: string): string {
+type TokenTranslate = ReturnType<typeof useTranslations>;
+type AppFormatter = ReturnType<typeof useFormatter>;
+
+function formatRelativeDate(
+  dateStr: string,
+  t: TokenTranslate,
+  format: AppFormatter,
+): string {
   const date = new Date(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  if (diffDays === 0) return "today";
-  if (diffDays === 1) return "yesterday";
-  if (diffDays < 7) return `${diffDays}d ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
-  return date.toLocaleDateString();
+  if (diffDays === 0) return t("relative.today");
+  if (diffDays === 1) return t("relative.yesterday");
+  if (diffDays < 7) return t("relative.daysAgo", { days: diffDays });
+  if (diffDays < 30) return t("relative.weeksAgo", { weeks: Math.floor(diffDays / 7) });
+  return format.dateTime(date, { dateStyle: "medium" });
 }
 
-function formatExpiryDate(dateStr: string): { text: string; urgent: boolean } {
+function formatExpiryDate(
+  dateStr: string,
+  t: TokenTranslate,
+  format: AppFormatter,
+): { text: string; urgent: boolean } {
   const date = new Date(dateStr);
   const now = new Date();
   const diffMs = date.getTime() - now.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  if (diffDays < 0) return { text: "Expired", urgent: true };
-  if (diffDays === 0) return { text: "Expires today", urgent: true };
-  if (diffDays <= 7) return { text: `${diffDays}d left`, urgent: true };
-  if (diffDays <= 30) return { text: `${diffDays}d left`, urgent: false };
-  return { text: date.toLocaleDateString(), urgent: false };
+  if (diffDays < 0) return { text: t("expiry.expired"), urgent: true };
+  if (diffDays === 0) return { text: t("expiry.expiresToday"), urgent: true };
+  if (diffDays <= 7) return { text: t("expiry.daysLeft", { days: diffDays }), urgent: true };
+  if (diffDays <= 30)
+    return { text: t("expiry.daysLeft", { days: diffDays }), urgent: false };
+  return { text: format.dateTime(date, { dateStyle: "medium" }), urgent: false };
 }
 
 export function ExtensionTokenManager() {
@@ -100,6 +113,9 @@ export function ExtensionTokenManager() {
   const newTokenRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const t = useTranslations("extension.tokens");
+  const tCommon = useTranslations("common");
+  const format = useFormatter();
 
   const fetchTokens = useCallback(async () => {
     setLoadError(false);
@@ -132,6 +148,13 @@ export function ExtensionTokenManager() {
           expiryDays: 90,
         }),
       });
+      if (!res.ok) {
+        // On 4xx/5xx the body is an {error} envelope with no `.data`, so the
+        // old `if (json.data)` guard silently swallowed the failure. Throw so
+        // the catch below surfaces the destructive toast.
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error?.message ?? j?.error ?? "Failed");
+      }
       const json = await res.json();
       if (json.data) {
         setNewToken(json.data);
@@ -143,32 +166,35 @@ export function ExtensionTokenManager() {
           newTokenRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
         });
         toast({
-          title: "Token created",
-          description: "Copy and paste it into the extension to connect.",
+          title: t("toast.createdTitle"),
+          description: t("toast.createdDescription"),
         });
         // Clear the "just created" highlight after animation
         setTimeout(() => setJustCreatedId(null), 2000);
       }
     } catch {
       toast({
-        title: "Failed to create token",
-        description: "Please try again.",
+        title: t("toast.createFailedTitle"),
+        description: t("toast.tryAgain"),
         variant: "destructive",
       });
     } finally {
       setCreating(false);
     }
-  }, [tokenName, fetchTokens, toast]);
+  }, [tokenName, fetchTokens, toast, t]);
 
   const handleRevoke = useCallback(
     async (token: ExtensionToken) => {
       setRevoking(token.id);
       try {
-        await fetch("/api/ext/auth/token", {
+        const res = await fetch("/api/ext/auth/token", {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ tokenId: token.id }),
         });
+        // Revoke is a security action — a failed DELETE must not report success.
+        // Mirror fetchTokens, which already throws on a non-ok response.
+        if (!res.ok) throw new Error(`status=${res.status}`);
         // Animate out before removing from list
         setRemovingId(token.id);
         setTimeout(async () => {
@@ -178,14 +204,16 @@ export function ExtensionTokenManager() {
             setNewToken(null);
           }
           toast({
-            title: "Token revoked",
-            description: `"${token.name || "Unnamed token"}" has been permanently revoked.`,
+            title: t("toast.revokedTitle"),
+            description: t("toast.revokedDescription", {
+              name: token.name || t("unnamed"),
+            }),
           });
         }, 300);
       } catch {
         toast({
-          title: "Failed to revoke token",
-          description: "Please try again.",
+          title: t("toast.revokeFailedTitle"),
+          description: t("toast.tryAgain"),
           variant: "destructive",
         });
       } finally {
@@ -193,17 +221,17 @@ export function ExtensionTokenManager() {
         setRevokeTarget(null);
       }
     },
-    [fetchTokens, newToken, toast],
+    [fetchTokens, newToken, toast, t],
   );
 
   const handleCopy = useCallback(
     async (text: string) => {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      toast({ title: "Copied to clipboard" });
+      toast({ title: t("toast.copied") });
       setTimeout(() => setCopied(false), 2000);
     },
-    [toast],
+    [toast, t],
   );
 
   return (
@@ -215,7 +243,7 @@ export function ExtensionTokenManager() {
             <Plus className="h-4 w-4 text-brand-emerald-700" />
           </div>
           <h2 className="text-sm font-semibold text-foreground/90">
-            Generate New Token
+            {t("generateTitle")}
           </h2>
         </div>
 
@@ -230,7 +258,7 @@ export function ExtensionTokenManager() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !creating) handleCreate();
               }}
-              placeholder="e.g. My Laptop Chrome"
+              placeholder={t("namePlaceholder")}
               className="ext-input pl-9"
             />
           </div>
@@ -241,13 +269,13 @@ export function ExtensionTokenManager() {
           >
             {creating ? (
               <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                <span>Creating...</span>
+                <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
+                <span>{t("creating")}</span>
               </>
             ) : (
               <>
                 <Plus className="h-3.5 w-3.5" />
-                <span>Generate</span>
+                <span>{t("generate")}</span>
               </>
             )}
           </button>
@@ -262,7 +290,7 @@ export function ExtensionTokenManager() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-amber-900">
-                  Copy this token now — it won&apos;t be shown again.
+                  {t("revealWarning")}
                 </p>
                 <div className="mt-2 flex items-center gap-2">
                   <code className="ext-token-code">
@@ -278,12 +306,16 @@ export function ExtensionTokenManager() {
                       ) : (
                         <Copy className="h-3.5 w-3.5" />
                       )}
-                      <span>{copied ? "Copied!" : "Copy"}</span>
+                      <span>{copied ? t("copiedShort") : t("copy")}</span>
                     </span>
                   </button>
                 </div>
                 <p className="mt-1.5 text-[11px] text-amber-700/80">
-                  Expires {new Date(newToken.expiresAt).toLocaleDateString()}
+                  {t("expiresOn", {
+                    date: format.dateTime(new Date(newToken.expiresAt), {
+                      dateStyle: "medium",
+                    }),
+                  })}
                 </p>
               </div>
             </div>
@@ -299,7 +331,7 @@ export function ExtensionTokenManager() {
               <ShieldCheck className="h-4 w-4 text-muted-foreground" />
             </div>
             <h2 className="text-sm font-semibold text-foreground/90">
-              Active Tokens
+              {t("activeTitle")}
             </h2>
             {!loading && tokens.length > 0 && (
               <span className="ext-count-badge">{tokens.length}</span>
@@ -314,9 +346,9 @@ export function ExtensionTokenManager() {
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-destructive/10">
               <Key className="h-5 w-5 text-destructive/70" />
             </div>
-            <p className="text-sm font-medium text-foreground">Couldn&apos;t load tokens</p>
+            <p className="text-sm font-medium text-foreground">{t("loadErrorTitle")}</p>
             <p className="text-xs text-muted-foreground/70">
-              Check your connection and try again.
+              {t("loadErrorDescription")}
             </p>
             <Button
               variant="outline"
@@ -327,7 +359,7 @@ export function ExtensionTokenManager() {
                 void fetchTokens();
               }}
             >
-              Retry
+              {t("retry")}
             </Button>
           </div>
         ) : tokens.length === 0 ? (
@@ -335,15 +367,15 @@ export function ExtensionTokenManager() {
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted">
               <Key className="h-5 w-5 text-muted-foreground/70" />
             </div>
-            <p className="text-sm font-medium text-muted-foreground">No active tokens</p>
+            <p className="text-sm font-medium text-muted-foreground">{t("emptyTitle")}</p>
             <p className="text-xs text-muted-foreground/70">
-              Generate one above to connect the extension.
+              {t("emptyDescription")}
             </p>
           </div>
         ) : (
           <div className="space-y-2">
             {tokens.map((token) => {
-              const expiry = formatExpiryDate(token.expiresAt);
+              const expiry = formatExpiryDate(token.expiresAt, t, format);
               const isRemoving = removingId === token.id;
               const isNew = justCreatedId === token.id;
               return (
@@ -355,15 +387,21 @@ export function ExtensionTokenManager() {
                     <div className={`ext-token-dot ${token.lastUsedAt ? "ext-token-dot--active" : ""}`} />
                     <div className="min-w-0">
                       <div className="text-sm font-medium text-foreground/90 truncate">
-                        {token.name || "Unnamed token"}
+                        {token.name || t("unnamed")}
                       </div>
                       <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
-                        <span>Created {formatRelativeDate(token.createdAt)}</span>
+                        <span>
+                          {t("createdAt", {
+                            when: formatRelativeDate(token.createdAt, t, format),
+                          })}
+                        </span>
                         <span className="text-muted-foreground/40">·</span>
                         <span>
                           {token.lastUsedAt
-                            ? `Used ${formatRelativeDate(token.lastUsedAt)}`
-                            : "Never used"}
+                            ? t("usedAt", {
+                                when: formatRelativeDate(token.lastUsedAt, t, format),
+                              })
+                            : t("neverUsed")}
                         </span>
                         <span className="text-muted-foreground/40">·</span>
                         <span className={`flex items-center gap-0.5 ${expiry.urgent ? "text-amber-600 font-medium" : ""}`}>
@@ -379,11 +417,11 @@ export function ExtensionTokenManager() {
                     className="ext-btn-revoke"
                   >
                     {revoking === token.id ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" />
                     ) : (
                       <Trash2 className="h-3 w-3" />
                     )}
-                    <span>Revoke</span>
+                    <span>{t("revoke")}</span>
                   </button>
                 </div>
               );
@@ -399,25 +437,25 @@ export function ExtensionTokenManager() {
             <ShieldCheck className="h-4 w-4 text-brand-emerald-600" />
           </div>
           <h2 className="text-sm font-semibold text-foreground/90">
-            Setup Instructions
+            {t("setupTitle")}
           </h2>
         </div>
         <ol className="ext-instructions">
           <li>
             <span className="ext-step-num">1</span>
-            <span>Install the Joblit AutoFill extension from the Chrome Web Store.</span>
+            <span>{t("setupStep1")}</span>
           </li>
           <li>
             <span className="ext-step-num">2</span>
-            <span>Click the extension icon in your toolbar.</span>
+            <span>{t("setupStep2")}</span>
           </li>
           <li>
             <span className="ext-step-num">3</span>
-            <span>Paste the generated token and click <strong>Connect</strong>.</span>
+            <span>{t.rich("setupStep3", { b: (chunks) => <strong>{chunks}</strong> })}</span>
           </li>
           <li>
             <span className="ext-step-num">4</span>
-            <span>Visit any ATS job application page — the extension will auto-detect form fields.</span>
+            <span>{t("setupStep4")}</span>
           </li>
         </ol>
       </div>
@@ -430,30 +468,31 @@ export function ExtensionTokenManager() {
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-100">
                 <Trash2 className="h-4 w-4 text-red-600" />
               </div>
-              Revoke Token
+              {t("revokeDialogTitle")}
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm">
-              This will permanently revoke{" "}
-              <span className="font-medium text-foreground/85">
-                &quot;{revokeTarget?.name || "Unnamed token"}&quot;
-              </span>
-              . Any extension using this token will be disconnected immediately.
+              {t.rich("revokeDialogDescription", {
+                name: revokeTarget?.name || t("unnamed"),
+                strong: (chunks) => (
+                  <span className="font-medium text-foreground/85">{chunks}</span>
+                ),
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 sm:gap-2">
             <AlertDialogCancel className="ext-dialog-cancel">
-              Cancel
+              {tCommon("cancel")}
             </AlertDialogCancel>
             <AlertDialogAction
               className="ext-dialog-destructive"
               onClick={() => revokeTarget && handleRevoke(revokeTarget)}
             >
               {revoking ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
               ) : (
                 <Trash2 className="mr-1.5 h-3.5 w-3.5" />
               )}
-              Revoke
+              {t("revoke")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

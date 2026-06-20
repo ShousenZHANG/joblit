@@ -29,7 +29,7 @@ export function logoIconHtml(size: number = 20): string {
 
 /** Checkmark SVG for success states */
 export function checkmarkSvg(size: number = 24): string {
-  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
     <path d="M6 12.5l4 4 8-9" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
       stroke-dasharray="24" stroke-dashoffset="0" style="animation: jl-checkDraw 400ms ease forwards;"/>
   </svg>`;
@@ -54,7 +54,7 @@ export function keyIconSvg(size: number = 14): string {
 
 /** Spinner SVG (animated via CSS) */
 export function spinnerSvg(size: number = 16): string {
-  return `<svg width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="animation: jl-spin 600ms linear infinite;">
+  return `<svg width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" style="animation: jl-spin 600ms linear infinite;">
     <circle cx="8" cy="8" r="6" stroke="#e5e7eb" stroke-width="2" fill="none"/>
     <path d="M8 2a6 6 0 0 1 6 6" stroke="#059669" stroke-width="2" stroke-linecap="round" fill="none"/>
   </svg>`;

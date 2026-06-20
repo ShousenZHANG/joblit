@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Sparkles, RotateCcw, AlertTriangle } from "lucide-react";
 import type {
   AiAddedBullet,
@@ -16,6 +17,7 @@ export function BulletsSection({
   latestExperience,
   onChange,
 }: BulletsSectionProps) {
+  const t = useTranslations("tailor");
   const { addedBullets } = latestExperience;
   const acceptedCount = addedBullets.filter((b) => b.accepted).length;
 
@@ -32,20 +34,23 @@ export function BulletsSection({
         <div className="flex items-center gap-2">
           <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-brand-emerald-50 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-brand-emerald-700 ring-1 ring-brand-emerald-100">
             <Sparkles className="h-3 w-3" aria-hidden />
-            AI added
+            {t("badge.aiAdded")}
           </span>
           <h2 className="text-sm font-semibold tracking-tight text-foreground">
-            Latest experience bullets
+            {t("bullets.title")}
           </h2>
         </div>
         <span className="text-[11px] font-medium text-muted-foreground">
-          {acceptedCount} of {addedBullets.length} accepted
+          {t("acceptedCount", {
+            accepted: acceptedCount,
+            total: addedBullets.length,
+          })}
         </span>
       </header>
 
       {addedBullets.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border bg-muted/60 px-3 py-3 text-xs text-muted-foreground">
-          No AI-proposed additions for this experience.
+          {t("bullets.empty")}
         </p>
       ) : (
         <ul className="flex flex-col gap-2.5">
@@ -68,6 +73,7 @@ interface BulletRowProps {
 }
 
 function BulletRow({ bullet, onChange }: BulletRowProps) {
+  const t = useTranslations("tailor");
   const text = bullet.userEdit ?? bullet.text;
   const isUserEdited =
     bullet.userEdit !== undefined && bullet.userEdit !== bullet.text;
@@ -89,7 +95,7 @@ function BulletRow({ bullet, onChange }: BulletRowProps) {
           checked={bullet.accepted}
           onChange={(e) => onChange({ ...bullet, accepted: e.target.checked })}
           className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-border/80 text-brand-emerald-600 focus:ring-brand-emerald-400/40"
-          aria-label="Accept bullet"
+          aria-label={t("bullets.acceptAria")}
         />
         <div className="min-w-0 flex-1">
           <textarea
@@ -105,7 +111,7 @@ function BulletRow({ bullet, onChange }: BulletRowProps) {
             }
             rows={2}
             className="w-full resize-y rounded-xl border border-transparent bg-transparent px-2 py-1.5 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/60 focus-visible:border-brand-emerald-300 focus-visible:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-400/30"
-            aria-label="Bullet text"
+            aria-label={t("bullets.textAria")}
           />
           <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px]">
             {gateFailed && reason ? (
@@ -121,7 +127,7 @@ function BulletRow({ bullet, onChange }: BulletRowProps) {
                 className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
               >
                 <RotateCcw className="h-3 w-3" aria-hidden />
-                Reset to AI
+                {t("resetToAi")}
               </button>
             ) : null}
           </div>

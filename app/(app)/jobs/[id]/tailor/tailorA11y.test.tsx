@@ -1,12 +1,22 @@
 import { describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
 import { axe } from "vitest-axe";
+import { NextIntlClientProvider } from "next-intl";
+import type { ReactElement } from "react";
 import { SkillsSection } from "./SkillsSection";
 import { CoverParagraphsSection } from "./CoverParagraphsSection";
 import { SummarySection } from "./SummarySection";
 import { BulletsSection } from "./BulletsSection";
 import { PageHeading } from "@/components/app-shell/PageHeading";
+import messages from "@/messages/en.json";
 import type { AiContent, AiSummary } from "@/lib/shared/schemas/aiContent";
+
+const renderIntl = (ui: ReactElement) =>
+  render(
+    <NextIntlClientProvider locale="en" messages={messages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
 
 const skillsAdditions: AiContent["cv"]["skillsAdditions"] = [
   { label: "Backend", items: ["Spring Boot", "Spring Cloud"], accepted: true },
@@ -39,28 +49,28 @@ const latestExperience: AiContent["cv"]["latestExperience"] = {
 
 describe("tailor edit sections — accessibility", () => {
   it("SkillsSection has no axe violations", async () => {
-    const { container } = render(
+    const { container } = renderIntl(
       <SkillsSection skillsAdditions={skillsAdditions} onChange={() => {}} />,
     );
     expect(await axe(container)).toHaveNoViolations();
   });
 
   it("CoverParagraphsSection has no axe violations", async () => {
-    const { container } = render(
+    const { container } = renderIntl(
       <CoverParagraphsSection cover={cover} onChange={() => {}} />,
     );
     expect(await axe(container)).toHaveNoViolations();
   });
 
   it("SummarySection has no axe violations", async () => {
-    const { container } = render(
+    const { container } = renderIntl(
       <SummarySection summary={summary} onChange={() => {}} />,
     );
     expect(await axe(container)).toHaveNoViolations();
   });
 
   it("BulletsSection has no axe violations", async () => {
-    const { container } = render(
+    const { container } = renderIntl(
       <BulletsSection latestExperience={latestExperience} onChange={() => {}} />,
     );
     expect(await axe(container)).toHaveNoViolations();

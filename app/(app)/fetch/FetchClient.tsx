@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Briefcase, ChevronDown, RotateCcw } from "lucide-react";
+import { Briefcase, ChevronDown, Loader2, RotateCcw } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -412,6 +412,7 @@ const STATUS_DOT: Record<string, string> = {
 // rather than blocking the page. Refetches whenever a run starts or finishes
 // so a just-completed fetch appears without a manual refresh.
 function FetchHistory({ onRerun }: { onRerun: (run: FetchRunListItem) => void }) {
+  const t = useTranslations("fetch");
   const { runId, status } = useFetchStatus();
   const [runs, setRuns] = useState<FetchRunListItem[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -437,11 +438,44 @@ function FetchHistory({ onRerun }: { onRerun: (run: FetchRunListItem) => void })
     };
   }, [runId, status]);
 
-  if (!loaded || runs.length === 0) return null;
+  // While the history endpoint is in flight, render a fixed-height skeleton so
+  // the panel reserves its space instead of popping in once loaded.
+  if (!loaded) {
+    return (
+      <div className="space-y-2 border-t border-border/60 pt-4">
+        <div className="text-xs font-medium text-muted-foreground">{t("recentFetches")}</div>
+        <ul className="space-y-1.5" aria-hidden>
+          {[0, 1, 2].map((i) => (
+            <li
+              key={i}
+              className="flex items-center gap-3 rounded-xl border border-border/60 bg-card/60 px-3 py-2"
+            >
+              <span className="h-2 w-2 shrink-0 rounded-full bg-muted-foreground/20" />
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <div className="h-3 w-2/5 rounded bg-muted-foreground/15 motion-safe:animate-pulse" />
+                <div className="h-2.5 w-1/4 rounded bg-muted-foreground/10 motion-safe:animate-pulse" />
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  // Loaded with no runs yet: a one-line hint keeps the panel height stable and
+  // tells the user what will appear here, rather than collapsing to nothing.
+  if (runs.length === 0) {
+    return (
+      <div className="space-y-2 border-t border-border/60 pt-4">
+        <div className="text-xs font-medium text-muted-foreground">{t("recentFetches")}</div>
+        <p className="text-[11px] text-muted-foreground">{t("recentFetchesEmpty")}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2 border-t border-border/60 pt-4">
-      <div className="text-xs font-medium text-muted-foreground">Recent fetches</div>
+      <div className="text-xs font-medium text-muted-foreground">{t("recentFetches")}</div>
       <ul className="space-y-1.5">
         {runs.map((run) => (
           <li
@@ -1172,6 +1206,9 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
             data-guide-highlight={isTaskHighlighted("first_fetch") ? "true" : "false"}
             data-guide-anchor="first_fetch"
           >
+            {isSubmitting ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />
+            ) : null}
             {isSubmitting ? t("fetching") : t("startFetch")}
           </Button>
         </div>
@@ -1274,6 +1311,9 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
             data-guide-highlight={isTaskHighlighted("first_fetch") ? "true" : "false"}
             data-guide-anchor="first_fetch"
           >
+            {isSubmitting ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />
+            ) : null}
             {isSubmitting ? t("fetching") : t("startFetch")}
           </Button>
         </div>

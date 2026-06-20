@@ -1,12 +1,13 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Sparkles, RotateCcw } from "lucide-react";
 import type { AiContent, AiCoverParagraph } from "@/lib/shared/schemas/aiContent";
 
-const PARAGRAPH_LABELS: Record<keyof AiContent["cover"], string> = {
-  paragraphOne: "Hook - Paragraph 1",
-  paragraphTwo: "Match - Paragraph 2",
-  paragraphThree: "Close - Paragraph 3",
+const PARAGRAPH_LABEL_KEYS: Record<keyof AiContent["cover"], string> = {
+  paragraphOne: "cover.paragraphOne",
+  paragraphTwo: "cover.paragraphTwo",
+  paragraphThree: "cover.paragraphThree",
 };
 
 interface CoverParagraphsSectionProps {
@@ -15,6 +16,8 @@ interface CoverParagraphsSectionProps {
 }
 
 export function CoverParagraphsSection({ cover, onChange }: CoverParagraphsSectionProps) {
+  const t = useTranslations("tailor");
+
   function patch(key: keyof AiContent["cover"], next: AiCoverParagraph) {
     onChange({ ...cover, [key]: next });
   }
@@ -24,18 +27,18 @@ export function CoverParagraphsSection({ cover, onChange }: CoverParagraphsSecti
       <header className="flex items-center gap-2">
         <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-brand-emerald-50 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-brand-emerald-700 ring-1 ring-brand-emerald-100">
           <Sparkles className="h-3 w-3" aria-hidden />
-          AI drafted
+          {t("badge.aiDrafted")}
         </span>
         <h2 className="text-sm font-semibold tracking-tight text-foreground">
-          Cover letter
+          {t("cover.title")}
         </h2>
       </header>
 
-      {(Object.keys(PARAGRAPH_LABELS) as Array<keyof AiContent["cover"]>).map(
+      {(Object.keys(PARAGRAPH_LABEL_KEYS) as Array<keyof AiContent["cover"]>).map(
         (key) => (
           <ParagraphEditor
             key={key}
-            label={PARAGRAPH_LABELS[key]}
+            label={t(PARAGRAPH_LABEL_KEYS[key])}
             paragraph={cover[key]}
             onChange={(next) => patch(key, next)}
           />
@@ -52,6 +55,7 @@ interface ParagraphEditorProps {
 }
 
 function ParagraphEditor({ label, paragraph, onChange }: ParagraphEditorProps) {
+  const t = useTranslations("tailor");
   const value = paragraph.userEdit ?? paragraph.aiText;
   const charCount = value.length;
   const isUserEdited =
@@ -62,7 +66,7 @@ function ParagraphEditor({ label, paragraph, onChange }: ParagraphEditorProps) {
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-muted-foreground">{label}</span>
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground/80">
-          <span>{charCount} chars</span>
+          <span>{t("charCount", { count: charCount })}</span>
           {isUserEdited ? (
             <button
               type="button"
@@ -72,7 +76,7 @@ function ParagraphEditor({ label, paragraph, onChange }: ParagraphEditorProps) {
               className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <RotateCcw className="h-3 w-3" aria-hidden />
-              Reset to AI
+              {t("resetToAi")}
             </button>
           ) : null}
         </div>

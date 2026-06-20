@@ -1,6 +1,14 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  type ReactNode,
+} from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { useToast } from "@/hooks/use-toast";
 import { useGuide } from "@/app/GuideContext";
@@ -12,6 +20,14 @@ import type { UseResumePreviewReturn } from "./useResumePreview";
 import type { UseResumeProfilesReturn } from "./useResumeProfiles";
 import { getSectionIds, type SectionId } from "./constants";
 
+/**
+ * Three-state save indicator for the resume editor — mirrors the proven
+ * tailor draft pattern (see app/(app)/jobs/[id]/tailor/useTailorDraft.ts
+ * SaveStatus). "dirty" means the live form differs from the last saved
+ * snapshot, so the SectionNav must NOT claim "Saved".
+ */
+export type ResumeSaveState = "dirty" | "saving" | "saved";
+
 type ResumeContextValue = UseResumeFormReturn &
   UseResumePreviewReturn &
   UseResumeProfilesReturn & {
@@ -20,6 +36,10 @@ type ResumeContextValue = UseResumeFormReturn &
     previewOpen: boolean;
     setPreviewOpen: (open: boolean) => void;
     saving: boolean;
+    /** True when the live draft differs from the last persisted snapshot. */
+    isDirty: boolean;
+    /** Derived three-state status driving the SectionNav save indicator. */
+    saveState: ResumeSaveState;
     handleSave: () => Promise<void>;
     locale: string;
     t: ReturnType<typeof useTranslations>;
@@ -51,6 +71,25 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
 
   const form = useResumeForm(locale);
 
+  // --- dirty tracking ---------------------------------------------------
+  // Snapshot the serialized 'save' payload at the moment we last persisted
+  // (or hydrated from the server). The live payload is compared against this
+  // snapshot to derive `isDirty`. Initial value null === "nothing loaded yet"
+  // so a blank form is never marked dirty before the first profile hydrates.
+  const lastSavedSnapshotRef = useRef<string | null>(null);
+  const liveSaveKey = useMemo(
+    () => JSON.stringify(form.buildPayload("save")),
+    // form.buildPayload is a useCallback keyed on all form state, so its
+    // identity changes on every edit — depending on it recomputes per change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [form.buildPayload],
+  );
+  const isDirty =
+    form.hasAnyContent &&
+    lastSavedSnapshotRef.current !== null &&
+    liveSaveKey !== lastSavedSnapshotRef.current;
+  const saveState: ResumeSaveState = saving ? "saving" : isDirty ? "dirty" : "saved";
+
   const preview = useResumePreview({
     buildPayload: form.buildPayload,
     hasAnyContent: form.hasAnyContent,
@@ -69,6 +108,19 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
     t: t as unknown as (key: string, values?: Record<string, string | number>) => string,
     toast,
   });
+
+  // Re-baseline the "last saved" snapshot whenever the active version changes.
+  // A hydrate (initial load, create, delete, switch) batches the new
+  // activeProfileId with the freshly-applied draft, so on the render after a
+  // hydrate `liveSaveKey` already reflects the loaded draft — capturing it
+  // here marks the form clean. Keystrokes never touch activeProfileId, so the
+  // snapshot stays put and edits register as dirty. Saving the SAME version
+  // re-baselines explicitly in handleSave (activeProfileId may be unchanged).
+  const { activeProfileId } = profiles;
+  useEffect(() => {
+    lastSavedSnapshotRef.current = JSON.stringify(form.buildPayload("save"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProfileId]);
 
   // Whether the always-on desktop preview pane is on screen (md+). On mobile
   // the pane is hidden and the preview only lives inside the dialog, so we skip
@@ -89,17 +141,42 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
   // Gated to when a preview surface is actually visible — the desktop pane (md+)
   // or the open mobile dialog — so mobile editing with the dialog closed never
   // triggers a wasted render.
-  const livePreviewKey = form.hasAnyContent
-    ? JSON.stringify(form.buildPayload("preview"))
-    : "";
+  //
+  // Build + serialize the preview payload ONCE per keystroke and reuse it as
+  // the effect key, then hand the same payload/payloadKey to schedulePreview so
+  // it skips its internal rebuild+restringify (useResumePreview.ts:74-75).
+  const livePreviewPayload = useMemo(
+    () => (form.hasAnyContent ? form.buildPayload("preview") : null),
+    // form.buildPayload identity tracks all form state (see liveSaveKey above).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [form.hasAnyContent, form.buildPayload],
+  );
+  const livePreviewKey = useMemo(
+    () => (livePreviewPayload ? JSON.stringify(livePreviewPayload) : ""),
+    [livePreviewPayload],
+  );
   useEffect(() => {
-    if (!livePreviewKey) return;
+    if (!livePreviewPayload || !livePreviewKey) return;
     if (!previewOpen && !isPreviewPaneVisible) return;
-    schedulePreview(400);
-  }, [livePreviewKey, previewOpen, isPreviewPaneVisible, schedulePreview]);
+    schedulePreview(400, false, {
+      payload: livePreviewPayload,
+      payloadKey: livePreviewKey,
+    });
+  }, [
+    livePreviewPayload,
+    livePreviewKey,
+    previewOpen,
+    isPreviewPaneVisible,
+    schedulePreview,
+  ]);
 
   const handleSave = async () => {
     setSaving(true);
+    // Snapshot the exact draft being persisted up front. On success this
+    // becomes the new "last saved" baseline so the dirty indicator resets to
+    // clean even when saving the same version (where activeProfileId — and
+    // thus the re-baseline effect — does not change).
+    const savedSnapshot = JSON.stringify(form.buildPayload("save"));
     try {
       const payload = {
         ...form.buildPayload("save"),
@@ -115,6 +192,7 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
       });
       if (!res.ok) throw new Error("Save failed");
       const json = await res.json();
+      lastSavedSnapshotRef.current = savedSnapshot;
       profiles.hydrateFromResumeApi(json);
       toast({ title: t("toastSaved"), description: t("toastSavedDesc") });
       markTaskComplete("resume_setup");
@@ -130,6 +208,19 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Beforeunload guard — warn on tab-close / hard navigation only while there
+  // are unsaved edits or a save in flight, mirroring FetchClient/TailorClient.
+  // The resume editor has no autosave, so without this an entire editing
+  // session is silently lost on accidental close.
+  useEffect(() => {
+    if (!isDirty && !saving) return;
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [isDirty, saving]);
+
   return (
     <ResumeContext.Provider
       value={{
@@ -141,6 +232,8 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
         previewOpen,
         setPreviewOpen,
         saving,
+        isDirty,
+        saveState,
         handleSave,
         locale,
         t,

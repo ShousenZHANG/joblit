@@ -364,8 +364,14 @@ function getWidgetStyles(): string {
     .jf-collapsed {
       width: 48px;
       height: 48px;
+      border: none;
+      padding: 0;
+      appearance: none;
+      -webkit-appearance: none;
       border-radius: 14px;
       background: var(--jf-collapsed-gradient);
+      color: inherit;
+      font: inherit;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -375,6 +381,11 @@ function getWidgetStyles(): string {
       right: 20px;
       box-shadow: var(--jf-collapsed-shadow);
       transition: all 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .jf-collapsed:focus-visible {
+      outline: 2px solid var(--jf-emerald-500);
+      outline-offset: 2px;
     }
 
     .jf-collapsed:hover {

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import { useFormatter, useNow, useTranslations } from "next-intl";
 import { Download, ExternalLink, FileText, RefreshCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +16,7 @@ const ResumePdfPreview = dynamic(
     ssr: false,
     loading: () => (
       <div className="flex h-full w-full items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-emerald-500 border-t-transparent" />
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-emerald-500 border-t-transparent motion-reduce:animate-none" />
       </div>
     ),
   },
@@ -52,27 +53,27 @@ export function PdfPreview({
   isPending = false,
   autoRefresh = true,
 }: PdfPreviewProps) {
+  const t = useTranslations("tailor");
+  const format = useFormatter();
+  const now = useNow();
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [lastLabel, setLastLabel] = useState<string | null>(null);
+  // Bumped every 5s so the locale-aware relative label re-renders fresh.
+  const [, setTick] = useState(0);
   const previewSrc = useMemo(
     () => (pdfUrl ? withPreviewCacheBust(pdfUrl, lastRefreshedAt) : null),
     [lastRefreshedAt, pdfUrl],
   );
+  const lastLabel = lastRefreshedAt
+    ? format.relativeTime(new Date(lastRefreshedAt), now)
+    : null;
 
-  // Tick "Last refresh: Xs ago" every 5s. setState only fires inside
-  // timer callbacks (subscription handlers), never synchronously in
-  // the effect body, to satisfy react-hooks/set-state-in-effect.
+  // Re-render "Last: Xs ago" every 5s. setState only fires inside the
+  // timer callback (subscription handler), never synchronously in the
+  // effect body, to satisfy react-hooks/set-state-in-effect.
   useEffect(() => {
     if (!lastRefreshedAt) return;
-    function tick() {
-      setLastLabel(formatRelative(Date.now() - lastRefreshedAt!));
-    }
-    const initial = setTimeout(tick, 0);
-    const id = setInterval(tick, 5_000);
-    return () => {
-      clearTimeout(initial);
-      clearInterval(id);
-    };
+    const id = setInterval(() => setTick((n) => n + 1), 5_000);
+    return () => clearInterval(id);
   }, [lastRefreshedAt]);
 
   // 30s-idle auto-refresh: any keypress / pointer-move resets the timer;
@@ -101,28 +102,28 @@ export function PdfPreview({
 
   return (
     <aside
-      aria-label={`PDF preview for ${jobTitle}`}
+      aria-label={t("preview.ariaLabel", { title: jobTitle })}
       className="flex h-full min-h-[520px] flex-col overflow-hidden rounded-[1.35rem] border border-border bg-muted/40 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.32)]"
     >
       <header className="flex h-11 shrink-0 items-center gap-1.5 border-b border-border bg-card px-3">
         <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-          PDF preview
+          {t("preview.title")}
         </span>
         <div className="ml-auto flex items-center gap-1">
           {isPending ? (
             <span className="hidden rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-100 sm:inline-flex">
-              Updating soon
+              {t("preview.updatingSoon")}
             </span>
           ) : lastLabel ? (
             <span className="hidden text-[11px] font-medium text-muted-foreground sm:inline">
-              Last: {lastLabel}
+              {t("preview.last", { time: lastLabel })}
             </span>
           ) : null}
           <button
             type="button"
             onClick={() => void onRefresh()}
             disabled={isRefreshing}
-            aria-label="Refresh preview"
+            aria-label={t("preview.refreshAria")}
             aria-busy={isRefreshing}
             className={cn(
               "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-transform hover:bg-muted hover:text-foreground active:scale-90",
@@ -130,7 +131,10 @@ export function PdfPreview({
             )}
           >
             <RefreshCcw
-              className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")}
+              className={cn(
+                "h-3.5 w-3.5",
+                isRefreshing && "animate-spin motion-reduce:animate-none",
+              )}
               aria-hidden
             />
           </button>
@@ -139,7 +143,7 @@ export function PdfPreview({
               href={previewSrc}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Open preview in new tab"
+              aria-label={t("preview.openNewTabAria")}
               className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <ExternalLink className="h-3.5 w-3.5" aria-hidden />
@@ -175,7 +179,7 @@ export function PdfPreview({
               <div className="flex aspect-[1/1.414] w-full items-center justify-center rounded-sm border border-border bg-card shadow-[0_18px_40px_-22px_rgba(15,23,42,0.18)]">
                 <div className="flex max-w-[220px] flex-col items-center gap-2 px-4 text-center text-xs text-muted-foreground">
                   <FileText className="h-6 w-6 text-muted-foreground/50" aria-hidden />
-                  <span>No preview yet - click Refresh to render.</span>
+                  <span>{t("preview.empty")}</span>
                 </div>
               </div>
             </div>
@@ -184,13 +188,6 @@ export function PdfPreview({
       </div>
     </aside>
   );
-}
-
-function formatRelative(diffMs: number): string {
-  if (diffMs < 5_000) return "just now";
-  if (diffMs < 60_000) return `${Math.floor(diffMs / 1_000)}s ago`;
-  if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)}m ago`;
-  return `${Math.floor(diffMs / 3_600_000)}h ago`;
 }
 
 function withPreviewCacheBust(url: string, refreshedAt: number | null): string {

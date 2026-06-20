@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { ChevronDown, RotateCcw, Sparkles } from "lucide-react";
 import type { AiSummary } from "@/lib/shared/schemas/aiContent";
 import { cn } from "@/lib/utils";
@@ -12,6 +13,7 @@ interface SummarySectionProps {
 }
 
 export function SummarySection({ summary, onChange }: SummarySectionProps) {
+  const t = useTranslations("tailor");
   const [showDiff, setShowDiff] = useState(false);
   const value = summary.userEdit ?? summary.aiText;
   const isUserEdited = summary.userEdit !== undefined && summary.userEdit !== summary.aiText;
@@ -24,10 +26,10 @@ export function SummarySection({ summary, onChange }: SummarySectionProps) {
         <div className="flex items-center gap-2">
           <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-brand-emerald-50 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-brand-emerald-700 ring-1 ring-brand-emerald-100">
             <Sparkles className="h-3 w-3" aria-hidden />
-            AI rewrote
+            {t("badge.aiRewrote")}
           </span>
           <h2 className="text-sm font-semibold tracking-tight text-foreground">
-            Summary
+            {t("summary.title")}
           </h2>
         </div>
         {isUserEdited ? (
@@ -39,7 +41,7 @@ export function SummarySection({ summary, onChange }: SummarySectionProps) {
             className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <RotateCcw className="h-3 w-3" aria-hidden />
-            Reset to AI
+            {t("resetToAi")}
           </button>
         ) : null}
       </header>
@@ -55,8 +57,8 @@ export function SummarySection({ summary, onChange }: SummarySectionProps) {
         }
         rows={4}
         className="w-full resize-y rounded-2xl border border-border/70 bg-background px-3 py-2.5 text-sm leading-relaxed text-foreground shadow-inner shadow-black/5 placeholder:text-muted-foreground/60 focus-visible:border-brand-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-400/40"
-        placeholder="Summary"
-        aria-label="Resume summary"
+        placeholder={t("summary.placeholder")}
+        aria-label={t("summary.aria")}
       />
 
       {original && diffStats.hasChanges ? (
@@ -74,7 +76,7 @@ export function SummarySection({ summary, onChange }: SummarySectionProps) {
               )}
               aria-hidden
             />
-            {showDiff ? "Hide changes" : "Compare changes"}
+            {showDiff ? t("summary.hideChanges") : t("summary.compareChanges")}
             <span className="ml-0.5 inline-flex items-center gap-1 text-[10px] font-semibold tabular-nums">
               <span className="text-brand-emerald-600">+{diffStats.added}</span>
               <span className="text-rose-500">&minus;{diffStats.removed}</span>
@@ -85,11 +87,11 @@ export function SummarySection({ summary, onChange }: SummarySectionProps) {
               <div className="mb-1.5 flex flex-wrap items-center gap-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 <span className="inline-flex items-center gap-1">
                   <span className="h-2 w-2 rounded-[2px] bg-rose-300" aria-hidden />
-                  Your original
+                  {t("summary.yourOriginal")}
                 </span>
                 <span className="inline-flex items-center gap-1">
                   <span className="h-2 w-2 rounded-[2px] bg-brand-emerald-300" aria-hidden />
-                  AI &amp; your edits
+                  {t("summary.aiAndYourEdits")}
                 </span>
               </div>
               <InlineDiff original={original} revised={value} />

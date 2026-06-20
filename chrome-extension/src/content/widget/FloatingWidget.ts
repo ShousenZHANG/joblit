@@ -169,8 +169,10 @@ export class FloatingWidget {
     this.root.style.borderRadius = "";
     this.root.style.boxShadow = "";
 
-    const badge = document.createElement("div");
+    const badge = document.createElement("button");
+    badge.type = "button";
     badge.className = "jf-collapsed";
+    badge.setAttribute("aria-label", t("widget.openAria"));
 
     const logoSpan = document.createElement("span");
     logoSpan.className = "jf-logo";
@@ -226,6 +228,17 @@ export class FloatingWidget {
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
     });
+
+    // Keyboard activation (WCAG 2.1.1): Enter/Space expands the widget.
+    // Mouse activation is handled by the mousedown/mouseup click-vs-drag logic
+    // above, so there is no click listener to double-fire here.
+    badge.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+        e.preventDefault();
+        this.toggle();
+      }
+    });
+
     this.root.appendChild(badge);
   }
 

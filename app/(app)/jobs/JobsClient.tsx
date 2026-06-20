@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, CheckSquare, Compass, MapPin, SlidersHorizontal, Square, Trash2, X } from "lucide-react";
+import { ArrowRight, CheckSquare, Compass, MapPin, RefreshCw, SlidersHorizontal, Square, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -84,7 +84,7 @@ export function JobsClient({
 
   const {
     items, totalCount, nextCursor, loading, loadingInitial, showEmpty, loadingMore,
-    loadedCursors, resetPagination, firstQueryError, jobLevelOptions,
+    loadedCursors, resetPagination, firstQueryError, refetch, jobLevelOptions,
   } = useJobPagination({
     queryString,
     initialItems,
@@ -198,9 +198,16 @@ export function JobsClient({
   // filter switches. A barely-there fade still signals "working".
   const listOpacityClass = showLoadingOverlay ? "opacity-95" : "opacity-100";
   const queryError = firstQueryError
-    ? getErrorMessage(firstQueryError, "Failed to load jobs")
+    ? getErrorMessage(firstQueryError, t("errorLoadJobs"))
     : null;
+  // A query error gets a Retry affordance (wired to the infinite query refetch);
+  // a mutation error gets a dismiss (X) — mirrors TailorClient's banner.
   const activeError = mutationError ?? queryError;
+  const activeErrorKind: "query" | "mutation" | null = mutationError
+    ? "mutation"
+    : queryError
+      ? "query"
+      : null;
 
   const activeFilterCount = [
     locationFilter !== "ALL",
@@ -247,8 +254,8 @@ export function JobsClient({
 
     if (justBecameTerminal) {
       toast({
-        title: "Jobs imported",
-        description: `Imported ${delta} new job${delta === 1 ? "" : "s"}. Refreshing list.`,
+        title: t("importedToastTitle"),
+        description: t("importedToastDesc", { delta }),
         duration: 2200,
         className:
           "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-900 animate-in fade-in zoom-in-95",
@@ -261,6 +268,7 @@ export function JobsClient({
     loadedCursors,
     queryClient,
     resetPagination,
+    t,
     toast,
   ]);
 
@@ -326,7 +334,7 @@ export function JobsClient({
     queryFn: async () => {
       const res = await fetch(`/api/jobs/${effectiveSelectedId}`);
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || "Failed to load details");
+      if (!res.ok) throw new Error(json?.error || t("errorLoadDetails"));
       return json as { id: string; description: string | null };
     },
     enabled: Boolean(effectiveSelectedId),
@@ -335,7 +343,7 @@ export function JobsClient({
   });
   const selectedDescription = selectedJob ? detailQuery.data?.description ?? "" : "";
   const detailError = detailQuery.error
-    ? getErrorMessage(detailQuery.error, "Failed to load details")
+    ? getErrorMessage(detailQuery.error, t("errorLoadDetails"))
     : null;
   const detailLoading = detailQuery.isFetching && !detailQuery.data;
 
@@ -388,7 +396,7 @@ export function JobsClient({
       >
       <div className="flex flex-1 flex-col gap-2 lg:min-h-0 lg:h-full lg:overflow-hidden">
         <div aria-live="polite" className="sr-only">
-          {totalCount !== undefined ? `${totalCount} jobs found` : "Loading jobs"}
+          {totalCount !== undefined ? t("jobsFound", { count: totalCount }) : t("loadingJobs")}
         </div>
         {/* Mobile-only toolbar. Desktop search/filter row was moved
             into the results (list) column header to match the
@@ -396,7 +404,7 @@ export function JobsClient({
             pane. See the desktop-only block further down. */}
         <div
         role="search"
-        aria-label="Job search"
+        aria-label={t("searchLandmark")}
         data-testid="jobs-toolbar"
         className="relative rounded-2xl border border-border/70 bg-background/90 p-3 shadow-sm backdrop-blur lg:hidden"
       >
@@ -497,8 +505,34 @@ export function JobsClient({
       </div>
 
       {activeError ? (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-          {activeError}
+        <div
+          role="alert"
+          className="flex items-start justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+        >
+          <span className="min-w-0">{activeError}</span>
+          {activeErrorKind === "query" ? (
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              disabled={loading}
+              className="flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 font-medium transition-colors hover:bg-destructive/15 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw
+                className={cn("h-3.5 w-3.5", loading && "motion-safe:animate-spin")}
+                aria-hidden
+              />
+              {tc("retry")}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              aria-label={tc("close")}
+              className="shrink-0 rounded-md p-0.5 transition-colors hover:bg-destructive/15"
+            >
+              <X className="h-4 w-4" aria-hidden />
+            </button>
+          )}
         </div>
       ) : null}
 
@@ -641,7 +675,7 @@ export function JobsClient({
                   type="button"
                   onClick={toggleSelectAll}
                   className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-foreground/90 transition-colors hover:bg-brand-emerald-100"
-                  aria-label={batchSelectedIds.size === items.length ? "Deselect all" : "Select all"}
+                  aria-label={batchSelectedIds.size === items.length ? t("deselectAll") : t("selectAll")}
                 >
                   {batchSelectedIds.size === items.length ? (
                     <CheckSquare className="h-4 w-4 text-brand-emerald-600" />
@@ -649,9 +683,9 @@ export function JobsClient({
                     <Square className="h-4 w-4 text-muted-foreground" />
                   )}
                   {batchSelectedIds.size > 0 ? (
-                    <span className="font-semibold text-brand-emerald-700">{batchSelectedIds.size} selected</span>
+                    <span className="font-semibold text-brand-emerald-700">{t("selectedCount", { count: batchSelectedIds.size })}</span>
                   ) : (
-                    <span>Select all</span>
+                    <span>{t("selectAll")}</span>
                   )}
                 </button>
               </div>
@@ -663,13 +697,13 @@ export function JobsClient({
                   className="flex items-center gap-1 rounded-lg bg-destructive px-3 py-1.5 text-xs font-semibold text-destructive-foreground shadow-sm transition-all duration-150 hover:bg-destructive/90 active:translate-y-px disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  Delete
+                  {tc("delete")}
                 </button>
                 <button
                   type="button"
                   onClick={exitBatchMode}
                   className="flex items-center justify-center rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  aria-label="Exit selection mode"
+                  aria-label={t("exitSelectionMode")}
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -682,19 +716,19 @@ export function JobsClient({
                   {t("results")}
                   {typeof totalCount === "number" ? (
                     <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                      · {totalCount} {totalCount === 1 ? "job" : "jobs"}
+                      · {t("jobCount", { count: totalCount })}
                     </span>
                   ) : null}
                 </span>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">
-                    {items.length} loaded
+                    {t("loadedCount", { count: items.length })}
                   </span>
                   <button
                     type="button"
                     onClick={() => setBatchSelectMode(true)}
                     className="flex items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    aria-label="Enter selection mode"
+                    aria-label={t("enterSelectionMode")}
                   >
                     <CheckSquare className="h-4 w-4" />
                   </button>
@@ -877,13 +911,13 @@ export function JobsClient({
           <div className="border-t px-4 py-2 text-xs text-muted-foreground">
             {loadingMore ? (
               <div className="flex items-center gap-2">
-                <div className="h-3 w-3 animate-spin rounded-full border-2 border-brand-emerald-500 border-t-transparent" />
-                <span>Loading more jobs…</span>
+                <div className="h-3 w-3 motion-safe:animate-spin rounded-full border-2 border-brand-emerald-500 border-t-transparent" />
+                <span>{t("loadingMore")}</span>
               </div>
             ) : nextCursor ? (
-              "Scroll down to load more"
+              t("scrollToLoadMore")
             ) : (
-              "End of results"
+              t("endOfResults")
             )}
           </div>
         </div>
@@ -906,6 +940,7 @@ export function JobsClient({
           onDelete={requestDelete}
           onGenerateResume={(job) => ext.openExternalGenerateDialog(job, "resume")}
           onGenerateCover={(job) => ext.openExternalGenerateDialog(job, "cover")}
+          onRetryDetail={() => void detailQuery.refetch()}
         />
         </section>
       </div>

@@ -1,18 +1,13 @@
 "use client";
 
 import { CheckCircle2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 type StepDef = {
   id: 1 | 2 | 3;
   label: string;
   subtitle: string;
 };
-
-const STEPS: StepDef[] = [
-  { id: 1, label: "Import", subtitle: "AI skill pack" },
-  { id: 2, label: "Copy", subtitle: "Job prompt" },
-  { id: 3, label: "Generate", subtitle: "Paste & create PDF" },
-];
 
 export type DialogPhase = 1 | 2 | 3 | "generating";
 
@@ -34,7 +29,14 @@ export function StepIndicator({
   canGoToStep2,
   canGoToStep3,
 }: StepIndicatorProps) {
+  const t = useTranslations("jobs.external");
   const current = numericStep(currentStep);
+
+  const STEPS: StepDef[] = [
+    { id: 1, label: t("stepImportLabel"), subtitle: t("stepImportSubtitle") },
+    { id: 2, label: t("stepCopyLabel"), subtitle: t("stepCopySubtitle") },
+    { id: 3, label: t("stepGenerateLabel"), subtitle: t("stepGenerateSubtitle") },
+  ];
 
   return (
     <div className="flex items-start gap-0 px-2 py-1">

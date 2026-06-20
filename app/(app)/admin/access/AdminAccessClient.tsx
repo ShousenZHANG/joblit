@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Clock, Mail, ShieldX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 type AccessStatus = "PENDING" | "APPROVED" | "REJECTED";
 
@@ -40,6 +41,7 @@ export function AdminAccessClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,11 +75,19 @@ export function AdminAccessClient() {
       });
       if (!res.ok) throw new Error("Review failed");
     } catch {
+      // The optimistic flip is reverted by reconciling from the server. Without
+      // a toast the row silently snaps back, which reads as a UI glitch — tell
+      // the admin the update did not stick.
+      toast({
+        title: "Could not update request",
+        description: "The change was reverted. Please try again.",
+        variant: "destructive",
+      });
       await load(); // reconcile from server on any failure
     } finally {
       setBusyId(null);
     }
-  }, [load]);
+  }, [load, toast]);
 
   const pendingCount = useMemo(
     () => rows.filter((r) => r.status === "PENDING").length,

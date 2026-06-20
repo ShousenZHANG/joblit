@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useTranslations } from "next-intl";
 import {
   Brain,
   Search,
@@ -46,6 +47,8 @@ interface RuleGroup {
 }
 
 export function KnowledgeBase() {
+  const t = useTranslations("extension");
+  const tc = useTranslations("common");
   const { toast } = useToast();
   const [rules, setRules] = useState<MappingRule[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,13 +69,13 @@ export function KnowledgeBase() {
       setRules(json.data ?? []);
     } catch {
       toast({
-        title: "Failed to load knowledge base",
+        title: t("kb.toastLoadFailed"),
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, t]);
 
   useEffect(() => {
     fetchRules();
@@ -120,10 +123,10 @@ export function KnowledgeBase() {
       })
       .map(([key, groupRules]) => ({
         key,
-        label: key === "global" ? "Global" : key,
+        label: key === "global" ? t("kb.globalGroup") : key,
         rules: groupRules.sort((a, b) => b.useCount - a.useCount),
       }));
-  }, [filteredRules]);
+  }, [filteredRules, t]);
 
   function toggleGroup(key: string) {
     setCollapsedGroups((prev) => {
@@ -170,9 +173,9 @@ export function KnowledgeBase() {
         ),
       );
       setEditingId(null);
-      toast({ title: "Answer updated" });
+      toast({ title: t("kb.toastAnswerUpdated") });
     } catch {
-      toast({ title: "Failed to update", variant: "destructive" });
+      toast({ title: t("kb.toastUpdateFailed"), variant: "destructive" });
     } finally {
       setSavingId(null);
     }
@@ -190,9 +193,9 @@ export function KnowledgeBase() {
       if (!res.ok) throw new Error("Failed to delete");
 
       setRules((prev) => prev.filter((r) => r.id !== deletingRule.id));
-      toast({ title: "Rule deleted" });
+      toast({ title: t("kb.toastRuleDeleted") });
     } catch {
-      toast({ title: "Failed to delete rule", variant: "destructive" });
+      toast({ title: t("kb.toastDeleteFailed"), variant: "destructive" });
     } finally {
       setDeleteLoading(false);
       setDeletingRule(null);
@@ -214,8 +217,8 @@ export function KnowledgeBase() {
     return (
       <div className="mt-4 rounded-xl border border-border bg-card p-8">
         <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground/70">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading knowledge base...
+          <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />
+          {t("kb.loading")}
         </div>
       </div>
     );
@@ -232,11 +235,10 @@ export function KnowledgeBase() {
             </div>
             <div>
               <h2 className="text-sm font-semibold text-foreground">
-                AutoFill Knowledge Base
+                {t("kb.heading")}
               </h2>
               <p className="text-xs text-muted-foreground">
-                {rules.length} rule{rules.length !== 1 ? "s" : ""} learned from
-                your corrections
+                {t("kb.rulesLearned", { count: rules.length })}
               </p>
             </div>
           </div>
@@ -247,10 +249,11 @@ export function KnowledgeBase() {
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted/40">
               <Brain className="h-6 w-6 text-muted-foreground/40" />
             </div>
-            <p className="text-sm font-medium text-muted-foreground">No rules yet</p>
+            <p className="text-sm font-medium text-muted-foreground">
+              {t("kb.emptyTitle")}
+            </p>
             <p className="mt-1 text-xs text-muted-foreground/70">
-              Use the extension to fill forms — corrections you make will appear
-              here.
+              {t("kb.emptyBody")}
             </p>
           </div>
         ) : (
@@ -263,7 +266,7 @@ export function KnowledgeBase() {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search fields, answers, ATS..."
+                  placeholder={t("kb.searchPlaceholder")}
                   className="h-8 w-full rounded-lg border border-border bg-muted/40 pl-9 pr-3 text-xs text-foreground/85 outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-brand-emerald-300 focus:bg-card focus:ring-1 focus:ring-brand-emerald-200"
                 />
               </div>
@@ -272,7 +275,7 @@ export function KnowledgeBase() {
             {/* Grouped table */}
             {groups.length === 0 ? (
               <div className="px-5 py-8 text-center text-xs text-muted-foreground/70">
-                No rules match your search.
+                {t("kb.noSearchMatch")}
               </div>
             ) : (
               <div className="divide-y divide-border/60">
@@ -310,9 +313,9 @@ export function KnowledgeBase() {
                         <div className="pb-1">
                           {/* Table header */}
                           <div className="grid grid-cols-[1fr_1.5fr_50px_36px] gap-2 px-5 pb-1 pt-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
-                            <div className="pl-6">Field</div>
-                            <div>Answer</div>
-                            <div className="text-center">Used</div>
+                            <div className="pl-6">{t("kb.columnField")}</div>
+                            <div>{t("kb.columnAnswer")}</div>
+                            <div className="text-center">{t("kb.columnUsed")}</div>
                             <div />
                           </div>
 
@@ -350,7 +353,7 @@ export function KnowledgeBase() {
                                     className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-brand-emerald-50 text-brand-emerald-600 hover:bg-brand-emerald-100"
                                   >
                                     {savingId === rule.id ? (
-                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                      <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" />
                                     ) : (
                                       <Check className="h-3 w-3" />
                                     )}
@@ -366,12 +369,12 @@ export function KnowledgeBase() {
                                 <button
                                   onClick={() => startEdit(rule)}
                                   className="group/cell flex items-center gap-1.5 truncate rounded px-1.5 py-0.5 text-left text-xs text-muted-foreground transition-colors hover:bg-brand-emerald-50 hover:text-brand-emerald-700"
-                                  title="Click to edit"
+                                  title={t("kb.clickToEdit")}
                                 >
                                   <span className="truncate">
                                     {rule.staticValue || (
                                       <span className="italic text-muted-foreground/40">
-                                        No value
+                                        {t("kb.noValue")}
                                       </span>
                                     )}
                                   </span>
@@ -388,7 +391,7 @@ export function KnowledgeBase() {
                               <button
                                 onClick={() => setDeletingRule(rule)}
                                 className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground/40 opacity-0 transition-all hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
-                                title="Delete"
+                                title={tc("delete")}
                               >
                                 <Trash2 className="h-3 w-3" />
                               </button>
@@ -412,18 +415,19 @@ export function KnowledgeBase() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete this rule?</AlertDialogTitle>
+            <AlertDialogTitle>{t("kb.deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              The extension will no longer auto-fill{" "}
-              <strong>
-                {deletingRule?.fieldLabel || deletingRule?.fieldSelector}
-              </strong>{" "}
-              with &quot;{deletingRule?.staticValue}&quot;.
+              {t.rich("kb.deleteBody", {
+                field:
+                  deletingRule?.fieldLabel || deletingRule?.fieldSelector || "",
+                value: deletingRule?.staticValue ?? "",
+                strong: (chunks) => <strong>{chunks}</strong>,
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleteLoading}>
-              Cancel
+              {tc("cancel")}
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
@@ -431,11 +435,11 @@ export function KnowledgeBase() {
               className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
             >
               {deleteLoading ? (
-                <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
               ) : (
                 <Trash2 className="mr-2 h-3.5 w-3.5" />
               )}
-              Delete
+              {tc("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

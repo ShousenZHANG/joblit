@@ -135,7 +135,7 @@ export function Dashboard({ onDisconnect }: DashboardProps) {
           }
         });
       } else {
-        setFillState({ status: "error", message: "No active tab found" });
+        setFillState({ status: "error", message: t("error.noActiveTab") });
       }
     });
   }, []);
@@ -203,11 +203,12 @@ export function Dashboard({ onDisconnect }: DashboardProps) {
             <button
               onClick={handleRefreshProfile}
               className="jl-btn jl-btn--ghost"
-              title="Refresh profile"
+              title={t("dashboard.refreshProfile")}
+              aria-label={t("dashboard.refreshProfile")}
               style={{ padding: 6, flexShrink: 0, opacity: refreshing ? 0.5 : 0.6 }}
               disabled={refreshing}
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ animation: refreshing ? "spin 1s linear infinite" : "none" }}>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ animation: refreshing ? "spin 1s linear infinite" : "none" }}>
                 <path d="M14 8A6 6 0 1 1 8 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
                 <path d="M8 0l3 2-3 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
@@ -225,7 +226,7 @@ export function Dashboard({ onDisconnect }: DashboardProps) {
       {/* Fill Button with State */}
       {fillState.status === "idle" && (
         <button onClick={handleFillNow} className="jl-btn jl-btn--primary">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M2 12l3-8h6l3 8M4.5 8h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
           {t("dashboard.fillNow")}
@@ -233,11 +234,11 @@ export function Dashboard({ onDisconnect }: DashboardProps) {
       )}
 
       {fillState.status === "filling" && (
-        <div className="jl-card" style={{ textAlign: "center", padding: "16px 14px" }}>
+        <div role="status" aria-live="polite" className="jl-card" style={{ textAlign: "center", padding: "16px 14px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 8 }}>
-            <span dangerouslySetInnerHTML={{ __html: spinnerSvg(16) }} />
+            <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: spinnerSvg(16) }} />
             <span style={{ fontSize: 13, fontWeight: 600, color: "var(--jl-emerald-700)" }}>
-              Filling form fields...
+              {t("dashboard.fillingFields")}
             </span>
           </div>
           <div className="jl-progress">
@@ -247,49 +248,50 @@ export function Dashboard({ onDisconnect }: DashboardProps) {
       )}
 
       {fillState.status === "success" && (
-        <div className="jl-card" style={{ textAlign: "center", padding: "16px 14px" }}>
+        <div role="status" aria-live="polite" className="jl-card" style={{ textAlign: "center", padding: "16px 14px" }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
             <div
               className="jl-success-check"
+              aria-hidden="true"
               style={{ width: 36, height: 36 }}
               dangerouslySetInnerHTML={{ __html: checkmarkSvg(20) }}
             />
             <div style={{ fontSize: 14, fontWeight: 600, color: "var(--jl-emerald-700)" }}>
-              {fillState.filled}/{fillState.total} fields filled
+              {t("history.fieldsFilled", { filled: fillState.filled, total: fillState.total })}
             </div>
             {fillState.total > fillState.filled && (
               <div className="jl-badge jl-badge--warning" style={{ fontSize: 11 }}>
-                {fillState.total - fillState.filled} skipped
+                {t("dashboard.fieldsSkipped", { count: fillState.total - fillState.filled })}
               </div>
             )}
             {fillState.sources && (fillState.sources.profile > 0 || fillState.sources.historical > 0) && (
               <div style={{ display: "flex", gap: 4, justifyContent: "center", marginTop: 4 }}>
                 {fillState.sources.profile > 0 && (
                   <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, background: "var(--jl-success-bg)", color: "var(--jl-emerald-800)", border: "1px solid var(--jl-emerald-100)" }}>
-                    {fillState.sources.profile} from profile
+                    {t("dashboard.fromProfile", { count: fillState.sources.profile })}
                   </span>
                 )}
                 {fillState.sources.historical > 0 && (
                   <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, background: "var(--jl-blue-50)", color: "var(--jl-blue-700)", border: "1px solid var(--jl-blue-200)" }}>
-                    {fillState.sources.historical} from history
+                    {t("dashboard.fromHistory", { count: fillState.sources.historical })}
                   </span>
                 )}
               </div>
             )}
             <div style={{ fontSize: 11, color: "var(--jl-text-muted)", marginTop: 2 }}>
-              Closing in a moment...
+              {t("dashboard.closingSoon")}
             </div>
           </div>
         </div>
       )}
 
       {fillState.status === "error" && (
-        <div>
+        <div role="alert">
           <div className="jl-error-msg" style={{ marginBottom: 8 }}>
             <span>{fillState.message}</span>
           </div>
           <button onClick={() => setFillState({ status: "idle" })} className="jl-btn jl-btn--outline" style={{ width: "100%" }}>
-            Try Again
+            {t("dashboard.tryAgain")}
           </button>
         </div>
       )}
@@ -300,7 +302,7 @@ export function Dashboard({ onDisconnect }: DashboardProps) {
           Alt+Shift+F
         </div>
         <button onClick={handleToggleWidget} className="jl-btn jl-btn--outline" style={{ flex: 1 }}>
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <rect x="1" y="3" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.5"/>
             <circle cx="11" cy="8" r="2" stroke="currentColor" strokeWidth="1.5"/>
           </svg>
@@ -321,7 +323,7 @@ export function Dashboard({ onDisconnect }: DashboardProps) {
                 ? Math.round((sub.filledCount / sub.fieldCount) * 100)
                 : 0;
               const seconds = Math.floor((renderedAt - new Date(sub.createdAt).getTime()) / 1000);
-              const timeAgo = seconds < 60 ? "just now"
+              const timeAgo = seconds < 60 ? t("history.justNow")
                 : seconds < 3600 ? `${Math.floor(seconds / 60)}m`
                 : seconds < 86400 ? `${Math.floor(seconds / 3600)}h`
                 : `${Math.floor(seconds / 86400)}d`;
@@ -361,7 +363,7 @@ export function Dashboard({ onDisconnect }: DashboardProps) {
         className={`jl-btn ${confirmDisconnect ? "jl-btn--danger" : "jl-btn--ghost"}`}
         style={{ width: "100%", fontSize: 12 }}
       >
-        {confirmDisconnect ? "Click again to confirm disconnect" : t("auth.disconnect")}
+        {confirmDisconnect ? t("dashboard.confirmDisconnect") : t("auth.disconnect")}
       </button>
     </div>
   );

@@ -69,6 +69,7 @@ interface JobDetailPanelProps {
   onDelete: (job: JobItem) => void;
   onGenerateResume: (job: JobItem) => void;
   onGenerateCover: (job: JobItem) => void;
+  onRetryDetail: () => void;
 }
 
 /** Small icon + label pill for the header meta row. Renders nothing when the
@@ -101,6 +102,7 @@ export function JobDetailPanel({
   onDelete,
   onGenerateResume,
   onGenerateCover,
+  onRetryDetail,
 }: JobDetailPanelProps) {
   const t = useTranslations("jobs");
   // CN market ships a single Chinese résumé end-to-end — no AI CV tailoring or
@@ -340,8 +342,15 @@ export function JobDetailPanel({
                 </div>
               ) : null}
               {detailError ? (
-                <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-                  {detailError}
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                  <span>{detailError}</span>
+                  <button
+                    type="button"
+                    onClick={onRetryDetail}
+                    className="font-semibold underline underline-offset-2 hover:no-underline"
+                  >
+                    {t("retry")}
+                  </button>
                 </div>
               ) : null}
               {detailLoading ? (

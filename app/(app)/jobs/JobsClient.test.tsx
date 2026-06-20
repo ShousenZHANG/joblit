@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
 import { JobsClient } from "./JobsClient";
 import { sessionDeletedJobIds } from "./hooks/useJobMutations";
+import { resetToasts } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Toaster } from "@/components/ui/toaster";
 import messages from "../../../messages/en.json";
@@ -68,6 +69,9 @@ beforeEach(() => {
   // The session-tombstone set is module-level by design (it must survive
   // JobsClient remounts) — tests share the module instance, so isolate here.
   sessionDeletedJobIds.clear();
+  // The toast store is module-level too — clear leftover toasts (e.g. undo
+  // toasts from prior delete tests) so each case starts with a clean viewport.
+  resetToasts();
   fetchStatusMock.state = { runId: null, status: null, importedCount: 0 };
   if (!HTMLElement.prototype.hasPointerCapture) {
     Object.defineProperty(HTMLElement.prototype, "hasPointerCapture", {
@@ -833,7 +837,8 @@ describe("JobsClient", () => {
     const removeButton = (await screen.findAllByTestId("job-remove-button"))[0];
     await user.click(removeButton);
 
-    // The Undo action lives in the toast.
+    // The Undo action lives in the toast (toast store reset in beforeEach keeps
+    // this isolated to the one toast this delete produces).
     const undoButton = await screen.findByRole("button", { name: /undo/i });
     await user.click(undoButton);
 

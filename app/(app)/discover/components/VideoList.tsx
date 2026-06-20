@@ -3,7 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, RefreshCw, KeyRound, Star, Info } from "lucide-react";
+import {
+  AlertCircle,
+  RefreshCw,
+  KeyRound,
+  Star,
+  Info,
+  Film,
+} from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -110,7 +117,15 @@ export function VideoList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category, sort, timeWindow]);
 
-  const { data, isLoading, error } = useVideos(category, timeWindow, sort);
+  const { data, isLoading, isPlaceholderData, error } = useVideos(
+    category,
+    timeWindow,
+    sort,
+  );
+  // Only show the full skeleton on first load; later category/sort/window
+  // switches keep the previous grid in place (keepPreviousData) and just dim it.
+  const showSkeleton = isLoading && !data;
+  const listOpacityClass = isPlaceholderData ? "opacity-95" : "opacity-100";
   // Memoize so the `??` fallback doesn't allocate a fresh empty array on every
   // render and force `items` (and downstream snapshotKey) to recompute.
   const rawItems = useMemo(() => data?.items ?? [], [data?.items]);
@@ -240,7 +255,7 @@ export function VideoList() {
         })}
       </div>
 
-      {noApiKey && !isLoading ? (
+      {noApiKey && !showSkeleton ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
           <KeyRound className="h-5 w-5 text-amber-500" />
           <p className="text-sm font-medium text-amber-700">
@@ -254,7 +269,7 @@ export function VideoList() {
             to Vercel environment variables. Free tier: 10,000 units/day.
           </p>
         </div>
-      ) : isLoading ? (
+      ) : showSkeleton ? (
         <VideoSkeleton />
       ) : error ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-6 text-center">
@@ -274,11 +289,29 @@ export function VideoList() {
           </button>
         </div>
       ) : items.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">
-          {showFavoritesOnly
-            ? "No favorites match this category. Switch category or hit the star on a video."
-            : "No videos in this category yet. Try a different filter."}
-        </p>
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-card/50 p-10 text-center">
+          {showFavoritesOnly ? (
+            <Star className="h-6 w-6 text-muted-foreground" aria-hidden />
+          ) : (
+            <Film className="h-6 w-6 text-muted-foreground" aria-hidden />
+          )}
+          <p className="text-sm font-medium text-foreground">
+            {showFavoritesOnly ? t("noFavoritesTitle") : t("noVideosTitle")}
+          </p>
+          <p className="max-w-sm text-xs text-muted-foreground">
+            {showFavoritesOnly ? t("noFavoritesHint") : t("noVideosHint")}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              if (showFavoritesOnly) setShowFavoritesOnly(false);
+              else setCategory("all");
+            }}
+            className="mt-1 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+          >
+            {showFavoritesOnly ? t("showAllVideos") : t("showAllCategories")}
+          </button>
+        </div>
       ) : (
         <>
           {isStale && data?.fetchedAt && (
@@ -293,7 +326,9 @@ export function VideoList() {
               </span>
             </div>
           )}
-        <div className="grid gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3">
+        <div
+          className={`grid gap-2 transition-opacity duration-200 ease-out sm:grid-cols-2 sm:gap-3 lg:grid-cols-3 ${listOpacityClass}`}
+        >
           {items.map((item) => (
             <VideoCard
               key={item.id}

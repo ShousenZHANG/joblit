@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { Textarea } from "@/components/ui/textarea";
 import {
   CheckCircle2,
@@ -59,6 +60,7 @@ export function JsonInputPanel({
   target,
   parsedOutput,
 }: JsonInputPanelProps) {
+  const t = useTranslations("jobs.external");
   const [showPreview, setShowPreview] = useState(true);
   const hasInput = value.trim().length > 0;
   const isValid = hasInput && parsedOutput !== null;
@@ -76,6 +78,7 @@ export function JsonInputPanel({
         <Textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          aria-label={t("pasteLabel")}
           placeholder={
             target === "resume"
               ? '{\n  "cvSummary": "...",\n  "latestExperience": {\n    "bullets": ["..."]\n  },\n  "skillsFinal": [...]\n}'
@@ -89,13 +92,13 @@ export function JsonInputPanel({
           {!hasInput ? (
             <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 p-3">
               <p className="text-center text-xs text-muted-foreground/70">
-                Paste your AI output on the left to see a preview here
+                {t("pastePreviewHint")}
               </p>
             </div>
           ) : isValid ? (
             <div className="overflow-y-auto rounded-lg border border-brand-emerald-200 bg-card p-3">
               <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-brand-emerald-600">
-                Preview
+                {t("preview")}
               </div>
               {parsedOutput && "cvSummary" in parsedOutput ? (
                 <ResumePreviewContent parsed={parsedOutput as ResumeImportOutput} />
@@ -106,7 +109,7 @@ export function JsonInputPanel({
           ) : (
             <div className="flex flex-1 items-center justify-center rounded-lg border border-destructive/30 bg-destructive/10 p-3">
               <p className="text-center text-xs text-rose-500">
-                Invalid JSON &mdash; fix errors to see preview
+                {t("invalidJsonPreview")}
               </p>
             </div>
           )}
@@ -120,7 +123,7 @@ export function JsonInputPanel({
               onClick={() => setShowPreview((p) => !p)}
               className="flex w-full items-center justify-between rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground"
             >
-              {showPreview ? "Hide preview" : "Show preview"}
+              {showPreview ? t("hidePreview") : t("showPreview")}
               {showPreview ? (
                 <ChevronUp className="h-3.5 w-3.5" />
               ) : (
@@ -141,73 +144,85 @@ export function JsonInputPanel({
       </div>
 
       {/* Validation status bar */}
-      {!hasInput ? null : isValid ? (
-        <div className="flex items-center gap-2 rounded-lg border border-brand-emerald-200 bg-brand-emerald-50/60 px-3 py-2 text-xs text-brand-emerald-800">
-          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-brand-emerald-600" />
-          Valid JSON &mdash; ready to generate
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2.5 text-xs text-amber-900">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
-            <div className="min-w-0 flex-1">
-              <div className="font-medium">Couldn&apos;t parse the JSON</div>
-              <ul className="mt-1 space-y-0.5 text-amber-800/80">
-                <li>
-                  &bull; Remove <code className="rounded bg-amber-100 px-1 font-mono">```json</code> and{" "}
-                  <code className="rounded bg-amber-100 px-1 font-mono">```</code> markers
-                </li>
-                <li>&bull; Make sure all quotes are straight &quot; not curly</li>
-                <li>&bull; Check for trailing commas</li>
-              </ul>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleAutoFix}
-                className="mt-2 h-7 gap-1 rounded-md border-amber-300 bg-card px-2.5 text-[11px] font-medium text-amber-800 hover:bg-amber-50"
-              >
-                <Wand2 className="h-3 w-3" />
-                Auto-fix JSON
-              </Button>
+      <div role="status" aria-live="polite">
+        {!hasInput ? null : isValid ? (
+          <div className="flex items-center gap-2 rounded-lg border border-brand-emerald-200 bg-brand-emerald-50/60 px-3 py-2 text-xs text-brand-emerald-800">
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-brand-emerald-600" />
+            {t("validJson")}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2.5 text-xs text-amber-900">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+              <div className="min-w-0 flex-1">
+                <div className="font-medium">{t("parseError")}</div>
+                <ul className="mt-1 space-y-0.5 text-amber-800/80">
+                  <li>
+                    &bull; {t.rich("parseHintFences", {
+                      jsonCode: () => (
+                        <code className="rounded bg-amber-100 px-1 font-mono">```json</code>
+                      ),
+                      fenceCode: () => (
+                        <code className="rounded bg-amber-100 px-1 font-mono">```</code>
+                      ),
+                    })}
+                  </li>
+                  <li>&bull; {t("parseHintQuotes")}</li>
+                  <li>&bull; {t("parseHintCommas")}</li>
+                </ul>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAutoFix}
+                  className="mt-2 h-7 gap-1 rounded-md border-amber-300 bg-card px-2.5 text-[11px] font-medium text-amber-800 hover:bg-amber-50"
+                >
+                  <Wand2 className="h-3 w-3" />
+                  {t("autoFixJson")}
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
 
 function ResumePreviewContent({ parsed }: { parsed: ResumeImportOutput }) {
+  const t = useTranslations("jobs.external");
   const { summaryLength, summaryPreview } = getResumePreview(parsed);
   return (
     <div className="space-y-2.5 text-xs">
       <div>
-        <div className="font-medium text-foreground/85">Summary</div>
+        <div className="font-medium text-foreground/85">{t("summaryLabel")}</div>
         <p className="mt-0.5 text-muted-foreground">{summaryPreview}</p>
-        <span className="text-[10px] text-muted-foreground/70">{summaryLength} chars</span>
+        <span className="text-[10px] text-muted-foreground/70">
+          {t("charsCount", { count: summaryLength })}
+        </span>
       </div>
     </div>
   );
 }
 
 function CoverPreviewContent({ parsed }: { parsed: CoverImportOutput }) {
+  const t = useTranslations("jobs.external");
   const preview = getCoverPreview(parsed);
   return (
     <div className="space-y-2.5 text-xs">
       {preview.subject && (
         <div>
-          <div className="font-medium text-foreground/85">Subject</div>
+          <div className="font-medium text-foreground/85">{t("subjectLabel")}</div>
           <p className="mt-0.5 text-muted-foreground">{preview.subject}</p>
         </div>
       )}
       <div>
-        <div className="font-medium text-foreground/85">Paragraphs</div>
+        <div className="font-medium text-foreground/85">{t("paragraphsLabel")}</div>
         <div className="mt-1 space-y-1">
           {[
-            { ok: preview.hasP1, label: "Intent" },
-            { ok: preview.hasP2, label: "Evidence" },
-            { ok: preview.hasP3, label: "Motivation" },
+            { ok: preview.hasP1, label: t("paragraphIntent") },
+            { ok: preview.hasP2, label: t("paragraphEvidence") },
+            { ok: preview.hasP3, label: t("paragraphMotivation") },
           ].map((p) => (
             <div key={p.label} className="flex items-center gap-1.5">
               {p.ok ? (
@@ -224,7 +239,7 @@ function CoverPreviewContent({ parsed }: { parsed: CoverImportOutput }) {
       </div>
       {preview.p1Preview && (
         <div>
-          <div className="font-medium text-foreground/85">Preview</div>
+          <div className="font-medium text-foreground/85">{t("preview")}</div>
           <p className="mt-0.5 text-muted-foreground">{preview.p1Preview}</p>
         </div>
       )}

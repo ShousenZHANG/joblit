@@ -13,9 +13,16 @@ export function TrendingRepoList() {
   const [period, setPeriod] = useState<"weekly" | "monthly">("weekly");
   const [clean, setClean] = useState(false);
   const queryClient = useQueryClient();
-  const { data, isLoading, error } = useTrendingRepos(period, clean);
+  const { data, isLoading, isPlaceholderData, error } = useTrendingRepos(
+    period,
+    clean,
+  );
 
   const repos = data?.repos ?? [];
+  // Only show the full skeleton on first load; later period/filter switches keep
+  // the previous grid in place (via keepPreviousData) and just dim it.
+  const showSkeleton = isLoading && !data;
+  const listOpacityClass = isPlaceholderData ? "opacity-95" : "opacity-100";
 
   return (
     <section>
@@ -53,7 +60,7 @@ export function TrendingRepoList() {
       </div>
 
       {/* Content */}
-      {isLoading ? (
+      {showSkeleton ? (
         <TrendingSkeleton />
       ) : error ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-6 text-center">
@@ -75,7 +82,9 @@ export function TrendingRepoList() {
           {t("noRepos")}
         </p>
       ) : (
-        <div className="grid gap-2 sm:gap-3">
+        <div
+          className={`grid gap-2 transition-opacity duration-200 ease-out sm:gap-3 ${listOpacityClass}`}
+        >
           {repos.map((repo) => (
             <TrendingRepoCard key={repo.id} repo={repo} />
           ))}

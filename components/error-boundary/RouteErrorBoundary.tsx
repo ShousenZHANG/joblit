@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { AlertCircle, RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,6 +39,7 @@ function clearReloadAttempted() {
 }
 
 export function RouteErrorBoundary({ error, reset }: RouteErrorBoundaryProps) {
+  const t = useTranslations("errors");
   const isChunkError = useMemo(() => isChunkLoadError(error), [error]);
 
   useEffect(() => {
@@ -61,10 +63,12 @@ export function RouteErrorBoundary({ error, reset }: RouteErrorBoundaryProps) {
     window.location.reload();
   }, [isChunkError]);
 
-  const title = isChunkError ? "App update available" : "Something went wrong";
+  const title = isChunkError
+    ? t("route.updateTitle")
+    : t("route.errorTitle");
   const message = isChunkError
-    ? "A newer app bundle is available. Reload the page to continue with the latest version."
-    : "We could not load this page. Try again, or refresh the app if the issue persists.";
+    ? t("route.updateMessage")
+    : t("route.errorMessage");
 
   return (
     <div className="flex min-h-[50vh] items-center justify-center p-6">
@@ -88,7 +92,7 @@ export function RouteErrorBoundary({ error, reset }: RouteErrorBoundaryProps) {
             className="rounded-full bg-brand-emerald-600 px-4 text-white hover:bg-brand-emerald-700"
           >
             <RefreshCcw className="size-4" aria-hidden />
-            {isChunkError ? "Reload" : "Try again"}
+            {isChunkError ? t("route.reload") : t("route.tryAgain")}
           </Button>
           {!isChunkError && (
             <Button
@@ -97,7 +101,7 @@ export function RouteErrorBoundary({ error, reset }: RouteErrorBoundaryProps) {
               onClick={() => window.location.reload()}
               className="rounded-full px-4"
             >
-              Refresh app
+              {t("route.refreshApp")}
             </Button>
           )}
         </div>
