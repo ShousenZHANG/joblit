@@ -205,7 +205,7 @@ export function JobsClient({
   const activeFilterCount = [
     locationFilter !== "ALL",
     jobLevelFilter !== "ALL",
-    statusFilter !== "ALL",
+    statusFilter !== "NEW",
   ].filter(Boolean).length;
 
   function triggerSearch() {
@@ -476,16 +476,15 @@ export function JobsClient({
               </Select>
               <Select
                 value={statusFilter}
-                onValueChange={(v) => { startTransition(() => { setStatusFilter(v as JobStatus | "ALL"); }); }}
+                onValueChange={(v) => { startTransition(() => { setStatusFilter(v as JobStatus); }); }}
               >
                 <SelectTrigger
                   className={mobileFilterSelectTriggerClass}
                   aria-label={t("status")}
                 >
-                  <SelectValue placeholder={tc("all")} />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ALL">{tc("all")}</SelectItem>
                   <SelectItem value="NEW">{t("statusNew")}</SelectItem>
                   <SelectItem value="APPLIED">{t("statusApplied")}</SelectItem>
                   <SelectItem value="REJECTED">{t("statusRejected")}</SelectItem>
@@ -706,14 +705,6 @@ export function JobsClient({
                   instead of buried in a select dropdown. */}
               <div className="no-scrollbar -mt-1 flex items-center gap-1.5 overflow-x-auto px-4 pb-3">
                 <FilterPill
-                  active={statusFilter === "ALL"}
-                  onClick={() =>
-                    startTransition(() => setStatusFilter("ALL"))
-                  }
-                >
-                  {tc("all")}
-                </FilterPill>
-                <FilterPill
                   active={statusFilter === "NEW"}
                   onClick={() =>
                     startTransition(() => setStatusFilter("NEW"))
@@ -866,7 +857,7 @@ export function JobsClient({
                         size="sm"
                         onClick={() =>
                           startTransition(() => {
-                            setStatusFilter("ALL");
+                            setStatusFilter("NEW");
                             setLocationFilter("ALL");
                             setJobLevelFilter("ALL");
                             setQ("");

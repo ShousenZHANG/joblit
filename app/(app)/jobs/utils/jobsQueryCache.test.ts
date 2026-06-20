@@ -67,16 +67,14 @@ describe("jobs query cache helpers", () => {
     });
   });
 
-  it("patches status-filtered caches and rolls back via snapshots", () => {
+  it("drops a row from the status view it no longer matches, and rolls back", () => {
+    // No "all statuses" view exists — each cache is one status view. Moving a
+    // job NEW→APPLIED removes it from the NEW view (and decrements), while the
+    // APPLIED view (holding a different job) stays untouched.
     const client = createClient();
-    const allKey = getJobsListQueryKey("status=ALL");
     const newKey = getJobsListQueryKey("status=NEW");
     const appliedKey = getJobsListQueryKey("status=APPLIED");
 
-    client.setQueryData<JobsInfiniteData>(
-      allKey,
-      infinite({ items: [baseJob], nextCursor: null, totalCount: 1 }),
-    );
     client.setQueryData<JobsInfiniteData>(
       newKey,
       infinite({ items: [baseJob], nextCursor: null, totalCount: 1 }),
@@ -88,15 +86,10 @@ describe("jobs query cache helpers", () => {
 
     const snapshots = patchJobStatusInJobsCache(client, baseJob.id, "APPLIED");
 
-    expect(
-      client.getQueryData<JobsInfiniteData>(allKey)?.pages[0]?.items[0]?.status,
-    ).toBe("APPLIED");
-    // Moving NEW→APPLIED drops the row from the NEW-only cache and decrements it.
     expect(client.getQueryData<JobsInfiniteData>(newKey)?.pages[0]).toMatchObject({
       items: [],
       totalCount: 0,
     });
-    // The APPLIED cache holds a different job and must stay untouched.
     expect(client.getQueryData<JobsInfiniteData>(appliedKey)?.pages[0]).toMatchObject({
       items: [appliedOnlyJob],
       totalCount: 5,
@@ -104,10 +97,6 @@ describe("jobs query cache helpers", () => {
 
     restoreJobsSnapshots(client, snapshots);
 
-    expect(client.getQueryData<JobsInfiniteData>(allKey)?.pages[0]).toMatchObject({
-      items: [baseJob],
-      totalCount: 1,
-    });
     expect(client.getQueryData<JobsInfiniteData>(newKey)?.pages[0]).toMatchObject({
       items: [baseJob],
       totalCount: 1,
@@ -116,7 +105,7 @@ describe("jobs query cache helpers", () => {
 
   it("removes selected ids without decrementing unrelated cached queries", () => {
     const client = createClient();
-    const allKey = getJobsListQueryKey("status=ALL");
+    const allKey = getJobsListQueryKey("status=NEW");
     const appliedKey = getJobsListQueryKey("status=APPLIED");
 
     client.setQueryData<JobsInfiniteData>(
@@ -149,7 +138,7 @@ describe("jobs query cache helpers", () => {
 
   it("removes a job from whichever page holds it and decrements page-0 totalCount", () => {
     const client = createClient();
-    const allKey = getJobsListQueryKey("status=ALL");
+    const allKey = getJobsListQueryKey("status=NEW");
     const page2Job = { ...baseJob, id: "33333333-3333-3333-3333-333333333333" };
 
     client.setQueryData<JobsInfiniteData>(
@@ -175,7 +164,7 @@ describe("jobs query cache helpers", () => {
 
   it("patches generated artifact metadata across every cached jobs page", () => {
     const client = createClient();
-    const allKey = getJobsListQueryKey("status=ALL");
+    const allKey = getJobsListQueryKey("status=REJECTED");
     const newKey = getJobsListQueryKey("status=NEW");
     client.setQueryData<JobsInfiniteData>(
       allKey,

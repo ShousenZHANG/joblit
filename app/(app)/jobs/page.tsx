@@ -15,9 +15,15 @@ import type { JobItem } from "./types";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+// The workspace opens on the NEW view (no "all statuses" view). SSR must seed
+// the SAME key the client reads (status=NEW) or the first paint hydration-
+// misses and the client refetches with a flash.
+const DEFAULT_STATUS = "NEW" as const;
+
 function buildDefaultJobsQueryString(market: Market) {
   const sp = new URLSearchParams();
   sp.set("limit", "10");
+  sp.set("status", DEFAULT_STATUS);
   sp.set("market", market);
   sp.set("sort", "newest");
   return sp.toString();
@@ -67,6 +73,7 @@ async function JobsListSection({
   const result = await listJobs(userId, {
     limit: 10,
     sort: "newest",
+    status: DEFAULT_STATUS,
     market,
   });
 

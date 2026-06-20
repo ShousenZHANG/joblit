@@ -11,7 +11,11 @@ const SORT_ORDER = "newest" as const;
 export function useJobFilters() {
   const market = useMarket();
   const [q, setQ] = useState("");
-  const [statusFilter, setStatusFilter] = useState<JobStatus | "ALL">("ALL");
+  // Status is a primary VIEW, not an optional filter — there is no "all
+  // statuses" view (removed). The workspace opens on NEW (the triage inbox:
+  // freshly fetched roles you haven't actioned), matching the Gmail/Linear
+  // "land in your inbox, not the firehose" default.
+  const [statusFilter, setStatusFilter] = useState<JobStatus>("NEW");
   const [locationFilter, setLocationFilter] = useState("ALL");
   const [jobLevelFilter, setJobLevelFilter] = useState("ALL");
   const pageSize = 10;
@@ -34,7 +38,9 @@ export function useJobFilters() {
   const queryString = useMemo(() => {
     const sp = new URLSearchParams();
     sp.set("limit", String(debouncedFilters.pageSize));
-    if (debouncedFilters.statusFilter !== "ALL") sp.set("status", debouncedFilters.statusFilter);
+    // Status is always present now (NEW/APPLIED/REJECTED) — always sent so the
+    // query key is explicit and matches the SSR-seeded key (status=NEW).
+    sp.set("status", debouncedFilters.statusFilter);
     if (debouncedFilters.q.trim()) sp.set("q", debouncedFilters.q.trim());
     if (debouncedFilters.locationFilter !== "ALL") sp.set("location", debouncedFilters.locationFilter);
     if (debouncedFilters.jobLevelFilter !== "ALL") sp.set("jobLevel", debouncedFilters.jobLevelFilter);

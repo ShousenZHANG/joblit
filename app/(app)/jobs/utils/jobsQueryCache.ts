@@ -16,13 +16,15 @@ export function getJobDetailsQueryKey(jobId: string | null) {
   return ["job-details", jobId] as const;
 }
 
-function readJobsQueryStatusFilter(queryKey: QueryKey): JobStatus | "ALL" {
+function readJobsQueryStatusFilter(queryKey: QueryKey): JobStatus {
   const serializedQuery = typeof queryKey[1] === "string" ? queryKey[1] : "";
   const statusParam = new URLSearchParams(serializedQuery).get("status");
   if (statusParam === "NEW" || statusParam === "APPLIED" || statusParam === "REJECTED") {
     return statusParam;
   }
-  return "ALL";
+  // No "all statuses" view exists — a missing/invalid status means the default
+  // NEW view (matches useJobFilters + the SSR-seeded key).
+  return "NEW";
 }
 
 export function cancelJobsQueries(queryClient: QueryClient) {
@@ -132,8 +134,11 @@ export function patchJobStatusInJobsCache(
   const snapshots = snapshotJobsQueries(queryClient);
 
   for (const query of getJobsQueryEntries(queryClient)) {
+    // Each cached query is a single status view (no "all" view). A job keeps
+    // its place only in the view matching its NEW status; changing status to
+    // anything else drops it from the current view.
     const currentFilter = readJobsQueryStatusFilter(query.queryKey);
-    const shouldKeep = currentFilter === "ALL" || currentFilter === status;
+    const shouldKeep = currentFilter === status;
 
     queryClient.setQueryData<JobsInfiniteData>(query.queryKey, (old) => {
       if (!isInfiniteJobsData(old)) return old;
