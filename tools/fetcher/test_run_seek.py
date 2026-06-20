@@ -92,41 +92,6 @@ def test_is_seek_host():
     assert rs.is_seek_host("https://au.seek.com.evil.com/x") is False
 
 
-def test_build_search_params_includes_and_omits():
-    p = rs.build_search_params(keywords="software engineer", classification="6281", page=2, daterange_days=1)
-    assert p["keywords"] == "software engineer"
-    assert p["classification"] == "6281"
-    assert p["page"] == "2"
-    assert p["daterange"] == "1"
-    assert p["siteKey"] == "AU-Main"
-    assert p["pageSize"] == "100"
-    bare = rs.build_search_params(daterange_days=0)
-    assert "keywords" not in bare and "classification" not in bare and "daterange" not in bare
-
-
-def test_build_search_params_work_type():
-    p = rs.build_search_params(work_type="242")
-    assert p["worktype"] == "242"
-    # Salary is intentionally never filtered (Seek drops unsalaried listings).
-    assert "salaryrange" not in p and "salarytype" not in p
-    # invalid worktype id is ignored
-    p2 = rs.build_search_params(work_type="999")
-    assert "worktype" not in p2
-
-
-def test_build_search_params_subclassification():
-    # Subclass rides along only with a parent classification, numeric-only.
-    p = rs.build_search_params(classification="6281", sub_classification="6290")
-    assert p["classification"] == "6281"
-    assert p["subclassification"] == "6290"
-    # No parent -> subclass dropped (meaningless + the param is never set alone).
-    p2 = rs.build_search_params(sub_classification="6290")
-    assert "subclassification" not in p2 and "classification" not in p2
-    # Non-numeric subclass is ignored (URL-injection guard).
-    p3 = rs.build_search_params(classification="6281", sub_classification="6290&foo=1")
-    assert "subclassification" not in p3
-
-
 def test_build_queries_from_config_threads_filters():
     run = {
         "queries": {
@@ -167,13 +132,6 @@ def test_retry_after_seconds():
     assert rs.retry_after_seconds({"Retry-After": "99999"}) == rs.RETRY_AFTER_CAP_SEC
     assert rs.retry_after_seconds({}) is None
     assert rs.retry_after_seconds({"Retry-After": "soon"}) is None
-
-
-def test_parse_search_payload():
-    out = rs.parse_search_payload({"totalCount": 5, "data": [{"id": 1}]})
-    assert out["total_count"] == 5 and len(out["jobs"]) == 1
-    assert rs.parse_search_payload({}) == {"total_count": 0, "jobs": []}
-    assert rs.parse_search_payload("x")["jobs"] == []
 
 
 def test_map_job_real_record():
@@ -377,191 +335,6 @@ def test_run_from_config_genuine_empty_stays_succeeded(monkeypatch):
     assert not any(u.get("status") == "FAILED" for u in updates)
 
 
-def test_parse_search_payload_tolerates_list_key_rename():
-    # A Seek payload-shape drift (listings under a renamed key) must still parse,
-    # otherwise every run silently returns zero.
-    assert rs.parse_search_payload({"totalCount": 2, "results": [{"id": "1"}, {"id": "2"}]})["jobs"] == [
-        {"id": "1"},
-        {"id": "2"},
-    ]
-    assert rs.parse_search_payload({"totalCount": 1, "data": [{"id": "9"}]})["jobs"] == [{"id": "9"}]
-    assert rs.parse_search_payload({"totalCount": 5})["jobs"] == []
-
-
-# ── Network layer: warm-up / clock ─────────────────────────────────────────
-def test_warm_up_success_sets_timestamp(fast):
-    sess = FakeSession([FakeResp(200, text="<html>jobs</html>", ct="text/html")])
-    f = rs.SeekFetcher(session=sess, clock=Clock(123.0))
-    f.warm_up()
-    assert f._warmed_at == 123.0
-    assert f._needs_warm() is False
-
-
-def test_warm_up_challenge_raises(fast):
-    # A challenge that persists across EVERY warm-up attempt still stops the run.
-    sess = FakeSession(
-        [FakeResp(200, text="Just a moment...", ct="text/html") for _ in range(rs.WARMUP_MAX_ATTEMPTS)]
-    )
-    with pytest.raises(rs.SeekChallengeError):
-        rs.SeekFetcher(session=sess, clock=Clock(0)).warm_up()
-    assert len(sess.calls) == rs.WARMUP_MAX_ATTEMPTS  # retried, not first-hit death
-
-
-def test_warm_up_retries_then_succeeds(fast):
-    # A transient first-hit challenge must NOT kill the run: warm-up retries and
-    # succeeds on a later attempt — the real-world flaky-challenge case that made
-    # Seek intermittently return zero jobs.
-    sess = FakeSession([
-        FakeResp(200, text="Just a moment...", ct="text/html"),
-        FakeResp(200, text="<html>jobs</html>", ct="text/html"),
-    ])
-    f = rs.SeekFetcher(session=sess, clock=Clock(7.0))
-    f.warm_up()
-    assert f._warmed_at == 7.0
-    assert len(sess.calls) == 2
-
-
-def test_warm_up_is_gated_by_env(monkeypatch):
-    monkeypatch.delenv("SEEK_FETCH_ENABLED", raising=False)
-    with pytest.raises(RuntimeError, match="SEEK_FETCH_ENABLED"):
-        rs.SeekFetcher().warm_up()
-
-
-def test_needs_warm_expiry():
-    clk = Clock(0)
-    f = rs.SeekFetcher(session=FakeSession([]), clock=clk)
-    assert f._needs_warm() is True  # never warmed
-    f._warmed_at = 0.0
-    assert f._needs_warm() is False
-    clk.t = rs.WARM_TTL_SEC + 1
-    assert f._needs_warm() is True  # cookie aged out
-
-
-# ── Network layer: _get_json ───────────────────────────────────────────────
-def test_get_json_success_when_prewarmed(fast):
-    sess = FakeSession([FakeResp(json_data={"totalCount": 1, "data": []})])
-    f = rs.SeekFetcher(session=sess, clock=Clock(0))
-    f._warmed_at = 0.0
-    assert f._get_json("u", {})["totalCount"] == 1
-    assert len(sess.calls) == 1
-
-
-def test_get_json_warms_when_needed(fast):
-    sess = FakeSession([FakeResp(200, text="<html>", ct="text/html"), FakeResp(json_data={"ok": 1})])
-    f = rs.SeekFetcher(session=sess, clock=Clock(0))  # not pre-warmed
-    assert f._get_json("u", {}) == {"ok": 1}
-    assert len(sess.calls) == 2  # warm-up + search
-
-
-def test_get_json_retries_transient_then_succeeds(fast):
-    sess = FakeSession([FakeResp(503, ct="application/json"), FakeResp(json_data={"ok": 1})])
-    f = rs.SeekFetcher(session=sess, clock=Clock(0))
-    f._warmed_at = 0.0
-    assert f._get_json("u", {}) == {"ok": 1}
-    assert len(sess.calls) == 2
-
-
-def test_get_json_retries_connection_error(fast):
-    sess = FakeSession([requests.ConnectionError("boom"), FakeResp(json_data={"ok": 1})])
-    f = rs.SeekFetcher(session=sess, clock=Clock(0))
-    f._warmed_at = 0.0
-    assert f._get_json("u", {}) == {"ok": 1}
-
-
-def test_get_json_transient_exhausts_to_runtime_error(fast):
-    sess = FakeSession([FakeResp(503, ct="application/json") for _ in range(3)])
-    f = rs.SeekFetcher(session=sess, clock=Clock(0))
-    f._warmed_at = 0.0
-    with pytest.raises(RuntimeError, match="failed after retries"):
-        f._get_json("u", {})
-    assert len(sess.calls) == 3
-
-
-def test_get_json_client_error_no_retry(fast):
-    sess = FakeSession([FakeResp(404, text="missing", ct="application/json")])
-    f = rs.SeekFetcher(session=sess, clock=Clock(0))
-    f._warmed_at = 0.0
-    with pytest.raises(RuntimeError, match="client error"):
-        f._get_json("u", {})
-    assert len(sess.calls) == 1
-
-
-def test_get_json_non_json_ok_raises(fast):
-    sess = FakeSession([FakeResp(200, text="<html>", ct="text/html", raise_json=True)])
-    f = rs.SeekFetcher(session=sess, clock=Clock(0))
-    f._warmed_at = 0.0
-    with pytest.raises(RuntimeError, match="non-JSON"):
-        f._get_json("u", {})
-
-
-def test_get_json_challenge_rewarms_once_then_stops(fast):
-    chal = FakeResp(403, text="blocked", ct="text/html")
-    warm = FakeResp(200, text="<html>", ct="text/html")
-    sess = FakeSession([chal, warm, chal])
-    f = rs.SeekFetcher(session=sess, clock=Clock(0))
-    f._warmed_at = 0.0
-    with pytest.raises(rs.SeekChallengeError):
-        f._get_json("u", {})
-    assert len(sess.calls) == 3  # challenge, re-warm, challenge
-
-
-def test_get_json_challenge_rewarm_then_recovers(fast):
-    chal = FakeResp(403, text="blocked", ct="text/html")
-    warm = FakeResp(200, text="<html>", ct="text/html")
-    data = FakeResp(json_data={"ok": 1})
-    sess = FakeSession([chal, warm, data])
-    f = rs.SeekFetcher(session=sess, clock=Clock(0))
-    f._warmed_at = 0.0
-    assert f._get_json("u", {}) == {"ok": 1}
-    assert len(sess.calls) == 3
-
-
-# ── Network layer: search_paginated ────────────────────────────────────────
-def _patch_get_json(monkeypatch, fetcher, seq):
-    def fake_get(url, params):
-        item = seq.pop(0)
-        if isinstance(item, Exception):
-            raise item
-        return item
-    monkeypatch.setattr(fetcher, "_get_json", fake_get)
-
-
-def test_search_paginated_stops_on_empty(monkeypatch, fast):
-    f = rs.SeekFetcher(session=FakeSession([]), clock=Clock(0))
-    f._warmed_at = 0.0
-    _patch_get_json(monkeypatch, f, [
-        {"totalCount": 300, "data": [{"id": i} for i in range(100)]},
-        {"totalCount": 300, "data": [{"id": 100 + i} for i in range(100)]},
-        {"totalCount": 300, "data": []},
-    ])
-    assert len(f.search_paginated(max_pages=5)) == 200
-
-
-def test_search_paginated_caps_at_five_pages(monkeypatch, fast):
-    f = rs.SeekFetcher(session=FakeSession([]), clock=Clock(0))
-    f._warmed_at = 0.0
-    monkeypatch.setattr(f, "_get_json", lambda url, params: {"totalCount": 9999, "data": [{"id": 1}]})
-    assert len(f.search_paginated(max_pages=99)) == rs.SEEK_PAGE_CEILING
-
-
-def test_search_paginated_keeps_partial_on_page_error(monkeypatch, fast):
-    f = rs.SeekFetcher(session=FakeSession([]), clock=Clock(0))
-    f._warmed_at = 0.0
-    _patch_get_json(monkeypatch, f, [
-        {"totalCount": 300, "data": [{"id": i} for i in range(100)]},
-        RuntimeError("boom"),
-    ])
-    assert len(f.search_paginated(max_pages=5)) == 100  # page 1 kept
-
-
-def test_search_paginated_propagates_challenge(monkeypatch, fast):
-    f = rs.SeekFetcher(session=FakeSession([]), clock=Clock(0))
-    f._warmed_at = 0.0
-    _patch_get_json(monkeypatch, f, [rs.SeekChallengeError("blocked")])
-    with pytest.raises(rs.SeekChallengeError):
-        f.search_paginated(max_pages=5)
-
-
 # ── Orchestration: collect_jobs ────────────────────────────────────────────
 class _Fetcher:
     def __init__(self, per_query, enrich_val="FULL"):
@@ -673,7 +446,7 @@ def test_map_job_handles_graphql_shape():
 
 def test_search_graphql_returns_json_when_ok(fast):
     sess = FakeSession([FakeResp(json_data={"data": {"jobSearchV6": {"data": [REAL_GQL], "totalCount": 1}}})])
-    f = rs.SeekFetcher(session=sess, clock=Clock(0))
+    f = rs.SeekFetcher(session=sess)
     out = f.search_graphql(rs.build_graphql_variables(keywords="x"))
     assert out["data"]["jobSearchV6"]["totalCount"] == 1
     assert sess.calls[0][0] == rs.SEEK_GRAPHQL_URL  # hit the BFF, not /jobs or v5
@@ -682,7 +455,7 @@ def test_search_graphql_returns_json_when_ok(fast):
 def test_search_graphql_challenge_raises(fast):
     sess = FakeSession([FakeResp(403, text="blocked", ct="text/html")])
     with pytest.raises(rs.SeekChallengeError):
-        rs.SeekFetcher(session=sess, clock=Clock(0)).search_graphql({"params": {}})
+        rs.SeekFetcher(session=sess).search_graphql({"params": {}})
 
 
 def test_search_graphql_paginated_no_warmup_stops_on_empty(fast):
@@ -692,7 +465,7 @@ def test_search_graphql_paginated_no_warmup_stops_on_empty(fast):
         FakeResp(json_data={"data": {"jobSearchV6": {"data": [REAL_GQL], "totalCount": 1}}}),
         FakeResp(json_data={"data": {"jobSearchV6": {"data": [], "totalCount": 1}}}),
     ])
-    f = rs.SeekFetcher(session=sess, clock=Clock(0))
+    f = rs.SeekFetcher(session=sess)
     rows = f.search_graphql_paginated(keywords="software engineer", where="Sydney")
     assert [r["id"] for r in rows] == ["92319306"]
     assert all(c[0] == rs.SEEK_GRAPHQL_URL for c in sess.calls)  # no /jobs warm-up

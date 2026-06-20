@@ -6,14 +6,14 @@ Seek's Terms of Use (au.seek.com/terms, clauses 7(d), 9(b), 9(d)) prohibit
 automated data gathering and circumventing anti-bot measures. This worker is
 DELIBERATELY the mild variant:
 
-  * It calls the same public JSON endpoint (`/api/jobsearch/v5/search`) that
-    au.seek.com serves to ordinary clients.
-  * It uses only the `__cf_bm` cookie Seek freely hands out on a normal page
-    load — it does NOT solve Cloudflare challenges, spoof TLS/JA3 fingerprints,
-    or rotate residential proxies.
-  * On an anti-bot challenge it re-warms a few times with polite backoff and
-    then STOPS the run, rather than attempting to bypass the measure — no
-    challenge is ever solved and no fingerprint is spoofed.
+  * It calls the same public graphql endpoint (`/graphql`, operation
+    JobSearchV6) that au.seek.com serves to ordinary clients — no warm-up
+    page, no v5 REST.
+  * It does NOT solve Cloudflare challenges, spoof TLS/JA3 fingerprints, or
+    rotate residential proxies.
+  * On an anti-bot challenge (403 / interstitial) it STOPS the run, rather
+    than attempting to bypass the measure — no challenge is ever solved and
+    no fingerprint is spoofed.
   * It identifies honestly by default (User-Agent `Joblit-Fetcher/...`). An
     operator may override `SEEK_USER_AGENT` for browser compatibility, but that
     is a conscious choice, not built-in evasion.
@@ -31,7 +31,7 @@ import time
 import random
 import logging
 import argparse
-from typing import Any, Callable, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 from urllib.parse import urlsplit
 
 import requests
@@ -44,8 +44,6 @@ logger = logging.getLogger("seek_runner")
 # ── Endpoints ──────────────────────────────────────────────────────────────
 SEEK_HOST = "au.seek.com"
 SEEK_ORIGIN = f"https://{SEEK_HOST}"
-SEEK_WARMUP_URL = f"{SEEK_ORIGIN}/jobs"
-SEEK_SEARCH_URL = f"{SEEK_ORIGIN}/api/jobsearch/v5/search"  # legacy v5 (Cloudflare-walled)
 # Current Seek search stack: the consumer graphql BFF (same endpoint the
 # on-demand JD fetch uses). A JSON API POST, NOT the /jobs HTML page — so it
 # sidesteps the Cloudflare JS-challenge that walls the warm-up + v5 REST path
@@ -54,10 +52,7 @@ SEEK_GRAPHQL_URL = f"{SEEK_ORIGIN}/graphql"
 SEEK_JOB_URL_TEMPLATE = f"{SEEK_ORIGIN}/job/{{job_id}}"
 
 # ── Search params ──────────────────────────────────────────────────────────
-DEFAULT_SITE_KEY = "AU-Main"
-DEFAULT_SOURCE_SYSTEM = "houston"
 DEFAULT_WHERE = "All Australia"
-DEFAULT_PAGE_SIZE = 100  # Seek serves up to 100 per page.
 SEEK_PAGE_CEILING = 5  # Seek hard-caps any search at ~500 results = 5 pages x 100.
 # Default to a 2-day window so a missed/late cron run does not silently drop a
 # day of postings; downstream (userId, jobUrl) dedupe absorbs the overlap.
@@ -65,19 +60,11 @@ DEFAULT_DATERANGE_DAYS = 2
 
 # ── Politeness / resilience ────────────────────────────────────────────────
 REQUEST_DELAY_SEC = 1.2
-WARMUP_DELAY_SEC = 0.8
 REQUEST_TIMEOUT_SEC = 25.0
 MAX_RETRIES = 2
 RETRY_BACKOFF_SEC = 3.0
-# A Cloudflare warm-up challenge is frequently transient (decided per request),
-# so retry the warm-up politely before giving up — the difference between a whole
-# run yielding ZERO and one that just waited a few seconds. No challenge is solved;
-# a challenge that persists across every attempt still stops the run.
-WARMUP_MAX_ATTEMPTS = 3
 RETRY_AFTER_CAP_SEC = 60.0
 IMPORT_RETRIES = 2
-# __cf_bm clearance lives ~30 min; re-warm well before it lapses.
-WARM_TTL_SEC = 25 * 60
 
 # ── Defensive bounds (untrusted external data) ─────────────────────────────
 MAX_TITLE = 512
@@ -98,7 +85,7 @@ DEFAULT_USER_AGENT = "Joblit-Fetcher/1.0 (+https://www.joblit.tech)"
 
 class SeekChallengeError(RuntimeError):
     """Raised when Seek returns an anti-bot challenge. The worker stops here by
-    design (after one re-warm) rather than circumventing the measure."""
+    design rather than circumventing the measure."""
 
 
 class PartialImportError(RuntimeError):
@@ -147,48 +134,6 @@ def normalize_seek_where(location: Any) -> str:
     return first or DEFAULT_WHERE
 
 
-# Verified Seek work-type ids: 242 Full time, 243 Part time, 244 Contract/Temp,
-# 245 Casual/Vacation.
-SEEK_WORK_TYPE_IDS = {"242", "243", "244", "245"}
-
-
-def build_search_params(
-    *,
-    keywords: str = "",
-    classification: str = "",
-    sub_classification: str = "",
-    where: str = DEFAULT_WHERE,
-    page: int = 1,
-    page_size: int = DEFAULT_PAGE_SIZE,
-    daterange_days: Optional[int] = DEFAULT_DATERANGE_DAYS,
-    work_type: str = "",
-) -> Dict[str, str]:
-    params: Dict[str, str] = {
-        "siteKey": DEFAULT_SITE_KEY,
-        "sourcesystem": DEFAULT_SOURCE_SYSTEM,
-        "where": where,
-        "page": str(page),
-        "pageSize": str(page_size),
-    }
-    if keywords.strip():
-        params["keywords"] = keywords.strip()
-    if str(classification).strip():
-        params["classification"] = str(classification).strip()
-        # Subclassification refines a parent; it is meaningless without one and
-        # is numeric-only (guards against URL injection / SSRF on the Seek call).
-        sub = str(sub_classification or "").strip()
-        if sub.isdigit():
-            params["subclassification"] = sub
-    if daterange_days and daterange_days > 0:
-        params["daterange"] = str(daterange_days)
-    if str(work_type).strip() in SEEK_WORK_TYPE_IDS:
-        params["worktype"] = str(work_type).strip()
-    # NOTE: no salary filter. Seek's `salaryrange` filters server-side and drops
-    # every listing that does not advertise a salary (the majority), which gutted
-    # result volume — so salary filtering is intentionally not applied.
-    return params
-
-
 def classify_response(status_code: int, content_type: str, body: str) -> str:
     """Triage a response into: ok | challenge | transient | client_error.
 
@@ -225,26 +170,6 @@ def retry_after_seconds(headers: Any) -> Optional[float]:
     if not raw or not raw.isdigit():
         return None
     return min(float(raw), RETRY_AFTER_CAP_SEC)
-
-
-def parse_search_payload(payload: Any) -> Dict[str, Any]:
-    if not isinstance(payload, dict):
-        return {"total_count": 0, "jobs": []}
-    # Seek v5 returns the listing array under "data". Tolerate a key rename
-    # (their API has shifted shape before) by falling back to known alternates —
-    # otherwise a single upstream rename turns EVERY run into a silent zero with
-    # no error, which is exactly the "always returns 0 jobs" failure mode. The
-    # caller logs when totalCount > 0 but no rows parsed, surfacing the drift.
-    jobs: Any = None
-    for key in ("data", "results", "jobs", "items"):
-        candidate = payload.get(key)
-        if isinstance(candidate, list):
-            jobs = candidate
-            break
-    return {
-        "total_count": int(payload.get("totalCount") or 0),
-        "jobs": jobs if isinstance(jobs, list) else [],
-    }
 
 
 # ── graphql JobSearchV6 (current Seek search stack) ────────────────────────
@@ -324,8 +249,8 @@ def _join_locations(raw: Dict[str, Any]) -> str:
     locs = raw.get("locations")
     if not isinstance(locs, list):
         return ""
-    labels = [str(l.get("label", "")).strip() for l in locs if isinstance(l, dict)]
-    return _truncate(", ".join([l for l in labels if l]), MAX_TEXT_FIELD)
+    labels = [str(loc.get("label", "")).strip() for loc in locs if isinstance(loc, dict)]
+    return _truncate(", ".join([lbl for lbl in labels if lbl]), MAX_TEXT_FIELD)
 
 
 def _teaser_description(raw: Dict[str, Any]) -> str:
@@ -511,7 +436,6 @@ class SeekFetcher:
     def __init__(
         self,
         session: Optional[requests.Session] = None,
-        clock: Optional[Callable[[], float]] = None,
     ) -> None:
         self.session = session or requests.Session()
         self.session.headers.update(
@@ -522,8 +446,6 @@ class SeekFetcher:
                 "Referer": f"{SEEK_ORIGIN}/jobs",
             }
         )
-        self._clock = clock or time.monotonic
-        self._warmed_at: Optional[float] = None
 
     @staticmethod
     def _ensure_enabled() -> None:
@@ -533,141 +455,11 @@ class SeekFetcher:
                 "(operator accepts Seek ToS risk), or use --dry-run."
             )
 
-    def _needs_warm(self) -> bool:
-        return self._warmed_at is None or (self._clock() - self._warmed_at) > WARM_TTL_SEC
-
     def _sleep_backoff(self, attempt: int, retry_after: Optional[float] = None) -> None:
         base = RETRY_BACKOFF_SEC * (attempt + 1)
         if retry_after:
             base = max(base, retry_after)
         time.sleep(base + random.uniform(0, base * 0.5))  # jitter avoids lockstep
-
-    def warm_up(self) -> None:
-        """Load a normal page so Seek issues the __cf_bm clearance cookie.
-
-        Retries politely on a challenge: Cloudflare challenges per request, so a
-        first-hit interstitial is often transient and clears on a later try a few
-        seconds on. This is resilience, not evasion — no challenge is solved, and
-        a challenge that persists across every attempt still stops the run."""
-        self._ensure_enabled()
-        for attempt in range(WARMUP_MAX_ATTEMPTS):
-            try:
-                res = self.session.get(SEEK_WARMUP_URL, timeout=REQUEST_TIMEOUT_SEC)
-            except (requests.ConnectionError, requests.Timeout):
-                if attempt + 1 >= WARMUP_MAX_ATTEMPTS:
-                    raise
-                self._sleep_backoff(attempt)
-                continue
-            kind = classify_response(
-                res.status_code, res.headers.get("content-type", ""), res.text
-            )
-            if kind != "challenge":
-                self._warmed_at = self._clock()
-                time.sleep(WARMUP_DELAY_SEC)
-                return
-            if attempt + 1 < WARMUP_MAX_ATTEMPTS:
-                logger.info(
-                    "Warm-up challenged (attempt %s/%s) — backing off before retry.",
-                    attempt + 1, WARMUP_MAX_ATTEMPTS,
-                )
-                self._sleep_backoff(attempt)
-        raise SeekChallengeError(
-            f"Challenged on warm-up after {WARMUP_MAX_ATTEMPTS} attempts; "
-            "stopping (no bypass by design)."
-        )
-
-    def _get_json(self, url: str, params: Dict[str, str]) -> Dict[str, Any]:
-        self._ensure_enabled()
-        if self._needs_warm():
-            self.warm_up()
-        rewarmed = False
-        last_err: Optional[Exception] = None
-        for attempt in range(MAX_RETRIES + 1):
-            try:
-                res = self.session.get(url, params=params, timeout=REQUEST_TIMEOUT_SEC)
-            except (requests.ConnectionError, requests.Timeout) as err:
-                last_err = err
-                self._sleep_backoff(attempt)
-                continue
-            kind = classify_response(res.status_code, res.headers.get("content-type", ""), res.text)
-            if kind == "ok":
-                try:
-                    return res.json()
-                except ValueError as err:
-                    raise RuntimeError(f"Seek returned a non-JSON ok body: {err}")
-            if kind == "challenge":
-                if not rewarmed:
-                    rewarmed = True
-                    logger.info("Anti-bot challenge — re-warming once before giving up.")
-                    self._warmed_at = None
-                    self.warm_up()
-                    continue
-                raise SeekChallengeError(
-                    f"Challenge persisted after re-warm (status={res.status_code}); stopping."
-                )
-            if kind == "transient":
-                last_err = RuntimeError(f"transient status={res.status_code}")
-                if attempt < MAX_RETRIES:
-                    self._sleep_backoff(attempt, retry_after=retry_after_seconds(res.headers))
-                continue
-            raise RuntimeError(f"Seek client error status={res.status_code} (not retried).")
-        raise RuntimeError(f"Seek request failed after retries: {last_err}")
-
-    def search_paginated(
-        self,
-        *,
-        keywords: str = "",
-        classification: str = "",
-        sub_classification: str = "",
-        where: str = DEFAULT_WHERE,
-        daterange_days: Optional[int] = DEFAULT_DATERANGE_DAYS,
-        max_pages: int = SEEK_PAGE_CEILING,
-        page_size: int = DEFAULT_PAGE_SIZE,
-        work_type: str = "",
-    ) -> List[Dict[str, Any]]:
-        """Page through one query up to the Seek 5-page / ~500-result ceiling.
-        A challenge stops the run; any other page error keeps the prior pages."""
-        pages = max(1, min(int(max_pages), SEEK_PAGE_CEILING))
-        collected: List[Dict[str, Any]] = []
-        for page in range(1, pages + 1):
-            params = build_search_params(
-                keywords=keywords,
-                classification=classification,
-                sub_classification=sub_classification,
-                where=where,
-                page=page,
-                page_size=page_size,
-                daterange_days=daterange_days,
-                work_type=work_type,
-            )
-            try:
-                parsed = parse_search_payload(self._get_json(SEEK_SEARCH_URL, params))
-            except SeekChallengeError:
-                raise  # ToS-mild: stop the whole run on a challenge
-            except Exception as err:  # noqa: BLE001 — keep partial pages on any other error
-                logger.warning(
-                    "Seek page=%s failed (keeping %s prior rows): %s", page, len(collected), err
-                )
-                break
-            jobs = parsed["jobs"]
-            if not jobs:
-                # totalCount > 0 but nothing parsed = the response carried
-                # listings under a key we don't recognise (Seek changed shape).
-                # Distinct from a genuine empty page (totalCount 0).
-                if parsed["total_count"] > 0:
-                    logger.warning(
-                        "Seek page=%s query=%r reported totalCount=%s but 0 parsable "
-                        "rows — search-payload shape likely changed.",
-                        page, keywords, parsed["total_count"],
-                    )
-                break  # past the result ceiling for this query
-            collected.extend(jobs)
-            logger.info(
-                "Seek page=%s query=%r class=%s -> %s rows (totalCount=%s)",
-                page, keywords, classification or "-", len(jobs), parsed["total_count"],
-            )
-            time.sleep(REQUEST_DELAY_SEC)
-        return collected
 
     def search_graphql(self, variables: Dict[str, Any]) -> Dict[str, Any]:
         """POST one JobSearchV6 query to the graphql BFF. No warm-up: this is a
