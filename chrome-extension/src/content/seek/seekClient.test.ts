@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildSeekVariables,
-  extractSeekKeywords,
-  isSeekSearchUrl,
-  mapSeekJob,
-  parseJobSearchV6,
-} from "./seekClient";
+import { isSeekSearchUrl, mapSeekJob } from "./seekClient";
 
 const ROW = {
   id: "92319306",
@@ -22,7 +16,7 @@ const ROW = {
 };
 
 describe("seekClient.mapSeekJob", () => {
-  it("maps a JobSearchV6 row to an import item", () => {
+  it("maps a captured JobSearchV6 row to an import item", () => {
     const item = mapSeekJob(ROW);
     expect(item).not.toBeNull();
     expect(item!.jobUrl).toBe("https://au.seek.com/job/92319306");
@@ -47,56 +41,6 @@ describe("seekClient.mapSeekJob", () => {
     expect(mapSeekJob({ ...ROW, id: "", title: "x" })).toBeNull();
     expect(mapSeekJob({ ...ROW, title: "" })).toBeNull();
     expect(mapSeekJob(null)).toBeNull();
-  });
-});
-
-describe("seekClient.parseJobSearchV6", () => {
-  it("extracts rows + totalCount", () => {
-    const parsed = parseJobSearchV6({
-      data: { jobSearchV6: { data: [ROW], totalCount: 1784 } },
-    });
-    expect(parsed.totalCount).toBe(1784);
-    expect(parsed.jobs).toHaveLength(1);
-  });
-
-  it("tolerates garbage", () => {
-    expect(parseJobSearchV6({}).jobs).toEqual([]);
-    expect(parseJobSearchV6(null).jobs).toEqual([]);
-    expect(parseJobSearchV6({ data: { jobSearchV6: null } }).jobs).toEqual([]);
-  });
-});
-
-describe("seekClient.buildSeekVariables", () => {
-  it("uses siteKey AU and includes keywords", () => {
-    const v = buildSeekVariables("software engineer", 2, 50);
-    expect(v.params.siteKey).toBe("AU");
-    expect(v.params.keywords).toBe("software engineer");
-    expect(v.params.page).toBe(2);
-    expect(v.params.pageSize).toBe(50);
-  });
-
-  it("omits blank keywords", () => {
-    expect(buildSeekVariables("  ").params.keywords).toBeUndefined();
-  });
-});
-
-describe("seekClient.extractSeekKeywords", () => {
-  it("reads the keywords query param", () => {
-    expect(extractSeekKeywords("https://au.seek.com/jobs?keywords=software%20engineer")).toBe(
-      "software engineer",
-    );
-  });
-  it("derives from a SEO -jobs path", () => {
-    expect(extractSeekKeywords("https://au.seek.com/software-engineer-jobs")).toBe(
-      "software engineer",
-    );
-    expect(extractSeekKeywords("https://au.seek.com/data-analyst-jobs/in-Sydney-NSW")).toBe(
-      "data analyst",
-    );
-  });
-  it("returns empty when none", () => {
-    expect(extractSeekKeywords("https://au.seek.com/jobs")).toBe("");
-    expect(extractSeekKeywords("not a url")).toBe("");
   });
 });
 
