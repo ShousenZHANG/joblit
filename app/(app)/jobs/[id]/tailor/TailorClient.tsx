@@ -321,7 +321,7 @@ export function TailorClient({
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border/70 bg-background/95 px-4 py-3 backdrop-blur-md sm:px-8">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border/70 bg-background/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:px-8">
         <div className="mx-auto flex w-full max-w-[1400px] items-center justify-end gap-3">
           <button
             type="button"

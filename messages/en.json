@@ -22,7 +22,9 @@
     "guide": "Guide",
     "discover": "Discover",
     "extension": "Extension",
-    "admin": "Admin"
+    "admin": "Admin",
+    "language": "Language",
+    "theme": "Theme"
   },
   "marketing": {
     "heroTitle": "AI-tailored resumes for every job you apply to",
@@ -515,7 +517,10 @@
     "previewCompileFailed": "Preview failed to compile.",
     "previewSaveFirst": "Save your resume first to generate a preview.",
     "unsavedChanges": "Unsaved changes",
-    "toastCouldNotLoad": "Could not load resume"
+    "toastCouldNotLoad": "Could not load resume",
+    "discardSwitchTitle": "Discard unsaved changes?",
+    "discardSwitchBody": "Switching versions will discard the edits you haven’t saved on the current version.",
+    "discardAndSwitch": "Discard & switch"
   },
   "privacy": {
     "title": "Privacy Policy",

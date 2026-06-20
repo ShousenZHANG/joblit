@@ -22,7 +22,9 @@
     "guide": "引导",
     "discover": "发现",
     "extension": "插件",
-    "admin": "管理"
+    "admin": "管理",
+    "language": "语言",
+    "theme": "主题"
   },
   "marketing": {
     "heroTitle": "AI 为每份工作定制专属简历",
@@ -515,7 +517,10 @@
     "previewCompileFailed": "预览编译失败。",
     "previewSaveFirst": "请先保存简历再生成预览。",
     "unsavedChanges": "有未保存的更改",
-    "toastCouldNotLoad": "无法加载简历"
+    "toastCouldNotLoad": "无法加载简历",
+    "discardSwitchTitle": "放弃未保存的更改？",
+    "discardSwitchBody": "切换版本将丢弃当前版本上尚未保存的修改。",
+    "discardAndSwitch": "放弃并切换"
   },
   "privacy": {
     "title": "隐私政策",

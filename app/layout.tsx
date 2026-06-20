@@ -44,6 +44,9 @@ export const metadata: Metadata = {
 
 export const viewport = {
   themeColor: "#047857",
+  // Let the page extend under the notch / home indicator so env(safe-area-inset-*)
+  // resolves to real values for fixed/sticky bars on notched iOS devices.
+  viewportFit: "cover" as const,
 };
 
 export default async function RootLayout({

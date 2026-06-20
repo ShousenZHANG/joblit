@@ -260,9 +260,17 @@ export function AppNav() {
               <DropdownMenuItem asChild>
                 <div className="flex flex-col gap-1 py-1">
                   <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Language
+                    {t("language")}
                   </span>
                   <LocaleSwitcher />
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild onSelect={(e) => e.preventDefault()}>
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {t("theme")}
+                  </span>
+                  <ThemeToggle />
                 </div>
               </DropdownMenuItem>
               <DropdownMenuSeparator />

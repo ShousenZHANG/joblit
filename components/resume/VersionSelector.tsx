@@ -47,6 +47,9 @@ const SELECT_PLACEHOLDER_VALUE = "__none__";
 export function VersionSelector() {
   const tc = useTranslations("common");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  // When the draft has unsaved edits, defer a version switch behind a confirm
+  // dialog so a stray dropdown change can't silently discard typed data.
+  const [pendingSwitchId, setPendingSwitchId] = useState<string | null>(null);
   const {
     profiles,
     activeProfileId,
@@ -60,8 +63,14 @@ export function VersionSelector() {
     handleCreateProfile,
     handleDeleteProfile,
     handleActivateProfile,
+    isDirty,
     t,
   } = useResumeContext();
+
+  const switchProfile = (next: string) => {
+    setSelectedProfileId(next);
+    void handleActivateProfile(next);
+  };
 
   const isBusy = profileSwitching || profileCreating || profileDeleting;
   const selectValue = selectedProfileId ?? SELECT_PLACEHOLDER_VALUE;
@@ -86,8 +95,15 @@ export function VersionSelector() {
               setSelectedProfileId(null);
               return;
             }
-            setSelectedProfileId(next);
-            void handleActivateProfile(next);
+            if (next === selectedProfileId) return;
+            // Dirty draft: hold the switch and confirm before discarding edits.
+            // The Select is controlled by selectedProfileId, so leaving it
+            // unchanged here reverts the dropdown until the user confirms.
+            if (isDirty) {
+              setPendingSwitchId(next);
+              return;
+            }
+            switchProfile(next);
           }}
           disabled={isBusy}
         >
@@ -237,6 +253,37 @@ export function VersionSelector() {
               className="rounded-xl bg-destructive text-white hover:bg-destructive"
             >
               {t("deleteSelectedVersion")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={pendingSwitchId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingSwitchId(null);
+        }}
+      >
+        <AlertDialogContent className="max-w-md rounded-2xl border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("discardSwitchTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("discardSwitchBody")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">
+              {tc("cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const next = pendingSwitchId;
+                setPendingSwitchId(null);
+                if (next) switchProfile(next);
+              }}
+              className="rounded-xl bg-destructive text-white hover:bg-destructive"
+            >
+              {t("discardAndSwitch")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
