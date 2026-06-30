@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ResumeProfileSchema } from "@/lib/shared/schemas/resumeProfile";
 import type { PreviewStatus, ResumeProfilePayload } from "./types";
 
 interface UseResumePreviewParams {
@@ -72,6 +73,18 @@ export function useResumePreview({
       }
 
       const payload = options?.payload ?? buildPayload("preview");
+
+      // Mid-typing states (a half-entered email/url/phone, a partially filled
+      // row) fail the shared ResumeProfileSchema the server enforces, so a
+      // keystroke-driven preview would POST a body the server 400s on — which
+      // flashes a generic "preview failed" error and spams 400s in the logs.
+      // Validate against the same schema first: if the draft isn't renderable
+      // yet, hold the last good preview and skip the request. A manual refresh
+      // (force) still goes through so the user gets explicit feedback.
+      if (!options?.force && !ResumeProfileSchema.safeParse(payload).success) {
+        return;
+      }
+
       const payloadKey = options?.payloadKey ?? JSON.stringify(payload);
       const shouldSkip =
         !options?.force &&

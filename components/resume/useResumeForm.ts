@@ -565,6 +565,15 @@ export function useResumeForm(locale: string) {
         items: normalizeCommaItems(group.itemsText),
       }));
 
+      // Links need the same preview-only completeness filter every other
+      // section has: the default seed (and any in-progress row) carries a label
+      // with an empty url, which fails ResumeLinkSchema.url() and would 400 the
+      // whole preview render. Drop incomplete links from the preview payload.
+      const previewLinks =
+        mode === "preview"
+          ? cleanedLinks.filter((link) => hasContent(link.label) && hasContent(link.url))
+          : cleanedLinks;
+
       const previewExperiences =
         mode === "preview"
           ? cleanedExperiences.filter(
@@ -599,7 +608,7 @@ export function useResumeForm(locale: string) {
       return {
         locale,
         basics,
-        links: cleanedLinks.length > 0 ? cleanedLinks : null,
+        links: previewLinks.length > 0 ? previewLinks : null,
         summary: summary.trim() || null,
         experiences: previewExperiences,
         projects: previewProjects,

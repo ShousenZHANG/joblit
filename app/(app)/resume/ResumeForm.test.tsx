@@ -244,4 +244,54 @@ describe("Resume page", () => {
       { timeout: 2200 },
     );
   });
+
+  it("does not POST the preview while a required field is mid-edit (no 400 spam)", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = toUrl(input);
+      if (url.startsWith("/api/resume-profile")) {
+        return new Response(JSON.stringify(emptyProfileJson()), { status: 200 });
+      }
+      if (url === "/api/resume-pdf") {
+        return new Response(new Uint8Array([37, 80, 68, 70]), {
+          status: 200,
+          headers: { "content-type": "application/pdf" },
+        });
+      }
+      return new Response("not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const getPreviewCallCount = () =>
+      fetchMock.mock.calls.filter(([firstArg]) => toUrl(firstArg) === "/api/resume-pdf").length;
+
+    renderResumePage();
+    await fillBasics();
+
+    fireEvent.click(firstButton("Preview"));
+    expect(await screen.findByRole("heading", { name: "PDF preview" })).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(getPreviewCallCount()).toBe(1);
+    });
+
+    // Half-typed email fails the shared schema — the client must hold the last
+    // good preview and NOT POST (which would 400 on the server).
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "jane@" },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    expect(getPreviewCallCount()).toBe(1);
+
+    // Completing the email back to a valid value resumes preview rendering.
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "jane@example.org" },
+    });
+    await waitFor(
+      () => {
+        expect(getPreviewCallCount()).toBe(2);
+      },
+      { timeout: 2200 },
+    );
+  });
 });
