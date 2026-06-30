@@ -9,6 +9,7 @@ import {
   buildApplicationArtifactBlobPath,
 } from "@/lib/server/files/applicationArtifactBlob";
 import { LatexRenderError, compileLatexToPdf } from "@/lib/server/latex/compilePdf";
+import { contentDispositionAttachment } from "@/lib/server/files/pdfFilename";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
 import { getActivePromptSkillRulesForUser } from "@/lib/server/promptRuleTemplates";
@@ -261,7 +262,7 @@ export async function POST(req: Request) {
     status: 200,
     headers: {
       "content-type": "application/pdf",
-      "content-disposition": `attachment; filename="${filename}"`,
+      "content-disposition": contentDispositionAttachment(filename),
       "x-application-id": application.id,
       "x-request-id": requestId,
       "x-tailor-cv-source": data.target === "resume" ? "manual_import" : "base",

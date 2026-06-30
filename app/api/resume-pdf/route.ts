@@ -10,7 +10,7 @@ import { LatexRenderError, compileLatexToPdf } from "@/lib/server/latex/compileP
 import type { CompileFile } from "@/lib/server/latex/compilePdf";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import { mapResumeProfileCN } from "@/lib/server/latex/mapResumeProfileCN";
-import { buildPdfFilename } from "@/lib/server/files/pdfFilename";
+import { buildPdfFilename, contentDispositionAttachment } from "@/lib/server/files/pdfFilename";
 import { ResumeProfileSchema } from "@/lib/shared/schemas/resumeProfile";
 import {
   buildResumePhotoCompileFile,
@@ -148,7 +148,7 @@ export async function POST(req: Request) {
     status: 200,
     headers: {
       "content-type": "application/pdf",
-      "content-disposition": `attachment; filename=\"${filename}\"`,
+      "content-disposition": contentDispositionAttachment(filename),
       "x-request-id": requestId,
     },
   });

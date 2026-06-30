@@ -10,7 +10,7 @@ import { renderCoverLetterTex } from "@/lib/server/latex/renderCoverLetter";
 import { LatexRenderError, compileLatexToPdf } from "@/lib/server/latex/compilePdf";
 import { tailorApplicationContent } from "@/lib/server/ai/tailorApplication";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
-import { buildPdfFilename } from "@/lib/server/files/pdfFilename";
+import { buildPdfFilename, contentDispositionAttachment } from "@/lib/server/files/pdfFilename";
 import { enforceAiRateLimit } from "@/lib/server/api/aiRateLimit";
 
 export const runtime = "nodejs";
@@ -169,13 +169,13 @@ export async function POST(req: Request) {
     },
   });
 
-  const filename = buildPdfFilename(renderInput.candidate.name, job.title, "Cover Letter");
+  const filename = buildPdfFilename(renderInput.candidate.name, job.title, "cl");
 
   return new NextResponse(new Uint8Array(pdf), {
     status: 200,
     headers: {
       "content-type": "application/pdf",
-      "content-disposition": `attachment; filename="${filename}"`,
+      "content-disposition": contentDispositionAttachment(filename),
       "x-application-id": application.id,
       "x-request-id": requestId,
       "x-tailor-cv-source": tailored.source.cv,

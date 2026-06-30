@@ -921,7 +921,7 @@ describe("applications manual generate api", () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("application/pdf");
-    expect(res.headers.get("content-disposition")).toContain("Cover_Letter.pdf");
+    expect(res.headers.get("content-disposition")).toContain("_CL.pdf");
   });
 
   it("persists cover pdf url when blob token is configured", async () => {

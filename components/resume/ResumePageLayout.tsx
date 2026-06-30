@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect } from "react";
 import { Download } from "lucide-react";
+import { buildPdfFilename } from "@/lib/shared/pdfFilename";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -180,14 +181,12 @@ function MobilePreviewDialog() {
   const { previewOpen, setPreviewOpen, pdfUrl, previewStatus, previewError, schedulePreview, basics, locale, t } =
     useResumeContext();
 
-  const downloadFilename = (() => {
-    const fallback = locale === "zh-CN" ? "未命名简历" : "Unnamed_Resume";
-    if (!basics.fullName && !basics.title) return `${fallback}.pdf`;
-    const safeName = (basics.fullName || "").replace(/\s+/g, "_");
-    const safeTitle = (basics.title || "").replace(/\s+/g, "_");
-    const connector = safeName && safeTitle ? "_" : "";
-    return `${safeName}${connector}${safeTitle}.pdf`;
-  })();
+  const downloadFilename = buildPdfFilename(
+    basics.fullName,
+    basics.title,
+    "cv",
+    locale === "zh-CN" ? "未命名简历" : "Resume",
+  );
 
   return (
     <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>

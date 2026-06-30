@@ -171,7 +171,7 @@ export async function renderFinalCoverLetter(input: {
   const coverPdfName = buildPdfFilename(
     renderInput.candidate.name,
     input.job.title,
-    "Cover Letter",
+    "cl",
   );
   const blobPath = buildApplicationArtifactBlobPath({
     userId: input.userId,

@@ -9,7 +9,7 @@ import { getResumeProfile } from "@/lib/server/resumeProfile";
 import { buildResumePdfForJob } from "@/lib/server/applications/buildResumePdf";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
 import { enforceAiRateLimit } from "@/lib/server/api/aiRateLimit";
-import { buildPdfFilename } from "@/lib/server/files/pdfFilename";
+import { buildPdfFilename, contentDispositionAttachment } from "@/lib/server/files/pdfFilename";
 import { reportError } from "@/lib/server/observability/errorReporter";
 
 export const runtime = "nodejs";
@@ -128,7 +128,7 @@ export async function POST(req: Request) {
     status: 200,
     headers: {
       "content-type": "application/pdf",
-      "content-disposition": `attachment; filename="${filename}"`,
+      "content-disposition": contentDispositionAttachment(filename),
       "x-application-id": application.id,
       "x-request-id": requestId,
       "x-tailor-cv-source": pdfResult.cvSource,

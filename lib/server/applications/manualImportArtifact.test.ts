@@ -102,7 +102,8 @@ describe("manual import artifact builder", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.filename).toContain("Software_Engineer");
+    expect(result.filename).toContain("Software Engineer");
+    expect(result.filename).toMatch(/_CV\.pdf$/);
     expect(resumeRender.renderResumeTex).toHaveBeenCalledWith(
       expect.objectContaining({
         summary: expect.stringContaining("\\textbf{Java}"),
@@ -176,7 +177,7 @@ describe("manual import artifact builder", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.filename).toContain("Cover_Letter");
+    expect(result.filename).toMatch(/_CL\.pdf$/);
     expect(result.coverQualityGate).toBe("soft-fail");
     expect(coverRender.renderCoverLetterTex).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -78,8 +78,8 @@ function emptyCover(): AiContent["cover"] {
 
 function parseFilename(candidate: string, role: string, target: ManualImportTarget) {
   return target === "cover"
-    ? buildPdfFilename(candidate, role, "Cover Letter")
-    : buildPdfFilename(candidate, role);
+    ? buildPdfFilename(candidate, role, "cl")
+    : buildPdfFilename(candidate, role, "cv");
 }
 
 export function buildManualImportArtifact(input: {

@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { Download, ExternalLink, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { buildPdfFilename } from "@/lib/shared/pdfFilename";
 import { useResumeContext } from "./ResumeContext";
 
 // react-pdf + pdfjs worker is the single heaviest client dependency
@@ -30,14 +31,12 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
   const { pdfUrl, previewStatus, previewError, schedulePreview, basics, locale, t } =
     useResumeContext();
 
-  const downloadFilename = (() => {
-    const fallback = locale === "zh-CN" ? "未命名简历" : "Unnamed_Resume";
-    if (!basics.fullName && !basics.title) return `${fallback}.pdf`;
-    const safeName = (basics.fullName || "").replace(/\s+/g, "_");
-    const safeTitle = (basics.title || "").replace(/\s+/g, "_");
-    const connector = safeName && safeTitle ? "_" : "";
-    return `${safeName}${connector}${safeTitle}.pdf`;
-  })();
+  const downloadFilename = buildPdfFilename(
+    basics.fullName,
+    basics.title,
+    "cv",
+    locale === "zh-CN" ? "未命名简历" : "Resume",
+  );
 
   const currentPdfUrl = pdfUrl ?? null;
 

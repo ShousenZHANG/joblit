@@ -141,7 +141,7 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
     signatureName: tailored.cover.signatureName,
   });
   const coverPdf = await compileLatexToPdf(coverTex);
-  const coverPdfName = buildPdfFilename(resumeResult.renderInput.candidate.name, job.title, "Cover Letter");
+  const coverPdfName = buildPdfFilename(resumeResult.renderInput.candidate.name, job.title, "cl");
   const coverPdfUrl = await uploadPdfToBlob({
     userId: input.userId,
     jobId: job.id,

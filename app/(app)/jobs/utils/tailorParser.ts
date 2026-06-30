@@ -147,6 +147,16 @@ export function parseTailorOutput(
 
 export function filenameFromDisposition(disposition: string | null) {
   if (!disposition) return null;
-  const match = disposition.match(/filename="?([^"]+)"?/i);
+  // Prefer RFC 5987 `filename*=UTF-8''<pct-encoded>` so non-ASCII (e.g. CJK)
+  // names are preserved; fall back to the plain ASCII `filename=`.
+  const extended = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (extended?.[1]) {
+    try {
+      return decodeURIComponent(extended[1].trim());
+    } catch {
+      // malformed percent-encoding — fall through to the plain filename
+    }
+  }
+  const match = disposition.match(/filename="?([^";]+)"?/i);
   return match?.[1] ?? null;
 }
