@@ -86,6 +86,38 @@
     },
     {
       "aliases": [
+        "power platform developer",
+        "power platform engineer",
+        "power platform consultant",
+        "power platform specialist",
+        "power apps developer",
+        "powerapps developer",
+        "power automate developer",
+        "copilot studio developer",
+        "copilot developer",
+        "microsoft copilot developer",
+        "dynamics 365 developer",
+        "dynamics developer",
+        "d365 developer",
+        "dataverse developer",
+        "microsoft power platform",
+        "low code developer",
+        "lowcode developer"
+      ],
+      "roles": [
+        "Power Platform Developer",
+        "Power Platform Consultant",
+        "Copilot Studio Developer",
+        "Power Apps Developer",
+        "Power Automate Developer",
+        "Dynamics 365 Developer",
+        "Microsoft AI Engineer",
+        "AI Engineer",
+        "Full Stack Engineer"
+      ]
+    },
+    {
+      "aliases": [
         "data engineer",
         "analytics engineer",
         "data platform engineer",

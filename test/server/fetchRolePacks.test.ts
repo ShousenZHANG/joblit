@@ -43,4 +43,28 @@ describe("fetch role packs", () => {
     expect(out).toContain("AI Python Engineer");
     expect(out).toContain("AI Engineer");
   });
+
+  it("expands Power Platform titles to the Microsoft/Copilot ecosystem pack", () => {
+    const out = expandRoleQueries(["Power Platform Developer"]);
+    expect(out).toContain("Power Platform Developer");
+    expect(out).toContain("Copilot Studio Developer");
+    expect(out).toContain("Power Apps Developer");
+    expect(out).toContain("Power Automate Developer");
+    expect(out).toContain("Dynamics 365 Developer");
+    // Bridges toward the user's AI / full-stack identity.
+    expect(out).toContain("AI Engineer");
+  });
+
+  it("resolves Copilot Studio via its alias", () => {
+    const out = expandRoleQueries(["Copilot Studio Developer"]);
+    expect(out).toContain("Copilot Studio Developer");
+    expect(out).toContain("Power Platform Developer");
+  });
+
+  it("matches a seniority-prefixed Power Platform variant", () => {
+    const out = expandRoleQueries(["Senior Power Platform Engineer"]);
+    expect(out).toContain("Senior Power Platform Engineer");
+    expect(out).toContain("Power Platform Developer");
+    expect(out).toContain("Copilot Studio Developer");
+  });
 });
