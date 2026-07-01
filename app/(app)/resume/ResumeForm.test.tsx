@@ -5,6 +5,7 @@ import { ResumeFormProvider } from "@/components/resume/ResumeContext";
 import { ResumePageLayout } from "@/components/resume/ResumePageLayout";
 import messages from "@/messages/en.json";
 import zhMessages from "@/messages/zh.json";
+import { ResumeProfileSchema } from "@/lib/shared/schemas/resumeProfile";
 
 const guideMocks = vi.hoisted(() => ({
   isTaskHighlighted: vi.fn(() => false),
@@ -202,6 +203,43 @@ describe("Resume page", () => {
     await waitFor(() => {
       expect(guideMocks.markTaskComplete).toHaveBeenCalledWith("resume_setup");
     });
+  });
+
+  it("saves a basics-only draft with a schema-valid body (drops seeded empty rows)", async () => {
+    let savedBody: unknown = null;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = toUrl(input);
+      if (url.startsWith("/api/resume-profile") && init?.method === "POST") {
+        savedBody = JSON.parse(String(init.body));
+        return new Response(JSON.stringify(emptyProfileJson()), { status: 200 });
+      }
+      if (url.startsWith("/api/resume-profile")) {
+        return new Response(JSON.stringify(emptyProfileJson()), { status: 200 });
+      }
+      return new Response("not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderResumePage();
+    await fillBasics();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Save selected resume" })[0]);
+
+    await waitFor(() => {
+      expect(savedBody).not.toBeNull();
+    });
+
+    // The untouched sections seed one empty placeholder row each; the save
+    // payload must drop them so it passes the same schema the server enforces
+    // (otherwise the whole save 400s).
+    const parsed = ResumeProfileSchema.safeParse(savedBody);
+    expect(parsed.success).toBe(true);
+    const body = savedBody as Record<string, unknown>;
+    expect(body.experiences).toEqual([]);
+    expect(body.projects).toEqual([]);
+    expect(body.education).toEqual([]);
+    expect(body.skills).toEqual([]);
+    expect(body.links).toBeNull();
   });
 
   it("auto-refreshes preview when content changes while the preview is open", async () => {

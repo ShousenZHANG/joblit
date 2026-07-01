@@ -522,9 +522,13 @@ export function useResumeForm(locale: string) {
   // --- payload ---
   const buildPayload = useCallback(
     (mode: "preview" | "save"): ResumeProfilePayload => {
+      // A link needs BOTH a label and a url to be persistable — ResumeLinkSchema
+      // requires url() so the default seed `{ label: "LinkedIn", url: "" }` (and
+      // any half-filled row) would 400 the save/preview render. Require both,
+      // matching how experience/project links are already filtered.
       const cleanedLinks = links
         .map((link) => ({ label: link.label.trim(), url: link.url.trim() }))
-        .filter((link) => link.label || link.url);
+        .filter((link) => link.label && link.url);
 
       const cleanedExperiences = experiences.map((entry) => {
         const cleanedExperienceLinks = entry.links
@@ -565,15 +569,12 @@ export function useResumeForm(locale: string) {
         items: normalizeCommaItems(group.itemsText),
       }));
 
-      // Links need the same preview-only completeness filter every other
-      // section has: the default seed (and any in-progress row) carries a label
-      // with an empty url, which fails ResumeLinkSchema.url() and would 400 the
-      // whole preview render. Drop incomplete links from the preview payload.
-      const previewLinks =
-        mode === "preview"
-          ? cleanedLinks.filter((link) => hasContent(link.label) && hasContent(link.url))
-          : cleanedLinks;
-
+      // preview: keep only fully-renderable entries (all key fields present).
+      // save: keep anything with ANY content, dropping the fully-empty seeded
+      // placeholder rows that untouched sections carry — those would otherwise
+      // fail the required-field schema and 400 the whole save. Partially filled
+      // rows are kept (not silently dropped on re-hydrate) so the user never
+      // loses typed data; completing or removing them clears the save error.
       const previewExperiences =
         mode === "preview"
           ? cleanedExperiences.filter(
@@ -583,12 +584,28 @@ export function useResumeForm(locale: string) {
                 hasContent(entry.location) &&
                 hasContent(entry.dates),
             )
-          : cleanedExperiences;
+          : cleanedExperiences.filter(
+              (entry) =>
+                hasContent(entry.title) ||
+                hasContent(entry.company) ||
+                hasContent(entry.location) ||
+                hasContent(entry.dates) ||
+                entry.bullets.length > 0 ||
+                entry.links.length > 0,
+            );
 
       const previewProjects =
         mode === "preview"
           ? cleanedProjects.filter((entry) => hasContent(entry.name) && hasContent(entry.dates))
-          : cleanedProjects;
+          : cleanedProjects.filter(
+              (entry) =>
+                hasContent(entry.name) ||
+                hasContent(entry.location) ||
+                hasContent(entry.stack) ||
+                hasContent(entry.dates) ||
+                entry.bullets.length > 0 ||
+                entry.links.length > 0,
+            );
 
       const previewEducation =
         mode === "preview"
@@ -596,19 +613,28 @@ export function useResumeForm(locale: string) {
               (entry) =>
                 hasContent(entry.school) && hasContent(entry.degree) && hasContent(entry.dates),
             )
-          : cleanedEducation;
+          : cleanedEducation.filter(
+              (entry) =>
+                hasContent(entry.school) ||
+                hasContent(entry.degree) ||
+                hasContent(entry.location) ||
+                hasContent(entry.dates) ||
+                hasContent(entry.details),
+            );
 
       const previewSkills =
         mode === "preview"
           ? cleanedSkills.filter(
               (group) => hasContent(group.category) && group.items.length > 0,
             )
-          : cleanedSkills;
+          : cleanedSkills.filter(
+              (group) => hasContent(group.category) || group.items.length > 0,
+            );
 
       return {
         locale,
         basics,
-        links: previewLinks.length > 0 ? previewLinks : null,
+        links: cleanedLinks.length > 0 ? cleanedLinks : null,
         summary: summary.trim() || null,
         experiences: previewExperiences,
         projects: previewProjects,
