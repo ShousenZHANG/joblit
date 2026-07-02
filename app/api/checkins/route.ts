@@ -1,16 +1,25 @@
 import { NextResponse } from "next/server";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
-import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 
 export const runtime = "nodejs";
 
-const TimeZoneSchema = z
-  .string()
-  .min(1)
-  .max(100)
-  .optional()
-  .transform((value) => value ?? "UTC");
+/**
+ * Resolve the client-supplied x-user-timezone header to a usable IANA zone.
+ * Never throws: an unknown zone would make Intl.DateTimeFormat raise a
+ * RangeError (and an over-long value would fail validation) — both would
+ * surface as a raw 500. Fall back to UTC instead.
+ */
+function resolveTimeZone(raw: string | undefined): string {
+  const candidate = (raw ?? "").trim();
+  if (!candidate || candidate.length > 100) return "UTC";
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: candidate });
+    return candidate;
+  } catch {
+    return "UTC";
+  }
+}
 
 function getDatePartsInTimeZone(date: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -82,7 +91,7 @@ function getTodayRangeUtc(timeZone: string) {
 export async function GET(req: Request) {
   return withSessionRoute(async ({ userId }) => {
   const tzHeader = req.headers.get("x-user-timezone") ?? undefined;
-  const timeZone = TimeZoneSchema.parse(tzHeader);
+  const timeZone = resolveTimeZone(tzHeader);
   const { start, end, localDate } = getTodayRangeUtc(timeZone);
 
   const [checkins, remainingNew] = await Promise.all([
@@ -117,7 +126,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   return withSessionRoute(async ({ userId }) => {
   const tzHeader = req.headers.get("x-user-timezone") ?? undefined;
-  const timeZone = TimeZoneSchema.parse(tzHeader);
+  const timeZone = resolveTimeZone(tzHeader);
   const { start, end, localDate } = getTodayRangeUtc(timeZone);
 
   const remainingNew = await prisma.job.count({

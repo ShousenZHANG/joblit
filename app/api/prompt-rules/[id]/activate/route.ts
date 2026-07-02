@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { requireSession, UnauthorizedError } from "@/lib/server/auth/requireSession";
 import type { SessionContext } from "@/lib/server/auth/requireSession";
 import { unauthorizedError } from "@/lib/server/api/errorResponse";
@@ -20,6 +21,12 @@ export async function POST(
   const { userId, requestId } = ctx;
 
   const { id } = await context.params;
+  if (!z.string().uuid().safeParse(id).success) {
+    return NextResponse.json(
+      { error: { code: "INVALID_PARAMS", message: "Invalid template id" }, requestId },
+      { status: 400 },
+    );
+  }
   const activated = await activatePromptRuleTemplate(userId, id);
   if (!activated) {
     return NextResponse.json(

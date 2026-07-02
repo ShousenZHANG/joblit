@@ -91,21 +91,36 @@ describe("prompt rules api", () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "user-1" },
     });
+    const tplId = "33333333-3333-4333-8333-333333333333";
     service.activatePromptRuleTemplate.mockResolvedValueOnce({
-      id: "tpl-3",
+      id: tplId,
       name: "v3",
       version: 3,
       isActive: true,
     });
 
     const res = await ACTIVATE_RULE(
-      new Request("http://localhost/api/prompt-rules/tpl-3/activate", { method: "POST" }),
-      { params: Promise.resolve({ id: "tpl-3" }) },
+      new Request(`http://localhost/api/prompt-rules/${tplId}/activate`, { method: "POST" }),
+      { params: Promise.resolve({ id: tplId }) },
     );
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(json.template.id).toBe("tpl-3");
+    expect(json.template.id).toBe(tplId);
+  });
+
+  it("rejects a non-UUID template id with 400", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+
+    const res = await ACTIVATE_RULE(
+      new Request("http://localhost/api/prompt-rules/not-a-uuid/activate", { method: "POST" }),
+      { params: Promise.resolve({ id: "not-a-uuid" }) },
+    );
+
+    expect(res.status).toBe(400);
+    expect(service.activatePromptRuleTemplate).not.toHaveBeenCalled();
   });
 
   it("resets to default", async () => {

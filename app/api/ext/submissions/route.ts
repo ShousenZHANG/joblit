@@ -21,6 +21,17 @@ const CreateSubmissionSchema = z.object({
   jobId: z.string().uuid().optional(),
 });
 
+/**
+ * Parse a numeric query param safely. `Number("abc")` is NaN, which Prisma
+ * rejects with a validation error (raw 500) when used as take/skip; fall back
+ * to `def` and clamp into [min, max].
+ */
+function clampInt(raw: string | null, def: number, min: number, max: number): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return def;
+  return Math.min(Math.max(Math.trunc(n), min), max);
+}
+
 export async function POST(req: Request) {
   const rl = checkRateLimit(rateLimitKeyFromRequest(req, "ext:sub:post"), { limit: 30, windowSeconds: 60 });
   if (!rl.allowed) return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: rateLimitHeaders(rl) });
@@ -57,8 +68,8 @@ export async function GET(req: Request) {
       pageDomain: url.searchParams.get("pageDomain") ?? undefined,
       atsProvider: url.searchParams.get("atsProvider") ?? undefined,
       formSignature: url.searchParams.get("formSignature") ?? undefined,
-      limit: Math.min(Number(url.searchParams.get("limit") ?? 50), 100),
-      offset: Number(url.searchParams.get("offset") ?? 0),
+      limit: clampInt(url.searchParams.get("limit"), 50, 1, 100),
+      offset: clampInt(url.searchParams.get("offset"), 0, 0, Number.MAX_SAFE_INTEGER),
     });
 
     return NextResponse.json({ data: result });
