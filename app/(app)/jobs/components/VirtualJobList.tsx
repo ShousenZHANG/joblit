@@ -67,7 +67,7 @@ export function VirtualJobList({
           return (
             <div
               key={job.id}
-              className="absolute left-0 top-0 w-full motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200"
+              className="absolute left-0 top-0 w-full"
               style={{
                 height: `${virtualRow.size}px`,
                 transform: `translateY(${virtualRow.start}px)`,

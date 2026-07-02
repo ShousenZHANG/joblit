@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, CheckSquare, Compass, MapPin, RefreshCw, SlidersHorizontal, Square, Trash2, X } from "lucide-react";
@@ -876,13 +877,13 @@ export function JobsClient({
                       size="sm"
                       className="group h-10 gap-1.5 rounded-full bg-brand-emerald-600 px-5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-brand-emerald-700 hover:shadow-md"
                     >
-                      <a href="/fetch">
+                      <Link href="/fetch">
                         {t("emptyFetchCta")}
                         <ArrowRight
                           className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
                           aria-hidden
                         />
-                      </a>
+                      </Link>
                     </Button>
                     {activeFilterCount > 0 && (
                       <Button

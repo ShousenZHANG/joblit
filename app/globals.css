@@ -65,6 +65,8 @@
   --brand-emerald-50: #ecfdf5;
   --brand-emerald-100: #d1fae5;
   --brand-emerald-200: #a7f3d0;
+  --brand-emerald-300: #6ee7b7;
+  --brand-emerald-400: #34d399;
   --brand-emerald-500: #10b981;
   --brand-emerald-600: #059669;
   --brand-emerald-700: #047857;
@@ -139,6 +141,8 @@
   --color-brand-emerald-50: var(--brand-emerald-50);
   --color-brand-emerald-100: var(--brand-emerald-100);
   --color-brand-emerald-200: var(--brand-emerald-200);
+  --color-brand-emerald-300: var(--brand-emerald-300);
+  --color-brand-emerald-400: var(--brand-emerald-400);
   --color-brand-emerald-500: var(--brand-emerald-500);
   --color-brand-emerald-600: var(--brand-emerald-600);
   --color-brand-emerald-700: var(--brand-emerald-700);
@@ -2125,15 +2129,15 @@ body::-webkit-scrollbar-thumb:hover {
 }
 
 .filter-chip--active {
-  border-color: #22c55e;
-  background: #f0fdf4;
-  color: #166534;
+  border-color: var(--brand-emerald-500);
+  background: var(--brand-emerald-50);
+  color: var(--brand-emerald-800);
 }
 
 .filter-chip--inactive {
-  border-color: #e2e8f0;
-  background: white;
-  color: #64748b;
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--muted-foreground);
 }
 
 .filter-chip:hover {

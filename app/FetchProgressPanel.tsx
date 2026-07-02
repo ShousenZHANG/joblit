@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, ChevronDown, Loader2, Minus, X, XCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -312,7 +313,7 @@ export function FetchProgressPanel() {
                     onClick={() => setOpen(false)}
                     asChild
                   >
-                    <a href="/jobs">{t("viewJobs")}</a>
+                    <Link href="/jobs">{t("viewJobs")}</Link>
                   </Button>
                 </>
               ) : (

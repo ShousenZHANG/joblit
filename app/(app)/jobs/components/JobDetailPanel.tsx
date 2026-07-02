@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 import {
@@ -113,6 +113,17 @@ export function JobDetailPanel({
     APPLIED: t("statusApplied"),
     REJECTED: t("statusRejected"),
   };
+  // Reset the description scroll to the top when the selected job changes —
+  // the ScrollArea viewport DOM node is reused across selections, so without
+  // this a new job opens stuck at the previous job's scroll offset.
+  const scrollRootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const viewport = scrollRootRef.current?.querySelector<HTMLElement>(
+      "[data-radix-scroll-area-viewport]",
+    );
+    if (viewport) viewport.scrollTop = 0;
+  }, [selectedJob?.id]);
+
   const isAppliedSelected = selectedJob?.status === "APPLIED";
   const listOpacityClass = showLoadingOverlay ? "opacity-70" : "opacity-100";
   const actionHeight = isAppliedSelected ? "h-9" : "h-10";
@@ -300,6 +311,7 @@ export function JobDetailPanel({
         )}
       </div>
       <ScrollArea
+        ref={scrollRootRef}
         type="scroll"
         data-testid="jobs-details-scroll"
         data-loading={showLoadingOverlay ? "true" : "false"}
