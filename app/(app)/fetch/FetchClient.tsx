@@ -30,7 +30,6 @@ import {
   TITLE_EXCLUSION_OPTIONS,
   TITLE_EXCLUSION_VALUES,
 } from "@/lib/shared/fetchExclusionCriteria";
-import { SEEK_SUBCLASSIFICATIONS } from "@/lib/shared/seekSubclassifications";
 import { cn } from "@/lib/utils";
 
 const RIGHTS_EXCLUSION_OPTIONS = DESCRIPTION_EXCLUSION_OPTIONS.filter(
@@ -490,15 +489,8 @@ function FetchHistory({ onRerun }: { onRerun: (run: FetchRunListItem) => void })
               aria-hidden
             />
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <div className="truncate text-sm font-medium text-foreground">
-                  {run.title ?? "Untitled search"}
-                </div>
-                {run.source === "seek" ? (
-                  <span className="shrink-0 rounded-full bg-brand-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-brand-emerald-700 ring-1 ring-brand-emerald-100">
-                    Seek
-                  </span>
-                ) : null}
+              <div className="truncate text-sm font-medium text-foreground">
+                {run.title ?? "Untitled search"}
               </div>
               <div className="truncate text-[11px] text-muted-foreground">
                 {run.queryCount > 1 ? `${run.queryCount} roles · ` : ""}
@@ -525,44 +517,7 @@ function FetchHistory({ onRerun }: { onRerun: (run: FetchRunListItem) => void })
   );
 }
 
-// Seek top-level job categories (classification id -> label), harvested + id-
-// verified from Seek's live search taxonomy. Sorted by label for the picker.
-const SEEK_CLASSIFICATIONS: { id: string; label: string }[] = [
-  { id: "1200", label: "Accounting" },
-  { id: "6251", label: "Administration & Office Support" },
-  { id: "6304", label: "Advertising, Arts & Media" },
-  { id: "1203", label: "Banking & Financial Services" },
-  { id: "1204", label: "Call Centre & Customer Service" },
-  { id: "6163", label: "Community Services & Development" },
-  { id: "1206", label: "Construction" },
-  { id: "6263", label: "Design & Architecture" },
-  { id: "6123", label: "Education & Training" },
-  { id: "1209", label: "Engineering" },
-  { id: "6205", label: "Farming, Animals & Conservation" },
-  { id: "1210", label: "Government & Defence" },
-  { id: "1211", label: "Healthcare & Medical" },
-  { id: "1212", label: "Hospitality & Tourism" },
-  { id: "6317", label: "Human Resources & Recruitment" },
-  { id: "6281", label: "Information & Communication Technology" },
-  { id: "1216", label: "Legal" },
-  { id: "6092", label: "Manufacturing, Transport & Logistics" },
-  { id: "6008", label: "Marketing & Communications" },
-  { id: "6058", label: "Mining, Resources & Energy" },
-  { id: "1220", label: "Real Estate & Property" },
-  { id: "6043", label: "Retail & Consumer Products" },
-  { id: "6362", label: "Sales" },
-  { id: "1223", label: "Science & Technology" },
-  { id: "1225", label: "Trades & Services" },
-];
-
-const SEEK_WORK_TYPES: { id: string; label: string }[] = [
-  { id: "242", label: "Full time" },
-  { id: "243", label: "Part time" },
-  { id: "244", label: "Contract / Temp" },
-  { id: "245", label: "Casual / Vacation" },
-];
-
-export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) {
+export function FetchClient() {
   const { data: session } = useSession();
   const userId = session?.user?.id ?? null;
   const t = useTranslations("fetch");
@@ -570,27 +525,6 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
   const [location, setLocation] = useState("Sydney, New South Wales, Australia");
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const market = useMarket();
-  // AU pipeline selector: "jobspy" (LinkedIn, default) or "seek". Only offered
-  // when the server-side Seek kill-switch is on (seekEnabled prop).
-  const [source, setSource] = useState<"jobspy" | "seek" | "both">("jobspy");
-  // Default to Seek classification 6281 (Information & Communication Technology)
-  // since Joblit is a tech-focused product — scopes Seek's 500-result cap to IT
-  // roles instead of diluting it across all categories. Clear it for all-category
-  // search.
-  const [seekClassification, setSeekClassification] = useState("6281");
-  const [seekSubClass, setSeekSubClass] = useState(""); // "" = all subcategories
-  const [seekWorkType, setSeekWorkType] = useState(""); // "" = any
-  // Subcategories for the chosen parent (empty for "All categories").
-  const seekSubClassOptions = seekClassification
-    ? SEEK_SUBCLASSIFICATIONS[seekClassification] ?? []
-    : [];
-  // Seek only supports title exclusions — no smart-expand, no description-level
-  // (rights / minimum-experience) filtering.
-  const isSeek = seekEnabled && source === "seek";
-  // Seek-specific options (classification / work type / sub-class) show for the
-  // Seek source AND for "Both" (the Seek lane uses them). jobspy-only UI keys on
-  // `!isSeek`, which already covers jobspy + both.
-  const showSeekOptions = seekEnabled && (source === "seek" || source === "both");
   const [cnExcludeKeywords, setCnExcludeKeywords] = useState("");
   const [cnLocation, setCnLocation] = useState("");
   const [hoursOld, setHoursOld] = useState(48);
@@ -706,8 +640,7 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
     return fallback;
   }
 
-  async function createRun(targetSource: "jobspy" | "seek") {
-    const isSeekRun = targetSource === "seek";
+  async function createRun() {
     const body = market === "CN"
       ? {
           market: "CN",
@@ -728,29 +661,14 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
           queries,
           location,
           hoursOld,
-          // Seek honours only title exclusions — force smart-expand off and drop
-          // description-level rules for Seek runs.
-          smartExpand: isSeekRun ? false : smartExpand,
+          smartExpand,
           applyExcludes,
           excludeTitleTerms,
-          excludeDescriptionRules: isSeekRun
-            ? []
-            : [
-                ...excludeDescriptionRules,
-                ...(experienceRule ? [experienceRule] : []),
-              ],
-          source: targetSource,
-          ...(isSeekRun
-            ? {
-                classification: seekClassification.trim() || undefined,
-                // Subclass only travels with a chosen parent category.
-                subClassification:
-                  seekClassification.trim() && seekSubClass ? seekSubClass : undefined,
-                // Seek windows by day; reuse the hoursOld control (48h -> 2d).
-                daterange: Math.max(1, Math.min(31, Math.ceil(hoursOld / 24))),
-                workType: seekWorkType || undefined,
-              }
-            : {}),
+          excludeDescriptionRules: [
+            ...excludeDescriptionRules,
+            ...(experienceRule ? [experienceRule] : []),
+          ],
+          source: "jobspy",
         };
 
     const res = await fetch("/api/fetch-runs", {
@@ -780,45 +698,11 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
       if (!queries.length) {
         throw new Error("Please enter at least one job title to search.");
       }
-      // CN has no source toggle. AU resolves the selected source(s); "Both"
-      // launches one run per source so LinkedIn + Seek scrape in parallel.
-      const targets: ("jobspy" | "seek")[] =
-        market === "CN"
-          ? ["jobspy"]
-          : source === "both"
-            ? ["jobspy", "seek"]
-            : source === "seek"
-              ? ["seek"]
-              : ["jobspy"];
-
-      // Create runs independently — one source failing (e.g. Seek already in
-      // flight) must not block the other. A failed createRun never creates a
-      // server run, so there are no orphaned runs to clean up.
-      const settled = await Promise.allSettled(
-        targets.map(async (s) => ({ id: await createRun(s), source: s })),
-      );
-      const created = settled
-        .filter(
-          (r): r is PromiseFulfilledResult<{ id: string; source: "jobspy" | "seek" }> =>
-            r.status === "fulfilled",
-        )
-        .map((r) => r.value);
-
-      if (!created.length) {
-        const firstError = settled.find((r) => r.status === "rejected");
-        throw (firstError as PromiseRejectedResult | undefined)?.reason ??
-          new Error("Failed to start fetch");
-      }
-
+      // Single server-side pipeline: JobSpy (LinkedIn). Seek search runs in the
+      // browser extension, not here.
+      const created = [{ id: await createRun(), source: "jobspy" as const }];
       startRuns(created);
-      await Promise.all(created.map((r) => triggerRun(r.id)));
-
-      // Partial success (one of "Both" failed): proceed with the started run(s)
-      // but surface why the other didn't launch.
-      const failed = settled.find((r) => r.status === "rejected");
-      if (failed) {
-        setLocalError(getErrorMessage((failed as PromiseRejectedResult).reason));
-      }
+      await triggerRun(created[0].id);
       markTaskComplete("first_fetch");
     } catch (e: unknown) {
       setLocalError(getErrorMessage(e));
@@ -848,20 +732,6 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
       if (run.location) setLocation(run.location);
       if (typeof run.hoursOld === "number") setHoursOld(run.hoursOld);
       if (typeof run.smartExpand === "boolean") setSmartExpand(run.smartExpand);
-      // Restore the Seek selection so re-running a Seek run doesn't silently
-      // revert to LinkedIn.
-      if (seekEnabled && (run.source === "seek" || run.source === "jobspy")) {
-        setSource(run.source);
-      }
-      const reParent = typeof run.classification === "string" ? run.classification : "";
-      if (reParent) setSeekClassification(reParent);
-      // Restore subclass only if it still belongs to the restored parent.
-      const reSubValid =
-        reParent &&
-        typeof run.subClassification === "string" &&
-        (SEEK_SUBCLASSIFICATIONS[reParent] ?? []).some((s) => s.id === run.subClassification);
-      setSeekSubClass(reSubValid ? (run.subClassification as string) : "");
-      setSeekWorkType(typeof run.workType === "string" ? run.workType : "");
     }
     setLocalError(null);
     topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -912,128 +782,6 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
 
       {market === "AU" && (
       <div className="space-y-4">
-          {seekEnabled && (
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground">Source</Label>
-              <div className="flex flex-col gap-1.5">
-                <div className="inline-flex w-fit rounded-lg border border-border bg-muted/40 p-0.5">
-                  <button
-                    type="button"
-                    onClick={() => setSource("jobspy")}
-                    className={cn(
-                      "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
-                      source === "jobspy"
-                        ? "bg-background text-brand-emerald-700 shadow-sm"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    LinkedIn
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSource("seek")}
-                    className={cn(
-                      "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
-                      source === "seek"
-                        ? "bg-background text-brand-emerald-700 shadow-sm"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    Seek
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSource("both")}
-                    className={cn(
-                      "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
-                      source === "both"
-                        ? "bg-background text-brand-emerald-700 shadow-sm"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    Both
-                  </button>
-                </div>
-                {source === "both" && (
-                  <p className="text-[11px] leading-relaxed text-muted-foreground">
-                    Running LinkedIn + Seek together.{" "}
-                    <span className="font-medium text-foreground/80">Smart expand</span>, description
-                    filters and minimum experience apply to{" "}
-                    <span className="font-medium text-foreground/80">LinkedIn</span> only — Seek uses
-                    title exclusions plus the category / work type below. Title exclusions, location
-                    and time window apply to both.
-                  </p>
-                )}
-                {showSeekOptions && (
-                  <div className="flex flex-wrap gap-2">
-                    {source === "both" && (
-                      <span className="w-full text-[10px] font-semibold uppercase tracking-wider text-brand-emerald-700">
-                        Seek
-                      </span>
-                    )}
-                    <Select
-                      value={seekClassification || "all"}
-                      onValueChange={(v) => {
-                        // Parent change invalidates any chosen subclass — reset it.
-                        setSeekClassification(v === "all" ? "" : v);
-                        setSeekSubClass("");
-                      }}
-                    >
-                      <SelectTrigger className="h-9 w-full max-w-xs text-sm" aria-label="Seek category">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All categories</SelectItem>
-                        {SEEK_CLASSIFICATIONS.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {seekSubClassOptions.length > 0 && (
-                      <Select
-                        value={seekSubClass || "any"}
-                        onValueChange={(v) => setSeekSubClass(v === "any" ? "" : v)}
-                      >
-                        <SelectTrigger
-                          className="h-9 w-full max-w-xs text-sm"
-                          aria-label="Seek subcategory"
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="any">All subcategories</SelectItem>
-                          {seekSubClassOptions.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              {s.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                    <Select
-                      value={seekWorkType || "any"}
-                      onValueChange={(v) => setSeekWorkType(v === "any" ? "" : v)}
-                    >
-                      <SelectTrigger className="h-9 w-40 text-sm" aria-label="Work type">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="any">Any type</SelectItem>
-                        {SEEK_WORK_TYPES.map((w) => (
-                          <SelectItem key={w.id} value={w.id}>
-                            {w.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           {/* Primary search: job title (full width, prominent) */}
           <div className="space-y-1.5">
             <Label htmlFor="fetch-job-title" className="text-xs font-medium text-muted-foreground">{t("jobTitle")}</Label>
@@ -1113,21 +861,14 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
 
           {/* Options row: chip toggles */}
           <div className="flex flex-wrap items-center gap-2">
-            {!isSeek && (
-              <button
-                type="button"
-                className={`filter-chip ${smartExpand ? "filter-chip--active" : "filter-chip--inactive"}`}
-                onClick={() => setSmartExpand(!smartExpand)}
-              >
-                <span className={`h-1.5 w-1.5 rounded-full ${smartExpand ? "bg-brand-emerald-500" : "bg-muted-foreground/30"}`} />
-                Smart expand
-                {source === "both" && (
-                  <span className="ml-1 rounded bg-muted px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    LinkedIn
-                  </span>
-                )}
-              </button>
-            )}
+            <button
+              type="button"
+              className={`filter-chip ${smartExpand ? "filter-chip--active" : "filter-chip--inactive"}`}
+              onClick={() => setSmartExpand(!smartExpand)}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${smartExpand ? "bg-brand-emerald-500" : "bg-muted-foreground/30"}`} />
+              Smart expand
+            </button>
             <button
               type="button"
               className={`filter-chip ${applyExcludes ? "filter-chip--active" : "filter-chip--inactive"}`}
@@ -1157,41 +898,37 @@ export function FetchClient({ seekEnabled = false }: { seekEnabled?: boolean }) 
                     onChange={setExcludeTitleTerms}
                   />
                 </div>
-                {!isSeek && (
-                  <ExclusionDropdown
-                    label="Description exclusions"
-                    values={excludeDescriptionRules}
-                    options={RIGHTS_EXCLUSION_OPTIONS}
-                    placeholder="Select rules"
-                    testId="description-exclusions"
-                    onChange={setExcludeDescriptionRules}
-                  />
-                )}
+                <ExclusionDropdown
+                  label="Description exclusions"
+                  values={excludeDescriptionRules}
+                  options={RIGHTS_EXCLUSION_OPTIONS}
+                  placeholder="Select rules"
+                  testId="description-exclusions"
+                  onChange={setExcludeDescriptionRules}
+                />
               </div>
 
-              {!isSeek && (
-                <div className="space-y-1.5 sm:max-w-xs">
-                  <Label htmlFor="fetch-experience" className="text-xs font-medium text-muted-foreground">
-                    Minimum experience
-                  </Label>
-                  <Select
-                    value={experienceRule || "off"}
-                    onValueChange={(v) => setExperienceRule(v === "off" ? "" : v)}
-                  >
-                    <SelectTrigger id="fetch-experience">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="off">No experience filter</SelectItem>
-                      {EXPERIENCE_EXCLUSION_OPTIONS.map((o) => (
-                        <SelectItem key={o.value} value={o.value}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              <div className="space-y-1.5 sm:max-w-xs">
+                <Label htmlFor="fetch-experience" className="text-xs font-medium text-muted-foreground">
+                  Minimum experience
+                </Label>
+                <Select
+                  value={experienceRule || "off"}
+                  onValueChange={(v) => setExperienceRule(v === "off" ? "" : v)}
+                >
+                  <SelectTrigger id="fetch-experience">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="off">No experience filter</SelectItem>
+                    {EXPERIENCE_EXCLUSION_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           )}
 

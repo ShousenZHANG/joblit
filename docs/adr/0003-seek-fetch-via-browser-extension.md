@@ -69,3 +69,25 @@ ADR follow-up when the extension path ships.
 - The extension path is independent of `SEEK_FETCH_ENABLED` — it imports through
   `/api/ext/*` with an extension token, so retiring the server-side path does
   not block it.
+
+## Update (2026-07-06): server-side Seek search deleted
+
+The Chrome-extension Seek path has shipped (`chrome-extension/src/content/seek/*`
+→ `/api/ext/jobs/import`) and is now the live Seek source. The original decision
+kept the server-side Seek **search** code behind the kill-switch "for local /
+residential operators and tests"; in practice it was never usable from CI and
+carried its own UI, backend, worker, taxonomy and tests as dead weight. It is now
+**removed**:
+
+- Deleted: `tools/fetcher/run_seek.py` (+ tests), `.github/workflows/seek-fetch.yml`,
+  `lib/shared/seekSubclassifications.ts`, the Fetch-page Source/Seek/Both toggle
+  and Seek classification / sub-class / work-type selectors, the `source==="seek"`
+  branch of `POST /api/fetch-runs` (schema fields, kill-switch guard, advisory
+  lock) and the Seek dispatch branch of the trigger route, plus `fetchRunsSeek` /
+  `fetchRunTriggerSeek` test suites.
+- The Fetch page is now LinkedIn-only server-side; runs always dispatch the
+  `jobspy-fetch.yml` workflow. Old `FetchRun` rows with `source: "seek"` still
+  render in history (the `queries` JSON is schema-flexible; no migration).
+- **Kept:** `lib/server/seek/fetchJobDescription.ts` (on-demand JD enrichment at
+  tailor time — a single `jobDetails` graphql op that works server-side) and the
+  extension Seek path. `SEEK_FETCH_ENABLED` now gates **only** the JD enrichment.

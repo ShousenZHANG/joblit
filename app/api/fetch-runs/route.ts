@@ -7,21 +7,6 @@ import { filterDescriptionExclusionRules } from "@/lib/shared/fetchExclusionCrit
 
 export const runtime = "nodejs";
 
-// Product-level kill-switch for the Seek source — flip the env off to disable
-// Seek instantly (no deploy) if its anti-bot blocks us at scale.
-function isSeekEnabled(): boolean {
-  const v = (process.env.SEEK_FETCH_ENABLED || "").trim().toLowerCase();
-  return v === "1" || v === "true" || v === "yes";
-}
-
-// 31-bit positive hash of a userId for a Postgres pg_advisory_xact_lock(bigint),
-// used to serialise per-user Seek run creation (atomic one-in-flight guard).
-function userIdToAdvisoryKey(userId: string): number {
-  let h = 5381;
-  for (let i = 0; i < userId.length; i++) h = ((h << 5) + h + userId.charCodeAt(i)) | 0;
-  return h & 0x7fffffff;
-}
-
 // Title exclusions allow any user term (presets + custom). Lower-cased and
 // length-bounded; the worker escapes each term before building its regex, so
 // arbitrary input is injection-safe.
@@ -58,20 +43,10 @@ const AUSchema = z
       .optional()
       .default([])
       .transform(filterDescriptionExclusionRules),
-    // Pipeline selector: "jobspy" (LinkedIn, default, unchanged) or "seek".
-    source: z.enum(["jobspy", "seek"]).optional().default("jobspy"),
-    classification: z.string().trim().max(40).optional(),
-    daterange: z.coerce.number().int().min(1).max(31).optional(),
-    // Seek work-type id (242 Full / 243 Part / 244 Contract / 245 Casual), "" = any.
-    workType: z.enum(["", "242", "243", "244", "245"]).optional().default(""),
-    // Seek subclassification id (numeric, refines `classification`). Empty = none.
-    // Numeric-only so it can never inject extra query params into the Seek URL.
-    subClassification: z
-      .string()
-      .trim()
-      .max(6)
-      .regex(/^\d*$/, "subClassification must be numeric")
-      .optional(),
+    // Only the JobSpy (LinkedIn) pipeline is server-side now; Seek search moved
+    // to the browser extension. Kept as a fixed field so run status lanes and
+    // the trigger dispatch keep reading source === "jobspy".
+    source: z.literal("jobspy").optional().default("jobspy"),
   })
   .refine((data) => (data.title ?? data.queries?.[0])?.trim(), {
     message: "title is required",
@@ -182,10 +157,6 @@ export async function POST(req: Request) {
     if (!parsed.ok) return parsed.response;
     const data = parsed.data;
 
-    if (data.source === "seek" && !isSeekEnabled()) {
-      return NextResponse.json({ error: "SEEK_DISABLED" }, { status: 403 });
-    }
-
     const fallbackTitle = data.title ?? data.queries?.[0] ?? "";
     const baseQueries = data.queries?.length
       ? data.queries
@@ -209,15 +180,6 @@ export async function POST(req: Request) {
         excludeTitleTerms: data.excludeTitleTerms,
         excludeDescriptionRules: data.excludeDescriptionRules,
         source: data.source,
-        ...(data.source === "seek"
-          ? {
-              classification: data.classification ?? "",
-              // Subclass only refines a chosen parent; drop it when "All categories".
-              subClassification: data.classification ? data.subClassification ?? "" : "",
-              daterange: data.daterange ?? 2,
-              workType: data.workType ?? "",
-            }
-          : {}),
       },
       location: data.location ?? null,
       hoursOld: data.hoursOld ?? null,
@@ -225,35 +187,6 @@ export async function POST(req: Request) {
       includeFromQueries: data.includeFromQueries,
       filterDescription: data.applyExcludes,
     };
-
-    // Seek: enforce one in-flight run per user ATOMICALLY. Seek shares one
-    // egress IP under Cloudflare, so a TOCTOU between count and create would let
-    // concurrent requests both pass an empty check and both dispatch. A per-user
-    // advisory lock inside the transaction serialises the check + insert.
-    if (data.source === "seek") {
-      const lockKey = userIdToAdvisoryKey(userId);
-      const created = await prisma.$transaction(async (tx) => {
-        // pg_advisory_xact_lock() returns `void`; the Neon driver adapter can't
-        // deserialize a void result column ("UnsupportedNativeDataType"), so use
-        // $executeRaw (returns a row count, never maps result columns). The lock
-        // is still taken — the function runs server-side regardless of how the
-        // client reads the result.
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey}::bigint)`;
-        const active = await tx.fetchRun.count({
-          where: {
-            userId,
-            status: { in: ["QUEUED", "RUNNING"] },
-            queries: { path: ["source"], equals: "seek" },
-          },
-        });
-        if (active > 0) return null;
-        return tx.fetchRun.create({ data: createData, select: { id: true } });
-      });
-      if (!created) {
-        return NextResponse.json({ error: "SEEK_RUN_IN_PROGRESS" }, { status: 429 });
-      }
-      return NextResponse.json({ id: created.id }, { status: 201 });
-    }
 
     const run = await prisma.fetchRun.create({ data: createData, select: { id: true } });
     return NextResponse.json({ id: run.id }, { status: 201 });

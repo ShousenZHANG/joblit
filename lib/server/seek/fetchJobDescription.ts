@@ -1,10 +1,10 @@
 /**
  * On-demand full-JD fetch for Seek jobs.
  *
- * Bulk Seek fetches store only the short teaser (deliberately — see run_seek.py)
- * to keep the batch light and low-risk against Seek's anti-bot. When a Seek job
- * is actually tailored (Generate CV/CL), we fetch its FULL job description once,
- * server-side, so the tailoring prompt gets the complete JD.
+ * Seek jobs are imported via the browser extension, which captures only the
+ * short teaser description. When a Seek job is actually tailored (Generate
+ * CV/CL), we fetch its FULL job description once, server-side, so the tailoring
+ * prompt gets the complete JD.
  *
  * Source: a single POST to au.seek.com/graphql (the consumer BFF, which accepts
  * ad-hoc queries) — NOT the Cloudflare-challenged *.cloud.seek.com.au gateway.
@@ -12,8 +12,8 @@
  * numeric au.seek.com job ids, and fully graceful (returns null on any problem
  * so the caller falls back to the teaser).
  *
- * ToS note: same posture as the worker — honest identification, no challenge
- * solving, no proxy rotation; on-demand volume is tiny (only at tailoring time).
+ * ToS note: honest identification, no challenge solving, no proxy rotation;
+ * on-demand volume is tiny (only at tailoring time).
  */
 const SEEK_HOST = "au.seek.com";
 const SEEK_ORIGIN = `https://${SEEK_HOST}`;
