@@ -7,8 +7,9 @@ import { FloatingWidget, type FieldRuleData } from "./widget/FloatingWidget";
 import { recordSubmission, interceptFormSubmits } from "./recorder/submissionRecorder";
 import { generateFormSignature, matchFieldsFromHistory } from "./detector/similarity";
 import type { SubmissionRecord, MappingRule } from "./detector/similarity";
-import type { DetectedField, FormDetectionResult } from "@ext/shared/types";
+import type { ContentMessage, DetectedField, FormDetectionResult } from "@ext/shared/types";
 import { STORAGE_KEYS } from "@ext/shared/constants";
+import { isJobApplicationContext } from "@ext/shared/jobContext";
 import { initSeekScraper } from "./seek/seekScraper";
 
 let widget: FloatingWidget | null = null;
@@ -16,14 +17,17 @@ let currentDetection: FormDetectionResult | null = null;
 let currentProfile: FlatProfile | null = null;
 let cleanupSubmitListener: (() => void) | null = null;
 const isIframe = window !== window.top;
-/** Prevent duplicate onMessage listener if init() is called more than once (e.g. via lazyObs). */
-let messageListenerRegistered = false;
 /** Prevent duplicate MutationObserver on re-init. */
 let observerRegistered = false;
 /** Prevent concurrent performFill calls from corrupting widget state. */
 let fillInProgress = false;
 /** Timer ID for the post-fill progress reset — cleared when a new fill starts. */
 let progressResetTimer: ReturnType<typeof setTimeout> | null = null;
+
+type JoblitGlobal = typeof globalThis & {
+  __joblitContentScriptInstalled__?: boolean;
+};
+const joblitGlobal = globalThis as JoblitGlobal;
 
 /** Simple debounce — collapses rapid calls into one after `ms` of silence. */
 function debounce(fn: () => void, ms: number): () => void {
@@ -53,46 +57,56 @@ function setupSubmitIntercept(detection: FormDetectionResult) {
   );
 }
 
-/** Main entry point for the content script. */
-async function init() {
-  // Register message listener ONCE, BEFORE any early returns.
-  // Only the top frame responds to popup fill/toggle requests — prevents iframe
-  // race condition where an empty iframe responds with 0/0 before the top frame
-  // finishes its API calls, causing the popup to show "No fields detected" even
-  // though the top frame successfully fills the form.
-  if (!messageListenerRegistered) {
-    messageListenerRegistered = true;
-    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+/** Register the bridge listener before deciding whether to auto-initialize. */
+function registerContentMessageListener(): void {
+  chrome.runtime.onMessage.addListener(
+    (message: ContentMessage, _sender, sendResponse) => {
+      if (message.type === "JOBLIT_PING") {
+        if (isIframe) return false;
+        sendResponse({ type: "JOBLIT_PONG" });
+        return false;
+      }
+
       if (message.type === "TRIGGER_FILL") {
-        if (isIframe) return false; // Only top frame responds
-        performFill().then((result) => {
-          sendResponse({ success: true, ...result });
-        }).catch((err: unknown) => {
-          const errorMessage = err instanceof Error ? err.message : "Fill failed";
-          sendResponse({ success: false, error: errorMessage, filled: 0, skipped: 0 });
-        });
+        if (isIframe) return false;
+        performFill()
+          .then((result) => {
+            sendResponse({ success: true, ...result });
+          })
+          .catch((err: unknown) => {
+            const errorMessage =
+              err instanceof Error ? err.message : "Fill failed";
+            sendResponse({
+              success: false,
+              error: errorMessage,
+              filled: 0,
+              skipped: 0,
+            });
+          });
         return true;
       }
 
       if (message.type === "TOGGLE_WIDGET") {
-        if (isIframe) return false; // Only top frame responds
-        toggleWidget().then(() => sendResponse({ success: true })).catch(() => sendResponse({ success: true }));
+        if (isIframe) return false;
+        toggleWidget()
+          .then(() => sendResponse({ success: true }))
+          .catch(() => sendResponse({ success: true }));
         return true;
       }
-    });
-  }
 
-  // Known ATS domains — always initialize
-  const KNOWN_ATS_PATTERNS = [
-    /greenhouse\.io/i, /lever\.co/i, /myworkdayjobs\.com/i, /workday\.com/i,
-    /icims\.com/i, /successfactors\.com/i, /taleo\.net/i, /smartrecruiters\.com/i,
-    /bamboohr\.com/i, /jobvite\.com/i, /ashbyhq\.com/i, /rippling\.com/i,
-    /careers|jobs|apply|application/i,
-  ];
-  const isKnownAts = KNOWN_ATS_PATTERNS.some(p => p.test(location.href));
+      return false;
+    },
+  );
+}
+
+/** Main entry point for the content script. */
+async function init() {
+  if (!isJobApplicationContext(window.location.href)) return;
+
+  // Known ATS/job pages initialize automatically after the listener is ready.
   const hasFormElements = document.querySelector("input, textarea, select, form");
 
-  if (!hasFormElements && !isKnownAts && !isIframe) {
+  if (!hasFormElements && !isIframe) {
     // No forms on this page — set up a lazy observer and exit
     const lazyObs = new MutationObserver(() => {
       if (document.querySelector("input, textarea, select, form")) {
@@ -396,7 +410,12 @@ async function performFill() {
   }
 }
 
-// Run
-init();
-// Seek import button (au.seek.com search pages only — no-ops elsewhere).
-initSeekScraper();
+if (!joblitGlobal.__joblitContentScriptInstalled__) {
+  joblitGlobal.__joblitContentScriptInstalled__ = true;
+  registerContentMessageListener();
+  void init();
+  // Seek import button (au.seek.com search pages only — no-ops elsewhere).
+  if (isJobApplicationContext(window.location.href)) {
+    initSeekScraper();
+  }
+}

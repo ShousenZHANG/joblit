@@ -1,7 +1,13 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { afterEach, describe, it, expect, beforeEach, vi } from "vitest";
 import { FieldCategory } from "@ext/shared/fieldTaxonomy";
 import type { DetectedField } from "@ext/shared/types";
-import { captureFieldSnapshot, buildFieldMappings, extractDomain } from "./submissionRecorder";
+import {
+  buildFieldMappings,
+  captureFieldSnapshot,
+  extractDomain,
+  interceptFormSubmits,
+  recordSubmission,
+} from "./submissionRecorder";
 
 function makeField(el: HTMLElement, overrides: Partial<DetectedField> = {}): DetectedField {
   return {
@@ -66,6 +72,21 @@ describe("captureFieldSnapshot", () => {
     const snapshot = captureFieldSnapshot(fields);
     expect(snapshot.myfield).toBe("test");
   });
+
+  it("keeps email while excluding sensitive values independently", () => {
+    document.body.innerHTML = `
+      <input id="email" name="email" type="email" value="john@example.com" />
+      <input id="password" name="password" type="password" value="secret" />
+      <input id="otp" name="otp" value="123456" />
+      <input id="card" name="creditCardNumber" value="4111111111111111" />
+      <input id="bank" name="routingNumber" value="012345" />
+      <input id="government-id" name="nationalId" value="ID-123" />
+    `;
+    const fields = Array.from(document.querySelectorAll<HTMLElement>("input"))
+      .map((element) => makeField(element, { name: element.getAttribute("name") ?? "" }));
+
+    expect(captureFieldSnapshot(fields)).toEqual({ email: "john@example.com" });
+  });
 });
 
 describe("buildFieldMappings", () => {
@@ -94,6 +115,17 @@ describe("buildFieldMappings", () => {
     const mappings = buildFieldMappings(fields);
     expect(mappings.custom.source).toBe("manual");
   });
+
+  it("excludes sensitive fields independently of detector output", () => {
+    document.body.innerHTML = `
+      <input id="email" name="email" type="email" />
+      <input id="security-code" name="securityCode" />
+    `;
+    const fields = Array.from(document.querySelectorAll<HTMLElement>("input"))
+      .map((element) => makeField(element, { name: element.getAttribute("name") ?? "" }));
+
+    expect(Object.keys(buildFieldMappings(fields))).toEqual(["email"]);
+  });
 });
 
 describe("extractDomain", () => {
@@ -104,5 +136,37 @@ describe("extractDomain", () => {
 
   it("returns empty for invalid URL", () => {
     expect(extractDomain("not a url")).toBe("");
+  });
+});
+
+describe("submission context gating", () => {
+  beforeEach(() => {
+    document.body.innerHTML = '<form><input id="email" name="email" value="john@example.com" /></form>';
+    window.history.replaceState({}, "", "/login");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    window.history.replaceState({}, "", "/");
+  });
+
+  it("recordSubmission does not send outside a job application context", async () => {
+    const sendMessage = vi.spyOn(chrome.runtime, "sendMessage");
+    const field = makeField(document.querySelector("input")!, { name: "email" });
+
+    await recordSubmission([field], "generic");
+
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("interceptFormSubmits installs no submit listener outside job context", () => {
+    const form = document.querySelector("form")!;
+    const addEventListener = vi.spyOn(form, "addEventListener");
+    const field = makeField(document.querySelector("input")!, { name: "email" });
+
+    const cleanup = interceptFormSubmits([field], "generic");
+
+    expect(addEventListener).not.toHaveBeenCalledWith("submit", expect.any(Function));
+    expect(() => cleanup()).not.toThrow();
   });
 });

@@ -2,6 +2,7 @@ import type { DetectedField, FormDetectionResult } from "@ext/shared/types";
 import { classifyField, buildSelector, getInputType } from "./fieldClassifier";
 import type { AtsAdapter } from "./atsAdapters/types";
 import { getAdapter } from "./atsAdapters";
+import { filterSafeFields } from "@ext/shared/sensitiveFields";
 
 /** Input types that should be skipped. */
 const SKIP_TYPES = new Set(["hidden", "submit", "button", "reset", "image"]);
@@ -71,7 +72,7 @@ function queryInputsDeep(
 export function detectFields(doc: Document, adapter: AtsAdapter): DetectedField[] {
   // Try ATS-specific detection first; fall through to generic if no fields found
   const atsFields = adapter.detectFields(doc);
-  if (atsFields.length > 0) return atsFields;
+  if (atsFields.length > 0) return filterSafeFields(atsFields);
 
   // Fallback: generic detection (also used when ATS adapter returns 0 fields).
   // Deep-collect so web-component (shadow DOM) forms are reachable.
@@ -112,7 +113,7 @@ export function detectFields(doc: Document, adapter: AtsAdapter): DetectedField[
     });
   }
 
-  return fields;
+  return filterSafeFields(fields);
 }
 
 /** Run full form detection on the current page. */

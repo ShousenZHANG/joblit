@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { FieldCategory } from "@ext/shared/fieldTaxonomy";
-import { detectForms } from "./formDetector";
+import type { DetectedField } from "@ext/shared/types";
+import type { AtsAdapter } from "./atsAdapters/types";
+import { detectFields, detectForms } from "./formDetector";
 
 describe("detectForms", () => {
   beforeEach(() => {
@@ -84,6 +86,52 @@ describe("detectForms", () => {
     expect(field.name).toBe("first_name");
     expect(field.id).toBe("test-field");
     expect(field.placeholder).toBe("Enter first name");
+  });
+
+  it("keeps email while excluding sensitive generic fields", () => {
+    document.body.innerHTML = `
+      <form>
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" />
+        <input id="password" name="password" type="password" />
+        <input id="otp" name="otp" />
+        <input id="payment" name="creditCardNumber" />
+        <input id="bank" name="bankAccountNumber" />
+        <label for="passport">Passport number</label>
+        <input id="passport" />
+      </form>
+    `;
+
+    const result = detectForms(document);
+    expect(result.fields.map((field) => field.id)).toEqual(["email"]);
+  });
+
+  it("filters sensitive fields returned by an ATS adapter", () => {
+    document.body.innerHTML = `
+      <input id="email" type="email" />
+      <input id="verification" aria-label="Verification code" />
+    `;
+    const elements = Array.from(document.querySelectorAll<HTMLElement>("input"));
+    const adapterFields: DetectedField[] = elements.map((element) => ({
+      element,
+      selector: `#${element.id}`,
+      inputType: element.getAttribute("type") ?? "text",
+      category: FieldCategory.UNKNOWN,
+      confidence: 0,
+      labelText: element.getAttribute("aria-label") ?? "",
+      name: "",
+      id: element.id,
+      placeholder: "",
+    }));
+    const adapter: AtsAdapter = {
+      name: "test-ats",
+      canHandle: () => true,
+      detectFields: () => adapterFields,
+    };
+
+    expect(detectFields(document, adapter).map((field) => field.id)).toEqual([
+      "email",
+    ]);
   });
 });
 

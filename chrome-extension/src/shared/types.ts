@@ -47,10 +47,16 @@ export interface SeekImportItem {
   site?: string;
 }
 
-export type MessageType =
+export type ContentMessage =
+  | { type: "JOBLIT_PING" }
+  | { type: "TRIGGER_FILL" }
+  | { type: "TOGGLE_WIDGET" };
+
+export type BackgroundMessage =
   | { type: "GET_PROFILE"; locale?: string }
   | { type: "GET_FLAT_PROFILE"; locale?: string; force?: boolean }
-  | { type: "FILL_FORM" }
+  | { type: "FILL_ACTIVE_TAB" }
+  | { type: "TOGGLE_ACTIVE_TAB" }
   | { type: "RECORD_SUBMISSION"; data: Record<string, unknown> }
   | { type: "GET_SUBMISSIONS"; params?: SubmissionQueryParams }
   | { type: "GET_FIELD_MAPPINGS"; params?: FieldMappingQueryParams }
@@ -61,6 +67,8 @@ export type MessageType =
   | { type: "GET_AUTH_STATUS" }
   | { type: "SET_TOKEN"; token: string }
   | { type: "CLEAR_TOKEN" };
+
+export type MessageType = BackgroundMessage;
 
 export interface SubmissionQueryParams {
   pageDomain?: string;

@@ -89,64 +89,63 @@ export function Dashboard({ onDisconnect }: DashboardProps) {
   const handleFillNow = useCallback(() => {
     setFillState({ status: "filling" });
 
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]?.id) {
-        chrome.tabs.sendMessage(tabs[0].id, { type: "TRIGGER_FILL" }, (response) => {
-          if (chrome.runtime.lastError) {
-            setFillState({ status: "error", message: t("error.fillFailed") });
-            return;
-          }
-          if (response?.filled !== undefined) {
-            const filled = response.filled ?? 0;
-            const skipped = response.skipped ?? 0;
-            const total = filled + skipped;
-
-            if (total === 0) {
-              // No form fields detected — show informative message, don't auto-close
-              setFillState({
-                status: "error",
-                message: response.message || t("widget.noFields"),
-              });
-              return;
-            }
-
-            const fields: Array<{ filled?: unknown; source?: unknown }> =
-              Array.isArray(response.fields) ? response.fields : [];
-            const sources = {
-              profile: fields.filter((f) => f.filled && f.source === "profile").length,
-              historical: fields.filter((f) => f.filled && f.source === "historical").length,
-              default: 0,
-            };
-            setFillState({
-              status: "success",
-              filled,
-              total,
-              message: response.message,
-              sources,
-            });
-            // Auto-close after showing result
-            setTimeout(() => window.close(), 2000);
-          } else {
-            // Content script responded without fill data — treat as no fields
-            setFillState({
-              status: "error",
-              message: t("widget.noFields"),
-            });
-          }
+    chrome.runtime.sendMessage({ type: "FILL_ACTIVE_TAB" }, (response) => {
+      if (chrome.runtime.lastError) {
+        setFillState({ status: "error", message: t("error.fillFailed") });
+        return;
+      }
+      if (response?.success === false && response?.filled === undefined) {
+        setFillState({
+          status: "error",
+          message: response.error?.includes("No active tab")
+            ? t("error.noActiveTab")
+            : t("error.fillFailed"),
         });
+        return;
+      }
+      if (response?.filled !== undefined) {
+        const filled = response.filled ?? 0;
+        const skipped = response.skipped ?? 0;
+        const total = filled + skipped;
+
+        if (total === 0) {
+          // No form fields detected — show informative message, don't auto-close
+          setFillState({
+            status: "error",
+            message: response.message || t("widget.noFields"),
+          });
+          return;
+        }
+
+        const fields: Array<{ filled?: unknown; source?: unknown }> =
+          Array.isArray(response.fields) ? response.fields : [];
+        const sources = {
+          profile: fields.filter((f) => f.filled && f.source === "profile").length,
+          historical: fields.filter((f) => f.filled && f.source === "historical").length,
+          default: 0,
+        };
+        setFillState({
+          status: "success",
+          filled,
+          total,
+          message: response.message,
+          sources,
+        });
+        // Auto-close after showing result
+        setTimeout(() => window.close(), 2000);
       } else {
-        setFillState({ status: "error", message: t("error.noActiveTab") });
+        // Content script responded without fill data — treat as no fields
+        setFillState({
+          status: "error",
+          message: t("widget.noFields"),
+        });
       }
     });
   }, []);
 
   const handleToggleWidget = useCallback(() => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]?.id) {
-        chrome.tabs.sendMessage(tabs[0].id, { type: "TOGGLE_WIDGET" }, () => {
-          void chrome.runtime.lastError;
-        });
-      }
+    chrome.runtime.sendMessage({ type: "TOGGLE_ACTIVE_TAB" }, () => {
+      void chrome.runtime.lastError;
     });
   }, []);
 

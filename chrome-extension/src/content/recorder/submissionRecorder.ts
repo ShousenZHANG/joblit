@@ -1,5 +1,7 @@
 import type { DetectedField } from "@ext/shared/types";
 import { sendMessage } from "@ext/shared/messaging";
+import { isJobApplicationContext } from "@ext/shared/jobContext";
+import { filterSafeFields } from "@ext/shared/sensitiveFields";
 import { generateFormSignature } from "../detector/similarity";
 
 /** Capture a snapshot of all field values at submission time. */
@@ -7,7 +9,7 @@ export function captureFieldSnapshot(
   fields: DetectedField[],
 ): Record<string, string> {
   const snapshot: Record<string, string> = {};
-  for (const field of fields) {
+  for (const field of filterSafeFields(fields)) {
     const key = field.name || field.id || field.selector;
     const el = field.element;
     if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
@@ -26,7 +28,7 @@ export function buildFieldMappings(
   fields: DetectedField[],
 ): Record<string, { source: string; profilePath?: string; confidence: number }> {
   const mappings: Record<string, { source: string; profilePath?: string; confidence: number }> = {};
-  for (const field of fields) {
+  for (const field of filterSafeFields(fields)) {
     const key = field.name || field.id || field.selector;
     mappings[key] = {
       source: field.confidence > 0 ? "profile" : "manual",
@@ -51,10 +53,13 @@ export async function recordSubmission(
   fields: DetectedField[],
   atsProvider: string,
 ): Promise<void> {
-  const fieldValues = captureFieldSnapshot(fields);
-  const fieldMappings = buildFieldMappings(fields);
-  const formSignature = generateFormSignature(fields);
   const pageUrl = window.location.href;
+  if (!isJobApplicationContext(pageUrl)) return;
+
+  const safeFields = filterSafeFields(fields);
+  const fieldValues = captureFieldSnapshot(safeFields);
+  const fieldMappings = buildFieldMappings(safeFields);
+  const formSignature = generateFormSignature(safeFields);
   const pageDomain = extractDomain(pageUrl);
 
   await sendMessage({
@@ -75,6 +80,8 @@ export function interceptFormSubmits(
   fields: DetectedField[],
   atsProvider: string,
 ): () => void {
+  if (!isJobApplicationContext(window.location.href)) return () => {};
+
   const handler = (_e: SubmitEvent) => {
     // Record asynchronously — don't block the submit
     recordSubmission(fields, atsProvider).catch(() => {

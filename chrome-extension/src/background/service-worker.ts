@@ -3,6 +3,7 @@ import { setToken, clearToken, getAuthStatus } from "./auth";
 import { fetchProfile, fetchFlatProfile, postSubmission, fetchSubmissions, fetchFieldMappings, putFieldMapping, matchJob, markJobApplied, importSeekJobs } from "./api";
 import { enqueue } from "./syncQueue";
 import { processQueue } from "./syncProcessor";
+import { sendToActiveTab } from "./tabBridge";
 
 /** Handle messages from content scripts and popup. */
 chrome.runtime.onMessage.addListener(
@@ -50,6 +51,12 @@ async function handleMessage(message: MessageType): Promise<MessageResponse> {
       const flat = await fetchFlatProfile(message.locale, message.force);
       return { success: true, data: flat };
     }
+
+    case "FILL_ACTIVE_TAB":
+      return sendToActiveTab<MessageResponse>({ type: "TRIGGER_FILL" });
+
+    case "TOGGLE_ACTIVE_TAB":
+      return sendToActiveTab<MessageResponse>({ type: "TOGGLE_WIDGET" });
 
     case "RECORD_SUBMISSION": {
       try {
@@ -106,23 +113,15 @@ async function handleMessage(message: MessageType): Promise<MessageResponse> {
 /** Handle keyboard shortcuts. */
 chrome.commands.onCommand.addListener(async (command) => {
   if (command === "fill-form") {
-    const [tab] = await chrome.tabs.query({
-      active: true,
-      currentWindow: true,
+    await sendToActiveTab({ type: "TRIGGER_FILL" }).catch(() => {
+      // Keyboard commands have no response surface; keep failures non-blocking.
     });
-    if (tab?.id) {
-      chrome.tabs.sendMessage(tab.id, { type: "TRIGGER_FILL" });
-    }
   }
 
   if (command === "toggle-widget") {
-    const [tab] = await chrome.tabs.query({
-      active: true,
-      currentWindow: true,
+    await sendToActiveTab({ type: "TOGGLE_WIDGET" }).catch(() => {
+      // Keyboard commands have no response surface; keep failures non-blocking.
     });
-    if (tab?.id) {
-      chrome.tabs.sendMessage(tab.id, { type: "TOGGLE_WIDGET" });
-    }
   }
 });
 
