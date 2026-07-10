@@ -1,7 +1,7 @@
 export default function LoadingResume() {
   return (
     <main className="flex h-full min-h-0 flex-1 flex-col">
-      <section className="flex h-full min-h-0 flex-1 flex-col rounded-3xl border-2 border-border/60 bg-background/85 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] backdrop-blur overflow-hidden route-loading-enter">
+      <section className="flex h-full min-h-0 flex-1 flex-col cosmos-panel rounded-3xl border-2 border-border/60 bg-background/85 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] backdrop-blur overflow-hidden route-loading-enter">
         {/* Header skeleton */}
         <div className="shrink-0 px-6 pt-6 pb-4 space-y-2">
           <div className="h-7 w-48 animate-pulse rounded-lg bg-muted" />

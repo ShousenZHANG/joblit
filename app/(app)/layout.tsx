@@ -8,9 +8,13 @@ import { GuideProvider } from "../GuideContext";
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative grid h-dvh grid-rows-[auto_minmax(0,1fr)] overflow-x-hidden overflow-y-auto lg:overflow-hidden">
-      {/* Fixed gradient mesh behind the app (emerald/teal/amber wash,
-          dark-mode quieter variant). Same atmosphere as landing. */}
+      {/* Fixed gradient mesh behind the app — emerald wash over a deep-space
+          nebula in dark mode. Same atmosphere plane as landing. */}
       <div aria-hidden className="landing-atmos" />
+      {/* Fine grain over the atmosphere. A solid dark fill reads flat and
+          plastic; the texture is what makes deep space feel deep. Reuses the
+          landing grain (fixed, pointer-events-none, behind content at z-0). */}
+      <div aria-hidden className="landing-grain" />
       <GuideProvider>
         <AppNav />
         <div className="relative z-[1] app-frame app-shell flex min-h-0 flex-col py-3 sm:py-4 md:py-5 lg:h-full">

@@ -32,6 +32,10 @@
   --border: oklch(0.92 0.005 80);
   --input: oklch(0.92 0.005 80);
   --ring: oklch(0.65 0.14 160);
+  /* Aurora Deep tokens — defined in light too so the cosmos-* utilities are
+     inert (not broken) on the paper-clean light surface. */
+  --aurora-glow: oklch(0.72 0.14 162 / 0.12);
+  --nebula: none;
   --chart-1: oklch(0.56 0.19 255);
   --chart-2: oklch(0.62 0.12 200);
   --chart-3: oklch(0.48 0.08 230);
@@ -183,12 +187,13 @@
   );
 }
 
+/* Aurora Deep: the emerald wash now sits on a deep-space nebula. Already a
+   fixed, pointer-events-none plane — the nebula rides it for free, so there is
+   no `background-attachment: fixed` (an iOS Safari repaint trap) anywhere. */
 .dark .landing-atmos {
-  background: radial-gradient(
-    ellipse 70% 50% at 50% 0%,
-    rgba(16, 185, 129, 0.07),
-    transparent 65%
-  );
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 0%, rgba(16, 185, 129, 0.07), transparent 65%),
+    var(--nebula);
 }
 
 /* Aurora — premium "living" background layered BEHIND .landing-atmos. Three
@@ -278,6 +283,32 @@
   .landing-aurora-blob {
     animation: none;
   }
+}
+
+/* ==========================================================================
+   Aurora Deep — cosmos layer
+   Ambient/container-level polish for the authenticated workspace. Everything
+   here is dark-mode only: light stays paper-clean. Data surfaces (job rows,
+   forms, JD body) get NO decoration beyond .cosmos-signal below.
+   All motion is GPU-only (transform/opacity) and reduced-motion safe.
+   ========================================================================== */
+
+/* Starship porthole: a 1px inner highlight on each workspace panel. */
+.dark .cosmos-panel {
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.05);
+}
+
+/* Nav pill: a faint aurora seam along its lower edge. */
+.dark .cosmos-nav::after {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--brand-emerald-500) 50%, transparent);
+  opacity: 0.35;
+  pointer-events: none;
 }
 
 /* Landing keyframes used by Tailwind animate-[...] arbitrary utilities. */
@@ -463,13 +494,14 @@ body {
 
 
 .dark {
-  /* Linear-style dark: deeper near-black background (zinc-950), slightly
-     less blue-tinted card surfaces (zinc-900), tighter borders. */
-  --background: oklch(0.12 0.005 250);
+  /* Aurora Deep — deep-space ink rather than neutral near-black. Raising the
+     blue chroma gives the workspace depth (pure grey reads flat/plastic);
+     emerald then reads as a living signal against it, not a green button. */
+  --background: oklch(0.13 0.02 250);
   --foreground: oklch(0.98 0.005 250);
-  --card: oklch(0.16 0.005 250);
+  --card: oklch(0.17 0.022 252);
   --card-foreground: oklch(0.98 0.005 250);
-  --popover: oklch(0.16 0.005 250);
+  --popover: oklch(0.17 0.022 252);
   --popover-foreground: oklch(0.98 0.005 250);
   --primary: oklch(0.72 0.15 160);
   --primary-foreground: oklch(0.18 0.03 160);
@@ -480,9 +512,15 @@ body {
   --accent: oklch(0.26 0.02 255);
   --accent-foreground: oklch(0.98 0.005 250);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
+  --border: oklch(0.65 0.02 250 / 14%);
   --input: oklch(1 0 0 / 14%);
   --ring: oklch(0.7 0.13 160);
+  /* Emerald outer glow for primary actions / focus in deep space. */
+  --aurora-glow: oklch(0.72 0.14 162 / 0.25);
+  /* Deep-space nebula wash — layered onto the fixed .landing-atmos plane. */
+  --nebula:
+    radial-gradient(ellipse 80% 50% at 20% -10%, oklch(0.25 0.06 200 / 0.35), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 110%, oklch(0.3 0.08 160 / 0.22), transparent 55%);
   --chart-1: oklch(0.62 0.18 255);
   --chart-2: oklch(0.68 0.12 200);
   --chart-3: oklch(0.72 0.14 300);

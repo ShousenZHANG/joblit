@@ -104,7 +104,7 @@ export function AppNav() {
             : "0 8px 24px -12px rgba(5, 150, 105, 0.14), 0 2px 6px -2px rgba(15, 23, 42, 0.04)",
         }}
         transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
-        className="flex w-full items-center justify-between gap-3 rounded-full border border-border/60 bg-[var(--landing-nav-bg,rgba(255,255,255,0.82))] px-3 backdrop-blur-xl backdrop-saturate-150 sm:px-4"
+        className="cosmos-nav relative flex w-full items-center justify-between gap-3 rounded-full border border-border/60 bg-[var(--landing-nav-bg,rgba(255,255,255,0.82))] px-3 backdrop-blur-xl backdrop-saturate-150 sm:px-4"
         style={{ transformOrigin: "top center", willChange: "transform" }}
       >
         {/* Left: logo + primary links */}
