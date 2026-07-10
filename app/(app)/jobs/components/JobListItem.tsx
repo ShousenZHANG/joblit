@@ -71,7 +71,9 @@ function JobListItemInner({
             ? "border-l-brand-emerald-500 bg-brand-emerald-50/70 shadow-sm ring-1 ring-brand-emerald-200/70"
             : isActive
               ? "border-l-brand-emerald-500 bg-brand-emerald-50/50 shadow-sm"
-              : "border-l-transparent hover:border-border hover:bg-background"
+              : // Signal lock: hovering a row lights its left edge emerald. The
+              // 4px left border is always present, so this costs zero layout.
+              "border-l-transparent hover:border-border hover:border-l-brand-emerald-500/70 hover:bg-background"
         }`}
       >
         {batchMode && (

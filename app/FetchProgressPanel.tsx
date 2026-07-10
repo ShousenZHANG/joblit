@@ -157,7 +157,11 @@ export function FetchProgressPanel() {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.94, y: 16 }}
           transition={SPRING}
-          className="fixed bottom-6 right-6 z-50 w-[380px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-3xl border border-border/60 bg-background/95 shadow-[0_28px_60px_-24px_rgba(15,23,42,0.22)] backdrop-blur-xl"
+          className={cn(
+            "fixed bottom-6 right-6 z-50 w-[380px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-3xl border border-border/60 bg-background/95 shadow-[0_28px_60px_-24px_rgba(15,23,42,0.22)] backdrop-blur-xl",
+            // Scanning deep space while a run is in flight.
+            isRunning && "cosmos-scan",
+          )}
         >
           {/* Header — title, status chip, minimize, close */}
           <div className="flex items-center justify-between gap-2 border-b border-border/50 px-4 py-3">

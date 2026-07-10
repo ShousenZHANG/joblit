@@ -6,6 +6,7 @@ import { Footer } from "@/components/landing/Footer";
 import { Hero } from "@/components/landing/Hero";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { LogoBar } from "@/components/landing/LogoBar";
+import { Starfield } from "@/components/landing/Starfield";
 import { Access } from "@/components/landing/Access";
 import { Nav } from "@/components/landing/Nav";
 import { ScrollProgress } from "@/components/landing/ScrollProgress";
@@ -70,9 +71,10 @@ export default function MarketingPage() {
       <ScrollProgress />
       {/* Atmosphere: fixed layers rendered behind the page. Kept outside
           <main> so no ancestor transform/overflow establishes a new containing
-          block for the fixed Nav inside <main>. Order back→front: aurora
-          (drifting blobs) → atmos (radial wash) → grain (texture). All z-0,
-          so <main> (z-1) always sits on top. */}
+          block for the fixed Nav inside <main>. Order back→front: starfield
+          (dark-only parallax stars) → aurora (drifting blobs) → atmos (radial
+          wash) → grain (texture). All z-0, so <main> (z-1) sits on top. */}
+      <Starfield />
       <div aria-hidden className="landing-aurora">
         <span className="landing-aurora-blob landing-aurora-blob--1" />
         <span className="landing-aurora-blob landing-aurora-blob--2" />

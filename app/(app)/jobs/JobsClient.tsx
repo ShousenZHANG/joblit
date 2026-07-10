@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, CheckSquare, Compass, MapPin, RefreshCw, SlidersHorizontal, Square, Trash2, X } from "lucide-react";
+import { ArrowRight, CheckSquare, MapPin, RefreshCw, SlidersHorizontal, Square, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -861,8 +861,32 @@ export function JobsClient({
                         className="absolute inset-0 rounded-full ring-1 ring-brand-emerald-300/50 motion-safe:animate-ping [animation-duration:3s]"
                       />
                     )}
-                    <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-emerald-50 to-white text-brand-emerald-600 shadow-sm ring-1 ring-brand-emerald-100">
-                      <Compass className="h-6 w-6" aria-hidden />
+                    <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-emerald-50 to-white text-brand-emerald-600 shadow-sm ring-1 ring-brand-emerald-100 dark:from-brand-emerald-500/10 dark:to-transparent">
+                      {/* An empty board is empty sky: a constellation, not a
+                          compass. The lead star breathes; the rest are quiet. */}
+                      <svg viewBox="0 0 48 48" fill="none" className="h-7 w-7" aria-hidden>
+                        <path
+                          d="M10 30 L20 14 L31 24 L40 12"
+                          stroke="currentColor"
+                          strokeWidth="1"
+                          strokeDasharray="2 3"
+                          strokeLinecap="round"
+                          opacity="0.45"
+                        />
+                        <path
+                          d="M20 14 L26 36"
+                          stroke="currentColor"
+                          strokeWidth="1"
+                          strokeDasharray="2 3"
+                          strokeLinecap="round"
+                          opacity="0.28"
+                        />
+                        <circle cx="10" cy="30" r="1.3" fill="currentColor" opacity="0.7" />
+                        <circle cx="31" cy="24" r="1.3" fill="currentColor" opacity="0.7" />
+                        <circle cx="40" cy="12" r="1.1" fill="currentColor" opacity="0.55" />
+                        <circle cx="26" cy="36" r="1.1" fill="currentColor" opacity="0.55" />
+                        <circle cx="20" cy="14" r="2.4" fill="currentColor" className="cosmos-star" />
+                      </svg>
                     </span>
                   </div>
                   <h3 className="text-base font-semibold tracking-tight text-foreground">

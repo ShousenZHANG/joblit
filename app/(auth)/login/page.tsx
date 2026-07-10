@@ -11,6 +11,7 @@ import { motion, useReducedMotion, type Variants } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
 import { LocaleSwitcher } from "@/components/LocaleSwitcher";
+import { Starfield } from "@/components/landing/Starfield";
 import { ThemeToggle } from "@/components/providers/ThemeProvider";
 
 // Landing-aligned auth page. Single centered surface card, theme-token chrome,
@@ -88,7 +89,10 @@ function LoginPageInner() {
 
   return (
     <main className="relative min-h-screen overflow-hidden px-6 pb-16 pt-8 sm:px-10">
+      {/* Entering the observatory: stars → nebula wash → grain. Dark only. */}
+      <Starfield />
       <div aria-hidden className="landing-atmos" />
+      <div aria-hidden className="landing-grain" />
 
       <div className="relative z-[1] mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-5xl flex-col">
         {/* Minimal top bar — logo + locale + theme. No primary nav on
@@ -114,10 +118,13 @@ function LoginPageInner() {
           initial={{ opacity: 0, y: 16, scale: reduced ? 1 : 0.985 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="mt-12 flex flex-1 items-center justify-center"
+          className="relative mt-12 flex flex-1 items-center justify-center"
         >
+          {/* Aurora breathing behind the capsule — the only slow pulse on the
+              page, so the card reads as lit from deep space rather than flat. */}
+          <span aria-hidden className="cosmos-breath" />
           <div
-            className="relative w-full max-w-md overflow-hidden rounded-3xl border border-border/60 bg-background/85 p-8 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_20px_42px_-18px_rgba(5,150,105,0.2)] backdrop-blur-sm sm:p-10"
+            className="cosmos-panel relative w-full max-w-md overflow-hidden rounded-3xl border border-border/60 bg-background/85 p-8 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_20px_42px_-18px_rgba(5,150,105,0.2)] backdrop-blur-sm sm:p-10 dark:bg-card/70 dark:backdrop-blur-xl"
             data-testid="login-card"
           >
             {/* Corner glow — subtle emerald accent that pairs with the

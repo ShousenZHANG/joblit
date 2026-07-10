@@ -245,8 +245,11 @@
   animation: aurora-drift-3 36s ease-in-out infinite;
 }
 
+/* In deep space the aurora is dimmer and drifts on a cosmic clock — the gap
+   between a 60s background and a 200ms interaction IS the sense of vastness. */
 .dark .landing-aurora-blob {
   opacity: 0.34;
+  animation-duration: 60s;
 }
 
 @keyframes aurora-drift-1 {
@@ -279,6 +282,82 @@
   opacity: 0.05;
 }
 
+/* Starfield — three parallax layers behind the aurora. Dark only; on light the
+   whole plane is hidden. Each layer paints its stars via box-shadow (one node,
+   many stars) and moves with a single transform, so parallax is GPU-cheap. */
+.starfield {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+  contain: layout paint;
+}
+
+.dark .starfield {
+  opacity: 1;
+}
+
+.starfield-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 999px;
+  --star-c: oklch(0.9 0.02 250 / 0.5);
+  transition: transform 400ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+.starfield-far {
+  width: 1px;
+  height: 1px;
+  box-shadow:
+    45px 120px var(--star-c), 160px 640px var(--star-c), 230px 80px var(--star-c),
+    310px 420px var(--star-c), 420px 700px var(--star-c), 505px 160px var(--star-c),
+    590px 540px var(--star-c), 660px 90px var(--star-c), 730px 380px var(--star-c),
+    820px 650px var(--star-c), 905px 210px var(--star-c), 990px 480px var(--star-c),
+    1060px 40px var(--star-c), 1130px 720px var(--star-c), 1210px 300px var(--star-c),
+    1290px 580px var(--star-c), 1350px 130px var(--star-c), 1420px 450px var(--star-c),
+    1495px 690px var(--star-c), 1560px 240px var(--star-c), 90px 330px var(--star-c),
+    370px 20px var(--star-c), 680px 760px var(--star-c), 1170px 60px var(--star-c),
+    1530px 30px var(--star-c);
+  transform: translate3d(calc(var(--px, 0) * 4px), calc(var(--py, 0) * 4px), 0);
+}
+
+.starfield-mid {
+  width: 1.5px;
+  height: 1.5px;
+  --star-c: oklch(0.92 0.03 200 / 0.6);
+  box-shadow:
+    120px 250px var(--star-c), 280px 560px var(--star-c), 440px 100px var(--star-c),
+    570px 680px var(--star-c), 700px 300px var(--star-c), 850px 520px var(--star-c),
+    960px 130px var(--star-c), 1080px 610px var(--star-c), 1230px 380px var(--star-c),
+    1380px 90px var(--star-c), 1500px 560px var(--star-c), 200px 720px var(--star-c),
+    520px 400px var(--star-c), 780px 40px var(--star-c), 1010px 340px var(--star-c),
+    1310px 700px var(--star-c), 60px 60px var(--star-c), 1590px 410px var(--star-c);
+  transform: translate3d(calc(var(--px, 0) * 9px), calc(var(--py, 0) * 9px), 0);
+}
+
+.starfield-near {
+  width: 2px;
+  height: 2px;
+  --star-c: oklch(0.95 0.05 165 / 0.7);
+  box-shadow:
+    180px 180px var(--star-c), 400px 620px var(--star-c), 640px 460px var(--star-c),
+    880px 240px var(--star-c), 1120px 520px var(--star-c), 1340px 200px var(--star-c),
+    1550px 640px var(--star-c), 300px 350px var(--star-c), 760px 660px var(--star-c),
+    1040px 80px var(--star-c), 1440px 350px var(--star-c), 540px 40px var(--star-c);
+  transform: translate3d(calc(var(--px, 0) * 16px), calc(var(--py, 0) * 16px), 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .starfield-layer {
+    transition: none;
+    transform: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .landing-aurora-blob {
     animation: none;
@@ -296,6 +375,142 @@
 /* Starship porthole: a 1px inner highlight on each workspace panel. */
 .dark .cosmos-panel {
   box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.05);
+}
+
+/* Deep-space scan: a 1px emerald sweep across the top of a working surface.
+   Reads as "scanning" rather than a generic spinner. Only while in flight. */
+.cosmos-scan::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -30%;
+  width: 30%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--brand-emerald-400), transparent);
+  animation: cosmos-scan 1.4s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes cosmos-scan {
+  to {
+    left: 100%;
+  }
+}
+
+/* Signal burst: a one-shot spark on a settled success count. */
+.cosmos-burst {
+  position: relative;
+}
+
+.cosmos-burst::before,
+.cosmos-burst::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--brand-emerald-500);
+  pointer-events: none;
+  opacity: 0;
+  animation: cosmos-burst 220ms ease-out forwards;
+}
+
+.cosmos-burst::before {
+  box-shadow: 0 0 0 0 var(--brand-emerald-400);
+}
+
+.cosmos-burst::after {
+  animation-delay: 60ms;
+}
+
+@keyframes cosmos-burst {
+  0% {
+    opacity: 0.9;
+    transform: translate(-50%, -50%) scale(0.4);
+    box-shadow: 0 0 0 0 var(--aurora-glow);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1);
+    box-shadow: 0 0 0 14px transparent;
+  }
+}
+
+/* Breathing aurora halo behind a focal capsule (login card). Dark only. */
+.cosmos-breath {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(30rem, 90%);
+  height: 22rem;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(circle, var(--aurora-glow), transparent 70%);
+  filter: blur(60px);
+}
+
+.dark .cosmos-breath {
+  opacity: 1;
+  animation: cosmos-breath 8s ease-in-out infinite;
+}
+
+@keyframes cosmos-breath {
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.06);
+  }
+}
+
+/* Lead star of the empty-state constellation — a slow breath, not a blink. */
+.cosmos-star {
+  animation: cosmos-star 3.2s ease-in-out infinite;
+}
+
+@keyframes cosmos-star {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Focus capsule: a soft vignette pulling the eye to the editor centre. */
+.dark .cosmos-focus {
+  box-shadow: inset 0 0 120px 30px oklch(0 0 0 / 0.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cosmos-scan::after {
+    animation: none;
+    opacity: 0;
+  }
+
+  .cosmos-burst::before,
+  .cosmos-burst::after {
+    animation: none;
+    opacity: 0;
+  }
+
+  .cosmos-star {
+    animation: none;
+    opacity: 1;
+  }
+
+  .dark .cosmos-breath {
+    animation: none;
+  }
 }
 
 /* Nav pill: a faint aurora seam along its lower edge. */
