@@ -2,24 +2,10 @@ import { NextResponse } from "next/server";
 import { requireExtensionToken, ExtensionTokenError } from "@/lib/server/auth/requireExtensionToken";
 import { unauthorizedError, errorJson } from "@/lib/server/api/errorResponse";
 import { checkRateLimit, rateLimitKeyFromRequest, rateLimitHeaders } from "@/lib/server/api/rateLimit";
-import { z } from "zod";
 import { createFormSubmission, listFormSubmissions } from "@/lib/server/extensionSubmission";
+import { CreateSubmissionSchema } from "@/lib/server/extensionSubmissionPayload";
 
 export const runtime = "nodejs";
-
-const CreateSubmissionSchema = z.object({
-  pageUrl: z.string().url().max(2000),
-  pageDomain: z.string().min(1).max(200),
-  atsProvider: z.string().max(50).optional(),
-  formSignature: z.string().min(1).max(128),
-  fieldValues: z.record(z.string(), z.string()),
-  fieldMappings: z.record(z.string(), z.object({
-    source: z.string(),
-    profilePath: z.string().optional(),
-    confidence: z.number().min(0).max(1),
-  })),
-  jobId: z.string().uuid().optional(),
-});
 
 /**
  * Parse a numeric query param safely. `Number("abc")` is NaN, which Prisma

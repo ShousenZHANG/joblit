@@ -1,5 +1,6 @@
 import { STORAGE_KEYS, DEFAULT_API_BASE, PROFILE_CACHE_TTL } from "@ext/shared/constants";
 import { resolveStoredApiBase } from "@ext/shared/apiBase";
+import { ApiRequestError } from "./apiErrors";
 
 /** Get the stored API base URL. */
 async function getApiBase(): Promise<string> {
@@ -55,7 +56,11 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
     });
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
-      throw new Error(`Request timed out after ${API_TIMEOUT_MS / 1000}s`);
+      const timeoutError = new Error(
+        `Request timed out after ${API_TIMEOUT_MS / 1000}s`,
+      );
+      timeoutError.name = "TimeoutError";
+      throw timeoutError;
     }
     throw err;
   } finally {
@@ -66,7 +71,9 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
 /** Fetch the user's active resume profile. */
 export async function fetchProfile(locale = "en-AU") {
   const res = await apiFetch(`/api/ext/profile?locale=${encodeURIComponent(locale)}`);
-  if (!res.ok) throw new Error(`Profile fetch failed: ${res.status}`);
+  if (!res.ok) {
+    throw new ApiRequestError(res.status, `Profile fetch failed: ${res.status}`);
+  }
   return (await res.json()).data;
 }
 
@@ -86,7 +93,12 @@ export async function fetchFlatProfile(locale = "en-AU", force = false) {
   }
 
   const res = await apiFetch(`/api/ext/profile/flat?locale=${encodeURIComponent(locale)}`);
-  if (!res.ok) throw new Error(`Flat profile fetch failed: ${res.status}`);
+  if (!res.ok) {
+    throw new ApiRequestError(
+      res.status,
+      `Flat profile fetch failed: ${res.status}`,
+    );
+  }
   const json = await res.json();
 
   if (json.data) {
@@ -108,7 +120,12 @@ export async function postSubmission(data: Record<string, unknown>) {
     method: "POST",
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error(`Submission recording failed: ${res.status}`);
+  if (!res.ok) {
+    throw new ApiRequestError(
+      res.status,
+      `Submission recording failed: ${res.status}`,
+    );
+  }
   return (await res.json()).data;
 }
 
@@ -126,7 +143,12 @@ export async function fetchSubmissions(params: {
   if (params.limit) qs.set("limit", String(params.limit));
 
   const res = await apiFetch(`/api/ext/submissions?${qs.toString()}`);
-  if (!res.ok) throw new Error(`Submissions fetch failed: ${res.status}`);
+  if (!res.ok) {
+    throw new ApiRequestError(
+      res.status,
+      `Submissions fetch failed: ${res.status}`,
+    );
+  }
   return (await res.json()).data;
 }
 
@@ -140,14 +162,21 @@ export async function fetchFieldMappings(params: {
   if (params.pageDomain) qs.set("pageDomain", params.pageDomain);
 
   const res = await apiFetch(`/api/ext/field-mappings?${qs.toString()}`);
-  if (!res.ok) throw new Error(`Mappings fetch failed: ${res.status}`);
+  if (!res.ok) {
+    throw new ApiRequestError(
+      res.status,
+      `Mappings fetch failed: ${res.status}`,
+    );
+  }
   return (await res.json()).data;
 }
 
 /** Match a job URL to an existing Job in Joblit. */
 export async function matchJob(url: string) {
   const res = await apiFetch(`/api/ext/jobs/match?url=${encodeURIComponent(url)}`);
-  if (!res.ok) throw new Error(`Job match failed: ${res.status}`);
+  if (!res.ok) {
+    throw new ApiRequestError(res.status, `Job match failed: ${res.status}`);
+  }
   return (await res.json()).data;
 }
 
@@ -157,7 +186,9 @@ export async function markJobApplied(jobId: string) {
     method: "POST",
     body: JSON.stringify({ jobId }),
   });
-  if (!res.ok) throw new Error(`Mark applied failed: ${res.status}`);
+  if (!res.ok) {
+    throw new ApiRequestError(res.status, `Mark applied failed: ${res.status}`);
+  }
   return (await res.json()).data;
 }
 
@@ -168,7 +199,9 @@ export async function importSeekJobs(items: unknown[]) {
     method: "POST",
     body: JSON.stringify({ items }),
   });
-  if (!res.ok) throw new Error(`Seek import failed: ${res.status}`);
+  if (!res.ok) {
+    throw new ApiRequestError(res.status, `Seek import failed: ${res.status}`);
+  }
   return (await res.json()).data as { imported: number; invalid: number };
 }
 
@@ -178,6 +211,11 @@ export async function putFieldMapping(data: Record<string, unknown>) {
     method: "PUT",
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error(`Mapping update failed: ${res.status}`);
+  if (!res.ok) {
+    throw new ApiRequestError(
+      res.status,
+      `Mapping update failed: ${res.status}`,
+    );
+  }
   return (await res.json()).data;
 }

@@ -4,6 +4,7 @@ import { fetchProfile, fetchFlatProfile, postSubmission, fetchSubmissions, fetch
 import { enqueue } from "./syncQueue";
 import { processQueue } from "./syncProcessor";
 import { sendToActiveTab } from "./tabBridge";
+import { isRetryableApiError } from "./apiErrors";
 
 /** Handle messages from content scripts and popup. */
 chrome.runtime.onMessage.addListener(
@@ -62,6 +63,7 @@ async function handleMessage(message: MessageType): Promise<MessageResponse> {
       try {
         await postSubmission(message.data as Record<string, unknown>);
       } catch (err) {
+        if (!isRetryableApiError(err)) throw err;
         if (process.env.NODE_ENV !== "production") console.warn("[Joblit] Submission failed, queuing:", err);
         await enqueue("submission", message.data as Record<string, unknown>);
       }
@@ -83,8 +85,10 @@ async function handleMessage(message: MessageType): Promise<MessageResponse> {
         const mapping = await putFieldMapping(message.data as Record<string, unknown>);
         return { success: true, data: mapping };
       } catch (err) {
-        if (process.env.NODE_ENV !== "production") console.warn("[Joblit] Field mapping save failed, queuing:", err);
-        await enqueue("field_mapping", message.data as Record<string, unknown>);
+        if (isRetryableApiError(err)) {
+          if (process.env.NODE_ENV !== "production") console.warn("[Joblit] Field mapping save failed, queuing:", err);
+          await enqueue("field_mapping", message.data as Record<string, unknown>);
+        }
         const errorMessage = err instanceof Error ? err.message : "Save failed";
         return { success: false, error: errorMessage };
       }
