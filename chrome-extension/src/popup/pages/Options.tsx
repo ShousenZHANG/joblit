@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { STORAGE_KEYS, DEFAULT_API_BASE } from "@ext/shared/constants";
+import {
+  ApiBaseValidationError,
+  normalizeApiBase,
+  requestApiBasePermission,
+  resolveStoredApiBase,
+} from "@ext/shared/apiBase";
 import { t } from "@ext/shared/i18n";
 import { checkmarkSvg } from "@ext/shared/logo";
 
@@ -17,13 +23,14 @@ export function Options() {
   const [apiBase, setApiBase] = useState(DEFAULT_API_BASE);
   const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFERENCES);
   const [saved, setSaved] = useState(false);
+  const [apiBaseError, setApiBaseError] = useState("");
 
   useEffect(() => {
     chrome.storage.local.get(
       [STORAGE_KEYS.API_BASE, STORAGE_KEYS.PREFERENCES],
       (result) => {
         if (result[STORAGE_KEYS.API_BASE]) {
-          setApiBase(result[STORAGE_KEYS.API_BASE]);
+          setApiBase(resolveStoredApiBase(result[STORAGE_KEYS.API_BASE]));
         }
         if (result[STORAGE_KEYS.PREFERENCES]) {
           setPrefs({ ...DEFAULT_PREFERENCES, ...result[STORAGE_KEYS.PREFERENCES] });
@@ -32,11 +39,38 @@ export function Options() {
     );
   }, []);
 
-  const handleSave = useCallback(() => {
-    chrome.storage.local.set({
-      [STORAGE_KEYS.API_BASE]: apiBase.trim() || DEFAULT_API_BASE,
+  const handleSave = useCallback(async () => {
+    setSaved(false);
+    setApiBaseError("");
+
+    let normalizedBase: string;
+    try {
+      normalizedBase = normalizeApiBase(apiBase);
+    } catch (err) {
+      setApiBaseError(
+        err instanceof ApiBaseValidationError
+          ? t("error.apiBaseInvalid")
+          : t("error.unknown"),
+      );
+      return;
+    }
+
+    let permissionGranted = false;
+    try {
+      permissionGranted = await requestApiBasePermission(normalizedBase);
+    } catch {
+      permissionGranted = false;
+    }
+    if (!permissionGranted) {
+      setApiBaseError(t("error.apiBasePermissionDenied"));
+      return;
+    }
+
+    await chrome.storage.local.set({
+      [STORAGE_KEYS.API_BASE]: normalizedBase,
       [STORAGE_KEYS.PREFERENCES]: prefs,
     });
+    setApiBase(normalizedBase);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }, [apiBase, prefs]);
@@ -57,12 +91,20 @@ export function Options() {
           <input
             type="url"
             value={apiBase}
-            onChange={(e) => setApiBase(e.target.value)}
+            onChange={(e) => {
+              setApiBase(e.target.value);
+              if (apiBaseError) setApiBaseError("");
+            }}
             placeholder={DEFAULT_API_BASE}
-            className="jl-input"
+            className={`jl-input ${apiBaseError ? "jl-input--error" : ""}`}
             style={{ fontSize: 12, height: 36 }}
           />
           <div className="jl-input-hint">{t("options.apiBaseDesc")}</div>
+          {apiBaseError ? (
+            <div className="jl-error-msg" role="alert">
+              {apiBaseError}
+            </div>
+          ) : null}
         </div>
       </div>
 

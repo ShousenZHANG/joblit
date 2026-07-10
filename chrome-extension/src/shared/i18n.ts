@@ -81,6 +81,8 @@ const messages: Record<Locale, Record<string, string>> = {
     "error.fillFailed": "Form fill failed. Please try again.",
     "error.unknown": "An unexpected error occurred.",
     "error.noActiveTab": "No active tab found.",
+    "error.apiBaseInvalid": "Enter a valid HTTPS URL. HTTP is allowed only for local development.",
+    "error.apiBasePermissionDenied": "Allow access to this self-hosted Joblit origin to continue.",
 
     // Options
     "options.title": "Settings",
@@ -162,6 +164,8 @@ const messages: Record<Locale, Record<string, string>> = {
     "error.fillFailed": "表单填充失败，请重试。",
     "error.unknown": "发生意外错误。",
     "error.noActiveTab": "未找到活动标签页。",
+    "error.apiBaseInvalid": "请输入有效的 HTTPS 地址；仅本地开发可使用 HTTP。",
+    "error.apiBasePermissionDenied": "请允许扩展访问此自托管 Joblit 地址后再继续。",
 
     "options.title": "设置",
     "options.apiBase": "API 地址",

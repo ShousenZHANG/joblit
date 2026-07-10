@@ -1,9 +1,12 @@
 import { STORAGE_KEYS, DEFAULT_API_BASE, PROFILE_CACHE_TTL } from "@ext/shared/constants";
+import { resolveStoredApiBase } from "@ext/shared/apiBase";
 
 /** Get the stored API base URL. */
 async function getApiBase(): Promise<string> {
   const result = await chrome.storage.local.get(STORAGE_KEYS.API_BASE);
-  return result[STORAGE_KEYS.API_BASE] ?? DEFAULT_API_BASE;
+  return resolveStoredApiBase(
+    result[STORAGE_KEYS.API_BASE] ?? DEFAULT_API_BASE,
+  );
 }
 
 /** Get the stored auth token. */

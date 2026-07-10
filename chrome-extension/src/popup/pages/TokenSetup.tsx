@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { STORAGE_KEYS, DEFAULT_API_BASE } from "@ext/shared/constants";
+import {
+  ApiBaseValidationError,
+  normalizeApiBase,
+  requestApiBasePermission,
+  resolveStoredApiBase,
+} from "@ext/shared/apiBase";
 import { t } from "@ext/shared/i18n";
 import { checkmarkSvg, keyIconSvg, errorIconSvg } from "@ext/shared/logo";
 
@@ -19,7 +25,7 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
   useEffect(() => {
     chrome.storage.local.get(STORAGE_KEYS.API_BASE, (result) => {
       if (result[STORAGE_KEYS.API_BASE]) {
-        setApiBase(result[STORAGE_KEYS.API_BASE]);
+        setApiBase(resolveStoredApiBase(result[STORAGE_KEYS.API_BASE]));
       }
     });
   }, []);
@@ -36,8 +42,30 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
       return;
     }
 
-    // Save API base before connecting
-    const baseToUse = apiBase.trim() || DEFAULT_API_BASE;
+    let baseToUse: string;
+    try {
+      baseToUse = normalizeApiBase(apiBase);
+    } catch (err) {
+      setError(
+        err instanceof ApiBaseValidationError
+          ? t("error.apiBaseInvalid")
+          : t("error.unknown"),
+      );
+      return;
+    }
+
+    let permissionGranted = false;
+    try {
+      permissionGranted = await requestApiBasePermission(baseToUse);
+    } catch {
+      permissionGranted = false;
+    }
+    if (!permissionGranted) {
+      setError(t("error.apiBasePermissionDenied"));
+      return;
+    }
+
+    // Persist only after validation and an exact-origin permission grant.
     await chrome.storage.local.set({ [STORAGE_KEYS.API_BASE]: baseToUse });
 
     setStep("verifying");
@@ -186,7 +214,10 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
               <input
                 type="url"
                 value={apiBase}
-                onChange={(e) => setApiBase(e.target.value)}
+                onChange={(e) => {
+                  setApiBase(e.target.value);
+                  if (error) setError("");
+                }}
                 placeholder={DEFAULT_API_BASE}
                 className="jl-input"
                 style={{ fontSize: 12, height: 34 }}
