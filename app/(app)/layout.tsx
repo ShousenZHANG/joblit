@@ -1,4 +1,5 @@
 import { AppNav } from "@/components/app-shell/AppNav";
+import { Starfield } from "@/components/landing/Starfield";
 import { RouteTransition } from "../RouteTransition";
 import { GuideProvider } from "../GuideContext";
 
@@ -8,12 +9,18 @@ import { GuideProvider } from "../GuideContext";
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative grid h-dvh grid-rows-[auto_minmax(0,1fr)] overflow-x-hidden overflow-y-auto lg:overflow-hidden">
-      {/* Fixed gradient mesh behind the app — emerald wash over a deep-space
-          nebula in dark mode. Same atmosphere plane as landing. */}
+      {/* Atmosphere, back→front: starfield → drifting aurora → nebula wash →
+          grain. All fixed, pointer-events-none, z-0; content sits at z-1. The
+          workspace gets the same sky as landing — it is where the user lives. */}
+      <Starfield />
+      <div aria-hidden className="landing-aurora">
+        <span className="landing-aurora-blob landing-aurora-blob--1" />
+        <span className="landing-aurora-blob landing-aurora-blob--2" />
+        <span className="landing-aurora-blob landing-aurora-blob--3" />
+      </div>
       <div aria-hidden className="landing-atmos" />
-      {/* Fine grain over the atmosphere. A solid dark fill reads flat and
-          plastic; the texture is what makes deep space feel deep. Reuses the
-          landing grain (fixed, pointer-events-none, behind content at z-0). */}
+      {/* A solid dark fill reads flat and plastic; the grain is what makes
+          deep space feel deep. */}
       <div aria-hidden className="landing-grain" />
       <GuideProvider>
         <AppNav />
