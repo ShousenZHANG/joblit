@@ -48,6 +48,7 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
     try {
       baseToUse = normalizeApiBase(apiBase);
     } catch (err) {
+      setShowAdvanced(true);
       setApiBaseError(
         err instanceof ApiBaseValidationError
           ? t("error.apiBaseInvalid")
@@ -63,6 +64,7 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
       permissionGranted = false;
     }
     if (!permissionGranted) {
+      setShowAdvanced(true);
       setApiBaseError(t("error.apiBasePermissionDenied"));
       return;
     }
