@@ -87,6 +87,25 @@ describe("captureFieldSnapshot", () => {
 
     expect(captureFieldSnapshot(fields)).toEqual({ email: "john@example.com" });
   });
+
+  it("filters lowercase compact sensitive values without dropping employment verification email", () => {
+    document.body.innerHTML = `
+      <input id="email" name="email" value="john@example.com" />
+      <input id="employment-contact" name="employmentverificationemail"
+        aria-label="Employment verification contact email" value="hr@example.com" />
+      <input id="payment" name="cardnumber" value="4111111111111111" />
+      <input id="bank" name="bankaccountnumber" value="012345" />
+      <input id="passport" name="passportnumber" value="N1234567" />
+      <input id="tax" name="taxfilenumber" value="123456789" />
+    `;
+    const fields = Array.from(document.querySelectorAll<HTMLElement>("input"))
+      .map((element) => makeField(element, { name: element.getAttribute("name") ?? "" }));
+
+    expect(captureFieldSnapshot(fields)).toEqual({
+      email: "john@example.com",
+      employmentverificationemail: "hr@example.com",
+    });
+  });
 });
 
 describe("buildFieldMappings", () => {
@@ -125,6 +144,24 @@ describe("buildFieldMappings", () => {
       .map((element) => makeField(element, { name: element.getAttribute("name") ?? "" }));
 
     expect(Object.keys(buildFieldMappings(fields))).toEqual(["email"]);
+  });
+
+  it("filters lowercase compact sensitive mappings without dropping employment verification email", () => {
+    document.body.innerHTML = `
+      <input id="email" name="email" />
+      <input id="employment-contact" name="employmentverificationemail"
+        aria-label="Employment verification contact email" />
+      <input id="payment" name="debitcardnumber" />
+      <input id="government-id" name="governmentid" />
+      <input id="licence" name="driverlicense" />
+    `;
+    const fields = Array.from(document.querySelectorAll<HTMLElement>("input"))
+      .map((element) => makeField(element, { name: element.getAttribute("name") ?? "" }));
+
+    expect(Object.keys(buildFieldMappings(fields))).toEqual([
+      "email",
+      "employmentverificationemail",
+    ]);
   });
 });
 

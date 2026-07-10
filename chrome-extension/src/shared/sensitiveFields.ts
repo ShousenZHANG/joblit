@@ -6,10 +6,91 @@ const SENSITIVE_AUTOCOMPLETE_TOKENS = new Set([
   "one-time-code",
 ]);
 
+const SENSITIVE_COMPACT_TOKENS = new Set([
+  // Credentials and verification
+  "currentpassword",
+  "newpassword",
+  "confirmpassword",
+  "onetimecode",
+  "onetimepassword",
+  "securitycode",
+  "securityanswer",
+  "verificationcode",
+  "verificationtoken",
+  "verificationanswer",
+  "verificationpasscode",
+  "verificationpin",
+  "verificationotp",
+  "2facode",
+  "mfacode",
+  "otpcode",
+  // Payment cards
+  "cardnumber",
+  "creditcard",
+  "creditcardnumber",
+  "debitcard",
+  "debitcardnumber",
+  "ccnumber",
+  "cardsecuritycode",
+  "creditcardsecuritycode",
+  "debitcardsecuritycode",
+  "cardverificationcode",
+  "creditcardverificationcode",
+  "debitcardverificationcode",
+  "cvvcode",
+  "cvvnumber",
+  "cvccode",
+  "cvcnumber",
+  // Banking
+  "bankaccount",
+  "bankaccountnumber",
+  "bankaccountno",
+  "bankroutingnumber",
+  "routingnumber",
+  "routingno",
+  "bsbnumber",
+  "ibannumber",
+  "swiftnumber",
+  // Government identifiers
+  "passportnumber",
+  "passportno",
+  "passportid",
+  "passportidentifier",
+  "taxfilenumber",
+  "taxfileid",
+  "taxidentifier",
+  "nationalid",
+  "nationalidentifier",
+  "nationalidentification",
+  "nationalidnumber",
+  "governmentid",
+  "governmentidentifier",
+  "governmentidentification",
+  "governmentidnumber",
+  "socialsecuritynumber",
+  "socialsecurityno",
+  "socialsecurityid",
+  "ssnnumber",
+  "tfnnumber",
+  "driverlicence",
+  "driverlicencenumber",
+  "driverslicence",
+  "driverslicencenumber",
+  "driverlicense",
+  "driverlicensenumber",
+  "driverslicense",
+  "driverslicensenumber",
+  "drivinglicence",
+  "drivinglicencenumber",
+  "drivinglicense",
+  "drivinglicensenumber",
+]);
+
 const SENSITIVE_TEXT_PATTERNS = [
   /\b(?:password|passcode|passphrase|pin|otp|2fa|mfa)\b/,
   /\bone\s+time\s+(?:code|password)\b/,
-  /\bverification\b/,
+  /^verification$/,
+  /\bverification\s+(?:security\s+)?(?:code|token|answer|passcode|pin|otp)\b/,
   /\bsecurity\s+(?:code|answer)\b/,
   /\b(?:cvv|cvc)\b/,
   /\bcc\s+(?:number|code)\b/,
@@ -37,6 +118,16 @@ function normalizeText(value: string): string {
 
 function hasSensitiveText(value: string): boolean {
   const normalized = normalizeText(value);
+  if (!normalized) return false;
+
+  const tokens = normalized.split(/\s+/);
+  if (
+    tokens.some((token) => SENSITIVE_COMPACT_TOKENS.has(token)) ||
+    SENSITIVE_COMPACT_TOKENS.has(tokens.join(""))
+  ) {
+    return true;
+  }
+
   return SENSITIVE_TEXT_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 

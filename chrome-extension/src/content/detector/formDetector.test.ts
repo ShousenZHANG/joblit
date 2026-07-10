@@ -106,6 +106,27 @@ describe("detectForms", () => {
     expect(result.fields.map((field) => field.id)).toEqual(["email"]);
   });
 
+  it("filters lowercase compact sensitive fields without dropping employment verification email", () => {
+    document.body.innerHTML = `
+      <form>
+        <input id="email" name="email" type="email" />
+        <input id="employment-contact" name="employmentverificationemail" type="email"
+          aria-label="Employment verification contact email" />
+        <input id="payment" name="creditcardnumber" />
+        <input id="bank" name="routingnumber" />
+        <input id="passport" name="passportnumber" />
+        <input id="national-id" name="nationalidentifier" />
+        <input id="licence" name="driverslicence" />
+      </form>
+    `;
+
+    const result = detectForms(document);
+    expect(result.fields.map((field) => field.id)).toEqual([
+      "email",
+      "employment-contact",
+    ]);
+  });
+
   it("filters sensitive fields returned by an ATS adapter", () => {
     document.body.innerHTML = `
       <input id="email" type="email" />

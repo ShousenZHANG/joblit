@@ -36,6 +36,68 @@ describe("isSensitiveField", () => {
     expect(isSensitiveField(document.querySelector("input")!)).toBe(true);
   });
 
+  it.each([
+    "cardnumber",
+    "creditcardnumber",
+    "debitcardnumber",
+    "ccnumber",
+    "bankaccount",
+    "bankaccountnumber",
+    "routingnumber",
+    "passportnumber",
+    "taxfilenumber",
+    "nationalid",
+    "nationalidentifier",
+    "governmentid",
+    "socialsecuritynumber",
+    "driverslicence",
+    "driverlicense",
+    "creditcard",
+    "debitcard",
+    "cardsecuritycode",
+    "cvvcode",
+    "bankroutingnumber",
+    "bsbnumber",
+    "passportid",
+    "nationalidnumber",
+    "governmentidentifier",
+    "driverslicense",
+    "driverlicencenumber",
+    "securitycode",
+    "verificationtoken",
+  ])("denies the exact compact sensitive token %s", (token) => {
+    document.body.innerHTML = `<input name="${token}" />`;
+    expect(isSensitiveField(document.querySelector("input")!)).toBe(true);
+  });
+
+  it("denies exact verification metadata and sensitive verification phrases", () => {
+    document.body.innerHTML = `
+      <input id="exact" name="verification" />
+      <input id="code" aria-label="Verification code" />
+      <input id="token" placeholder="Enter verification token" />
+    `;
+
+    expect(isSensitiveField(document.querySelector("#exact")!)).toBe(true);
+    expect(isSensitiveField(document.querySelector("#code")!)).toBe(true);
+    expect(isSensitiveField(document.querySelector("#token")!)).toBe(true);
+  });
+
+  it("keeps employment verification contact email", () => {
+    document.body.innerHTML = `
+      <input id="employment-contact" aria-label="Employment verification contact email" />
+    `;
+
+    expect(isSensitiveField(document.querySelector("#employment-contact")!)).toBe(false);
+  });
+
+  it("does not deny an arbitrary substring containing a compact token", () => {
+    document.body.innerHTML = `
+      <input id="status" name="candidatecreditcardnumberstatus" />
+    `;
+
+    expect(isSensitiveField(document.querySelector("#status")!)).toBe(false);
+  });
+
   it("reads label and aria-describedby text", () => {
     document.body.innerHTML = `
       <label for="security-answer">Security answer</label>
