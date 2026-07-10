@@ -245,10 +245,10 @@
   animation: aurora-drift-3 36s ease-in-out infinite;
 }
 
-/* In deep space the aurora is dimmer and drifts on a cosmic clock — the gap
-   between a 60s background and a 200ms interaction IS the sense of vastness. */
+/* In deep space the aurora drifts on a cosmic clock — the gap between a 60s
+   background and a 200ms interaction IS the sense of vastness. */
 .dark .landing-aurora-blob {
-  opacity: 0.34;
+  opacity: 0.5;
   animation-duration: 60s;
 }
 
@@ -321,8 +321,12 @@
     1290px 580px var(--star-c), 1350px 130px var(--star-c), 1420px 450px var(--star-c),
     1495px 690px var(--star-c), 1560px 240px var(--star-c), 90px 330px var(--star-c),
     370px 20px var(--star-c), 680px 760px var(--star-c), 1170px 60px var(--star-c),
-    1530px 30px var(--star-c);
+    1530px 30px var(--star-c), 250px 500px var(--star-c), 615px 310px var(--star-c),
+    935px 585px var(--star-c), 1255px 175px var(--star-c), 70px 690px var(--star-c),
+    1470px 90px var(--star-c), 810px 130px var(--star-c), 350px 660px var(--star-c),
+    1105px 415px var(--star-c), 1585px 720px var(--star-c);
   transform: translate3d(calc(var(--px, 0) * 4px), calc(var(--py, 0) * 4px), 0);
+  animation: star-shimmer 11s ease-in-out infinite;
 }
 
 .starfield-mid {
@@ -335,8 +339,13 @@
     960px 130px var(--star-c), 1080px 610px var(--star-c), 1230px 380px var(--star-c),
     1380px 90px var(--star-c), 1500px 560px var(--star-c), 200px 720px var(--star-c),
     520px 400px var(--star-c), 780px 40px var(--star-c), 1010px 340px var(--star-c),
-    1310px 700px var(--star-c), 60px 60px var(--star-c), 1590px 410px var(--star-c);
+    1310px 700px var(--star-c), 60px 60px var(--star-c), 1590px 410px var(--star-c),
+    330px 190px var(--star-c), 745px 470px var(--star-c), 1155px 250px var(--star-c),
+    465px 730px var(--star-c), 895px 690px var(--star-c), 1545px 150px var(--star-c),
+    155px 470px var(--star-c), 1415px 610px var(--star-c);
   transform: translate3d(calc(var(--px, 0) * 9px), calc(var(--py, 0) * 9px), 0);
+  animation: star-shimmer 13s ease-in-out infinite;
+  animation-delay: -4s;
 }
 
 .starfield-near {
@@ -347,14 +356,72 @@
     180px 180px var(--star-c), 400px 620px var(--star-c), 640px 460px var(--star-c),
     880px 240px var(--star-c), 1120px 520px var(--star-c), 1340px 200px var(--star-c),
     1550px 640px var(--star-c), 300px 350px var(--star-c), 760px 660px var(--star-c),
-    1040px 80px var(--star-c), 1440px 350px var(--star-c), 540px 40px var(--star-c);
+    1040px 80px var(--star-c), 1440px 350px var(--star-c), 540px 40px var(--star-c),
+    240px 90px var(--star-c), 720px 200px var(--star-c), 980px 430px var(--star-c),
+    1230px 680px var(--star-c), 90px 560px var(--star-c), 1500px 480px var(--star-c);
   transform: translate3d(calc(var(--px, 0) * 16px), calc(var(--py, 0) * 16px), 0);
+  animation: star-shimmer 7s ease-in-out infinite;
+  animation-delay: -2s;
+}
+
+/* Atmospheric scintillation: whole layers breathe out of phase (7/11/13s
+   primes, staggered) so the sky shimmers without any per-star blinking. */
+@keyframes star-shimmer {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.65;
+  }
+}
+
+/* A meteor about every 16 seconds — visible for under one, missed if you
+   blink, which is exactly what makes catching one feel premium. */
+.shooting-star {
+  position: absolute;
+  top: 12%;
+  left: 62%;
+  width: 110px;
+  height: 1px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, oklch(0.98 0.02 220 / 0.9), transparent);
+  transform: rotate(-35deg);
+  transform-origin: left center;
+  opacity: 0;
+  animation: shooting-star 16s linear infinite;
+  animation-delay: 5s;
+}
+
+@keyframes shooting-star {
+  0% {
+    opacity: 0;
+    transform: rotate(-35deg) translateX(0);
+  }
+  1.5% {
+    opacity: 0.9;
+  }
+  6% {
+    opacity: 0;
+    transform: rotate(-35deg) translateX(-340px);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(-35deg) translateX(-340px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .starfield-layer {
     transition: none;
     transform: none;
+    animation: none;
+    opacity: 1;
+  }
+
+  .shooting-star {
+    animation: none;
+    opacity: 0;
   }
 }
 
@@ -383,7 +450,7 @@
 }
 
 .dark .cosmos-panel {
-  background-color: color-mix(in oklch, var(--card) 62%, transparent);
+  background-color: color-mix(in oklch, var(--card) 55%, transparent);
   box-shadow:
     /* porthole highlight */
     inset 0 1px 0 oklch(1 0 0 / 0.1),
@@ -782,13 +849,15 @@ body {
   --ring: oklch(0.7 0.13 160);
   /* Emerald outer glow for primary actions / focus in deep space. */
   --aurora-glow: oklch(0.72 0.14 162 / 0.3);
-  /* Deep-space nebula — three clouds (cyan / emerald / violet) on the fixed
-     .landing-atmos plane. Strong enough to read through a translucent panel;
-     the panels are what keep it off the data. */
+  /* Deep-space nebula — three clouds (cyan / emerald / violet), a diagonal
+     milky-way band, and an edge vignette for depth. Strong enough to read
+     through the glazed panels; the panels are what keep it off the data. */
   --nebula:
-    radial-gradient(ellipse 95% 62% at 12% -18%, oklch(0.4 0.14 218 / 0.5), transparent 62%),
-    radial-gradient(ellipse 75% 55% at 88% 112%, oklch(0.44 0.15 165 / 0.38), transparent 58%),
-    radial-gradient(ellipse 55% 45% at 62% 38%, oklch(0.32 0.12 292 / 0.24), transparent 66%);
+    radial-gradient(ellipse 120% 100% at 50% 42%, transparent 55%, oklch(0.06 0.03 262 / 0.6) 100%),
+    linear-gradient(115deg, transparent 34%, oklch(0.5 0.06 250 / 0.1) 46%, oklch(0.58 0.05 220 / 0.13) 51%, oklch(0.5 0.06 250 / 0.08) 56%, transparent 68%),
+    radial-gradient(ellipse 95% 62% at 12% -18%, oklch(0.4 0.14 218 / 0.55), transparent 62%),
+    radial-gradient(ellipse 75% 55% at 88% 112%, oklch(0.44 0.15 165 / 0.42), transparent 58%),
+    radial-gradient(ellipse 55% 45% at 62% 38%, oklch(0.34 0.13 292 / 0.3), transparent 66%);
   --chart-1: oklch(0.62 0.18 255);
   --chart-2: oklch(0.68 0.12 200);
   --chart-3: oklch(0.72 0.14 300);

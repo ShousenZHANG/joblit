@@ -45,6 +45,8 @@ export function Starfield() {
       <span className="starfield-layer starfield-far" />
       <span className="starfield-layer starfield-mid" />
       <span className="starfield-layer starfield-near" />
+      {/* One meteor every ~16s, gone in under a second. */}
+      <span className="shooting-star" />
     </div>
   );
 }
