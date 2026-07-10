@@ -113,8 +113,12 @@ describe("detectForms", () => {
         <input id="employment-contact" name="employmentverificationemail" type="email"
           aria-label="Employment verification contact email" />
         <input id="payment" name="creditcardnumber" />
+        <input id="variant-one" name="cvv2" />
+        <input id="variant-two" name="ccnum" />
         <input id="bank" name="routingnumber" />
+        <input id="variant-three" name="swiftcode" />
         <input id="passport" name="passportnumber" />
+        <input id="passport-short" name="passportnum" />
         <input id="national-id" name="nationalidentifier" />
         <input id="licence" name="driverslicence" />
       </form>
@@ -154,6 +158,37 @@ describe("detectForms", () => {
       "email",
     ]);
   });
+
+  it("filters sensitive cached metadata returned with neutral adapter elements", () => {
+    document.body.innerHTML = `
+      <input id="safe-dom" />
+      <input id="cached-name-dom" />
+      <input id="cached-type-dom" />
+    `;
+    const elements = Array.from(document.querySelectorAll<HTMLElement>("input"));
+    const adapterFields: DetectedField[] = elements.map((element) => ({
+      element,
+      selector: `#${element.id}`,
+      inputType: "text",
+      category: FieldCategory.UNKNOWN,
+      confidence: 0,
+      labelText: "",
+      name: "",
+      id: element.id,
+      placeholder: "",
+    }));
+    adapterFields[1].name = "cardnumber";
+    adapterFields[2].inputType = "password";
+    const adapter: AtsAdapter = {
+      name: "cached-metadata-ats",
+      canHandle: () => true,
+      detectFields: () => adapterFields,
+    };
+
+    expect(detectFields(document, adapter).map((field) => field.id)).toEqual([
+      "safe-dom",
+    ]);
+  });
 });
 
 describe("detectForms — shadow DOM coverage", () => {
@@ -186,5 +221,18 @@ describe("detectForms — shadow DOM coverage", () => {
 
     const result = detectForms(document);
     expect(result.fields.some((f) => f.category === FieldCategory.PHONE)).toBe(true);
+  });
+
+  it("filters an input described as sensitive inside its open shadow root", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const shadow = host.attachShadow({ mode: "open" });
+    shadow.innerHTML = `
+      <span id="payment:help[1]">Enter CVV2</span>
+      <input id="shadow-payment" aria-describedby="payment:help[1]" />
+    `;
+
+    const result = detectForms(document);
+    expect(result.fields.map((field) => field.id)).not.toContain("shadow-payment");
   });
 });

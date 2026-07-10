@@ -6,85 +6,30 @@ const SENSITIVE_AUTOCOMPLETE_TOKENS = new Set([
   "one-time-code",
 ]);
 
-const SENSITIVE_COMPACT_TOKENS = new Set([
+const SENSITIVE_COMPACT_PATTERNS = [
   // Credentials and verification
-  "currentpassword",
-  "newpassword",
-  "confirmpassword",
-  "onetimecode",
-  "onetimepassword",
-  "securitycode",
-  "securityanswer",
-  "verificationcode",
-  "verificationtoken",
-  "verificationanswer",
-  "verificationpasscode",
-  "verificationpin",
-  "verificationotp",
-  "2facode",
-  "mfacode",
-  "otpcode",
+  /^(?:current|new|confirm)password$/,
+  /^onetime(?:code|password)$/,
+  /^security(?:code|answer)$/,
+  /^verification(?:code|token|answer|passcode|pin|otp)$/,
+  /^(?:2fa|mfa|otp)(?:code|token|2)?$/,
   // Payment cards
-  "cardnumber",
-  "creditcard",
-  "creditcardnumber",
-  "debitcard",
-  "debitcardnumber",
-  "ccnumber",
-  "cardsecuritycode",
-  "creditcardsecuritycode",
-  "debitcardsecuritycode",
-  "cardverificationcode",
-  "creditcardverificationcode",
-  "debitcardverificationcode",
-  "cvvcode",
-  "cvvnumber",
-  "cvccode",
-  "cvcnumber",
+  /^(?:(?:credit|debit)?card|cc)(?:number|num|no)$/,
+  /^(?:credit|debit)card$/,
+  /^(?:credit|debit)?card(?:security|verification)(?:code|number|num|no|2)$/,
+  /^(?:cvv|cvc)(?:code|number|num|no|2)?$/,
   // Banking
-  "bankaccount",
-  "bankaccountnumber",
-  "bankaccountno",
-  "bankroutingnumber",
-  "routingnumber",
-  "routingno",
-  "bsbnumber",
-  "ibannumber",
-  "swiftnumber",
+  /^bankaccount(?:number|num|no)?$/,
+  /^(?:bank)?routing(?:number|num|no|code)$/,
+  /^(?:bsb|iban|swift)(?:number|num|no|code)?$/,
   // Government identifiers
-  "passportnumber",
-  "passportno",
-  "passportid",
-  "passportidentifier",
-  "taxfilenumber",
-  "taxfileid",
-  "taxidentifier",
-  "nationalid",
-  "nationalidentifier",
-  "nationalidentification",
-  "nationalidnumber",
-  "governmentid",
-  "governmentidentifier",
-  "governmentidentification",
-  "governmentidnumber",
-  "socialsecuritynumber",
-  "socialsecurityno",
-  "socialsecurityid",
-  "ssnnumber",
-  "tfnnumber",
-  "driverlicence",
-  "driverlicencenumber",
-  "driverslicence",
-  "driverslicencenumber",
-  "driverlicense",
-  "driverlicensenumber",
-  "driverslicense",
-  "driverslicensenumber",
-  "drivinglicence",
-  "drivinglicencenumber",
-  "drivinglicense",
-  "drivinglicensenumber",
-]);
+  /^passport(?:number|num|no|id|identifier|code)$/,
+  /^tax(?:file)?(?:number|num|no|id|identifier)$/,
+  /^(?:national|government)(?:id|identifier|identification)(?:number|num|no)?$/,
+  /^socialsecurity(?:number|num|no|id|identifier)$/,
+  /^(?:ssn|tfn)(?:number|num|no)?$/,
+  /^(?:driver|drivers|driving)(?:licence|license)(?:number|num|no|id|identifier)?$/,
+] as const;
 
 const SENSITIVE_TEXT_PATTERNS = [
   /\b(?:password|passcode|passphrase|pin|otp|2fa|mfa)\b/,
@@ -121,9 +66,11 @@ function hasSensitiveText(value: string): boolean {
   if (!normalized) return false;
 
   const tokens = normalized.split(/\s+/);
+  const compactCandidates = [...tokens, tokens.join("")];
   if (
-    tokens.some((token) => SENSITIVE_COMPACT_TOKENS.has(token)) ||
-    SENSITIVE_COMPACT_TOKENS.has(tokens.join(""))
+    compactCandidates.some((candidate) =>
+      SENSITIVE_COMPACT_PATTERNS.some((pattern) => pattern.test(candidate)),
+    )
   ) {
     return true;
   }
@@ -145,10 +92,16 @@ function getLabelText(element: HTMLElement): string[] {
 
 function getDescriptionText(element: HTMLElement): string[] {
   const ownerDocument = element.ownerDocument;
+  const root = element.getRootNode() as Node & {
+    getElementById?: (id: string) => Element | null;
+  };
   const ids = (element.getAttribute("aria-describedby") ?? "")
     .split(/\s+/)
     .filter(Boolean);
-  return ids.map((id) => ownerDocument.getElementById(id)?.textContent ?? "");
+  return ids.map((id) => {
+    const rootMatch = root.getElementById?.(id) ?? null;
+    return (rootMatch ?? ownerDocument.getElementById(id))?.textContent ?? "";
+  });
 }
 
 export function isSensitiveField(element: HTMLElement): boolean {
@@ -188,6 +141,13 @@ export function isSensitiveField(element: HTMLElement): boolean {
 export function filterSafeFields(fields: DetectedField[]): DetectedField[] {
   return fields.filter(
     (field) =>
-      !isSensitiveField(field.element) && !hasSensitiveText(field.labelText),
+      !isSensitiveField(field.element) &&
+      ![
+        field.inputType,
+        field.name,
+        field.id,
+        field.placeholder,
+        field.labelText,
+      ].some(hasSensitiveText),
   );
 }

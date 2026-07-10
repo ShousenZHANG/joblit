@@ -56,9 +56,15 @@ describe("isSensitiveField", () => {
     "debitcard",
     "cardsecuritycode",
     "cvvcode",
+    "cvv2",
+    "cvc2",
+    "ccnum",
+    "cardno",
     "bankroutingnumber",
     "bsbnumber",
+    "swiftcode",
     "passportid",
+    "passportnum",
     "nationalidnumber",
     "governmentidentifier",
     "driverslicense",
@@ -98,6 +104,16 @@ describe("isSensitiveField", () => {
     expect(isSensitiveField(document.querySelector("#status")!)).toBe(false);
   });
 
+  it.each([
+    "cardinality",
+    "candidateaccountmanager",
+    "swiftcoder",
+    "passportnumbering",
+  ])("keeps the anchored compact-family near miss %s", (token) => {
+    document.body.innerHTML = `<input name="${token}" />`;
+    expect(isSensitiveField(document.querySelector("input")!)).toBe(false);
+  });
+
   it("reads label and aria-describedby text", () => {
     document.body.innerHTML = `
       <label for="security-answer">Security answer</label>
@@ -108,6 +124,18 @@ describe("isSensitiveField", () => {
 
     expect(isSensitiveField(document.querySelector("#security-answer")!)).toBe(true);
     expect(isSensitiveField(document.querySelector("#tax-id")!)).toBe(true);
+  });
+
+  it("reads aria-describedby text from an open shadow root by exact id", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const shadow = host.attachShadow({ mode: "open" });
+    shadow.innerHTML = `
+      <p id="security:help[1]">Enter your security code</p>
+      <input id="shadow-field" aria-describedby="security:help[1]" />
+    `;
+
+    expect(isSensitiveField(shadow.querySelector("#shadow-field")!)).toBe(true);
   });
 
   it("keeps ordinary email and shipping fields", () => {
@@ -137,5 +165,29 @@ describe("filterSafeFields", () => {
       .map(asDetectedField);
 
     expect(filterSafeFields(fields).map((field) => field.id)).toEqual(["email"]);
+  });
+
+  it("filters sensitive cached metadata when the DOM element is neutral", () => {
+    document.body.innerHTML = `
+      <input id="safe-dom" value="safe" />
+      <input id="cached-name-dom" value="secret" />
+      <input id="cached-type-dom" value="secret" />
+      <input id="cached-id-dom" value="secret" />
+      <input id="cached-placeholder-dom" value="secret" />
+      <input id="cached-label-dom" value="secret" />
+    `;
+    const elements = Array.from(document.querySelectorAll<HTMLElement>("input"));
+    const fields = [
+      asDetectedField(elements[0]),
+      { ...asDetectedField(elements[1]), name: "cardnumber" },
+      { ...asDetectedField(elements[2]), inputType: "password" },
+      { ...asDetectedField(elements[3]), id: "passportnum" },
+      { ...asDetectedField(elements[4]), placeholder: "swiftcode" },
+      { ...asDetectedField(elements[5]), labelText: "CVC2" },
+    ];
+
+    expect(filterSafeFields(fields).map((field) => field.id)).toEqual([
+      "safe-dom",
+    ]);
   });
 });

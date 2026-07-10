@@ -94,8 +94,11 @@ describe("captureFieldSnapshot", () => {
       <input id="employment-contact" name="employmentverificationemail"
         aria-label="Employment verification contact email" value="hr@example.com" />
       <input id="payment" name="cardnumber" value="4111111111111111" />
+      <input id="variant-one" name="cvv2" value="123" />
       <input id="bank" name="bankaccountnumber" value="012345" />
+      <input id="variant-two" name="swiftcode" value="ABCDAU2S" />
       <input id="passport" name="passportnumber" value="N1234567" />
+      <input id="passport-short" name="passportnum" value="N7654321" />
       <input id="tax" name="taxfilenumber" value="123456789" />
     `;
     const fields = Array.from(document.querySelectorAll<HTMLElement>("input"))
@@ -105,6 +108,22 @@ describe("captureFieldSnapshot", () => {
       email: "john@example.com",
       employmentverificationemail: "hr@example.com",
     });
+  });
+
+  it("filters sensitive cached metadata from snapshots with neutral DOM elements", () => {
+    document.body.innerHTML = `
+      <input id="safe-dom" value="john@example.com" />
+      <input id="cached-name-dom" value="4111111111111111" />
+      <input id="cached-type-dom" value="secret" />
+    `;
+    const elements = Array.from(document.querySelectorAll<HTMLElement>("input"));
+    const fields = [
+      makeField(elements[0], { name: "email" }),
+      makeField(elements[1], { name: "cardno" }),
+      makeField(elements[2], { name: "credential", inputType: "password" }),
+    ];
+
+    expect(captureFieldSnapshot(fields)).toEqual({ email: "john@example.com" });
   });
 });
 
@@ -152,6 +171,7 @@ describe("buildFieldMappings", () => {
       <input id="employment-contact" name="employmentverificationemail"
         aria-label="Employment verification contact email" />
       <input id="payment" name="debitcardnumber" />
+      <input id="variant-one" name="ccnum" />
       <input id="government-id" name="governmentid" />
       <input id="licence" name="driverlicense" />
     `;
@@ -162,6 +182,22 @@ describe("buildFieldMappings", () => {
       "email",
       "employmentverificationemail",
     ]);
+  });
+
+  it("filters sensitive cached metadata from mappings with neutral DOM elements", () => {
+    document.body.innerHTML = `
+      <input id="safe-dom" />
+      <input id="cached-placeholder-dom" />
+      <input id="cached-label-dom" />
+    `;
+    const elements = Array.from(document.querySelectorAll<HTMLElement>("input"));
+    const fields = [
+      makeField(elements[0], { name: "email" }),
+      makeField(elements[1], { name: "bank", placeholder: "swiftcode" }),
+      makeField(elements[2], { name: "card", labelText: "CVV2" }),
+    ];
+
+    expect(Object.keys(buildFieldMappings(fields))).toEqual(["email"]);
   });
 });
 
