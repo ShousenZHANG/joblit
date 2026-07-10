@@ -202,7 +202,9 @@ export function TailorClient({
     docTab === "resume" ? lastResumeRefreshAt : lastCoverRefreshAt;
 
   return (
-    <main className="mx-auto flex w-full max-w-[1400px] flex-col gap-4 px-4 pb-32 pt-6 lg:px-8">
+    // cosmos-focus: a soft vignette in dark mode pulls the eye toward the
+    // editor. The writing surface itself stays untouched.
+    <main className="cosmos-focus mx-auto flex w-full max-w-[1400px] flex-col gap-4 px-4 pb-32 pt-6 lg:px-8">
       <header className="flex flex-wrap items-center gap-4">
         <Link
           href="/jobs"

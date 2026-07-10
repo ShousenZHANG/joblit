@@ -398,11 +398,9 @@
   }
 }
 
-/* Signal burst: a one-shot spark on a settled success count. */
-.cosmos-burst {
-  position: relative;
-}
-
+/* Signal burst: a one-shot spark when a run settles into success. The host
+   must already establish a positioning context — this class deliberately does
+   NOT set `position`, so it can never clobber a host's absolute placement. */
 .cosmos-burst::before,
 .cosmos-burst::after {
   content: "";
@@ -436,6 +434,36 @@
     opacity: 0;
     transform: translate(-50%, -50%) scale(1);
     box-shadow: 0 0 0 14px transparent;
+  }
+}
+
+/* Orbit indicator — a point tracing a dashed orbit. Used only for the long
+   render/compile waits, so a slow wait reads as a slow orbit. */
+.orbit-spinner {
+  position: relative;
+  display: inline-block;
+  width: var(--orbit-size, 24px);
+  height: var(--orbit-size, 24px);
+  border: 1px dashed oklch(0.65 0.02 250 / 0.4);
+  border-radius: 999px;
+  animation: orbit-rotate 1.6s linear infinite;
+}
+
+.orbit-dot {
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  border-radius: 999px;
+  background: var(--brand-emerald-500);
+  box-shadow: 0 0 6px var(--aurora-glow);
+}
+
+@keyframes orbit-rotate {
+  to {
+    transform: rotate(360deg);
   }
 }
 
@@ -510,6 +538,11 @@
 
   .dark .cosmos-breath {
     animation: none;
+  }
+
+  .orbit-spinner {
+    animation: none;
+    border-style: solid;
   }
 }
 

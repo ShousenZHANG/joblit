@@ -135,7 +135,15 @@ export function FetchProgressPanel() {
               transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             />
           </svg>
-          <span className="absolute text-[11px] font-bold tabular-nums text-foreground">
+          <span
+            // Remount on status change so the burst plays exactly once, at the
+            // moment the run settles into success.
+            key={status}
+            className={cn(
+              "absolute text-[11px] font-bold tabular-nums text-foreground",
+              status === "SUCCEEDED" && "cosmos-burst",
+            )}
+          >
             {status === "SUCCEEDED"
               ? "\u2713"
               : status === "FAILED"

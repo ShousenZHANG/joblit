@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { Download, ExternalLink, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { OrbitSpinner } from "@/components/ui/orbit-spinner";
 import { cn } from "@/lib/utils";
 import { buildPdfFilename } from "@/lib/shared/pdfFilename";
 import { useResumeContext } from "./ResumeContext";
@@ -17,7 +18,7 @@ const ResumePdfPreview = dynamic(
     ssr: false,
     loading: () => (
       <div className="flex h-full w-full items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-emerald-500 border-t-transparent" />
+        <OrbitSpinner />
       </div>
     ),
   },

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import { Download, ExternalLink, FileText, RefreshCcw } from "lucide-react";
+import { OrbitSpinner } from "@/components/ui/orbit-spinner";
 import { cn } from "@/lib/utils";
 
 // react-pdf + pdfjs (~120KB gzip) is the heaviest client dep. Lazy-load it so
@@ -16,7 +17,7 @@ const ResumePdfPreview = dynamic(
     ssr: false,
     loading: () => (
       <div className="flex h-full w-full items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-emerald-500 border-t-transparent motion-reduce:animate-none" />
+        <OrbitSpinner />
       </div>
     ),
   },
