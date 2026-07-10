@@ -20,6 +20,8 @@ export function normalizeApiBase(
 
   const raw = typeof value === "string" ? value.trim() : "";
   const candidate = raw || fallback.trim();
+  const hasQueryDelimiter = candidate.includes("?");
+  const hasFragmentDelimiter = candidate.includes("#");
 
   let url: URL;
   try {
@@ -41,12 +43,12 @@ export function normalizeApiBase(
       "API Base URL must not contain credentials",
     );
   }
-  if (url.search) {
+  if (hasQueryDelimiter) {
     throw new ApiBaseValidationError(
       "API Base URL must not contain a query string",
     );
   }
-  if (url.hash) {
+  if (hasFragmentDelimiter) {
     throw new ApiBaseValidationError(
       "API Base URL must not contain a fragment",
     );
@@ -59,7 +61,10 @@ export function normalizeApiBase(
 /** Return the exact Chrome host-permission pattern for a normalized API base. */
 export function apiBasePermissionPattern(base: string): string {
   const normalized = normalizeApiBase(base);
-  return `${new URL(normalized).origin}/*`;
+  const url = new URL(normalized);
+  // Chrome host match patterns do not accept a port; an omitted port matches
+  // all ports for that exact scheme + host.
+  return `${url.protocol}//${url.hostname}/*`;
 }
 
 /** Treat persisted extension storage as untrusted legacy input. */
@@ -78,7 +83,7 @@ export async function requestApiBasePermission(base: string): Promise<boolean> {
   const productionOrigin = new URL(normalizeApiBase(DEFAULT_API_BASE)).origin;
   if (targetOrigin === productionOrigin) return true;
 
-  const permissions = { origins: [`${targetOrigin}/*`] };
+  const permissions = { origins: [apiBasePermissionPattern(normalized)] };
   if (await chrome.permissions.contains(permissions)) return true;
   return chrome.permissions.request(permissions);
 }

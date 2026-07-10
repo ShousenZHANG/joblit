@@ -17,6 +17,7 @@ describe("normalizeApiBase", () => {
   );
 
   it("normalizes HTTPS origins and preserves reverse-proxy paths", () => {
+    expect(normalizeApiBase(`${DEFAULT_API_BASE}/`)).toBe(DEFAULT_API_BASE);
     expect(normalizeApiBase(" https://jobs.example.com/// ")).toBe(
       "https://jobs.example.com",
     );
@@ -40,7 +41,9 @@ describe("normalizeApiBase", () => {
     "not a url",
     "https://user:secret@jobs.example.com",
     "https://jobs.example.com?token=secret",
+    "https://jobs.example.com/?",
     "https://jobs.example.com#fragment",
+    "https://jobs.example.com/#",
   ])("rejects an unsafe or ambiguous URL: %s", (value) => {
     expect(() => normalizeApiBase(value)).toThrow(ApiBaseValidationError);
   });
@@ -50,6 +53,16 @@ describe("normalizeApiBase", () => {
       apiBasePermissionPattern("https://self-hosted.example.com/joblit/api"),
     ).toBe("https://self-hosted.example.com/*");
   });
+
+  it.each([
+    ["http://localhost:3000/api", "http://localhost/*"],
+    ["https://jobs.example.com:8443/api", "https://jobs.example.com/*"],
+  ])(
+    "uses Chrome match-pattern host syntax for a URL with a port",
+    (input, expected) => {
+      expect(apiBasePermissionPattern(input)).toBe(expected);
+    },
+  );
 
   it("falls back to production when legacy storage is invalid", () => {
     expect(resolveStoredApiBase("http://attacker.example.com")).toBe(

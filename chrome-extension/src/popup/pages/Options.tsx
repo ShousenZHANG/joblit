@@ -97,6 +97,7 @@ export function Options() {
             }}
             placeholder={DEFAULT_API_BASE}
             className={`jl-input ${apiBaseError ? "jl-input--error" : ""}`}
+            aria-invalid={apiBaseError ? true : undefined}
             style={{ fontSize: 12, height: 36 }}
           />
           <div className="jl-input-hint">{t("options.apiBaseDesc")}</div>

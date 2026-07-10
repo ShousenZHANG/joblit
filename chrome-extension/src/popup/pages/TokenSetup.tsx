@@ -18,6 +18,7 @@ type Step = "input" | "verifying" | "success";
 export function TokenSetup({ onConnected }: TokenSetupProps) {
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
+  const [apiBaseError, setApiBaseError] = useState("");
   const [step, setStep] = useState<Step>("input");
   const [apiBase, setApiBase] = useState(DEFAULT_API_BASE);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -41,12 +42,13 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
       setError(t("auth.tokenInvalid"));
       return;
     }
+    setError("");
 
     let baseToUse: string;
     try {
       baseToUse = normalizeApiBase(apiBase);
     } catch (err) {
-      setError(
+      setApiBaseError(
         err instanceof ApiBaseValidationError
           ? t("error.apiBaseInvalid")
           : t("error.unknown"),
@@ -61,9 +63,10 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
       permissionGranted = false;
     }
     if (!permissionGranted) {
-      setError(t("error.apiBasePermissionDenied"));
+      setApiBaseError(t("error.apiBasePermissionDenied"));
       return;
     }
+    setApiBaseError("");
 
     // Persist only after validation and an exact-origin permission grant.
     await chrome.storage.local.set({ [STORAGE_KEYS.API_BASE]: baseToUse });
@@ -216,13 +219,23 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
                 value={apiBase}
                 onChange={(e) => {
                   setApiBase(e.target.value);
-                  if (error) setError("");
+                  if (apiBaseError) setApiBaseError("");
                 }}
                 placeholder={DEFAULT_API_BASE}
-                className="jl-input"
+                className={`jl-input ${apiBaseError ? "jl-input--error" : ""}`}
+                aria-invalid={apiBaseError ? true : undefined}
                 style={{ fontSize: 12, height: 34 }}
               />
               <div className="jl-input-hint">{t("auth.apiBaseHint")}</div>
+              {apiBaseError ? (
+                <div className="jl-error-msg" role="alert">
+                  <span
+                    className="jl-error-icon"
+                    dangerouslySetInnerHTML={{ __html: errorIconSvg(14) }}
+                  />
+                  <span>{apiBaseError}</span>
+                </div>
+              ) : null}
             </div>
           </div>
 
