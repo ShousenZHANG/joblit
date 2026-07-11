@@ -205,8 +205,8 @@
   inset: 0;
   opacity: 0;
   background:
-    radial-gradient(ellipse 90% 65% at 50% 108%, oklch(0.55 0.09 268 / 0.16), transparent 62%),
-    linear-gradient(180deg, transparent 30%, oklch(0.6 0.05 250 / 0.08));
+    radial-gradient(ellipse 90% 65% at 50% 108%, oklch(0.55 0.11 268 / 0.32), transparent 62%),
+    linear-gradient(180deg, transparent 25%, oklch(0.58 0.06 255 / 0.18));
 }
 
 .dark .landing-atmos::after {
@@ -222,11 +222,16 @@
   }
 }
 
+/* Front-loaded: dusk is clearly falling by mid-page instead of only at the
+   very bottom — the colour shift must be felt, not archaeological. */
 @keyframes atmos-dusk {
-  from {
+  0% {
     opacity: 0;
   }
-  to {
+  45% {
+    opacity: 0.75;
+  }
+  100% {
     opacity: 1;
   }
 }
@@ -316,7 +321,7 @@
 
 @keyframes aurora-breathe {
   from {
-    opacity: calc(var(--blob-o) * 0.6);
+    opacity: calc(var(--blob-o) * 0.45);
   }
   to {
     opacity: var(--blob-o);
@@ -629,6 +634,8 @@
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+  /* Halo traces the glyph alpha — the word glows like the aurora behind it. */
+  filter: drop-shadow(0 0 22px rgba(16, 185, 129, 0.3));
   animation: hero-gradient-sweep 9s ease-in-out infinite alternate;
 }
 
@@ -2655,54 +2662,59 @@ body::-webkit-scrollbar-thumb:hover {
   pointer-events: none;
 }
 
-/* Horizontal beam on the 4th row (4 × 34px). */
+/* Horizontal beam on the 4th row (4 × 34px). Bright core + glow halo so the
+   pulse reads instantly even against the light dawn wash. */
 .landing-canvas-grid::before {
-  top: 136px;
+  top: 135px;
   left: 0;
-  width: 220px;
-  height: 1px;
+  width: 320px;
+  height: 2px;
+  border-radius: 999px;
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(16, 185, 129, 0.85) 45%,
-    rgba(56, 189, 248, 0.65) 70%,
+    rgba(16, 185, 129, 1) 45%,
+    rgba(56, 189, 248, 0.95) 70%,
     transparent
   );
-  transform: translateX(-240px);
-  animation: grid-beam-x 9s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  animation-delay: 1.5s;
+  box-shadow: 0 0 12px 1px rgba(16, 185, 129, 0.55);
+  transform: translateX(-340px);
+  animation: grid-beam-x 6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation-delay: 1s;
 }
 
 /* Vertical beam on the 12th column (12 × 34px). */
 .landing-canvas-grid::after {
   top: 0;
-  left: 408px;
-  width: 1px;
-  height: 180px;
+  left: 407px;
+  width: 2px;
+  height: 260px;
+  border-radius: 999px;
   background: linear-gradient(
     180deg,
     transparent,
-    rgba(16, 185, 129, 0.8) 50%,
-    rgba(139, 148, 250, 0.55) 75%,
+    rgba(16, 185, 129, 0.95) 50%,
+    rgba(139, 148, 250, 0.8) 75%,
     transparent
   );
-  transform: translateY(-200px);
-  animation: grid-beam-y 12s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  animation-delay: 5s;
+  box-shadow: 0 0 12px 1px rgba(56, 189, 248, 0.45);
+  transform: translateY(-280px);
+  animation: grid-beam-y 8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation-delay: 3.5s;
 }
 
 @keyframes grid-beam-x {
   0% {
-    transform: translateX(-240px);
+    transform: translateX(-340px);
     opacity: 0;
   }
-  4% {
+  6% {
     opacity: 1;
   }
-  38% {
+  52% {
     opacity: 1;
   }
-  46%,
+  62%,
   100% {
     transform: translateX(min(92vw, 1160px));
     opacity: 0;
@@ -2711,18 +2723,18 @@ body::-webkit-scrollbar-thumb:hover {
 
 @keyframes grid-beam-y {
   0% {
-    transform: translateY(-200px);
+    transform: translateY(-280px);
     opacity: 0;
   }
-  5% {
+  6% {
     opacity: 1;
   }
-  30% {
+  42% {
     opacity: 1;
   }
-  38%,
+  52%,
   100% {
-    transform: translateY(640px);
+    transform: translateY(660px);
     opacity: 0;
   }
 }

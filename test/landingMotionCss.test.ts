@@ -2,7 +2,12 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const css = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
+// Normalise line endings so the positional assertions hold on both LF and
+// CRLF working copies (Windows checkouts rewrite this file to CRLF).
+const css = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8").replace(
+  /\r\n/g,
+  "\n",
+);
 
 describe("landing motion CSS contracts", () => {
   it("pauses starfield animation after all light-mode animation shorthands", () => {
