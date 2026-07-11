@@ -11,11 +11,23 @@ interface LegalTableOfContentsProps {
   items: TocItem[];
   /** Render only the desktop sidebar, only the mobile toggle, or both (default). */
   variant?: "desktop" | "mobile";
+  labels?: {
+    aria: string;
+    heading: string;
+    toggle: string;
+  };
 }
+
+const DEFAULT_LABELS = {
+  aria: "Table of contents",
+  heading: "On this page",
+  toggle: "Table of Contents",
+};
 
 export default function LegalTableOfContents({
   items,
   variant,
+  labels = DEFAULT_LABELS,
 }: LegalTableOfContentsProps) {
   const [activeId, setActiveId] = useState<string>("");
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -58,8 +70,8 @@ export default function LegalTableOfContents({
     <>
       {/* Desktop sidebar — hidden below lg via CSS */}
       {showDesktop && (
-        <nav className="legal-toc-sidebar" aria-label="Table of contents">
-          <p className="legal-toc-heading">On this page</p>
+        <nav className="legal-toc-sidebar" aria-label={labels.aria}>
+          <p className="legal-toc-heading">{labels.heading}</p>
           <ul className="legal-toc-list">
             {items.map((item) => (
               <li key={item.id}>
@@ -97,7 +109,7 @@ export default function LegalTableOfContents({
                 strokeLinecap="round"
               />
             </svg>
-            Table of Contents
+            {labels.toggle}
             <svg
               width="12"
               height="12"

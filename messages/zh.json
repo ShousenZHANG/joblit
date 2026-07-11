@@ -1,5 +1,8 @@
 {
   "common": {
+    "themeToggle": "切换主题",
+    "themeSwitchToLight": "切换到浅色主题",
+    "themeSwitchToDark": "切换到深色主题",
     "signOut": "退出登录",
     "search": "搜索",
     "allLocations": "全部城市",
@@ -14,6 +17,16 @@
     "noResults": "暂无结果。",
     "error": "出了点问题。",
     "retry": "重试"
+  },
+  "legal": {
+    "back": "返回",
+    "lastUpdated": "最后更新",
+    "email": "邮箱",
+    "tocAria": "目录",
+    "tocHeading": "本页内容",
+    "tocToggle": "目录",
+    "privacyCrossLink": "另请参阅《服务条款》，了解使用 Joblit 时应遵守的规则。",
+    "termsCrossLink": "另请参阅《隐私政策》，了解我们如何处理您的数据。"
   },
   "nav": {
     "jobs": "职位",

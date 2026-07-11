@@ -68,6 +68,7 @@ describe("landing Nav", () => {
     expect(screen.getByRole("navigation", { name: zh.landing.nav.primary })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: zh.landing.nav.home })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: zh.landing.nav.github })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "切换到深色主题" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: zh.landing.nav.openMenu }));
     expect(screen.getByRole("button", { name: zh.landing.nav.closeMenu })).toBeInTheDocument();
@@ -86,8 +87,8 @@ describe("landing Nav", () => {
     const cta = screen.getByRole("link", { name: en.landing.nav.startFree });
     const menu = screen.getByRole("button", { name: en.landing.nav.openMenu });
 
-    expect(github).toHaveClass("h-11");
-    expect(cta).toHaveClass("h-11");
+    expect(github).toHaveClass("h-11", "min-w-11");
+    expect(cta).toHaveClass("h-11", "min-w-11");
     expect(menu).toHaveClass("h-11", "w-11");
     expect(menu).toHaveClass("lg:hidden");
     expect(screen.getByRole("link", { name: en.landing.nav.product }).closest("ul")).toHaveClass("lg:flex");
@@ -95,6 +96,16 @@ describe("landing Nav", () => {
     expect(cta.className).toContain("focus-visible:ring-2");
     expect(github).toHaveAttribute("target", "_blank");
     expect(github).toHaveAttribute("rel", expect.stringContaining("noreferrer"));
+  });
+
+  it("keeps the tablet login target touchable", () => {
+    session.status = "unauthenticated";
+    renderNav();
+
+    expect(screen.getByRole("link", { name: en.landing.nav.logIn })).toHaveClass(
+      "min-h-11",
+      "lg:min-h-9",
+    );
   });
 
   it("keeps the compact menu at tablet width and closes it at the lg breakpoint", async () => {

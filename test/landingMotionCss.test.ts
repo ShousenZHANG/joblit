@@ -21,4 +21,13 @@ describe("landing motion CSS contracts", () => {
     expect(css.slice(lightPauseRule)).toContain(".dark .starfield-far");
     expect(css.slice(lightPauseRule)).toContain("animation-play-state: running");
   });
+
+  it("gives the education surface a theme-aware dark background", () => {
+    expect(css).toMatch(
+      /\.dark \.marketing-edu\.extension-guide-surface\s*\{[^}]*background:/,
+    );
+    expect(css).toMatch(
+      /\.dark \.extension-guide-surface \.edu-bg\s*\{[^}]*background:/,
+    );
+  });
 });

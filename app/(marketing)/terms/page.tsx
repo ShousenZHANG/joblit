@@ -4,31 +4,45 @@ import { Search, ArrowLeft, ArrowRight, FileText } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import LegalTableOfContents from "../LegalTableOfContents";
 
-export const metadata: Metadata = {
-  title: "Terms of Service — Joblit",
-  description: "Terms governing use of the Joblit application.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("terms");
+  return {
+    title: t("title"),
+    description: t("intro"),
+  };
+}
 
 const TOC_ITEMS = [
-  { id: "acceptance", label: "1. Acceptance of Terms" },
-  { id: "description", label: "2. Description of Service" },
-  { id: "account", label: "3. Account & Security" },
-  { id: "acceptable-use", label: "4. Acceptable Use" },
-  { id: "ip", label: "5. Intellectual Property" },
-  { id: "ai-disclaimer", label: "6. AI Content Disclaimer" },
-  { id: "third-party-data", label: "7. Third-Party Data" },
-  { id: "liability", label: "8. Limitation of Liability" },
-  { id: "indemnification", label: "9. Indemnification" },
-  { id: "termination", label: "10. Termination" },
-  { id: "governing-law", label: "11. Governing Law" },
-  { id: "general", label: "12. General Provisions" },
-  { id: "warranty", label: "13. Disclaimer of Warranties" },
-  { id: "changes", label: "14. Changes to Terms" },
-  { id: "contact", label: "15. Contact Us" },
-];
+  { id: "acceptance", labelKey: "s1Title" },
+  { id: "description", labelKey: "s2Title" },
+  { id: "account", labelKey: "s3Title" },
+  { id: "acceptable-use", labelKey: "s4Title" },
+  { id: "ip", labelKey: "s5Title" },
+  { id: "ai-disclaimer", labelKey: "s6Title" },
+  { id: "third-party-data", labelKey: "s7Title" },
+  { id: "liability", labelKey: "s8Title" },
+  { id: "indemnification", labelKey: "s9Title" },
+  { id: "termination", labelKey: "s10Title" },
+  { id: "governing-law", labelKey: "s11Title" },
+  { id: "general", labelKey: "s12Title" },
+  { id: "warranty", labelKey: "sWarrantyTitle" },
+  { id: "changes", labelKey: "sChangesTitle" },
+  { id: "contact", labelKey: "s13Title" },
+] as const;
 
 export default async function TermsOfServicePage() {
   const t = await getTranslations("terms");
+  const tm = await getTranslations("marketing");
+  const tl = await getTranslations("legal");
+  const tocItems = TOC_ITEMS.map((item) => ({
+    id: item.id,
+    label: t(item.labelKey),
+  }));
+  const tocLabels = {
+    aria: tl("tocAria"),
+    heading: tl("tocHeading"),
+    toggle: tl("tocToggle"),
+  };
 
   return (
     <div className="marketing-edu relative min-h-[100dvh] overflow-hidden">
@@ -39,17 +53,17 @@ export default async function TermsOfServicePage() {
         <nav className="mb-6 flex items-center justify-between">
           <Link
             href="/"
-            className="flex items-center gap-2 text-sm font-semibold text-foreground transition-colors hover:text-brand-emerald-text"
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg text-sm font-semibold text-foreground transition-colors hover:text-brand-emerald-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             <Search className="h-4 w-4 text-brand-emerald-text" />
             Joblit
           </Link>
           <Link
             href="/"
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Back
+            {tl("back")}
           </Link>
         </nav>
 
@@ -57,11 +71,11 @@ export default async function TermsOfServicePage() {
         <header className="legal-header">
           <div className="legal-header-badge">
             <FileText className="h-3.5 w-3.5" />
-            Terms
+            {tm("terms")}
           </div>
           <h1 className="legal-title">{t("title")}</h1>
           <div className="legal-meta">
-            <span>Last updated: {t("lastUpdated")}</span>
+            <span>{tl("lastUpdated")}: {t("lastUpdated")}</span>
             <span className="legal-meta-sep" aria-hidden="true" />
             <span>Joblit</span>
           </div>
@@ -69,9 +83,9 @@ export default async function TermsOfServicePage() {
 
         {/* Grid: content + sidebar TOC */}
         <div className="legal-page">
-          <main id="main-content">
+          <main id="main-content" tabIndex={-1}>
             {/* Mobile TOC — only renders the collapsible toggle (hidden at lg+) */}
-            <LegalTableOfContents items={TOC_ITEMS} variant="mobile" />
+            <LegalTableOfContents items={tocItems} variant="mobile" labels={tocLabels} />
 
             {/* Intro */}
             <div className="legal-body py-4">
@@ -215,7 +229,7 @@ export default async function TermsOfServicePage() {
               <div className="legal-body">
                 <p>{t("s13")}</p>
                 <p>
-                  <strong>Email:</strong>{" "}
+                  <strong>{tl("email")}:</strong>{" "}
                   <a href={`mailto:${t("s13Email")}`}>{t("s13Email")}</a>
                 </p>
               </div>
@@ -224,32 +238,29 @@ export default async function TermsOfServicePage() {
             {/* Cross-link to Privacy */}
             <Link href="/privacy" className="legal-cross-link">
               <ArrowRight className="h-4 w-4" />
-              <span>
-                Also see our <strong>Privacy Policy</strong> to understand how we
-                handle your data.
-              </span>
+              <span>{tl("termsCrossLink")}</span>
             </Link>
           </main>
 
           {/* Desktop sidebar — only renders the sticky nav (hidden below lg) */}
           <aside>
-            <LegalTableOfContents items={TOC_ITEMS} variant="desktop" />
+            <LegalTableOfContents items={tocItems} variant="desktop" labels={tocLabels} />
           </aside>
         </div>
 
         {/* Footer */}
         <footer className="legal-footer">
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
-            <Link href="/" className="flex items-center gap-1.5 font-semibold text-foreground">
+            <Link href="/" className="inline-flex min-h-11 items-center gap-1.5 rounded-md font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background">
               <Search className="h-3.5 w-3.5 text-brand-emerald-text" />
               Joblit
             </Link>
             <span aria-hidden="true">&middot;</span>
-            <Link href="/privacy" className="transition-colors hover:text-foreground">Privacy</Link>
+            <Link href="/privacy" className="inline-flex min-h-11 items-center rounded-md transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background">{tm("privacy")}</Link>
             <span aria-hidden="true">&middot;</span>
-            <span className="font-medium text-brand-emerald-text">Terms</span>
+            <span className="font-medium text-brand-emerald-text">{tm("terms")}</span>
             <span aria-hidden="true">&middot;</span>
-            <span>&copy; {new Date().getFullYear()} All rights reserved.</span>
+            <span>&copy; {new Date().getFullYear()} {tm("allRightsReserved")}</span>
           </div>
         </footer>
       </div>

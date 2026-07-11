@@ -139,7 +139,7 @@ export function Access() {
                   }}
                   placeholder={t("emailPlaceholder")}
                   aria-invalid={phase === "error"}
-                  className="h-11 flex-1 rounded-full border border-border bg-background px-4 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-brand-emerald-400 focus:ring-2 focus:ring-brand-emerald-200"
+                  className="h-11 w-full rounded-full border border-border bg-background px-4 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-brand-emerald-400 focus:ring-2 focus:ring-brand-emerald-200 sm:flex-1"
                 />
                 <button
                   type="submit"

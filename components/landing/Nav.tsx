@@ -149,7 +149,7 @@ export function Nav() {
             rel="noreferrer"
             aria-label={t("github")}
             title={t("github")}
-            className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-full border border-border/70 bg-background/75 px-2.5 text-[13px] font-semibold text-muted-foreground shadow-sm transition-all duration-200 hover:-translate-y-px hover:border-brand-emerald-300 hover:bg-brand-emerald-50/70 hover:text-brand-emerald-800 hover:shadow-md active:translate-y-0 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-3 lg:h-9"
+            className="inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full border border-border/70 bg-background/75 px-2.5 text-[13px] font-semibold text-muted-foreground shadow-sm transition-all duration-200 hover:-translate-y-px hover:border-brand-emerald-300 hover:bg-brand-emerald-50/70 hover:text-brand-emerald-800 hover:shadow-md active:translate-y-0 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-3 lg:h-9"
           >
             <Github className="h-3.5 w-3.5" aria-hidden />
             <span className="hidden whitespace-nowrap lg:inline">GitHub</span>
@@ -163,7 +163,7 @@ export function Nav() {
           {status === "unauthenticated" && (
             <Link
               href="/login"
-              className="hidden rounded-full px-3 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:inline-block"
+              className="hidden min-h-11 items-center rounded-full px-3 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:inline-flex lg:min-h-9"
             >
               {t("logIn")}
             </Link>
@@ -172,7 +172,7 @@ export function Nav() {
             <Link
               href={ctaHref}
               aria-label={ctaLabel}
-              className="inline-flex h-11 shrink-0 items-center gap-1 rounded-full bg-foreground px-3 text-[13px] font-semibold text-background shadow-sm transition-all hover:-translate-y-px hover:bg-foreground/90 hover:shadow-md active:translate-y-0 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-4 lg:h-9"
+              className="inline-flex h-11 min-w-11 shrink-0 items-center gap-1 rounded-full bg-foreground px-3 text-[13px] font-semibold text-background shadow-sm transition-all hover:-translate-y-px hover:bg-foreground/90 hover:shadow-md active:translate-y-0 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-4 lg:h-9"
             >
               <span className="hidden whitespace-nowrap sm:inline">{ctaLabel}</span>
               <ArrowRight className="h-3.5 w-3.5" aria-hidden />

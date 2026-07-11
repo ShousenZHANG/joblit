@@ -91,7 +91,7 @@ describe("ExtensionGuidePage", () => {
 
   it("provides a skip-link target, 44px controls, and visible focus styles", async () => {
     const { container } = await renderPage();
-    expect(container.querySelector("main")).toBeInTheDocument();
+    expect(container.querySelector("main")).toHaveClass("extension-guide-surface");
     const skipTarget = container.querySelector("#main-content");
     expect(skipTarget).toBeInTheDocument();
     expect(skipTarget).toHaveAttribute("tabindex", "-1");

@@ -1,5 +1,8 @@
 {
   "common": {
+    "themeToggle": "Toggle theme",
+    "themeSwitchToLight": "Switch to light theme",
+    "themeSwitchToDark": "Switch to dark theme",
     "signOut": "Sign out",
     "search": "Search",
     "allLocations": "All locations",
@@ -14,6 +17,16 @@
     "noResults": "No results found.",
     "error": "Something went wrong.",
     "retry": "Retry"
+  },
+  "legal": {
+    "back": "Back",
+    "lastUpdated": "Last updated",
+    "email": "Email",
+    "tocAria": "Table of contents",
+    "tocHeading": "On this page",
+    "tocToggle": "Table of Contents",
+    "privacyCrossLink": "Also see our Terms of Service for the rules that govern your use of Joblit.",
+    "termsCrossLink": "Also see our Privacy Policy to understand how we handle your data."
   },
   "nav": {
     "jobs": "Jobs",

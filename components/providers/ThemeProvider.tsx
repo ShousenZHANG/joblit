@@ -1,6 +1,7 @@
 "use client";
 
 import { Moon, Sun } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { ThemeProvider as NextThemesProvider, useTheme } from "next-themes";
 import * as React from "react";
 
@@ -39,6 +40,7 @@ export function ThemeToggle({
   size?: "compact" | "touch";
 }) {
   const { resolvedTheme, setTheme } = useTheme();
+  const t = useTranslations("common");
   const mounted = React.useSyncExternalStore(
     subscribeToClient,
     getClientSnapshot,
@@ -48,9 +50,9 @@ export function ThemeToggle({
   const isDark = resolvedTheme === "dark";
   const label = mounted
     ? isDark
-      ? "Switch to light theme"
-      : "Switch to dark theme"
-    : "Toggle theme";
+      ? t("themeSwitchToLight")
+      : t("themeSwitchToDark")
+    : t("themeToggle");
 
   return (
     <button

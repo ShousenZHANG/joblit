@@ -59,7 +59,7 @@ export default async function ExtensionGuidePage() {
   ];
 
   return (
-    <main className="marketing-edu relative min-h-[100dvh] overflow-hidden">
+    <main className="extension-guide-surface marketing-edu relative min-h-[100dvh] overflow-hidden">
       <div className="edu-bg" aria-hidden="true" />
 
       <div className="relative z-[2] mx-auto w-full max-w-3xl px-4 pb-16 pt-6 sm:px-6 lg:px-8">
