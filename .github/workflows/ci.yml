@@ -51,6 +51,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install extension dependencies
+        run: npm ci
+        working-directory: chrome-extension
+
       - name: Enforce dependency policy
         run: npm run deps:policy
 
@@ -65,10 +69,6 @@ jobs:
 
       - name: Test (with coverage ratchet)
         run: npm run test:coverage
-
-      - name: Install extension dependencies
-        run: npm ci
-        working-directory: chrome-extension
 
       - name: Audit extension production dependencies
         run: npm run deps:audit
