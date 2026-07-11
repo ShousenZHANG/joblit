@@ -20,11 +20,13 @@ import {
 } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
-export const metadata: Metadata = {
-  title: "Joblit AutoFill — Chrome Extension",
-  description:
-    "Download and install the Joblit AutoFill Chrome extension. Auto-fill job applications on Greenhouse, Lever, Workday, and more.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("extensionGuide");
+  return {
+    title: t("metadataTitle"),
+    description: t("metadataDescription"),
+  };
+}
 
 const ATS_PLATFORMS = [
   { name: "Greenhouse", domain: "boards.greenhouse.io" },
@@ -38,12 +40,11 @@ const ATS_PLATFORMS = [
   { name: "Jobvite", domain: "*.jobvite.com" },
   { name: "Ashby", domain: "*.ashbyhq.com" },
   { name: "Rippling", domain: "*.rippling.com" },
-  { name: "Generic Forms", domain: "Any page with form fields" },
 ];
 
 function StepNumber({ n }: { n: number }) {
   return (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-emerald-50 text-sm font-bold text-brand-emerald-700">
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-emerald-50 text-sm font-bold text-brand-emerald-text">
       {n}
     </span>
   );
@@ -52,9 +53,13 @@ function StepNumber({ n }: { n: number }) {
 export default async function ExtensionGuidePage() {
   const t = await getTranslations("extensionGuide");
   const tm = await getTranslations("marketing");
+  const platforms = [
+    ...ATS_PLATFORMS,
+    { name: t("genericForms"), domain: t("genericFormsDomain") },
+  ];
 
   return (
-    <div className="marketing-edu relative min-h-[100dvh] overflow-hidden">
+    <main className="marketing-edu relative min-h-[100dvh] overflow-hidden">
       <div className="edu-bg" aria-hidden="true" />
 
       <div className="relative z-[2] mx-auto w-full max-w-3xl px-4 pb-16 pt-6 sm:px-6 lg:px-8">
@@ -62,14 +67,14 @@ export default async function ExtensionGuidePage() {
         <nav className="mb-8 flex items-center justify-between">
           <Link
             href="/"
-            className="flex items-center gap-2 text-sm font-semibold text-foreground transition-colors hover:text-brand-emerald-700"
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg text-sm font-semibold text-foreground transition-colors hover:text-brand-emerald-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
-            <Search className="h-4 w-4 text-brand-emerald-700" aria-hidden="true" />
+            <Search className="h-4 w-4 text-brand-emerald-text" aria-hidden="true" />
             Joblit
           </Link>
           <Link
             href="/"
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             {t("backToHome")}
@@ -77,9 +82,9 @@ export default async function ExtensionGuidePage() {
         </nav>
 
         {/* Hero */}
-        <header className="mb-12 text-center">
+        <header id="main-content" tabIndex={-1} className="mb-12 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-emerald-50 shadow-sm">
-            <Chrome className="h-8 w-8 text-brand-emerald-700" />
+            <Chrome className="h-8 w-8 text-brand-emerald-text" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
             {t("title")}
@@ -106,7 +111,7 @@ export default async function ExtensionGuidePage() {
               href="https://github.com/ShousenZHANG/joblit/releases/latest"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-lg bg-brand-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-emerald-700"
+              className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-brand-emerald-700 px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-emerald-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               <Download className="h-4 w-4" />
               {t("downloadBtn")}
@@ -125,7 +130,7 @@ export default async function ExtensionGuidePage() {
                 {t("installTitle")}
               </h2>
             </div>
-            <ol className="space-y-3 text-sm text-foreground/80">
+            <ol className="space-y-3 text-sm text-muted-foreground">
               {(["installStep1", "installStep2", "installStep3", "installStep4", "installStep5"] as const).map(
                 (key, i) => (
                   <li key={key} className="flex items-start gap-3">
@@ -136,7 +141,7 @@ export default async function ExtensionGuidePage() {
                       {key === "installStep2" ? (
                         <>
                           {t("installStep2").split("chrome://extensions")[0]}
-                          <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono text-brand-emerald-700">
+                          <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono text-brand-emerald-text">
                             chrome://extensions
                           </code>
                           {t("installStep2").split("chrome://extensions")[1]}
@@ -150,7 +155,7 @@ export default async function ExtensionGuidePage() {
               )}
             </ol>
             <div className="mt-4 rounded-lg bg-brand-emerald-50 px-3 py-2 text-xs text-brand-emerald-800">
-              <strong>Tip:</strong> {t("installTip")}
+              <strong>{t("tipLabel")}:</strong> {t("installTip")}
             </div>
           </section>
 
@@ -164,7 +169,7 @@ export default async function ExtensionGuidePage() {
               </h2>
             </div>
             <p className="mb-4 text-sm text-muted-foreground">{t("accountDesc")}</p>
-            <ol className="mb-4 space-y-2 text-sm text-foreground/80">
+            <ol className="mb-4 space-y-2 text-sm text-muted-foreground">
               {(["accountStep1", "accountStep2", "accountStep3"] as const).map(
                 (key, i) => (
                   <li key={key} className="flex items-start gap-3">
@@ -178,7 +183,7 @@ export default async function ExtensionGuidePage() {
             </ol>
             <Link
               href="/login?callbackUrl=/resume"
-              className="inline-flex items-center gap-2 rounded-lg bg-foreground px-5 py-2.5 text-sm font-semibold text-background shadow-sm transition-colors hover:bg-foreground/90"
+              className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-foreground px-5 text-sm font-semibold text-background shadow-sm transition-colors hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               {t("accountBtn")}
               <ChevronRight className="h-4 w-4" />
@@ -195,7 +200,7 @@ export default async function ExtensionGuidePage() {
               </h2>
             </div>
             <p className="mb-4 text-sm text-muted-foreground">{t("tokenDesc")}</p>
-            <ol className="mb-4 space-y-2 text-sm text-foreground/80">
+            <ol className="mb-4 space-y-2 text-sm text-muted-foreground">
               {(["tokenStep1", "tokenStep2", "tokenStep3"] as const).map(
                 (key, i) => (
                   <li key={key} className="flex items-start gap-3">
@@ -209,7 +214,7 @@ export default async function ExtensionGuidePage() {
             </ol>
             <Link
               href="/extension"
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-5 py-2.5 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-muted"
+              className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-card px-5 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               <KeyRound className="h-4 w-4" />
               {t("tokenBtn")}
@@ -228,7 +233,7 @@ export default async function ExtensionGuidePage() {
                 {t("connectTitle")}
               </h2>
             </div>
-            <ol className="space-y-2 text-sm text-foreground/80">
+            <ol className="space-y-2 text-sm text-muted-foreground">
               {(["connectStep1", "connectStep2", "connectStep3"] as const).map(
                 (key, i) => (
                   <li key={key} className="flex items-start gap-3">
@@ -282,12 +287,12 @@ export default async function ExtensionGuidePage() {
               {t("supportedDesc")}
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
-              {ATS_PLATFORMS.map((ats) => (
+              {platforms.map((ats) => (
                 <div
                   key={ats.name}
                   className="flex items-center gap-3 rounded-lg border border-border/60 bg-muted/50 px-4 py-2.5"
                 >
-                  <span className="flex h-6 w-6 items-center justify-center rounded bg-brand-emerald-50 text-xs font-bold text-brand-emerald-700">
+                  <span className="flex h-6 w-6 items-center justify-center rounded bg-brand-emerald-50 text-xs font-bold text-brand-emerald-text">
                     {ats.name[0]}
                   </span>
                   <div>
@@ -318,10 +323,10 @@ export default async function ExtensionGuidePage() {
                   key={q}
                   className="group rounded-lg border border-border/60 bg-muted/50 px-4 py-3"
                 >
-                  <summary className="flex cursor-pointer items-center gap-2 text-sm font-medium text-foreground [&::-webkit-details-marker]:hidden">
+                  <summary className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background [&::-webkit-details-marker]:hidden">
                     <Icon className="h-4 w-4 shrink-0 text-brand-emerald-600" />
                     {t(q)}
-                    <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground/70 transition-transform group-open:rotate-90" />
+                    <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
                   </summary>
                   <p className="mt-2 pl-6 text-sm text-muted-foreground">{t(a)}</p>
                 </details>
@@ -335,18 +340,18 @@ export default async function ExtensionGuidePage() {
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
             <Link
               href="/"
-              className="flex items-center gap-1.5 font-semibold text-foreground"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-md font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
-              <Search className="h-4 w-4 text-brand-emerald-700" />
+              <Search className="h-4 w-4 text-brand-emerald-text" />
               Joblit
             </Link>
             <span aria-hidden="true">&middot;</span>
-            <Link href="/privacy" className="hover:text-foreground">
-              Privacy
+            <Link href="/privacy" className="inline-flex min-h-11 items-center rounded-md hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+              {tm("privacy")}
             </Link>
             <span aria-hidden="true">&middot;</span>
-            <Link href="/terms" className="hover:text-foreground">
-              Terms
+            <Link href="/terms" className="inline-flex min-h-11 items-center rounded-md hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+              {tm("terms")}
             </Link>
             <span aria-hidden="true">&middot;</span>
             <span>
@@ -355,6 +360,6 @@ export default async function ExtensionGuidePage() {
           </div>
         </footer>
       </div>
-    </div>
+    </main>
   );
 }

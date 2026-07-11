@@ -35,7 +35,7 @@ export function StepImport({
             <h3 className="text-sm font-semibold text-brand-emerald-900">
               {t("freshTitle")}
             </h3>
-            <p className="mt-1 text-sm text-brand-emerald-700/80">
+            <p className="mt-1 text-sm text-brand-emerald-text">
               {t("freshDescription")}
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-3">

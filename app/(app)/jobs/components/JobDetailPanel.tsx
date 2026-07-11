@@ -46,7 +46,7 @@ const JobDescriptionMarkdown = dynamic(
 );
 
 const statusClass: Record<JobStatus, string> = {
-  NEW: "bg-brand-emerald-100 text-brand-emerald-700 ring-1 ring-brand-emerald-200",
+  NEW: "bg-brand-emerald-100 text-brand-emerald-text ring-1 ring-brand-emerald-200",
   APPLIED:
     "bg-[theme(colors.tier-good-bg)] text-[theme(colors.tier-good-fg)] ring-1 ring-[theme(colors.tier-good-ring)]",
   REJECTED: "bg-muted text-muted-foreground ring-1 ring-border",
@@ -322,7 +322,7 @@ export function JobDetailPanel({
             <div className="space-y-4 text-sm text-muted-foreground">
               {/* Premium section header — icon + label + hairline rule. */}
               <div className="flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-brand-emerald-50 text-brand-emerald-700 ring-1 ring-brand-emerald-100 dark:bg-brand-emerald-500/10 dark:text-brand-emerald-300">
+                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-brand-emerald-50 text-brand-emerald-text ring-1 ring-brand-emerald-100 dark:bg-brand-emerald-500/10 dark:text-brand-emerald-300">
                   <FileText className="h-3.5 w-3.5" aria-hidden />
                 </span>
                 <span className="text-xs font-semibold uppercase tracking-wider text-foreground/80">

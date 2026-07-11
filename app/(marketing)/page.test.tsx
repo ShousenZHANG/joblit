@@ -60,6 +60,11 @@ describe("MarketingPage", () => {
       ).toBeInTheDocument();
     }
 
+    const nav = screen.getByTestId("landing-nav");
+    const skipTarget = document.getElementById("main-content");
+    expect(skipTarget).toHaveAttribute("tabindex", "-1");
+    expect(nav.compareDocumentPosition(skipTarget as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
     const githubLink = screen.getByRole("link", {
       name: /star joblit on github/i,
     });

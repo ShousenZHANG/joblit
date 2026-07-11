@@ -64,7 +64,7 @@ export function SaveIndicator({ status, onRetry }: SaveIndicatorProps) {
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-emerald-700">
+    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-emerald-text">
       <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
       {t("save.savedAt", { time: format.relativeTime(new Date(status.at), now) })}
     </span>

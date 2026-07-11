@@ -18,6 +18,7 @@ type FooterLink = { label: string; href: string; external?: boolean };
 export function Footer() {
   const reveal = useReveal();
   const t = useTranslations("landing.footer");
+  const tNav = useTranslations("landing.nav");
   const COLUMNS: Array<{ heading: string; links: FooterLink[] }> = [
     {
       heading: t("product.heading"),
@@ -31,7 +32,7 @@ export function Footer() {
       heading: t("resources.heading"),
       links: [
         { label: "GitHub", href: REPO_URL, external: true },
-        { label: "Report an issue", href: `${REPO_URL}/issues`, external: true },
+        { label: t("resources.reportIssue"), href: `${REPO_URL}/issues`, external: true },
       ],
     },
     {
@@ -55,10 +56,11 @@ export function Footer() {
           <div>
             <Link
               href="/"
-              className="inline-flex items-center gap-2 text-base font-semibold tracking-tight text-foreground"
+              aria-label={tNav("home")}
+              className="inline-flex min-h-11 items-center gap-2 rounded-lg text-base font-semibold tracking-tight text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:min-h-0"
             >
               <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-brand-emerald-50 ring-1 ring-brand-emerald-100">
-                <JoblitMark size={18} color="var(--brand-emerald-700, #047857)" ariaLabel={null} />
+                <JoblitMark size={18} color="var(--brand-emerald-text, #047857)" ariaLabel={null} />
               </span>
               Joblit
             </Link>
@@ -80,7 +82,7 @@ export function Footer() {
                         href={link.href}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-sm text-foreground/80 transition-colors hover:text-foreground"
+                        className="inline-flex min-h-11 items-center rounded-md text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:min-h-0"
                       >
                         {link.label}
                       </a>
@@ -89,7 +91,7 @@ export function Footer() {
                     <li key={link.label}>
                       <Link
                         href={link.href}
-                        className="text-sm text-foreground/80 transition-colors hover:text-foreground"
+                        className="inline-flex min-h-11 items-center rounded-md text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:min-h-0"
                       >
                         {link.label}
                       </Link>

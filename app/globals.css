@@ -81,6 +81,7 @@
   --brand-emerald-500: #10b981;
   --brand-emerald-600: #059669;
   --brand-emerald-700: #047857;
+  --brand-emerald-text: #047857;
   --brand-emerald-800: #065f46;
   --brand-emerald-900: #064e3b;
   --brand-emerald-950: #022c22;
@@ -138,6 +139,7 @@
   --brand-emerald-50: rgba(6, 95, 70, 0.18);
   --brand-emerald-100: rgba(6, 95, 70, 0.32);
   --brand-emerald-200: rgba(16, 185, 129, 0.38);
+  --brand-emerald-text: #6ee7b7;
   --brand-emerald-800: #a7f3d0;
   /* Nav pill needs a darker translucent base so the blur still reads
      over dark hero gradients. */
@@ -157,6 +159,7 @@
   --color-brand-emerald-500: var(--brand-emerald-500);
   --color-brand-emerald-600: var(--brand-emerald-600);
   --color-brand-emerald-700: var(--brand-emerald-700);
+  --color-brand-emerald-text: var(--brand-emerald-text);
   --color-brand-emerald-800: var(--brand-emerald-800);
   --color-brand-emerald-900: var(--brand-emerald-900);
   --color-brand-emerald-950: var(--brand-emerald-950);
@@ -258,15 +261,6 @@
   --blob-o: 0.55;
   opacity: var(--blob-o);
   will-change: transform, opacity;
-}
-
-@keyframes aurora-breathe {
-  from {
-    opacity: calc(var(--blob-o) * 0.65);
-  }
-  to {
-    opacity: var(--blob-o);
-  }
 }
 
 /* Daylight aurora — a real dawn, not a hint. Emerald / teal / violet-sky mirror
@@ -392,7 +386,7 @@
   border-radius: 999px;
   --star-c: oklch(0.94 0.02 250 / 0.75);
   transition: transform 500ms cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: transform;
+  will-change: auto;
 }
 
 .starfield-far {
@@ -450,6 +444,21 @@
   animation-delay: -2s;
 }
 
+/* Animation shorthands above reset play-state, so theme gating must come
+   afterwards. Hidden light-mode stars stay fully idle; dark mode opts in. */
+.starfield-far,
+.starfield-mid,
+.starfield-near {
+  animation-play-state: paused;
+}
+
+.dark .starfield-far,
+.dark .starfield-mid,
+.dark .starfield-near {
+  animation-play-state: running;
+  will-change: transform;
+}
+
 /* Atmospheric scintillation: whole layers breathe out of phase (7/11/13s
    primes, staggered) so the sky shimmers without any per-star blinking. */
 @keyframes star-shimmer {
@@ -477,6 +486,11 @@
   opacity: 0;
   animation: shooting-star 16s linear infinite;
   animation-delay: 5s;
+  animation-play-state: paused;
+}
+
+.dark .shooting-star {
+  animation-play-state: running;
 }
 
 @keyframes shooting-star {
@@ -498,6 +512,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .landing-atmos::after {
+    animation: none;
+    opacity: 0;
+  }
+
   .starfield-layer {
     transition: none;
     transform: none;
@@ -508,6 +527,25 @@
   .shooting-star {
     animation: none;
     opacity: 0;
+  }
+}
+
+@media (pointer: coarse) {
+  .landing-aurora-blob {
+    animation: none;
+    will-change: auto;
+  }
+
+  .landing-aurora-blob--4,
+  .starfield-near,
+  .shooting-star {
+    display: none;
+  }
+
+  .starfield-layer {
+    animation: none;
+    transition: none;
+    will-change: auto;
   }
 }
 

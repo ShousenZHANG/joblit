@@ -147,7 +147,7 @@ function ExclusionDropdown({
             </span>
             <span className="flex shrink-0 items-center gap-2">
               {selectedOptions.length > 0 && (
-                <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-brand-emerald-100 px-1.5 text-[11px] font-semibold text-brand-emerald-700">
+                <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-brand-emerald-100 px-1.5 text-[11px] font-semibold text-brand-emerald-text">
                   {selectedOptions.length}
                 </span>
               )}
@@ -155,7 +155,7 @@ function ExclusionDropdown({
                 aria-hidden
                 className={cn(
                   "h-4 w-4 text-muted-foreground transition-transform duration-200 ease-out",
-                  open && "rotate-180 text-brand-emerald-700",
+                  open && "rotate-180 text-brand-emerald-text",
                 )}
               />
             </span>
@@ -267,7 +267,7 @@ function CustomTermAdder({
           {customTerms.map((t) => (
             <span
               key={t}
-              className="inline-flex items-center gap-1 rounded-full border border-brand-emerald-200 bg-brand-emerald-50 px-2.5 py-1 text-[11px] font-medium text-brand-emerald-700"
+              className="inline-flex items-center gap-1 rounded-full border border-brand-emerald-200 bg-brand-emerald-50 px-2.5 py-1 text-[11px] font-medium text-brand-emerald-text"
             >
               {t}
               <button
@@ -510,7 +510,7 @@ function FetchHistory({ onRerun }: { onRerun: (run: FetchRunListItem) => void })
               type="button"
               onClick={() => onRerun(run)}
               aria-label={`Re-run ${run.title ?? "search"}`}
-              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border px-3 text-xs font-semibold text-foreground/80 transition-colors hover:border-brand-emerald-300 hover:bg-brand-emerald-50/60 hover:text-brand-emerald-700"
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border px-3 text-xs font-semibold text-foreground/80 transition-colors hover:border-brand-emerald-300 hover:bg-brand-emerald-50/60 hover:text-brand-emerald-text"
             >
               <RotateCcw className="h-3.5 w-3.5" aria-hidden />
               Re-run
@@ -1016,11 +1016,11 @@ export function FetchClient() {
                 picker: all CN job data comes from 牛客网 via the configured
                 RSSHub instance, so there is nothing to choose. */}
             <div className="flex h-10 items-center gap-2.5 rounded-lg border border-border bg-muted/30 px-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-brand-emerald-50 text-brand-emerald-700 ring-1 ring-brand-emerald-100">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-brand-emerald-50 text-brand-emerald-text ring-1 ring-brand-emerald-100">
                 <Briefcase className="h-3.5 w-3.5" aria-hidden />
               </span>
               <span className="text-sm font-medium text-foreground">牛客网</span>
-              <span className="ml-auto rounded-full bg-brand-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-brand-emerald-700 ring-1 ring-brand-emerald-100">
+              <span className="ml-auto rounded-full bg-brand-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-brand-emerald-text ring-1 ring-brand-emerald-100">
                 官方源
               </span>
             </div>

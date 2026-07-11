@@ -62,7 +62,7 @@ export function GenerateProgress({ target }: GenerateProgressProps) {
                 <span
                   className={
                     isDone
-                      ? "text-brand-emerald-700"
+                      ? "text-brand-emerald-text"
                       : isActive
                         ? "font-medium text-foreground"
                         : "text-muted-foreground/70"

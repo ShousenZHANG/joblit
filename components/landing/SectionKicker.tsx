@@ -20,7 +20,7 @@ export function SectionKicker({
   return (
     <div
       className={
-        "mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-emerald-700 " +
+        "mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-emerald-text " +
         justify +
         " " +
         className

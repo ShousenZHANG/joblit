@@ -1,20 +1,30 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+import { axe } from "vitest-axe";
 import messages from "../../../messages/en.json";
+import zhMessages from "../../../messages/zh.json";
 import ExtensionGuidePage from "./page";
+
+const localeState = vi.hoisted(() => ({
+  messages: {} as Record<string, Record<string, string>>,
+}));
 
 vi.mock("next-intl/server", () => ({
   getTranslations: (ns: string) => {
     return Promise.resolve((key: string) => {
-      const map = messages as Record<string, Record<string, string>>;
-      return map[ns]?.[key] ?? `${ns}.${key}`;
+      return localeState.messages[ns]?.[key] ?? `${ns}.${key}`;
     });
   },
 }));
 
 afterEach(cleanup);
 
-async function renderPage() {
+beforeEach(() => {
+  localeState.messages = messages as unknown as Record<string, Record<string, string>>;
+});
+
+async function renderPage(localeMessages = messages) {
+  localeState.messages = localeMessages as unknown as Record<string, Record<string, string>>;
   const Page = await ExtensionGuidePage();
   return render(Page);
 }
@@ -77,5 +87,48 @@ describe("ExtensionGuidePage", () => {
     await renderPage();
     const backLink = screen.getByText(messages.extensionGuide.backToHome);
     expect(backLink.closest("a")).toHaveAttribute("href", "/");
+  });
+
+  it("provides a skip-link target, 44px controls, and visible focus styles", async () => {
+    const { container } = await renderPage();
+    expect(container.querySelector("main")).toBeInTheDocument();
+    const skipTarget = container.querySelector("#main-content");
+    expect(skipTarget).toBeInTheDocument();
+    expect(skipTarget).toHaveAttribute("tabindex", "-1");
+
+    const downloadLink = screen.getByRole("link", {
+      name: new RegExp(messages.extensionGuide.downloadBtn),
+    });
+    const backLink = screen.getByRole("link", {
+      name: new RegExp(messages.extensionGuide.backToHome),
+    });
+    const firstFaq = screen.getByText(messages.extensionGuide.faq1Q).closest("summary");
+
+    expect(downloadLink).toHaveClass("min-h-11");
+    expect(backLink).toHaveClass("min-h-11");
+    expect(firstFaq).toHaveClass("min-h-11");
+    expect(downloadLink?.className).toContain("focus-visible:ring-2");
+    expect(firstFaq?.className).toContain("focus-visible:ring-2");
+  });
+
+  it("localizes instructional and footer labels in Chinese", async () => {
+    await renderPage(zhMessages);
+
+    expect(screen.getByText(`${zhMessages.extensionGuide.tipLabel}:`)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: zhMessages.marketing.privacy })).toHaveAttribute(
+      "href",
+      "/privacy",
+    );
+    expect(screen.getByRole("link", { name: zhMessages.marketing.terms })).toHaveAttribute(
+      "href",
+      "/terms",
+    );
+    expect(screen.getByText(zhMessages.extensionGuide.genericForms)).toBeInTheDocument();
+    expect(screen.getByText(zhMessages.extensionGuide.genericFormsDomain)).toBeInTheDocument();
+  });
+
+  it("has no automated accessibility violations", async () => {
+    const { container } = await renderPage();
+    expect(await axe(container)).toHaveNoViolations();
   });
 });

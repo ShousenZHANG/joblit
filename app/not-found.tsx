@@ -6,10 +6,10 @@ export default function NotFound() {
     <div className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden px-6">
       <div className="landing-atmos" aria-hidden />
       <div className="relative z-[1] w-full max-w-md rounded-3xl border border-border/70 bg-background/90 p-8 text-center shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] backdrop-blur">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-emerald-50 text-brand-emerald-700">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-emerald-50 text-brand-emerald-text">
           <Compass className="h-7 w-7" aria-hidden />
         </div>
-        <p className="text-sm font-semibold uppercase tracking-[0.08em] text-brand-emerald-700">
+        <p className="text-sm font-semibold uppercase tracking-[0.08em] text-brand-emerald-text">
           404
         </p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">

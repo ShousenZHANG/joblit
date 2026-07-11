@@ -151,7 +151,7 @@ export function ExternalGenerateDialog({
               </Button>
 
               {promptCopied && (
-                <p className="text-center text-sm text-brand-emerald-700">
+                <p className="text-center text-sm text-brand-emerald-text">
                   {t("pasteHint")}
                 </p>
               )}

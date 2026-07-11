@@ -16,27 +16,65 @@ export function Starfield() {
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
-    // Respect reduced motion: never arm the listener, leave layers at rest.
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // Keep the narrowed element in an immutable non-null binding for callbacks
+    // that outlive this effect's synchronous setup phase.
+    const element: HTMLDivElement = root;
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const finePointer = window.matchMedia("(pointer: fine)");
 
     let frame = 0;
+    let listening = false;
     function onPointerMove(event: PointerEvent) {
       if (frame) return;
       frame = window.requestAnimationFrame(() => {
         frame = 0;
-        if (!root) return;
         // Normalise to -1..1 around the viewport centre.
         const px = (event.clientX / window.innerWidth) * 2 - 1;
         const py = (event.clientY / window.innerHeight) * 2 - 1;
-        root.style.setProperty("--px", px.toFixed(3));
-        root.style.setProperty("--py", py.toFixed(3));
+        element.style.setProperty("--px", px.toFixed(3));
+        element.style.setProperty("--py", py.toFixed(3));
       });
     }
 
-    window.addEventListener("pointermove", onPointerMove, { passive: true });
-    return () => {
+    function stopListening() {
+      if (!listening) return;
       window.removeEventListener("pointermove", onPointerMove);
+      listening = false;
       if (frame) window.cancelAnimationFrame(frame);
+      frame = 0;
+      element.style.removeProperty("--px");
+      element.style.removeProperty("--py");
+    }
+
+    function syncListener() {
+      const shouldListen =
+        !reducedMotion.matches &&
+        finePointer.matches &&
+        document.documentElement.classList.contains("dark");
+
+      if (shouldListen && !listening) {
+        window.addEventListener("pointermove", onPointerMove, { passive: true });
+        listening = true;
+      } else if (!shouldListen) {
+        stopListening();
+      }
+    }
+
+    const themeObserver = new MutationObserver(syncListener);
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    reducedMotion.addEventListener("change", syncListener);
+    finePointer.addEventListener("change", syncListener);
+    syncListener();
+
+    return () => {
+      themeObserver.disconnect();
+      reducedMotion.removeEventListener("change", syncListener);
+      finePointer.removeEventListener("change", syncListener);
+      stopListening();
     };
   }, []);
 

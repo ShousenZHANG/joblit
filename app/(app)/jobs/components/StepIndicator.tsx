@@ -79,7 +79,7 @@ export function StepIndicator({
                   isDone
                     ? "bg-brand-emerald-500 text-white shadow-sm"
                     : isActive
-                      ? "border-2 border-brand-emerald-500 bg-brand-emerald-50 text-brand-emerald-700"
+                      ? "border-2 border-brand-emerald-500 bg-brand-emerald-50 text-brand-emerald-text"
                       : "border border-border bg-card text-muted-foreground/70",
                 ].join(" ")}
               >
@@ -99,7 +99,7 @@ export function StepIndicator({
                 className={[
                   "text-[11px] font-semibold leading-tight",
                   isDone
-                    ? "text-brand-emerald-700"
+                    ? "text-brand-emerald-text"
                     : isActive
                       ? "text-brand-emerald-800"
                       : "text-muted-foreground/70",

@@ -38,7 +38,7 @@
   },
   "marketing": {
     "heroTitle": "AI-tailored resumes for every job you apply to",
-    "heroSubtitle": "Fetch roles, generate a custom CV and cover letter matched to each JD, export PDF. One workflow, zero copy-paste.",
+    "heroSubtitle": "Bring roles, JD-matched resume and cover-letter workflows, and PDF export into one focused workspace.",
     "badge": "Powered by 95-score AI Skill Pack",
     "navHowItWorks": "How it works",
     "navFeatures": "Features",
@@ -49,6 +49,8 @@
     "cta": "Start free",
     "login": "Log in",
     "skipToContent": "Skip to content",
+    "privacy": "Privacy",
+    "terms": "Terms",
     "allRightsReserved": "All rights reserved.",
     "openSource": "Open-source on GitHub",
     "demoLabel": "Live demo",
@@ -102,6 +104,8 @@
     "extensionLink": "Chrome Extension"
   },
   "extensionGuide": {
+    "metadataTitle": "Joblit AutoFill — Chrome Extension",
+    "metadataDescription": "Download and install Joblit AutoFill for guided application-form assistance across supported ATS platforms.",
     "title": "Joblit AutoFill — Chrome Extension",
     "subtitle": "Auto-fill job applications on Greenhouse, Lever, Workday, iCIMS, SuccessFactors, and more.",
     "downloadTitle": "Step 1: Download the Extension",
@@ -114,6 +118,7 @@
     "installStep3": "Enable \"Developer mode\" using the toggle in the top-right corner.",
     "installStep4": "Click \"Load unpacked\" and select the unzipped folder.",
     "installStep5": "The Joblit AutoFill extension icon will appear in your toolbar.",
+    "tipLabel": "Tip",
     "installTip": "Pin the extension for quick access: click the puzzle icon in the toolbar, then click the pin next to Joblit AutoFill.",
     "accountTitle": "Step 3: Create Your Account",
     "accountDesc": "Sign up or log in to Joblit using your Google or GitHub account, then set up your resume profile.",
@@ -142,6 +147,8 @@
     "useMethod3Desc": "View filled results, manually edit values, and save corrections to the Knowledge Base for future auto-fill.",
     "supportedTitle": "Supported ATS Platforms",
     "supportedDesc": "Works out of the box with the most popular Applicant Tracking Systems:",
+    "genericForms": "Generic forms",
+    "genericFormsDomain": "Pages with supported form fields",
     "faqTitle": "FAQ",
     "faq1Q": "Is my data safe?",
     "faq1A": "Yes. The extension communicates with your Joblit account over HTTPS. Your resume data stays in your account. Tokens are hashed and never stored in plain text.",
@@ -669,24 +676,29 @@
       "changelog": "Changelog",
       "startFree": "Start free",
       "openApp": "Open app",
-      "logIn": "Log in"
+      "logIn": "Log in",
+      "primary": "Primary navigation",
+      "home": "Joblit home",
+      "github": "Star Joblit on GitHub",
+      "openMenu": "Open menu",
+      "closeMenu": "Close menu"
     },
     "hero": {
       "eyebrowNew": "New",
       "eyebrowTagline": "Self-learning extension · v0.1",
       "titleLine1": "The job search,",
       "titleItalic": "re-engineered.",
-      "subtitle": "Joblit fetches roles from Seek and LinkedIn, tailors your CV and cover letter to each JD, exports clean LaTeX PDFs, and auto-fills the applications. One workstation. Zero copy-paste.",
+      "subtitle": "Joblit brings roles from Seek and LinkedIn into one workspace, helps tailor your CV and cover letter to each JD, exports clean LaTeX PDFs, and supports application autofill.",
       "startFree": "Start free",
-      "watchDemo": "Watch demo",
-      "metaFree": "Free forever · Bring your own LLM key"
+      "watchDemo": "See how it works",
+      "metaFree": "Free while invite-only · Gemini in app · Portable Skill Pack"
     },
     "logoBar": {
       "heading": "Plugs into your whole job hunt",
       "items": {
         "boards": "job boards",
         "ats": "ATS platforms",
-        "byom": "bring your own model",
+        "byom": "Gemini + portable Skill Pack",
         "bilingual": "bilingual resumes"
       }
     },
@@ -695,7 +707,7 @@
       "titlePrefix": "Submit-ready applications in",
       "titleItalic": "three steps",
       "titleSuffix": ".",
-      "lede": "No prompting, no template-hunting, no per-job copy-paste. You give Joblit your profile; it does the rest.",
+      "lede": "Keep your profile in one place, reduce repetitive prompting and template work, and reuse verified context across applications.",
       "steps": {
         "fetch": {
           "title": "Fetch",
@@ -723,15 +735,15 @@
       },
       "trustworthy": {
         "title": "Trustworthy by design",
-        "blurb": "ATS-safe output that parses cleanly through Workday, Greenhouse, Lever, and iCIMS. Every bullet cites a real line from your past experience — zero hallucinated claims."
+        "blurb": "Structured, ATS-conscious output for Workday, Greenhouse, Lever, and iCIMS. Suggested bullets are grounded in evidence from your saved experience and remain yours to review."
       },
       "tailor": {
-        "title": "Tailored in seconds",
-        "blurb": "Streamed generation: watch your resume compose itself in real time. From JD to final PDF in under five seconds, no loading spinners."
+        "title": "Evidence-grounded tailoring",
+        "blurb": "Generate a role-specific resume and cover letter with Gemini using your saved profile and the target JD, then review and edit every suggestion before export."
       },
       "output": {
         "title": "Pro-grade output",
-        "blurb": "LaTeX-typeset PDFs with proper kerning and widow control, locale-aware templates (EN / CN), and bring-your-own LLM key — Gemini, Claude, or OpenAI."
+        "blurb": "Export LaTeX-typeset PDFs with locale-aware EN / CN templates. In-app generation uses Gemini; export a portable Skill Pack for optional external use with Claude, ChatGPT, or Gemini."
       }
     },
     "access": {
@@ -749,7 +761,7 @@
       "approvedBody": "Taking you to sign-in — use the Google or GitHub account on that email.",
       "errorBody": "Something went wrong. Please try again.",
       "invalidEmail": "Enter a valid email address.",
-      "perks": "No credit card · No paywalls · Your data and AI keys stay yours"
+      "perks": "No credit card · No paywalls · You control your profile and exports"
     },
     "faq": {
       "kicker": "Questions",
@@ -763,7 +775,7 @@
         },
         {
           "q": "Will my data be used to train models?",
-          "a": "No. Your profile and generated resumes are never used for training. If you bring your own LLM key, data goes direct to that provider under their terms — we never see it."
+          "a": "No. Joblit does not use your profile or documents for model training. For in-app generation, Joblit sends Gemini only the profile and target-JD context needed for the request, under the provider's API terms."
         },
         {
           "q": "Is Joblit really free?",
@@ -774,8 +786,8 @@
           "a": "Yes, plus iCIMS and SuccessFactors. We ship dedicated adapters per ATS so quirky fields (like Workday's multi-step forms and date pickers) behave correctly."
         },
         {
-          "q": "Can I use my own OpenAI / Claude / Gemini key?",
-          "a": "Yes. Bring-your-own-LLM is a first-class path — your data goes straight to your provider and you pay them for tokens directly. Joblit itself is free."
+          "q": "Which AI providers can I use?",
+          "a": "In-app generation currently uses Gemini. You can also export a portable Skill Pack and choose to upload it externally to Claude, ChatGPT, or Gemini. Joblit does not currently accept personal provider API keys in the app."
         },
         {
           "q": "What if the generated bullets aren't accurate?",
@@ -784,11 +796,11 @@
       ]
     },
     "cta": {
-      "titlePrefix": "Stop rewriting your resume.",
-      "titleItalic": "Start getting interviews.",
-      "lede": "Free forever. No credit card. Takes two minutes to import your profile and run your first fetch.",
+      "titlePrefix": "Spend less time rewriting.",
+      "titleItalic": "Keep applications moving.",
+      "lede": "Free during invite-only access, with no credit card. Import your profile once, then reuse it across role discovery, tailoring, and application workflows.",
       "primary": "Start free",
-      "secondary": "Book a 10-min demo"
+      "secondary": "See how it works"
     },
     "footer": {
       "tagline": "The AI job-search workstation. Fetch, tailor, apply. Built by people who got tired of the rest.",
@@ -808,6 +820,7 @@
       },
       "resources": {
         "heading": "Resources",
+        "reportIssue": "Report an issue",
         "docs": "Docs",
         "guide": "Resume guide",
         "blog": "Blog",

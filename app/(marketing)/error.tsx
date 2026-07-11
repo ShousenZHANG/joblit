@@ -9,5 +9,9 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  return <RouteErrorBoundary error={error} reset={reset} />;
+  return (
+    <main id="main-content" tabIndex={-1}>
+      <RouteErrorBoundary error={error} reset={reset} />
+    </main>
+  );
 }

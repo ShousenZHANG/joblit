@@ -27,7 +27,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
  * Icon-only toggle. Avoids the classic SSR hydration mismatch by rendering
  * a placeholder until the client mounts and the persisted theme is known.
  */
-export function ThemeToggle({ className }: { className?: string }) {
+export function ThemeToggle({
+  className,
+  size = "compact",
+}: {
+  className?: string;
+  size?: "compact" | "touch";
+}) {
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
 
@@ -49,7 +55,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       title={label}
       onClick={() => setTheme(isDark ? "light" : "dark")}
       className={
-        "inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background/80 text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring " +
+        `inline-flex ${size === "touch" ? "h-11 w-11" : "h-9 w-9"} items-center justify-center rounded-full border border-border bg-background/80 text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ` +
         (className ?? "")
       }
     >

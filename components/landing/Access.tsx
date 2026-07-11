@@ -139,12 +139,12 @@ export function Access() {
                   }}
                   placeholder={t("emailPlaceholder")}
                   aria-invalid={phase === "error"}
-                  className="h-11 flex-1 rounded-full border border-border bg-background px-4 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-brand-emerald-400 focus:ring-2 focus:ring-brand-emerald-200"
+                  className="h-11 flex-1 rounded-full border border-border bg-background px-4 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-brand-emerald-400 focus:ring-2 focus:ring-brand-emerald-200"
                 />
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="group inline-flex h-11 items-center justify-center gap-1.5 rounded-full bg-brand-emerald-600 px-6 text-sm font-semibold text-white shadow-sm transition-all hover:bg-brand-emerald-700 hover:shadow-md active:scale-[0.98] disabled:opacity-70"
+                  className="group inline-flex h-11 items-center justify-center gap-1.5 rounded-full bg-brand-emerald-700 px-6 text-sm font-semibold text-white shadow-sm transition-all hover:bg-brand-emerald-900 hover:shadow-md active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-70"
                 >
                   {submitting ? (
                     <>

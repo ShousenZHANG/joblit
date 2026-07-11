@@ -25,7 +25,7 @@ export function CoverParagraphsSection({ cover, onChange }: CoverParagraphsSecti
   return (
     <section className="space-y-3 rounded-[1.35rem] border border-border/70 bg-card p-4 shadow-[0_18px_46px_-36px_rgba(15,23,42,0.45),0_1px_0_rgba(255,255,255,0.9)_inset] ring-1 ring-border/40">
       <header className="flex items-center gap-2">
-        <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-brand-emerald-50 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-brand-emerald-700 ring-1 ring-brand-emerald-100">
+        <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-brand-emerald-50 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-brand-emerald-text ring-1 ring-brand-emerald-100">
           <Sparkles className="h-3 w-3" aria-hidden />
           {t("badge.aiDrafted")}
         </span>

@@ -145,7 +145,7 @@ export function VideoCard({
             target="_blank"
             rel="noopener noreferrer"
             onClick={handleOpen}
-            className="mb-1 line-clamp-2 flex-1 text-sm font-semibold leading-snug text-foreground transition-colors hover:text-brand-emerald-700"
+            className="mb-1 line-clamp-2 flex-1 text-sm font-semibold leading-snug text-foreground transition-colors hover:text-brand-emerald-text"
           >
             {item.title}
           </a>
@@ -205,7 +205,7 @@ export function VideoCard({
             {qualitySignals.map((signal) => (
               <span
                 key={signal}
-                className="rounded-full border border-brand-emerald-100 bg-brand-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-brand-emerald-700 dark:border-brand-emerald-500/20 dark:bg-brand-emerald-500/10 dark:text-brand-emerald-300"
+                className="rounded-full border border-brand-emerald-100 bg-brand-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-brand-emerald-text dark:border-brand-emerald-500/20 dark:bg-brand-emerald-500/10 dark:text-brand-emerald-300"
               >
                 {signal}
               </span>

@@ -24,7 +24,7 @@ const markdownStyles = {
     "border-l-2 border-brand-emerald-200 bg-brand-emerald-50/40 px-4 py-2 text-sm text-foreground/85 rounded-r-lg",
   codeInline: "rounded bg-muted px-1.5 py-0.5 text-xs text-foreground/90",
   pre: "rounded-lg border border-border/60 bg-muted/50 p-3 text-xs text-foreground/90 overflow-auto",
-  link: "text-brand-emerald-700 underline-offset-4 hover:underline",
+  link: "text-brand-emerald-text underline-offset-4 hover:underline",
   table: "w-full border-collapse text-sm",
   th: "border border-border/60 bg-muted/50 px-3 py-2 text-left font-semibold text-foreground",
   td: "border border-border/60 px-3 py-2 text-foreground/85",

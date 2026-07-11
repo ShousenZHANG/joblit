@@ -36,7 +36,7 @@ function StepCard({ step }: { step: Step }) {
           {num}
         </span>
         <Icon
-          className="h-5 w-5 text-brand-emerald-600/80 transition-colors duration-300 group-hover:text-brand-emerald-700"
+          className="h-5 w-5 text-brand-emerald-600/80 transition-colors duration-300 group-hover:text-brand-emerald-text"
           strokeWidth={1.8}
           aria-hidden
         />

@@ -368,7 +368,7 @@ export function KnowledgeBase() {
                               ) : (
                                 <button
                                   onClick={() => startEdit(rule)}
-                                  className="group/cell flex items-center gap-1.5 truncate rounded px-1.5 py-0.5 text-left text-xs text-muted-foreground transition-colors hover:bg-brand-emerald-50 hover:text-brand-emerald-700"
+                                  className="group/cell flex items-center gap-1.5 truncate rounded px-1.5 py-0.5 text-left text-xs text-muted-foreground transition-colors hover:bg-brand-emerald-50 hover:text-brand-emerald-text"
                                   title={t("kb.clickToEdit")}
                                 >
                                   <span className="truncate">

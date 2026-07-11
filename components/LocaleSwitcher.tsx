@@ -10,7 +10,7 @@ const options = [
   { value: "zh", label: "中文" },
 ] as const;
 
-export function LocaleSwitcher() {
+export function LocaleSwitcher({ size = "compact" }: { size?: "compact" | "touch" }) {
   const locale = useLocale();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -42,7 +42,9 @@ export function LocaleSwitcher() {
             onClick={() => switchLocale(opt.value)}
             disabled={isPending}
             aria-pressed={isActive}
-            className={`relative inline-flex items-center justify-center gap-1 rounded-full px-3 py-1 text-xs font-semibold tracking-wide transition-all duration-200 active:scale-95 disabled:cursor-wait ${
+            className={`relative inline-flex items-center justify-center gap-1 rounded-full text-xs font-semibold tracking-wide transition-all duration-200 active:scale-95 disabled:cursor-wait ${
+              size === "touch" ? "min-h-11 min-w-11 px-3" : "px-3 py-1"
+            } ${
               isActive
                 ? "bg-foreground text-background shadow-sm"
                 : "text-muted-foreground hover:text-foreground"

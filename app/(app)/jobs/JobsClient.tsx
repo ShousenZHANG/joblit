@@ -433,7 +433,7 @@ export function JobsClient({
               className={cn(
                 "flex h-11 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors sm:h-9",
                 mobileFiltersOpen
-                  ? "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-700"
+                  ? "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-text"
                   : "border-border bg-background text-foreground/70",
               )}
             >
@@ -551,7 +551,7 @@ export function JobsClient({
             className={cn(
               "flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-150 min-h-[44px]",
               mobileTab === "list"
-                ? "bg-background text-brand-emerald-700 shadow-sm"
+                ? "bg-background text-brand-emerald-text shadow-sm"
                 : "text-muted-foreground active:bg-background/60",
             )}
           >
@@ -568,7 +568,7 @@ export function JobsClient({
             className={cn(
               "flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-150 min-h-[44px]",
               mobileTab === "detail"
-                ? "bg-background text-brand-emerald-700 shadow-sm"
+                ? "bg-background text-brand-emerald-text shadow-sm"
                 : "text-muted-foreground active:bg-background/60",
             )}
           >
@@ -684,7 +684,7 @@ export function JobsClient({
                     <Square className="h-4 w-4 text-muted-foreground" />
                   )}
                   {batchSelectedIds.size > 0 ? (
-                    <span className="font-semibold text-brand-emerald-700">{t("selectedCount", { count: batchSelectedIds.size })}</span>
+                    <span className="font-semibold text-brand-emerald-text">{t("selectedCount", { count: batchSelectedIds.size })}</span>
                   ) : (
                     <span>{t("selectAll")}</span>
                   )}

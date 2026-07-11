@@ -95,12 +95,12 @@ export function AppNav() {
         <div className="flex min-w-0 items-center gap-4">
           <Link
             href="/"
-            className="flex shrink-0 items-center gap-2 text-[15px] font-semibold tracking-tight text-foreground transition-colors hover:text-brand-emerald-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-brand-emerald-600"
+            className="flex shrink-0 items-center gap-2 text-[15px] font-semibold tracking-tight text-foreground transition-colors hover:text-brand-emerald-text focus-visible:outline focus-visible:ring-2 focus-visible:ring-brand-emerald-600"
             aria-label="Joblit home"
             onClick={resetScroll}
           >
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-emerald-50 ring-1 ring-brand-emerald-100">
-              <JoblitMark size={18} color="var(--brand-emerald-700, #047857)" ariaLabel={null} />
+              <JoblitMark size={18} color="var(--brand-emerald-text, #047857)" ariaLabel={null} />
             </span>
             Joblit
           </Link>
@@ -139,7 +139,7 @@ export function AppNav() {
           {email ? (
             <a
               href={`mailto:${email}`}
-              className="hidden text-[12px] text-brand-emerald-700 transition-colors hover:text-brand-emerald-800 hover:underline xl:inline-block"
+              className="hidden text-[12px] text-brand-emerald-text transition-colors hover:text-brand-emerald-800 hover:underline xl:inline-block"
               title={email}
             >
               {email}
@@ -177,7 +177,7 @@ export function AppNav() {
                     className="transition-[stroke-dasharray] duration-500 ease-out"
                   />
                 </svg>
-                <span className="text-[10px] font-semibold text-brand-emerald-700">
+                <span className="text-[10px] font-semibold text-brand-emerald-text">
                   {state.completedCount}/{state.totalCount}
                 </span>
               </span>
@@ -247,7 +247,7 @@ export function AppNav() {
                   <CircleHelp className="mr-2 h-4 w-4" />
                   <span>{t("guide")}</span>
                   {state ? (
-                    <span className="ml-auto rounded-full bg-brand-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-brand-emerald-700">
+                    <span className="ml-auto rounded-full bg-brand-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-brand-emerald-text">
                       {state.completedCount}/{state.totalCount}
                     </span>
                   ) : null}

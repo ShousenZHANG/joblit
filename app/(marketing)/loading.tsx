@@ -1,6 +1,6 @@
 export default function MarketingLoading() {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-background">
+    <main id="main-content" tabIndex={-1} className="relative min-h-screen overflow-hidden bg-background">
       <div aria-hidden className="landing-atmos" />
       <div className="relative z-[1] mx-auto flex w-full max-w-6xl flex-col items-center gap-20 px-6 pt-6">
         {/* Nav pill skeleton */}
@@ -40,6 +40,6 @@ export default function MarketingLoading() {
           ))}
         </div>
       </div>
-    </div>
+    </main>
   );
 }

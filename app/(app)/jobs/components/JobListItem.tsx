@@ -119,7 +119,7 @@ function JobListItemInner({
             <span>{job.jobType ?? t("unknownJobType")}</span>
             {job.jobLevel ? <span>· {job.jobLevel}</span> : null}
             {job.workArrangement ? (
-              <span className="rounded-full bg-brand-emerald-50 px-1.5 py-0.5 font-medium text-brand-emerald-700 ring-1 ring-brand-emerald-100">
+              <span className="rounded-full bg-brand-emerald-50 px-1.5 py-0.5 font-medium text-brand-emerald-text ring-1 ring-brand-emerald-100">
                 {job.workArrangement}
               </span>
             ) : null}

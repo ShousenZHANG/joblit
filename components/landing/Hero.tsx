@@ -76,7 +76,7 @@ const JOB_ROWS: JobRow[] = [
 ];
 
 const STATUS_BG: Record<JobRow["status"], string> = {
-  NEW: "bg-brand-emerald-100 text-brand-emerald-700",
+  NEW: "bg-brand-emerald-100 text-brand-emerald-text",
   APPLIED: "bg-[theme(colors.tier-good-bg)] text-[theme(colors.tier-good-fg)]",
 };
 
@@ -153,6 +153,8 @@ export function Hero() {
   return (
     <section
       ref={heroRef}
+      id="main-content"
+      tabIndex={-1}
       data-testid="landing-hero"
       className="relative isolate mx-auto w-full max-w-6xl overflow-hidden px-6 pb-24 pt-16 sm:pt-24 lg:px-10"
     >
@@ -176,15 +178,15 @@ export function Hero() {
         variants={introItem}
         className="flex items-center justify-center"
       >
-        <span className="inline-flex items-center gap-2 rounded-full border border-brand-emerald-200 bg-brand-emerald-50 px-3 py-1 text-xs font-semibold text-brand-emerald-700">
+        <span className="inline-flex items-center gap-2 rounded-full border border-brand-emerald-200 bg-brand-emerald-50 px-3 py-1 text-xs font-semibold text-brand-emerald-text">
           <span
             aria-hidden
             className="relative flex h-1.5 w-1.5 items-center justify-center"
           >
-            <span className="absolute inline-flex h-full w-full animate-[landing-pulse_2s_ease-in-out_infinite] rounded-full bg-brand-emerald-500" />
+            <span className="absolute inline-flex h-full w-full animate-[landing-pulse_2s_ease-in-out_infinite] rounded-full bg-brand-emerald-500 motion-reduce:animate-none" />
             <span className="relative h-1.5 w-1.5 rounded-full bg-brand-emerald-600" />
           </span>
-          <span className="rounded-full bg-brand-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+          <span className="rounded-full bg-brand-emerald-700 px-1.5 py-0.5 text-[10px] font-bold text-white">
             {t("eyebrowNew")}
           </span>
           {t("eyebrowTagline")}
@@ -246,7 +248,7 @@ export function Hero() {
             aria-disabled={cta.disabled}
             tabIndex={cta.disabled ? -1 : undefined}
             className={
-              "group inline-flex h-11 items-center gap-2 rounded-full bg-foreground px-6 text-sm font-semibold text-background shadow-[0_10px_36px_-10px_rgba(16,185,129,0.45)] transition-[transform,box-shadow,background-color] duration-200 hover:-translate-y-px hover:bg-foreground/90 hover:shadow-[0_14px_44px_-10px_rgba(16,185,129,0.6)] active:translate-y-0 active:scale-[0.98] " +
+              "group inline-flex h-11 items-center gap-2 rounded-full bg-foreground px-6 text-sm font-semibold text-background shadow-[0_10px_36px_-10px_rgba(16,185,129,0.45)] transition-[transform,box-shadow,background-color] duration-200 hover:-translate-y-px hover:bg-foreground/90 hover:shadow-[0_14px_44px_-10px_rgba(16,185,129,0.6)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background " +
               (cta.disabled ? "pointer-events-none opacity-70" : "")
             }
           >
@@ -259,7 +261,7 @@ export function Hero() {
         </Magnetic>
         <Link
           href="#how"
-          className="inline-flex h-11 items-center gap-2 rounded-full border border-border bg-background/70 px-6 text-sm font-semibold text-foreground transition-[background-color,transform] duration-200 hover:bg-muted active:scale-[0.98]"
+          className="inline-flex h-11 items-center gap-2 rounded-full border border-border bg-background/70 px-6 text-sm font-semibold text-foreground transition-[background-color,transform] duration-200 hover:bg-muted active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           <Play className="h-4 w-4" aria-hidden />
           {t("watchDemo")}
@@ -331,12 +333,12 @@ export function Hero() {
             >
               <div className="mb-4 flex items-center gap-2 text-xs font-semibold">
                 <span className="flex h-6 w-6 items-center justify-center rounded-md bg-brand-emerald-50 ring-1 ring-brand-emerald-100">
-                  <Search className="h-3.5 w-3.5 text-brand-emerald-700" aria-hidden />
+                  <Search className="h-3.5 w-3.5 text-brand-emerald-text" aria-hidden />
                 </span>
                 Joblit
               </div>
               <ul className="flex flex-col gap-1 text-xs">
-                <li className="flex items-center justify-between rounded-md bg-brand-emerald-50 px-2 py-1.5 font-semibold text-brand-emerald-700">
+                <li className="flex items-center justify-between rounded-md bg-brand-emerald-50 px-2 py-1.5 font-semibold text-brand-emerald-text">
                   <span className="inline-flex items-center gap-2">
                     <Briefcase className="h-3.5 w-3.5" aria-hidden />
                     Jobs
@@ -432,7 +434,7 @@ export function Hero() {
                 <div className="text-base font-semibold text-foreground">
                   Sr. Frontend Engineer
                 </div>
-                <span className="rounded-full bg-brand-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-brand-emerald-700">
+                <span className="rounded-full bg-brand-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-brand-emerald-text">
                   New
                 </span>
               </div>
@@ -442,7 +444,7 @@ export function Hero() {
                 {META_CHIPS.map(({ icon: Icon, label }) => (
                   <span
                     key={label}
-                    className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/70 px-1.5 py-0.5 text-[10px] font-medium text-foreground/70"
+                    className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
                   >
                     <Icon className="h-3 w-3 text-brand-emerald-600" aria-hidden />
                     {label}
@@ -472,10 +474,10 @@ export function Hero() {
 
               {/* Job description header — icon medallion + hairline. */}
               <div className="mt-4 flex items-center gap-1.5">
-                <span className="flex h-5 w-5 items-center justify-center rounded-md bg-brand-emerald-50 text-brand-emerald-700 ring-1 ring-brand-emerald-100">
+                <span className="flex h-5 w-5 items-center justify-center rounded-md bg-brand-emerald-50 text-brand-emerald-text ring-1 ring-brand-emerald-100">
                   <FileText className="h-3 w-3" aria-hidden />
                 </span>
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground/70">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Job description
                 </span>
                 <span className="h-px flex-1 bg-gradient-to-r from-border to-transparent" aria-hidden />

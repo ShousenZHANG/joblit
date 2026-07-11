@@ -53,7 +53,7 @@ export function TrendingRepoCard({ repo }: { repo: TrendingRepo }) {
             href={repo.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="truncate text-sm font-semibold text-foreground transition-colors hover:text-brand-emerald-700"
+            className="truncate text-sm font-semibold text-foreground transition-colors hover:text-brand-emerald-text"
           >
             {repo.fullName}
           </a>
@@ -83,7 +83,7 @@ export function TrendingRepoCard({ repo }: { repo: TrendingRepo }) {
           {repo.topics.slice(0, 3).map((topic) => (
             <span
               key={topic}
-              className="rounded-md bg-brand-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-brand-emerald-700"
+              className="rounded-md bg-brand-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-brand-emerald-text"
             >
               {topic}
             </span>

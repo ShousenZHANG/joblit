@@ -467,7 +467,7 @@ function TailorReviewDialogBody({
 
       <div className="flex shrink-0 flex-col gap-3 border-t border-border/70 bg-card/90 px-5 py-4 shadow-[0_-18px_48px_-42px_rgba(15,23,42,0.55)] backdrop-blur-xl md:flex-row md:items-center md:justify-between md:px-7">
         <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/80 px-3 py-2 text-xs text-muted-foreground shadow-sm">
-          <FileText className="h-4 w-4 text-brand-emerald-700" />
+          <FileText className="h-4 w-4 text-brand-emerald-text" />
           <span className="hidden sm:inline">
             {previewSyncStatus === "pending"
               ? "Preview will update after you stop editing."

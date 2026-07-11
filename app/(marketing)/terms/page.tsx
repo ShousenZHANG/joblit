@@ -39,9 +39,9 @@ export default async function TermsOfServicePage() {
         <nav className="mb-6 flex items-center justify-between">
           <Link
             href="/"
-            className="flex items-center gap-2 text-sm font-semibold text-foreground transition-colors hover:text-brand-emerald-700"
+            className="flex items-center gap-2 text-sm font-semibold text-foreground transition-colors hover:text-brand-emerald-text"
           >
-            <Search className="h-4 w-4 text-brand-emerald-700" />
+            <Search className="h-4 w-4 text-brand-emerald-text" />
             Joblit
           </Link>
           <Link
@@ -69,7 +69,7 @@ export default async function TermsOfServicePage() {
 
         {/* Grid: content + sidebar TOC */}
         <div className="legal-page">
-          <main>
+          <main id="main-content">
             {/* Mobile TOC — only renders the collapsible toggle (hidden at lg+) */}
             <LegalTableOfContents items={TOC_ITEMS} variant="mobile" />
 
@@ -241,13 +241,13 @@ export default async function TermsOfServicePage() {
         <footer className="legal-footer">
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
             <Link href="/" className="flex items-center gap-1.5 font-semibold text-foreground">
-              <Search className="h-3.5 w-3.5 text-brand-emerald-700" />
+              <Search className="h-3.5 w-3.5 text-brand-emerald-text" />
               Joblit
             </Link>
             <span aria-hidden="true">&middot;</span>
             <Link href="/privacy" className="transition-colors hover:text-foreground">Privacy</Link>
             <span aria-hidden="true">&middot;</span>
-            <span className="font-medium text-brand-emerald-700">Terms</span>
+            <span className="font-medium text-brand-emerald-text">Terms</span>
             <span aria-hidden="true">&middot;</span>
             <span>&copy; {new Date().getFullYear()} All rights reserved.</span>
           </div>

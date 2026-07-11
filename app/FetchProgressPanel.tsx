@@ -81,7 +81,7 @@ export function FetchProgressPanel() {
     status === "FAILED"
       ? "bg-destructive/10 text-destructive"
       : status === "SUCCEEDED"
-        ? "bg-brand-emerald-100 text-brand-emerald-700"
+        ? "bg-brand-emerald-100 text-brand-emerald-text"
         : status === "RUNNING"
           ? "bg-[theme(colors.tier-good-bg)] text-[theme(colors.tier-good-fg)]"
           : "bg-muted text-muted-foreground";
@@ -244,7 +244,7 @@ export function FetchProgressPanel() {
             {/* Live import count — real signal while the worker streams results
                 in, instead of relying on the time-based progress bar alone. */}
             {isRunning && importedCount > 0 ? (
-              <div className="text-sm font-semibold text-brand-emerald-700">
+              <div className="text-sm font-semibold text-brand-emerald-text">
                 {t("importedSoFar", { n: importedCount })}
               </div>
             ) : null}
@@ -311,7 +311,7 @@ export function FetchProgressPanel() {
                 <>
                   <div className="relative overflow-hidden rounded-lg bg-brand-emerald-50/60 py-3 text-center">
                     {isPartial ? null : <ConfettiDots />}
-                    <div className="text-sm font-semibold text-brand-emerald-700">
+                    <div className="text-sm font-semibold text-brand-emerald-text">
                       {t("importedNew", { n: importedCount })}
                     </div>
                     {isPartial ? (
@@ -473,7 +473,7 @@ function SourceLanes({ lanes }: { lanes: FetchRunLane[] }) {
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {lane.importedCount > 0 ? (
-                <span className="text-[11px] font-semibold tabular-nums text-brand-emerald-700">
+                <span className="text-[11px] font-semibold tabular-nums text-brand-emerald-text">
                   +{lane.importedCount}
                 </span>
               ) : null}

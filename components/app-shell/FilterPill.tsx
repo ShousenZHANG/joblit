@@ -39,7 +39,7 @@ export const FilterPill = React.forwardRef<HTMLButtonElement, FilterPillProps>(
               "rounded-full px-1.5 text-[10px] font-bold tabular-nums",
               active
                 ? "bg-white/25 text-white"
-                : "bg-brand-emerald-50 text-brand-emerald-700",
+                : "bg-brand-emerald-50 text-brand-emerald-text",
             )}
           >
             {count}

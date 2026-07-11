@@ -41,7 +41,7 @@ export function TrendingRepoList() {
             className={
               "rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors " +
               (clean
-                ? "border-brand-emerald-300 bg-brand-emerald-50 text-brand-emerald-700"
+                ? "border-brand-emerald-300 bg-brand-emerald-50 text-brand-emerald-text"
                 : "border-border bg-card text-muted-foreground hover:border-brand-emerald-200")
             }
           >

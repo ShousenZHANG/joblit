@@ -15,7 +15,7 @@ import { ScrollProgress } from "@/components/landing/ScrollProgress";
 
 const TITLE = "AI-tailored resumes for every job you apply to";
 const DESC =
-  "Fetch roles, generate a custom CV and cover letter matched to each JD, export PDF. One workflow, zero copy-paste.";
+  "Bring role discovery, JD-matched resume and cover-letter workflows, and PDF export into one focused workspace.";
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -83,7 +83,7 @@ export default function MarketingPage() {
       </div>
       <div aria-hidden className="landing-atmos" />
       <div aria-hidden className="landing-grain" />
-      <main id="main-content" className="relative z-[1] flex flex-col bg-transparent text-foreground">
+      <main className="relative z-[1] flex flex-col bg-transparent text-foreground">
         <Nav />
         <Hero />
         <LogoBar />

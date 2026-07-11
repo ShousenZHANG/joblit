@@ -54,7 +54,7 @@ export function Nav() {
   useEffect(() => {
     if (!mobileOpen) return;
     const onResize = () => {
-      if (window.innerWidth >= 768) setMobileOpen(false);
+      if (window.innerWidth >= 1024) setMobileOpen(false);
     };
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") setMobileOpen(false);
@@ -88,9 +88,7 @@ export function Nav() {
   const ctaHref =
     status === "authenticated"
       ? "/jobs"
-      : status === "unauthenticated"
-        ? "#access"
-        : "#";
+      : "#access";
   const ctaLabel =
     status === "authenticated" ? t("openApp") : t("startFree");
 
@@ -101,7 +99,7 @@ export function Nav() {
     // on this wrapper so sticky works reliably.
     <nav
       data-testid="landing-nav"
-      aria-label="Primary"
+      aria-label={t("primary")}
       className="sticky top-3 z-50 mx-auto w-full max-w-6xl px-3 sm:top-4 sm:px-6"
     >
       {/* Inner pill: backdrop-blur + thin border at rest. Scrolling deepens
@@ -121,22 +119,22 @@ export function Nav() {
       >
         <Link
           href="/"
-          className="flex min-w-0 shrink-0 items-center gap-2 text-[15px] font-semibold tracking-tight text-foreground transition-colors hover:text-brand-emerald-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-brand-emerald-600"
-          aria-label="Joblit home"
+          className="flex min-h-11 min-w-0 shrink-0 items-center gap-2 rounded-lg text-[15px] font-semibold tracking-tight text-foreground transition-colors hover:text-brand-emerald-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background lg:min-h-9"
+          aria-label={t("home")}
         >
           <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-emerald-50 ring-1 ring-brand-emerald-100">
-            <JoblitMark size={18} color="var(--brand-emerald-700, #047857)" ariaLabel={null} />
+            <JoblitMark size={18} color="var(--brand-emerald-text, #047857)" ariaLabel={null} />
           </span>
           Joblit
         </Link>
 
-        <ul className="hidden items-center gap-1 text-sm md:flex" role="list">
+        <ul className="hidden items-center gap-1 text-sm lg:flex" role="list">
           {LINKS.map((link) => (
             <li key={link.label}>
               <a
                 href={link.href}
                 onClick={handleSmoothScroll(link.href)}
-                className="rounded-full px-3 py-1.5 text-[13px] font-medium text-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
+                className="rounded-full px-3 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
                 {link.label}
               </a>
@@ -149,23 +147,23 @@ export function Nav() {
             href={GITHUB_REPO_URL}
             target="_blank"
             rel="noreferrer"
-            aria-label="Star Joblit on GitHub"
-            title="Star Joblit on GitHub"
-            className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-border/70 bg-background/75 px-2.5 text-[13px] font-semibold text-foreground/75 shadow-sm transition-all duration-200 hover:-translate-y-px hover:border-brand-emerald-300 hover:bg-brand-emerald-50/70 hover:text-brand-emerald-800 hover:shadow-md active:translate-y-0 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 sm:px-3"
+            aria-label={t("github")}
+            title={t("github")}
+            className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-full border border-border/70 bg-background/75 px-2.5 text-[13px] font-semibold text-muted-foreground shadow-sm transition-all duration-200 hover:-translate-y-px hover:border-brand-emerald-300 hover:bg-brand-emerald-50/70 hover:text-brand-emerald-800 hover:shadow-md active:translate-y-0 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-3 lg:h-9"
           >
             <Github className="h-3.5 w-3.5" aria-hidden />
             <span className="hidden whitespace-nowrap lg:inline">GitHub</span>
           </a>
           <div className="hidden sm:inline-flex">
-            <LocaleSwitcher />
+            <LocaleSwitcher size="touch" />
           </div>
           <div className="hidden sm:inline-flex">
-            <ThemeToggle />
+            <ThemeToggle size="touch" />
           </div>
           {status === "unauthenticated" && (
             <Link
               href="/login"
-              className="hidden rounded-full px-3 py-1.5 text-[13px] font-medium text-foreground/70 transition-colors hover:text-foreground sm:inline-block"
+              className="hidden rounded-full px-3 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:inline-block"
             >
               {t("logIn")}
             </Link>
@@ -174,27 +172,22 @@ export function Nav() {
             <Link
               href={ctaHref}
               aria-label={ctaLabel}
-              aria-disabled={status === "loading"}
-              tabIndex={status === "loading" ? -1 : undefined}
-              className={
-                "inline-flex shrink-0 items-center gap-1 rounded-full bg-foreground px-3 py-1.5 text-[13px] font-semibold text-background shadow-sm transition-all hover:-translate-y-px hover:bg-foreground/90 hover:shadow-md active:translate-y-0 active:scale-[0.97] sm:px-4 " +
-                (status === "loading" ? "pointer-events-none opacity-60" : "")
-              }
+              className="inline-flex h-11 shrink-0 items-center gap-1 rounded-full bg-foreground px-3 text-[13px] font-semibold text-background shadow-sm transition-all hover:-translate-y-px hover:bg-foreground/90 hover:shadow-md active:translate-y-0 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-4 lg:h-9"
             >
               <span className="hidden whitespace-nowrap sm:inline">{ctaLabel}</span>
               <ArrowRight className="h-3.5 w-3.5" aria-hidden />
             </Link>
           </Magnetic>
 
-          {/* Mobile menu toggle — only surface under md, where the inline
+          {/* Compact menu toggle — only surface under lg, where the inline
               link list is hidden. */}
           <button
             type="button"
             onClick={() => setMobileOpen((v) => !v)}
-            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+            aria-label={mobileOpen ? t("closeMenu") : t("openMenu")}
             aria-expanded={mobileOpen}
             aria-controls="mobile-nav-panel"
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background/75 text-foreground/75 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 md:hidden"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background/75 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background lg:hidden"
           >
             {mobileOpen ? (
               <X className="h-4 w-4" aria-hidden />
@@ -214,7 +207,7 @@ export function Nav() {
             animate={{ opacity: 1, y: 0 }}
             exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8 }}
             transition={{ duration: reduced ? 0 : 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="mt-2 overflow-hidden rounded-2xl border border-border/60 bg-[var(--landing-nav-bg,rgba(255,255,255,0.92))] p-2 shadow-[0_18px_40px_-20px_rgba(15,23,42,0.25)] backdrop-blur-xl md:hidden"
+            className="mt-2 overflow-hidden rounded-2xl border border-border/60 bg-[var(--landing-nav-bg,rgba(255,255,255,0.92))] p-2 shadow-[0_18px_40px_-20px_rgba(15,23,42,0.25)] backdrop-blur-xl lg:hidden"
           >
             <ul className="flex flex-col" role="list">
               {LINKS.map((link) => (
@@ -222,7 +215,7 @@ export function Nav() {
                   <a
                     href={link.href}
                     onClick={handleSmoothScroll(link.href)}
-                    className="block rounded-xl px-4 py-2.5 text-sm font-medium text-foreground/80 transition-colors hover:bg-muted hover:text-foreground"
+                    className="inline-flex min-h-11 w-full items-center rounded-xl px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-inset"
                   >
                     {link.label}
                   </a>
@@ -233,7 +226,7 @@ export function Nav() {
                   <Link
                     href="/login"
                     onClick={() => setMobileOpen(false)}
-                    className="block rounded-xl px-4 py-2.5 text-sm font-medium text-foreground/80 transition-colors hover:bg-muted hover:text-foreground"
+                    className="inline-flex min-h-11 w-full items-center rounded-xl px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-inset"
                   >
                     {t("logIn")}
                   </Link>
@@ -241,8 +234,8 @@ export function Nav() {
               ) : null}
             </ul>
             <div className="mt-1 flex items-center gap-2 border-t border-border/60 px-2 pt-2">
-              <LocaleSwitcher />
-              <ThemeToggle />
+              <LocaleSwitcher size="touch" />
+              <ThemeToggle size="touch" />
             </div>
           </motion.div>
         ) : null}

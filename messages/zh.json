@@ -38,7 +38,7 @@
   },
   "marketing": {
     "heroTitle": "AI 为每份工作定制专属简历",
-    "heroSubtitle": "抓取职位、生成匹配 JD 的定制简历和求职信、导出 PDF。一个工作流，零复制粘贴。",
+    "heroSubtitle": "把岗位发现、匹配 JD 的简历与求职信流程，以及 PDF 导出集中到一个专注的工作台。",
     "badge": "95 分 AI 技能包驱动",
     "navHowItWorks": "工作流程",
     "navFeatures": "功能特性",
@@ -49,6 +49,8 @@
     "cta": "免费开始",
     "login": "登录",
     "skipToContent": "跳到正文",
+    "privacy": "隐私政策",
+    "terms": "使用条款",
     "allRightsReserved": "保留所有权利。",
     "openSource": "在 GitHub 上开源",
     "demoLabel": "实时演示",
@@ -102,6 +104,8 @@
     "extensionLink": "Chrome 插件"
   },
   "extensionGuide": {
+    "metadataTitle": "Joblit AutoFill — Chrome 浏览器插件",
+    "metadataDescription": "下载并安装 Joblit AutoFill，在支持的 ATS 平台上获得求职申请表填写辅助。",
     "title": "Joblit AutoFill — Chrome 浏览器插件",
     "subtitle": "自动填充 Greenhouse、Lever、Workday、iCIMS、SuccessFactors 等平台的求职申请表单。",
     "downloadTitle": "第一步：下载插件",
@@ -114,6 +118,7 @@
     "installStep3": "点击右上角的「开发者模式」开关启用。",
     "installStep4": "点击「加载已解压的扩展程序」，选择刚才解压的文件夹。",
     "installStep5": "Joblit AutoFill 图标会出现在工具栏中。",
+    "tipLabel": "提示",
     "installTip": "建议固定插件：点击工具栏的拼图图标，然后点击 Joblit AutoFill 旁边的固定按钮。",
     "accountTitle": "第三步：创建你的账号",
     "accountDesc": "使用 Google 或 GitHub 账号注册或登录 Joblit，然后设置你的简历档案。",
@@ -142,6 +147,8 @@
     "useMethod3Desc": "查看填充结果，手动修改字段值，保存修正到知识库，下次自动使用。",
     "supportedTitle": "支持的 ATS 平台",
     "supportedDesc": "开箱即用，支持最主流的求职申请系统：",
+    "genericForms": "通用表单",
+    "genericFormsDomain": "包含受支持表单字段的页面",
     "faqTitle": "常见问题",
     "faq1Q": "我的数据安全吗？",
     "faq1A": "是的。插件通过 HTTPS 与你的 Joblit 账号通信。简历数据只存在你的账号中。令牌经过哈希处理，不会明文存储。",
@@ -669,24 +676,29 @@
       "changelog": "更新日志",
       "startFree": "免费开始",
       "openApp": "打开应用",
-      "logIn": "登录"
+      "logIn": "登录",
+      "primary": "主导航",
+      "home": "Joblit 首页",
+      "github": "在 GitHub 上查看 Joblit",
+      "openMenu": "打开菜单",
+      "closeMenu": "关闭菜单"
     },
     "hero": {
       "eyebrowNew": "新",
       "eyebrowTagline": "自学习扩展 · v0.1",
       "titleLine1": "求职流程，",
       "titleItalic": "重新定义。",
-      "subtitle": "Joblit 从 Seek 和 LinkedIn 抓取岗位、按每个 JD 定制简历与求职信、导出干净的 LaTeX PDF、自动填写申请。一个工作台，零复制粘贴。",
+      "subtitle": "Joblit 将 Seek 和 LinkedIn 岗位汇集到一个工作台，按目标 JD 辅助定制简历与求职信、导出清晰的 LaTeX PDF，并支持申请表自动填写。",
       "startFree": "免费开始",
-      "watchDemo": "观看演示",
-      "metaFree": "永久免费 · 自带 LLM key"
+      "watchDemo": "查看工作原理",
+      "metaFree": "邀请期免费 · 应用内 Gemini · 可移植 Skill Pack"
     },
     "logoBar": {
       "heading": "贯通你的整个求职流程",
       "items": {
         "boards": "招聘平台",
         "ats": "ATS 平台",
-        "byom": "自带模型",
+        "byom": "Gemini + 可移植 Skill Pack",
         "bilingual": "中英双语简历"
       }
     },
@@ -695,7 +707,7 @@
       "titlePrefix": "提交就绪的申请，只需",
       "titleItalic": "三步",
       "titleSuffix": "。",
-      "lede": "不用写提示词，不用找模板，不用为每个岗位复制粘贴。你给 Joblit 你的档案，它完成剩下的。",
+      "lede": "把个人档案集中管理，减少重复提示与模板整理，并在不同申请中复用经过确认的背景信息。",
       "steps": {
         "fetch": {
           "title": "抓取",
@@ -723,15 +735,15 @@
       },
       "trustworthy": {
         "title": "可信任的设计",
-        "blurb": "ATS 兼容输出可被 Workday、Greenhouse、Lever、iCIMS 清晰解析。每条要点都引用自你过往经历中的真实内容 —— 零幻觉描述。"
+        "blurb": "面向 Workday、Greenhouse、Lever 与 iCIMS 的结构化 ATS 友好输出。建议要点以你保存的经历证据为依据，并由你最终审阅。"
       },
       "tailor": {
-        "title": "数秒级定制",
-        "blurb": "流式生成 —— 实时看到简历逐字成形。从 JD 到最终 PDF 不超过 5 秒，无需等待加载。"
+        "title": "基于证据的定制",
+        "blurb": "Gemini 根据你保存的档案与目标 JD 生成岗位定制简历和求职信；导出前，每一项建议都可审阅和编辑。"
       },
       "output": {
         "title": "专业级输出",
-        "blurb": "LaTeX 级 PDF，精准字距、避免孤行；中英双语本地化模板；自带 LLM key —— Gemini / Claude / OpenAI 任选。"
+        "blurb": "导出采用中英双语模板的 LaTeX 排版 PDF。应用内生成使用 Gemini；也可导出可移植 Skill Pack，自行在 Claude、ChatGPT 或 Gemini 中使用。"
       }
     },
     "access": {
@@ -749,7 +761,7 @@
       "approvedBody": "正在带你前往登录 —— 用该邮箱的 Google 或 GitHub 账号即可。",
       "errorBody": "出错了,请重试。",
       "invalidEmail": "请输入有效邮箱。",
-      "perks": "无需信用卡 · 无付费墙 · 数据与 AI 密钥始终归你"
+      "perks": "无需信用卡 · 无付费墙 · 档案与导出内容由你掌控"
     },
     "faq": {
       "kicker": "常见问题",
@@ -763,7 +775,7 @@
         },
         {
           "q": "我的数据会被用于训练模型吗?",
-          "a": "不会。你的档案和生成的简历永远不会用于训练。如果你自带 LLM 密钥,数据直接按该提供商条款传输 —— 我们完全看不到。"
+          "a": "不会。Joblit 不会使用你的档案或文档训练模型。应用内生成时，Joblit 仅按提供商 API 条款向 Gemini 发送完成请求所需的档案与目标 JD 上下文。"
         },
         {
           "q": "Joblit 真的免费吗?",
@@ -774,8 +786,8 @@
           "a": "是的,还支持 iCIMS 和 SuccessFactors。我们为每个 ATS 提供专用适配器,这样 Workday 的多步表单、日期选择器等怪异字段都能正常工作。"
         },
         {
-          "q": "可以使用我自己的 OpenAI / Claude / Gemini 密钥吗?",
-          "a": "可以。自带模型是一等公民 —— 数据直达你的模型方,token 费用也直接付给他们。Joblit 本身免费。"
+          "q": "可以使用哪些 AI 服务?",
+          "a": "应用内生成目前使用 Gemini。你也可以导出可移植 Skill Pack，并选择在外部上传到 Claude、ChatGPT 或 Gemini。Joblit 应用内目前不接收个人提供商 API 密钥。"
         },
         {
           "q": "如果生成的要点不准确怎么办?",
@@ -784,11 +796,11 @@
       ]
     },
     "cta": {
-      "titlePrefix": "停止重写简历,",
-      "titleItalic": "开始收到面试。",
-      "lede": "永久免费。无需信用卡。两分钟即可导入你的档案并完成首次抓取。",
+      "titlePrefix": "少花时间重复改简历，",
+      "titleItalic": "让申请持续推进。",
+      "lede": "邀请开放期间免费，无需信用卡。只需维护一份档案，即可在岗位发现、材料定制与申请流程中复用。",
       "primary": "免费开始",
-      "secondary": "预约 10 分钟演示"
+      "secondary": "查看工作原理"
     },
     "footer": {
       "tagline": "AI 求职工作台。抓取、定制、申请。由厌倦现状的人打造。",
@@ -808,6 +820,7 @@
       },
       "resources": {
         "heading": "资源",
+        "reportIssue": "报告问题",
         "docs": "文档",
         "guide": "简历指南",
         "blog": "博客",

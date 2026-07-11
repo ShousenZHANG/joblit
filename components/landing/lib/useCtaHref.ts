@@ -13,11 +13,10 @@ import { useSession } from "next-auth/react";
  *
  *   authenticated   → `/jobs` (straight into the app)
  *   unauthenticated → `/login` (sign-in)
- *   loading         → `#` and link is disabled (pointer-events-none)
+ *   loading         → `#access` (the invite form stays available)
  *
- * Consumers receive both the href and a boolean for the loading state
- * so they can render a `pointer-events-none` + `aria-disabled` shell
- * while the session resolves.
+ * The return shape stays stable for existing consumers, but every state is
+ * actionable so a slow session request never creates a dead primary CTA.
  */
 export function useCtaHref() {
   const { status } = useSession();
@@ -28,5 +27,5 @@ export function useCtaHref() {
     return { href: "/login", disabled: false } as const;
   }
   // status === "loading" — SessionProvider is mid-fetch.
-  return { href: "#", disabled: true } as const;
+  return { href: "#access", disabled: false } as const;
 }

@@ -57,7 +57,7 @@ export function DiscoverClient() {
                 onClick={() => setActiveTab(tab.value)}
                 className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-150 lg:px-4 lg:py-2 lg:text-sm ${
                   selected
-                    ? "bg-background text-brand-emerald-700 shadow-sm"
+                    ? "bg-background text-brand-emerald-text shadow-sm"
                     : "text-muted-foreground hover:text-foreground active:bg-background/60"
                 }`}
               >

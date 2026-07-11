@@ -57,7 +57,7 @@ function IconChip({ icon: Icon }: { icon: LucideIcon }) {
   return (
     <span
       aria-hidden
-      className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-emerald-50 to-brand-emerald-100/70 text-brand-emerald-700 ring-1 ring-brand-emerald-200/70 transition-transform duration-300 group-hover:-rotate-3 group-hover:scale-105"
+      className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-emerald-50 to-brand-emerald-100/70 text-brand-emerald-text ring-1 ring-brand-emerald-200/70 transition-transform duration-300 group-hover:-rotate-3 group-hover:scale-105"
     >
       <Icon className="h-[22px] w-[22px]" strokeWidth={1.8} />
     </span>

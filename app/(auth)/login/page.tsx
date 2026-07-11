@@ -74,12 +74,17 @@ function LoginPageInner() {
     void signIn(provider, { callbackUrl });
   }
 
-  const container: Variants = {
-    hidden: {},
-    show: { transition: { staggerChildren: 0.07, delayChildren: 0.08 } },
-  };
+  const container: Variants = reduced
+    ? { hidden: {}, show: { transition: { duration: 0 } } }
+    : {
+        hidden: {},
+        show: { transition: { staggerChildren: 0.07, delayChildren: 0.08 } },
+      };
   const item: Variants = reduced
-    ? { hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.3 } } }
+    ? {
+        hidden: { opacity: 1, y: 0 },
+        show: { opacity: 1, y: 0, transition: { duration: 0 } },
+      }
     : {
         hidden: { opacity: 0, y: 12 },
         show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } },
@@ -100,24 +105,24 @@ function LoginPageInner() {
         <div className="flex items-center justify-between">
           <Link
             href="/"
-            className="flex items-center gap-2 rounded-lg text-[15px] font-semibold tracking-tight text-foreground transition-colors hover:text-brand-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-500 focus-visible:ring-offset-2"
+            className="flex items-center gap-2 rounded-lg text-[15px] font-semibold tracking-tight text-foreground transition-colors hover:text-brand-emerald-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-500 focus-visible:ring-offset-2"
             aria-label="Joblit home"
           >
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-emerald-50 ring-1 ring-brand-emerald-100">
-              <JoblitMark size={18} color="var(--brand-emerald-700, #047857)" ariaLabel={null} />
+              <JoblitMark size={18} color="var(--brand-emerald-text, #047857)" ariaLabel={null} />
             </span>
             Joblit
           </Link>
           <div className="flex items-center gap-2">
-            <LocaleSwitcher />
-            <ThemeToggle />
+            <LocaleSwitcher size="touch" />
+            <ThemeToggle size="touch" />
           </div>
         </div>
 
         <motion.div
-          initial={{ opacity: 0, y: 16, scale: reduced ? 1 : 0.985 }}
+          initial={reduced ? false : { opacity: 0, y: 16, scale: 0.985 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: reduced ? 0 : 0.6, ease: [0.16, 1, 0.3, 1] }}
           className="relative mt-12 flex flex-1 items-center justify-center"
         >
           {/* Aurora breathing behind the capsule — the only slow pulse on the
@@ -142,7 +147,7 @@ function LoginPageInner() {
             <motion.div variants={container} initial="hidden" animate="show" className="relative">
               <motion.span
                 variants={item}
-                className="inline-flex items-center gap-2 rounded-full border border-brand-emerald-200 bg-brand-emerald-50 px-3 py-1 text-[11px] font-semibold text-brand-emerald-700"
+                className="inline-flex items-center gap-2 rounded-full border border-brand-emerald-200 bg-brand-emerald-50 px-3 py-1 text-[11px] font-semibold text-brand-emerald-text"
               >
                 <span
                   aria-hidden
@@ -161,7 +166,7 @@ function LoginPageInner() {
                   </p>
                   <Button
                     asChild
-                    className="mt-6 h-11 w-full justify-center gap-2 rounded-full bg-brand-emerald-600 text-[13px] font-semibold text-white transition-colors hover:bg-brand-emerald-700"
+                    className="mt-6 h-11 w-full justify-center gap-2 rounded-full bg-brand-emerald-700 text-[13px] font-semibold text-white transition-colors hover:bg-brand-emerald-900"
                   >
                     <Link href="/#access">
                       {t("requestAccess")}
@@ -235,14 +240,14 @@ function LoginPageInner() {
                 {t("agreementPrefix")}{" "}
                 <Link
                   href="/terms"
-                  className="font-medium text-foreground underline decoration-border underline-offset-2 transition-colors hover:text-brand-emerald-700 hover:decoration-brand-emerald-300"
+                  className="font-medium text-foreground underline decoration-border underline-offset-2 transition-colors hover:text-brand-emerald-text hover:decoration-brand-emerald-300"
                 >
                   {t("terms")}
                 </Link>{" "}
                 {t("and")}{" "}
                 <Link
                   href="/privacy"
-                  className="font-medium text-foreground underline decoration-border underline-offset-2 transition-colors hover:text-brand-emerald-700 hover:decoration-brand-emerald-300"
+                  className="font-medium text-foreground underline decoration-border underline-offset-2 transition-colors hover:text-brand-emerald-text hover:decoration-brand-emerald-300"
                 >
                   {t("privacyPolicy")}
                 </Link>
