@@ -8,8 +8,15 @@ on:
       - master
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 # Dummy values so `next build` (and any test that reads env) passes without
-# real secrets. These are NOT credentials --they only satisfy module-load
+# real secrets. These are NOT credentials -- they only satisfy module-load
 # guards like prisma.ts's DATABASE_URL check; no service is contacted in CI.
 env:
   DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
@@ -37,15 +44,43 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            chrome-extension/package-lock.json
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Enforce dependency policy
+        run: npm run deps:policy
+
+      - name: Audit production dependencies
+        run: npm run deps:audit
+
+      - name: Dead-code and dependency gate
+        run: npm run deadcode
 
       - name: Lint
         run: npm run lint
 
       - name: Test (with coverage ratchet)
         run: npm run test:coverage
+
+      - name: Install extension dependencies
+        run: npm ci
+        working-directory: chrome-extension
+
+      - name: Audit extension production dependencies
+        run: npm run deps:audit
+        working-directory: chrome-extension
+
+      - name: Test extension (with coverage ratchet)
+        run: npm run test:coverage
+        working-directory: chrome-extension
+
+      - name: Build extension
+        run: npm run build
+        working-directory: chrome-extension
 
       - name: Build
         run: npm run build

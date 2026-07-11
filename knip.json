@@ -1,6 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "ignore": ["lib/generated/**", "**/dist/**"],
+  "ignore": ["lib/generated/**"],
   "ignoreDependencies": [
     "@neondatabase/serverless",
     "axe-core",
@@ -10,8 +10,6 @@
   "workspaces": {
     ".": {
       "entry": [
-        "instrumentation.ts",
-        "prisma.config.ts",
         "tools/**/*.mjs"
       ],
       "project": ["**/*.{ts,tsx}", "!chrome-extension/**"]
@@ -20,11 +18,9 @@
       "entry": [
         "src/background/service-worker.ts",
         "src/content/index.ts",
+        "src/content/seek/seekInterceptMain.ts",
         "src/popup/main.tsx",
-        "src/popup/index.html",
-        "vite.config.ts",
-        "vitest.config.ts",
-        "test/setup.ts"
+        "src/popup/index.html"
       ],
       "project": "src/**/*.{ts,tsx}"
     }

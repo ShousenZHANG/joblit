@@ -4,6 +4,16 @@ import { fileURLToPath } from "node:url";
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig({
+  // Vite otherwise treats the extension popup HTML as a root entry while the
+  // web suite is starting, then reports its extension-only aliases as missing.
+  // Scan the web test graph explicitly; the extension has its own config.
+  optimizeDeps: {
+    entries: [
+      "**/*.test.{ts,tsx}",
+      "!chrome-extension/**",
+      "!everything-claude-code/**",
+    ],
+  },
   resolve: {
     alias: {
       "@": rootDir,

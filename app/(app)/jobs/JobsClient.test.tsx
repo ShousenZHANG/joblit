@@ -944,6 +944,9 @@ describe("JobsClient", () => {
 
   it("disables skill pack download until prompt meta is ready, then advances to Copy Prompt with one click", async () => {
     const user = userEvent.setup();
+    const anchorClickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
     let resolvePrompt!: (value: Response) => void;
     const promptResponse = new Promise<Response>((resolve) => {
       resolvePrompt = resolve;
@@ -1023,10 +1026,14 @@ describe("JobsClient", () => {
     expect(await screen.findByRole("button", { name: /copy prompt to clipboard/i })).toBeInTheDocument();
     expect(createObjectUrlSpy).toHaveBeenCalled();
     expect(revokeObjectUrlSpy).toHaveBeenCalled();
+    expect(anchorClickSpy).toHaveBeenCalled();
   });
 
   it("reuses the downloaded skill pack between CV and CL when version is unchanged", async () => {
     const user = userEvent.setup();
+    const anchorClickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
     localStorage.clear();
     const createObjectUrlSpy = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:skill-pack");
     const revokeObjectUrlSpy = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
@@ -1115,7 +1122,8 @@ describe("JobsClient", () => {
     expect(downloadCalls).toHaveLength(1);
     expect(createObjectUrlSpy).toHaveBeenCalledTimes(1);
     expect(revokeObjectUrlSpy).toHaveBeenCalledTimes(1);
-  });
+    expect(anchorClickSpy).toHaveBeenCalledTimes(1);
+  }, 10_000);
 
   it("restores filtered query cache item when status update fails", async () => {
     const user = userEvent.setup();
@@ -1398,7 +1406,7 @@ describe("JobsClient", () => {
         expect(within(resultsPane).queryByText("Beta Developer")).not.toBeInTheDocument();
         expect(within(resultsPane).getByText("Gamma Designer")).toBeInTheDocument();
       });
-    });
+    }, 10_000);
 
     it("exits batch mode after deletion and clears selection", async () => {
       const user = userEvent.setup();

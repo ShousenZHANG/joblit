@@ -15,6 +15,7 @@ node_modules
 
 # testing
 /coverage
+/chrome-extension/coverage/
 
 # next.js
 /.next/

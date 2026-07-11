@@ -7,6 +7,36 @@ import * as axeMatchers from "vitest-axe/matchers";
 // (>=0.95) with component-level checks that catch interactive-state issues.
 expect.extend(axeMatchers);
 
+// jsdom intentionally leaves canvas rendering unimplemented. axe-core uses a
+// tiny 2D surface only to compare text widths/pixels when detecting icon-font
+// ligatures, so provide that deterministic subset instead of suppressing the
+// resulting console errors (which could hide real application failures).
+Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
+  configurable: true,
+  value(this: HTMLCanvasElement, contextId: string) {
+    if (contextId !== "2d") return null;
+
+    return {
+      canvas: this,
+      font: "10px sans-serif",
+      textAlign: "start",
+      textBaseline: "alphabetic",
+      measureText(text: string) {
+        return { width: text.length * 10 } as TextMetrics;
+      },
+      fillText() {},
+      clearRect() {},
+      getImageData(_x: number, _y: number, width: number, height: number) {
+        const data = new Uint8ClampedArray(
+          Math.max(1, Math.ceil(width)) * Math.max(1, Math.ceil(height)) * 4,
+        );
+        data[3] = 255;
+        return { data } as ImageData;
+      },
+    } as unknown as CanvasRenderingContext2D;
+  },
+});
+
 class ResizeObserverMock {
   observe() {}
   unobserve() {}
