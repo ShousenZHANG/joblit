@@ -79,6 +79,7 @@ export default function MarketingPage() {
         <span className="landing-aurora-blob landing-aurora-blob--1" />
         <span className="landing-aurora-blob landing-aurora-blob--2" />
         <span className="landing-aurora-blob landing-aurora-blob--3" />
+        <span className="landing-aurora-blob landing-aurora-blob--4" />
       </div>
       <div aria-hidden className="landing-atmos" />
       <div aria-hidden className="landing-grain" />

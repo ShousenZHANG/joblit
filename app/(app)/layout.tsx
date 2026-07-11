@@ -18,6 +18,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <span className="landing-aurora-blob landing-aurora-blob--1" />
         <span className="landing-aurora-blob landing-aurora-blob--2" />
         <span className="landing-aurora-blob landing-aurora-blob--3" />
+        <span className="landing-aurora-blob landing-aurora-blob--4" />
       </div>
       <div aria-hidden className="landing-atmos" />
       {/* A solid dark fill reads flat and plastic; the grain is what makes

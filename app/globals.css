@@ -192,6 +192,42 @@
     var(--nebula);
 }
 
+/* Scroll-driven colour temperature: the sky cools from dawn to dusk as the
+   page scrolls — driven by the native scroll timeline (zero JS, zero
+   listeners; scroll position IS the animation clock). Progressive
+   enhancement: browsers without scroll() keep the static dawn. */
+.landing-atmos::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background:
+    radial-gradient(ellipse 90% 65% at 50% 108%, oklch(0.55 0.09 268 / 0.16), transparent 62%),
+    linear-gradient(180deg, transparent 30%, oklch(0.6 0.05 250 / 0.08));
+}
+
+.dark .landing-atmos::after {
+  background:
+    radial-gradient(ellipse 90% 65% at 50% 108%, oklch(0.3 0.1 282 / 0.4), transparent 62%),
+    linear-gradient(180deg, transparent 30%, oklch(0.1 0.03 262 / 0.5));
+}
+
+@supports (animation-timeline: scroll()) {
+  .landing-atmos::after {
+    animation: atmos-dusk linear both;
+    animation-timeline: scroll(root block);
+  }
+}
+
+@keyframes atmos-dusk {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* Aurora Deep: the emerald wash now sits on a deep-space nebula. Already a
    fixed, pointer-events-none plane — the nebula rides it for free, so there is
    no `background-attachment: fixed` (an iOS Safari repaint trap) anywhere. */
@@ -219,19 +255,34 @@
   position: absolute;
   border-radius: 9999px;
   filter: blur(72px);
-  opacity: 0.55;
-  will-change: transform;
+  --blob-o: 0.55;
+  opacity: var(--blob-o);
+  will-change: transform, opacity;
+}
+
+@keyframes aurora-breathe {
+  from {
+    opacity: calc(var(--blob-o) * 0.65);
+  }
+  to {
+    opacity: var(--blob-o);
+  }
 }
 
 /* Daylight aurora — a real dawn, not a hint. Emerald / teal / violet-sky mirror
    the dark nebula's three clouds so the two themes are one universe. */
+/* Each blob runs two clocks: its drift AND an out-of-phase opacity breath
+   (aurora-breathe, staggered negative delays), so the field reads as one
+   living colour mesh rather than separate shapes floating. Compositor-only. */
 .landing-aurora-blob--1 {
   width: 44vw;
   height: 44vw;
   left: -6vw;
   top: -8vw;
   background: radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.3), transparent 68%);
-  animation: aurora-drift-1 24s ease-in-out infinite;
+  animation:
+    aurora-drift-1 24s ease-in-out infinite,
+    aurora-breathe 11s ease-in-out infinite alternate;
 }
 
 .landing-aurora-blob--2 {
@@ -240,7 +291,9 @@
   right: -8vw;
   top: 2vw;
   background: radial-gradient(circle at 50% 50%, rgba(45, 212, 191, 0.26), transparent 68%);
-  animation: aurora-drift-2 30s ease-in-out infinite;
+  animation:
+    aurora-drift-2 30s ease-in-out infinite,
+    aurora-breathe 13s ease-in-out -4s infinite alternate;
 }
 
 .landing-aurora-blob--3 {
@@ -249,14 +302,40 @@
   left: 18vw;
   top: 26vw;
   background: radial-gradient(circle at 50% 50%, rgba(139, 148, 250, 0.2), transparent 70%);
-  animation: aurora-drift-3 36s ease-in-out infinite;
+  animation:
+    aurora-drift-3 36s ease-in-out infinite,
+    aurora-breathe 17s ease-in-out -9s infinite alternate;
+}
+
+/* Fourth cloud — a small sky-blue breath near the hero's heart. Completes the
+   mesh (emerald / teal / violet / sky) so no region of the field sits still. */
+.landing-aurora-blob--4 {
+  width: 26vw;
+  height: 26vw;
+  right: 24vw;
+  top: 16vw;
+  background: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.22), transparent 68%);
+  animation:
+    aurora-drift-2 42s ease-in-out -12s infinite,
+    aurora-breathe 9s ease-in-out -2s infinite alternate;
+}
+
+@keyframes aurora-breathe {
+  from {
+    opacity: calc(var(--blob-o) * 0.6);
+  }
+  to {
+    opacity: var(--blob-o);
+  }
 }
 
 /* In deep space the aurora drifts on a cosmic clock — the gap between a 60s
-   background and a 200ms interaction IS the sense of vastness. */
+   background and a 200ms interaction IS the sense of vastness. The two-value
+   duration maps to the two animations: drift slows to 60s, the breath keeps
+   its own 13s clock (stagger via per-blob delays remains). */
 .dark .landing-aurora-blob {
-  opacity: 0.5;
-  animation-duration: 60s;
+  --blob-o: 0.5;
+  animation-duration: 60s, 13s;
 }
 
 @keyframes aurora-drift-1 {
@@ -2525,6 +2604,97 @@ body::-webkit-scrollbar-thumb:hover {
   background-size: 34px 34px;
   -webkit-mask-image: radial-gradient(ellipse 72% 58% at 50% 42%, black 0%, transparent 76%);
   mask-image: radial-gradient(ellipse 72% 58% at 50% 42%, black 0%, transparent 76%);
+}
+
+/* Grid beams — light pulses running along the grid's own lines, turning the
+   static backdrop into a live circuit. Rows/columns sit on 34px multiples so
+   the beams ride real lines; the parent's radial mask fades them at the edges
+   for free. transform + opacity only. */
+.landing-canvas-grid::before,
+.landing-canvas-grid::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+/* Horizontal beam on the 4th row (4 × 34px). */
+.landing-canvas-grid::before {
+  top: 136px;
+  left: 0;
+  width: 220px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(16, 185, 129, 0.85) 45%,
+    rgba(56, 189, 248, 0.65) 70%,
+    transparent
+  );
+  transform: translateX(-240px);
+  animation: grid-beam-x 9s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation-delay: 1.5s;
+}
+
+/* Vertical beam on the 12th column (12 × 34px). */
+.landing-canvas-grid::after {
+  top: 0;
+  left: 408px;
+  width: 1px;
+  height: 180px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(16, 185, 129, 0.8) 50%,
+    rgba(139, 148, 250, 0.55) 75%,
+    transparent
+  );
+  transform: translateY(-200px);
+  animation: grid-beam-y 12s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation-delay: 5s;
+}
+
+@keyframes grid-beam-x {
+  0% {
+    transform: translateX(-240px);
+    opacity: 0;
+  }
+  4% {
+    opacity: 1;
+  }
+  38% {
+    opacity: 1;
+  }
+  46%,
+  100% {
+    transform: translateX(min(92vw, 1160px));
+    opacity: 0;
+  }
+}
+
+@keyframes grid-beam-y {
+  0% {
+    transform: translateY(-200px);
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  30% {
+    opacity: 1;
+  }
+  38%,
+  100% {
+    transform: translateY(640px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-canvas-grid::before,
+  .landing-canvas-grid::after {
+    animation: none;
+    opacity: 0;
+  }
 }
 
 /* ── Landing: liquid glass (warm adaptation — Mindloop pattern) ── */
