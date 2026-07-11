@@ -9,7 +9,6 @@ const directSensitiveTokens = new Set([
   "passcode",
   "pin",
   "otp",
-  "verification",
   "cvv",
   "cvc",
   "routing",
@@ -18,12 +17,15 @@ const directSensitiveTokens = new Set([
   "swift",
   "ssn",
   "tfn",
-  "passport",
 ]);
 
 const sensitivePhrases = [
   "pass code",
   "security code",
+  "security answer",
+  "verification code",
+  "verification token",
+  "verification answer",
   "card number",
   "bank account",
   "social security",
@@ -36,21 +38,21 @@ const sensitivePhrases = [
   "national identifier",
 ];
 
-const compactSensitiveKeys = [
-  /^(?:password|passcode)\d*$/,
-  /^(?:pin|otp)(?:code|token)?\d*$/,
-  /^verification(?:code|token|answer|passcode|pin|otp)?\d*$/,
-  /^securitycode\d*$/,
-  /^(?:cvv|cvc)\d*$/,
-  /^(?:(?:credit|debit|payment)card|card)(?:number|num|no)\d*$/,
-  /^bankaccount(?:number|num|no)?\d*$/,
-  /^routing(?:number|num|no)?\d*$/,
-  /^(?:bsb|iban|swift)(?:code|number|num|no)?\d*$/,
-  /^(?:ssn|socialsecurity(?:number|num|no)?)\d*$/,
-  /^(?:tfn|taxfile(?:number|num|no)?)\d*$/,
-  /^passport(?:number|num|no)?\d*$/,
-  /^drivers?licen[cs]e(?:number|num|no)?\d*$/,
-  /^national(?:id|identifier)(?:number|num|no)?\d*$/,
+const compactSensitiveSuffixes = [
+  /(?:password|passcode)(?:confirmation|confirm)?\d*$/,
+  /(?:pin|otp)(?:code|token)?\d*$/,
+  /verification(?:code|token|answer|passcode|pin|otp)\d*$/,
+  /security(?:code|answer)\d*$/,
+  /(?:cvv|cvc)\d*$/,
+  /(?:(?:credit|debit|payment)card|card)(?:number|num|no)\d*$/,
+  /bankaccount(?:number|num|no)?\d*$/,
+  /routing(?:number|num|no)?\d*$/,
+  /(?:bsb|iban|swift)(?:code|number|num|no)?\d*$/,
+  /(?:ssn|socialsecurity(?:number|num|no|id|identifier)?)\d*$/,
+  /(?:tfn|tax(?:file)?(?:number|num|no|id|identifier))\d*$/,
+  /passport(?:(?:number|num|no|id|identifier)\d*|\d+)$/,
+  /drivers?licen[cs]e(?:number|num|no|id|identifier)?\d*$/,
+  /(?:national|government)(?:id|identifier)(?:number|num|no)?\d*$/,
 ];
 
 function normalizeFieldKey(key: string): string {
@@ -69,6 +71,12 @@ function isSensitiveFieldKey(key: string): boolean {
   if (!normalized) return false;
 
   const tokens = normalized.split(" ");
+  const compact = tokens.join("");
+  const isPostalPinCode =
+    /(?:postal|address)pincode$/.test(compact) &&
+    !/(?:verification|security|password|passcode|otp|2fa|mfa)/.test(compact);
+  if (isPostalPinCode) return false;
+
   if (tokens.some((token) => directSensitiveTokens.has(token))) return true;
 
   const padded = ` ${normalized} `;
@@ -76,9 +84,9 @@ function isSensitiveFieldKey(key: string): boolean {
     return true;
   }
 
-  const compactCandidates = [...tokens, tokens.join("")];
+  const compactCandidates = [...tokens, compact];
   return compactCandidates.some((candidate) =>
-    compactSensitiveKeys.some((pattern) => pattern.test(candidate)),
+    compactSensitiveSuffixes.some((pattern) => pattern.test(candidate)),
   );
 }
 

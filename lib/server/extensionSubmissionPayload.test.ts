@@ -99,6 +99,56 @@ describe("CreateSubmissionSchema", () => {
     expect(CreateSubmissionSchema.safeParse(payload).success).toBe(false);
   });
 
+  it.each([
+    ["prefixed password", "userpassword"],
+    ["prefixed verification code", "emailverificationcode"],
+    ["prefixed card number", "billingcreditcardnumber"],
+    ["prefixed passport number", "candidatepassportnumber"],
+  ])("rejects a compact lowercase %s suffix", (_family, key) => {
+    const payload = validPayload();
+    payload.fieldValues = { [key]: "secret" };
+
+    expect(CreateSubmissionSchema.safeParse(payload).success).toBe(false);
+  });
+
+  it("allows a compact sensitive phrase followed by a safe suffix", () => {
+    const payload = validPayload();
+    payload.fieldValues = {
+      candidatecreditcardnumberstatus: "not-collected",
+    };
+
+    expect(CreateSubmissionSchema.safeParse(payload).success).toBe(true);
+  });
+
+  it.each([
+    ["postal PIN code", "postalPinCode"],
+    ["shipping postal PIN code", "shippingPostalPinCode"],
+    ["billing address PIN code", "billingAddressPinCode"],
+    ["compact postal PIN code", "postalpincode"],
+    ["employment verification contact", "employmentVerificationContact"],
+    ["employment verification email", "employmentverificationemail"],
+    ["passport issuing country", "passportIssuingCountry"],
+  ])("allows a non-sensitive recruitment/address field: %s", (_label, key) => {
+    const payload = validPayload();
+    payload.fieldValues = { [key]: "safe-value" };
+
+    expect(CreateSubmissionSchema.safeParse(payload).success).toBe(true);
+  });
+
+  it.each([
+    "accountVerificationPin",
+    "securityPin",
+    "emailverificationtoken",
+    "userpasswordconfirmation",
+    "candidateGovernmentId",
+    "candidateTaxIdentifier",
+  ])("still rejects a sensitive suffix: %s", (key) => {
+    const payload = validPayload();
+    payload.fieldValues = { [key]: "secret" };
+
+    expect(CreateSubmissionSchema.safeParse(payload).success).toBe(false);
+  });
+
   it("rejects a sensitive fieldMappings key instead of dropping it", () => {
     const payload = validPayload();
     payload.fieldMappings = {
@@ -220,6 +270,29 @@ describe("submission route validation", () => {
           message: "Invalid request body",
           details: expect.any(Object),
         }),
+      }),
+    );
+    expect(routeMocks.createFormSubmission).not.toHaveBeenCalled();
+  });
+
+  it("returns INVALID_BODY for a prefixed compact sensitive key", async () => {
+    routeMocks.createFormSubmission.mockClear();
+    const payload = validPayload();
+    payload.fieldValues = { billingcreditcardnumber: "4111111111111111" };
+    const request = new Request("https://www.joblit.tech/api/ext/submissions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toEqual(
+      expect.objectContaining({
+        code: "INVALID_BODY",
+        message: "Invalid request body",
       }),
     );
     expect(routeMocks.createFormSubmission).not.toHaveBeenCalled();
