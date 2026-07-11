@@ -61,24 +61,30 @@ export function KnowledgeBase() {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const editInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchRules = useCallback(async () => {
+  const fetchRules = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch("/api/field-mappings");
+      const res = await fetch("/api/field-mappings", { signal });
       if (!res.ok) throw new Error("Failed to fetch");
       const json = await res.json();
+      if (signal?.aborted) return;
       setRules(json.data ?? []);
     } catch {
+      if (signal?.aborted) return;
       toast({
         title: t("kb.toastLoadFailed"),
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [toast, t]);
 
   useEffect(() => {
-    fetchRules();
+    const controller = new AbortController();
+    queueMicrotask(() => {
+      if (!controller.signal.aborted) void fetchRules(controller.signal);
+    });
+    return () => controller.abort();
   }, [fetchRules]);
 
   // Focus input when editing starts

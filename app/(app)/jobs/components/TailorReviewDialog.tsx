@@ -107,19 +107,14 @@ function TailorReviewDialogBody({
   const [coverPdf, setCoverPdf] = useState<string | null>(
     initialDraft.coverPdfUrl,
   );
-  const [lastResumeRefreshAt, setLastResumeRefreshAt] = useState<number | null>(
-    initialDraft.resumePdfUrl ? Date.now() : null,
-  );
-  const [lastCoverRefreshAt, setLastCoverRefreshAt] = useState<number | null>(
-    initialDraft.coverPdfUrl ? Date.now() : null,
-  );
+  const [lastResumeRefreshAt, setLastResumeRefreshAt] = useState<number | null>(null);
+  const [lastCoverRefreshAt, setLastCoverRefreshAt] = useState<number | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [previewSyncStatus, setPreviewSyncStatus] =
     useState<PreviewSyncStatus>("synced");
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isDiscarding, setIsDiscarding] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [showConflictDialog, setShowConflictDialog] = useState(false);
   const initialPreviewUrl =
     initialDraft.target === "resume"
       ? initialDraft.resumePdfUrl
@@ -147,6 +142,8 @@ function TailorReviewDialogBody({
       : previewSyncStatus === "pending"
         ? "Queued after edit"
         : "Preview in sync";
+  const showConflictDialog =
+    draft.saveStatus.kind === "error" && draft.saveStatus.conflict === true;
 
   useEffect(() => {
     latestHashRef.current = draft.currentHash;
@@ -164,15 +161,6 @@ function TailorReviewDialogBody({
     },
     [],
   );
-
-  useEffect(() => {
-    if (
-      draft.saveStatus.kind === "error" &&
-      draft.saveStatus.message.includes("Another tab")
-    ) {
-      setShowConflictDialog(true);
-    }
-  }, [draft.saveStatus]);
 
   function patchSummary(summary: AiContent["cv"]["summary"]) {
     setStatus("DRAFT");

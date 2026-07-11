@@ -66,8 +66,9 @@ export function useResumeProfiles({
   // Initial load — mirrors ExtensionTokenManager.fetchTokens: a failed fetch
   // must surface as an explicit error + retry, not a silent blank form that
   // reads as "no saved resume". `loadError` drives that UI; `retryLoad` lets
-  // the surface re-attempt. The `aliveRef` guard prevents a stale locale's
-  // response (or one resolving after unmount) from clobbering current state.
+  // the surface re-attempt. The per-load AbortSignal prevents a stale locale's
+  // response from winning, while `aliveRef` also protects event-triggered
+  // retries that resolve after unmount.
   const aliveRef = useRef(true);
   useEffect(() => {
     aliveRef.current = true;
@@ -76,16 +77,16 @@ export function useResumeProfiles({
     };
   }, []);
 
-  const loadProfiles = useCallback(async () => {
+  const loadProfiles = useCallback(async (signal?: AbortSignal) => {
     setLoadError(false);
     try {
-      const res = await fetch(`/api/resume-profile?locale=${locale}`);
+      const res = await fetch(`/api/resume-profile?locale=${locale}`, { signal });
       if (!res.ok) throw new Error(`status=${res.status}`);
       const json = await res.json();
-      if (!aliveRef.current) return;
+      if (signal?.aborted || !aliveRef.current) return;
       hydrateFromResumeApi(json);
     } catch {
-      if (!aliveRef.current) return;
+      if (signal?.aborted || !aliveRef.current) return;
       setLoadError(true);
       toast({
         title: t("toastCouldNotLoad"),
@@ -96,7 +97,11 @@ export function useResumeProfiles({
   }, [locale, hydrateFromResumeApi, toast, t]);
 
   useEffect(() => {
-    void loadProfiles();
+    const controller = new AbortController();
+    queueMicrotask(() => {
+      if (!controller.signal.aborted) void loadProfiles(controller.signal);
+    });
+    return () => controller.abort();
   }, [loadProfiles]);
 
   const resetPreviewState = useCallback(() => {

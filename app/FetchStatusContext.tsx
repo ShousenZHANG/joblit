@@ -167,29 +167,25 @@ export function FetchStatusProvider({ children }: { children: React.ReactNode })
     }
   }, [storageKeys.runs, storageKeys.startedAt, storageKeys.panelOpen, storageKeys.endedAt]);
 
-  // Rehydrate run state from localStorage on mount + whenever the user (and
-  // thus the storage key) changes. This is the rule's documented valid case —
-  // syncing React state FROM an external store — but the static analyzer can't
-  // tell it apart from a cascading-render bug, so the rule is disabled at these
-  // two call sites only. Doing this in an effect (not a lazy initialiser) keeps
-  // SSR and the first client render identical, avoiding a hydration mismatch.
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage rehydration
-    refreshFromStorage();
-  }, [refreshFromStorage]);
-
   useEffect(() => {
     const prev = prevKeysRef.current;
-    if (prev && prev.runs !== storageKeys.runs) {
+    const userChanged = Boolean(prev && prev.runs !== storageKeys.runs);
+    if (prev && userChanged) {
       localStorage.removeItem(prev.runs);
       localStorage.removeItem(prev.startedAt);
       localStorage.removeItem(prev.panelOpen);
       localStorage.removeItem(prev.endedAt);
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset on user switch
-      resetState();
     }
     prevKeysRef.current = storageKeys;
-    refreshFromStorage();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      if (userChanged) resetState();
+      refreshFromStorage();
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [storageKeys, resetState, refreshFromStorage]);
 
   useEffect(() => {

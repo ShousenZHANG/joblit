@@ -117,24 +117,30 @@ export function ExtensionTokenManager() {
   const tCommon = useTranslations("common");
   const format = useFormatter();
 
-  const fetchTokens = useCallback(async () => {
+  const fetchTokens = useCallback(async (signal?: AbortSignal) => {
     setLoadError(false);
     try {
-      const res = await fetch("/api/ext/auth/token");
+      const res = await fetch("/api/ext/auth/token", { signal });
       if (!res.ok) throw new Error(`status=${res.status}`);
       const json = await res.json();
+      if (signal?.aborted) return;
       if (json.data) setTokens(json.data);
     } catch {
+      if (signal?.aborted) return;
       // Without this the failure renders as "No active tokens" — an honest
       // error + retry beats a misleading empty state.
       setLoadError(true);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchTokens();
+    const controller = new AbortController();
+    queueMicrotask(() => {
+      if (!controller.signal.aborted) void fetchTokens(controller.signal);
+    });
+    return () => controller.abort();
   }, [fetchTokens]);
 
   const handleCreate = useCallback(async () => {

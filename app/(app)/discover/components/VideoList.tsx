@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -137,21 +137,24 @@ export function VideoList() {
   // time the user clicks a card. Otherwise the just-clicked card teleports
   // to the end of the list and looks like it vanished. Clicking still
   // updates the `watched` set used for the badge via VideoCard props.
-  const watchedSnapshotRef = useRef<Set<string>>(new Set());
   const snapshotKey = `${category}|${sort}|${timeWindow}|${rawItems.length}`;
-  const lastSnapshotKeyRef = useRef<string>("");
-  if (lastSnapshotKeyRef.current !== snapshotKey) {
-    lastSnapshotKeyRef.current = snapshotKey;
-    watchedSnapshotRef.current = new Set(watched.ids);
+  const [watchedSnapshot, setWatchedSnapshot] = useState(() => ({
+    key: snapshotKey,
+    ids: new Set(watched.ids),
+  }));
+  let watchedSnapshotIds = watchedSnapshot.ids;
+  if (watchedSnapshot.key !== snapshotKey) {
+    watchedSnapshotIds = new Set(watched.ids);
+    setWatchedSnapshot({ key: snapshotKey, ids: watchedSnapshotIds });
   }
 
   const items = useMemo(() => {
-    const ranked = sinkWatched(rawItems, watchedSnapshotRef.current);
+    const ranked = sinkWatched(rawItems, watchedSnapshotIds);
     return showFavoritesOnly
       ? ranked.filter((v) => favorites.has(v.id))
       : ranked;
     // watched.ids intentionally omitted — see snapshotKey comment above.
-  }, [rawItems, favorites, showFavoritesOnly]);
+  }, [rawItems, watchedSnapshotIds, favorites, showFavoritesOnly]);
 
   const favCount = favorites.ids.size;
 

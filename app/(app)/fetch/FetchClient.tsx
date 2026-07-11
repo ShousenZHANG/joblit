@@ -604,6 +604,7 @@ export function FetchClient() {
   useEffect(() => {
     const raw = localStorage.getItem("joblit.fetch.preferences");
     if (!raw) return;
+    let cancelled = false;
     try {
       const parsed = JSON.parse(raw) as {
         title?: string;
@@ -611,13 +612,19 @@ export function FetchClient() {
         hoursOld?: number;
         smartExpand?: boolean;
       };
-      if (parsed.title) setJobTitle(parsed.title);
-      if (parsed.location) setLocation(parsed.location);
-      if (parsed.hoursOld) setHoursOld(parsed.hoursOld);
-      if (typeof parsed.smartExpand === "boolean") setSmartExpand(parsed.smartExpand);
+      queueMicrotask(() => {
+        if (cancelled) return;
+        if (parsed.title) setJobTitle(parsed.title);
+        if (parsed.location) setLocation(parsed.location);
+        if (parsed.hoursOld) setHoursOld(parsed.hoursOld);
+        if (typeof parsed.smartExpand === "boolean") setSmartExpand(parsed.smartExpand);
+      });
     } catch {
       // ignore invalid local preference payload
     }
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {

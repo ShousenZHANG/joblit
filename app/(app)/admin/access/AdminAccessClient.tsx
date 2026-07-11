@@ -43,23 +43,32 @@ export function AdminAccessClient() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/admin/access-requests", { cache: "no-store" });
+      const res = await fetch("/api/admin/access-requests", {
+        cache: "no-store",
+        signal,
+      });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || "Failed to load");
+      if (signal?.aborted) return;
       setRows(Array.isArray(json.requests) ? json.requests : []);
     } catch (e) {
+      if (signal?.aborted) return;
       setError(e instanceof Error ? e.message : "Failed to load");
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void load();
+    const controller = new AbortController();
+    queueMicrotask(() => {
+      if (!controller.signal.aborted) void load(controller.signal);
+    });
+    return () => controller.abort();
   }, [load]);
 
   const review = useCallback(async (id: string, action: "approve" | "reject") => {

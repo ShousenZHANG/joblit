@@ -4,6 +4,10 @@ import { Moon, Sun } from "lucide-react";
 import { ThemeProvider as NextThemesProvider, useTheme } from "next-themes";
 import * as React from "react";
 
+const subscribeToClient = () => () => {};
+const getClientSnapshot = () => true;
+const getServerSnapshot = () => false;
+
 /**
  * Root theme provider. Wire this at the app layout so both the marketing
  * landing and the authenticated shell share one theme source. Uses the
@@ -35,11 +39,11 @@ export function ThemeToggle({
   size?: "compact" | "touch";
 }) {
   const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = React.useState(false);
-
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = React.useSyncExternalStore(
+    subscribeToClient,
+    getClientSnapshot,
+    getServerSnapshot,
+  );
 
   const isDark = resolvedTheme === "dark";
   const label = mounted

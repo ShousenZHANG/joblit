@@ -290,16 +290,23 @@ export function GuideProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const fetchState = useCallback(async () => {
+  const fetchState = useCallback(async (signal?: AbortSignal) => {
     if (!userId || isCN) {
-      setState(null);
+      if (!signal?.aborted) {
+        setState(null);
+        setLoading(false);
+      }
       return;
     }
     setLoading(true);
     try {
-      const res = await fetch("/api/onboarding/state", { cache: "no-store" });
+      const res = await fetch("/api/onboarding/state", {
+        cache: "no-store",
+        signal,
+      });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || "Failed to load onboarding state");
+      if (signal?.aborted) return;
       const nextState = json.state as GuideState;
       setState((prev) => {
         const resolved = resolveGuideState(prev, nextState, true);
@@ -319,14 +326,19 @@ export function GuideProvider({ children }: { children: ReactNode }) {
         return resolved;
       });
     } catch {
+      if (signal?.aborted) return;
       setState(null);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [userId, isCN]);
 
   useEffect(() => {
-    void fetchState();
+    const controller = new AbortController();
+    queueMicrotask(() => {
+      if (!controller.signal.aborted) void fetchState(controller.signal);
+    });
+    return () => controller.abort();
   }, [fetchState]);
 
   const patchState = useCallback(
@@ -507,8 +519,15 @@ export function GuideProvider({ children }: { children: ReactNode }) {
     if (!task) return;
     const onTaskPage = pathname === task.href || pathname.startsWith(`${task.href}/`);
     if (!onTaskPage) {
-      setCoachmarkTaskId(null);
-      setCoachmarkRect(null);
+      let cancelled = false;
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setCoachmarkTaskId(null);
+        setCoachmarkRect(null);
+      });
+      return () => {
+        cancelled = true;
+      };
     }
   }, [coachmarkTaskId, pathname]);
 
@@ -516,10 +535,7 @@ export function GuideProvider({ children }: { children: ReactNode }) {
   // a permanent polling interval while still following scroll, resize, and
   // page-level DOM changes triggered by route transitions.
   useEffect(() => {
-    if (!coachmarkTaskId) {
-      setCoachmarkRect(null);
-      return;
-    }
+    if (!coachmarkTaskId) return;
     const task = ONBOARDING_TASKS.find((t) => t.id === coachmarkTaskId);
     if (!task) return;
     const onTaskPage = pathname === task.href || pathname.startsWith(`${task.href}/`);

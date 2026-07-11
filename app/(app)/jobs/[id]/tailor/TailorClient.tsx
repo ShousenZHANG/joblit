@@ -71,18 +71,15 @@ export function TailorClient({
   const [status, setStatus] = useState<"DRAFT" | "FINAL">(initialStatus);
   const [resumePdf, setResumePdf] = useState<string | null>(resumePdfUrl);
   const [coverPdf, setCoverPdf] = useState<string | null>(coverPdfUrl);
-  const [lastResumeRefreshAt, setLastResumeRefreshAt] = useState<number | null>(
-    resumePdfUrl ? Date.now() : null,
-  );
-  const [lastCoverRefreshAt, setLastCoverRefreshAt] = useState<number | null>(
-    coverPdfUrl ? Date.now() : null,
-  );
+  const [lastResumeRefreshAt, setLastResumeRefreshAt] = useState<number | null>(null);
+  const [lastCoverRefreshAt, setLastCoverRefreshAt] = useState<number | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isDiscarding, setIsDiscarding] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [showConflictDialog, setShowConflictDialog] = useState(false);
   const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
+  const showConflictDialog =
+    draft.saveStatus.kind === "error" && draft.saveStatus.conflict === true;
 
   // Beforeunload guard: only warn if there are pending unsaved edits.
   useEffect(() => {
@@ -96,13 +93,6 @@ export function TailorClient({
     }
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [draft.saveStatus]);
-
-  // Surface 409 saves as the conflict dialog (Phase 3).
-  useEffect(() => {
-    if (draft.saveStatus.kind === "error" && draft.saveStatus.conflict) {
-      setShowConflictDialog(true);
-    }
   }, [draft.saveStatus]);
 
   function patchSummary(summary: AiContent["cv"]["summary"]) {
@@ -362,7 +352,6 @@ export function TailorClient({
             window.location.reload();
           }}
           onOverwrite={() => {
-            setShowConflictDialog(false);
             // Force a re-save by replacing the hash with current server hash.
             // Simplest: reload — overwrite semantics are dangerous without
             // an explicit server endpoint. Phase 4 may add /draft?force=true.

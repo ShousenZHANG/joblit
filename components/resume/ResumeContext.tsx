@@ -6,7 +6,6 @@ import {
   useState,
   useEffect,
   useMemo,
-  useRef,
   type ReactNode,
 } from "react";
 import { useTranslations, useLocale } from "next-intl";
@@ -56,15 +55,26 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
   const globalLocale = useLocale();
   const locale = globalLocale.startsWith("zh") ? "zh-CN" : "en-AU";
 
-  const [activeSection, setActiveSection] = useState<SectionId>("personal");
-  // Reset activeSection when locale changes if the current section doesn't
-  // exist in the new locale's layout (e.g. "summary" doesn't exist in CN).
   const validSections = getSectionIds(locale);
-  useEffect(() => {
-    if (!validSections.includes(activeSection)) {
-      setActiveSection("personal");
-    }
-  }, [locale, activeSection, validSections]);
+  const [sectionState, setSectionState] = useState<{
+    locale: string;
+    activeSection: SectionId;
+  }>(() => ({ locale, activeSection: "personal" }));
+  // Keep the rendered section valid on the locale-changing render itself.
+  // React permits this guarded prop/state adjustment and immediately retries
+  // the render, avoiding the stale section + cascading effect render.
+  const activeSection = validSections.includes(sectionState.activeSection)
+    ? sectionState.activeSection
+    : "personal";
+  if (
+    sectionState.locale !== locale ||
+    sectionState.activeSection !== activeSection
+  ) {
+    setSectionState({ locale, activeSection });
+  }
+  const setActiveSection = (section: SectionId) => {
+    setSectionState({ locale, activeSection: section });
+  };
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -72,11 +82,8 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
   const form = useResumeForm(locale);
 
   // --- dirty tracking ---------------------------------------------------
-  // Snapshot the serialized 'save' payload at the moment we last persisted
-  // (or hydrated from the server). The live payload is compared against this
-  // snapshot to derive `isDirty`. Initial value null === "nothing loaded yet"
-  // so a blank form is never marked dirty before the first profile hydrates.
-  const lastSavedSnapshotRef = useRef<string | null>(null);
+  // Serialize the live 'save' payload once per form change. It is compared
+  // with the last hydrated/persisted state snapshot below to derive isDirty.
   const liveSaveKey = useMemo(
     () => JSON.stringify(form.buildPayload("save")),
     // form.buildPayload is a useCallback keyed on all form state, so its
@@ -84,12 +91,6 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [form.buildPayload],
   );
-  const isDirty =
-    form.hasAnyContent &&
-    lastSavedSnapshotRef.current !== null &&
-    liveSaveKey !== lastSavedSnapshotRef.current;
-  const saveState: ResumeSaveState = saving ? "saving" : isDirty ? "dirty" : "saved";
-
   const preview = useResumePreview({
     buildPayload: form.buildPayload,
     hasAnyContent: form.hasAnyContent,
@@ -117,10 +118,23 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
   // snapshot stays put and edits register as dirty. Saving the SAME version
   // re-baselines explicitly in handleSave (activeProfileId may be unchanged).
   const { activeProfileId } = profiles;
-  useEffect(() => {
-    lastSavedSnapshotRef.current = JSON.stringify(form.buildPayload("save"));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeProfileId]);
+  const [savedBaseline, setSavedBaseline] = useState(() => ({
+    activeProfileId,
+    snapshot: liveSaveKey,
+  }));
+  const baselineSnapshot =
+    savedBaseline.activeProfileId === activeProfileId
+      ? savedBaseline.snapshot
+      : liveSaveKey;
+  if (savedBaseline.activeProfileId !== activeProfileId) {
+    setSavedBaseline({ activeProfileId, snapshot: liveSaveKey });
+  }
+  const isDirty = form.hasAnyContent && liveSaveKey !== baselineSnapshot;
+  const saveState: ResumeSaveState = saving
+    ? "saving"
+    : isDirty
+      ? "dirty"
+      : "saved";
 
   // Whether the always-on desktop preview pane is on screen (md+). On mobile
   // the pane is hidden and the preview only lives inside the dialog, so we skip
@@ -192,7 +206,7 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
       });
       if (!res.ok) throw new Error("Save failed");
       const json = await res.json();
-      lastSavedSnapshotRef.current = savedSnapshot;
+      setSavedBaseline({ activeProfileId, snapshot: savedSnapshot });
       profiles.hydrateFromResumeApi(json);
       toast({ title: t("toastSaved"), description: t("toastSavedDesc") });
       markTaskComplete("resume_setup");
