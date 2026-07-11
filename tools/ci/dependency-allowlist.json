@@ -1,5 +1,8 @@
 {
-  "banned": ["cm", "dk"],
+  "banned": [
+    "cm",
+    "dk"
+  ],
   "allowlist": {
     "dependencies": [
       "@dnd-kit/core",
@@ -9,7 +12,6 @@
       "@next-auth/prisma-adapter",
       "@prisma/adapter-neon",
       "@prisma/client",
-      "@swc/helpers",
       "@radix-ui/react-alert-dialog",
       "@radix-ui/react-dialog",
       "@radix-ui/react-dropdown-menu",
