@@ -4,6 +4,7 @@ import {
   ApiBaseValidationError,
   apiBasePermissionPattern,
   normalizeApiBase,
+  releaseApiBasePermission,
   requestApiBasePermission,
   resolveStoredApiBase,
 } from "./apiBase";
@@ -77,13 +78,51 @@ describe("normalizeApiBase", () => {
 describe("requestApiBasePermission", () => {
   const contains = vi.fn();
   const request = vi.fn();
+  const remove = vi.fn();
 
   beforeEach(() => {
     contains.mockReset();
     request.mockReset();
+    remove.mockReset();
     Object.assign(chrome, {
-      permissions: { contains, request },
+      permissions: { contains, request, remove },
     });
+  });
+
+  it("releases an old optional origin after switching API hosts", async () => {
+    contains.mockResolvedValue(true);
+    remove.mockResolvedValue(true);
+
+    await expect(
+      releaseApiBasePermission(
+        "https://old-self-hosted.example.com/api",
+        "https://new-self-hosted.example.com/api",
+      ),
+    ).resolves.toBe(true);
+
+    const oldPermission = {
+      origins: ["https://old-self-hosted.example.com/*"],
+    };
+    expect(contains).toHaveBeenCalledWith(oldPermission);
+    expect(remove).toHaveBeenCalledWith(oldPermission);
+  });
+
+  it("keeps the current origin and the required Joblit origin", async () => {
+    await expect(
+      releaseApiBasePermission(
+        "https://self-hosted.example.com/one",
+        "https://self-hosted.example.com/two",
+      ),
+    ).resolves.toBe(false);
+    await expect(
+      releaseApiBasePermission(
+        "https://www.joblit.tech",
+        "https://self-hosted.example.com",
+      ),
+    ).resolves.toBe(false);
+
+    expect(contains).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
   });
 
   afterEach(() => {

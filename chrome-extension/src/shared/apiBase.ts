@@ -1,6 +1,7 @@
 import { DEFAULT_API_BASE } from "./constants";
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const MANIFEST_REQUIRED_API_PATTERN = "https://www.joblit.tech/*";
 
 export class ApiBaseValidationError extends Error {
   constructor(message: string) {
@@ -82,4 +83,23 @@ export async function requestApiBasePermission(base: string): Promise<boolean> {
   const permissions = { origins: [apiBasePermissionPattern(normalized)] };
   if (await chrome.permissions.contains(permissions)) return true;
   return chrome.permissions.request(permissions);
+}
+
+/** Revoke a no-longer-used optional API origin after a successful switch. */
+export async function releaseApiBasePermission(
+  previousBase: string,
+  nextBase: string,
+): Promise<boolean> {
+  const previousPattern = apiBasePermissionPattern(previousBase);
+  const nextPattern = apiBasePermissionPattern(nextBase);
+  if (
+    previousPattern === nextPattern ||
+    previousPattern === MANIFEST_REQUIRED_API_PATTERN
+  ) {
+    return false;
+  }
+
+  const permission = { origins: [previousPattern] };
+  if (!(await chrome.permissions.contains(permission))) return false;
+  return chrome.permissions.remove(permission);
 }

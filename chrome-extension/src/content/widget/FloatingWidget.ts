@@ -565,12 +565,18 @@ export class FloatingWidget {
   }
 
   /** Show a brief toast notification inside the widget. */
-  private showToast(message: string): void {
+  private showToast(
+    message: string,
+    announcement: "polite" | "assertive" = "polite",
+  ): void {
     const existing = this.root.querySelector(".jf-toast");
     if (existing) existing.remove();
 
     const toast = document.createElement("div");
     toast.className = "jf-toast";
+    toast.setAttribute("role", announcement === "assertive" ? "alert" : "status");
+    toast.setAttribute("aria-live", announcement);
+    toast.setAttribute("aria-atomic", "true");
     toast.textContent = message;
     this.root.appendChild(toast);
 
@@ -579,7 +585,7 @@ export class FloatingWidget {
 
   /** Tell the user their host form continued but Joblit could not save it. */
   showSubmissionError(): void {
-    this.showToast(t("error.submissionRecord"));
+    this.showToast(t("error.submissionRecord"), "assertive");
   }
 
   // ── Field change detection (review mode) ──

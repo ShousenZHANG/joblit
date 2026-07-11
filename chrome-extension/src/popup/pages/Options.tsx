@@ -3,6 +3,7 @@ import { STORAGE_KEYS, DEFAULT_API_BASE } from "@ext/shared/constants";
 import {
   ApiBaseValidationError,
   normalizeApiBase,
+  releaseApiBasePermission,
   requestApiBasePermission,
   resolveStoredApiBase,
 } from "@ext/shared/apiBase";
@@ -66,10 +67,18 @@ export function Options() {
       return;
     }
 
+    const stored = await chrome.storage.local.get(STORAGE_KEYS.API_BASE);
+    const previousBase = resolveStoredApiBase(stored[STORAGE_KEYS.API_BASE]);
+
     await chrome.storage.local.set({
       [STORAGE_KEYS.API_BASE]: normalizedBase,
       [STORAGE_KEYS.PREFERENCES]: prefs,
     });
+    try {
+      await releaseApiBasePermission(previousBase, normalizedBase);
+    } catch {
+      // The new origin is already active; stale permission cleanup can retry later.
+    }
     setApiBase(normalizedBase);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);

@@ -3,6 +3,7 @@ import { STORAGE_KEYS, DEFAULT_API_BASE } from "@ext/shared/constants";
 import {
   ApiBaseValidationError,
   normalizeApiBase,
+  releaseApiBasePermission,
   requestApiBasePermission,
   resolveStoredApiBase,
 } from "@ext/shared/apiBase";
@@ -70,8 +71,16 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
     }
     setApiBaseError("");
 
+    const stored = await chrome.storage.local.get(STORAGE_KEYS.API_BASE);
+    const previousBase = resolveStoredApiBase(stored[STORAGE_KEYS.API_BASE]);
+
     // Persist only after validation and an exact-origin permission grant.
     await chrome.storage.local.set({ [STORAGE_KEYS.API_BASE]: baseToUse });
+    try {
+      await releaseApiBasePermission(previousBase, baseToUse);
+    } catch {
+      // The new origin is already active; stale permission cleanup can retry later.
+    }
 
     setStep("verifying");
     setError("");

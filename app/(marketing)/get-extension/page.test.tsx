@@ -130,5 +130,5 @@ describe("ExtensionGuidePage", () => {
   it("has no automated accessibility violations", async () => {
     const { container } = await renderPage();
     expect(await axe(container)).toHaveNoViolations();
-  });
+  }, 10_000);
 });

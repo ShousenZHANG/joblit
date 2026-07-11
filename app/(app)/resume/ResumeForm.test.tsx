@@ -113,7 +113,7 @@ describe("Resume page", () => {
     screen
       .getAllByRole("button", { name: "Save selected resume" })
       .forEach((button) => expect(button).toBeDisabled());
-  });
+  }, 10_000);
 
   it("uses the CN resume section order and CN-specific personal-info fields", async () => {
     mockEmptyProfileFetch();

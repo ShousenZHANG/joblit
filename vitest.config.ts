@@ -4,15 +4,11 @@ import { fileURLToPath } from "node:url";
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig({
-  // Vite otherwise treats the extension popup HTML as a root entry while the
-  // web suite is starting, then reports its extension-only aliases as missing.
-  // Scan the web test graph explicitly; the extension has its own config.
+  // Vitest transforms dependencies on demand. Disabling Vite's HTML crawling
+  // prevents the root suite from scanning the extension popup and its aliases.
   optimizeDeps: {
-    entries: [
-      "**/*.test.{ts,tsx}",
-      "!chrome-extension/**",
-      "!everything-claude-code/**",
-    ],
+    noDiscovery: true,
+    include: [],
   },
   resolve: {
     alias: {
@@ -43,10 +39,10 @@ export default defineConfig({
       // false gate (much app/ UI is still untested); locking the floor is the
       // honest move and still blocks any drop.
       thresholds: {
-        statements: 53,
-        branches: 43,
-        functions: 50,
-        lines: 56,
+        statements: 57.7,
+        branches: 46.5,
+        functions: 54.1,
+        lines: 60.3,
       },
     },
     // Vitest 4 default `forks` pool fails to register suites on Windows in this

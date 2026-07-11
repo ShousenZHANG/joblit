@@ -24,10 +24,10 @@ export default defineConfig({
       // Regression ratchet only: these floors sit immediately below the
       // measured baseline; they are not a claim that 80% coverage is reached.
       thresholds: {
-        statements: 42,
-        branches: 38,
-        functions: 44,
-        lines: 42,
+        statements: 45.7,
+        branches: 38.7,
+        functions: 47.4,
+        lines: 46.7,
       },
     },
     // Vitest 4 default `forks` pool intermittently fails to register suites
