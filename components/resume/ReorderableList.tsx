@@ -16,12 +16,14 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { SortableItem } from "./SortableItem";
-import { toSortableId, toSortableIndex } from "./utils";
-import type { ReorderSection } from "./types";
 
 interface ReorderableListProps<T> {
   items: T[];
-  section: ReorderSection;
+  /** Stable identity for a row — MUST follow the entry, not its position.
+      Position-based ids made dnd-kit's drop FLIP animate the wrong element
+      (cards teleported on release) and pinned focus/expanded state to slots
+      instead of entries. Rows carry a client-only rowId for this. */
+  getId: (item: T, index: number) => string;
   onMove: (from: number, to: number) => void;
   renderItem: (
     item: T,
@@ -33,7 +35,7 @@ interface ReorderableListProps<T> {
 
 export function ReorderableList<T>({
   items,
-  section,
+  getId,
   onMove,
   renderItem,
 }: ReorderableListProps<T>) {
@@ -42,23 +44,23 @@ export function ReorderableList<T>({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
+  const sortableIds = items.map((item, i) => getId(item, i));
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const from = toSortableIndex(active.id, section);
-    const to = toSortableIndex(over.id, section);
-    if (from === null || to === null) return;
+    const from = sortableIds.indexOf(String(active.id));
+    const to = sortableIds.indexOf(String(over.id));
+    if (from === -1 || to === -1) return;
     onMove(from, to);
   };
-
-  const sortableIds = items.map((_, i) => toSortableId(section, i));
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
         <div className="space-y-3">
           {items.map((item, index) => (
-            <SortableItem key={toSortableId(section, index)} id={toSortableId(section, index)}>
+            <SortableItem key={sortableIds[index]} id={sortableIds[index]}>
               {({ dragHandleProps, isDragging }) =>
                 renderItem(item, index, dragHandleProps, isDragging)
               }

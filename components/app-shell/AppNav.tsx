@@ -7,7 +7,6 @@ import { CircleHelp, LogOut } from "lucide-react";
 import { JoblitMark } from "@/components/brand/JoblitMark";
 import { useTranslations } from "next-intl";
 import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
 
 import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { useMarket } from "@/hooks/useMarket";
@@ -53,14 +52,9 @@ export function AppNav() {
   const tc = useTranslations("common");
   const { openGuide, state } = useGuide();
   const resetScroll = useResetScrollOnNavigate();
-  const [scrolled, setScrolled] = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  // NOTE: the old scroll-shrink effect listened to window scroll, but the app
+  // shell scrolls an inner container — window.scrollY was permanently 0 and
+  // the shrink never fired. Removed as dead code (static resting style kept).
 
   // CN market support is temporarily limited to Resume + Discover. Jobs/Fetch
   // (and the autofill Extension) are hidden there until CN-market search ships.
@@ -93,19 +87,9 @@ export function AppNav() {
     >
       <motion.div
         initial={{ opacity: 0, y: -10 }}
-        animate={{
-          opacity: 1,
-          y: 0,
-          scale: scrolled ? 0.97 : 1,
-          paddingTop: scrolled ? 7 : 9,
-          paddingBottom: scrolled ? 7 : 9,
-          boxShadow: scrolled
-            ? "0 14px 36px -16px rgba(5, 150, 105, 0.26), 0 4px 12px -4px rgba(15, 23, 42, 0.08)"
-            : "0 8px 24px -12px rgba(5, 150, 105, 0.14), 0 2px 6px -2px rgba(15, 23, 42, 0.04)",
-        }}
+        animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
-        className="cosmos-nav relative flex w-full items-center justify-between gap-3 rounded-full border border-border/60 bg-[var(--landing-nav-bg,rgba(255,255,255,0.82))] px-3 backdrop-blur-xl backdrop-saturate-150 sm:px-4"
-        style={{ transformOrigin: "top center", willChange: "transform" }}
+        className="cosmos-nav relative flex w-full items-center justify-between gap-3 rounded-full border border-border/60 bg-[var(--landing-nav-bg,rgba(255,255,255,0.82))] px-3 py-[9px] shadow-[0_8px_24px_-12px_rgba(5,150,105,0.14),0_2px_6px_-2px_rgba(15,23,42,0.04)] backdrop-blur-xl backdrop-saturate-150 sm:px-4"
       >
         {/* Left: logo + primary links */}
         <div className="flex min-w-0 items-center gap-4">
@@ -205,6 +189,18 @@ export function AppNav() {
             <LocaleSwitcher />
           </div>
           <ThemeToggle className="hidden sm:inline-flex" />
+
+          {/* ⌘K affordance — the palette itself lives in the app layout and
+              listens for this event, avoiding prop-drilling through a server
+              component. */}
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event("joblit:command-palette"))}
+            aria-label={t("paletteTitle")}
+            className="hidden h-8 items-center gap-1 rounded-full border border-border/60 bg-background/60 px-2.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-brand-emerald-500/40 hover:text-foreground sm:inline-flex"
+          >
+            <kbd className="font-sans text-[11px]">⌘K</kbd>
+          </button>
 
           <button
             type="button"

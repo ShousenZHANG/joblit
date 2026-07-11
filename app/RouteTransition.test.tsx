@@ -20,7 +20,7 @@ vi.mock("framer-motion", () => ({
 }));
 
 describe("RouteTransition", () => {
-  it("uses cute fade-scale motion without vertical shift", () => {
+  it("enters with a fade-scale and never defines an exit (no serial wait)", () => {
     capturedMotionProps.length = 0;
 
     render(
@@ -36,6 +36,9 @@ describe("RouteTransition", () => {
     const motionProps = capturedMotionProps[0] ?? {};
     expect(motionProps.initial).toEqual({ opacity: 0, scale: 0.985 });
     expect(motionProps.animate).toEqual({ opacity: 1, scale: 1 });
-    expect(motionProps.exit).toEqual({ opacity: 0, scale: 1.005 });
+    // Exit + AnimatePresence mode="wait" taxed every navigation with a serial
+    // ~220ms delay and could flash new content mid-exit under the App Router.
+    // Navigation must respond immediately: enter-only.
+    expect(motionProps.exit).toBeUndefined();
   });
 });

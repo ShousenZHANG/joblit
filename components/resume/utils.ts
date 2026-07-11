@@ -1,5 +1,3 @@
-import type { ReorderSection } from "./types";
-
 export function hasContent(value: string): boolean {
   return value.trim().length > 0;
 }
@@ -17,17 +15,6 @@ export function normalizeCommaItems(text: string): string[] {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
-}
-
-export function toSortableId(section: ReorderSection, index: number): string {
-  return `${section}:${index}`;
-}
-
-export function toSortableIndex(id: string | number, section: ReorderSection): number | null {
-  const [idSection, indexText] = String(id).split(":");
-  if (idSection !== section) return null;
-  const index = Number(indexText);
-  return Number.isInteger(index) && index >= 0 ? index : null;
 }
 
 export function remapFocusedIndex(currentIndex: number, from: number, to: number): number {

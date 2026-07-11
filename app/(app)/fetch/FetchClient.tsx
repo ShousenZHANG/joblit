@@ -334,7 +334,7 @@ function LocationCombobox({
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
           onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onBlur={() => setOpen(false)}
           className="h-11"
         />
       </PopoverAnchor>
@@ -342,6 +342,11 @@ function LocationCombobox({
         align="start"
         className="w-[var(--radix-popover-trigger-width)] p-0"
         onOpenAutoFocus={(e) => e.preventDefault()}
+        // Selecting an option must not blur the input first. A press-and-hold
+        // longer than a blur timeout used to unmount the list mid-tap (options
+        // vanished under the finger); preventing default keeps input focus so
+        // onSelect always lands, and blur can close instantly with no timer.
+        onPointerDown={(e) => e.preventDefault()}
       >
         <Command shouldFilter={false}>
           <CommandList className="max-h-64 p-1">
@@ -793,7 +798,7 @@ export function FetchClient() {
                   value={jobTitle}
                   onChange={(e) => setJobTitle(e.target.value)}
                   onFocus={() => { setSuggestionsOpen(true); }}
-                  onBlur={() => setTimeout(() => setSuggestionsOpen(false), 150)}
+                  onBlur={() => setSuggestionsOpen(false)}
                   className="h-11 text-base"
                 />
               </PopoverAnchor>
@@ -801,6 +806,8 @@ export function FetchClient() {
                 align="start"
                 className="w-[var(--radix-popover-trigger-width)] p-0"
                 onOpenAutoFocus={(e) => e.preventDefault()}
+                // Keep input focus through option taps — see LocationCombobox.
+                onPointerDown={(e) => e.preventDefault()}
               >
                 <Command shouldFilter={false}>
                   <CommandList className="max-h-64 p-1">
@@ -966,13 +973,15 @@ export function FetchClient() {
                   onFocus={() => {
                     setSuggestionsOpen(true);
                   }}
-                  onBlur={() => setTimeout(() => setSuggestionsOpen(false), 150)}
+                  onBlur={() => setSuggestionsOpen(false)}
                 />
               </PopoverAnchor>
               <PopoverContent
                 align="start"
                 className="w-[var(--radix-popover-trigger-width)] p-0"
                 onOpenAutoFocus={(e) => e.preventDefault()}
+                // Keep input focus through option taps — see LocationCombobox.
+                onPointerDown={(e) => e.preventDefault()}
               >
                 <Command shouldFilter={false}>
                   <CommandList className="max-h-64 p-1">

@@ -24,7 +24,17 @@
     "extension": "插件",
     "admin": "管理",
     "language": "语言",
-    "theme": "主题"
+    "theme": "主题",
+    "paletteTitle": "命令面板",
+    "paletteHint": "快速跳转、切换主题或搜索岗位。",
+    "palettePlaceholder": "输入命令或搜索…",
+    "paletteEmpty": "没有匹配结果。",
+    "paletteActions": "操作",
+    "palettePages": "页面",
+    "paletteSearchJobs": "在岗位中搜索“{query}”",
+    "paletteThemeLight": "浅色主题",
+    "paletteThemeDark": "深色主题",
+    "paletteThemeSystem": "跟随系统"
   },
   "marketing": {
     "heroTitle": "AI 为每份工作定制专属简历",

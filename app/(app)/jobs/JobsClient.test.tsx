@@ -246,11 +246,13 @@ describe("JobsClient", () => {
     }
   });
 
-  it("applies the page-enter animation on the jobs shell", () => {
+  it("leaves page-enter animation to RouteTransition (no double entrance)", () => {
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
+    // The shell must NOT carry its own entrance animation — stacking a 600ms
+    // drift on top of the route-level fade made the page "settle twice".
     const shell = screen.getAllByTestId("jobs-shell")[0];
-    expect(shell).toHaveClass("edu-page-enter");
+    expect(shell).not.toHaveClass("edu-page-enter");
   });
 
   it("renders results without forcing virtualized mode", () => {

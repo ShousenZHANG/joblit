@@ -19,6 +19,7 @@ import {
   emptyEducation,
   emptySkillGroup,
   defaultLinks,
+  newRowId,
 } from "./constants";
 import {
   hasContent,
@@ -143,6 +144,7 @@ export function useResumeForm(locale: string) {
                   }))
                 : [{ label: "", url: "" }];
             return {
+              rowId: newRowId(),
               title: entry.title ?? "",
               company: entry.company ?? "",
               location: entry.location ?? "",
@@ -160,6 +162,7 @@ export function useResumeForm(locale: string) {
       if (Array.isArray(profile.projects) && profile.projects.length > 0) {
         setProjects(
           profile.projects.map((entry) => ({
+            rowId: newRowId(),
             name: entry.name ?? "",
             location: entry.location ?? "",
             stack:
@@ -191,6 +194,7 @@ export function useResumeForm(locale: string) {
       if (Array.isArray(profile.education) && profile.education.length > 0) {
         setEducation(
           profile.education.map((entry) => ({
+            rowId: newRowId(),
             school: entry.school ?? "",
             degree: entry.degree ?? "",
             location: entry.location ?? "",
@@ -206,6 +210,7 @@ export function useResumeForm(locale: string) {
         const skillGroups = profile.skills.map((group) => {
           const source = group as { category?: string; label?: string; items?: string[] };
           return {
+            rowId: newRowId(),
             category: source.category ?? source.label ?? "",
             itemsText:
               Array.isArray(source.items) && source.items.length > 0
@@ -559,8 +564,13 @@ export function useResumeForm(locale: string) {
         };
       });
 
+      // Field-by-field (not a spread) so the client-only rowId never leaks
+      // into the API payload or the dirty-tracking snapshot.
       const cleanedEducation = education.map((entry) => ({
-        ...entry,
+        school: entry.school.trim(),
+        degree: entry.degree.trim(),
+        location: entry.location.trim(),
+        dates: entry.dates.trim(),
         details: entry.details?.trim() ?? "",
       }));
 

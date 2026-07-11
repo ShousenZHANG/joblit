@@ -23,7 +23,10 @@ const ToastViewport = React.forwardRef<
 ToastViewport.displayName = ToastPrimitives.Viewport.displayName;
 
 const toastVariants = cva(
-  "group pointer-events-auto relative flex w-full items-center justify-between gap-3 overflow-hidden rounded-md border bg-background p-4 pr-8 shadow-lg transition-all data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-80 data-[state=open]:slide-in-from-top-full data-[state=closed]:slide-out-to-right-full sm:data-[state=open]:slide-in-from-bottom-full",
+  // data-[swipe=*] wires Radix's touch-drag gesture: the toast tracks the
+  // finger, springs back on a cancelled swipe, and slides out on release —
+  // without these classes a swipe did nothing and the toast just popped away.
+  "group pointer-events-auto relative flex w-full items-center justify-between gap-3 overflow-hidden rounded-md border bg-background p-4 pr-8 shadow-lg transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=open]:slide-in-from-top-full data-[state=closed]:slide-out-to-right-full data-[swipe=end]:slide-out-to-right-full sm:data-[state=open]:slide-in-from-bottom-full motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none",
   {
     variants: {
       variant: {

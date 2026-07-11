@@ -1,7 +1,7 @@
 "use client";
 
 import { useLayoutEffect } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { useReducedMotion } from "framer-motion";
 
@@ -20,20 +20,22 @@ export function RouteTransition({ children }: { children: React.ReactNode }) {
   const ease: [number, number, number, number] = [0.22, 1, 0.36, 1];
   const transition = reduce ? { duration: 0 } : { duration: 0.22, ease };
 
+  // Enter-only, keyed by pathname. The previous AnimatePresence mode="wait" +
+  // exit pair taxed EVERY navigation with a serial ~220ms exit before the new
+  // page could even start entering — and under the App Router the exiting
+  // subtree re-renders against the NEW route context, which can flash the new
+  // page's content mid-exit (double flash). Navigation now responds on the
+  // next frame and simply fades the new page in.
   return (
-    <AnimatePresence initial={false} mode="wait">
-      <motion.div
-        key={pathname}
-        initial={reduce ? false : { opacity: 0, scale: 0.985 }}
-        animate={reduce ? {} : { opacity: 1, scale: 1 }}
-        exit={reduce ? {} : { opacity: 0, scale: 1.005 }}
-        transition={transition}
-        data-route-transition="fade"
-        className="flex min-h-0 flex-1 flex-col origin-top [will-change:transform,opacity]"
-      >
-        {children}
-      </motion.div>
-    </AnimatePresence>
+    <motion.div
+      key={pathname}
+      initial={reduce ? false : { opacity: 0, scale: 0.985 }}
+      animate={reduce ? {} : { opacity: 1, scale: 1 }}
+      transition={transition}
+      data-route-transition="fade"
+      className="flex min-h-0 flex-1 flex-col origin-top"
+    >
+      {children}
+    </motion.div>
   );
 }
-

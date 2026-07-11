@@ -72,7 +72,7 @@ export function ProjectsSection({
     >
       <ReorderableList
         items={projects}
-        section="project"
+        getId={(entry) => entry.rowId}
         onMove={onMove}
         renderItem={(entry, index, dragHandleProps) => (
           <details

@@ -1,4 +1,5 @@
 import { AppNav } from "@/components/app-shell/AppNav";
+import { CommandPalette } from "@/components/app-shell/CommandPalette";
 import { Starfield } from "@/components/landing/Starfield";
 import { RouteTransition } from "../RouteTransition";
 import { GuideProvider } from "../GuideContext";
@@ -24,6 +25,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div aria-hidden className="landing-grain" />
       <GuideProvider>
         <AppNav />
+        <CommandPalette />
         <div className="relative z-[1] app-frame app-shell flex min-h-0 flex-col py-3 sm:py-4 md:py-5 lg:h-full">
           <RouteTransition>{children}</RouteTransition>
         </div>

@@ -39,7 +39,7 @@ export function EducationSection({
     >
       <ReorderableList
         items={education}
-        section="education"
+        getId={(entry) => entry.rowId}
         onMove={onMove}
         renderItem={(entry, index, dragHandleProps) => (
           <div className="space-y-3 rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-shadow hover:shadow-[0_4px_12px_-4px_rgba(0,0,0,0.08)]">

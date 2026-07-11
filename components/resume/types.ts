@@ -15,7 +15,14 @@ export type ResumeLink = {
   url: string;
 };
 
+/* rowId: a client-only identity for drag-reorder and React keys. Immutable
+   per-row edits spread it forward, so identity follows the ENTRY, not its
+   position — drag drop-animations land correctly and focus/expanded state
+   never jumps rows. buildPayload constructs API objects field-by-field, so
+   rowId never reaches the server. */
+
 export type ResumeExperience = {
+  rowId: string;
   location: string;
   dates: string;
   title: string;
@@ -25,6 +32,7 @@ export type ResumeExperience = {
 };
 
 export type ResumeProject = {
+  rowId: string;
   name: string;
   location: string;
   stack: string;
@@ -34,6 +42,7 @@ export type ResumeProject = {
 };
 
 export type ResumeEducation = {
+  rowId: string;
   school: string;
   degree: string;
   location: string;
@@ -42,6 +51,7 @@ export type ResumeEducation = {
 };
 
 export type ResumeSkillGroup = {
+  rowId: string;
   category: string;
   label?: string;
   itemsText: string;
@@ -59,9 +69,10 @@ export type ResumeProfilePayload = {
   basics?: ResumeBasics | null;
   links?: ResumeLink[] | null;
   summary?: string | null;
-  experiences?: ResumeExperience[] | null;
-  projects?: ResumeProject[] | null;
-  education?: ResumeEducation[] | null;
+  // API shape — rowId is client-only identity and must never cross the wire.
+  experiences?: Omit<ResumeExperience, "rowId">[] | null;
+  projects?: Omit<ResumeProject, "rowId">[] | null;
+  education?: Omit<ResumeEducation, "rowId">[] | null;
   skills?: ResumeSkillPayload[] | null;
 };
 

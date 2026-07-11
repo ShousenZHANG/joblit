@@ -24,7 +24,17 @@
     "extension": "Extension",
     "admin": "Admin",
     "language": "Language",
-    "theme": "Theme"
+    "theme": "Theme",
+    "paletteTitle": "Command palette",
+    "paletteHint": "Jump anywhere, switch theme, or search jobs.",
+    "palettePlaceholder": "Type a command or search…",
+    "paletteEmpty": "No results found.",
+    "paletteActions": "Actions",
+    "palettePages": "Pages",
+    "paletteSearchJobs": "Search jobs for “{query}”",
+    "paletteThemeLight": "Light theme",
+    "paletteThemeDark": "Dark theme",
+    "paletteThemeSystem": "System theme"
   },
   "marketing": {
     "heroTitle": "AI-tailored resumes for every job you apply to",

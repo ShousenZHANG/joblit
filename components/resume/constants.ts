@@ -7,7 +7,16 @@ export const emptyBasics: ResumeBasics = {
   phone: "",
 };
 
+/* Stable per-row identity for drag-reorder keys. crypto.randomUUID exists in
+   every supported runtime (browser, node 19+, jsdom); the fallback keeps any
+   older test environment alive. */
+export const newRowId = (): string =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `row-${Math.random().toString(36).slice(2)}`;
+
 export const emptyExperience = (): ResumeExperience => ({
+  rowId: newRowId(),
   title: "",
   company: "",
   location: "",
@@ -17,6 +26,7 @@ export const emptyExperience = (): ResumeExperience => ({
 });
 
 export const emptyProject = (): ResumeProject => ({
+  rowId: newRowId(),
   name: "",
   location: "",
   stack: "",
@@ -26,6 +36,7 @@ export const emptyProject = (): ResumeProject => ({
 });
 
 export const emptyEducation = (): ResumeEducation => ({
+  rowId: newRowId(),
   school: "",
   degree: "",
   location: "",
@@ -34,6 +45,7 @@ export const emptyEducation = (): ResumeEducation => ({
 });
 
 export const emptySkillGroup = (): ResumeSkillGroup => ({
+  rowId: newRowId(),
   category: "",
   itemsText: "",
 });

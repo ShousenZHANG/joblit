@@ -4,8 +4,6 @@ import {
   hasBullets,
   normalizeBullets,
   normalizeCommaItems,
-  toSortableId,
-  toSortableIndex,
   remapFocusedIndex,
 } from "./utils";
 
@@ -118,59 +116,6 @@ describe("normalizeCommaItems", () => {
 
   it("handles items with extra whitespace", () => {
     expect(normalizeCommaItems("  a  ,  b  ")).toEqual(["a", "b"]);
-  });
-});
-
-describe("toSortableId", () => {
-  it("creates id with section and index", () => {
-    expect(toSortableId("experience", 0)).toBe("experience:0");
-  });
-
-  it("works for all section types", () => {
-    expect(toSortableId("project", 1)).toBe("project:1");
-    expect(toSortableId("education", 2)).toBe("education:2");
-    expect(toSortableId("skill", 3)).toBe("skill:3");
-  });
-
-  it("handles large indices", () => {
-    expect(toSortableId("experience", 99)).toBe("experience:99");
-  });
-});
-
-describe("toSortableIndex", () => {
-  it("extracts index from valid id", () => {
-    expect(toSortableIndex("experience:2", "experience")).toBe(2);
-  });
-
-  it("returns null when section does not match", () => {
-    expect(toSortableIndex("experience:2", "project")).toBeNull();
-  });
-
-  it("returns null for malformed id with no colon", () => {
-    expect(toSortableIndex("experience", "experience")).toBeNull();
-  });
-
-  it("returns null for negative index", () => {
-    expect(toSortableIndex("experience:-1", "experience")).toBeNull();
-  });
-
-  it("returns null for non-numeric index", () => {
-    expect(toSortableIndex("experience:abc", "experience")).toBeNull();
-  });
-
-  it("returns 0 for index 0", () => {
-    expect(toSortableIndex("skill:0", "skill")).toBe(0);
-  });
-
-  it("handles numeric id input (converts to string)", () => {
-    // When id is a number, String(id) gives just the number with no colon → null
-    expect(toSortableIndex(0, "experience")).toBeNull();
-  });
-
-  it("works for all section types", () => {
-    expect(toSortableIndex("project:5", "project")).toBe(5);
-    expect(toSortableIndex("education:3", "education")).toBe(3);
-    expect(toSortableIndex("skill:7", "skill")).toBe(7);
   });
 });
 

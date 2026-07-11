@@ -393,7 +393,7 @@ export function JobsClient({
 
       <div
         data-testid="jobs-shell"
-        className="edu-page-enter relative flex flex-1 flex-col gap-2 pb-0 text-foreground lg:min-h-0 lg:h-full lg:overflow-hidden"
+        className="relative flex flex-1 flex-col gap-2 pb-0 text-foreground lg:min-h-0 lg:h-full lg:overflow-hidden"
       >
       <div className="flex flex-1 flex-col gap-2 lg:min-h-0 lg:h-full lg:overflow-hidden">
         <div aria-live="polite" className="sr-only">
