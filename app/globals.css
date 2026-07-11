@@ -26,18 +26,23 @@
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.965 0.005 80);
   --secondary-foreground: oklch(0.18 0.005 250);
-  --muted-foreground: oklch(0.48 0.012 250);
+  /* One step darker than the shadcn default: the glazed cosmos panels sit on
+     a dawn wash, so secondary text needs the extra margin to hold AA. */
+  --muted-foreground: oklch(0.45 0.012 250);
   --accent-foreground: oklch(0.18 0.005 250);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.92 0.005 80);
   --input: oklch(0.92 0.005 80);
   --ring: oklch(0.65 0.14 160);
-  /* Aurora Deep, daylight side. Not "space on white" — that reads cheap. A
-     cold dawn wash that gives the paper surface depth without tinting text. */
-  --aurora-glow: oklch(0.72 0.14 162 / 0.14);
+  /* Aurora Deep, daylight side. Not "space on white" — that reads cheap. The
+     day face of the same universe: pastel aurora refracting through a bright
+     atmosphere. Three clouds (cyan / emerald / violet) mirror the dark nebula
+     an octave lighter, so switching themes feels like dawn, not a reskin. */
+  --aurora-glow: oklch(0.72 0.14 162 / 0.16);
   --nebula:
-    radial-gradient(ellipse 95% 62% at 12% -18%, oklch(0.93 0.035 232 / 0.55), transparent 62%),
-    radial-gradient(ellipse 75% 55% at 88% 112%, oklch(0.94 0.04 166 / 0.42), transparent 58%);
+    radial-gradient(ellipse 95% 62% at 12% -18%, oklch(0.9 0.055 228 / 0.65), transparent 62%),
+    radial-gradient(ellipse 75% 55% at 88% 112%, oklch(0.92 0.06 166 / 0.55), transparent 58%),
+    radial-gradient(ellipse 55% 45% at 62% 38%, oklch(0.93 0.045 300 / 0.4), transparent 66%);
   --chart-1: oklch(0.56 0.19 255);
   --chart-2: oklch(0.62 0.12 200);
   --chart-3: oklch(0.48 0.08 230);
@@ -274,7 +279,7 @@
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.035;
+  opacity: 0.045;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
@@ -446,7 +451,16 @@
    declaration re-glazes every workspace shell at once.
    Data stays legible: foreground is L0.98 against an L~0.2 glazed panel. */
 .cosmos-panel {
-  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.7);
+  /* Pearlescent glass on paper. Light-mode premium lives in shadow quality:
+     a crisp 1px contact shadow plus a long cool ambient falloff, an inner
+     top highlight, and a whisper of an emerald rim. The glass is translucent
+     enough for the dawn wash to breathe through. */
+  background-color: color-mix(in oklch, var(--card) 80%, transparent);
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.85),
+    inset 0 0 0 1px oklch(0.65 0.14 160 / 0.05),
+    0 1px 2px oklch(0.3 0.02 250 / 0.06),
+    0 28px 70px -42px oklch(0.45 0.1 205 / 0.4);
 }
 
 .dark .cosmos-panel {
@@ -629,18 +643,24 @@
   }
 }
 
-/* Nav pill: an aurora seam along its lower edge, with a soft bloom under it. */
-.dark .cosmos-nav::after {
+/* Nav pill: an aurora seam along its lower edge. Present in both themes —
+   a whisper in daylight, a glow with bloom in deep space. */
+.cosmos-nav::after {
   content: "";
   position: absolute;
   left: 8%;
   right: 8%;
   bottom: -1px;
   height: 1px;
+  background: linear-gradient(90deg, transparent, var(--brand-emerald-500) 50%, transparent);
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.dark .cosmos-nav::after {
   background: linear-gradient(90deg, transparent, var(--brand-emerald-400) 50%, transparent);
   opacity: 0.6;
   box-shadow: 0 0 12px 1px var(--aurora-glow);
-  pointer-events: none;
 }
 
 /* Landing keyframes used by Tailwind animate-[...] arbitrary utilities. */
