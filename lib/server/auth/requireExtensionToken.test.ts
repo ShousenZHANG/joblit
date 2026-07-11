@@ -1,14 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHash } from "crypto";
 
 // Mock prisma
 const mockFindFirst = vi.fn();
-const mockUpdate = vi.fn();
+const mockUpdateMany = vi.fn();
 vi.mock("@/lib/server/prisma", () => ({
   prisma: {
     extensionToken: {
       findFirst: (...args: unknown[]) => mockFindFirst(...args),
-      update: (...args: unknown[]) => mockUpdate(...args),
+      updateMany: (...args: unknown[]) => mockUpdateMany(...args),
     },
   },
 }));
@@ -65,7 +65,14 @@ describe("hashToken", () => {
 
 describe("requireExtensionToken", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-10T12:00:00.000Z"));
     vi.clearAllMocks();
+    mockUpdateMany.mockResolvedValue({ count: 1 });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("throws when no Authorization header is present", async () => {
@@ -76,6 +83,7 @@ describe("requireExtensionToken", () => {
     await expect(requireExtensionToken(req)).rejects.toThrow(
       "Missing or invalid Authorization header",
     );
+    expect(mockUpdateMany).not.toHaveBeenCalled();
   });
 
   it("throws when Authorization header is not Bearer", async () => {
@@ -85,6 +93,7 @@ describe("requireExtensionToken", () => {
     await expect(requireExtensionToken(req)).rejects.toThrow(
       ExtensionTokenError,
     );
+    expect(mockUpdateMany).not.toHaveBeenCalled();
   });
 
   it("throws when token is empty after Bearer", async () => {
@@ -92,6 +101,7 @@ describe("requireExtensionToken", () => {
     await expect(requireExtensionToken(req)).rejects.toThrow(
       ExtensionTokenError,
     );
+    expect(mockUpdateMany).not.toHaveBeenCalled();
   });
 
   it("throws when token not found in database", async () => {
@@ -103,6 +113,7 @@ describe("requireExtensionToken", () => {
     await expect(requireExtensionToken(req)).rejects.toThrow(
       "Invalid or expired token",
     );
+    expect(mockUpdateMany).not.toHaveBeenCalled();
   });
 
   it("throws when token is expired", async () => {
@@ -118,6 +129,7 @@ describe("requireExtensionToken", () => {
     await expect(requireExtensionToken(req)).rejects.toThrow(
       "Invalid or expired token",
     );
+    expect(mockUpdateMany).not.toHaveBeenCalled();
   });
 
   it("throws when token is revoked", async () => {
@@ -133,12 +145,12 @@ describe("requireExtensionToken", () => {
     await expect(requireExtensionToken(req)).rejects.toThrow(
       "Invalid or expired token",
     );
+    expect(mockUpdateMany).not.toHaveBeenCalled();
   });
 
   it("returns userId and tokenId for valid token", async () => {
     const { rawToken, dbRecord } = makeValidToken();
     mockFindFirst.mockResolvedValue(dbRecord);
-    mockUpdate.mockResolvedValue(dbRecord);
 
     const req = makeRequest(rawToken);
     const ctx = await requireExtensionToken(req);
@@ -148,26 +160,71 @@ describe("requireExtensionToken", () => {
     expect(typeof ctx.requestId).toBe("string");
   });
 
-  it("updates lastUsedAt on successful auth", async () => {
+  it("conditionally updates a null lastUsedAt with the same now and cutoff", async () => {
     const { rawToken, dbRecord } = makeValidToken();
     mockFindFirst.mockResolvedValue(dbRecord);
-    mockUpdate.mockResolvedValue(dbRecord);
 
     const req = makeRequest(rawToken);
     await requireExtensionToken(req);
 
-    expect(mockUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: "token-id-1" },
-        data: { lastUsedAt: expect.any(Date) },
-      }),
-    );
+    expect(mockUpdateMany).toHaveBeenCalledOnce();
+    expect(mockUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: "token-id-1",
+        OR: [
+          { lastUsedAt: null },
+          { lastUsedAt: { lte: new Date("2026-07-10T11:55:00.000Z") } },
+        ],
+      },
+      data: { lastUsedAt: new Date("2026-07-10T12:00:00.000Z") },
+    });
+  });
+
+  it("skips the activity write when lastUsedAt is 4 minutes 59 seconds old", async () => {
+    const { rawToken, dbRecord } = makeValidToken();
+    mockFindFirst.mockResolvedValue({
+      ...dbRecord,
+      lastUsedAt: new Date("2026-07-10T11:55:01.000Z"),
+    });
+
+    const ctx = await requireExtensionToken(makeRequest(rawToken));
+
+    expect(ctx).toEqual(expect.objectContaining({
+      userId: "user-id-1",
+      tokenId: "token-id-1",
+    }));
+    expect(mockUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("updates activity at the exact five-minute boundary", async () => {
+    const { rawToken, dbRecord } = makeValidToken();
+    mockFindFirst.mockResolvedValue({
+      ...dbRecord,
+      lastUsedAt: new Date("2026-07-10T11:55:00.000Z"),
+    });
+
+    await requireExtensionToken(makeRequest(rawToken));
+
+    expect(mockUpdateMany).toHaveBeenCalledOnce();
+  });
+
+  it("authenticates when another request wins the conditional update", async () => {
+    const { rawToken, dbRecord } = makeValidToken();
+    mockFindFirst.mockResolvedValue(dbRecord);
+    mockUpdateMany.mockResolvedValue({ count: 0 });
+
+    const ctx = await requireExtensionToken(makeRequest(rawToken));
+
+    expect(ctx).toEqual(expect.objectContaining({
+      userId: "user-id-1",
+      tokenId: "token-id-1",
+    }));
+    expect(mockUpdateMany).toHaveBeenCalledOnce();
   });
 
   it("queries database with hashed token", async () => {
     const { rawToken, dbRecord } = makeValidToken();
     mockFindFirst.mockResolvedValue(dbRecord);
-    mockUpdate.mockResolvedValue(dbRecord);
 
     const req = makeRequest(rawToken);
     await requireExtensionToken(req);

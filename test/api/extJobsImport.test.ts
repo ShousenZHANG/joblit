@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const prismaStore = vi.hoisted(() => ({
   extensionToken: {
     findFirst: vi.fn(),
-    update: vi.fn(),
+    updateMany: vi.fn(),
   },
   deletedJobUrl: {
     findMany: vi.fn(),
@@ -31,7 +31,7 @@ function req(body: unknown, withToken = true) {
 describe("ext jobs import api", () => {
   beforeEach(() => {
     prismaStore.extensionToken.findFirst.mockReset();
-    prismaStore.extensionToken.update.mockReset();
+    prismaStore.extensionToken.updateMany.mockReset();
     prismaStore.deletedJobUrl.findMany.mockReset();
     prismaStore.job.createMany.mockReset();
 
@@ -40,8 +40,9 @@ describe("ext jobs import api", () => {
       userId: "user-1",
       revokedAt: null,
       expiresAt: new Date(Date.now() + 10_000_000),
+      lastUsedAt: null,
     });
-    prismaStore.extensionToken.update.mockResolvedValue({});
+    prismaStore.extensionToken.updateMany.mockResolvedValue({ count: 1 });
     prismaStore.deletedJobUrl.findMany.mockResolvedValue([]);
     prismaStore.job.createMany.mockResolvedValue({ count: 1 });
   });

@@ -4,6 +4,8 @@ import { hashToken } from "@/lib/server/extensionToken";
 
 export { hashToken };
 
+const LAST_USED_AT_WRITE_INTERVAL_MS = 5 * 60 * 1000;
+
 export type ExtensionTokenContext = {
   userId: string;
   tokenId: string;
@@ -39,16 +41,27 @@ export async function requireExtensionToken(
     where: { tokenHash },
   });
 
-  if (!record || record.revokedAt || record.expiresAt < new Date()) {
+  const now = new Date();
+
+  if (!record || record.revokedAt || record.expiresAt < now) {
     throw new ExtensionTokenError("Invalid or expired token");
   }
 
-  // Update lastUsedAt asynchronously (fire-and-forget is fine here,
-  // but we await in tests for determinism)
-  await prisma.extensionToken.update({
-    where: { id: record.id },
-    data: { lastUsedAt: new Date() },
-  });
+  const lastUsedAtCutoff = new Date(
+    now.getTime() - LAST_USED_AT_WRITE_INTERVAL_MS,
+  );
+  if (!record.lastUsedAt || record.lastUsedAt <= lastUsedAtCutoff) {
+    await prisma.extensionToken.updateMany({
+      where: {
+        id: record.id,
+        OR: [
+          { lastUsedAt: null },
+          { lastUsedAt: { lte: lastUsedAtCutoff } },
+        ],
+      },
+      data: { lastUsedAt: now },
+    });
+  }
 
   return {
     userId: record.userId,
