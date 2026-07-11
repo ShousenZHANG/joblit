@@ -161,6 +161,9 @@ export function Hero() {
         style={{ y: reduced ? 0 : gridY }}
         className="landing-canvas-grid pointer-events-none absolute inset-x-0 top-10 -z-10 h-[620px] opacity-80"
       />
+      {/* Prismatic hairline — dawn refracting into its spectrum. The landing's
+          signature stroke, sitting where the sky meets the page. */}
+      <div aria-hidden className="prism-line absolute inset-x-10 top-0 lg:inset-x-24" />
       {/* LCP-safe: the headline block renders VISIBLE at SSR (initial=false →
           framer paints the `show` state immediately, no opacity:0 gate waiting
           on hydration). The decorative product mock below keeps its JS-driven
@@ -199,7 +202,9 @@ export function Hero() {
         {t("titleLine1")}
         <br />
         <span className="relative inline-block">
-          <em className="font-serif italic text-foreground">
+          {/* Dawn-spectrum emphasis: a slow gradient shimmer sweeps the serif
+              word (emerald → teal → sky), echoing the aurora behind it. */}
+          <em className="hero-gradient-text font-serif italic">
             {t("titleItalic")}
           </em>
           {/* Hand-drawn emerald underline — draws itself once after the intro
@@ -241,7 +246,7 @@ export function Hero() {
             aria-disabled={cta.disabled}
             tabIndex={cta.disabled ? -1 : undefined}
             className={
-              "group inline-flex h-11 items-center gap-2 rounded-full bg-foreground px-6 text-sm font-semibold text-background transition-transform hover:-translate-y-px hover:bg-foreground/90 active:translate-y-0 active:scale-[0.98] " +
+              "group inline-flex h-11 items-center gap-2 rounded-full bg-foreground px-6 text-sm font-semibold text-background shadow-[0_10px_36px_-10px_rgba(16,185,129,0.45)] transition-[transform,box-shadow,background-color] duration-200 hover:-translate-y-px hover:bg-foreground/90 hover:shadow-[0_14px_44px_-10px_rgba(16,185,129,0.6)] active:translate-y-0 active:scale-[0.98] " +
               (cta.disabled ? "pointer-events-none opacity-70" : "")
             }
           >

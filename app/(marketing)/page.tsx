@@ -86,12 +86,28 @@ export default function MarketingPage() {
         <Nav />
         <Hero />
         <LogoBar />
-        <HowItWorks />
-        <Features />
-        <Access />
-        <Faq />
-        <Cta />
-        <Footer />
+        {/* Below-the-fold sections skip layout/paint until they near the
+            viewport (content-visibility) — every scroll-reveal animation still
+            fires exactly as before; the browser just stops paying for content
+            the user hasn't reached yet. */}
+        <div className="cv-auto">
+          <HowItWorks />
+        </div>
+        <div className="cv-auto">
+          <Features />
+        </div>
+        <div className="cv-auto">
+          <Access />
+        </div>
+        <div className="cv-auto">
+          <Faq />
+        </div>
+        <div className="cv-auto">
+          <Cta />
+        </div>
+        <div className="cv-auto">
+          <Footer />
+        </div>
       </main>
     </>
   );

@@ -105,21 +105,19 @@ export function Nav() {
       className="sticky top-3 z-50 mx-auto w-full max-w-6xl px-3 sm:top-4 sm:px-6"
     >
       {/* Inner pill: backdrop-blur + thin border at rest. Scrolling deepens
-          the shadow only — no scale/padding change, no infinite sheen. */}
+          the elevation via two pre-painted shadow pseudo-layers cross-faded on
+          opacity (see .landing-nav-pill) — animating box-shadow on a
+          backdrop-blurred element forced a per-frame repaint and was the
+          landing page's scroll-jank hotspot. */}
       <motion.div
         initial={reduced ? undefined : { opacity: 0, y: -12 }}
-        animate={{
-          opacity: 1,
-          y: 0,
-          boxShadow: scrolled
-            ? "0 12px 32px -16px rgba(15, 23, 42, 0.18), 0 2px 6px -2px rgba(15, 23, 42, 0.06)"
-            : "0 6px 18px -12px rgba(15, 23, 42, 0.10), 0 1px 3px -1px rgba(15, 23, 42, 0.04)",
-        }}
+        animate={{ opacity: 1, y: 0 }}
         transition={{
           duration: reduced ? 0 : 0.32,
           ease: [0.22, 1, 0.36, 1],
         }}
-        className="flex w-full min-w-0 items-center justify-between rounded-full border border-border/60 bg-[var(--landing-nav-bg,rgba(255,255,255,0.82))] px-3 py-2 backdrop-blur-xl backdrop-saturate-150 sm:px-5"
+        data-scrolled={scrolled ? "true" : "false"}
+        className="landing-nav-pill flex w-full min-w-0 items-center justify-between rounded-full border border-border/60 bg-[var(--landing-nav-bg,rgba(255,255,255,0.82))] px-3 py-2 backdrop-blur-xl backdrop-saturate-150 sm:px-5"
       >
         <Link
           href="/"

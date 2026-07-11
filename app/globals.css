@@ -223,12 +223,14 @@
   will-change: transform;
 }
 
+/* Daylight aurora — a real dawn, not a hint. Emerald / teal / violet-sky mirror
+   the dark nebula's three clouds so the two themes are one universe. */
 .landing-aurora-blob--1 {
   width: 44vw;
   height: 44vw;
   left: -6vw;
   top: -8vw;
-  background: radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.2), transparent 68%);
+  background: radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.3), transparent 68%);
   animation: aurora-drift-1 24s ease-in-out infinite;
 }
 
@@ -237,7 +239,7 @@
   height: 40vw;
   right: -8vw;
   top: 2vw;
-  background: radial-gradient(circle at 50% 50%, rgba(45, 212, 191, 0.16), transparent 68%);
+  background: radial-gradient(circle at 50% 50%, rgba(45, 212, 191, 0.26), transparent 68%);
   animation: aurora-drift-2 30s ease-in-out infinite;
 }
 
@@ -246,7 +248,7 @@
   height: 50vw;
   left: 18vw;
   top: 26vw;
-  background: radial-gradient(circle at 50% 50%, rgba(52, 211, 153, 0.12), transparent 70%);
+  background: radial-gradient(circle at 50% 50%, rgba(139, 148, 250, 0.2), transparent 70%);
   animation: aurora-drift-3 36s ease-in-out infinite;
 }
 
@@ -432,6 +434,98 @@
 
 @media (prefers-reduced-motion: reduce) {
   .landing-aurora-blob {
+    animation: none;
+  }
+}
+
+/* Nav pill elevation — two pre-painted shadow layers cross-faded on OPACITY.
+   Animating box-shadow directly forces a per-frame paint of a backdrop-blurred
+   element (the scroll-jank hotspot this replaces); opacity is compositor-only. */
+.landing-nav-pill {
+  position: relative;
+}
+
+.landing-nav-pill::before,
+.landing-nav-pill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+  transition: opacity 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.landing-nav-pill::before {
+  box-shadow: 0 6px 18px -12px rgba(15, 23, 42, 0.1), 0 1px 3px -1px rgba(15, 23, 42, 0.04);
+  opacity: 1;
+}
+
+.landing-nav-pill::after {
+  box-shadow: 0 12px 32px -16px rgba(15, 23, 42, 0.18), 0 2px 6px -2px rgba(15, 23, 42, 0.06);
+  opacity: 0;
+}
+
+.landing-nav-pill[data-scrolled="true"]::before {
+  opacity: 0;
+}
+
+.landing-nav-pill[data-scrolled="true"]::after {
+  opacity: 1;
+}
+
+/* Below-the-fold sections skip layout/paint until they approach the viewport —
+   the single highest-leverage scroll optimisation for a long landing page.
+   contain-intrinsic-size keeps the scrollbar stable while skipped. */
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 640px;
+}
+
+/* Prismatic hairline — the landing's signature stroke: dawn refracting into
+   its spectrum. Pure gradient, zero motion. */
+.prism-line {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(16, 185, 129, 0.7) 25%,
+    rgba(56, 189, 248, 0.7) 50%,
+    rgba(167, 139, 250, 0.6) 75%,
+    transparent
+  );
+}
+
+/* Gradient display text for the hero's emphasis word. Slow shimmer sweeps the
+   gradient across the glyphs; freezes to a static gradient under
+   reduced motion. Fallback color guards unsupported clip. */
+.hero-gradient-text {
+  color: var(--brand-emerald-700);
+  background: linear-gradient(
+    100deg,
+    var(--brand-emerald-600),
+    #14b8a6 35%,
+    #38bdf8 60%,
+    var(--brand-emerald-600) 90%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: hero-gradient-sweep 9s ease-in-out infinite alternate;
+}
+
+@keyframes hero-gradient-sweep {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 100% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-gradient-text {
     animation: none;
   }
 }
