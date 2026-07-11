@@ -1,16 +1,13 @@
-const ATS_HOST_SUFFIXES = [
+const DEDICATED_ATS_HOST_SUFFIXES = [
   "greenhouse.io",
   "lever.co",
   "myworkdayjobs.com",
-  "workday.com",
   "icims.com",
   "successfactors.com",
   "taleo.net",
   "smartrecruiters.com",
-  "bamboohr.com",
   "jobvite.com",
   "ashbyhq.com",
-  "rippling.com",
   "seek.com",
 ] as const;
 
@@ -42,7 +39,11 @@ export function isJobApplicationContext(url: string): boolean {
     }
 
     const hostname = parsed.hostname.toLowerCase();
-    if (ATS_HOST_SUFFIXES.some((suffix) => hasHostSuffix(hostname, suffix))) {
+    if (
+      DEDICATED_ATS_HOST_SUFFIXES.some((suffix) =>
+        hasHostSuffix(hostname, suffix),
+      )
+    ) {
       return true;
     }
 

@@ -26,18 +26,30 @@ describe("extension manifest least privilege", () => {
       "https://*.greenhouse.io/*",
       "https://*.lever.co/*",
       "https://*.myworkdayjobs.com/*",
-      "https://*.workday.com/*",
+      "https://*.workday.com/job/*",
+      "https://*.workday.com/*/job/*",
       "https://*.icims.com/*",
       "https://*.successfactors.com/*",
       "https://*.taleo.net/*",
       "https://*.smartrecruiters.com/*",
-      "https://*.bamboohr.com/*",
+      "https://*.bamboohr.com/careers/*",
+      "https://*.bamboohr.com/jobs/*",
       "https://*.jobvite.com/*",
       "https://*.ashbyhq.com/*",
-      "https://*.rippling.com/*",
+      "https://*.rippling.com/job/*",
+      "https://*.rippling.com/jobs/*",
+      "https://*.rippling.com/*/job/*",
+      "https://*.rippling.com/*/jobs/*",
       "https://au.seek.com/*",
     ]);
     expect(mainContentScript.matches).not.toContain("https://*/*");
+    expect(mainContentScript.matches).not.toEqual(
+      expect.arrayContaining([
+        "https://*.workday.com/*",
+        "https://*.bamboohr.com/*",
+        "https://*.rippling.com/*",
+      ]),
+    );
   });
 
   it("never injects a manifest content script into all frames", () => {

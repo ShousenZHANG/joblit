@@ -131,6 +131,42 @@ describe("detectForms", () => {
     ]);
   });
 
+  it("never returns prefixed sensitive fields while keeping contextual near misses", () => {
+    document.body.innerHTML = `
+      <form>
+        <input id="email" name="email" type="email" />
+        <input id="postal" name="postalPinCode" aria-label="Postal PIN code" />
+        <input id="swift-skill" name="swiftExperience" aria-label="Swift experience" />
+        <input id="password" name="userpassword" />
+        <input id="verification" name="emailverificationcode" />
+        <input id="card" name="billingcreditcardnumber" />
+        <input id="passport" name="candidatepassportnumber" />
+      </form>
+    `;
+
+    expect(detectForms(document).fields.map((field) => field.id)).toEqual([
+      "email",
+      "postal",
+      "swift-skill",
+    ]);
+  });
+
+  it("never returns localized or aria-labelledby sensitive fields", () => {
+    document.body.innerHTML = `
+      <form>
+        <input id="email" name="email" type="email" />
+        <input id="government-id" name="身份证号" />
+        <input id="verification" aria-label="验证码" />
+        <span id="payment-label">Credit card number</span>
+        <input id="payment" aria-labelledby="payment-label" />
+      </form>
+    `;
+
+    expect(detectForms(document).fields.map((field) => field.id)).toEqual([
+      "email",
+    ]);
+  });
+
   it("filters sensitive fields returned by an ATS adapter", () => {
     document.body.innerHTML = `
       <input id="email" type="email" />

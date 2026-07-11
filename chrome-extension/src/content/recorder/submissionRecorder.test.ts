@@ -110,6 +110,42 @@ describe("captureFieldSnapshot", () => {
     });
   });
 
+  it("never captures prefixed sensitive values while keeping contextual near misses", () => {
+    document.body.innerHTML = `
+      <input id="postal" name="postalPinCode" value="2000" />
+      <input id="swift-skill" name="swiftExperience" value="5 years" />
+      <input id="password" name="userpassword" value="secret" />
+      <input id="verification" name="emailverificationcode" value="123456" />
+      <input id="card" name="billingcreditcardnumber" value="4111111111111111" />
+      <input id="passport" name="candidatepassportnumber" value="N1234567" />
+    `;
+    const fields = Array.from(document.querySelectorAll<HTMLElement>("input"))
+      .map((element) => makeField(element, { name: element.getAttribute("name") ?? "" }));
+
+    expect(captureFieldSnapshot(fields)).toEqual({
+      postalPinCode: "2000",
+      swiftExperience: "5 years",
+    });
+  });
+
+  it("never captures localized or aria-labelledby sensitive values", () => {
+    document.body.innerHTML = `
+      <input id="email" name="email" value="john@example.com" />
+      <input id="government-id" name="身份证号" value="110101199001011234" />
+      <span id="payment-label">Credit card number</span>
+      <input id="payment" aria-labelledby="payment-label" value="4111111111111111" />
+    `;
+    const fields = Array.from(document.querySelectorAll<HTMLElement>("input"))
+      .map((element) => makeField(element, {
+        name: element.getAttribute("name") ?? "",
+        labelText: "",
+      }));
+
+    expect(captureFieldSnapshot(fields)).toEqual({
+      email: "john@example.com",
+    });
+  });
+
   it("filters sensitive cached metadata from snapshots with neutral DOM elements", () => {
     document.body.innerHTML = `
       <input id="safe-dom" value="john@example.com" />
@@ -184,6 +220,24 @@ describe("buildFieldMappings", () => {
     ]);
   });
 
+  it("never maps prefixed sensitive fields while keeping contextual near misses", () => {
+    document.body.innerHTML = `
+      <input id="postal" name="postalPinCode" />
+      <input id="swift-skill" name="swiftExperience" />
+      <input id="password" name="userpassword" />
+      <input id="verification" name="emailverificationcode" />
+      <input id="card" name="billingcreditcardnumber" />
+      <input id="passport" name="candidatepassportnumber" />
+    `;
+    const fields = Array.from(document.querySelectorAll<HTMLElement>("input"))
+      .map((element) => makeField(element, { name: element.getAttribute("name") ?? "" }));
+
+    expect(Object.keys(buildFieldMappings(fields))).toEqual([
+      "postalPinCode",
+      "swiftExperience",
+    ]);
+  });
+
   it("filters sensitive cached metadata from mappings with neutral DOM elements", () => {
     document.body.innerHTML = `
       <input id="safe-dom" />
@@ -230,6 +284,43 @@ describe("submission context gating", () => {
     await recordSubmission([field], "generic");
 
     expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("recordSubmission rejects when the background permanently refuses it", async () => {
+    window.history.replaceState({}, "", "/jobs/123/apply");
+    vi.spyOn(chrome.runtime, "sendMessage").mockImplementation(
+      ((...args: unknown[]) => {
+        const callback = args[args.length - 1] as (response: unknown) => void;
+        callback({ success: false, error: "Invalid request body" });
+      }) as typeof chrome.runtime.sendMessage,
+    );
+    const field = makeField(document.querySelector("input")!, { name: "email" });
+
+    await expect(recordSubmission([field], "generic")).rejects.toThrow(
+      "Invalid request body",
+    );
+  });
+
+  it("interceptFormSubmits reports a permanent recording failure", async () => {
+    window.history.replaceState({}, "", "/jobs/123/apply");
+    vi.spyOn(chrome.runtime, "sendMessage").mockImplementation(
+      ((...args: unknown[]) => {
+        const callback = args[args.length - 1] as (response: unknown) => void;
+        callback({ success: false, error: "Invalid request body" });
+      }) as typeof chrome.runtime.sendMessage,
+    );
+    const onError = vi.fn();
+    const field = makeField(document.querySelector("input")!, { name: "email" });
+    const cleanup = interceptFormSubmits([field], "generic", onError);
+
+    document.querySelector("form")!.dispatchEvent(
+      new SubmitEvent("submit", { bubbles: true, cancelable: true }),
+    );
+
+    await vi.waitFor(() => {
+      expect(onError).toHaveBeenCalledWith(expect.any(Error));
+    });
+    cleanup();
   });
 
   it("interceptFormSubmits installs no submit listener outside job context", () => {

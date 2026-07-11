@@ -90,12 +90,28 @@ describe("requestApiBasePermission", () => {
     Reflect.deleteProperty(chrome, "permissions");
   });
 
-  it("does not request permission for the production API", async () => {
+  it("reuses manifest access for the build-time default API", async () => {
+    contains.mockResolvedValue(true);
+
     await expect(requestApiBasePermission(DEFAULT_API_BASE)).resolves.toBe(
       true,
     );
-    expect(contains).not.toHaveBeenCalled();
+    expect(contains).toHaveBeenCalledWith({
+      origins: [apiBasePermissionPattern(DEFAULT_API_BASE)],
+    });
     expect(request).not.toHaveBeenCalled();
+  });
+
+  it("requests exact access when a build-time default is not manifest-granted", async () => {
+    contains.mockResolvedValue(false);
+    request.mockResolvedValue(true);
+
+    await expect(requestApiBasePermission(DEFAULT_API_BASE)).resolves.toBe(
+      true,
+    );
+    expect(request).toHaveBeenCalledWith({
+      origins: [apiBasePermissionPattern(DEFAULT_API_BASE)],
+    });
   });
 
   it("reuses an already-granted exact origin", async () => {

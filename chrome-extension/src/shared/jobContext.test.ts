@@ -6,18 +6,31 @@ describe("isJobApplicationContext", () => {
     "greenhouse.io",
     "lever.co",
     "myworkdayjobs.com",
-    "workday.com",
     "icims.com",
     "successfactors.com",
     "taleo.net",
     "smartrecruiters.com",
-    "bamboohr.com",
     "jobvite.com",
     "ashbyhq.com",
-    "rippling.com",
     "seek.com",
   ])("recognizes the supported ATS host suffix %s", (host) => {
     expect(isJobApplicationContext(`https://boards.${host}/company`)).toBe(true);
+  });
+
+  it.each([
+    "https://company.workday.com/en-US/job/12345",
+    "https://company.bamboohr.com/careers/12345",
+    "https://ats.rippling.com/acme/jobs/12345",
+  ])("recognizes a contextual ATS job path: %s", (url) => {
+    expect(isJobApplicationContext(url)).toBe(true);
+  });
+
+  it.each([
+    "https://www.workday.com/",
+    "https://app.bamboohr.com/login",
+    "https://app.rippling.com/",
+  ])("rejects a non-recruiting page on a shared ATS domain: %s", (url) => {
+    expect(isJobApplicationContext(url)).toBe(false);
   });
 
   it("recognizes an exact job-path segment on a custom recruiting site", () => {

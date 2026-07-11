@@ -54,6 +54,7 @@ function setupSubmitIntercept(detection: FormDetectionResult) {
   cleanupSubmitListener = interceptFormSubmits(
     detection.fields,
     detection.atsProvider,
+    () => widget?.showSubmissionError(),
   );
 }
 
@@ -189,7 +190,10 @@ async function initWidget(detection: FormDetectionResult) {
   widget = new FloatingWidget(mounted.container, {
     onRecordSubmission: () => {
       if (currentDetection) {
-        recordSubmission(currentDetection.fields, currentDetection.atsProvider);
+        void recordSubmission(
+          currentDetection.fields,
+          currentDetection.atsProvider,
+        ).catch(() => widget?.showSubmissionError());
       }
     },
     onCorrectMapping: (fieldSelector, newProfilePath) => {

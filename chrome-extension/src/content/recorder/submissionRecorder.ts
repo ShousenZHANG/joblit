@@ -62,7 +62,7 @@ export async function recordSubmission(
   const formSignature = generateFormSignature(safeFields);
   const pageDomain = extractDomain(pageUrl);
 
-  await sendMessage({
+  const response = await sendMessage({
     type: "RECORD_SUBMISSION",
     data: {
       pageUrl,
@@ -73,19 +73,26 @@ export async function recordSubmission(
       fieldMappings,
     },
   });
+  if (!response.success) {
+    throw new Error(response.error ?? "Submission recording failed");
+  }
 }
 
 /** Intercept form submit events on the page. */
 export function interceptFormSubmits(
   fields: DetectedField[],
   atsProvider: string,
+  onError: (error: Error) => void = () => {},
 ): () => void {
   if (!isJobApplicationContext(window.location.href)) return () => {};
 
   const handler = (_e: SubmitEvent) => {
     // Record asynchronously — don't block the submit
-    recordSubmission(fields, atsProvider).catch(() => {
-      // Silently fail — don't break the user's application
+    recordSubmission(fields, atsProvider).catch((error: unknown) => {
+      // Keep the host form non-blocking while reporting the Joblit-side failure.
+      onError(
+        error instanceof Error ? error : new Error("Submission recording failed"),
+      );
     });
   };
 

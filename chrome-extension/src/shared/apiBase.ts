@@ -76,13 +76,9 @@ export function resolveStoredApiBase(value: unknown): string {
   }
 }
 
-/** Request a custom self-hosted origin only from an explicit user gesture. */
+/** Ensure the exact API origin is granted from an explicit user gesture. */
 export async function requestApiBasePermission(base: string): Promise<boolean> {
   const normalized = normalizeApiBase(base);
-  const targetOrigin = new URL(normalized).origin;
-  const productionOrigin = new URL(normalizeApiBase(DEFAULT_API_BASE)).origin;
-  if (targetOrigin === productionOrigin) return true;
-
   const permissions = { origins: [apiBasePermissionPattern(normalized)] };
   if (await chrome.permissions.contains(permissions)) return true;
   return chrome.permissions.request(permissions);

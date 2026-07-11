@@ -577,6 +577,11 @@ export class FloatingWidget {
     setTimeout(() => toast.remove(), 2000);
   }
 
+  /** Tell the user their host form continued but Joblit could not save it. */
+  showSubmissionError(): void {
+    this.showToast(t("error.submissionRecord"));
+  }
+
   // ── Field change detection (review mode) ──
 
   private static PLACEHOLDER_RE = /^(select\.{0,3}|choose\.{0,3}|请选择|-- .+ --)$/i;
