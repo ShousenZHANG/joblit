@@ -10,7 +10,13 @@ interface SensitiveFamilyRule {
   safeMetadataSuffixes?: readonly RegExp[];
 }
 
-const commonSafeMetadataSuffixes = [/status\d*$/] as const;
+const commonSafeMetadataSuffixes = [/^status\d*$/] as const;
+const swiftProgrammingSuffixes = [
+  /^(?:employment|coding)?experience\d*$/,
+  /^coder\d*$/,
+  /^skills?\d*$/,
+  /^(?:developer|development|programming|language|ui)\d*$/,
+] as const;
 
 /**
  * High-confidence semantic families may have an arbitrary technical prefix.
@@ -20,6 +26,7 @@ const commonSafeMetadataSuffixes = [/status\d*$/] as const;
  */
 const sensitiveFamilyRules: readonly SensitiveFamilyRule[] = [
   { pattern: /(?:password|passcode)(?:confirmation|confirm)?([a-z0-9]*)$/ },
+  { pattern: /onetime(?:code|password)([a-z0-9]*)$/ },
   {
     pattern:
       /verification(?:code|token|answer|passcode|pin|otp)([a-z0-9]*)$/,
@@ -27,12 +34,12 @@ const sensitiveFamilyRules: readonly SensitiveFamilyRule[] = [
   { pattern: /security(?:code|answer)([a-z0-9]*)$/ },
   {
     pattern:
-      /(?:(?:credit|debit|payment)card|card)(?:number|num|no)([a-z0-9]*)$/,
+      /(?:(?:credit|debit|payment)card(?:number|num|no)?|card(?:number|num|no)|cc(?:number|num|no))([a-z0-9]*)$/,
   },
   { pattern: /bankaccount([a-z0-9]*)$/ },
   {
     pattern: /routing([a-z0-9]*)$/,
-    safeMetadataSuffixes: [/preference\d*$/],
+    safeMetadataSuffixes: [/^preference\d*$/],
   },
   { pattern: /socialsecurity([a-z0-9]*)$/ },
   {
@@ -41,7 +48,7 @@ const sensitiveFamilyRules: readonly SensitiveFamilyRule[] = [
   },
   {
     pattern: /passport([a-z0-9]*)$/,
-    safeMetadataSuffixes: [/(?:issuingcountry|numbering)\d*$/],
+    safeMetadataSuffixes: [/^(?:issuingcountry|numbering)\d*$/],
   },
   { pattern: /drivers?licen[cs]e([a-z0-9]*)$/ },
   {
@@ -49,7 +56,7 @@ const sensitiveFamilyRules: readonly SensitiveFamilyRule[] = [
   },
   {
     pattern: /swift([a-z0-9]*)$/,
-    safeMetadataSuffixes: [/(?:employment)?experience\d*$/, /coder\d*$/],
+    safeMetadataSuffixes: swiftProgrammingSuffixes,
   },
 ];
 
@@ -58,10 +65,18 @@ const sensitiveFamilyRules: readonly SensitiveFamilyRule[] = [
  * as `shipping` and `cvVersion` are not rejected by substring coincidence.
  */
 const structuredSensitiveSuffixes = [
-  /(?:pin|otp)(?:code|token)?\d*(?:value|field|input)?\d*$/,
+  /(?:pin|2fa|mfa|otp)(?:code|token|2)?\d*(?:value|field|input)?\d*$/,
   /(?:cvv|cvc)(?:code|number|num|no)?\d*(?:value|field|input)?\d*$/,
   /(?:bsb|iban)(?:code|number|num|no)?\d*(?:value|field|input)?\d*$/,
   /(?:ssn|tfn)(?:number|num|no|id|identifier)?\d*(?:value|field|input)?\d*$/,
+] as const;
+
+const localizedSensitivePatterns = [
+  /(?:密码|密碼|口令|通行码|通行碼)/,
+  /(?:验证码|驗證碼|动态码|動態碼|安全码|安全碼)/,
+  /(?:信用卡|借记卡|借記卡|银行卡|銀行卡|支付卡|卡号|卡號)/,
+  /(?:银行|銀行)(?:账户|帳戶|账号|賬號)/,
+  /(?:身份证|身份證|护照|護照|税号|稅號|社保号|社保號|驾驶证|駕駛證)/,
 ] as const;
 
 function normalizeFieldKey(key: string): string {
@@ -76,6 +91,15 @@ function normalizeFieldKey(key: string): string {
 }
 
 function isSensitiveFieldKey(key: string): boolean {
+  const unicodeNormalized = key.normalize("NFKC").toLowerCase();
+  if (
+    localizedSensitivePatterns.some((pattern) =>
+      pattern.test(unicodeNormalized),
+    )
+  ) {
+    return true;
+  }
+
   const normalized = normalizeFieldKey(key);
   if (!normalized) return false;
 

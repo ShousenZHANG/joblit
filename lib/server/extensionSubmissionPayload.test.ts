@@ -112,6 +112,37 @@ describe("CreateSubmissionSchema", () => {
   });
 
   it.each([
+    "ccnumber",
+    "ccnum",
+    "billingccnumber",
+    "creditcard",
+    "debitcard",
+    "paymentcard",
+  ])("rejects an alternate card-number family key: %s", (key) => {
+    const payload = validPayload();
+    payload.fieldValues = { [key]: "4111111111111111" };
+
+    expect(CreateSubmissionSchema.safeParse(payload).success).toBe(false);
+  });
+
+  it.each([
+    "身份证号",
+    "身份證號",
+    "银行卡号",
+    "銀行卡號",
+    "信用卡号",
+    "验证码",
+    "驗證碼",
+    "Ｐａｓｓｐｏｒｔ Ｎｕｍｂｅｒ",
+    "Ｃｒｅｄｉｔ Ｃａｒｄ",
+  ])("rejects a localized sensitive field key: %s", (key) => {
+    const payload = validPayload();
+    payload.fieldValues = { [key]: "secret" };
+
+    expect(CreateSubmissionSchema.safeParse(payload).success).toBe(false);
+  });
+
+  it.each([
     "passport",
     "candidatepassport",
     "taxfile",

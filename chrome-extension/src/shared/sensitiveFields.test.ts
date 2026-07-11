@@ -76,6 +76,17 @@ describe("isSensitiveField", () => {
     expect(isSensitiveField(document.querySelector("input")!)).toBe(true);
   });
 
+  it.each([
+    "userpassword",
+    "emailverificationcode",
+    "billingcreditcardnumber",
+    "billingccnumber",
+    "candidatepassportnumber",
+  ])("denies a prefixed compact sensitive token: %s", (token) => {
+    document.body.innerHTML = `<input name="${token}" />`;
+    expect(isSensitiveField(document.querySelector("input")!)).toBe(true);
+  });
+
   it("denies exact verification metadata and sensitive verification phrases", () => {
     document.body.innerHTML = `
       <input id="exact" name="verification" />
@@ -114,6 +125,16 @@ describe("isSensitiveField", () => {
     expect(isSensitiveField(document.querySelector("input")!)).toBe(false);
   });
 
+  it.each([
+    ["postal PIN code", "postalPinCode"],
+    ["billing address PIN code", "billingAddressPinCode"],
+    ["Swift experience", "swiftExperience"],
+    ["Swift employment experience", "swiftEmploymentExperience"],
+  ])("keeps the non-secret %s field", (_label, name) => {
+    document.body.innerHTML = `<input name="${name}" aria-label="${_label}" />`;
+    expect(isSensitiveField(document.querySelector("input")!)).toBe(false);
+  });
+
   it("reads label and aria-describedby text", () => {
     document.body.innerHTML = `
       <label for="security-answer">Security answer</label>
@@ -124,6 +145,30 @@ describe("isSensitiveField", () => {
 
     expect(isSensitiveField(document.querySelector("#security-answer")!)).toBe(true);
     expect(isSensitiveField(document.querySelector("#tax-id")!)).toBe(true);
+  });
+
+  it.each([
+    "身份证号",
+    "身份證號",
+    "银行卡号",
+    "銀行卡號",
+    "信用卡号",
+    "验证码",
+    "驗證碼",
+    "Ｐａｓｓｐｏｒｔ Ｎｕｍｂｅｒ",
+    "Ｃｒｅｄｉｔ Ｃａｒｄ",
+  ])("denies localized sensitive metadata: %s", (label) => {
+    document.body.innerHTML = `<input name="${label}" />`;
+    expect(isSensitiveField(document.querySelector("input")!)).toBe(true);
+  });
+
+  it("reads aria-labelledby text before a neutral field can be captured", () => {
+    document.body.innerHTML = `
+      <span id="payment-label">Credit card number</span>
+      <input id="field-1" aria-labelledby="payment-label" />
+    `;
+
+    expect(isSensitiveField(document.querySelector("#field-1")!)).toBe(true);
   });
 
   it("reads aria-describedby text from an open shadow root by exact id", () => {
