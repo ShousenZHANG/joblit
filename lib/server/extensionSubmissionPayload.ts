@@ -4,56 +4,65 @@ import { z } from "zod";
 const MAX_FIELD_ENTRIES = 200;
 const MAX_SERIALIZED_FIELDS_BYTES = 250 * 1024;
 
-const directSensitiveTokens = new Set([
-  "password",
-  "passcode",
-  "pin",
-  "otp",
-  "cvv",
-  "cvc",
-  "routing",
-  "bsb",
-  "iban",
-  "swift",
-  "ssn",
-  "tfn",
-]);
+interface SensitiveFamilyRule {
+  /** The first capture is the semantic suffix following the sensitive family. */
+  pattern: RegExp;
+  safeMetadataSuffixes?: readonly RegExp[];
+}
 
-const sensitivePhrases = [
-  "pass code",
-  "security code",
-  "security answer",
-  "verification code",
-  "verification token",
-  "verification answer",
-  "card number",
-  "bank account",
-  "social security",
-  "tax file",
-  "driver licence",
-  "drivers licence",
-  "driver license",
-  "drivers license",
-  "national id",
-  "national identifier",
+const commonSafeMetadataSuffixes = [/status\d*$/] as const;
+
+/**
+ * High-confidence semantic families may have an arbitrary technical prefix.
+ * Once present, only an explicit metadata suffix is safe; value-like or unknown
+ * suffixes remain blocked. Matching the compact form makes casing and separators
+ * irrelevant without relying on broad short-token substring checks.
+ */
+const sensitiveFamilyRules: readonly SensitiveFamilyRule[] = [
+  { pattern: /(?:password|passcode)(?:confirmation|confirm)?([a-z0-9]*)$/ },
+  {
+    pattern:
+      /verification(?:code|token|answer|passcode|pin|otp)([a-z0-9]*)$/,
+  },
+  { pattern: /security(?:code|answer)([a-z0-9]*)$/ },
+  {
+    pattern:
+      /(?:(?:credit|debit|payment)card|card)(?:number|num|no)([a-z0-9]*)$/,
+  },
+  { pattern: /bankaccount([a-z0-9]*)$/ },
+  {
+    pattern: /routing([a-z0-9]*)$/,
+    safeMetadataSuffixes: [/preference\d*$/],
+  },
+  { pattern: /socialsecurity([a-z0-9]*)$/ },
+  {
+    pattern:
+      /(?:taxfile|tax(?:number|num|no|id|identifier))([a-z0-9]*)$/,
+  },
+  {
+    pattern: /passport([a-z0-9]*)$/,
+    safeMetadataSuffixes: [/(?:issuingcountry|numbering)\d*$/],
+  },
+  { pattern: /drivers?licen[cs]e([a-z0-9]*)$/ },
+  {
+    pattern: /(?:national|government)(?:id|identifier)([a-z0-9]*)$/,
+  },
+  {
+    pattern: /swift([a-z0-9]*)$/,
+    safeMetadataSuffixes: [/(?:employment)?experience\d*$/, /coder\d*$/],
+  },
 ];
 
-const compactSensitiveSuffixes = [
-  /(?:password|passcode)(?:confirmation|confirm)?\d*$/,
-  /(?:pin|otp)(?:code|token)?\d*$/,
-  /verification(?:code|token|answer|passcode|pin|otp)\d*$/,
-  /security(?:code|answer)\d*$/,
-  /(?:cvv|cvc)\d*$/,
-  /(?:(?:credit|debit|payment)card|card)(?:number|num|no)\d*$/,
-  /bankaccount(?:number|num|no)?\d*$/,
-  /routing(?:number|num|no)?\d*$/,
-  /(?:bsb|iban|swift)(?:code|number|num|no)?\d*$/,
-  /(?:ssn|socialsecurity(?:number|num|no|id|identifier)?)\d*$/,
-  /(?:tfn|tax(?:file)?(?:number|num|no|id|identifier))\d*$/,
-  /passport(?:(?:number|num|no|id|identifier)\d*|\d+)$/,
-  /drivers?licen[cs]e(?:number|num|no|id|identifier)?\d*$/,
-  /(?:national|government)(?:id|identifier)(?:number|num|no)?\d*$/,
-];
+/**
+ * Short acronyms need a recognised sensitive shape so harmless compounds such
+ * as `shipping` and `cvVersion` are not rejected by substring coincidence.
+ */
+const structuredSensitiveSuffixes = [
+  /(?:pin|otp)(?:code|token)?\d*(?:value|field|input)?\d*$/,
+  /(?:cvv|cvc)(?:code|number|num|no)?\d*(?:value|field|input)?\d*$/,
+  /(?:bsb|iban)(?:code|number|num|no)?\d*(?:value|field|input)?\d*$/,
+  /(?:ssn|tfn)(?:number|num|no|id|identifier)?\d*(?:value|field|input)?\d*$/,
+] as const;
 
 function normalizeFieldKey(key: string): string {
   return key
@@ -70,23 +79,31 @@ function isSensitiveFieldKey(key: string): boolean {
   const normalized = normalizeFieldKey(key);
   if (!normalized) return false;
 
-  const tokens = normalized.split(" ");
-  const compact = tokens.join("");
+  const compact = normalized.replaceAll(" ", "");
+  const postalCandidate = compact
+    .replace(/\d+$/, "")
+    .replace(/(?:value|field|input)$/, "")
+    .replace(/\d+$/, "");
   const isPostalPinCode =
-    /(?:postal|address)pincode$/.test(compact) &&
+    /(?:postal|address)pincode$/.test(postalCandidate) &&
     !/(?:verification|security|password|passcode|otp|2fa|mfa)/.test(compact);
   if (isPostalPinCode) return false;
 
-  if (tokens.some((token) => directSensitiveTokens.has(token))) return true;
+  for (const rule of sensitiveFamilyRules) {
+    const match = rule.pattern.exec(compact);
+    if (!match) continue;
 
-  const padded = ` ${normalized} `;
-  if (sensitivePhrases.some((phrase) => padded.includes(` ${phrase} `))) {
-    return true;
+    const semanticSuffix = match[1];
+    const isSafeMetadata = [
+      ...commonSafeMetadataSuffixes,
+      ...(rule.safeMetadataSuffixes ?? []),
+    ].some((pattern) => pattern.test(semanticSuffix));
+
+    return !isSafeMetadata;
   }
 
-  const compactCandidates = [...tokens, compact];
-  return compactCandidates.some((candidate) =>
-    compactSensitiveSuffixes.some((pattern) => pattern.test(candidate)),
+  return structuredSensitiveSuffixes.some((pattern) =>
+    pattern.test(compact),
   );
 }
 

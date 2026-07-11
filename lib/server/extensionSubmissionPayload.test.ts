@@ -111,11 +111,79 @@ describe("CreateSubmissionSchema", () => {
     expect(CreateSubmissionSchema.safeParse(payload).success).toBe(false);
   });
 
-  it("allows a compact sensitive phrase followed by a safe suffix", () => {
+  it.each([
+    "passport",
+    "candidatepassport",
+    "taxfile",
+    "usertaxfile",
+  ])("rejects an exact or prefixed compact government identifier: %s", (key) => {
     const payload = validPayload();
-    payload.fieldValues = {
-      candidatecreditcardnumberstatus: "not-collected",
-    };
+    payload.fieldValues = { [key]: "secret" };
+
+    expect(CreateSubmissionSchema.safeParse(payload).success).toBe(false);
+  });
+
+  it.each([
+    "userpasswordvalue",
+    "userPasswordField",
+    "user_password_input",
+    "user-password-value-2",
+    "userpasswordpayload",
+    "emailverificationcodevalue",
+    "emailVerificationCodeField",
+    "email_verification_code_input",
+    "email-verification-code-value-2",
+    "billingcreditcardnumbervalue",
+    "billingCreditCardNumberField",
+    "billing_credit_card_number_input",
+    "billing-credit-card-number-value-2",
+    "billingcreditcardnumbercache",
+    "candidatepassportnumbervalue",
+    "candidatePassportNumberField",
+    "candidate_passport_number_input",
+    "candidate-passport-number-value-2",
+    "candidatepassportdocument",
+    "usertaxfilenumbervalue",
+    "userTaxFileNumberField",
+    "user_tax_file_number_input",
+    "user-tax-file-number-value-2",
+    "usertaxfilerecord",
+  ])("rejects a sensitive value-bearing key in every naming style: %s", (key) => {
+    const payload = validPayload();
+    payload.fieldValues = { [key]: "secret" };
+
+    expect(CreateSubmissionSchema.safeParse(payload).success).toBe(false);
+  });
+
+  it.each([
+    "candidatecreditcardnumberstatus",
+    "candidateCreditCardNumberStatus",
+    "candidate_credit_card_number_status",
+    "candidate-credit-card-number-status",
+    "passportissuingcountry",
+    "passportIssuingCountry",
+    "passport_issuing_country",
+    "passport-issuing-country",
+    "swiftemploymentexperience",
+    "swiftEmploymentExperience",
+    "swift_employment_experience",
+    "swift-employment-experience",
+    "swiftexperience",
+    "swiftExperience",
+    "swiftcoder",
+    "swiftCoder",
+    "passportnumbering",
+    "passportNumbering",
+    "routingPreference",
+    "routing_preference",
+    "cvVersion",
+    "cardinality",
+    "candidateAccountManager",
+    "shipping",
+    "shippingAddress",
+  ])("allows an explicitly safe metadata key in every naming style: %s", (key) => {
+    const payload = validPayload();
+    payload.fieldValues = { [key]: "safe-value" };
 
     expect(CreateSubmissionSchema.safeParse(payload).success).toBe(true);
   });
