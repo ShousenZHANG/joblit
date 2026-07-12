@@ -29,4 +29,16 @@ describe("mobile layout style contracts", () => {
       /@media \(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\.joblit-list-item\s*\{[^}]*transition:\s*none;/,
     );
   });
+
+  it("expands compact buttons to 44x44 and keeps shared controls touch-safe on coarse pointers", () => {
+    const cssPath = join(process.cwd(), "app", "globals.css");
+    const css = readFileSync(cssPath, "utf8");
+
+    expect(css).toMatch(
+      /@media \(pointer:\s*coarse\)\s*\{\s*\[data-slot="button"\],\s*\[data-slot="input"\],\s*\[data-slot="select-trigger"\],\s*\[data-slot="select-item"\],\s*\[data-slot="dialog-close"\]\s*\{[^}]*min-height:\s*44px;/,
+    );
+    expect(css).toMatch(
+      /@media \(pointer:\s*coarse\)\s*\{[\s\S]*?\[data-slot="button"\],\s*\[data-slot="dialog-close"\]\s*\{[^}]*min-width:\s*44px;/,
+    );
+  });
 });

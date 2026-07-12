@@ -554,6 +554,21 @@
   }
 }
 
+@media (pointer: coarse) {
+  [data-slot="button"],
+  [data-slot="input"],
+  [data-slot="select-trigger"],
+  [data-slot="select-item"],
+  [data-slot="dialog-close"] {
+    min-height: 44px;
+  }
+
+  [data-slot="button"],
+  [data-slot="dialog-close"] {
+    min-width: 44px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .landing-aurora-blob {
     animation: none;
