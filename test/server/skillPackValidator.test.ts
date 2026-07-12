@@ -23,7 +23,8 @@ function run(scriptPath: string, jsonPath: string, target: "resume" | "cover") {
     const out = execFileSync(
       execPath,
       [scriptPath, jsonPath, `--target=${target}`, "--locale=en-AU"],
-      { encoding: "utf8" },
+      // Timeout so a wedged child can never hang the suite.
+      { encoding: "utf8", timeout: 15_000 },
     );
     return { code: 0, out };
   } catch (e) {
@@ -32,7 +33,10 @@ function run(scriptPath: string, jsonPath: string, target: "resume" | "cover") {
   }
 }
 
-describe("skill pack validate.mjs (deterministic output gate)", () => {
+// retry: these tests spawn real node child processes; under a fully loaded
+// coverage run a spawn can flake (observed once in CI-shaped local runs). A
+// genuine validator regression still fails all three attempts.
+describe("skill pack validate.mjs (deterministic output gate)", { retry: 2 }, () => {
   it("passes a well-formed resume output", () => {
     const { dir, scriptPath } = setupPack();
     const good = join(dir, "good.json");
