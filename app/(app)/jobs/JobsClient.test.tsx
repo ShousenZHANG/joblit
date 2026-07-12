@@ -1330,6 +1330,75 @@ describe("JobsClient", () => {
       await screen.findAllByText("Alpha Engineer");
     }
 
+    it("gives the standard jobs list one active row tab stop", async () => {
+      const user = userEvent.setup();
+      setupMultiJobFetch();
+      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
+      await waitForJobsRendered();
+
+      const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
+      const list = within(resultsPane).getByRole("list");
+      const rows = [...list.querySelectorAll<HTMLButtonElement>("[data-job-id]")];
+
+      expect(rows).toHaveLength(3);
+      expect(rows.filter((row) => row.tabIndex === 0)).toHaveLength(1);
+      expect(rows[0]).toHaveAttribute("aria-current", "true");
+      expect(rows[0]).toHaveAttribute("tabindex", "0");
+      expect(rows[1]).not.toHaveAttribute("aria-current");
+      expect(rows[1]).toHaveAttribute("tabindex", "-1");
+
+      await user.click(rows[1]);
+
+      expect(rows[0]).not.toHaveAttribute("aria-current");
+      expect(rows[0]).toHaveAttribute("tabindex", "-1");
+      expect(rows[1]).toHaveAttribute("aria-current", "true");
+      expect(rows[1]).toHaveAttribute("tabindex", "0");
+    });
+
+    it("uses list semantics for the virtual jobs list", async () => {
+      const virtualJobs = Array.from({ length: 81 }, (_, index) => ({
+        ...jobA,
+        id: `virtual-${index}`,
+        title: `Virtual role ${index}`,
+      }));
+      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.startsWith("/api/jobs?")) {
+          return new Response(
+            JSON.stringify({ items: virtualJobs, nextCursor: null, totalCount: virtualJobs.length, facets: { jobLevels: ["Mid"] } }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (url.startsWith("/api/jobs/")) {
+          return new Response(
+            JSON.stringify({ id: virtualJobs[0].id, description: "desc" }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
+      }));
+
+      renderWithClient(<JobsClient initialItems={virtualJobs} initialCursor={null} />);
+
+      const resultsPane = await screen.findByTestId("jobs-results-scroll");
+      await waitFor(() => expect(resultsPane).toHaveAttribute("data-virtual", "true"));
+      expect(within(resultsPane).getByRole("list")).toBeInTheDocument();
+    });
+
+    it("keeps batch row selectors at least 44 by 44 pixels", async () => {
+      const user = userEvent.setup();
+      setupMultiJobFetch();
+      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
+      await waitForJobsRendered();
+
+      await user.click(screen.getByRole("button", { name: /enter selection mode/i }));
+      const checkbox = screen.getByRole("button", { name: /select alpha engineer/i });
+      const icon = checkbox.querySelector("svg");
+
+      expect(checkbox).toHaveClass("min-h-11", "min-w-11");
+      expect(icon).toHaveClass("h-[18px]", "w-[18px]");
+    });
+
     it("enters batch mode and shows checkboxes when selection icon is clicked", async () => {
       const user = userEvent.setup();
       setupMultiJobFetch();

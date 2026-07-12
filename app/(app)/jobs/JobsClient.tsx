@@ -76,6 +76,7 @@ export function JobsClient({
   const [timeZone] = useState<string | null>(() => getUserTimeZone() || null);
   const [isPending, startTransition] = useTransition();
   const resultsScrollRef = useRef<HTMLDivElement | null>(null);
+  const jobListRef = useRef<HTMLDivElement>(null);
   // Seed from the session tombstones so a remount (SPA nav away and back)
   // keeps already-committed deletes hidden even while a flushed DELETE is
   // still in flight — see sessionDeletedJobIds in useJobMutations.
@@ -321,6 +322,7 @@ export function JobsClient({
   }, [markTaskComplete]);
 
   useKeyboardNavigation({
+    containerRef: jobListRef,
     items,
     selectedId: effectiveSelectedId,
     onSelect: handleSelectJob,
@@ -788,18 +790,20 @@ export function JobsClient({
             ) : null}
             {items.length > 0 ? (
               items.length > 80 ? (
-                <VirtualJobList
-                  items={items}
-                  effectiveSelectedId={effectiveSelectedId}
-                  onSelect={handleSelectJob}
-                  timeZone={timeZone}
-                  scrollRootRef={resultsScrollRef}
-                  batchMode={batchSelectMode}
-                  batchSelectedIds={batchSelectedIds}
-                  onBatchToggle={toggleBatchSelect}
-                />
+                <div ref={jobListRef} role="list">
+                  <VirtualJobList
+                    items={items}
+                    effectiveSelectedId={effectiveSelectedId}
+                    onSelect={handleSelectJob}
+                    timeZone={timeZone}
+                    scrollRootRef={resultsScrollRef}
+                    batchMode={batchSelectMode}
+                    batchSelectedIds={batchSelectedIds}
+                    onBatchToggle={toggleBatchSelect}
+                  />
+                </div>
               ) : (
-                <div className="space-y-3 p-3">
+                <div ref={jobListRef} role="list" className="space-y-3 p-3">
                   {items.map((it) => {
                     const row = (
                       <JobListItem

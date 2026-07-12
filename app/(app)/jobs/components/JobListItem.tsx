@@ -64,7 +64,7 @@ function JobListItemInner({
     : t("unknownTime");
 
   return (
-    <div role="listitem" aria-current={isActive ? "true" : undefined} aria-label={listLabel} className="w-full">
+    <div role="listitem" aria-label={listLabel} className="w-full">
       <div
         className={`joblit-list-item flex w-full items-start gap-0 rounded-2xl border border-l-4 border-border/60 bg-background/80 text-left backdrop-blur-sm transition-all duration-200 ease-out hover:-translate-y-[1px] ${
           batchSelected
@@ -83,7 +83,7 @@ function JobListItemInner({
               e.stopPropagation();
               onBatchToggle?.(job.id);
             }}
-            className="flex shrink-0 items-center justify-center py-3 pl-3 pr-1"
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center py-3 pl-3 pr-1"
             aria-label={batchSelected ? t("deselectJob", { title: job.title }) : t("selectJob", { title: job.title })}
           >
             {batchSelected ? (
@@ -98,6 +98,8 @@ function JobListItemInner({
           onClick={batchMode ? () => onBatchToggle?.(job.id) : onSelect}
           data-job-id={job.id}
           data-perf="cv-auto"
+          tabIndex={isActive ? 0 : -1}
+          aria-current={isActive ? "true" : undefined}
           className="min-w-0 flex-1 cursor-pointer px-3 py-3 text-left"
         >
           <div className="flex items-center justify-between gap-2">

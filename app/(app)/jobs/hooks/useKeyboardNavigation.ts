@@ -1,30 +1,50 @@
-import { useEffect } from "react";
+import { useEffect, type RefObject } from "react";
 
 export interface UseKeyboardNavigationOptions {
+  containerRef: RefObject<HTMLElement | null>;
   items: Array<{ id: string }>;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   enabled?: boolean;
 }
 
-function isTypingTarget(active: Element | null): boolean {
-  const tag = active?.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA";
+const BLOCKING_TARGET = [
+  "input",
+  "textarea",
+  "select",
+  "a[href]",
+  "[contenteditable='true']",
+  "[role='dialog']",
+  "[role='menu']",
+  "[role='listbox']",
+  "[role='combobox']",
+].join(",");
+
+function isOwnedRowTarget(target: EventTarget | null): boolean {
+  const element = target instanceof Element ? target : null;
+  if (!element) return false;
+  return Boolean(element.closest("[data-job-id]")) || !element.closest(BLOCKING_TARGET);
 }
 
-function scrollJobIntoView(jobId: string) {
-  const el = document.querySelector(`[data-job-id="${CSS.escape(jobId)}"]`);
-  el?.scrollIntoView({ block: "nearest" });
+function focusJob(container: HTMLElement, jobId: string) {
+  const element = container.querySelector<HTMLElement>(
+    `[data-job-id="${CSS.escape(jobId)}"]`,
+  );
+  if (!element) return;
+  element.focus({ preventScroll: true });
+  element.scrollIntoView({ block: "nearest" });
 }
 
 export function useKeyboardNavigation(options: UseKeyboardNavigationOptions) {
-  const { items, selectedId, onSelect, enabled = true } = options;
+  const { containerRef, items, selectedId, onSelect, enabled = true } = options;
 
   useEffect(() => {
-    if (!enabled || items.length === 0) return;
+    const container = containerRef.current;
+    if (!enabled || items.length === 0 || !container) return;
 
     function onKeyDown(event: KeyboardEvent) {
-      if (isTypingTarget(document.activeElement)) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target || !container.contains(target) || !isOwnedRowTarget(target)) return;
 
       const key = event.key;
       const isNext = key === "j" || key === "ArrowDown";
@@ -47,7 +67,7 @@ export function useKeyboardNavigation(options: UseKeyboardNavigationOptions) {
         event.preventDefault();
         const nextId = items[currentIndex + 1]!.id;
         onSelect(nextId);
-        queueMicrotask(() => scrollJobIntoView(nextId));
+        queueMicrotask(() => focusJob(container, nextId));
         return;
       }
 
@@ -56,11 +76,11 @@ export function useKeyboardNavigation(options: UseKeyboardNavigationOptions) {
         event.preventDefault();
         const prevId = items[currentIndex - 1]!.id;
         onSelect(prevId);
-        queueMicrotask(() => scrollJobIntoView(prevId));
+        queueMicrotask(() => focusJob(container, prevId));
       }
     }
 
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [enabled, items, onSelect, selectedId]);
+    container.addEventListener("keydown", onKeyDown);
+    return () => container.removeEventListener("keydown", onKeyDown);
+  }, [containerRef, enabled, items, onSelect, selectedId]);
 }
