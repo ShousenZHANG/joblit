@@ -27,6 +27,7 @@ const SPRING = {
   damping: 28,
   mass: 0.6,
 };
+const MOTION_EASE = [0.16, 1, 0.3, 1] as const;
 
 export function FetchProgressPanel() {
   const {
@@ -134,7 +135,7 @@ export function FetchProgressPanel() {
               animate={{ strokeDashoffset }}
               transition={{
                 duration: reducedMotion ? 0 : 0.26,
-                ease: [0.22, 1, 0.36, 1],
+                ease: MOTION_EASE,
               }}
             />
           </svg>
@@ -292,7 +293,7 @@ export function FetchProgressPanel() {
                 <div
                   data-testid="fetch-progress-fill"
                   className={cn(
-                    "h-full w-full origin-left bg-gradient-to-r from-brand-emerald-500 to-brand-emerald-600 shadow-[0_0_10px_rgba(16,185,129,0.4)] transition-transform duration-[260ms] ease-out motion-reduce:transition-none",
+                    "h-full w-full origin-left bg-gradient-to-r from-brand-emerald-500 to-brand-emerald-600 shadow-[0_0_10px_rgba(16,185,129,0.4)] transition-transform duration-[260ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
                     status === "FAILED" &&
                       "from-destructive to-destructive bg-destructive",
                   )}
@@ -439,7 +440,7 @@ function StepIndicator({ status }: { status: string | null }) {
               <motion.div
                 initial={false}
                 animate={{ scaleX: step.done ? 1 : 0 }}
-                transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+                transition={{ duration: 0.26, ease: MOTION_EASE }}
                 className="absolute inset-y-0 left-0 w-full origin-left bg-brand-emerald-500"
               />
             </div>
