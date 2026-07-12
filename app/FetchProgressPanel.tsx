@@ -2,11 +2,10 @@
 
 import React from "react";
 import Link from "next/link";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { CheckCircle2, ChevronDown, Loader2, Minus, X, XCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { useFetchStatus, type FetchRunLane } from "./FetchStatusContext";
 
@@ -45,6 +44,7 @@ export function FetchProgressPanel() {
     cancelRun,
   } = useFetchStatus();
   const t = useTranslations("fetchProgress");
+  const reducedMotion = useReducedMotion();
 
   const isRunning = status === "RUNNING" || status === "QUEUED";
   // Partial outcome: aggregate reads SUCCEEDED but at least one source failed
@@ -132,7 +132,10 @@ export function FetchProgressPanel() {
               strokeLinecap="round"
               strokeDasharray={circumference}
               animate={{ strokeDashoffset }}
-              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+              transition={{
+                duration: reducedMotion ? 0 : 0.26,
+                ease: [0.22, 1, 0.36, 1],
+              }}
             />
           </svg>
           <span
@@ -153,7 +156,7 @@ export function FetchProgressPanel() {
                   : "\u22ef"}
           </span>
           {isRunning && (
-            <span className="pointer-events-none absolute inset-0 animate-ping rounded-full border-2 border-brand-emerald-400 opacity-20" />
+            <span className="pointer-events-none absolute inset-0 rounded-full border-2 border-brand-emerald-400 opacity-20 motion-safe:animate-ping" />
           )}
         </motion.button>
       ) : (
@@ -161,12 +164,13 @@ export function FetchProgressPanel() {
           key="panel"
           role="dialog"
           aria-label="Fetch progress"
+          data-testid="fetch-progress-panel"
           initial={{ opacity: 0, scale: 0.94, y: 16 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.94, y: 16 }}
           transition={SPRING}
           className={cn(
-            "fixed bottom-6 right-6 z-50 w-[380px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-3xl border border-border/60 bg-background/95 shadow-[0_28px_60px_-24px_rgba(15,23,42,0.22)] backdrop-blur-xl",
+            "fixed bottom-6 right-6 z-50 w-[380px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-3xl border border-border/60 bg-background/95 shadow-[0_28px_60px_-24px_rgba(15,23,42,0.22)] backdrop-blur-xl motion-reduce:transition-none",
             // Scanning deep space while a run is in flight.
             isRunning && "cosmos-scan",
           )}
@@ -176,7 +180,7 @@ export function FetchProgressPanel() {
             <div className="flex min-w-0 items-center gap-2">
               {isRunning ? (
                 <Loader2
-                  className="h-4 w-4 shrink-0 animate-spin text-brand-emerald-600"
+                  className="h-4 w-4 shrink-0 animate-spin text-brand-emerald-600 motion-reduce:animate-none"
                   aria-hidden
                 />
               ) : status === "SUCCEEDED" ? (
@@ -277,15 +281,24 @@ export function FetchProgressPanel() {
 
             {/* Progress bar */}
             <div className="space-y-1.5">
-              <Progress
-                value={progressValue}
-                className="h-2 bg-brand-emerald-100/60"
-                indicatorClassName={cn(
-                  "bg-gradient-to-r from-brand-emerald-500 to-brand-emerald-600 shadow-[0_0_10px_rgba(16,185,129,0.4)] transition-all duration-500 ease-out",
-                  status === "FAILED" &&
-                    "from-destructive to-destructive bg-destructive",
-                )}
-              />
+              <div
+                role="progressbar"
+                aria-label={t("title")}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={progressValue}
+                className="h-2 overflow-hidden rounded-full bg-brand-emerald-100/60"
+              >
+                <div
+                  data-testid="fetch-progress-fill"
+                  className={cn(
+                    "h-full w-full origin-left bg-gradient-to-r from-brand-emerald-500 to-brand-emerald-600 shadow-[0_0_10px_rgba(16,185,129,0.4)] transition-transform duration-[260ms] ease-out motion-reduce:transition-none",
+                    status === "FAILED" &&
+                      "from-destructive to-destructive bg-destructive",
+                  )}
+                  style={{ transform: `scaleX(${progressValue / 100})` }}
+                />
+              </div>
               <div className="flex items-center justify-between text-[11px] text-muted-foreground tabular-nums">
                 {/* No fake percentage — show the real state instead. The bar
                     itself is ambient motion, the numbers below are truthful. */}
@@ -404,13 +417,10 @@ function StepIndicator({ status }: { status: string | null }) {
       {steps.map((step, i) => (
         <React.Fragment key={step.label}>
           <div className="flex min-w-0 flex-col items-center gap-1">
-            <motion.div
-              animate={{
-                scale: step.active ? 1.08 : 1,
-              }}
-              transition={{ duration: 0.5, repeat: step.active ? Infinity : 0, repeatType: "reverse" }}
+            <div
               className={cn(
                 "flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold transition-colors",
+                step.active && "motion-safe:animate-pulse",
                 step.done
                   ? "bg-brand-emerald-500 text-white"
                   : step.active
@@ -419,7 +429,7 @@ function StepIndicator({ status }: { status: string | null }) {
               )}
             >
               {step.done ? <ChevronDown className="h-3 w-3 rotate-[-135deg]" strokeWidth={3} aria-hidden /> : i + 1}
-            </motion.div>
+            </div>
             <span className="text-[10px] font-medium text-muted-foreground">
               {step.label}
             </span>
@@ -428,9 +438,9 @@ function StepIndicator({ status }: { status: string | null }) {
             <div className="relative mb-4 h-0.5 flex-1 overflow-hidden rounded-full bg-muted">
               <motion.div
                 initial={false}
-                animate={{ width: step.done ? "100%" : "0%" }}
-                transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-                className="absolute inset-y-0 left-0 bg-brand-emerald-500"
+                animate={{ scaleX: step.done ? 1 : 0 }}
+                transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+                className="absolute inset-y-0 left-0 w-full origin-left bg-brand-emerald-500"
               />
             </div>
           )}
@@ -461,7 +471,7 @@ function SourceLanes({ lanes }: { lanes: FetchRunLane[] }) {
           >
             <div className="flex min-w-0 items-center gap-2">
               {active ? (
-                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-brand-emerald-600" aria-hidden />
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-brand-emerald-600 motion-reduce:animate-none" aria-hidden />
               ) : lane.status === "SUCCEEDED" ? (
                 <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-brand-emerald-600" aria-hidden />
               ) : (

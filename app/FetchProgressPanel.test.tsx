@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import messages from "../messages/en.json";
 import { FetchProgressPanel } from "./FetchProgressPanel";
@@ -11,7 +11,7 @@ vi.mock("./FetchStatusContext", () => ({
     importedCount: 0,
     lanes: [],
     error: null,
-    elapsedSeconds: 12,
+    elapsedSeconds: 11,
     open: true,
     setOpen: vi.fn(),
     startRun: vi.fn(),
@@ -21,6 +21,8 @@ vi.mock("./FetchStatusContext", () => ({
     smartExpand: true,
   }),
 }));
+
+afterEach(cleanup);
 
 describe("FetchProgressPanel", () => {
   it("shows the real role queries used by smart fetch", () => {
@@ -34,5 +36,23 @@ describe("FetchProgressPanel", () => {
     expect(screen.getByText(/frontend engineer/i)).toBeInTheDocument();
     expect(screen.getByText(/backend engineer/i)).toBeInTheDocument();
     expect(screen.getByText(/smart fetch expanded/i)).toBeInTheDocument();
+  });
+
+  it("uses transform progress and disables motion transitions when requested", () => {
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <FetchProgressPanel />
+      </NextIntlClientProvider>,
+    );
+
+    expect(screen.getByTestId("fetch-progress-fill")).toHaveStyle({
+      transform: "scaleX(0.42)",
+    });
+    expect(screen.getByTestId("fetch-progress-panel")).toHaveClass(
+      "motion-reduce:transition-none",
+    );
+    expect(
+      screen.getByRole("progressbar", { name: /fetch progress/i }),
+    ).toHaveAttribute("aria-valuenow", "42");
   });
 });

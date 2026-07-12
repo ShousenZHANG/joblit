@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MotionConfig } from "framer-motion";
 import { SessionProvider } from "next-auth/react";
 import NextTopLoader from "nextjs-toploader";
 import { Toaster } from "@/components/ui/toaster";
@@ -24,16 +25,18 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <ThemeProvider>
-      <QueryClientProvider client={queryClient}>
-        <SessionProvider>
-          <NextTopLoader color="#111827" height={2} showSpinner={false} />
-          <FetchStatusProvider>
-            {children}
-            <FetchProgressPanel />
-          </FetchStatusProvider>
-          <Toaster />
-        </SessionProvider>
-      </QueryClientProvider>
+      <MotionConfig reducedMotion="user">
+        <QueryClientProvider client={queryClient}>
+          <SessionProvider>
+            <NextTopLoader color="#111827" height={2} showSpinner={false} />
+            <FetchStatusProvider>
+              {children}
+              <FetchProgressPanel />
+            </FetchStatusProvider>
+            <Toaster />
+          </SessionProvider>
+        </QueryClientProvider>
+      </MotionConfig>
     </ThemeProvider>
   );
 }
