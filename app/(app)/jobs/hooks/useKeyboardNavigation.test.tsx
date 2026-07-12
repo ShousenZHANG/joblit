@@ -5,12 +5,13 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { useKeyboardNavigation } from "./useKeyboardNavigation";
 
 const items = [{ id: "first" }, { id: "second" }];
+const externallySelectedItems = [...items, { id: "third" }];
 
 function JobsKeyboardHarness({
   initialSelectedId = "first",
   onSelect,
 }: {
-  initialSelectedId?: string;
+  initialSelectedId?: string | null;
   onSelect: (id: string | null) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
@@ -71,6 +72,7 @@ function JobsKeyboardHarness({
             tabIndex={0}
           />
         </div>
+        <span data-testid="list-background" tabIndex={0}>List background</span>
         <button
           type="button"
           data-job-id="second"
@@ -98,6 +100,38 @@ function MissingTargetHarness({ prepareRowFocus }: { prepareRowFocus: (index: nu
   return (
     <div ref={containerRef} data-testid="missing-target-list">
       <button type="button" data-job-id="first">First role</button>
+    </div>
+  );
+}
+
+function ExternalSelectionHarness({
+  selectedId,
+  renderPendingTarget,
+  onSelect,
+  prepareRowFocus,
+}: {
+  selectedId: string;
+  renderPendingTarget: boolean;
+  onSelect: (id: string | null) => void;
+  prepareRowFocus: (index: number) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useKeyboardNavigation({
+    containerRef,
+    items: externallySelectedItems,
+    selectedId,
+    onSelect,
+    prepareRowFocus,
+  });
+
+  return (
+    <div ref={containerRef} data-testid="external-selection-list">
+      <button type="button" data-job-id="first">First role</button>
+      {renderPendingTarget ? (
+        <button type="button" data-job-id="second">Second role</button>
+      ) : null}
+      <button type="button" data-job-id="third">Third role</button>
     </div>
   );
 }
@@ -151,6 +185,18 @@ describe("useKeyboardNavigation", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  it("does not use a background descendant to resume a cleared selection", () => {
+    const onSelect = vi.fn();
+    render(<JobsKeyboardHarness initialSelectedId={null} onSelect={onSelect} />);
+    const background = screen.getByTestId("list-background");
+
+    background.focus();
+    const wasNotCancelled = fireEvent.keyDown(background, { key: "ArrowDown" });
+
+    expect(wasNotCancelled).toBe(true);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
   it("does not intercept controls outside the jobs list", () => {
     const onSelect = vi.fn();
     render(<JobsKeyboardHarness onSelect={onSelect} />);
@@ -190,6 +236,28 @@ describe("useKeyboardNavigation", () => {
       await waitFor(() => expect(expected).toHaveFocus());
       expect(focus).toHaveBeenCalledWith({ preventScroll: true });
       expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+    },
+  );
+
+  it.each([
+    { key: "ArrowDown", expectedId: "first", expectedName: "First role" },
+    { key: "j", expectedId: "first", expectedName: "First role" },
+    { key: "ArrowUp", expectedId: "second", expectedName: "Second role" },
+    { key: "k", expectedId: "second", expectedName: "Second role" },
+  ])(
+    "resumes a cleared selection from the list root with $key",
+    async ({ key, expectedId, expectedName }) => {
+      const onSelect = vi.fn();
+      render(<JobsKeyboardHarness initialSelectedId={null} onSelect={onSelect} />);
+      const list = screen.getByTestId("jobs-list");
+      const expected = screen.getByRole("button", { name: expectedName });
+
+      list.focus();
+      const wasNotCancelled = fireEvent.keyDown(list, { key });
+
+      expect(wasNotCancelled).toBe(false);
+      expect(onSelect).toHaveBeenCalledWith(expectedId);
+      await waitFor(() => expect(expected).toHaveFocus());
     },
   );
 
@@ -239,5 +307,51 @@ describe("useKeyboardNavigation", () => {
     expect(requestFrame).toHaveBeenCalled();
     unmount();
     expect(cancelFrame).toHaveBeenCalledWith(73);
+  });
+
+  it("does not let a pending virtual focus override an external selection", async () => {
+    let pendingFrame: FrameRequestCallback | null = null;
+    const requestFrame = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      pendingFrame = callback;
+      return 91;
+    });
+    const cancelFrame = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+    const onSelect = vi.fn();
+    const prepareRowFocus = vi.fn();
+    const { rerender } = render(
+      <ExternalSelectionHarness
+        selectedId="first"
+        renderPendingTarget={false}
+        onSelect={onSelect}
+        prepareRowFocus={prepareRowFocus}
+      />,
+    );
+    const first = screen.getByRole("button", { name: "First role" });
+
+    first.focus();
+    fireEvent.keyDown(first, { key: "ArrowDown" });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(onSelect).toHaveBeenCalledWith("second");
+    expect(requestFrame).toHaveBeenCalled();
+    rerender(
+      <ExternalSelectionHarness
+        selectedId="third"
+        renderPendingTarget
+        onSelect={onSelect}
+        prepareRowFocus={prepareRowFocus}
+      />,
+    );
+    const second = screen.getByRole("button", { name: "Second role" });
+    const third = screen.getByRole("button", { name: "Third role" });
+    third.focus();
+
+    expect(cancelFrame).toHaveBeenCalledWith(91);
+    act(() => pendingFrame?.(0));
+
+    expect(third).toHaveFocus();
+    expect(second).not.toHaveFocus();
   });
 });

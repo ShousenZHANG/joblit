@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 
 export interface UseKeyboardNavigationOptions {
   containerRef: RefObject<HTMLElement | null>;
@@ -49,11 +49,12 @@ export function useKeyboardNavigation(options: UseKeyboardNavigationOptions) {
     enabled = true,
   } = options;
   const selectedIdRef = useRef(selectedId);
-  const focusRequestRef = useRef({ sequence: 0, frameId: null as number | null });
-
-  useEffect(() => {
-    selectedIdRef.current = selectedId;
-  }, [selectedId]);
+  const focusRequestRef = useRef({
+    sequence: 0,
+    frameId: null as number | null,
+    targetId: null as string | null,
+    originId: null as string | null,
+  });
 
   const cancelPendingFocus = useCallback(() => {
     focusRequestRef.current.sequence += 1;
@@ -61,17 +62,36 @@ export function useKeyboardNavigation(options: UseKeyboardNavigationOptions) {
       cancelAnimationFrame(focusRequestRef.current.frameId);
       focusRequestRef.current.frameId = null;
     }
+    focusRequestRef.current.targetId = null;
+    focusRequestRef.current.originId = null;
   }, []);
 
-  const requestRowFocus = useCallback((container: HTMLElement, index: number, jobId: string) => {
+  useLayoutEffect(() => {
+    selectedIdRef.current = selectedId;
+    const pendingTargetId = focusRequestRef.current.targetId;
+    if (pendingTargetId !== null && pendingTargetId !== selectedId) {
+      cancelPendingFocus();
+    }
+  }, [cancelPendingFocus, selectedId]);
+
+  const requestRowFocus = useCallback((
+    container: HTMLElement,
+    index: number,
+    jobId: string,
+    originId: string | null,
+  ) => {
     cancelPendingFocus();
     const requestSequence = focusRequestRef.current.sequence;
+    focusRequestRef.current.targetId = jobId;
+    focusRequestRef.current.originId = originId;
     let attemptsRemaining = 8;
     prepareRowFocus?.(index);
 
     const tryFocus = () => {
       if (
         focusRequestRef.current.sequence !== requestSequence ||
+        focusRequestRef.current.targetId !== jobId ||
+        selectedIdRef.current !== jobId ||
         containerRef.current !== container ||
         !container.isConnected
       ) {
@@ -81,6 +101,8 @@ export function useKeyboardNavigation(options: UseKeyboardNavigationOptions) {
       const element = findJob(container, jobId);
       if (element) {
         focusRequestRef.current.frameId = null;
+        focusRequestRef.current.targetId = null;
+        focusRequestRef.current.originId = null;
         element.focus({ preventScroll: true });
         element.scrollIntoView({ block: "nearest" });
         return;
@@ -88,6 +110,8 @@ export function useKeyboardNavigation(options: UseKeyboardNavigationOptions) {
 
       if (attemptsRemaining <= 0) {
         focusRequestRef.current.frameId = null;
+        focusRequestRef.current.targetId = null;
+        focusRequestRef.current.originId = null;
         return;
       }
       attemptsRemaining -= 1;
@@ -106,7 +130,9 @@ export function useKeyboardNavigation(options: UseKeyboardNavigationOptions) {
 
     function onKeyDown(event: KeyboardEvent) {
       const target = event.target instanceof Element ? event.target : null;
-      if (!target || !container.contains(target) || !isOwnedRowTarget(target)) return;
+      if (!target || !container.contains(target)) return;
+      const isClearedListRoot = target === container && selectedIdRef.current === null;
+      if (!isClearedListRoot && !isOwnedRowTarget(target)) return;
 
       const key = event.key;
       const isNext = key === "j" || key === "ArrowDown";
@@ -115,7 +141,27 @@ export function useKeyboardNavigation(options: UseKeyboardNavigationOptions) {
 
       if (!isNext && !isPrev && !isEscape) return;
 
-      let currentIndex = items.findIndex((it) => it.id === selectedIdRef.current);
+      if (isClearedListRoot) {
+        if (!isNext && !isPrev) return;
+        event.preventDefault();
+        const resumeIndex = isNext ? 0 : items.length - 1;
+        const resumeId = items[resumeIndex]!.id;
+        selectedIdRef.current = resumeId;
+        onSelect(resumeId);
+        requestRowFocus(container, resumeIndex, resumeId, null);
+        return;
+      }
+
+      const focusedRowId = target.closest<HTMLElement>("[data-job-id]")?.dataset.jobId;
+      const validFocusedRowId = focusedRowId && items.some((item) => item.id === focusedRowId)
+        ? focusedRowId
+        : null;
+      const pendingCursorId = validFocusedRowId !== null &&
+        focusRequestRef.current.originId === validFocusedRowId
+        ? focusRequestRef.current.targetId
+        : null;
+      const cursorId = pendingCursorId ?? validFocusedRowId ?? selectedIdRef.current;
+      let currentIndex = items.findIndex((it) => it.id === cursorId);
       if (currentIndex < 0) currentIndex = 0;
 
       if (isEscape) {
@@ -143,7 +189,7 @@ export function useKeyboardNavigation(options: UseKeyboardNavigationOptions) {
         const nextId = items[nextIndex]!.id;
         selectedIdRef.current = nextId;
         onSelect(nextId);
-        requestRowFocus(container, nextIndex, nextId);
+        requestRowFocus(container, nextIndex, nextId, validFocusedRowId ?? cursorId);
         return;
       }
 
@@ -154,7 +200,7 @@ export function useKeyboardNavigation(options: UseKeyboardNavigationOptions) {
         const prevId = items[prevIndex]!.id;
         selectedIdRef.current = prevId;
         onSelect(prevId);
-        requestRowFocus(container, prevIndex, prevId);
+        requestRowFocus(container, prevIndex, prevId, validFocusedRowId ?? cursorId);
       }
     }
 

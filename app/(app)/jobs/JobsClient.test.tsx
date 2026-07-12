@@ -1419,8 +1419,28 @@ describe("JobsClient", () => {
       expect(rows[1]).not.toHaveAttribute("aria-current");
     });
 
-    it("clears row and detail selection with Escape, then allows a row reselect", async () => {
+    it("continues keyboard navigation from the focused batch main row", async () => {
       const user = userEvent.setup();
+      setupMultiJobFetch();
+      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
+      await waitForJobsRendered();
+
+      await user.click(screen.getByRole("button", { name: /enter selection mode/i }));
+      const list = within(screen.getAllByTestId("jobs-results-scroll")[0]).getByRole("list");
+      const rows = [...list.querySelectorAll<HTMLButtonElement>("[data-job-id]")];
+
+      await user.click(rows[1]);
+      expect(rows[1]).toHaveFocus();
+      expect(rows[0]).toHaveAttribute("aria-current", "true");
+
+      fireEvent.keyDown(rows[1], { key: "ArrowDown" });
+
+      await waitFor(() => expect(rows[2]).toHaveFocus());
+      expect(rows[2]).toHaveAttribute("aria-current", "true");
+      expect(rows[0]).not.toHaveAttribute("aria-current");
+    });
+
+    it("clears with Escape, then reselects from the list root with the keyboard", async () => {
       setupMultiJobFetch();
       renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
       await waitForJobsRendered();
@@ -1439,11 +1459,13 @@ describe("JobsClient", () => {
       expect(within(details).getByText("Select a job to preview details.")).toBeInTheDocument();
       expect(within(details).queryByRole("heading", { name: "Alpha Engineer" })).not.toBeInTheDocument();
 
-      await user.click(rows[1]);
+      const wasNotCancelled = fireEvent.keyDown(list, { key: "ArrowDown" });
 
-      expect(rows[1]).toHaveAttribute("aria-current", "true");
+      expect(wasNotCancelled).toBe(false);
+      await waitFor(() => expect(rows[0]).toHaveFocus());
+      expect(rows[0]).toHaveAttribute("aria-current", "true");
       expect(list).toHaveAttribute("tabindex", "-1");
-      expect(within(details).getByRole("heading", { name: "Beta Developer" })).toBeInTheDocument();
+      expect(within(details).getByRole("heading", { name: "Alpha Engineer" })).toBeInTheDocument();
     });
 
     it("lets a mutation selection replace an explicit Escape clear", async () => {
