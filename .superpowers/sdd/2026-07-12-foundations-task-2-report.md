@@ -81,3 +81,49 @@ emit the exact `data-slot` hooks consumed by the new CSS contract.
 None. The repository stores `app/globals.css` with CRLF line endings; the file
 was staged while preserving that format, so the commit contains only the 15
 intended CSS lines.
+
+## Review follow-up: test integrity
+
+Formal review identified two gaps in the tests, not in the production touch
+contract. Both were addressed with mutation evidence before the final GREEN.
+
+### Balanced coarse-pointer block extraction
+
+- RED: a synthetic mutation moved the button/dialog `min-width: 44px` rule
+  immediately outside `@media (pointer: coarse)`. The old `[\s\S]*?`
+  cross-block regex still matched it, so the new mutation regression failed for
+  the expected reason.
+- GREEN: `test/mobileLayoutStyles.test.ts` now extracts each coarse-pointer
+  media body with balanced-brace scanning before evaluating its rule bodies.
+  The scanner ignores braces inside CSS comments, quoted values, and escaped
+  characters. The outside-media mutation is rejected, while the real contract
+  is accepted.
+
+### Real primitive slot binding
+
+- RED: after adding a real render of Button, Input, open Radix Select
+  (trigger + item), and the default Dialog close, the four existing production
+  slots were temporarily changed to `*-mutant`. The test failed with the exact
+  received array `input-mutant`, `select-trigger-mutant`,
+  `select-item-mutant`, and `dialog-close-mutant`.
+- GREEN: restoring the production slots made the test pass. The final test
+  binds every coarse-pointer CSS selector to the actual rendered DOM:
+  `button`, `input`, `select-trigger`, `select-item`, and `dialog-close`.
+- The temporary production mutations were fully restored; the follow-up has no
+  production-code diff.
+
+### Follow-up verification
+
+- Focused tests:
+  `npm test -- components/ui/interaction-primitives.test.tsx test/mobileLayoutStyles.test.ts`
+  — 2 files passed, 8 tests passed.
+- Limited ESLint on both changed test files: exit 0, no findings.
+- `git diff --check`: clean.
+- Full Vitest was not repeated because the review task explicitly limited
+  verification to the two focused files.
+
+### Follow-up concerns
+
+None. The stricter CSS test cannot accept a matching width rule after the
+balanced coarse-pointer block closes, and the slot test exercises real Radix
+portal output rather than mocked primitives.
