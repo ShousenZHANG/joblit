@@ -76,3 +76,45 @@ styling.
 None in Task 1. An optional repository-wide `tsc --noEmit` probe still reports
 pre-existing type errors in unrelated test files; neither changed file appears
 in that output, and the scoped TypeScript check for this task is clean.
+
+## Review follow-up: controlled sync and safe relationship IDs
+
+Formal review identified one controlled-state bug and one ID-hardening gap.
+Both were closed with separate RED to GREEN cycles.
+
+### External controlled-value sync
+
+- RED: a real manual-mode harness added an external button that calls the
+  parent `setValue("second")`. Selection and panel visibility moved to Second,
+  but First incorrectly remained the sole `tabIndex=0` tab. The focused suite
+  failed on the expected `tabindex="-1"` assertion for First.
+- GREEN: roving state now records the selected-value snapshot. When the
+  controlled value changes, the hook conditionally resets the tab stop to the
+  new selected value before commit. Manual arrow navigation still changes only
+  focus/tab stop until Enter or Space activates it.
+- The regression verifies Second is selected, its panel is visible, it is the
+  unique `tabIndex=0` tab, and pressing Tab from the preceding external control
+  enters Second directly.
+
+### Whitespace-free value tokens
+
+- RED: a harness using the tab value `"cover letter"` received the raw ID
+  `documents-tab-cover letter`; the exact encoded-ID assertion failed.
+- GREEN: tab and panel IDs now derive their value token with
+  `encodeURIComponent`. The test binds both sides of `aria-controls` and
+  `aria-labelledby` to the encoded IDs and confirms every relationship string
+  is whitespace-free.
+
+### Follow-up verification
+
+- Focused Vitest:
+  `npm test -- components/ui/useAccessibleTabs.test.tsx` — 1 file passed,
+  5 tests passed.
+- Limited ESLint on the hook and test: exit 0, no findings.
+- Scoped TypeScript check on the hook and test: exit 0.
+- CRLF-aware unstaged diff check on both product paths: clean.
+- Full Vitest was not repeated, per the formal-review instruction.
+
+### Follow-up concerns
+
+None. The optional repository-wide TypeScript baseline note above is unchanged.

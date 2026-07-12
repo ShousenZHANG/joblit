@@ -39,12 +39,36 @@ function ManualHarness() {
 
   return (
     <>
+      <button onClick={() => setValue("second")}>Select second externally</button>
       <div aria-label="Resume sections" {...tabs.tabListProps}>
         <button {...tabs.getTabProps("first")}>First</button>
         <button {...tabs.getTabProps("second")}>Second</button>
       </div>
       <section {...tabs.getPanelProps("first")}>First panel</section>
       <section {...tabs.getPanelProps("second")}>Second panel</section>
+    </>
+  );
+}
+
+function SpacedValueHarness() {
+  const [value, setValue] = useState<"overview" | "cover letter">("overview");
+  const tabs = useAccessibleTabs({
+    id: "documents",
+    value,
+    values: ["overview", "cover letter"] as const,
+    onValueChange: setValue,
+  });
+
+  return (
+    <>
+      <div aria-label="Document views" {...tabs.tabListProps}>
+        <button {...tabs.getTabProps("overview")}>Overview</button>
+        <button {...tabs.getTabProps("cover letter")}>Cover letter</button>
+      </div>
+      <section {...tabs.getPanelProps("overview")}>Overview panel</section>
+      <section {...tabs.getPanelProps("cover letter")}>
+        Cover letter panel
+      </section>
     </>
   );
 }
@@ -169,5 +193,65 @@ describe("useAccessibleTabs", () => {
     await user.keyboard("{End}");
     expect(second).toHaveFocus();
     expect(first).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("syncs the manual tab stop when the controlled value changes externally", async () => {
+    const user = userEvent.setup();
+    render(<ManualHarness />);
+
+    const externalControl = screen.getByRole("button", {
+      name: "Select second externally",
+    });
+    const first = screen.getByRole("tab", { name: "First" });
+    const second = screen.getByRole("tab", { name: "Second" });
+    const firstPanel = screen.getByText("First panel");
+    const secondPanel = screen.getByText("Second panel");
+
+    await user.click(externalControl);
+
+    expect(second).toHaveAttribute("aria-selected", "true");
+    expect(first).toHaveAttribute("tabindex", "-1");
+    expect(second).toHaveAttribute("tabindex", "0");
+    expect(
+      screen.getAllByRole("tab").filter((tab) => tab.tabIndex === 0),
+    ).toEqual([second]);
+    expect(firstPanel).toHaveAttribute("hidden");
+    expect(secondPanel).not.toHaveAttribute("hidden");
+
+    await user.tab();
+    expect(second).toHaveFocus();
+  });
+
+  it("encodes tab values into whitespace-free relationship IDs", () => {
+    render(<SpacedValueHarness />);
+
+    const coverLetter = screen.getByRole("tab", { name: "Cover letter" });
+    const coverLetterPanel = screen.getByText("Cover letter panel");
+
+    expect(coverLetter).toHaveAttribute(
+      "id",
+      "documents-tab-cover%20letter",
+    );
+    expect(coverLetter).toHaveAttribute(
+      "aria-controls",
+      "documents-panel-cover%20letter",
+    );
+    expect(coverLetterPanel).toHaveAttribute(
+      "id",
+      "documents-panel-cover%20letter",
+    );
+    expect(coverLetterPanel).toHaveAttribute(
+      "aria-labelledby",
+      "documents-tab-cover%20letter",
+    );
+
+    for (const relationship of [
+      coverLetter.id,
+      coverLetter.getAttribute("aria-controls"),
+      coverLetterPanel.id,
+      coverLetterPanel.getAttribute("aria-labelledby"),
+    ]) {
+      expect(relationship).not.toMatch(/\s/);
+    }
   });
 });
