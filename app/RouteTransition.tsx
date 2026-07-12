@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { useReducedMotion } from "framer-motion";
@@ -8,32 +8,57 @@ import { useReducedMotion } from "framer-motion";
 export function RouteTransition({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const reduce = useReducedMotion();
+  const [historyNavigation, setHistoryNavigation] = useState(false);
+  const [routeState, setRouteState] = useState(() => ({
+    pathname,
+    hasNavigated: false,
+    fromHistory: false,
+  }));
+
+  if (routeState.pathname !== pathname) {
+    setRouteState({
+      pathname,
+      hasNavigated: true,
+      fromHistory: historyNavigation,
+    });
+    if (historyNavigation) setHistoryNavigation(false);
+  }
+
+  useEffect(() => {
+    const markHistoryNavigation = () => {
+      setHistoryNavigation(true);
+    };
+
+    window.addEventListener("popstate", markHistoryNavigation);
+    return () => window.removeEventListener("popstate", markHistoryNavigation);
+  }, []);
 
   useLayoutEffect(() => {
-    const appShell = document.querySelector<HTMLElement>(".app-shell");
-    if (appShell) {
-      appShell.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    if (!routeState.hasNavigated || routeState.pathname !== pathname) return;
+
+    if (!routeState.fromHistory) {
+      requestAnimationFrame(() => {
+        document.getElementById("main-content")?.focus({ preventScroll: true });
+      });
     }
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-  }, [pathname]);
+  }, [pathname, routeState]);
 
   const ease: [number, number, number, number] = [0.22, 1, 0.36, 1];
   const transition = reduce ? { duration: 0 } : { duration: 0.22, ease };
 
-  // Enter-only, keyed by pathname. The previous AnimatePresence mode="wait" +
-  // exit pair taxed EVERY navigation with a serial ~220ms exit before the new
-  // page could even start entering — and under the App Router the exiting
-  // subtree re-renders against the NEW route context, which can flash the new
-  // page's content mid-exit (double flash). Navigation now responds on the
-  // next frame and simply fades the new page in.
+  const initial =
+    !routeState.hasNavigated || routeState.fromHistory || reduce
+      ? false
+      : { opacity: 0, y: 4 };
+
   return (
     <motion.div
       key={pathname}
-      initial={reduce ? false : { opacity: 0, scale: 0.985 }}
-      animate={reduce ? {} : { opacity: 1, scale: 1 }}
+      initial={initial}
+      animate={reduce ? {} : { opacity: 1, y: 0 }}
       transition={transition}
       data-route-transition="fade"
-      className="flex min-h-0 flex-1 flex-col origin-top"
+      className="flex min-h-0 flex-1 flex-col"
     >
       {children}
     </motion.div>
