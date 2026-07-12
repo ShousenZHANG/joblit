@@ -245,6 +245,86 @@
     var(--nebula);
 }
 
+/* Authenticated workspace atmosphere — two static light-mode layers, with a
+   single 60-second compositor-only drift in dark mode. The app shell avoids
+   mounting the landing starfield, so there is no pointer listener here. */
+.workspace-atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  contain: layout paint;
+}
+
+.workspace-atmosphere > span {
+  position: absolute;
+  inset: -10%;
+  transform: none;
+}
+
+.workspace-atmosphere__aurora {
+  opacity: 0.5;
+  background:
+    radial-gradient(ellipse 56% 48% at 12% 2%, oklch(0.84 0.1 164 / 0.5), transparent 70%),
+    radial-gradient(ellipse 50% 44% at 92% 18%, oklch(0.86 0.08 210 / 0.4), transparent 72%);
+}
+
+.workspace-atmosphere__nebula {
+  opacity: 0.42;
+  background: var(--nebula);
+}
+
+.dark .workspace-atmosphere__aurora,
+.dark .workspace-atmosphere__nebula {
+  --workspace-layer-opacity-low: 0.45;
+  --workspace-layer-opacity: 0.58;
+  animation: workspace-atmosphere-drift 60s ease-in-out infinite alternate;
+  will-change: transform, opacity;
+}
+
+.dark .workspace-atmosphere__aurora {
+  background:
+    radial-gradient(ellipse 58% 52% at 10% 0%, oklch(0.58 0.16 164 / 0.24), transparent 70%),
+    radial-gradient(ellipse 52% 48% at 94% 18%, oklch(0.54 0.12 218 / 0.2), transparent 72%);
+}
+
+.dark .workspace-atmosphere__nebula {
+  --workspace-layer-opacity-low: 0.34;
+  --workspace-layer-opacity: 0.44;
+  animation-delay: -30s;
+  animation-direction: alternate-reverse;
+}
+
+@keyframes workspace-atmosphere-drift {
+  from {
+    opacity: var(--workspace-layer-opacity-low);
+    transform: translate3d(-1.5%, -1%, 0) scale(1.02);
+  }
+  to {
+    opacity: var(--workspace-layer-opacity);
+    transform: translate3d(1.5%, 1%, 0) scale(1.05);
+  }
+}
+
+@media (pointer: coarse) {
+  .dark .workspace-atmosphere > span {
+    animation: none;
+    opacity: var(--workspace-layer-opacity);
+    transform: none;
+    will-change: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dark .workspace-atmosphere > span {
+    animation: none;
+    opacity: var(--workspace-layer-opacity);
+    transform: none;
+    will-change: auto;
+  }
+}
+
 /* Aurora — premium "living" background layered BEHIND .landing-atmos. Three
    slow-drifting blurred emerald/teal blobs. Animates TRANSFORM ONLY (GPU
    composited, blur is a static layer), so unlike the paint-heavy effects that

@@ -1,6 +1,5 @@
 import { AppNav } from "@/components/app-shell/AppNav";
 import { CommandPalette } from "@/components/app-shell/CommandPalette";
-import { Starfield } from "@/components/landing/Starfield";
 import { getTranslations } from "next-intl/server";
 import { RouteTransition } from "../RouteTransition";
 import { GuideProvider } from "../GuideContext";
@@ -13,20 +12,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="relative grid h-dvh grid-rows-[auto_minmax(0,1fr)] overflow-x-hidden overflow-y-auto lg:overflow-hidden">
-      {/* Atmosphere, back→front: starfield → drifting aurora → nebula wash →
-          grain. All fixed, pointer-events-none, z-0; content sits at z-1. The
-          workspace gets the same sky as landing — it is where the user lives. */}
-      <Starfield />
-      <div aria-hidden className="landing-aurora">
-        <span className="landing-aurora-blob landing-aurora-blob--1" />
-        <span className="landing-aurora-blob landing-aurora-blob--2" />
-        <span className="landing-aurora-blob landing-aurora-blob--3" />
-        <span className="landing-aurora-blob landing-aurora-blob--4" />
+      {/* Two compositor-friendly layers preserve the Aurora workspace identity
+          without mounting the interactive landing starfield. */}
+      <div aria-hidden className="workspace-atmosphere">
+        <span className="workspace-atmosphere__aurora" />
+        <span className="workspace-atmosphere__nebula" />
       </div>
-      <div aria-hidden className="landing-atmos" />
-      {/* A solid dark fill reads flat and plastic; the grain is what makes
-          deep space feel deep. */}
-      <div aria-hidden className="landing-grain" />
       <GuideProvider>
         <a
           href="#main-content"

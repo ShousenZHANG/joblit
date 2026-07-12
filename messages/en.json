@@ -4,6 +4,7 @@
     "themeSwitchToLight": "Switch to light theme",
     "themeSwitchToDark": "Switch to dark theme",
     "signOut": "Sign out",
+    "signingOut": "Signing out...",
     "search": "Search",
     "allLocations": "All locations",
     "allLevels": "All levels",
@@ -30,6 +31,10 @@
   },
   "nav": {
     "skipToContent": "Skip to content",
+    "primary": "Primary navigation",
+    "home": "Joblit home",
+    "moreOptions": "More options",
+    "openCommands": "Open commands",
     "jobs": "Jobs",
     "fetch": "Fetch",
     "resume": "Resume",

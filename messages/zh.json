@@ -4,6 +4,7 @@
     "themeSwitchToLight": "切换到浅色主题",
     "themeSwitchToDark": "切换到深色主题",
     "signOut": "退出登录",
+    "signingOut": "正在退出...",
     "search": "搜索",
     "allLocations": "全部城市",
     "allLevels": "全部级别",
@@ -30,6 +31,10 @@
   },
   "nav": {
     "skipToContent": "跳到正文",
+    "primary": "主导航",
+    "home": "Joblit 首页",
+    "moreOptions": "更多选项",
+    "openCommands": "打开命令面板",
     "jobs": "职位",
     "fetch": "抓取",
     "resume": "简历",

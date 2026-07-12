@@ -1,4 +1,5 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
 import { AppNav } from "./AppNav";
 
@@ -58,9 +59,57 @@ function desktopScope() {
 
 describe("AppNav", () => {
   beforeEach(() => {
-    signOutMock.mockClear();
+    signOutMock.mockReset();
+    signOutMock.mockResolvedValue(undefined);
     openGuideMock.mockClear();
     mockPathname = "/jobs";
+  });
+
+  it("localizes navigation and exposes touch-safe controls", () => {
+    render(<AppNav />);
+
+    expect(screen.getByTestId("app-nav")).toHaveAttribute(
+      "aria-label",
+      "primary",
+    );
+    expect(screen.getByTestId("app-nav-mobile-menu")).toHaveClass(
+      "h-11",
+      "w-11",
+    );
+    expect(
+      screen.getByRole("button", { name: "openCommands" }),
+    ).toHaveAttribute("aria-haspopup", "dialog");
+    expect(
+      screen.getByRole("button", { name: "openCommands" }),
+    ).toHaveClass("focus-visible:ring-2", "active:scale-95");
+  });
+
+  it("does not perform a manual scroll reset from links", async () => {
+    const user = userEvent.setup();
+    const scrollTo = vi
+      .spyOn(window, "scrollTo")
+      .mockImplementation(() => undefined);
+    render(<AppNav />);
+    const resume = desktopScope().getByRole("link", { name: /resume/i });
+    resume.addEventListener("click", (event) => event.preventDefault());
+
+    await user.click(resume);
+
+    expect(scrollTo).not.toHaveBeenCalled();
+    scrollTo.mockRestore();
+  });
+
+  it("prevents duplicate sign-out and exposes pending state", async () => {
+    const user = userEvent.setup();
+    signOutMock.mockReturnValue(new Promise(() => undefined));
+    render(<AppNav />);
+    const signOut = screen.getAllByRole("button", { name: /signOut/i })[0];
+
+    await user.dblClick(signOut);
+
+    expect(signOutMock).toHaveBeenCalledTimes(1);
+    expect(signOut).toBeDisabled();
+    expect(signOut).toHaveAttribute("aria-busy", "true");
   });
 
   it("renders all 5 primary app links in the desktop nav", () => {
