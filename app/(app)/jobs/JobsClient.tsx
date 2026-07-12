@@ -23,7 +23,7 @@ import { sessionDeletedJobIds, useJobMutations } from "./hooks/useJobMutations";
 import { useKeyboardNavigation } from "./hooks/useKeyboardNavigation";
 import { useExternalGenerate } from "./hooks/useExternalGenerate";
 import { JobListItem } from "./components/JobListItem";
-import { VirtualJobList } from "./components/VirtualJobList";
+import { VirtualJobList, type VirtualJobListHandle } from "./components/VirtualJobList";
 import { JobBatchDeleteDialog } from "./components/JobBatchDeleteDialog";
 import { JobSearchBar } from "./components/JobSearchBar";
 import { ExternalGenerateDialog } from "./components/ExternalGenerateDialog";
@@ -71,18 +71,24 @@ export function JobsClient({
   } = useJobFilters();
 
   const [selectedId, setSelectedId] = useState<string | null>(initialItems[0]?.id ?? null);
+  const [selectionExplicitlyCleared, setSelectionExplicitlyCleared] = useState(false);
   const [mobileTab, setMobileTab] = useState<"list" | "detail">("list");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [timeZone] = useState<string | null>(() => getUserTimeZone() || null);
   const [isPending, startTransition] = useTransition();
   const resultsScrollRef = useRef<HTMLDivElement | null>(null);
   const jobListRef = useRef<HTMLDivElement>(null);
+  const virtualJobListRef = useRef<VirtualJobListHandle>(null);
   // Seed from the session tombstones so a remount (SPA nav away and back)
   // keeps already-committed deletes hidden even while a flushed DELETE is
   // still in flight — see sessionDeletedJobIds in useJobMutations.
   const [suppressedDeletedIds, setSuppressedDeletedIds] = useState<Set<string>>(
     () => new Set(sessionDeletedJobIds),
   );
+  const setSelectedIdFromMutation = useCallback((id: string | null) => {
+    setSelectionExplicitlyCleared(false);
+    setSelectedId(id);
+  }, []);
 
   const {
     items, totalCount, nextCursor, loading, loadingInitial, showEmpty, loadingMore,
@@ -102,7 +108,7 @@ export function JobsClient({
   } = useJobMutations({
     items,
     selectedId,
-    setSelectedId,
+    setSelectedId: setSelectedIdFromMutation,
     setSuppressedDeletedIds,
   });
 
@@ -306,12 +312,14 @@ export function JobsClient({
   }
 
   const effectiveSelectedId = useMemo(() => {
+    if (selectionExplicitlyCleared) return null;
     if (!items.length) return null;
     if (selectedId && items.some((it) => it.id === selectedId)) return selectedId;
     return items[0]?.id ?? null;
-  }, [items, selectedId]);
+  }, [items, selectedId, selectionExplicitlyCleared]);
 
   const handleSelectJob = useCallback((id: string | null) => {
+    setSelectionExplicitlyCleared(id === null);
     setSelectedId(id);
     if (id !== null) {
       markTaskComplete("review_jobs");
@@ -321,11 +329,16 @@ export function JobsClient({
     }
   }, [markTaskComplete]);
 
+  const prepareRowFocus = useCallback((index: number) => {
+    virtualJobListRef.current?.scrollToIndex(index);
+  }, []);
+
   useKeyboardNavigation({
     containerRef: jobListRef,
     items,
     selectedId: effectiveSelectedId,
     onSelect: handleSelectJob,
+    prepareRowFocus,
   });
 
   const selectedJob = items.find((it) => it.id === effectiveSelectedId) ?? null;
@@ -790,8 +803,13 @@ export function JobsClient({
             ) : null}
             {items.length > 0 ? (
               items.length > 80 ? (
-                <div ref={jobListRef} role="list">
+                <div
+                  ref={jobListRef}
+                  role="list"
+                  tabIndex={effectiveSelectedId === null ? 0 : -1}
+                >
                   <VirtualJobList
+                    ref={virtualJobListRef}
                     items={items}
                     effectiveSelectedId={effectiveSelectedId}
                     onSelect={handleSelectJob}
@@ -803,7 +821,12 @@ export function JobsClient({
                   />
                 </div>
               ) : (
-                <div ref={jobListRef} role="list" className="space-y-3 p-3">
+                <div
+                  ref={jobListRef}
+                  role="list"
+                  tabIndex={effectiveSelectedId === null ? 0 : -1}
+                  className="space-y-3 p-3"
+                >
                   {items.map((it) => {
                     const row = (
                       <JobListItem

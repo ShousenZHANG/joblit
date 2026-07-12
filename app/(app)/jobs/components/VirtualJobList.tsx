@@ -1,7 +1,15 @@
 "use client";
 
-import { useLayoutEffect, useState, type RefObject } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import {
+  forwardRef,
+  useCallback,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  type RefObject,
+} from "react";
+import { defaultRangeExtractor, useVirtualizer, type Range } from "@tanstack/react-virtual";
 
 import type { JobItem } from "../types";
 import { JobListItem } from "./JobListItem";
@@ -9,16 +17,11 @@ import { JobListItem } from "./JobListItem";
 const ROW_ESTIMATE_PX = 88;
 const ROW_OVERSCAN = 5;
 
-export function VirtualJobList({
-  items,
-  effectiveSelectedId,
-  onSelect,
-  timeZone,
-  scrollRootRef,
-  batchMode,
-  batchSelectedIds,
-  onBatchToggle,
-}: {
+export interface VirtualJobListHandle {
+  scrollToIndex: (index: number) => void;
+}
+
+interface VirtualJobListProps {
   items: JobItem[];
   effectiveSelectedId: string | null;
   onSelect: (id: string) => void;
@@ -27,8 +30,28 @@ export function VirtualJobList({
   batchMode?: boolean;
   batchSelectedIds?: Set<string>;
   onBatchToggle?: (id: string) => void;
-}) {
+}
+
+export const VirtualJobList = forwardRef<VirtualJobListHandle, VirtualJobListProps>(function VirtualJobList({
+  items,
+  effectiveSelectedId,
+  onSelect,
+  timeZone,
+  scrollRootRef,
+  batchMode,
+  batchSelectedIds,
+  onBatchToggle,
+}: VirtualJobListProps, ref) {
   const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
+  const activeIndex = useMemo(
+    () => items.findIndex((item) => item.id === effectiveSelectedId),
+    [effectiveSelectedId, items],
+  );
+  const rangeExtractor = useCallback((range: Range) => {
+    const indexes = defaultRangeExtractor(range);
+    if (activeIndex < 0 || indexes.includes(activeIndex)) return indexes;
+    return [...indexes, activeIndex].sort((left, right) => left - right);
+  }, [activeIndex]);
 
   useLayoutEffect(() => {
     const root = scrollRootRef.current;
@@ -42,16 +65,19 @@ export function VirtualJobList({
     return () => cancelAnimationFrame(raf);
   }, [scrollRootRef, items.length]);
 
-  // TanStack Virtual's `useVirtualizer()` returns functions whose identity is
-  // not memoization-safe; the React Compiler correctly skips this hook. The
-  // accompanying lint rule is informational only — silence it here.
-  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollElement,
     estimateSize: () => ROW_ESTIMATE_PX,
     overscan: ROW_OVERSCAN,
+    rangeExtractor,
   });
+
+  useImperativeHandle(ref, () => ({
+    scrollToIndex(index: number) {
+      virtualizer.scrollToIndex(index, { align: "auto" });
+    },
+  }), [virtualizer]);
 
   // Animate row repositioning (e.g. when a row above is deleted, the rows
   // below slide up smoothly instead of snapping). Disabled mid-scroll so
@@ -92,4 +118,4 @@ export function VirtualJobList({
       </div>
     </div>
   );
-}
+});

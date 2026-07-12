@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { useKeyboardNavigation } from "./useKeyboardNavigation";
 
@@ -33,7 +33,11 @@ function JobsKeyboardHarness({
   return (
     <>
       <button type="button">Outside control</button>
-      <div ref={containerRef} data-testid="jobs-list">
+      <div
+        ref={containerRef}
+        data-testid="jobs-list"
+        tabIndex={selectedId === null ? 0 : -1}
+      >
         <button
           type="button"
           data-job-id="first"
@@ -42,26 +46,31 @@ function JobsKeyboardHarness({
         >
           First role
         </button>
-        <input aria-label="Nested input" />
-        <textarea aria-label="Nested textarea" />
-        <select aria-label="Nested select" defaultValue="one">
-          <option value="one">One</option>
-          <option value="two">Two</option>
-        </select>
-        <a href="/jobs/example">Nested link</a>
-        <div contentEditable suppressContentEditableWarning tabIndex={0}>
-          Editable content
+        <div data-job-id="nested-row">
+          <button type="button" data-testid="nested-button">Nested action</button>
+          <input aria-label="Nested input" />
+          <textarea aria-label="Nested textarea" />
+          <select aria-label="Nested select" defaultValue="one">
+            <option value="one">One</option>
+            <option value="two">Two</option>
+          </select>
+          <a href="/jobs/example">Nested link</a>
+          <div contentEditable suppressContentEditableWarning tabIndex={0}>
+            Editable content
+          </div>
+          <div data-testid="empty-contenteditable" tabIndex={0}>Empty editable</div>
+          <div data-testid="plaintext-contenteditable" tabIndex={0}>Plaintext editable</div>
+          <div role="dialog" aria-label="Nested dialog" tabIndex={0} />
+          <div role="menu" aria-label="Nested menu" tabIndex={0} />
+          <div role="listbox" aria-label="Nested listbox" tabIndex={0} />
+          <div
+            role="combobox"
+            aria-label="Nested combobox"
+            aria-controls="nested-combobox-options"
+            aria-expanded="false"
+            tabIndex={0}
+          />
         </div>
-        <div role="dialog" aria-label="Nested dialog" tabIndex={0} />
-        <div role="menu" aria-label="Nested menu" tabIndex={0} />
-        <div role="listbox" aria-label="Nested listbox" tabIndex={0} />
-        <div
-          role="combobox"
-          aria-label="Nested combobox"
-          aria-controls="nested-combobox-options"
-          aria-expanded="false"
-          tabIndex={0}
-        />
         <button
           type="button"
           data-job-id="second"
@@ -75,6 +84,24 @@ function JobsKeyboardHarness({
   );
 }
 
+function MissingTargetHarness({ prepareRowFocus }: { prepareRowFocus: (index: number) => void }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useKeyboardNavigation({
+    containerRef,
+    items,
+    selectedId: "first",
+    onSelect: () => {},
+    prepareRowFocus,
+  });
+
+  return (
+    <div ref={containerRef} data-testid="missing-target-list">
+      <button type="button" data-job-id="first">First role</button>
+    </div>
+  );
+}
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -82,24 +109,43 @@ afterEach(() => {
 
 describe("useKeyboardNavigation", () => {
   it.each([
-    "input",
-    "textarea",
-    "select",
-    "a[href]",
-    "[contenteditable='true']",
-    "[role='dialog']",
-    "[role='menu']",
-    "[role='listbox']",
-    "[role='combobox']",
-  ])("does not intercept nested %s keyboard behavior", (selector) => {
+    { selector: "[data-testid='nested-button']" },
+    { selector: "input" },
+    { selector: "textarea" },
+    { selector: "select" },
+    { selector: "a[href]" },
+    { selector: "[contenteditable='true']" },
+    { selector: "[data-testid='empty-contenteditable']", contentEditable: "" },
+    { selector: "[data-testid='plaintext-contenteditable']", contentEditable: "plaintext-only" },
+    { selector: "[role='dialog']" },
+    { selector: "[role='menu']" },
+    { selector: "[role='listbox']" },
+    { selector: "[role='combobox']" },
+  ])("does not intercept nested $selector keyboard behavior", ({ selector, contentEditable }) => {
     const onSelect = vi.fn();
     render(<JobsKeyboardHarness onSelect={onSelect} />);
     const list = screen.getByTestId("jobs-list");
     const target = list.querySelector<HTMLElement>(selector);
     expect(target).not.toBeNull();
+    if (contentEditable !== undefined) {
+      target!.setAttribute("contenteditable", contentEditable);
+    }
 
     target!.focus();
     const wasNotCancelled = fireEvent.keyDown(target!, { key: "ArrowDown" });
+
+    expect(wasNotCancelled).toBe(true);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("does not intercept keyboard events from the list background", () => {
+    const onSelect = vi.fn();
+    render(<JobsKeyboardHarness onSelect={onSelect} />);
+    const list = screen.getByTestId("jobs-list");
+
+    list.tabIndex = -1;
+    list.focus();
+    const wasNotCancelled = fireEvent.keyDown(list, { key: "ArrowDown" });
 
     expect(wasNotCancelled).toBe(true);
     expect(onSelect).not.toHaveBeenCalled();
@@ -147,16 +193,21 @@ describe("useKeyboardNavigation", () => {
     },
   );
 
-  it("clears selection with Escape while a row owns focus", () => {
+  it("clears selection and focuses the list with Escape while a row owns focus", async () => {
     const onSelect = vi.fn();
     render(<JobsKeyboardHarness onSelect={onSelect} />);
     const first = screen.getByRole("button", { name: "First role" });
+    const list = screen.getByTestId("jobs-list");
+    const focus = vi.spyOn(list, "focus");
 
     first.focus();
     const wasNotCancelled = fireEvent.keyDown(first, { key: "Escape" });
 
     expect(wasNotCancelled).toBe(false);
     expect(onSelect).toHaveBeenCalledWith(null);
+    await waitFor(() => expect(list).toHaveFocus());
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+    expect(first).not.toHaveAttribute("aria-current");
   });
 
   it("leaves boundary keys unhandled when selection cannot move", () => {
@@ -169,5 +220,24 @@ describe("useKeyboardNavigation", () => {
 
     expect(wasNotCancelled).toBe(true);
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("cancels a pending row-focus retry when the list unmounts", async () => {
+    const prepareRowFocus = vi.fn();
+    const requestFrame = vi.spyOn(window, "requestAnimationFrame").mockReturnValue(73);
+    const cancelFrame = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+    const { unmount } = render(<MissingTargetHarness prepareRowFocus={prepareRowFocus} />);
+    const first = screen.getByRole("button", { name: "First role" });
+
+    first.focus();
+    fireEvent.keyDown(first, { key: "ArrowDown" });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(prepareRowFocus).toHaveBeenCalledWith(1);
+    expect(requestFrame).toHaveBeenCalled();
+    unmount();
+    expect(cancelFrame).toHaveBeenCalledWith(73);
   });
 });

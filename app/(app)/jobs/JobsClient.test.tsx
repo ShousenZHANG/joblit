@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
@@ -1397,6 +1397,110 @@ describe("JobsClient", () => {
 
       expect(checkbox).toHaveClass("min-h-11", "min-w-11");
       expect(icon).toHaveClass("h-[18px]", "w-[18px]");
+    });
+
+    it("does not navigate jobs from a batch row selector", async () => {
+      const user = userEvent.setup();
+      setupMultiJobFetch();
+      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
+      await waitForJobsRendered();
+
+      await user.click(screen.getByRole("button", { name: /enter selection mode/i }));
+      const checkbox = screen.getByRole("button", { name: /select alpha engineer/i });
+      const list = within(screen.getAllByTestId("jobs-results-scroll")[0]).getByRole("list");
+      const rows = [...list.querySelectorAll<HTMLButtonElement>("[data-job-id]")];
+
+      checkbox.focus();
+      const wasNotCancelled = fireEvent.keyDown(checkbox, { key: "ArrowDown" });
+
+      expect(wasNotCancelled).toBe(true);
+      expect(checkbox).toHaveFocus();
+      expect(rows[0]).toHaveAttribute("aria-current", "true");
+      expect(rows[1]).not.toHaveAttribute("aria-current");
+    });
+
+    it("clears row and detail selection with Escape, then allows a row reselect", async () => {
+      const user = userEvent.setup();
+      setupMultiJobFetch();
+      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
+      await waitForJobsRendered();
+
+      const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
+      const list = within(resultsPane).getByRole("list");
+      const rows = [...list.querySelectorAll<HTMLButtonElement>("[data-job-id]")];
+      const details = screen.getByTestId("jobs-details-panel");
+
+      rows[0].focus();
+      fireEvent.keyDown(rows[0], { key: "Escape" });
+
+      await waitFor(() => expect(list).toHaveFocus());
+      expect(list).toHaveAttribute("tabindex", "0");
+      expect(rows.every((row) => !row.hasAttribute("aria-current"))).toBe(true);
+      expect(within(details).getByText("Select a job to preview details.")).toBeInTheDocument();
+      expect(within(details).queryByRole("heading", { name: "Alpha Engineer" })).not.toBeInTheDocument();
+
+      await user.click(rows[1]);
+
+      expect(rows[1]).toHaveAttribute("aria-current", "true");
+      expect(list).toHaveAttribute("tabindex", "-1");
+      expect(within(details).getByRole("heading", { name: "Beta Developer" })).toBeInTheDocument();
+    });
+
+    it("lets a mutation selection replace an explicit Escape clear", async () => {
+      const user = userEvent.setup();
+      let resolveBatchDelete: (response: Response) => void = () => {};
+      const batchDeleteResponse = new Promise<Response>((resolve) => {
+        resolveBatchDelete = resolve;
+      });
+      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.startsWith("/api/jobs/batch-delete") && init?.method === "POST") {
+          return batchDeleteResponse;
+        }
+        if (url.startsWith("/api/jobs?")) {
+          return new Response(
+            JSON.stringify({ items: [jobA, jobB, jobC], nextCursor: null, totalCount: 3, facets: { jobLevels: ["Mid"] } }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (url.startsWith("/api/jobs/")) {
+          return new Response(
+            JSON.stringify({ id: jobA.id, description: "desc" }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
+      }));
+      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
+      await waitForJobsRendered();
+
+      await user.click(screen.getByRole("button", { name: /enter selection mode/i }));
+      await user.click(screen.getByRole("button", { name: /select alpha engineer/i }));
+      await user.click(screen.getByRole("button", { name: /^delete$/i }));
+      await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: /delete 1 job/i }));
+
+      const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
+      const list = within(resultsPane).getByRole("list");
+      await waitFor(() => {
+        expect(within(list).queryByText("Alpha Engineer")).not.toBeInTheDocument();
+      });
+      const betaRow = list.querySelector<HTMLButtonElement>("[data-job-id='bbbb-2222']")!;
+
+      betaRow.focus();
+      fireEvent.keyDown(betaRow, { key: "Escape" });
+      await waitFor(() => expect(list).toHaveFocus());
+      expect(list.querySelector("[aria-current='true']")).toBeNull();
+
+      resolveBatchDelete(new Response(JSON.stringify({ error: "batch failed" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      }));
+
+      await waitFor(() => {
+        const restored = list.querySelector<HTMLButtonElement>("[data-job-id='aaaa-1111']");
+        expect(restored).toHaveAttribute("aria-current", "true");
+      });
+      expect(within(screen.getByTestId("jobs-details-panel")).getByRole("heading", { name: "Alpha Engineer" })).toBeInTheDocument();
     });
 
     it("enters batch mode and shows checkboxes when selection icon is clicked", async () => {
