@@ -205,6 +205,37 @@ describe("RouteTransition", () => {
     expect(focusMock).toHaveBeenCalledOnce();
   });
 
+  it("cancels queued forward focus when a same-path popstate arrives first", () => {
+    const view = render(
+      <div className="app-shell">
+        <main id="main-content" tabIndex={-1}>
+          <RouteTransition>
+            <div>Jobs</div>
+          </RouteTransition>
+        </main>
+      </div>,
+    );
+
+    window.history.pushState({}, "", "/resume");
+    mockPathname = "/resume";
+    view.rerender(
+      <div className="app-shell">
+        <main id="main-content" tabIndex={-1}>
+          <RouteTransition>
+            <div>Resume</div>
+          </RouteTransition>
+        </main>
+      </div>,
+    );
+
+    window.history.replaceState({}, "", "/resume?tab=preview#document");
+    act(() => window.dispatchEvent(new PopStateEvent("popstate")));
+
+    expect(cancelAnimationFrameMock).toHaveBeenCalledWith(1);
+    act(flushAnimationFrames);
+    expect(focusMock).not.toHaveBeenCalled();
+  });
+
   it("cancels queued forward focus when history navigation takes over", () => {
     const view = render(
       <div className="app-shell">
