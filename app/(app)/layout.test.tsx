@@ -1,7 +1,10 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import en from "../../messages/en.json";
 import zh from "../../messages/zh.json";
+import LoadingJobs from "./jobs/loading";
 import AppLayout from "./layout";
 
 const localeState = vi.hoisted(() => ({
@@ -37,9 +40,22 @@ vi.mock("../RouteTransition", () => ({
   ),
 }));
 
-async function renderLayout(messages = en) {
+const appDirectory = join(process.cwd(), "app", "(app)");
+
+function collectTsxFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = join(directory, entry.name);
+    if (entry.isDirectory()) return collectTsxFiles(entryPath);
+    return entry.isFile() && entry.name.endsWith(".tsx") ? [entryPath] : [];
+  });
+}
+
+async function renderLayout(
+  messages = en,
+  children: React.ReactNode = <div>Workspace</div>,
+) {
   localeState.messages = messages as unknown as Record<string, Record<string, string>>;
-  return render(await AppLayout({ children: <div>Workspace</div> }));
+  return render(await AppLayout({ children }));
 }
 
 describe("AppLayout", () => {
@@ -73,5 +89,24 @@ describe("AppLayout", () => {
       "href",
       "#main-content",
     );
+  });
+
+  it("keeps one main landmark when the shell renders authenticated route content", async () => {
+    const { container } = await renderLayout(en, <LoadingJobs />);
+
+    const mainLandmarks = container.querySelectorAll("main");
+    expect(mainLandmarks).toHaveLength(1);
+    expect(mainLandmarks[0]).toHaveAttribute("id", "main-content");
+  });
+
+  it("reserves main elements in authenticated app source for the shell layout", () => {
+    const shellLayout = join(appDirectory, "layout.tsx");
+    const offenders = collectTsxFiles(appDirectory)
+      .filter((file) => file !== shellLayout && !file.endsWith(".test.tsx"))
+      .filter((file) => /<\/?main\b/.test(readFileSync(file, "utf8")))
+      .map((file) => relative(appDirectory, file).replaceAll("\\", "/"))
+      .sort();
+
+    expect(offenders).toEqual([]);
   });
 });

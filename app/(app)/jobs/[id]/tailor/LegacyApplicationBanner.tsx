@@ -26,7 +26,7 @@ export function LegacyApplicationBanner({
 }: LegacyApplicationBannerProps) {
   const t = useTranslations("tailor");
   return (
-    <main className="mx-auto flex min-h-[60vh] w-full max-w-3xl flex-col gap-6 px-6 py-12">
+    <div className="mx-auto flex min-h-[60vh] w-full max-w-3xl flex-col gap-6 px-6 py-12">
       <Link
         href="/jobs"
         className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
@@ -82,6 +82,6 @@ export function LegacyApplicationBanner({
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

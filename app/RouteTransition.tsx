@@ -8,7 +8,7 @@ import { useReducedMotion } from "framer-motion";
 export function RouteTransition({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const reduce = useReducedMotion();
-  const [historyNavigation, setHistoryNavigation] = useState(false);
+  const [historyTargetPathname, setHistoryTargetPathname] = useState<string | null>(null);
   const [routeState, setRouteState] = useState(() => ({
     pathname,
     hasNavigated: false,
@@ -19,14 +19,16 @@ export function RouteTransition({ children }: { children: React.ReactNode }) {
     setRouteState({
       pathname,
       hasNavigated: true,
-      fromHistory: historyNavigation,
+      fromHistory: historyTargetPathname === pathname,
     });
-    if (historyNavigation) setHistoryNavigation(false);
+    if (historyTargetPathname !== null) setHistoryTargetPathname(null);
+  } else if (historyTargetPathname === pathname) {
+    setHistoryTargetPathname(null);
   }
 
   useEffect(() => {
     const markHistoryNavigation = () => {
-      setHistoryNavigation(true);
+      setHistoryTargetPathname(window.location.pathname);
     };
 
     window.addEventListener("popstate", markHistoryNavigation);
@@ -36,11 +38,12 @@ export function RouteTransition({ children }: { children: React.ReactNode }) {
   useLayoutEffect(() => {
     if (!routeState.hasNavigated || routeState.pathname !== pathname) return;
 
-    if (!routeState.fromHistory) {
-      requestAnimationFrame(() => {
-        document.getElementById("main-content")?.focus({ preventScroll: true });
-      });
-    }
+    if (routeState.fromHistory) return;
+
+    const frameId = requestAnimationFrame(() => {
+      document.getElementById("main-content")?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frameId);
   }, [pathname, routeState]);
 
   const ease: [number, number, number, number] = [0.22, 1, 0.36, 1];

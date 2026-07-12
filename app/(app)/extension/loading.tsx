@@ -1,6 +1,6 @@
 export default function LoadingExtension() {
   return (
-    <main className="route-loading-enter flex h-full min-h-0 flex-1 flex-col">
+    <div className="route-loading-enter flex h-full min-h-0 flex-1 flex-col">
       <section className="flex h-full min-h-0 flex-1 flex-col overflow-hidden cosmos-panel rounded-3xl border-2 border-border/60 bg-background/85 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] backdrop-blur">
         {/* Header */}
         <div className="flex shrink-0 items-start justify-between gap-4 px-4 pb-2 pt-3 lg:px-6 lg:pb-4 lg:pt-6">
@@ -25,6 +25,6 @@ export default function LoadingExtension() {
           ))}
         </div>
       </section>
-    </main>
+    </div>
   );
 }

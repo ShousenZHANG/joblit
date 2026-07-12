@@ -8,10 +8,10 @@ export default async function DiscoverPage() {
   if (!session?.user) redirect("/login?callbackUrl=/discover");
 
   return (
-    <main className="flex h-full min-h-0 flex-1 flex-col">
+    <div className="flex h-full min-h-0 flex-1 flex-col">
       <section className="flex h-full min-h-0 flex-1 flex-col cosmos-panel rounded-3xl border-2 border-border/60 bg-background/85 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] backdrop-blur overflow-hidden">
         <DiscoverClient />
       </section>
-    </main>
+    </div>
   );
 }

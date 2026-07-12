@@ -130,10 +130,10 @@ export default async function JobsPage() {
   if (market === "CN") redirect("/resume");
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col gap-2 lg:h-full lg:overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col gap-2 lg:h-full lg:overflow-hidden">
       <Suspense fallback={<JobsListFallback />}>
         <JobsListSection userId={userId} market={market} />
       </Suspense>
-    </main>
+    </div>
   );
 }

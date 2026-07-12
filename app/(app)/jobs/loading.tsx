@@ -1,6 +1,6 @@
 export default function LoadingJobs() {
   return (
-    <main className="route-loading-enter flex min-h-0 flex-1 flex-col gap-2 lg:h-full lg:overflow-hidden">
+    <div className="route-loading-enter flex min-h-0 flex-1 flex-col gap-2 lg:h-full lg:overflow-hidden">
       <div className="grid min-h-0 flex-1 gap-2 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
         {/* Left: job list column */}
         <section className="flex min-h-0 flex-col rounded-2xl border border-border/60 bg-background/85">
@@ -59,6 +59,6 @@ export default function LoadingJobs() {
           </div>
         </section>
       </div>
-    </main>
+    </div>
   );
 }
