@@ -7,7 +7,7 @@ import { CircleHelp, LogOut } from "lucide-react";
 import { JoblitMark } from "@/components/brand/JoblitMark";
 import { useTranslations } from "next-intl";
 import { motion, useReducedMotion } from "framer-motion";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { useMarket } from "@/hooks/useMarket";
@@ -36,6 +36,10 @@ interface NavLink {
   label: string;
 }
 
+function isRouteActive(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export function AppNav() {
   const { data } = useSession();
   const pathname = usePathname();
@@ -44,6 +48,7 @@ export function AppNav() {
   const { openGuide, state } = useGuide();
   const reduce = useReducedMotion();
   const [signingOut, setSigningOut] = useState(false);
+  const signOutInFlight = useRef(false);
   // NOTE: the old scroll-shrink effect listened to window scroll, but the app
   // shell scrolls an inner container — window.scrollY was permanently 0 and
   // the shrink never fired. Removed as dead code (static resting style kept).
@@ -72,12 +77,16 @@ export function AppNav() {
     : links;
 
   const handleSignOut = async () => {
-    if (signingOut) return;
+    if (signOutInFlight.current) return;
 
+    signOutInFlight.current = true;
     setSigningOut(true);
     try {
       await signOut({ callbackUrl: "/login" });
+    } catch {
+      // Keep the current session usable so the user can retry the action.
     } finally {
+      signOutInFlight.current = false;
       setSigningOut(false);
     }
   };
@@ -114,7 +123,7 @@ export function AppNav() {
             data-testid="app-nav-links"
           >
             {allLinks.map((link) => {
-              const active = pathname.startsWith(link.href);
+              const active = isRouteActive(pathname, link.href);
               return (
                 <li key={link.href}>
                   <Link
@@ -238,16 +247,25 @@ export function AppNav() {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[200px]">
-              {allLinks.map((link) => (
-                <DropdownMenuItem key={link.href} asChild>
-                  <Link
-                    href={link.href}
-                    className="min-h-11 focus-visible:ring-2 focus-visible:ring-brand-emerald-600"
-                  >
-                    {link.label}
-                  </Link>
-                </DropdownMenuItem>
-              ))}
+              {allLinks.map((link) => {
+                const active = isRouteActive(pathname, link.href);
+                return (
+                  <DropdownMenuItem key={link.href} asChild>
+                    <Link
+                      href={link.href}
+                      aria-current={active ? "page" : undefined}
+                      className={
+                        "min-h-11 focus-visible:ring-2 focus-visible:ring-brand-emerald-600 " +
+                        (active
+                          ? "bg-brand-emerald-50 font-semibold text-brand-emerald-text"
+                          : "")
+                      }
+                    >
+                      {link.label}
+                    </Link>
+                  </DropdownMenuItem>
+                );
+              })}
               <DropdownMenuSeparator />
               {!isCN ? (
                 <DropdownMenuItem
@@ -271,7 +289,7 @@ export function AppNav() {
                   <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     {t("language")}
                   </span>
-                  <LocaleSwitcher />
+                  <LocaleSwitcher size="touch" />
                 </div>
               </DropdownMenuItem>
               <DropdownMenuItem
@@ -283,15 +301,18 @@ export function AppNav() {
                   <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     {t("theme")}
                   </span>
-                  <ThemeToggle />
+                  <ThemeToggle size="touch" />
                 </div>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={handleSignOut}
+                onSelect={(event) => {
+                  event.preventDefault();
+                  void handleSignOut();
+                }}
                 disabled={signingOut}
                 aria-busy={signingOut}
-                className="min-h-11 text-destructive focus-visible:ring-2 focus-visible:ring-brand-emerald-600 disabled:cursor-wait disabled:opacity-70"
+                className="min-h-11 text-destructive focus-visible:ring-2 focus-visible:ring-brand-emerald-600 data-[disabled]:cursor-wait"
               >
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>{tc(signingOut ? "signingOut" : "signOut")}</span>

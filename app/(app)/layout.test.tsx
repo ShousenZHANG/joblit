@@ -26,10 +26,6 @@ vi.mock("@/components/app-shell/CommandPalette", () => ({
   CommandPalette: () => null,
 }));
 
-vi.mock("@/components/landing/Starfield", () => ({
-  Starfield: () => null,
-}));
-
 vi.mock("../GuideContext", () => ({
   GuideProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -41,6 +37,40 @@ vi.mock("../RouteTransition", () => ({
 }));
 
 const appDirectory = join(process.cwd(), "app", "(app)");
+const layoutSource = readFileSync(join(appDirectory, "layout.tsx"), "utf8");
+const globalCss = readFileSync(
+  join(process.cwd(), "app", "globals.css"),
+  "utf8",
+).replace(/\r\n/g, "\n");
+
+function findClosingBrace(source: string, openingBrace: number) {
+  let depth = 0;
+  for (let index = openingBrace; index < source.length; index += 1) {
+    if (source[index] === "{") depth += 1;
+    if (source[index] === "}") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+
+  throw new Error("Unclosed CSS block");
+}
+
+function extractMediaBlocks(marker: string) {
+  const blocks: string[] = [];
+  let searchFrom = 0;
+  let markerIndex = globalCss.indexOf(marker, searchFrom);
+
+  while (markerIndex >= 0) {
+    const openingBrace = globalCss.indexOf("{", markerIndex);
+    const closingBrace = findClosingBrace(globalCss, openingBrace);
+    blocks.push(globalCss.slice(openingBrace + 1, closingBrace));
+    searchFrom = closingBrace + 1;
+    markerIndex = globalCss.indexOf(marker, searchFrom);
+  }
+
+  return blocks;
+}
 
 function collectTsxFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -90,6 +120,36 @@ describe("AppLayout", () => {
       "#main-content",
     );
   });
+
+  it("renders exactly two workspace atmosphere layers without Starfield", async () => {
+    const { container } = await renderLayout();
+    const atmosphere = container.querySelector(".workspace-atmosphere");
+
+    expect(atmosphere).not.toBeNull();
+    expect(
+      Array.from(atmosphere?.children ?? []).map((layer) => ({
+        className: layer.className,
+        tagName: layer.tagName,
+      })),
+    ).toEqual([
+      { className: "workspace-atmosphere__aurora", tagName: "SPAN" },
+      { className: "workspace-atmosphere__nebula", tagName: "SPAN" },
+    ]);
+    expect(container.querySelector(".starfield")).toBeNull();
+    expect(layoutSource).not.toMatch(/\bStarfield\b/);
+  });
+
+  it.each(["@media (pointer: coarse)", "@media (prefers-reduced-motion: reduce)"])(
+    "keeps the workspace atmosphere static inside %s",
+    (marker) => {
+      const workspaceRule =
+        /\.dark \.workspace-atmosphere > span\s*\{[^}]*animation:\s*none;[^}]*transform:\s*none;[^}]*will-change:\s*auto;/;
+
+      expect(extractMediaBlocks(marker)).toEqual(
+        expect.arrayContaining([expect.stringMatching(workspaceRule)]),
+      );
+    },
+  );
 
   it("keeps one main landmark when the shell renders authenticated route content", async () => {
     const { container } = await renderLayout(en, <LoadingJobs />);

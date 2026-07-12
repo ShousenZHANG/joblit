@@ -1,4 +1,11 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
 import { AppNav } from "./AppNav";
@@ -57,6 +64,22 @@ function desktopScope() {
   return within(screen.getByTestId("app-nav-links"));
 }
 
+function createDeferred() {
+  let resolve!: () => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<void>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+
+  return { promise, reject, resolve };
+}
+
+async function openMobileMenu(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByTestId("app-nav-mobile-menu"));
+  return screen.findByRole("menu");
+}
+
 describe("AppNav", () => {
   beforeEach(() => {
     signOutMock.mockReset();
@@ -112,6 +135,77 @@ describe("AppNav", () => {
     expect(signOut).toHaveAttribute("aria-busy", "true");
   });
 
+  it("keeps overflow sign-out mounted and guarded until it resolves", async () => {
+    const user = userEvent.setup();
+    const deferred = createDeferred();
+    signOutMock.mockReturnValue(deferred.promise);
+    render(<AppNav />);
+    const menu = await openMobileMenu(user);
+
+    await user.click(within(menu).getByRole("menuitem", { name: "signOut" }));
+
+    const pending = within(menu).getByRole("menuitem", {
+      name: "signingOut",
+    });
+    expect(pending).toBeVisible();
+    expect(pending).toHaveAttribute("aria-busy", "true");
+    expect(pending).toHaveAttribute("aria-disabled", "true");
+    await user.click(pending);
+    expect(signOutMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      deferred.resolve();
+      await deferred.promise;
+    });
+
+    await waitFor(() => {
+      const restored = within(menu).getByRole("menuitem", { name: "signOut" });
+      expect(restored).toHaveAttribute("aria-busy", "false");
+      expect(restored).not.toHaveAttribute("aria-disabled");
+    });
+  });
+
+  it("restores overflow sign-out after a rejected request", async () => {
+    const user = userEvent.setup();
+    const deferred = createDeferred();
+    signOutMock.mockReturnValue(deferred.promise);
+    render(<AppNav />);
+    const menu = await openMobileMenu(user);
+
+    await user.click(within(menu).getByRole("menuitem", { name: "signOut" }));
+
+    expect(
+      within(menu).getByRole("menuitem", { name: "signingOut" }),
+    ).toHaveAttribute("aria-busy", "true");
+    expect(signOutMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      deferred.reject(new Error("sign-out failed"));
+      await deferred.promise.catch(() => undefined);
+    });
+
+    await waitFor(() => {
+      const restored = within(menu).getByRole("menuitem", { name: "signOut" });
+      expect(restored).toHaveAttribute("aria-busy", "false");
+      expect(restored).not.toHaveAttribute("aria-disabled");
+    });
+    expect(signOutMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses touch-sized locale and theme controls in the overflow menu", async () => {
+    const user = userEvent.setup();
+    render(<AppNav />);
+    const menu = await openMobileMenu(user);
+
+    expect(within(menu).getByRole("button", { name: "EN" })).toHaveClass(
+      "min-h-11",
+      "min-w-11",
+    );
+    expect(
+      within(menu).getByRole("button", { name: "themeSwitchToDark" }),
+    ).toHaveClass("h-11", "w-11");
+  });
+
   it("renders all 5 primary app links in the desktop nav", () => {
     render(<AppNav />);
     const scope = desktopScope();
@@ -129,6 +223,35 @@ describe("AppNav", () => {
     render(<AppNav />);
     const resume = desktopScope().getByRole("link", { name: /resume/i });
     expect(resume).toHaveAttribute("aria-current", "page");
+  });
+
+  it("marks a nested route active in the mobile overflow", async () => {
+    const user = userEvent.setup();
+    mockPathname = "/resume/rules";
+    render(<AppNav />);
+    const menu = await openMobileMenu(user);
+    const resume = within(menu).getByRole("menuitem", { name: /resume/i });
+
+    expect(resume).toHaveAttribute("aria-current", "page");
+    expect(resume).toHaveClass(
+      "bg-brand-emerald-50",
+      "text-brand-emerald-text",
+    );
+  });
+
+  it("does not mark a sibling prefix as the active route", async () => {
+    const user = userEvent.setup();
+    mockPathname = "/jobs-board";
+    render(<AppNav />);
+
+    expect(
+      desktopScope().getByRole("link", { name: /jobs/i }),
+    ).not.toHaveAttribute("aria-current");
+
+    const menu = await openMobileMenu(user);
+    const jobs = within(menu).getByRole("menuitem", { name: /jobs/i });
+    expect(jobs).not.toHaveAttribute("aria-current");
+    expect(jobs).not.toHaveClass("bg-brand-emerald-50");
   });
 
   it("surfaces the signed-in email and at least one sign-out control", () => {
