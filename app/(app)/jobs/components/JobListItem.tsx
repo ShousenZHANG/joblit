@@ -36,6 +36,8 @@ function JobListItemInner({
   batchMode,
   batchSelected,
   onBatchToggle,
+  setSize,
+  positionInSet,
 }: {
   job: JobItem;
   isActive: boolean;
@@ -44,6 +46,8 @@ function JobListItemInner({
   batchMode?: boolean;
   batchSelected?: boolean;
   onBatchToggle?: (id: string) => void;
+  setSize?: number;
+  positionInSet?: number;
 }) {
   const t = useTranslations("jobs");
   const format = useFormatter();
@@ -64,7 +68,13 @@ function JobListItemInner({
     : t("unknownTime");
 
   return (
-    <div role="listitem" aria-label={listLabel} className="w-full">
+    <div
+      role="listitem"
+      aria-label={listLabel}
+      aria-setsize={setSize}
+      aria-posinset={positionInSet}
+      className="w-full"
+    >
       <div
         className={`joblit-list-item flex w-full items-start gap-0 rounded-2xl border border-l-4 border-border/60 bg-background/80 text-left backdrop-blur-sm transition-all duration-200 ease-out hover:-translate-y-[1px] ${
           batchSelected

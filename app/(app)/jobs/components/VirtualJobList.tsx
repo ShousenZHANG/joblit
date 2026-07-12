@@ -10,11 +10,12 @@ import {
   type RefObject,
 } from "react";
 import { defaultRangeExtractor, useVirtualizer, type Range } from "@tanstack/react-virtual";
+import { useReducedMotion } from "framer-motion";
 
 import type { JobItem } from "../types";
 import { JobListItem } from "./JobListItem";
 
-const ROW_ESTIMATE_PX = 88;
+const ROW_ESTIMATE_PX = 132;
 const ROW_OVERSCAN = 5;
 
 export interface VirtualJobListHandle {
@@ -43,6 +44,7 @@ export const VirtualJobList = forwardRef<VirtualJobListHandle, VirtualJobListPro
   onBatchToggle,
 }: VirtualJobListProps, ref) {
   const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
+  const reducedMotion = useReducedMotion();
   const activeIndex = useMemo(
     () => items.findIndex((item) => item.id === effectiveSelectedId),
     [effectiveSelectedId, items],
@@ -69,6 +71,7 @@ export const VirtualJobList = forwardRef<VirtualJobListHandle, VirtualJobListPro
     count: items.length,
     getScrollElement: () => scrollElement,
     estimateSize: () => ROW_ESTIMATE_PX,
+    measureElement: (element) => element.getBoundingClientRect().height,
     overscan: ROW_OVERSCAN,
     rangeExtractor,
   });
@@ -93,11 +96,12 @@ export const VirtualJobList = forwardRef<VirtualJobListHandle, VirtualJobListPro
           return (
             <div
               key={job.id}
-              className="absolute left-0 top-0 w-full"
+              ref={virtualizer.measureElement}
+              data-index={virtualRow.index}
+              className="absolute left-0 top-0 w-full pb-3"
               style={{
-                height: `${virtualRow.size}px`,
                 transform: `translateY(${virtualRow.start}px)`,
-                transition: isScrolling
+                transition: isScrolling || reducedMotion
                   ? "none"
                   : "transform 220ms cubic-bezier(0.16, 1, 0.3, 1)",
                 willChange: "transform",
@@ -111,6 +115,8 @@ export const VirtualJobList = forwardRef<VirtualJobListHandle, VirtualJobListPro
                 batchMode={batchMode}
                 batchSelected={batchSelectedIds?.has(job.id)}
                 onBatchToggle={onBatchToggle}
+                setSize={items.length}
+                positionInSet={virtualRow.index + 1}
               />
             </div>
           );

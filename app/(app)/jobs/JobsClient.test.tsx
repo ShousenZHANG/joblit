@@ -1382,7 +1382,11 @@ describe("JobsClient", () => {
 
       const resultsPane = await screen.findByTestId("jobs-results-scroll");
       await waitFor(() => expect(resultsPane).toHaveAttribute("data-virtual", "true"));
-      expect(within(resultsPane).getByRole("list")).toBeInTheDocument();
+      const list = within(resultsPane).getByRole("list");
+      expect(list).toBeInTheDocument();
+      expect(list.querySelector<HTMLElement>(".relative.w-full")).toHaveStyle({
+        height: `${virtualJobs.length * 132}px`,
+      });
     });
 
     it("keeps batch row selectors at least 44 by 44 pixels", async () => {

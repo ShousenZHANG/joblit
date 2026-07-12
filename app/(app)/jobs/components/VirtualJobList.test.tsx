@@ -17,14 +17,24 @@ type MockRange = {
 
 type MockVirtualizerOptions = {
   count: number;
+  estimateSize: () => number;
+  measureElement?: (element: HTMLElement) => number;
   rangeExtractor?: (range: MockRange) => number[];
 };
 
 const virtualMock = vi.hoisted(() => ({
+  estimatedSize: 0,
+  isScrolling: false,
+  reducedMotion: false,
   startIndex: 0,
   endIndex: 1,
+  measureElement: vi.fn(),
   order: [] as string[],
   scrollToIndex: vi.fn(),
+}));
+
+vi.mock("framer-motion", () => ({
+  useReducedMotion: () => virtualMock.reducedMotion,
 }));
 
 vi.mock("@tanstack/react-virtual", async () => {
@@ -41,6 +51,8 @@ vi.mock("@tanstack/react-virtual", async () => {
     defaultRangeExtractor,
     useVirtualizer(options: MockVirtualizerOptions) {
       const [, forceRender] = React.useReducer((revision: number) => revision + 1, 0);
+      const estimatedSize = options.estimateSize();
+      virtualMock.estimatedSize = estimatedSize;
       const range = {
         startIndex: virtualMock.startIndex,
         endIndex: virtualMock.endIndex,
@@ -50,16 +62,21 @@ vi.mock("@tanstack/react-virtual", async () => {
       const indexes = (options.rangeExtractor ?? defaultRangeExtractor)(range);
 
       return {
-        isScrolling: false,
-        getTotalSize: () => options.count * 88,
+        isScrolling: virtualMock.isScrolling,
+        getTotalSize: () => options.count * estimatedSize,
         getVirtualItems: () => indexes.map((index) => ({
           key: index,
           index,
-          start: index * 88,
-          end: (index + 1) * 88,
-          size: 88,
+          start: index * estimatedSize,
+          end: (index + 1) * estimatedSize,
+          size: estimatedSize,
           lane: 0,
         })),
+        measureElement(element: HTMLElement | null) {
+          if (!element) return;
+          virtualMock.measureElement(element);
+          options.measureElement?.(element);
+        },
         scrollToIndex(index: number, scrollOptions?: { align?: string }) {
           virtualMock.order.push(`scroll:${index}`);
           virtualMock.scrollToIndex(index, scrollOptions);
@@ -73,20 +90,34 @@ vi.mock("@tanstack/react-virtual", async () => {
 });
 
 const now = new Date().toISOString();
-const virtualJobs: JobItem[] = Array.from({ length: 12 }, (_, index) => ({
-  id: `virtual-${index}`,
-  jobUrl: `https://example.com/jobs/${index}`,
-  title: `Virtual role ${index}`,
-  company: "Virtual Co",
-  location: "Remote",
-  jobType: "Full-time",
-  jobLevel: "Mid",
-  status: "NEW",
-  createdAt: now,
-  updatedAt: now,
-}));
+function makeJobs(
+  count: number,
+  overrides: (index: number) => Partial<JobItem> = () => ({}),
+): JobItem[] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `virtual-${index}`,
+    jobUrl: `https://example.com/jobs/${index}`,
+    title: `Virtual role ${index}`,
+    company: "Virtual Co",
+    location: "Remote",
+    jobType: "Full-time",
+    jobLevel: "Mid",
+    status: "NEW",
+    createdAt: now,
+    updatedAt: now,
+    ...overrides(index),
+  }));
+}
 
-function VirtualListHarness({ selectedId }: { selectedId: string }) {
+const virtualJobs = makeJobs(12);
+
+function VirtualListHarness({
+  selectedId,
+  items = virtualJobs,
+}: {
+  selectedId: string;
+  items?: JobItem[];
+}) {
   const scrollRootRef = useRef<HTMLDivElement>(null);
 
   return (
@@ -95,7 +126,7 @@ function VirtualListHarness({ selectedId }: { selectedId: string }) {
         <div data-radix-scroll-area-viewport="" />
       </div>
       <VirtualJobList
-        items={virtualJobs}
+        items={items}
         effectiveSelectedId={selectedId}
         onSelect={() => {}}
         timeZone={null}
@@ -150,8 +181,12 @@ function VirtualKeyboardHarness() {
 }
 
 beforeEach(() => {
+  virtualMock.estimatedSize = 0;
+  virtualMock.isScrolling = false;
+  virtualMock.reducedMotion = false;
   virtualMock.startIndex = 0;
   virtualMock.endIndex = 1;
+  virtualMock.measureElement.mockReset();
   virtualMock.order = [];
   virtualMock.scrollToIndex.mockReset();
 });
@@ -161,7 +196,42 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("VirtualJobList keyboard integration", () => {
+describe("VirtualJobList", () => {
+  it("measures variable rows and publishes virtual list position", () => {
+    const items = makeJobs(81, (index) => ({
+      title: index % 2
+        ? `Short ${index}`
+        : `A deliberately long title ${index} with wrapped metadata`,
+    }));
+
+    render(<VirtualListHarness selectedId={items[0].id} items={items} />);
+
+    const first = screen.getByRole("listitem", { name: /deliberately long/i });
+    const wrapper = first.parentElement;
+    expect(wrapper).not.toBeNull();
+    expect.soft(virtualMock.estimatedSize).toBe(132);
+    expect.soft(virtualMock.measureElement).toHaveBeenCalled();
+    expect.soft(first).toHaveAttribute("aria-setsize", "81");
+    expect.soft(first).toHaveAttribute("aria-posinset", "1");
+    expect.soft(wrapper).toHaveAttribute("data-index", "0");
+    expect.soft(wrapper).toHaveClass("pb-3");
+    expect.soft(wrapper).not.toHaveStyle({ height: "88px" });
+    expect.soft(wrapper?.style.height).toBe("");
+  });
+
+  it.each([
+    { reason: "scrolling", isScrolling: true, reducedMotion: false },
+    { reason: "reduced motion", isScrolling: false, reducedMotion: true },
+  ])("disables transform transitions during $reason", ({ isScrolling, reducedMotion }) => {
+    virtualMock.isScrolling = isScrolling;
+    virtualMock.reducedMotion = reducedMotion;
+
+    render(<VirtualListHarness selectedId={virtualJobs[0].id} />);
+
+    const row = screen.getByRole("listitem", { name: /Virtual role 0/i });
+    expect(row.parentElement).toHaveStyle({ transition: "none" });
+  });
+
   it("keeps the offscreen active row mounted as the only row tab stop", () => {
     render(<VirtualListHarness selectedId={virtualJobs[8].id} />);
 
