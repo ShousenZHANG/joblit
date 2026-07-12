@@ -54,6 +54,10 @@ export const VirtualJobList = forwardRef<VirtualJobListHandle, VirtualJobListPro
     if (activeIndex < 0 || indexes.includes(activeIndex)) return indexes;
     return [...indexes, activeIndex].sort((left, right) => left - right);
   }, [activeIndex]);
+  const getItemKey = useCallback(
+    (index: number) => items[index]?.id ?? index,
+    [items],
+  );
 
   useLayoutEffect(() => {
     const root = scrollRootRef.current;
@@ -71,6 +75,7 @@ export const VirtualJobList = forwardRef<VirtualJobListHandle, VirtualJobListPro
     count: items.length,
     getScrollElement: () => scrollElement,
     estimateSize: () => ROW_ESTIMATE_PX,
+    getItemKey,
     measureElement: (element) => element.getBoundingClientRect().height,
     overscan: ROW_OVERSCAN,
     rangeExtractor,
@@ -95,7 +100,7 @@ export const VirtualJobList = forwardRef<VirtualJobListHandle, VirtualJobListPro
           if (!job) return null;
           return (
             <div
-              key={job.id}
+              key={virtualRow.key}
               ref={virtualizer.measureElement}
               data-index={virtualRow.index}
               className="absolute left-0 top-0 w-full pb-3"

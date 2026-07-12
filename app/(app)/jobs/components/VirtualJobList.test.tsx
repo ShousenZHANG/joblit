@@ -18,6 +18,7 @@ type MockRange = {
 type MockVirtualizerOptions = {
   count: number;
   estimateSize: () => number;
+  getItemKey?: (index: number) => string | number;
   measureElement?: (element: HTMLElement) => number;
   rangeExtractor?: (range: MockRange) => number[];
 };
@@ -51,6 +52,9 @@ vi.mock("@tanstack/react-virtual", async () => {
     defaultRangeExtractor,
     useVirtualizer(options: MockVirtualizerOptions) {
       const [, forceRender] = React.useReducer((revision: number) => revision + 1, 0);
+      const optionsRef = React.useRef(options);
+      const measuredSizesRef = React.useRef(new Map<string | number, number>());
+      optionsRef.current = options;
       const estimatedSize = options.estimateSize();
       virtualMock.estimatedSize = estimatedSize;
       const range = {
@@ -60,23 +64,56 @@ vi.mock("@tanstack/react-virtual", async () => {
         count: options.count,
       };
       const indexes = (options.rangeExtractor ?? defaultRangeExtractor)(range);
+      const getItemKey = (index: number) => options.getItemKey?.(index) ?? index;
+      const getItemSize = (index: number) => (
+        measuredSizesRef.current.get(getItemKey(index)) ?? estimatedSize
+      );
+      const getItemStart = (index: number) => {
+        let start = 0;
+        for (let previousIndex = 0; previousIndex < index; previousIndex += 1) {
+          start += getItemSize(previousIndex);
+        }
+        return start;
+      };
+      const measureElement = React.useCallback((element: HTMLElement | null) => {
+        if (!element) return;
+        virtualMock.measureElement(element);
+
+        const index = Number(element.dataset.index);
+        if (!Number.isInteger(index)) return;
+
+        const currentOptions = optionsRef.current;
+        const measuredSize = currentOptions.measureElement?.(element);
+        if (measuredSize === undefined || !Number.isFinite(measuredSize)) return;
+
+        const key = currentOptions.getItemKey?.(index) ?? index;
+        if (measuredSizesRef.current.get(key) === measuredSize) return;
+        measuredSizesRef.current.set(key, measuredSize);
+        forceRender();
+      }, []);
 
       return {
         isScrolling: virtualMock.isScrolling,
-        getTotalSize: () => options.count * estimatedSize,
-        getVirtualItems: () => indexes.map((index) => ({
-          key: index,
-          index,
-          start: index * estimatedSize,
-          end: (index + 1) * estimatedSize,
-          size: estimatedSize,
-          lane: 0,
-        })),
-        measureElement(element: HTMLElement | null) {
-          if (!element) return;
-          virtualMock.measureElement(element);
-          options.measureElement?.(element);
+        getTotalSize: () => {
+          let totalSize = 0;
+          for (let index = 0; index < options.count; index += 1) {
+            totalSize += getItemSize(index);
+          }
+          return totalSize;
         },
+        getVirtualItems: () => indexes.map((index) => {
+          const start = getItemStart(index);
+          const size = getItemSize(index);
+          return {
+            key: getItemKey(index),
+            index,
+            start,
+            end: start + size,
+            size,
+            lane: 0,
+          };
+        }),
+        measureElement,
         scrollToIndex(index: number, scrollOptions?: { align?: string }) {
           virtualMock.order.push(`scroll:${index}`);
           virtualMock.scrollToIndex(index, scrollOptions);
@@ -110,6 +147,24 @@ function makeJobs(
 }
 
 const virtualJobs = makeJobs(12);
+
+function mockRowHeights(heights: Record<string, number>) {
+  return vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function () {
+    const jobId = this.querySelector<HTMLElement>("[data-job-id]")?.dataset.jobId;
+    const height = jobId ? (heights[jobId] ?? 132) : 132;
+    return {
+      x: 0,
+      y: 0,
+      width: 800,
+      height,
+      top: 0,
+      right: 800,
+      bottom: height,
+      left: 0,
+      toJSON: () => ({}),
+    } as DOMRect;
+  });
+}
 
 function VirtualListHarness({
   selectedId,
@@ -197,26 +252,84 @@ afterEach(() => {
 });
 
 describe("VirtualJobList", () => {
-  it("measures variable rows and publishes virtual list position", () => {
+  it("measures variable rows and publishes virtual list position", async () => {
     const items = makeJobs(81, (index) => ({
       title: index % 2
         ? `Short ${index}`
         : `A deliberately long title ${index} with wrapped metadata`,
     }));
+    mockRowHeights({ "virtual-0": 180, "virtual-1": 96 });
 
     render(<VirtualListHarness selectedId={items[0].id} items={items} />);
 
     const first = screen.getByRole("listitem", { name: /deliberately long/i });
+    const second = screen.getByRole("listitem", { name: /Short 1/i });
     const wrapper = first.parentElement;
+    const secondWrapper = second.parentElement;
+    const virtualCanvas = wrapper?.parentElement;
     expect(wrapper).not.toBeNull();
+    expect(secondWrapper).not.toBeNull();
+    expect(virtualCanvas).not.toBeNull();
     expect.soft(virtualMock.estimatedSize).toBe(132);
     expect.soft(virtualMock.measureElement).toHaveBeenCalled();
     expect.soft(first).toHaveAttribute("aria-setsize", "81");
     expect.soft(first).toHaveAttribute("aria-posinset", "1");
+    expect.soft(second).toHaveAttribute("aria-setsize", "81");
+    expect.soft(second).toHaveAttribute("aria-posinset", "2");
     expect.soft(wrapper).toHaveAttribute("data-index", "0");
     expect.soft(wrapper).toHaveClass("pb-3");
     expect.soft(wrapper).not.toHaveStyle({ height: "88px" });
     expect.soft(wrapper?.style.height).toBe("");
+    await waitFor(() => {
+      expect(secondWrapper).toHaveStyle({ transform: "translateY(180px)" });
+      expect(virtualCanvas).toHaveStyle({ height: "10704px" });
+    });
+  });
+
+  it("keeps measured row heights attached to job identity when items reorder", async () => {
+    virtualMock.endIndex = 2;
+    const items = makeJobs(3);
+    mockRowHeights({ "virtual-0": 180, "virtual-1": 96, "virtual-2": 144 });
+    const view = render(<VirtualListHarness selectedId={items[0].id} items={items} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("listitem", { name: /Virtual role 2/i }).parentElement).toHaveStyle({
+        transform: "translateY(276px)",
+      });
+    });
+
+    view.rerender(
+      <VirtualListHarness selectedId={items[0].id} items={[items[1], items[0], items[2]]} />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("listitem", { name: /Virtual role 0/i }).parentElement).toHaveStyle({
+        transform: "translateY(96px)",
+      });
+    });
+  });
+
+  it("keeps measured row heights attached to job identity when an earlier item is deleted", async () => {
+    virtualMock.endIndex = 2;
+    const items = makeJobs(3);
+    mockRowHeights({ "virtual-0": 180, "virtual-1": 96, "virtual-2": 144 });
+    const view = render(<VirtualListHarness selectedId={items[1].id} items={items} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("listitem", { name: /Virtual role 2/i }).parentElement).toHaveStyle({
+        transform: "translateY(276px)",
+      });
+    });
+
+    view.rerender(
+      <VirtualListHarness selectedId={items[1].id} items={[items[1], items[2]]} />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("listitem", { name: /Virtual role 2/i }).parentElement).toHaveStyle({
+        transform: "translateY(96px)",
+      });
+    });
   });
 
   it.each([
