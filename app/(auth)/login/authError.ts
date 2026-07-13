@@ -19,7 +19,15 @@ export function getSafeCallbackUrl(value: string | null): string {
   try {
     const parsed = new URL(value, CALLBACK_SENTINEL_ORIGIN);
     if (parsed.origin !== CALLBACK_SENTINEL_ORIGIN) return DEFAULT_CALLBACK_URL;
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+
+    const candidate = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    if (!candidate.startsWith("/") || candidate.startsWith("//")) {
+      return DEFAULT_CALLBACK_URL;
+    }
+
+    const verified = new URL(candidate, CALLBACK_SENTINEL_ORIGIN);
+    if (verified.origin !== CALLBACK_SENTINEL_ORIGIN) return DEFAULT_CALLBACK_URL;
+    return candidate;
   } catch {
     return DEFAULT_CALLBACK_URL;
   }

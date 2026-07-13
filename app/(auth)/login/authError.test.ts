@@ -20,6 +20,9 @@ describe("login recovery", () => {
     ["https://evil.example", "/jobs"],
     ["//evil.example", "/jobs"],
     ["/\\evil.example", "/jobs"],
+    ["/resume/..//evil.example", "/jobs"],
+    ["/..//evil.example", "/jobs"],
+    ["/a/../\\evil.example", "/jobs"],
     ["javascript:alert(1)", "/jobs"],
   ] as const)("normalizes callback %s to %s", (value, expected) => {
     expect(getSafeCallbackUrl(value)).toBe(expected);
