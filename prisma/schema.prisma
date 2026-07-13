@@ -60,12 +60,6 @@ enum ApplicationStatus {
   FINAL
 }
 
-enum AccessRequestStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
-
 model User {
   id        String   @id @default(uuid()) @db.Uuid
   email     String?  @unique
@@ -452,21 +446,4 @@ model DiscoverVideoCache {
   expiresAt DateTime
 
   @@index([expiresAt])
-}
-
-// Invite-only access gate. A visitor submits their email from the landing
-// "Apply for access" form (status PENDING). An admin approves it (APPROVED),
-// which adds the email to the allowlist the NextAuth signIn callback checks —
-// the visitor then signs in with the Google/GitHub account on that email.
-// Email is stored lower-cased; the unique constraint makes apply idempotent.
-model AccessRequest {
-  id              String              @id @default(uuid()) @db.Uuid
-  email           String              @unique
-  status          AccessRequestStatus @default(PENDING)
-  note            String?
-  createdAt       DateTime            @default(now())
-  reviewedAt      DateTime?
-  reviewedByEmail String?
-
-  @@index([status, createdAt])
 }
