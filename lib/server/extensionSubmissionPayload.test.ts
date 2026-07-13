@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+import type { z } from "zod";
 import { POST } from "@/app/api/ext/submissions/route";
 import { CreateSubmissionSchema } from "./extensionSubmissionPayload";
+
+type CreateSubmissionInput = z.input<typeof CreateSubmissionSchema>;
 
 const routeMocks = vi.hoisted(() => ({
   createFormSubmission: vi.fn().mockResolvedValue({ id: "submission-1" }),
@@ -22,7 +25,7 @@ vi.mock("@/lib/server/api/rateLimit", () => ({
   rateLimitKeyFromRequest: vi.fn().mockReturnValue("test-key"),
 }));
 
-function validPayload() {
+function validPayload(): CreateSubmissionInput {
   return {
     pageUrl: "https://jobs.example.com/apply/software-engineer",
     pageDomain: "jobs.example.com",
@@ -275,7 +278,11 @@ describe("CreateSubmissionSchema", () => {
               ],
         ),
       );
-      payload[field] = entries as typeof payload[typeof field];
+      if (field === "fieldValues") {
+        payload.fieldValues = entries as CreateSubmissionInput["fieldValues"];
+      } else {
+        payload.fieldMappings = entries as CreateSubmissionInput["fieldMappings"];
+      }
 
       expect(CreateSubmissionSchema.safeParse(payload).success).toBe(false);
     },
@@ -286,11 +293,13 @@ describe("CreateSubmissionSchema", () => {
     (field) => {
       const payload = validPayload();
       const longKey = `answer-${"k".repeat(194)}`;
-      payload[field] = (field === "fieldValues"
-        ? { [longKey]: "value" }
-        : {
-            [longKey]: { source: "profile", confidence: 0.8 },
-          }) as typeof payload[typeof field];
+      if (field === "fieldValues") {
+        payload.fieldValues = { [longKey]: "value" };
+      } else {
+        payload.fieldMappings = {
+          [longKey]: { source: "profile", confidence: 0.8 },
+        };
+      }
 
       expect(longKey).toHaveLength(201);
       expect(CreateSubmissionSchema.safeParse(payload).success).toBe(false);

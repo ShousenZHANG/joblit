@@ -29,7 +29,7 @@ const signOutMock = vi.fn();
 vi.mock("next-auth/react", () => ({
   signOut: (...args: unknown[]) => signOutMock(...args),
   useSession: () => ({
-    data: { user: { email: "alex@joblit.tech", isAdmin: true } },
+    data: { user: { email: "alex@joblit.tech" } },
   }),
 }));
 

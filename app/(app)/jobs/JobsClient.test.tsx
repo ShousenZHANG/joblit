@@ -1805,7 +1805,7 @@ describe("JobsClient", () => {
       await user.click(within(dialog).getByRole("button", { name: /delete 2 jobs/i }));
 
       const batchCalls = mockFetch.mock.calls.filter(
-        ([url, init]: [RequestInfo, RequestInit | undefined]) =>
+        ([url, init]) =>
           typeof url === "string" && url.includes("/api/jobs/batch-delete") && init?.method === "POST",
       );
       expect(batchCalls).toHaveLength(1);

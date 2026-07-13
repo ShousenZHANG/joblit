@@ -74,7 +74,6 @@ describe("codex run context", () => {
       userId: "user-1",
       profile: {
         updatedAt: new Date("2026-02-22T10:00:00.000Z"),
-        summary: "Summary",
       },
     });
 

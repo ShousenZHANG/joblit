@@ -37,7 +37,7 @@ describe("application batch latest api", () => {
       updatedAt: new Date("2026-02-22T10:10:00.000Z"),
     });
 
-    const res = await GET(new Request("http://localhost/api/application-batches/latest"));
+    const res = await GET();
     const json = await res.json();
 
     expect(res.status).toBe(200);
@@ -46,4 +46,3 @@ describe("application batch latest api", () => {
     expect(typeof json.updatedAt).toBe("string");
   });
 });
-

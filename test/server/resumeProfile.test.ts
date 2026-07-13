@@ -130,7 +130,7 @@ describe("resumeProfile data access", () => {
       },
     });
     expect(activeResumeProfileStore.upsert).toHaveBeenCalled();
-    expect(profile.name).toBe("Graduate CV");
+    expect(profile?.name).toBe("Graduate CV");
   });
 
   it("returns null when explicit profileId does not belong to user", async () => {

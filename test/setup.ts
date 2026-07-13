@@ -1,6 +1,23 @@
 import "@testing-library/jest-dom/vitest";
+import type { AxeMatchers } from "vitest-axe";
 import { expect } from "vitest";
 import * as axeMatchers from "vitest-axe/matchers";
+
+type VitestAssertionDefault = ReturnType<JSON["parse"]>;
+
+// vitest-axe@0.1 augments the removed Vitest `Vi` namespace. Vitest 4 exposes
+// matcher types through the `vitest` module, so bridge the package's matcher
+// contract into the current assertion interfaces.
+declare module "vitest" {
+  interface Assertion<T = VitestAssertionDefault> {
+    toHaveNoViolations(
+      this: Assertion<T>,
+    ): ReturnType<AxeMatchers["toHaveNoViolations"]>;
+  }
+  interface AsymmetricMatchersContaining {
+    toHaveNoViolations(): ReturnType<AxeMatchers["toHaveNoViolations"]>;
+  }
+}
 
 // Accessibility assertions: enables `expect(container).toHaveNoViolations()`
 // backed by axe-core. Complements the per-PR Lighthouse accessibility gate

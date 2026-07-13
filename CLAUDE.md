@@ -76,7 +76,7 @@ Two locales: `en-AU` and `zh-CN` via next-intl. Locale is cookie-based. Resume p
 
 ### Authentication
 
-NextAuth v4 with GitHub + Google OAuth, Prisma adapter (database sessions). Session includes `user.id`. Protected API routes use `IMPORT_SECRET` or `FETCH_RUN_SECRET` for background job authorization.
+NextAuth v4 with GitHub + Google OAuth, Prisma adapter (database sessions). Sign-in is free, open, and self-service: no invitation or manual approval is required. Session includes `user.id`. Background routes use service-secret boundaries: `/api/admin/import` is an internal JobSpy import route protected by `IMPORT_SECRET`, while fetch-run callbacks use `FETCH_RUN_SECRET`.
 
 ### Testing
 

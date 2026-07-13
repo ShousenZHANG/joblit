@@ -149,7 +149,9 @@ function makeJobs(
 const virtualJobs = makeJobs(12);
 
 function mockRowHeights(heights: Record<string, number>) {
-  return vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function () {
+  return vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+    this: HTMLElement,
+  ) {
     const jobId = this.querySelector<HTMLElement>("[data-job-id]")?.dataset.jobId;
     const height = jobId ? (heights[jobId] ?? 132) : 132;
     return {

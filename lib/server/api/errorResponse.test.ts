@@ -93,7 +93,7 @@ describe("validationError", () => {
       {
         code: "invalid_type",
         expected: "string",
-        received: "number",
+        input: 42,
         path: ["name"],
         message: "Expected string, received number",
       },

@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+type ResumeRenderInput = Parameters<
+  typeof import("@/lib/server/latex/renderResume").renderResumeTex
+>[0];
+
 const resumeRender = vi.hoisted(() => ({
-  renderResumeTex: vi.fn(() => "\\documentclass{article}% resume"),
+  renderResumeTex: vi.fn((_input: ResumeRenderInput) => "\\documentclass{article}% resume"),
 }));
 
 const coverRender = vi.hoisted(() => ({
@@ -22,6 +26,10 @@ const renderInput = {
     email: "jane@example.com",
     linkedinUrl: "https://linkedin.com/in/jane",
     linkedinText: "linkedin.com/in/jane",
+    githubUrl: undefined,
+    githubText: undefined,
+    websiteUrl: undefined,
+    websiteText: undefined,
   },
   summary: "Base summary",
   skills: [{ label: "Backend", items: ["Java"] }],
@@ -32,6 +40,7 @@ const renderInput = {
       location: "Sydney",
       dates: "2022-2024",
       bullets: ["Built Java APIs.", "Maintained CI/CD pipelines on Linux."],
+      links: [],
     },
   ],
   projects: [],
@@ -110,7 +119,7 @@ describe("manual import artifact builder", () => {
         skills: [{ label: "Backend", items: ["Java", "Spring Boot"] }],
       }),
     );
-    const renderArg = resumeRender.renderResumeTex.mock.calls[0]?.[0];
+    const renderArg = resumeRender.renderResumeTex.mock.calls[0][0];
     expect(renderArg.experiences[0].bullets).toEqual([
       "Maintained CI/CD pipelines on Linux.",
       "Built Java APIs.",

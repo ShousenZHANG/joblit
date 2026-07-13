@@ -9,7 +9,7 @@ const aiContent: AiContent = {
   generatedAt: "2026-07-11T00:00:00.000Z",
   promptMetaHash: "sha256:test",
   cv: {
-    summary: { aiText: "Summary", originalText: "Original" },
+    summary: { aiText: "Summary", originalText: "Original", accepted: true },
     latestExperience: { experienceIndex: 0, addedBullets: [] },
     skillsAdditions: [],
   },

@@ -56,7 +56,7 @@ describe("fetchSeekJobDescription", () => {
 
   it("fetches and strips the full JD html to text via the numeric id", async () => {
     vi.stubEnv("SEEK_FETCH_ENABLED", "true");
-    const f = vi.fn(async () =>
+    const f = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
       gqlResponse(
         "<p><strong>AI Engineer</strong></p><ul><li>Build scalable platforms</li>" +
           "<li>Ship reliable services to production</li></ul>",
@@ -67,7 +67,7 @@ describe("fetchSeekJobDescription", () => {
     expect(out).toContain("AI Engineer");
     expect(out).toContain("Build scalable platforms");
     expect(out).not.toContain("<");
-    const body = JSON.parse((f.mock.calls[0][1] as RequestInit).body as string);
+    const body = JSON.parse(f.mock.calls[0]?.[1]?.body as string);
     expect(body.query).toContain('jobDetails(id: "92521602")');
   });
 
