@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { FieldCategory } from "@ext/shared/fieldTaxonomy";
 import type { DetectedField } from "@ext/shared/types";
-import { fillFields, advanceMultiStepForm, type FlatProfile } from "./formFiller";
+import { fillFields, type FlatProfile } from "./formFiller";
 
 const sampleProfile: FlatProfile = {
   fullName: "John Doe",
@@ -281,29 +281,5 @@ describe("fillFields with historical overrides", () => {
     const result = fillFields(fields, sampleProfile, { "#resume": "file.pdf" });
     expect(result.skipped).toBe(1);
     expect(result.fields[0].source).toBe("skipped");
-  });
-});
-
-describe("advanceMultiStepForm", () => {
-  beforeEach(() => {
-    document.body.innerHTML = "";
-  });
-
-  it("clicks a Next button", () => {
-    let clicked = false;
-    document.body.innerHTML = `<button type="button">Next</button>`;
-    document.querySelector("button")!.addEventListener("click", () => { clicked = true; });
-    expect(advanceMultiStepForm(document)).toBe(true);
-    expect(clicked).toBe(true);
-  });
-
-  it("clicks a Continue button", () => {
-    document.body.innerHTML = `<button type="button">Continue</button>`;
-    expect(advanceMultiStepForm(document)).toBe(true);
-  });
-
-  it("returns false when no next button found", () => {
-    document.body.innerHTML = `<button type="submit">Submit</button>`;
-    expect(advanceMultiStepForm(document)).toBe(false);
   });
 });

@@ -1,10 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { t } from "@ext/shared/i18n";
 import { checkmarkSvg, spinnerSvg } from "@ext/shared/logo";
-
-interface DashboardProps {
-  onDisconnect: () => void;
-}
 
 interface ProfileData {
   profileName?: string;
@@ -32,15 +28,13 @@ interface RecentSubmission {
   createdAt: string;
 }
 
-export function Dashboard({ onDisconnect }: DashboardProps) {
+export function Dashboard() {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [fillState, setFillState] = useState<FillState>({ status: "idle" });
   const [refreshing, setRefreshing] = useState(false);
   const [recentSubs, setRecentSubs] = useState<RecentSubmission[]>([]);
-  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
-  const disconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Capture render time once via useState lazy initializer (allowed to be
   // impure) so the recent-submissions list can compute relative ages without
   // calling Date.now() during render.
@@ -62,17 +56,13 @@ export function Dashboard({ onDisconnect }: DashboardProps) {
 
     // Fetch recent submissions for history section
     chrome.runtime.sendMessage(
-      { type: "GET_SUBMISSIONS", params: { limit: 5 } },
+      { type: "GET_SUBMISSIONS", params: { limit: 3 } },
       (response) => {
         if (response?.success && Array.isArray(response.data)) {
           setRecentSubs(response.data);
         }
       },
     );
-
-    return () => {
-      if (disconnectTimer.current) clearTimeout(disconnectTimer.current);
-    };
   }, []);
 
   const handleRefreshProfile = useCallback(() => {
@@ -131,8 +121,6 @@ export function Dashboard({ onDisconnect }: DashboardProps) {
           message: response.message,
           sources,
         });
-        // Auto-close after showing result
-        setTimeout(() => window.close(), 2000);
       } else {
         // Content script responded without fill data — treat as no fields
         setFillState({
@@ -149,221 +137,201 @@ export function Dashboard({ onDisconnect }: DashboardProps) {
     });
   }, []);
 
-  const handleDisconnect = useCallback(() => {
-    if (!confirmDisconnect) {
-      setConfirmDisconnect(true);
-      disconnectTimer.current = setTimeout(() => setConfirmDisconnect(false), 3000);
-      return;
-    }
-    chrome.runtime.sendMessage({ type: "CLEAR_TOKEN" }, () => {
-      onDisconnect();
-    });
-  }, [confirmDisconnect, onDisconnect]);
-
   // Initial for avatar
   const initial = (profile?.flat?.fullName || "?")[0].toUpperCase();
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {/* Profile Card */}
-      <div className="jl-card jl-card--emerald">
+    <div className="jl-page-stack">
+      <section className="jl-profile-summary" aria-label={t("dashboard.profileSummary")}>
         {loading ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div className="jl-skeleton" style={{ width: 120, height: 16 }} />
-            <div className="jl-skeleton" style={{ width: 180, height: 12 }} />
-            <div className="jl-skeleton" style={{ width: 140, height: 12 }} />
+          <div className="jl-skeleton-stack" aria-label={t("dashboard.loadingProfile")}>
+            <div className="jl-skeleton" style={{ width: 118, height: 15 }} />
+            <div className="jl-skeleton" style={{ width: 178, height: 11 }} />
           </div>
         ) : profile ? (
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <div style={{
-              width: 40, height: 40, borderRadius: 12,
-              background: "var(--jl-emerald-100)", color: "var(--jl-emerald-700)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontWeight: 700, fontSize: 16, flexShrink: 0,
-            }}>
-              {initial}
-            </div>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ fontSize: 15, fontWeight: 600, color: "var(--jl-text-primary)" }}>
-                {profile.flat?.fullName ?? "—"}
+          <>
+            <div className="jl-avatar" aria-hidden="true">{initial}</div>
+            <div className="jl-profile-copy">
+              <div className="jl-profile-name">{profile.flat?.fullName ?? "—"}</div>
+              <div className="jl-profile-role">
+                {profile.flat?.currentTitle || profile.profileName || t("profile.active")}
+                {profile.flat?.currentCompany ? ` · ${profile.flat.currentCompany}` : ""}
               </div>
-              <div style={{ fontSize: 12, color: "var(--jl-text-secondary)", marginTop: 1 }}>
-                {profile.flat?.currentTitle}
-                {profile.flat?.currentCompany ? ` @ ${profile.flat.currentCompany}` : ""}
-              </div>
-              <div style={{ fontSize: 11, color: "var(--jl-text-muted)", marginTop: 2, display: "flex", alignItems: "center", gap: 4 }}>
+              <div className="jl-profile-meta">
                 <span>{profile.flat?.email}</span>
-                <span style={{ color: "var(--jl-border)" }}>&middot;</span>
-                <span className="jl-badge jl-badge--success" style={{ fontSize: 10 }}>
-                  {t("auth.connected")}
-                </span>
+                <span className="jl-status-dot" aria-hidden="true" />
+                <span>{t("auth.connected")}</span>
               </div>
             </div>
             <button
+              type="button"
               onClick={handleRefreshProfile}
-              className="jl-btn jl-btn--ghost"
+              className="jl-icon-btn"
               title={t("dashboard.refreshProfile")}
               aria-label={t("dashboard.refreshProfile")}
-              style={{ padding: 6, flexShrink: 0, opacity: refreshing ? 0.5 : 0.6 }}
+              aria-busy={refreshing}
               disabled={refreshing}
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ animation: refreshing ? "spin 1s linear infinite" : "none" }}>
-                <path d="M14 8A6 6 0 1 1 8 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                <path d="M8 0l3 2-3 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <svg className={refreshing ? "jl-icon--spinning" : ""} width="17" height="17" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M14 8A6 6 0 1 1 8 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M8 0l3 2-3 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
-          </div>
-        ) : error ? (
-          <div style={{ color: "var(--jl-error)", fontSize: 13 }}>{error}</div>
+          </>
         ) : (
-          <div style={{ color: "var(--jl-text-muted)", fontSize: 13 }}>
-            {t("dashboard.noProfile")}
+          <div className={`jl-inline-state ${error ? "jl-inline-state--error" : ""}`} role={error ? "alert" : "status"}>
+            {error || t("dashboard.noProfile")}
           </div>
         )}
-      </div>
+      </section>
 
-      {/* Fill Button with State */}
-      {fillState.status === "idle" && (
-        <button onClick={handleFillNow} className="jl-btn jl-btn--primary">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M2 12l3-8h6l3 8M4.5 8h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          {t("dashboard.fillNow")}
-        </button>
-      )}
-
-      {fillState.status === "filling" && (
-        <div role="status" aria-live="polite" className="jl-card" style={{ textAlign: "center", padding: "16px 14px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 8 }}>
-            <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: spinnerSvg(16) }} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--jl-emerald-700)" }}>
-              {t("dashboard.fillingFields")}
-            </span>
-          </div>
-          <div className="jl-progress">
-            <div className="jl-progress-bar jl-progress-bar--indeterminate" />
-          </div>
-        </div>
-      )}
-
-      {fillState.status === "success" && (
-        <div role="status" aria-live="polite" className="jl-card" style={{ textAlign: "center", padding: "16px 14px" }}>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-            <div
-              className="jl-success-check"
-              aria-hidden="true"
-              style={{ width: 36, height: 36 }}
-              dangerouslySetInnerHTML={{ __html: checkmarkSvg(20) }}
-            />
-            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--jl-emerald-700)" }}>
-              {t("history.fieldsFilled", { filled: fillState.filled, total: fillState.total })}
-            </div>
-            {fillState.total > fillState.filled && (
-              <div className="jl-badge jl-badge--warning" style={{ fontSize: 11 }}>
-                {t("dashboard.fieldsSkipped", { count: fillState.total - fillState.filled })}
+      <section
+        className={`jl-action-surface jl-action-surface--${fillState.status}`}
+        data-state={fillState.status}
+        aria-busy={fillState.status === "filling"}
+      >
+        <span
+          className="jl-sr-only"
+          role={fillState.status === "error" ? "alert" : "status"}
+          aria-live={fillState.status === "error" ? "assertive" : "polite"}
+        >
+          {fillState.status === "idle" && t("dashboard.readyTitle")}
+          {fillState.status === "filling" && t("dashboard.fillingFields")}
+          {fillState.status === "success" && t("history.fieldsFilled", { filled: fillState.filled, total: fillState.total })}
+          {fillState.status === "error" && fillState.message}
+        </span>
+        <div className="jl-action-body">
+          {fillState.status === "idle" && (
+            <>
+              <div className="jl-state-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M12 3.5 13.8 9l5.7 1.8-5.7 1.8L12 18l-1.8-5.4-5.7-1.8L10.2 9 12 3.5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+                  <path d="m18.5 3 .6 1.9L21 5.5l-1.9.6-.6 1.9-.6-1.9-1.9-.6 1.9-.6.6-1.9Z" fill="currentColor" />
+                </svg>
               </div>
-            )}
-            {fillState.sources && (fillState.sources.profile > 0 || fillState.sources.historical > 0) && (
-              <div style={{ display: "flex", gap: 4, justifyContent: "center", marginTop: 4 }}>
-                {fillState.sources.profile > 0 && (
-                  <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, background: "var(--jl-success-bg)", color: "var(--jl-emerald-800)", border: "1px solid var(--jl-emerald-100)" }}>
-                    {t("dashboard.fromProfile", { count: fillState.sources.profile })}
+              <div className="jl-action-copy">
+                <h2>{t("dashboard.readyTitle")}</h2>
+                <p>{t("dashboard.readyDesc")}</p>
+              </div>
+              <button type="button" onClick={handleFillNow} className="jl-btn jl-btn--primary">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M2 12l3-8h6l3 8M4.5 8h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                {t("dashboard.fillNow")}
+              </button>
+            </>
+          )}
+
+          {fillState.status === "filling" && (
+            <>
+              <div className="jl-state-icon" aria-hidden="true" dangerouslySetInnerHTML={{ __html: spinnerSvg(20) }} />
+              <div className="jl-action-copy">
+                <h2>{t("dashboard.fillingFields")}</h2>
+                <p>{t("dashboard.fillingDesc")}</p>
+              </div>
+              <div className="jl-progress" aria-hidden="true">
+                <div className="jl-progress-bar jl-progress-bar--indeterminate" />
+              </div>
+            </>
+          )}
+
+          {fillState.status === "success" && (
+            <>
+              <div className="jl-state-icon jl-state-icon--success" aria-hidden="true" dangerouslySetInnerHTML={{ __html: checkmarkSvg(20) }} />
+              <div className="jl-action-copy">
+                <h2>{t("dashboard.successTitle")}</h2>
+                <p>{t("history.fieldsFilled", { filled: fillState.filled, total: fillState.total })}</p>
+              </div>
+              <div className="jl-result-chips" aria-label={t("dashboard.fillSources")}>
+                {fillState.total > fillState.filled && (
+                  <span className="jl-badge jl-badge--warning">
+                    {t("dashboard.fieldsSkipped", { count: fillState.total - fillState.filled })}
                   </span>
                 )}
-                {fillState.sources.historical > 0 && (
-                  <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, background: "var(--jl-blue-50)", color: "var(--jl-blue-700)", border: "1px solid var(--jl-blue-200)" }}>
-                    {t("dashboard.fromHistory", { count: fillState.sources.historical })}
-                  </span>
-                )}
+                {fillState.sources?.profile ? (
+                  <span className="jl-badge jl-badge--success">{t("dashboard.fromProfile", { count: fillState.sources.profile })}</span>
+                ) : null}
+                {fillState.sources?.historical ? (
+                  <span className="jl-badge jl-badge--info">{t("dashboard.fromHistory", { count: fillState.sources.historical })}</span>
+                ) : null}
               </div>
-            )}
-            <div style={{ fontSize: 11, color: "var(--jl-text-muted)", marginTop: 2 }}>
-              {t("dashboard.closingSoon")}
-            </div>
-          </div>
-        </div>
-      )}
+              <div className="jl-action-buttons">
+                <button type="button" onClick={() => window.close()} className="jl-btn jl-btn--primary">
+                  {t("dashboard.reviewOnPage")}
+                </button>
+                <button type="button" onClick={handleFillNow} className="jl-btn jl-btn--quiet">
+                  {t("dashboard.fillAgain")}
+                </button>
+              </div>
+            </>
+          )}
 
-      {fillState.status === "error" && (
-        <div role="alert">
-          <div className="jl-error-msg" style={{ marginBottom: 8 }}>
-            <span>{fillState.message}</span>
-          </div>
-          <button onClick={() => setFillState({ status: "idle" })} className="jl-btn jl-btn--outline" style={{ width: "100%" }}>
-            {t("dashboard.tryAgain")}
-          </button>
+          {fillState.status === "error" && (
+            <>
+              <div className="jl-state-icon jl-state-icon--error" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M12 8v4m0 4h.01M4.9 19h14.2a2 2 0 0 0 1.73-3L13.73 4a2 2 0 0 0-3.46 0L3.17 16A2 2 0 0 0 4.9 19Z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
+              </div>
+              <div className="jl-action-copy">
+                <h2>{t("dashboard.errorTitle")}</h2>
+                <p>{fillState.message}</p>
+              </div>
+              <button type="button" onClick={handleFillNow} className="jl-btn jl-btn--primary">
+                {t("dashboard.tryAgain")}
+              </button>
+            </>
+          )}
         </div>
-      )}
 
-      {/* Shortcut & Widget toggle */}
-      <div style={{ display: "flex", gap: 8 }}>
-        <div className="jl-kbd" style={{ flex: 1, justifyContent: "center" }}>
-          Alt+Shift+F
+        <div className="jl-action-shortcut">
+          <span>{t("dashboard.shortcutHint")}</span>
+          <kbd>Alt</kbd><span>+</span><kbd>Shift</kbd><span>+</span><kbd>F</kbd>
         </div>
-        <button onClick={handleToggleWidget} className="jl-btn jl-btn--outline" style={{ flex: 1 }}>
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <rect x="1" y="3" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.5"/>
-            <circle cx="11" cy="8" r="2" stroke="currentColor" strokeWidth="1.5"/>
+      </section>
+
+      <button type="button" onClick={handleToggleWidget} className="jl-page-tool">
+        <span className="jl-page-tool-icon" aria-hidden="true">
+          <svg width="17" height="17" viewBox="0 0 16 16" fill="none">
+            <rect x="1" y="3" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.5" />
+            <circle cx="11" cy="8" r="2" stroke="currentColor" strokeWidth="1.5" />
           </svg>
-          {t("dashboard.toggleWidget")}
-        </button>
-      </div>
+        </span>
+        <span>
+          <strong>{t("dashboard.widgetTitle")}</strong>
+          <small>{t("dashboard.widgetDesc")}</small>
+        </span>
+        <svg className="jl-page-tool-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="m6 3.5 4.5 4.5L6 12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
 
-      {/* Recent Submissions */}
       {recentSubs.length > 0 && (
-        <>
-          <hr className="jl-divider" />
-          <div className="jl-section-label" style={{ margin: 0, fontSize: 11 }}>
-            {t("history.title")}
+        <section className="jl-history" aria-labelledby="jl-history-title">
+          <div className="jl-section-heading">
+            <h2 id="jl-history-title">{t("history.title")}</h2>
+            <span>{t("history.recent")}</span>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {recentSubs.map((sub) => {
-              const ratio = sub.fieldCount > 0
-                ? Math.round((sub.filledCount / sub.fieldCount) * 100)
-                : 0;
+          <div className="jl-history-list">
+            {recentSubs.slice(0, 3).map((sub) => {
+              const ratio = sub.fieldCount > 0 ? Math.round((sub.filledCount / sub.fieldCount) * 100) : 0;
               const seconds = Math.floor((renderedAt - new Date(sub.createdAt).getTime()) / 1000);
               const timeAgo = seconds < 60 ? t("history.justNow")
                 : seconds < 3600 ? `${Math.floor(seconds / 60)}m`
                 : seconds < 86400 ? `${Math.floor(seconds / 3600)}h`
                 : `${Math.floor(seconds / 86400)}d`;
               return (
-                <div key={sub.id} className="jl-card" style={{ padding: "6px 10px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{
-                      fontSize: 11, fontWeight: 500, color: "var(--jl-text-primary)",
-                      maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    }}>
-                      {sub.pageDomain}
-                    </span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      <span style={{
-                        fontSize: 9, padding: "1px 5px", borderRadius: 4,
-                        background: ratio >= 80 ? "var(--jl-success-bg)" : ratio >= 50 ? "var(--jl-amber-50)" : "var(--jl-red-50)",
-                        color: ratio >= 80 ? "var(--jl-emerald-800)" : ratio >= 50 ? "var(--jl-amber-800)" : "var(--jl-red-800)",
-                        fontWeight: 500,
-                      }}>
-                        {sub.filledCount}/{sub.fieldCount}
-                      </span>
-                      <span style={{ fontSize: 9, color: "var(--jl-text-muted)" }}>{timeAgo}</span>
-                    </div>
-                  </div>
+                <div key={sub.id} className="jl-history-row">
+                  <div className="jl-history-domain" title={sub.pageDomain}>{sub.pageDomain}</div>
+                  <span className="jl-history-provider">{sub.atsProvider || t("history.form")}</span>
+                  <span className={`jl-history-score jl-history-score--${ratio >= 80 ? "high" : ratio >= 50 ? "medium" : "low"}`}>
+                    {sub.filledCount}/{sub.fieldCount}
+                  </span>
+                  <time dateTime={sub.createdAt}>{timeAgo}</time>
                 </div>
               );
             })}
           </div>
-        </>
+        </section>
       )}
-
-      <hr className="jl-divider" />
-
-      {/* Disconnect */}
-      <button
-        onClick={handleDisconnect}
-        className={`jl-btn ${confirmDisconnect ? "jl-btn--danger" : "jl-btn--ghost"}`}
-        style={{ width: "100%", fontSize: 12 }}
-      >
-        {confirmDisconnect ? t("dashboard.confirmDisconnect") : t("auth.disconnect")}
-      </button>
     </div>
   );
 }

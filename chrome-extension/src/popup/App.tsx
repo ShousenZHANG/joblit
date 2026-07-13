@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, type KeyboardEvent } from "react";
 import { Dashboard } from "./pages/Dashboard";
 import { TokenSetup } from "./pages/TokenSetup";
 import { ProfileSelect } from "./pages/ProfileSelect";
@@ -7,8 +7,9 @@ import { Options } from "./pages/Options";
 import { useI18n } from "@ext/shared/useI18n";
 import { logoIconSvg } from "@ext/shared/logo";
 
-type AuthState = "loading" | "setup" | "authenticated";
+type AuthState = "loading" | "setup" | "authenticated" | "error";
 type Tab = "dashboard" | "profile" | "options";
+const TAB_KEYS: Tab[] = ["dashboard", "profile", "options"];
 
 const TAB_ICONS: Record<Tab, string> = {
   dashboard: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5"/></svg>`,
@@ -20,6 +21,11 @@ export function App() {
   const { t, ready } = useI18n();
   const [authState, setAuthState] = useState<AuthState>("loading");
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
+  const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({
+    dashboard: null,
+    profile: null,
+    options: null,
+  });
 
   const TAB_ITEMS: { key: Tab; label: string }[] = [
     { key: "dashboard", label: t("tab.home") },
@@ -29,6 +35,10 @@ export function App() {
 
   const checkAuth = useCallback(() => {
     chrome.runtime.sendMessage({ type: "GET_AUTH_STATUS" }, (response) => {
+      if (chrome.runtime.lastError || !response) {
+        setAuthState("error");
+        return;
+      }
       if (response?.success && response.data?.authenticated) {
         setAuthState("authenticated");
       } else {
@@ -40,6 +50,22 @@ export function App() {
   useEffect(() => {
     if (ready) checkAuth();
   }, [checkAuth, ready]);
+
+  const handleTabKeyDown = useCallback((event: KeyboardEvent<HTMLButtonElement>, currentTab: Tab) => {
+    const currentIndex = TAB_KEYS.indexOf(currentTab);
+    let nextIndex: number | null = null;
+
+    if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % TAB_KEYS.length;
+    if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + TAB_KEYS.length) % TAB_KEYS.length;
+    if (event.key === "Home") nextIndex = 0;
+    if (event.key === "End") nextIndex = TAB_KEYS.length - 1;
+    if (nextIndex === null) return;
+
+    event.preventDefault();
+    const nextTab = TAB_KEYS[nextIndex];
+    setActiveTab(nextTab);
+    tabRefs.current[nextTab]?.focus();
+  }, []);
 
   if (!ready) {
     return (
@@ -67,9 +93,30 @@ export function App() {
       </header>
 
       {authState === "loading" && (
-        <div className="jl-loading">
+        <div className="jl-loading" role="status" aria-live="polite">
           <div className="jl-spinner" />
           <span className="jl-loading-text">{t("app.loading")}</span>
+        </div>
+      )}
+
+      {authState === "error" && (
+        <div className="jl-auth-error" role="alert">
+          <div className="jl-state-icon jl-state-icon--neutral" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M12 8v4m0 4h.01M4.9 19h14.2a2 2 0 0 0 1.73-3L13.73 4a2 2 0 0 0-3.46 0L3.17 16A2 2 0 0 0 4.9 19Z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+            </svg>
+          </div>
+          <h2>{t("app.unavailable")}</h2>
+          <p>{t("app.unavailableDesc")}</p>
+          <button
+            className="jl-btn jl-btn--primary"
+            onClick={() => {
+              setAuthState("loading");
+              checkAuth();
+            }}
+          >
+            {t("app.retry")}
+          </button>
         </div>
       )}
 
@@ -82,11 +129,19 @@ export function App() {
       {authState === "authenticated" && (
         <>
           {/* Tab Bar */}
-          <nav className="jl-tabs">
+          <nav className="jl-tabs" role="tablist" aria-label={t("tabs.ariaLabel")}>
             {TAB_ITEMS.map(({ key, label }) => (
               <button
                 key={key}
+                ref={(element) => { tabRefs.current[key] = element; }}
+                id={`jl-tab-${key}`}
+                role="tab"
+                type="button"
+                aria-selected={activeTab === key}
+                aria-controls={`jl-panel-${key}`}
+                tabIndex={activeTab === key ? 0 : -1}
                 onClick={() => setActiveTab(key)}
+                onKeyDown={(event) => handleTabKeyDown(event, key)}
                 className={`jl-tab ${activeTab === key ? "jl-tab--active" : ""}`}
               >
                 <span
@@ -99,11 +154,18 @@ export function App() {
           </nav>
 
           {/* Tab Content */}
-          <div className="jl-content" key={activeTab}>
-            {activeTab === "dashboard" && <Dashboard onDisconnect={checkAuth} />}
+          <main
+            className="jl-content"
+            id={`jl-panel-${activeTab}`}
+            role="tabpanel"
+            aria-labelledby={`jl-tab-${activeTab}`}
+            tabIndex={-1}
+            key={activeTab}
+          >
+            {activeTab === "dashboard" && <Dashboard />}
             {activeTab === "profile" && <ProfileSelect />}
-            {activeTab === "options" && <Options />}
-          </div>
+            {activeTab === "options" && <Options onDisconnect={checkAuth} />}
+          </main>
         </>
       )}
     </div>

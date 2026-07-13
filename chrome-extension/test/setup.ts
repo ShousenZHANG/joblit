@@ -4,41 +4,79 @@
  */
 
 const storageData: Record<string, unknown> = {};
+const storageListeners = new Set<(
+  changes: Record<string, chrome.storage.StorageChange>,
+  areaName: string,
+) => void>();
 
 const storageMock = {
   local: {
-    get: async (keys: string | string[] | Record<string, unknown>) => {
+    get: async (
+      keys: string | string[] | Record<string, unknown>,
+      callback?: (result: Record<string, unknown>) => void,
+    ) => {
+      let result: Record<string, unknown>;
       if (typeof keys === "string") {
-        return { [keys]: storageData[keys] };
-      }
-      if (Array.isArray(keys)) {
-        const result: Record<string, unknown> = {};
+        result = { [keys]: storageData[keys] };
+      } else if (Array.isArray(keys)) {
+        result = {};
         for (const key of keys) {
           result[key] = storageData[key];
         }
-        return result;
+      } else {
+        // Object form — return stored values or defaults
+        result = {};
+        for (const [key, defaultVal] of Object.entries(keys)) {
+          result[key] = storageData[key] ?? defaultVal;
+        }
       }
-      // Object form — return stored values or defaults
-      const result: Record<string, unknown> = {};
-      for (const [key, defaultVal] of Object.entries(keys as Record<string, unknown>)) {
-        result[key] = storageData[key] ?? defaultVal;
-      }
+      callback?.(result);
       return result;
     },
-    set: async (items: Record<string, unknown>) => {
+    set: async (items: Record<string, unknown>, callback?: () => void) => {
+      const changes: Record<string, chrome.storage.StorageChange> = {};
+      for (const [key, value] of Object.entries(items)) {
+        changes[key] = { oldValue: storageData[key], newValue: value };
+      }
       Object.assign(storageData, items);
+      for (const listener of storageListeners) listener(changes, "local");
+      callback?.();
     },
-    remove: async (keys: string | string[]) => {
+    remove: async (keys: string | string[], callback?: () => void) => {
       const toRemove = Array.isArray(keys) ? keys : [keys];
+      const changes: Record<string, chrome.storage.StorageChange> = {};
       for (const key of toRemove) {
+        changes[key] = { oldValue: storageData[key], newValue: undefined };
         delete storageData[key];
       }
+      for (const listener of storageListeners) listener(changes, "local");
+      callback?.();
     },
-    clear: async () => {
+    clear: async (callback?: () => void) => {
+      const changes: Record<string, chrome.storage.StorageChange> = {};
       for (const key of Object.keys(storageData)) {
+        changes[key] = { oldValue: storageData[key], newValue: undefined };
         delete storageData[key];
       }
+      if (Object.keys(changes).length > 0) {
+        for (const listener of storageListeners) listener(changes, "local");
+      }
+      callback?.();
     },
+  },
+  onChanged: {
+    addListener: (listener: (
+      changes: Record<string, chrome.storage.StorageChange>,
+      areaName: string,
+    ) => void) => storageListeners.add(listener),
+    removeListener: (listener: (
+      changes: Record<string, chrome.storage.StorageChange>,
+      areaName: string,
+    ) => void) => storageListeners.delete(listener),
+    hasListener: (listener: (
+      changes: Record<string, chrome.storage.StorageChange>,
+      areaName: string,
+    ) => void) => storageListeners.has(listener),
   },
 };
 

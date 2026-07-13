@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { STORAGE_KEYS, DEFAULT_API_BASE } from "@ext/shared/constants";
 import {
   ApiBaseValidationError,
@@ -8,11 +8,15 @@ import {
   resolveStoredApiBase,
 } from "@ext/shared/apiBase";
 import { t } from "@ext/shared/i18n";
-import { checkmarkSvg } from "@ext/shared/logo";
+import { checkmarkSvg, spinnerSvg } from "@ext/shared/logo";
 
 interface Preferences {
   autoFill: boolean;
   showWidget: boolean;
+}
+
+interface OptionsProps {
+  onDisconnect: () => void;
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -20,11 +24,15 @@ const DEFAULT_PREFERENCES: Preferences = {
   showWidget: true,
 };
 
-export function Options() {
+export function Options({ onDisconnect }: OptionsProps) {
   const [apiBase, setApiBase] = useState(DEFAULT_API_BASE);
   const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFERENCES);
-  const [saved, setSaved] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [apiBaseError, setApiBaseError] = useState("");
+  const [showConnection, setShowConnection] = useState(false);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [disconnectError, setDisconnectError] = useState("");
 
   useEffect(() => {
     chrome.storage.local.get(
@@ -41,116 +49,177 @@ export function Options() {
   }, []);
 
   const handleSave = useCallback(async () => {
-    setSaved(false);
+    if (saveState === "saving") return;
+    setSaveState("saving");
     setApiBaseError("");
 
     let normalizedBase: string;
     try {
       normalizedBase = normalizeApiBase(apiBase);
     } catch (err) {
+      setShowConnection(true);
       setApiBaseError(
         err instanceof ApiBaseValidationError
           ? t("error.apiBaseInvalid")
           : t("error.unknown"),
       );
+      setSaveState("idle");
       return;
     }
 
-    let permissionGranted = false;
     try {
-      permissionGranted = await requestApiBasePermission(normalizedBase);
+      const permissionGranted = await requestApiBasePermission(normalizedBase);
+      if (!permissionGranted) {
+        setShowConnection(true);
+        setApiBaseError(t("error.apiBasePermissionDenied"));
+        setSaveState("idle");
+        return;
+      }
+
+      const stored = await chrome.storage.local.get(STORAGE_KEYS.API_BASE);
+      const previousBase = resolveStoredApiBase(stored[STORAGE_KEYS.API_BASE]);
+
+      await chrome.storage.local.set({
+        [STORAGE_KEYS.API_BASE]: normalizedBase,
+        [STORAGE_KEYS.PREFERENCES]: prefs,
+      });
+      try {
+        await releaseApiBasePermission(previousBase, normalizedBase);
+      } catch {
+        // The active origin is already safe; stale permission cleanup can retry later.
+      }
+      setApiBase(normalizedBase);
+      setSaveState("saved");
     } catch {
-      permissionGranted = false;
+      setApiBaseError(t("error.settingsSave"));
+      setShowConnection(true);
+      setSaveState("idle");
     }
-    if (!permissionGranted) {
-      setApiBaseError(t("error.apiBasePermissionDenied"));
-      return;
-    }
+  }, [apiBase, prefs, saveState]);
 
-    const stored = await chrome.storage.local.get(STORAGE_KEYS.API_BASE);
-    const previousBase = resolveStoredApiBase(stored[STORAGE_KEYS.API_BASE]);
+  const toggleWidget = useCallback(() => {
+    setPrefs((previous) => ({ ...previous, showWidget: !previous.showWidget }));
+    setSaveState("idle");
+  }, []);
 
-    await chrome.storage.local.set({
-      [STORAGE_KEYS.API_BASE]: normalizedBase,
-      [STORAGE_KEYS.PREFERENCES]: prefs,
+  const handleDisconnect = useCallback(() => {
+    if (disconnecting) return;
+    setDisconnecting(true);
+    setDisconnectError("");
+    chrome.runtime.sendMessage({ type: "CLEAR_TOKEN" }, (response) => {
+      setDisconnecting(false);
+      if (chrome.runtime.lastError || response?.success === false) {
+        setDisconnectError(t("error.disconnectFailed"));
+        return;
+      }
+      onDisconnect();
     });
-    try {
-      await releaseApiBasePermission(previousBase, normalizedBase);
-    } catch {
-      // The new origin is already active; stale permission cleanup can retry later.
-    }
-    setApiBase(normalizedBase);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }, [apiBase, prefs]);
-
-  const togglePref = useCallback(
-    (key: keyof Preferences) => {
-      setPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
-    },
-    [],
-  );
+  }, [disconnecting, onDisconnect]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* API Base */}
-      <div>
-        <div className="jl-section-label">{t("options.apiBase")}</div>
-        <div className="jl-input-group" style={{ marginBottom: 0 }}>
-          <input
-            type="url"
-            value={apiBase}
-            onChange={(e) => {
-              setApiBase(e.target.value);
-              if (apiBaseError) setApiBaseError("");
-            }}
-            placeholder={DEFAULT_API_BASE}
-            className={`jl-input ${apiBaseError ? "jl-input--error" : ""}`}
-            aria-invalid={apiBaseError ? true : undefined}
-            style={{ fontSize: 12, height: 36 }}
-          />
-          <div className="jl-input-hint">{t("options.apiBaseDesc")}</div>
-          {apiBaseError ? (
-            <div className="jl-error-msg" role="alert">
-              {apiBaseError}
-            </div>
-          ) : null}
+    <div className="jl-page-stack">
+      <section aria-labelledby="jl-behavior-title">
+        <div className="jl-section-heading jl-section-heading--stacked">
+          <h2 id="jl-behavior-title">{t("options.behavior")}</h2>
+          <p>{t("options.behaviorDesc")}</p>
         </div>
-      </div>
-
-      {/* Behavior toggles */}
-      <div>
-        <div className="jl-section-label">{t("options.behavior")}</div>
-        <div className="jl-card" style={{ padding: "4px 14px" }}>
+        <div className="jl-settings-card">
           <ToggleRow
             label={t("options.showWidget")}
-            description="Shows floating widget on supported ATS pages"
+            description={t("options.showWidgetDesc")}
             checked={prefs.showWidget}
-            onChange={() => togglePref("showWidget")}
+            onChange={toggleWidget}
           />
         </div>
-      </div>
+      </section>
 
-      {/* Save button */}
-      <button
-        onClick={handleSave}
-        className={`jl-btn ${saved ? "jl-btn--outline" : "jl-btn--primary"}`}
-        style={saved ? {
-          width: "100%",
-          borderColor: "var(--jl-emerald-200)",
-          color: "var(--jl-emerald-700)",
-          background: "var(--jl-emerald-50)",
-        } : { width: "100%" }}
-      >
-        {saved ? (
-          <>
-            <span dangerouslySetInnerHTML={{ __html: checkmarkSvg(14) }} />
-            {t("options.saved")}
-          </>
-        ) : (
-          t("options.save")
+      <section className="jl-settings-card jl-settings-card--connection">
+        <button
+          type="button"
+          className="jl-disclosure"
+          aria-expanded={showConnection}
+          aria-controls="jl-connection-settings"
+          onClick={() => setShowConnection((open) => !open)}
+        >
+          <span className="jl-disclosure-icon" aria-hidden="true">
+            <svg width="17" height="17" viewBox="0 0 16 16" fill="none">
+              <path d="M6.5 2.5h3M5 5h6a2 2 0 0 1 2 2v4.5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M8 8v2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+          </span>
+          <span>
+            <strong>{t("options.connection")}</strong>
+            <small>{t("options.connectionDesc")}</small>
+          </span>
+          <svg className="jl-disclosure-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="m5 6 3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+
+        {showConnection && (
+          <div id="jl-connection-settings" className="jl-disclosure-panel">
+            <div className="jl-input-group">
+              <label className="jl-input-label" htmlFor="joblit-api-base">{t("options.apiBase")}</label>
+              <input
+                id="joblit-api-base"
+                type="url"
+                value={apiBase}
+                onChange={(event) => {
+                  setApiBase(event.target.value);
+                  setApiBaseError("");
+                  setSaveState("idle");
+                }}
+                placeholder={DEFAULT_API_BASE}
+                className={`jl-input ${apiBaseError ? "jl-input--error" : ""}`}
+                aria-invalid={apiBaseError ? true : undefined}
+                aria-describedby={`joblit-api-base-hint${apiBaseError ? " joblit-api-base-error" : ""}`}
+              />
+              <div id="joblit-api-base-hint" className="jl-input-hint">{t("options.apiBaseDesc")}</div>
+              {apiBaseError && (
+                <div id="joblit-api-base-error" className="jl-error-msg" role="alert">{apiBaseError}</div>
+              )}
+            </div>
+          </div>
         )}
+      </section>
+
+      <button
+        type="button"
+        onClick={handleSave}
+        className={`jl-btn ${saveState === "saved" ? "jl-btn--success" : "jl-btn--primary"}`}
+        disabled={saveState === "saving"}
+        aria-busy={saveState === "saving"}
+      >
+        {saveState === "saving" && <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: spinnerSvg(15) }} />}
+        {saveState === "saved" && <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: checkmarkSvg(15) }} />}
+        {saveState === "saving" ? t("options.saving") : saveState === "saved" ? t("options.saved") : t("options.save")}
       </button>
+
+      <section className="jl-account-section" aria-labelledby="jl-account-title">
+        <div className="jl-section-heading jl-section-heading--stacked">
+          <h2 id="jl-account-title">{t("options.account")}</h2>
+          <p>{t("options.accountDesc")}</p>
+        </div>
+
+        {!confirmDisconnect ? (
+          <button type="button" className="jl-btn jl-btn--danger-quiet" onClick={() => setConfirmDisconnect(true)}>
+            {t("auth.disconnect")}
+          </button>
+        ) : (
+          <div className="jl-confirm-panel" role="group" aria-label={t("auth.confirmDisconnect") }>
+            <p>{t("auth.disconnectWarning")}</p>
+            <div className="jl-confirm-actions">
+              <button type="button" className="jl-btn jl-btn--outline" onClick={() => setConfirmDisconnect(false)} disabled={disconnecting}>
+                {t("common.cancel")}
+              </button>
+              <button type="button" className="jl-btn jl-btn--danger" onClick={handleDisconnect} disabled={disconnecting} aria-busy={disconnecting}>
+                {disconnecting ? t("auth.disconnecting") : t("auth.disconnectAccount")}
+              </button>
+            </div>
+          </div>
+        )}
+        {disconnectError && <div className="jl-error-msg" role="alert">{disconnectError}</div>}
+      </section>
     </div>
   );
 }
@@ -162,25 +231,21 @@ function ToggleRow({
   onChange,
 }: {
   label: string;
-  description?: string;
+  description: string;
   checked: boolean;
   onChange: () => void;
 }) {
   return (
     <label className="jl-toggle-row">
-      <div>
-        <div style={{ fontSize: 13, fontWeight: 500 }}>{label}</div>
-        {description && (
-          <div style={{ fontSize: 11, color: "var(--jl-text-muted)", marginTop: 1 }}>
-            {description}
-          </div>
-        )}
-      </div>
-      <div className="jl-toggle">
+      <span className="jl-toggle-copy">
+        <strong>{label}</strong>
+        <small>{description}</small>
+      </span>
+      <span className="jl-toggle">
         <input type="checkbox" checked={checked} onChange={onChange} />
-        <div className="jl-toggle-track" />
-        <div className="jl-toggle-thumb" />
-      </div>
+        <span className="jl-toggle-track" />
+        <span className="jl-toggle-thumb" />
+      </span>
     </label>
   );
 }

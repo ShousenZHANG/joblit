@@ -1,5 +1,5 @@
 import { detectForms } from "./detector/formDetector";
-import { fillFields, advanceMultiStepForm, highlightUnfilledFields, type FlatProfile, type HistoricalOverrides } from "./filler/formFiller";
+import { fillFields, highlightUnfilledFields, type FlatProfile, type HistoricalOverrides } from "./filler/formFiller";
 import { simulateInput } from "./filler/inputSimulator";
 import { sendMessage } from "@ext/shared/messaging";
 import { mountWidget, unmountWidget, isWidgetMounted } from "./widget/mount";
@@ -213,7 +213,7 @@ async function initWidget(detection: FormDetectionResult) {
           fieldSelector: rule.fieldSelector,
           fieldLabel: rule.fieldLabel,
           profilePath: rule.profilePath,
-          staticValue: rule.staticValue || undefined,
+          staticValue: rule.staticValue,
           atsProvider,
           pageDomain,
           source: "user",
@@ -316,7 +316,7 @@ async function fetchHistoricalOverrides(
 /** Perform form detection and filling. */
 async function performFill() {
   // Prevent concurrent fills from corrupting widget state (e.g. auto-fill +
-  // manual click, or multi-step recursive fill calling performFill again)
+  // a manual click arriving at the same time).
   if (fillInProgress) return { filled: 0, skipped: 0, message: "Fill already in progress." };
   fillInProgress = true;
   // Cancel any pending progress-reset timer from a previous fill
@@ -383,24 +383,6 @@ async function performFill() {
       progressResetTimer = null;
       if (widget) widget.setFillProgress(0, 0, "idle");
     }, 3000);
-  }
-
-  // Attempt multi-step form advancement
-  if (result.filled > 0) {
-    setTimeout(() => {
-      const advanced = advanceMultiStepForm(document);
-      if (advanced) {
-        // Re-detect after page transition and fill next step
-        setTimeout(() => {
-          currentDetection = detectForms(document);
-          if (currentDetection.fields.length > 0) {
-            performFill().catch(() => {
-              // Non-critical — multi-step fill failed silently
-            });
-          }
-        }, 1500);
-      }
-    }, 500);
   }
 
   return {

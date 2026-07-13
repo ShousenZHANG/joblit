@@ -218,40 +218,6 @@ function findDropdownTrigger(el: HTMLElement): HTMLElement | null {
 }
 
 /**
- * Detect and click "Next" / "Continue" buttons in multi-step forms.
- * Returns true if a next-step button was found and clicked.
- */
-export function advanceMultiStepForm(doc: Document): boolean {
-  const nextButtonSelectors = [
-    'button[data-automation-id="bottom-navigation-next-button"]',
-    'button[data-testid="next-button"]',
-    'button[type="button"]',
-    'a.btn',
-    'button',
-  ];
-
-  const NEXT_PATTERNS = /^(next|continue|proceed|save\s*(?:&|and)\s*continue|save\s*&\s*next|下一步|继续|保存并继续)$/i;
-  const SUBMIT_PATTERNS = /^(submit|apply|投递|提交申请|submit\s*application|apply\s*now)$/i;
-
-  for (const selector of nextButtonSelectors) {
-    const buttons = doc.querySelectorAll<HTMLElement>(selector);
-    for (const btn of buttons) {
-      const text = btn.textContent?.trim() ?? "";
-      if (SUBMIT_PATTERNS.test(text)) {
-        // Reached submit button — stop and let user review
-        return false;
-      }
-      if (NEXT_PATTERNS.test(text)) {
-        btn.click();
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
-/**
  * Highlight unfilled form fields on the page with a visual indicator.
  * Adds a pulsing orange outline to fields that were skipped or have no value.
  */

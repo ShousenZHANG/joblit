@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { STORAGE_KEYS, DEFAULT_API_BASE } from "@ext/shared/constants";
 import {
   ApiBaseValidationError,
@@ -8,7 +8,7 @@ import {
   resolveStoredApiBase,
 } from "@ext/shared/apiBase";
 import { t } from "@ext/shared/i18n";
-import { checkmarkSvg, keyIconSvg, errorIconSvg } from "@ext/shared/logo";
+import { checkmarkSvg, errorIconSvg, keyIconSvg, spinnerSvg } from "@ext/shared/logo";
 
 interface TokenSetupProps {
   onConnected: () => void;
@@ -21,8 +21,10 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
   const [error, setError] = useState("");
   const [apiBaseError, setApiBaseError] = useState("");
   const [step, setStep] = useState<Step>("input");
+  const [busy, setBusy] = useState(false);
   const [apiBase, setApiBase] = useState(DEFAULT_API_BASE);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const transitionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     chrome.storage.local.get(STORAGE_KEYS.API_BASE, (result) => {
@@ -30,15 +32,18 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
         setApiBase(resolveStoredApiBase(result[STORAGE_KEYS.API_BASE]));
       }
     });
+    return () => {
+      if (transitionTimer.current) clearTimeout(transitionTimer.current);
+    };
   }, []);
 
   const handleConnect = useCallback(async () => {
+    if (busy) return;
     const trimmed = token.trim();
     if (!trimmed) {
       setError(t("auth.tokenEmpty"));
       return;
     }
-
     if (!trimmed.startsWith("jfext_")) {
       setError(t("auth.tokenInvalid"));
       return;
@@ -58,203 +63,186 @@ export function TokenSetup({ onConnected }: TokenSetupProps) {
       return;
     }
 
-    let permissionGranted = false;
-    try {
-      permissionGranted = await requestApiBasePermission(baseToUse);
-    } catch {
-      permissionGranted = false;
-    }
-    if (!permissionGranted) {
-      setShowAdvanced(true);
-      setApiBaseError(t("error.apiBasePermissionDenied"));
-      return;
-    }
+    setBusy(true);
     setApiBaseError("");
-
-    const stored = await chrome.storage.local.get(STORAGE_KEYS.API_BASE);
-    const previousBase = resolveStoredApiBase(stored[STORAGE_KEYS.API_BASE]);
-
-    // Persist only after validation and an exact-origin permission grant.
-    await chrome.storage.local.set({ [STORAGE_KEYS.API_BASE]: baseToUse });
     try {
-      await releaseApiBasePermission(previousBase, baseToUse);
+      const permissionGranted = await requestApiBasePermission(baseToUse);
+      if (!permissionGranted) {
+        setShowAdvanced(true);
+        setApiBaseError(t("error.apiBasePermissionDenied"));
+        setBusy(false);
+        return;
+      }
+
+      const stored = await chrome.storage.local.get(STORAGE_KEYS.API_BASE);
+      const previousBase = resolveStoredApiBase(stored[STORAGE_KEYS.API_BASE]);
+      await chrome.storage.local.set({ [STORAGE_KEYS.API_BASE]: baseToUse });
+      try {
+        await releaseApiBasePermission(previousBase, baseToUse);
+      } catch {
+        // The active origin is already safe; stale permission cleanup can retry later.
+      }
     } catch {
-      // The new origin is already active; stale permission cleanup can retry later.
+      setShowAdvanced(true);
+      setApiBaseError(t("auth.networkError", { base: baseToUse }));
+      setBusy(false);
+      return;
     }
 
     setStep("verifying");
-    setError("");
-
     chrome.runtime.sendMessage(
       { type: "SET_TOKEN", token: trimmed },
       (response) => {
-        if (response?.success) {
-          // Verify the token works by fetching profile
-          chrome.runtime.sendMessage(
-            { type: "GET_PROFILE" },
-            (profileResponse) => {
-              if (profileResponse?.success) {
-                setStep("success");
-                setTimeout(() => onConnected(), 1200);
-              } else {
-                setStep("input");
-                const serverError = profileResponse?.error ?? "";
-                if (
-                  serverError.includes("fetch") ||
-                  serverError.includes("network") ||
-                  serverError.includes("Failed")
-                ) {
-                  setError(t("auth.networkError", { base: baseToUse }));
-                } else {
-                  setError(t("auth.tokenInvalid"));
-                }
-                chrome.runtime.sendMessage({ type: "CLEAR_TOKEN" });
-              }
-            },
-          );
-        } else {
+        if (chrome.runtime.lastError || !response?.success) {
           setStep("input");
+          setBusy(false);
           setError(t("error.unknown"));
+          return;
         }
+
+        chrome.runtime.sendMessage({ type: "GET_PROFILE" }, (profileResponse) => {
+          if (!chrome.runtime.lastError && profileResponse?.success) {
+            setStep("success");
+            setBusy(false);
+            transitionTimer.current = setTimeout(onConnected, 900);
+            return;
+          }
+
+          setStep("input");
+          setBusy(false);
+          const serverError = profileResponse?.error ?? "";
+          setError(
+            serverError.includes("fetch") ||
+            serverError.includes("network") ||
+            serverError.includes("Failed")
+              ? t("auth.networkError", { base: baseToUse })
+              : t("auth.tokenInvalid"),
+          );
+          chrome.runtime.sendMessage({ type: "CLEAR_TOKEN" });
+        });
       },
     );
-  }, [token, apiBase, onConnected]);
+  }, [apiBase, busy, onConnected, token]);
 
-  const stepIndex = step === "input" ? 0 : step === "verifying" ? 1 : 2;
+  const handleSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void handleConnect();
+  }, [handleConnect]);
+
+  if (step === "success") {
+    return (
+      <div className="jl-connection-state" role="status" aria-live="polite">
+        <div className="jl-state-icon jl-state-icon--success jl-state-icon--large" aria-hidden="true" dangerouslySetInnerHTML={{ __html: checkmarkSvg(26) }} />
+        <h2>{t("auth.connectedTitle")}</h2>
+        <p>{t("auth.connectedDesc")}</p>
+      </div>
+    );
+  }
+
+  if (step === "verifying") {
+    return (
+      <div className="jl-connection-state" role="status" aria-live="polite" aria-busy="true">
+        <div className="jl-state-icon jl-state-icon--large" aria-hidden="true" dangerouslySetInnerHTML={{ __html: spinnerSvg(24) }} />
+        <h2>{t("auth.connecting")}</h2>
+        <p>{t("auth.verifying")}</p>
+        <div className="jl-progress" aria-hidden="true">
+          <div className="jl-progress-bar jl-progress-bar--indeterminate" />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div>
-      {/* Step indicator */}
-      <div className="jl-stepper">
-        <div className={`jl-step-dot ${stepIndex >= 0 ? "jl-step-dot--active" : ""} ${stepIndex > 0 ? "jl-step-dot--done" : ""}`} />
-        <div className={`jl-step-line ${stepIndex > 0 ? "jl-step-line--done" : ""}`} />
-        <div className={`jl-step-dot ${stepIndex >= 1 ? "jl-step-dot--active" : ""} ${stepIndex > 1 ? "jl-step-dot--done" : ""}`} />
-        <div className={`jl-step-line ${stepIndex > 1 ? "jl-step-line--done" : ""}`} />
-        <div className={`jl-step-dot ${stepIndex >= 2 ? "jl-step-dot--active" : ""}`} />
+    <form className="jl-connect-form" onSubmit={handleSubmit} noValidate>
+      <div className="jl-connect-intro">
+        <div className="jl-state-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M8.5 11.5 11 14l5-5m3 3a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+        <div>
+          <h1>{t("auth.connect")}</h1>
+          <p>{t("auth.connectDesc")}</p>
+        </div>
       </div>
 
-      {/* Success state */}
-      {step === "success" && (
-        <div className="jl-result">
-          <div
-            className="jl-success-check"
-            dangerouslySetInnerHTML={{ __html: checkmarkSvg(28) }}
+      <div className="jl-input-group">
+        <label className="jl-input-label" htmlFor="joblit-token">{t("auth.tokenLabel")}</label>
+        <div className="jl-input-wrapper">
+          <span className="jl-input-icon" aria-hidden="true" dangerouslySetInnerHTML={{ __html: keyIconSvg(15) }} />
+          <input
+            id="joblit-token"
+            type="password"
+            value={token}
+            onChange={(event) => {
+              setToken(event.target.value);
+              setError("");
+            }}
+            placeholder={t("auth.tokenPlaceholder")}
+            className={`jl-input jl-input--has-icon ${error ? "jl-input--error" : ""}`}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={`joblit-token-hint${error ? " joblit-token-error" : ""}`}
+            autoComplete="off"
+            autoFocus
           />
-          <div className="jl-result-title" style={{ color: "var(--jl-emerald-700)" }}>
-            {t("auth.connected")}
-          </div>
-          <div className="jl-result-desc">Redirecting to dashboard...</div>
+        </div>
+        <div id="joblit-token-hint" className="jl-input-hint">{t("auth.tokenHint")}</div>
+      </div>
+
+      {error && (
+        <div id="joblit-token-error" className="jl-error-msg" role="alert">
+          <span className="jl-error-icon" aria-hidden="true" dangerouslySetInnerHTML={{ __html: errorIconSvg(15) }} />
+          <span>{error}</span>
         </div>
       )}
 
-      {/* Verifying state */}
-      {step === "verifying" && (
-        <div className="jl-result">
-          <div className="jl-spinner" style={{ width: 36, height: 36 }} />
-          <div className="jl-result-title">{t("auth.connecting")}</div>
-          <div className="jl-result-desc">Verifying your token...</div>
-        </div>
-      )}
+      <button type="submit" className="jl-btn jl-btn--primary" disabled={busy} aria-busy={busy}>
+        {busy && <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: spinnerSvg(15) }} />}
+        {busy ? t("auth.connecting") : t("auth.connect")}
+      </button>
 
-      {/* Input state */}
-      {step === "input" && (
-        <>
-          <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4, color: "var(--jl-text-primary)" }}>
-            {t("auth.connect")}
-          </h2>
-          <p style={{ fontSize: 13, color: "var(--jl-text-muted)", marginBottom: 18, lineHeight: 1.5 }}>
-            {t("auth.connectDesc")}
-          </p>
+      <button
+        type="button"
+        className="jl-collapse-toggle"
+        aria-expanded={showAdvanced}
+        aria-controls="joblit-advanced-settings"
+        onClick={() => setShowAdvanced((visible) => !visible)}
+      >
+        <svg className="jl-collapse-arrow" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+          <path d="M3 4.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+        <span>{t("auth.advanced")}</span>
+      </button>
 
-          {/* Token input */}
+      {showAdvanced && (
+        <div id="joblit-advanced-settings" className="jl-advanced-panel">
           <div className="jl-input-group">
-            <label className="jl-input-label">Token</label>
-            <div className="jl-input-wrapper">
-              <span
-                className="jl-input-icon"
-                dangerouslySetInnerHTML={{ __html: keyIconSvg(14) }}
-              />
-              <input
-                type="password"
-                value={token}
-                onChange={(e) => {
-                  setToken(e.target.value);
-                  if (error) setError("");
-                }}
-                placeholder={t("auth.tokenPlaceholder")}
-                className={`jl-input jl-input--has-icon ${error ? "jl-input--error" : ""}`}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleConnect();
-                }}
-                autoFocus
-              />
-            </div>
+            <label className="jl-input-label" htmlFor="joblit-connect-api-base">{t("options.apiBase")}</label>
+            <input
+              id="joblit-connect-api-base"
+              type="url"
+              value={apiBase}
+              onChange={(event) => {
+                setApiBase(event.target.value);
+                setApiBaseError("");
+              }}
+              placeholder={DEFAULT_API_BASE}
+              className={`jl-input ${apiBaseError ? "jl-input--error" : ""}`}
+              aria-invalid={apiBaseError ? true : undefined}
+              aria-describedby={`joblit-connect-api-hint${apiBaseError ? " joblit-connect-api-error" : ""}`}
+            />
+            <div id="joblit-connect-api-hint" className="jl-input-hint">{t("auth.apiBaseHint")}</div>
+            {apiBaseError && (
+              <div id="joblit-connect-api-error" className="jl-error-msg" role="alert">
+                <span className="jl-error-icon" aria-hidden="true" dangerouslySetInnerHTML={{ __html: errorIconSvg(15) }} />
+                <span>{apiBaseError}</span>
+              </div>
+            )}
           </div>
-
-          {/* Error message */}
-          {error && (
-            <div className="jl-error-msg" style={{ marginBottom: 14 }}>
-              <span
-                className="jl-error-icon"
-                dangerouslySetInnerHTML={{ __html: errorIconSvg(14) }}
-              />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {/* Connect button */}
-          <button
-            onClick={handleConnect}
-            className="jl-btn jl-btn--primary"
-          >
-            {t("auth.connect")}
-          </button>
-
-          {/* Advanced: API Base URL */}
-          <button
-            className="jl-collapse-toggle"
-            aria-expanded={showAdvanced}
-            onClick={() => setShowAdvanced((v) => !v)}
-          >
-            <svg className="jl-collapse-arrow" viewBox="0 0 12 12" fill="none">
-              <path d="M3 4.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-            <span>Advanced Settings</span>
-          </button>
-
-          <div className={`jl-collapse-body ${showAdvanced ? "jl-collapse-body--open" : ""}`}>
-            <div className="jl-input-group" style={{ marginTop: 4 }}>
-              <label className="jl-input-label">{t("options.apiBase")}</label>
-              <input
-                type="url"
-                value={apiBase}
-                onChange={(e) => {
-                  setApiBase(e.target.value);
-                  if (apiBaseError) setApiBaseError("");
-                }}
-                placeholder={DEFAULT_API_BASE}
-                className={`jl-input ${apiBaseError ? "jl-input--error" : ""}`}
-                aria-invalid={apiBaseError ? true : undefined}
-                style={{ fontSize: 12, height: 34 }}
-              />
-              <div className="jl-input-hint">{t("auth.apiBaseHint")}</div>
-              {apiBaseError ? (
-                <div className="jl-error-msg" role="alert">
-                  <span
-                    className="jl-error-icon"
-                    dangerouslySetInnerHTML={{ __html: errorIconSvg(14) }}
-                  />
-                  <span>{apiBaseError}</span>
-                </div>
-              ) : null}
-            </div>
-          </div>
-
-          <p style={{ fontSize: 12, color: "var(--jl-text-muted)", marginTop: 16, textAlign: "center" }}>
-            {t("auth.setupHint")}
-          </p>
-        </>
+        </div>
       )}
-    </div>
+
+      <p className="jl-connect-help">{t("auth.setupHint")}</p>
+    </form>
   );
 }

@@ -136,6 +136,12 @@ function getWidgetStyles(): string {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
 
+    button:focus-visible,
+    input:focus-visible {
+      outline: 2px solid var(--jf-emerald-500);
+      outline-offset: 2px;
+    }
+
     #joblit-widget-root {
       position: fixed;
       bottom: 20px;
@@ -148,7 +154,7 @@ function getWidgetStyles(): string {
       overflow: hidden;
       font-size: 13px;
       color: var(--jf-text);
-      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: box-shadow 180ms ease, width 180ms ease, max-height 180ms ease;
     }
 
     /* ── Header ── */
@@ -156,7 +162,8 @@ function getWidgetStyles(): string {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 14px;
+      min-height: 60px;
+      padding: 8px 8px 8px 14px;
       background: var(--jf-header-gradient);
       color: #fff;
     }
@@ -196,20 +203,24 @@ function getWidgetStyles(): string {
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 26px;
-      height: 26px;
+      width: 44px;
+      height: 44px;
       background: rgba(255, 255, 255, 0.1);
       border: none;
       border-radius: 6px;
       color: #fff;
       cursor: pointer;
       opacity: 0.8;
-      transition: all 150ms ease;
+      transition: background-color 150ms ease, opacity 150ms ease;
     }
 
     .jf-header-btn:hover {
       opacity: 1;
       background: rgba(255, 255, 255, 0.2);
+    }
+
+    .jf-header-btn:focus-visible {
+      outline-color: #fff;
     }
 
     /* ── Fill progress ── */
@@ -248,7 +259,8 @@ function getWidgetStyles(): string {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 7px 0;
+      min-height: 48px;
+      padding: 2px 0;
       border-bottom: 1px solid var(--jf-border-light);
       transition: background 100ms ease;
     }
@@ -267,7 +279,7 @@ function getWidgetStyles(): string {
     .jf-field-label {
       font-size: 12px;
       color: var(--jf-text-muted);
-      max-width: 100px;
+      max-width: 88px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -275,14 +287,20 @@ function getWidgetStyles(): string {
     }
 
     .jf-field-value {
+      min-width: 0;
+      flex: 1;
       font-size: 12px;
       color: var(--jf-text);
       font-weight: 500;
-      max-width: 150px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       margin-left: auto;
+      text-align: right;
+    }
+
+    .jf-source-badge {
+      flex-shrink: 0;
     }
 
     .jf-confidence {
@@ -311,6 +329,7 @@ function getWidgetStyles(): string {
       justify-content: center;
       gap: 6px;
       padding: 9px 16px;
+      min-height: 44px;
       background: var(--jf-emerald-600);
       color: #fff;
       border: none;
@@ -318,7 +337,7 @@ function getWidgetStyles(): string {
       font-size: 13px;
       font-weight: 600;
       cursor: pointer;
-      transition: all 150ms ease;
+      transition: background-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
     }
 
     .jf-btn-primary:hover { background: var(--jf-emerald-700); box-shadow: var(--jf-primary-hover-shadow); }
@@ -339,6 +358,7 @@ function getWidgetStyles(): string {
       display: inline-flex;
       align-items: center;
       padding: 9px 14px;
+      min-height: 44px;
       background: var(--jf-bg-subtle);
       color: var(--jf-text-secondary);
       border: 1.5px solid var(--jf-border);
@@ -346,7 +366,7 @@ function getWidgetStyles(): string {
       font-size: 12px;
       font-weight: 600;
       cursor: pointer;
-      transition: all 150ms ease;
+      transition: background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
     }
 
     .jf-btn-secondary:hover { background: var(--jf-bg-hover); border-color: var(--jf-border-strong); }
@@ -380,7 +400,7 @@ function getWidgetStyles(): string {
       bottom: 20px;
       right: 20px;
       box-shadow: var(--jf-collapsed-shadow);
-      transition: all 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+      transition: transform 180ms ease, box-shadow 180ms ease;
     }
 
     .jf-collapsed:focus-visible {
@@ -389,16 +409,12 @@ function getWidgetStyles(): string {
     }
 
     .jf-collapsed:hover {
-      transform: scale(1.08);
+      transform: scale(1.04);
       box-shadow: var(--jf-collapsed-shadow-hover);
     }
 
     .jf-collapsed:active {
       transform: scale(0.95);
-    }
-
-    .jf-collapsed--has-fields {
-      animation: jf-pulse 2.5s ease infinite;
     }
 
     .jf-collapsed-badge {
@@ -468,11 +484,11 @@ function getWidgetStyles(): string {
 
     /* ── Edit button (hover reveal) ── */
     .jf-edit-btn {
-      display: none;
+      display: flex;
       align-items: center;
       justify-content: center;
-      width: 22px;
-      height: 22px;
+      width: 44px;
+      height: 44px;
       border: none;
       border-radius: 5px;
       background: var(--jf-bg-hover);
@@ -480,7 +496,8 @@ function getWidgetStyles(): string {
       cursor: pointer;
       flex-shrink: 0;
       margin-left: 4px;
-      transition: all 100ms ease;
+      opacity: 0;
+      transition: opacity 120ms ease, background-color 120ms ease, color 120ms ease;
     }
 
     .jf-edit-btn:hover {
@@ -488,8 +505,9 @@ function getWidgetStyles(): string {
       color: var(--jf-text-secondary);
     }
 
-    .jf-field-item:hover .jf-edit-btn {
-      display: flex;
+    .jf-field-item:hover .jf-edit-btn,
+    .jf-field-item:focus-within .jf-edit-btn {
+      opacity: 1;
     }
 
     /* ── Inline edit ── */
@@ -512,7 +530,7 @@ function getWidgetStyles(): string {
     .jf-edit-input {
       flex: 1;
       min-width: 0;
-      height: 26px;
+      min-height: 44px;
       padding: 0 8px;
       border: 1.5px solid var(--jf-emerald-500);
       border-radius: 6px;
@@ -531,13 +549,13 @@ function getWidgetStyles(): string {
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 22px;
-      height: 22px;
+      min-width: 44px;
+      min-height: 44px;
       border: none;
       border-radius: 5px;
       cursor: pointer;
       flex-shrink: 0;
-      transition: all 100ms ease;
+      transition: background-color 120ms ease, color 120ms ease;
     }
 
     .jf-edit-confirm {
@@ -586,16 +604,34 @@ function getWidgetStyles(): string {
       to   { opacity: 0; }
     }
 
-    /* ── Animations ── */
-    @keyframes jf-pulse {
-      0%, 100% { box-shadow: 0 4px 16px rgba(5, 150, 105, 0.35); }
-      50%      { box-shadow: 0 4px 16px rgba(5, 150, 105, 0.35), 0 0 0 6px rgba(16, 185, 129, 0); }
+    @media (hover: none) {
+      .jf-edit-btn {
+        opacity: 1;
+      }
+    }
+
+    @media (max-width: 420px) {
+      #joblit-widget-root {
+        width: min(340px, calc(100vw - 24px)) !important;
+        max-height: calc(100vh - 24px) !important;
+        right: 12px !important;
+        bottom: 12px !important;
+      }
+
+      .jf-body {
+        max-height: calc(100vh - 148px);
+      }
+
+      .jf-field-label {
+        max-width: 78px;
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
-        animation-duration: 0.01ms !important;
-        transition-duration: 0.01ms !important;
+        animation: none !important;
+        transition: none !important;
+        scroll-behavior: auto !important;
       }
     }
   `;

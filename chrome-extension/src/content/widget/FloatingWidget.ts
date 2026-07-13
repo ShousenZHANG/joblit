@@ -104,22 +104,27 @@ export class FloatingWidget {
     this.render();
   }
 
-  private getMatchedCount(): number {
-    return this.fields.filter(
-      (f) => f.category !== FieldCategory.UNKNOWN && f.confidence > 0.15,
-    ).length;
+  private getFilledCount(): number {
+    return this.fields.reduce((count, field) => {
+      const draft = this.edits.get(field.selector);
+      if (draft) return count + (draft.value ? 1 : 0);
+      const result = this.fillResults.get(field.selector);
+      return count + (result?.filled && result.value ? 1 : 0);
+    }, 0);
+  }
+
+  private getUneditedFieldValue(field: DetectedField): string {
+    const fillResult = this.fillResults.get(field.selector);
+    if (fillResult?.filled && fillResult.value) return fillResult.value;
+    const profileKey = PROFILE_KEY_MAP[field.category];
+    return profileKey ? (this.profile[profileKey] ?? "") : "";
   }
 
   private getFieldValue(field: DetectedField): string {
-    // User edit takes priority
+    // User draft takes priority, including an intentional empty value.
     const edit = this.edits.get(field.selector);
     if (edit) return edit.value;
-    // Then fill results (includes KB/historical values)
-    const fillResult = this.fillResults.get(field.selector);
-    if (fillResult?.filled && fillResult.value) return fillResult.value;
-    // Then profile
-    const profileKey = PROFILE_KEY_MAP[field.category];
-    return profileKey ? (this.profile[profileKey] ?? "") : "";
+    return this.getUneditedFieldValue(field);
   }
 
   private getFieldStatus(field: DetectedField): "filled" | "edited" | "unfilled" | "unknown" {
@@ -159,8 +164,7 @@ export class FloatingWidget {
   }
 
   private renderCollapsed(): void {
-    const matched = this.getMatchedCount();
-    const editCount = this.edits.size;
+    const filled = this.getFilledCount();
     this.root.replaceChildren();
 
     this.root.style.width = "";
@@ -179,17 +183,17 @@ export class FloatingWidget {
     logoSpan.innerHTML = this.logoSvg(22);
     badge.appendChild(logoSpan);
 
-    const total = matched + editCount;
-    if (total > 0) {
+    if (filled > 0) {
       const count = document.createElement("span");
       count.className = "jf-collapsed-badge";
-      count.textContent = String(total);
+      count.textContent = String(filled);
       badge.appendChild(count);
       badge.classList.add("jf-collapsed--has-fields");
     }
 
-    // Drag-to-reposition: distinguish click (<3px) from drag
-    let startX = 0, startY = 0, dragging = false;
+    // Drag-to-reposition: distinguish click (<3px) from drag. Activation stays
+    // on the native click path so keyboard, touch and assistive tech all work.
+    let startX = 0, startY = 0, dragging = false, suppressClick = false;
     badge.addEventListener("mousedown", (e: MouseEvent) => {
       startX = e.clientX;
       startY = e.clientY;
@@ -215,13 +219,15 @@ export class FloatingWidget {
       const onUp = () => {
         document.removeEventListener("mousemove", onMove);
         document.removeEventListener("mouseup", onUp);
-        if (!dragging) {
-          this.toggle();
-        } else {
+        if (dragging) {
           // Persist position
           const right = this.root.style.right;
           const bottom = this.root.style.bottom;
           chrome.storage.local.set({ widgetPosition: { right, bottom } });
+          suppressClick = true;
+          // A drag that ends outside the button may not emit a click. Reset on
+          // the next task so a later intentional activation is never swallowed.
+          setTimeout(() => { suppressClick = false; }, 0);
         }
       };
 
@@ -229,14 +235,12 @@ export class FloatingWidget {
       document.addEventListener("mouseup", onUp);
     });
 
-    // Keyboard activation (WCAG 2.1.1): Enter/Space expands the widget.
-    // Mouse activation is handled by the mousedown/mouseup click-vs-drag logic
-    // above, so there is no click listener to double-fire here.
-    badge.addEventListener("keydown", (e: KeyboardEvent) => {
-      if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
-        e.preventDefault();
-        this.toggle();
+    badge.addEventListener("click", () => {
+      if (suppressClick) {
+        suppressClick = false;
+        return;
       }
+      this.toggle();
     });
 
     this.root.appendChild(badge);
@@ -251,7 +255,7 @@ export class FloatingWidget {
     this.root.style.borderRadius = "14px";
     this.root.style.boxShadow = "var(--jf-shadow-card)";
 
-    const matched = this.getMatchedCount();
+    const filled = this.getFilledCount();
 
     // ── Header ──
     const header = document.createElement("div");
@@ -272,27 +276,22 @@ export class FloatingWidget {
 
     const badgeSpan = document.createElement("span");
     badgeSpan.className = "jf-header-badge";
-    badgeSpan.textContent = `${matched}/${this.fields.length}`;
+    badgeSpan.textContent = `${filled}/${this.fields.length}`;
+    badgeSpan.setAttribute("aria-label", t("widget.progressText", { filled, total: this.fields.length }));
     headerLeft.appendChild(badgeSpan);
 
     const headerActions = document.createElement("div");
     headerActions.className = "jf-header-actions";
 
-    const minimizeBtn = document.createElement("button");
-    minimizeBtn.className = "jf-header-btn";
-    minimizeBtn.title = "Minimize";
-    minimizeBtn.setAttribute("aria-label", "Minimize widget");
-    minimizeBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3 7h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
-    minimizeBtn.addEventListener("click", () => this.toggle());
+    const collapseBtn = document.createElement("button");
+    collapseBtn.type = "button";
+    collapseBtn.className = "jf-header-btn";
+    collapseBtn.title = t("widget.collapse");
+    collapseBtn.setAttribute("aria-label", t("widget.collapse"));
+    collapseBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    collapseBtn.addEventListener("click", () => this.toggle());
 
-    const closeBtn = document.createElement("button");
-    closeBtn.className = "jf-header-btn";
-    closeBtn.title = "Close";
-    closeBtn.setAttribute("aria-label", "Close widget");
-    closeBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
-    closeBtn.addEventListener("click", () => this.toggle());
-
-    headerActions.append(minimizeBtn, closeBtn);
+    headerActions.append(collapseBtn);
     header.append(headerLeft, headerActions);
     this.root.appendChild(header);
 
@@ -300,18 +299,23 @@ export class FloatingWidget {
     if (this.fillProgress.status !== "idle") {
       const progressWrap = document.createElement("div");
       progressWrap.className = "jf-fill-progress";
+      const total = Math.max(0, this.fillProgress.total);
+      const filledProgress = Math.min(Math.max(0, this.fillProgress.filled), total);
+      const pct = total > 0 ? Math.round((filledProgress / total) * 100) : 0;
+      progressWrap.setAttribute("role", "progressbar");
+      progressWrap.setAttribute("aria-label", t("widget.progressLabel"));
+      progressWrap.setAttribute("aria-valuemin", "0");
+      progressWrap.setAttribute("aria-valuenow", String(filledProgress));
+      progressWrap.setAttribute("aria-valuemax", String(total));
+      progressWrap.setAttribute("aria-valuetext", t("widget.progressText", { filled: filledProgress, total }));
 
       const progressBar = document.createElement("div");
       progressBar.className = "jf-fill-progress-bar";
+      progressBar.style.width = `${pct}%`;
 
       if (this.fillProgress.status === "filling") {
-        const pct = this.fillProgress.total > 0
-          ? Math.round((this.fillProgress.filled / this.fillProgress.total) * 100)
-          : 0;
-        progressBar.style.width = `${pct}%`;
         progressBar.classList.add("jf-fill-progress-bar--active");
       } else {
-        progressBar.style.width = "100%";
         progressBar.classList.add("jf-fill-progress-bar--done");
       }
 
@@ -351,12 +355,14 @@ export class FloatingWidget {
       actions.className = "jf-footer-actions";
 
       const saveBtn = document.createElement("button");
+      saveBtn.type = "button";
       saveBtn.className = "jf-btn-primary";
       saveBtn.textContent = t("widget.saveChanges", { count: this.edits.size });
       saveBtn.disabled = this.saving;
       saveBtn.addEventListener("click", () => this.saveAllEdits());
 
       const discardBtn = document.createElement("button");
+      discardBtn.type = "button";
       discardBtn.className = "jf-btn-secondary";
       discardBtn.textContent = t("widget.skip");
       discardBtn.addEventListener("click", () => {
@@ -409,6 +415,7 @@ export class FloatingWidget {
       input.type = "text";
       input.value = value;
       input.placeholder = t("widget.typeValue");
+      input.setAttribute("aria-label", `${t("widget.edit")}: ${field.labelText || field.name || t("widget.field")}`);
 
       // Confirm on Enter, cancel on Escape
       input.addEventListener("keydown", (e) => {
@@ -421,18 +428,20 @@ export class FloatingWidget {
       });
 
       const confirmBtn = document.createElement("button");
+      confirmBtn.type = "button";
       confirmBtn.className = "jf-edit-confirm";
-      confirmBtn.title = "Confirm";
-      confirmBtn.setAttribute("aria-label", "Confirm edit");
+      confirmBtn.title = t("widget.confirmEdit");
+      confirmBtn.setAttribute("aria-label", t("widget.confirmEdit"));
       confirmBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6.5l2.5 2.5L10 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
       confirmBtn.addEventListener("click", () => {
         this.commitEdit(field, input.value);
       });
 
       const cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
       cancelBtn.className = "jf-edit-cancel";
-      cancelBtn.title = "Cancel";
-      cancelBtn.setAttribute("aria-label", "Cancel edit");
+      cancelBtn.title = t("widget.cancelEdit");
+      cancelBtn.setAttribute("aria-label", t("widget.cancelEdit"));
       cancelBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
       cancelBtn.addEventListener("click", () => {
         this.editingField = null;
@@ -450,9 +459,10 @@ export class FloatingWidget {
 
       // Edit button (visible on hover)
       const editBtn = document.createElement("button");
+      editBtn.type = "button";
       editBtn.className = "jf-edit-btn";
       editBtn.title = t("widget.edit");
-      editBtn.setAttribute("aria-label", `${t("widget.edit")}: ${field.labelText || field.name || "field"}`);
+      editBtn.setAttribute("aria-label", `${t("widget.edit")}: ${field.labelText || field.name || t("widget.field")}`);
       editBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M7.5 2l2.5 2.5L4 10.5H1.5V8L7.5 2z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
       editBtn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -491,13 +501,9 @@ export class FloatingWidget {
   private commitEdit(field: DetectedField, value: string): void {
     const trimmed = value.trim();
 
-    if (trimmed) {
-      this.edits.set(field.selector, { value: trimmed, source: "user" });
-      // Apply value to the actual form field immediately
-      this.callbacks.onApplyValue(field.selector, trimmed);
-    } else {
-      this.edits.delete(field.selector);
-    }
+    this.edits.set(field.selector, { value: trimmed, source: "user" });
+    // Apply the final draft immediately, including an intentional clear.
+    this.callbacks.onApplyValue(field.selector, trimmed);
 
     this.editingField = null;
     this.render();
@@ -512,6 +518,8 @@ export class FloatingWidget {
     this.saving = true;
     this.render(); // Show disabled save button immediately
 
+    let toastMessage: string | null = null;
+
     try {
       const savedSelectors: string[] = [];
 
@@ -524,9 +532,9 @@ export class FloatingWidget {
 
       const savedCount = savedSelectors.length;
       if (savedCount === entries.length) {
-        this.showToast(t("widget.allSaved"));
+        toastMessage = t("widget.allSaved");
       } else {
-        this.showToast(t("widget.partialSaved", { saved: savedCount, total: entries.length }));
+        toastMessage = t("widget.partialSaved", { saved: savedCount, total: entries.length });
       }
 
       // Promote ONLY successfully saved edits into fillResults
@@ -542,6 +550,8 @@ export class FloatingWidget {
       this.saving = false;
       this.render();
     }
+
+    if (toastMessage) this.showToast(toastMessage);
   }
 
   /** Persist a single field edit as a knowledge base rule. */
@@ -714,21 +724,28 @@ export class FloatingWidget {
     let changed = false;
 
     for (const field of this.fields) {
-      // Skip fields the user is actively editing in the widget or already edited
-      if (this.edits.has(field.selector) || this.editingField === field.selector) continue;
+      // Inline editing owns its own draft until it is confirmed or cancelled.
+      if (this.editingField === field.selector) continue;
 
       const currentValue = this.readFieldValueFromDOM(field);
       const lastValue = this.lastFieldValues.get(field.selector) ?? "";
 
-      // Skip empty or placeholder values
-      if (!currentValue || FloatingWidget.PLACEHOLDER_RE.test(currentValue)) continue;
+      // Empty is a meaningful final draft when the user clears a field.
+      if (currentValue && FloatingWidget.PLACEHOLDER_RE.test(currentValue)) continue;
 
       if (currentValue !== lastValue) {
         this.lastFieldValues.set(field.selector, currentValue);
-        // Only register as edit if different from the already-filled value
-        const existingValue = this.getFieldValue(field);
-        if (currentValue !== existingValue) {
-          this.edits.set(field.selector, { value: currentValue, source: "user" });
+        const existingDraft = this.edits.get(field.selector);
+        const originalValue = this.getUneditedFieldValue(field);
+        // Once a field has a draft, keep following it through every keystroke,
+        // including a final empty value. Otherwise only create a draft when the
+        // host form diverges from Joblit's original value.
+        if (existingDraft || currentValue !== originalValue) {
+          if (existingDraft?.value !== currentValue) {
+            this.edits.set(field.selector, { value: currentValue, source: "user" });
+            changed = true;
+          }
+        } else if (this.edits.delete(field.selector)) {
           changed = true;
         }
       }

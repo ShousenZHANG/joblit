@@ -46,10 +46,18 @@ describe("TokenSetup API Base errors", () => {
     const tokenInput = container.querySelector<HTMLInputElement>(
       'input[type="password"]',
     );
+    expect(tokenInput).not.toBeNull();
+
+    const advancedToggle = Array.from(
+      container.querySelectorAll("button"),
+    ).find((button) => button.textContent?.includes("Advanced Settings"));
+    await act(async () => {
+      advancedToggle?.click();
+    });
+
     const apiBaseInput = container.querySelector<HTMLInputElement>(
       'input[type="url"]',
     );
-    expect(tokenInput).not.toBeNull();
     expect(apiBaseInput).not.toBeNull();
 
     await act(async () => {
@@ -66,14 +74,25 @@ describe("TokenSetup API Base errors", () => {
       connectButton!.click();
     });
 
-    const advancedToggle = Array.from(
-      container.querySelectorAll("button"),
-    ).find((button) => button.textContent?.includes("Advanced Settings"));
     expect(advancedToggle?.getAttribute("aria-expanded")).toBe("true");
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
       "Allow access to this self-hosted Joblit origin to continue.",
     );
     expect(apiBaseInput?.getAttribute("aria-invalid")).toBe("true");
     expect(tokenInput?.classList.contains("jl-input--error")).toBe(false);
+  });
+
+  it("associates field labels and removes collapsed advanced controls from focus order", () => {
+    const tokenInput = container.querySelector<HTMLInputElement>(
+      'input[type="password"]',
+    );
+    const tokenLabel = container.querySelector<HTMLLabelElement>(
+      'label[for="joblit-token"]',
+    );
+
+    expect(tokenInput?.id).toBe("joblit-token");
+    expect(tokenInput?.getAttribute("aria-describedby")).toContain("joblit-token-hint");
+    expect(tokenLabel).not.toBeNull();
+    expect(container.querySelector('input[type="url"]')).toBeNull();
   });
 });
