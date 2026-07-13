@@ -38,7 +38,10 @@ export async function checkFetchRunQuota(
   mode: "create" | "trigger",
   now = new Date(),
 ): Promise<FetchRunQuotaViolation | null> {
-  await tx.$queryRaw`
+  // pg_advisory_xact_lock() returns PostgreSQL `void`. Prisma's driver adapter
+  // cannot deserialize that type through $queryRaw, while $executeRaw runs the
+  // same statement without mapping a result column back into JavaScript.
+  await tx.$executeRaw`
     SELECT pg_advisory_xact_lock(
       ${FETCH_RUN_QUOTA_LOCK_NAMESPACE}::integer,
       ${FETCH_RUN_QUOTA_LOCK_KEY}::integer

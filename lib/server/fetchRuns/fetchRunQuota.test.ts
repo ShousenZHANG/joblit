@@ -9,9 +9,9 @@ import {
 function fakeTransaction(counts: number[]) {
   const order: string[] = [];
   const remaining = [...counts];
-  const queryRaw = vi.fn(async (_query: TemplateStringsArray, ..._values: unknown[]) => {
+  const executeRaw = vi.fn(async (_query: TemplateStringsArray, ..._values: unknown[]) => {
     order.push("lock");
-    return [{ pg_advisory_xact_lock: null }];
+    return 1;
   });
   const count = vi.fn(async () => {
     order.push("count");
@@ -20,11 +20,11 @@ function fakeTransaction(counts: number[]) {
 
   return {
     tx: {
-      $queryRaw: queryRaw,
+      $executeRaw: executeRaw,
       fetchRun: { count },
     } as unknown as Prisma.TransactionClient,
     order,
-    queryRaw,
+    executeRaw,
     count,
   };
 }
@@ -84,12 +84,12 @@ describe("fetch run quota", () => {
   });
 
   it("acquires the transaction advisory lock before reading any counts", async () => {
-    const { tx, order, queryRaw } = fakeTransaction([0, 0, 0, 0]);
+    const { tx, order, executeRaw } = fakeTransaction([0, 0, 0, 0]);
 
     await checkFetchRunQuota(tx, "user-1", "create");
 
     expect(order).toEqual(["lock", "count", "count", "count", "count"]);
-    expect(String(queryRaw.mock.calls[0]?.[0])).toContain("pg_advisory_xact_lock");
+    expect(String(executeRaw.mock.calls[0]?.[0])).toContain("pg_advisory_xact_lock");
   });
 
   it("returns the stable structured 429 response", async () => {

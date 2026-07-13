@@ -6,6 +6,7 @@ const fetchRunStore = vi.hoisted(() => ({
   updateInTx: vi.fn(),
   updateMany: vi.fn(),
   queryRawLock: vi.fn(),
+  executeRawLock: vi.fn(),
   countInTx: vi.fn(),
 }));
 
@@ -25,6 +26,7 @@ vi.mock("@/lib/server/prisma", () => ({
           count: fetchRunStore.countInTx,
         },
         $queryRaw: fetchRunStore.queryRawLock,
+        $executeRaw: fetchRunStore.executeRawLock,
       };
       return cb(tx);
     },
@@ -62,6 +64,8 @@ describe("fetch run trigger api", () => {
     fetchRunStore.updateInTx.mockReset();
     fetchRunStore.updateMany.mockReset();
     fetchRunStore.queryRawLock.mockReset();
+    fetchRunStore.executeRawLock.mockReset();
+    fetchRunStore.executeRawLock.mockResolvedValue(1);
     fetchRunStore.countInTx.mockReset();
     fetchRunStore.countInTx.mockResolvedValue(0);
     process.env.GITHUB_OWNER = "o";

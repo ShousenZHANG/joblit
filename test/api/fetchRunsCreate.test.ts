@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const fetchRunStore = vi.hoisted(() => ({
   create: vi.fn(),
   count: vi.fn(),
-  queryRawLock: vi.fn(),
+  executeRawLock: vi.fn(),
 }));
 
 vi.mock("@/lib/server/prisma", () => ({
@@ -12,7 +12,7 @@ vi.mock("@/lib/server/prisma", () => ({
     $transaction: async (cb: (tx: unknown) => Promise<unknown>) =>
       cb({
         fetchRun: fetchRunStore,
-        $queryRaw: fetchRunStore.queryRawLock,
+        $executeRaw: fetchRunStore.executeRawLock,
       }),
   },
 }));
@@ -33,10 +33,10 @@ describe("fetch runs create api", () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockReset();
     fetchRunStore.create.mockReset();
     fetchRunStore.count.mockReset();
-    fetchRunStore.queryRawLock.mockReset();
+    fetchRunStore.executeRawLock.mockReset();
     fetchRunStore.create.mockResolvedValue({ id: "run-1" });
     fetchRunStore.count.mockResolvedValue(0);
-    fetchRunStore.queryRawLock.mockResolvedValue([{ pg_advisory_xact_lock: null }]);
+    fetchRunStore.executeRawLock.mockResolvedValue(1);
   });
 
   it("auto expands a single role query by default", async () => {
