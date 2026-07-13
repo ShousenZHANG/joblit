@@ -49,6 +49,12 @@ describe("landing Nav", () => {
     expect(cta).not.toHaveAttribute("aria-disabled");
     expect(cta).not.toHaveAttribute("tabindex", "-1");
     expect(cta).not.toHaveClass("pointer-events-none");
+
+    const retiredHref = ["#", "access"].join("");
+    const linkHrefs = screen
+      .getAllByRole("link")
+      .map((link) => link.getAttribute("href"));
+    expect(linkHrefs).not.toContain(retiredHref);
   });
 
   it("routes authenticated visitors directly to the app", () => {
