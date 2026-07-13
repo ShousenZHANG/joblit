@@ -690,7 +690,6 @@
     "nav": {
       "product": "产品",
       "howItWorks": "工作原理",
-      "access": "申请使用",
       "faq": "常见问题",
       "changelog": "更新日志",
       "startFree": "免费开始",
@@ -710,7 +709,7 @@
       "subtitle": "Joblit 将 Seek 和 LinkedIn 岗位汇集到一个工作台，按目标 JD 辅助定制简历与求职信、导出清晰的 LaTeX PDF，并支持申请表自动填写。",
       "startFree": "免费开始",
       "watchDemo": "查看工作原理",
-      "metaFree": "邀请期免费 · 应用内 Gemini · 可移植 Skill Pack"
+      "metaFree": "所有人免费开放 · 无需信用卡 · Google 或 GitHub 登录"
     },
     "logoBar": {
       "heading": "贯通你的整个求职流程",
@@ -765,23 +764,6 @@
         "blurb": "导出采用中英双语模板的 LaTeX 排版 PDF。应用内生成使用 Gemini；也可导出可移植 Skill Pack，自行在 Claude、ChatGPT 或 Gemini 中使用。"
       }
     },
-    "access": {
-      "kicker": "完全免费 · 邀请制",
-      "titlePrefix": "完全免费。",
-      "titleItalic": "扩容期间邀请制。",
-      "lede": "所有功能全免费 —— 岗位抓取、AI 定制简历与求职信、LaTeX PDF 导出、Chrome 扩展。我们分批开放:留下邮箱,我们帮你开通账号。",
-      "emailLabel": "邮箱",
-      "emailPlaceholder": "you@example.com",
-      "submit": "申请使用",
-      "submitting": "提交中…",
-      "successTitle": "已加入名单",
-      "successBody": "我们会尽快通过你的邮箱 —— 届时用该邮箱的 Google 或 GitHub 账号登录即可。",
-      "approvedTitle": "你已获批",
-      "approvedBody": "正在带你前往登录 —— 用该邮箱的 Google 或 GitHub 账号即可。",
-      "errorBody": "出错了,请重试。",
-      "invalidEmail": "请输入有效邮箱。",
-      "perks": "无需信用卡 · 无付费墙 · 档案与导出内容由你掌控"
-    },
     "faq": {
       "kicker": "常见问题",
       "titlePrefix": "针对",
@@ -798,7 +780,7 @@
         },
         {
           "q": "Joblit 真的免费吗?",
-          "a": "是的 —— 所有功能全免费:岗位抓取、AI 定制简历与求职信、LaTeX PDF 导出、Chrome 扩展。扩容期间为邀请制,用你的邮箱申请使用,我们会帮你开通账号。"
+          "a": "是的，Joblit 所有功能均向每位登录用户免费开放，无需邀请、审批、订阅或信用卡。"
         },
         {
           "q": "Chrome 扩展支持 Workday / Greenhouse / Lever 吗?",
@@ -817,7 +799,7 @@
     "cta": {
       "titlePrefix": "少花时间重复改简历，",
       "titleItalic": "让申请持续推进。",
-      "lede": "邀请开放期间免费，无需信用卡。只需维护一份档案，即可在岗位发现、材料定制与申请流程中复用。",
+      "lede": "面向所有人免费开放，无需信用卡。使用 Google 或 GitHub 登录，一次维护档案，即可贯穿岗位发现、材料定制与申请流程。",
       "primary": "免费开始",
       "secondary": "查看工作原理"
     },

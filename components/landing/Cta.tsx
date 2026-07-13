@@ -63,7 +63,7 @@ export function Cta() {
           <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Magnetic strength={7}>
               <Link
-                href={cta.disabled ? "#" : cta.href === "/login" ? "#access" : cta.href}
+                href={cta.href}
                 aria-disabled={cta.disabled}
                 tabIndex={cta.disabled ? -1 : undefined}
                 className={

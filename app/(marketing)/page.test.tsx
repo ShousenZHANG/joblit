@@ -34,7 +34,7 @@ vi.mock("next-themes", async () => {
 });
 
 describe("MarketingPage", () => {
-  it("renders all 9 landing sections", () => {
+  it("renders all 8 landing sections without the retired access form", () => {
     render(
       <NextIntlClientProvider locale="en" messages={messages}>
         <MarketingPage />
@@ -47,7 +47,6 @@ describe("MarketingPage", () => {
       "landing-logobar",
       "landing-howitworks",
       "landing-features",
-      "landing-access",
       "landing-faq",
       "landing-cta",
       "landing-footer",
@@ -59,6 +58,8 @@ describe("MarketingPage", () => {
         `missing section: ${testid}`,
       ).toBeInTheDocument();
     }
+
+    expect(screen.queryByTestId("landing-access")).not.toBeInTheDocument();
 
     expect(screen.getByTestId("hero-demo-row-0")).toHaveAttribute(
       "data-active",

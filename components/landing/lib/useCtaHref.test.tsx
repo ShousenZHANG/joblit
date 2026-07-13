@@ -18,7 +18,7 @@ describe("useCtaHref", () => {
   it.each([
     ["authenticated", "/jobs"],
     ["unauthenticated", "/login"],
-    ["loading", "#access"],
+    ["loading", "/login"],
   ] as const)("routes %s sessions to %s without disabling the CTA", (status, href) => {
     session.status = status;
 

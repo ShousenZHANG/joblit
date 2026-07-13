@@ -690,7 +690,6 @@
     "nav": {
       "product": "Product",
       "howItWorks": "How it works",
-      "access": "Access",
       "faq": "FAQ",
       "changelog": "Changelog",
       "startFree": "Start free",
@@ -710,7 +709,7 @@
       "subtitle": "Joblit brings roles from Seek and LinkedIn into one workspace, helps tailor your CV and cover letter to each JD, exports clean LaTeX PDFs, and supports application autofill.",
       "startFree": "Start free",
       "watchDemo": "See how it works",
-      "metaFree": "Free while invite-only · Gemini in app · Portable Skill Pack"
+      "metaFree": "Free for everyone · No credit card · Google or GitHub sign-in"
     },
     "logoBar": {
       "heading": "Plugs into your whole job hunt",
@@ -765,23 +764,6 @@
         "blurb": "Export LaTeX-typeset PDFs with locale-aware EN / CN templates. In-app generation uses Gemini; export a portable Skill Pack for optional external use with Claude, ChatGPT, or Gemini."
       }
     },
-    "access": {
-      "kicker": "Free & invite-only",
-      "titlePrefix": "Completely free.",
-      "titleItalic": "Invite-only while we scale.",
-      "lede": "Every feature is free — role fetching, AI-tailored CV & cover letters, LaTeX PDF export, the Chrome extension. We onboard in waves: drop your email and we'll switch your account on.",
-      "emailLabel": "Email",
-      "emailPlaceholder": "you@example.com",
-      "submit": "Request access",
-      "submitting": "Sending…",
-      "successTitle": "You're on the list",
-      "successBody": "We'll approve your email shortly — then sign in with the Google or GitHub account on that address.",
-      "approvedTitle": "You're already approved",
-      "approvedBody": "Taking you to sign-in — use the Google or GitHub account on that email.",
-      "errorBody": "Something went wrong. Please try again.",
-      "invalidEmail": "Enter a valid email address.",
-      "perks": "No credit card · No paywalls · You control your profile and exports"
-    },
     "faq": {
       "kicker": "Questions",
       "titlePrefix": "Honest answers to",
@@ -798,7 +780,7 @@
         },
         {
           "q": "Is Joblit really free?",
-          "a": "Yes — every feature is free: role fetching, AI-tailored CVs and cover letters, LaTeX PDF export, and the Chrome extension. It's invite-only while we scale, so request access with your email and we'll switch your account on."
+          "a": "Yes — every Joblit feature is free for every signed-in user. No invitation, approval, subscription, or credit card is required."
         },
         {
           "q": "Does the Chrome extension work on Workday / Greenhouse / Lever?",
@@ -817,7 +799,7 @@
     "cta": {
       "titlePrefix": "Spend less time rewriting.",
       "titleItalic": "Keep applications moving.",
-      "lede": "Free during invite-only access, with no credit card. Import your profile once, then reuse it across role discovery, tailoring, and application workflows.",
+      "lede": "Free for everyone, with no credit card. Sign in with Google or GitHub, add your profile once, and reuse it across discovery, tailoring, and applications.",
       "primary": "Start free",
       "secondary": "See how it works"
     },

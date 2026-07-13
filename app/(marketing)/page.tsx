@@ -7,7 +7,6 @@ import { Hero } from "@/components/landing/Hero";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { LogoBar } from "@/components/landing/LogoBar";
 import { Starfield } from "@/components/landing/Starfield";
-import { Access } from "@/components/landing/Access";
 import { Nav } from "@/components/landing/Nav";
 import { ScrollProgress } from "@/components/landing/ScrollProgress";
 
@@ -45,7 +44,7 @@ const jsonLd = {
 /* ── Page ─────────────────────────────────────────────── */
 
 /**
- * Marketing landing page. Server component that stitches the 9 landing
+ * Marketing landing page. Server component that stitches the 8 landing
  * sections from `components/landing/`. Each section is "use client" so it
  * can run framer-motion reveals — but the page shell renders from the
  * server so HTML arrives first for SEO and LCP.
@@ -56,7 +55,6 @@ const jsonLd = {
  *   LogoBar    — credibility (job boards + LLM providers)
  *   HowItWorks — 3-step flow
  *   Features   — 2×2 differentiators
- *   Access     — free + invite-only apply form
  *   Faq        — objections
  *   Cta        — final push
  *   Footer     — links + legal
@@ -96,9 +94,6 @@ export default function MarketingPage() {
         </div>
         <div className="cv-auto">
           <Features />
-        </div>
-        <div className="cv-auto">
-          <Access />
         </div>
         <div className="cv-auto">
           <Faq />

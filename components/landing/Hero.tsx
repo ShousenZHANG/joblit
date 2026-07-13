@@ -171,7 +171,7 @@ export function Hero() {
       >
         <Magnetic strength={7}>
           <Link
-            href={cta.disabled ? "#" : cta.href === "/login" ? "#access" : cta.href}
+            href={cta.href}
             aria-disabled={cta.disabled}
             tabIndex={cta.disabled ? -1 : undefined}
             className={

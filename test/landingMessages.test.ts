@@ -42,6 +42,45 @@ describe("landing message contract", () => {
     expect(landing.faq.items[4]?.a).toContain("Skill Pack");
   });
 
+  it("uses the exact open-access English copy", () => {
+    expect(en.landing.hero.metaFree).toBe(
+      "Free for everyone · No credit card · Google or GitHub sign-in",
+    );
+    expect(en.landing.faq.items[2]?.a).toBe(
+      "Yes — every Joblit feature is free for every signed-in user. No invitation, approval, subscription, or credit card is required.",
+    );
+    expect(en.landing.cta.lede).toBe(
+      "Free for everyone, with no credit card. Sign in with Google or GitHub, add your profile once, and reuse it across discovery, tailoring, and applications.",
+    );
+  });
+
+  it("uses the exact open-access Chinese copy", () => {
+    expect(zh.landing.hero.metaFree).toBe(
+      "所有人免费开放 · 无需信用卡 · Google 或 GitHub 登录",
+    );
+    expect(zh.landing.faq.items[2]?.a).toBe(
+      "是的，Joblit 所有功能均向每位登录用户免费开放，无需邀请、审批、订阅或信用卡。",
+    );
+    expect(zh.landing.cta.lede).toBe(
+      "面向所有人免费开放，无需信用卡。使用 Google 或 GitHub 登录，一次维护档案，即可贯穿岗位发现、材料定制与申请流程。",
+    );
+  });
+
+  it.each([
+    ["en", en.landing],
+    ["zh", zh.landing],
+  ] as const)("contains no retired invitation language in %s", (_locale, landing) => {
+    const copy = JSON.stringify(landing).toLowerCase();
+    for (const phrase of [
+      "invite-only",
+      "request access",
+      "manual approval",
+      "邀请制",
+      "申请使用",
+      "人工审批",
+    ]) expect(copy).not.toContain(phrase);
+  });
+
   it.each([
     ["en", { landing: en.landing, marketing: en.marketing }],
     ["zh", { landing: zh.landing, marketing: zh.marketing }],

@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { ThemeToggle } from "@/components/providers/ThemeProvider";
 import { Magnetic } from "./lib/interactive";
+import { useCtaHref } from "./lib/useCtaHref";
 
 // Glass navbar. Sticky at top 16px, gains a deeper shadow once the user
 // scrolls past 20px. Smooth scroll handler hijacks clicks on `#anchor`
@@ -32,13 +33,13 @@ export function Nav() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const t = useTranslations("landing.nav");
+  const cta = useCtaHref();
 
   // Dropped the "Changelog" link — it pointed at a dead "#" anchor, which
   // reads as pre-launch in a primary nav. Re-add when a real page exists.
   const LINKS: NavLink[] = [
     { label: t("product"), href: "#product" },
     { label: t("howItWorks"), href: "#how" },
-    { label: t("access"), href: "#access" },
     { label: t("faq"), href: "#faq" },
   ];
 
@@ -82,13 +83,6 @@ export function Nav() {
     [reduced],
   );
 
-  // Invite-only: unauthenticated visitors go to the apply section, not straight
-  // to /login (where the gate would reject an un-approved email). Approved /
-  // existing users use the separate "Log in" link. Authenticated → straight in.
-  const ctaHref =
-    status === "authenticated"
-      ? "/jobs"
-      : "#access";
   const ctaLabel =
     status === "authenticated" ? t("openApp") : t("startFree");
 
@@ -170,7 +164,7 @@ export function Nav() {
           )}
           <Magnetic strength={5}>
             <Link
-              href={ctaHref}
+              href={cta.href}
               aria-label={ctaLabel}
               className="inline-flex h-11 min-w-11 shrink-0 items-center gap-1 rounded-full bg-foreground px-3 text-[13px] font-semibold text-background shadow-sm transition-all hover:-translate-y-px hover:bg-foreground/90 hover:shadow-md active:translate-y-0 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-4 lg:h-9"
             >

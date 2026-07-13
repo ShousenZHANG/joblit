@@ -13,7 +13,7 @@ import { useSession } from "next-auth/react";
  *
  *   authenticated   → `/jobs` (straight into the app)
  *   unauthenticated → `/login` (sign-in)
- *   loading         → `#access` (the invite form stays available)
+ *   loading         → `/login` (sign-in remains immediately actionable)
  *
  * The return shape stays stable for existing consumers, but every state is
  * actionable so a slow session request never creates a dead primary CTA.
@@ -23,9 +23,5 @@ export function useCtaHref() {
   if (status === "authenticated") {
     return { href: "/jobs", disabled: false } as const;
   }
-  if (status === "unauthenticated") {
-    return { href: "/login", disabled: false } as const;
-  }
-  // status === "loading" — SessionProvider is mid-fetch.
-  return { href: "#access", disabled: false } as const;
+  return { href: "/login", disabled: false } as const;
 }
