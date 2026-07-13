@@ -60,6 +60,11 @@ describe("MarketingPage", () => {
       ).toBeInTheDocument();
     }
 
+    expect(screen.getByTestId("hero-demo-row-0")).toHaveAttribute(
+      "data-active",
+      "true",
+    );
+
     const nav = screen.getByTestId("landing-nav");
     const skipTarget = document.getElementById("main-content");
     expect(skipTarget).toHaveAttribute("tabindex", "-1");
