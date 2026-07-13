@@ -5,14 +5,14 @@ const isHeaderSafe = (value: string) => [...value].every((c) => c.charCodeAt(0) 
 
 describe("buildPdfFilename", () => {
   it("formats `{Full Name} {Title}_CV.pdf` with spaces preserved", () => {
-    expect(buildPdfFilename("Eddy Zhang", "Software Engineer", "cv")).toBe(
-      "Eddy Zhang Software Engineer_CV.pdf",
+    expect(buildPdfFilename("Alex Morgan", "Software Engineer", "cv")).toBe(
+      "Alex Morgan Software Engineer_CV.pdf",
     );
   });
 
   it("uses the _CL suffix for cover letters", () => {
-    expect(buildPdfFilename("Eddy Zhang", "Software Engineer", "cl")).toBe(
-      "Eddy Zhang Software Engineer_CL.pdf",
+    expect(buildPdfFilename("Alex Morgan", "Software Engineer", "cl")).toBe(
+      "Alex Morgan Software Engineer_CL.pdf",
     );
   });
 
@@ -39,8 +39,8 @@ describe("buildPdfFilename", () => {
   });
 
   it("collapses repeated whitespace", () => {
-    expect(buildPdfFilename("Eddy   Zhang", "Sr.   Engineer", "cv")).toBe(
-      "Eddy Zhang Sr Engineer_CV.pdf",
+    expect(buildPdfFilename("Alex   Morgan", "Sr.   Engineer", "cv")).toBe(
+      "Alex Morgan Sr Engineer_CV.pdf",
     );
   });
 
@@ -49,7 +49,7 @@ describe("buildPdfFilename", () => {
   });
 
   it("handles name-only or title-only input", () => {
-    expect(buildPdfFilename("Eddy Zhang", "", "cv")).toBe("Eddy Zhang_CV.pdf");
+    expect(buildPdfFilename("Alex Morgan", "", "cv")).toBe("Alex Morgan_CV.pdf");
     expect(buildPdfFilename("", "Software Engineer", "cv")).toBe("Software Engineer_CV.pdf");
   });
 
@@ -65,8 +65,8 @@ describe("buildPdfFilename", () => {
 
 describe("contentDispositionAttachment", () => {
   it("uses a plain filename for ASCII names", () => {
-    const value = contentDispositionAttachment("Eddy Zhang Software Engineer_CV.pdf");
-    expect(value).toContain('filename="Eddy Zhang Software Engineer_CV.pdf"');
+    const value = contentDispositionAttachment("Alex Morgan Software Engineer_CV.pdf");
+    expect(value).toContain('filename="Alex Morgan Software Engineer_CV.pdf"');
     expect(value).toContain("filename*=UTF-8''");
     expect(isHeaderSafe(value)).toBe(true);
   });

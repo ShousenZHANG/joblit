@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-05-06
-- **Context owner:** Eddy Zhang
+- **Context owner:** Joblit Engineering
 
 ## Context
 

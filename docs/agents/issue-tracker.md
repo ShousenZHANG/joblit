@@ -1,6 +1,6 @@
 # Issue Tracker: GitHub
 
-Issues and PRDs for this repo live in GitHub Issues for `ShousenZHANG/jobflow-web`.
+Issues and PRDs for this repo live in GitHub Issues for `ShousenZHANG/joblit`.
 
 Use the `gh` CLI for issue operations when available. If `gh` is unavailable, use the GitHub connector/API with the same issue workflow.
 
@@ -13,7 +13,7 @@ Use the `gh` CLI for issue operations when available. If `gh` is unavailable, us
 
 ## When a skill says "publish to the issue tracker"
 
-Create a GitHub issue in `ShousenZHANG/jobflow-web`.
+Create a GitHub issue in `ShousenZHANG/joblit`.
 
 ## When a skill says "fetch the relevant ticket"
 

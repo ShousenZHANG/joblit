@@ -4,7 +4,6 @@
     "type": true
   },
   "ignore": [
-    "lib/generated/**",
     "lib/shared/schemas/resumeProfile.ts"
   ],
   "ignoreDependencies": [

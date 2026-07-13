@@ -108,7 +108,7 @@ The `AGENTS.md` file documents the external orchestration protocol for the Codex
 
 ### Issue tracker
 
-Issues and PRDs are tracked in GitHub Issues for `ShousenZHANG/jobflow-web`. See `docs/agents/issue-tracker.md`.
+Issues and PRDs are tracked in GitHub Issues for `ShousenZHANG/joblit`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

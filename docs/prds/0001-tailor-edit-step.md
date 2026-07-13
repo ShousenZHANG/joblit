@@ -1,7 +1,7 @@
 # PRD: Tailor Edit Step
 
 - **Status:** Approved
-- **Owner:** Eddy Zhang
+- **Owner:** Joblit Engineering
 - **Created:** 2026-05-06
 - **Target ship:** 2 sprints across 3 phases
 
@@ -258,4 +258,4 @@ Layout sketch:
 
 ## Approvals
 
-- Eddy Zhang — 2026-05-06 (owner approval)
+- Joblit Engineering — 2026-05-06 (owner approval)

@@ -6,10 +6,10 @@
  * download `<a download>` attributes) so every PDF a user saves is named the
  * same way:  `{Full Name} {Title}_{CV|CL}.pdf`.
  *
- *   buildPdfFilename("Eddy Zhang", "Software Engineer", "cv")
- *     -> "Eddy Zhang Software Engineer_CV.pdf"
- *   buildPdfFilename("Eddy Zhang", "Software Engineer", "cl")
- *     -> "Eddy Zhang Software Engineer_CL.pdf"
+ *   buildPdfFilename("Alex Morgan", "Software Engineer", "cv")
+ *     -> "Alex Morgan Software Engineer_CV.pdf"
+ *   buildPdfFilename("Alex Morgan", "Software Engineer", "cl")
+ *     -> "Alex Morgan Software Engineer_CL.pdf"
  */
 
 export type PdfDocKind = "cv" | "cl";

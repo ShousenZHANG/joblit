@@ -11,7 +11,7 @@ import { revealUp, useReveal } from "./lib/motion";
 // dead links reads as pre-launch and tanks credibility. The JoblitMark
 // logo mirrors the Nav for brand consistency.
 
-const REPO_URL = "https://github.com/ShousenZHANG/jobflow-web";
+const REPO_URL = "https://github.com/ShousenZHANG/joblit";
 
 type FooterLink = { label: string; href: string; external?: boolean };
 

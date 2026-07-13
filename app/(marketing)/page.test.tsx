@@ -75,7 +75,7 @@ describe("MarketingPage", () => {
     });
     expect(githubLink).toHaveAttribute(
       "href",
-      "https://github.com/ShousenZHANG/jobflow-web",
+      "https://github.com/ShousenZHANG/joblit",
     );
     expect(githubLink).toHaveAttribute("target", "_blank");
   });
