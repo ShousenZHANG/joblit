@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
@@ -304,7 +304,6 @@ describe("JobsClient", () => {
   });
 
   it("merges an immediate selection with a pending debounced query", async () => {
-    const user = userEvent.setup();
     const secondJob = {
       ...baseJob,
       id: "22222222-2222-2222-2222-222222222222",
@@ -312,28 +311,45 @@ describe("JobsClient", () => {
     };
     navigationMock.search = "utm=campaign";
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 480 });
+    vi.useFakeTimers();
 
-    renderWithClient(
-      <JobsClient initialItems={[baseJob, secondJob]} initialCursor={null} />,
-    );
-    fireEvent.change(screen.getAllByRole("textbox")[0], {
-      target: { value: "platform" },
-    });
-    const results = screen.getAllByTestId("jobs-results-scroll")[0];
-    await user.click(
-      within(results).getByRole("button", { name: /Backend Engineer/i }),
-    );
-
-    expect(navigationMock.replace.mock.calls).toContainEqual([
-      `/jobs?utm=campaign&job=${secondJob.id}&view=detail`,
-      { scroll: false },
-    ]);
-    await waitFor(() => {
-      expect(navigationMock.replace).toHaveBeenLastCalledWith(
-        `/jobs?utm=campaign&job=${secondJob.id}&view=detail&q=platform`,
-        { scroll: false },
+    try {
+      renderWithClient(
+        <JobsClient initialItems={[baseJob, secondJob]} initialCursor={null} />,
       );
-    });
+      fireEvent.change(screen.getAllByRole("textbox")[0], {
+        target: { value: "platform" },
+      });
+      const results = screen.getAllByTestId("jobs-results-scroll")[0];
+      fireEvent.click(
+        within(results).getByRole("button", { name: /Backend Engineer/i }),
+      );
+
+      expect(navigationMock.replace.mock.calls).toEqual([
+        [
+          `/jobs?utm=campaign&job=${secondJob.id}&view=detail`,
+          { scroll: false },
+        ],
+      ]);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(250);
+      });
+
+      expect(navigationMock.replace.mock.calls).toEqual([
+        [
+          `/jobs?utm=campaign&job=${secondJob.id}&view=detail`,
+          { scroll: false },
+        ],
+        [
+          `/jobs?utm=campaign&job=${secondJob.id}&view=detail&q=platform`,
+          { scroll: false },
+        ],
+      ]);
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
   });
 
   it("links mobile tabs to panels and supports automatic arrow activation", async () => {
