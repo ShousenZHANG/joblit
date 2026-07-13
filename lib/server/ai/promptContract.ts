@@ -14,12 +14,12 @@ export type PromptMeta = {
   promptHash: string;
 };
 
-export type ImportedPromptMeta = Pick<PromptMeta, "ruleSetId" | "resumeSnapshotUpdatedAt"> &
+type ImportedPromptMeta = Pick<PromptMeta, "ruleSetId" | "resumeSnapshotUpdatedAt"> &
   Partial<
     Pick<PromptMeta, "promptTemplateVersion" | "schemaVersion" | "skillPackVersion" | "promptHash">
   >;
 
-export type PromptMetaMismatch = {
+type PromptMetaMismatch = {
   field: keyof ImportedPromptMeta;
   expected: string;
   received: string;

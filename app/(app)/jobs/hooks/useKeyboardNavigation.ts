@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 
-export interface UseKeyboardNavigationOptions {
+interface UseKeyboardNavigationOptions {
   containerRef: RefObject<HTMLElement | null>;
   items: Array<{ id: string }>;
   selectedId: string | null;

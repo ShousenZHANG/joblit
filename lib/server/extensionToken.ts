@@ -13,7 +13,7 @@ export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-export interface CreateTokenResult {
+interface CreateTokenResult {
   id: string;
   rawToken: string;
   name: string;

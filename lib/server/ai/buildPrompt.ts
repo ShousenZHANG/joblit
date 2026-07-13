@@ -5,7 +5,7 @@ import {
 } from "./applicationPromptBuilder";
 import { truncate } from "@/lib/shared/utils/text";
 
-export type TailorPromptInput = {
+type TailorPromptInput = {
   baseSummary: string;
   jobTitle: string;
   company: string;

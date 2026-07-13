@@ -2,14 +2,14 @@ import { del } from "@vercel/blob";
 import { prisma } from "@/lib/server/prisma";
 import { canonicalizeJobUrl } from "@/lib/shared/canonicalizeJobUrl";
 
-export type JobDeleteResult =
+type JobDeleteResult =
   | { alreadyDeleted: true }
   | {
       alreadyDeleted: false;
       blobCleanup: { attempted: number; deleted: number; failed: number };
     };
 
-export type BatchDeleteResult = {
+type BatchDeleteResult = {
   deleted: number;
   notFound: number;
   blobCleanup: { attempted: number; deleted: number; failed: number };

@@ -28,9 +28,9 @@ export const ImportJobItemSchema = z
   })
   .passthrough();
 
-export type ImportJobItem = z.infer<typeof ImportJobItemSchema>;
+type ImportJobItem = z.infer<typeof ImportJobItemSchema>;
 
-export interface ImportJobsResult {
+interface ImportJobsResult {
   imported: number;
   invalid: number;
 }

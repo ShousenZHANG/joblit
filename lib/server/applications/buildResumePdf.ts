@@ -14,7 +14,7 @@ type ResumeProfileRecord = NonNullable<
   Awaited<ReturnType<typeof import("@/lib/server/resumeProfile").getResumeProfile>>
 >;
 
-export type ResumePdfResult = {
+type ResumePdfResult = {
   pdf: Buffer;
   tex: string;
   cvSource: "ai" | "base";

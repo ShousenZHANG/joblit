@@ -29,14 +29,10 @@ export const ResumeBasicsSchema = z.object({
   qq: z.string().max(20).optional().nullable(),
 });
 
-export type ResumeBasics = z.infer<typeof ResumeBasicsSchema>;
-
 export const ResumeLinkSchema = z.object({
   label: z.string().trim().min(1).max(40),
   url: z.string().trim().url().max(300),
 });
-
-export type ResumeLink = z.infer<typeof ResumeLinkSchema>;
 
 export const ResumeExperienceSchema = z.object({
   location: z.string().trim().min(1).max(120).optional().nullable(),
@@ -47,8 +43,6 @@ export const ResumeExperienceSchema = z.object({
   bullets: z.array(z.string().trim().min(1).max(220)).max(12),
 });
 
-export type ResumeExperience = z.infer<typeof ResumeExperienceSchema>;
-
 export const ResumeProjectSchema = z.object({
   name: z.string().trim().min(1).max(140),
   location: z.string().trim().min(1).max(120).optional().nullable(),
@@ -58,8 +52,6 @@ export const ResumeProjectSchema = z.object({
   bullets: z.array(z.string().trim().min(1).max(220)).max(12),
 });
 
-export type ResumeProject = z.infer<typeof ResumeProjectSchema>;
-
 export const ResumeEducationSchema = z.object({
   school: z.string().trim().min(1).max(140),
   degree: z.string().trim().min(1).max(140),
@@ -68,14 +60,10 @@ export const ResumeEducationSchema = z.object({
   details: z.string().trim().max(200).optional().nullable(),
 });
 
-export type ResumeEducation = z.infer<typeof ResumeEducationSchema>;
-
 export const ResumeSkillSchema = z.object({
   category: z.string().trim().min(1).max(60),
   items: z.array(z.string().trim().min(1).max(60)).max(30),
 });
-
-export type ResumeSkill = z.infer<typeof ResumeSkillSchema>;
 
 export const ResumeProfileSchema = z.object({
   locale: z.string().optional().nullable(),
@@ -90,9 +78,5 @@ export const ResumeProfileSchema = z.object({
 
 export type ResumeProfile = z.infer<typeof ResumeProfileSchema>;
 
-/**
- * Backward-compatible alias for CnResumeBasicsSchema.
- * Consumers that imported from cnResumeBasics.ts can switch to this.
- */
+/** Compatibility alias retained for API callers and schema regression tests. */
 export const CnResumeBasicsSchema = ResumeBasicsSchema;
-export type CnResumeBasics = ResumeBasics;

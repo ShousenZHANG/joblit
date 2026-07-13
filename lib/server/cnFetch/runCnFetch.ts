@@ -7,9 +7,7 @@ import { normalizeCnJobs, type NormalizedCnJob } from "./normalize";
 // dedups. Per-source failures do not abort the run — the user still gets
 // whatever the other sources produced, plus a diagnostics report.
 
-export type CnFetchAdapter = (signal?: AbortSignal) => Promise<AdapterResult>;
-
-export interface RunCnFetchOptions {
+interface RunCnFetchOptions {
   /** Sources to include. Only "nowcoder" is supported; defaults to it. */
   sources?: CnSource[];
   /** User's keyword filter (ranks results in normalize). */
@@ -22,7 +20,7 @@ export interface RunCnFetchOptions {
   adapters?: Partial<Record<CnSource, () => Promise<AdapterResult>>>;
 }
 
-export interface RunCnFetchResult {
+interface RunCnFetchResult {
   jobs: NormalizedCnJob[];
   diagnostics: Array<{
     source: CnSource;

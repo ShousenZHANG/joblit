@@ -1,6 +1,6 @@
 /** Centralized error handling for the extension. */
 
-export interface ExtError {
+interface ExtError {
   code: string;
   message: string;
   recoverable: boolean;

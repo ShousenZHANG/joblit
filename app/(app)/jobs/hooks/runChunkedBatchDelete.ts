@@ -1,11 +1,11 @@
 import { chunkArray } from "@/lib/shared/chunk";
 
-export interface ChunkResult {
+interface ChunkResult {
   deleted: number;
   notFound: number;
 }
 
-export interface BatchDeleteSummary {
+interface BatchDeleteSummary {
   deleted: number;
   notFound: number;
   failedIds: string[];
@@ -13,7 +13,7 @@ export interface BatchDeleteSummary {
   firstError?: Error;
 }
 
-export interface RunChunkedBatchDeleteOptions {
+interface RunChunkedBatchDeleteOptions {
   ids: readonly string[];
   /** Sends one chunk to the server. Should throw on HTTP/network failure. */
   sendChunk: (idsChunk: string[]) => Promise<ChunkResult>;

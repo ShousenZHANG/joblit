@@ -7,7 +7,7 @@ export {
   buildCacheKey,
 } from "./videoCacheHelpers";
 
-export interface VideoCacheEntry {
+interface VideoCacheEntry {
   key: string;
   payload: VideosResponse;
   fetchedAt: Date;

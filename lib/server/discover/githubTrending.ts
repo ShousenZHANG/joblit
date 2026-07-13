@@ -125,7 +125,7 @@ export function parseTrendingHtml(html: string): TrendingRepo[] {
 const CJK_RE = /[぀-ヿ㐀-䶿一-鿿豈-﫿ｦ-ﾟ]/g;
 const CJK_RATIO_THRESHOLD = 0.2;
 
-export function cjkRatio(text: string): number {
+function cjkRatio(text: string): number {
   const stripped = (text || "").replace(/\s/g, "");
   if (stripped.length === 0) return 0;
   const cjk = stripped.match(CJK_RE)?.length ?? 0;

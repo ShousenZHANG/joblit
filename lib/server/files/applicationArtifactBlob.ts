@@ -1,4 +1,4 @@
-export type ApplicationArtifactTarget = "resume" | "cover";
+type ApplicationArtifactTarget = "resume" | "cover";
 
 export function buildApplicationArtifactBlobPath(input: {
   userId: string;

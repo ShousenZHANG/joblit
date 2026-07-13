@@ -8,7 +8,7 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-export type AccessReviewStatus = "APPROVED" | "REJECTED";
+type AccessReviewStatus = "APPROVED" | "REJECTED";
 
 /**
  * Gate used by the NextAuth signIn callback. An email may sign in when it is:

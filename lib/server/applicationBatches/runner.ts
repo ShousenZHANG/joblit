@@ -45,7 +45,7 @@ type ClaimResult =
   | { kind: "terminal"; batchStatus: ApplicationBatchStatus }
   | { kind: "not_found" };
 
-export type RetryBatchResult = {
+type RetryBatchResult = {
   batch: {
     id: string;
     scope: "NEW";

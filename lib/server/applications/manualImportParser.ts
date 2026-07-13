@@ -66,12 +66,12 @@ const CoverManualOutputSchema = z.object({
   cover: CoverContentSchema,
 });
 
-export type ResumeManualOutput = z.infer<typeof ResumeManualOutputSchema>;
-export type CoverManualOutput = z.infer<typeof CoverManualOutputSchema>;
+type ResumeManualOutput = z.infer<typeof ResumeManualOutputSchema>;
+type CoverManualOutput = z.infer<typeof CoverManualOutputSchema>;
 
 // ── JSON Parsing ──
 
-export function parseJsonCandidate(raw: string): unknown | null {
+function parseJsonCandidate(raw: string): unknown | null {
   const text = raw.trim();
   if (!text) return null;
 
@@ -383,7 +383,7 @@ function extractMeaningfulKeywords(value: string) {
   );
 }
 
-export function bulletSimilarityScore(a: string, b: string) {
+function bulletSimilarityScore(a: string, b: string) {
   const ta = tokenizeBulletForSimilarity(a);
   const tb = tokenizeBulletForSimilarity(b);
   if (ta.size === 0 || tb.size === 0) return 0;

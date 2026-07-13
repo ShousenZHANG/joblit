@@ -26,7 +26,7 @@ export class ApiError extends Error {
   }
 }
 
-export interface FetchJsonOptions<TSchema extends ZodType | undefined = undefined>
+interface FetchJsonOptions<TSchema extends ZodType | undefined = undefined>
   extends RequestInit {
   /** Optional Zod schema to validate the success body. */
   schema?: TSchema;

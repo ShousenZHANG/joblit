@@ -10,9 +10,9 @@ const PHOTO_CONTENT_TYPE_TO_EXT = {
 
 const ALLOWED_PHOTO_FILENAMES = new Set(["photo.jpg", "photo.png", "photo.webp"]);
 
-export type ResumePhotoContentType = keyof typeof PHOTO_CONTENT_TYPE_TO_EXT;
+type ResumePhotoContentType = keyof typeof PHOTO_CONTENT_TYPE_TO_EXT;
 
-export function normalizeResumePhotoContentType(value: string | null) {
+function normalizeResumePhotoContentType(value: string | null) {
   return (value ?? "").split(";")[0].trim().toLowerCase();
 }
 
@@ -21,11 +21,7 @@ export function toResumePhotoContentType(value: string | null): ResumePhotoConte
   return normalized in PHOTO_CONTENT_TYPE_TO_EXT ? (normalized as ResumePhotoContentType) : null;
 }
 
-export function isAllowedResumePhotoContentType(value: string | null) {
-  return toResumePhotoContentType(value) !== null;
-}
-
-export function getResumePhotoExtension(contentType: ResumePhotoContentType) {
+function getResumePhotoExtension(contentType: ResumePhotoContentType) {
   return PHOTO_CONTENT_TYPE_TO_EXT[contentType];
 }
 

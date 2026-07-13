@@ -20,16 +20,8 @@
  */
 
 export type Market = "AU" | "CN";
-export type ResumeLocale = "en-AU" | "zh-CN";
-export type UILocale = "en" | "zh";
-
-export const MARKETS: readonly Market[] = ["AU", "CN"] as const;
-export const RESUME_LOCALES: readonly ResumeLocale[] = ["en-AU", "zh-CN"] as const;
-export const UI_LOCALES: readonly UILocale[] = ["en", "zh"] as const;
-
-export const DEFAULT_MARKET: Market = "AU";
-export const DEFAULT_RESUME_LOCALE: ResumeLocale = "en-AU";
-export const DEFAULT_UI_LOCALE: UILocale = "en";
+type ResumeLocale = "en-AU" | "zh-CN";
+type UILocale = "en" | "zh";
 
 /* ───────────────────────── conversions ───────────────────────── */
 

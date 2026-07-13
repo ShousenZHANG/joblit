@@ -11,7 +11,7 @@
  * time, in the order they were queued. A failing task does NOT break the chain:
  * later tasks still run (each caller handles its own error/rollback).
  */
-export type SerialRunner = <T>(task: () => Promise<T>) => Promise<T>;
+type SerialRunner = <T>(task: () => Promise<T>) => Promise<T>;
 
 export function createSerialRunner(): SerialRunner {
   let tail: Promise<unknown> = Promise.resolve();

@@ -22,11 +22,6 @@ export function logoIconSvg(size: number = 20): string {
   </svg>`;
 }
 
-/** Logo as a React-friendly inline component string for dangerouslySetInnerHTML */
-export function logoIconHtml(size: number = 20): string {
-  return logoIconSvg(size);
-}
-
 /** Checkmark SVG for success states */
 export function checkmarkSvg(size: number = 24): string {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">

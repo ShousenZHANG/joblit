@@ -16,9 +16,9 @@ const TERMINAL_BATCH_STATUSES = new Set<ApplicationBatchStatus>([
   "CANCELLED",
 ]);
 
-export type BatchRunStopReason = "LIMIT_REACHED" | "BATCH_COMPLETE" | "BATCH_TERMINAL";
+type BatchRunStopReason = "LIMIT_REACHED" | "BATCH_COMPLETE" | "BATCH_TERMINAL";
 
-export type BatchRunTask = {
+type BatchRunTask = {
   taskId: string;
   jobId: string;
   job: {
@@ -32,7 +32,7 @@ export type BatchRunTask = {
   };
 };
 
-export type BatchRunContext = {
+type BatchRunContext = {
   promptMeta: PromptMeta;
   promptMetaByTarget: {
     resume: PromptMeta;
@@ -47,13 +47,13 @@ export type BatchRunContext = {
   resumeSnapshotHash: string;
 };
 
-export type BatchTaskCompletionInput = {
+type BatchTaskCompletionInput = {
   taskId: string;
   status: Extract<ApplicationBatchTaskStatus, "SUCCEEDED" | "FAILED" | "SKIPPED">;
   error?: string | null;
 };
 
-export type BatchTaskCompletionResult = BatchTaskCompletionInput & {
+type BatchTaskCompletionResult = BatchTaskCompletionInput & {
   accepted: boolean;
   error?: string;
 };

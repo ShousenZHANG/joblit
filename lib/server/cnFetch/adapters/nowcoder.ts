@@ -156,7 +156,7 @@ export function parseNowcoderHtml(html: string): RawCnJob[] {
   return out;
 }
 
-export interface NowcoderAdapterOptions {
+interface NowcoderAdapterOptions {
   fetchImpl?: typeof fetch;
   centers?: string[];
   timeoutMs?: number;

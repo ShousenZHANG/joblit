@@ -6,7 +6,7 @@ export { hashToken };
 
 const LAST_USED_AT_WRITE_INTERVAL_MS = 5 * 60 * 1000;
 
-export type ExtensionTokenContext = {
+type ExtensionTokenContext = {
   userId: string;
   tokenId: string;
   requestId: string;

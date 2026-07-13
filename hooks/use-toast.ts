@@ -167,4 +167,4 @@ function useToast() {
   };
 }
 
-export { useToast, toast, resetToasts };
+export { useToast, resetToasts };

@@ -35,14 +35,14 @@ type ManualImportJob = {
 
 type ManualImportProfile = Record<string, unknown>;
 
-export type ManualImportArtifactError = {
+type ManualImportArtifactError = {
   status: number;
   code: string;
   message: string;
   details?: unknown;
 };
 
-export type ManualImportArtifactResult =
+type ManualImportArtifactResult =
   | {
       ok: true;
       tex: string;

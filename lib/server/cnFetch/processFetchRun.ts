@@ -23,7 +23,7 @@ interface CnRunConfig {
  * Defaults to Nowcoder when sources is missing or malformed (the only CN
  * source) so stale runs from before the single-source migration still work.
  */
-export function readCnRunConfig(raw: unknown): CnRunConfig {
+function readCnRunConfig(raw: unknown): CnRunConfig {
   const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const queries = Array.isArray(obj.queries)
     ? (obj.queries as unknown[]).filter((q): q is string => typeof q === "string")
@@ -46,7 +46,7 @@ export function readCnRunConfig(raw: unknown): CnRunConfig {
   };
 }
 
-export interface ProcessResult {
+interface ProcessResult {
   userId: string;
   runId: string;
   discovered: number;

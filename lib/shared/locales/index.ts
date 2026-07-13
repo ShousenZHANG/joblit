@@ -20,5 +20,3 @@ const PROFILES: Record<string, LocaleProfile> = {
 export function getLocaleProfile(locale: "en-AU" | "zh-CN"): LocaleProfile {
   return PROFILES[locale] ?? enAU;
 }
-
-export { enAU, zhCN };

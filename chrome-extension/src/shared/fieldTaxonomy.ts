@@ -264,7 +264,7 @@ export const LABEL_PATTERNS: Record<FieldCategory, RegExp[]> = {
  * attribute may carry section/scope prefixes ("shipping street-address") — the
  * classifier checks each space-separated token against this map.
  */
-export const AUTOCOMPLETE_MAP: Record<string, FieldCategory> = {
+const AUTOCOMPLETE_MAP: Record<string, FieldCategory> = {
   name: FieldCategory.FULL_NAME,
   "given-name": FieldCategory.FIRST_NAME,
   "additional-name": FieldCategory.FIRST_NAME,

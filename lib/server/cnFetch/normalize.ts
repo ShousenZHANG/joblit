@@ -12,7 +12,7 @@ import type { RawCnJob } from "./types";
 //
 // Pure TypeScript — no I/O. Safe to unit-test.
 
-export interface NormalizeOptions {
+interface NormalizeOptions {
   /** User's query keywords. Used to RANK (matched first), never to hard-filter:
    *  Nowcoder's recommended feed is small (~40), so emptying it on a keyword
    *  reads as "nothing found". Matches float to the top; the rest follow. */

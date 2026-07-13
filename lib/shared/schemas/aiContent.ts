@@ -96,7 +96,6 @@ export const aiContentSchema = z
 
 export type AiContent = z.infer<typeof aiContentSchema>;
 export type AiAddedBullet = z.infer<typeof addedBulletSchema>;
-export type AiSkillsAddition = z.infer<typeof skillsAdditionSchema>;
 export type AiSummary = z.infer<typeof summarySchema>;
 export type AiCoverParagraph = z.infer<typeof coverParagraphSchema>;
 

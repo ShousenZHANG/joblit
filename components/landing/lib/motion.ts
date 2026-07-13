@@ -78,7 +78,7 @@ export const revealOnce = {
   viewport: { once: true, amount: 0.12, margin: "0px 0px 15% 0px" },
 } as const;
 
-export interface RevealProps {
+interface RevealProps {
   ref: RefObject<HTMLElement | null>;
   initial: "hidden" | "show";
   animate?: "hidden" | "show";

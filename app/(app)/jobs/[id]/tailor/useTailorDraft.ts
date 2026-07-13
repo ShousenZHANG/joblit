@@ -13,7 +13,7 @@ export type SaveStatus =
   | { kind: "saving" }
   | { kind: "error"; message: string; conflict?: boolean };
 
-export interface UseTailorDraftOptions {
+interface UseTailorDraftOptions {
   applicationId: string;
   initialAiContent: AiContent;
   initialAiContentHash: string | null;
@@ -29,7 +29,7 @@ const DEFAULT_CONFLICT_MESSAGE =
   "Another tab updated this draft. Reload to continue.";
 const DEFAULT_SAVE_FAILED_MESSAGE = "Save failed — retry";
 
-export interface UseTailorDraftReturn {
+interface UseTailorDraftReturn {
   aiContent: AiContent;
   setAiContent: (next: AiContent) => void;
   saveStatus: SaveStatus;

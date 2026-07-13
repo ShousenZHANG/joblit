@@ -41,8 +41,3 @@ export async function processQueue(): Promise<{ synced: number; failed: number }
 
   return { synced, failed };
 }
-
-/** Check if we're currently online. */
-export function isOnline(): boolean {
-  return navigator.onLine;
-}

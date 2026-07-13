@@ -10,7 +10,7 @@ import {
   buildApplicationArtifactBlobPath,
 } from "@/lib/server/files/applicationArtifactBlob";
 
-export type JobStatusUpdateResult = {
+type JobStatusUpdateResult = {
   ok: true;
   resumeSaved: boolean;
   resumePdfUrl: string | null;

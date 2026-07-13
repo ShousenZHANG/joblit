@@ -102,7 +102,7 @@ export function buildInitialJobsInfiniteData({
   };
 }
 
-export type JobsQuerySnapshot = {
+type JobsQuerySnapshot = {
   queryKey: QueryKey;
   data: JobsInfiniteData | undefined;
 };

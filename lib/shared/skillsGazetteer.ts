@@ -12,7 +12,7 @@
 //   - Coverage target: top ~250 skills that appear in >1% of SWE postings.
 //     Incomplete by design — gracefully degrades (just under-counts).
 
-export interface GazetteerEntry {
+interface GazetteerEntry {
   name: string;
   aliases: string[];
 }

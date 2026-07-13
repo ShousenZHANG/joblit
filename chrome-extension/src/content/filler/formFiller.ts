@@ -13,7 +13,7 @@ export type FlatProfile = Record<string, string>;
 /** Historical override values keyed by field selector. */
 export type HistoricalOverrides = Record<string, string>;
 
-export interface FillResult {
+interface FillResult {
   filled: number;
   skipped: number;
   fields: Array<{

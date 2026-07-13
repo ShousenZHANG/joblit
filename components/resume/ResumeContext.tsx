@@ -25,7 +25,7 @@ import { getSectionIds, type SectionId } from "./constants";
  * SaveStatus). "dirty" means the live form differs from the last saved
  * snapshot, so the SectionNav must NOT claim "Saved".
  */
-export type ResumeSaveState = "dirty" | "saving" | "saved";
+type ResumeSaveState = "dirty" | "saving" | "saved";
 
 type ResumeContextValue = UseResumeFormReturn &
   UseResumePreviewReturn &

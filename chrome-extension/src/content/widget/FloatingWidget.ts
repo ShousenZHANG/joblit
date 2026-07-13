@@ -11,7 +11,7 @@ import type { FlatProfile } from "../filler/formFiller";
 import { matchValueToProfile } from "@ext/shared/profileMatcher";
 
 
-export interface WidgetCallbacks {
+interface WidgetCallbacks {
   onRecordSubmission: () => void;
   onCorrectMapping: (fieldSelector: string, newProfilePath: string) => void;
   /** Save a field correction as a knowledge base rule. Returns true if persisted. */

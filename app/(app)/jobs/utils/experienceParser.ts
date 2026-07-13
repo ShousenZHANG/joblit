@@ -1,4 +1,4 @@
-export type ExperienceRequirementSignal = {
+type ExperienceRequirementSignal = {
   key: string;
   label: string;
   evidence: string;

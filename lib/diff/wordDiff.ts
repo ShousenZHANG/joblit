@@ -7,7 +7,7 @@
 
 type DiffSegmentType = "equal" | "added" | "removed";
 
-export interface DiffSegment {
+interface DiffSegment {
   type: DiffSegmentType;
   value: string;
 }

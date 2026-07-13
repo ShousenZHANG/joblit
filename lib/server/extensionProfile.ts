@@ -1,6 +1,6 @@
 import type { ResumeProfile } from "@/lib/shared/schemas/resumeProfile";
 
-export interface FlatProfile {
+interface FlatProfile {
   // Basics
   fullName: string;
   firstName: string;

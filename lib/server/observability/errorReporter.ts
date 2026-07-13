@@ -17,9 +17,9 @@
 
 const SERVICE = "joblit-web";
 
-export type ErrorSeverity = "info" | "warning" | "error" | "fatal";
+type ErrorSeverity = "info" | "warning" | "error" | "fatal";
 
-export interface ErrorContext {
+interface ErrorContext {
   /** Stable identifier for the location, e.g. "fetch-runs.create". */
   scope: string;
   /** Severity. Defaults to "error". */
@@ -34,7 +34,7 @@ export interface ErrorContext {
   extra?: Record<string, unknown>;
 }
 
-export interface CapturedEvent {
+interface CapturedEvent {
   /** Stable identifier, e.g. "batch.task.skipped". */
   name: string;
   /** Severity. Defaults to "info". */

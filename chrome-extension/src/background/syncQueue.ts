@@ -1,5 +1,5 @@
 /** A queued item pending sync to the server. */
-export interface QueuedItem {
+interface QueuedItem {
   id: string;
   type: "submission" | "field_mapping";
   payload: Record<string, unknown>;

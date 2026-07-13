@@ -25,14 +25,14 @@ function cleanup(now: number) {
   }
 }
 
-export interface RateLimitConfig {
+interface RateLimitConfig {
   /** Maximum requests allowed in the window. */
   limit: number;
   /** Window duration in seconds. */
   windowSeconds: number;
 }
 
-export interface RateLimitResult {
+interface RateLimitResult {
   allowed: boolean;
   limit: number;
   remaining: number;

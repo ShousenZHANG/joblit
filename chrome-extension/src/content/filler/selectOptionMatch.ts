@@ -83,7 +83,7 @@ export function aliasesFor(value: string): Set<string> {
   return new Set([norm]);
 }
 
-export interface OptionLike {
+interface OptionLike {
   value: string;
   text: string;
 }

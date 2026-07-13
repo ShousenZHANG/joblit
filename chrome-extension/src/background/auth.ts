@@ -1,6 +1,6 @@
 import { STORAGE_KEYS } from "@ext/shared/constants";
 
-export interface AuthStatus {
+interface AuthStatus {
   authenticated: boolean;
   userId: string | null;
   expiresAt: number | null;

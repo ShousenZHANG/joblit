@@ -13,7 +13,7 @@ const PROFILE_CLONE_SELECT = {
   education: true,
 } satisfies Prisma.ResumeProfileSelect;
 
-export type ResumeProfileInput = {
+type ResumeProfileInput = {
   summary?: string | null;
   basics?: {
     fullName: string;
@@ -67,7 +67,7 @@ export type ResumeProfileInput = {
   }[] | null;
 };
 
-export type ResumeProfileSummary = {
+type ResumeProfileSummary = {
   id: string;
   name: string;
   createdAt: Date;
@@ -315,7 +315,7 @@ export async function renameResumeProfile(userId: string, profileId: string, nam
   });
 }
 
-export type DeleteResumeProfileResult =
+type DeleteResumeProfileResult =
   | { status: "deleted"; deletedProfileId: string; activeProfileId: string | null }
   | { status: "not_found" }
   | { status: "last_profile" };

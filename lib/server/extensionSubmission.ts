@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/server/prisma";
 
-export interface CreateSubmissionInput {
+interface CreateSubmissionInput {
   userId: string;
   jobId?: string;
   pageUrl: string;
@@ -26,7 +26,7 @@ export async function createFormSubmission(input: CreateSubmissionInput) {
   });
 }
 
-export interface ListSubmissionsParams {
+interface ListSubmissionsParams {
   userId: string;
   pageDomain?: string;
   atsProvider?: string;
@@ -67,7 +67,7 @@ export async function listFormSubmissions(params: ListSubmissionsParams) {
   return { items, total };
 }
 
-export interface UpsertMappingRuleInput {
+interface UpsertMappingRuleInput {
   userId: string;
   fieldSelector: string;
   fieldLabel?: string;
@@ -119,7 +119,7 @@ export async function upsertFieldMappingRule(input: UpsertMappingRuleInput) {
   });
 }
 
-export interface ListMappingRulesParams {
+interface ListMappingRulesParams {
   userId: string;
   atsProvider?: string;
   pageDomain?: string;

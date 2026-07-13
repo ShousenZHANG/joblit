@@ -1,5 +1,4 @@
 import { del, put } from "@vercel/blob";
-import { prisma } from "@/lib/server/prisma";
 import { getResumeProfile } from "@/lib/server/resumeProfile";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import { renderResumeTex } from "@/lib/server/latex/renderResume";
@@ -119,8 +118,6 @@ function mergeAcceptedSkillAdditions(
   return Array.from(byLabel.entries()).map(([label, items]) => ({ label, items }));
 }
 
-// Re-export prisma for the route's update path (keeps imports symmetric).
-export { prisma };
 
 /**
  * Cover-letter finalize: render LaTeX from accepted aiContent.cover

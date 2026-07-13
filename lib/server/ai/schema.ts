@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { toStringValue } from "@/lib/shared/utils/text";
 
-export const TailorModelOutputSchema = z.object({
+const TailorModelOutputSchema = z.object({
   cvSummary: z.string().trim().max(1400).optional().default(""),
   cover: z
     .object({
@@ -29,7 +29,7 @@ export const TailorModelOutputSchema = z.object({
     }),
 });
 
-export type TailorModelOutput = z.infer<typeof TailorModelOutputSchema>;
+type TailorModelOutput = z.infer<typeof TailorModelOutputSchema>;
 
 function pickFirstText(obj: Record<string, unknown>, keys: string[]) {
   for (const key of keys) {

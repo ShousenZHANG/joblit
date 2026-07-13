@@ -70,14 +70,14 @@ export type BackgroundMessage =
 
 export type MessageType = BackgroundMessage;
 
-export interface SubmissionQueryParams {
+interface SubmissionQueryParams {
   pageDomain?: string;
   atsProvider?: string;
   formSignature?: string;
   limit?: number;
 }
 
-export interface FieldMappingQueryParams {
+interface FieldMappingQueryParams {
   atsProvider?: string;
   pageDomain?: string;
 }

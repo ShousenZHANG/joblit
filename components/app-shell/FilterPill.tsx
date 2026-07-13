@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
  * 7 / Remote) and re-usable across other pages that need the same
  * filter bar affordance.
  */
-export interface FilterPillProps
+interface FilterPillProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   active?: boolean;
   count?: number;

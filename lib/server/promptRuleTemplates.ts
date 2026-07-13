@@ -14,7 +14,7 @@ type TemplateRecord = {
   updatedAt: Date;
 };
 
-export type PromptRuleTemplateInput = {
+type PromptRuleTemplateInput = {
   name: string;
   cvRules: string[];
   coverRules: string[];

@@ -38,6 +38,18 @@ function checkManifest(manifestPath, allowlist, workspace = ".") {
       violations.push(`${prefix}devDependency not in allowlist: ${name}`);
     }
   }
+
+  for (const name of allowDeps) {
+    if (!deps.includes(name)) {
+      violations.push(`${prefix}stale allowlisted dependency: ${name}`);
+    }
+  }
+
+  for (const name of allowDevDeps) {
+    if (!devDeps.includes(name)) {
+      violations.push(`${prefix}stale allowlisted devDependency: ${name}`);
+    }
+  }
 }
 
 checkManifest(path.join(cwd, "package.json"), policy.allowlist, ".");

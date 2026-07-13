@@ -1,6 +1,12 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "ignore": ["lib/generated/**"],
+  "ignoreExportsUsedInFile": {
+    "type": true
+  },
+  "ignore": [
+    "lib/generated/**",
+    "lib/shared/schemas/resumeProfile.ts"
+  ],
   "ignoreDependencies": [
     "@neondatabase/serverless",
     "axe-core",
