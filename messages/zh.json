@@ -671,8 +671,8 @@
   },
   "loginPage": {
     "secureSignIn": "安全登录",
-    "welcomeBack": "欢迎回来",
-    "subtitle": "继续你的求职之旅，保持你的筛选进度。",
+    "welcomeBack": "开始使用 Joblit",
+    "subtitle": "使用 Google 或 GitHub 登录，系统会自动创建你的免费账号。",
     "continueGoogle": "使用 Google 登录",
     "continueGithub": "使用 GitHub 登录",
     "connecting": "正在连接…",
@@ -680,11 +680,9 @@
     "terms": "使用条款",
     "and": "和",
     "privacyPolicy": "隐私政策",
-    "deniedTitle": "你的邮箱还未获邀",
-    "deniedBody": "Joblit 扩容期间为邀请制。用你的邮箱申请使用，我们会帮你开通账号。",
-    "requestAccess": "申请使用",
-    "tryAnother": "用错账号了？换一个登录：",
-    "genericError": "登录失败，请重试。"
+    "accessDeniedError": "登录授权未完成。请重试 Google 或 GitHub，或改用另一种登录方式。",
+    "accountNotLinkedError": "该邮箱已关联其他登录方式。请使用首次登录时选择的 Google 或 GitHub。",
+    "genericError": "登录失败。请重试 Google 或 GitHub。"
   },
   "landing": {
     "nav": {

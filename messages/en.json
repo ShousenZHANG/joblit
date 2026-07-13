@@ -671,8 +671,8 @@
   },
   "loginPage": {
     "secureSignIn": "Secure sign in",
-    "welcomeBack": "Welcome back",
-    "subtitle": "Jump back into your job search and keep your shortlist moving.",
+    "welcomeBack": "Start with Joblit",
+    "subtitle": "Sign in with Google or GitHub. Your free account is created automatically.",
     "continueGoogle": "Continue with Google",
     "continueGithub": "Continue with GitHub",
     "connecting": "Connecting…",
@@ -680,11 +680,9 @@
     "terms": "Terms",
     "and": "and",
     "privacyPolicy": "Privacy Policy",
-    "deniedTitle": "You're not on the invite list yet",
-    "deniedBody": "Joblit is invite-only while we scale. Request access with your email and we'll switch your account on.",
-    "requestAccess": "Request access",
-    "tryAnother": "Used the wrong account? Try a different one:",
-    "genericError": "We couldn't sign you in. Please try again."
+    "accessDeniedError": "Sign-in authorization was not completed. Try Google or GitHub again, or choose the other provider.",
+    "accountNotLinkedError": "An account with this email already exists. Use the Google or GitHub provider you chose the first time.",
+    "genericError": "We couldn't sign you in. Try Google or GitHub again."
   },
   "landing": {
     "nav": {

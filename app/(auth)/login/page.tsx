@@ -4,7 +4,7 @@ import { signIn, useSession } from "next-auth/react";
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Github, Loader2 } from "lucide-react";
+import { Github, Loader2 } from "lucide-react";
 import { JoblitMark } from "@/components/brand/JoblitMark";
 import { useTranslations } from "next-intl";
 import { motion, useReducedMotion, type Variants } from "framer-motion";
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { Starfield } from "@/components/landing/Starfield";
 import { ThemeToggle } from "@/components/providers/ThemeProvider";
+import { getLoginErrorKey, getSafeCallbackUrl } from "./authError";
 
 // Landing-aligned auth page. Single centered surface card, theme-token chrome,
 // staggered entrance, and per-provider "connecting" feedback so a click lands
@@ -53,12 +54,11 @@ function LoginPageInner() {
   const reduced = useReducedMotion();
   const [loadingProvider, setLoadingProvider] = useState<Provider | null>(null);
 
-  // NextAuth routes the invite-gate rejection here as ?error=AccessDenied
-  // (pages.error = "/login"). Read it straight from the (reactive) search params
-  // — no effect + setState, so there's no cascading render and no hydration
-  // drift. The page is wrapped in <Suspense> below, as useSearchParams requires.
-  const authError = searchParams.get("error");
-  const callbackUrl = searchParams.get("callbackUrl") || "/jobs";
+  // Read recovery state directly from the reactive search params. Keep OAuth
+  // errors actionable without replacing the standard provider choices, and
+  // constrain callbacks to local paths before using them for either redirect.
+  const authErrorKey = getLoginErrorKey(searchParams.get("error"));
+  const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl"));
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -156,42 +156,22 @@ function LoginPageInner() {
                 {t("secureSignIn")}
               </motion.span>
 
-              {authError === "AccessDenied" ? (
-                <motion.div variants={item}>
-                  <h1 className="mt-5 text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl sm:leading-[1.1]">
-                    {t("deniedTitle")}
-                  </h1>
-                  <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                    {t("deniedBody")}
-                  </p>
-                  <Button
-                    asChild
-                    className="mt-6 h-11 w-full justify-center gap-2 rounded-full bg-brand-emerald-700 text-[13px] font-semibold text-white transition-colors hover:bg-brand-emerald-900"
+              <motion.div variants={item}>
+                <h1 className="mt-5 text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl sm:leading-[1.1]">
+                  {t("welcomeBack")}
+                </h1>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                  {t("subtitle")}
+                </p>
+                {authErrorKey ? (
+                  <div
+                    role="alert"
+                    className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-relaxed text-rose-700"
                   >
-                    <Link href="/#access">
-                      {t("requestAccess")}
-                      <ArrowRight className="h-4 w-4" aria-hidden />
-                    </Link>
-                  </Button>
-                  <p className="mt-6 text-xs font-medium text-muted-foreground">
-                    {t("tryAnother")}
-                  </p>
-                </motion.div>
-              ) : (
-                <motion.div variants={item}>
-                  <h1 className="mt-5 text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl sm:leading-[1.1]">
-                    {t("welcomeBack")}
-                  </h1>
-                  <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                    {t("subtitle")}
-                  </p>
-                  {authError ? (
-                    <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                      {t("genericError")}
-                    </div>
-                  ) : null}
-                </motion.div>
-              )}
+                    {t(authErrorKey)}
+                  </div>
+                ) : null}
+              </motion.div>
 
               <motion.div variants={item} className="mt-7 flex flex-col gap-3">
                 <Button
