@@ -87,7 +87,7 @@ The login page will retain both OAuth provider buttons, loading feedback, callba
 
 ## Security and Cost Controls
 
-Open registration increases the potential volume of Gemini, JobSpy, PDF, storage, and other resource-consuming operations. Existing per-user/global rate limits, ownership checks, and worker secrets will therefore remain. No client-facing code may receive server secrets.
+Open registration increases the potential volume of Gemini, JobSpy, PDF, storage, and other resource-consuming operations. Existing ownership checks and worker secrets will therefore remain. Fetch creation and trigger paths use `FetchRun` rows as a persistent quota ledger, with per-user and global active/hourly counts protected by a PostgreSQL transaction advisory lock so concurrent serverless instances cannot exceed the limits. Active runs (`QUEUED` or `RUNNING`) are capped at 2 per user and 20 globally; creation is capped at 6 per user and 120 globally in a rolling one-hour window. No client-facing code may receive server secrets.
 
 GitHub accounts with private email settings must be exercised during authentication verification because some email-dependent Fetch operations use stricter session requirements. A provider limitation must produce a clear user-facing error rather than weaken authorization.
 
@@ -110,7 +110,7 @@ A repository-wide search will confirm that obsolete invitation APIs, routes, tra
 
 ## Deployment
 
-Application code can be deployed with the new forward Prisma migration. Since the new application no longer queries `AccessRequest`, either code-first or migration-first rollout does not introduce a runtime dependency on the dropped table. Production should remove any obsolete `ADMIN_EMAILS` environment setting after deployment.
+Existing environments require a code-first drain rollout: deploy the new application code without running the drop migration, wait for every old instance and serverless deployment version to drain, run `npx prisma migrate deploy`, and only then remove the obsolete `ADMIN_EMAILS` environment setting. Migration-first is unsafe because an old instance may still query the schema being removed. Fresh environments may run migrations during initial provisioning because no old application version is present.
 
 ## Acceptance Criteria
 

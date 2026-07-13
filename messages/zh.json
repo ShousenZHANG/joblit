@@ -323,6 +323,7 @@
     "excludeTitles": "排除职位",
     "startFetch": "开始抓取",
     "fetching": "抓取中…",
+    "capacityLimited": "当前免费抓取容量繁忙，请稍后重试。",
     "suggestions": "建议",
     "popular": "热门",
     "cnSources": "数据来源",

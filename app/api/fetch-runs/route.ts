@@ -4,6 +4,10 @@ import { withEmailSessionRoute, parseJsonValue } from "@/lib/server/api/routeHan
 import { prisma } from "@/lib/server/prisma";
 import { expandRoleQueries } from "@/lib/shared/fetchRolePacks";
 import { filterDescriptionExclusionRules } from "@/lib/shared/fetchExclusionCriteria";
+import {
+  checkFetchRunQuota,
+  fetchRunQuotaExceededResponse,
+} from "@/lib/server/fetchRuns/fetchRunQuota";
 
 export const runtime = "nodejs";
 
@@ -128,29 +132,39 @@ export async function POST(req: Request) {
       if (!parsed.ok) return parsed.response;
       const d = parsed.data;
       const title = d.queries[0] ?? "";
-      const run = await prisma.fetchRun.create({
-        data: {
-          userId,
-          userEmail: userEmail.toLowerCase(),
-          status: "QUEUED",
-          market: "CN",
-          importedCount: 0,
-          queries: {
-            title,
-            queries: d.queries,
-            sources: d.sources,
-            excludeKeywords: d.excludeKeywords,
-            locations: d.locations,
+      const txResult = await prisma.$transaction(async (tx) => {
+        const quotaViolation = await checkFetchRunQuota(tx, userId, "create");
+        if (quotaViolation) return { kind: "quota" as const, quotaViolation };
+
+        const run = await tx.fetchRun.create({
+          data: {
+            userId,
+            userEmail: userEmail.toLowerCase(),
+            status: "QUEUED",
+            market: "CN",
+            importedCount: 0,
+            queries: {
+              title,
+              queries: d.queries,
+              sources: d.sources,
+              excludeKeywords: d.excludeKeywords,
+              locations: d.locations,
+            },
+            location: null,
+            hoursOld: null,
+            resultsWanted: null,
+            includeFromQueries: false,
+            filterDescription: false,
           },
-          location: null,
-          hoursOld: null,
-          resultsWanted: null,
-          includeFromQueries: false,
-          filterDescription: false,
-        },
-        select: { id: true },
+          select: { id: true },
+        });
+        return { kind: "created" as const, id: run.id };
       });
-      return NextResponse.json({ id: run.id }, { status: 201 });
+
+      if (txResult.kind === "quota") {
+        return fetchRunQuotaExceededResponse(txResult.quotaViolation);
+      }
+      return NextResponse.json({ id: txResult.id }, { status: 201 });
     }
 
     const parsed = parseJsonValue(json, AUSchema, requestId);
@@ -188,8 +202,17 @@ export async function POST(req: Request) {
       filterDescription: data.applyExcludes,
     };
 
-    const run = await prisma.fetchRun.create({ data: createData, select: { id: true } });
-    return NextResponse.json({ id: run.id }, { status: 201 });
+    const txResult = await prisma.$transaction(async (tx) => {
+      const quotaViolation = await checkFetchRunQuota(tx, userId, "create");
+      if (quotaViolation) return { kind: "quota" as const, quotaViolation };
+
+      const run = await tx.fetchRun.create({ data: createData, select: { id: true } });
+      return { kind: "created" as const, id: run.id };
+    });
+
+    if (txResult.kind === "quota") {
+      return fetchRunQuotaExceededResponse(txResult.quotaViolation);
+    }
+    return NextResponse.json({ id: txResult.id }, { status: 201 });
   });
 }
-

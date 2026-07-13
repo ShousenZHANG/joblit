@@ -323,6 +323,7 @@
     "excludeTitles": "Exclude titles",
     "startFetch": "Start fetch",
     "fetching": "Fetching…",
+    "capacityLimited": "Free fetch capacity is busy right now. Try again shortly.",
     "suggestions": "Suggestions",
     "popular": "Popular",
     "cnSources": "Sources",

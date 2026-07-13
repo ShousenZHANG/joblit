@@ -6,6 +6,7 @@ const fetchRunStore = vi.hoisted(() => ({
   updateInTx: vi.fn(),
   updateMany: vi.fn(),
   queryRawLock: vi.fn(),
+  countInTx: vi.fn(),
 }));
 
 vi.mock("@/lib/server/prisma", () => ({
@@ -21,6 +22,7 @@ vi.mock("@/lib/server/prisma", () => ({
         fetchRun: {
           findFirst: fetchRunStore.findFirstInTx,
           update: fetchRunStore.updateInTx,
+          count: fetchRunStore.countInTx,
         },
         $queryRaw: fetchRunStore.queryRawLock,
       };
@@ -60,6 +62,8 @@ describe("fetch run trigger api", () => {
     fetchRunStore.updateInTx.mockReset();
     fetchRunStore.updateMany.mockReset();
     fetchRunStore.queryRawLock.mockReset();
+    fetchRunStore.countInTx.mockReset();
+    fetchRunStore.countInTx.mockResolvedValue(0);
     process.env.GITHUB_OWNER = "o";
     process.env.GITHUB_REPO = "r";
     process.env.GITHUB_TOKEN = "t";
@@ -202,6 +206,40 @@ describe("fetch run trigger api", () => {
       { params: Promise.resolve({ id: RUN_ID }) },
     );
     expect(res.status).toBe(409);
+  });
+
+  it("returns 429 without claiming or dispatching when persistent active quota is exceeded", async () => {
+    mockAuthedUser();
+    mockLockAcquired(true);
+    fetchRunStore.findFirstInTx.mockResolvedValueOnce({
+      id: RUN_ID,
+      status: "QUEUED",
+      market: "AU",
+      queries: { title: "SWE", queries: ["SWE"] },
+    });
+    fetchRunStore.countInTx.mockResolvedValueOnce(3);
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await POST(
+      new Request(`http://localhost/api/fetch-runs/${RUN_ID}/trigger`, { method: "POST" }),
+      { params: Promise.resolve({ id: RUN_ID }) },
+    );
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("30");
+    await expect(res.json()).resolves.toEqual({
+      error: {
+        code: "FETCH_RUN_QUOTA_EXCEEDED",
+        message: "Free fetch capacity is busy right now. Try again shortly.",
+        reason: "USER_ACTIVE_LIMIT",
+        limit: 2,
+      },
+    });
+    expect(fetchRunStore.updateInTx).not.toHaveBeenCalled();
+    expect(fetchRunStore.updateMany).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("unlocks when GitHub dispatch fails so user can retry", async () => {

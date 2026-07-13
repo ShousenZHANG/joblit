@@ -7,6 +7,10 @@ import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import type { Prisma } from "@/lib/generated/prisma";
 import { processCnFetchRun } from "@/lib/server/cnFetch/processFetchRun";
+import {
+  checkFetchRunQuota,
+  fetchRunQuotaExceededResponse,
+} from "@/lib/server/fetchRuns/fetchRunQuota";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -133,6 +137,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       return { kind: "already_dispatched" as const };
     }
 
+    const quotaViolation = await checkFetchRunQuota(tx, userId, "trigger");
+    if (quotaViolation) return { kind: "quota" as const, quotaViolation };
+
     // Claim the dispatch slot inside this transaction — row won't change
     // between this update and commit because we hold the advisory lock.
     await tx.fetchRun.update({
@@ -168,6 +175,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   }
   if (txResult.kind === "invalid_state") {
     return NextResponse.json({ error: "INVALID_STATE", status: txResult.status }, { status: 409 });
+  }
+  if (txResult.kind === "quota") {
+    return fetchRunQuotaExceededResponse(txResult.quotaViolation);
   }
 
   // txResult.kind === "locked" — we hold the dispatch slot.

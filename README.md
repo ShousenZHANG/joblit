@@ -334,6 +334,19 @@ CI runs lint, dependency policy, full test suite, and (per-PR) Lighthouse agains
 - Configure all environment variables in the deployment platform
 - Chrome extension is distributed as a `.zip` for sideloading or via the Chrome Web Store
 
+### Existing-environment cutover
+
+The migration that removes the obsolete access-request schema is destructive, so existing
+environments must use a code-first drain sequence:
+
+1. Deploy the current application code **without** running the drop migration.
+2. Wait for every old application instance and serverless deployment version to drain.
+3. Run `npx prisma migrate deploy` against the environment database.
+4. Remove the obsolete `ADMIN_EMAILS` environment setting.
+
+Fresh environments may run all migrations during initial provisioning because no older
+application instance can still reference the removed schema.
+
 ## Troubleshooting
 
 | Symptom | Fix |

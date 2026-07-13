@@ -652,6 +652,18 @@ export function FetchClient() {
     return fallback;
   }
 
+  function getApiErrorMessage(res: Response, json: unknown, fallback: string) {
+    if (res.status === 429) return t("capacityLimited");
+    if (!json || typeof json !== "object" || Array.isArray(json)) return fallback;
+    const error = (json as { error?: unknown }).error;
+    if (typeof error === "string") return error;
+    if (error && typeof error === "object" && !Array.isArray(error)) {
+      const message = (error as { message?: unknown }).message;
+      if (typeof message === "string") return message;
+    }
+    return fallback;
+  }
+
   async function createRun() {
     const body = market === "CN"
       ? {
@@ -689,18 +701,14 @@ export function FetchClient() {
       body: JSON.stringify(body),
     });
     const json = await res.json().catch(() => ({}));
-    const message =
-      typeof json?.error === "string"
-        ? json.error
-        : json?.error?.message || "Failed to create run";
-    if (!res.ok) throw new Error(message);
+    if (!res.ok) throw new Error(getApiErrorMessage(res, json, "Failed to create run"));
     return json.id as string;
   }
 
   async function triggerRun(id: string) {
     const res = await fetch(`/api/fetch-runs/${id}/trigger`, { method: "POST" });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json?.error || "Failed to trigger run");
+    if (!res.ok) throw new Error(getApiErrorMessage(res, json, "Failed to trigger run"));
   }
 
   async function onSubmit() {

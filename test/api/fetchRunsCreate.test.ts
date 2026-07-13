@@ -2,11 +2,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const fetchRunStore = vi.hoisted(() => ({
   create: vi.fn(),
+  count: vi.fn(),
+  queryRawLock: vi.fn(),
 }));
 
 vi.mock("@/lib/server/prisma", () => ({
   prisma: {
     fetchRun: fetchRunStore,
+    $transaction: async (cb: (tx: unknown) => Promise<unknown>) =>
+      cb({
+        fetchRun: fetchRunStore,
+        $queryRaw: fetchRunStore.queryRawLock,
+      }),
   },
 }));
 
@@ -25,7 +32,11 @@ describe("fetch runs create api", () => {
   beforeEach(() => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockReset();
     fetchRunStore.create.mockReset();
+    fetchRunStore.count.mockReset();
+    fetchRunStore.queryRawLock.mockReset();
     fetchRunStore.create.mockResolvedValue({ id: "run-1" });
+    fetchRunStore.count.mockResolvedValue(0);
+    fetchRunStore.queryRawLock.mockResolvedValue([{ pg_advisory_xact_lock: null }]);
   });
 
   it("auto expands a single role query by default", async () => {
@@ -181,5 +192,31 @@ describe("fetch runs create api", () => {
     expect(res.status).toBe(201);
     const payload = fetchRunStore.create.mock.calls[0]?.[0]?.data?.queries;
     expect(payload.sourceOptions).toBeUndefined();
+  });
+
+  it("returns a structured 429 without creating when persistent quota is exhausted", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1", email: "user@example.com" },
+    });
+    fetchRunStore.count.mockResolvedValueOnce(2);
+
+    const res = await POST(
+      new Request("http://localhost/api/fetch-runs", {
+        method: "POST",
+        body: JSON.stringify({ title: "Software Engineer" }),
+      }),
+    );
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("30");
+    await expect(res.json()).resolves.toEqual({
+      error: {
+        code: "FETCH_RUN_QUOTA_EXCEEDED",
+        message: "Free fetch capacity is busy right now. Try again shortly.",
+        reason: "USER_ACTIVE_LIMIT",
+        limit: 2,
+      },
+    });
+    expect(fetchRunStore.create).not.toHaveBeenCalled();
   });
 });
