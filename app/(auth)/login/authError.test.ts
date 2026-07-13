@@ -16,11 +16,20 @@ describe("login recovery", () => {
   it.each([
     [null, "/jobs"],
     ["/resume", "/resume"],
+    ["/resume/../jobs?sort=newest#top", "/jobs?sort=newest#top"],
     ["https://evil.example", "/jobs"],
     ["//evil.example", "/jobs"],
+    ["/\\evil.example", "/jobs"],
     ["javascript:alert(1)", "/jobs"],
   ] as const)("normalizes callback %s to %s", (value, expected) => {
     expect(getSafeCallbackUrl(value)).toBe(expected);
+  });
+
+  it("rejects a backslash origin after query decoding", () => {
+    const value = new URLSearchParams("callbackUrl=%2F%5Cevil.example").get("callbackUrl");
+
+    expect(value).toBe("/\\evil.example");
+    expect(getSafeCallbackUrl(value)).toBe("/jobs");
   });
 
   it.each([

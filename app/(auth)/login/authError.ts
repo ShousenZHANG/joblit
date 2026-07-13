@@ -3,6 +3,9 @@ export type LoginErrorKey =
   | "accountNotLinkedError"
   | "genericError";
 
+const CALLBACK_SENTINEL_ORIGIN = "https://joblit.invalid";
+const DEFAULT_CALLBACK_URL = "/jobs";
+
 export function getLoginErrorKey(error: string | null): LoginErrorKey | null {
   if (!error) return null;
   if (error === "AccessDenied") return "accessDeniedError";
@@ -11,5 +14,13 @@ export function getLoginErrorKey(error: string | null): LoginErrorKey | null {
 }
 
 export function getSafeCallbackUrl(value: string | null): string {
-  return value?.startsWith("/") && !value.startsWith("//") ? value : "/jobs";
+  if (!value?.startsWith("/")) return DEFAULT_CALLBACK_URL;
+
+  try {
+    const parsed = new URL(value, CALLBACK_SENTINEL_ORIGIN);
+    if (parsed.origin !== CALLBACK_SENTINEL_ORIGIN) return DEFAULT_CALLBACK_URL;
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return DEFAULT_CALLBACK_URL;
+  }
 }
