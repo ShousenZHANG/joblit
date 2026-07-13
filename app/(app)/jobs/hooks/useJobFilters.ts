@@ -1,24 +1,122 @@
-import { useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useMarket } from "@/hooks/useMarket";
 import type { JobStatus } from "../types";
+import {
+  parseJobsUrlState,
+  writeJobsUrlState,
+  type JobsUrlState,
+} from "../utils/jobsUrlState";
 
-// Sort is hardcoded to "newest". The user-facing "Posted: newest/oldest"
-// toggle was removed — data is always sorted newest-first, matching the
-// big-tech job-board default (Indeed, LinkedIn, Greenhouse).
+// Sort is hardcoded to newest. The user-facing ordering toggle was removed,
+// matching the default triage flow used by mainstream job boards.
 const SORT_ORDER = "newest" as const;
+
+function getFilterStateKey(
+  state: Pick<
+    JobsUrlState,
+    "q" | "statusFilter" | "locationFilter" | "jobLevelFilter"
+  >,
+) {
+  return JSON.stringify([
+    state.q,
+    state.statusFilter,
+    state.locationFilter,
+    state.jobLevelFilter,
+  ]);
+}
 
 export function useJobFilters() {
   const market = useMarket();
-  const [q, setQ] = useState("");
-  // Status is a primary VIEW, not an optional filter — there is no "all
-  // statuses" view (removed). The workspace opens on NEW (the triage inbox:
-  // freshly fetched roles you haven't actioned), matching the Gmail/Linear
-  // "land in your inbox, not the firehose" default.
-  const [statusFilter, setStatusFilter] = useState<JobStatus>("NEW");
-  const [locationFilter, setLocationFilter] = useState("ALL");
-  const [jobLevelFilter, setJobLevelFilter] = useState("ALL");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
+  const urlState = useMemo(
+    () => parseJobsUrlState(new URLSearchParams(searchParamsString)),
+    [searchParamsString],
+  );
+  // Writes may occur before Next publishes the prior replace through
+  // useSearchParams. Keep a synchronous snapshot so rapid filter/selection
+  // changes merge instead of dropping one another.
+  const latestParamsRef = useRef(searchParamsString);
+  const lastObservedFilterKeyRef = useRef(getFilterStateKey(urlState));
+  const urlSyncTargetRef = useRef<string | null>(null);
+
+  const [q, setQState] = useState(() => urlState.q);
+  // Status is a primary view rather than an optional filter. The workspace
+  // opens on NEW, its triage inbox.
+  const [statusFilter, setStatusFilterState] = useState<JobStatus>(
+    () => urlState.statusFilter,
+  );
+  const [locationFilter, setLocationFilterState] = useState(
+    () => urlState.locationFilter,
+  );
+  const [jobLevelFilter, setJobLevelFilterState] = useState(
+    () => urlState.jobLevelFilter,
+  );
   const pageSize = 10;
+
+  const wrapUserSetter = useCallback(
+    <T,>(setter: Dispatch<SetStateAction<T>>): Dispatch<SetStateAction<T>> =>
+      (value) => {
+        urlSyncTargetRef.current = null;
+        setter(value);
+      },
+    [],
+  );
+  const setQ = useMemo(() => wrapUserSetter(setQState), [wrapUserSetter]);
+  const setStatusFilter = useMemo(
+    () => wrapUserSetter(setStatusFilterState),
+    [wrapUserSetter],
+  );
+  const setLocationFilter = useMemo(
+    () => wrapUserSetter(setLocationFilterState),
+    [wrapUserSetter],
+  );
+  const setJobLevelFilter = useMemo(
+    () => wrapUserSetter(setJobLevelFilterState),
+    [wrapUserSetter],
+  );
+
+  useEffect(() => {
+    latestParamsRef.current = searchParamsString;
+    const nextFilterKey = getFilterStateKey(urlState);
+    if (nextFilterKey === lastObservedFilterKeyRef.current) return;
+
+    lastObservedFilterKeyRef.current = nextFilterKey;
+    urlSyncTargetRef.current = nextFilterKey;
+    setQState(urlState.q);
+    setStatusFilterState(urlState.statusFilter);
+    setLocationFilterState(urlState.locationFilter);
+    setJobLevelFilterState(urlState.jobLevelFilter);
+  }, [searchParamsString, urlState]);
+
+  const replaceUrlState = useCallback(
+    (patch: Partial<JobsUrlState>): JobsUrlState | null => {
+      const currentParams = new URLSearchParams(latestParamsRef.current);
+      const nextParams = writeJobsUrlState(currentParams, patch);
+      const nextSearch = nextParams.toString();
+
+      if (nextSearch === latestParamsRef.current) return null;
+
+      latestParamsRef.current = nextSearch;
+      router.replace(nextSearch ? `${pathname}?${nextSearch}` : pathname, {
+        scroll: false,
+      });
+      return parseJobsUrlState(nextParams);
+    },
+    [pathname, router],
+  );
 
   const filters = useMemo(
     () => ({ statusFilter, locationFilter, jobLevelFilter, market, pageSize }),
@@ -38,16 +136,33 @@ export function useJobFilters() {
   const queryString = useMemo(() => {
     const sp = new URLSearchParams();
     sp.set("limit", String(debouncedFilters.pageSize));
-    // Status is always present now (NEW/APPLIED/REJECTED) — always sent so the
-    // query key is explicit and matches the SSR-seeded key (status=NEW).
     sp.set("status", debouncedFilters.statusFilter);
     if (debouncedFilters.q.trim()) sp.set("q", debouncedFilters.q.trim());
-    if (debouncedFilters.locationFilter !== "ALL") sp.set("location", debouncedFilters.locationFilter);
-    if (debouncedFilters.jobLevelFilter !== "ALL") sp.set("jobLevel", debouncedFilters.jobLevelFilter);
+    if (debouncedFilters.locationFilter !== "ALL") {
+      sp.set("location", debouncedFilters.locationFilter);
+    }
+    if (debouncedFilters.jobLevelFilter !== "ALL") {
+      sp.set("jobLevel", debouncedFilters.jobLevelFilter);
+    }
     sp.set("market", debouncedFilters.market);
     sp.set("sort", SORT_ORDER);
     return sp.toString();
   }, [debouncedFilters]);
+
+  useEffect(() => {
+    const nextFilterState = {
+      q: debouncedFilters.q.trim(),
+      statusFilter: debouncedFilters.statusFilter,
+      locationFilter: debouncedFilters.locationFilter,
+      jobLevelFilter: debouncedFilters.jobLevelFilter,
+    };
+    const nextFilterKey = getFilterStateKey(nextFilterState);
+    const urlSyncTarget = urlSyncTargetRef.current;
+    if (urlSyncTarget !== null && urlSyncTarget !== nextFilterKey) return;
+
+    urlSyncTargetRef.current = null;
+    replaceUrlState(nextFilterState);
+  }, [debouncedFilters, replaceUrlState]);
 
   return {
     q,
@@ -62,5 +177,7 @@ export function useJobFilters() {
     pageSize,
     market,
     queryString,
+    urlState,
+    replaceUrlState,
   };
 }

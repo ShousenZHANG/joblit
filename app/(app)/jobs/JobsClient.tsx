@@ -11,6 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FilterPill } from "@/components/app-shell/FilterPill";
+import { useAccessibleTabs } from "@/components/ui/useAccessibleTabs";
 import { useToast } from "@/hooks/use-toast";
 import { useGuide } from "@/app/GuideContext";
 import { useFetchStatus, type FetchRunStatus } from "@/app/FetchStatusContext";
@@ -32,6 +33,7 @@ import { TailorReviewDialog } from "./components/TailorReviewDialog";
 import { JobDetailPanel } from "./components/JobDetailPanel";
 import { cn } from "@/lib/utils";
 import { AU_LOCATION_OPTIONS, CN_LOCATION_OPTIONS, getUserTimeZone } from "./utils/constants";
+import type { JobsUrlState } from "./utils/jobsUrlState";
 import {
   getJobDetailsQueryKey,
   invalidateActiveJobsQueries,
@@ -43,6 +45,12 @@ const desktopFilterSelectTriggerClass =
 
 const mobileFilterSelectTriggerClass =
   "h-11 w-full min-w-0 justify-between overflow-hidden rounded-lg px-2.5 text-xs [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate [&_[data-slot=select-value]]:text-left sm:h-9";
+
+function getWorkspaceStateKey(
+  state: Pick<JobsUrlState, "selectedId" | "view">,
+) {
+  return `${state.selectedId ?? ""}\u0000${state.view}`;
+}
 
 export function JobsClient({
   initialItems = [],
@@ -68,27 +76,71 @@ export function JobsClient({
     jobLevelFilter, setJobLevelFilter,
     market,
     queryString,
+    urlState,
+    replaceUrlState,
   } = useJobFilters();
+  const urlSelectedId = urlState.selectedId;
+  const urlView = urlState.view;
 
-  const [selectedId, setSelectedId] = useState<string | null>(initialItems[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    () => urlSelectedId ?? initialItems[0]?.id ?? null,
+  );
   const [selectionExplicitlyCleared, setSelectionExplicitlyCleared] = useState(false);
-  const [mobileTab, setMobileTab] = useState<"list" | "detail">("list");
+  const [mobileTab, setMobileTab] = useState<"list" | "detail">(
+    () => urlView,
+  );
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [timeZone] = useState<string | null>(() => getUserTimeZone() || null);
   const [isPending, startTransition] = useTransition();
   const resultsScrollRef = useRef<HTMLDivElement | null>(null);
   const jobListRef = useRef<HTMLDivElement>(null);
   const virtualJobListRef = useRef<VirtualJobListHandle>(null);
+  const pendingWorkspaceUrlRef = useRef<string | null>(null);
+  const workspaceUrlInitializedRef = useRef(false);
   // Seed from the session tombstones so a remount (SPA nav away and back)
   // keeps already-committed deletes hidden even while a flushed DELETE is
   // still in flight — see sessionDeletedJobIds in useJobMutations.
   const [suppressedDeletedIds, setSuppressedDeletedIds] = useState<Set<string>>(
     () => new Set(sessionDeletedJobIds),
   );
-  const setSelectedIdFromMutation = useCallback((id: string | null) => {
+  const persistWorkspaceUrl = useCallback(
+    (patch: Partial<Pick<JobsUrlState, "selectedId" | "view">>) => {
+      const nextState = replaceUrlState(patch);
+      if (nextState) {
+        pendingWorkspaceUrlRef.current = getWorkspaceStateKey(nextState);
+      }
+    },
+    [replaceUrlState],
+  );
+  const setSelectedIdFromMutation = useCallback(
+    (id: string | null) => {
+      setSelectionExplicitlyCleared(false);
+      setSelectedId(id);
+      persistWorkspaceUrl({ selectedId: id });
+    },
+    [persistWorkspaceUrl],
+  );
+
+  useEffect(() => {
+    if (!workspaceUrlInitializedRef.current) {
+      workspaceUrlInitializedRef.current = true;
+      return;
+    }
+
+    const incomingKey = getWorkspaceStateKey({
+      selectedId: urlSelectedId,
+      view: urlView,
+    });
+    if (pendingWorkspaceUrlRef.current === incomingKey) {
+      pendingWorkspaceUrlRef.current = null;
+      return;
+    }
+
+    pendingWorkspaceUrlRef.current = null;
     setSelectionExplicitlyCleared(false);
-    setSelectedId(id);
-  }, []);
+    setSelectedId(urlSelectedId);
+    setMobileTab(urlView);
+  }, [urlSelectedId, urlView]);
 
   const {
     items, totalCount, nextCursor, loading, loadingInitial, showEmpty, loadingMore,
@@ -319,15 +371,36 @@ export function JobsClient({
   }, [items, selectedId, selectionExplicitlyCleared]);
 
   const handleSelectJob = useCallback((id: string | null) => {
+    const showDetail =
+      id !== null && typeof window !== "undefined" && window.innerWidth < 1024;
     setSelectionExplicitlyCleared(id === null);
     setSelectedId(id);
     if (id !== null) {
       markTaskComplete("review_jobs");
     }
-    if (id !== null && typeof window !== "undefined" && window.innerWidth < 1024) {
+    if (showDetail) {
       setMobileTab("detail");
     }
-  }, [markTaskComplete]);
+    persistWorkspaceUrl({
+      selectedId: id,
+      ...(showDetail ? { view: "detail" as const } : {}),
+    });
+  }, [markTaskComplete, persistWorkspaceUrl]);
+
+  const handleMobileTabChange = useCallback(
+    (view: "list" | "detail") => {
+      setMobileTab(view);
+      persistWorkspaceUrl({ view });
+    },
+    [persistWorkspaceUrl],
+  );
+
+  const mobileTabs = useAccessibleTabs({
+    id: "jobs-mobile",
+    value: mobileTab,
+    values: ["list", "detail"] as const,
+    onValueChange: handleMobileTabChange,
+  });
 
   const prepareRowFocus = useCallback((index: number) => {
     virtualJobListRef.current?.scrollToIndex(index);
@@ -555,14 +628,12 @@ export function JobsClient({
         <section className="relative flex flex-1 flex-col gap-3 lg:grid lg:min-h-0 lg:h-full lg:grid-cols-[380px_1fr] lg:items-stretch">
         <div
           className="flex shrink-0 items-center rounded-lg bg-muted/70 p-0.5 lg:hidden"
-          role="tablist"
           aria-label={t("mobileTablistLabel")}
+          {...mobileTabs.tabListProps}
         >
           <button
             type="button"
-            role="tab"
-            aria-selected={mobileTab === "list"}
-            onClick={() => setMobileTab("list")}
+            {...mobileTabs.getTabProps("list")}
             className={cn(
               "flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-150 min-h-[44px]",
               mobileTab === "list"
@@ -577,9 +648,7 @@ export function JobsClient({
           </button>
           <button
             type="button"
-            role="tab"
-            aria-selected={mobileTab === "detail"}
-            onClick={() => setMobileTab("detail")}
+            {...mobileTabs.getTabProps("detail")}
             className={cn(
               "flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-150 min-h-[44px]",
               mobileTab === "detail"
@@ -593,6 +662,8 @@ export function JobsClient({
 
         {/* Results panel */}
         <div
+          {...mobileTabs.getPanelProps("list")}
+          hidden={undefined}
           data-testid="jobs-results-panel"
           className={cn(
             "relative flex flex-col overflow-hidden backdrop-blur transition-shadow duration-200 ease-out",
@@ -976,6 +1047,10 @@ export function JobsClient({
 
         {/* Detail panel */}
         <JobDetailPanel
+          panelProps={{
+            ...mobileTabs.getPanelProps("detail"),
+            hidden: undefined,
+          }}
           selectedJob={selectedJob}
           selectedDescription={selectedDescription}
           detailError={detailError}

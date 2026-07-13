@@ -14,6 +14,11 @@ const fetchStatusMock = vi.hoisted(() => ({
   state: { runId: null as string | null, status: null as string | null, importedCount: 0 },
 }));
 
+const navigationMock = vi.hoisted(() => ({
+  search: "",
+  replace: vi.fn(),
+}));
+
 vi.mock("@/app/FetchStatusContext", () => ({
   useFetchStatus: () => fetchStatusMock.state,
 }));
@@ -21,14 +26,14 @@ vi.mock("@/app/FetchStatusContext", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: vi.fn(),
-    replace: vi.fn(),
+    replace: navigationMock.replace,
     back: vi.fn(),
     forward: vi.fn(),
     refresh: vi.fn(),
     prefetch: vi.fn(),
   }),
   usePathname: () => "/jobs",
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(navigationMock.search),
 }));
 
 afterEach(() => {
@@ -73,6 +78,9 @@ beforeEach(() => {
   // toasts from prior delete tests) so each case starts with a clean viewport.
   resetToasts();
   fetchStatusMock.state = { runId: null, status: null, importedCount: 0 };
+  navigationMock.search = "";
+  navigationMock.replace.mockReset();
+  Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
   if (!HTMLElement.prototype.hasPointerCapture) {
     Object.defineProperty(HTMLElement.prototype, "hasPointerCapture", {
       configurable: true,
@@ -197,6 +205,197 @@ describe("JobsClient", () => {
     expect(toolbar).toBeInTheDocument();
     // Toolbar must expose at least the keyword search input for filtering.
     expect(within(toolbar).getAllByRole("textbox").length).toBeGreaterThan(0);
+  });
+
+  it("restores filters from the URL and debounces canonical URL updates", async () => {
+    const user = userEvent.setup();
+    navigationMock.search =
+      "utm=campaign&q=react&status=APPLIED&location=Victoria%2C+Australia&level=Mid";
+
+    renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
+
+    const search = screen.getAllByRole("textbox")[0];
+    expect(search).toHaveValue("react");
+    expect(screen.getByTestId("jobs-location-filter")).toHaveTextContent("Victoria");
+    expect(screen.getByTestId("jobs-level-filter")).toHaveTextContent("Mid");
+    expect(
+      screen.getByRole("button", { name: messages.jobs.statusApplied }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(navigationMock.replace).not.toHaveBeenCalled();
+
+    await user.clear(search);
+
+    await waitFor(() => {
+      expect(navigationMock.replace).toHaveBeenLastCalledWith(
+        "/jobs?utm=campaign&status=APPLIED&location=Victoria%2C+Australia&level=Mid",
+        { scroll: false },
+      );
+    });
+  });
+
+  it("restores a selected row and mobile detail view from the URL", async () => {
+    const secondJob = {
+      ...baseJob,
+      id: "22222222-2222-2222-2222-222222222222",
+      title: "Backend Engineer",
+    };
+    navigationMock.search = `utm=campaign&job=${secondJob.id}&view=detail`;
+
+    renderWithClient(
+      <JobsClient initialItems={[baseJob, secondJob]} initialCursor={null} />,
+    );
+
+    const results = screen.getAllByTestId("jobs-results-scroll")[0];
+    await waitFor(() => {
+      expect(
+        within(results).getByRole("button", { name: /Backend Engineer/i }),
+      ).toHaveAttribute("aria-current", "true");
+    });
+    expect(screen.getByRole("tab", { name: messages.jobs.tabDetail })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(
+      within(screen.getByTestId("jobs-details-panel")).getByRole("heading", {
+        name: "Backend Engineer",
+      }),
+    ).toBeInTheDocument();
+    expect(navigationMock.replace).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the first visible job for a malformed selected id", async () => {
+    navigationMock.search = "job=does-not-exist&view=detail";
+
+    renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
+
+    expect(
+      await within(screen.getByTestId("jobs-details-panel")).findByRole("heading", {
+        name: "Frontend Engineer",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("writes mobile row selection and view without losing unrelated params", async () => {
+    const user = userEvent.setup();
+    const secondJob = {
+      ...baseJob,
+      id: "22222222-2222-2222-2222-222222222222",
+      title: "Backend Engineer",
+    };
+    navigationMock.search = "utm=campaign";
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 480 });
+
+    renderWithClient(
+      <JobsClient initialItems={[baseJob, secondJob]} initialCursor={null} />,
+    );
+    const results = screen.getAllByTestId("jobs-results-scroll")[0];
+    await user.click(
+      within(results).getByRole("button", { name: /Backend Engineer/i }),
+    );
+
+    expect(navigationMock.replace.mock.calls).toContainEqual([
+      `/jobs?utm=campaign&job=${secondJob.id}&view=detail`,
+      { scroll: false },
+    ]);
+    expect(screen.getByRole("tab", { name: messages.jobs.tabDetail })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
+  it("merges an immediate selection with a pending debounced query", async () => {
+    const user = userEvent.setup();
+    const secondJob = {
+      ...baseJob,
+      id: "22222222-2222-2222-2222-222222222222",
+      title: "Backend Engineer",
+    };
+    navigationMock.search = "utm=campaign";
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 480 });
+
+    renderWithClient(
+      <JobsClient initialItems={[baseJob, secondJob]} initialCursor={null} />,
+    );
+    fireEvent.change(screen.getAllByRole("textbox")[0], {
+      target: { value: "platform" },
+    });
+    const results = screen.getAllByTestId("jobs-results-scroll")[0];
+    await user.click(
+      within(results).getByRole("button", { name: /Backend Engineer/i }),
+    );
+
+    expect(navigationMock.replace.mock.calls).toContainEqual([
+      `/jobs?utm=campaign&job=${secondJob.id}&view=detail`,
+      { scroll: false },
+    ]);
+    await waitFor(() => {
+      expect(navigationMock.replace).toHaveBeenLastCalledWith(
+        `/jobs?utm=campaign&job=${secondJob.id}&view=detail&q=platform`,
+        { scroll: false },
+      );
+    });
+  });
+
+  it("links mobile tabs to panels and supports automatic arrow activation", async () => {
+    const user = userEvent.setup();
+    renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
+
+    const listTab = screen.getByRole("tab", { name: /Jobs/ });
+    const detailTab = screen.getByRole("tab", { name: messages.jobs.tabDetail });
+    const listPanel = screen.getByTestId("jobs-results-panel");
+    const detailPanel = screen.getByTestId("jobs-details-panel");
+
+    expect(listTab).toHaveAttribute("aria-controls", listPanel.id);
+    expect(detailTab).toHaveAttribute("aria-controls", detailPanel.id);
+    expect(listPanel).toHaveAttribute("role", "tabpanel");
+    expect(detailPanel).toHaveAttribute("role", "tabpanel");
+
+    listTab.focus();
+    await user.keyboard("{ArrowRight}");
+
+    expect(detailTab).toHaveFocus();
+    expect(detailTab).toHaveAttribute("aria-selected", "true");
+    expect(navigationMock.replace).toHaveBeenLastCalledWith("/jobs?view=detail", {
+      scroll: false,
+    });
+  });
+
+  it("restores URL state after browser history navigation without rewriting it", async () => {
+    const secondJob = {
+      ...baseJob,
+      id: "22222222-2222-2222-2222-222222222222",
+      title: "Backend Engineer",
+    };
+    navigationMock.search = "q=react&job=does-not-exist";
+    const view = renderWithClient(
+      <JobsClient initialItems={[baseJob, secondJob]} initialCursor={null} />,
+    );
+    expect(screen.getAllByRole("textbox")[0]).toHaveValue("react");
+
+    navigationMock.search = `q=backend&status=APPLIED&job=${secondJob.id}&view=detail`;
+    view.rerender(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <JobsClient initialItems={[baseJob, secondJob]} initialCursor={null} />
+          <Toaster />
+        </QueryClientProvider>
+      </NextIntlClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("textbox")[0]).toHaveValue("backend");
+      expect(screen.getByRole("tab", { name: messages.jobs.tabDetail })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      expect(
+        within(screen.getByTestId("jobs-details-panel")).getByRole("heading", {
+          name: "Backend Engineer",
+        }),
+      ).toBeInTheDocument();
+    });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(navigationMock.replace).not.toHaveBeenCalled();
   });
 
   it("keeps desktop location and level filters inside bounded grid tracks", () => {

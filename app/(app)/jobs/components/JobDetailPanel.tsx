@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, type ComponentPropsWithoutRef } from "react";
 import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 import {
@@ -53,6 +53,7 @@ const statusClass: Record<JobStatus, string> = {
 };
 
 interface JobDetailPanelProps {
+  panelProps?: Omit<ComponentPropsWithoutRef<"div">, "className">;
   selectedJob: JobItem | null;
   selectedDescription: string;
   detailError: string | null;
@@ -86,6 +87,7 @@ function MetaChip({ icon: Icon, value }: { icon: React.ElementType; value?: stri
 }
 
 export function JobDetailPanel({
+  panelProps,
   selectedJob,
   selectedDescription,
   detailError,
@@ -135,6 +137,8 @@ export function JobDetailPanel({
 
   return (
     <div
+      {...panelProps}
+      hidden={undefined}
       data-testid="jobs-details-panel"
       className={cn(
         "relative flex flex-col overflow-hidden backdrop-blur transition-shadow duration-200 ease-out",
