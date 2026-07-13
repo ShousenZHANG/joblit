@@ -28,7 +28,9 @@ vi.mock("next-intl", () => ({
 const signOutMock = vi.fn();
 vi.mock("next-auth/react", () => ({
   signOut: (...args: unknown[]) => signOutMock(...args),
-  useSession: () => ({ data: { user: { email: "alex@joblit.tech" } } }),
+  useSession: () => ({
+    data: { user: { email: "alex@joblit.tech", isAdmin: true } },
+  }),
 }));
 
 // next-themes — provide mounted state so ThemeToggle renders its icon.
@@ -216,6 +218,7 @@ describe("AppNav", () => {
     expect(
       scope.getByRole("link", { name: /extension/i }),
     ).toBeInTheDocument();
+    expect(scope.queryByRole("link", { name: /admin/i })).not.toBeInTheDocument();
   });
 
   it("marks the link matching the current path as active", () => {

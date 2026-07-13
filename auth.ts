@@ -3,8 +3,6 @@ import GoogleProvider from "next-auth/providers/google";
 import GitHubProvider from "next-auth/providers/github";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "@/lib/server/prisma";
-import { isSignInAllowed } from "@/lib/server/access/accessRequestService";
-import { isAdminEmail } from "@/lib/server/auth/adminAccess";
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -13,9 +11,7 @@ export const authOptions: NextAuthOptions = {
   session: { strategy: "database" },
   secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
   // Route NextAuth's sign-in + error screens to our own /login (default is the
-  // bare /api/auth/* pages). Critical for the invite gate: when signIn returns
-  // false the user lands on /login?error=AccessDenied, where we render a clear
-  // "request access" path instead of a dead-end NextAuth error page.
+  // bare /api/auth/* pages) so authentication keeps the branded experience.
   pages: { signIn: "/login", error: "/login" },
   // Explicit cookie hardening (defense-in-depth atop NextAuth defaults). In
   // production the session token gets the __Secure- prefix + Secure flag so it
@@ -45,19 +41,9 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    // Invite-only gate: only configured admins, APPROVED access requests, and
-    // already-existing users may sign in. Returning false aborts sign-in BEFORE
-    // the adapter creates a User row, so an unapproved email gets no account.
-    async signIn({ user }) {
-      return isSignInAllowed(user?.email);
-    },
     session({ session, user }) {
       if (session.user) {
         session.user.id = user.id;
-        // Surface admin status to the client (nav shows the admin link only for
-        // admins). isAdminEmail reads ADMIN_EMAILS server-side; the API routes
-        // re-check it, so this flag is UX only, never the security boundary.
-        session.user.isAdmin = isAdminEmail(user.email);
       }
       return session;
     },

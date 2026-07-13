@@ -69,12 +69,6 @@ export function AppNav() {
         { href: "/extension", label: t("extension") },
       ];
   const email = data?.user?.email ?? "";
-  // Admin-only console link. `isAdmin` comes from the session (server-computed
-  // from ADMIN_EMAILS); the /admin/access page + its APIs re-check server-side,
-  // so hiding the link here is purely UX.
-  const allLinks: NavLink[] = data?.user?.isAdmin
-    ? [...links, { href: "/admin/access", label: t("admin") }]
-    : links;
 
   const handleSignOut = async () => {
     if (signOutInFlight.current) return;
@@ -122,7 +116,7 @@ export function AppNav() {
             role="list"
             data-testid="app-nav-links"
           >
-            {allLinks.map((link) => {
+            {links.map((link) => {
               const active = isRouteActive(pathname, link.href);
               return (
                 <li key={link.href}>
@@ -247,7 +241,7 @@ export function AppNav() {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[200px]">
-              {allLinks.map((link) => {
+              {links.map((link) => {
                 const active = isRouteActive(pathname, link.href);
                 return (
                   <DropdownMenuItem key={link.href} asChild>
