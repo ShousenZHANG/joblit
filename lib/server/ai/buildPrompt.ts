@@ -3,6 +3,7 @@ import {
   buildApplicationSystemPrompt,
   buildApplicationUserPrompt,
 } from "./applicationPromptBuilder";
+import { buildResumePromptSnapshot } from "./resumePromptSnapshot";
 import { truncate } from "@/lib/shared/utils/text";
 
 type TailorPromptInput = {
@@ -10,6 +11,7 @@ type TailorPromptInput = {
   jobTitle: string;
   company: string;
   description: string;
+  resumeSnapshot?: unknown;
   coverContext?: {
     topResponsibilities: string[];
     matchedEvidence: string[];
@@ -34,10 +36,22 @@ export function buildTailorPrompts(
   const topResponsibilities = input.coverContext?.topResponsibilities ?? [];
   const matchedEvidence = input.coverContext?.matchedEvidence ?? [];
   const resumeHighlights = input.coverContext?.resumeHighlights ?? [];
+  const sourceSnapshot =
+    input.resumeSnapshot && typeof input.resumeSnapshot === "object"
+      ? (input.resumeSnapshot as Record<string, unknown>)
+      : {};
+  const candidate = buildResumePromptSnapshot({
+    ...sourceSnapshot,
+    summary:
+      typeof sourceSnapshot.summary === "string" && sourceSnapshot.summary.trim()
+        ? sourceSnapshot.summary
+        : input.baseSummary,
+  });
 
   const resumeGuidancePrompt = buildApplicationUserPrompt({
     target: "resume",
     rules,
+    candidate,
     job: {
       title: input.jobTitle,
       company: input.company,
@@ -58,6 +72,7 @@ export function buildTailorPrompts(
   const coverGuidancePrompt = buildApplicationUserPrompt({
     target: "cover",
     rules,
+    candidate,
     job: {
       title: input.jobTitle,
       company: input.company,

@@ -83,12 +83,13 @@ const rules = {
 function arrangeSuccess(overrides?: Partial<{
   description: string;
   jobUrl: string | null;
+  market: "AU" | "CN";
 }>) {
   dependencies.jobFindFirst.mockResolvedValue({
     title: "Senior Backend Engineer",
     company: "Acme",
     description: overrides?.description ?? "Build reliable distributed APIs.",
-    market: "AU",
+    market: overrides?.market ?? "AU",
     jobUrl: overrides?.jobUrl ?? "https://jobs.example/1",
   });
   dependencies.getResumeProfile.mockResolvedValue(profile);
@@ -218,8 +219,13 @@ describe("application prompt service", () => {
     ).rejects.toMatchObject({ code: "NO_PROFILE", status: 404 });
   });
 
-  it("rejects a prompt that exceeds the explicit total prompt limit", async () => {
-    arrangeSuccess();
+  it.each([
+    ["AU", "Application prompt is too large to process."],
+    ["CN", "申请提示内容过长，无法处理。"],
+  ] as const)(
+    "returns a stable localized PROMPT_TOO_LARGE contract for %s jobs",
+    async (market, expectedMessage) => {
+    arrangeSuccess({ market });
     dependencies.getRules.mockResolvedValueOnce({
       ...rules,
       hardConstraints: ["x".repeat(MAX_APPLICATION_PROMPT_CHARS + 1)],
@@ -232,6 +238,11 @@ describe("application prompt service", () => {
     }).catch((caught) => caught);
 
     expect(error).toBeInstanceOf(ApplicationPromptError);
-    expect(error).toMatchObject({ code: "PROMPT_TOO_LARGE", status: 413 });
-  });
+    expect(error).toMatchObject({
+      code: "PROMPT_TOO_LARGE",
+      status: 413,
+      message: expectedMessage,
+    });
+    },
+  );
 });

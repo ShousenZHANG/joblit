@@ -60,4 +60,51 @@ describe("default prompt rules", () => {
     expect(prompts.userPrompt).toContain("Additional resume highlights:");
     expect(prompts.userPrompt).toContain("Experience (Backend Engineer @ Acme):");
   });
+
+  it("embeds bounded candidate evidence in the server-side tailoring prompts", () => {
+    const prompts = buildTailorPrompts(DEFAULT_RULES, {
+      baseSummary: "Fallback summary",
+      jobTitle: "Software Engineer",
+      company: "Example Co",
+      description: "Build product features.",
+      resumeSnapshot: {
+        id: "profile-internal-id",
+        userId: "user-internal-id",
+        summary: "Backend engineer focused on reliable APIs.",
+        basics: {
+          fullName: "Alex Chen",
+          title: "Backend Engineer",
+          email: "candidate@example.com",
+          phone: "+61 400 000 000",
+        },
+        links: [{ label: "LinkedIn", url: "https://private.example/alex" }],
+        experiences: [
+          {
+            id: "experience-internal-id",
+            title: "Backend Engineer",
+            company: "Acme",
+            dates: "2023-present",
+            bullets: ["Built reliable APIs."],
+          },
+        ],
+      },
+    });
+    const evidenceBlocks = [...prompts.userPrompt.matchAll(
+      /<candidate-evidence>\n([\s\S]*?)\n<\/candidate-evidence>/g,
+    )].map((match) => JSON.parse(match[1]));
+
+    expect(evidenceBlocks).toHaveLength(2);
+    for (const evidence of evidenceBlocks) {
+      expect(evidence).toMatchObject({
+        basics: { fullName: "Alex Chen", title: "Backend Engineer" },
+        summary: "Backend engineer focused on reliable APIs.",
+        experiences: [{ bullets: ["Built reliable APIs."] }],
+      });
+      const serialized = JSON.stringify(evidence);
+      expect(serialized).not.toContain("candidate@example.com");
+      expect(serialized).not.toContain("+61 400 000 000");
+      expect(serialized).not.toContain("https://private.example");
+      expect(serialized).not.toContain("internal-id");
+    }
+  });
 });

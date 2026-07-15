@@ -59,6 +59,21 @@ export class ApplicationPromptError extends Error {
 
 export const MAX_APPLICATION_PROMPT_CHARS = 64_000;
 
+type ApplicationPromptMessages = {
+  errors: {
+    applicationPrompt: {
+      promptTooLarge: string;
+    };
+  };
+};
+
+async function getPromptTooLargeMessage(locale: "en-AU" | "zh-CN"): Promise<string> {
+  const language = locale === "zh-CN" ? "zh" : "en";
+  const messages = (await import(`../../../messages/${language}.json`))
+    .default as ApplicationPromptMessages;
+  return messages.errors.applicationPrompt.promptTooLarge;
+}
+
 export async function buildApplicationPromptForUser(input: {
   userId: string;
   jobId: string;
@@ -147,7 +162,7 @@ export async function buildApplicationPromptForUser(input: {
   if (instructions.length + promptInput.length > MAX_APPLICATION_PROMPT_CHARS) {
     throw new ApplicationPromptError(
       "PROMPT_TOO_LARGE",
-      "Application prompt exceeds the size limit.",
+      await getPromptTooLargeMessage(locale),
       413,
     );
   }

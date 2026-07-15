@@ -1024,6 +1024,9 @@
     }
   },
   "errors": {
+    "applicationPrompt": {
+      "promptTooLarge": "Application prompt is too large to process."
+    },
     "route": {
       "updateTitle": "App update available",
       "errorTitle": "Something went wrong",

@@ -125,7 +125,7 @@ describe("applications prompt api", () => {
   it.each([
     ["JOB_NOT_FOUND", "Job not found", 404],
     ["NO_PROFILE", "Create and save your master resume before generating prompt.", 404],
-    ["PROMPT_TOO_LARGE", "Application prompt exceeds the size limit.", 413],
+    ["PROMPT_TOO_LARGE", "Application prompt is too large to process.", 413],
   ] as const)("maps %s service errors into the existing JSON envelope", async (code, message, status) => {
     applicationPrompt.build.mockRejectedValueOnce(
       new ApplicationPromptError(code, message, status),

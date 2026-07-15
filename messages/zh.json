@@ -1024,6 +1024,9 @@
     }
   },
   "errors": {
+    "applicationPrompt": {
+      "promptTooLarge": "申请提示内容过长，无法处理。"
+    },
     "route": {
       "updateTitle": "应用有可用更新",
       "errorTitle": "出错了",
