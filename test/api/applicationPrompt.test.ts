@@ -1,160 +1,141 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const jobStore = vi.hoisted(() => ({
-  findFirst: vi.fn(),
+const applicationPrompt = vi.hoisted(() => ({
+  build: vi.fn(),
 }));
 
-vi.mock("@/lib/server/prisma", () => ({
-  prisma: {
-    job: jobStore,
-  },
-}));
-
-vi.mock("@/auth", () => ({
-  authOptions: {},
-}));
+vi.mock("@/auth", () => ({ authOptions: {} }));
 
 vi.mock("next-auth/next", () => ({
   getServerSession: vi.fn(),
 }));
 
-vi.mock("@/lib/server/resumeProfile", () => ({
-  getResumeProfile: vi.fn(),
+vi.mock("@/lib/server/prisma", () => ({
+  prisma: {
+    job: {
+      findFirst: vi.fn(),
+      updateMany: vi.fn(),
+    },
+  },
 }));
 
-vi.mock("@/lib/server/latex/mapResumeProfile", () => ({
-  mapResumeProfile: vi.fn(() => ({
-    experiences: [
-      {
-        bullets: ["Built backend services with Java and Spring Boot.", "Maintained CI/CD pipelines on Linux."],
-      },
-    ],
-  })),
-}));
-
-vi.mock("@/lib/server/promptRuleTemplates", () => ({
-  getActivePromptSkillRulesForUser: vi.fn(() => ({
-    id: "rules-1",
-    locale: "en-AU",
-    cvRules: ["cv-rule"],
-    coverRules: ["cover-rule"],
-    hardConstraints: ["json-only"],
-  })),
-}));
+vi.mock("@/lib/server/applications/applicationPrompt", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/lib/server/applications/applicationPrompt")
+  >("@/lib/server/applications/applicationPrompt");
+  return {
+    ...actual,
+    buildApplicationPromptForUser: applicationPrompt.build,
+  };
+});
 
 import { getServerSession } from "next-auth/next";
-import { getResumeProfile } from "@/lib/server/resumeProfile";
+import {
+  ApplicationPromptError,
+  type ApplicationPromptPayload,
+} from "@/lib/server/applications/applicationPrompt";
 import { POST } from "@/app/api/applications/prompt/route";
 
 const VALID_JOB_ID = "550e8400-e29b-41d4-a716-446655440000";
 
+const servicePayload: ApplicationPromptPayload = {
+  requestId: "service-request-id",
+  prompt: {
+    input: "<candidate-evidence>{}</candidate-evidence>",
+    instructions: "system instructions",
+    sessionId: "22222222-2222-4222-8222-222222222222",
+  },
+  promptMeta: {
+    ruleSetId: "rules-1",
+    resumeSnapshotUpdatedAt: "2026-07-15T00:00:00.000Z",
+  },
+  expectedJsonShape: '{"cvSummary":"string"}',
+  expectedJsonSchema: { type: "object" },
+  promptVersion: "v3-local-ai",
+};
+
+function request(body: unknown) {
+  return new Request("http://localhost/api/applications/prompt", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 describe("applications prompt api", () => {
   beforeEach(() => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockReset();
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockReset();
-    jobStore.findFirst.mockReset();
-  });
-
-  it("returns 404 when job does not exist", async () => {
+    vi.clearAllMocks();
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "user-1" },
     });
-    jobStore.findFirst.mockResolvedValueOnce(null);
-
-    const res = await POST(
-      new Request("http://localhost/api/applications/prompt", {
-        method: "POST",
-        body: JSON.stringify({ jobId: VALID_JOB_ID, target: "resume" }),
-      }),
-    );
-    const json = await res.json();
-
-    expect(res.status).toBe(404);
-    expect(json.error.code).toBe("JOB_NOT_FOUND");
+    applicationPrompt.build.mockResolvedValue(servicePayload);
   });
 
-  it("returns resume-target prompt payload (V2 default)", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
-    jobStore.findFirst.mockResolvedValueOnce({
-      title: "Software Engineer",
-      company: "Example Co",
-      description: "Build product features",
-    });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
+  it("requires a session", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
 
-    const res = await POST(
-      new Request("http://localhost/api/applications/prompt", {
-        method: "POST",
-        body: JSON.stringify({ jobId: VALID_JOB_ID, target: "resume" }),
-      }),
-    );
-    const json = await res.json();
+    const response = await POST(request({ jobId: VALID_JOB_ID, target: "resume" }));
+    const json = await response.json();
 
-    expect(res.status).toBe(200);
-    expect(typeof json.prompt.systemPrompt).toBe("string");
-    expect(typeof json.prompt.userPrompt).toBe("string");
-    expect(typeof json.prompt.shortUserPrompt).toBe("string");
-    expect(json.promptVersion).toBe("v2");
-    // V2 system prompt uses XML tags
-    expect(json.prompt.systemPrompt).toContain("<role>");
-    expect(json.prompt.systemPrompt).toContain("<hard-constraints>");
-    // V2 user prompt uses XML tags
-    expect(json.prompt.userPrompt).toContain("<task>");
-    expect(json.prompt.userPrompt).toContain("<job>");
-    expect(json.expectedJsonShape.cvSummary).toBe("string");
-    expect(Array.isArray(json.expectedJsonShape.latestExperience.bullets)).toBe(true);
-    expect(Array.isArray(json.expectedJsonShape.skillsFinal)).toBe(true);
-    expect(json.expectedJsonShape.cover).toBeUndefined();
-    expect(json.promptMeta.ruleSetId).toBe("rules-1");
-    expect(json.promptMeta.resumeSnapshotUpdatedAt).toBe("2026-02-06T00:00:00.000Z");
-    expect(typeof json.promptMeta.promptTemplateVersion).toBe("string");
-    expect(typeof json.promptMeta.schemaVersion).toBe("string");
-    expect(json.promptMeta.skillPackVersion.length).toBe(64);
-    expect(json.promptMeta.promptHash.length).toBe(64);
-    expect(json.expectedJsonSchema?.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
+    expect(response.status).toBe(401);
+    expect(json.error.code).toBe("UNAUTHORIZED");
+    expect(applicationPrompt.build).not.toHaveBeenCalled();
   });
 
-  it("returns cover-target prompt payload", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
-    jobStore.findFirst.mockResolvedValueOnce({
-      title: "Software Engineer",
-      company: "Example Co",
-      description: "Build product features",
-    });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
-
-    const res = await POST(
-      new Request("http://localhost/api/applications/prompt", {
-        method: "POST",
-        body: JSON.stringify({ jobId: VALID_JOB_ID, target: "cover" }),
-      }),
+  it("strictly rejects invalid or over-posted bodies with the existing envelope", async () => {
+    const response = await POST(
+      request({ jobId: VALID_JOB_ID, target: "resume", userId: "attacker" }),
     );
-    const json = await res.json();
+    const json = await response.json();
 
-    expect(res.status).toBe(200);
-    expect(json.expectedJsonShape.cvSummary).toBeUndefined();
-    expect(json.expectedJsonShape.cover.paragraphOne).toBe("string");
-    expect(json.expectedJsonShape.cover.salutation).toBe("string (optional)");
-    expect(json.expectedJsonShape.cover.subject).toBe("string (optional)");
-    expect(typeof json.promptMeta.skillPackVersion).toBe("string");
-    expect(json.promptMeta.skillPackVersion.length).toBe(64);
-    expect(typeof json.promptMeta.promptHash).toBe("string");
-    expect(json.promptMeta.promptHash.length).toBe(64);
-    expect(json.expectedJsonSchema?.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
-    expect(json.expectedJsonSchema?.type).toBe("object");
-    expect(json.prompt.userPrompt).not.toContain("Top-3 Responsibility Coverage (must follow):");
-    expect(json.prompt.userPrompt).toContain("Top-3 JD responsibilities");
-    expect(json.prompt.userPrompt).toContain("Bold all JD-critical keywords");
-    expect(json.prompt.userPrompt).toContain("Australian workplace");
+    expect(response.status).toBe(400);
+    expect(json.error.code).toBe("INVALID_BODY");
+    expect(json.error.message).toBe("Invalid request body");
+    expect(json.error.details).toBeDefined();
+    expect(typeof json.requestId).toBe("string");
+    expect(applicationPrompt.build).not.toHaveBeenCalled();
+  });
+
+  it("delegates authenticated business orchestration and returns the v3 envelope", async () => {
+    const response = await POST(request({ jobId: VALID_JOB_ID, target: "resume" }));
+    const json = await response.json();
+
+    expect(applicationPrompt.build).toHaveBeenCalledWith({
+      userId: "user-1",
+      jobId: VALID_JOB_ID,
+      target: "resume",
+    });
+    expect(response.status).toBe(200);
+    expect(json).toMatchObject({
+      prompt: {
+        ...servicePayload.prompt,
+        systemPrompt: servicePayload.prompt.instructions,
+        userPrompt: servicePayload.prompt.input,
+        shortUserPrompt: "",
+      },
+      promptMeta: servicePayload.promptMeta,
+      expectedJsonShape: servicePayload.expectedJsonShape,
+      expectedJsonSchema: servicePayload.expectedJsonSchema,
+      promptVersion: "v3-local-ai",
+    });
+    expect(json.requestId).not.toBe(servicePayload.requestId);
+    expect(json.requestId).toMatch(/^[0-9a-f-]{36}$/i);
+  });
+
+  it.each([
+    ["JOB_NOT_FOUND", "Job not found", 404],
+    ["NO_PROFILE", "Create and save your master resume before generating prompt.", 404],
+    ["PROMPT_TOO_LARGE", "Application prompt exceeds the size limit.", 413],
+  ] as const)("maps %s service errors into the existing JSON envelope", async (code, message, status) => {
+    applicationPrompt.build.mockRejectedValueOnce(
+      new ApplicationPromptError(code, message, status),
+    );
+
+    const response = await POST(request({ jobId: VALID_JOB_ID, target: "cover" }));
+    const json = await response.json();
+
+    expect(response.status).toBe(status);
+    expect(json.error).toEqual({ code, message });
+    expect(typeof json.requestId).toBe("string");
   });
 });
