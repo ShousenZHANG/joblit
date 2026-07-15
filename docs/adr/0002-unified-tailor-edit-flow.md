@@ -4,7 +4,7 @@
 - **Date:** 2026-05-06
 - **Context owner:** Joblit Engineering
 
-> **Proposed amendment:** ADR-0004 keeps current Codex Batch `finalize=true` behavior only as a migration exception. If ADR-0004 is accepted and its Phase 4 migration ships, Codex Batch will generate evidence-complete drafts instead of immediately finalizing. All other decisions in this ADR remain active.
+> **Accepted amendment:** ADR-0004 keeps current Codex Batch `finalize=true` behavior only as a migration exception. When ADR-0004 Phase 4 ships, Codex Batch will generate evidence-complete drafts instead of immediately finalizing. All other decisions in this ADR remain active.
 
 ## Context
 

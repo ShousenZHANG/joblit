@@ -2,9 +2,9 @@
 
 **Date:** 2026-07-15
 
-**Status:** Architecture selected; written spec pending user review
+**Status:** Accepted
 
-**Decision:** Use Joblit as the deterministic system of record, the Chrome extension as a narrow security bridge, and a dedicated local Hermes profile as the user's AI runtime. Keep manual Skill Pack and optional provider API paths as fallbacks.
+**Decision:** Use Joblit as the deterministic system of record, the Chrome extension as a narrow security bridge, and an official, unmodified Hermes profile as the user's local AI runtime. Do not fork Hermes. Keep manual Skill Pack and optional provider API paths as fallbacks.
 
 ## Context
 
@@ -14,7 +14,7 @@ Joblit already owns the durable job-search workflow: authenticated user data, a 
 - an optional server-side model flow;
 - a Codex Batch flow;
 - a Chrome extension that currently handles Joblit profile data, Seek import, and ATS autofill but does not bridge Joblit to Hermes;
-- a local Hermes runtime that can use the user's own ChatGPT access and local memory, but whose current `/v1/responses` contract cannot reliably select one required skill per request.
+- a local Hermes runtime that can use the user's own ChatGPT access and persist local state, but whose official interactive API cannot deterministically preload one required Skill per request or safely partition built-in memory by request.
 
 The product direction is broader than adding another provider. Joblit should become an AI-native career operating system while preserving factual grounding, user control, predictable scoring, and multi-user security.
 
@@ -25,10 +25,11 @@ This design incorporates useful workflow ideas from the MIT-licensed [`MadsLoren
 Adopt a hybrid local-first architecture:
 
 1. **Joblit owns truth and control.** Authentication, authorization, source facts, schemas, score arithmetic, revisions, idempotency, persistence, PDF rendering, and Finalize remain deterministic Joblit responsibilities.
-2. **Hermes owns bounded reasoning.** A dedicated per-Joblit-account Hermes profile performs requirement extraction, evidence matching, drafting, reviewing, interview coaching, and derived preference projection.
-3. **The Chrome extension owns transport.** It obtains full AI task payloads from Joblit with its existing extension credential, calls loopback Hermes, and returns results to Joblit. Neither the web page nor Joblit's cloud receives the Hermes token or the user's ChatGPT credentials.
+2. **Hermes owns bounded reasoning.** A dedicated per-Joblit-account Hermes profile performs requirement extraction, evidence matching, drafting, reviewing, and interview coaching. Joblit supplies bounded confirmed preferences; first-release Hermes memory stays disabled.
+3. **The Chrome extension owns transport.** It obtains canonical prompt envelopes from Joblit with its existing extension credential, calls loopback Hermes, and returns bounded output to the authenticated page for strict import. Neither the web page nor Joblit's cloud receives the Hermes token or the user's ChatGPT credentials.
 4. **Users remain in Joblit.** The normal workflow never requires copying prompts, opening ChatGPT, or pasting JSON.
 5. **Every new-path generated artifact starts as a proposal.** AI output enters a `DRAFT` Application or another reviewable result. Only an explicit user action may Finalize or submit it. Existing legacy paths remain temporary exceptions during migration and must reach evidence/DRAFT parity before the master program can pass acceptance.
+6. **Hermes stays stock.** Joblit consumes documented Hermes HTTP APIs and distributes a minimal Joblit profile/SOUL/Skill package. It does not patch, fork, or publish a custom Hermes runtime.
 
 This decision extends rather than replaces ADR-0001 and ADR-0002. `aiContent`, provenance, stale-write detection, and the unified Generate -> Edit -> Finalize lifecycle remain authoritative.
 
@@ -79,34 +80,35 @@ TypeScript schemas and deterministic validators in Joblit are the source of trut
 
 ```mermaid
 flowchart LR
-    UI["Joblit Web UI"] --> API["Joblit AI Task API"]
-    API --> DB["Joblit system of record"]
-    UI -->|"task ID + one-time nonce"| EXT["Chrome extension"]
-    EXT -->|"extension token"| API
+    UI["Joblit Web UI"] --> DB["Joblit system of record"]
+    UI -->|"Job ID + target + request ID"| EXT["Chrome extension"]
+    EXT -->|"extension token + entity IDs"| API["Joblit canonical prompt API"]
+    API --> DB
+    API -->|"versioned prompt envelope"| EXT
     EXT -->|"loopback token"| H["Hermes joblit profile"]
     H --> C["User ChatGPT connection"]
     C --> H
     H --> EXT
-    EXT -->|"strict result envelope"| API
-    API --> V["Schema, evidence, score, revision validators"]
+    EXT -->|"output + prompt metadata"| UI
+    UI --> IMPORT["Joblit import API"]
+    IMPORT --> V["Schema, evidence, score, revision validators"]
     V --> DB
     DB --> UI
     UI -->|"explicit Finalize"| PDF["PDF and ATS renderer"]
     PDF --> DB
-    DB -->|"accepted edits and outcomes only"| API
-    API --> EXT
-    EXT --> H
+    DB -->|"confirmed preferences in future prompts"| API
 ```
 
 ### Trust boundaries
 
 | Boundary | Authenticated identity / expected fields | Untrusted data | Enforcement |
 |---|---|---|---|
-| Browser page -> extension | task ID, nonce, requested action | every page-controlled string | exact allowed origin, typed message, size limit, nonce, sender validation |
-| Extension -> Joblit | authenticated extension identity and task ID | every extension payload and local runtime result | existing token ownership, task-user binding, JSON Schema, revision checks |
-| Extension -> Hermes | scoped Joblit-mode token and expected task shape | every request field, model output, and tool output | loopback-only listener, per-account profile, server-preloaded skill, tool policy, timeouts, response cap |
+| Browser page -> extension | Job ID, target, client request ID | every page-controlled string | exact allowed origin, typed message, size limit, expiry, sender validation |
+| Extension -> Joblit | authenticated extension identity and entity IDs | every extension request | existing token ownership, entity ownership, action allowlist, canonical prompt builder |
+| Extension -> Hermes | dedicated profile API key and fixed action vocabulary | every request field and model output | loopback-only endpoint, minimal profile toolsets, full versioned Joblit prompt, capability/tool probes, timeouts, response cap |
 | Job and company content -> AI | source text and source locations | embedded instructions, markup, tracking content | content/data delimiters, prompt-injection rules, no executable tools |
-| AI result -> persistence | validated evidence references | claims, patches, scores | deterministic validation and atomic commit |
+| Extension -> browser page | request ID, prompt metadata, bounded model output | every model-written byte | exact origin, correlation, status allowlist, response cap |
+| AI result -> persistence | authenticated web session and validated evidence references | claims, patches, scores | deterministic validation, ownership/revision checks, atomic `DRAFT` write |
 
 ## Capability Model
 
@@ -124,7 +126,6 @@ type AiAction =
   | "ANSWER_APPLICATION"
   | "INTERVIEW_PREP"
   | "LEARN_OUTCOME"
-  | "SYNC_CONFIRMED_MEMORY"
   | "PLAN_UPSKILL";
 ```
 
@@ -229,17 +230,21 @@ Candidate and Job snapshots are materialized, content-addressed records rather t
 
 `Application`, `JobAssessment`, and other durable AI artifacts reference the exact snapshot IDs used to create them. Deleting a source Job or Profile immediately deletes unreferenced snapshots; snapshots referenced by a retained Application/Assessment remain until that artifact is deleted. Account deletion removes every snapshot and artifact. Superseded snapshots remain available only while referenced, so historical evidence links do not silently point at edited profile or Job content.
 
-### AI task envelope
+### Local AI prompt envelope
 
-The web page never sends resume or Job content directly to the extension. It creates an authenticated server task, then sends only `taskId`, `nonce`, and `action` through Chrome external messaging. The extension uses its own Joblit extension token to fetch the canonical envelope.
+The web page never sends a resume, Job description, or page-authored prompt to
+the extension. It sends only `jobId`, target, and a client-generated request ID
+through the dedicated content-script bridge. The extension uses its own Joblit
+extension token to fetch the canonical prompt envelope from an extension-auth
+endpoint that rechecks entity ownership.
 
 ```ts
-type AiTaskEnvelope<T> = {
-  taskId: string;
+type LocalAiPromptEnvelope<T> = {
+  requestId: string;
   action: AiAction;
   contractVersion: string;
-  runtimeSkill: { name: "joblit-career-agent"; version: string; contentHash: string };
   promptVersion: string;
+  outputSchemaVersion: string;
   ruleSetVersion: number;
   locale: "en-AU" | "zh-CN";
   candidateSnapshotId?: string;
@@ -247,27 +252,28 @@ type AiTaskEnvelope<T> = {
   jobSnapshotId?: string;
   jobContentHash?: string;
   applicationRevision?: number;
-  idempotencyKey: string;
   expiresAt: string;
-  memoryScope: "none" | "read_preferences" | "write_derived_preferences";
-  executionGrant: string;
+  confirmedPreferenceSnapshotId?: string;
+  promptHash: string;
+  systemPrompt: string;
+  userPrompt: string;
   input: T;
 };
 ```
 
-`memoryScope` is server-selected. Generation and `LEARN_OUTCOME` receive `none` or `read_preferences`; they cannot write memory. After the user confirms a typed proposal in Joblit's ledger, a separate idempotent `SYNC_CONFIRMED_MEMORY` task may receive `write_derived_preferences`.
-
-`executionGrant` is a Compact JWS with algorithm locked to `EdDSA`. Hermes validates fixed issuer `https://www.joblit.tech`, audience `joblit-hermes-v1`, maximum five-minute lifetime, and a recognized `kid`. Claims bind `grantId`, `taskId`, `idempotencyKey`, `action`, `accountFingerprint`, `profileId`, `toolPolicyId`, `memoryScope`, Skill content hash, canonical input SHA-256, expiry, audience, and nonce.
-
-Hermes trusts only a preinstalled Joblit public-key set delivered through the signed Hermes release/updater; grant-provided JWK, `jku`, `x5c`, or algorithm changes are rejected. Capabilities advertises trusted `kid` values. Key rotation distributes the new public key first, Joblit signs with a key advertised by that runtime, and the old key remains trusted until its supported-runtime window plus maximum grant lifetime has elapsed.
-
-Input hash uses RFC 8785 JSON Canonicalization Scheme over UTF-8. Parsing rejects duplicate object keys, non-finite numbers, invalid Unicode, and non-UTF-8 bytes before hashing. Before Skill loading or model invocation, Hermes atomically inserts `grantId`, `taskId`, `idempotencyKey`, `runId`, and `expiresAt` into a persistent replay ledger with unique `grantId`. The ledger survives Hermes restart. Repeating the same grant with the same idempotency key returns the original run; every other reuse or claim mismatch is rejected. The extension cannot select or escalate a tool policy by editing the request.
+The complete prompt is produced by Joblit's versioned prompt builder and is the
+authoritative execution contract. The extension does not accept page-supplied
+prompts and does not ask Hermes to choose a Skill. Expiry, ownership, prompt
+hash, and source revisions are enforced before the payload is returned and
+again before a result is imported. Confirmed
+preferences are materialized by Joblit and injected as bounded data, not
+granted as a model-controlled memory-write permission.
 
 ### AI result envelope
 
 ```ts
-type AiResultEnvelope<T> = {
-  taskId: string;
+type LocalAiResultEnvelope<T> = {
+  requestId: string;
   action: AiAction;
   contractVersion: string;
   result: T;
@@ -279,18 +285,21 @@ type AiResultEnvelope<T> = {
     durationMs: number;
     modelLabel?: string;
     runId?: string;
-    attestedSkill?: {
-      name: "joblit-career-agent";
-      version: string;
-      contentHash: string;
-    };
-    attestedToolPolicy?: { id: string; manifestHash: string };
-    verifiedGrantId?: string;
+    promptVersion: string;
+    advertisedModel?: string;
+    promptPackageVersion: string;
+    locallyVerifiedProfilePackageVersion?: string;
   };
 };
 ```
 
-Business result schema is independent from runtime provenance. Runtime attestation is supplied by Hermes and carried by the extension, never model-generated content. Skill, tool-policy, and verified-grant attestations are mandatory for Hermes results and absent for manual/provider compatibility paths. The server rejects mismatched task IDs, actions, contract versions, attestations, evidence IDs, requirement IDs, revisions, or terminal task states.
+Business result schema is independent from runtime provenance. Runtime metadata
+comes from the extension and official Hermes responses, never from model-written
+JSON. `locallyVerifiedProfilePackageVersion` is present only when a Joblit local
+installer/verifier supplied it; stock Hermes HTTP endpoints cannot report or
+attest that package version. The import endpoint rejects mismatched request
+metadata, actions, contract versions, prompt versions/hashes, evidence IDs,
+requirement IDs, ownership, or source revisions.
 
 ### Patch contract
 
@@ -352,33 +361,32 @@ type DerivedPreferenceProposal = {
 
 The canonical preference registry maps each allowlisted key to a value schema, maximum item/text lengths, locale rules, and sensitivity classification. Overrides must use the original key's schema; unknown keys, free-form blobs, and sensitive eligibility answers are rejected from derived memory.
 
-`LEARN_OUTCOME` returns only `DerivedPreferenceProposal[]` under a read-only policy. Joblit creates feedback events from authenticated product actions and requires user confirmation before a derived preference affects `Preference Fit`. Confirmation writes the ledger, then `SYNC_CONFIRMED_MEMORY` projects that exact typed value into Hermes under a one-time learning grant. Correction and deletion create override/tombstone events, so rebuilding memory cannot resurrect removed entries. Accepted wording may teach presentation style; it never becomes a new career fact.
+`LEARN_OUTCOME` returns only `DerivedPreferenceProposal[]` under a read-only policy. Joblit creates feedback events from authenticated product actions and requires user confirmation before a derived preference affects `Preference Fit`. Confirmation writes the Joblit ledger and future runs receive a fresh bounded snapshot of confirmed preferences. Correction and deletion create override/tombstone events, so rebuilding that snapshot cannot resurrect removed entries. The first-release generation profile does not write Hermes memory. Accepted wording may teach presentation style; it never becomes a new career fact.
 
-## AI Task Lifecycle
+## Local Run Lifecycle
 
-The server persists coordination metadata in an `AiTask` record. It references materialized `AiSnapshot` rows rather than duplicating resume/JD blobs.
+The first release coordinates one browser-visible local run without a new
+Prisma task table. Canonical source data and imported output remain in Joblit;
+the extension retains only bounded transient run coordination.
 
 ```text
-QUEUED -> RUNNING -> VALIDATING -> SUCCEEDED
-   |         |            |
-   +-------> FAILED <------+
-   +-------> CANCELLED
-   +-------> EXPIRED
+IDLE -> STARTING -> QUEUED -> RUNNING -> IMPORTING -> SUCCEEDED
+           |          |          |           |
+           +--------> FAILED <---+-----------+
+                       +-------> CANCELLED
+                       +-------> RUN_LOST
 ```
 
-- Creation requires a Joblit session and user-owned entity references.
-- `(userId, idempotencyKey)` is unique.
-- A one-time nonce binds the web request to one extension handoff and expires within five minutes.
-- The extension token must belong to the same user as the task.
-- Claim uses `claimedByInstallationId`, `leaseExpiresAt`, `heartbeatAt`, and compare-and-swap updates. A second installation cannot run an active lease.
-- The extension starts Hermes through idempotent `/v1/runs`, then atomically records `runtimeRunId`. Service-worker restart resumes polling that run.
-- If Hermes restarts and loses an in-memory run, the adapter records `RUN_LOST`; retry creates a new attempt instead of pretending the old run resumed.
-- A task result may commit once. Duplicate delivery returns the existing terminal result.
-- Version mismatch produces `STALE_INPUT`; it never auto-merges.
-- Retry after a terminal failure creates a new attempt linked by `parentTaskId` and a new nonce.
-- Page or service-worker disconnect does not lose Joblit task state. The page may poll and reconnect; local execution resumes only when the recorded Hermes run still exists.
-- Result payloads are persisted only in their canonical destination (`Application`, `JobAssessment`, interview artifact, or feedback event). `AiTask` stores the destination reference and diagnostic metadata.
-- `Application.applicationRevision` is an incrementing database integer used for compare-and-swap updates and Finalize. A canonical SHA-256 may additionally protect content integrity. Existing 32-bit `aiContentHash` remains a fast UX dirty/stale hint and is never a security or idempotency boundary.
+- The authenticated page creates a random `requestId`; the bridge rejects malformed, expired, oversized, or recently replayed starts.
+- The extension fetches the canonical prompt with its own Joblit token. A token/account mismatch or inaccessible Job fails before Hermes starts.
+- The extension maps `requestId` to one Hermes `runId` in `chrome.storage.session`. A duplicate start for the same active request returns the existing mapping.
+- Stock `POST /v1/runs` is not idempotent and ignores `Idempotency-Key`. After an ambiguous start response, Joblit reports `RUN_START_UNKNOWN` and never silently retries with the same request.
+- Each page poll triggers at most one short `GET /v1/runs/{id}` call. Terminal statuses are cached in bounded extension session state.
+- Stop maps to `/v1/runs/{id}/stop`. `cancelled` is shown only after Hermes reports terminal cancellation; `stopping` remains in progress.
+- Hermes restart or expired run status maps to `RUN_LOST`; user retry gets a new request ID and new run. Existing `DRAFT`/`FINAL` Application data is unchanged.
+- Completed model output plus authoritative `promptMeta` returns to the authenticated page, which calls the existing strict import endpoint. Only that endpoint may persist a `DRAFT` Application.
+- `Application.applicationRevision` is a later hardening migration, not an existing field or first-release blocker. Existing prompt metadata and `aiContentHash` remain stale/dirty hints, never security boundaries.
+- Durable background coordination, cross-device execution, or offline continuation may introduce a server `AiTask` later; it is not a first-release dependency.
 
 ## Matching and Scoring
 
@@ -516,30 +524,114 @@ AI never presses a job-board final Submit button. Autofill may prepare the form;
 
 ### Dedicated profile
 
-Joblit uses one Hermes profile per Joblit account: `joblit-<accountFingerprint>`. `GET /api/ext/me`, authenticated by the existing extension token, returns a server-generated HMAC account fingerprint and token expiry. The extension never derives identity from an opaque token, stale cache, or page parameter. Account switching must re-fetch identity and switch profile, API key, and session namespace; a profile mismatch fails closed to prevent cross-account memory leakage.
+Each connected Joblit account uses one dedicated stock Hermes profile named
+`joblit-<opaqueAccountHash>`. Joblit does not create, fork, or patch a Hermes
+runtime. The existing extension token identifies the Joblit account for Joblit
+API calls; it is not reused as the Hermes API credential. Each profile has its
+own API key, sessions, state, and—when multiple profiles run concurrently—port.
+Account switching provisions or selects a different profile instead of relying
+on a session header for tenant isolation. Each profile explicitly completes its
+own OAuth flow; missing profile credentials must not silently rely on global
+fallback auth. A Hermes profile is state isolation, not cryptographic account
+attestation or an OS sandbox.
 
-A Joblit launcher starts Hermes with an explicit `HERMES_HOME`. `/v1/capabilities` must return an authenticated `profileId`, `homeFingerprint`, `bindPosture`, runtime version, and Joblit-mode state. Silent fallback to the default Hermes profile is incompatible.
+A minimal Joblit profile distribution is installed under that profile. It owns
+only product defaults; credentials and user state stay installer-owned:
 
-Hermes must provide server-enforced per-request tool policies:
+```text
+joblit-hermes/
+|-- distribution.yaml
+|-- config.yaml
+|-- SOUL.md
+|-- .no-bundled-skills
+|-- joblit-package-manifest.json
+|-- joblit-package-manifest.sig
+`-- skills/
+    `-- joblit-career-agent/
+```
 
-- `joblit-generation-readonly`: model inference plus server-preloaded Joblit skill; no terminal, file, browser, code execution, `skill_manage`, cron, session administration, or memory write;
-- `joblit-learning`: the same restricted surface plus structured writes to the tenant-scoped derived-memory projection;
-- onboarding verifies the exact tool lists through `/v1/toolsets`; extra tools or a missing policy produce `HERMES_INCOMPATIBLE`.
+The profile uses Hermes' `openai-codex` provider with
+`model.openai_runtime: auto`. Users authorize their own ChatGPT subscription
+through Hermes' model picker/device-code flow. The optional
+`codex_app_server` runtime is forbidden for Joblit because its Codex-native
+shell and patch tools remain available independently of Hermes platform
+toolsets.
 
-Joblit mode uses a scoped token that exposes only health, capabilities, installed-skill metadata, tool-policy metadata, idempotent runs, run polling, and run stop. It cannot access arbitrary session/history, fork/delete, cron, jobs, or admin routes. Joblit mode rejects a non-loopback bind instead of warning.
+The profile config sets `platform_toolsets.api_server` to `[no_mcp]`, installs
+no third-party plugins, and disables terminal, file, browser, web,
+code-execution, cron, delegation, session-search, memory, and Skill-management
+toolsets for API generation. Built-in and external Hermes memory are disabled
+in the first release; Joblit injects confirmed preferences on every run.
+`skills.write_approval` is defense in depth for interactive model-originated
+Skill maintenance only; the API generation surface exposes no Skill-management
+tools. This is profile-level configuration, not a per-request policy or OS
+sandbox.
 
-Generation requests set `persistSession: false`. This prohibits task content in `state.db`, Responses storage, conversation history, tool traces, caches, and normal debug/crash logs after success, failure, timeout, or cancellation. Logs retain only content-free identifiers and stable error codes. A unique-marker integration test searches the entire account profile after task completion and must find no task content. Derived-memory writes use the separate structured learning policy and ledger described below.
+```yaml
+platform_toolsets:
+  api_server:
+    - no_mcp
+  cron:
+    - no_mcp
+memory:
+  memory_enabled: false
+  user_profile_enabled: false
+agent:
+  disabled_toolsets:
+    - memory
+    - session_search
+```
 
-Profile isolation covers sessions, skills, state, and memory, not necessarily the user's existing global ChatGPT credential pool. Joblit mode pins the approved provider/model route in server policy, prohibits client model overrides, and reports a non-secret `authSource` plus model route in capabilities. It never returns credentials or cookies.
+The API server is configured only through the dedicated profile's environment:
+
+```dotenv
+API_SERVER_ENABLED=true
+API_SERVER_HOST=127.0.0.1
+API_SERVER_PORT=8642
+API_SERVER_KEY=<random high-entropy local key>
+```
+
+### Local bootstrap boundary
+
+A web page or ordinary Chrome extension cannot run `hermes profile install`,
+write profile `.env`, inspect final config, or start a gateway. The first release
+therefore ships a user-launched **Joblit Local Bootstrap** and labels the feature
+`Hermes Local AI Beta`. The bootstrap downloads a signed release into a stable
+local cache, verifies signature/hash/path allowlists, installs or updates the
+account-specific profile with the intended config, generates its key/port,
+starts or restarts the gateway, reads configuration back, and emits connection
+details for the trusted extension UI. No Hermes source is modified.
+
+A later signed native installer may register a Chrome Native Messaging host to
+make this one-click. Until that host exists, onboarding must show the manual
+local setup step and must not claim the extension installed or attested Hermes.
+Production readiness uses the signed profile-distribution path only; a Skills
+tap may support manual Hermes users but is never a second API-readiness source.
+
+The Joblit installer/verifier checks the active profile config and package
+manifest after every install/update: expected profile label, `openai-codex`,
+`model.openai_runtime: auto`, `[no_mcp]`, disabled toolsets/memory, plugins, bind,
+port, and API-key presence. The extension connects only to loopback and never
+enables browser CORS. It checks `/health`, `/v1/capabilities`, `/v1/models`, and
+`/v1/toolsets` for API compatibility and the advertised Hermes toolsets.
+Stock HTTP probes do not expose the active provider/runtime, inherited default
+MCP servers, or Codex app-server built-ins; they cannot replace local config
+verification or serve as runtime attestation.
+
+Official Hermes may persist sessions and Responses state. Joblit therefore
+does not claim zero local retention. Session IDs are purpose-specific and local
+history controls are visible. Reduced-history mode deletes a completed Hermes
+transcript through the Sessions API after successful import; this does not clear
+Responses storage, profile memory, external providers, logs, run-status TTL
+records, or provider-side retention. Joblit telemetry remains content-free.
 
 ### Skill package
 
-One versioned umbrella skill simplifies activation while keeping instructions modular:
+One versioned umbrella Skill simplifies manual Hermes invocation and source organization while keeping instructions modular:
 
 ```text
 joblit-career-agent/
 |-- SKILL.md
-|-- skill-manifest.json
 `-- references/
     |-- action-contracts.md
     |-- evidence-policy.md
@@ -555,50 +647,111 @@ joblit-career-agent/
     `-- locale-zh-CN.md
 ```
 
-The root skill routes by `AiAction`; references contain action-specific rules. Deterministic validation stays in Joblit and the extension, not in model-invoked scripts. Evaluation fixtures live in `tests/ai-evals/joblit-career-agent/`, outside the runtime Skill package.
+The root skill routes by `AiAction`; references contain action-specific rules.
+Deterministic validation stays in Joblit and the extension, not in model-invoked
+scripts. Evaluation fixtures live in `tests/ai-evals/joblit-career-agent/`,
+outside the runtime Skill package.
 
-`skill-manifest.json` is generated, not model-authored. It defines the semantic `version` and SHA-256 for every runtime content file except the manifest itself. Package `contentHash` is SHA-256 over canonical manifest JSON after sorting POSIX relative paths. Text files must be UTF-8 with LF line endings; all bytes after that repository normalization are hashed. `SKILL.md` and every reference are file entries; the manifest payload is the hash root. Symlinks, undeclared files, duplicate paths, and path traversal are rejected.
+The root `joblit-package-manifest.json` is generated, not model-authored. It
+records package version, compatible Hermes versions, source commit, allowed
+paths, sizes, SHA-256 values, and security-policy hash. A detached Ed25519
+signature is verified with a Joblit release public key before install. The
+release artifact root contains only allowlisted distribution files because
+stock distribution ownership metadata is not treated as a sufficient copy
+boundary. Stock `profile update` preserves existing `config.yaml` unless
+forced, so the verifier always rechecks active config after update. This
+protects distribution integrity; it does not prove a particular run loaded a
+Skill.
 
-### Explicit skill activation
+`distribution.yaml` still declares the exact `distribution_owned` paths,
+including `.no-bundled-skills`, but Bootstrap and CI independently enforce the
+same allowlist. CI installs the release artifact into a temporary profile and
+asserts the resulting file tree. Development repository metadata, tests,
+workflows, and documentation never ship as the distribution source.
 
-Production readiness requires Hermes to accept an allowlisted, content-addressed skill selection on `/v1/runs`:
+### API execution contract
+
+The official `/v1/runs` endpoint has no `skills` field and does not execute the
+CLI/gateway `/skill-name` parser. `/v1/skills` exposes discovery metadata only.
+Joblit therefore never depends on model-selected `skill_view` or slash-command
+activation for API correctness.
+
+For every run, Joblit compiles the action-specific Skill rules into the
+versioned `systemPrompt` and sends the complete prompt contract:
+
+```http
+POST /v1/runs
+Authorization: Bearer <local API_SERVER_KEY>
+Content-Type: application/json
+```
 
 ```json
 {
-  "skills": [{ "name": "joblit-career-agent", "contentHash": "sha256:..." }],
-  "toolPolicyId": "joblit-generation-readonly",
-  "persistSession": false,
-  "idempotencyKey": "...",
-  "executionGrant": "eyJ..."
+  "input": "<versioned Joblit user prompt>",
+  "instructions": "<versioned Joblit system prompt and output contract>",
+  "session_id": "joblit:<jobId>:<action>:<attemptId>"
 }
 ```
 
-Hermes validates the execution grant, derives the tool policy from it, preloads and hashes the Skill before model invocation, and fails before inference if any check fails. It returns server-attested `loadedSkill { name, version, contentHash }`, `attestedToolPolicy`, and `verifiedGrantId` outside model content. `/v1/skills` exposes `name`, `version`, `contentHash`, `source`, and `enabled`. Model self-report, prompt echo, and model-invoked `skill_view` are never accepted as proof. Older Hermes versions without these server guarantees return `HERMES_INCOMPATIBLE`; generic unskilled generation is not a compatibility path.
+`/v1/runs` reads `session_id` from the JSON body; it does not use
+`X-Hermes-Session-Id`. `X-Hermes-Session-Key` is reserved for a future explicit
+external-memory-provider release. It scopes providers such as Honcho, not
+Hermes built-in `MEMORY.md`/`USER.md`, and is not authentication.
+
+The installed Skill remains valuable for manual Hermes use, transparent user
+inspection, and shared source material. Joblit's prompt builder and the Skill
+package are generated from or tested against the same contracts so they cannot
+silently diverge.
 
 ## Chrome Extension Bridge
 
 ### Web-to-extension transport
 
-Use Chrome `externally_connectable` with production matches limited to `https://www.joblit.tech/*`. Joblit receives the stable Chrome Web Store extension ID from validated deployment configuration; development builds use a separate explicit development ID and loopback Joblit origins. Missing extension detection uses a short external-connect timeout and never guesses IDs. The service worker validates `onMessageExternal` and `onConnectExternal` independently, including `sender.url`, message schema, action, byte size, task nonce, and rate limits.
+Use a dedicated content script on `https://www.joblit.tech/*` and a typed
+`window.postMessage` bridge into the extension service worker. This avoids
+shipping or guessing the Chrome Web Store extension ID. The bridge accepts only
+`GET_STATUS`, `START_RUN`, `GET_RUN`, and `STOP_RUN`; it validates
+`event.source`, origin, request ID, action, byte size, expiry, and rate limits.
+The service worker independently validates every message before touching local
+credentials or HTTP.
 
-The external message contains no profile, Job, result, Joblit extension token, or Hermes token. It contains only task coordination data.
+Start messages contain only `jobId`, target, request ID, expiry, and bridge
+nonce. The extension fetches the canonical prompt/input with its Joblit token.
+Poll responses may return bounded model output and authoritative `promptMeta`
+to the authenticated page for strict import. Messages never contain the Joblit
+extension token, Hermes API key, provider OAuth credentials, Resume Profile, Job
+description, page-authored prompt, or unrestricted URL/path data. Every payload
+is typed, bounded, correlated, and treated as untrusted by both sides.
 
 ### Extension-to-Hermes transport
 
 - Default endpoint: `http://127.0.0.1:8642`. Custom endpoints may use only `http`, `127.0.0.1`, `[::1]`, or validated `localhost`; credentials, query, fragment, non-root base path, DNS hostnames, and redirects are rejected.
 - Chrome host permission is exact by scheme and host; match patterns cannot restrict ports. Runtime validation separately pins the configured port and allowed Hermes paths.
-- On extension startup, call `chrome.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" })` before reading secrets. Both the Joblit extension token and Hermes scoped token remain background/popup-only. Content-script preference access moves to typed background RPC.
-- Start work through idempotent `/v1/runs`, persist the returned run ID, then poll or stop through the scoped Joblit-mode API.
+- On extension startup, call `chrome.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" })` before reading secrets. Both the Joblit extension token and dedicated Hermes API key remain background/popup-only. Content-script preference access moves to typed background RPC.
+- Start work through official `/v1/runs`, persist the `requestId` to Hermes `runId` mapping in extension-owned `chrome.storage.session`, then poll `/v1/runs/{id}` or call `/v1/runs/{id}/stop`. The extension prevents normal duplicate starts for an active request; stock Runs has no idempotency-key behavior.
 - Apply connect, first-byte, total-run, and idle timeouts.
 - Cap request and response sizes by action.
 - Use `AbortController` for cancellation.
 - Redact content from logs and error telemetry.
+- In reduced-history mode, attempt fixed-route `DELETE /api/sessions/{sessionId}` after success/import, failure, or cancellation. Treat it as best-effort logical transcript deletion, never secure erase or zero-retention proof.
 
-On Joblit sign-out, account switch, token revocation, or Hermes profile deletion, the extension stops active old-account runs, invalidates unused grants, revokes/forgets the old scoped Hermes token, clears the stored account/profile binding, and requires a fresh `/api/ext/me` exchange before new work.
+On Joblit sign-out, account switch, token revocation, or Hermes profile deletion,
+the extension stops tracked old-account runs, forgets the stored Hermes API key,
+clears account/profile bindings and run IDs, and requires a fresh connection to
+the correct account-specific profile before new work. It never deletes a user's
+Hermes profile or auth credentials without a separate explicit local action.
 
 ### Progress and recovery
 
-An external Chrome Port carries stage-only progress. If the port or service worker sleeps, the web UI polls Joblit `AiTask` state. The extension recovers a still-live Hermes run from the persisted run ID; Hermes restart maps to `RUN_LOST` and a new user-visible retry attempt. This guarantees recoverable product state, not impossible continuation of a lost local process.
+The page polls one short extension request at a time; each request makes at most
+one short Hermes status call, and the service worker never holds a long-running
+Promise that Chrome may suspend. Extension-owned `chrome.storage.session` keeps
+the request/run mapping across service-worker suspension. The page keeps only
+its current request ID in page `sessionStorage`; refresh may resume while the
+extension session and Hermes run status still exist. Browser restart, Hermes
+restart, or expired run status maps to `RUN_LOST` and a user-visible retry.
+Canonical content remains in the existing Application workflow, so a lost local
+run never corrupts an Application.
 
 User-facing failures map to stable codes such as:
 
@@ -607,22 +760,34 @@ User-facing failures map to stable codes such as:
 - `HERMES_OFFLINE`
 - `HERMES_AUTH_FAILED`
 - `HERMES_INCOMPATIBLE`
-- `SKILL_MISSING`
-- `SKILL_STALE`
+- `PROFILE_PACKAGE_MISSING`
+- `PROFILE_CONFIG_UNVERIFIED`
+- `UNSAFE_TOOL_SURFACE`
 - `AI_RATE_LIMITED`
 - `AI_TIMEOUT`
+- `RUN_START_UNKNOWN`
 - `RUN_LOST`
 - `INVALID_AI_RESULT`
 - `STALE_INPUT`
-- `TASK_EXPIRED`
+- `REQUEST_EXPIRED`
 
 Each error has one primary recovery action. Raw model or transport errors are not shown to users.
 
 ## Memory and Learning
 
-Joblit stores source facts, append-only feedback events, and a structured derived-preference ledger. Per-account Hermes memory is a disposable local projection of user-confirmed ledger entries and reusable coaching context; it is never the only copy needed to inspect, delete, or rebuild memory.
+Joblit stores source facts, append-only feedback events, and a structured
+derived-preference ledger. That ledger is the only authoritative preference
+source. Every AI run receives a bounded snapshot of user-confirmed preferences,
+so generation correctness never depends on Hermes memory.
 
-Memory may update only from:
+Hermes built-in memory is profile-wide; `X-Hermes-Session-Key` does not partition
+it. The first-release generation profile therefore disables built-in memory,
+external memory providers, and memory/session-search tools. Honcho is also
+disabled because it adds separate storage, inference, retention, cost, and no
+request-scoped write acknowledgement. A later opt-in Hermes-memory release needs
+its own isolation, approval, inspection, deletion, and retention design.
+
+The following update policy applies only to Joblit's derived-preference ledger:
 
 - explicit preferences;
 - accepted or user-edited patches that were later Finalized, for style preference only;
@@ -636,10 +801,17 @@ The Memory Center lets users:
 - inspect derived memories and their source events;
 - correct or delete an item;
 - disable learning while retaining generation;
-- clear local Hermes career memory;
-- rebuild derived memory from Joblit feedback history on a new device.
+- open separate Hermes local-history controls;
+- clear tracked local Hermes transcripts where the official Sessions API permits;
+- rebuild Joblit's confirmed-preference snapshot on a new device.
 
-Raw resume and Job content remains in Joblit's user-owned records and materialized snapshots. `persistSession: false` prevents generation sessions from becoming a second uncontrolled history. Hermes memory stores only confirmed derived summaries and source-event references; Joblit can recreate the projection after account/device change.
+Raw resume and Job content remains in Joblit's user-owned records and
+materialized snapshots. Official Hermes may persist local session/Responses
+state, so onboarding and Settings state this accurately. Reduced-history mode
+deletes the completed transcript through the Sessions API after successful
+import. It is not a non-persistence guarantee and does not clear Responses
+storage, profile memory, external providers, logs, run-status TTL records, or
+provider-side retention. Neither mode changes Joblit's content-free telemetry.
 
 ## User Experience
 
@@ -649,11 +821,11 @@ The Settings flow uses one guided sequence:
 
 1. Detect the Joblit Chrome extension.
 2. Connect the existing Joblit extension token.
-3. Detect loopback Hermes.
-4. Verify the account-specific `joblit-<opaqueTenantHash>` profile, home fingerprint, loopback posture, and scoped token.
-5. Verify `joblit-career-agent` name, semantic version, and exact content hash.
-6. Run a pure capabilities/schema/tool-policy probe with no model invocation and no memory loading.
-7. Show `Local AI Ready`.
+3. Run the Joblit installer/verifier for the account-specific official Hermes profile and complete that profile's `openai-codex` device-code sign-in.
+4. Revalidate profile config/package state, then store its loopback endpoint and dedicated API key in trusted extension storage.
+5. Probe stock `/health`, `/v1/capabilities`, `/v1/models`, and `/v1/toolsets` for API compatibility, expected advertised profile label, and observable Hermes toolsets. State clearly that HTTP cannot attest provider/runtime or Codex-native tools.
+6. Run one explicit low-sensitivity model connection test. Label that this may create local Hermes session/Responses state.
+7. Show `Local AI Ready` with advertised profile, endpoint, locally verified package version, history mode, and a link to rerun verification after updates.
 
 Advanced endpoint and diagnostics stay collapsed. Normal users do not paste prompts or Skill files.
 
@@ -661,7 +833,7 @@ Advanced endpoint and diagnostics stay collapsed. Normal users do not paste prom
 
 Job cards show eligibility, role fit, confidence, and at most two concise reasons. Deep evidence, gaps, and unknowns live in the Job detail panel. Scores never appear until analysis exists.
 
-Primary action: **Create application pack**. Progress uses named stages, elapsed time, cancel, and recoverable retry. The user may continue browsing while a local task runs.
+Primary action: **Create application pack**. Progress uses named stages, elapsed time, cancel, and recoverable retry. The user may continue browsing while a local run remains attached to the current browser session.
 
 ### Review experience
 
@@ -690,27 +862,28 @@ New-path fallbacks converge into the same `DRAFT` Application and review editor.
 
 ## Security and Privacy Requirements
 
-- Bind Hermes Joblit mode to loopback only and require an independent route-scoped token.
+- Accept only a fixed loopback Hermes base URL and a dedicated high-entropy `API_SERVER_KEY`; stock Hermes keys are API-wide, not route-scoped.
 - Set Chrome local storage to `TRUSTED_CONTEXTS`; keep both Joblit extension and Hermes tokens out of page context, content scripts, logs, analytics, and server payloads.
-- Enforce exact production origin and sender checks for external extension messaging.
+- Enforce exact production origin, `event.source`, direction marker, request ID, action allowlist, schema, byte limit, expiry, and rate limit on the content-script bridge.
 - Treat Job descriptions, company pages, form labels, and AI output as untrusted data.
-- Enforce server-preloaded Skill attestation and exact per-request tool policy before model invocation.
-- Require a valid one-time Joblit execution grant before Hermes may select a tool policy, load task input, or invoke the model.
-- Disable generation-time terminal, filesystem, browser, code execution, skill management, session administration, and memory writes.
-- Validate action-specific JSON Schema, semantic evidence references, byte size, task state, entity ownership, and strong application/snapshot revisions before persistence.
-- Rate-limit task creation by user and task execution by extension installation.
-- Use one-time nonces and expiring tasks; reject replay.
-- Log only task ID, action, stage, duration, error code, contract version, and skill version.
-- Add explicit user controls for local-memory inspection, deletion, and learning opt-out.
+- Send the complete versioned Joblit instructions and output schema on every `/v1/runs` call; never depend on server-preloaded Skill selection or slash-command activation.
+- Ship the dedicated profile with MCP inheritance disabled and a zero-tool API surface. Require local installer/verifier checks for `openai_runtime: auto`; HTTP probes alone cannot detect Codex app-server built-ins or the active provider/runtime.
+- Do not expose a generic Hermes proxy to page code. Allow only status, start, poll, and stop operations on fixed Hermes routes.
+- Keep generation-time terminal, filesystem, browser, code execution, Skill management, cron, and delegation outside the supported Joblit profile surface.
+- Validate action-specific JSON Schema, semantic evidence references, byte size, prompt hash/metadata, entity ownership, and available source revisions before persistence.
+- Rate-limit canonical-prompt creation by user and local-run starts in the extension.
+- Use expiring bridge nonces and request IDs; reject normal replay without claiming Hermes Runs idempotency.
+- Log only request ID, action, stage, duration, error code, contract version, and prompt-package version.
+- Add explicit controls for Joblit derived-memory inspection/deletion/opt-out and separately labelled Hermes transcript controls.
 - Run a threat-model review before public enablement.
 
 ## Observability
 
 Joblit records content-free operational events:
 
-- task action and terminal state;
+- run action and terminal state;
 - queue, local runtime, validation, and persistence durations;
-- contract and skill versions;
+- contract and prompt-package versions;
 - retry count and stable error code;
 - result destination type;
 - user acceptance/rejection aggregates with no generated text.
@@ -722,30 +895,30 @@ Dashboards track completion rate, invalid-result rate, stale-input rate, local-r
 ### Contract and security tests
 
 - JSON Schema and semantic validators for every action.
-- Cross-user task and extension-token rejection.
-- nonce replay, expiry, duplicate result, stale revision, oversized payload, and unsupported action tests.
-- exact origin and malicious external-message tests.
+- Cross-user canonical-prompt and extension-token rejection.
+- bridge nonce replay, expiry, duplicate terminal response, stale prompt metadata, oversized payload, and unsupported action tests.
+- exact origin and malicious `window.postMessage` tests.
 - prompt-injection fixtures embedded in Job descriptions and ATS labels.
 - proof that page/content-script contexts cannot read either token.
 - startup assertion that Chrome storage is restricted to trusted extension contexts.
-- profile/account mismatch, non-loopback bind, over-broad scoped token, extra tool, and missing server Skill-attestation tests.
-- execution-grant tampering, replay, expiry, input-hash mismatch, profile mismatch, and attempted tool-policy escalation tests.
-- concurrent double-submit, restart-then-replay, unknown `kid`, algorithm confusion, duplicate JSON key, and signing-key rotation tests.
+- local verifier tests for unsafe provider/runtime/profile config, plus extension tests for non-loopback endpoint, credential-bearing URL, redirect, unexpected advertised tool surface, and malformed capability responses.
+- bridge direction spoofing, unknown action, replayed/expired request ID, oversized payload, unrestricted path, and attempted generic-proxy tests.
+- concurrent double-submit, restart-then-resume, malformed JSON, duplicate JSON key, stale input, and result-schema downgrade tests.
 
 ### Runtime and extension tests
 
-- Hermes offline, wrong token, missing skill, stale skill, incompatible API, timeout, cancellation, service-worker restart, and `RUN_LOST` recovery.
-- one successful result committed exactly once after duplicate delivery.
-- web reconnect/poll recovery after external Port loss.
-- capabilities-only health check proving no model or profile memory is loaded.
+- Hermes offline, wrong token, missing profile package metadata, incompatible API, malformed run/status response, timeout, cancellation, service-worker restart, and `RUN_LOST` recovery.
+- one successful result imported once despite duplicate terminal polling.
+- web reconnect/poll recovery after content-script or service-worker restart.
+- read-only health probes proving no `/v1/runs` call occurs; the separate model test is explicit and user-visible.
 
 ### AI evaluations
 
-Maintain at least 100 golden Job/candidate pairs, at least 40 per locale, including at least 25 confirmed hard-gate blocks and 25 hard-gate non-blocks. Cover strong, weak, sparse, seniority-mismatched, visa-constrained, ambiguous, adversarial, and unsupported-claim cases. Every skill change runs:
+Maintain at least 100 golden Job/candidate pairs, at least 40 per locale, including at least 25 confirmed hard-gate blocks and 25 hard-gate non-blocks. Cover strong, weak, sparse, seniority-mismatched, visa-constrained, ambiguous, adversarial, and unsupported-claim cases. Every prompt-package change runs:
 
-- skill-enabled evaluation;
-- no-skill baseline;
-- previous released skill comparison;
+- released prompt-package evaluation;
+- minimal-instruction baseline;
+- previous released prompt-package comparison;
 - human-readable evaluator report.
 
 Release gates:
@@ -767,27 +940,26 @@ Release gates:
 
 This master design is too broad for one implementation plan. Delivery uses child specs and plans in this order:
 
-### Phase 0: Hermes Joblit-mode compatibility prerequisite
+### Phase 0: Stock Hermes integration baseline
 
-- Implementation owner: Hermes runtime repository; Joblit owns consumer fixtures and acceptance tests.
-- Ship `joblitRuntimeContractVersion: "1"` in capabilities. Joblit keys compatibility to this contract, not a loosely related application semantic version.
-- Add account-profile attestation, strict loopback posture, scoped token/routes, Compact JWS EdDSA grant verification, trusted-key rotation, persistent atomic replay ledger, per-request tool policies, deterministic Skill manifest/hash/preload, idempotent runs, `persistSession: false`, and content-free capabilities.
-- Publish canonical request/response/error fixtures under Joblit `tests/fixtures/hermes-joblit-v1/` and run them against the minimum supported Hermes release in CI.
-- Provide a signed Hermes release/upgrade channel that onboarding can identify and direct users to when the runtime contract is missing.
-- Do not begin a personal-data Joblit vertical slice until the compatibility suite passes. Before that point only capabilities-only probing is allowed.
+- Hermes remains an unmodified upstream dependency. Joblit owns only the profile distribution, versioned prompt package, extension bridge, validators, fixtures, and compatibility matrix.
+- Pin and document the minimum supported official Hermes version plus required stock endpoints: `/health`, `/v1/capabilities`, `/v1/models`, `/v1/toolsets`, and `/v1/runs` lifecycle routes.
+- Publish the minimal account-specific Joblit profile distribution with `openai-codex`, `model.openai_runtime: auto`, loopback API settings, MCP and memory disabled, and a zero-tool API surface.
+- Add a Joblit-owned installer/verifier that pins a trusted release-asset digest, generates the profile key/port, verifies active config after updates, and emits connection details without changing Hermes source.
+- Add package allowlist/signature/config-policy tests and publish the supported stock-Hermes compatibility matrix.
 
 ### Phase 1: Local AI foundation
 
 - AI Settings onboarding and `Local AI Ready` health state.
-- authenticated `/api/ext/me` account fingerprint exchange and account/profile binding lifecycle.
-- exact-origin web-to-extension external bridge.
+- existing Joblit account connection plus clear separation between Joblit and Hermes credentials.
+- exact-origin, typed web-to-content-script-to-service-worker bridge.
 - trusted-context token migration and content-script preference RPC.
-- consume and verify Hermes Joblit-mode contract v1 from Phase 0.
-- `AiTask` coordination, installation lease, lifecycle, idempotency, run recovery, progress, cancellation, and error mapping.
-- minimum materialized Candidate/Job snapshots, stable evidence/requirement IDs, canonical Job hash, strict result schema, and `aiContent` v2 provenance.
-- v1/v2 discriminated-union readers, explicit legacy labels, and the per-artifact historical backfill matrix.
-- strong `applicationRevision` plus per-artifact status migration before changing Finalize behavior.
-- one capabilities-only health action, then one evidence-complete `TAILOR_RESUME` vertical slice into the existing `DRAFT` editor.
+- stock Hermes compatibility probes, fixed `/v1/runs` client, polling, cancellation, restart recovery, and stable error mapping.
+- extension-side loopback validation, trusted secret storage, fixed-route client, typed bridge, and mock Hermes fixtures.
+- extension-auth canonical-prompt endpoint, bridge request de-duplication, transient run mapping, progress, cancellation, restart/error recovery, and bounded result return.
+- reuse the existing prompt builder, strict JSON parser, `manual-generate?finalize=false`, and canonical `DRAFT` editor without a new `AiTask` table.
+- preserve existing `promptMeta`/hash/revision guards; materialized evidence snapshots and integer `applicationRevision` remain later hardening migrations.
+- one explicit connection test, then grounded strict-schema `TAILOR_RESUME` and `WRITE_COVER` vertical slices into the existing `DRAFT` editor; Phase 2 upgrades them to stable evidence IDs.
 
 ### Phase 2: Contract expansion and evaluation foundation
 
@@ -795,7 +967,7 @@ This master design is too broad for one implementation plan. Delivery uses child
 - add `CareerPreference` and structured eligibility sources;
 - generate Skill references from canonical TypeScript contracts;
 - legacy tolerant-parser isolation;
-- content-free task observability.
+- content-free run observability.
 - baseline, previous-version, adversarial, and bilingual evaluation harness.
 
 ### Phase 3: Matching
@@ -840,21 +1012,21 @@ Each phase requires its own approved child design and implementation plan. Phase
 
 ## Migration and Compatibility
 
-- Keep current manual, internal-provider, and Codex Batch paths working during Phase 1 as explicitly labelled legacy exceptions. Their existing no-evidence and `finalize=true` behavior is not covered by AI-native safety claims.
-- Route every new local-AI path into the evidence-complete `DRAFT`/Edit/Finalize lifecycle.
+- Keep current manual, internal-provider, and Codex Batch paths working during Phase 1 as explicitly labelled legacy exceptions. Manual import already uses `finalize=false`; only callers that still finalize immediately remain migration exceptions. Missing evidence remains outside AI-native safety claims.
+- Route every new local-AI path into `DRAFT`/Edit/Finalize immediately. Phase 1 is explicitly labelled grounded legacy-schema provenance; Phase 2 upgrades new local writes to stable evidence-complete contracts.
 - By the end of Phase 4, adapt manual/provider fallbacks to canonical evidence and `DRAFT`, and change Codex Batch from unattended `finalize=true` to evidence-complete batch draft generation. The master program cannot pass acceptance while either exception remains.
 - Do not rewrite immutable historical migrations.
-- Introduce new task/assessment/feedback storage through forward migrations only.
-- Preserve existing `promptMeta`, `skillPackVersion`, `aiContent`, and `aiContentHash` for compatibility. Do not reuse `skillPackVersion` as runtime Skill identity: runtime Skill, contract, prompt, rules, candidate, Job, and Application versions remain separate.
+- Introduce new assessment/feedback/artifact-state storage through forward migrations only.
+- Preserve existing `promptMeta`, `skillPackVersion`, `aiContent`, and `aiContentHash` for compatibility. Do not reuse `skillPackVersion` as proof of runtime Skill activation; prompt package, profile package, contract, rules, candidate, Job, and Application versions remain separate.
 - Mark manual Skill Pack as fallback only after local AI reaches release gates.
 - Do not remove a fallback until telemetry shows a stable replacement and a separate removal decision is approved.
 
 ## Acceptance Criteria for the Master Program
 
-- A new user can connect Extension and Hermes, verify the Joblit skill, and reach `Local AI Ready` without copying a prompt or JSON.
+- A new user can connect Extension and stock Hermes, locally verify the account-specific Joblit profile configuration, and reach `Local AI Ready` without copying a prompt or JSON.
 - A user can analyze a Job, understand eligibility/fit/confidence with source evidence, and create a reviewable Application Pack entirely inside Joblit.
 - Every persisted AI claim references valid candidate evidence and, where applicable, Job requirements.
-- AI output cannot bypass `DRAFT`, ownership checks, schema validation, revision checks, or explicit Finalize.
+- AI output cannot bypass `DRAFT`, ownership checks, schema validation, prompt/source freshness checks, or explicit Finalize.
 - The page never gains access to extension or Hermes credentials.
 - Local AI failure leaves Joblit usable and offers a clear recovery or fallback.
 - User-approved edits and real outcomes can improve local derived memory; unapproved drafts and one-off model guesses cannot.
@@ -867,15 +1039,15 @@ Each phase requires its own approved child design and implementation plan. Phase
 ### Positive
 
 - Uses the user's local AI access while preserving a cohesive Joblit experience.
-- Keeps runtime credentials and the Hermes memory projection local while retaining an auditable, user-controlled derived-preference ledger in Joblit.
+- Keeps runtime credentials and Hermes transcript state local while retaining an auditable, user-controlled derived-preference ledger in Joblit.
 - Makes scoring and state transitions explainable and testable.
 - Reuses mature Application, Skill Pack, extension-token, and PDF foundations.
-- Supports additional runtimes later through one versioned task contract.
+- Supports additional runtimes later through one versioned local-run contract.
 
 ### Negative
 
-- Requires coordinated changes across Joblit, the Chrome extension, and Hermes compatibility.
-- Browser extension service-worker suspension requires durable task coordination and recovery.
+- Requires coordinated changes across Joblit web, the Chrome extension, the Joblit profile package, and the supported-upstream Hermes compatibility matrix.
+- Browser/extension restart loses transient run coordination; the first release offers explicit `RUN_LOST` recovery rather than pretending durable background execution.
 - Local runtime setup creates onboarding and support burden.
 - Strict evidence and schema gates may reject plausible but insufficiently sourced model output.
 
@@ -883,20 +1055,25 @@ Each phase requires its own approved child design and implementation plan. Phase
 
 | Risk | Mitigation |
 |---|---|
-| Hermes version fragmentation | capability probe, minimum supported version, server-attested Skill hash, exact tool/profile posture, fail closed |
+| Hermes version fragmentation | minimum supported version, pinned package, local config verifier, API capability/tool probes, fail closed where observable |
 | Prompt injection from Jobs or ATS pages | untrusted-data framing, no executable tools, adversarial evals, semantic validators |
-| Credential leakage | trusted-context extension storage, scoped token, no page payloads, redacted telemetry, security tests |
-| Duplicate or stale writes | idempotency key, terminal-state guard, materialized snapshots, integer `applicationRevision` |
+| Credential leakage | trusted-context extension storage, dedicated API key, fixed loopback routes, redacted telemetry, security tests |
+| Duplicate or stale writes | bridge request de-duplication, prompt hash/metadata checks, strict import, later integer `applicationRevision` migration |
 | Hallucinated career claims | stable evidence references, strict validator, independent review, zero-claim release gate |
 | Misleading match precision | separate eligibility/fit/confidence, deterministic weights, visible unknowns |
 | Over-learning from noisy outcomes | append-only facts, minimum repeated evidence, user controls, rejection as weak signal |
-| Scope explosion | phased child specs; only Phase 1 enters the next implementation plan |
+| Scope explosion | phased child specs; stock-Hermes baseline and first CV/cover slice enter the next implementation plan |
 
 ## References
 
 - [ADR-0001: Persist AI provenance on the Application row](../../adr/0001-application-aicontent-provenance.md)
 - [ADR-0002: Unified draft -> edit -> finalize flow](../../adr/0002-unified-tailor-edit-flow.md)
 - [ADR-0003: Seek browser-extension path](../../adr/0003-seek-fetch-via-browser-extension.md)
+- [ADR-0004: Use the stock Hermes local API runtime](../../adr/0004-hybrid-local-ai-runtime.md)
 - [Joblit domain glossary](../../../CONTEXT.md)
+- [Hermes API Server](https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server/)
+- [Hermes Profiles](https://hermes-agent.nousresearch.com/docs/user-guide/profiles/)
+- [Hermes Profile Distributions](https://hermes-agent.nousresearch.com/docs/user-guide/profile-distributions)
+- [Hermes Codex app-server runtime](https://hermes-agent.nousresearch.com/docs/user-guide/features/codex-app-server-runtime)
 - [`MadsLorentzen/ai-job-search` at audited commit `55ba1c1`](https://github.com/MadsLorentzen/ai-job-search/tree/55ba1c16528a63f790eaf7b4bbad567bae6125b3), reference workflow only
 - [Reference repository MIT License](https://github.com/MadsLorentzen/ai-job-search/blob/55ba1c16528a63f790eaf7b4bbad567bae6125b3/LICENSE); no prompt, LaTeX, or file-state implementation is copied
