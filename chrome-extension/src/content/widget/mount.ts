@@ -3,9 +3,11 @@
  * from the host page.
  */
 
+import type { WidgetPosition } from "@ext/shared/types";
+
 const WIDGET_HOST_ID = "joblit-autofill-widget";
 
-export function mountWidget(): { shadowRoot: ShadowRoot; container: HTMLDivElement } | null {
+export function mountWidget(initialPosition?: WidgetPosition): { shadowRoot: ShadowRoot; container: HTMLDivElement } | null {
   // Prevent double-mount
   if (document.getElementById(WIDGET_HOST_ID)) return null;
 
@@ -25,14 +27,10 @@ export function mountWidget(): { shadowRoot: ShadowRoot; container: HTMLDivEleme
   container.id = "joblit-widget-root";
   shadowRoot.appendChild(container);
 
-  // Restore persisted widget position
-  chrome.storage.local.get("widgetPosition", (result) => {
-    const pos = result.widgetPosition;
-    if (pos?.right && pos?.bottom) {
-      container.style.right = pos.right;
-      container.style.bottom = pos.bottom;
-    }
-  });
+  if (initialPosition) {
+    container.style.right = initialPosition.right;
+    container.style.bottom = initialPosition.bottom;
+  }
 
   return { shadowRoot, container };
 }

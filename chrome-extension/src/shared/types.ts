@@ -1,4 +1,9 @@
 import type { FieldCategory } from "./fieldTaxonomy";
+import type {
+  HermesSettingsInput,
+  RunLookupPayload,
+  StartRunPayload,
+} from "./hermesTypes";
 
 /** A detected form field with classification metadata. */
 export interface DetectedField {
@@ -52,6 +57,16 @@ export type ContentMessage =
   | { type: "TRIGGER_FILL" }
   | { type: "TOGGLE_WIDGET" };
 
+export interface WidgetPosition {
+  right: string;
+  bottom: string;
+}
+
+export interface ContentSettings {
+  preferences: { autoFill: boolean; showWidget: boolean };
+  widgetPosition?: WidgetPosition;
+}
+
 export type BackgroundMessage =
   | { type: "GET_PROFILE"; locale?: string }
   | { type: "GET_FLAT_PROFILE"; locale?: string; force?: boolean }
@@ -64,6 +79,16 @@ export type BackgroundMessage =
   | { type: "MATCH_JOB"; url: string }
   | { type: "MARK_JOB_APPLIED"; jobId: string }
   | { type: "IMPORT_SEEK_JOBS"; data: { items: SeekImportItem[] } }
+  | { type: "GET_CONTENT_SETTINGS" }
+  | { type: "SET_WIDGET_POSITION"; position: WidgetPosition }
+  | { type: "LOCAL_AI_GET_STATUS" }
+  | { type: "LOCAL_AI_START_RUN"; payload: StartRunPayload }
+  | { type: "LOCAL_AI_GET_RUN"; payload: RunLookupPayload }
+  | { type: "LOCAL_AI_STOP_RUN"; payload: RunLookupPayload }
+  | { type: "GET_HERMES_SETTINGS" }
+  | { type: "CHECK_HERMES_SETTINGS" }
+  | { type: "TEST_AND_SAVE_HERMES_SETTINGS"; data: HermesSettingsInput }
+  | { type: "CLEAR_HERMES_SETTINGS" }
   | { type: "GET_AUTH_STATUS" }
   | { type: "SET_TOKEN"; token: string }
   | { type: "CLEAR_TOKEN" };
@@ -86,4 +111,6 @@ export interface MessageResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
+  errorCode?: string;
+  retryable?: boolean;
 }

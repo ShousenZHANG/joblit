@@ -1,4 +1,4 @@
-import { STORAGE_KEYS } from "@ext/shared/constants";
+import { SESSION_STORAGE_KEYS, STORAGE_KEYS } from "@ext/shared/constants";
 
 interface AuthStatus {
   authenticated: boolean;
@@ -19,11 +19,14 @@ export async function setToken(token: string): Promise<void> {
 
 /** Clear stored auth data. */
 export async function clearToken(): Promise<void> {
-  await chrome.storage.local.remove([
-    STORAGE_KEYS.AUTH_TOKEN,
-    STORAGE_KEYS.TOKEN_EXPIRES_AT,
-    STORAGE_KEYS.USER_ID,
-    STORAGE_KEYS.CACHED_PROFILE,
+  await Promise.all([
+    chrome.storage.local.remove([
+      STORAGE_KEYS.AUTH_TOKEN,
+      STORAGE_KEYS.TOKEN_EXPIRES_AT,
+      STORAGE_KEYS.USER_ID,
+      STORAGE_KEYS.CACHED_PROFILE,
+    ]),
+    chrome.storage.session.remove(SESSION_STORAGE_KEYS.HERMES_RUN_REGISTRY),
   ]);
 }
 

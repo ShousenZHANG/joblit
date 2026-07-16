@@ -147,6 +147,28 @@ Rules are scoped at three levels (global / ATS-level / site-specific) and manage
 - **Offline queue** — submissions queue locally and sync when back online
 - **Bilingual UI** — English and Chinese via lightweight i18n
 
+### Local AI with stock Hermes (Beta)
+
+Joblit can generate a grounded CV or cover letter through the official Hermes client on the user's own computer. The website sends only a job ID and target to the extension; the extension fetches the canonical Joblit prompt, calls the loopback Hermes Runs API, and returns a strict JSON result to the existing DRAFT editor.
+
+- Uses an unmodified Hermes installation and the user's own `openai-codex` / ChatGPT OAuth session
+- Binds only to `127.0.0.1`; Joblit and Hermes API keys never enter page JavaScript
+- Disables Hermes memory, MCP, and executable toolsets for the Joblit profile
+- Keeps a verified persistent local distribution source so official profile updates remain repeatable
+- Reuses an existing `openai-codex` login and opens OAuth only when Hermes reports logged out
+- Preserves the existing manual Skill/copy/paste method as fallback
+
+Windows setup is user-launched and isolated from existing Hermes profiles:
+
+```powershell
+pwsh -File tools/hermes/bootstrap/Install-JoblitHermes.ps1 `
+  -PackagePath <verified-package.zip> `
+  -ProfileName joblit-<opaque-account-hash> `
+  -ExpectedArchiveSha256 <published-sha256>
+```
+
+After bootstrap succeeds, paste the one-time local API key into **Extension settings → Local AI Beta**. Production profile releases require a trusted Ed25519 signature; the current empty key registry intentionally fails closed until a real release key is provisioned.
+
 ## Architecture
 
 ```mermaid
@@ -268,6 +290,10 @@ Load `chrome-extension/dist` as an unpacked extension at `chrome://extensions`.
 | `npm run readme:metrics` | Refresh auto-metrics badges in this README |
 | `npm run deps:policy` | Check repository dependency policy |
 | `npm run deps:audit` | npm audit (production deps, high severity) |
+| `npm run hermes:profile:test` | Validate the minimal stock-Hermes Joblit profile |
+| `npm run hermes:package:test` | Test deterministic packaging and Ed25519 verification |
+| `npm run hermes:package:build -- --staging <dir> --source-commit <sha>` | Build a deterministic profile package |
+| `npm run hermes:package:verify -- --root <dir> --mode <integrity\|digest\|production>` | Verify profile package trust and content |
 | `npx prisma migrate dev` | Apply database migrations in development |
 | `npx prisma studio` | Database GUI |
 

@@ -136,7 +136,10 @@ describe("extension application prompt api", () => {
     extensionAuth.requireToken.mockRejectedValueOnce(new ExtensionTokenError(message));
 
     const response = await extensionPOST(
-      extensionRequest({ jobId: VALID_JOB_ID, target: "resume" }),
+      extensionRequest(
+        { jobId: VALID_JOB_ID, target: "resume" },
+        _label === "missing" ? "" : "jfext_invalid",
+      ),
     );
     const json = await response.json();
 
@@ -144,6 +147,10 @@ describe("extension application prompt api", () => {
     expect(json.error.code).toBe("UNAUTHORIZED");
     expect(applicationPrompt.build).not.toHaveBeenCalled();
     expect(promptRateLimit.check).not.toHaveBeenCalled();
+    const authenticatedRequest = extensionAuth.requireToken.mock.calls[0]?.[0] as Request;
+    expect(authenticatedRequest.headers.get("Authorization")).toBe(
+      _label === "missing" ? null : "Bearer jfext_invalid",
+    );
   });
 
   it.each([

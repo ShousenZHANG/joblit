@@ -14,6 +14,14 @@ export const STORAGE_KEYS = {
   DEFAULT_ANSWERS: "defaultAnswers",
   API_BASE: "apiBase",
   LOCALE: "locale",
+  WIDGET_POSITION: "widgetPosition",
+  HERMES_API_BASE: "hermesApiBase",
+  HERMES_API_KEY: "hermesApiKey",
+  HERMES_PROFILE_NAME: "hermesProfileName",
+} as const;
+
+export const SESSION_STORAGE_KEYS = {
+  HERMES_RUN_REGISTRY: "hermesRunRegistry",
 } as const;
 
 /** Profile cache TTL in milliseconds (30 minutes). */

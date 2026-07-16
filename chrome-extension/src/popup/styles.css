@@ -1553,6 +1553,84 @@ input:focus-visible,
   width: 100%;
 }
 
+.jl-local-ai {
+  padding: 0;
+  overflow: hidden;
+}
+
+.jl-local-ai-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+}
+
+.jl-local-ai-heading h2,
+.jl-local-ai-heading p {
+  margin: 0;
+}
+
+.jl-local-ai-heading p {
+  margin-top: 4px;
+  color: var(--jl-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.jl-local-ai-title-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.jl-local-ai-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--jl-neutral-bg);
+  color: var(--jl-text-muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.jl-local-ai-status--ready {
+  background: var(--jl-success-bg);
+  color: var(--jl-emerald-700);
+}
+
+.jl-local-ai-status--auth_failed,
+.jl-local-ai-status--incompatible,
+.jl-local-ai-status--unavailable {
+  background: var(--jl-error-bg);
+  color: var(--jl-error-text);
+}
+
+.jl-disclosure--compact {
+  border-top: 1px solid var(--jl-border);
+  border-radius: 0;
+}
+
+.jl-local-ai-form {
+  display: grid;
+  gap: 12px;
+  padding: 4px 14px 14px;
+  border-top: 1px solid var(--jl-border);
+}
+
+.jl-local-ai-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.jl-local-ai-actions .jl-btn--primary {
+  flex: 1;
+}
+
 .jl-confirm-panel {
   padding: 11px;
   border: 1px solid var(--jl-error-border);

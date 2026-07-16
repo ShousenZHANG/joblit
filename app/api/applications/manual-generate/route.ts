@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { del, put } from "@vercel/blob";
-import { errorJson, notFoundError } from "@/lib/server/api/errorResponse";
-import { parseJsonBody, withSessionRoute } from "@/lib/server/api/routeHandler";
+import { errorJson, notFoundError, validationError } from "@/lib/server/api/errorResponse";
+import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { enforceAiRateLimit } from "@/lib/server/api/aiRateLimit";
 import { buildPromptMeta, validatePromptMetaForImport } from "@/lib/server/ai/promptContract";
 import {
@@ -16,7 +16,10 @@ import { getActivePromptSkillRulesForUser } from "@/lib/server/promptRuleTemplat
 import { prisma } from "@/lib/server/prisma";
 import { getResumeProfile } from "@/lib/server/resumeProfile";
 import { buildManualImportArtifact } from "@/lib/server/applications/manualImportArtifact";
-import { ManualGenerateSchema } from "@/lib/server/applications/manualImportParser";
+import {
+  ImportedPromptMetaSchema,
+  ManualGenerateSchema,
+} from "@/lib/server/applications/manualImportParser";
 import { hashAiContent } from "@/lib/shared/schemas/aiContent";
 
 export const runtime = "nodejs";
@@ -42,13 +45,38 @@ export async function POST(req: Request) {
     const limited = enforceAiRateLimit(userId, requestId);
     if (limited) return limited;
 
-    const parsed = await parseJsonBody(req, ManualGenerateSchema, requestId);
-    if (!parsed.ok) return parsed.response;
+    const body = await req.json().catch(() => null);
+    const parsed = ManualGenerateSchema.safeParse(body);
+    if (!parsed.success) {
+      const localAiOutputTooLarge =
+        body &&
+        typeof body === "object" &&
+        (body as { source?: unknown }).source === "local_ai" &&
+        parsed.error.issues.some(
+          (issue) => issue.path.join(".") === "modelOutput" && issue.code === "too_big",
+        );
+      if (localAiOutputTooLarge) {
+        return errorJson(
+          "INVALID_AI_RESULT",
+          "Local AI output exceeds the 80,000 character limit.",
+          400,
+          { requestId },
+        );
+      }
+      return validationError(parsed.error, requestId);
+    }
     const data = parsed.data;
 
   const job = await prisma.job.findFirst({
     where: { id: data.jobId, userId },
-    select: { id: true, title: true, company: true, description: true, market: true },
+    select: {
+      id: true,
+      title: true,
+      company: true,
+      location: true,
+      description: true,
+      market: true,
+    },
   });
 
   if (!job) {
@@ -75,16 +103,21 @@ export async function POST(req: Request) {
     select: { resumePdfUrl: true, coverPdfUrl: true },
   });
 
+  const activeRules = await getActivePromptSkillRulesForUser(userId);
+  const expectedPromptMeta = buildPromptMeta({
+    target: data.target,
+    ruleSetId: activeRules.id,
+    resumeSnapshotUpdatedAt: profile.updatedAt.toISOString(),
+  });
+
   if (data.promptMeta) {
-    const activeRules = await getActivePromptSkillRulesForUser(userId);
-    const expectedPromptMeta = buildPromptMeta({
-      target: data.target,
-      ruleSetId: activeRules.id,
-      resumeSnapshotUpdatedAt: profile.updatedAt.toISOString(),
-    });
+    const importedPromptMeta = ImportedPromptMetaSchema.safeParse(data.promptMeta);
+    if (!importedPromptMeta.success) {
+      return validationError(importedPromptMeta.error, requestId);
+    }
     const promptMetaValidation = validatePromptMetaForImport({
       expected: expectedPromptMeta,
-      received: data.promptMeta,
+      received: importedPromptMeta.data,
     });
 
     if (!promptMetaValidation.ok) {
@@ -104,6 +137,9 @@ export async function POST(req: Request) {
   const artifact = buildManualImportArtifact({
     target: data.target,
     modelOutput: data.modelOutput,
+    mode: data.source === "local_ai" ? "strict" : "legacy",
+    source: data.source,
+    promptMetaHash: expectedPromptMeta.promptHash,
     renderInput,
     profile,
     job,
@@ -152,6 +188,12 @@ export async function POST(req: Request) {
         aiContent: artifact.aiContent,
         coverQualityGate: artifact.coverQualityGate,
         coverQualityIssueCount: artifact.coverQualityIssueCount,
+        job: {
+          id: job.id,
+          title: job.title,
+          company: job.company,
+          location: job.location,
+        },
         requestId,
       },
       { status: 200 },
@@ -265,9 +307,9 @@ export async function POST(req: Request) {
       "content-disposition": contentDispositionAttachment(filename),
       "x-application-id": application.id,
       "x-request-id": requestId,
-      "x-tailor-cv-source": data.target === "resume" ? "manual_import" : "base",
-      "x-tailor-cover-source": data.target === "cover" ? "manual_import" : "fallback",
-      "x-tailor-reason": "manual_import_ok",
+      "x-tailor-cv-source": data.target === "resume" ? data.source : "base",
+      "x-tailor-cover-source": data.target === "cover" ? data.source : "fallback",
+      "x-tailor-reason": `${data.source}_ok`,
       "x-cover-quality-gate": coverQualityGate,
       "x-cover-quality-issue-count": String(coverQualityIssueCount),
     },

@@ -211,6 +211,21 @@ export function buildApplicationUserPrompt(input: BuildApplicationPromptInput) {
   ].join("\n");
 }
 
+function buildV2CoverageAnalysisBlock(resume: ResumePromptInput): string {
+  const { baseLatestBullets, coverage } = resume;
+
+  return stringifyUntrustedEvidence({
+    topResponsibilities: coverage.topResponsibilities,
+    baseLatestBullets,
+    missingFromBase: coverage.missingFromBase,
+    fallbackResponsibilities: coverage.fallbackResponsibilities,
+    requiredNewBullets: {
+      min: coverage.requiredNewBulletsMin,
+      max: coverage.requiredNewBulletsMax,
+    },
+  });
+}
+
 export function getTemplateResumePromptInput(baseLatestBullets: string[]): ResumePromptInput {
   return {
     baseLatestBullets: baseLatestBullets.length
@@ -394,7 +409,6 @@ export function buildV2ResumeUserPrompt(input: BuildApplicationPromptInput): str
     "</self-check>",
   ].join("\n");
 }
-
 /**
  * V2 cover user prompt with structured XML sections.
  */
@@ -444,74 +458,4 @@ export function buildV2CoverUserPrompt(input: BuildApplicationPromptInput): stri
     qualityGates,
     "</self-check>",
   ].join("\n");
-}
-
-/**
- * V2 short user prompt with compact, self-contained constraint reminders.
- */
-export function buildV2ShortUserPrompt(input: {
-  target: PromptTarget;
-  job: JobInput;
-  candidate?: ResumePromptSnapshot;
-  resume?: ResumePromptInput;
-  locale?: "en-AU" | "zh-CN";
-}): string {
-  const locale = input.locale ?? "en-AU";
-  const isResume = input.target === "resume";
-
-  const jobBlock = buildJobEvidence(input.job);
-
-  const coverageBlock =
-    isResume && input.resume ? buildV2CoverageAnalysisBlock(input.resume) : "";
-
-  const constraintReminders = [
-    "- JSON only, no code fences, no markdown prose outside JSON string values.",
-    "- No fabrication — only resume snapshot evidence. If evidence is insufficient, be conservative.",
-    "- Bold JD-critical keywords with clean **keyword** markers (no inner spaces).",
-    isResume
-      ? "- Preserve every base latest-experience bullet verbatim. Only reorder and add grounded new bullets."
-      : `- Three substantial paragraphs within ${getLocaleProfile(locale).coverWordRange.min}-${getLocaleProfile(locale).coverWordRange.max} word range.`,
-    "- Check grounding, target schema, and JSON validity before returning.",
-  ].join("\n");
-
-  return [
-    "<task>",
-    `Target: ${input.target}`,
-    isResume
-      ? "Tailor the candidate's resume for this role using only the embedded evidence."
-      : "Generate a cover letter for this role using only the embedded evidence.",
-    "</task>",
-    "",
-    "<candidate-evidence>",
-    buildCandidateEvidence(input.candidate),
-    "</candidate-evidence>",
-    "",
-    "<job-evidence>",
-    jobBlock,
-    "</job-evidence>",
-    "",
-    ...(coverageBlock
-      ? ["<coverage-analysis>", coverageBlock, "</coverage-analysis>", ""]
-      : []),
-    "<constraint-reminders>",
-    constraintReminders,
-    "</constraint-reminders>",
-  ].join("\n");
-}
-
-/* ── V2 internal helpers ── */
-
-function buildV2CoverageAnalysisBlock(resume: ResumePromptInput): string {
-  const { baseLatestBullets, coverage } = resume;
-
-  return stringifyUntrustedEvidence({
-    topResponsibilities: coverage.topResponsibilities,
-    baseLatestBullets,
-    missingFromBase: coverage.missingFromBase,
-    fallbackResponsibilities: coverage.fallbackResponsibilities,
-    requiredNewBullets: {
-      min: coverage.requiredNewBulletsMin,
-      max: coverage.requiredNewBulletsMax,
-    },
-  });
 }

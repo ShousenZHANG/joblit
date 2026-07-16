@@ -12,6 +12,7 @@ import {
   putFieldMapping,
 } from "./api";
 import { ApiRequestError, isRetryableApiError } from "./apiErrors";
+import { HermesApiError, toPublicLocalAiError } from "./apiErrors";
 
 describe("ApiRequestError", () => {
   it("retains the HTTP status and message", () => {
@@ -20,6 +21,19 @@ describe("ApiRequestError", () => {
     expect(error).toBeInstanceOf(Error);
     expect(error.status).toBe(422);
     expect(error.message).toBe("Submission recording failed: 422");
+  });
+});
+
+describe("HermesApiError", () => {
+  it("maps internal failures to stable redacted public errors", () => {
+    const publicError = toPublicLocalAiError(
+      new HermesApiError("HERMES_AUTH_FAILED", "raw local response secret", { status: 401 }),
+    );
+    expect(publicError).toEqual({
+      code: "HERMES_AUTH_FAILED",
+      message: "Hermes authentication failed. Check the local API key.",
+      retryable: false,
+    });
   });
 });
 

@@ -47,6 +47,11 @@ describe("aiContentSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts bounded import provenance without changing the DB schema", () => {
+    const value = { ...validAiContent(), source: "local_ai" as const };
+    expect(aiContentSchema.parse(value).source).toBe("local_ai");
+  });
+
   it("rejects a payload with an unknown schemaVersion", () => {
     const stale = { ...validAiContent(), schemaVersion: 999 };
     const result = aiContentSchema.safeParse(stale);

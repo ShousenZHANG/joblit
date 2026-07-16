@@ -17,6 +17,64 @@ import {
   patchGeneratedJobArtifactInJobsCache,
 } from "../utils/jobsQueryCache";
 
+export type GeneratedDraftSource = "manual_import" | "local_ai";
+
+export type PersistedGeneratedDraft = {
+  applicationId: string;
+  status: "DRAFT" | "FINAL";
+  aiContentHash: string | null;
+  aiContent: AiContent;
+  job: {
+    id: string;
+    title: string;
+    company: string | null;
+    location: string | null;
+  };
+};
+
+export async function persistGeneratedDraft(input: {
+  jobId: string;
+  target: "resume" | "cover";
+  modelOutput: string;
+  promptMeta?: Record<string, unknown> | ExternalPromptMeta | null;
+  source: GeneratedDraftSource;
+}): Promise<PersistedGeneratedDraft> {
+  const response = await fetch("/api/applications/manual-generate?finalize=false", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const json = await response.json().catch(() => null);
+  if (!response.ok) {
+    const baseMessage = json?.error?.message || json?.error || "Failed to import generated content";
+    const details = Array.isArray(json?.error?.details)
+      ? json.error.details.filter((item: unknown) => typeof item === "string")
+      : [];
+    const detailText = details.length ? ` (${details.slice(0, 2).join(" | ")})` : "";
+    throw new Error(`${baseMessage}${detailText}`);
+  }
+  if (
+    !json?.applicationId ||
+    !json?.aiContent ||
+    !json?.job?.id ||
+    typeof json.job.title !== "string"
+  ) {
+    throw new Error("Unexpected response: missing editable draft metadata");
+  }
+  return {
+    applicationId: json.applicationId,
+    status: json.status === "FINAL" ? "FINAL" : "DRAFT",
+    aiContentHash: typeof json.aiContentHash === "string" ? json.aiContentHash : null,
+    aiContent: json.aiContent as AiContent,
+    job: {
+      id: json.job.id,
+      title: json.job.title,
+      company: typeof json.job.company === "string" ? json.job.company : null,
+      location: typeof json.job.location === "string" ? json.job.location : null,
+    },
+  };
+}
+
 export function useExternalGenerate(setError: (e: string | null) => void) {
   const { toast } = useToast();
   const { markTaskComplete } = useGuide();
@@ -40,6 +98,38 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
   >({});
   const [tailorReviewDraft, setTailorReviewDraft] =
     useState<TailorReviewDraft | null>(null);
+
+  const openTailorReviewFromPersistedDraft = useCallback(async (input: {
+    draft: PersistedGeneratedDraft;
+    target: "resume" | "cover";
+    source: GeneratedDraftSource;
+    resumePdfUrl?: string | null;
+    coverPdfUrl?: string | null;
+  }) => {
+    const { draft, target, source } = input;
+    markTaskComplete("generate_first_pdf");
+    setTailorSourceByJob((prev) => ({
+      ...prev,
+      [draft.job.id]: {
+        ...prev[draft.job.id],
+        ...(target === "resume"
+          ? { cv: source as CvSource }
+          : { cover: source as CoverSource }),
+      },
+    }));
+    await invalidateActiveJobsQueries(queryClient);
+    setTailorReviewDraft({
+      applicationId: draft.applicationId,
+      target,
+      initialStatus: draft.status,
+      initialAiContent: draft.aiContent,
+      initialAiContentHash: draft.aiContentHash,
+      resumePdfUrl: input.resumePdfUrl ?? null,
+      coverPdfUrl: input.coverPdfUrl ?? null,
+      source,
+      job: draft.job,
+    });
+  }, [markTaskComplete, queryClient]);
 
   async function loadTailorPrompt(job: JobItem, target: "resume" | "cover"): Promise<{
     promptText: string;
@@ -229,78 +319,21 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
     setDialogPhase("generating");
     setError(null);
     try {
-      // Phase 2 unified flow: both resume and cover targets enter the
-      // draft -> edit -> finalize pipeline through the Tailor editor.
-      const useDraftFlow = true;
-      const res = await fetch(
-        `/api/applications/manual-generate${useDraftFlow ? "?finalize=false" : ""}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            jobId: job.id,
-            target,
-            modelOutput,
-            promptMeta: externalPromptMeta,
-          }),
-        },
-      );
-
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        const baseMessage = json?.error?.message || json?.error || "Failed to generate PDF";
-        const details = Array.isArray(json?.error?.details)
-          ? json.error.details.filter((item: unknown) => typeof item === "string")
-          : [];
-        const detailText = details.length ? ` (${details.slice(0, 2).join(" | ")})` : "";
-        throw new Error(`${baseMessage}${detailText}`);
-      }
-
-      // DRAFT mode: server returns the persisted aiContent. Keep the
-      // review phase in the current Jobs surface instead of routing away.
-      const json = (await res.json().catch(() => null)) as
-        | { applicationId?: string }
-        | null;
-      const applicationId = json?.applicationId;
-      if (!applicationId) {
-        throw new Error("Unexpected response: missing applicationId");
-      }
-      const draftJson = json as {
-        status?: "DRAFT" | "FINAL";
-        aiContentHash?: string | null;
-        aiContent?: AiContent;
-      };
-      if (!draftJson.aiContent) {
-        throw new Error("Unexpected response: missing editable AI content");
-      }
-      markTaskComplete("generate_first_pdf");
-      setTailorSourceByJob((prev) => ({
-        ...prev,
-        [job.id]: {
-          ...prev[job.id],
-          ...(target === "resume"
-            ? { cv: "manual_import" as const }
-            : { cover: "manual_import" as const }),
-        },
-      }));
-      await invalidateActiveJobsQueries(queryClient);
+      const draft = await persistGeneratedDraft({
+        jobId: job.id,
+        target,
+        modelOutput,
+        promptMeta: externalPromptMeta,
+        source: "manual_import",
+      });
       setExternalDialogOpen(false);
       setDialogPhase(1);
-      setTailorReviewDraft({
-        applicationId,
+      await openTailorReviewFromPersistedDraft({
+        draft,
         target,
-        initialStatus: draftJson.status === "FINAL" ? "FINAL" : "DRAFT",
-        initialAiContent: draftJson.aiContent,
-        initialAiContentHash:
-          typeof draftJson.aiContentHash === "string" ? draftJson.aiContentHash : null,
+        source: "manual_import",
         resumePdfUrl: target === "resume" ? null : job.resumePdfUrl ?? null,
         coverPdfUrl: target === "cover" ? null : job.coverPdfUrl ?? null,
-        job: {
-          id: job.id,
-          title: job.title,
-          company: job.company,
-          location: job.location,
-        },
       });
     } catch (e) {
       setDialogPhase(3);
@@ -332,13 +365,14 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
     const jobId = tailorReviewDraft?.job.id;
     if (!jobId) return;
 
+    const finalizedSource = tailorReviewDraft?.source ?? "manual_import";
     setTailorSourceByJob((prev) => ({
       ...prev,
       [jobId]: {
         ...prev[jobId],
         ...(result.target === "resume"
-          ? { cv: "manual_import" as const }
-          : { cover: "manual_import" as const }),
+          ? { cv: finalizedSource as CvSource }
+          : { cover: finalizedSource as CoverSource }),
       },
     }));
 
@@ -379,5 +413,6 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
     generateFromImportedJson,
     closeTailorReview,
     handleTailorReviewFinalized,
+    openTailorReviewFromPersistedDraft,
   };
 }

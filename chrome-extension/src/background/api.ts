@@ -1,6 +1,7 @@
 import { STORAGE_KEYS, DEFAULT_API_BASE, PROFILE_CACHE_TTL } from "@ext/shared/constants";
 import { resolveStoredApiBase } from "@ext/shared/apiBase";
 import { ApiRequestError } from "./apiErrors";
+import type { LocalAiTarget } from "@ext/shared/hermesTypes";
 
 /** Get the stored API base URL. */
 async function getApiBase(): Promise<string> {
@@ -218,4 +219,19 @@ export async function putFieldMapping(data: Record<string, unknown>) {
     );
   }
   return (await res.json()).data;
+}
+
+/** Fetch the server-owned, self-contained prompt. Page code never sees it. */
+export async function fetchAiPromptEnvelope(input: {
+  jobId: string;
+  target: LocalAiTarget;
+}): Promise<unknown> {
+  const res = await apiFetch("/api/ext/applications/prompt", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw new ApiRequestError(res.status, `AI prompt fetch failed: ${res.status}`);
+  }
+  return res.json();
 }

@@ -8,24 +8,33 @@ import { escapeLatex } from "@/lib/server/latex/escapeLatex";
 
 // ── Zod Schemas ──
 
-export const ManualGenerateSchema = z.object({
-  jobId: z.string().uuid(),
-  target: z.enum(["resume", "cover"]),
-  modelOutput: z.string().min(20).max(80000),
-  promptMeta: z.object({
+export const ManualGenerateSchema = z
+  .object({
+    jobId: z.string().uuid(),
+    target: z.enum(["resume", "cover"]),
+    modelOutput: z.string().min(1).max(80_000),
+    promptMeta: z.record(z.string(), z.unknown()).optional(),
+    source: z.enum(["manual_import", "local_ai"]).default("manual_import"),
+  })
+  .strict();
+
+export const ImportedPromptMetaSchema = z
+  .object({
     ruleSetId: z.string().min(1),
     resumeSnapshotUpdatedAt: z.string().min(1),
     promptTemplateVersion: z.string().min(1).optional(),
     schemaVersion: z.string().min(1).optional(),
     skillPackVersion: z.string().min(1).optional(),
     promptHash: z.string().min(1).optional(),
-  }),
-});
+  })
+  .strict();
 
-const ResumeSkillAdditionSchema = z.object({
-  category: z.string().trim().min(1).max(100),
-  items: z.array(z.string().trim().min(1).max(120)).min(1).max(30),
-});
+const ResumeSkillAdditionSchema = z
+  .object({
+    category: z.string().trim().min(1).max(100),
+    items: z.array(z.string().trim().min(1).max(120)).min(1).max(30),
+  })
+  .strict();
 
 const ResumeSkillGroupSchema = z
   .object({
@@ -33,6 +42,7 @@ const ResumeSkillGroupSchema = z
     category: z.string().trim().min(1).max(100).optional(),
     items: z.array(z.string().trim().min(1).max(120)).min(1).max(40),
   })
+  .strict()
   .transform((value) => ({
     label: (value.label ?? value.category ?? "").trim(),
     items: value.items,
@@ -41,33 +51,90 @@ const ResumeSkillGroupSchema = z
     message: "skillsFinal item must include label or category",
   });
 
-const ResumeManualOutputSchema = z.object({
-  cvSummary: z.string().trim().min(1).max(2000),
-  latestExperience: z.object({
-    bullets: z.array(z.string().trim().min(1).max(320)).min(1).max(15),
-  }),
-  skillsAdditions: z.array(ResumeSkillAdditionSchema).max(20).optional(),
-  skillsFinal: z.array(ResumeSkillGroupSchema).min(1).max(20).optional(),
-});
+const ResumeManualOutputSchema = z
+  .object({
+    cvSummary: z.string().trim().min(1).max(2000),
+    latestExperience: z
+      .object({
+        bullets: z.array(z.string().trim().min(1).max(320)).min(1).max(15),
+      })
+      .strict(),
+    skillsAdditions: z.array(ResumeSkillAdditionSchema).max(20).optional(),
+    skillsFinal: z.array(ResumeSkillGroupSchema).min(1).max(20).optional(),
+  })
+  .strict();
 
-const CoverContentSchema = z.object({
-  candidateTitle: z.string().trim().max(160).optional(),
-  subject: z.string().trim().max(220).optional(),
-  date: z.string().trim().max(80).optional(),
-  salutation: z.string().trim().max(220).optional(),
-  paragraphOne: z.string().trim().min(1).max(2000),
-  paragraphTwo: z.string().trim().min(1).max(2000),
-  paragraphThree: z.string().trim().min(1).max(2000),
-  closing: z.string().trim().max(300).optional(),
-  signatureName: z.string().trim().max(120).optional(),
-});
+const ResumeStrictOutputSchema = z
+  .object({
+    cvSummary: z.string().trim().min(1).max(2000),
+    latestExperience: z
+      .object({
+        bullets: z.array(z.string().trim().min(1).max(320)).min(1).max(15),
+      })
+      .strict(),
+    skillsFinal: z
+      .array(
+        z
+          .object({
+            label: z.string().trim().min(1).max(100),
+            items: z.array(z.string().trim().min(1).max(120)).min(1).max(20),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(5),
+  })
+  .strict();
 
-const CoverManualOutputSchema = z.object({
-  cover: CoverContentSchema,
-});
+const CoverContentSchema = z
+  .object({
+    candidateTitle: z.string().trim().max(160).optional(),
+    subject: z.string().trim().max(220).optional(),
+    date: z.string().trim().max(80).optional(),
+    salutation: z.string().trim().max(220).optional(),
+    paragraphOne: z.string().trim().min(1).max(2000),
+    paragraphTwo: z.string().trim().min(1).max(2000),
+    paragraphThree: z.string().trim().min(1).max(2000),
+    closing: z.string().trim().max(300).optional(),
+    signatureName: z.string().trim().max(120).optional(),
+  })
+  .strict();
+
+const CoverManualOutputSchema = z.object({ cover: CoverContentSchema }).strict();
 
 type ResumeManualOutput = z.infer<typeof ResumeManualOutputSchema>;
 type CoverManualOutput = z.infer<typeof CoverManualOutputSchema>;
+
+type ParsedOutput<T> = { data: T | null; issues: string[] };
+
+function zodIssues(error: z.ZodError): string[] {
+  return error.issues.map((issue) => {
+    const path = issue.path.length > 0 ? issue.path.join(".") : "(root)";
+    return `${path}: ${issue.message}`;
+  });
+}
+
+function parseStrictJson<T>(raw: string, schema: z.ZodType<T>): ParsedOutput<T> {
+  let candidate: unknown;
+  try {
+    candidate = JSON.parse(raw);
+  } catch {
+    return { data: null, issues: ["Payload must be one valid JSON object."] };
+  }
+
+  const parsed = schema.safeParse(candidate);
+  return parsed.success
+    ? { data: parsed.data, issues: [] }
+    : { data: null, issues: zodIssues(parsed.error) };
+}
+
+export function parseResumeStrictOutput(raw: string): ParsedOutput<ResumeManualOutput> {
+  return parseStrictJson(raw, ResumeStrictOutputSchema);
+}
+
+export function parseCoverStrictOutput(raw: string): ParsedOutput<CoverManualOutput> {
+  return parseStrictJson(raw, CoverManualOutputSchema);
+}
 
 // ── JSON Parsing ──
 
@@ -206,10 +273,7 @@ export function parseResumeManualOutput(raw: string): {
   if (parsed.success) return { data: parsed.data, issues: [] };
   return {
     data: null,
-    issues: parsed.error.issues.map((issue) => {
-      const path = issue.path.length > 0 ? issue.path.join(".") : "(root)";
-      return `${path}: ${issue.message}`;
-    }),
+    issues: zodIssues(parsed.error),
   };
 }
 
@@ -269,10 +333,7 @@ export function parseCoverManualOutput(raw: string): {
   if (parsed.success) return { data: parsed.data, issues: [] };
   return {
     data: null,
-    issues: parsed.error.issues.map((issue) => {
-      const path = issue.path.length > 0 ? issue.path.join(".") : "(root)";
-      return `${path}: ${issue.message}`;
-    }),
+    issues: zodIssues(parsed.error),
   };
 }
 

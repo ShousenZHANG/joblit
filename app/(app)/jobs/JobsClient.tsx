@@ -22,18 +22,21 @@ import { useJobFilters } from "./hooks/useJobFilters";
 import { useJobPagination } from "./hooks/useJobPagination";
 import { sessionDeletedJobIds, useJobMutations } from "./hooks/useJobMutations";
 import { useKeyboardNavigation } from "./hooks/useKeyboardNavigation";
-import { useExternalGenerate } from "./hooks/useExternalGenerate";
+import { persistGeneratedDraft, useExternalGenerate } from "./hooks/useExternalGenerate";
+import { useLocalAiRun } from "./hooks/useLocalAiRun";
 import { JobListItem } from "./components/JobListItem";
 import { VirtualJobList, type VirtualJobListHandle } from "./components/VirtualJobList";
 import { JobBatchDeleteDialog } from "./components/JobBatchDeleteDialog";
 import { JobSearchBar } from "./components/JobSearchBar";
 import { ExternalGenerateDialog } from "./components/ExternalGenerateDialog";
+import { LocalAiGenerateDialog } from "./components/LocalAiGenerateDialog";
 import { PdfPreviewDialog } from "./components/PdfPreviewDialog";
 import { TailorReviewDialog } from "./components/TailorReviewDialog";
 import { JobDetailPanel } from "./components/JobDetailPanel";
 import { cn } from "@/lib/utils";
 import { AU_LOCATION_OPTIONS, CN_LOCATION_OPTIONS, getUserTimeZone } from "./utils/constants";
 import type { JobsUrlState } from "./utils/jobsUrlState";
+import type { LocalAiSucceededRun } from "@/lib/shared/localAiBridgeContract";
 import {
   getJobDetailsQueryKey,
   invalidateActiveJobsQueries,
@@ -175,6 +178,33 @@ export function JobsClient({
   } | null>(null);
 
   const ext = useExternalGenerate(setError);
+  const openTailorReviewFromPersistedDraft = ext.openTailorReviewFromPersistedDraft;
+  const [localAiDialogOpen, setLocalAiDialogOpen] = useState(false);
+  const [localAiJob, setLocalAiJob] = useState<{
+    job: JobItem;
+    target: "resume" | "cover";
+  } | null>(null);
+  const handleLocalAiSucceeded = useCallback(async (run: LocalAiSucceededRun) => {
+    const draft = await persistGeneratedDraft({
+      jobId: run.jobId,
+      target: run.target,
+      modelOutput: run.modelOutput,
+      promptMeta: run.promptMeta,
+      source: "local_ai",
+    });
+    setLocalAiDialogOpen(false);
+    await openTailorReviewFromPersistedDraft({
+      draft,
+      target: run.target,
+      source: "local_ai",
+    });
+  }, [openTailorReviewFromPersistedDraft]);
+  const localAi = useLocalAiRun({
+    enabled: true,
+    onSucceeded: handleLocalAiSucceeded,
+  });
+  const localAiDialogVisible = localAiDialogOpen
+    || ["starting", "queued", "running", "stopping", "importing"].includes(localAi.runState.status);
 
   const [batchSelectMode, setBatchSelectMode] = useState(false);
   const [batchSelectedIds, setBatchSelectedIds] = useState<Set<string>>(new Set());
@@ -436,6 +466,21 @@ export function JobsClient({
     : null;
   const detailLoading = detailQuery.isFetching && !detailQuery.data;
 
+  const openLocalAiGenerate = useCallback((job: JobItem, target: "resume" | "cover") => {
+    setLocalAiJob({ job, target });
+    setLocalAiDialogOpen(true);
+    if (localAi.availability === "ready") {
+      void localAi.start(job.id, target);
+    }
+  }, [localAi]);
+
+  const useManualGenerate = useCallback(() => {
+    if (!localAiJob) return;
+    setLocalAiDialogOpen(false);
+    localAi.reset();
+    void ext.openExternalGenerateDialog(localAiJob.job, localAiJob.target);
+  }, [ext, localAi, localAiJob]);
+
   return (
     <>
       <ExternalGenerateDialog
@@ -462,6 +507,26 @@ export function JobsClient({
         onCopySmartPrompt={ext.copySmartPrompt}
         onDownloadSkillPack={ext.downloadSkillPack}
         onGenerate={ext.generateFromImportedJson}
+      />
+
+      <LocalAiGenerateDialog
+        open={localAiDialogVisible}
+        onOpenChange={setLocalAiDialogOpen}
+        availability={localAi.availability}
+        runState={localAi.runState}
+        job={localAiJob ? {
+          id: localAiJob.job.id,
+          title: localAiJob.job.title,
+          company: localAiJob.job.company,
+          target: localAiJob.target,
+        } : null}
+        onStart={() => {
+          if (localAiJob) void localAi.start(localAiJob.job.id, localAiJob.target);
+        }}
+        onStop={() => void localAi.stop()}
+        onRetry={localAi.retry}
+        onCheckAgain={() => void localAi.checkAvailability()}
+        onUseManual={useManualGenerate}
       />
 
       <TailorReviewDialog
@@ -1061,12 +1126,12 @@ export function JobsClient({
           deletingIds={deletingIds}
           highlightGenerate={highlightGenerate}
           guideHighlightClass={guideHighlightClass}
-          externalPromptLoading={ext.externalPromptLoading}
+          externalPromptLoading={["starting", "queued", "running", "stopping", "importing"].includes(localAi.runState.status)}
           mobileTab={mobileTab}
           onUpdateStatus={updateStatus}
           onDelete={requestDelete}
-          onGenerateResume={(job) => ext.openExternalGenerateDialog(job, "resume")}
-          onGenerateCover={(job) => ext.openExternalGenerateDialog(job, "cover")}
+          onGenerateResume={(job) => openLocalAiGenerate(job, "resume")}
+          onGenerateCover={(job) => openLocalAiGenerate(job, "cover")}
           onRetryDetail={() => void detailQuery.refetch()}
         />
         </section>

@@ -89,6 +89,7 @@ export const aiContentSchema = z
      * `.min(1)` is intentionally deferred — see ADR-0001.
      */
     promptMetaHash: z.string(),
+    source: z.enum(["manual_import", "local_ai"]).optional(),
     cv: cvSchema,
     cover: coverSchema,
   })

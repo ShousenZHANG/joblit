@@ -3,14 +3,18 @@
  * that interact with chrome.storage and chrome.runtime.
  */
 
-const storageData: Record<string, unknown> = {};
+const localStorageData: Record<string, unknown> = {};
+const sessionStorageData: Record<string, unknown> = {};
 const storageListeners = new Set<(
   changes: Record<string, chrome.storage.StorageChange>,
   areaName: string,
 ) => void>();
 
-const storageMock = {
-  local: {
+function createStorageArea(
+  storageData: Record<string, unknown>,
+  areaName: "local" | "session",
+) {
+  return {
     get: async (
       keys: string | string[] | Record<string, unknown>,
       callback?: (result: Record<string, unknown>) => void,
@@ -39,7 +43,7 @@ const storageMock = {
         changes[key] = { oldValue: storageData[key], newValue: value };
       }
       Object.assign(storageData, items);
-      for (const listener of storageListeners) listener(changes, "local");
+      for (const listener of storageListeners) listener(changes, areaName);
       callback?.();
     },
     remove: async (keys: string | string[], callback?: () => void) => {
@@ -49,7 +53,7 @@ const storageMock = {
         changes[key] = { oldValue: storageData[key], newValue: undefined };
         delete storageData[key];
       }
-      for (const listener of storageListeners) listener(changes, "local");
+      for (const listener of storageListeners) listener(changes, areaName);
       callback?.();
     },
     clear: async (callback?: () => void) => {
@@ -59,11 +63,17 @@ const storageMock = {
         delete storageData[key];
       }
       if (Object.keys(changes).length > 0) {
-        for (const listener of storageListeners) listener(changes, "local");
+        for (const listener of storageListeners) listener(changes, areaName);
       }
       callback?.();
     },
-  },
+    setAccessLevel: async () => {},
+  };
+}
+
+const storageMock = {
+  local: createStorageArea(localStorageData, "local"),
+  session: createStorageArea(sessionStorageData, "session"),
   onChanged: {
     addListener: (listener: (
       changes: Record<string, chrome.storage.StorageChange>,
@@ -81,6 +91,9 @@ const storageMock = {
 };
 
 const runtimeMock = {
+  id: "joblit-test-extension",
+  getURL: (path: string) => `chrome-extension://joblit-test-extension/${path}`,
+  getManifest: () => ({ content_scripts: [] }),
   sendMessage: (_message: unknown, callback?: (response: unknown) => void) => {
     callback?.({ success: true });
   },
@@ -104,6 +117,14 @@ Object.defineProperty(globalThis, "chrome", {
       onCommand: {
         addListener: () => {},
       },
+    },
+    permissions: {
+      contains: async () => true,
+      request: async () => true,
+      remove: async () => true,
+    },
+    scripting: {
+      executeScript: async () => [],
     },
   },
   writable: true,

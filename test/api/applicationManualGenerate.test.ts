@@ -32,6 +32,10 @@ vi.mock("next-auth/next", () => ({
   getServerSession: vi.fn(),
 }));
 
+vi.mock("@/lib/server/api/aiRateLimit", () => ({
+  enforceAiRateLimit: vi.fn(() => null),
+}));
+
 vi.mock("@/lib/server/resumeProfile", () => ({
   getResumeProfile: vi.fn(),
 }));
@@ -171,13 +175,26 @@ describe("applications manual generate api", () => {
     expect(json.error.code).toBe("PARSE_FAILED");
   });
 
-  it("rejects imports that do not include promptMeta", async () => {
+  it("keeps legacy manual imports compatible when promptMeta is omitted", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "user-1" },
     });
+    jobStore.findFirst.mockResolvedValueOnce({
+      id: VALID_JOB_ID,
+      title: "Software Engineer",
+      company: "Example Co",
+      location: "Sydney",
+      description: "Build product features",
+      market: "AU",
+    });
+    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "rp-1",
+      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
+    });
+    applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 
     const res = await POST(
-      new Request("http://localhost/api/applications/manual-generate", {
+      new Request("http://localhost/api/applications/manual-generate?finalize=false", {
         method: "POST",
         body: JSON.stringify({
           jobId: VALID_JOB_ID,
@@ -188,9 +205,9 @@ describe("applications manual generate api", () => {
     );
     const json = await res.json();
 
-    expect(res.status).toBe(400);
-    expect(json.error.code).toBe("INVALID_BODY");
-    expect(jobStore.findFirst).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(json.aiContent.promptMetaHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(json.aiContent.source).toBe("manual_import");
   });
 
   it("generates resume pdf from imported JSON", async () => {
@@ -1040,6 +1057,112 @@ describe("applications manual generate api", () => {
       }),
     );
     // PDF compile + Blob put are skipped in DRAFT mode.
+    expect(blobStore.put).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["fenced JSON", `\`\`\`json\n${JSON.stringify({ cvSummary: "Strict", latestExperience: { bullets: ["Built APIs."] }, skillsFinal: [{ label: "Backend", items: ["TypeScript"] }] })}\n\`\`\``],
+    ["snake_case alias", JSON.stringify({ cv_summary: "Strict", latest_experience: { bullets: ["Built APIs."] } })],
+    ["trailing comma", '{"cvSummary":"Strict","latestExperience":{"bullets":["Built APIs."]},}'],
+    ["unknown key", JSON.stringify({ cvSummary: "Strict", latestExperience: { bullets: ["Built APIs."] }, unknown: true })],
+  ])("returns stable INVALID_AI_RESULT for local AI %s", async (_label, modelOutput) => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: "user-1" } });
+    jobStore.findFirst.mockResolvedValueOnce({
+      id: VALID_JOB_ID,
+      title: "Software Engineer",
+      company: "Example Co",
+      location: "Sydney",
+      description: "Build product features",
+      market: "AU",
+    });
+    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "rp-1",
+      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
+    });
+
+    const res = await POST(new Request(
+      "http://localhost/api/applications/manual-generate?finalize=false",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          jobId: VALID_JOB_ID,
+          target: "resume",
+          modelOutput,
+          source: "local_ai",
+          promptMeta: {
+            ruleSetId: "rules-1",
+            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+          },
+        }),
+      },
+    ));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe("INVALID_AI_RESULT");
+  });
+
+  it("rejects oversized local AI output with INVALID_AI_RESULT before persistence", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: "user-1" } });
+    const res = await POST(new Request("http://localhost/api/applications/manual-generate", {
+      method: "POST",
+      body: JSON.stringify({
+        jobId: VALID_JOB_ID,
+        target: "resume",
+        modelOutput: "x".repeat(80_001),
+        source: "local_ai",
+      }),
+    }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe("INVALID_AI_RESULT");
+    expect(jobStore.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("persists canonical local provenance and returns authoritative DRAFT job metadata", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: "user-1" } });
+    jobStore.findFirst.mockResolvedValueOnce({
+      id: VALID_JOB_ID,
+      title: "Authoritative Role",
+      company: "Authoritative Co",
+      location: "Melbourne",
+      description: "Build TypeScript APIs",
+      market: "AU",
+    });
+    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "rp-1",
+      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
+    });
+    applicationStore.upsert.mockResolvedValueOnce({ id: "app-local" });
+    const modelOutput = JSON.stringify({
+      cvSummary: "Strict local summary",
+      latestExperience: { bullets: ["Built TypeScript APIs."] },
+      skillsFinal: [{ label: "Backend", items: ["TypeScript"] }],
+    });
+
+    const res = await POST(new Request(
+      "http://localhost/api/applications/manual-generate?finalize=false",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          jobId: VALID_JOB_ID,
+          target: "resume",
+          modelOutput,
+          source: "local_ai",
+          promptMeta: {
+            ruleSetId: "rules-1",
+            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+          },
+        }),
+      },
+    ));
+    const json = await res.json();
+    expect(res.status).toBe(200);
+    expect(json.job).toEqual({
+      id: VALID_JOB_ID,
+      title: "Authoritative Role",
+      company: "Authoritative Co",
+      location: "Melbourne",
+    });
+    expect(json.aiContent.source).toBe("local_ai");
+    expect(json.aiContent.promptMetaHash).toMatch(/^[0-9a-f]{64}$/);
     expect(blobStore.put).not.toHaveBeenCalled();
   });
 });

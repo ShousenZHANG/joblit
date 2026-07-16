@@ -27,6 +27,17 @@ const queueMocks = vi.hoisted(() => ({
   processQueue: vi.fn(),
 }));
 
+const hermesMocks = vi.hoisted(() => ({
+  checkHermesSettings: vi.fn(),
+  forgetHermesSettings: vi.fn(),
+  getHermesSettingsPublic: vi.fn(),
+  getLocalAiRun: vi.fn(),
+  getPublicLocalAiStatus: vi.fn(),
+  startLocalAiRun: vi.fn(),
+  stopLocalAiRun: vi.fn(),
+  testAndSaveHermesSettings: vi.fn(),
+}));
+
 vi.mock("./api", () => apiMocks);
 vi.mock("./auth", () => ({
   clearToken: vi.fn(),
@@ -38,6 +49,10 @@ vi.mock("./syncProcessor", () => ({
   processQueue: queueMocks.processQueue,
 }));
 vi.mock("./tabBridge", () => ({ sendToActiveTab: vi.fn() }));
+vi.mock("./storageSecurity", () => ({
+  ensureTrustedLocalStorage: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("./hermesRuns", () => hermesMocks);
 
 type RuntimeMessageListener = (
   message: MessageType,
@@ -47,13 +62,16 @@ type RuntimeMessageListener = (
 
 let runtimeMessageListener: RuntimeMessageListener | undefined;
 
-async function dispatchMessage(message: MessageType): Promise<MessageResponse> {
+async function dispatchMessage(
+  message: MessageType,
+  sender = {} as chrome.runtime.MessageSender,
+): Promise<MessageResponse> {
   if (!runtimeMessageListener) throw new Error("Runtime listener not registered");
 
   return new Promise((resolve) => {
     const keepsChannelOpen = runtimeMessageListener?.(
       message,
-      {} as chrome.runtime.MessageSender,
+      sender,
       resolve,
     );
     expect(keepsChannelOpen).toBe(true);
@@ -128,5 +146,28 @@ describe("service worker retry queue policy", () => {
       success: false,
       error: "Mapping update failed: 400",
     });
+  });
+
+  it("accepts Local AI run actions only from the exact Joblit content script", async () => {
+    const run = {
+      requestId: "550e8400-e29b-41d4-a716-446655440000",
+      jobId: "c56a4180-65aa-42ec-a945-5fd21dec0538",
+      target: "resume" as const,
+      status: "queued" as const,
+    };
+    hermesMocks.startLocalAiRun.mockResolvedValueOnce(run);
+    const message: MessageType = { type: "LOCAL_AI_START_RUN", payload: run };
+
+    await expect(dispatchMessage(message, {
+      id: chrome.runtime.id,
+      url: "https://www.joblit.tech/jobs",
+      tab: { id: 7, url: "https://www.joblit.tech/jobs" } as chrome.tabs.Tab,
+    })).resolves.toEqual({ success: true, data: run });
+
+    await expect(dispatchMessage(message, {
+      id: chrome.runtime.id,
+      url: "https://evil.example/jobs",
+      tab: { id: 8, url: "https://evil.example/jobs" } as chrome.tabs.Tab,
+    })).resolves.toMatchObject({ success: false, errorCode: "FORBIDDEN_CALLER" });
   });
 });

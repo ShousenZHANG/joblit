@@ -7,8 +7,7 @@ import { FloatingWidget, type FieldRuleData } from "./widget/FloatingWidget";
 import { recordSubmission, interceptFormSubmits } from "./recorder/submissionRecorder";
 import { generateFormSignature, matchFieldsFromHistory } from "./detector/similarity";
 import type { SubmissionRecord, MappingRule } from "./detector/similarity";
-import type { ContentMessage, DetectedField, FormDetectionResult } from "@ext/shared/types";
-import { STORAGE_KEYS } from "@ext/shared/constants";
+import type { ContentMessage, ContentSettings, DetectedField, FormDetectionResult, WidgetPosition } from "@ext/shared/types";
 import { isJobApplicationContext } from "@ext/shared/jobContext";
 import { initSeekScraper } from "./seek/seekScraper";
 
@@ -23,6 +22,7 @@ let observerRegistered = false;
 let fillInProgress = false;
 /** Timer ID for the post-fill progress reset — cleared when a new fill starts. */
 let progressResetTimer: ReturnType<typeof setTimeout> | null = null;
+let currentWidgetPosition: WidgetPosition | undefined;
 
 type JoblitGlobal = typeof globalThis & {
   __joblitContentScriptInstalled__?: boolean;
@@ -36,16 +36,10 @@ function debounce(fn: () => void, ms: number): () => void {
 }
 
 /** Load user preferences from storage. */
-async function loadPreferences(): Promise<{ autoFill: boolean; showWidget: boolean }> {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(STORAGE_KEYS.PREFERENCES, (result) => {
-      const prefs = result[STORAGE_KEYS.PREFERENCES];
-      resolve({
-        autoFill: prefs?.autoFill ?? false,
-        showWidget: prefs?.showWidget ?? true,
-      });
-    });
-  });
+async function loadContentSettings(): Promise<ContentSettings> {
+  const response = await sendMessage<ContentSettings>({ type: "GET_CONTENT_SETTINGS" });
+  if (response.success && response.data) return response.data;
+  return { preferences: { autoFill: false, showWidget: true } };
 }
 
 /** Set up submit interception for detected fields. */
@@ -119,7 +113,9 @@ async function init() {
     return;
   }
 
-  const prefs = await loadPreferences();
+  const settings = await loadContentSettings();
+  const prefs = settings.preferences;
+  currentWidgetPosition = settings.widgetPosition;
 
   // Exponential retry for SPA-rendered forms
   const DETECTION_DELAYS = [500, 1500, 3000, 6000];
@@ -184,7 +180,7 @@ async function init() {
 
 /** Initialize the floating widget. */
 async function initWidget(detection: FormDetectionResult) {
-  const mounted = mountWidget();
+  const mounted = mountWidget(currentWidgetPosition);
   if (!mounted) return;
 
   widget = new FloatingWidget(mounted.container, {
@@ -227,6 +223,10 @@ async function initWidget(detection: FormDetectionResult) {
       if (field?.element) {
         simulateInput(field.element, value);
       }
+    },
+    onSavePosition: (position) => {
+      currentWidgetPosition = position;
+      void sendMessage({ type: "SET_WIDGET_POSITION", position });
     },
   });
 

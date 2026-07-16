@@ -6,6 +6,7 @@ import { authOptions } from "@/auth";
 import { PageHeading } from "@/components/app-shell/PageHeading";
 import { ExtensionTokenManager } from "./ExtensionTokenManager";
 import { KnowledgeBase } from "./KnowledgeBase";
+import { LocalAiSetupCard } from "./LocalAiSetupCard";
 import { ArrowUpRight, Chrome } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +39,7 @@ export default async function ExtensionPage() {
           />
         </div>
         <div className="min-h-0 flex-1 overflow-auto px-4 pb-4 lg:px-6 lg:pb-6">
+          <LocalAiSetupCard />
           <ExtensionTokenManager />
           <KnowledgeBase />
         </div>

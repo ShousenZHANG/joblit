@@ -18,6 +18,8 @@ interface WidgetCallbacks {
   onSaveRule: (rule: FieldRuleData) => Promise<boolean>;
   /** Apply a value to a form field immediately. */
   onApplyValue: (fieldSelector: string, value: string) => void;
+  /** Persist non-secret UI position through the background worker. */
+  onSavePosition: (position: { right: string; bottom: string }) => void;
 }
 
 export interface FieldRuleData {
@@ -223,7 +225,7 @@ export class FloatingWidget {
           // Persist position
           const right = this.root.style.right;
           const bottom = this.root.style.bottom;
-          chrome.storage.local.set({ widgetPosition: { right, bottom } });
+          this.callbacks.onSavePosition({ right, bottom });
           suppressClick = true;
           // A drag that ends outside the button may not emit a click. Reset on
           // the next task so a later intentional activation is never swallowed.

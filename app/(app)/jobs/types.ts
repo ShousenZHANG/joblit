@@ -28,8 +28,8 @@ export type JobsResponse = {
   };
 };
 
-export type CvSource = "ai" | "base" | "manual_import";
-export type CoverSource = "ai" | "fallback" | "manual_import";
+export type CvSource = "ai" | "base" | "manual_import" | "local_ai";
+export type CoverSource = "ai" | "fallback" | "manual_import" | "local_ai";
 
 export type ResumeImportOutput = {
   cvSummary: string;

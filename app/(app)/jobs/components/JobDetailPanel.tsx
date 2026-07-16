@@ -299,12 +299,12 @@ export function JobDetailPanel({
               <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                 {tailorSource.cv ? (
                   <span className="rounded-full border border-border/60 bg-muted/60 px-2 py-0.5">
-                    CV: {tailorSource.cv === "ai" ? "AI" : tailorSource.cv === "manual_import" ? "Manual" : "Base"}
+                    CV: {tailorSource.cv === "ai" || tailorSource.cv === "local_ai" ? "AI" : tailorSource.cv === "manual_import" ? "Manual" : "Base"}
                   </span>
                 ) : null}
                 {tailorSource.cover ? (
                   <span className="rounded-full border border-border/60 bg-muted/60 px-2 py-0.5">
-                    Cover: {tailorSource.cover === "ai" ? "AI" : tailorSource.cover === "manual_import" ? "Manual" : "Fallback"}
+                    Cover: {tailorSource.cover === "ai" || tailorSource.cover === "local_ai" ? "AI" : tailorSource.cover === "manual_import" ? "Manual" : "Fallback"}
                   </span>
                 ) : null}
               </div>

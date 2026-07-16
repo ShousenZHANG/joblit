@@ -66,4 +66,16 @@ describe("extension manifest least privilege", () => {
       world: "MAIN",
     });
   });
+
+  it("appends an isolated exact-origin Joblit bridge without changing loader indices", () => {
+    expect(manifest.minimum_chrome_version).toBe("102");
+    expect(manifest.content_scripts[0].js).toEqual(["src/content/index.ts"]);
+    expect(manifest.content_scripts[1].js).toEqual(["src/content/seek/seekInterceptMain.ts"]);
+    expect(manifest.content_scripts[2]).toEqual({
+      matches: ["https://www.joblit.tech/*"],
+      js: ["src/content/joblitBridge.ts"],
+      run_at: "document_start",
+    });
+    expect("externally_connectable" in manifest).toBe(false);
+  });
 });

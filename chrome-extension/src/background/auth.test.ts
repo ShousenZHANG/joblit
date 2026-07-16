@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { setToken, clearToken, getAuthStatus } from "./auth";
-import { STORAGE_KEYS } from "@ext/shared/constants";
+import { SESSION_STORAGE_KEYS, STORAGE_KEYS } from "@ext/shared/constants";
 
 describe("auth", () => {
   beforeEach(async () => {
@@ -38,6 +38,8 @@ describe("auth", () => {
       ]);
       expect(result[STORAGE_KEYS.AUTH_TOKEN]).toBeUndefined();
       expect(result[STORAGE_KEYS.TOKEN_EXPIRES_AT]).toBeUndefined();
+      const session = await chrome.storage.session.get(SESSION_STORAGE_KEYS.HERMES_RUN_REGISTRY);
+      expect(session[SESSION_STORAGE_KEYS.HERMES_RUN_REGISTRY]).toBeUndefined();
     });
   });
 

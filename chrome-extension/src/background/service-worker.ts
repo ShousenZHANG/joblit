@@ -1,21 +1,83 @@
-import type { MessageType, MessageResponse } from "@ext/shared/types";
+import type { MessageType, MessageResponse, WidgetPosition } from "@ext/shared/types";
+import { STORAGE_KEYS } from "@ext/shared/constants";
+import { JOBLIT_WEB_ORIGIN } from "@ext/shared/hermesTypes";
 import { setToken, clearToken, getAuthStatus } from "./auth";
 import { fetchProfile, fetchFlatProfile, postSubmission, fetchSubmissions, fetchFieldMappings, putFieldMapping, matchJob, markJobApplied, importSeekJobs } from "./api";
 import { enqueue } from "./syncQueue";
 import { processQueue } from "./syncProcessor";
 import { sendToActiveTab } from "./tabBridge";
-import { isRetryableApiError } from "./apiErrors";
+import { HermesApiError, isRetryableApiError, toPublicLocalAiError } from "./apiErrors";
+import { ensureTrustedLocalStorage } from "./storageSecurity";
+import {
+  checkHermesSettings,
+  forgetHermesSettings,
+  getHermesSettingsPublic,
+  getLocalAiRun,
+  getPublicLocalAiStatus,
+  startLocalAiRun,
+  stopLocalAiRun,
+  testAndSaveHermesSettings,
+} from "./hermesRuns";
+
+const storageReady = ensureTrustedLocalStorage();
+
+function isJoblitWebSender(sender: chrome.runtime.MessageSender): boolean {
+  if (sender.id !== chrome.runtime.id || !sender.tab) return false;
+  const rawUrl = sender.url ?? sender.tab.url;
+  if (!rawUrl) return false;
+  try {
+    return new URL(rawUrl).origin === JOBLIT_WEB_ORIGIN;
+  } catch {
+    return false;
+  }
+}
+
+function isExtensionPageSender(sender: chrome.runtime.MessageSender): boolean {
+  if (sender.id !== chrome.runtime.id || sender.tab || !sender.url) return false;
+  return sender.url.startsWith(chrome.runtime.getURL(""));
+}
+
+function requireSender(allowed: boolean): void {
+  if (!allowed) throw new HermesApiError("FORBIDDEN_CALLER", "Forbidden extension caller");
+}
+
+function isWidgetPosition(value: unknown): value is WidgetPosition {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const position = value as Record<string, unknown>;
+  const pixel = /^(?:0|[1-9]\d{0,3})px$/;
+  return (
+    Object.keys(position).length === 2 &&
+    typeof position.right === "string" &&
+    pixel.test(position.right) &&
+    typeof position.bottom === "string" &&
+    pixel.test(position.bottom)
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
 
 /** Handle messages from content scripts and popup. */
 chrome.runtime.onMessage.addListener(
   (
     message: MessageType,
-    _sender: chrome.runtime.MessageSender,
+    sender: chrome.runtime.MessageSender,
     sendResponse: (response: MessageResponse) => void,
   ) => {
-    handleMessage(message)
+    handleMessage(message, sender)
       .then(sendResponse)
       .catch((err: unknown) => {
+        if (err instanceof HermesApiError) {
+          const publicError = toPublicLocalAiError(err);
+          sendResponse({
+            success: false,
+            error: publicError.message,
+            errorCode: publicError.code,
+            retryable: publicError.retryable,
+          });
+          return;
+        }
         const errorMessage =
           err instanceof Error ? err.message : "Unknown error";
         sendResponse({ success: false, error: errorMessage });
@@ -26,7 +88,15 @@ chrome.runtime.onMessage.addListener(
   },
 );
 
-async function handleMessage(message: MessageType): Promise<MessageResponse> {
+async function handleMessage(
+  message: MessageType,
+  sender: chrome.runtime.MessageSender,
+): Promise<MessageResponse> {
+  try {
+    await storageReady;
+  } catch {
+    throw new HermesApiError("EXTENSION_STORAGE_UNAVAILABLE", "Secure extension storage is unavailable");
+  }
   switch (message.type) {
     case "GET_AUTH_STATUS": {
       const status = await getAuthStatus();
@@ -109,6 +179,77 @@ async function handleMessage(message: MessageType): Promise<MessageResponse> {
       return { success: true, data: result };
     }
 
+    case "GET_CONTENT_SETTINGS": {
+      const stored = await chrome.storage.local.get([
+        STORAGE_KEYS.PREFERENCES,
+        STORAGE_KEYS.WIDGET_POSITION,
+      ]);
+      const preferences = isRecord(stored[STORAGE_KEYS.PREFERENCES])
+        ? stored[STORAGE_KEYS.PREFERENCES]
+        : {};
+      const safePreferences = {
+        autoFill: preferences?.autoFill === true,
+        showWidget: preferences?.showWidget !== false,
+      };
+      const position = stored[STORAGE_KEYS.WIDGET_POSITION];
+      return {
+        success: true,
+        data: {
+          preferences: safePreferences,
+          ...(isWidgetPosition(position) ? { widgetPosition: position } : {}),
+        },
+      };
+    }
+
+    case "SET_WIDGET_POSITION": {
+      if (!isWidgetPosition(message.position)) {
+        throw new HermesApiError("INVALID_REQUEST", "Invalid widget position");
+      }
+      await chrome.storage.local.set({ [STORAGE_KEYS.WIDGET_POSITION]: message.position });
+      return { success: true };
+    }
+
+    case "LOCAL_AI_GET_STATUS": {
+      requireSender(isJoblitWebSender(sender));
+      return { success: true, data: await getPublicLocalAiStatus() };
+    }
+
+    case "LOCAL_AI_START_RUN": {
+      requireSender(isJoblitWebSender(sender));
+      return { success: true, data: await startLocalAiRun(message.payload) };
+    }
+
+    case "LOCAL_AI_GET_RUN": {
+      requireSender(isJoblitWebSender(sender));
+      return { success: true, data: await getLocalAiRun(message.payload) };
+    }
+
+    case "LOCAL_AI_STOP_RUN": {
+      requireSender(isJoblitWebSender(sender));
+      return { success: true, data: await stopLocalAiRun(message.payload) };
+    }
+
+    case "GET_HERMES_SETTINGS": {
+      requireSender(isExtensionPageSender(sender));
+      return { success: true, data: await getHermesSettingsPublic() };
+    }
+
+    case "CHECK_HERMES_SETTINGS": {
+      requireSender(isExtensionPageSender(sender));
+      return { success: true, data: await checkHermesSettings() };
+    }
+
+    case "TEST_AND_SAVE_HERMES_SETTINGS": {
+      requireSender(isExtensionPageSender(sender));
+      return { success: true, data: await testAndSaveHermesSettings(message.data) };
+    }
+
+    case "CLEAR_HERMES_SETTINGS": {
+      requireSender(isExtensionPageSender(sender));
+      await forgetHermesSettings();
+      return { success: true };
+    }
+
     default:
       return { success: false, error: "Unknown message type" };
   }
@@ -131,8 +272,8 @@ chrome.commands.onCommand.addListener(async (command) => {
 
 /** Process offline sync queue when connectivity is restored. */
 self.addEventListener("online", () => {
-  processQueue();
+  void storageReady.then(() => processQueue()).catch(() => undefined);
 });
 
 /** Also process queue on service worker startup (handles restart after being idle). */
-processQueue();
+void storageReady.then(() => processQueue()).catch(() => undefined);

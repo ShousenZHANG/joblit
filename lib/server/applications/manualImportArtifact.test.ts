@@ -75,6 +75,9 @@ describe("manual import artifact builder", () => {
     const result = buildManualImportArtifact({
       target: "resume",
       modelOutput: "invalid-output-invalid-output",
+      mode: "legacy",
+      source: "manual_import",
+      promptMetaHash: "prompt-hash",
       renderInput,
       profile,
       job,
@@ -104,6 +107,9 @@ describe("manual import artifact builder", () => {
         },
         skillsFinal: [{ label: "Backend", items: ["Java", "Spring Boot"] }],
       }),
+      mode: "legacy",
+      source: "manual_import",
+      promptMetaHash: "prompt-hash",
       renderInput,
       profile,
       job,
@@ -140,6 +146,9 @@ describe("manual import artifact builder", () => {
         },
         skillsFinal: [{ label: "Backend", items: ["Java", "Spring Boot"] }],
       }),
+      mode: "legacy",
+      source: "manual_import",
+      promptMetaHash: "prompt-hash",
       renderInput,
       profile,
       job,
@@ -149,6 +158,8 @@ describe("manual import artifact builder", () => {
     if (!result.ok) return;
     expect(result.aiContent).toBeDefined();
     expect(result.aiContent.schemaVersion).toBe(AI_CONTENT_SCHEMA_VERSION);
+    expect(result.aiContent.promptMetaHash).toBe("prompt-hash");
+    expect(result.aiContent.source).toBe("manual_import");
 
     expect(result.aiContent.cv.summary).toEqual(
       expect.objectContaining({
@@ -179,6 +190,9 @@ describe("manual import artifact builder", () => {
           paragraphThree: "Three",
         },
       }),
+      mode: "legacy",
+      source: "manual_import",
+      promptMetaHash: "prompt-hash",
       renderInput,
       profile,
       job,
@@ -195,5 +209,22 @@ describe("manual import artifact builder", () => {
         paragraphOne: "One",
       }),
     );
+  });
+
+  it("returns stable INVALID_AI_RESULT for non-canonical local AI output", () => {
+    const result = buildManualImportArtifact({
+      target: "resume",
+      modelOutput: `\`\`\`json\n{}\n\`\`\``,
+      mode: "strict",
+      source: "local_ai",
+      promptMetaHash: "canonical-hash",
+      renderInput,
+      profile,
+      job,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("INVALID_AI_RESULT");
   });
 });

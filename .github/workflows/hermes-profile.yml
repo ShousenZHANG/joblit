@@ -1,0 +1,171 @@
+name: Hermes profile
+
+on:
+  pull_request:
+    paths:
+      - "integrations/hermes/**"
+      - "tools/hermes/**"
+      - "test/hermesProfileSource.test.ts"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/hermes-profile.yml"
+  push:
+    branches: [master]
+    paths:
+      - "integrations/hermes/**"
+      - "tools/hermes/**"
+      - "test/hermesProfileSource.test.ts"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/hermes-profile.yml"
+  workflow_dispatch:
+    inputs:
+      production_release:
+        description: "Sign and upload a tagged production profile release"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hermes-profile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-and-package:
+    name: Source and package policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Validate minimal profile source
+        run: npm run hermes:profile:test
+      - name: Test deterministic package and ephemeral signatures
+        run: npm run hermes:package:test
+      - name: Build twice and compare exact staged content
+        shell: bash
+        run: |
+          npm run hermes:package:build -- --staging .tmp/hermes-ci-a --source-commit "$GITHUB_SHA"
+          npm run hermes:package:build -- --staging .tmp/hermes-ci-b --source-commit "$GITHUB_SHA"
+          diff -ru --no-dereference .tmp/hermes-ci-a .tmp/hermes-ci-b
+          npm run hermes:package:verify -- --root .tmp/hermes-ci-a --mode integrity --expected-source-commit "$GITHUB_SHA"
+      - name: Reject secrets, links, and runtime state in source
+        shell: bash
+        run: |
+          if git grep -n -E 'BEGIN ([A-Z0-9 ]+ )?PRIVATE KEY|jfext_[A-Za-z0-9_-]+|sk-[A-Za-z0-9_-]{20,}' -- integrations/hermes tools/hermes test/hermesProfileSource.test.ts; then
+            echo "Potential committed secret found"
+            exit 1
+          fi
+          test -z "$(find integrations/hermes/profile -type l -print -quit)"
+          test -z "$(find integrations/hermes/profile -type f \( -name '.env' -o -name '*.sig' -o -name '*.key' \) -print -quit)"
+
+  windows-bootstrap:
+    name: Windows bootstrap safety
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: Install PowerShell test tools
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module Pester -RequiredVersion 5.6.1 -Scope CurrentUser -Force
+          Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Scope CurrentUser -Force
+      - name: Parse every PowerShell file
+        shell: pwsh
+        run: |
+          $failed = $false
+          Get-ChildItem tools/hermes/bootstrap -Recurse -Include *.ps1,*.psm1 | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [void][Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors)
+            if ($errors.Count -gt 0) {
+              $failed = $true
+              $errors | ForEach-Object { Write-Error "$($_.Extent.File):$($_.Extent.StartLineNumber): $($_.Message)" }
+            }
+          }
+          if ($failed) { exit 1 }
+      - name: Run PowerShell security analysis
+        shell: pwsh
+        run: |
+          $findings = Invoke-ScriptAnalyzer -Path tools/hermes/bootstrap -Recurse -Severity Error,Warning
+          $findings | Format-Table -AutoSize
+          if ($findings) { exit 1 }
+      - name: Run Pester against fakes and temporary profiles
+        shell: pwsh
+        run: Invoke-Pester tools/hermes/bootstrap/tests -CI
+
+  production-release:
+    name: Signed production release
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.production_release == true &&
+      startsWith(github.ref, 'refs/tags/')
+    needs: [source-and-package, windows-bootstrap]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+      - name: Fail closed unless real release trust is provisioned
+        shell: bash
+        run: |
+          [[ "$GITHUB_REF_NAME" =~ ^[A-Za-z0-9._-]+$ ]]
+          test "$(node -e "const r=require('./integrations/hermes/trust/release-keys.json');process.stdout.write(String(r.keys.length))")" -gt 0
+      - name: Build unsigned package
+        shell: bash
+        run: |
+          npm run hermes:package:build -- --staging .tmp/hermes-release --source-commit "$GITHUB_SHA"
+      - name: Sign package manifest
+        shell: bash
+        env:
+          JOBLIT_HERMES_SIGNING_PRIVATE_KEY: ${{ secrets.JOBLIT_HERMES_SIGNING_PRIVATE_KEY }}
+          JOBLIT_HERMES_SIGNING_KEY_ID: ${{ secrets.JOBLIT_HERMES_SIGNING_KEY_ID }}
+        run: |
+          test -n "$JOBLIT_HERMES_SIGNING_PRIVATE_KEY"
+          test -n "$JOBLIT_HERMES_SIGNING_KEY_ID"
+          npm run hermes:package:sign -- --root .tmp/hermes-release --key-id "$JOBLIT_HERMES_SIGNING_KEY_ID" --expected-source-commit "$GITHUB_SHA"
+      - name: Verify and archive signed package
+        shell: bash
+        run: |
+          npm run hermes:package:verify -- --root .tmp/hermes-release --mode production --expected-source-commit "$GITHUB_SHA"
+          (
+            cd .tmp/hermes-release
+            find . -type f -printf '%P\0' | sort -z | xargs -0 zip -X "../joblit-hermes-profile-${GITHUB_REF_NAME}.zip"
+          )
+          (
+            cd .tmp
+            sha256sum "joblit-hermes-profile-${GITHUB_REF_NAME}.zip" > "joblit-hermes-profile-${GITHUB_REF_NAME}.zip.sha256"
+          )
+      - name: Publish only verified signed artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release="$GITHUB_REF_NAME"
+          archive="joblit-hermes-profile-${release}.zip"
+          checksum="${archive}.sha256"
+          if ! gh release view "$release" >/dev/null 2>&1; then
+            gh release create "$release" --verify-tag --title "Joblit Hermes profile ${release}" --notes "Verified, signed Joblit profile for stock Hermes."
+          fi
+          existing="$(gh release view "$release" --json assets --jq '.assets[].name')"
+          if grep -Fxq "$archive" <<<"$existing" || grep -Fxq "$checksum" <<<"$existing"; then
+            echo "Refusing to replace an existing release asset."
+            exit 1
+          fi
+          gh release upload "$release" ".tmp/$archive" ".tmp/$checksum"

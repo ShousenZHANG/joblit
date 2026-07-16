@@ -19,13 +19,17 @@ import {
   normalizeBulletForCompare,
   normalizeMarkdownBold,
   parseCoverManualOutput,
+  parseCoverStrictOutput,
   parseResumeManualOutput,
+  parseResumeStrictOutput,
   sanitizeSkillGroups,
 } from "./manualImportParser";
 
 type ResumeRenderInput = ReturnType<typeof mapResumeProfile>;
 
 type ManualImportTarget = "resume" | "cover";
+type ManualImportMode = "legacy" | "strict";
+type ManualImportSource = "manual_import" | "local_ai";
 
 type ManualImportJob = {
   title: string;
@@ -85,6 +89,9 @@ function parseFilename(candidate: string, role: string, target: ManualImportTarg
 export function buildManualImportArtifact(input: {
   target: ManualImportTarget;
   modelOutput: string;
+  mode: ManualImportMode;
+  source: ManualImportSource;
+  promptMetaHash: string;
   renderInput: ResumeRenderInput;
   profile: ManualImportProfile;
   job: ManualImportJob;
@@ -96,19 +103,27 @@ export function buildManualImportArtifact(input: {
 
 function buildManualResumeArtifact(input: {
   modelOutput: string;
+  mode: ManualImportMode;
+  source: ManualImportSource;
+  promptMetaHash: string;
   renderInput: ResumeRenderInput;
   profile: ManualImportProfile;
   job: ManualImportJob;
 }): ManualImportArtifactResult {
-  const resumeParsed = parseResumeManualOutput(input.modelOutput);
+  const resumeParsed =
+    input.mode === "strict"
+      ? parseResumeStrictOutput(input.modelOutput)
+      : parseResumeManualOutput(input.modelOutput);
   if (!resumeParsed.data) {
     return {
       ok: false,
       error: {
         status: 400,
-        code: "PARSE_FAILED",
+        code: input.mode === "strict" ? "INVALID_AI_RESULT" : "PARSE_FAILED",
         message:
-          "Unable to parse model output. Resume JSON must include cvSummary and latestExperience.bullets (skillsFinal preferred).",
+          input.mode === "strict"
+            ? "Local AI returned invalid resume JSON. Run it again or use the manual method."
+            : "Unable to parse model output. Resume JSON must include cvSummary and latestExperience.bullets (skillsFinal preferred).",
         details: resumeParsed.issues.slice(0, 8),
       },
     };
@@ -204,7 +219,8 @@ function buildManualResumeArtifact(input: {
   const aiContent: AiContent = {
     schemaVersion: AI_CONTENT_SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
-    promptMetaHash: "",
+    promptMetaHash: input.promptMetaHash,
+    source: input.source,
     cv: {
       summary: {
         aiText: cvSummary,
@@ -237,19 +253,27 @@ function buildManualResumeArtifact(input: {
 
 function buildManualCoverArtifact(input: {
   modelOutput: string;
+  mode: ManualImportMode;
+  source: ManualImportSource;
+  promptMetaHash: string;
   renderInput: ResumeRenderInput;
   profile: ManualImportProfile;
   job: ManualImportJob;
 }): ManualImportArtifactResult {
-  const coverParsed = parseCoverManualOutput(input.modelOutput);
+  const coverParsed =
+    input.mode === "strict"
+      ? parseCoverStrictOutput(input.modelOutput)
+      : parseCoverManualOutput(input.modelOutput);
   if (!coverParsed.data) {
     return {
       ok: false,
       error: {
         status: 400,
-        code: "PARSE_FAILED",
+        code: input.mode === "strict" ? "INVALID_AI_RESULT" : "PARSE_FAILED",
         message:
-          "Unable to parse model output. Cover JSON must include cover.paragraphOne/paragraphTwo/paragraphThree.",
+          input.mode === "strict"
+            ? "Local AI returned invalid cover-letter JSON. Run it again or use the manual method."
+            : "Unable to parse model output. Cover JSON must include cover.paragraphOne/paragraphTwo/paragraphThree.",
         details: coverParsed.issues.slice(0, 8),
       },
     };
@@ -314,7 +338,8 @@ function buildManualCoverArtifact(input: {
     aiContent: {
       schemaVersion: AI_CONTENT_SCHEMA_VERSION,
       generatedAt: new Date().toISOString(),
-      promptMetaHash: "",
+      promptMetaHash: input.promptMetaHash,
+      source: input.source,
       cv: {
         summary: { aiText: "", originalText: input.renderInput.summary ?? "", accepted: false },
         latestExperience: { experienceIndex: 0, addedBullets: [] },

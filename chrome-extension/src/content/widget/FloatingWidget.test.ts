@@ -26,6 +26,7 @@ function createWidget(onSaveRule = vi.fn().mockResolvedValue(true)) {
     onCorrectMapping: vi.fn(),
     onSaveRule,
     onApplyValue: vi.fn(),
+    onSavePosition: vi.fn(),
   };
   const widget = new FloatingWidget(container, callbacks);
   return { container, callbacks, widget };
@@ -49,6 +50,7 @@ describe("FloatingWidget announcements", () => {
       onCorrectMapping: vi.fn(),
       onSaveRule: vi.fn().mockResolvedValue(true),
       onApplyValue: vi.fn(),
+      onSavePosition: vi.fn(),
     });
 
     widget.showSubmissionError();

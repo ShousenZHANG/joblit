@@ -36,6 +36,7 @@ export type TailorReviewDraft = {
   initialAiContentHash: string | null;
   resumePdfUrl: string | null;
   coverPdfUrl: string | null;
+  source?: "manual_import" | "local_ai";
   job: {
     id: string | null;
     title: string;

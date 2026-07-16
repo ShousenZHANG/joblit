@@ -19,6 +19,10 @@ const navigationMock = vi.hoisted(() => ({
   replace: vi.fn(),
 }));
 
+const localAiBridgeMock = vi.hoisted(() => ({
+  send: vi.fn(),
+}));
+
 vi.mock("@/app/FetchStatusContext", () => ({
   useFetchStatus: () => fetchStatusMock.state,
 }));
@@ -35,6 +39,13 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/jobs",
   useSearchParams: () => new URLSearchParams(navigationMock.search),
 }));
+
+vi.mock("@/lib/client/localAiBridge", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/client/localAiBridge")>(
+    "@/lib/client/localAiBridge",
+  );
+  return { ...actual, sendLocalAiBridgeRequest: localAiBridgeMock.send };
+});
 
 afterEach(() => {
   cleanup();
@@ -71,6 +82,7 @@ function renderWithClient(ui: React.ReactElement) {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  sessionStorage.clear();
   // The session-tombstone set is module-level by design (it must survive
   // JobsClient remounts) — tests share the module instance, so isolate here.
   sessionDeletedJobIds.clear();
@@ -80,6 +92,8 @@ beforeEach(() => {
   fetchStatusMock.state = { runId: null, status: null, importedCount: 0 };
   navigationMock.search = "";
   navigationMock.replace.mockReset();
+  localAiBridgeMock.send.mockReset();
+  localAiBridgeMock.send.mockResolvedValue({ state: "not_configured", joblitConnected: true });
   Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
   if (!HTMLElement.prototype.hasPointerCapture) {
     Object.defineProperty(HTMLElement.prototype, "hasPointerCapture", {
@@ -1157,6 +1171,43 @@ describe("JobsClient", () => {
     expect(detailsPanel.className).toContain("flex");
   });
 
+  it("uses the allowlisted Local AI START_RUN as the primary CV action", async () => {
+    const user = userEvent.setup();
+    localAiBridgeMock.send.mockImplementation(async (action: string, payload: unknown) => {
+      if (action === "GET_STATUS") return { state: "ready", joblitConnected: true };
+      if (action === "START_RUN" || action === "GET_RUN") {
+        const request = payload as { requestId: string; jobId?: string; target?: string };
+        return {
+          requestId: request.requestId,
+          jobId: request.jobId ?? baseJob.id,
+          target: request.target ?? "resume",
+          status: "queued",
+        };
+      }
+      throw new Error(`unexpected ${action}`);
+    });
+    renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
+    await waitFor(() => {
+      expect(localAiBridgeMock.send).toHaveBeenCalledWith(
+        "GET_STATUS",
+        {},
+        expect.objectContaining({ timeoutMs: 1_500 }),
+      );
+    });
+
+    await user.click((await screen.findAllByRole("button", { name: /generate cv/i }))[0]);
+
+    await waitFor(() => {
+      expect(localAiBridgeMock.send).toHaveBeenCalledWith(
+        "START_RUN",
+        expect.objectContaining({ jobId: baseJob.id, target: "resume" }),
+        expect.objectContaining({ timeoutMs: 10_000 }),
+      );
+    });
+    const startPayload = localAiBridgeMock.send.mock.calls.find(([action]) => action === "START_RUN")?.[1];
+    expect(JSON.stringify(startPayload)).not.toMatch(/token|prompt|url|run_id/i);
+  });
+
   it("disables skill pack download until prompt meta is ready, then advances to Copy Prompt with one click", async () => {
     const user = userEvent.setup();
     const anchorClickSpy = vi
@@ -1209,6 +1260,7 @@ describe("JobsClient", () => {
 
     const generateCvButton = (await screen.findAllByRole("button", { name: /generate cv/i }))[0];
     await user.click(generateCvButton);
+    await user.click(await screen.findByRole("button", { name: /use manual method/i }));
 
     const downloadButton = await screen.findByRole("button", {
       name: /preparing|download zip/i,
@@ -1315,6 +1367,7 @@ describe("JobsClient", () => {
 
     const generateCvButton = (await screen.findAllByRole("button", { name: /generate cv/i }))[0];
     await user.click(generateCvButton);
+    await user.click(await screen.findByRole("button", { name: /use manual method/i }));
 
     const downloadButton = await screen.findByRole("button", { name: /download zip/i });
     await waitFor(() => {
@@ -1327,6 +1380,7 @@ describe("JobsClient", () => {
 
     const generateCoverButton = (await screen.findAllByRole("button", { name: /generate cl/i }))[0];
     await user.click(generateCoverButton);
+    await user.click(await screen.findByRole("button", { name: /use manual method/i }));
     expect(await screen.findByRole("button", { name: /copy prompt to clipboard/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /download skill pack/i })).not.toBeInTheDocument();
 

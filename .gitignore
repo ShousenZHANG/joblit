@@ -112,3 +112,9 @@ design-system/
 
 # Packaged extension build artifacts
 *.zip
+
+# Generated Hermes profile packages, secrets, and local receipts
+/.tmp/hermes-*/
+*.sig
+*.key
+*hermes-receipt*.json

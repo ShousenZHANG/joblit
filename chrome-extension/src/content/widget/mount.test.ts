@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountWidget, unmountWidget } from "./mount";
 
 afterEach(() => {
@@ -6,6 +6,13 @@ afterEach(() => {
 });
 
 describe("floating widget interaction styles", () => {
+  it("applies a background-provided position without reading extension storage", () => {
+    const getSpy = vi.spyOn(chrome.storage.local, "get");
+    const mounted = mountWidget({ right: "32px", bottom: "48px" });
+    expect(mounted?.container.style.right).toBe("32px");
+    expect(mounted?.container.style.bottom).toBe("48px");
+    expect(getSpy).not.toHaveBeenCalled();
+  });
   it("keeps edit controls keyboard-discoverable with visible focus and 44px targets", () => {
     const mounted = mountWidget();
     const styles = mounted?.shadowRoot.querySelector("style")?.textContent ?? "";
