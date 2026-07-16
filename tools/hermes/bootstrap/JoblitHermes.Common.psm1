@@ -100,6 +100,32 @@ function Invoke-JoblitProcess {
     return [pscustomobject]@{ ExitCode = $exitCode; Output = $safeOutput }
 }
 
+function Invoke-JoblitNonInteractiveProcess {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string] $FilePath,
+        [Parameter(Mandatory)][string[]] $Arguments,
+        [string[]] $Secrets = @(),
+        [switch] $AllowFailure
+    )
+    $hadValue = Test-Path Env:HERMES_NONINTERACTIVE
+    $previousValue = $env:HERMES_NONINTERACTIVE
+    try {
+        $env:HERMES_NONINTERACTIVE = '1'
+        return Invoke-JoblitProcess `
+            -FilePath $FilePath `
+            -Arguments $Arguments `
+            -Secrets $Secrets `
+            -AllowFailure:$AllowFailure
+    } finally {
+        if ($hadValue) {
+            $env:HERMES_NONINTERACTIVE = $previousValue
+        } else {
+            Remove-Item Env:HERMES_NONINTERACTIVE -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 function Get-JoblitHermesVersion {
     param([Parameter(Mandatory)][string] $HermesPath)
     $result = Invoke-JoblitProcess -FilePath $HermesPath -Arguments @('--version')
@@ -184,10 +210,35 @@ function Read-JoblitEnvFile {
     return $values
 }
 
+function Test-JoblitPrivateAcl {
+    param(
+        [Parameter(Mandatory)][Security.AccessControl.FileSecurity] $Acl,
+        [Parameter(Mandatory)][Security.Principal.SecurityIdentifier] $Identity
+    )
+    try {
+        $owner = $Acl.GetOwner([Security.Principal.SecurityIdentifier])
+        $rules = @($Acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))
+        if (-not $Acl.AreAccessRulesProtected -or -not $owner.Equals($Identity) -or $rules.Count -ne 1) {
+            return $false
+        }
+        $rule = $rules[0]
+        return (
+            $rule.IdentityReference.Equals($Identity) -and
+            $rule.AccessControlType -eq [Security.AccessControl.AccessControlType]::Allow -and
+            $rule.FileSystemRights -eq [Security.AccessControl.FileSystemRights]::FullControl -and
+            -not $rule.IsInherited
+        )
+    } catch {
+        return $false
+    }
+}
+
 function Set-JoblitPrivateAcl {
     param([Parameter(Mandatory)][string] $Path)
     if ($env:OS -ne 'Windows_NT') { return }
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent().User
+    $current = Get-Acl -LiteralPath $Path
+    if (Test-JoblitPrivateAcl -Acl $current -Identity $identity) { return }
     $acl = New-Object Security.AccessControl.FileSecurity
     $acl.SetOwner($identity)
     $acl.SetAccessRuleProtection($true, $false)
@@ -198,6 +249,10 @@ function Set-JoblitPrivateAcl {
     )
     $acl.AddAccessRule($rule)
     Set-Acl -LiteralPath $Path -AclObject $acl
+    $applied = Get-Acl -LiteralPath $Path
+    if (-not (Test-JoblitPrivateAcl -Acl $applied -Identity $identity)) {
+        throw (New-JoblitFailure -Code 'PRIVATE_ACL_VERIFY_FAILED' -Message $Path)
+    }
 }
 
 function Write-JoblitEnvFileAtomic {
@@ -214,19 +269,23 @@ function Write-JoblitEnvFileAtomic {
             throw (New-JoblitFailure -Code 'UNSAFE_ENV_FILE' -Message $Path)
         }
     }
-    $temporary = "$Path.$PID.$([guid]::NewGuid().ToString('N')).tmp"
+    $operationId = [guid]::NewGuid().ToString('N')
+    $temporary = "$Path.$PID.$operationId.tmp"
+    $backup = "$Path.$PID.$operationId.bak"
     $lines = @($Values.Keys | Sort-Object | ForEach-Object { "$_=$($Values[$_])" })
     try {
         [IO.File]::WriteAllLines($temporary, $lines, [Text.UTF8Encoding]::new($false))
         Set-JoblitPrivateAcl -Path $temporary
         if (Test-Path -LiteralPath $Path) {
-            [IO.File]::Replace($temporary, $Path, $null, $true)
+            Set-JoblitPrivateAcl -Path $Path
+            [IO.File]::Replace($temporary, $Path, $backup, $true)
         } else {
             [IO.File]::Move($temporary, $Path)
         }
         Set-JoblitPrivateAcl -Path $Path
     } finally {
         if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force }
+        if (Test-Path -LiteralPath $backup) { Remove-Item -LiteralPath $backup -Force }
     }
 }
 
@@ -808,7 +867,7 @@ function Invoke-JoblitHermesInstall {
 
         Write-JoblitStatus -State 'InstallGateway' -Status 'Started' -Message 'Installing official per-profile gateway service.'
         $loginArgument = if ($StartOnLogin) { '--start-on-login' } else { '--no-start-on-login' }
-        Invoke-JoblitProcess -FilePath $hermes -Arguments @('-p',$ProfileName,'gateway','install','--start-now',$loginArgument) -Secrets @($apiKey) | Out-Null
+        Invoke-JoblitNonInteractiveProcess -FilePath $hermes -Arguments @('-p',$ProfileName,'gateway','install','--start-now',$loginArgument) -Secrets @($apiKey) | Out-Null
         Write-JoblitStatus -State 'InstallGateway' -Status 'Passed' -Message 'Gateway install completed.'
 
         Write-JoblitStatus -State 'Probe' -Status 'Started' -Message 'Checking liveness and authenticated capabilities.'

@@ -38,6 +38,7 @@ agent:
         $global:JoblitTestPackageRoot = $script:PackageRoot
         $global:JoblitTestEvents = [Collections.Generic.List[string]]::new()
         $global:JoblitTestCommands = [Collections.Generic.List[string]]::new()
+        $global:JoblitGatewayNonInteractive = $null
 
         Mock Resolve-JoblitExecutable { param($Name) return "fake-$Name" } -ModuleName JoblitHermes.Common
         Mock Get-JoblitHermesVersion { return '0.18.2' } -ModuleName JoblitHermes.Common
@@ -51,6 +52,9 @@ agent:
             param($FilePath, $Arguments, $Secrets, $AllowFailure)
             $joined = $Arguments -join ' '
             $global:JoblitTestCommands.Add($joined)
+            if ($joined -match 'gateway install') {
+                $global:JoblitGatewayNonInteractive = $env:HERMES_NONINTERACTIVE
+            }
             if ($Arguments[0] -eq 'profile' -and $Arguments[1] -eq 'install') {
                 $global:JoblitTestEvents.Add('install')
                 $sourceRoot = $Arguments[2]
@@ -86,11 +90,13 @@ installed_at: '2026-07-16T00:00:00+00:00'
 
     AfterEach {
         Remove-Item Env:HERMES_HOME -ErrorAction SilentlyContinue
-        Remove-Variable JoblitTestPackageRoot, JoblitTestEvents, JoblitTestCommands, JoblitAuthChecks, JoblitProbeAttempts -Scope Global -ErrorAction SilentlyContinue
+        Remove-Item Env:HERMES_NONINTERACTIVE -ErrorAction SilentlyContinue
+        Remove-Variable JoblitTestPackageRoot, JoblitTestEvents, JoblitTestCommands, JoblitGatewayNonInteractive, JoblitAuthChecks, JoblitProbeAttempts -Scope Global -ErrorAction SilentlyContinue
     }
 
     It 'verifies before mutation and uses official isolated profile, auth, and gateway commands' {
         $profile = 'joblit-0123456789abcdef'
+        Remove-Item Env:HERMES_NONINTERACTIVE -ErrorAction SilentlyContinue
         $receipt = Invoke-JoblitHermesInstall -PackagePath $script:PackageRoot -ProfileName $profile -Production
 
         $global:JoblitTestEvents[0] | Should -Be 'verify'
@@ -100,6 +106,8 @@ installed_at: '2026-07-16T00:00:00+00:00'
         $global:JoblitTestCommands | Should -Contain "-p $profile auth status openai-codex"
         $global:JoblitTestCommands | Should -Not -Contain "-p $profile auth add openai-codex"
         $global:JoblitTestCommands | Should -Contain "-p $profile gateway install --start-now --start-on-login"
+        $global:JoblitGatewayNonInteractive | Should -Be '1'
+        Test-Path Env:HERMES_NONINTERACTIVE | Should -BeFalse
         @($global:JoblitTestCommands | Where-Object { $_ -match '(^|\s)config\s+get(\s|$)' }).Count | Should -Be 0
         Test-Path -LiteralPath $persistentSource -PathType Container | Should -BeTrue
         Test-JoblitSamePath -Left $persistentSource -Right $script:PackageRoot | Should -BeFalse
