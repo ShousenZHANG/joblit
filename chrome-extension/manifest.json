@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "minimum_chrome_version": "102",
   "name": "Joblit AutoFill",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Auto-fill job application forms with your Joblit profile data",
   "author": "Joblit (joblit.tech)",
   "homepage_url": "https://www.joblit.tech",

@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import manifest from "../manifest.json";
+import packageJson from "../package.json";
 
 describe("extension manifest least privilege", () => {
+  it("never reuses the legacy 0.1.1 version for the bridge-capable release", () => {
+    expect(manifest.version).toBe(packageJson.version);
+    expect(manifest.version).not.toBe("0.1.1");
+  });
+
   it("requires access only to the Joblit API host", () => {
     expect(manifest.host_permissions).toEqual(["https://www.joblit.tech/*"]);
     expect(manifest.host_permissions).not.toContain("https://*/*");
