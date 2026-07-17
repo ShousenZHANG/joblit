@@ -112,8 +112,11 @@ async function readBoundedJson(response: Response): Promise<unknown> {
 }
 
 function httpError(response: Response, missingRun: boolean): HermesApiError {
-  if (response.status === 401 || response.status === 403) {
+  if (response.status === 401) {
     return new HermesApiError("HERMES_AUTH_FAILED", "Hermes rejected API key", { status: response.status });
+  }
+  if (response.status === 403) {
+    return new HermesApiError("HERMES_ORIGIN_FORBIDDEN", "Hermes blocked the extension origin", { status: response.status });
   }
   if (response.status === 404) {
     return missingRun
@@ -247,6 +250,16 @@ export function createHermesApi(input: HermesClientConfig): HermesApi {
       if (tools.length > 0) {
         throw new HermesApiError("HERMES_INCOMPATIBLE", "Joblit Hermes profile advertises executable tools");
       }
+      try {
+        await request(
+          "/v1/runs",
+          { method: "POST", body: "{}" },
+          PROBE_TIMEOUT_MS,
+        );
+        throw new HermesApiError("HERMES_INCOMPATIBLE", "Hermes accepted an empty run probe");
+      } catch (error) {
+        if (!(error instanceof HermesApiError && error.status === 400)) throw error;
+      }
       return { modelId: profileName, profileName, tools };
     },
 
@@ -259,7 +272,7 @@ export function createHermesApi(input: HermesClientConfig): HermesApi {
         body.instructions.length === 0 ||
         body.instructions.length > 160_000 ||
         typeof body.session_id !== "string" ||
-        body.session_id.length > 180
+        body.session_id.length > 64
       ) {
         throw new HermesApiError("HERMES_PROTOCOL_ERROR", "Invalid Hermes run body");
       }

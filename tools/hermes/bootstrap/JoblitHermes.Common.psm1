@@ -6,7 +6,8 @@ $script:ManagedEnvironmentKeys = @(
     'API_SERVER_HOST',
     'API_SERVER_PORT',
     'API_SERVER_KEY',
-    'API_SERVER_MODEL_NAME'
+    'API_SERVER_MODEL_NAME',
+    'API_SERVER_CORS_ORIGINS'
 )
 $script:VerifierScript = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\verify-package.mjs'))
 
@@ -574,6 +575,21 @@ function Invoke-JoblitProbe {
         $capabilities = Invoke-RestMethod -Method Get -Uri "$base/v1/capabilities" -Headers $headers -TimeoutSec 10
         $models = Invoke-RestMethod -Method Get -Uri "$base/v1/models" -Headers $headers -TimeoutSec 10
         $toolsets = Invoke-RestMethod -Method Get -Uri "$base/v1/toolsets" -Headers $headers -TimeoutSec 10
+        $preflight = Invoke-WebRequest -UseBasicParsing -Method Options -Uri "$base/v1/runs" -Headers @{
+            Origin = 'chrome-extension://joblit-probe'
+            'Access-Control-Request-Method' = 'POST'
+            'Access-Control-Request-Headers' = 'Authorization, Content-Type'
+        } -TimeoutSec 10
+        $allowedOrigin = @($preflight.Headers['Access-Control-Allow-Origin']) -join ', '
+        $allowedMethods = @($preflight.Headers['Access-Control-Allow-Methods']) -join ', '
+        $allowedHeaders = @($preflight.Headers['Access-Control-Allow-Headers']) -join ', '
+        if (
+            [int] $preflight.StatusCode -ne 200 -or
+            $allowedOrigin -ne '*' -or
+            $allowedMethods -notmatch '(?i)(^|,\s*)POST(\s*,|$)' -or
+            $allowedHeaders -notmatch '(?i)(^|,\s*)Authorization(\s*,|$)' -or
+            $allowedHeaders -notmatch '(?i)(^|,\s*)Content-Type(\s*,|$)'
+        ) { throw 'extension CORS preflight' }
 
         $auth = Get-JoblitPropertyValue -Object $capabilities -Name 'auth'
         $features = Get-JoblitPropertyValue -Object $capabilities -Name 'features'
@@ -861,6 +877,7 @@ function Invoke-JoblitHermesInstall {
         $environmentValues['API_SERVER_PORT'] = [string] $Port
         $environmentValues['API_SERVER_KEY'] = $apiKey
         $environmentValues['API_SERVER_MODEL_NAME'] = $ProfileName
+        $environmentValues['API_SERVER_CORS_ORIGINS'] = '*'
         Write-JoblitEnvFileAtomic -Path $envPath -Values $environmentValues
         $fingerprint = Get-JoblitKeyFingerprint -ApiKey $apiKey
         Write-JoblitStatus -State 'WriteLocalEnv' -Status 'Passed' -Message "Private environment written; key fingerprint $fingerprint." -Secrets @($apiKey)
@@ -954,6 +971,7 @@ function Test-JoblitHermesReadiness {
             $values['API_SERVER_HOST'] -ne '127.0.0.1' -or
             $values['API_SERVER_ENABLED'] -ne 'true' -or
             $values['API_SERVER_MODEL_NAME'] -ne $ProfileName -or
+            $values['API_SERVER_CORS_ORIGINS'] -ne '*' -or
             -not (Test-JoblitApiKeyStrength $values['API_SERVER_KEY'])
         ) { throw 'Unsafe API environment.' }
         $port = [int] $values['API_SERVER_PORT']

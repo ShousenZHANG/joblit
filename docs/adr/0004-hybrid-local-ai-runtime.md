@@ -154,8 +154,11 @@ high-friction experience. It remains the last-resort fallback.
   `127.0.0.1`/`localhost`. Reject public, LAN, or arbitrary remote endpoints.
 - Use a separate high-entropy `API_SERVER_KEY`. Keep it only in extension
   `chrome.storage.local` after setting access to `TRUSTED_CONTEXTS`.
-- Do not enable browser CORS for Joblit; the extension service worker uses
-  explicit loopback host permission.
+- Enable Hermes CORS only for the extension service worker's authenticated
+  loopback JSON requests. Beta sideload builds use `*` because unpacked Chrome
+  extension IDs vary; the random bearer key remains mandatory and is never
+  exposed to page code. Replace `*` with the fixed Chrome Web Store extension
+  origin once that public ID is assigned.
 - Configure `platform_toolsets.api_server: [no_mcp]`, disable memory and all
   executable/API-generation toolsets, install no plugins, and keep
   `model.openai_runtime: auto`. A Joblit installer/verifier checks active local

@@ -44,6 +44,7 @@ type HermesUiState =
 
 function hermesStateFromError(code?: string): HermesUiState {
   if (code === "HERMES_AUTH_FAILED") return "auth_failed";
+  if (code === "HERMES_ORIGIN_FORBIDDEN") return "incompatible";
   if (code === "HERMES_INCOMPATIBLE" || code === "HERMES_PROTOCOL_ERROR") return "incompatible";
   return "unavailable";
 }
@@ -51,6 +52,7 @@ function hermesStateFromError(code?: string): HermesUiState {
 function hermesErrorKey(code?: string): string {
   switch (code) {
     case "HERMES_AUTH_FAILED":
+    case "HERMES_ORIGIN_FORBIDDEN":
     case "HERMES_INCOMPATIBLE":
     case "HERMES_PROTOCOL_ERROR":
     case "HERMES_UNREACHABLE":

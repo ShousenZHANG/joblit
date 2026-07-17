@@ -310,6 +310,7 @@ export async function getPublicLocalAiStatus(): Promise<PublicLocalAiStatus> {
   } catch (error) {
     const code = error instanceof HermesApiError ? error.code : "HERMES_PROTOCOL_ERROR";
     if (code === "HERMES_AUTH_FAILED") return { state: "auth_failed", joblitConnected: true, profileName: settings.profileName };
+    if (code === "HERMES_ORIGIN_FORBIDDEN") return { state: "incompatible", joblitConnected: true, profileName: settings.profileName };
     if (code === "HERMES_INCOMPATIBLE" || code === "HERMES_PROTOCOL_ERROR") {
       return { state: "incompatible", joblitConnected: true, profileName: settings.profileName };
     }
@@ -344,7 +345,7 @@ async function startOnce(payload: StartRunPayload): Promise<PublicRunResult> {
     ({ runId } = await makeApi(settings).startRun({
       input: prompt.input,
       instructions: prompt.instructions,
-      session_id: `joblit:${settings.profileName}:${payload.requestId}`,
+      session_id: `joblit:${payload.requestId}`,
     }));
   } catch (error) {
     if (error instanceof HermesApiError && error.ambiguousStart) {

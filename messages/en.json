@@ -271,6 +271,7 @@
         "RUN_LOST": "The local run can no longer be found. Start a new run when ready.",
         "HERMES_UNREACHABLE": "Hermes is not reachable on this computer.",
         "HERMES_AUTH_FAILED": "Hermes rejected the configured credentials.",
+        "HERMES_ORIGIN_FORBIDDEN": "Hermes blocked this extension origin. Re-run the latest Joblit Hermes installer.",
         "HERMES_INCOMPATIBLE": "This Hermes API is not compatible with Local AI.",
         "HERMES_RATE_LIMITED": "Hermes is busy. Wait briefly, then try again.",
         "HERMES_RESPONSE_TOO_LARGE": "Hermes returned more content than Joblit can safely import.",

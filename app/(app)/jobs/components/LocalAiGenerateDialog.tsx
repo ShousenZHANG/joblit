@@ -226,6 +226,7 @@ function errorLabel(t: Translate, code: string) {
     "RUN_LOST",
     "HERMES_UNREACHABLE",
     "HERMES_AUTH_FAILED",
+    "HERMES_ORIGIN_FORBIDDEN",
     "HERMES_INCOMPATIBLE",
     "HERMES_RATE_LIMITED",
     "HERMES_RESPONSE_TOO_LARGE",

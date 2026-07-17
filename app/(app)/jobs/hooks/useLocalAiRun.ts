@@ -162,7 +162,7 @@ export function useLocalAiRun(options: {
         const run = await sendLocalAiBridgeRequest(
           "GET_RUN",
           { requestId: activeRequestId },
-          { signal: controller.signal, timeoutMs: 3_000 },
+          { signal: controller.signal, timeoutMs: 10_000 },
         );
         if (disposed) return;
         await acceptRun(run);
@@ -209,7 +209,7 @@ export function useLocalAiRun(options: {
       const run = await sendLocalAiBridgeRequest(
         "START_RUN",
         { requestId, jobId, target },
-        { timeoutMs: 10_000 },
+        { timeoutMs: 20_000 },
       );
       if (["queued", "running", "stopping"].includes(run.status)) {
         setActiveRequestId(requestId);
@@ -217,8 +217,10 @@ export function useLocalAiRun(options: {
       await acceptRun(run);
     } catch (error) {
       const failure = bridgeFailure(error, "RUN_START_FAILED");
-      if (failure.code === "RUN_START_UNKNOWN") {
+      if (failure.code === "RUN_START_UNKNOWN" || failure.code === "BRIDGE_TIMEOUT") {
         setActiveRequestId(requestId);
+        setRunState({ status: "queued", requestId, jobId, target });
+        return;
       } else {
         window.sessionStorage.removeItem(LOCAL_AI_ACTIVE_REQUEST_KEY);
       }

@@ -271,6 +271,7 @@
         "RUN_LOST": "找不到本地任务；准备好后请启动新任务。",
         "HERMES_UNREACHABLE": "此电脑上的 Hermes 无法连接。",
         "HERMES_AUTH_FAILED": "Hermes 拒绝了当前凭据。",
+        "HERMES_ORIGIN_FORBIDDEN": "Hermes blocked this extension origin. Re-run the latest Joblit Hermes installer.",
         "HERMES_INCOMPATIBLE": "此 Hermes API 与本地 AI 不兼容。",
         "HERMES_RATE_LIMITED": "Hermes 正忙；请稍候重试。",
         "HERMES_RESPONSE_TOO_LARGE": "Hermes 返回内容过大，Joblit 无法安全导入。",

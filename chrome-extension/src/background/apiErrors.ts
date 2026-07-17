@@ -42,6 +42,7 @@ const PUBLIC_ERROR_MESSAGES: Record<LocalAiErrorCode, string> = {
   HERMES_NOT_CONFIGURED: "Set up Hermes Local AI in the Joblit extension.",
   HERMES_UNREACHABLE: "Hermes is unavailable. Start the local Hermes gateway and try again.",
   HERMES_AUTH_FAILED: "Hermes authentication failed. Check the local API key.",
+  HERMES_ORIGIN_FORBIDDEN: "Hermes blocked this extension origin. Reinstall or update the Joblit Hermes profile.",
   HERMES_INCOMPATIBLE: "This Hermes profile is not compatible with Joblit Local AI.",
   HERMES_RATE_LIMITED: "Hermes is busy. Wait a moment and try again.",
   HERMES_RESPONSE_TOO_LARGE: "Hermes returned more data than Joblit can safely process.",

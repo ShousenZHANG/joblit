@@ -4,6 +4,7 @@ export type Locale = "en" | "zh";
 
 const messages: Record<Locale, Record<string, string>> = {
   en: {
+    "localAi.error.HERMES_ORIGIN_FORBIDDEN": "Hermes blocked this extension origin. Re-run the latest Joblit Hermes installer.",
     // General
     "app.name": "Joblit AutoFill",
     "app.loading": "Loading...",
@@ -183,6 +184,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "common.cancel": "Cancel",
   },
   zh: {
+    "localAi.error.HERMES_ORIGIN_FORBIDDEN": "Hermes blocked this extension origin. Re-run the latest Joblit Hermes installer.",
     "app.name": "Joblit 自动填充",
     "app.loading": "加载中...",
     "app.unavailable": "扩展暂时不可用",
