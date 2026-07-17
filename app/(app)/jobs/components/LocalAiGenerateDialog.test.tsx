@@ -69,7 +69,7 @@ describe("LocalAiGenerateDialog", () => {
       error: { code: "RUN_LOST", retryable: true },
     });
     expect(screen.getByRole("alert")).toHaveTextContent("The local run can no longer be found");
-    await user.click(screen.getByRole("button", { name: "Try again" }));
+    await user.click(screen.getByRole("button", { name: "Start new run" }));
     expect(props.onRetry).toHaveBeenCalledTimes(1);
   });
 

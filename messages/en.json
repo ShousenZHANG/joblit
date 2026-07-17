@@ -280,6 +280,7 @@
         "UNEXPECTED_APPROVAL_REQUIRED": "Hermes requested an approval that this local flow cannot provide.",
         "AI_OUTPUT_INVALID": "Hermes returned content outside the strict Joblit format.",
         "HERMES_RUN_FAILED": "Hermes could not complete the local run.",
+        "AI_TIMEOUT": "The local run took too long to finish. Check that Hermes is signed in to ChatGPT, then retry.",
         "INVALID_AI_RESULT": "Hermes returned content outside the strict Joblit format.",
         "IMPORT_FAILED": "The result could not be saved as a draft.",
         "LOCAL_AI_NOT_READY": "Local AI is not ready. Check extension setup first.",

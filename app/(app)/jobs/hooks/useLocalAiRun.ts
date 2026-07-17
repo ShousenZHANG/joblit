@@ -16,6 +16,10 @@ import type {
 export const LOCAL_AI_ACTIVE_REQUEST_KEY = "joblit.local-ai.active-request.v1";
 export const LOCAL_AI_LAST_START_KEY = "joblit.local-ai.last-start.v1";
 export const LOCAL_AI_POLL_MS = 750;
+// Total wall-clock budget for a single run. A run that never reaches a terminal
+// state (e.g. the local model stalls or ChatGPT auth is not active) must not
+// spin forever — spec §14.1 / §17 require a bounded total timeout.
+export const LOCAL_AI_MAX_RUN_MS = 180_000;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type LastStart = { jobId: string; target: "resume" | "cover" };
@@ -71,7 +75,9 @@ function bridgeFailure(error: unknown, fallbackCode: string) {
 export function useLocalAiRun(options: {
   enabled: boolean;
   onSucceeded: (run: LocalAiSucceededRun) => Promise<void>;
+  maxRunMs?: number;
 }) {
+  const maxRunMs = options.maxRunMs ?? LOCAL_AI_MAX_RUN_MS;
   const restoredIdRef = useRef<string | null>(restoredRequestId());
   const [availability, setAvailability] = useState<LocalAiAvailability>("detecting");
   const [activeRequestId, setActiveRequestId] = useState<string | null>(restoredIdRef.current);
@@ -85,6 +91,7 @@ export function useLocalAiRun(options: {
   const terminalConsumedRef = useRef(new Set<string>());
   const startInFlightRef = useRef(false);
   const lastStartRef = useRef<LastStart | null>(restoredLastStart());
+  const runDeadlineRef = useRef<{ requestId: string; at: number } | null>(null);
 
   useEffect(() => {
     onSucceededRef.current = options.onSucceeded;
@@ -187,6 +194,12 @@ export function useLocalAiRun(options: {
     let timer: number | null = null;
     const controller = new AbortController();
 
+    // Fix the run deadline once per requestId so it survives individual poll
+    // iterations but resets for a fresh or retried run.
+    if (runDeadlineRef.current?.requestId !== activeRequestId) {
+      runDeadlineRef.current = { requestId: activeRequestId, at: Date.now() + maxRunMs };
+    }
+
     const poll = async () => {
       try {
         const run = await sendLocalAiBridgeRequest(
@@ -197,6 +210,19 @@ export function useLocalAiRun(options: {
         if (disposed) return;
         await acceptRun(run);
         if (!disposed && ["queued", "running", "stopping"].includes(run.status)) {
+          if (Date.now() >= (runDeadlineRef.current?.at ?? Number.POSITIVE_INFINITY)) {
+            // The run never reached a terminal state within budget. Keep the
+            // active request so retry resumes polling the same run instead of
+            // starting a duplicate (POST /v1/runs is not idempotent).
+            setRunState({
+              status: "failed",
+              requestId: activeRequestId,
+              jobId: run.jobId,
+              target: run.target,
+              error: { code: "AI_TIMEOUT", retryable: true },
+            });
+            return;
+          }
           timer = window.setTimeout(() => void poll(), LOCAL_AI_POLL_MS);
         }
       } catch (error) {
@@ -218,7 +244,7 @@ export function useLocalAiRun(options: {
       controller.abort();
       if (timer !== null) window.clearTimeout(timer);
     };
-  }, [acceptRun, activeRequestId, clearActiveRequest, options.enabled, pollEpoch]);
+  }, [acceptRun, activeRequestId, clearActiveRequest, maxRunMs, options.enabled, pollEpoch]);
 
   const start = useCallback(async (jobId: string, target: "resume" | "cover") => {
     if (startInFlightRef.current || activeRequestId) return;
@@ -313,6 +339,7 @@ export function useLocalAiRun(options: {
       return;
     }
     if (activeRequestId) {
+      runDeadlineRef.current = null;
       setRunState((current) => ({
         status: "queued",
         requestId: activeRequestId,

@@ -280,6 +280,7 @@
         "UNEXPECTED_APPROVAL_REQUIRED": "Hermes 要求额外批准；此本地流程无法处理。",
         "AI_OUTPUT_INVALID": "Hermes 返回内容不符合 Joblit 严格格式。",
         "HERMES_RUN_FAILED": "Hermes 未能完成本地任务。",
+        "AI_TIMEOUT": "本地任务耗时过长未完成。请确认 Hermes 已登录 ChatGPT，然后重试。",
         "INVALID_AI_RESULT": "Hermes 返回内容不符合 Joblit 严格格式。",
         "IMPORT_FAILED": "结果无法保存为草稿。",
         "LOCAL_AI_NOT_READY": "本地 AI 尚未就绪；请先检查扩展设置。",

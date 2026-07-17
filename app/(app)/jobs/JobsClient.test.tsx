@@ -1205,7 +1205,7 @@ describe("JobsClient", () => {
       expect(localAiBridgeMock.send).toHaveBeenCalledWith(
         "START_RUN",
         expect.objectContaining({ jobId: baseJob.id, target: "resume" }),
-        expect.objectContaining({ timeoutMs: 10_000 }),
+        expect.objectContaining({ timeoutMs: 20_000 }),
       );
     });
     const startPayload = localAiBridgeMock.send.mock.calls.find(([action]) => action === "START_RUN")?.[1];

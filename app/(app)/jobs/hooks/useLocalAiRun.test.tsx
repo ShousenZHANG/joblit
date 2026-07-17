@@ -99,6 +99,26 @@ describe("useLocalAiRun", () => {
     expect(sessionStorage.getItem(LOCAL_AI_ACTIVE_REQUEST_KEY)).toBeNull();
   });
 
+  it("fails a run that never reaches a terminal state with AI_TIMEOUT", async () => {
+    bridge.send.mockImplementation(async (action: string) => {
+      if (action === "GET_STATUS") return { state: "ready", joblitConnected: true };
+      // Hermes keeps reporting the run as running and never completes.
+      return { requestId: REQUEST_ID, jobId: JOB_ID, target: "resume", status: "running" };
+    });
+    const { result } = renderHook(() =>
+      useLocalAiRun({ enabled: true, onSucceeded: vi.fn(), maxRunMs: 0 }),
+    );
+    await waitFor(() => expect(result.current.availability).toBe("ready"));
+    await act(async () => result.current.start(JOB_ID, "resume"));
+    await waitFor(
+      () => expect(result.current.runState).toMatchObject({
+        status: "failed",
+        error: { code: "AI_TIMEOUT", retryable: true },
+      }),
+      { timeout: LOCAL_AI_POLL_MS * 4 },
+    );
+  });
+
   it("stops an active run and exposes cancellation", async () => {
     bridge.send.mockImplementation(async (action: string) => {
       if (action === "GET_STATUS") return { state: "ready", joblitConnected: true };

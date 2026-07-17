@@ -235,6 +235,7 @@ function errorLabel(t: Translate, code: string) {
     "UNEXPECTED_APPROVAL_REQUIRED",
     "AI_OUTPUT_INVALID",
     "HERMES_RUN_FAILED",
+    "AI_TIMEOUT",
     "INVALID_AI_RESULT",
     "IMPORT_FAILED",
     "LOCAL_AI_NOT_READY",
