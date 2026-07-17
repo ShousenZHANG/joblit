@@ -533,7 +533,7 @@ export function buildLeanMatchUserPrompt(input: {
   return [
     "<task>",
     "Assess how well the candidate fits this role.",
-    "1) Extract 6-14 concrete requirements from the job evidence. Classify each as REQUIRED, PREFERRED, RESPONSIBILITY, SENIORITY, DOMAIN, or CREDENTIAL.",
+    "1) Extract the 6-10 most decisive requirements from the job evidence. Classify each as REQUIRED, PREFERRED, RESPONSIBILITY, SENIORITY, DOMAIN, or CREDENTIAL.",
     "Extract only what the candidate would need to do or bring: action responsibilities and stated skill/experience requirements. Ignore company intro, mission, culture, funding, perks, and benefits narrative.",
     "2) Judge each requirement against the candidate evidence only:",
     "MATCH = direct evidence of the same skill/domain in the candidate's experience, projects, or skills.",
@@ -557,11 +557,11 @@ export function buildLeanMatchUserPrompt(input: {
     "Return strictly ONE JSON object, no prose, no code fences:",
     "{",
     '  "requirements": [',
-    '    { "id": "r1", "type": "REQUIRED", "requirement": "short requirement text", "judgement": "MATCH", "evidence": "short quote or paraphrase from candidate evidence (optional)", "note": "short caveat (optional)" }',
+    '    { "id": "r1", "type": "REQUIRED", "requirement": "short requirement text", "judgement": "MATCH", "evidence": "short phrase (only for PARTIAL or GAP)" }',
     "  ],",
     '  "eligibility": { "status": "PASS", "reasons": [] }',
     "}",
-    "requirements: 6-14 items, ids r1..rN. evidence/note are optional strings. Respond directly.",
+    "requirements: 6-10 items, ids r1..rN. Include a short evidence phrase (max 15 words) ONLY for PARTIAL or GAP judgements; omit evidence for MATCH and UNKNOWN. Respond directly.",
     "</output>",
   ].join("\n");
 }
