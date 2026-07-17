@@ -61,6 +61,9 @@ export async function POST(req: Request) {
       userId,
       jobId: parsed.data.jobId,
       target: parsed.data.target,
+      // The extension drives a local Hermes run; reasoning models stall on the
+      // full prompt, so serve the lean variant here (cloud/manual stays full).
+      variant: "lean",
     });
     return NextResponse.json(payload, {
       headers: { "Cache-Control": "no-store" },

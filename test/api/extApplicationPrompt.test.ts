@@ -187,6 +187,7 @@ describe("extension application prompt api", () => {
       userId: "user-2",
       jobId: VALID_JOB_ID,
       target: "resume",
+      variant: "lean",
     });
     expect(response.status).toBe(404);
     expect(json.error.code).toBe("JOB_NOT_FOUND");
@@ -223,6 +224,7 @@ describe("extension application prompt api", () => {
         userId: "user-1",
         jobId: VALID_JOB_ID,
         target,
+        variant: "lean",
       });
       expect(response.status).toBe(200);
       expect(response.headers.get("Cache-Control")).toBe("no-store");
@@ -275,24 +277,24 @@ describe("extension application prompt api", () => {
       extensionResponse.json(),
     ]);
 
-    expect(applicationPrompt.build).toHaveBeenNthCalledWith(1, {
+    // Session (Copy Prompt / cloud) keeps the full prompt; the extension serves
+    // the lean local-Hermes variant. Assert both calls order-independently.
+    expect(applicationPrompt.build).toHaveBeenCalledWith({
       userId: "user-1",
       ...body,
     });
-    expect(applicationPrompt.build).toHaveBeenNthCalledWith(2, {
+    expect(applicationPrompt.build).toHaveBeenCalledWith({
       userId: "user-1",
       ...body,
+      variant: "lean",
     });
+    // Version, schema, and metadata stay equivalent so import validation is
+    // identical regardless of which route produced the prompt.
     expect(extensionJson).toMatchObject({
       promptVersion: sessionJson.promptVersion,
       expectedJsonShape: sessionJson.expectedJsonShape,
       expectedJsonSchema: sessionJson.expectedJsonSchema,
       promptMeta: sessionJson.promptMeta,
-      prompt: {
-        input: sessionJson.prompt.input,
-        instructions: sessionJson.prompt.instructions,
-        sessionId: sessionJson.prompt.sessionId,
-      },
     });
   });
 });

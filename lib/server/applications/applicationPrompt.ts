@@ -1,6 +1,9 @@
 import { z } from "zod";
 
 import {
+  buildLeanCoverUserPrompt,
+  buildLeanResumeUserPrompt,
+  buildLeanSystemPrompt,
   buildV2CoverUserPrompt,
   buildV2ResumeUserPrompt,
   buildV2SystemPrompt,
@@ -78,6 +81,12 @@ export async function buildApplicationPromptForUser(input: {
   userId: string;
   jobId: string;
   target: "resume" | "cover";
+  /**
+   * "lean" produces a slimmed prompt for local reasoning models (Hermes) that
+   * stall on the full V2 prompt; "full" (default) keeps the rich cloud/manual
+   * prompt. Both share identical promptMeta so import validation is unchanged.
+   */
+  variant?: "full" | "lean";
 }): Promise<ApplicationPromptPayload> {
   const parsed = ApplicationPromptRequestSchema.safeParse({
     jobId: input.jobId,
@@ -142,22 +151,40 @@ export async function buildApplicationPromptForUser(input: {
   };
   const resumeInput = { baseLatestBullets, coverage };
 
-  const instructions = buildV2SystemPrompt(rules, locale);
+  const lean = input.variant === "lean";
+  const instructions = lean
+    ? buildLeanSystemPrompt(rules, locale)
+    : buildV2SystemPrompt(rules, locale);
   const promptInput =
     parsed.data.target === "resume"
-      ? buildV2ResumeUserPrompt({
-          target: "resume",
-          rules,
-          candidate,
-          job: jobInput,
-          resume: resumeInput,
-        })
-      : buildV2CoverUserPrompt({
-          target: "cover",
-          rules,
-          candidate,
-          job: jobInput,
-        });
+      ? lean
+        ? buildLeanResumeUserPrompt({
+            target: "resume",
+            rules,
+            candidate,
+            job: jobInput,
+            resume: resumeInput,
+          })
+        : buildV2ResumeUserPrompt({
+            target: "resume",
+            rules,
+            candidate,
+            job: jobInput,
+            resume: resumeInput,
+          })
+      : lean
+        ? buildLeanCoverUserPrompt({
+            target: "cover",
+            rules,
+            candidate,
+            job: jobInput,
+          })
+        : buildV2CoverUserPrompt({
+            target: "cover",
+            rules,
+            candidate,
+            job: jobInput,
+          });
 
   if (instructions.length + promptInput.length > MAX_APPLICATION_PROMPT_CHARS) {
     throw new ApplicationPromptError(
