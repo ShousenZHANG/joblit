@@ -99,6 +99,10 @@ describe("Hermes fixed-route client", () => {
       "fetch",
       vi.fn().mockImplementation(() => {
         const body = responses.shift();
+        if (body === undefined) {
+          // Empty-run safety probe: the server must reject {} with 400.
+          return Promise.resolve(new Response(JSON.stringify({ error: "bad_request" }), { status: 400, headers: { "content-type": "application/json" } }));
+        }
         return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } }));
       }),
     );

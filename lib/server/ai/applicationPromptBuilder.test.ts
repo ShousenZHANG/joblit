@@ -235,3 +235,63 @@ describe("lean application prompt builder (local Hermes)", () => {
     expect(systemPrompt.length).toBeLessThan(buildV2SystemPrompt(rules).length);
   });
 });
+
+describe("writing-quality rules (full prompt path)", () => {
+  const buildResume = () =>
+    buildV2ResumeUserPrompt({
+      target: "resume",
+      rules,
+      candidate,
+      job,
+      resume: {
+        baseLatestBullets: candidate.experiences[0].bullets,
+        coverage: {
+          topResponsibilities: ["Build distributed APIs"],
+          missingFromBase: ["Build distributed APIs"],
+          fallbackResponsibilities: [],
+          requiredNewBulletsMin: 1,
+          requiredNewBulletsMax: 1,
+        },
+      },
+    });
+  const buildCover = () =>
+    buildV2CoverUserPrompt({ target: "cover", rules, candidate, job });
+
+  it.each([
+    ["resume", buildResume],
+    ["cover", buildCover],
+  ] as const)("embeds the writing-quality guardrails for %s", (_target, build) => {
+    const prompt = build();
+    expect(prompt).toContain("<writing-quality>");
+    expect(prompt).toContain("No em-dashes");
+    expect(prompt.toLowerCase()).toContain("passionate about");
+    expect(prompt.toLowerCase()).toContain("interview backtrack test");
+    expect(prompt.toLowerCase()).toContain("no unverified company-specific claims");
+  });
+
+  it("strengthens the cover structure with a headline formula and forward-looking framing", () => {
+    const prompt = buildCover();
+    expect(prompt.toLowerCase()).toContain("forward-looking framing");
+    expect(prompt.toLowerCase()).toContain("key phrase from the posting");
+  });
+
+  it("keeps the lean local-Hermes prompt free of the writing-quality block", () => {
+    const lean = buildLeanResumeUserPrompt({
+      target: "resume",
+      rules,
+      candidate,
+      job,
+      resume: {
+        baseLatestBullets: candidate.experiences[0].bullets,
+        coverage: {
+          topResponsibilities: [],
+          missingFromBase: [],
+          fallbackResponsibilities: [],
+          requiredNewBulletsMin: 1,
+          requiredNewBulletsMax: 1,
+        },
+      },
+    });
+    expect(lean).not.toContain("<writing-quality>");
+  });
+});

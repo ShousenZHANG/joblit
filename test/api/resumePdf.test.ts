@@ -30,7 +30,13 @@ vi.mock("@/lib/server/latex/renderResume", () => ({
 import { getServerSession } from "next-auth/next";
 import { POST } from "@/app/api/resume-pdf/route";
 
-const mockPdf = new Uint8Array([37, 80, 68, 70]);
+// A valid-looking PDF stub: "%PDF-1.7" header padded past the render integrity
+// floor (1KB) so compileLatexToPdf accepts it.
+const mockPdf = (() => {
+  const bytes = new Uint8Array(1200);
+  bytes.set([37, 80, 68, 70, 45, 49, 46, 55], 0); // "%PDF-1.7"
+  return bytes;
+})();
 
 describe("resume pdf api", () => {
   beforeEach(() => {

@@ -142,7 +142,8 @@ function buildResumeSkillsPolicyBlock() {
 function buildCoverStructureBlock() {
   return [
     "Cover output structure (must follow):",
-    "1) cover.subject: concise role-specific subject line (prefer 'Application for <Role>' only; do NOT append candidate name).",
+    "0) Forward-looking framing: the cover letter is NOT a CV repetition. Lead with the tasks you can solve for THIS employer and the approach, methods, and tools you bring; use at most 1-2 brief past examples only to back up forward-looking claims.",
+    "1) cover.subject: engaging and specific. Prefer the formula [candidate specialty or title] + [key phrase from the posting] (e.g. 'Backend engineer specialising in event-driven payments'); fall back to 'Application for <Role>' only when nothing specific fits. Do NOT append candidate name.",
     "2) cover.candidateTitle (optional): set to role-aligned candidate title for the letter header.",
     "3) cover.date: current or provided date string.",
     "4) cover.salutation: addressee only (e.g. 'Hiring Team at <Company>'); no leading 'Dear', no trailing comma.",
@@ -154,6 +155,20 @@ function buildCoverStructureBlock() {
     "9) cover.closing + cover.signatureName: include when possible.",
     "10) Australian workplace + big tech standard: direct, concise, understated confidence; collaborative tone; no hype or filler. Sound human and specific. Target 280–360 words across three paragraphs.",
     "11) Cover target JSON keys allowed: cover only (no cvSummary/latestExperience/skillsFinal).",
+  ].join("\n");
+}
+
+// Shared writing-quality rules applied to both resume and cover on the full
+// (cloud / manual) prompt path. Kept concise; the lean local-Hermes prompt
+// omits this to stay under the reasoning budget.
+function buildWritingQualityBlock() {
+  return [
+    "Writing quality (must follow):",
+    "1) No em-dashes (— or --). Use commas, periods, or restructure the sentence instead.",
+    "2) No cliches or filler phrases. Ban: 'passionate about', 'great fit', 'leverage my skills', 'hit the ground running', 'drive results', 'synergies', 'team player', 'results-oriented', 'think outside the box'. Replace every claim with a specific, evidence-backed example.",
+    "3) No unverified company-specific claims (partnerships, product names, technology, funding, expansions). If a claim is not supported by the job evidence, phrase it generally or omit it. Do not invent company facts.",
+    "4) Interview backtrack test: only reframe experience the candidate could defend in an interview without backtracking. OK: reorder to lead with the most relevant experience, use natural synonyms for the target domain, emphasize one aspect of a broad role. Never: claim experience the candidate does not have, or imply they worked in a domain they have not. When a line is a stretch, prefer the softer, defensible phrasing.",
+    "5) Demonstrate, don't state: replace 'I am X' with a concrete example that shows X and its outcome. First person, active voice.",
   ].join("\n");
 }
 
@@ -397,6 +412,10 @@ export function buildV2ResumeUserPrompt(input: BuildApplicationPromptInput): str
     skillsPolicy,
     "</skills-policy>",
     "",
+    "<writing-quality>",
+    buildWritingQualityBlock(),
+    "</writing-quality>",
+    "",
     "<output-schema>",
     requiredJsonSchema,
     "</output-schema>",
@@ -537,6 +556,10 @@ export function buildV2CoverUserPrompt(input: BuildApplicationPromptInput): stri
     "<cover-structure>",
     coverStructure,
     "</cover-structure>",
+    "",
+    "<writing-quality>",
+    buildWritingQualityBlock(),
+    "</writing-quality>",
     "",
     "<output-schema>",
     requiredJsonSchema,

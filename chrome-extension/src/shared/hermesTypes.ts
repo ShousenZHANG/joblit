@@ -266,10 +266,6 @@ export function parseBridgeRequest(value: unknown, now = Date.now()): BridgeRequ
   return value as unknown as BridgeRequest;
 }
 
-export function validatePublicBridgePresence(value: unknown): value is PublicBridgePresence {
-  return isPlainRecord(value) && hasExactKeys(value, ["present"]) && value.present === true;
-}
-
 export function validatePublicLocalAiStatus(value: unknown): value is PublicLocalAiStatus {
   if (!isPlainRecord(value)) return false;
   const allowed = new Set<LocalAiStatusState>([

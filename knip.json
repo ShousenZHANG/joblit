@@ -1,8 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "ignoreExportsUsedInFile": {
-    "type": true
-  },
+  "ignoreExportsUsedInFile": true,
   "ignore": [
     "lib/shared/schemas/resumeProfile.ts"
   ],

@@ -34,6 +34,12 @@ const BREAKER_THRESHOLD = 5;
 const BREAKER_COOLDOWN_MS = 30_000;
 const breaker = { failures: 0, openUntil: 0 };
 
+// Integrity floor for a rendered PDF. The render service can answer 200 with an
+// HTML error page or a truncated body; a real one-page resume PDF is tens of KB,
+// so anything without the %PDF- header or under this size is corrupt.
+const PDF_MAGIC = Buffer.from("%PDF-", "latin1");
+const MIN_PDF_BYTES = 1024;
+
 function breakerIsOpen(): boolean {
   return Date.now() < breaker.openUntil;
 }
@@ -120,6 +126,17 @@ export async function compileLatexToPdf(tex: string, options?: { files?: Compile
     );
   }
 
+  const pdf = Buffer.from(await res.arrayBuffer());
+  if (pdf.byteLength < MIN_PDF_BYTES || !pdf.subarray(0, PDF_MAGIC.length).equals(PDF_MAGIC)) {
+    // A 200 with a non-PDF or truncated body means the render service is
+    // misbehaving; fail loudly so a corrupt file never reaches storage or the
+    // user. Content anomalies do not trip the infra breaker.
+    throw new LatexRenderError(
+      "LATEX_RENDER_FAILED",
+      502,
+      "Render service returned a non-PDF or truncated payload",
+    );
+  }
   recordBreakerSuccess();
-  return Buffer.from(await res.arrayBuffer());
+  return pdf;
 }
