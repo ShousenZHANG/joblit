@@ -64,6 +64,7 @@ export function LocalAiGenerateDialog({
   const isImporting = runState.status === "importing";
   const isActive = activeStages.includes(runState.status);
   const isReady = availability === "ready";
+  const isRunLost = runState.status === "failed" && runState.error.code === "RUN_LOST";
   const statusLabel = getStatusLabel(t, availability, runState);
 
   return (
@@ -145,7 +146,7 @@ export function LocalAiGenerateDialog({
               {runState.error.retryable ? (
                 <Button variant="outline" size="sm" className="mt-3 rounded-xl" onClick={onRetry}>
                   <RefreshCw className="mr-2 h-3.5 w-3.5" aria-hidden />
-                  {t("retry")}
+                  {isRunLost ? t("startNewRun") : t("retry")}
                 </Button>
               ) : null}
             </div>

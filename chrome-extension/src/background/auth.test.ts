@@ -35,9 +35,11 @@ describe("auth", () => {
         STORAGE_KEYS.TOKEN_EXPIRES_AT,
         STORAGE_KEYS.USER_ID,
         STORAGE_KEYS.CACHED_PROFILE,
+        STORAGE_KEYS.HERMES_RUN_REGISTRY,
       ]);
       expect(result[STORAGE_KEYS.AUTH_TOKEN]).toBeUndefined();
       expect(result[STORAGE_KEYS.TOKEN_EXPIRES_AT]).toBeUndefined();
+      expect(result[STORAGE_KEYS.HERMES_RUN_REGISTRY]).toBeUndefined();
       const session = await chrome.storage.session.get(SESSION_STORAGE_KEYS.HERMES_RUN_REGISTRY);
       expect(session[SESSION_STORAGE_KEYS.HERMES_RUN_REGISTRY]).toBeUndefined();
     });

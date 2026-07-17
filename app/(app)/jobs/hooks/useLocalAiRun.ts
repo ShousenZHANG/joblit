@@ -14,7 +14,11 @@ import type {
 } from "@/lib/shared/localAiBridgeContract";
 
 export const LOCAL_AI_ACTIVE_REQUEST_KEY = "joblit.local-ai.active-request.v1";
+export const LOCAL_AI_LAST_START_KEY = "joblit.local-ai.last-start.v1";
 export const LOCAL_AI_POLL_MS = 750;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+type LastStart = { jobId: string; target: "resume" | "cover" };
 
 export type LocalAiAvailability =
   | "detecting"
@@ -38,7 +42,24 @@ export type LocalAiRunState =
 function restoredRequestId(): string | null {
   if (typeof window === "undefined") return null;
   const value = window.sessionStorage.getItem(LOCAL_AI_ACTIVE_REQUEST_KEY);
-  return value && /^[0-9a-f-]{36}$/i.test(value) ? value : null;
+  return value && UUID_RE.test(value) ? value : null;
+}
+
+function restoredLastStart(): LastStart | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const value = JSON.parse(window.sessionStorage.getItem(LOCAL_AI_LAST_START_KEY) ?? "null");
+    return (
+      value &&
+      typeof value === "object" &&
+      UUID_RE.test(value.jobId) &&
+      (value.target === "resume" || value.target === "cover")
+    )
+      ? { jobId: value.jobId, target: value.target }
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function bridgeFailure(error: unknown, fallbackCode: string) {
@@ -63,7 +84,7 @@ export function useLocalAiRun(options: {
   const onSucceededRef = useRef(options.onSucceeded);
   const terminalConsumedRef = useRef(new Set<string>());
   const startInFlightRef = useRef(false);
-  const lastStartRef = useRef<{ jobId: string; target: "resume" | "cover" } | null>(null);
+  const lastStartRef = useRef<LastStart | null>(restoredLastStart());
 
   useEffect(() => {
     onSucceededRef.current = options.onSucceeded;
@@ -92,6 +113,13 @@ export function useLocalAiRun(options: {
     setActiveRequestId(null);
   }, []);
 
+  const forgetLastStart = useCallback(() => {
+    lastStartRef.current = null;
+    if (typeof window !== "undefined") {
+      window.sessionStorage.removeItem(LOCAL_AI_LAST_START_KEY);
+    }
+  }, []);
+
   const acceptRun = useCallback(async (run: LocalAiPublicRun) => {
     if (run.status === "succeeded") {
       if (terminalConsumedRef.current.has(run.requestId)) return;
@@ -105,6 +133,7 @@ export function useLocalAiRun(options: {
       });
       try {
         await onSucceededRef.current(run);
+        forgetLastStart();
         setRunState({
           status: "succeeded",
           requestId: run.requestId,
@@ -135,6 +164,7 @@ export function useLocalAiRun(options: {
     }
     if (run.status === "cancelled") {
       clearActiveRequest();
+      forgetLastStart();
       setRunState({
         status: "cancelled",
         requestId: run.requestId,
@@ -149,7 +179,7 @@ export function useLocalAiRun(options: {
       jobId: run.jobId,
       target: run.target,
     });
-  }, [clearActiveRequest]);
+  }, [clearActiveRequest, forgetLastStart]);
 
   useEffect(() => {
     if (!options.enabled || !activeRequestId) return;
@@ -171,12 +201,14 @@ export function useLocalAiRun(options: {
         }
       } catch (error) {
         if (disposed || controller.signal.aborted) return;
+        const failure = bridgeFailure(error, "RUN_STATUS_FAILED");
+        if (failure.code === "RUN_LOST") clearActiveRequest();
         setRunState((current) => ({
           status: "failed",
           requestId: activeRequestId,
           jobId: "jobId" in current ? current.jobId : undefined,
           target: "target" in current ? current.target : undefined,
-          error: bridgeFailure(error, "RUN_STATUS_FAILED"),
+          error: failure,
         }));
       }
     };
@@ -186,7 +218,7 @@ export function useLocalAiRun(options: {
       controller.abort();
       if (timer !== null) window.clearTimeout(timer);
     };
-  }, [acceptRun, activeRequestId, options.enabled, pollEpoch]);
+  }, [acceptRun, activeRequestId, clearActiveRequest, options.enabled, pollEpoch]);
 
   const start = useCallback(async (jobId: string, target: "resume" | "cover") => {
     if (startInFlightRef.current || activeRequestId) return;
@@ -202,6 +234,10 @@ export function useLocalAiRun(options: {
     startInFlightRef.current = true;
     const requestId = crypto.randomUUID();
     lastStartRef.current = { jobId, target };
+    window.sessionStorage.setItem(
+      LOCAL_AI_LAST_START_KEY,
+      JSON.stringify(lastStartRef.current),
+    );
     terminalConsumedRef.current.delete(requestId);
     window.sessionStorage.setItem(LOCAL_AI_ACTIVE_REQUEST_KEY, requestId);
     setRunState({ status: "starting", requestId, jobId, target });
@@ -259,7 +295,23 @@ export function useLocalAiRun(options: {
     }
   }, [acceptRun, activeRequestId]);
 
-  const retry = useCallback(() => {
+  const retry = useCallback((fallbackJobId?: string, fallbackTarget?: "resume" | "cover") => {
+    if (runState.status === "failed" && runState.error.code === "RUN_LOST") {
+      const fallback = (
+        fallbackJobId &&
+        UUID_RE.test(fallbackJobId) &&
+        (fallbackTarget === "resume" || fallbackTarget === "cover")
+      )
+        ? { jobId: fallbackJobId, target: fallbackTarget }
+        : null;
+      const next = lastStartRef.current ?? fallback;
+      if (next) {
+        void start(next.jobId, next.target);
+      } else {
+        setRunState({ status: "idle" });
+      }
+      return;
+    }
     if (activeRequestId) {
       setRunState((current) => ({
         status: "queued",
@@ -273,12 +325,13 @@ export function useLocalAiRun(options: {
     if (lastStartRef.current) {
       void start(lastStartRef.current.jobId, lastStartRef.current.target);
     }
-  }, [activeRequestId, start]);
+  }, [activeRequestId, runState, start]);
 
   const reset = useCallback(() => {
     clearActiveRequest();
+    forgetLastStart();
     setRunState({ status: "idle" });
-  }, [clearActiveRequest]);
+  }, [clearActiveRequest, forgetLastStart]);
 
   return {
     availability,

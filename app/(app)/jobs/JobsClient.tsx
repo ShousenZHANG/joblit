@@ -524,7 +524,7 @@ export function JobsClient({
           if (localAiJob) void localAi.start(localAiJob.job.id, localAiJob.target);
         }}
         onStop={() => void localAi.stop()}
-        onRetry={localAi.retry}
+        onRetry={() => localAi.retry(localAiJob?.job.id, localAiJob?.target)}
         onCheckAgain={() => void localAi.checkAvailability()}
         onUseManual={useManualGenerate}
       />

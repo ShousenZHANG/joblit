@@ -8,6 +8,17 @@ interface AuthStatus {
 
 /** Store an extension token. */
 export async function setToken(token: string): Promise<void> {
+  const existing = await chrome.storage.local.get(STORAGE_KEYS.AUTH_TOKEN);
+  if (existing[STORAGE_KEYS.AUTH_TOKEN] && existing[STORAGE_KEYS.AUTH_TOKEN] !== token) {
+    await Promise.all([
+      chrome.storage.local.remove([
+        STORAGE_KEYS.USER_ID,
+        STORAGE_KEYS.CACHED_PROFILE,
+        STORAGE_KEYS.HERMES_RUN_REGISTRY,
+      ]),
+      chrome.storage.session.remove(SESSION_STORAGE_KEYS.HERMES_RUN_REGISTRY),
+    ]);
+  }
   // We don't decode the token — just store it. Expiry comes from the server
   // response when the token was created. For simplicity, we set a long expiry
   // and rely on the server to reject expired tokens.
@@ -25,6 +36,7 @@ export async function clearToken(): Promise<void> {
       STORAGE_KEYS.TOKEN_EXPIRES_AT,
       STORAGE_KEYS.USER_ID,
       STORAGE_KEYS.CACHED_PROFILE,
+      STORAGE_KEYS.HERMES_RUN_REGISTRY,
     ]),
     chrome.storage.session.remove(SESSION_STORAGE_KEYS.HERMES_RUN_REGISTRY),
   ]);

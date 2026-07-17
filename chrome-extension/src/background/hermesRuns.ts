@@ -150,9 +150,19 @@ function isRegistryEntry(value: unknown, requestId: string): value is RegistryEn
 }
 
 async function readRegistry(now = Date.now()): Promise<Registry> {
-  const result = await chrome.storage.session.get(SESSION_STORAGE_KEYS.HERMES_RUN_REGISTRY);
-  const raw = result[SESSION_STORAGE_KEYS.HERMES_RUN_REGISTRY];
-  if (!isRecord(raw)) return {};
+  const [localResult, legacyResult] = await Promise.all([
+    chrome.storage.local.get(STORAGE_KEYS.HERMES_RUN_REGISTRY),
+    chrome.storage.session.get(SESSION_STORAGE_KEYS.HERMES_RUN_REGISTRY),
+  ]);
+  const localRaw = localResult[STORAGE_KEYS.HERMES_RUN_REGISTRY];
+  const legacyRaw = legacyResult[SESSION_STORAGE_KEYS.HERMES_RUN_REGISTRY];
+  const raw = isRecord(localRaw) ? localRaw : legacyRaw;
+  if (!isRecord(raw)) {
+    if (localRaw !== undefined || legacyRaw !== undefined) {
+      await writeRegistry({});
+    }
+    return {};
+  }
   const registry: Registry = {};
   for (const [requestId, entry] of Object.entries(raw)) {
     if (
@@ -164,6 +174,10 @@ async function readRegistry(now = Date.now()): Promise<Registry> {
     ) {
       registry[requestId] = entry;
     }
+  }
+  const requiresCleanup = Object.keys(registry).length !== Object.keys(raw).length;
+  if (isRecord(legacyRaw) || requiresCleanup) {
+    await writeRegistry(registry);
   }
   return registry;
 }
@@ -177,7 +191,8 @@ async function writeRegistry(registry: Registry): Promise<void> {
   if (jsonByteLength(bounded) > MAX_REGISTRY_BYTES) {
     throw new HermesApiError("HERMES_RESPONSE_TOO_LARGE", "Local run registry exceeds limit");
   }
-  await chrome.storage.session.set({ [SESSION_STORAGE_KEYS.HERMES_RUN_REGISTRY]: bounded });
+  await chrome.storage.local.set({ [STORAGE_KEYS.HERMES_RUN_REGISTRY]: bounded });
+  await chrome.storage.session.remove(SESSION_STORAGE_KEYS.HERMES_RUN_REGISTRY);
 }
 
 function mutateRegistry(
@@ -467,7 +482,10 @@ export async function stopLocalAiRun(payload: RunLookupPayload): Promise<PublicR
 async function clearLocalAiRunRegistry(): Promise<void> {
   registryEpoch += 1;
   const operation = registryMutationQueue.then(() =>
-    chrome.storage.session.remove(SESSION_STORAGE_KEYS.HERMES_RUN_REGISTRY)
+    Promise.all([
+      chrome.storage.local.remove(STORAGE_KEYS.HERMES_RUN_REGISTRY),
+      chrome.storage.session.remove(SESSION_STORAGE_KEYS.HERMES_RUN_REGISTRY),
+    ]).then(() => undefined)
   );
   registryMutationQueue = operation.catch(() => undefined);
   await operation;

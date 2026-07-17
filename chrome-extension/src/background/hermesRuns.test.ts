@@ -46,7 +46,7 @@ describe("Hermes run registry", () => {
     await expect(startLocalAiRun(payload)).resolves.toEqual({ ...payload, status: "queued" });
     await expect(startLocalAiRun(payload)).resolves.toEqual({ ...payload, status: "queued" });
     expect(api.startRun).toHaveBeenCalledTimes(1);
-    const stored = await chrome.storage.session.get(SESSION_STORAGE_KEYS.HERMES_RUN_REGISTRY);
+    const stored = await chrome.storage.local.get(STORAGE_KEYS.HERMES_RUN_REGISTRY);
     expect(JSON.stringify(stored)).toContain(runId);
   });
 

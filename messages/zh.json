@@ -236,6 +236,7 @@
       "generate": "使用本地 AI 生成",
       "cancel": "停止本地任务",
       "retry": "重试",
+      "startNewRun": "启动新任务",
       "useManual": "使用手动方式",
       "openSetup": "设置本地 AI",
       "checkAgain": "重新检查",

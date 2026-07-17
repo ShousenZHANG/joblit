@@ -236,6 +236,7 @@
       "generate": "Generate with Local AI",
       "cancel": "Stop local run",
       "retry": "Try again",
+      "startNewRun": "Start new run",
       "useManual": "Use manual method",
       "openSetup": "Set up Local AI",
       "checkAgain": "Check again",

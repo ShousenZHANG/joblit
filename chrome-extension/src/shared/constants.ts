@@ -18,9 +18,11 @@ export const STORAGE_KEYS = {
   HERMES_API_BASE: "hermesApiBase",
   HERMES_API_KEY: "hermesApiKey",
   HERMES_PROFILE_NAME: "hermesProfileName",
+  HERMES_RUN_REGISTRY: "hermesRunRegistry",
 } as const;
 
 export const SESSION_STORAGE_KEYS = {
+  /** Legacy v0.1.x location; migrated to protected local storage on read. */
   HERMES_RUN_REGISTRY: "hermesRunRegistry",
 } as const;
 
