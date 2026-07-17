@@ -14,6 +14,7 @@ import {
   getHermesSettingsPublic,
   getLocalAiRun,
   getPublicLocalAiStatus,
+  repairLocalAiRun,
   startLocalAiRun,
   stopLocalAiRun,
   testAndSaveHermesSettings,
@@ -227,6 +228,11 @@ async function handleMessage(
     case "LOCAL_AI_STOP_RUN": {
       requireSender(isJoblitWebSender(sender));
       return { success: true, data: await stopLocalAiRun(message.payload) };
+    }
+
+    case "LOCAL_AI_REPAIR_RUN": {
+      requireSender(isJoblitWebSender(sender));
+      return { success: true, data: await repairLocalAiRun(message.payload) };
     }
 
     case "GET_HERMES_SETTINGS": {

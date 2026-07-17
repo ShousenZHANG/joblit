@@ -3,6 +3,7 @@ import { DEFAULT_HERMES_BASE, DEFAULT_HERMES_PROFILE_NAME, isHermesProfileName, 
 import {
   MAX_MODEL_OUTPUT_CHARS,
   MIN_MODEL_OUTPUT_CHARS,
+  isRepairRunPayload,
   isRunLookupPayload,
   isStartRunPayload,
   jsonByteLength,
@@ -11,6 +12,7 @@ import {
   type HermesSettingsPublic,
   type PublicLocalAiStatus,
   type PublicRunResult,
+  type RepairRunPayload,
   type RunLookupPayload,
   type StartRunPayload,
 } from "@ext/shared/hermesTypes";
@@ -29,6 +31,12 @@ const startLocks = new Map<string, {
   target: StartRunPayload["target"];
   operation: Promise<PublicRunResult>;
 }>();
+// One bounded repair per run (spec: at most one AI repair). The in-flight map
+// lives in worker memory: if the service worker restarts mid-repair the chat
+// result is unrecoverable, so the poller fails the repair fast instead of
+// leaving the page spinning.
+const REPAIR_TIMEOUT_MS = 90_000;
+const repairInFlight = new Map<string, Promise<void>>();
 let registryMutationQueue: Promise<void> = Promise.resolve();
 let registryEpoch = 0;
 
@@ -52,7 +60,8 @@ type RegistryEntry =
       runId: string;
       lastStatus: "queued" | "running" | "stopping";
     })
-  | (RegistryBase & { stage: "terminal"; terminal: PublicRunResult });
+  | (RegistryBase & { stage: "terminal"; terminal: PublicRunResult; repaired?: true })
+  | (RegistryBase & { stage: "repairing"; repairStartedAt: number });
 
 type Registry = Record<string, RegistryEntry>;
 
@@ -139,11 +148,15 @@ function isRegistryEntry(value: unknown, requestId: string): value is RegistryEn
       (value.lastStatus === "queued" || value.lastStatus === "running" || value.lastStatus === "stopping")
     );
   }
+  if (value.stage === "repairing") {
+    return typeof value.repairStartedAt === "number" && Number.isFinite(value.repairStartedAt);
+  }
   if (value.stage === "terminal" && validatePublicRunResult(value.terminal)) {
     return (
       value.terminal.requestId === value.requestId &&
       value.terminal.jobId === value.jobId &&
-      value.terminal.target === value.target
+      value.terminal.target === value.target &&
+      (value.repaired === undefined || value.repaired === true)
     );
   }
   return false;
@@ -223,7 +236,10 @@ function deleteEntry(requestId: string, expectedEpoch = registryEpoch): Promise<
   }, expectedEpoch);
 }
 
-function publicActive(entry: RegistryBase, status: "queued" | "running" | "stopping"): PublicRunResult {
+function publicActive(
+  entry: RegistryBase,
+  status: "queued" | "running" | "stopping",
+): Extract<PublicRunResult, { status: "queued" | "running" | "stopping" | "cancelled" }> {
   return { requestId: entry.requestId, jobId: entry.jobId, target: entry.target, status };
 }
 
@@ -406,6 +422,16 @@ export async function getLocalAiRun(payload: RunLookupPayload): Promise<PublicRu
     throw new HermesApiError("RUN_START_UNKNOWN", "Hermes start state is ambiguous");
   }
   if (entry.stage === "terminal") return entry.terminal;
+  if (entry.stage === "repairing") {
+    const lost = !repairInFlight.has(entry.requestId);
+    const expired = Date.now() - entry.repairStartedAt > REPAIR_TIMEOUT_MS;
+    if (lost || expired) {
+      const terminal = publicFailure(entry, "AI_OUTPUT_INVALID");
+      await putEntry({ ...entry, stage: "terminal", terminal, repaired: true, updatedAt: Date.now() }, expectedEpoch);
+      return terminal;
+    }
+    return publicActive(entry, "running");
+  }
 
   const settings = await readSecretSettings();
   let run;
@@ -431,7 +457,12 @@ export async function getLocalAiRun(payload: RunLookupPayload): Promise<PublicRu
   if (run.status === "queued" || run.status === "running" || run.status === "stopping") {
     const active: RegistryEntry = { ...entry, stage: "active", lastStatus: run.status, updatedAt: Date.now() };
     await putEntry(active, expectedEpoch);
-    return publicActive(active, run.status);
+    const base = publicActive(active, run.status);
+    if (run.status === "running") {
+      const progressChars = await makeApi(settings).peekRunProgress(entry.runId);
+      if (progressChars !== null) return { ...base, progressChars };
+    }
+    return base;
   }
 
   let terminal: PublicRunResult;
@@ -464,6 +495,83 @@ export async function getLocalAiRun(payload: RunLookupPayload): Promise<PublicRu
   return terminal;
 }
 
+function buildRepairMessage(feedback: string): string {
+  return [
+    "Your previous reply was rejected by Joblit's strict validator.",
+    `Validator feedback: ${feedback}`,
+    "Return the corrected result as exactly ONE JSON object with the same required keys.",
+    "No code fences, no prose, no apologies. Preserve every correct part of your previous reply and change only what the feedback identifies.",
+  ].join("\n");
+}
+
+export async function repairLocalAiRun(payload: RepairRunPayload): Promise<PublicRunResult> {
+  if (!isRepairRunPayload(payload)) {
+    throw new HermesApiError("HERMES_PROTOCOL_ERROR", "Invalid repair payload");
+  }
+  const expectedEpoch = registryEpoch;
+  const registry = await readRegistry();
+  const entry = registry[payload.requestId];
+  if (!entry) throw new HermesApiError("HERMES_RUN_NOT_FOUND", "Run mapping is missing", { retryable: true });
+  if (entry.stage === "repairing") return publicActive(entry, "running");
+  if (entry.stage !== "terminal" || entry.terminal.status !== "succeeded") {
+    throw new HermesApiError("HERMES_PROTOCOL_ERROR", "Only a succeeded run can be repaired");
+  }
+  if (entry.repaired) {
+    throw new HermesApiError("HERMES_PROTOCOL_ERROR", "Run was already repaired once");
+  }
+
+  const settings = await readSecretSettings();
+  const repairing: RegistryEntry = {
+    requestId: entry.requestId,
+    jobId: entry.jobId,
+    target: entry.target,
+    createdAt: entry.createdAt,
+    promptMeta: entry.promptMeta,
+    stage: "repairing",
+    repairStartedAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  await putEntry(repairing, expectedEpoch);
+
+  const operation = (async () => {
+    let terminal: PublicRunResult;
+    try {
+      const content = await makeApi(settings).sessionChat(
+        `joblit:${entry.requestId}`,
+        buildRepairMessage(payload.feedback),
+      );
+      const success: PublicRunResult = {
+        requestId: entry.requestId,
+        jobId: entry.jobId,
+        target: entry.target,
+        status: "succeeded",
+        modelOutput: content,
+        promptMeta: entry.promptMeta,
+      };
+      terminal = validatePublicRunResult(success)
+        ? success
+        : publicFailure(repairing, "AI_OUTPUT_INVALID");
+    } catch {
+      terminal = publicFailure(repairing, "AI_OUTPUT_INVALID");
+    }
+    await mutateRegistry((current) => {
+      const latest = current[entry.requestId];
+      // Keep a cancel/stop that happened mid-repair; never resurrect the run.
+      if (!latest || latest.stage !== "repairing") return;
+      current[entry.requestId] = {
+        ...latest,
+        stage: "terminal",
+        terminal,
+        repaired: true,
+        updatedAt: Date.now(),
+      };
+    }, expectedEpoch).catch(() => undefined);
+  })().finally(() => repairInFlight.delete(entry.requestId));
+  repairInFlight.set(entry.requestId, operation);
+
+  return publicActive(repairing, "running");
+}
+
 export async function stopLocalAiRun(payload: RunLookupPayload): Promise<PublicRunResult> {
   if (!isRunLookupPayload(payload)) throw new HermesApiError("HERMES_PROTOCOL_ERROR", "Invalid stop payload");
   const expectedEpoch = registryEpoch;
@@ -471,6 +579,17 @@ export async function stopLocalAiRun(payload: RunLookupPayload): Promise<PublicR
   const entry = registry[payload.requestId];
   if (!entry) throw new HermesApiError("HERMES_RUN_NOT_FOUND", "Run mapping is missing", { retryable: true });
   if (entry.stage === "terminal") return entry.terminal;
+  if (entry.stage === "repairing") {
+    // The original run already completed; cancelling a repair just abandons it.
+    const terminal: PublicRunResult = {
+      requestId: entry.requestId,
+      jobId: entry.jobId,
+      target: entry.target,
+      status: "cancelled",
+    };
+    await putEntry({ ...entry, stage: "terminal", terminal, repaired: true, updatedAt: Date.now() }, expectedEpoch);
+    return terminal;
+  }
   if (entry.stage !== "active") throw new HermesApiError("RUN_START_UNKNOWN", "Hermes start state is ambiguous");
   const settings = await readSecretSettings();
   await makeApi(settings).stopRun(entry.runId);

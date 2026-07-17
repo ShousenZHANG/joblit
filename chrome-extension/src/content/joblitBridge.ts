@@ -50,6 +50,8 @@ function internalMessage(request: BackgroundBridgeRequest): BackgroundMessage {
       return { type: "LOCAL_AI_GET_RUN", payload: request.payload };
     case "STOP_RUN":
       return { type: "LOCAL_AI_STOP_RUN", payload: request.payload };
+    case "REPAIR_RUN":
+      return { type: "LOCAL_AI_REPAIR_RUN", payload: request.payload };
   }
   throw new Error("Unsupported Local AI bridge action");
 }
@@ -94,16 +96,19 @@ export function createJoblitBridgeHandler(dependencies: BridgeDependencies = {})
     requestTimes = requestTimes.filter((time) => time > cutoff);
     startTimes = startTimes.filter((time) => time > cutoff);
     statusTimes = statusTimes.filter((time) => time > cutoff);
+    // REPAIR_RUN triggers a model generation just like START_RUN, so it shares
+    // the same per-minute generation budget.
+    const isGeneration = request.action === "START_RUN" || request.action === "REPAIR_RUN";
     if (
       requestTimes.length >= MAX_REQUESTS_PER_MINUTE ||
-      (request.action === "START_RUN" && startTimes.length >= MAX_STARTS_PER_MINUTE) ||
+      (isGeneration && startTimes.length >= MAX_STARTS_PER_MINUTE) ||
       (request.action === "GET_STATUS" && statusTimes.length >= MAX_STATUS_REQUESTS_PER_MINUTE)
     ) {
       emitError(request, publicError("RATE_LIMITED", "Too many Local AI requests. Wait a moment and try again.", true));
       return;
     }
     requestTimes.push(current);
-    if (request.action === "START_RUN") startTimes.push(current);
+    if (isGeneration) startTimes.push(current);
     if (request.action === "GET_STATUS") statusTimes.push(current);
 
     if (request.action === "PING") {

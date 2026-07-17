@@ -232,6 +232,7 @@
       "companyFallback": "the company",
       "recovering": "Recovering your active local run in this browser.",
       "localOnly": "Hermes runs on your computer. Joblit receives only the finished structured result.",
+      "progressChars": "Generating on your computer — about {count} characters so far.",
       "setupHint": "Finish setup in the Joblit extension, or use the manual method.",
       "generate": "Generate with Local AI",
       "cancel": "Stop local run",

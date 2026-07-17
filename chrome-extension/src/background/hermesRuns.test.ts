@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { SESSION_STORAGE_KEYS, STORAGE_KEYS } from "@ext/shared/constants";
+import { STORAGE_KEYS } from "@ext/shared/constants";
 import { HermesApiError } from "./apiErrors";
 
 const runId = "run_0123456789abcdef0123456789abcdef";
@@ -14,6 +14,8 @@ const api = vi.hoisted(() => ({
   startRun: vi.fn(),
   getRun: vi.fn(),
   stopRun: vi.fn(),
+  sessionChat: vi.fn(),
+  peekRunProgress: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("./hermesApi", () => ({ createHermesApi: () => api }));
@@ -85,5 +87,72 @@ describe("Hermes run registry", () => {
       error: { code: "UNEXPECTED_APPROVAL_REQUIRED", retryable: false },
     });
     expect(api.stopRun).toHaveBeenCalledWith(runId);
+  });
+
+  it("surfaces best-effort progress for a running run", async () => {
+    api.getRun.mockResolvedValue({ object: "hermes.run", runId, status: "running" });
+    api.peekRunProgress.mockResolvedValue(420);
+    const { getLocalAiRun, startLocalAiRun } = await import("./hermesRuns");
+    await startLocalAiRun(payload);
+    await expect(getLocalAiRun({ requestId: payload.requestId })).resolves.toMatchObject({
+      status: "running",
+      progressChars: 420,
+    });
+  });
+
+  it("repairs once via session chat and refuses a second repair", async () => {
+    api.getRun.mockResolvedValue({
+      object: "hermes.run",
+      runId,
+      status: "completed",
+      output: JSON.stringify({ summary: "A grounded result long enough" }),
+    });
+    const { getLocalAiRun, repairLocalAiRun, startLocalAiRun } = await import("./hermesRuns");
+    await startLocalAiRun(payload);
+    await getLocalAiRun({ requestId: payload.requestId });
+
+    const repairedOutput = JSON.stringify({ summary: "A corrected grounded result" });
+    api.sessionChat.mockResolvedValue(repairedOutput);
+    await expect(
+      repairLocalAiRun({ requestId: payload.requestId, feedback: "cvSummary was too long" }),
+    ).resolves.toMatchObject({ status: "running" });
+
+    await vi.waitFor(async () => {
+      const result = await getLocalAiRun({ requestId: payload.requestId });
+      expect(result.status).toBe("succeeded");
+    });
+    await expect(getLocalAiRun({ requestId: payload.requestId })).resolves.toMatchObject({
+      status: "succeeded",
+      modelOutput: repairedOutput,
+      promptMeta: { promptHash: "sha256:test" },
+    });
+    expect(api.sessionChat).toHaveBeenCalledTimes(1);
+    expect(api.sessionChat.mock.calls[0][0]).toBe(`joblit:${payload.requestId}`);
+    await expect(
+      repairLocalAiRun({ requestId: payload.requestId, feedback: "again" }),
+    ).rejects.toMatchObject({ code: "HERMES_PROTOCOL_ERROR" });
+  });
+
+  it("fails a repair fast after a service-worker restart", async () => {
+    api.getRun.mockResolvedValue({
+      object: "hermes.run",
+      runId,
+      status: "completed",
+      output: JSON.stringify({ summary: "A grounded result long enough" }),
+    });
+    api.sessionChat.mockReturnValue(new Promise(() => undefined));
+    const first = await import("./hermesRuns");
+    await first.startLocalAiRun(payload);
+    await first.getLocalAiRun({ requestId: payload.requestId });
+    await first.repairLocalAiRun({ requestId: payload.requestId, feedback: "fix the schema" });
+
+    vi.resetModules();
+    const restarted = await import("./hermesRuns");
+    await expect(
+      restarted.getLocalAiRun({ requestId: payload.requestId }),
+    ).resolves.toMatchObject({
+      status: "failed",
+      error: { code: "AI_OUTPUT_INVALID" },
+    });
   });
 });

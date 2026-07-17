@@ -14,8 +14,13 @@ export const BridgeActionSchema = z.enum([
   "START_RUN",
   "GET_RUN",
   "STOP_RUN",
+  "REPAIR_RUN",
 ]);
 export type BridgeAction = z.infer<typeof BridgeActionSchema>;
+
+export const LOCAL_AI_MAX_REPAIR_FEEDBACK_CHARS = 1_200;
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARS_RE = /[\u0000-\u001f\u007f-\u009f]/;
 
 const uuid = z.string().uuid();
 const nonce = z.string().regex(/^[A-Za-z0-9_-]{16,128}$/);
@@ -61,10 +66,25 @@ export const BridgeRequestSchema = z.discriminatedUnion("action", [
     action: z.literal("STOP_RUN"),
     payload: z.object({ requestId: uuid }).strict(),
   }).strict(),
+  z.object({
+    ...requestBase,
+    action: z.literal("REPAIR_RUN"),
+    payload: z
+      .object({
+        requestId: uuid,
+        feedback: z
+          .string()
+          .min(1)
+          .max(LOCAL_AI_MAX_REPAIR_FEEDBACK_CHARS)
+          .refine((value) => !CONTROL_CHARS_RE.test(value), "control characters are not allowed"),
+      })
+      .strict(),
+  }).strict(),
 ]);
 
 export type BridgeRequest = z.infer<typeof BridgeRequestSchema>;
 export type StartPayload = Extract<BridgeRequest, { action: "START_RUN" }>["payload"];
+export type RepairPayload = Extract<BridgeRequest, { action: "REPAIR_RUN" }>["payload"];
 
 export const LocalAiPresenceSchema = z.object({ present: z.literal(true) }).strict();
 export type LocalAiPresenceResult = z.infer<typeof LocalAiPresenceSchema>;
@@ -124,7 +144,13 @@ const runBase = {
 
 export const LocalAiPublicRunSchema = z.discriminatedUnion("status", [
   z.object({ ...runBase, status: z.literal("queued") }).strict(),
-  z.object({ ...runBase, status: z.literal("running") }).strict(),
+  z
+    .object({
+      ...runBase,
+      status: z.literal("running"),
+      progressChars: z.number().int().nonnegative().max(LOCAL_AI_MAX_MODEL_OUTPUT_CHARS).optional(),
+    })
+    .strict(),
   z.object({ ...runBase, status: z.literal("stopping") }).strict(),
   z
     .object({

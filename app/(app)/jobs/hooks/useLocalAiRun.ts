@@ -8,10 +8,12 @@ import {
   sendLocalAiBridgeRequest,
   type LocalAiDetectionState,
 } from "@/lib/client/localAiBridge";
-import type {
-  LocalAiPublicRun,
-  LocalAiSucceededRun,
+import {
+  LOCAL_AI_MAX_REPAIR_FEEDBACK_CHARS,
+  type LocalAiPublicRun,
+  type LocalAiSucceededRun,
 } from "@/lib/shared/localAiBridgeContract";
+import { DraftImportError } from "./useExternalGenerate";
 
 export const LOCAL_AI_ACTIVE_REQUEST_KEY = "joblit.local-ai.active-request.v1";
 export const LOCAL_AI_LAST_START_KEY = "joblit.local-ai.last-start.v1";
@@ -31,7 +33,13 @@ export type LocalAiAvailability =
 export type LocalAiRunState =
   | { status: "idle" }
   | { status: "starting"; requestId: string; jobId: string; target: "resume" | "cover" }
-  | { status: "queued" | "running" | "stopping"; requestId: string; jobId?: string; target?: "resume" | "cover" }
+  | {
+      status: "queued" | "running" | "stopping";
+      requestId: string;
+      jobId?: string;
+      target?: "resume" | "cover";
+      progressChars?: number;
+    }
   | { status: "importing"; requestId: string; jobId: string; target: "resume" | "cover" }
   | { status: "succeeded"; requestId: string; jobId: string; target: "resume" | "cover" }
   | { status: "cancelled"; requestId: string; jobId: string; target: "resume" | "cover" }
@@ -72,6 +80,18 @@ function bridgeFailure(error: unknown, fallbackCode: string) {
     : { code: fallbackCode, retryable: true };
 }
 
+/** Flatten validator output into a bounded, control-character-free line. */
+function repairFeedbackFromError(error: DraftImportError): string {
+  const text = (error.details.length ? error.details.join("; ") : error.message)
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f-\u009f]+/g, " ")
+    .trim();
+  return (text || "The JSON did not match the required schema.").slice(
+    0,
+    LOCAL_AI_MAX_REPAIR_FEEDBACK_CHARS,
+  );
+}
+
 export function useLocalAiRun(options: {
   enabled: boolean;
   onSucceeded: (run: LocalAiSucceededRun) => Promise<void>;
@@ -89,6 +109,7 @@ export function useLocalAiRun(options: {
   );
   const onSucceededRef = useRef(options.onSucceeded);
   const terminalConsumedRef = useRef(new Set<string>());
+  const repairAttemptedRef = useRef(new Set<string>());
   const startInFlightRef = useRef(false);
   const lastStartRef = useRef<LastStart | null>(restoredLastStart());
   const runDeadlineRef = useRef<{ requestId: string; at: number } | null>(null);
@@ -147,13 +168,49 @@ export function useLocalAiRun(options: {
           jobId: run.jobId,
           target: run.target,
         });
-      } catch {
+      } catch (error) {
+        // Strict-import rejections get exactly one AI repair on the same local
+        // session (spec §12.2): the extension replays a short validator note to
+        // Hermes instead of re-running the whole prompt, then polling resumes.
+        if (
+          error instanceof DraftImportError &&
+          error.code === "INVALID_AI_RESULT" &&
+          !repairAttemptedRef.current.has(run.requestId)
+        ) {
+          repairAttemptedRef.current.add(run.requestId);
+          try {
+            await sendLocalAiBridgeRequest(
+              "REPAIR_RUN",
+              { requestId: run.requestId, feedback: repairFeedbackFromError(error) },
+              { timeoutMs: 10_000 },
+            );
+            terminalConsumedRef.current.delete(run.requestId);
+            window.sessionStorage.setItem(LOCAL_AI_ACTIVE_REQUEST_KEY, run.requestId);
+            runDeadlineRef.current = null;
+            setActiveRequestId(run.requestId);
+            setPollEpoch((value) => value + 1);
+            setRunState({
+              status: "running",
+              requestId: run.requestId,
+              jobId: run.jobId,
+              target: run.target,
+            });
+            return;
+          } catch {
+            // Repair could not start; fall through to the import failure.
+          }
+        }
         setRunState({
           status: "failed",
           requestId: run.requestId,
           jobId: run.jobId,
           target: run.target,
-          error: { code: "IMPORT_FAILED", retryable: true },
+          error: {
+            code: error instanceof DraftImportError && error.code === "INVALID_AI_RESULT"
+              ? "INVALID_AI_RESULT"
+              : "IMPORT_FAILED",
+            retryable: true,
+          },
         });
       }
       return;
@@ -185,6 +242,9 @@ export function useLocalAiRun(options: {
       requestId: run.requestId,
       jobId: run.jobId,
       target: run.target,
+      ...(run.status === "running" && run.progressChars !== undefined
+        ? { progressChars: run.progressChars }
+        : {}),
     });
   }, [clearActiveRequest, forgetLastStart]);
 

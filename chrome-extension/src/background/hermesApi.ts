@@ -5,8 +5,11 @@ import { HermesApiError } from "./apiErrors";
 
 const REQUEST_TIMEOUT_MS = 15_000;
 const PROBE_TIMEOUT_MS = 6_000;
+const SESSION_CHAT_TIMEOUT_MS = 75_000;
+const PROGRESS_PEEK_TIMEOUT_MS = 1_200;
 const MAX_JSON_BYTES = 192_000;
 const RUN_ID_RE = /^run_[0-9a-f]{32}$/;
+const SESSION_ID_RE = /^joblit:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const STOCK_RUN_STATUSES = new Set<HermesRunStatus>([
   "queued",
   "running",
@@ -34,6 +37,10 @@ interface HermesApi {
   startRun(body: StartRunBody): Promise<{ runId: string }>;
   getRun(runId: string): Promise<HermesRun>;
   stopRun(runId: string): Promise<void>;
+  /** One-turn repair on an existing run session; returns the assistant reply text. */
+  sessionChat(sessionId: string, message: string): Promise<string>;
+  /** Best-effort peek at generated output size for an in-flight run; null when unknown. */
+  peekRunProgress(runId: string): Promise<number | null>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -250,6 +257,36 @@ export function createHermesApi(input: HermesClientConfig): HermesApi {
       if (tools.length > 0) {
         throw new HermesApiError("HERMES_INCOMPATIBLE", "Joblit Hermes profile advertises executable tools");
       }
+      // Functional readiness: capabilities alone cannot prove runs will be
+      // dispatched. A stopped gateway accepts runs that then sit undispatched
+      // forever, so "Ready" must require a running gateway and a healthy model.
+      try {
+        const detailed = await request("/health/detailed", {}, PROBE_TIMEOUT_MS);
+        if (isRecord(detailed)) {
+          const readiness = isRecord(detailed.readiness) ? detailed.readiness : undefined;
+          const checks = readiness && isRecord(readiness.checks) ? readiness.checks : undefined;
+          const model = checks && isRecord(checks.model) ? checks.model : undefined;
+          if (
+            detailed.gateway_state !== "running" ||
+            (model !== undefined && model.status !== "ok")
+          ) {
+            throw new HermesApiError(
+              "HERMES_UNREACHABLE",
+              "Hermes gateway is not running; local runs would never be dispatched",
+              { retryable: true },
+            );
+          }
+        }
+      } catch (error) {
+        // Older builds without /health/detailed stay compatible; only a
+        // confirmed stopped gateway or auth issue should fail the probe.
+        if (
+          error instanceof HermesApiError &&
+          (error.status === undefined || error.status !== 404)
+        ) {
+          throw error;
+        }
+      }
       try {
         await request(
           "/v1/runs",
@@ -326,6 +363,77 @@ export function createHermesApi(input: HermesClientConfig): HermesApi {
       const result = await request(`/v1/runs/${runId}/stop`, { method: "POST" }, REQUEST_TIMEOUT_MS, false, true);
       if (!isRecord(result) || result.run_id !== runId || result.status !== "stopping") {
         throw new HermesApiError("HERMES_PROTOCOL_ERROR", "Hermes stop response is invalid");
+      }
+    },
+
+    async sessionChat(sessionId, message) {
+      if (!SESSION_ID_RE.test(sessionId)) {
+        throw new HermesApiError("HERMES_PROTOCOL_ERROR", "Invalid Hermes session id");
+      }
+      if (typeof message !== "string" || message.length === 0 || message.length > 4_000) {
+        throw new HermesApiError("HERMES_PROTOCOL_ERROR", "Invalid Hermes repair message");
+      }
+      const result = await request(
+        `/api/sessions/${encodeURIComponent(sessionId)}/chat`,
+        { method: "POST", body: JSON.stringify({ message }) },
+        SESSION_CHAT_TIMEOUT_MS,
+        false,
+        true,
+      );
+      if (
+        !isRecord(result) ||
+        result.role !== "assistant" ||
+        typeof result.content !== "string" ||
+        result.content.length === 0 ||
+        result.content.length > MAX_MODEL_OUTPUT_CHARS
+      ) {
+        throw new HermesApiError("HERMES_PROTOCOL_ERROR", "Hermes chat response is invalid");
+      }
+      return result.content;
+    },
+
+    async peekRunProgress(rawRunId) {
+      const runId = validateRunId(rawRunId);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), PROGRESS_PEEK_TIMEOUT_MS);
+      try {
+        const response = await fetch(`${baseUrl}/v1/runs/${runId}/events`, {
+          redirect: "error",
+          signal: controller.signal,
+          headers: { Accept: "text/event-stream", Authorization: `Bearer ${apiKey}` },
+        });
+        if (!response.ok || !response.body) return null;
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let text = "";
+        try {
+          while (text.length < MAX_JSON_BYTES) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            text += decoder.decode(value, { stream: true });
+          }
+        } finally {
+          await reader.cancel().catch(() => undefined);
+          reader.releaseLock();
+        }
+        let chars = 0;
+        for (const line of text.split("\n")) {
+          if (!line.startsWith("data:")) continue;
+          try {
+            const event: unknown = JSON.parse(line.slice(5));
+            if (isRecord(event) && event.event === "message.delta" && typeof event.delta === "string") {
+              chars += event.delta.length;
+            }
+          } catch {
+            // Partial SSE frame at the abort boundary; ignore.
+          }
+        }
+        return chars > 0 ? Math.min(chars, MAX_MODEL_OUTPUT_CHARS) : null;
+      } catch {
+        // Progress is decorative; never let a peek failure disturb the run.
+        return null;
+      } finally {
+        clearTimeout(timer);
       }
     },
   };

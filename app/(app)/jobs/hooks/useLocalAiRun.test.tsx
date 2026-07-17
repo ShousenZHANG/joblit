@@ -19,6 +19,7 @@ import {
   useLocalAiRun,
 } from "./useLocalAiRun";
 import { LocalAiBridgeError } from "@/lib/client/localAiBridge";
+import { DraftImportError } from "./useExternalGenerate";
 
 const REQUEST_ID = "550e8400-e29b-41d4-a716-446655440000";
 const JOB_ID = "22222222-2222-4222-8222-222222222222";
@@ -97,6 +98,121 @@ describe("useLocalAiRun", () => {
     );
     expect(imported).toHaveBeenCalledTimes(1);
     expect(sessionStorage.getItem(LOCAL_AI_ACTIVE_REQUEST_KEY)).toBeNull();
+  });
+
+  it("repairs a rejected import once and consumes the corrected result", async () => {
+    const imported = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new DraftImportError("Invalid", "INVALID_AI_RESULT", ["cvSummary exceeds 2000 chars"]),
+      )
+      .mockResolvedValue(undefined);
+    let repaired = false;
+    bridge.send.mockImplementation(async (action: string, payload: unknown) => {
+      if (action === "GET_STATUS") return { state: "ready", joblitConnected: true };
+      if (action === "START_RUN") {
+        return { requestId: REQUEST_ID, jobId: JOB_ID, target: "resume", status: "queued" };
+      }
+      if (action === "REPAIR_RUN") {
+        expect(payload).toMatchObject({
+          requestId: REQUEST_ID,
+          feedback: expect.stringContaining("cvSummary exceeds"),
+        });
+        repaired = true;
+        return { requestId: REQUEST_ID, jobId: JOB_ID, target: "resume", status: "running" };
+      }
+      if (action === "GET_RUN") {
+        return {
+          requestId: REQUEST_ID,
+          jobId: JOB_ID,
+          target: "resume",
+          status: "succeeded",
+          modelOutput: repaired
+            ? "{\"validOutput\":true,\"repaired\":true}"
+            : "{\"validOutput\":false,\"tooLong\":1}",
+          promptMeta,
+        };
+      }
+      throw new Error(`unexpected ${action}`);
+    });
+    const { result } = renderHook(() =>
+      useLocalAiRun({ enabled: true, onSucceeded: imported }),
+    );
+    await waitFor(() => expect(result.current.availability).toBe("ready"));
+    await act(async () => result.current.start(JOB_ID, "resume"));
+    await waitFor(
+      () => expect(result.current.runState.status).toBe("succeeded"),
+      { timeout: LOCAL_AI_POLL_MS * 8 },
+    );
+    expect(imported).toHaveBeenCalledTimes(2);
+    expect(imported.mock.calls[1][0]).toMatchObject({
+      modelOutput: "{\"validOutput\":true,\"repaired\":true}",
+    });
+    expect(
+      bridge.send.mock.calls.filter(([action]) => action === "REPAIR_RUN"),
+    ).toHaveLength(1);
+  });
+
+  it("does not repair twice when the corrected result is still rejected", async () => {
+    const imported = vi
+      .fn()
+      .mockRejectedValue(
+        new DraftImportError("Invalid", "INVALID_AI_RESULT", ["still invalid"]),
+      );
+    bridge.send.mockImplementation(async (action: string) => {
+      if (action === "GET_STATUS") return { state: "ready", joblitConnected: true };
+      if (action === "START_RUN" || action === "GET_RUN") {
+        return {
+          requestId: REQUEST_ID,
+          jobId: JOB_ID,
+          target: "resume",
+          status: "succeeded",
+          modelOutput: "{\"validOutput\":false}",
+          promptMeta,
+        };
+      }
+      if (action === "REPAIR_RUN") {
+        return { requestId: REQUEST_ID, jobId: JOB_ID, target: "resume", status: "running" };
+      }
+      throw new Error(`unexpected ${action}`);
+    });
+    const { result } = renderHook(() =>
+      useLocalAiRun({ enabled: true, onSucceeded: imported }),
+    );
+    await waitFor(() => expect(result.current.availability).toBe("ready"));
+    await act(async () => result.current.start(JOB_ID, "resume"));
+    await waitFor(
+      () => expect(result.current.runState).toMatchObject({
+        status: "failed",
+        error: { code: "INVALID_AI_RESULT" },
+      }),
+      { timeout: LOCAL_AI_POLL_MS * 8 },
+    );
+    expect(
+      bridge.send.mock.calls.filter(([action]) => action === "REPAIR_RUN"),
+    ).toHaveLength(1);
+    expect(imported).toHaveBeenCalledTimes(2);
+  });
+
+  it("exposes best-effort progress while the run is generating", async () => {
+    bridge.send.mockImplementation(async (action: string) => {
+      if (action === "GET_STATUS") return { state: "ready", joblitConnected: true };
+      if (action === "START_RUN") {
+        return { requestId: REQUEST_ID, jobId: JOB_ID, target: "resume", status: "queued" };
+      }
+      if (action === "GET_RUN") {
+        return { requestId: REQUEST_ID, jobId: JOB_ID, target: "resume", status: "running", progressChars: 512 };
+      }
+      throw new Error(`unexpected ${action}`);
+    });
+    const { result } = renderHook(() =>
+      useLocalAiRun({ enabled: true, onSucceeded: vi.fn() }),
+    );
+    await waitFor(() => expect(result.current.availability).toBe("ready"));
+    await act(async () => result.current.start(JOB_ID, "resume"));
+    await waitFor(() =>
+      expect(result.current.runState).toMatchObject({ status: "running", progressChars: 512 }),
+    );
   });
 
   it("fails a run that never reaches a terminal state with AI_TIMEOUT", async () => {

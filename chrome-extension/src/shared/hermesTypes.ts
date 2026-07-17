@@ -25,6 +25,7 @@ export type BridgeRequest = BridgeEnvelopeBase & {
     | { action: "PING" | "GET_STATUS"; payload: Record<string, never> }
     | { action: "START_RUN"; payload: StartRunPayload }
     | { action: "GET_RUN" | "STOP_RUN"; payload: RunLookupPayload }
+    | { action: "REPAIR_RUN"; payload: RepairRunPayload }
   );
 
 export interface StartRunPayload {
@@ -35,6 +36,13 @@ export interface StartRunPayload {
 
 export interface RunLookupPayload {
   requestId: string;
+}
+
+export const MAX_REPAIR_FEEDBACK_CHARS = 1_200;
+
+export interface RepairRunPayload {
+  requestId: string;
+  feedback: string;
 }
 
 export type LocalAiStatusState =
@@ -70,6 +78,11 @@ export interface PublicRunBase {
   status: PublicRunStatus;
 }
 
+export interface PublicRunProgress {
+  /** Approximate characters of model output observed so far (best-effort). */
+  progressChars?: number;
+}
+
 export interface PublicRunSuccess extends PublicRunBase {
   status: "succeeded";
   modelOutput: string;
@@ -84,7 +97,7 @@ export interface PublicRunFailure extends PublicRunBase {
 export type PublicRunResult =
   | PublicRunSuccess
   | PublicRunFailure
-  | (PublicRunBase & { status: "queued" | "running" | "stopping" | "cancelled" });
+  | (PublicRunBase & PublicRunProgress & { status: "queued" | "running" | "stopping" | "cancelled" });
 
 export interface PublicLocalAiError {
   code: LocalAiErrorCode;
@@ -222,6 +235,19 @@ export function isRunLookupPayload(value: unknown): value is RunLookupPayload {
   return isPlainRecord(value) && hasExactKeys(value, ["requestId"]) && isUuid(value.requestId);
 }
 
+export function isRepairRunPayload(value: unknown): value is RepairRunPayload {
+  return (
+    isPlainRecord(value) &&
+    hasExactKeys(value, ["feedback", "requestId"]) &&
+    isUuid(value.requestId) &&
+    typeof value.feedback === "string" &&
+    value.feedback.length > 0 &&
+    value.feedback.length <= MAX_REPAIR_FEEDBACK_CHARS &&
+    // Feedback is untrusted display/data text; refuse control characters.
+    !/[\u0000-\u001f\u007f-\u009f]/.test(value.feedback)
+  );
+}
+
 export function parseBridgeRequest(value: unknown, now = Date.now()): BridgeRequest | null {
   if (!isPlainRecord(value) || jsonBytes(value) > MAX_BRIDGE_REQUEST_BYTES) return null;
   if (
@@ -260,6 +286,8 @@ export function parseBridgeRequest(value: unknown, now = Date.now()): BridgeRequ
     if (!isStartRunPayload(value.payload)) return null;
   } else if (value.action === "GET_RUN" || value.action === "STOP_RUN") {
     if (!isRunLookupPayload(value.payload)) return null;
+  } else if (value.action === "REPAIR_RUN") {
+    if (!isRepairRunPayload(value.payload)) return null;
   } else {
     return null;
   }
@@ -297,10 +325,24 @@ export function validatePublicRunResult(value: unknown): value is PublicRunResul
   if (value.status === "failed") {
     return hasExactKeys(value, ["error", "jobId", "requestId", "status", "target"]) && isPublicLocalAiError(value.error);
   }
-  return (
-    (value.status === "queued" || value.status === "running" || value.status === "stopping" || value.status === "cancelled") &&
-    hasExactKeys(value, ["jobId", "requestId", "status", "target"])
-  );
+  if (
+    value.status !== "queued" &&
+    value.status !== "running" &&
+    value.status !== "stopping" &&
+    value.status !== "cancelled"
+  ) {
+    return false;
+  }
+  if (value.progressChars !== undefined) {
+    return (
+      hasExactKeys(value, ["jobId", "progressChars", "requestId", "status", "target"]) &&
+      typeof value.progressChars === "number" &&
+      Number.isInteger(value.progressChars) &&
+      value.progressChars >= 0 &&
+      value.progressChars <= MAX_MODEL_OUTPUT_CHARS
+    );
+  }
+  return hasExactKeys(value, ["jobId", "requestId", "status", "target"]);
 }
 
 export function isPublicLocalAiError(value: unknown): value is PublicLocalAiError {

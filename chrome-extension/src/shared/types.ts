@@ -1,6 +1,7 @@
 import type { FieldCategory } from "./fieldTaxonomy";
 import type {
   HermesSettingsInput,
+  RepairRunPayload,
   RunLookupPayload,
   StartRunPayload,
 } from "./hermesTypes";
@@ -85,6 +86,7 @@ export type BackgroundMessage =
   | { type: "LOCAL_AI_START_RUN"; payload: StartRunPayload }
   | { type: "LOCAL_AI_GET_RUN"; payload: RunLookupPayload }
   | { type: "LOCAL_AI_STOP_RUN"; payload: RunLookupPayload }
+  | { type: "LOCAL_AI_REPAIR_RUN"; payload: RepairRunPayload }
   | { type: "GET_HERMES_SETTINGS" }
   | { type: "CHECK_HERMES_SETTINGS" }
   | { type: "TEST_AND_SAVE_HERMES_SETTINGS"; data: HermesSettingsInput }

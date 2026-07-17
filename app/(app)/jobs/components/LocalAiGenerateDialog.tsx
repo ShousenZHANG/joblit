@@ -115,7 +115,11 @@ export function LocalAiGenerateDialog({
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-foreground">{statusLabel}</p>
                 <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                  {isReady ? t("localOnly") : t("setupHint")}
+                  {runState.status === "running" && runState.progressChars
+                    ? t("progressChars", { count: runState.progressChars })
+                    : isReady
+                      ? t("localOnly")
+                      : t("setupHint")}
                 </p>
               </div>
             </div>

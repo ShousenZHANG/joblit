@@ -19,6 +19,18 @@ import {
 
 export type GeneratedDraftSource = "manual_import" | "local_ai";
 
+/** Import rejection carrying the server's stable code + validator details. */
+export class DraftImportError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string | null,
+    public readonly details: string[],
+  ) {
+    super(message);
+    this.name = "DraftImportError";
+  }
+}
+
 export type PersistedGeneratedDraft = {
   applicationId: string;
   status: "DRAFT" | "FINAL";
@@ -51,7 +63,8 @@ export async function persistGeneratedDraft(input: {
       ? json.error.details.filter((item: unknown) => typeof item === "string")
       : [];
     const detailText = details.length ? ` (${details.slice(0, 2).join(" | ")})` : "";
-    throw new Error(`${baseMessage}${detailText}`);
+    const code = typeof json?.error?.code === "string" ? json.error.code : null;
+    throw new DraftImportError(`${baseMessage}${detailText}`, code, details);
   }
   if (
     !json?.applicationId ||

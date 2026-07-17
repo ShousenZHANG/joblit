@@ -94,6 +94,11 @@ describe("Hermes fixed-route client", () => {
         platform: "api_server",
         data: [{ name: "core", enabled: true, configured: true, tools: [] }],
       },
+      {
+        status: "ok",
+        gateway_state: "running",
+        readiness: { checks: { model: { status: "ok" } } },
+      },
     ];
     vi.stubGlobal(
       "fetch",
@@ -108,6 +113,74 @@ describe("Hermes fixed-route client", () => {
     );
 
     await expect(createHermesApi(config).probe()).resolves.toEqual({ modelId: config.profileName, profileName: config.profileName, tools: [] });
+  });
+
+  it("fails the probe when the gateway is not running", async () => {
+    const responses = [
+      { status: "ok" },
+      {
+        object: "hermes.api_server.capabilities",
+        platform: "hermes-agent",
+        model: config.profileName,
+        auth: { type: "bearer", required: true },
+        features: { run_submission: true, run_status: true, run_stop: true },
+        endpoints: {
+          runs: { method: "POST", path: "/v1/runs" },
+          run_status: { method: "GET", path: "/v1/runs/{run_id}" },
+          run_stop: { method: "POST", path: "/v1/runs/{run_id}/stop" },
+          toolsets: { method: "GET", path: "/v1/toolsets" },
+          models: { method: "GET", path: "/v1/models" },
+          health: { method: "GET", path: "/health" },
+        },
+      },
+      { object: "list", data: [{ id: config.profileName, object: "model" }] },
+      {
+        object: "list",
+        platform: "api_server",
+        data: [{ name: "core", enabled: true, configured: true, tools: [] }],
+      },
+      // Stopped gateway: runs would be accepted but never dispatched.
+      { status: "ok", gateway_state: "stopped", readiness: { checks: { model: { status: "ok" } } } },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() => {
+        const body = responses.shift() ?? { error: "unexpected extra request" };
+        return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } }));
+      }),
+    );
+
+    await expect(createHermesApi(config).probe()).rejects.toMatchObject({ code: "HERMES_UNREACHABLE" });
+  });
+
+  it("returns the assistant text from a session chat and rejects malformed replies", async () => {
+    const sessionId = "joblit:550e8400-e29b-41d4-a716-446655440000";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ role: "assistant", content: "{\"fixed\":true}" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+    await expect(createHermesApi(config).sessionChat(sessionId, "fix the schema"))
+      .resolves.toBe("{\"fixed\":true}");
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ role: "user", content: "echo" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+    await expect(createHermesApi(config).sessionChat(sessionId, "fix the schema"))
+      .rejects.toMatchObject({ code: "HERMES_PROTOCOL_ERROR" });
+
+    await expect(createHermesApi(config).sessionChat("joblit:not-a-uuid", "fix"))
+      .rejects.toMatchObject({ code: "HERMES_PROTOCOL_ERROR" });
   });
 
   it("rejects a capabilities document that redirects a required fixed route", async () => {

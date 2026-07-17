@@ -12,6 +12,7 @@ import {
   type LocalAiBridgeErrorPayload,
   type LocalAiPresenceResult,
   type LocalAiPublicRun,
+  type RepairPayload,
   type StartPayload,
 } from "@/lib/shared/localAiBridgeContract";
 
@@ -21,6 +22,7 @@ type PayloadByAction = {
   START_RUN: StartPayload;
   GET_RUN: { requestId: string };
   STOP_RUN: { requestId: string };
+  REPAIR_RUN: RepairPayload;
 };
 
 type ResultByAction = {
@@ -29,6 +31,7 @@ type ResultByAction = {
   START_RUN: LocalAiPublicRun;
   GET_RUN: LocalAiPublicRun;
   STOP_RUN: LocalAiPublicRun;
+  REPAIR_RUN: LocalAiPublicRun;
 };
 
 export const LOCAL_AI_PRESENCE_TIMEOUT_MS = 1_500;

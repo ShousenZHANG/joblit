@@ -32,6 +32,52 @@ describe("local AI bridge contract", () => {
     expect(parseBridgeRequest(request(), NOW)?.action).toBe("START_RUN");
   });
 
+  it("accepts a bounded repair request and rejects unsafe feedback", () => {
+    const repair = request({
+      action: "REPAIR_RUN",
+      payload: { requestId: ID, feedback: "cvSummary exceeds the 2000 character limit" },
+    });
+    expect(parseBridgeRequest(repair, NOW)?.action).toBe("REPAIR_RUN");
+
+    expect(
+      parseBridgeRequest(
+        request({ action: "REPAIR_RUN", payload: { requestId: ID, feedback: "bad\u0000byte" } }),
+        NOW,
+      ),
+    ).toBeNull();
+    expect(
+      parseBridgeRequest(
+        request({ action: "REPAIR_RUN", payload: { requestId: ID, feedback: "x".repeat(1_500) } }),
+        NOW,
+      ),
+    ).toBeNull();
+    expect(
+      parseBridgeRequest(
+        request({ action: "REPAIR_RUN", payload: { requestId: ID, feedback: "ok", extra: "no" } }),
+        NOW,
+      ),
+    ).toBeNull();
+  });
+
+  it("accepts optional bounded progress on a running run response", () => {
+    const base = {
+      channel: LOCAL_AI_BRIDGE_CHANNEL,
+      direction: "extension-to-web",
+      version: 1,
+      messageId: ID,
+      nonce: NONCE,
+      ok: true,
+    };
+    const run = { requestId: ID, jobId: NONCE, target: "resume", status: "running" };
+    expect(
+      parseBridgeResponse({ ...base, data: { ...run, progressChars: 512 } }),
+    ).toMatchObject({ ok: true, data: { progressChars: 512 } });
+    expect(parseBridgeResponse({ ...base, data: { ...run, progressChars: -1 } })).toBeNull();
+    expect(
+      parseBridgeResponse({ ...base, data: { ...run, status: "queued", progressChars: 5 } }),
+    ).toBeNull();
+  });
+
   it("accepts a strict presence ping and response", () => {
     const ping = request({ action: "PING", payload: {} });
     expect(parseBridgeRequest(ping, NOW)?.action).toBe("PING");
