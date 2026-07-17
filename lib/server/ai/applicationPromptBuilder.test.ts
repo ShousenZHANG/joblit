@@ -238,6 +238,9 @@ describe("lean application prompt builder (local Hermes)", () => {
     expect(prompt).toContain('"requirements"');
     expect(prompt).toContain('"eligibility"');
     expect(prompt.toLowerCase()).toContain("do not output any overall score");
+    expect(prompt.toLowerCase()).toContain("ignore company intro");
+    expect(prompt.toLowerCase()).toContain("state gaps plainly");
+    expect(prompt.toLowerCase()).toContain("could honestly defend in an interview");
     expect(prompt.match(/<\/candidate-evidence>/g)).toHaveLength(1);
     expect(prompt.match(/<\/job-evidence>/g)).toHaveLength(1);
     // Match stays free of the reasoning-heavy application sections.

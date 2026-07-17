@@ -5,7 +5,10 @@ import { useCallback, useRef, useState } from "react";
 import { sendLocalAiBridgeRequest } from "@/lib/client/localAiBridge";
 
 const FIT_POLL_MS = 1_000;
-const FIT_RUN_BUDGET_MS = 180_000;
+// Match runs judge 6-14 requirements one by one on a local reasoning model —
+// measured ~157s on a real JD. Background batch work, so the budget is looser
+// than the interactive CV/cover budget.
+const FIT_RUN_BUDGET_MS = 240_000;
 
 export type FitScanState = {
   status: "idle" | "scanning" | "done" | "failed";
