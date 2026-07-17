@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  detectLocalAiAvailability,
   LocalAiBridgeError,
   sendLocalAiBridgeRequest,
+  type LocalAiDetectionState,
 } from "@/lib/client/localAiBridge";
 import type {
-  LocalAiAvailabilityResult,
   LocalAiPublicRun,
   LocalAiSucceededRun,
 } from "@/lib/shared/localAiBridgeContract";
@@ -17,8 +18,7 @@ export const LOCAL_AI_POLL_MS = 750;
 
 export type LocalAiAvailability =
   | "detecting"
-  | "extension_missing"
-  | LocalAiAvailabilityResult["state"];
+  | LocalAiDetectionState;
 
 export type LocalAiRunState =
   | { status: "idle" }
@@ -72,13 +72,10 @@ export function useLocalAiRun(options: {
   const checkAvailability = useCallback(async (signal?: AbortSignal) => {
     setAvailability("detecting");
     try {
-      const result = await sendLocalAiBridgeRequest("GET_STATUS", {}, {
-        signal,
-        timeoutMs: 1_500,
-      });
-      if (!signal?.aborted) setAvailability(result.state);
+      const result = await detectLocalAiAvailability({ signal });
+      if (!signal?.aborted) setAvailability(result);
     } catch {
-      if (!signal?.aborted) setAvailability("extension_missing");
+      if (!signal?.aborted) setAvailability("bridge_error");
     }
   }, []);
 

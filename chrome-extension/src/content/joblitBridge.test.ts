@@ -20,6 +20,25 @@ function event(data: unknown, origin: string = JOBLIT_WEB_ORIGIN, source: Window
 }
 
 describe("Joblit document bridge", () => {
+  it("answers a presence ping immediately without waking the background worker", () => {
+    const post = vi.fn();
+    const send = vi.fn();
+    const handler = createJoblitBridgeHandler({ now: () => now, post, send });
+
+    handler(event({ ...baseRequest, action: "PING" }));
+
+    expect(send).not.toHaveBeenCalled();
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageId: baseRequest.messageId,
+        nonce: baseRequest.nonce,
+        ok: true,
+        data: { present: true },
+      }),
+      JOBLIT_WEB_ORIGIN,
+    );
+  });
+
   it("forwards only a valid exact-origin request and returns matching correlation fields", async () => {
     const post = vi.fn();
     const send = vi.fn((_message, callback) => callback({

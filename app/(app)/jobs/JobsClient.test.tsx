@@ -20,6 +20,7 @@ const navigationMock = vi.hoisted(() => ({
 }));
 
 const localAiBridgeMock = vi.hoisted(() => ({
+  detect: vi.fn(),
   send: vi.fn(),
 }));
 
@@ -44,7 +45,11 @@ vi.mock("@/lib/client/localAiBridge", async () => {
   const actual = await vi.importActual<typeof import("@/lib/client/localAiBridge")>(
     "@/lib/client/localAiBridge",
   );
-  return { ...actual, sendLocalAiBridgeRequest: localAiBridgeMock.send };
+  return {
+    ...actual,
+    detectLocalAiAvailability: localAiBridgeMock.detect,
+    sendLocalAiBridgeRequest: localAiBridgeMock.send,
+  };
 });
 
 afterEach(() => {
@@ -92,8 +97,9 @@ beforeEach(() => {
   fetchStatusMock.state = { runId: null, status: null, importedCount: 0 };
   navigationMock.search = "";
   navigationMock.replace.mockReset();
+  localAiBridgeMock.detect.mockReset();
+  localAiBridgeMock.detect.mockResolvedValue("not_configured");
   localAiBridgeMock.send.mockReset();
-  localAiBridgeMock.send.mockResolvedValue({ state: "not_configured", joblitConnected: true });
   Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
   if (!HTMLElement.prototype.hasPointerCapture) {
     Object.defineProperty(HTMLElement.prototype, "hasPointerCapture", {
@@ -1173,8 +1179,8 @@ describe("JobsClient", () => {
 
   it("uses the allowlisted Local AI START_RUN as the primary CV action", async () => {
     const user = userEvent.setup();
+    localAiBridgeMock.detect.mockResolvedValue("ready");
     localAiBridgeMock.send.mockImplementation(async (action: string, payload: unknown) => {
-      if (action === "GET_STATUS") return { state: "ready", joblitConnected: true };
       if (action === "START_RUN" || action === "GET_RUN") {
         const request = payload as { requestId: string; jobId?: string; target?: string };
         return {
@@ -1188,10 +1194,8 @@ describe("JobsClient", () => {
     });
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
     await waitFor(() => {
-      expect(localAiBridgeMock.send).toHaveBeenCalledWith(
-        "GET_STATUS",
-        {},
-        expect.objectContaining({ timeoutMs: 1_500 }),
+      expect(localAiBridgeMock.detect).toHaveBeenCalledWith(
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
     });
 

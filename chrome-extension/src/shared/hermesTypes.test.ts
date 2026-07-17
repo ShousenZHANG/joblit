@@ -30,6 +30,11 @@ describe("parseBridgeRequest", () => {
     expect(parseBridgeRequest(request(), now)).toEqual(request());
   });
 
+  it("accepts a strict presence ping", () => {
+    const ping = request({ action: "PING", payload: {} });
+    expect(parseBridgeRequest(ping, now)).toEqual(ping);
+  });
+
   it.each([
     ["channel", "other"],
     ["direction", "extension-to-web"],

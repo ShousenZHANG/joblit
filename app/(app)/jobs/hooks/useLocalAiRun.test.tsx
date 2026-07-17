@@ -1,12 +1,16 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const bridge = vi.hoisted(() => ({ send: vi.fn() }));
+const bridge = vi.hoisted(() => ({ detect: vi.fn(), send: vi.fn() }));
 vi.mock("@/lib/client/localAiBridge", async () => {
   const actual = await vi.importActual<typeof import("@/lib/client/localAiBridge")>(
     "@/lib/client/localAiBridge",
   );
-  return { ...actual, sendLocalAiBridgeRequest: bridge.send };
+  return {
+    ...actual,
+    detectLocalAiAvailability: bridge.detect,
+    sendLocalAiBridgeRequest: bridge.send,
+  };
 });
 
 import {
@@ -30,6 +34,8 @@ const promptMeta = {
 describe("useLocalAiRun", () => {
   beforeEach(() => {
     sessionStorage.clear();
+    bridge.detect.mockReset();
+    bridge.detect.mockResolvedValue("ready");
     bridge.send.mockReset();
     vi.spyOn(crypto, "randomUUID").mockReturnValue(
       REQUEST_ID as `${string}-${string}-${string}-${string}-${string}`,
@@ -41,17 +47,25 @@ describe("useLocalAiRun", () => {
   });
 
   it("detects a missing extension with a bounded status request", async () => {
-    bridge.send.mockRejectedValueOnce(new LocalAiBridgeError("BRIDGE_TIMEOUT", "timeout", true));
+    bridge.detect.mockResolvedValueOnce("extension_missing");
     const { result } = renderHook(() =>
       useLocalAiRun({ enabled: true, onSucceeded: vi.fn() }),
     );
     await waitFor(() => expect(result.current.availability).toBe("extension_missing"));
   });
 
+  it("keeps bridge failures distinct from a missing extension", async () => {
+    bridge.detect.mockResolvedValueOnce("bridge_error");
+    const { result } = renderHook(() =>
+      useLocalAiRun({ enabled: true, onSucceeded: vi.fn() }),
+    );
+    await waitFor(() => expect(result.current.availability).toBe("bridge_error"));
+  });
+
   it.each(["not_configured", "joblit_disconnected", "unreachable", "auth_failed", "incompatible"] as const)(
     "surfaces setup status %s without connection details",
     async (status) => {
-      bridge.send.mockResolvedValueOnce({ state: status, joblitConnected: status !== "joblit_disconnected" });
+      bridge.detect.mockResolvedValueOnce(status);
       const { result } = renderHook(() =>
         useLocalAiRun({ enabled: true, onSucceeded: vi.fn() }),
       );
@@ -127,14 +141,11 @@ describe("useLocalAiRun", () => {
   });
 
   it("cleans polling and bridge timeouts on unmount", async () => {
-    bridge.send.mockResolvedValue({ state: "ready", joblitConnected: true });
     const { unmount } = renderHook(() => useLocalAiRun({ enabled: true, onSucceeded: vi.fn() }));
-    await waitFor(() => expect(bridge.send).toHaveBeenCalledWith(
-      "GET_STATUS",
-      {},
+    await waitFor(() => expect(bridge.detect).toHaveBeenCalledWith(
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     ));
-    const signal = bridge.send.mock.calls[0]?.[2]?.signal as AbortSignal;
+    const signal = bridge.detect.mock.calls[0]?.[0]?.signal as AbortSignal;
     unmount();
     expect(signal.aborted).toBe(true);
   });

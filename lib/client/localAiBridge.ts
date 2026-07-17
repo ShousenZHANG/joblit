@@ -3,17 +3,20 @@ import {
   LOCAL_AI_BRIDGE_TTL_MS,
   LOCAL_AI_BRIDGE_VERSION,
   LocalAiAvailabilitySchema,
+  LocalAiPresenceSchema,
   LocalAiPublicRunSchema,
   parseBridgeRequest,
   parseBridgeResponse,
   type BridgeAction,
   type LocalAiAvailabilityResult,
   type LocalAiBridgeErrorPayload,
+  type LocalAiPresenceResult,
   type LocalAiPublicRun,
   type StartPayload,
 } from "@/lib/shared/localAiBridgeContract";
 
 type PayloadByAction = {
+  PING: Record<string, never>;
   GET_STATUS: Record<string, never>;
   START_RUN: StartPayload;
   GET_RUN: { requestId: string };
@@ -21,11 +24,19 @@ type PayloadByAction = {
 };
 
 type ResultByAction = {
+  PING: LocalAiPresenceResult;
   GET_STATUS: LocalAiAvailabilityResult;
   START_RUN: LocalAiPublicRun;
   GET_RUN: LocalAiPublicRun;
   STOP_RUN: LocalAiPublicRun;
 };
+
+export const LOCAL_AI_PRESENCE_TIMEOUT_MS = 1_500;
+export const LOCAL_AI_STATUS_TIMEOUT_MS = 15_000;
+export type LocalAiDetectionState =
+  | "extension_missing"
+  | "bridge_error"
+  | LocalAiAvailabilityResult["state"];
 
 export class LocalAiBridgeError extends Error {
   constructor(
@@ -71,7 +82,7 @@ export function sendLocalAiBridgeRequest<A extends BridgeAction>(
     );
   }
   const origin = window.location.origin;
-  const timeoutMs = Math.max(250, Math.min(options.timeoutMs ?? 3_000, 10_000));
+  const timeoutMs = Math.max(250, Math.min(options.timeoutMs ?? 3_000, 20_000));
 
   return new Promise<ResultByAction[A]>((resolve, reject) => {
     let settled = false;
@@ -98,7 +109,9 @@ export function sendLocalAiBridgeRequest<A extends BridgeAction>(
       }
 
       const result =
-        action === "GET_STATUS"
+        action === "PING"
+          ? LocalAiPresenceSchema.safeParse(response.data)
+          : action === "GET_STATUS"
           ? LocalAiAvailabilitySchema.safeParse(response.data)
           : LocalAiPublicRunSchema.safeParse(response.data);
       if (!result.success) {
@@ -121,4 +134,35 @@ export function sendLocalAiBridgeRequest<A extends BridgeAction>(
     options.signal?.addEventListener("abort", onAbort, { once: true });
     window.postMessage(request, origin);
   });
+}
+
+export async function detectLocalAiAvailability(
+  options: { signal?: AbortSignal } = {},
+): Promise<LocalAiDetectionState> {
+  try {
+    await sendLocalAiBridgeRequest("PING", {}, {
+      signal: options.signal,
+      timeoutMs: LOCAL_AI_PRESENCE_TIMEOUT_MS,
+    });
+  } catch {
+    try {
+      const legacyResult = await sendLocalAiBridgeRequest("GET_STATUS", {}, {
+        signal: options.signal,
+        timeoutMs: LOCAL_AI_STATUS_TIMEOUT_MS,
+      });
+      return legacyResult.state;
+    } catch {
+      return "extension_missing";
+    }
+  }
+
+  try {
+    const result = await sendLocalAiBridgeRequest("GET_STATUS", {}, {
+      signal: options.signal,
+      timeoutMs: LOCAL_AI_STATUS_TIMEOUT_MS,
+    });
+    return result.state;
+  } catch {
+    return "bridge_error";
+  }
 }

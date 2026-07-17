@@ -32,6 +32,22 @@ describe("local AI bridge contract", () => {
     expect(parseBridgeRequest(request(), NOW)?.action).toBe("START_RUN");
   });
 
+  it("accepts a strict presence ping and response", () => {
+    const ping = request({ action: "PING", payload: {} });
+    expect(parseBridgeRequest(ping, NOW)?.action).toBe("PING");
+    expect(
+      parseBridgeResponse({
+        channel: LOCAL_AI_BRIDGE_CHANNEL,
+        direction: "extension-to-web",
+        version: 1,
+        messageId: ID,
+        nonce: NONCE,
+        ok: true,
+        data: { present: true },
+      }),
+    ).toMatchObject({ ok: true, data: { present: true } });
+  });
+
   it.each([
     ["channel", "other"],
     ["direction", "extension-to-web"],

@@ -243,6 +243,7 @@
       "availability": {
         "detecting": "正在检测 Joblit 扩展…",
         "extension_missing": "未检测到 Joblit 扩展",
+        "bridge_error": "扩展连接需要处理",
         "not_configured": "需要设置 Hermes",
         "joblit_disconnected": "请将扩展连接到 Joblit",
         "unreachable": "Hermes 当前不可用",
@@ -914,6 +915,7 @@
       "states": {
         "detecting": "正在检测此浏览器…",
         "extensionMissing": "未检测到扩展",
+        "bridgeError": "扩展连接需要处理",
         "joblitDisconnected": "Joblit 未连接",
         "setupRequired": "需要设置 Hermes",
         "ready": "本地 AI 已就绪"

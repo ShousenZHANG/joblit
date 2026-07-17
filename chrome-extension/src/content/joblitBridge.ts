@@ -38,7 +38,9 @@ function publicError(
   return { code, message, retryable };
 }
 
-function internalMessage(request: BridgeRequest): BackgroundMessage {
+type BackgroundBridgeRequest = Exclude<BridgeRequest, { action: "PING" }>;
+
+function internalMessage(request: BackgroundBridgeRequest): BackgroundMessage {
   switch (request.action) {
     case "GET_STATUS":
       return { type: "LOCAL_AI_GET_STATUS" };
@@ -49,6 +51,7 @@ function internalMessage(request: BridgeRequest): BackgroundMessage {
     case "STOP_RUN":
       return { type: "LOCAL_AI_STOP_RUN", payload: request.payload };
   }
+  throw new Error("Unsupported Local AI bridge action");
 }
 
 function responseBase(request: BridgeRequest) {
@@ -102,6 +105,16 @@ export function createJoblitBridgeHandler(dependencies: BridgeDependencies = {})
     requestTimes.push(current);
     if (request.action === "START_RUN") startTimes.push(current);
     if (request.action === "GET_STATUS") statusTimes.push(current);
+
+    if (request.action === "PING") {
+      const bridgeResponse: BridgeResponse = {
+        ...responseBase(request),
+        ok: true,
+        data: { present: true },
+      };
+      post(bridgeResponse, JOBLIT_WEB_ORIGIN);
+      return;
+    }
 
     let settled = false;
     const handleResponse = (response: MessageResponse): void => {

@@ -243,6 +243,7 @@
       "availability": {
         "detecting": "Detecting the Joblit extension…",
         "extension_missing": "Joblit extension not detected",
+        "bridge_error": "Extension connection needs attention",
         "not_configured": "Hermes setup required",
         "joblit_disconnected": "Connect the extension to Joblit",
         "unreachable": "Hermes is unavailable",
@@ -914,6 +915,7 @@
       "states": {
         "detecting": "Detecting this browser…",
         "extensionMissing": "Extension missing",
+        "bridgeError": "Extension connection needs attention",
         "joblitDisconnected": "Joblit disconnected",
         "setupRequired": "Hermes setup required",
         "ready": "Local AI Ready"

@@ -6,25 +6,12 @@ import { CheckCircle2, Cpu, Loader2, RefreshCw, Settings2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
-import { sendLocalAiBridgeRequest } from "@/lib/client/localAiBridge";
-import type { LocalAiAvailabilityResult } from "@/lib/shared/localAiBridgeContract";
+import {
+  detectLocalAiAvailability,
+  type LocalAiDetectionState,
+} from "@/lib/client/localAiBridge";
 
-type WebsiteStatus =
-  | "detecting"
-  | "extension_missing"
-  | LocalAiAvailabilityResult["state"];
-
-async function resolveAvailability(signal: AbortSignal): Promise<WebsiteStatus> {
-  try {
-    const result = await sendLocalAiBridgeRequest("GET_STATUS", {}, {
-      signal,
-      timeoutMs: 1_500,
-    });
-    return result.state;
-  } catch {
-    return "extension_missing";
-  }
-}
+type WebsiteStatus = "detecting" | LocalAiDetectionState;
 
 export function LocalAiSetupCard() {
   const t = useTranslations("extension.localAi");
@@ -37,14 +24,14 @@ export function LocalAiSetupCard() {
     const controller = new AbortController();
     controllerRef.current = controller;
     setStatus("detecting");
-    const nextStatus = await resolveAvailability(controller.signal);
+    const nextStatus = await detectLocalAiAvailability({ signal: controller.signal });
     if (!controller.signal.aborted) setStatus(nextStatus);
   }, []);
 
   useEffect(() => {
     const controller = new AbortController();
     controllerRef.current = controller;
-    void resolveAvailability(controller.signal).then((nextStatus) => {
+    void detectLocalAiAvailability({ signal: controller.signal }).then((nextStatus) => {
       if (!controller.signal.aborted) setStatus(nextStatus);
     });
     return () => controller.abort();
@@ -55,6 +42,8 @@ export function LocalAiSetupCard() {
       ? "detecting"
       : status === "extension_missing"
         ? "extensionMissing"
+        : status === "bridge_error"
+          ? "bridgeError"
         : status === "joblit_disconnected"
           ? "joblitDisconnected"
           : status === "ready"

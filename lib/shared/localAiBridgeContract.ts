@@ -9,6 +9,7 @@ export const LOCAL_AI_BRIDGE_MAX_RESPONSE_BYTES = 96_000;
 const LOCAL_AI_MAX_MODEL_OUTPUT_CHARS = 80_000;
 
 export const BridgeActionSchema = z.enum([
+  "PING",
   "GET_STATUS",
   "START_RUN",
   "GET_RUN",
@@ -29,6 +30,11 @@ const requestBase = {
 };
 
 export const BridgeRequestSchema = z.discriminatedUnion("action", [
+  z.object({
+    ...requestBase,
+    action: z.literal("PING"),
+    payload: z.object({}).strict(),
+  }).strict(),
   z.object({
     ...requestBase,
     action: z.literal("GET_STATUS"),
@@ -59,6 +65,9 @@ export const BridgeRequestSchema = z.discriminatedUnion("action", [
 
 export type BridgeRequest = z.infer<typeof BridgeRequestSchema>;
 export type StartPayload = Extract<BridgeRequest, { action: "START_RUN" }>["payload"];
+
+export const LocalAiPresenceSchema = z.object({ present: z.literal(true) }).strict();
+export type LocalAiPresenceResult = z.infer<typeof LocalAiPresenceSchema>;
 
 export const LocalAiAvailabilitySchema = z
   .object({
@@ -149,7 +158,11 @@ export const BridgeResponseSchema = z.discriminatedUnion("ok", [
     .object({
       ...responseBase,
       ok: z.literal(true),
-      data: z.union([LocalAiAvailabilitySchema, LocalAiPublicRunSchema]),
+      data: z.union([
+        LocalAiPresenceSchema,
+        LocalAiAvailabilitySchema,
+        LocalAiPublicRunSchema,
+      ]),
     })
     .strict(),
   z

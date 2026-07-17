@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { sendLocalAiBridgeRequest } from "./localAiBridge";
+import {
+  detectLocalAiAvailability,
+  sendLocalAiBridgeRequest,
+} from "./localAiBridge";
 import { LOCAL_AI_BRIDGE_CHANNEL } from "@/lib/shared/localAiBridgeContract";
 
 describe("local AI bridge client", () => {
@@ -48,6 +51,109 @@ describe("local AI bridge client", () => {
       window.location.origin,
     );
     expect(JSON.stringify(post.mock.calls[0][0])).not.toMatch(/token|prompt|run_id|https?:\/\//i);
+  });
+
+  it("keeps the extension detected when Hermes status takes longer than 1.5 seconds", async () => {
+    const actions: string[] = [];
+    vi.spyOn(window, "postMessage").mockImplementation((message) => {
+      const request = message as Record<string, unknown>;
+      actions.push(String(request.action));
+      const respond = (data: unknown) => {
+        window.dispatchEvent(
+          new MessageEvent("message", {
+            origin: window.location.origin,
+            source: window,
+            data: {
+              channel: LOCAL_AI_BRIDGE_CHANNEL,
+              direction: "extension-to-web",
+              version: 1,
+              messageId: request.messageId,
+              nonce: request.nonce,
+              ok: true,
+              data,
+            },
+          }),
+        );
+      };
+      if (request.action === "PING") {
+        queueMicrotask(() => respond({ present: true }));
+      } else if (request.action === "GET_STATUS") {
+        window.setTimeout(
+          () => respond({ state: "ready", joblitConnected: true, profileName: "joblit" }),
+          2_136,
+        );
+      }
+    });
+
+    const detection = detectLocalAiAvailability();
+    await vi.runAllTimersAsync();
+
+    await expect(detection).resolves.toBe("ready");
+    expect(actions).toEqual(["PING", "GET_STATUS"]);
+  });
+
+  it("falls back to GET_STATUS for installed legacy extensions without PING", async () => {
+    const actions: string[] = [];
+    vi.spyOn(window, "postMessage").mockImplementation((message) => {
+      const request = message as Record<string, unknown>;
+      actions.push(String(request.action));
+      if (request.action !== "GET_STATUS") return;
+      window.setTimeout(() => {
+        window.dispatchEvent(
+          new MessageEvent("message", {
+            origin: window.location.origin,
+            source: window,
+            data: {
+              channel: LOCAL_AI_BRIDGE_CHANNEL,
+              direction: "extension-to-web",
+              version: 1,
+              messageId: request.messageId,
+              nonce: request.nonce,
+              ok: true,
+              data: { state: "ready", joblitConnected: true, profileName: "joblit" },
+            },
+          }),
+        );
+      }, 2_136);
+    });
+
+    const detection = detectLocalAiAvailability();
+    await vi.runAllTimersAsync();
+
+    await expect(detection).resolves.toBe("ready");
+    expect(actions).toEqual(["PING", "GET_STATUS"]);
+  });
+
+  it("distinguishes a missing extension from a slow or failed Hermes probe", async () => {
+    const post = vi.spyOn(window, "postMessage").mockImplementation(() => undefined);
+    const missing = detectLocalAiAvailability();
+    await vi.runAllTimersAsync();
+    await expect(missing).resolves.toBe("extension_missing");
+
+    post.mockImplementation((message) => {
+      const request = message as Record<string, unknown>;
+      if (request.action !== "PING") return;
+      queueMicrotask(() => {
+        window.dispatchEvent(
+          new MessageEvent("message", {
+            origin: window.location.origin,
+            source: window,
+            data: {
+              channel: LOCAL_AI_BRIDGE_CHANNEL,
+              direction: "extension-to-web",
+              version: 1,
+              messageId: request.messageId,
+              nonce: request.nonce,
+              ok: true,
+              data: { present: true },
+            },
+          }),
+        );
+      });
+    });
+    const bridgeError = detectLocalAiAvailability();
+    await vi.runAllTimersAsync();
+    await expect(bridgeError).resolves.toBe("bridge_error");
   });
 
   it("ignores wrong origin/source/id/nonce and rejects on bounded timeout", async () => {

@@ -22,7 +22,7 @@ export type BridgeRequest = BridgeEnvelopeBase & {
   issuedAt: number;
   expiresAt: number;
 } & (
-    | { action: "GET_STATUS"; payload: Record<string, never> }
+    | { action: "PING" | "GET_STATUS"; payload: Record<string, never> }
     | { action: "START_RUN"; payload: StartRunPayload }
     | { action: "GET_RUN" | "STOP_RUN"; payload: RunLookupPayload }
   );
@@ -49,6 +49,10 @@ export interface PublicLocalAiStatus {
   state: LocalAiStatusState;
   joblitConnected: boolean;
   profileName?: string;
+}
+
+export interface PublicBridgePresence {
+  present: true;
 }
 
 export type PublicRunStatus =
@@ -128,7 +132,7 @@ const LOCAL_AI_ERROR_CODES = new Set<LocalAiErrorCode>([
 export interface BridgeSuccessResponse extends BridgeEnvelopeBase {
   direction: "extension-to-web";
   ok: true;
-  data: PublicLocalAiStatus | PublicRunResult;
+  data: PublicBridgePresence | PublicLocalAiStatus | PublicRunResult;
 }
 
 export interface BridgeErrorResponse extends BridgeEnvelopeBase {
@@ -248,7 +252,7 @@ export function parseBridgeRequest(value: unknown, now = Date.now()): BridgeRequ
     return null;
   }
 
-  if (value.action === "GET_STATUS") {
+  if (value.action === "PING" || value.action === "GET_STATUS") {
     if (!isPlainRecord(value.payload) || !hasExactKeys(value.payload, [])) return null;
   } else if (value.action === "START_RUN") {
     if (!isStartRunPayload(value.payload)) return null;
@@ -258,6 +262,10 @@ export function parseBridgeRequest(value: unknown, now = Date.now()): BridgeRequ
     return null;
   }
   return value as unknown as BridgeRequest;
+}
+
+export function validatePublicBridgePresence(value: unknown): value is PublicBridgePresence {
+  return isPlainRecord(value) && hasExactKeys(value, ["present"]) && value.present === true;
 }
 
 export function validatePublicLocalAiStatus(value: unknown): value is PublicLocalAiStatus {
