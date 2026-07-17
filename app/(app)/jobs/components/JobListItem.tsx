@@ -28,6 +28,29 @@ const STATUS_CLASS: Record<JobStatus, string> = {
     "dark:border-rose-400/30 dark:bg-rose-500/15 dark:text-rose-300",
 };
 
+// AI role-fit badge tone by score band (deterministic verdict thresholds).
+function fitBadgeClass(score: number): string {
+  if (score >= 75) {
+    return (
+      "border border-emerald-300/60 bg-emerald-100 text-emerald-800 " +
+      "dark:border-emerald-400/30 dark:bg-emerald-500/15 dark:text-emerald-300"
+    );
+  }
+  if (score >= 60) {
+    return (
+      "border border-sky-300/60 bg-sky-100 text-sky-800 " +
+      "dark:border-sky-400/30 dark:bg-sky-500/15 dark:text-sky-300"
+    );
+  }
+  if (score >= 45) {
+    return (
+      "border border-amber-300/60 bg-amber-100 text-amber-800 " +
+      "dark:border-amber-400/30 dark:bg-amber-500/15 dark:text-amber-300"
+    );
+  }
+  return "border border-border bg-muted text-muted-foreground";
+}
+
 function JobListItemInner({
   job,
   isActive,
@@ -115,6 +138,12 @@ function JobListItemInner({
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5">
               <Badge className={STATUS_CLASS[job.status]}>{t(STATUS_LABEL_KEY[job.status])}</Badge>
+              {typeof job.fitScore === "number" ? (
+                <Badge className={fitBadgeClass(job.fitScore)} title={job.fitVerdict ?? undefined}>
+                  {job.fitEligibility === "BLOCK" ? "⛔ " : ""}
+                  {job.fitScore}
+                </Badge>
+              ) : null}
             </div>
             <span
               className="text-xs text-muted-foreground"

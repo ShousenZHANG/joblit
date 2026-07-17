@@ -143,6 +143,16 @@ model Job {
   status      JobStatus @default(NEW)
   market      String    @default("AU") // "AU" | "CN"
 
+  // AI role-fit triage. The matrix is model-produced per-requirement judgements;
+  // the score/verdict are ALWAYS aggregated deterministically by Joblit.
+  fitScore        Int?
+  fitVerdict      String?   // "STRONG" | "GOOD" | "MODERATE" | "WEAK" | "POOR"
+  fitEligibility  String?   // "PASS" | "RISK" | "BLOCK"
+  fitMatrix       Json?     // requirement matrix; null when only prescreened
+  fitSource       String?   // "prescreen" | "local_ai"
+  fitScoredAt     DateTime?
+  fitSnapshotHash String?   // resume snapshot hash the score was computed against
+
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -156,6 +166,7 @@ model Job {
   @@index([userId, status])
   @@index([userId, market, createdAt])
   @@index([userId, jobLevel])
+  @@index([userId, fitScore])
   // GIN trigram indexes (title, company, location) created via raw SQL migration
 }
 

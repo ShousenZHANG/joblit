@@ -25,6 +25,7 @@ import { useKeyboardNavigation } from "./hooks/useKeyboardNavigation";
 import { persistGeneratedDraft, useExternalGenerate } from "./hooks/useExternalGenerate";
 import { useLocalAiRun } from "./hooks/useLocalAiRun";
 import { JobListItem } from "./components/JobListItem";
+import { useFitScan } from "./hooks/useFitScan";
 import { VirtualJobList, type VirtualJobListHandle } from "./components/VirtualJobList";
 import { JobBatchDeleteDialog } from "./components/JobBatchDeleteDialog";
 import { JobSearchBar } from "./components/JobSearchBar";
@@ -185,6 +186,8 @@ export function JobsClient({
     target: "resume" | "cover";
   } | null>(null);
   const handleLocalAiSucceeded = useCallback(async (run: LocalAiSucceededRun) => {
+    // Fit-scan "match" runs are imported by useFitScan, never as a draft.
+    if (run.target === "match") return;
     const draft = await persistGeneratedDraft({
       jobId: run.jobId,
       target: run.target,
@@ -203,6 +206,16 @@ export function JobsClient({
     enabled: true,
     onSucceeded: handleLocalAiSucceeded,
   });
+  const fitScan = useFitScan({ onJobScored: refetch });
+  const [hideLowFit, setHideLowFit] = useState(false);
+  // Unscored jobs stay visible: hiding is a triage aid, not a data filter.
+  const visibleItems = useMemo(
+    () =>
+      hideLowFit
+        ? items.filter((it) => it.fitScore == null || it.fitScore >= 60)
+        : items,
+    [hideLowFit, items],
+  );
   const localAiDialogVisible = localAiDialogOpen
     || ["starting", "queued", "running", "stopping", "importing"].includes(localAi.runState.status);
 
@@ -914,6 +927,42 @@ export function JobsClient({
                 >
                   {t("statusRejected")}
                 </FilterPill>
+                <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-border" />
+                {fitScan.state.status === "scanning" ? (
+                  <>
+                    <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+                      {t("fitScan.scanning", {
+                        done: fitScan.state.scored + fitScan.state.failed,
+                        total: Math.max(
+                          fitScan.state.total - fitScan.state.prescreened,
+                          fitScan.state.scored + fitScan.state.failed,
+                        ),
+                      })}
+                    </span>
+                    <FilterPill active={false} onClick={fitScan.stop}>
+                      {t("fitScan.stop")}
+                    </FilterPill>
+                  </>
+                ) : (
+                  <FilterPill
+                    active={false}
+                    onClick={() => {
+                      const unscored = items
+                        .filter((it) => it.fitScore == null)
+                        .map((it) => it.id)
+                        .slice(0, 200);
+                      if (unscored.length > 0) void fitScan.start(unscored);
+                    }}
+                  >
+                    {t("fitScan.button")}
+                  </FilterPill>
+                )}
+                <FilterPill
+                  active={hideLowFit}
+                  onClick={() => setHideLowFit((value) => !value)}
+                >
+                  {t("fitScan.hideLowFit")}
+                </FilterPill>
               </div>
             </div>
           )}
@@ -937,8 +986,8 @@ export function JobsClient({
                 ))}
               </div>
             ) : null}
-            {items.length > 0 ? (
-              items.length > 80 ? (
+            {visibleItems.length > 0 ? (
+              visibleItems.length > 80 ? (
                 <div
                   ref={jobListRef}
                   role="list"
@@ -946,7 +995,7 @@ export function JobsClient({
                 >
                   <VirtualJobList
                     ref={virtualJobListRef}
-                    items={items}
+                    items={visibleItems}
                     effectiveSelectedId={effectiveSelectedId}
                     onSelect={handleSelectJob}
                     timeZone={timeZone}
@@ -963,7 +1012,7 @@ export function JobsClient({
                   tabIndex={effectiveSelectedId === null ? 0 : -1}
                   className="space-y-3 p-3"
                 >
-                  {items.map((it) => {
+                  {visibleItems.map((it) => {
                     const row = (
                       <JobListItem
                         job={it}

@@ -52,7 +52,7 @@ export const BridgeRequestSchema = z.discriminatedUnion("action", [
       .object({
         requestId: uuid,
         jobId: uuid,
-        target: z.enum(["resume", "cover"]),
+        target: z.enum(["resume", "cover", "match"]),
       })
       .strict(),
   }).strict(),
@@ -139,7 +139,7 @@ export type LocalAiBridgeErrorPayload = z.infer<typeof LocalAiBridgeErrorSchema>
 const runBase = {
   requestId: uuid,
   jobId: uuid,
-  target: z.enum(["resume", "cover"]),
+  target: z.enum(["resume", "cover", "match"]),
 };
 
 export const LocalAiPublicRunSchema = z.discriminatedUnion("status", [

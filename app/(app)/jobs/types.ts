@@ -15,6 +15,9 @@ export type JobItem = {
   resumePdfUrl?: string | null;
   resumePdfName?: string | null;
   coverPdfUrl?: string | null;
+  fitScore?: number | null;
+  fitVerdict?: string | null;
+  fitEligibility?: string | null;
   createdAt: string;
   updatedAt: string;
 };

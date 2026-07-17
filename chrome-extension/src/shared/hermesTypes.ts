@@ -8,7 +8,7 @@ export const MAX_BRIDGE_RESPONSE_BYTES = 96_000;
 export const MIN_MODEL_OUTPUT_CHARS = 20;
 export const MAX_MODEL_OUTPUT_CHARS = 80_000;
 
-export type LocalAiTarget = "resume" | "cover";
+export type LocalAiTarget = "resume" | "cover" | "match";
 
 export interface BridgeEnvelopeBase {
   channel: typeof BRIDGE_CHANNEL;
@@ -227,7 +227,7 @@ export function isStartRunPayload(value: unknown): value is StartRunPayload {
     hasExactKeys(value, ["jobId", "requestId", "target"]) &&
     isUuid(value.requestId) &&
     isUuid(value.jobId) &&
-    (value.target === "resume" || value.target === "cover")
+    (value.target === "resume" || value.target === "cover" || value.target === "match")
   );
 }
 
@@ -311,7 +311,13 @@ export function validatePublicLocalAiStatus(value: unknown): value is PublicLoca
 
 export function validatePublicRunResult(value: unknown): value is PublicRunResult {
   if (!isPlainRecord(value) || jsonBytes(value) > MAX_BRIDGE_RESPONSE_BYTES) return false;
-  if (!isUuid(value.requestId) || !isUuid(value.jobId) || (value.target !== "resume" && value.target !== "cover")) return false;
+  if (
+    !isUuid(value.requestId) ||
+    !isUuid(value.jobId) ||
+    (value.target !== "resume" && value.target !== "cover" && value.target !== "match")
+  ) {
+    return false;
+  }
   if (["run_id", "runId", "prompt", "endpoint", "apiKey", "token"].some((key) => key in value)) return false;
   if (value.status === "succeeded") {
     return (

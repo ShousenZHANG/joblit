@@ -194,6 +194,12 @@
     "statusNew": "New",
     "statusApplied": "Applied",
     "statusRejected": "Rejected",
+    "fitScan": {
+      "button": "Match scan",
+      "scanning": "Scoring {done}/{total}…",
+      "stop": "Stop scan",
+      "hideLowFit": "Hide low fit"
+    },
     "statusRemote": "Remote",
     "noJobs": "No jobs found.",
     "emptyHeadline": "No jobs yet",

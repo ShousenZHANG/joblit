@@ -521,6 +521,46 @@ export function buildLeanCoverUserPrompt(input: BuildApplicationPromptInput): st
 }
 
 /**
+ * Lean job-fit matrix prompt (target "match"). Single run: the model extracts
+ * the role's requirements AND judges each one against the candidate evidence.
+ * It never produces a total score — Joblit aggregates deterministically.
+ */
+export function buildLeanMatchUserPrompt(input: {
+  rules: PromptSkillRuleSet;
+  candidate?: ResumePromptSnapshot;
+  job: JobInput;
+}): string {
+  return [
+    "<task>",
+    "Assess how well the candidate fits this role.",
+    "1) Extract 6-14 concrete requirements from the job evidence. Classify each as REQUIRED, PREFERRED, RESPONSIBILITY, SENIORITY, DOMAIN, or CREDENTIAL.",
+    "2) Judge each requirement against the candidate evidence only: MATCH (clear evidence), PARTIAL (adjacent/transferable evidence), GAP (no evidence), UNKNOWN (cannot tell).",
+    "3) Set eligibility: BLOCK for hard barriers stated in the JD (visa, licence, on-site relocation the candidate cannot meet), RISK for uncertain ones, otherwise PASS.",
+    "Do NOT output any overall score, percentage, or verdict. Do not invent candidate facts.",
+    "</task>",
+    "",
+    "<candidate-evidence>",
+    buildCandidateEvidence(input.candidate),
+    "</candidate-evidence>",
+    "",
+    "<job-evidence>",
+    buildLeanJobEvidence(input.job),
+    "</job-evidence>",
+    "",
+    "<output>",
+    "Return strictly ONE JSON object, no prose, no code fences:",
+    "{",
+    '  "requirements": [',
+    '    { "id": "r1", "type": "REQUIRED", "requirement": "short requirement text", "judgement": "MATCH", "evidence": "short quote or paraphrase from candidate evidence (optional)", "note": "short caveat (optional)" }',
+    "  ],",
+    '  "eligibility": { "status": "PASS", "reasons": [] }',
+    "}",
+    "requirements: 6-14 items, ids r1..rN. evidence/note are optional strings. Respond directly.",
+    "</output>",
+  ].join("\n");
+}
+
+/**
  * V2 cover user prompt with structured XML sections.
  */
 export function buildV2CoverUserPrompt(input: BuildApplicationPromptInput): string {

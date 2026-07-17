@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 
 export type PromptTarget = "resume" | "cover";
+/** Prompt targets that produce non-application artifacts (job-fit triage). */
+export type ExtendedPromptTarget = PromptTarget | "match";
 
 export const PROMPT_TEMPLATE_VERSION = "2026.02.v1";
 export const PROMPT_SCHEMA_VERSION = "2026-02-22";
@@ -174,7 +176,7 @@ export function getExpectedJsonSchemaForTarget(target: PromptTarget) {
 }
 
 function buildPromptHash(input: {
-  target: PromptTarget;
+  target: ExtendedPromptTarget;
   ruleSetId: string;
   resumeSnapshotUpdatedAt: string;
 }) {
@@ -208,7 +210,7 @@ export function buildSkillPackVersion(input: {
 }
 
 export function buildPromptMeta(input: {
-  target: PromptTarget;
+  target: ExtendedPromptTarget;
   ruleSetId: string;
   resumeSnapshotUpdatedAt: string;
 }): PromptMeta {

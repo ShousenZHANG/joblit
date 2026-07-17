@@ -194,6 +194,12 @@
     "statusNew": "新职位",
     "statusApplied": "已投递",
     "statusRejected": "已拒绝",
+    "fitScan": {
+      "button": "匹配扫描",
+      "scanning": "评分中 {done}/{total}…",
+      "stop": "停止扫描",
+      "hideLowFit": "隐藏低匹配"
+    },
     "statusRemote": "远程",
     "noJobs": "暂无职位。",
     "emptyHeadline": "还没有职位",

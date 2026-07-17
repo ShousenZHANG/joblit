@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import {
   buildLeanCoverUserPrompt,
+  buildLeanMatchUserPrompt,
   buildLeanResumeUserPrompt,
   buildLeanSystemPrompt,
   buildV2CoverUserPrompt,
@@ -29,9 +30,25 @@ import { marketStringToResumeLocale } from "@/lib/shared/market";
 export const ApplicationPromptRequestSchema = z
   .object({
     jobId: z.string().uuid(),
-    target: z.enum(["resume", "cover"]),
+    // "match" produces the job-fit requirement matrix (always lean; imported
+    // via the fit endpoint, never via manual-generate).
+    target: z.enum(["resume", "cover", "match"]),
   })
   .strict();
+
+const MATCH_OUTPUT_SHAPE = {
+  requirements: [
+    {
+      id: "string",
+      type: "REQUIRED | PREFERRED | RESPONSIBILITY | SENIORITY | DOMAIN | CREDENTIAL",
+      requirement: "string",
+      judgement: "MATCH | PARTIAL | GAP | UNKNOWN",
+      evidence: "string (optional)",
+      note: "string (optional)",
+    },
+  ],
+  eligibility: { status: "PASS | RISK | BLOCK", reasons: ["string"] },
+};
 
 export interface ApplicationPromptPayload {
   requestId: string;
@@ -80,7 +97,7 @@ async function getPromptTooLargeMessage(locale: "en-AU" | "zh-CN"): Promise<stri
 export async function buildApplicationPromptForUser(input: {
   userId: string;
   jobId: string;
-  target: "resume" | "cover";
+  target: "resume" | "cover" | "match";
   /**
    * "lean" produces a slimmed prompt for local reasoning models (Hermes) that
    * stall on the full V2 prompt; "full" (default) keeps the rich cloud/manual
@@ -151,12 +168,16 @@ export async function buildApplicationPromptForUser(input: {
   };
   const resumeInput = { baseLatestBullets, coverage };
 
-  const lean = input.variant === "lean";
+  // The match matrix is always lean regardless of caller variant: it targets
+  // local reasoning models and its output is aggregated server-side anyway.
+  const lean = input.variant === "lean" || parsed.data.target === "match";
   const instructions = lean
     ? buildLeanSystemPrompt(rules, locale)
     : buildV2SystemPrompt(rules, locale);
   const promptInput =
-    parsed.data.target === "resume"
+    parsed.data.target === "match"
+      ? buildLeanMatchUserPrompt({ rules, candidate, job: jobInput })
+      : parsed.data.target === "resume"
       ? lean
         ? buildLeanResumeUserPrompt({
             target: "resume",
@@ -209,11 +230,16 @@ export async function buildApplicationPromptForUser(input: {
     },
     promptMeta,
     expectedJsonShape: JSON.stringify(
-      getExpectedJsonShapeForTarget(parsed.data.target),
+      parsed.data.target === "match"
+        ? MATCH_OUTPUT_SHAPE
+        : getExpectedJsonShapeForTarget(parsed.data.target),
       null,
       2,
     ),
-    expectedJsonSchema: getExpectedJsonSchemaForTarget(parsed.data.target),
+    expectedJsonSchema:
+      parsed.data.target === "match"
+        ? { type: "object", required: ["requirements", "eligibility"] }
+        : getExpectedJsonSchemaForTarget(parsed.data.target),
     promptVersion: "v3-local-ai",
   };
 }

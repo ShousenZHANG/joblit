@@ -32,6 +32,11 @@ describe("local AI bridge contract", () => {
     expect(parseBridgeRequest(request(), NOW)?.action).toBe("START_RUN");
   });
 
+  it("accepts the match target for fit-scan runs", () => {
+    const match = request({ payload: { requestId: ID, jobId: NONCE, target: "match" } });
+    expect(parseBridgeRequest(match, NOW)?.action).toBe("START_RUN");
+  });
+
   it("accepts a bounded repair request and rejects unsafe feedback", () => {
     const repair = request({
       action: "REPAIR_RUN",
