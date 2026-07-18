@@ -116,6 +116,44 @@ describe("useFitScan", () => {
     expect(new Set(startPayloads.map((p) => p.requestId)).size).toBe(1);
   });
 
+  it("self-heals a stale resumed requestId by restarting the batch fresh", async () => {
+    mockFetchRoutes({ prescreen: { poor: [], needAi: [JOB_A] }, batchScored: [JOB_A] });
+    let starts = 0;
+    let polls = 0;
+    bridge.send.mockImplementation(async (action: string, payload: { requestId: string }) => {
+      if (action === "START_RUN") {
+        starts += 1;
+        if (starts === 1) {
+          // First start "succeeds" into a queued run whose mapping then vanishes.
+          return { requestId: payload.requestId, jobId: JOB_A, target: "triage", status: "queued" };
+        }
+        return {
+          requestId: payload.requestId,
+          jobId: JOB_A,
+          target: "triage",
+          status: "succeeded",
+          modelOutput: JSON.stringify([{ jobId: JOB_A, matchScore: 61 }]),
+          promptMeta,
+        };
+      }
+      if (action === "GET_RUN") {
+        polls += 1;
+        throw new LocalAiBridgeError("HERMES_RUN_NOT_FOUND", "gone", true);
+      }
+      throw new Error(`unexpected ${action}`);
+    });
+    const { result } = renderHook(() =>
+      useFitScan({ onJobScored: vi.fn(), retryBackoffMs: 20 }),
+    );
+    await act(async () => result.current.start([JOB_A]));
+    await waitFor(
+      () => expect(result.current.state).toMatchObject({ status: "done", scored: 1, failed: 0 }),
+      { timeout: 10_000 },
+    );
+    expect(starts).toBe(2);
+    expect(polls).toBeGreaterThanOrEqual(3);
+  });
+
   it("marks the batch failed on a non-retryable error", async () => {
     mockFetchRoutes({ prescreen: { poor: [], needAi: [JOB_A] } });
     bridge.send.mockRejectedValue(

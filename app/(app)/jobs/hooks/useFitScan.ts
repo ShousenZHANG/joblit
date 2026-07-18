@@ -119,6 +119,7 @@ async function runTriageBatch(
 ): Promise<number> {
   const deadline = Date.now() + TRIAGE_RUN_BUDGET_MS;
   let started = false;
+  let notFoundStreak = 0;
   for (;;) {
     if (isCancelled() || Date.now() > deadline) {
       await sendLocalAiBridgeRequest("STOP_RUN", { requestId }).catch(() => undefined);
@@ -155,6 +156,19 @@ async function runTriageBatch(
       // the run anyway; from here on GET_RUN (idempotent) takes over.
       if (!started && error instanceof LocalAiBridgeError && error.code === "BRIDGE_TIMEOUT") {
         started = true;
+      }
+      // A resumed scan can hold a requestId the worker no longer knows (stale
+      // snapshot, worker restart). START_RUN is idempotent, so after a few
+      // consecutive not-found polls we self-heal by starting the batch fresh
+      // instead of polling a ghost forever.
+      if (started && error instanceof LocalAiBridgeError && error.code === "HERMES_RUN_NOT_FOUND") {
+        notFoundStreak += 1;
+        if (notFoundStreak >= 3) {
+          started = false;
+          notFoundStreak = 0;
+        }
+      } else {
+        notFoundStreak = 0;
       }
       await new Promise((resolve) => setTimeout(resolve, retryBackoffMs));
     }
