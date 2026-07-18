@@ -34,7 +34,11 @@ function isJoblitWebSender(sender: chrome.runtime.MessageSender): boolean {
 }
 
 function isExtensionPageSender(sender: chrome.runtime.MessageSender): boolean {
-  if (sender.id !== chrome.runtime.id || sender.tab || !sender.url) return false;
+  // Trust our own packaged pages wherever they render: the popup has no
+  // sender.tab, but the full settings view (?view=settings) is a real tab.
+  // The extension-id + chrome-extension:// URL prefix is the security
+  // boundary; being in a tab does not change the trust level.
+  if (sender.id !== chrome.runtime.id || !sender.url) return false;
   return sender.url.startsWith(chrome.runtime.getURL(""));
 }
 

@@ -170,4 +170,28 @@ describe("service worker retry queue policy", () => {
       tab: { id: 8, url: "https://evil.example/jobs" } as chrome.tabs.Tab,
     })).resolves.toMatchObject({ success: false, errorCode: "FORBIDDEN_CALLER" });
   });
+
+  it("accepts Hermes settings messages from our own pages in a tab, rejects foreign pages", async () => {
+    hermesMocks.getHermesSettingsPublic.mockResolvedValue({
+      baseUrl: "http://127.0.0.1:8642",
+      profileName: "joblit-0123456789abcdef",
+      hasApiKey: true,
+      configured: true,
+    });
+    const message: MessageType = { type: "GET_HERMES_SETTINGS" };
+    const settingsTabUrl = `${chrome.runtime.getURL("")}src/popup/index.html?view=settings`;
+
+    // The full settings view is a real tab of our own packaged page.
+    await expect(dispatchMessage(message, {
+      id: chrome.runtime.id,
+      url: settingsTabUrl,
+      tab: { id: 9, url: settingsTabUrl } as chrome.tabs.Tab,
+    })).resolves.toMatchObject({ success: true });
+
+    await expect(dispatchMessage(message, {
+      id: chrome.runtime.id,
+      url: "https://evil.example/settings",
+      tab: { id: 10, url: "https://evil.example/settings" } as chrome.tabs.Tab,
+    })).resolves.toMatchObject({ success: false, errorCode: "FORBIDDEN_CALLER" });
+  });
 });
