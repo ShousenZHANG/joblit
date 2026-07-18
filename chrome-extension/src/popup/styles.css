@@ -1514,7 +1514,7 @@ input:focus-visible,
   text-align: left;
 }
 
-.jl-disclosure > span:nth-child(2) {
+.jl-disclosure > span:not(.jl-disclosure-icon):not(.jl-disclosure-arrow) {
   min-width: 0;
   flex: 1;
   display: flex;
@@ -1973,4 +1973,30 @@ input:focus-visible,
   .jl-action-surface::before {
     opacity: 0.45;
   }
+}
+
+
+/* ── Full-page settings (?view=settings in a real tab) ── */
+.jl-app--page {
+  width: min(640px, 100vw - 32px);
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 12px 0 40px;
+  overflow: visible;
+}
+
+.jl-app--page .jl-content {
+  padding-bottom: 24px;
+}
+
+/* Popup Local AI card: status + a single escape hatch to the settings tab. */
+.jl-local-ai-open {
+  display: grid;
+  gap: 10px;
+  padding: 4px 14px 14px;
+  border-top: 1px solid var(--jl-border);
+}
+
+.jl-local-ai-open .jl-input-hint {
+  margin: 0;
 }

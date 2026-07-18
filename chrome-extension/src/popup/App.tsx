@@ -17,6 +17,13 @@ const TAB_ICONS: Record<Tab, string> = {
   options: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`,
 };
 
+// Full-page settings mode (?view=settings): complex configuration cannot live
+// in the popup — chrome.permissions.request() and any focus loss close it,
+// wiping the form. The same bundle rendered in a tab has neither problem.
+const IS_SETTINGS_PAGE =
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).get("view") === "settings";
+
 export function App() {
   const { t, ready } = useI18n();
   const [authState, setAuthState] = useState<AuthState>("loading");
@@ -69,7 +76,7 @@ export function App() {
 
   if (!ready) {
     return (
-      <div className="jl-app">
+      <div className={`jl-app${IS_SETTINGS_PAGE ? " jl-app--page" : ""}`}>
         <div className="jl-loading">
           <div className="jl-spinner" />
           <span className="jl-loading-text">{t("app.loading")}</span>
@@ -79,7 +86,7 @@ export function App() {
   }
 
   return (
-    <div className="jl-app">
+    <div className={`jl-app${IS_SETTINGS_PAGE ? " jl-app--page" : ""}`}>
       {/* Header */}
       <header className="jl-header">
         <div className="jl-header-logo">
@@ -126,7 +133,13 @@ export function App() {
         </div>
       )}
 
-      {authState === "authenticated" && (
+      {authState === "authenticated" && IS_SETTINGS_PAGE && (
+        <main className="jl-content">
+          <Options onDisconnect={checkAuth} variant="page" />
+        </main>
+      )}
+
+      {authState === "authenticated" && !IS_SETTINGS_PAGE && (
         <>
           {/* Tab Bar */}
           <nav className="jl-tabs" role="tablist" aria-label={t("tabs.ariaLabel")}>

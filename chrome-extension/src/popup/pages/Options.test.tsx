@@ -44,7 +44,7 @@ describe("Options interaction safety", () => {
     remove.mockResolvedValue(true);
 
     await act(async () => {
-      root.render(<Options onDisconnect={vi.fn()} />);
+      root.render(<Options onDisconnect={vi.fn()} variant="page" />);
     });
     const saveButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent?.includes("Save Settings"),
@@ -74,7 +74,7 @@ describe("Options interaction safety", () => {
     contains.mockResolvedValue(true);
 
     await act(async () => {
-      root.render(<Options onDisconnect={onDisconnect} />);
+      root.render(<Options onDisconnect={onDisconnect} variant="page" />);
     });
 
     const disconnectButton = Array.from(container.querySelectorAll("button")).find(
@@ -117,16 +117,13 @@ describe("Options interaction safety", () => {
     contains.mockResolvedValue(true);
 
     await act(async () => {
-      root.render(<Options onDisconnect={vi.fn()} />);
+      root.render(<Options onDisconnect={vi.fn()} variant="page" />);
       await Promise.resolve();
       await Promise.resolve();
     });
 
     expect(container.textContent).not.toContain("0123456789abcdef");
-    const configure = Array.from(container.querySelectorAll("button")).find((button) =>
-      button.textContent?.includes("Local AI"),
-    );
-    await act(async () => configure?.click());
+    // The page variant renders the configuration expanded by default.
     expect(container.querySelector<HTMLInputElement>('#hermes-api-key')?.type).toBe("password");
   });
 });

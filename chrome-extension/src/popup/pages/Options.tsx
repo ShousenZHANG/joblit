@@ -27,6 +27,18 @@ interface Preferences {
 
 interface OptionsProps {
   onDisconnect: () => void;
+  /**
+   * "popup" keeps only instant-save toggles and status; anything that can
+   * trigger a permission prompt or needs pasting lives in the "page" variant,
+   * rendered in a real tab (popups close on permission prompts / focus loss).
+   */
+  variant?: "popup" | "page";
+}
+
+function openSettingsPage(): void {
+  void chrome.tabs.create({
+    url: chrome.runtime.getURL("src/popup/index.html?view=settings"),
+  });
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -65,12 +77,13 @@ function hermesErrorKey(code?: string): string {
   }
 }
 
-export function Options({ onDisconnect }: OptionsProps) {
+export function Options({ onDisconnect, variant = "popup" }: OptionsProps) {
+  const isPage = variant === "page";
   const [apiBase, setApiBase] = useState(DEFAULT_API_BASE);
   const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFERENCES);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [apiBaseError, setApiBaseError] = useState("");
-  const [showConnection, setShowConnection] = useState(false);
+  const [showConnection, setShowConnection] = useState(isPage);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [disconnectError, setDisconnectError] = useState("");
@@ -81,7 +94,7 @@ export function Options({ onDisconnect }: OptionsProps) {
   const [hermesState, setHermesState] = useState<HermesUiState>("checking");
   const [hermesBusy, setHermesBusy] = useState(false);
   const [hermesError, setHermesError] = useState("");
-  const [showHermesConfig, setShowHermesConfig] = useState(false);
+  const [showHermesConfig, setShowHermesConfig] = useState(isPage);
 
   useEffect(() => {
     chrome.storage.local.get(
@@ -176,8 +189,14 @@ export function Options({ onDisconnect }: OptionsProps) {
     }
   }, [apiBase, prefs, saveState]);
 
+  // Toggles persist instantly — the popup variant has no save button, and a
+  // popup can close at any moment, so deferred saves silently lose changes.
   const toggleWidget = useCallback(() => {
-    setPrefs((previous) => ({ ...previous, showWidget: !previous.showWidget }));
+    setPrefs((previous) => {
+      const next = { ...previous, showWidget: !previous.showWidget };
+      void chrome.storage.local.set({ [STORAGE_KEYS.PREFERENCES]: next });
+      return next;
+    });
     setSaveState("idle");
   }, []);
 
@@ -286,6 +305,7 @@ export function Options({ onDisconnect }: OptionsProps) {
         </div>
       </section>
 
+      {isPage && (
       <section className="jl-settings-card jl-settings-card--connection">
         <button
           type="button"
@@ -335,6 +355,7 @@ export function Options({ onDisconnect }: OptionsProps) {
           </div>
         )}
       </section>
+      )}
 
       <section className="jl-settings-card jl-local-ai" aria-labelledby="jl-local-ai-title">
         <div className="jl-local-ai-heading">
@@ -351,6 +372,16 @@ export function Options({ onDisconnect }: OptionsProps) {
           </span>
         </div>
 
+        {!isPage && (
+          <div className="jl-local-ai-open">
+            <p className="jl-input-hint">{t("localAi.openSettingsHint")}</p>
+            <button type="button" className="jl-btn jl-btn--primary" onClick={openSettingsPage}>
+              {t("localAi.openSettings")}
+            </button>
+          </div>
+        )}
+
+        {isPage && (
         <button
           type="button"
           className="jl-disclosure jl-disclosure--compact"
@@ -363,8 +394,9 @@ export function Options({ onDisconnect }: OptionsProps) {
             <path d="m5 6 3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
+        )}
 
-        {showHermesConfig && (
+        {isPage && showHermesConfig && (
           <div id="jl-hermes-settings" className="jl-local-ai-form">
             <div className="jl-input-group">
               <label className="jl-input-label" htmlFor="hermes-endpoint">{t("localAi.endpoint")}</label>
@@ -403,6 +435,7 @@ export function Options({ onDisconnect }: OptionsProps) {
         )}
       </section>
 
+      {isPage && (
       <button
         type="button"
         onClick={handleSave}
@@ -414,6 +447,7 @@ export function Options({ onDisconnect }: OptionsProps) {
         {saveState === "saved" && <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: checkmarkSvg(15) }} />}
         {saveState === "saving" ? t("options.saving") : saveState === "saved" ? t("options.saved") : t("options.save")}
       </button>
+      )}
 
       <section className="jl-account-section" aria-labelledby="jl-account-title">
         <div className="jl-section-heading jl-section-heading--stacked">
