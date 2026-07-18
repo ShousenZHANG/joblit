@@ -19,13 +19,17 @@ const api = vi.hoisted(() => ({
 }));
 
 vi.mock("./hermesApi", () => ({ createHermesApi: () => api }));
-vi.mock("./api", () => ({
-  fetchAiPromptEnvelope: vi.fn().mockResolvedValue({
+vi.mock("./api", () => {
+  const envelope = {
     prompt: { input: "generate grounded JSON", instructions: "strict rules", sessionId: "server-session" },
     promptMeta: { promptHash: "sha256:test" },
     promptVersion: "v3-local-ai",
-  }),
-}));
+  };
+  return {
+    fetchAiPromptEnvelope: vi.fn().mockResolvedValue(envelope),
+    fetchAiTriagePromptEnvelope: vi.fn().mockResolvedValue(envelope),
+  };
+});
 vi.mock("./auth", () => ({
   getAuthStatus: vi.fn().mockResolvedValue({ authenticated: true, userId: null, expiresAt: null }),
 }));
@@ -131,6 +135,52 @@ describe("Hermes run registry", () => {
     await expect(
       repairLocalAiRun({ requestId: payload.requestId, feedback: "again" }),
     ).rejects.toMatchObject({ code: "HERMES_PROTOCOL_ERROR" });
+  });
+
+  it("keeps a triage batch entry across registry reads and returns its output", async () => {
+    const triagePayload = {
+      requestId: payload.requestId,
+      jobId: payload.jobId,
+      target: "triage" as const,
+      jobIds: [payload.jobId, "9114d0b0-a6e3-4d3a-94f0-bc792eba35f5"],
+    };
+    api.getRun.mockResolvedValue({
+      object: "hermes.run",
+      runId,
+      status: "completed",
+      output: JSON.stringify([
+        { jobId: triagePayload.jobIds[0], matchScore: 70 },
+        { jobId: triagePayload.jobIds[1], matchScore: 15 },
+      ]),
+    });
+    const { getLocalAiRun, startLocalAiRun } = await import("./hermesRuns");
+    await expect(startLocalAiRun(triagePayload)).resolves.toMatchObject({
+      status: "queued",
+      target: "triage",
+    });
+    // The registry read on the next poll must not discard the triage entry.
+    await expect(getLocalAiRun({ requestId: payload.requestId })).resolves.toMatchObject({
+      status: "succeeded",
+      target: "triage",
+      modelOutput: expect.stringContaining("matchScore"),
+    });
+  });
+
+  it("converts a Hermes-expired run into a terminal RUN_LOST instead of endless retries", async () => {
+    api.getRun.mockRejectedValue(
+      new HermesApiError("HERMES_RUN_NOT_FOUND", "gone", { status: 404, retryable: true }),
+    );
+    const { getLocalAiRun, startLocalAiRun } = await import("./hermesRuns");
+    await startLocalAiRun(payload);
+    await expect(getLocalAiRun({ requestId: payload.requestId })).resolves.toMatchObject({
+      status: "failed",
+      error: { code: "RUN_LOST", retryable: false },
+    });
+    // Terminal result is sticky; no further Hermes calls needed.
+    await expect(getLocalAiRun({ requestId: payload.requestId })).resolves.toMatchObject({
+      status: "failed",
+      error: { code: "RUN_LOST" },
+    });
   });
 
   it("fails a repair fast after a service-worker restart", async () => {

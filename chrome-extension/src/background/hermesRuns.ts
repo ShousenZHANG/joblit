@@ -126,11 +126,14 @@ function validatePositionIndependentPrompt(value: unknown): {
 }
 
 function isRegistryEntry(value: unknown, requestId: string): value is RegistryEntry {
-  if (!isRecord(value) || value.requestId !== requestId || !isStartRunPayload({
-    requestId: value.requestId,
-    jobId: value.jobId,
-    target: value.target,
-  })) return false;
+  if (!isRecord(value) || value.requestId !== requestId) return false;
+  // Rebuild the exact payload shape for validation: triage entries carry
+  // jobIds and MUST include them here, or the reader discards a valid entry.
+  const payloadShape =
+    value.target === "triage"
+      ? { requestId: value.requestId, jobId: value.jobId, target: value.target, jobIds: value.jobIds }
+      : { requestId: value.requestId, jobId: value.jobId, target: value.target };
+  if (!isStartRunPayload(payloadShape)) return false;
   if (
     typeof value.createdAt !== "number" ||
     !Number.isFinite(value.createdAt) ||
@@ -245,13 +248,15 @@ function publicActive(
 
 function publicFailure(
   entry: RegistryBase,
-  code: "HERMES_RUN_FAILED" | "AI_OUTPUT_INVALID" | "UNEXPECTED_APPROVAL_REQUIRED",
+  code: "HERMES_RUN_FAILED" | "AI_OUTPUT_INVALID" | "UNEXPECTED_APPROVAL_REQUIRED" | "RUN_LOST",
 ): PublicRunResult {
   const message = code === "AI_OUTPUT_INVALID"
     ? "Hermes returned an invalid or oversized result."
     : code === "UNEXPECTED_APPROVAL_REQUIRED"
       ? "Hermes requested an approval that the Joblit profile must not use."
-      : "Hermes could not complete this generation.";
+      : code === "RUN_LOST"
+        ? "The local run can no longer be found on Hermes."
+        : "Hermes could not complete this generation.";
   return {
     requestId: entry.requestId,
     jobId: entry.jobId,
@@ -440,7 +445,13 @@ export async function getLocalAiRun(payload: RunLookupPayload): Promise<PublicRu
     run = await makeApi(settings).getRun(entry.runId);
   } catch (error) {
     if (error instanceof HermesApiError && error.code === "HERMES_RUN_NOT_FOUND") {
-      await deleteEntry(entry.requestId, expectedEpoch);
+      // Hermes garbage-collected the run before we could read its result.
+      // Deleting the mapping here made every later GET_RUN a retryable
+      // "not found" — an endless client retry loop. Converge to a sticky
+      // terminal RUN_LOST instead so the page fails fast and moves on.
+      const terminal = publicFailure(entry, "RUN_LOST");
+      await putEntry({ ...entry, stage: "terminal", terminal, updatedAt: Date.now() }, expectedEpoch);
+      return terminal;
     }
     throw error;
   }
