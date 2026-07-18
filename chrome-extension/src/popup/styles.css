@@ -2000,3 +2000,206 @@ input:focus-visible,
 .jl-local-ai-open .jl-input-hint {
   margin: 0;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Design refresh — appended override layer.
+   Class names are untouched; later rules win at equal specificity.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Width anchor: Chrome can lock a popup narrower than the app shell if it
+   measures before React mounts. Anchoring the body guarantees 380px. */
+html, body {
+  width: 380px;
+  margin: 0;
+}
+
+body.jl-body-page {
+  width: auto;
+}
+
+body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  background:
+    radial-gradient(120% 80% at 50% 0%, #f2faf6 0%, #f5f8f7 55%, #eef3f1 100%);
+  letter-spacing: 0.01em;
+}
+
+.jl-app {
+  width: 380px;
+  background: transparent;
+}
+
+.jl-app--page {
+  width: min(640px, 100vw - 32px);
+}
+
+/* Header: quieter, more premium wordmark row. */
+.jl-header {
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid rgba(17, 24, 39, 0.06);
+}
+
+.jl-header-wordmark {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.jl-header-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: var(--jl-emerald-700);
+  background: var(--jl-emerald-50);
+  border: 1px solid var(--jl-emerald-100);
+}
+
+/* Tabs: segmented-control feel. */
+.jl-tabs {
+  padding: 8px 12px;
+  gap: 6px;
+}
+
+.jl-tab {
+  border-radius: 10px;
+  font-weight: 600;
+  transition: background 140ms var(--jl-ease), color 140ms var(--jl-ease);
+}
+
+.jl-tab--active {
+  background: var(--jl-emerald-50);
+  color: var(--jl-emerald-700);
+  box-shadow: inset 0 0 0 1px var(--jl-emerald-100);
+}
+
+/* Cards: softer elevation, larger radius. */
+.jl-settings-card,
+.jl-card {
+  border-radius: 16px;
+  border: 1px solid rgba(17, 24, 39, 0.07);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px -16px rgba(16, 24, 40, 0.10);
+}
+
+/* Buttons: consistent height, confident primary, tactile motion. */
+.jl-btn {
+  min-height: 40px;
+  border-radius: 12px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  transition: transform 120ms var(--jl-ease), box-shadow 120ms var(--jl-ease), background 120ms var(--jl-ease);
+}
+
+.jl-btn--primary {
+  background: linear-gradient(180deg, #059669 0%, #047857 100%);
+  box-shadow: 0 1px 2px rgba(4, 120, 87, 0.35), 0 8px 20px -12px rgba(4, 120, 87, 0.6);
+}
+
+.jl-btn--primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(4, 120, 87, 0.35), 0 12px 26px -12px rgba(4, 120, 87, 0.65);
+}
+
+.jl-btn--primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.jl-btn:focus-visible,
+.jl-input:focus-visible,
+.jl-tab:focus-visible {
+  outline: 2px solid var(--jl-emerald-500);
+  outline-offset: 2px;
+}
+
+/* Inputs: calm resting state, unmistakable focus. */
+.jl-input {
+  min-height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  background: #ffffff;
+  transition: border-color 120ms var(--jl-ease), box-shadow 120ms var(--jl-ease);
+}
+
+.jl-input:focus {
+  border-color: var(--jl-emerald-500);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.16);
+  outline: none;
+}
+
+/* Token setup: centered hero instead of a cramped left stack. */
+.jl-connect-intro {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 6px 4px 2px;
+}
+
+.jl-connect-intro .jl-state-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--jl-emerald-50), #ffffff);
+  border: 1px solid var(--jl-emerald-100);
+  box-shadow: 0 8px 20px -14px rgba(4, 120, 87, 0.5);
+}
+
+.jl-connect-intro h2 {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.jl-connect-intro p {
+  max-width: 30ch;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--jl-text-muted);
+}
+
+.jl-connect-form {
+  display: grid;
+  gap: 14px;
+}
+
+/* Connection state (checking / success) — roomy and centered. */
+.jl-connection-state {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 28px 12px;
+}
+
+.jl-state-icon--large {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+}
+
+/* Section headings: crisper hierarchy. */
+.jl-section-heading h2 {
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.jl-section-heading p {
+  font-size: 11px;
+  color: var(--jl-text-muted);
+}
+
+/* Full-page settings: comfortable reading column on a real tab. */
+.jl-app--page .jl-header {
+  border-bottom: 0;
+  padding-top: 22px;
+}
+
+.jl-app--page .jl-settings-card,
+.jl-app--page .jl-card {
+  border-radius: 18px;
+}
