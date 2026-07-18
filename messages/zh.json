@@ -196,11 +196,13 @@
     "statusRejected": "已拒绝",
     "fitScan": {
       "button": "匹配扫描",
-      "scanning": "评分中 第 {batch}/{batches} 批…",
+      "bannerScanning": "本机评分中 第 {batch}/{batches} 批——已评 {scored} 个岗位。请保持页面打开。",
+      "bannerDone": "扫描完成：AI 评分 {scored} 个，预筛过滤 {prescreened} 个，失败 {failed} 个。",
       "stop": "停止扫描",
       "hideLowFit": "隐藏低匹配",
       "selectLowFit": "选中 {count} 个低匹配",
-      "failed": "扫描失败。请重新加载 Joblit 扩展后重试。"
+      "failed": "扫描失败。请重新加载 Joblit 扩展后重试。",
+      "dismiss": "关闭扫描结果"
     },
     "statusRemote": "远程",
     "noJobs": "暂无职位。",

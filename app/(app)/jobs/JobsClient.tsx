@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, CheckSquare, MapPin, RefreshCw, SlidersHorizontal, Square, Trash2, X } from "lucide-react";
+import { ArrowRight, CheckCircle2, CheckSquare, Loader2, MapPin, RefreshCw, SlidersHorizontal, Square, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -934,19 +934,7 @@ export function JobsClient({
                   {t("statusRejected")}
                 </FilterPill>
                 <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-border" />
-                {fitScan.state.status === "scanning" ? (
-                  <>
-                    <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
-                      {t("fitScan.scanning", {
-                        batch: Math.max(fitScan.state.currentBatch, 1),
-                        batches: Math.max(fitScan.state.totalBatches, 1),
-                      })}
-                    </span>
-                    <FilterPill active={false} onClick={fitScan.stop}>
-                      {t("fitScan.stop")}
-                    </FilterPill>
-                  </>
-                ) : (
+                {fitScan.state.status !== "scanning" ? (
                   <FilterPill
                     active={false}
                     onClick={() => {
@@ -959,11 +947,6 @@ export function JobsClient({
                   >
                     {t("fitScan.button")}
                   </FilterPill>
-                )}
-                {fitScan.state.status === "failed" ? (
-                  <span className="shrink-0 whitespace-nowrap text-xs font-medium text-destructive">
-                    {t("fitScan.failed")}
-                  </span>
                 ) : null}
                 {lowFitIds.length > 0 && fitScan.state.status !== "scanning" ? (
                   <FilterPill
@@ -985,6 +968,60 @@ export function JobsClient({
               </div>
             </div>
           )}
+          {fitScan.state.status === "scanning" ? (
+            <div className="flex items-center justify-between gap-3 border-b bg-brand-emerald-50/60 px-4 py-2.5 dark:bg-emerald-500/10" role="status" aria-live="polite">
+              <span className="flex min-w-0 items-center gap-2 text-sm text-foreground">
+                <Loader2 className="h-4 w-4 shrink-0 text-brand-emerald-600 motion-safe:animate-spin" aria-hidden />
+                <span className="truncate">
+                  {t("fitScan.bannerScanning", {
+                    batch: Math.max(fitScan.state.currentBatch, 1),
+                    batches: Math.max(fitScan.state.totalBatches, 1),
+                    scored: fitScan.state.scored + fitScan.state.prescreened,
+                  })}
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={fitScan.stop}
+                className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                {t("fitScan.stop")}
+              </button>
+            </div>
+          ) : null}
+          {fitScan.state.status === "done" || fitScan.state.status === "failed" ? (
+            <div
+              className={`flex items-center justify-between gap-3 border-b px-4 py-2.5 ${
+                fitScan.state.status === "done"
+                  ? "bg-brand-emerald-50/60 dark:bg-emerald-500/10"
+                  : "bg-destructive/5"
+              }`}
+              role="status"
+            >
+              <span className="flex min-w-0 items-center gap-2 text-sm">
+                {fitScan.state.status === "done" ? (
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-brand-emerald-600" aria-hidden />
+                ) : null}
+                <span className={`truncate ${fitScan.state.status === "failed" ? "text-destructive" : "text-foreground"}`}>
+                  {fitScan.state.status === "done"
+                    ? t("fitScan.bannerDone", {
+                        scored: fitScan.state.scored,
+                        prescreened: fitScan.state.prescreened,
+                        failed: fitScan.state.failed,
+                      })
+                    : t("fitScan.failed")}
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={fitScan.reset}
+                className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label={t("fitScan.dismiss")}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ) : null}
           <div className="relative flex min-h-0 flex-1 flex-col">
           <ScrollArea
             ref={resultsScrollRef}

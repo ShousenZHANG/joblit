@@ -1,14 +1,15 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { sendLocalAiBridgeRequest } from "@/lib/client/localAiBridge";
 
-const FIT_POLL_MS = 1_000;
+const FIT_POLL_MS = 1_500;
 // One triage run scores a whole batch of jobs coarsely on the local reasoning
-// model — measured minutes-scale, so the budget is looser than interactive runs.
+// model — measured ~27s per 10-job batch, but budget generously.
 const TRIAGE_RUN_BUDGET_MS = 240_000;
 const TRIAGE_BATCH_SIZE = 15;
+export const FIT_SCAN_STORAGE_KEY = "joblit.fit-scan.v1";
 
 export type FitScanState = {
   status: "idle" | "scanning" | "done" | "failed";
@@ -30,6 +31,48 @@ const IDLE: FitScanState = {
   currentBatch: 0,
   totalBatches: 0,
 };
+
+type PersistedScan = {
+  /** Active run for the batch currently executing (resume target). */
+  requestId: string;
+  batchJobIds: string[];
+  /** Batches not yet started. */
+  remaining: string[][];
+  scored: number;
+  prescreened: number;
+  failed: number;
+  total: number;
+  totalBatches: number;
+  currentBatch: number;
+};
+
+function readPersisted(): PersistedScan | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = JSON.parse(window.sessionStorage.getItem(FIT_SCAN_STORAGE_KEY) ?? "null");
+    if (
+      raw &&
+      typeof raw === "object" &&
+      typeof raw.requestId === "string" &&
+      Array.isArray(raw.batchJobIds) &&
+      Array.isArray(raw.remaining)
+    ) {
+      return raw as PersistedScan;
+    }
+  } catch {
+    // Corrupt snapshot: fall through to null.
+  }
+  return null;
+}
+
+function persist(snapshot: PersistedScan | null): void {
+  if (typeof window === "undefined") return;
+  if (snapshot === null) {
+    window.sessionStorage.removeItem(FIT_SCAN_STORAGE_KEY);
+  } else {
+    window.sessionStorage.setItem(FIT_SCAN_STORAGE_KEY, JSON.stringify(snapshot));
+  }
+}
 
 function chunk<T>(items: T[], size: number): T[][] {
   const batches: T[][] = [];
@@ -54,19 +97,11 @@ async function importTriageResult(
   return json.scored?.length ?? 0;
 }
 
-async function runTriageBatch(
+async function pollTriageRun(
+  requestId: string,
   jobIds: string[],
   isCancelled: () => boolean,
 ): Promise<number> {
-  const requestId = crypto.randomUUID();
-  const started = await sendLocalAiBridgeRequest(
-    "START_RUN",
-    { requestId, jobId: jobIds[0], target: "triage", jobIds },
-    { timeoutMs: 20_000 },
-  );
-  if (started.status === "succeeded") {
-    return importTriageResult(jobIds, started.modelOutput, started.promptMeta);
-  }
   const deadline = Date.now() + TRIAGE_RUN_BUDGET_MS;
   for (;;) {
     if (isCancelled() || Date.now() > deadline) {
@@ -88,10 +123,10 @@ async function runTriageBatch(
 }
 
 /**
- * Batch fit scan: deterministic prescreen first (one request), then one local
- * Hermes triage run per batch of up to 15 jobs. Serial by design — the local
- * gateway runs one job at a time. Already-scored jobs are skipped by the
- * caller, so the scan is naturally resumable.
+ * Batch fit scan: deterministic prescreen first, then one local Hermes triage
+ * run per batch of up to 15 jobs. Progress survives a page refresh: the active
+ * run + remaining batches persist in sessionStorage and resume on mount, so a
+ * run that finishes while the page reloads still gets imported.
  */
 export function useFitScan(options: { onJobScored: () => void }) {
   const [state, setState] = useState<FitScanState>(IDLE);
@@ -99,6 +134,72 @@ export function useFitScan(options: { onJobScored: () => void }) {
   const runningRef = useRef(false);
   const onJobScoredRef = useRef(options.onJobScored);
   onJobScoredRef.current = options.onJobScored;
+
+  const executeBatches = useCallback(
+    async (
+      firstBatch: { requestId: string | null; jobIds: string[] } | null,
+      remaining: string[][],
+      base: Pick<PersistedScan, "scored" | "prescreened" | "failed" | "total" | "totalBatches" | "currentBatch">,
+    ) => {
+      let { scored, failed, currentBatch } = base;
+      const queue: Array<{ requestId: string | null; jobIds: string[] }> = [
+        ...(firstBatch ? [firstBatch] : []),
+        ...remaining.map((jobIds) => ({ requestId: null, jobIds })),
+      ];
+      for (const [index, batch] of queue.entries()) {
+        if (cancelRef.current) break;
+        currentBatch = base.currentBatch + index;
+        setState((current) => ({ ...current, currentBatch }));
+        try {
+          let requestId = batch.requestId;
+          if (requestId === null) {
+            requestId = crypto.randomUUID();
+            persist({
+              requestId,
+              batchJobIds: batch.jobIds,
+              remaining: queue.slice(index + 1).map((entry) => entry.jobIds),
+              scored,
+              prescreened: base.prescreened,
+              failed,
+              total: base.total,
+              totalBatches: base.totalBatches,
+              currentBatch,
+            });
+            const started = await sendLocalAiBridgeRequest(
+              "START_RUN",
+              { requestId, jobId: batch.jobIds[0], target: "triage", jobIds: batch.jobIds },
+              { timeoutMs: 20_000 },
+            );
+            if (started.status === "succeeded") {
+              const count = await importTriageResult(batch.jobIds, started.modelOutput, started.promptMeta);
+              scored += count;
+              failed += batch.jobIds.length - count;
+              setState((current) => ({ ...current, scored, failed }));
+              onJobScoredRef.current();
+              continue;
+            }
+          }
+          const count = await pollTriageRun(requestId, batch.jobIds, () => cancelRef.current);
+          scored += count;
+          failed += batch.jobIds.length - count;
+          setState((current) => ({ ...current, scored, failed }));
+          onJobScoredRef.current();
+        } catch (error) {
+          if (cancelRef.current) break;
+          void error;
+          failed += batch.jobIds.length;
+          setState((current) => ({ ...current, failed }));
+        }
+      }
+      persist(null);
+      setState((current) => ({
+        ...current,
+        status: cancelRef.current ? "idle" : "done",
+        currentBatch: 0,
+      }));
+    },
+    [],
+  );
 
   const start = useCallback(async (jobIds: string[]) => {
     if (runningRef.current || jobIds.length === 0) return;
@@ -125,30 +226,16 @@ export function useFitScan(options: { onJobScored: () => void }) {
         totalBatches: batches.length,
       }));
       if (prescreen.poor.length > 0) onJobScoredRef.current();
-
-      for (const [index, batch] of batches.entries()) {
-        if (cancelRef.current) break;
-        setState((current) => ({ ...current, currentBatch: index + 1 }));
-        try {
-          const scored = await runTriageBatch(batch, () => cancelRef.current);
-          setState((current) => ({
-            ...current,
-            scored: current.scored + scored,
-            failed: current.failed + (batch.length - scored),
-          }));
-          onJobScoredRef.current();
-        } catch (error) {
-          if (cancelRef.current) break;
-          void error;
-          setState((current) => ({ ...current, failed: current.failed + batch.length }));
-        }
-      }
-      setState((current) => ({
-        ...current,
-        status: cancelRef.current ? "idle" : "done",
-        currentBatch: 0,
-      }));
+      await executeBatches(null, batches, {
+        scored: 0,
+        prescreened: prescreen.poor.length,
+        failed: 0,
+        total: jobIds.length,
+        totalBatches: batches.length,
+        currentBatch: 1,
+      });
     } catch (error) {
+      persist(null);
       setState((current) => ({
         ...current,
         status: "failed",
@@ -158,10 +245,41 @@ export function useFitScan(options: { onJobScored: () => void }) {
     } finally {
       runningRef.current = false;
     }
-  }, []);
+  }, [executeBatches]);
+
+  // Resume a scan interrupted by a refresh: pick up the in-flight run first,
+  // then continue with any batches that never started.
+  useEffect(() => {
+    const persisted = readPersisted();
+    if (!persisted || runningRef.current) return;
+    runningRef.current = true;
+    cancelRef.current = false;
+    setState({
+      status: "scanning",
+      total: persisted.total,
+      scored: persisted.scored,
+      prescreened: persisted.prescreened,
+      failed: persisted.failed,
+      currentBatch: persisted.currentBatch,
+      totalBatches: persisted.totalBatches,
+    });
+    void executeBatches(
+      { requestId: persisted.requestId, jobIds: persisted.batchJobIds },
+      persisted.remaining,
+      persisted,
+    )
+      .catch(() => {
+        persist(null);
+        setState((current) => ({ ...current, status: "failed", currentBatch: 0 }));
+      })
+      .finally(() => {
+        runningRef.current = false;
+      });
+  }, [executeBatches]);
 
   const stop = useCallback(() => {
     cancelRef.current = true;
+    persist(null);
   }, []);
 
   const reset = useCallback(() => {

@@ -196,11 +196,13 @@
     "statusRejected": "Rejected",
     "fitScan": {
       "button": "Match scan",
-      "scanning": "Scoring batch {batch}/{batches}…",
+      "bannerScanning": "Scoring batch {batch}/{batches} on your computer — {scored} jobs scored so far. Keep this page open.",
+      "bannerDone": "Scan finished: {scored} AI-scored, {prescreened} filtered instantly, {failed} failed.",
       "stop": "Stop scan",
       "hideLowFit": "Hide low fit",
       "selectLowFit": "Select {count} low fit",
-      "failed": "Scan failed. Reload the Joblit extension, then try again."
+      "failed": "Scan failed. Reload the Joblit extension, then try again.",
+      "dismiss": "Dismiss scan result"
     },
     "statusRemote": "Remote",
     "noJobs": "No jobs found.",
