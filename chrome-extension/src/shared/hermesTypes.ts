@@ -8,7 +8,9 @@ export const MAX_BRIDGE_RESPONSE_BYTES = 96_000;
 export const MIN_MODEL_OUTPUT_CHARS = 20;
 export const MAX_MODEL_OUTPUT_CHARS = 80_000;
 
-export type LocalAiTarget = "resume" | "cover" | "match";
+export type LocalAiTarget = "resume" | "cover" | "match" | "triage";
+
+export const MAX_TRIAGE_JOBS = 15;
 
 export interface BridgeEnvelopeBase {
   channel: typeof BRIDGE_CHANNEL;
@@ -30,8 +32,11 @@ export type BridgeRequest = BridgeEnvelopeBase & {
 
 export interface StartRunPayload {
   requestId: string;
+  /** For "triage" batches this is the representative first job id. */
   jobId: string;
   target: LocalAiTarget;
+  /** Present (1..15 ids, jobIds[0] === jobId) only when target is "triage". */
+  jobIds?: string[];
 }
 
 export interface RunLookupPayload {
@@ -222,11 +227,20 @@ function isUuid(value: unknown): value is string {
 }
 
 export function isStartRunPayload(value: unknown): value is StartRunPayload {
+  if (!isPlainRecord(value) || !isUuid(value.requestId) || !isUuid(value.jobId)) return false;
+  if (value.target === "triage") {
+    return (
+      hasExactKeys(value, ["jobId", "jobIds", "requestId", "target"]) &&
+      Array.isArray(value.jobIds) &&
+      value.jobIds.length >= 1 &&
+      value.jobIds.length <= MAX_TRIAGE_JOBS &&
+      value.jobIds.every((id) => isUuid(id)) &&
+      value.jobIds[0] === value.jobId &&
+      new Set(value.jobIds).size === value.jobIds.length
+    );
+  }
   return (
-    isPlainRecord(value) &&
     hasExactKeys(value, ["jobId", "requestId", "target"]) &&
-    isUuid(value.requestId) &&
-    isUuid(value.jobId) &&
     (value.target === "resume" || value.target === "cover" || value.target === "match")
   );
 }
@@ -314,7 +328,10 @@ export function validatePublicRunResult(value: unknown): value is PublicRunResul
   if (
     !isUuid(value.requestId) ||
     !isUuid(value.jobId) ||
-    (value.target !== "resume" && value.target !== "cover" && value.target !== "match")
+    (value.target !== "resume" &&
+      value.target !== "cover" &&
+      value.target !== "match" &&
+      value.target !== "triage")
   ) {
     return false;
   }

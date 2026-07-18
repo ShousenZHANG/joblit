@@ -196,9 +196,10 @@
     "statusRejected": "已拒绝",
     "fitScan": {
       "button": "匹配扫描",
-      "scanning": "评分中 {done}/{total}…",
+      "scanning": "评分中 第 {batch}/{batches} 批…",
       "stop": "停止扫描",
-      "hideLowFit": "隐藏低匹配"
+      "hideLowFit": "隐藏低匹配",
+      "selectLowFit": "选中 {count} 个低匹配"
     },
     "statusRemote": "远程",
     "noJobs": "暂无职位。",

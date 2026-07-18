@@ -37,6 +37,34 @@ describe("local AI bridge contract", () => {
     expect(parseBridgeRequest(match, NOW)?.action).toBe("START_RUN");
   });
 
+  it("accepts a bounded triage batch and rejects malformed jobIds", () => {
+    const jobIds = [NONCE, ID];
+    const ok = request({ payload: { requestId: ID, jobId: NONCE, target: "triage", jobIds } });
+    expect(parseBridgeRequest(ok, NOW)?.action).toBe("START_RUN");
+
+    // jobIds[0] must equal jobId.
+    expect(
+      parseBridgeRequest(
+        request({ payload: { requestId: ID, jobId: NONCE, target: "triage", jobIds: [ID, NONCE] } }),
+        NOW,
+      ),
+    ).toBeNull();
+    // Duplicate ids rejected.
+    expect(
+      parseBridgeRequest(
+        request({ payload: { requestId: ID, jobId: NONCE, target: "triage", jobIds: [NONCE, NONCE] } }),
+        NOW,
+      ),
+    ).toBeNull();
+    // Over the 15-job cap rejected.
+    expect(
+      parseBridgeRequest(
+        request({ payload: { requestId: ID, jobId: NONCE, target: "triage", jobIds: Array(16).fill(NONCE) } }),
+        NOW,
+      ),
+    ).toBeNull();
+  });
+
   it("accepts a bounded repair request and rejects unsafe feedback", () => {
     const repair = request({
       action: "REPAIR_RUN",

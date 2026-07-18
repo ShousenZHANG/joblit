@@ -196,9 +196,10 @@
     "statusRejected": "Rejected",
     "fitScan": {
       "button": "Match scan",
-      "scanning": "Scoring {done}/{total}…",
+      "scanning": "Scoring batch {batch}/{batches}…",
       "stop": "Stop scan",
-      "hideLowFit": "Hide low fit"
+      "hideLowFit": "Hide low fit",
+      "selectLowFit": "Select {count} low fit"
     },
     "statusRemote": "Remote",
     "noJobs": "No jobs found.",

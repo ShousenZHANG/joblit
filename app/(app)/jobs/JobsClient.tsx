@@ -186,8 +186,8 @@ export function JobsClient({
     target: "resume" | "cover";
   } | null>(null);
   const handleLocalAiSucceeded = useCallback(async (run: LocalAiSucceededRun) => {
-    // Fit-scan "match" runs are imported by useFitScan, never as a draft.
-    if (run.target === "match") return;
+    // Fit-scan "match"/"triage" runs are imported by useFitScan, never as a draft.
+    if (run.target === "match" || run.target === "triage") return;
     const draft = await persistGeneratedDraft({
       jobId: run.jobId,
       target: run.target,
@@ -215,6 +215,12 @@ export function JobsClient({
         ? items.filter((it) => it.fitScore == null || it.fitScore >= 60)
         : items,
     [hideLowFit, items],
+  );
+  // "Clearly not a match" = deterministic POOR band (<30). Selecting them just
+  // pre-fills the existing batch-delete flow; the user still confirms.
+  const lowFitIds = useMemo(
+    () => items.filter((it) => typeof it.fitScore === "number" && it.fitScore < 30).map((it) => it.id),
+    [items],
   );
   const localAiDialogVisible = localAiDialogOpen
     || ["starting", "queued", "running", "stopping", "importing"].includes(localAi.runState.status);
@@ -932,11 +938,8 @@ export function JobsClient({
                   <>
                     <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
                       {t("fitScan.scanning", {
-                        done: fitScan.state.scored + fitScan.state.failed,
-                        total: Math.max(
-                          fitScan.state.total - fitScan.state.prescreened,
-                          fitScan.state.scored + fitScan.state.failed,
-                        ),
+                        batch: Math.max(fitScan.state.currentBatch, 1),
+                        batches: Math.max(fitScan.state.totalBatches, 1),
                       })}
                     </span>
                     <FilterPill active={false} onClick={fitScan.stop}>
@@ -957,6 +960,17 @@ export function JobsClient({
                     {t("fitScan.button")}
                   </FilterPill>
                 )}
+                {lowFitIds.length > 0 && fitScan.state.status !== "scanning" ? (
+                  <FilterPill
+                    active={false}
+                    onClick={() => {
+                      setBatchSelectMode(true);
+                      setBatchSelectedIds(new Set(lowFitIds));
+                    }}
+                  >
+                    {t("fitScan.selectLowFit", { count: lowFitIds.length })}
+                  </FilterPill>
+                ) : null}
                 <FilterPill
                   active={hideLowFit}
                   onClick={() => setHideLowFit((value) => !value)}

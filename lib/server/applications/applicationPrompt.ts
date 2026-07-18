@@ -5,9 +5,11 @@ import {
   buildLeanMatchUserPrompt,
   buildLeanResumeUserPrompt,
   buildLeanSystemPrompt,
+  buildLeanTriageUserPrompt,
   buildV2CoverUserPrompt,
   buildV2ResumeUserPrompt,
   buildV2SystemPrompt,
+  TRIAGE_MAX_JOBS,
 } from "@/lib/server/ai/applicationPromptBuilder";
 import {
   buildPromptMeta,
@@ -92,6 +94,94 @@ async function getPromptTooLargeMessage(locale: "en-AU" | "zh-CN"): Promise<stri
   const messages = (await import(`../../../messages/${language}.json`))
     .default as ApplicationPromptMessages;
   return messages.errors.applicationPrompt.promptTooLarge;
+}
+
+export const TriagePromptRequestSchema = z
+  .object({
+    jobIds: z.array(z.string().uuid()).min(1).max(TRIAGE_MAX_JOBS),
+  })
+  .strict();
+
+/**
+ * Batch coarse-triage prompt: one local run scores up to 15 jobs so obvious
+ * mismatches can be bulk-removed. JDs are truncated inside the builder; the
+ * returned scores are verdict-banded deterministically at import time.
+ */
+export async function buildTriagePromptForUser(input: {
+  userId: string;
+  jobIds: string[];
+}): Promise<ApplicationPromptPayload> {
+  const parsed = TriagePromptRequestSchema.safeParse({ jobIds: input.jobIds });
+  if (!parsed.success) {
+    throw new ApplicationPromptError(
+      "INVALID_REQUEST",
+      "Invalid request body",
+      400,
+      parsed.error.flatten(),
+    );
+  }
+
+  const jobs = await prisma.job.findMany({
+    where: { id: { in: parsed.data.jobIds }, userId: input.userId },
+    select: { id: true, title: true, company: true, description: true, market: true },
+  });
+  if (jobs.length === 0) {
+    throw new ApplicationPromptError("JOB_NOT_FOUND", "Jobs not found", 404);
+  }
+
+  const locale = marketStringToResumeLocale(jobs[0].market);
+  const profile = await getResumeProfile(input.userId, { locale });
+  if (!profile) {
+    throw new ApplicationPromptError(
+      "NO_PROFILE",
+      "Create and save your master resume before generating prompt.",
+      404,
+    );
+  }
+  const rules = await getActivePromptSkillRulesForUser(input.userId);
+  const candidate = buildResumePromptSnapshot(profile);
+
+  const instructions = buildLeanSystemPrompt(rules, locale);
+  const promptInput = buildLeanTriageUserPrompt({
+    rules,
+    candidate,
+    jobs: jobs.map((job) => ({
+      jobId: job.id,
+      title: job.title,
+      company: job.company,
+      description: job.description,
+    })),
+  });
+  if (instructions.length + promptInput.length > MAX_APPLICATION_PROMPT_CHARS) {
+    throw new ApplicationPromptError(
+      "PROMPT_TOO_LARGE",
+      await getPromptTooLargeMessage(locale),
+      413,
+    );
+  }
+
+  const promptMeta = buildPromptMeta({
+    target: "triage",
+    ruleSetId: rules.id,
+    resumeSnapshotUpdatedAt: profile.updatedAt.toISOString(),
+  });
+
+  return {
+    requestId: createRequestId(),
+    prompt: {
+      input: promptInput,
+      instructions,
+      sessionId: createRequestId(),
+    },
+    promptMeta,
+    expectedJsonShape: JSON.stringify(
+      [{ jobId: "string", matchScore: "0-100", reason: "string" }],
+      null,
+      2,
+    ),
+    expectedJsonSchema: { type: "array" },
+    promptVersion: "v3-local-ai",
+  };
 }
 
 export async function buildApplicationPromptForUser(input: {

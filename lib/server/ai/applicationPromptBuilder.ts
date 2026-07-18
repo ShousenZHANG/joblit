@@ -566,6 +566,61 @@ export function buildLeanMatchUserPrompt(input: {
   ].join("\n");
 }
 
+// Rough triage reads only the head of each JD: requirements cluster early and
+// a 10-15 job batch must stay far below the local reasoning blow-up threshold.
+const TRIAGE_JD_MAX_CHARS = 1_200;
+export const TRIAGE_MAX_JOBS = 15;
+
+export type TriageJobInput = {
+  jobId: string;
+  title: string;
+  company: string | null;
+  description: string | null;
+};
+
+/**
+ * Lean batch-triage prompt (target "triage"). One run scores a batch of jobs
+ * coarsely so obvious mismatches can be bulk-removed by the user. Verdict
+ * banding of the returned scores stays deterministic in Joblit.
+ */
+export function buildLeanTriageUserPrompt(input: {
+  rules: PromptSkillRuleSet;
+  candidate?: ResumePromptSnapshot;
+  jobs: TriageJobInput[];
+}): string {
+  const jobsPayload = input.jobs.slice(0, TRIAGE_MAX_JOBS).map((job) => ({
+    jobId: job.jobId,
+    title: sanitizePromptText(job.title),
+    company: sanitizePromptText(job.company || "unknown"),
+    description: truncate(sanitizePromptText(job.description ?? ""), TRIAGE_JD_MAX_CHARS),
+  }));
+  return [
+    "<task>",
+    `Rough-triage ${jobsPayload.length} job postings against the candidate evidence.`,
+    "For each job return one matchScore from 0-100 describing how plausible a fit the candidate is:",
+    "0-25 = clearly not a match (different profession, hard requirements the candidate lacks).",
+    "26-50 = weak: major gaps in the core requirements.",
+    "51-75 = plausible: core requirements mostly covered or transferable.",
+    "76-100 = strong: core requirements clearly covered.",
+    "Judge from each posting's title and description only against the candidate evidence. Be honest and decisive; do not inflate borderline jobs, and do not judge by company prestige.",
+    "</task>",
+    "",
+    "<candidate-evidence>",
+    buildCandidateEvidence(input.candidate),
+    "</candidate-evidence>",
+    "",
+    "<jobs>",
+    stringifyUntrustedEvidence(jobsPayload),
+    "</jobs>",
+    "",
+    "<output>",
+    "Return strictly ONE JSON array, no prose, no code fences — one entry per job, same jobId values:",
+    '[ { "jobId": "…", "matchScore": 42, "reason": "one short honest phrase (max 12 words)" } ]',
+    "Respond directly.",
+    "</output>",
+  ].join("\n");
+}
+
 /**
  * V2 cover user prompt with structured XML sections.
  */

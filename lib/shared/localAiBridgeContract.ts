@@ -48,13 +48,29 @@ export const BridgeRequestSchema = z.discriminatedUnion("action", [
   z.object({
     ...requestBase,
     action: z.literal("START_RUN"),
-    payload: z
-      .object({
-        requestId: uuid,
-        jobId: uuid,
-        target: z.enum(["resume", "cover", "match"]),
-      })
-      .strict(),
+    payload: z.union([
+      z
+        .object({
+          requestId: uuid,
+          jobId: uuid,
+          target: z.enum(["resume", "cover", "match"]),
+        })
+        .strict(),
+      z
+        .object({
+          requestId: uuid,
+          jobId: uuid,
+          target: z.literal("triage"),
+          jobIds: z.array(uuid).min(1).max(15),
+        })
+        .strict()
+        .refine(
+          (payload) =>
+            payload.jobIds[0] === payload.jobId &&
+            new Set(payload.jobIds).size === payload.jobIds.length,
+          "jobIds must be unique and start with jobId",
+        ),
+    ]),
   }).strict(),
   z.object({
     ...requestBase,
@@ -139,7 +155,7 @@ export type LocalAiBridgeErrorPayload = z.infer<typeof LocalAiBridgeErrorSchema>
 const runBase = {
   requestId: uuid,
   jobId: uuid,
-  target: z.enum(["resume", "cover", "match"]),
+  target: z.enum(["resume", "cover", "match", "triage"]),
 };
 
 export const LocalAiPublicRunSchema = z.discriminatedUnion("status", [

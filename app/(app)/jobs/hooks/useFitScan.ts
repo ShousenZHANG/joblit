@@ -5,10 +5,10 @@ import { useCallback, useRef, useState } from "react";
 import { sendLocalAiBridgeRequest } from "@/lib/client/localAiBridge";
 
 const FIT_POLL_MS = 1_000;
-// Match runs judge 6-14 requirements one by one on a local reasoning model —
-// measured ~157s on a real JD. Background batch work, so the budget is looser
-// than the interactive CV/cover budget.
-const FIT_RUN_BUDGET_MS = 240_000;
+// One triage run scores a whole batch of jobs coarsely on the local reasoning
+// model — measured minutes-scale, so the budget is looser than interactive runs.
+const TRIAGE_RUN_BUDGET_MS = 240_000;
+const TRIAGE_BATCH_SIZE = 15;
 
 export type FitScanState = {
   status: "idle" | "scanning" | "done" | "failed";
@@ -16,7 +16,8 @@ export type FitScanState = {
   scored: number;
   prescreened: number;
   failed: number;
-  currentJobId: string | null;
+  currentBatch: number;
+  totalBatches: number;
   error?: string;
 };
 
@@ -26,38 +27,51 @@ const IDLE: FitScanState = {
   scored: 0,
   prescreened: 0,
   failed: 0,
-  currentJobId: null,
+  currentBatch: 0,
+  totalBatches: 0,
 };
 
-async function importFitResult(jobId: string, modelOutput: string, promptMeta: Record<string, unknown>) {
-  const response = await fetch(`/api/jobs/${jobId}/fit`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ modelOutput, promptMeta }),
-  });
-  if (!response.ok) throw new Error(`fit import failed: ${response.status}`);
+function chunk<T>(items: T[], size: number): T[][] {
+  const batches: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    batches.push(items.slice(index, index + size));
+  }
+  return batches;
 }
 
-async function runMatchForJob(jobId: string, isCancelled: () => boolean): Promise<void> {
+async function importTriageResult(
+  jobIds: string[],
+  modelOutput: string,
+  promptMeta: Record<string, unknown>,
+): Promise<number> {
+  const response = await fetch("/api/jobs/fit/batch-import", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jobIds, modelOutput, promptMeta }),
+  });
+  if (!response.ok) throw new Error(`batch import failed: ${response.status}`);
+  const json = (await response.json()) as { scored?: Array<{ jobId: string }> };
+  return json.scored?.length ?? 0;
+}
+
+async function runTriageBatch(
+  jobIds: string[],
+  isCancelled: () => boolean,
+): Promise<number> {
   const requestId = crypto.randomUUID();
   const started = await sendLocalAiBridgeRequest(
     "START_RUN",
-    { requestId, jobId, target: "match" },
+    { requestId, jobId: jobIds[0], target: "triage", jobIds },
     { timeoutMs: 20_000 },
   );
   if (started.status === "succeeded") {
-    await importFitResult(jobId, started.modelOutput, started.promptMeta);
-    return;
+    return importTriageResult(jobIds, started.modelOutput, started.promptMeta);
   }
-  const deadline = Date.now() + FIT_RUN_BUDGET_MS;
+  const deadline = Date.now() + TRIAGE_RUN_BUDGET_MS;
   for (;;) {
-    if (isCancelled()) {
+    if (isCancelled() || Date.now() > deadline) {
       await sendLocalAiBridgeRequest("STOP_RUN", { requestId }).catch(() => undefined);
-      throw new Error("cancelled");
-    }
-    if (Date.now() > deadline) {
-      await sendLocalAiBridgeRequest("STOP_RUN", { requestId }).catch(() => undefined);
-      throw new Error("run timed out");
+      throw new Error(isCancelled() ? "cancelled" : "run timed out");
     }
     await new Promise((resolve) => setTimeout(resolve, FIT_POLL_MS));
     const run = await sendLocalAiBridgeRequest(
@@ -66,8 +80,7 @@ async function runMatchForJob(jobId: string, isCancelled: () => boolean): Promis
       { timeoutMs: 10_000 },
     );
     if (run.status === "succeeded") {
-      await importFitResult(jobId, run.modelOutput, run.promptMeta);
-      return;
+      return importTriageResult(jobIds, run.modelOutput, run.promptMeta);
     }
     if (run.status === "failed") throw new Error(run.error.code);
     if (run.status === "cancelled") throw new Error("cancelled");
@@ -75,9 +88,9 @@ async function runMatchForJob(jobId: string, isCancelled: () => boolean): Promis
 }
 
 /**
- * Sequential job-fit scan: deterministic prescreen first (one request), then
- * one local Hermes "match" run per remaining job. Serial by design — the local
- * gateway executes one run at a time. Already-scored jobs are skipped by the
+ * Batch fit scan: deterministic prescreen first (one request), then one local
+ * Hermes triage run per batch of up to 15 jobs. Serial by design — the local
+ * gateway runs one job at a time. Already-scored jobs are skipped by the
  * caller, so the scan is naturally resumable.
  */
 export function useFitScan(options: { onJobScored: () => void }) {
@@ -105,32 +118,41 @@ export function useFitScan(options: { onJobScored: () => void }) {
         poor: Array<{ jobId: string }>;
         needAi: string[];
       };
-      setState((current) => ({ ...current, prescreened: prescreen.poor.length }));
+      const batches = chunk(prescreen.needAi, TRIAGE_BATCH_SIZE);
+      setState((current) => ({
+        ...current,
+        prescreened: prescreen.poor.length,
+        totalBatches: batches.length,
+      }));
       if (prescreen.poor.length > 0) onJobScoredRef.current();
 
-      for (const jobId of prescreen.needAi) {
+      for (const [index, batch] of batches.entries()) {
         if (cancelRef.current) break;
-        setState((current) => ({ ...current, currentJobId: jobId }));
+        setState((current) => ({ ...current, currentBatch: index + 1 }));
         try {
-          await runMatchForJob(jobId, () => cancelRef.current);
-          setState((current) => ({ ...current, scored: current.scored + 1 }));
+          const scored = await runTriageBatch(batch, () => cancelRef.current);
+          setState((current) => ({
+            ...current,
+            scored: current.scored + scored,
+            failed: current.failed + (batch.length - scored),
+          }));
           onJobScoredRef.current();
         } catch (error) {
           if (cancelRef.current) break;
           void error;
-          setState((current) => ({ ...current, failed: current.failed + 1 }));
+          setState((current) => ({ ...current, failed: current.failed + batch.length }));
         }
       }
       setState((current) => ({
         ...current,
         status: cancelRef.current ? "idle" : "done",
-        currentJobId: null,
+        currentBatch: 0,
       }));
     } catch (error) {
       setState((current) => ({
         ...current,
         status: "failed",
-        currentJobId: null,
+        currentBatch: 0,
         error: error instanceof Error ? error.message : "scan failed",
       }));
     } finally {

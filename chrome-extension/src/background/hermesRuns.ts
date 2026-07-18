@@ -16,7 +16,7 @@ import {
   type RunLookupPayload,
   type StartRunPayload,
 } from "@ext/shared/hermesTypes";
-import { fetchAiPromptEnvelope } from "./api";
+import { fetchAiPromptEnvelope, fetchAiTriagePromptEnvelope } from "./api";
 import { HermesApiError } from "./apiErrors";
 import { getAuthStatus } from "./auth";
 import { createHermesApi } from "./hermesApi";
@@ -363,10 +363,11 @@ async function startOnce(payload: StartRunPayload): Promise<PublicRunResult> {
   }
 
   const settings = await readSecretSettings();
-  const prompt = validatePositionIndependentPrompt(await fetchAiPromptEnvelope({
-    jobId: payload.jobId,
-    target: payload.target,
-  }));
+  const prompt = validatePositionIndependentPrompt(
+    await (payload.target === "triage" && payload.jobIds
+      ? fetchAiTriagePromptEnvelope({ jobIds: payload.jobIds })
+      : fetchAiPromptEnvelope({ jobId: payload.jobId, target: payload.target })),
+  );
   const now = Date.now();
   const base: RegistryBase = { ...payload, createdAt: now, updatedAt: now, promptMeta: prompt.promptMeta };
   await putEntry({ ...base, stage: "starting" }, expectedEpoch);

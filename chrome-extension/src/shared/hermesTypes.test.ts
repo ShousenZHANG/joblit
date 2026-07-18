@@ -57,6 +57,31 @@ describe("parseBridgeRequest", () => {
       ),
     ).toBeNull();
   });
+
+  it("accepts a triage batch payload and enforces its shape", () => {
+    const jobIds = [jobId, requestId];
+    expect(
+      parseBridgeRequest(request({ payload: { requestId, jobId, target: "triage", jobIds } }), now),
+    ).not.toBeNull();
+    // jobIds[0] must equal jobId.
+    expect(
+      parseBridgeRequest(
+        request({ payload: { requestId, jobId, target: "triage", jobIds: [requestId, jobId] } }),
+        now,
+      ),
+    ).toBeNull();
+    // A non-triage target must not carry jobIds.
+    expect(
+      parseBridgeRequest(
+        request({ payload: { requestId, jobId, target: "resume", jobIds } }),
+        now,
+      ),
+    ).toBeNull();
+    // triage without jobIds is invalid.
+    expect(
+      parseBridgeRequest(request({ payload: { requestId, jobId, target: "triage" } }), now),
+    ).toBeNull();
+  });
 });
 
 describe("validatePublicRunResult", () => {

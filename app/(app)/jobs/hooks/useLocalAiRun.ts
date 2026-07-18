@@ -149,9 +149,9 @@ export function useLocalAiRun(options: {
   }, []);
 
   const acceptRun = useCallback(async (run: LocalAiPublicRun) => {
-    // This hook drives application runs only; fit-scan "match" runs are
-    // orchestrated by useFitScan and must never reach this state machine.
-    if (run.target === "match") return;
+    // This hook drives application runs only; fit-scan "match"/"triage" runs
+    // are orchestrated by useFitScan and must never reach this state machine.
+    if (run.target === "match" || run.target === "triage") return;
     if (run.status === "succeeded") {
       if (terminalConsumedRef.current.has(run.requestId)) return;
       terminalConsumedRef.current.add(run.requestId);
@@ -281,7 +281,7 @@ export function useLocalAiRun(options: {
               status: "failed",
               requestId: activeRequestId,
               jobId: run.jobId,
-              target: run.target === "match" ? undefined : run.target,
+              target: run.target === "match" || run.target === "triage" ? undefined : run.target,
               error: { code: "AI_TIMEOUT", retryable: true },
             });
             return;

@@ -235,3 +235,16 @@ export async function fetchAiPromptEnvelope(input: {
   }
   return res.json();
 }
+
+export async function fetchAiTriagePromptEnvelope(input: {
+  jobIds: string[];
+}): Promise<unknown> {
+  const res = await apiFetch("/api/ext/jobs/triage-prompt", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw new ApiRequestError(res.status, `AI triage prompt fetch failed: ${res.status}`);
+  }
+  return res.json();
+}
