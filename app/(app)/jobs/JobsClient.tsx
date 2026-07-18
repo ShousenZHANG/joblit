@@ -960,6 +960,11 @@ export function JobsClient({
                     {t("fitScan.button")}
                   </FilterPill>
                 )}
+                {fitScan.state.status === "failed" ? (
+                  <span className="shrink-0 whitespace-nowrap text-xs font-medium text-destructive">
+                    {t("fitScan.failed")}
+                  </span>
+                ) : null}
                 {lowFitIds.length > 0 && fitScan.state.status !== "scanning" ? (
                   <FilterPill
                     active={false}

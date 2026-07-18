@@ -199,7 +199,8 @@
       "scanning": "Scoring batch {batch}/{batches}…",
       "stop": "Stop scan",
       "hideLowFit": "Hide low fit",
-      "selectLowFit": "Select {count} low fit"
+      "selectLowFit": "Select {count} low fit",
+      "failed": "Scan failed. Reload the Joblit extension, then try again."
     },
     "statusRemote": "Remote",
     "noJobs": "No jobs found.",
