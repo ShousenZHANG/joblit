@@ -248,3 +248,25 @@ export async function fetchAiTriagePromptEnvelope(input: {
   }
   return res.json();
 }
+
+/** Non-secret local AI defaults synced with Joblit (endpoint + profile only). */
+export async function fetchLocalAiDefaults(): Promise<unknown> {
+  const res = await apiFetch("/api/ext/local-ai/settings");
+  if (!res.ok) {
+    throw new ApiRequestError(res.status, `Local AI defaults fetch failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function pushLocalAiDefaults(input: {
+  hermesEndpoint: string;
+  hermesProfile: string;
+}): Promise<void> {
+  const res = await apiFetch("/api/ext/local-ai/settings", {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw new ApiRequestError(res.status, `Local AI defaults push failed: ${res.status}`);
+  }
+}

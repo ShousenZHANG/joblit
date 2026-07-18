@@ -9,6 +9,11 @@ const payload = {
   target: "resume" as const,
 };
 
+const remoteDefaults = vi.hoisted(() => ({
+  fetch: vi.fn().mockResolvedValue(null),
+  push: vi.fn().mockResolvedValue(undefined),
+}));
+
 const api = vi.hoisted(() => ({
   probe: vi.fn(),
   startRun: vi.fn(),
@@ -28,6 +33,8 @@ vi.mock("./api", () => {
   return {
     fetchAiPromptEnvelope: vi.fn().mockResolvedValue(envelope),
     fetchAiTriagePromptEnvelope: vi.fn().mockResolvedValue(envelope),
+    fetchLocalAiDefaults: remoteDefaults.fetch,
+    pushLocalAiDefaults: remoteDefaults.push,
   };
 });
 vi.mock("./auth", () => ({
@@ -181,6 +188,51 @@ describe("Hermes run registry", () => {
       status: "failed",
       error: { code: "RUN_LOST" },
     });
+  });
+
+  it("prefills endpoint and profile from Joblit on a fresh install, key stays local", async () => {
+    await chrome.storage.local.clear();
+    remoteDefaults.fetch.mockResolvedValueOnce({
+      hermesEndpoint: "http://127.0.0.1:9700",
+      hermesProfile: "joblit-f1742d0bc521469b",
+    });
+    const { getHermesSettingsPublic } = await import("./hermesRuns");
+    await expect(getHermesSettingsPublic()).resolves.toEqual({
+      baseUrl: "http://127.0.0.1:9700",
+      profileName: "joblit-f1742d0bc521469b",
+      hasApiKey: false,
+      configured: false,
+    });
+  });
+
+  it("never lets remote defaults override locally saved settings", async () => {
+    remoteDefaults.fetch.mockResolvedValue({
+      hermesEndpoint: "http://127.0.0.1:9999",
+      hermesProfile: "joblit-ffffffffffffffff",
+    });
+    const { getHermesSettingsPublic } = await import("./hermesRuns");
+    const settings = await getHermesSettingsPublic();
+    expect(settings.baseUrl).toBe("http://127.0.0.1:8642");
+    expect(settings.profileName).toBe("joblit-0123456789abcdef");
+    expect(remoteDefaults.fetch).not.toHaveBeenCalled();
+  });
+
+  it("syncs non-secret defaults to Joblit after a successful save", async () => {
+    api.probe.mockResolvedValue({ modelId: "joblit-0123456789abcdef", profileName: "joblit-0123456789abcdef", tools: [] });
+    const { testAndSaveHermesSettings } = await import("./hermesRuns");
+    await testAndSaveHermesSettings({
+      baseUrl: "http://127.0.0.1:8642",
+      profileName: "joblit-0123456789abcdef",
+      apiKey: "0123456789abcdef0123456789abcdef",
+    });
+    await vi.waitFor(() => {
+      expect(remoteDefaults.push).toHaveBeenCalledWith({
+        hermesEndpoint: "http://127.0.0.1:8642",
+        hermesProfile: "joblit-0123456789abcdef",
+      });
+    });
+    const pushed = JSON.stringify(remoteDefaults.push.mock.calls);
+    expect(pushed).not.toContain("0123456789abcdef0123456789abcdef");
   });
 
   it("fails a repair fast after a service-worker restart", async () => {

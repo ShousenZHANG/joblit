@@ -16,7 +16,12 @@ import {
   type RunLookupPayload,
   type StartRunPayload,
 } from "@ext/shared/hermesTypes";
-import { fetchAiPromptEnvelope, fetchAiTriagePromptEnvelope } from "./api";
+import {
+  fetchAiPromptEnvelope,
+  fetchAiTriagePromptEnvelope,
+  fetchLocalAiDefaults,
+  pushLocalAiDefaults,
+} from "./api";
 import { HermesApiError } from "./apiErrors";
 import { getAuthStatus } from "./auth";
 import { createHermesApi } from "./hermesApi";
@@ -266,6 +271,21 @@ function publicFailure(
   };
 }
 
+/** Best-effort prefill from Joblit for a fresh install (non-secret values only). */
+async function fetchRemoteDefaults(): Promise<{ baseUrl: string; profileName: string } | null> {
+  try {
+    const auth = await getAuthStatus();
+    if (!auth.authenticated) return null;
+    const remote = await fetchLocalAiDefaults();
+    if (!isRecord(remote)) return null;
+    const baseUrl = normalizeHermesBase(remote.hermesEndpoint);
+    if (!validProfileName(remote.hermesProfile)) return null;
+    return { baseUrl, profileName: remote.hermesProfile };
+  } catch {
+    return null;
+  }
+}
+
 export async function getHermesSettingsPublic(): Promise<HermesSettingsPublic> {
   const stored = await chrome.storage.local.get([
     STORAGE_KEYS.HERMES_API_BASE,
@@ -283,10 +303,21 @@ export async function getHermesSettingsPublic(): Promise<HermesSettingsPublic> {
     hasValidBase = false;
   }
   const hasValidProfile = validProfileName(stored[STORAGE_KEYS.HERMES_PROFILE_NAME]);
-  const profileName = hasValidProfile
+  let profileName = hasValidProfile
     ? stored[STORAGE_KEYS.HERMES_PROFILE_NAME]
     : DEFAULT_HERMES_PROFILE_NAME;
   const hasApiKey = validApiKey(stored[STORAGE_KEYS.HERMES_API_KEY]);
+
+  // Fresh install (no locally saved connection): prefill endpoint + profile
+  // from the Joblit-synced defaults so the user only re-enters the API key.
+  if (!hasValidBase && !hasValidProfile && !hasApiKey) {
+    const remote = await fetchRemoteDefaults();
+    if (remote) {
+      baseUrl = remote.baseUrl;
+      profileName = remote.profileName;
+    }
+  }
+
   return { baseUrl, profileName, hasApiKey, configured: hasApiKey && hasValidBase && hasValidProfile };
 }
 
@@ -311,6 +342,10 @@ export async function testAndSaveHermesSettings(input: HermesSettingsInput): Pro
     [STORAGE_KEYS.HERMES_API_KEY]: apiKey,
     [STORAGE_KEYS.HERMES_PROFILE_NAME]: input.profileName,
   });
+  // Sync the NON-SECRET connection defaults to Joblit so a future reinstall
+  // prefills endpoint + profile. The API key never leaves the extension.
+  void pushLocalAiDefaults({ hermesEndpoint: baseUrl, hermesProfile: input.profileName })
+    .catch(() => undefined);
   return { baseUrl, profileName: input.profileName, hasApiKey: true, configured: true };
 }
 

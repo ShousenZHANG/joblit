@@ -81,6 +81,7 @@ model User {
   applications   Application[]
   promptRuleTemplates PromptRuleTemplate[]
   onboardingState OnboardingState?
+  localAiSetting LocalAiSetting?
   applicationBatches ApplicationBatch[]
   applicationBatchTasks ApplicationBatchTask[]
   extensionTokens ExtensionToken[]
@@ -457,4 +458,16 @@ model DiscoverVideoCache {
   expiresAt DateTime
 
   @@index([expiresAt])
+}
+
+// Non-secret local AI connection defaults, synced from the extension so a
+// reinstalled extension can prefill endpoint + profile. The Hermes API key is
+// NEVER stored here or anywhere server-side.
+model LocalAiSetting {
+  userId         String   @id @db.Uuid
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hermesEndpoint String
+  hermesProfile  String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
