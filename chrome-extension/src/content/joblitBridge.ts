@@ -17,7 +17,10 @@ import {
 import type { BackgroundMessage, MessageResponse } from "@ext/shared/types";
 
 const MAX_REQUESTS_PER_MINUTE = 120;
-const MAX_STARTS_PER_MINUTE = 4;
+// Generation budget shared by START_RUN and REPAIR_RUN. Batch triage runs a
+// generation per ~27s batch, so 4/min throttled legitimate scans; 6/min still
+// bounds abuse while letting a multi-batch scan proceed.
+const MAX_STARTS_PER_MINUTE = 6;
 const MAX_STATUS_REQUESTS_PER_MINUTE = 20;
 const REPLAY_CACHE_LIMIT = 256;
 
