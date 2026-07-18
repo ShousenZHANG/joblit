@@ -118,3 +118,7 @@ design-system/
 *.sig
 *.key
 *hermes-receipt*.json
+
+# Packaged/unpacked extension artifacts (built from chrome-extension/dist)
+chrome-extension/joblit-extension-*.zip
+chrome-extension/joblit-extension-*/
