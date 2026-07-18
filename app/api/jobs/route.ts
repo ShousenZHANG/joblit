@@ -14,7 +14,8 @@ const QuerySchema = z.object({
   q: z.string().trim().min(1).max(80).optional(),
   location: z.string().trim().min(1).max(80).optional(),
   jobLevel: z.string().trim().min(1).max(80).optional(),
-  sort: z.enum(["newest", "oldest"]).optional().default("newest"),
+  sort: z.enum(["newest", "oldest", "fit"]).optional().default("newest"),
+  fitBand: z.enum(["strong", "good", "moderate", "low", "unscored"]).optional(),
   market: z.enum(["AU", "CN"]).optional(),
   platform: z.string().trim().min(1).max(80).optional(),
 });

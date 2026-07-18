@@ -22,7 +22,9 @@ export type JobListQuery = {
   q?: string;
   location?: string;
   jobLevel?: string;
-  sort: "newest" | "oldest";
+  sort: "newest" | "oldest" | "fit";
+  /** Deterministic verdict bands over Job.fitScore (45/60/75 thresholds). */
+  fitBand?: "strong" | "good" | "moderate" | "low" | "unscored";
   market?: "AU" | "CN";
   platform?: string;
 };
@@ -95,6 +97,26 @@ function buildWhereClause(userId: string, query: JobListQuery): JobWhereClause {
     andClauses.push({ jobLevel: { equals: jobLevel, mode: "insensitive" } });
   }
 
+  if (query.fitBand) {
+    switch (query.fitBand) {
+      case "strong":
+        andClauses.push({ fitScore: { gte: 75 } });
+        break;
+      case "good":
+        andClauses.push({ fitScore: { gte: 60, lt: 75 } });
+        break;
+      case "moderate":
+        andClauses.push({ fitScore: { gte: 45, lt: 60 } });
+        break;
+      case "low":
+        andClauses.push({ fitScore: { lt: 45 } });
+        break;
+      case "unscored":
+        andClauses.push({ fitScore: null });
+        break;
+    }
+  }
+
   return {
     userId,
     ...(status ? { status } : {}),
@@ -118,9 +140,15 @@ function getCursorPage<T extends { id: string }>(
 export async function listJobs(userId: string, query: JobListQuery): Promise<JobListResult> {
   const { limit, cursor, sort } = query;
   const orderBy =
-    sort === "oldest"
-      ? [{ createdAt: "asc" as const }, { id: "asc" as const }]
-      : [{ createdAt: "desc" as const }, { id: "desc" as const }];
+    sort === "fit"
+      ? [
+          { fitScore: { sort: "desc" as const, nulls: "last" as const } },
+          { createdAt: "desc" as const },
+          { id: "desc" as const },
+        ]
+      : sort === "oldest"
+        ? [{ createdAt: "asc" as const }, { id: "asc" as const }]
+        : [{ createdAt: "desc" as const }, { id: "desc" as const }];
 
   const where = buildWhereClause(userId, query);
 
@@ -188,6 +216,7 @@ export async function listJobs(userId: string, query: JobListQuery): Promise<Job
     `location=${query.location ?? ""}`,
     `jobLevel=${query.jobLevel ?? ""}`,
     `sort=${sort}`,
+    `fitBand=${query.fitBand ?? ""}`,
     `market=${query.market ?? ""}`,
   ].join("|");
 

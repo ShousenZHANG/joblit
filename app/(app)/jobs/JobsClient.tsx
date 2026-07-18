@@ -79,6 +79,7 @@ export function JobsClient({
     locationFilter, setLocationFilter,
     jobLevelFilter, setJobLevelFilter,
     market,
+    sortByFit, setSortByFit,
     queryString,
     urlState,
     replaceUrlState,
@@ -208,20 +209,59 @@ export function JobsClient({
   });
   const fitScan = useFitScan({ onJobScored: refetch });
   const [hideLowFit, setHideLowFit] = useState(false);
+  // One undo window for the last bulk-ignore sweep.
+  const [ignoredUndo, setIgnoredUndo] = useState<{ count: number; jobIds: string[] } | null>(null);
   // Unscored jobs stay visible: hiding is a triage aid, not a data filter.
+  // 45 is the WEAK/POOR boundary — the same threshold bulk-ignore uses.
   const visibleItems = useMemo(
     () =>
       hideLowFit
-        ? items.filter((it) => it.fitScore == null || it.fitScore >= 60)
+        ? items.filter((it) => it.fitScore == null || it.fitScore >= 45)
         : items,
     [hideLowFit, items],
   );
-  // "Clearly not a match" = deterministic POOR band (<30). Selecting them just
-  // pre-fills the existing batch-delete flow; the user still confirms.
-  const lowFitIds = useMemo(
-    () => items.filter((it) => typeof it.fitScore === "number" && it.fitScore < 30).map((it) => it.id),
-    [items],
-  );
+
+  // Full-database sweep: preview the count, confirm, move NEW -> ignored
+  // (REJECTED, reversible) server-side, then offer one-click undo.
+  const handleIgnoreLowFit = useCallback(async () => {
+    try {
+      const preview = (await (await fetch("/api/jobs/bulk-ignore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ maxScore: 44, preview: true }),
+      })).json()) as { count?: number };
+      const count = preview.count ?? 0;
+      if (count === 0) {
+        toast({ description: t("fitScan.ignoreNone") });
+        return;
+      }
+      if (!window.confirm(t("fitScan.ignoreConfirm", { count }))) return;
+      const result = (await (await fetch("/api/jobs/bulk-ignore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ maxScore: 44 }),
+      })).json()) as { count?: number; jobIds?: string[] };
+      setIgnoredUndo({ count: result.count ?? 0, jobIds: result.jobIds ?? [] });
+      refetch();
+    } catch {
+      toast({ description: t("fitScan.ignoreFailed"), variant: "destructive" });
+    }
+  }, [refetch, t, toast]);
+
+  const handleUndoIgnore = useCallback(async () => {
+    if (!ignoredUndo) return;
+    try {
+      await fetch("/api/jobs/bulk-ignore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ restoreJobIds: ignoredUndo.jobIds }),
+      });
+      setIgnoredUndo(null);
+      refetch();
+    } catch {
+      toast({ description: t("fitScan.ignoreFailed"), variant: "destructive" });
+    }
+  }, [ignoredUndo, refetch, t, toast]);
   const localAiDialogVisible = localAiDialogOpen
     || ["starting", "queued", "running", "stopping", "importing"].includes(localAi.runState.status);
 
@@ -935,28 +975,19 @@ export function JobsClient({
                 </FilterPill>
                 <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-border" />
                 {fitScan.state.status !== "scanning" ? (
-                  <FilterPill
-                    active={false}
-                    onClick={() => {
-                      const unscored = items
-                        .filter((it) => it.fitScore == null)
-                        .map((it) => it.id)
-                        .slice(0, 200);
-                      if (unscored.length > 0) void fitScan.start(unscored);
-                    }}
-                  >
+                  <FilterPill active={false} onClick={() => void fitScan.start()}>
                     {t("fitScan.button")}
                   </FilterPill>
                 ) : null}
-                {lowFitIds.length > 0 && fitScan.state.status !== "scanning" ? (
-                  <FilterPill
-                    active={false}
-                    onClick={() => {
-                      setBatchSelectMode(true);
-                      setBatchSelectedIds(new Set(lowFitIds));
-                    }}
-                  >
-                    {t("fitScan.selectLowFit", { count: lowFitIds.length })}
+                <FilterPill
+                  active={sortByFit}
+                  onClick={() => startTransition(() => setSortByFit((value) => !value))}
+                >
+                  {t("fitScan.sortByFit")}
+                </FilterPill>
+                {fitScan.state.status !== "scanning" ? (
+                  <FilterPill active={false} onClick={() => void handleIgnoreLowFit()}>
+                    {t("fitScan.ignoreLow")}
                   </FilterPill>
                 ) : null}
                 <FilterPill
@@ -974,9 +1005,8 @@ export function JobsClient({
                 <Loader2 className="h-4 w-4 shrink-0 text-brand-emerald-600 motion-safe:animate-spin" aria-hidden />
                 <span className="truncate">
                   {t("fitScan.bannerScanning", {
-                    batch: Math.max(fitScan.state.currentBatch, 1),
-                    batches: Math.max(fitScan.state.totalBatches, 1),
                     scored: fitScan.state.scored + fitScan.state.prescreened,
+                    remaining: fitScan.state.remaining,
                   })}
                 </span>
               </span>
@@ -1020,6 +1050,30 @@ export function JobsClient({
               >
                 <X className="h-4 w-4" />
               </button>
+            </div>
+          ) : null}
+          {ignoredUndo ? (
+            <div className="flex items-center justify-between gap-3 border-b bg-muted/40 px-4 py-2.5" role="status">
+              <span className="min-w-0 truncate text-sm text-foreground">
+                {t("fitScan.ignoredBanner", { count: ignoredUndo.count })}
+              </span>
+              <span className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => void handleUndoIgnore()}
+                  className="rounded-md px-2 py-1 text-xs font-semibold text-brand-emerald-700 transition-colors hover:bg-brand-emerald-50"
+                >
+                  {t("fitScan.undo")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIgnoredUndo(null)}
+                  className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label={t("fitScan.dismiss")}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </span>
             </div>
           ) : null}
           <div className="relative flex min-h-0 flex-1 flex-col">
