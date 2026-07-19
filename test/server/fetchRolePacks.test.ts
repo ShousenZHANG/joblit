@@ -14,6 +14,7 @@ describe("fetch role packs", () => {
       "Solutions Architect",
       "Full Stack Engineer",
       "AI Engineer",
+      "AI Agent Engineer",
     ]);
   });
 

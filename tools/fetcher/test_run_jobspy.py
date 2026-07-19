@@ -306,6 +306,60 @@ class RunJobspyDedupeTests(unittest.TestCase):
         self.assertEqual(java["title"].tolist(), ["Senior Java Engineer"])
         self.assertEqual(go["title"].tolist(), ["Go Engineer"])
 
+    def test_filter_title_ai_query_keeps_domain_synonyms(self):
+        # An "AI Engineer" search must keep AI-domain titles that never carry
+        # the literal token "ai" (ML / GenAI / LLM / Agentic), which previously
+        # left the strict include filter fetching nothing.
+        df = pd.DataFrame(
+            [
+                {"title": "Machine Learning Engineer"},
+                {"title": "ML Engineer"},
+                {"title": "GenAI Engineer"},
+                {"title": "LLM Engineer"},
+                {"title": "Agentic Engineer"},
+                {"title": "AI Engineer"},
+                {"title": "Accountant"},
+                {"title": "Marketing Manager"},
+            ]
+        )
+
+        out = rj.filter_title(
+            df,
+            queries=["AI Engineer"],
+            enforce_include=True,
+            exclude_terms=[],
+            base_queries=["AI Engineer"],
+        )
+
+        kept = out["title"].tolist()
+        self.assertIn("Machine Learning Engineer", kept)
+        self.assertIn("GenAI Engineer", kept)
+        self.assertIn("LLM Engineer", kept)
+        self.assertIn("Agentic Engineer", kept)
+        self.assertIn("AI Engineer", kept)
+        self.assertNotIn("Accountant", kept)
+        self.assertNotIn("Marketing Manager", kept)
+
+    def test_filter_title_ai_agent_query_requires_both_domain_signals(self):
+        df = pd.DataFrame(
+            [
+                {"title": "Agentic Engineer"},
+                {"title": "AI Agent Engineer"},
+                {"title": "Backend Engineer"},
+            ]
+        )
+        out = rj.filter_title(
+            df,
+            queries=["AI Agent Engineer"],
+            enforce_include=True,
+            exclude_terms=[],
+            base_queries=["AI Agent Engineer"],
+        )
+        kept = out["title"].tolist()
+        self.assertIn("Agentic Engineer", kept)
+        self.assertIn("AI Agent Engineer", kept)
+        self.assertNotIn("Backend Engineer", kept)
+
     def test_filter_title_matches_mixed_chinese_and_ascii_role_query(self):
         df = pd.DataFrame(
             [

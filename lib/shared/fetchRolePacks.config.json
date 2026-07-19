@@ -21,7 +21,8 @@
         "Agent Engineer",
         "Solutions Architect",
         "Full Stack Engineer",
-        "AI Engineer"
+        "AI Engineer",
+        "AI Agent Engineer"
       ]
     },
     {
@@ -65,25 +66,46 @@
         "Full Stack Developer",
         "Software Engineer",
         "Backend Engineer",
-        "Full Stack Agentic Engineer"
+        "Full Stack Agentic Engineer",
+        "AI Full Stack Engineer",
+        "AI Agent Engineer"
       ]
     },
     {
       "aliases": [
         "ai engineer",
         "ai developer",
+        "ai agent engineer",
+        "ai agent developer",
+        "agent engineer",
         "agentic engineer",
+        "ai full stack engineer",
+        "ai full stack developer",
+        "full stack ai engineer",
         "full stack agentic engineer",
         "full stack agentic developer",
+        "genai engineer",
+        "gen ai engineer",
+        "generative ai engineer",
+        "llm engineer",
+        "llm developer",
         "ml engineer",
-        "machine learning engineer"
+        "machine learning engineer",
+        "applied ai engineer",
+        "applied scientist"
       ],
       "roles": [
         "AI Engineer",
         "AI Developer",
+        "AI Agent Engineer",
+        "Agentic Engineer",
+        "AI Full Stack Engineer",
         "Full Stack Agentic Engineer",
-        "Full Stack Agentic Developer",
+        "GenAI Engineer",
+        "Generative AI Engineer",
+        "LLM Engineer",
         "Machine Learning Engineer",
+        "Applied AI Engineer",
         "Software Engineer"
       ]
     },

@@ -542,6 +542,48 @@ def _cjk_role_signals(value: str) -> List[str]:
     return re.findall(r"[\u3400-\u9fff]+", normalized)
 
 
+# AI-domain roles rarely carry the literal token "ai" in their titles: they
+# read as "Machine Learning Engineer", "ML / GenAI / LLM Engineer", "Agentic
+# Engineer", "Data Scientist". Treat these as one signal class so an
+# "AI Engineer" query keeps them instead of rejecting the whole result set
+# (which left the strict include filter fetching nothing for AI searches).
+ROLE_SIGNAL_SYNONYMS: Dict[str, tuple[str, ...]] = {
+    "ai": (
+        "ai",
+        "artificial intelligence",
+        "ml",
+        "machine learning",
+        "genai",
+        "gen ai",
+        "generative ai",
+        "llm",
+        "llms",
+        "nlp",
+        "deep learning",
+        "agentic",
+    ),
+    "ml": (
+        "ml",
+        "machine learning",
+        "ai",
+        "artificial intelligence",
+        "deep learning",
+    ),
+    "agent": ("agent", "agents", "agentic"),
+    "agentic": ("agentic", "agent", "agents"),
+    "genai": ("genai", "gen ai", "generative ai", "ai"),
+    "llm": ("llm", "llms", "ai"),
+}
+
+
+def _signal_in_title(title: str, signal: str) -> bool:
+    """A role signal matches when the title contains it OR a domain synonym."""
+    for candidate in ROLE_SIGNAL_SYNONYMS.get(signal, (signal,)):
+        if _contains_title_term(title, candidate):
+            return True
+    return False
+
+
 def _is_title_relevant(title: str, queries: List[str]) -> bool:
     for query in queries:
         if _contains_title_term(title, query):
@@ -552,7 +594,7 @@ def _is_title_relevant(title: str, queries: List[str]) -> bool:
         cjk_signals = _cjk_role_signals(query)
         if not ascii_signals and not cjk_signals:
             continue
-        if not all(_contains_title_term(title, signal) for signal in ascii_signals):
+        if not all(_signal_in_title(title, signal) for signal in ascii_signals):
             continue
         normalized_title = _normalize_role_text(title)
         if all(signal in normalized_title for signal in cjk_signals):
@@ -567,7 +609,7 @@ def _matches_base_query_constraints(title: str, base_queries: List[str]) -> bool
         cjk_signals = _cjk_role_signals(query)
         if not ascii_signals and not cjk_signals:
             return True
-        if not all(_contains_title_term(title, signal) for signal in ascii_signals):
+        if not all(_signal_in_title(title, signal) for signal in ascii_signals):
             continue
         if all(signal in normalized_title for signal in cjk_signals):
             return True
