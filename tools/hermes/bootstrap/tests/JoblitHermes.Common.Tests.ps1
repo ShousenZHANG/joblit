@@ -1,4 +1,6 @@
 BeforeAll {
+    Add-Type -AssemblyName System.IO.Compression -ErrorAction Stop
+    Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
     $modulePath = Join-Path $PSScriptRoot '..\JoblitHermes.Common.psm1'
     Import-Module $modulePath -Force
 }
@@ -172,6 +174,19 @@ Describe 'Invoke-JoblitProbe' {
             $global:JoblitProbeCalls.Add("$Method $path $($Headers.Authorization)")
             return $global:JoblitProbeResponses[$path]
         } -ModuleName JoblitHermes.Common
+        Mock Invoke-WebRequest {
+            param($UseBasicParsing, $Method, $Uri, $Headers, $TimeoutSec)
+            $path = ([uri] $Uri).AbsolutePath
+            $global:JoblitProbeCalls.Add("$Method $path $($Headers.Origin)")
+            return [pscustomobject]@{
+                StatusCode = 200
+                Headers = @{
+                    'Access-Control-Allow-Origin' = '*'
+                    'Access-Control-Allow-Methods' = 'POST, OPTIONS'
+                    'Access-Control-Allow-Headers' = 'Authorization, Content-Type'
+                }
+            }
+        } -ModuleName JoblitHermes.Common
     }
 
     AfterEach { Remove-Variable JoblitProbeCalls,JoblitProbeProfile,JoblitProbeKey,JoblitProbeResponses -Scope Global -ErrorAction SilentlyContinue }
@@ -179,10 +194,19 @@ Describe 'Invoke-JoblitProbe' {
     It 'validates the fixed read-only API surface without submitting a run' {
         Invoke-JoblitProbe -Port 8642 -ApiKey $global:JoblitProbeKey -ProfileName $global:JoblitProbeProfile | Should -BeTrue
 
-        $global:JoblitProbeCalls.Count | Should -Be 4
+        $global:JoblitProbeCalls.Count | Should -Be 5
         $global:JoblitProbeCalls | Should -Contain 'Get /health '
         $global:JoblitProbeCalls | Should -Contain "Get /v1/capabilities Bearer $($global:JoblitProbeKey)"
+        $global:JoblitProbeCalls | Should -Contain 'Options /v1/runs chrome-extension://joblit-probe'
         @($global:JoblitProbeCalls | Where-Object { $_ -match '^Post ' }).Count | Should -Be 0
+        Assert-MockCalled Invoke-WebRequest -Times 1 -ModuleName JoblitHermes.Common -ParameterFilter {
+            $Method -eq 'Options' -and
+            ([uri] $Uri).AbsolutePath -eq '/v1/runs' -and
+            $Headers.Origin -eq 'chrome-extension://joblit-probe' -and
+            $Headers['Access-Control-Request-Method'] -eq 'POST' -and
+            $Headers['Access-Control-Request-Headers'] -match 'Authorization' -and
+            $Headers['Access-Control-Request-Headers'] -match 'Content-Type'
+        }
     }
 
     It 'rejects model identity drift and enabled executable tools' {
