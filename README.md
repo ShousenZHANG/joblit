@@ -4,7 +4,7 @@
 
 **An end-to-end job-search workstation.** Fetch roles, triage them, tailor a custom resume and cover letter for each JD, auto-fill any ATS form, and export production-grade PDFs — without copy-paste.
 
-[Live Demo](https://www.joblit.tech) · [Codex Batch Protocol](./AGENTS.md) · [Domain Context](./CONTEXT.md) · [Report a bug](https://github.com/ShousenZHANG/jobflow-web/issues)
+[Live Demo](https://www.joblit.tech) · [Codex Batch Protocol](./AGENTS.md) · [Domain Context](./CONTEXT.md) · [Report a bug](https://github.com/ShousenZHANG/joblit/issues)
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
 ![React](https://img.shields.io/badge/React-19-149eca)
@@ -249,8 +249,8 @@ test/                 API + server test suites
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/ShousenZHANG/jobflow-web.git
-cd jobflow-web
+git clone https://github.com/ShousenZHANG/joblit.git
+cd joblit
 npm install
 
 # 2. Configure environment
