@@ -64,6 +64,7 @@ export function Cta() {
             <Magnetic strength={7}>
               <Link
                 href={cta.href}
+                prefetch={cta.prefetch}
                 aria-disabled={cta.disabled}
                 tabIndex={cta.disabled ? -1 : undefined}
                 className={

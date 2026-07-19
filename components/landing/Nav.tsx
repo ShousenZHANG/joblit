@@ -162,6 +162,7 @@ export function Nav() {
           <Magnetic strength={5}>
             <Link
               href={cta.href}
+              prefetch={cta.prefetch}
               aria-label={cta.label}
               className="inline-flex h-11 min-w-11 shrink-0 items-center gap-1 rounded-full bg-foreground px-3 text-[13px] font-semibold text-background shadow-sm transition-all hover:-translate-y-px hover:bg-foreground/90 hover:shadow-md active:translate-y-0 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-4 lg:h-9"
             >

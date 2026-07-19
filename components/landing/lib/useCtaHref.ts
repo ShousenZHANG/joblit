@@ -13,18 +13,25 @@ import { useTranslations } from "next-intl";
  * resolves the right destination up-front:
  *
  *   authenticated   → `/jobs` (straight into the app)
- *   unauthenticated → `/login` (sign-in)
- *   loading         → `/login` (sign-in remains immediately actionable)
+ *   unauthenticated → `/login?callbackUrl=/jobs` (direct sign-in)
+ *   loading         → `/jobs` (server resolves auth)
  *
- * The hook also owns the translated label so every primary marketing CTA uses
- * the same authenticated/unauthenticated semantics. Every state is actionable,
- * so a slow session request never creates a dead primary CTA.
+ * The loading and authenticated states share one destination, preventing the
+ * hydration race. A known signed-out visitor can still take the shorter direct
+ * sign-in path. Only authenticated users prefetch the protected workspace.
  */
 export function useCtaHref() {
   const { status } = useSession();
   const t = useTranslations("landing.nav");
-  if (status === "authenticated") {
-    return { href: "/jobs", disabled: false, label: t("openApp") } as const;
-  }
-  return { href: "/login", disabled: false, label: t("startFree") } as const;
+  const authenticated = status === "authenticated";
+
+  return {
+    href:
+      status === "unauthenticated"
+        ? "/login?callbackUrl=/jobs"
+        : "/jobs",
+    disabled: false,
+    label: t(authenticated ? "openApp" : "startFree"),
+    prefetch: authenticated,
+  } as const;
 }

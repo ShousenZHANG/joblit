@@ -41,11 +41,11 @@ describe("landing Nav", () => {
     cleanup();
   });
 
-  it("keeps the loading CTA focusable and routes it directly to sign-in", () => {
+  it("keeps the loading CTA focusable and lets the protected app route resolve auth", () => {
     renderNav();
 
     const cta = screen.getByRole("link", { name: en.landing.nav.startFree });
-    expect(cta).toHaveAttribute("href", "/login");
+    expect(cta).toHaveAttribute("href", "/jobs");
     expect(cta).not.toHaveAttribute("aria-disabled");
     expect(cta).not.toHaveAttribute("tabindex", "-1");
     expect(cta).not.toHaveClass("pointer-events-none");
