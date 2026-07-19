@@ -1,13 +1,12 @@
-[CmdletBinding()]
+[CmdletBinding(SupportsShouldProcess)]
 param(
     [Parameter(Mandatory)] [string] $PackagePath,
     [Parameter(Mandatory)] [ValidatePattern('^joblit-[a-f0-9]{16,64}$')] [string] $ProfileName,
     [ValidateRange(1024,65535)] [int] $Port = 8642,
     [string] $ExpectedArchiveSha256,
     [switch] $Production,
-    [switch] $StartOnLogin = $true,
-    [switch] $ForceConfigUpdate,
-    [switch] $WhatIf
+    [bool] $StartOnLogin = $true,
+    [switch] $ForceConfigUpdate
 )
 
 Set-StrictMode -Version Latest

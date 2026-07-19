@@ -97,9 +97,26 @@ jobs:
       - name: Run PowerShell security analysis
         shell: pwsh
         run: |
-          $findings = Invoke-ScriptAnalyzer -Path tools/hermes/bootstrap -Recurse -Severity Error,Warning
+          $productionFiles = Get-ChildItem tools/hermes/bootstrap -Recurse -Include *.ps1,*.psm1 |
+            Where-Object { $_.Name -notmatch '\.Tests\.ps1$' }
+          $productionFindings = @(
+            $productionFiles | ForEach-Object {
+              Invoke-ScriptAnalyzer -Path $_.FullName -Severity Error,Warning
+            }
+          )
+          $testFixtureRules = @(
+            'PSAvoidAssignmentToAutomaticVariable',
+            'PSAvoidGlobalVars',
+            'PSReviewUnusedParameter'
+          )
+          $testFindings = @(
+            Get-ChildItem tools/hermes/bootstrap -Recurse -Include *.Tests.ps1 | ForEach-Object {
+              Invoke-ScriptAnalyzer -Path $_.FullName -Severity Error,Warning
+            } | Where-Object { $_.RuleName -notin $testFixtureRules }
+          )
+          $findings = @($productionFindings) + @($testFindings)
           $findings | Format-Table -AutoSize
-          if ($findings) { exit 1 }
+          if ($findings.Count -gt 0) { exit 1 }
       - name: Run Pester against fakes and temporary profiles
         shell: pwsh
         run: Invoke-Pester tools/hermes/bootstrap/tests -CI

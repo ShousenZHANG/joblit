@@ -12,6 +12,11 @@ $script:ManagedEnvironmentKeys = @(
 $script:VerifierScript = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\verify-package.mjs'))
 
 function New-JoblitFailure {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute(
+        'PSUseShouldProcessForStateChangingFunctions',
+        '',
+        Justification = 'Creates and returns an exception object; it does not mutate system state.'
+    )]
     param([Parameter(Mandatory)][string] $Code, [Parameter(Mandatory)][string] $Message)
     return [InvalidOperationException]::new("${Code}: ${Message}")
 }
@@ -135,6 +140,11 @@ function Get-JoblitHermesVersion {
 
 function New-JoblitApiKey {
     [CmdletBinding()]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute(
+        'PSUseShouldProcessForStateChangingFunctions',
+        '',
+        Justification = 'Generates key material in memory; it does not persist or mutate system state.'
+    )]
     param()
     $bytes = New-Object byte[] 32
     $generator = [Security.Cryptography.RandomNumberGenerator]::Create()
@@ -235,6 +245,7 @@ function Test-JoblitPrivateAcl {
 }
 
 function Set-JoblitPrivateAcl {
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Low')]
     param([Parameter(Mandatory)][string] $Path)
     if ($env:OS -ne 'Windows_NT') { return }
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent().User
@@ -249,6 +260,7 @@ function Set-JoblitPrivateAcl {
         [Security.AccessControl.AccessControlType]::Allow
     )
     $acl.AddAccessRule($rule)
+    if (-not $PSCmdlet.ShouldProcess($Path, 'Restrict file ACL to the current user')) { return }
     Set-Acl -LiteralPath $Path -AclObject $acl
     $applied = Get-Acl -LiteralPath $Path
     if (-not (Test-JoblitPrivateAcl -Acl $applied -Identity $identity)) {
@@ -358,6 +370,11 @@ function Test-JoblitPortableArchivePath {
 
 function Test-JoblitArchiveEntries {
     [CmdletBinding()]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute(
+        'PSUseSingularNouns',
+        '',
+        Justification = 'Preserves the published bootstrap module API used by existing installers.'
+    )]
     param([Parameter(Mandatory)][string] $ArchivePath)
     Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
     $archive = [IO.Compression.ZipFile]::OpenRead($ArchivePath)
@@ -411,6 +428,11 @@ function Expand-JoblitVerifiedArchive {
 }
 
 function Remove-JoblitTemporaryDirectory {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute(
+        'PSUseShouldProcessForStateChangingFunctions',
+        '',
+        Justification = 'Always removes only a GUID-scoped directory beneath the OS temp root, including during WhatIf verification.'
+    )]
     param([Parameter(Mandatory)][string] $Path)
     $resolved = [IO.Path]::GetFullPath($Path)
     $allowedParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
@@ -522,7 +544,10 @@ function Test-JoblitPortAvailable {
     $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $Port)
     try { $listener.Start(); return $true }
     catch { return $false }
-    finally { try { $listener.Stop() } catch {} }
+    finally {
+        try { $listener.Stop() }
+        catch { Write-Verbose "Failed to stop the temporary port probe listener: $($_.Exception.Message)" }
+    }
 }
 
 function Get-JoblitPropertyValue {
@@ -711,16 +736,15 @@ function Get-JoblitFailureCategory {
 }
 
 function Invoke-JoblitHermesInstall {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)][string] $PackagePath,
         [Parameter(Mandatory)][ValidatePattern('^joblit-[a-f0-9]{16,64}$')][string] $ProfileName,
         [ValidateRange(1024,65535)][int] $Port = 8642,
         [string] $ExpectedArchiveSha256,
         [switch] $Production,
-        [switch] $StartOnLogin = $true,
-        [switch] $ForceConfigUpdate,
-        [switch] $WhatIf
+        [bool] $StartOnLogin = $true,
+        [switch] $ForceConfigUpdate
     )
     $extractedRoot = $null
     $apiKey = $null
@@ -795,7 +819,7 @@ function Invoke-JoblitHermesInstall {
         }
         Write-JoblitStatus -State 'InspectExistingProfile' -Status 'Passed' -Message $(if ($profileExists) { 'Managed Joblit profile found.' } else { 'Fresh isolated profile.' })
 
-        if ($WhatIf) {
+        if (-not $PSCmdlet.ShouldProcess($ProfileName, 'Install or update the verified Joblit Hermes profile')) {
             foreach ($state in @('InstallOrUpdate','ConfigureOAuth','WriteLocalEnv','InstallGateway','Probe')) {
                 Write-JoblitStatus -State $state -Status 'Skipped' -Message 'WhatIf: no user profile, auth, environment, service, or network state changed.'
             }
@@ -915,6 +939,11 @@ function Invoke-JoblitHermesInstall {
 }
 
 function New-JoblitReadinessResult {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute(
+        'PSUseShouldProcessForStateChangingFunctions',
+        '',
+        Justification = 'Creates and returns an in-memory readiness result; it does not mutate system state.'
+    )]
     param([string] $State, [int] $ExitCode, [string] $ProfileName, [string] $Detail)
     return [pscustomobject][ordered]@{
         state = $State

@@ -41,6 +41,7 @@ agent:
             API_SERVER_PORT = '8642'
             API_SERVER_KEY = $script:ApiKey
             API_SERVER_MODEL_NAME = $script:ProfileName
+            API_SERVER_CORS_ORIGINS = '*'
         }
         Write-JoblitEnvFileAtomic -Path (Join-Path $script:ProfileRoot '.env') -Values $values
 
