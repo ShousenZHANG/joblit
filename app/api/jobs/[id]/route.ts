@@ -6,6 +6,7 @@ import type { SessionContext } from "@/lib/server/auth/requireSession";
 import { unauthorizedError } from "@/lib/server/api/errorResponse";
 import { deleteJob } from "@/lib/server/jobs/jobDeleteService";
 import { updateJobStatus } from "@/lib/server/jobs/jobStatusService";
+import { FitMatrixSchema } from "@/lib/shared/schemas/fitMatrix";
 
 export const runtime = "nodejs";
 
@@ -74,14 +75,20 @@ export async function GET(
 
   const job = await prisma.job.findFirst({
     where: { id: parsedParams.data.id, userId },
-    select: { id: true, description: true },
+    select: { id: true, description: true, fitMatrix: true, updatedAt: true },
   });
 
   if (!job) {
     return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   }
 
-  return NextResponse.json({ id: job.id, description: job.description ?? null });
+  const matrix = FitMatrixSchema.safeParse(job.fitMatrix);
+  return NextResponse.json({
+    id: job.id,
+    description: job.description ?? null,
+    fitMatrix: matrix.success ? matrix.data : null,
+    updatedAt: job.updatedAt.toISOString(),
+  });
 }
 
 export async function DELETE(

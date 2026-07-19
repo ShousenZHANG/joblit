@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, type ComponentPropsWithoutRef } from "react";
+import { useEffect, useRef, type ComponentPropsWithoutRef } from "react";
 import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 import {
@@ -13,7 +13,6 @@ import {
   ExternalLink,
   FileText,
   MapPin,
-  ShieldAlert,
   Sparkles,
   Trash2,
   Wifi,
@@ -25,8 +24,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import type { FitMatrix } from "@/lib/shared/schemas/fitMatrix";
 import type { JobItem, JobStatus, CvSource, CoverSource } from "../types";
-import { parseExperienceGate } from "../utils/experienceParser";
+import { FitAssessmentCard } from "./FitAssessmentCard";
 
 // Markdown body (react-markdown + rehype-highlight + highlight.js CSS) is the
 // jobs-list's heaviest dep cluster — load it as a dynamic chunk only when a
@@ -56,6 +56,7 @@ interface JobDetailPanelProps {
   panelProps?: Omit<ComponentPropsWithoutRef<"div">, "className">;
   selectedJob: JobItem | null;
   selectedDescription: string;
+  selectedFitMatrix: FitMatrix | null;
   detailError: string | null;
   detailLoading: boolean;
   showLoadingOverlay: boolean;
@@ -90,6 +91,7 @@ export function JobDetailPanel({
   panelProps,
   selectedJob,
   selectedDescription,
+  selectedFitMatrix,
   detailError,
   detailLoading,
   showLoadingOverlay,
@@ -129,11 +131,6 @@ export function JobDetailPanel({
   const isAppliedSelected = selectedJob?.status === "APPLIED";
   const listOpacityClass = showLoadingOverlay ? "opacity-70" : "opacity-100";
   const actionHeight = isAppliedSelected ? "h-9" : "h-10";
-
-  const experienceSignals = useMemo(
-    () => parseExperienceGate(selectedDescription),
-    [selectedDescription],
-  );
 
   return (
     <div
@@ -334,29 +331,13 @@ export function JobDetailPanel({
                 </span>
                 <span className="h-px flex-1 bg-gradient-to-r from-border to-transparent" aria-hidden />
               </div>
-              {experienceSignals.length ? (
-                <div className="rounded-2xl border border-border/60 bg-gradient-to-br from-muted/50 to-muted/20 p-3.5 shadow-[0_10px_30px_-26px_rgba(15,23,42,0.5)]">
-                  <div className="mb-2.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground/90">
-                    <ShieldAlert className="h-3.5 w-3.5 text-amber-500" aria-hidden />
-                    Experience gate
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {experienceSignals.map((signal) => (
-                      <span
-                        key={signal.key}
-                        className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${
-                          signal.isRequired
-                            ? "border-destructive/40 bg-destructive/10 text-destructive"
-                            : "border-[theme(colors.tier-fair-ring)] bg-[theme(colors.tier-fair-bg)] text-[theme(colors.tier-fair-fg)]"
-                        }`}
-                        title={signal.evidence}
-                      >
-                        {signal.label}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
+              <FitAssessmentCard
+                description={selectedDescription}
+                score={selectedJob.fitScore}
+                verdict={selectedJob.fitVerdict}
+                eligibility={selectedJob.fitEligibility}
+                matrix={selectedFitMatrix}
+              />
               {detailError ? (
                 <div className="flex flex-wrap items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
                   <span>{detailError}</span>

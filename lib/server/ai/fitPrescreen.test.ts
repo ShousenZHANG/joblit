@@ -16,6 +16,8 @@ describe("deterministic fit prescreen", () => {
     if (outcome.decision === "poor") {
       expect(outcome.result.score).toBeLessThan(25);
       expect(outcome.result.verdict).toBe("POOR");
+      expect(outcome.result.criticalSkills).toContain("Java");
+      expect(outcome.result.missingSkills).toContain("Spring Boot");
     }
   });
 
@@ -38,5 +40,38 @@ describe("deterministic fit prescreen", () => {
         resumeText: RESUME_TEXT,
       }).decision,
     ).toBe("score_with_ai");
+  });
+
+  it("does not dilute core fit with benefits or optional technology", () => {
+    const outcome = prescreenJobFit({
+      jobDescription: `
+        Requirements:
+        Build services with TypeScript, Node.js and PostgreSQL.
+        Nice to have:
+        Java, Spring Boot, Scala, Kafka, Terraform and Jenkins.
+        Benefits:
+        AWS credits, Kubernetes training and GitHub access.
+      `,
+      resumeText: RESUME_TEXT,
+    });
+    expect(outcome.decision).toBe("score_with_ai");
+  });
+
+  it("uses safe framework implications for candidate evidence", () => {
+    const outcome = prescreenJobFit({
+      jobDescription:
+        "Must have JavaScript, React, Kubernetes, AWS and PostgreSQL experience.",
+      resumeText:
+        "Delivered TypeScript, React Native, Amazon EKS and PostgreSQL systems.",
+    });
+    expect(outcome.decision).toBe("score_with_ai");
+  });
+
+  it("does not auto-reject on fewer than three decisive technical requirements", () => {
+    const outcome = prescreenJobFit({
+      jobDescription: "Must have Java and Spring Boot experience.",
+      resumeText: RESUME_TEXT,
+    });
+    expect(outcome.decision).toBe("score_with_ai");
   });
 });

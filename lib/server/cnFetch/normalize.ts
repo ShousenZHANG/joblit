@@ -13,9 +13,7 @@ import type { RawCnJob } from "./types";
 // Pure TypeScript — no I/O. Safe to unit-test.
 
 interface NormalizeOptions {
-  /** User's query keywords. Used to RANK (matched first), never to hard-filter:
-   *  Nowcoder's recommended feed is small (~40), so emptying it on a keyword
-   *  reads as "nothing found". Matches float to the top; the rest follow. */
+  /** User's role queries. A title must match one when supplied. */
   queries?: string[];
   /** User's exclude keywords. Any match drops the job (hard filter). */
   excludeKeywords?: string[];
@@ -32,12 +30,58 @@ export interface NormalizedCnJob {
   jobType: string | null;
   jobLevel: string | null;
   description: string | null;
+  listingDate: string | null;
   market: "CN";
   source: RawCnJob["source"];
 }
 
 const MAX_FIELD_LEN = 200;
 const MAX_DESC_LEN = 8000;
+const ROLE_TOKENS = new Set([
+  "architect",
+  "developer",
+  "development",
+  "engineer",
+  "engineering",
+  "programmer",
+]);
+const ROLE_NOISE_TOKENS = new Set([
+  "entry",
+  "graduate",
+  "head",
+  "junior",
+  "lead",
+  "level",
+  "mid",
+  "principal",
+  "senior",
+  "staff",
+]);
+const CJK_ROLE_TERMS = [
+  "开发工程师",
+  "软件工程师",
+  "开发人员",
+  "技术专家",
+  "工程师",
+  "程序员",
+  "架构师",
+  "开发者",
+  "设计师",
+  "分析师",
+  "经理",
+  "顾问",
+  "专员",
+  "开发",
+] as const;
+const CJK_ROLE_NOISE_TERMS = [
+  "高级",
+  "资深",
+  "初级",
+  "中级",
+  "首席",
+  "应届",
+  "校招",
+] as const;
 
 // Common Chinese job-title suffixes. Chinese recruitment posts almost
 // always use short-form titles ("前端", "后端", "全栈") inside bracket
@@ -85,16 +129,95 @@ function tightenString(
   return trimmed.length > max ? trimmed.slice(0, max) : trimmed;
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function containsTerm(haystack: string, rawNeedle: string): boolean {
+  const needle = rawNeedle.normalize("NFKC").trim().toLowerCase();
+  if (!needle) return false;
+  const body = haystack.normalize("NFKC").toLowerCase();
+
+  if (/[\u3400-\u9fff]/u.test(needle)) return body.includes(needle);
+
+  const phrase = needle
+    .split(/[\s\-_/.]+/)
+    .filter(Boolean)
+    .map(escapeRegExp)
+    .join("[\\s\\-_/.]+");
+  if (!phrase) return false;
+  return new RegExp(`(?:^|[^a-z0-9])${phrase}(?=$|[^a-z0-9])`, "iu").test(
+    body,
+  );
+}
+
 function containsAny(
   haystack: string,
   needles: readonly string[],
 ): boolean {
   if (needles.length === 0) return false;
-  const lowerHay = haystack.toLowerCase();
-  return needles.some((n) => {
-    const needle = n.trim().toLowerCase();
-    return needle.length > 0 && lowerHay.includes(needle);
+  return needles.some((needle) => containsTerm(haystack, needle));
+}
+
+function normalizeRoleText(value: string): string {
+  return value
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/\bfront[\s-]*end\b/gu, "frontend")
+    .replace(/\bback[\s-]*end\b/gu, "backend")
+    .replace(/\bfull[\s-]*stack\b/gu, "fullstack")
+    .replace(/\bml\b/gu, "machine learning");
+}
+
+function roleTokens(value: string): string[] {
+  return normalizeRoleText(value).match(/[a-z][a-z0-9+#.]*/gu) ?? [];
+}
+
+function hasRoleMarker(value: string): boolean {
+  const normalized = normalizeRoleText(value);
+  return (
+    roleTokens(normalized).some((token) => ROLE_TOKENS.has(token)) ||
+    CJK_ROLE_TERMS.some((term) => normalized.includes(term))
+  );
+}
+
+function asciiRoleSignals(value: string): string[] {
+  return roleTokens(value).filter(
+    (token) => !ROLE_TOKENS.has(token) && !ROLE_NOISE_TOKENS.has(token),
+  );
+}
+
+function cjkRoleSignals(value: string): string[] {
+  let normalized = normalizeRoleText(value).replace(
+    /[a-z][a-z0-9+#.]*/gu,
+    " ",
+  );
+  for (const term of [...CJK_ROLE_TERMS, ...CJK_ROLE_NOISE_TERMS]) {
+    normalized = normalized.replaceAll(term, " ");
+  }
+  return normalized.match(/[\u3400-\u9fff]+/gu) ?? [];
+}
+
+function isTitleRelevant(title: string, queries: readonly string[]): boolean {
+  return queries.some((query) => {
+    if (containsTerm(title, query)) return true;
+    if (!hasRoleMarker(query) || !hasRoleMarker(title)) return false;
+
+    const asciiSignals = asciiRoleSignals(query);
+    const cjkSignals = cjkRoleSignals(query);
+    if (asciiSignals.length === 0 && cjkSignals.length === 0) return false;
+    if (!asciiSignals.every((signal) => containsTerm(title, signal))) {
+      return false;
+    }
+    const normalizedTitle = normalizeRoleText(title);
+    return cjkSignals.every((signal) => normalizedTitle.includes(signal));
   });
+}
+
+function normalizeListingDate(value: string | null | undefined): string | null {
+  if (!value?.trim()) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
 export function normalizeCnJobs(
@@ -110,13 +233,11 @@ export function normalizeCnJobs(
     .filter(Boolean);
 
   const seen = new Set<string>();
-  const matched: NormalizedCnJob[] = []; // keyword hit — ranked first
-  const rest: NormalizedCnJob[] = []; // kept but no keyword hit
+  const matched: NormalizedCnJob[] = [];
 
   for (const r of raw) {
     const canonical = canonicalizeJobUrl(r.jobUrl ?? "");
     if (!canonical) continue;
-    if (seen.has(canonical)) continue;
 
     const title = tightenString(r.title);
     if (!title) continue;
@@ -136,6 +257,8 @@ export function normalizeCnJobs(
       continue;
     }
 
+    if (queries.length > 0 && !isTitleRelevant(title, queries)) continue;
+    if (seen.has(canonical)) continue;
     seen.add(canonical);
     const normalized: NormalizedCnJob = {
       jobUrl: canonical,
@@ -145,20 +268,13 @@ export function normalizeCnJobs(
       jobType: tightenString(r.jobType),
       jobLevel: tightenString(r.jobLevel),
       description,
+      listingDate: normalizeListingDate(r.publishedAt),
       market: "CN",
       source: r.source,
     };
 
-    // Keyword RANKING (not filtering): a hit in title/company/description
-    // floats the row to the top; everything else still ships so the small
-    // recommended feed is never emptied by a keyword.
-    if (queries.length === 0) {
-      matched.push(normalized);
-      continue;
-    }
-    const haystack = `${title} ${company ?? ""} ${description ?? ""}`;
-    (containsAny(haystack, queries) ? matched : rest).push(normalized);
+    matched.push(normalized);
   }
 
-  return [...matched, ...rest];
+  return matched;
 }

@@ -1,4 +1,8 @@
-import { extractSkills } from "@/lib/shared/skillsGazetteer";
+import { analyzeJobTechnicalRequirements } from "@/lib/shared/jdTechnicalAnalysis";
+import {
+  expandSkillSet,
+  extractSkills,
+} from "@/lib/shared/skillsGazetteer";
 import { verdictForScore, type FitScoreResult } from "./fitScoring";
 
 /**
@@ -13,7 +17,14 @@ export const PRESCREEN_POOR_THRESHOLD = 25;
 
 export type PrescreenResult =
   | { decision: "score_with_ai" }
-  | { decision: "poor"; result: Pick<FitScoreResult, "score" | "verdict"> };
+  | {
+      decision: "poor";
+      result: Pick<FitScoreResult, "score" | "verdict"> & {
+        matchedSkills: string[];
+        missingSkills: string[];
+        criticalSkills: string[];
+      };
+    };
 
 export function prescreenJobFit(input: {
   jobDescription: string | null | undefined;
@@ -22,16 +33,46 @@ export function prescreenJobFit(input: {
   const description = input.jobDescription?.trim() ?? "";
   if (!description) return { decision: "score_with_ai" };
 
-  const jdSkills = extractSkills(description);
-  // A JD the gazetteer cannot read is not evidence of a mismatch.
-  if (jdSkills.size < 3) return { decision: "score_with_ai" };
+  const requirements = analyzeJobTechnicalRequirements(description).filter(
+    (requirement) =>
+      requirement.priority === "REQUIRED" ||
+      requirement.priority === "CORE",
+  );
+  // A short or weakly structured JD is not enough evidence for auto-rejection.
+  if (requirements.length < 3) return { decision: "score_with_ai" };
 
-  const resumeSkills = extractSkills(input.resumeText);
-  let overlap = 0;
-  for (const skill of jdSkills) {
-    if (resumeSkills.has(skill)) overlap += 1;
+  const resumeSkills = expandSkillSet(extractSkills(input.resumeText));
+  let matchedWeight = 0;
+  let totalWeight = 0;
+  const matchedSkills: string[] = [];
+  const missingSkills: string[] = [];
+  for (const requirement of requirements) {
+    const weight = requirement.isGate
+      ? 3
+      : requirement.priority === "REQUIRED"
+        ? 2
+        : 1;
+    totalWeight += weight;
+    if (resumeSkills.has(requirement.skill)) {
+      matchedWeight += weight;
+      matchedSkills.push(requirement.skill);
+    } else {
+      missingSkills.push(requirement.skill);
+    }
   }
-  const score = Math.round((overlap / jdSkills.size) * 100);
+  const score =
+    totalWeight > 0 ? Math.round((matchedWeight / totalWeight) * 100) : 0;
   if (score >= PRESCREEN_POOR_THRESHOLD) return { decision: "score_with_ai" };
-  return { decision: "poor", result: { score, verdict: verdictForScore(score) } };
+  return {
+    decision: "poor",
+    result: {
+      score,
+      verdict: verdictForScore(score),
+      matchedSkills,
+      missingSkills,
+      criticalSkills: requirements
+        .filter((requirement) => requirement.isGate)
+        .map((requirement) => requirement.skill),
+    },
+  };
 }

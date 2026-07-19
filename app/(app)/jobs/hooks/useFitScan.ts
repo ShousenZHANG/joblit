@@ -5,6 +5,8 @@ import { useCallback, useRef, useState } from "react";
 import { LocalAiBridgeError, sendLocalAiBridgeRequest } from "@/lib/client/localAiBridge";
 
 const FIT_POLL_MS = 1_500;
+const DEFAULT_LEASE_POLL_MS = 5_000;
+const MAX_LEASE_POLL_MS = 30_000;
 // Backoff between retries of a retryable bridge failure (rate limit, cold
 // service worker, transient not-found while the run is still being created).
 const RETRY_BACKOFF_MS = 8_000;
@@ -27,6 +29,8 @@ export type FitScanState = {
   prescreened: number;
   failed: number;
   remaining: number;
+  /** Pending jobs currently owned by another fresh scan lease. */
+  leased: number;
   error?: string;
 };
 
@@ -38,7 +42,18 @@ const IDLE: FitScanState = {
   prescreened: 0,
   failed: 0,
   remaining: 0,
+  leased: 0,
 };
+
+function nonNegativeInteger(value: unknown, fallback = 0): number {
+  return Number.isInteger(value) && Number(value) >= 0
+    ? Number(value)
+    : fallback;
+}
+
+function waitForLeasePoll(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
 
 async function postJson<T>(url: string, body?: unknown): Promise<T> {
   const response = await fetch(url, {
@@ -52,12 +67,13 @@ async function postJson<T>(url: string, body?: unknown): Promise<T> {
 
 async function importTriageResult(
   jobIds: string[],
+  claimToken: string,
   modelOutput: string,
   promptMeta: Record<string, unknown>,
 ): Promise<number> {
   const json = await postJson<{ scored?: Array<{ jobId: string }> }>(
     "/api/jobs/fit/batch-import",
-    { jobIds, modelOutput, promptMeta },
+    { jobIds, claimToken, modelOutput, promptMeta },
   );
   return json.scored?.length ?? 0;
 }
@@ -70,6 +86,7 @@ async function importTriageResult(
  */
 async function runTriageBatch(
   jobIds: string[],
+  claimToken: string,
   isCancelled: () => boolean,
   retryBackoffMs: number,
 ): Promise<number> {
@@ -91,7 +108,7 @@ async function runTriageBatch(
         );
         started = true;
         if (run.status === "succeeded") {
-          return importTriageResult(jobIds, run.modelOutput, run.promptMeta);
+          return importTriageResult(jobIds, claimToken, run.modelOutput, run.promptMeta);
         }
         if (run.status === "failed") throw new Error(run.error.code);
         continue;
@@ -103,7 +120,7 @@ async function runTriageBatch(
         { timeoutMs: 10_000 },
       );
       if (run.status === "succeeded") {
-        return importTriageResult(jobIds, run.modelOutput, run.promptMeta);
+        return importTriageResult(jobIds, claimToken, run.modelOutput, run.promptMeta);
       }
       if (run.status === "failed") throw new Error(run.error.code);
       if (run.status === "cancelled") throw new Error("cancelled");
@@ -136,8 +153,17 @@ async function runTriageBatch(
  * until none remain. Nothing is kept client-side — a refresh mid-scan loses
  * nothing, and pressing the button again simply resumes from the database.
  */
-export function useFitScan(options: { onJobScored: () => void; retryBackoffMs?: number }) {
+export function useFitScan(options: {
+  onJobScored: () => void;
+  retryBackoffMs?: number;
+  /** Test seam; production never polls a live lease more often than every 5s. */
+  leasePollMinMs?: number;
+}) {
   const retryBackoffMs = options.retryBackoffMs ?? RETRY_BACKOFF_MS;
+  const leasePollMinMs = Math.max(
+    1,
+    Math.floor(options.leasePollMinMs ?? DEFAULT_LEASE_POLL_MS),
+  );
   const [state, setState] = useState<FitScanState>(IDLE);
   const cancelRef = useRef(false);
   const runningRef = useRef(false);
@@ -167,39 +193,104 @@ export function useFitScan(options: { onJobScored: () => void; retryBackoffMs?: 
 
       for (;;) {
         if (cancelRef.current) break;
-        const batch = await postJson<{ jobIds: string[]; remaining: number }>(
+        const batch = await postJson<{
+          jobIds: string[];
+          remaining: number;
+          pendingTotal?: number;
+          leased?: number;
+          retryAfterMs?: number | null;
+          claimToken: string | null;
+        }>(
           "/api/jobs/fit/next-batch",
         );
-        if (batch.jobIds.length === 0) break;
-        setState((current) => ({ ...current, remaining: batch.remaining + batch.jobIds.length }));
+        if (batch.jobIds.length === 0) {
+          // Empty does not necessarily mean done: another tab or a browser
+          // session that just closed may still own fresh leases. Keep this scan
+          // in recovery mode and poll at the server-provided low frequency.
+          const pendingTotal = nonNegativeInteger(
+            batch.pendingTotal,
+            nonNegativeInteger(batch.remaining),
+          );
+          const leased = nonNegativeInteger(batch.leased);
+          if (pendingTotal > 0 || leased > 0) {
+            const requestedDelay = nonNegativeInteger(
+              batch.retryAfterMs,
+              leasePollMinMs,
+            );
+            const waitMs = Math.min(
+              MAX_LEASE_POLL_MS,
+              Math.max(leasePollMinMs, requestedDelay),
+            );
+            setState((current) => ({
+              ...current,
+              remaining: Math.max(pendingTotal, leased),
+              leased,
+            }));
+            await waitForLeasePoll(waitMs);
+            continue;
+          }
+          setState((current) => ({ ...current, remaining: 0, leased: 0 }));
+          break;
+        }
+        if (!batch.claimToken) throw new Error("Scoring batch claim is missing");
+        const remaining = nonNegativeInteger(batch.remaining);
+        const leasedByOtherScans = Math.max(
+          nonNegativeInteger(batch.leased) - batch.jobIds.length,
+          0,
+        );
+        setState((current) => ({
+          ...current,
+          remaining: remaining + batch.jobIds.length,
+          leased: leasedByOtherScans,
+        }));
         try {
-          const scored = await runTriageBatch(batch.jobIds, () => cancelRef.current, retryBackoffMs);
+          const scored = await runTriageBatch(
+            batch.jobIds,
+            batch.claimToken,
+            () => cancelRef.current,
+            retryBackoffMs,
+          );
           const failed = batch.jobIds.length - scored;
           if (failed > 0) {
-            await postJson("/api/jobs/fit/mark-failed", { jobIds: batch.jobIds }).catch(() => undefined);
+            await postJson("/api/jobs/fit/mark-failed", {
+              jobIds: batch.jobIds,
+              claimToken: batch.claimToken,
+            }).catch(() => undefined);
           }
           setState((current) => ({
             ...current,
             scored: current.scored + scored,
             failed: current.failed + failed,
-            remaining: batch.remaining,
+            remaining,
+            leased: leasedByOtherScans,
           }));
           onJobScoredRef.current();
         } catch (error) {
-          if (cancelRef.current) break;
+          if (cancelRef.current) {
+            await postJson("/api/jobs/fit/release-batch", {
+              jobIds: batch.jobIds,
+              claimToken: batch.claimToken,
+            }).catch(() => undefined);
+            break;
+          }
           void error;
           // Terminal batch failure: dequeue so the pump never loops on it.
-          await postJson("/api/jobs/fit/mark-failed", { jobIds: batch.jobIds }).catch(() => undefined);
+          await postJson("/api/jobs/fit/mark-failed", {
+            jobIds: batch.jobIds,
+            claimToken: batch.claimToken,
+          }).catch(() => undefined);
           setState((current) => ({
             ...current,
             failed: current.failed + batch.jobIds.length,
-            remaining: batch.remaining,
+            remaining,
+            leased: leasedByOtherScans,
           }));
         }
       }
       setState((current) => ({
         ...current,
         status: cancelRef.current ? "idle" : "done",
+        leased: 0,
       }));
     } catch (error) {
       setState((current) => ({
@@ -210,7 +301,7 @@ export function useFitScan(options: { onJobScored: () => void; retryBackoffMs?: 
     } finally {
       runningRef.current = false;
     }
-  }, [retryBackoffMs]);
+  }, [leasePollMinMs, retryBackoffMs]);
 
   const stop = useCallback(() => {
     cancelRef.current = true;

@@ -19,7 +19,6 @@ export const BridgeActionSchema = z.enum([
 export type BridgeAction = z.infer<typeof BridgeActionSchema>;
 
 export const LOCAL_AI_MAX_REPAIR_FEEDBACK_CHARS = 1_200;
-// eslint-disable-next-line no-control-regex
 const CONTROL_CHARS_RE = /[\u0000-\u001f\u007f-\u009f]/;
 
 const uuid = z.string().uuid();

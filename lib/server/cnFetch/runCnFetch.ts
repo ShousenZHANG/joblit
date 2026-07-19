@@ -10,7 +10,7 @@ import { normalizeCnJobs, type NormalizedCnJob } from "./normalize";
 interface RunCnFetchOptions {
   /** Sources to include. Only "nowcoder" is supported; defaults to it. */
   sources?: CnSource[];
-  /** User's keyword filter (ranks results in normalize). */
+  /** User's role queries (hard title-relevance gate in normalize). */
   queries?: string[];
   /** User's exclusion filter (applied in normalize). */
   excludeKeywords?: string[];

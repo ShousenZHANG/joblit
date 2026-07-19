@@ -7,7 +7,11 @@ import {
   UnauthorizedError,
   type SessionContext,
 } from "@/lib/server/auth/requireSession";
-import { getFitRunStats, prescreenAllUnscored } from "@/lib/server/jobs/fitRunService";
+import {
+  getFitRunStats,
+  prescreenAllUnscored,
+  resetFailedFitBatches,
+} from "@/lib/server/jobs/fitRunService";
 
 export const runtime = "nodejs";
 
@@ -35,7 +39,8 @@ export async function POST() {
     );
   }
 
+  const retried = await resetFailedFitBatches(userId);
   const { prescreened } = await prescreenAllUnscored(userId);
   const stats = await getFitRunStats(userId);
-  return NextResponse.json({ ...stats, prescreened });
+  return NextResponse.json({ ...stats, prescreened, retried });
 }

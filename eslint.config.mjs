@@ -21,6 +21,7 @@ const eslintConfig = defineConfig([
     // Chrome extension build artifacts (linted via its own pipeline):
     "chrome-extension/dist/**",
     "chrome-extension/coverage/**",
+    "chrome-extension/joblit-extension-*/**",
   ]),
   // Honor the standard underscore-prefix convention for intentionally unused
   // bindings, and the rest-siblings pattern for "omit one field" destructuring.

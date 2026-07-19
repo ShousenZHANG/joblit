@@ -242,11 +242,74 @@ describe("lean application prompt builder (local Hermes)", () => {
     expect(prompt.toLowerCase()).toContain("ignore company intro");
     expect(prompt.toLowerCase()).toContain("state gaps plainly");
     expect(prompt.toLowerCase()).toContain("could honestly defend in an interview");
+    expect(prompt).toContain('"criticality": "GATE"');
+    expect(prompt).toContain('"category": "TECHNICAL"');
+    expect(prompt).toContain('"jdEvidence"');
+    expect(prompt).toContain('"candidateEvidence"');
+    expect(prompt.toLowerCase()).toContain("multiple mandatory gaps");
+    expect(prompt.toLowerCase()).toContain("missing candidate evidence means risk, not block");
     expect(prompt.match(/<\/candidate-evidence>/g)).toHaveLength(1);
     expect(prompt.match(/<\/job-evidence>/g)).toHaveLength(1);
     // Match stays free of the reasoning-heavy application sections.
     expect(prompt).not.toContain("<self-check>");
     expect(prompt).not.toContain("<coverage-analysis>");
+  });
+
+  it("preserves decisive technology found after the lean JD excerpt", () => {
+    const prompt = buildLeanMatchUserPrompt({
+      rules,
+      candidate,
+      job: {
+        title: "Platform Engineer",
+        company: "Acme",
+        description:
+          `${"Company background and culture. ".repeat(100)}\n` +
+          "Must-haves: C#, .NET, Kubernetes on AWS EKS and Terraform.",
+      },
+    });
+    const jobEvidence =
+      prompt.match(/<job-evidence>\n([\s\S]*?)\n<\/job-evidence>/)?.[1] ?? "";
+    expect(jobEvidence).toContain('"decisiveTechnicalSignals"');
+    expect(jobEvidence).toContain('"skill": "C#"');
+    expect(jobEvidence).toContain('"skill": "Amazon EKS"');
+    expect(jobEvidence).toContain('"isGate": true');
+  });
+
+  it("preserves structural gates found after both lean JD excerpts", () => {
+    const description =
+      `${"Company background and culture. ".repeat(100)}\n` +
+      "Minimum requirements: Applicants must have unrestricted Australian work rights, hold NV1 security clearance, possess a valid driver's licence, be based in Sydney, and have at least 5 years of professional experience.";
+    const matchPrompt = buildLeanMatchUserPrompt({
+      rules,
+      candidate,
+      job: {
+        title: "Platform Engineer",
+        company: "Acme",
+        description,
+      },
+    });
+    const triagePrompt = buildLeanTriageUserPrompt({
+      rules,
+      candidate,
+      jobs: [
+        {
+          jobId: "11111111-1111-4111-8111-111111111111",
+          title: "Platform Engineer",
+          company: "Acme",
+          description,
+        },
+      ],
+    });
+
+    for (const prompt of [matchPrompt, triagePrompt]) {
+      expect(prompt).toContain('"structuralGates"');
+      expect(prompt).toContain('"kind": "WORK_RIGHTS"');
+      expect(prompt).toContain('"kind": "CLEARANCE"');
+      expect(prompt).toContain('"kind": "LICENCE"');
+      expect(prompt).toContain('"kind": "LOCATION"');
+      expect(prompt).toContain('"kind": "EXPERIENCE"');
+      expect(prompt).toContain("unrestricted Australian work rights");
+    }
   });
 
   it("builds a bounded batch triage prompt with truncated JDs and honest scoring bands", () => {
@@ -263,6 +326,8 @@ describe("lean application prompt builder (local Hermes)", () => {
     expect(prompt).toContain('"matchScore"');
     expect(prompt.toLowerCase()).toContain("one json array");
     expect(prompt.toLowerCase()).toContain("do not inflate borderline jobs");
+    expect(prompt).toContain('"decisiveTechnicalSignals"');
+    expect(prompt.toLowerCase()).toContain("confirmed hard gate gap cannot score above 29");
     // JD truncated to the triage budget.
     const jobsBlock = prompt.match(/<jobs>\n([\s\S]*?)\n<\/jobs>/)?.[1] ?? "";
     expect(jobsBlock.length).toBeLessThan(4_000);

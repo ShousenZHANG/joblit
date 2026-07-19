@@ -2,7 +2,7 @@
 
 Install this skill so Cursor’s AI understands the `joblit` codebase (structure, APIs, conventions) when contributing or debugging.
 
-Repo: `https://github.com/ShousenZHANG/joblit.git`
+Repo: `https://github.com/ShousenZHANG/jobflow-web.git`
 
 ## Install
 
@@ -25,7 +25,7 @@ Copy-Item -Recurse -Force "skills\joblit" "$env:USERPROFILE\.cursor\skills\jobli
 ### Option B — skills CLI
 
 ```bash
-npx skills add https://github.com/ShousenZHANG/joblit.git --skill joblit -y -g
+npx skills add https://github.com/ShousenZHANG/jobflow-web.git --skill joblit -y -g
 ```
 
 ## Contents

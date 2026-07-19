@@ -58,7 +58,7 @@ describe("runCnFetch", () => {
     });
   });
 
-  it("ranks keyword matches first but keeps the full feed (never empties)", async () => {
+  it("keeps only title-relevant jobs when queries are supplied", async () => {
     const result = await runCnFetch({
       queries: ["前端"],
       adapters: {
@@ -72,8 +72,7 @@ describe("runCnFetch", () => {
         }),
       },
     });
-    // Both kept (small feed never emptied); the keyword match floats to the top.
-    expect(result.jobs).toHaveLength(2);
+    expect(result.jobs).toHaveLength(1);
     expect(result.jobs[0].title).toBe("前端工程师");
   });
 

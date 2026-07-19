@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { SKILLS_GAZETTEER, extractSkills } from "./skillsGazetteer";
+import {
+  SKILLS_GAZETTEER,
+  expandSkillSet,
+  extractSkillMentions,
+  extractSkills,
+} from "./skillsGazetteer";
 
 describe("SKILLS_GAZETTEER", () => {
   it("has no duplicate canonical names", () => {
@@ -87,6 +92,60 @@ describe("extractSkills", () => {
     );
   });
 
+  it("matches punctuation-heavy names without leaking into substrings", () => {
+    expect(extractSkills("Required: C++, C#, .NET 8 and ASP.NET Core")).toEqual(
+      new Set(["C++", "C#", ".NET", "ASP.NET"]),
+    );
+    expect(extractSkills("Google engineering")).not.toContain("Go");
+    expect(extractSkills("Go engineering")).toContain("Go");
+  });
+
+  it("requires technical context for ambiguous Go and Spring words", () => {
+    expect(
+      extractSkills(
+        "Candidates must go onsite this spring for the Spring 2026 graduate program.",
+      ),
+    ).not.toContain("Go");
+    expect(
+      extractSkills(
+        "Candidates must go onsite this spring for the Spring 2026 graduate program.",
+      ),
+    ).not.toContain("Spring");
+    expect(
+      extractSkills("Prior experience in spring internships is welcome."),
+    ).not.toContain("Spring");
+
+    expect(
+      extractSkills(
+        "Experience with Go programming and Java/Spring MVC services.",
+      ),
+    ).toEqual(new Set(["Go", "Java", "Spring"]));
+  });
+
+  it("keeps compound framework names distinct", () => {
+    expect(extractSkills("React Native mobile delivery")).toEqual(
+      new Set(["React Native"]),
+    );
+    expect(extractSkills("Spring Boot APIs")).toEqual(
+      new Set(["Spring Boot"]),
+    );
+  });
+
+  it("recognises managed-cloud service aliases", () => {
+    expect(
+      extractSkills("Operate EKS, EC2, RDS, S3 and CloudFormation on AWS"),
+    ).toEqual(
+      new Set([
+        "Amazon EKS",
+        "Amazon EC2",
+        "Amazon RDS",
+        "Amazon S3",
+        "CloudFormation",
+        "AWS",
+      ]),
+    );
+  });
+
   it("matches longer aliases before shorter ones (e.g. Node.js before node)", () => {
     // Only Node.js entry has these aliases; there's no separate "Node" entry.
     // This asserts that "Node.js" phrase gets picked up instead of silently
@@ -99,6 +158,21 @@ describe("extractSkills", () => {
     const second = extractSkills("Python engineer");
     expect(first).toEqual(new Set(["React"]));
     expect(second).toEqual(new Set(["Python"]));
+  });
+
+  it("returns source positions and expands only safe one-way implications", () => {
+    const mentions = extractSkillMentions("Ship services on EKS with TypeScript");
+    expect(mentions.map((mention) => mention.name)).toEqual([
+      "Amazon EKS",
+      "TypeScript",
+    ]);
+    expect(mentions[0]?.index).toBe(17);
+
+    const expanded = expandSkillSet(mentions.map((mention) => mention.name));
+    expect(expanded).toEqual(
+      new Set(["Amazon EKS", "TypeScript", "Kubernetes", "AWS", "JavaScript"]),
+    );
+    expect(expandSkillSet(["Kubernetes"])).not.toContain("Amazon EKS");
   });
 
   it("extracts skills from a realistic JD paragraph", () => {

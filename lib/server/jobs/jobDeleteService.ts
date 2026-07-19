@@ -15,6 +15,53 @@ type BatchDeleteResult = {
   blobCleanup: { attempted: number; deleted: number; failed: number };
 };
 
+type BlobCleanupResult = {
+  attempted: number;
+  deleted: number;
+  failed: number;
+};
+
+async function cleanupArtifacts(artifactUrls: string[]): Promise<BlobCleanupResult> {
+  const urls = Array.from(
+    new Set(artifactUrls.filter((value) => value.trim().length > 0)),
+  );
+  const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+  if (urls.length === 0) {
+    return { attempted: 0, deleted: 0, failed: 0 };
+  }
+  if (!blobToken) {
+    // Surface deployment misconfiguration instead of reporting a clean
+    // no-op while user artifacts remain in storage.
+    return { attempted: urls.length, deleted: 0, failed: urls.length };
+  }
+
+  // @vercel/blob accepts an array. One request is materially faster than up to
+  // four requests per application (and hundreds during a batch delete).
+  try {
+    await del(urls, { token: blobToken });
+    return { attempted: urls.length, deleted: urls.length, failed: 0 };
+  } catch {
+    // A bulk request can fail because of one malformed/missing object. Retry
+    // individually in bounded waves so healthy artifacts are still removed
+    // without creating an unbounded burst against Blob.
+    let deleted = 0;
+    const fallbackChunkSize = 20;
+    for (let index = 0; index < urls.length; index += fallbackChunkSize) {
+      const results = await Promise.allSettled(
+        urls
+          .slice(index, index + fallbackChunkSize)
+          .map((url) => del(url, { token: blobToken })),
+      );
+      deleted += results.filter((result) => result.status === "fulfilled").length;
+    }
+    return {
+      attempted: urls.length,
+      deleted,
+      failed: urls.length - deleted,
+    };
+  }
+}
+
 export async function deleteJob(
   userId: string,
   jobId: string,
@@ -39,15 +86,21 @@ export async function deleteJob(
   });
 
   const canonicalJobUrl = canonicalizeJobUrl(job.jobUrl);
-  await prisma.$transaction([
+  const transactionResult = await prisma.$transaction([
     prisma.deletedJobUrl.upsert({
       where: { userId_jobUrl: { userId, jobUrl: canonicalJobUrl } },
       update: {},
       create: { userId, jobUrl: canonicalJobUrl },
     }),
     prisma.application.deleteMany({ where: { userId, jobId: job.id } }),
-    prisma.job.delete({ where: { id: job.id } }),
+    // deleteMany makes a raced second DELETE idempotent and keeps ownership in
+    // the write predicate. job.delete({ id }) could throw P2025 after lookup.
+    prisma.job.deleteMany({ where: { id: job.id, userId } }),
   ]);
+  const deletedJob = transactionResult[2];
+  if (!("count" in deletedJob) || deletedJob.count === 0) {
+    return { alreadyDeleted: true };
+  }
 
   const artifactUrls = Array.from(
     new Set(
@@ -60,24 +113,9 @@ export async function deleteJob(
     ),
   );
 
-  let blobCleanupFailed = 0;
-  let blobCleanupDeleted = 0;
-  const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
-  if (blobToken && artifactUrls.length > 0) {
-    const cleanup = await Promise.allSettled(
-      artifactUrls.map((url) => del(url, { token: blobToken })),
-    );
-    blobCleanupDeleted = cleanup.filter((r) => r.status === "fulfilled").length;
-    blobCleanupFailed = cleanup.length - blobCleanupDeleted;
-  }
-
   return {
     alreadyDeleted: false,
-    blobCleanup: {
-      attempted: artifactUrls.length,
-      deleted: blobCleanupDeleted,
-      failed: blobCleanupFailed,
-    },
+    blobCleanup: await cleanupArtifacts(artifactUrls),
   };
 }
 
@@ -85,13 +123,14 @@ export async function batchDeleteJobs(
   userId: string,
   jobIds: string[],
 ): Promise<BatchDeleteResult> {
+  const uniqueJobIds = Array.from(new Set(jobIds));
   const jobs = await prisma.job.findMany({
-    where: { id: { in: jobIds }, userId },
+    where: { id: { in: uniqueJobIds }, userId },
     select: { id: true, jobUrl: true },
   });
 
   if (jobs.length === 0) {
-    return { deleted: 0, notFound: jobIds.length, blobCleanup: { attempted: 0, deleted: 0, failed: 0 } };
+    return { deleted: 0, notFound: uniqueJobIds.length, blobCleanup: { attempted: 0, deleted: 0, failed: 0 } };
   }
 
   const foundIds = jobs.map((j) => j.id);
@@ -112,7 +151,7 @@ export async function batchDeleteJobs(
   // Per-batch query count drops from (N + 2) to 3, which keeps the whole
   // transaction comfortably inside Neon's per-statement budget even when
   // a chunk arrives at the absolute MAX_BATCH_SIZE.
-  await prisma.$transaction([
+  const transactionResult = await prisma.$transaction([
     prisma.deletedJobUrl.createMany({
       data: canonicalUrls.map((url) => ({ userId, jobUrl: url })),
       skipDuplicates: true,
@@ -120,6 +159,8 @@ export async function batchDeleteJobs(
     prisma.application.deleteMany({ where: { userId, jobId: { in: foundIds } } }),
     prisma.job.deleteMany({ where: { id: { in: foundIds }, userId } }),
   ]);
+  const deletedJobs = transactionResult[2];
+  const deletedCount = "count" in deletedJobs ? deletedJobs.count : 0;
 
   const artifactUrls = Array.from(
     new Set(
@@ -130,24 +171,9 @@ export async function batchDeleteJobs(
     ),
   );
 
-  let blobCleanupFailed = 0;
-  let blobCleanupDeleted = 0;
-  const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
-  if (blobToken && artifactUrls.length > 0) {
-    const cleanup = await Promise.allSettled(
-      artifactUrls.map((url) => del(url, { token: blobToken })),
-    );
-    blobCleanupDeleted = cleanup.filter((r) => r.status === "fulfilled").length;
-    blobCleanupFailed = cleanup.length - blobCleanupDeleted;
-  }
-
   return {
-    deleted: foundIds.length,
-    notFound: jobIds.length - foundIds.length,
-    blobCleanup: {
-      attempted: artifactUrls.length,
-      deleted: blobCleanupDeleted,
-      failed: blobCleanupFailed,
-    },
+    deleted: deletedCount,
+    notFound: uniqueJobIds.length - deletedCount,
+    blobCleanup: await cleanupArtifacts(artifactUrls),
   };
 }

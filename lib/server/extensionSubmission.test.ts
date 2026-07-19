@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockCreate = vi.fn();
+const mockJobFindFirst = vi.fn();
 const mockFindMany = vi.fn();
 const mockCount = vi.fn();
 const mockUpsert = vi.fn();
@@ -12,6 +13,9 @@ const mockRuleFindMany = vi.fn();
 
 vi.mock("@/lib/server/prisma", () => ({
   prisma: {
+    job: {
+      findFirst: (...args: unknown[]) => mockJobFindFirst(...args),
+    },
     formSubmission: {
       create: (...args: unknown[]) => mockCreate(...args),
       findMany: (...args: unknown[]) => mockFindMany(...args),
@@ -76,6 +80,45 @@ describe("createFormSubmission", () => {
     });
 
     expect(mockCreate.mock.calls[0][0].data.jobId).toBeNull();
+  });
+
+  it("links a submission only to a job owned by the same user", async () => {
+    const jobId = "11111111-1111-4111-8111-111111111111";
+    mockJobFindFirst.mockResolvedValue({ id: jobId });
+    mockCreate.mockResolvedValue({ id: "sub-3" });
+
+    await createFormSubmission({
+      userId: "user-1",
+      jobId,
+      pageUrl: "https://example.com/apply",
+      pageDomain: "example.com",
+      formSignature: "owned-job",
+      fieldValues: {},
+      fieldMappings: {},
+    });
+
+    expect(mockJobFindFirst).toHaveBeenCalledWith({
+      where: { id: jobId, userId: "user-1" },
+      select: { id: true },
+    });
+    expect(mockCreate.mock.calls[0][0].data.jobId).toBe(jobId);
+  });
+
+  it("rejects a job owned by another user", async () => {
+    mockJobFindFirst.mockResolvedValue(null);
+
+    await expect(
+      createFormSubmission({
+        userId: "user-1",
+        jobId: "22222222-2222-4222-8222-222222222222",
+        pageUrl: "https://example.com/apply",
+        pageDomain: "example.com",
+        formSignature: "foreign-job",
+        fieldValues: {},
+        fieldMappings: {},
+      }),
+    ).rejects.toMatchObject({ name: "SubmissionJobAccessError" });
+    expect(mockCreate).not.toHaveBeenCalled();
   });
 });
 

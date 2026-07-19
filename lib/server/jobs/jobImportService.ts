@@ -8,23 +8,23 @@ import { canonicalizeJobUrl } from "@/lib/shared/canonicalizeJobUrl";
 // field names so a single schema serves both producers.
 export const ImportJobItemSchema = z
   .object({
-    job_url: z.string().url().optional(),
-    jobUrl: z.string().url().optional(),
-    title: z.string().min(1),
-    company: z.string().optional().nullable(),
-    location: z.string().optional().nullable(),
-    job_type: z.string().optional().nullable(),
-    jobType: z.string().optional().nullable(),
-    job_level: z.string().optional().nullable(),
-    jobLevel: z.string().optional().nullable(),
-    description: z.string().optional().nullable(),
-    salary: z.string().optional().nullable(),
-    work_arrangement: z.string().optional().nullable(),
-    workArrangement: z.string().optional().nullable(),
-    listing_date: z.string().optional().nullable(),
-    listingDate: z.string().optional().nullable(),
-    market: z.string().optional().default("AU"),
-    site: z.string().optional().nullable(),
+    job_url: z.string().trim().max(2048).url().optional(),
+    jobUrl: z.string().trim().max(2048).url().optional(),
+    title: z.string().trim().min(2).max(240),
+    company: z.string().trim().max(240).optional().nullable(),
+    location: z.string().trim().max(240).optional().nullable(),
+    job_type: z.string().trim().max(80).optional().nullable(),
+    jobType: z.string().trim().max(80).optional().nullable(),
+    job_level: z.string().trim().max(80).optional().nullable(),
+    jobLevel: z.string().trim().max(80).optional().nullable(),
+    description: z.string().trim().max(60_000).optional().nullable(),
+    salary: z.string().trim().max(240).optional().nullable(),
+    work_arrangement: z.string().trim().max(80).optional().nullable(),
+    workArrangement: z.string().trim().max(80).optional().nullable(),
+    listing_date: z.string().trim().max(80).optional().nullable(),
+    listingDate: z.string().trim().max(80).optional().nullable(),
+    market: z.enum(["AU", "CN"]).optional().default("AU"),
+    site: z.string().trim().max(120).optional().nullable(),
   })
   .passthrough();
 
@@ -36,6 +36,11 @@ interface ImportJobsResult {
 }
 
 const BATCH_SIZE = 200;
+
+function optionalText(value: string | null | undefined): string | null {
+  const normalized = value?.trim();
+  return normalized || null;
+}
 
 /**
  * Normalise → tombstone-filter → dedupe → atomic batch insert for one user.
@@ -69,13 +74,15 @@ export async function importJobsForUser({
       return {
         jobUrl,
         title,
-        company: it.company ?? null,
-        location: it.location ?? null,
-        jobType: it.jobType ?? it.job_type ?? null,
-        jobLevel: it.jobLevel ?? it.job_level ?? null,
-        description: it.description ?? null,
-        salary: it.salary ?? null,
-        workArrangement: it.workArrangement ?? it.work_arrangement ?? null,
+        company: optionalText(it.company),
+        location: optionalText(it.location),
+        jobType: optionalText(it.jobType) ?? optionalText(it.job_type),
+        jobLevel: optionalText(it.jobLevel) ?? optionalText(it.job_level),
+        description: optionalText(it.description),
+        salary: optionalText(it.salary),
+        workArrangement:
+          optionalText(it.workArrangement) ??
+          optionalText(it.work_arrangement),
         listingDate,
         market: it.market ?? "AU",
       };

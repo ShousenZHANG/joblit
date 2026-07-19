@@ -760,7 +760,7 @@ describe("JobsClient", () => {
     expect(quote.closest("blockquote")).toHaveClass("border-l-2");
   });
 
-  it("shows experience gate chips for year-limit requirements in JD", async () => {
+  it("shows screening-gate chips for year-limit requirements in JD", async () => {
     const jd =
       "Requirements: Minimum of 5 years of experience in software engineering required. " +
       "Nice to have: 3+ years in React.";
@@ -791,7 +791,7 @@ describe("JobsClient", () => {
     vi.stubGlobal("fetch", mockFetch);
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
-    expect(await screen.findByText("Experience gate")).toBeInTheDocument();
+    expect(await screen.findByText("Screening gates")).toBeInTheDocument();
     expect(await screen.findByText("Required: 5+ years")).toBeInTheDocument();
     expect(await screen.findByText("Preferred: 3+ years")).toBeInTheDocument();
   });
@@ -832,6 +832,74 @@ describe("JobsClient", () => {
 
     const actionRows = await screen.findAllByTestId("job-primary-actions");
     expect(actionRows[0]).toHaveClass("grid", "grid-cols-1", "sm:grid-cols-2");
+  });
+
+  it("surfaces a bulk-ignore HTTP failure instead of reporting that no jobs qualify", async () => {
+    const user = userEvent.setup();
+    const mockFetch = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url === "/api/jobs/bulk-ignore" && init?.method === "POST") {
+        return new Response(JSON.stringify({ error: "Too many requests" }), {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.startsWith("/api/jobs?")) {
+        return new Response(
+          JSON.stringify({ items: [baseJob], nextCursor: null, totalCount: 1 }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.startsWith("/api/jobs/")) {
+        return new Response(JSON.stringify({ id: baseJob.id, description: "desc" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
+    await user.click(await screen.findByRole("button", { name: /ignore low fit/i }));
+
+    expect(await screen.findByText("Could not update jobs. Try again.")).toBeInTheDocument();
+    expect(screen.queryByText("No scored low-fit jobs to ignore.")).not.toBeInTheDocument();
+  });
+
+  it("uses an accessible in-app confirmation for bulk-ignore", async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const mockFetch = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url === "/api/jobs/bulk-ignore" && init?.method === "POST") {
+        return new Response(JSON.stringify({ count: 2 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.startsWith("/api/jobs?")) {
+        return new Response(
+          JSON.stringify({ items: [baseJob], nextCursor: null, totalCount: 1 }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.startsWith("/api/jobs/")) {
+        return new Response(JSON.stringify({ id: baseJob.id, description: "desc" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
+    await user.click(await screen.findByRole("button", { name: /ignore low fit/i }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText(/move 2 low-fit jobs to rejected/i)).toBeInTheDocument();
+    expect(confirmSpy).not.toHaveBeenCalled();
   });
 
   it("keeps deleted job hidden without triggering an unnecessary refetch", async () => {
@@ -1846,6 +1914,50 @@ describe("JobsClient", () => {
       expect(screen.getByText("Select all")).toBeInTheDocument();
     });
 
+    it("select all includes only rows visible after low-fit hiding", async () => {
+      const user = userEvent.setup();
+      const lowFit = { ...jobA, fitScore: 20 };
+      const highFit = { ...jobB, fitScore: 82 };
+      const unscored = { ...jobC, fitScore: null };
+      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.startsWith("/api/jobs?")) {
+          return new Response(
+            JSON.stringify({
+              items: [lowFit, highFit, unscored],
+              nextCursor: null,
+              totalCount: 3,
+              facets: { jobLevels: ["Mid"] },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (url.startsWith("/api/jobs/")) {
+          return new Response(JSON.stringify({ id: jobA.id, description: "desc" }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
+      }));
+
+      renderWithClient(
+        <JobsClient initialItems={[lowFit, highFit, unscored]} initialCursor={null} />,
+      );
+      await waitForJobsRendered();
+      await user.click(screen.getByRole("button", { name: /hide low fit/i }));
+      expect(
+        within(screen.getAllByTestId("jobs-results-scroll")[0]).queryByText(
+          "Alpha Engineer",
+        ),
+      ).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: /enter selection mode/i }));
+      await user.click(screen.getByRole("button", { name: /select all/i }));
+
+      expect(screen.getByText("2 selected")).toBeInTheDocument();
+    });
+
     it("batch delete sends a single batch-delete request and removes items from list", async () => {
       const user = userEvent.setup();
       const { mockFetch } = setupMultiJobFetch();
@@ -1898,6 +2010,54 @@ describe("JobsClient", () => {
       });
 
       expect(screen.getByRole("button", { name: /enter selection mode/i })).toBeInTheDocument();
+    });
+
+    it("keeps the failed batch selection ready for retry", async () => {
+      const user = userEvent.setup();
+      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.startsWith("/api/jobs/batch-delete") && init?.method === "POST") {
+          return new Response(JSON.stringify({ error: "Temporary delete failure" }), {
+            status: 503,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (url.startsWith("/api/jobs?")) {
+          return new Response(
+            JSON.stringify({
+              items: [jobA, jobB, jobC],
+              nextCursor: null,
+              totalCount: 3,
+              facets: { jobLevels: ["Mid"] },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (url.startsWith("/api/jobs/")) {
+          return new Response(JSON.stringify({ id: jobA.id, description: "desc" }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
+      }));
+
+      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
+      await waitForJobsRendered();
+      await user.click(screen.getByRole("button", { name: /enter selection mode/i }));
+      await user.click(screen.getByRole("button", { name: /select alpha engineer/i }));
+      await user.click(screen.getByRole("button", { name: /select beta developer/i }));
+      await user.click(screen.getByRole("button", { name: /^delete$/i }));
+      await user.click(
+        within(await screen.findByRole("alertdialog")).getByRole("button", {
+          name: /delete 2 jobs/i,
+        }),
+      );
+
+      expect(await screen.findByText("2 selected")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /select alpha engineer/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /select beta developer/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /^delete$/i })).toBeEnabled();
     });
 
     it("exits batch mode when X button is clicked without deleting", async () => {

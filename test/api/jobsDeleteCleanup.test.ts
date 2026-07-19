@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const jobStore = vi.hoisted(() => ({
   findFirst: vi.fn(),
-  delete: vi.fn(),
+  deleteMany: vi.fn(),
 }));
 
 const deletedJobUrlStore = vi.hoisted(() => ({
@@ -53,7 +53,7 @@ describe("jobs delete api cleanup", () => {
   beforeEach(() => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockReset();
     jobStore.findFirst.mockReset();
-    jobStore.delete.mockReset();
+    jobStore.deleteMany.mockReset();
     deletedJobUrlStore.upsert.mockReset();
     applicationStore.findUnique.mockReset();
     applicationStore.deleteMany.mockReset();
@@ -81,7 +81,7 @@ describe("jobs delete api cleanup", () => {
     });
     deletedJobUrlStore.upsert.mockResolvedValueOnce({ id: "deleted-url-1" });
     applicationStore.deleteMany.mockResolvedValueOnce({ count: 1 });
-    jobStore.delete.mockResolvedValueOnce({ id: JOB_ID });
+    jobStore.deleteMany.mockResolvedValueOnce({ count: 1 });
     blobStore.del.mockResolvedValue(undefined);
 
     const res = await DELETE(
@@ -95,7 +95,13 @@ describe("jobs delete api cleanup", () => {
     expect(applicationStore.deleteMany).toHaveBeenCalledWith({
       where: { userId: "user-1", jobId: JOB_ID },
     });
-    expect(blobStore.del).toHaveBeenCalledTimes(2);
+    expect(blobStore.del).toHaveBeenCalledTimes(1);
+    expect(blobStore.del).toHaveBeenCalledWith(
+      [
+        "https://blob.vercel-storage.com/r1.pdf",
+        "https://blob.vercel-storage.com/c1.pdf",
+      ],
+      { token: "token" },
+    );
   });
 });
-

@@ -1,3 +1,6 @@
+import { randomUUID } from "node:crypto";
+
+import type { Prisma } from "@/lib/generated/prisma";
 import { prescreenJobFit } from "@/lib/server/ai/fitPrescreen";
 import { verdictForScore } from "@/lib/server/ai/fitScoring";
 import { buildResumePromptSnapshot } from "@/lib/server/ai/resumePromptSnapshot";
@@ -13,6 +16,59 @@ import { marketStringToResumeLocale } from "@/lib/shared/market";
  */
 
 export const FIT_BATCH_SIZE = 15;
+export const FIT_CLAIM_LEASE_MS = 5 * 60 * 1_000;
+export const FIT_CLAIM_RETRY_AFTER_MS = 5_000;
+
+const FIT_CLAIM_PREFIX = "claim:";
+const FIT_CLAIM_LOCK_NAMESPACE = 0x4a4f4246; // "JOBF"
+
+export function fitClaimSource(claimToken: string): string {
+  return `${FIT_CLAIM_PREFIX}${claimToken}`;
+}
+
+function stableInt32(value: string): number {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash | 0;
+}
+
+function claimableFitWhere(userId: string, staleBefore: Date): Prisma.JobWhereInput {
+  return {
+    userId,
+    status: "NEW",
+    fitScoredAt: null,
+    OR: [
+      { fitSource: null },
+      { fitSource: { not: { startsWith: FIT_CLAIM_PREFIX } } },
+      {
+        fitSource: { startsWith: FIT_CLAIM_PREFIX },
+        updatedAt: { lt: staleBefore },
+      },
+    ],
+  };
+}
+
+function pendingFitWhere(userId: string): Prisma.JobWhereInput {
+  return {
+    userId,
+    status: "NEW",
+    fitScoredAt: null,
+  };
+}
+
+function leasedFitWhere(
+  userId: string,
+  staleBefore: Date,
+): Prisma.JobWhereInput {
+  return {
+    ...pendingFitWhere(userId),
+    fitSource: { startsWith: FIT_CLAIM_PREFIX },
+    updatedAt: { gte: staleBefore },
+  };
+}
 
 export type FitRunStats = {
   /** All NEW jobs for the user. */
@@ -31,13 +87,30 @@ export async function getFitRunStats(userId: string): Promise<FitRunStats> {
   return { total, scored: total - pending, pending };
 }
 
+/** Explicitly starting a new scan retries only terminally failed AI batches. */
+export async function resetFailedFitBatches(userId: string): Promise<number> {
+  const result = await prisma.job.updateMany({
+    where: { userId, status: "NEW", fitSource: "failed" },
+    data: {
+      fitScore: null,
+      fitVerdict: null,
+      fitEligibility: null,
+      fitSource: null,
+      fitScoredAt: null,
+      fitSnapshotHash: null,
+    },
+  });
+  return result.count;
+}
+
 /**
  * Deterministic prescreen across ALL unscored NEW jobs: obvious mismatches are
  * banded POOR without an AI run. Returns how many were dequeued this way.
  */
 export async function prescreenAllUnscored(userId: string): Promise<{ prescreened: number }> {
+  const staleBefore = new Date(Date.now() - FIT_CLAIM_LEASE_MS);
   const jobs = await prisma.job.findMany({
-    where: { userId, status: "NEW", fitScoredAt: null },
+    where: claimableFitWhere(userId, staleBefore),
     select: { id: true, description: true, market: true },
   });
   if (jobs.length === 0) return { prescreened: 0 };
@@ -67,10 +140,13 @@ export async function prescreenAllUnscored(userId: string): Promise<{ prescreene
 
   if (poor.length > 0) {
     const now = new Date();
-    await prisma.$transaction(
+    const writes = await prisma.$transaction(
       poor.map((entry) =>
         prisma.job.updateMany({
-          where: { id: entry.jobId, userId },
+          where: {
+            ...claimableFitWhere(userId, staleBefore),
+            id: entry.jobId,
+          },
           data: {
             fitScore: entry.score,
             fitVerdict: verdictForScore(entry.score),
@@ -82,23 +158,97 @@ export async function prescreenAllUnscored(userId: string): Promise<{ prescreene
         }),
       ),
     );
+    return {
+      prescreened: writes.reduce((total, result) => total + result.count, 0),
+    };
   }
-  return { prescreened: poor.length };
+  return { prescreened: 0 };
 }
 
-/** Next batch of unscored NEW jobs (oldest first) plus how many remain after it. */
-export async function nextFitBatch(userId: string): Promise<{ jobIds: string[]; remaining: number }> {
-  const where = { userId, status: "NEW" as const, fitScoredAt: null };
-  const [batch, pending] = await Promise.all([
-    prisma.job.findMany({
+export type ClaimedFitBatch = {
+  jobIds: string[];
+  /** Pending jobs after excluding the batch returned to this caller. */
+  remaining: number;
+  /** Every unscored NEW job, including rows currently leased by another scan. */
+  pendingTotal: number;
+  /** Pending rows protected by a fresh claim, including this response's batch. */
+  leased: number;
+  /** Poll hint when no batch is available but leased work still exists. */
+  retryAfterMs: number | null;
+  claimToken: string | null;
+};
+
+/**
+ * Atomically lease the next batch. The per-user advisory lock makes
+ * select-and-claim serial across tabs and serverless instances.
+ */
+export async function nextFitBatch(userId: string): Promise<ClaimedFitBatch> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      SELECT pg_advisory_xact_lock(
+        ${FIT_CLAIM_LOCK_NAMESPACE}::integer,
+        ${stableInt32(userId)}::integer
+      )
+    `;
+
+    const staleBefore = new Date(Date.now() - FIT_CLAIM_LEASE_MS);
+    const where = claimableFitWhere(userId, staleBefore);
+    const candidates = await tx.job.findMany({
       where,
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       take: FIT_BATCH_SIZE,
       select: { id: true },
-    }),
-    prisma.job.count({ where }),
-  ]);
-  return { jobIds: batch.map((job) => job.id), remaining: Math.max(pending - batch.length, 0) };
+    });
+
+    if (candidates.length === 0) {
+      const pendingTotal = await tx.job.count({
+        where: pendingFitWhere(userId),
+      });
+      const leased = await tx.job.count({
+        where: leasedFitWhere(userId, staleBefore),
+      });
+      return {
+        jobIds: [],
+        remaining: pendingTotal,
+        pendingTotal,
+        leased,
+        retryAfterMs:
+          pendingTotal > 0 || leased > 0 ? FIT_CLAIM_RETRY_AFTER_MS : null,
+        claimToken: null,
+      };
+    }
+
+    const claimToken = randomUUID();
+    const claimSource = fitClaimSource(claimToken);
+    const claimedRows = await tx.job.updateManyAndReturn({
+      where: {
+        ...where,
+        id: { in: candidates.map((job) => job.id) },
+      },
+      data: { fitSource: claimSource, updatedAt: new Date() },
+      select: { id: true },
+    });
+    const claimed = new Set(claimedRows.map((job) => job.id));
+    const jobIds = candidates.map((job) => job.id).filter((id) => claimed.has(id));
+    const pendingTotal = await tx.job.count({
+      where: pendingFitWhere(userId),
+    });
+    const leased = await tx.job.count({
+      where: leasedFitWhere(userId, staleBefore),
+    });
+
+    return {
+      jobIds,
+      remaining: Math.max(pendingTotal - jobIds.length, 0),
+      pendingTotal,
+      leased,
+      retryAfterMs:
+        jobIds.length === 0 && (pendingTotal > 0 || leased > 0)
+          ? FIT_CLAIM_RETRY_AFTER_MS
+          : null,
+      claimToken: jobIds.length > 0 ? claimToken : null,
+    };
+  });
 }
 
 /**
@@ -106,10 +256,39 @@ export async function nextFitBatch(userId: string): Promise<{ jobIds: string[]; 
  * them forever. They keep a null score (rendered as unscored) but carry a
  * "failed" source and a timestamp; a future rescan can clear and retry them.
  */
-export async function markFitBatchFailed(userId: string, jobIds: string[]): Promise<number> {
+export async function markFitBatchFailed(
+  userId: string,
+  jobIds: string[],
+  claimToken: string,
+): Promise<number> {
   const result = await prisma.job.updateMany({
-    where: { id: { in: jobIds }, userId, status: "NEW", fitScoredAt: null },
+    where: {
+      id: { in: jobIds },
+      userId,
+      status: "NEW",
+      fitScoredAt: null,
+      fitSource: fitClaimSource(claimToken),
+    },
     data: { fitSource: "failed", fitScoredAt: new Date() },
+  });
+  return result.count;
+}
+
+/** Release a live lease when the user cancels, so retry is immediate. */
+export async function releaseFitBatchClaim(
+  userId: string,
+  jobIds: string[],
+  claimToken: string,
+): Promise<number> {
+  const result = await prisma.job.updateMany({
+    where: {
+      id: { in: jobIds },
+      userId,
+      status: "NEW",
+      fitScoredAt: null,
+      fitSource: fitClaimSource(claimToken),
+    },
+    data: { fitSource: null },
   });
   return result.count;
 }

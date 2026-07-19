@@ -102,7 +102,7 @@ export function buildInitialJobsInfiniteData({
   };
 }
 
-type JobsQuerySnapshot = {
+export type JobsQuerySnapshot = {
   queryKey: QueryKey;
   data: JobsInfiniteData | undefined;
 };
@@ -123,6 +123,73 @@ export function restoreJobsSnapshots(
 ) {
   for (const snapshot of snapshots ?? []) {
     queryClient.setQueryData(snapshot.queryKey, snapshot.data);
+  }
+}
+
+/**
+ * Restore only specific rows from optimistic-mutation snapshots.
+ *
+ * Whole-cache rollback is unsafe when another mutation or refetch lands while
+ * a batch request is in flight: restoring the old snapshot would erase that
+ * newer state. This helper reinserts only failed rows at their former page
+ * positions and leaves every unrelated cache change intact.
+ */
+export function restoreJobsByIdsFromSnapshots(
+  queryClient: QueryClient,
+  snapshots: JobsQuerySnapshot[] | undefined,
+  ids: Set<string>,
+) {
+  if (ids.size === 0) return;
+
+  for (const snapshot of snapshots ?? []) {
+    if (!snapshot.data) continue;
+    queryClient.setQueryData<JobsInfiniteData>(snapshot.queryKey, (current) => {
+      if (!isInfiniteJobsData(current)) return current;
+
+      const nextPages = current.pages.map((page) => ({
+        ...page,
+        items: [...(page.items ?? [])],
+      }));
+      const existingIds = new Set(
+        nextPages.flatMap((page) => page.items.map((item) => item.id)),
+      );
+      let restored = 0;
+
+      snapshot.data?.pages.forEach((snapshotPage, pageIndex) => {
+        const missing = (snapshotPage.items ?? []).filter(
+          (item) => ids.has(item.id) && !existingIds.has(item.id),
+        );
+        if (missing.length === 0) return;
+
+        if (!nextPages[pageIndex]) {
+          nextPages[pageIndex] = {
+            ...snapshotPage,
+            items: [],
+          };
+        }
+        const targetPage = nextPages[pageIndex];
+        for (const item of missing) {
+          const formerIndex = snapshotPage.items.findIndex(
+            (candidate) => candidate.id === item.id,
+          );
+          targetPage.items.splice(
+            Math.min(Math.max(formerIndex, 0), targetPage.items.length),
+            0,
+            item,
+          );
+          existingIds.add(item.id);
+          restored += 1;
+        }
+      });
+
+      if (restored > 0 && nextPages[0] && typeof nextPages[0].totalCount === "number") {
+        nextPages[0] = {
+          ...nextPages[0],
+          totalCount: nextPages[0].totalCount + restored,
+        };
+      }
+      return { ...current, pages: nextPages };
+    });
   }
 }
 

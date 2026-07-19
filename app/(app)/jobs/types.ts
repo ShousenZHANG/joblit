@@ -1,3 +1,5 @@
+import type { FitMatrix } from "@/lib/shared/schemas/fitMatrix";
+
 export type JobStatus = "NEW" | "APPLIED" | "REJECTED";
 
 export type JobItem = {
@@ -29,6 +31,14 @@ export type JobsResponse = {
   facets?: {
     jobLevels?: string[];
   };
+};
+
+export type JobDetailResponse = {
+  id: string;
+  description: string | null;
+  fitMatrix: FitMatrix | null;
+  /** Cache version for score/matrix coherence with the list row. */
+  updatedAt: string;
 };
 
 export type CvSource = "ai" | "base" | "manual_import" | "local_ai";

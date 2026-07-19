@@ -686,6 +686,7 @@ export function FetchClient() {
           location,
           hoursOld,
           smartExpand,
+          includeFromQueries: true,
           applyExcludes,
           excludeTitleTerms,
           excludeDescriptionRules: [

@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { requireExtensionToken, ExtensionTokenError } from "@/lib/server/auth/requireExtensionToken";
 import { unauthorizedError, errorJson } from "@/lib/server/api/errorResponse";
 import { checkRateLimit, rateLimitKeyFromRequest, rateLimitHeaders } from "@/lib/server/api/rateLimit";
-import { createFormSubmission, listFormSubmissions } from "@/lib/server/extensionSubmission";
+import {
+  createFormSubmission,
+  listFormSubmissions,
+  SubmissionJobAccessError,
+} from "@/lib/server/extensionSubmission";
 import { CreateSubmissionSchema } from "@/lib/server/extensionSubmissionPayload";
 
 export const runtime = "nodejs";
@@ -37,6 +41,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ data: { id: result.id } }, { status: 201 });
   } catch (err) {
     if (err instanceof ExtensionTokenError) return unauthorizedError();
+    if (err instanceof SubmissionJobAccessError) {
+      return errorJson("INVALID_JOB", "The referenced job is not available.", 400);
+    }
     throw err;
   }
 }

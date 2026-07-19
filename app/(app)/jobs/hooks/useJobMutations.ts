@@ -10,11 +10,13 @@ import { runChunkedBatchDelete } from "./runChunkedBatchDelete";
 import { createSerialRunner } from "./serialRunner";
 import {
   cancelJobsQueries,
+  getJobDetailsQueryKey,
   invalidateActiveJobsQueries,
   patchGeneratedJobArtifactInJobsCache,
   patchJobStatusInJobsCache,
   removeJobFromJobsCache,
   removeJobsFromJobsCache,
+  restoreJobsByIdsFromSnapshots,
   restoreJobsSnapshots,
 } from "../utils/jobsQueryCache";
 
@@ -34,6 +36,7 @@ export const sessionDeletedJobIds = new Set<string>();
 
 type PendingDelete = {
   timer: ReturnType<typeof setTimeout>;
+  restoreSelection: boolean;
 };
 
 export function useJobMutations({
@@ -187,6 +190,10 @@ export function useJobMutations({
         // cache stayed untouched and concurrent pending deletes/undos never
         // interfered with each other.
         removeJobFromJobsCache(queryClient, id);
+        queryClient.removeQueries({
+          queryKey: getJobDetailsQueryKey(id),
+          exact: true,
+        });
         // The id stays in suppressedDeletedIds for the rest of the session —
         // a tombstone, exactly like the batch-delete success path. This is the
         // rapid-delete resurrection fix: a list response that raced past the
@@ -206,6 +213,9 @@ export function useJobMutations({
           next.delete(id);
           return next;
         });
+        if (pending.restoreSelection) {
+          setSelectedId(id);
+        }
         invalidateActiveJobsQueries(queryClient);
         setError(getErrorMessage(e, "Failed to delete job"));
         toast({
@@ -224,7 +234,7 @@ export function useJobMutations({
         });
       }
     },
-    [queryClient, setSuppressedDeletedIds, toast],
+    [queryClient, setSelectedId, setSuppressedDeletedIds, toast],
   );
 
   const undoDelete = useCallback(
@@ -260,7 +270,13 @@ export function useJobMutations({
       });
       void cancelJobsQueries(queryClient);
       if (selectedId === id) {
-        setSelectedId(items.find((it) => it.id !== id)?.id ?? null);
+        const currentIndex = items.findIndex((item) => item.id === id);
+        const adjacent =
+          items[currentIndex + 1] ??
+          items[currentIndex - 1] ??
+          items.find((item) => item.id !== id) ??
+          null;
+        setSelectedId(adjacent?.id ?? null);
       }
       // No cache mutation here — the row is hidden via suppressedDeletedIds
       // above. The cache is only touched if/when the commit succeeds.
@@ -269,7 +285,10 @@ export function useJobMutations({
         // one-at-a-time instead of bursting parallel requests at the backend.
         void commitRunnerRef.current(() => finalizeDelete(id));
       }, UNDO_WINDOW_MS);
-      pendingDeletesRef.current.set(id, { timer });
+      pendingDeletesRef.current.set(id, {
+        timer,
+        restoreSelection: selectedId === id,
+      });
       // Premium undo toast (Gmail/Linear): a NEUTRAL surface — a delete isn't a
       // "success", so the previous emerald-green styling was semantically
       // wrong — an emerald Undo that pops, and a countdown bar that visibly
@@ -372,10 +391,21 @@ export function useJobMutations({
           if (!res.ok) {
             throw new Error(json?.error || "Failed to batch delete");
           }
-          return json as { deleted: number; notFound: number };
+          const deleted = json?.deleted;
+          const notFound = json?.notFound;
+          if (
+            !Number.isInteger(deleted) ||
+            deleted < 0 ||
+            !Number.isInteger(notFound) ||
+            notFound < 0 ||
+            deleted + notFound !== chunk.length
+          ) {
+            throw new Error("Invalid batch delete response");
+          }
+          return { deleted, notFound };
         },
       });
-      if (summary.failedIds.length > 0 && summary.deleted === 0) {
+      if (summary.failedIds.length > 0 && summary.completedIds.length === 0) {
         // Every chunk failed — surface as a real error so onError runs and
         // the optimistic update gets rolled back fully.
         throw summary.firstError ?? new Error("Failed to batch delete");
@@ -418,7 +448,11 @@ export function useJobMutations({
         for (const id of ids) next.delete(id);
         return next;
       });
-      restoreJobsSnapshots(queryClient, context?.rollbackSnapshots);
+      restoreJobsByIdsFromSnapshots(
+        queryClient,
+        context?.rollbackSnapshots,
+        new Set(ids),
+      );
       invalidateActiveJobsQueries(queryClient);
       if (context?.previousSelectedId) {
         setSelectedId(context.previousSelectedId);
@@ -431,24 +465,32 @@ export function useJobMutations({
         className: "border-destructive/30 bg-destructive/10 text-rose-900 animate-in fade-in zoom-in-95",
       });
     },
-    onSuccess: (data, ids) => {
+    onSuccess: (data, ids, context) => {
       const deleted = data.deleted;
       const failed = data.failedIds.length;
 
       // Committed ids become session tombstones (same contract as the single
       // delete): survives JobsClient remounts so a stale or in-flight list
       // payload can never resurrect them.
-      const failedSet = new Set(data.failedIds);
-      for (const id of ids) {
-        if (!failedSet.has(id)) sessionDeletedJobIds.add(id);
+      for (const id of data.completedIds) {
+        sessionDeletedJobIds.add(id);
+        queryClient.removeQueries({
+          queryKey: getJobDetailsQueryKey(id),
+          exact: true,
+        });
       }
 
-      if (failed > 0 && deleted > 0) {
+      if (failed > 0) {
         // Partial success only: refetch so the failed (un-suppressed) ids
         // re-appear with fresh server state. Full success skips the refetch
         // entirely — the optimistic removeJobsFromJobsCache() already removed
         // the rows + decremented totalCount, so invalidating would just dim
         // the list for no reason.
+        restoreJobsByIdsFromSnapshots(
+          queryClient,
+          context?.rollbackSnapshots,
+          new Set(data.failedIds),
+        );
         void invalidateActiveJobsQueries(queryClient);
         setSuppressedDeletedIds((prev) => {
           const next = new Set(prev);

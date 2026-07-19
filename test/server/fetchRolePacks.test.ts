@@ -6,6 +6,9 @@ describe("fetch role packs", () => {
     const out = expandRoleQueries(["Software Engineer"]);
     expect(out).toEqual([
       "Software Engineer",
+      "Software Developer",
+      "Application Developer",
+      "Web Developer",
       "Forward Deployed Engineer",
       "Agent Engineer",
       "Solutions Architect",

@@ -12,7 +12,8 @@ const BodySchema = z.object({
   ids: z
     .array(z.string().uuid())
     .min(1, "At least one ID is required")
-    .max(MAX_BATCH_SIZE, `Maximum ${MAX_BATCH_SIZE} jobs per batch`),
+    .max(MAX_BATCH_SIZE, `Maximum ${MAX_BATCH_SIZE} jobs per batch`)
+    .transform((ids) => Array.from(new Set(ids))),
 });
 
 export async function POST(req: Request) {

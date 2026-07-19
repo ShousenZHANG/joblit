@@ -8,8 +8,7 @@ const prismaStore = vi.hoisted(() => ({
   job: {
     findFirst: vi.fn(),
     findMany: vi.fn(),
-    delete: vi.fn(() => ({ __op: "job.delete" })),
-    deleteMany: vi.fn(() => ({ __op: "job.deleteMany" })),
+    deleteMany: vi.fn(() => ({ __op: "job.deleteMany", __result: { count: 1 } })),
   },
   application: {
     findUnique: vi.fn(),
@@ -20,7 +19,9 @@ const prismaStore = vi.hoisted(() => ({
     upsert: vi.fn(() => ({ __op: "deletedJobUrl.upsert" })),
     createMany: vi.fn(() => ({ __op: "deletedJobUrl.createMany" })),
   },
-  $transaction: vi.fn(async (ops: unknown[]) => ops),
+  $transaction: vi.fn(async (ops: Array<{ __result?: unknown }>) =>
+    ops.map((op) => op.__result ?? op),
+  ),
 }));
 
 vi.mock("@/lib/server/prisma", () => ({ prisma: prismaStore }));
@@ -57,8 +58,27 @@ describe("jobDeleteService", () => {
       expect(ops.map((o) => o.__op)).toEqual([
         "deletedJobUrl.upsert",
         "application.deleteMany",
-        "job.delete",
+        "job.deleteMany",
       ]);
+      expect(prismaStore.job.deleteMany).toHaveBeenCalledWith({
+        where: { id: "job-1", userId: "user-1" },
+      });
+    });
+
+    it("stays idempotent when another request deletes the job after lookup", async () => {
+      prismaStore.job.findFirst.mockResolvedValue({
+        id: "job-1",
+        jobUrl: "https://example.com/jobs/1",
+      });
+      prismaStore.application.findUnique.mockResolvedValue(null);
+      prismaStore.job.deleteMany.mockReturnValueOnce({
+        __op: "job.deleteMany",
+        __result: { count: 0 },
+      });
+
+      await expect(deleteJob("user-1", "job-1")).resolves.toEqual({
+        alreadyDeleted: true,
+      });
     });
 
     it("scopes the lookup to the owning user", async () => {
@@ -78,7 +98,10 @@ describe("jobDeleteService", () => {
       });
       const result = await deleteJob("user-1", "job-1");
       expect(blobDel).not.toHaveBeenCalled();
-      expect(result).toMatchObject({ alreadyDeleted: false });
+      expect(result).toMatchObject({
+        alreadyDeleted: false,
+        blobCleanup: { attempted: 1, deleted: 0, failed: 1 },
+      });
     });
   });
 
@@ -100,6 +123,10 @@ describe("jobDeleteService", () => {
         { id: "b", jobUrl: "https://e.com/b" },
       ]);
       prismaStore.application.findMany.mockResolvedValue([]);
+      prismaStore.job.deleteMany.mockReturnValueOnce({
+        __op: "job.deleteMany",
+        __result: { count: 2 },
+      });
 
       const result = await batchDeleteJobs("user-1", ["a", "b", "missing"]);
 
@@ -111,6 +138,89 @@ describe("jobDeleteService", () => {
       ]);
       expect(result.deleted).toBe(2);
       expect(result.notFound).toBe(1);
+    });
+
+    it("deduplicates repeated ids before counting and deleting", async () => {
+      prismaStore.job.findMany.mockResolvedValue([
+        { id: "a", jobUrl: "https://e.com/a" },
+      ]);
+      prismaStore.application.findMany.mockResolvedValue([]);
+      prismaStore.job.deleteMany.mockReturnValueOnce({
+        __op: "job.deleteMany",
+        __result: { count: 1 },
+      });
+
+      const result = await batchDeleteJobs("user-1", ["a", "a"]);
+
+      expect(prismaStore.job.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: { in: ["a"] }, userId: "user-1" } }),
+      );
+      expect(result).toMatchObject({ deleted: 1, notFound: 0 });
+    });
+
+    it("deletes all application artifacts in one Blob request", async () => {
+      process.env.BLOB_READ_WRITE_TOKEN = "blob-token";
+      prismaStore.job.findMany.mockResolvedValue([
+        { id: "a", jobUrl: "https://e.com/a" },
+      ]);
+      prismaStore.application.findMany.mockResolvedValue([
+        {
+          resumeTexUrl: "https://blob/cv.tex",
+          resumePdfUrl: "https://blob/cv.pdf",
+          coverTexUrl: "https://blob/cover.tex",
+          coverPdfUrl: "https://blob/cover.pdf",
+        },
+      ]);
+      prismaStore.job.deleteMany.mockReturnValueOnce({
+        __op: "job.deleteMany",
+        __result: { count: 1 },
+      });
+
+      const result = await batchDeleteJobs("user-1", ["a"]);
+
+      expect(blobDel).toHaveBeenCalledTimes(1);
+      expect(blobDel).toHaveBeenCalledWith(
+        [
+          "https://blob/cv.tex",
+          "https://blob/cv.pdf",
+          "https://blob/cover.tex",
+          "https://blob/cover.pdf",
+        ],
+        { token: "blob-token" },
+      );
+      expect(result.blobCleanup).toEqual({ attempted: 4, deleted: 4, failed: 0 });
+    });
+
+    it("falls back to bounded per-object cleanup when the bulk Blob call fails", async () => {
+      process.env.BLOB_READ_WRITE_TOKEN = "blob-token";
+      prismaStore.job.findMany.mockResolvedValue([
+        { id: "a", jobUrl: "https://e.com/a" },
+      ]);
+      prismaStore.application.findMany.mockResolvedValue([
+        {
+          resumeTexUrl: null,
+          resumePdfUrl: "https://blob/cv.pdf",
+          coverTexUrl: null,
+          coverPdfUrl: "https://blob/cover.pdf",
+        },
+      ]);
+      prismaStore.job.deleteMany.mockReturnValueOnce({
+        __op: "job.deleteMany",
+        __result: { count: 1 },
+      });
+      blobDel
+        .mockRejectedValueOnce(new Error("bulk failed"))
+        .mockResolvedValueOnce({})
+        .mockRejectedValueOnce(new Error("object failed"));
+
+      const result = await batchDeleteJobs("user-1", ["a"]);
+
+      expect(blobDel).toHaveBeenCalledTimes(3);
+      expect(result.blobCleanup).toEqual({
+        attempted: 2,
+        deleted: 1,
+        failed: 1,
+      });
     });
   });
 });

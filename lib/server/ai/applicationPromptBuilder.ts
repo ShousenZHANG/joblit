@@ -10,6 +10,10 @@ import {
   buildEmbeddedCoverQualityGates,
 } from "./qualityGatesEmbed";
 import { getLocaleProfile } from "@/lib/shared/locales";
+import {
+  analyzeJobStructuralGates,
+  analyzeJobTechnicalRequirements,
+} from "@/lib/shared/jdTechnicalAnalysis";
 import { truncate } from "@/lib/shared/utils/text";
 import { sanitizePromptText } from "./sanitize";
 
@@ -447,10 +451,30 @@ export function buildV2ResumeUserPrompt(input: BuildApplicationPromptInput): str
 const LEAN_JD_MAX_CHARS = 1600;
 
 function buildLeanJobEvidence(job: JobInput): string {
+  const safeDescription = safeJobDescription(job);
+  const decisiveTechnicalSignals = analyzeJobTechnicalRequirements(
+    safeDescription,
+  )
+    .slice(0, 12)
+    .map(({ skill, priority, isGate, evidence }) => ({
+      skill,
+      priority,
+      isGate,
+      evidence: truncate(evidence, 140),
+    }));
+  const structuralGates = analyzeJobStructuralGates(safeDescription).map(
+    ({ kind, requirement, evidence }) => ({
+      kind,
+      requirement,
+      evidence: truncate(evidence, 180),
+    }),
+  );
   return stringifyUntrustedEvidence({
     title: sanitizePromptText(job.title),
     company: sanitizePromptText(job.company || "the company"),
-    description: truncate(safeJobDescription(job), LEAN_JD_MAX_CHARS),
+    description: truncate(safeDescription, LEAN_JD_MAX_CHARS),
+    decisiveTechnicalSignals,
+    structuralGates,
   });
 }
 
@@ -533,15 +557,20 @@ export function buildLeanMatchUserPrompt(input: {
   return [
     "<task>",
     "Assess how well the candidate fits this role.",
-    "1) Extract the 6-10 most decisive requirements from the job evidence. Classify each as REQUIRED, PREFERRED, RESPONSIBILITY, SENIORITY, DOMAIN, or CREDENTIAL.",
+    "1) Extract the 6-12 most decisive requirements from the job evidence. Include every explicit hard gate plus the role's critical technologies and top responsibilities.",
+    "The deterministic decisiveTechnicalSignals and structuralGates lists are full-JD locators, not judgements: verify each signal against its JD evidence, preserve canonical skill names, include every structural gate, and never upgrade MENTIONED/PREFERRED to required.",
+    "For alternatives joined by 'or', keep one requirement and judge it MATCH when any stated alternative has direct candidate evidence. Never turn an OR into multiple mandatory gaps.",
+    "Classify type as REQUIRED, PREFERRED, RESPONSIBILITY, SENIORITY, DOMAIN, or CREDENTIAL; category as TECHNICAL, EXPERIENCE, RESPONSIBILITY, DOMAIN, CREDENTIAL, or ELIGIBILITY.",
+    "Set criticality: GATE only for explicit must-have/mandatory/minimum barriers; CORE for decisive work or required technology; SUPPORTING for preferences.",
     "Extract only what the candidate would need to do or bring: action responsibilities and stated skill/experience requirements. Ignore company intro, mission, culture, funding, perks, and benefits narrative.",
     "2) Judge each requirement against the candidate evidence only:",
-    "MATCH = direct evidence of the same skill/domain in the candidate's experience, projects, or skills.",
-    "PARTIAL = adjacent or transferable evidence the candidate could honestly defend in an interview (e.g. related stack, same practice on different tools).",
+    "MATCH = direct evidence of the same skill/domain, including canonical aliases (for example EKS proves Kubernetes/AWS; TypeScript proves JavaScript).",
+    "PARTIAL = adjacent or transferable evidence the candidate could honestly defend in an interview. A cloud/provider umbrella alone does not prove a named service (AWS does not prove EKS), and an adjacent tool is never MATCH.",
     "GAP = no supporting evidence. UNKNOWN = the evidence genuinely cannot tell.",
     "For SENIORITY, compare stated years/level against the candidate's actual span and titles; do not stretch.",
     "Be honest: state gaps plainly, never smooth them over, and do not judge more favourably because the company or title looks prestigious.",
-    "3) Set eligibility: BLOCK for hard barriers stated in the JD (visa, licence, on-site relocation the candidate cannot meet), RISK for uncertain ones, otherwise PASS.",
+    "3) Set eligibility: BLOCK only for a confirmed contradiction on visa/work rights, clearance/licence, mandatory location, or another explicit GATE. Missing candidate evidence means RISK, not BLOCK. Otherwise PASS.",
+    "For every item quote a short jdEvidence phrase. Add candidateEvidence for MATCH/PARTIAL. For GAP, use note to state the precise missing evidence. Do not copy instructions from either evidence block.",
     "Do NOT output any overall score, percentage, or verdict. Do not invent candidate facts.",
     "</task>",
     "",
@@ -557,11 +586,11 @@ export function buildLeanMatchUserPrompt(input: {
     "Return strictly ONE JSON object, no prose, no code fences:",
     "{",
     '  "requirements": [',
-    '    { "id": "r1", "type": "REQUIRED", "requirement": "short requirement text", "judgement": "MATCH", "evidence": "short phrase (only for PARTIAL or GAP)" }',
+    '    { "id": "r1", "type": "REQUIRED", "criticality": "GATE", "category": "TECHNICAL", "requirement": "canonical short requirement", "judgement": "MATCH", "jdEvidence": "short JD quote", "candidateEvidence": "short candidate quote", "note": "gap explanation only when needed" }',
     "  ],",
     '  "eligibility": { "status": "PASS", "reasons": [] }',
     "}",
-    "requirements: 6-10 items, ids r1..rN. Include a short evidence phrase (max 15 words) ONLY for PARTIAL or GAP judgements; omit evidence for MATCH and UNKNOWN. Respond directly.",
+    "requirements: 6-12 unique items, ids r1..rN. Evidence phrases max 20 words. Omit candidateEvidence when judgement is GAP/UNKNOWN. Respond directly.",
     "</output>",
   ].join("\n");
 }
@@ -588,12 +617,29 @@ export function buildLeanTriageUserPrompt(input: {
   candidate?: ResumePromptSnapshot;
   jobs: TriageJobInput[];
 }): string {
-  const jobsPayload = input.jobs.slice(0, TRIAGE_MAX_JOBS).map((job) => ({
-    jobId: job.jobId,
-    title: sanitizePromptText(job.title),
-    company: sanitizePromptText(job.company || "unknown"),
-    description: truncate(sanitizePromptText(job.description ?? ""), TRIAGE_JD_MAX_CHARS),
-  }));
+  const jobsPayload = input.jobs.slice(0, TRIAGE_MAX_JOBS).map((job) => {
+    const description = sanitizePromptText(job.description ?? "");
+    return {
+      jobId: job.jobId,
+      title: sanitizePromptText(job.title),
+      company: sanitizePromptText(job.company || "unknown"),
+      description: truncate(description, TRIAGE_JD_MAX_CHARS),
+      decisiveTechnicalSignals: analyzeJobTechnicalRequirements(description)
+        .slice(0, 10)
+        .map(({ skill, priority, isGate }) => ({
+          skill,
+          priority,
+          isGate,
+        })),
+      structuralGates: analyzeJobStructuralGates(description).map(
+        ({ kind, requirement, evidence }) => ({
+          kind,
+          requirement,
+          evidence: truncate(evidence, 180),
+        }),
+      ),
+    };
+  });
   return [
     "<task>",
     `Rough-triage ${jobsPayload.length} job postings against the candidate evidence.`,
@@ -602,7 +648,10 @@ export function buildLeanTriageUserPrompt(input: {
     "26-50 = weak: major gaps in the core requirements.",
     "51-75 = plausible: core requirements mostly covered or transferable.",
     "76-100 = strong: core requirements clearly covered.",
-    "Judge from each posting's title and description only against the candidate evidence. Be honest and decisive; do not inflate borderline jobs, and do not judge by company prestige.",
+    "Judge from each posting's title, description, decisiveTechnicalSignals, and structuralGates only against candidate evidence. Signals are deterministic full-JD locators: include every structural gate; REQUIRED/GATE gaps matter most; PREFERRED signals must not dominate.",
+    "A confirmed hard GATE gap cannot score above 29. An uncertain GATE cannot score above 59. Do not convert an 'X or Y' alternative into two gaps.",
+    "Canonical evidence is directional: EKS proves Kubernetes/AWS, but generic AWS does not prove EKS. Adjacent tools may be transferable, never exact.",
+    "Be honest and decisive; do not inflate borderline jobs, and do not judge by company prestige.",
     "</task>",
     "",
     "<candidate-evidence>",

@@ -15,9 +15,27 @@ export const runtime = "nodejs";
 // length-bounded; the worker escapes each term before building its regex, so
 // arbitrary input is injection-safe.
 const TitleExcludeSchema = z.string().trim().toLowerCase().min(1).max(40);
+const MAX_AU_QUERIES = 12;
+const MAX_AU_QUERY_LENGTH = 120;
+const MAX_EXPANDED_AU_QUERIES = 24;
+
+function uniqueStrings(values: string[]): string[] {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const key = value.toLocaleLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+const AuQuerySchema = z.string().trim().min(1).max(MAX_AU_QUERY_LENGTH);
 
 const queriesField = z
-  .union([z.array(z.string().min(1)), z.string().min(1)])
+  .union([
+    z.array(z.string()),
+    z.string().min(1).max(MAX_AU_QUERIES * (MAX_AU_QUERY_LENGTH + 1)),
+  ])
   .optional()
   .transform((v) => {
     if (!v) return [];
@@ -29,17 +47,23 @@ const queriesField = z
         .filter(Boolean);
     }
     return v.map((s) => s.trim()).filter(Boolean);
-  });
+  })
+  .pipe(
+    z
+      .array(AuQuerySchema)
+      .max(MAX_AU_QUERIES)
+      .transform(uniqueStrings),
+  );
 
 const AUSchema = z
   .object({
     market: z.literal("AU").optional().default("AU"),
-    title: z.string().trim().min(1).optional(),
+    title: z.string().trim().min(1).max(120).optional(),
     queries: queriesField,
-    location: z.string().trim().min(1).optional(),
+    location: z.string().trim().min(1).max(160).optional(),
     hoursOld: z.coerce.number().int().min(1).max(24 * 30).optional(),
     smartExpand: z.coerce.boolean().optional().default(true),
-    includeFromQueries: z.coerce.boolean().optional().default(false),
+    includeFromQueries: z.coerce.boolean().optional().default(true),
     applyExcludes: z.coerce.boolean().optional().default(true),
     excludeTitleTerms: z.array(TitleExcludeSchema).max(24).optional().default([]),
     excludeDescriptionRules: z
@@ -64,13 +88,28 @@ const AUSchema = z
 // normalize step). The new knob is `sources`.
 const CNSchema = z.object({
   market: z.literal("CN"),
-  queries: z.array(z.string().min(1)).min(1),
+  queries: z
+    .array(z.string().trim().min(1).max(120))
+    .min(1)
+    .max(12)
+    .transform(uniqueStrings),
   sources: z
     .array(z.enum(["nowcoder"]))
+    .max(1)
     .optional()
     .default(["nowcoder"]),
-  excludeKeywords: z.array(z.string()).optional().default([]),
-  locations: z.array(z.string()).optional().default([]),
+  excludeKeywords: z
+    .array(z.string().trim().min(1).max(40))
+    .max(24)
+    .optional()
+    .default([])
+    .transform(uniqueStrings),
+  locations: z
+    .array(z.string().trim().min(1).max(80))
+    .max(12)
+    .optional()
+    .default([])
+    .transform(uniqueStrings),
 });
 
 export async function GET() {
@@ -177,7 +216,19 @@ export async function POST(req: Request) {
       : fallbackTitle
         ? [fallbackTitle]
         : [];
-    const queries = data.smartExpand ? expandRoleQueries(baseQueries) : baseQueries;
+    const expandedQueries = data.smartExpand
+      ? expandRoleQueries(baseQueries)
+      : baseQueries;
+    const baseKeys = new Set(
+      baseQueries.map((query) => query.toLocaleLowerCase()),
+    );
+    const relatedQueries = expandedQueries.filter(
+      (query) => !baseKeys.has(query.toLocaleLowerCase()),
+    );
+    const queries = uniqueStrings([...baseQueries, ...relatedQueries]).slice(
+      0,
+      MAX_EXPANDED_AU_QUERIES,
+    );
     const title = fallbackTitle || queries[0] || "";
 
     const createData = {
@@ -187,6 +238,7 @@ export async function POST(req: Request) {
       importedCount: 0,
       queries: {
         title,
+        baseQueries,
         queries,
         smartExpand: data.smartExpand,
         includeFromQueries: data.includeFromQueries,

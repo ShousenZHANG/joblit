@@ -6,10 +6,10 @@
   "homepage": "https://www.joblit.tech",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ShousenZHANG/joblit.git"
+    "url": "git+https://github.com/ShousenZHANG/jobflow-web.git"
   },
   "bugs": {
-    "url": "https://github.com/ShousenZHANG/joblit/issues"
+    "url": "https://github.com/ShousenZHANG/jobflow-web/issues"
   },
   "license": "Apache-2.0",
   "author": "Joblit contributors",

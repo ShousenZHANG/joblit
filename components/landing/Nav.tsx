@@ -25,7 +25,7 @@ interface NavLink {
   href: string;
 }
 
-const GITHUB_REPO_URL = "https://github.com/ShousenZHANG/joblit";
+const GITHUB_REPO_URL = "https://github.com/ShousenZHANG/jobflow-web";
 
 export function Nav() {
   const { status } = useSession();

@@ -7,7 +7,7 @@ Joblit is in active development on the `master` branch. Security fixes are relea
 ## Reporting a Vulnerability
 
 If you discover a security vulnerability, report it through
-[GitHub's private security advisory form](https://github.com/ShousenZHANG/joblit/security/advisories/new)
+[GitHub's private security advisory form](https://github.com/ShousenZHANG/jobflow-web/security/advisories/new)
 or email the monitored role address `security@joblit.tech`.
 
 Please include:

@@ -87,7 +87,7 @@ describe("normalizeCnJobs", () => {
     expect(row.description?.length).toBe(8000);
   });
 
-  it("ranks keyword matches first but keeps every row (never empties the feed)", () => {
+  it("keeps only title-relevant rows when queries are present", () => {
     const input = [
       makeRaw({
         jobUrl: "https://example.com/2",
@@ -101,8 +101,7 @@ describe("normalizeCnJobs", () => {
       }),
     ];
     const rows = normalizeCnJobs(input, { queries: ["前端"] });
-    // Both kept; the keyword hit floats to the top (rank, not hard filter).
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(1);
     expect(rows[0].jobUrl).toBe("https://example.com/1");
   });
 
@@ -118,12 +117,12 @@ describe("normalizeCnJobs", () => {
     expect(rows[0].location).toBe("北京 · 上海");
   });
 
-  it("keyword include match works case-insensitively on English", () => {
+  it("does not count a description-only keyword hit as role relevance", () => {
     const rows = normalizeCnJobs(
       [makeRaw({ title: "Backend Engineer", description: "python" })],
       { queries: ["Python"] },
     );
-    expect(rows).toHaveLength(1);
+    expect(rows).toHaveLength(0);
   });
 
   it("empty queries disables include filter", () => {
@@ -133,7 +132,7 @@ describe("normalizeCnJobs", () => {
     expect(rows).toHaveLength(1);
   });
 
-  it("falls back to all rows when keyword filter matches zero (thin-day safety net)", () => {
+  it("returns no rows instead of unrelated fallback jobs when nothing matches", () => {
     const rows = normalizeCnJobs(
       [
         makeRaw({ jobUrl: "https://example.com/a", title: "产品经理" }),
@@ -141,11 +140,10 @@ describe("normalizeCnJobs", () => {
       ],
       { queries: ["大模型工程师"] },
     );
-    // Neither row matches the query, but the pool is non-empty → return all.
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(0);
   });
 
-  it("soft fallback still respects excludeKeywords", () => {
+  it("never revives irrelevant rows after exclusions", () => {
     const rows = normalizeCnJobs(
       [
         makeRaw({ jobUrl: "https://example.com/a", title: "实习运营" }),
@@ -153,9 +151,7 @@ describe("normalizeCnJobs", () => {
       ],
       { queries: ["大模型"], excludeKeywords: ["实习"] },
     );
-    // Strict = 0 → fallback to relaxed, but 实习 row is still excluded.
-    expect(rows).toHaveLength(1);
-    expect(rows[0].title).toBe("产品经理");
+    expect(rows).toHaveLength(0);
   });
 
   it("excludeKeywords drop on any hit", () => {
@@ -203,5 +199,71 @@ describe("normalizeCnJobs", () => {
   it("always emits market='CN'", () => {
     const rows = normalizeCnJobs([makeRaw({})]);
     expect(rows[0].market).toBe("CN");
+  });
+
+  it("uses word boundaries for short English role terms", () => {
+    const rows = normalizeCnJobs(
+      [
+        makeRaw({
+          jobUrl: "https://example.com/go",
+          title: "Go Engineer",
+        }),
+        makeRaw({
+          jobUrl: "https://example.com/google",
+          title: "Google Ads Specialist",
+        }),
+      ],
+      { queries: ["Go"] },
+    );
+
+    expect(rows.map((row) => row.title)).toEqual(["Go Engineer"]);
+  });
+
+  it("matches reordered role variants without confusing Java and JavaScript", () => {
+    const rows = normalizeCnJobs(
+      [
+        makeRaw({
+          jobUrl: "https://example.com/java",
+          title: "Senior Java Backend Engineer",
+        }),
+        makeRaw({
+          jobUrl: "https://example.com/javascript",
+          title: "Senior JavaScript Backend Engineer",
+        }),
+      ],
+      { queries: ["Java Developer"] },
+    );
+
+    expect(rows.map((row) => row.title)).toEqual([
+      "Senior Java Backend Engineer",
+    ]);
+  });
+
+  it("matches mixed CJK/ASCII role variants with ASCII boundaries", () => {
+    const rows = normalizeCnJobs(
+      [
+        makeRaw({
+          jobUrl: "https://example.com/java-cn",
+          title: "高级Java后端开发工程师",
+        }),
+        makeRaw({
+          jobUrl: "https://example.com/javascript-cn",
+          title: "高级JavaScript后端开发工程师",
+        }),
+      ],
+      { queries: ["Java开发工程师"] },
+    );
+
+    expect(rows.map((row) => row.title)).toEqual([
+      "高级Java后端开发工程师",
+    ]);
+  });
+
+  it("preserves a valid upstream publication timestamp", () => {
+    const rows = normalizeCnJobs([
+      makeRaw({ publishedAt: "2026-07-19T10:00:00.000Z" }),
+    ]);
+
+    expect(rows[0].listingDate).toBe("2026-07-19T10:00:00.000Z");
   });
 });

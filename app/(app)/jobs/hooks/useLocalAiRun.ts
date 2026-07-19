@@ -83,7 +83,6 @@ function bridgeFailure(error: unknown, fallbackCode: string) {
 /** Flatten validator output into a bounded, control-character-free line. */
 function repairFeedbackFromError(error: DraftImportError): string {
   const text = (error.details.length ? error.details.join("; ") : error.message)
-    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001f\u007f-\u009f]+/g, " ")
     .trim();
   return (text || "The JSON did not match the required schema.").slice(

@@ -43,9 +43,13 @@ const MATCH_OUTPUT_SHAPE = {
     {
       id: "string",
       type: "REQUIRED | PREFERRED | RESPONSIBILITY | SENIORITY | DOMAIN | CREDENTIAL",
+      criticality: "GATE | CORE | SUPPORTING",
+      category:
+        "TECHNICAL | EXPERIENCE | RESPONSIBILITY | DOMAIN | CREDENTIAL | ELIGIBILITY",
       requirement: "string",
       judgement: "MATCH | PARTIAL | GAP | UNKNOWN",
-      evidence: "string (optional)",
+      jdEvidence: "short direct phrase from the JD",
+      candidateEvidence: "short direct phrase (MATCH/PARTIAL only)",
       note: "string (optional)",
     },
   ],

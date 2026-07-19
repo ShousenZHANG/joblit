@@ -104,7 +104,7 @@ The final production build was rechecked in-browser on the landing, login, exten
 | Reduced motion | Ambient star, meteor, Aurora, and grid animation paths are disabled or neutralized by the tested media rules. |
 | Browser console | No warning or error captured in the final public-surface acceptance run. |
 
-The public extension download resolves to the [Joblit AutoFill v0.1.0 release](https://github.com/ShousenZHANG/joblit/releases/tag/v0.1.0).
+The public extension download resolves to the [Joblit AutoFill v0.1.0 release](https://github.com/ShousenZHANG/jobflow-web/releases/tag/v0.1.0).
 
 ## Residual risk register
 

@@ -8,12 +8,11 @@ import {
   UnauthorizedError,
   type SessionContext,
 } from "@/lib/server/auth/requireSession";
-import { markFitBatchFailed } from "@/lib/server/jobs/fitRunService";
+import { releaseFitBatchClaim } from "@/lib/server/jobs/fitRunService";
 
 export const runtime = "nodejs";
 
-const FAILED_RATE_LIMIT = { limit: 60, windowSeconds: 60 } as const;
-
+const RELEASE_RATE_LIMIT = { limit: 60, windowSeconds: 60 } as const;
 const BodySchema = z
   .object({
     jobIds: z.array(z.string().uuid()).min(1).max(15),
@@ -21,18 +20,19 @@ const BodySchema = z
   })
   .strict();
 
-/** Dequeue a failed AI batch so the pump never loops on the same jobs. */
 export async function POST(req: Request) {
   let session: SessionContext;
   try {
     session = await requireSession();
-  } catch (err) {
-    if (err instanceof UnauthorizedError) return unauthorizedError();
-    throw err;
+  } catch (error) {
+    if (error instanceof UnauthorizedError) return unauthorizedError();
+    throw error;
   }
-  const { userId } = session;
 
-  const rateLimit = checkRateLimit(`jobs:fit:mark-failed:${userId}`, FAILED_RATE_LIMIT);
+  const rateLimit = checkRateLimit(
+    `jobs:fit:release:${session.userId}`,
+    RELEASE_RATE_LIMIT,
+  );
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: "Too many requests" },
@@ -47,8 +47,8 @@ export async function POST(req: Request) {
     });
   }
 
-  const count = await markFitBatchFailed(
-    userId,
+  const count = await releaseFitBatchClaim(
+    session.userId,
     body.data.jobIds,
     body.data.claimToken,
   );

@@ -81,6 +81,37 @@ class RunJobspyDedupeTests(unittest.TestCase):
             "https://linkedin.com/jobs/view/999",
         )
 
+    def test_canonicalize_job_url_preserves_query_job_identity(self):
+        self.assertEqual(
+            rj._canonicalize_job_url(
+                "https://boards.greenhouse.io/acme/jobs?gh_jid=123&utm_source=x"
+            ),
+            "https://boards.greenhouse.io/acme/jobs?gh_jid=123",
+        )
+        first = rj._canonicalize_job_url(
+            "https://careers.example.com/apply?jobId=100"
+        )
+        second = rj._canonicalize_job_url(
+            "https://careers.example.com/apply?jobId=200"
+        )
+        self.assertNotEqual(first, second)
+
+    def test_canonicalize_job_url_rejects_non_http_protocols(self):
+        self.assertEqual(
+            rj._canonicalize_job_url("ftp://example.com/jobs/123"),
+            "",
+        )
+
+    def test_canonicalize_job_url_uses_stable_alias_priority_and_rfc3986_spaces(self):
+        self.assertEqual(
+            rj._canonicalize_job_url(
+                "https://careers.example.com/apply?"
+                "jid=2&job_id=hello%20world%21%27%28%29%2A"
+            ),
+            "https://careers.example.com/apply?"
+            "job_id=hello%20world%21%27%28%29%2A",
+        )
+
     def test_results_per_query_splits_budget_across_terms(self):
         self.assertEqual(rj._results_per_query(100, 8), 13)
         self.assertEqual(rj._results_per_query(100, 1), 100)
@@ -223,6 +254,245 @@ class RunJobspyDedupeTests(unittest.TestCase):
             exclude_terms=[],
         )
         self.assertEqual(len(out), 2)
+
+    def test_filter_title_excludes_seniority_from_job_level(self):
+        df = pd.DataFrame(
+            [
+                {
+                    "title": "Software Engineer",
+                    "job_level": "Mid-Senior level",
+                    "description": "Build APIs",
+                },
+                {
+                    "title": "Software Engineer",
+                    "job_level": "Entry level",
+                    "description": "Build web applications",
+                },
+            ]
+        )
+
+        out = rj.filter_title(
+            df,
+            queries=["Software Engineer"],
+            enforce_include=True,
+            exclude_terms=["senior"],
+        )
+
+        self.assertEqual(out["job_level"].tolist(), ["Entry level"])
+
+    def test_filter_title_matches_role_tokens_without_short_word_false_positives(self):
+        df = pd.DataFrame(
+            [
+                {"title": "Senior Java Engineer", "job_level": "Senior"},
+                {"title": "Senior JavaScript Engineer", "job_level": "Senior"},
+                {"title": "Go Engineer", "job_level": "Entry"},
+                {"title": "Google Ads Specialist", "job_level": "Entry"},
+            ]
+        )
+
+        java = rj.filter_title(
+            df,
+            queries=["Java Developer"],
+            enforce_include=True,
+            exclude_terms=[],
+        )
+        go = rj.filter_title(
+            df,
+            queries=["Go"],
+            enforce_include=True,
+            exclude_terms=[],
+        )
+
+        self.assertEqual(java["title"].tolist(), ["Senior Java Engineer"])
+        self.assertEqual(go["title"].tolist(), ["Go Engineer"])
+
+    def test_filter_title_matches_mixed_chinese_and_ascii_role_query(self):
+        df = pd.DataFrame(
+            [
+                {"title": "高级Java后端开发工程师"},
+                {"title": "高级JavaScript后端开发工程师"},
+            ]
+        )
+
+        out = rj.filter_title(
+            df,
+            queries=["Java开发工程师"],
+            enforce_include=True,
+            exclude_terms=[],
+        )
+
+        self.assertEqual(out["title"].tolist(), ["高级Java后端开发工程师"])
+
+    def test_smart_expand_cannot_bypass_original_technical_direction(self):
+        df = pd.DataFrame(
+            [
+                {"title": "Software Engineer"},
+                {"title": "Platform Engineer"},
+                {"title": "JavaScript Backend Engineer"},
+                {"title": "Senior Java Backend Engineer"},
+            ]
+        )
+
+        out = rj.filter_title(
+            df,
+            queries=[
+                "Java Backend Developer",
+                "Backend Engineer",
+                "Software Engineer",
+                "Platform Engineer",
+            ],
+            base_queries=["Java backend developer"],
+            enforce_include=True,
+            exclude_terms=[],
+        )
+
+        self.assertEqual(out["title"].tolist(), ["Senior Java Backend Engineer"])
+
+    def test_smart_expand_still_works_when_base_query_has_only_generic_signals(self):
+        df = pd.DataFrame(
+            [
+                {"title": "Software Engineer"},
+                {"title": "AI Engineer"},
+            ]
+        )
+
+        out = rj.filter_title(
+            df,
+            queries=["Software Engineer", "AI Engineer"],
+            base_queries=["Software Engineer"],
+            enforce_include=True,
+            exclude_terms=[],
+        )
+
+        self.assertEqual(out["title"].tolist(), ["Software Engineer", "AI Engineer"])
+
+    def test_resolve_base_queries_supports_new_and_legacy_runs(self):
+        self.assertEqual(
+            rj._resolve_base_queries(
+                {
+                    "title": "Java Developer",
+                    "queries": ["Java Developer", "Software Engineer"],
+                    "baseQueries": ["Java Developer"],
+                    "smartExpand": True,
+                },
+                "Java Developer",
+                ["Java Developer", "Software Engineer"],
+            ),
+            ["Java Developer"],
+        )
+        self.assertEqual(
+            rj._resolve_base_queries(
+                {
+                    "title": "Java Developer",
+                    "queries": ["Java Developer", "Software Engineer"],
+                    "smartExpand": True,
+                },
+                "Java Developer",
+                ["Java Developer", "Software Engineer"],
+            ),
+            ["Java Developer"],
+        )
+        self.assertEqual(
+            rj._resolve_base_queries(
+                {
+                    "title": "Java Developer",
+                    "queries": ["Java Developer", "Backend Developer"],
+                    "smartExpand": False,
+                },
+                "Java Developer",
+                ["Java Developer", "Backend Developer"],
+            ),
+            ["Java Developer", "Backend Developer"],
+        )
+        self.assertEqual(
+            rj._resolve_base_queries(
+                ["Java Developer", "Backend Developer"],
+                "Java Developer",
+                ["Java Developer", "Backend Developer"],
+            ),
+            ["Java Developer", "Backend Developer"],
+        )
+
+    def test_filter_location_drops_known_interstate_noise_without_dropping_remote(self):
+        df = pd.DataFrame(
+            [
+                {"title": "A", "location": "Melbourne VIC"},
+                {"title": "B", "location": "Chatswood NSW"},
+                {"title": "C", "location": "Remote - Australia"},
+                {"title": "D", "location": ""},
+            ]
+        )
+
+        out, audit = rj.filter_location(
+            df,
+            requested_location="Sydney, New South Wales, Australia",
+        )
+
+        self.assertEqual(out["title"].tolist(), ["B", "C", "D"])
+        self.assertEqual(audit.iloc[0]["rule"], "location_mismatch")
+
+    def test_filter_location_prefers_explicit_state_over_ambiguous_place_name(self):
+        df = pd.DataFrame(
+            [
+                {"title": "Keep", "location": "Victoria Point QLD"},
+                {"title": "Drop", "location": "Melbourne VIC"},
+            ]
+        )
+
+        out, audit = rj.filter_location(
+            df,
+            requested_location="Brisbane QLD, Australia",
+        )
+
+        self.assertEqual(out["title"].tolist(), ["Keep"])
+        self.assertEqual(audit["title"].tolist(), ["Drop"])
+
+    def test_filter_listing_age_rejects_known_stale_rows_but_keeps_unknown_dates(self):
+        df = pd.DataFrame(
+            [
+                {"title": "Fresh", "listing_date": "2026-07-19T10:00:00Z"},
+                {"title": "Stale", "listing_date": "2026-07-14T10:00:00Z"},
+                {"title": "Unknown", "listing_date": ""},
+            ]
+        )
+
+        out, audit = rj.filter_listing_age(
+            df,
+            hours_old=48,
+            now=pd.Timestamp("2026-07-19T12:00:00Z"),
+        )
+
+        self.assertEqual(out["title"].tolist(), ["Fresh", "Unknown"])
+        self.assertEqual(audit.iloc[0]["rule"], "listing_too_old")
+
+    def test_filter_job_quality_blocks_access_walls_and_unverifiable_empty_jd(self):
+        df = pd.DataFrame(
+            [
+                {
+                    "job_url": "https://linkedin.com/jobs/view/1",
+                    "title": "Software Engineer",
+                    "description": "Build reliable APIs and distributed systems.",
+                },
+                {
+                    "job_url": "https://linkedin.com/jobs/view/2",
+                    "title": "Data Engineer",
+                    "description": "Sign in to view this job",
+                },
+                {
+                    "job_url": "https://linkedin.com/jobs/view/3",
+                    "title": "Frontend Engineer",
+                    "description": "",
+                },
+            ]
+        )
+
+        out, audit = rj.filter_job_quality(df, require_description=True)
+
+        self.assertEqual(out["title"].tolist(), ["Software Engineer"])
+        self.assertEqual(
+            audit["rule"].tolist(),
+            ["invalid_description", "missing_description"],
+        )
 
     def test_filter_description_only_drops_hard_rights_requirement(self):
         from rights_filter import filter_description_v2
@@ -373,6 +643,21 @@ class RunJobspyDedupeTests(unittest.TestCase):
         self.assertIn("Minimum of 5 years required.", cleaned)
         self.assertIn("Must-have: Python.", cleaned)
         self.assertNotIn("<p>", cleaned)
+
+    def test_keep_columns_preserves_normalized_listing_date(self):
+        df = pd.DataFrame(
+            [
+                {
+                    "job_url": "https://linkedin.com/jobs/view/1",
+                    "title": "Software Engineer",
+                    "date_posted": pd.Timestamp("2026-07-19T10:00:00Z"),
+                }
+            ]
+        )
+
+        out = rj.keep_columns(df)
+
+        self.assertEqual(out.iloc[0]["listing_date"], "2026-07-19T10:00:00+00:00")
 
     def test_parse_csv_list_dedupes_and_trims(self):
         out = rj._parse_csv_list(" alpha , beta , ,BETA ")

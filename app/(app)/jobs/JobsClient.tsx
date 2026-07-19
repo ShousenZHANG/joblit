@@ -16,7 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useGuide } from "@/app/GuideContext";
 import { useFetchStatus, type FetchRunStatus } from "@/app/FetchStatusContext";
 
-import type { JobItem, JobStatus } from "./types";
+import type { JobDetailResponse, JobItem, JobStatus } from "./types";
 import { getErrorMessage } from "./types";
 import { useJobFilters } from "./hooks/useJobFilters";
 import { useJobPagination } from "./hooks/useJobPagination";
@@ -28,6 +28,7 @@ import { JobListItem } from "./components/JobListItem";
 import { useFitScan } from "./hooks/useFitScan";
 import { VirtualJobList, type VirtualJobListHandle } from "./components/VirtualJobList";
 import { JobBatchDeleteDialog } from "./components/JobBatchDeleteDialog";
+import { JobBulkIgnoreDialog } from "./components/JobBulkIgnoreDialog";
 import { JobSearchBar } from "./components/JobSearchBar";
 import { ExternalGenerateDialog } from "./components/ExternalGenerateDialog";
 import { LocalAiGenerateDialog } from "./components/LocalAiGenerateDialog";
@@ -210,7 +211,14 @@ export function JobsClient({
   const fitScan = useFitScan({ onJobScored: refetch });
   const [hideLowFit, setHideLowFit] = useState(false);
   // One undo window for the last bulk-ignore sweep.
-  const [ignoredUndo, setIgnoredUndo] = useState<{ count: number; jobIds: string[] } | null>(null);
+  const [ignoredUndo, setIgnoredUndo] = useState<{
+    count: number;
+    ignoredAt: string;
+    maxScore: number;
+  } | null>(null);
+  const [ignoreDialogOpen, setIgnoreDialogOpen] = useState(false);
+  const [ignorePreviewCount, setIgnorePreviewCount] = useState(0);
+  const [ignorePending, setIgnorePending] = useState<"preview" | "commit" | "undo" | null>(null);
   // Unscored jobs stay visible: hiding is a triage aid, not a data filter.
   // 45 is the WEAK/POOR boundary — the same threshold bulk-ignore uses.
   const visibleItems = useMemo(
@@ -223,45 +231,101 @@ export function JobsClient({
 
   // Full-database sweep: preview the count, confirm, move NEW -> ignored
   // (REJECTED, reversible) server-side, then offer one-click undo.
-  const handleIgnoreLowFit = useCallback(async () => {
+  const handlePrepareIgnoreLowFit = useCallback(async () => {
+    if (ignorePending) return;
+    setIgnorePending("preview");
     try {
-      const preview = (await (await fetch("/api/jobs/bulk-ignore", {
+      const response = await fetch("/api/jobs/bulk-ignore", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ maxScore: 44, preview: true }),
-      })).json()) as { count?: number };
+      });
+      const preview = (await response.json().catch(() => ({}))) as {
+        count?: number;
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(preview.error || t("fitScan.ignoreFailed"));
+      }
       const count = preview.count ?? 0;
       if (count === 0) {
         toast({ description: t("fitScan.ignoreNone") });
         return;
       }
-      if (!window.confirm(t("fitScan.ignoreConfirm", { count }))) return;
-      const result = (await (await fetch("/api/jobs/bulk-ignore", {
+      setIgnorePreviewCount(count);
+      setIgnoreDialogOpen(true);
+    } catch {
+      toast({ description: t("fitScan.ignoreFailed"), variant: "destructive" });
+    } finally {
+      setIgnorePending(null);
+    }
+  }, [ignorePending, t, toast]);
+
+  const handleIgnoreLowFit = useCallback(async () => {
+    if (ignorePending) return;
+    setIgnorePending("commit");
+    try {
+      const response = await fetch("/api/jobs/bulk-ignore", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ maxScore: 44 }),
-      })).json()) as { count?: number; jobIds?: string[] };
-      setIgnoredUndo({ count: result.count ?? 0, jobIds: result.jobIds ?? [] });
-      refetch();
+      });
+      const result = (await response.json().catch(() => ({}))) as {
+        count?: number;
+        ignoredAt?: string;
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(result.error || t("fitScan.ignoreFailed"));
+      }
+
+      const count = result.count ?? 0;
+      if (count === 0) {
+        setIgnoreDialogOpen(false);
+        toast({ description: t("fitScan.ignoreNone") });
+        return;
+      }
+      if (!result.ignoredAt || Number.isNaN(Date.parse(result.ignoredAt))) {
+        throw new Error("Invalid bulk-ignore response");
+      }
+      setIgnoredUndo({
+        count,
+        ignoredAt: result.ignoredAt,
+        maxScore: 44,
+      });
+      setIgnoreDialogOpen(false);
+      await invalidateJobsQueries(queryClient);
     } catch {
       toast({ description: t("fitScan.ignoreFailed"), variant: "destructive" });
+    } finally {
+      setIgnorePending(null);
     }
-  }, [refetch, t, toast]);
+  }, [ignorePending, queryClient, t, toast]);
 
   const handleUndoIgnore = useCallback(async () => {
-    if (!ignoredUndo) return;
+    if (!ignoredUndo || ignorePending) return;
+    setIgnorePending("undo");
     try {
-      await fetch("/api/jobs/bulk-ignore", {
+      const response = await fetch("/api/jobs/bulk-ignore", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ restoreJobIds: ignoredUndo.jobIds }),
+        body: JSON.stringify({
+          restoreIgnoredAt: ignoredUndo.ignoredAt,
+          maxScore: ignoredUndo.maxScore,
+        }),
       });
+      const result = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        throw new Error(result.error || t("fitScan.ignoreFailed"));
+      }
       setIgnoredUndo(null);
-      refetch();
+      await invalidateJobsQueries(queryClient);
     } catch {
       toast({ description: t("fitScan.ignoreFailed"), variant: "destructive" });
+    } finally {
+      setIgnorePending(null);
     }
-  }, [ignoredUndo, refetch, t, toast]);
+  }, [ignorePending, ignoredUndo, queryClient, t, toast]);
   const localAiDialogVisible = localAiDialogOpen
     || ["starting", "queued", "running", "stopping", "importing"].includes(localAi.runState.status);
 
@@ -301,7 +365,11 @@ export function JobsClient({
   const [prevItemsIdKey, setPrevItemsIdKey] = useState(itemsIdKey);
   if (itemsIdKey !== prevItemsIdKey) {
     setPrevItemsIdKey(itemsIdKey);
-    if (batchSelectMode && batchSelectedIds.size > 0) {
+    if (
+      batchSelectMode &&
+      batchSelectedIds.size > 0 &&
+      !batchDeleteMutation.isPending
+    ) {
       const currentIds = new Set(items.map((it) => it.id));
       const pruned = new Set(
         [...batchSelectedIds].filter((id) => currentIds.has(id)),
@@ -318,6 +386,7 @@ export function JobsClient({
   // state of .app-shell when the dialog unmounts.
   const anyDialogOpen =
     batchDeleteConfirmOpen ||
+    ignoreDialogOpen ||
     previewOpen ||
     ext.externalDialogOpen ||
     !!ext.tailorReviewDraft;
@@ -363,6 +432,9 @@ export function JobsClient({
     jobLevelFilter !== "ALL",
     statusFilter !== "NEW",
   ].filter(Boolean).length;
+  const allVisibleBatchSelected =
+    visibleItems.length > 0 &&
+    visibleItems.every((item) => batchSelectedIds.has(item.id));
 
   function triggerSearch() {
     invalidateJobsQueries(queryClient);
@@ -431,10 +503,13 @@ export function JobsClient({
   }
 
   function toggleSelectAll() {
-    if (batchSelectedIds.size === items.length) {
+    const visibleIds = visibleItems.map((item) => item.id);
+    const allVisibleSelected =
+      visibleIds.length > 0 && visibleIds.every((id) => batchSelectedIds.has(id));
+    if (allVisibleSelected) {
       setBatchSelectedIds(new Set());
     } else {
-      setBatchSelectedIds(new Set(items.map((it) => it.id)));
+      setBatchSelectedIds(new Set(visibleIds));
     }
   }
 
@@ -446,10 +521,22 @@ export function JobsClient({
   function confirmBatchDelete() {
     const ids = [...batchSelectedIds].filter((id) => !deletingIds.has(id));
     if (ids.length > 0) {
-      batchDeleteMutation.mutate(ids);
+      batchDeleteMutation.mutate(ids, {
+        onSuccess: (result) => {
+          if (result.failedIds.length > 0) {
+            setBatchSelectMode(true);
+            setBatchSelectedIds(new Set(result.failedIds));
+            return;
+          }
+          exitBatchMode();
+        },
+        onError: () => {
+          setBatchSelectMode(true);
+          setBatchSelectedIds(new Set(ids));
+        },
+      });
     }
     setBatchDeleteConfirmOpen(false);
-    exitBatchMode();
   }
 
   const effectiveSelectedId = useMemo(() => {
@@ -513,17 +600,55 @@ export function JobsClient({
       const res = await fetch(`/api/jobs/${effectiveSelectedId}`);
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || t("errorLoadDetails"));
-      return json as { id: string; description: string | null };
+      return json as JobDetailResponse;
     },
     enabled: Boolean(effectiveSelectedId),
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
-  const selectedDescription = selectedJob ? detailQuery.data?.description ?? "" : "";
-  const detailError = detailQuery.error
-    ? getErrorMessage(detailQuery.error, t("errorLoadDetails"))
+  const {
+    data: detailData,
+    error: detailQueryError,
+    isFetching: detailIsFetching,
+    refetch: refetchDetail,
+  } = detailQuery;
+  const fitDetailRefetchKeyRef = useRef<string | null>(null);
+  const selectedDescription = selectedJob ? detailData?.description ?? "" : "";
+  const selectedJobId = selectedJob?.id;
+  const selectedJobVersion = selectedJob?.updatedAt;
+  const selectedJobEligibility = selectedJob?.fitEligibility;
+  // The list and detail have different cache lifetimes. Compare row versions
+  // so any re-score/status update refreshes the detail instead of combining a
+  // new score with a stale GATE matrix for up to five minutes.
+  useEffect(() => {
+    const versionChanged =
+      Boolean(detailData?.updatedAt) &&
+      detailData?.updatedAt !== selectedJobVersion;
+    const missingCompletedMatrix =
+      Boolean(selectedJobEligibility) && !detailData?.fitMatrix;
+    if (
+      selectedJobId &&
+      (versionChanged || missingCompletedMatrix) &&
+      !detailIsFetching
+    ) {
+      const key = `${selectedJobId}:${selectedJobVersion}`;
+      if (fitDetailRefetchKeyRef.current === key) return;
+      fitDetailRefetchKeyRef.current = key;
+      void refetchDetail();
+    }
+  }, [
+    detailData?.fitMatrix,
+    detailData?.updatedAt,
+    detailIsFetching,
+    refetchDetail,
+    selectedJobEligibility,
+    selectedJobId,
+    selectedJobVersion,
+  ]);
+  const detailError = detailQueryError
+    ? getErrorMessage(detailQueryError, t("errorLoadDetails"))
     : null;
-  const detailLoading = detailQuery.isFetching && !detailQuery.data;
+  const detailLoading = detailIsFetching && !detailData;
 
   const openLocalAiGenerate = useCallback((job: JobItem, target: "resume" | "cover") => {
     setLocalAiJob({ job, target });
@@ -885,10 +1010,11 @@ export function JobsClient({
                 <button
                   type="button"
                   onClick={toggleSelectAll}
-                  className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-foreground/90 transition-colors hover:bg-brand-emerald-100"
-                  aria-label={batchSelectedIds.size === items.length ? t("deselectAll") : t("selectAll")}
+                  disabled={batchDeleteMutation.isPending}
+                  className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-foreground/90 transition-colors hover:bg-brand-emerald-100 disabled:cursor-wait disabled:opacity-60"
+                  aria-label={allVisibleBatchSelected ? t("deselectAll") : t("selectAll")}
                 >
-                  {batchSelectedIds.size === items.length ? (
+                  {allVisibleBatchSelected ? (
                     <CheckSquare className="h-4 w-4 text-brand-emerald-600" />
                   ) : (
                     <Square className="h-4 w-4 text-muted-foreground" />
@@ -903,17 +1029,23 @@ export function JobsClient({
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  disabled={batchSelectedIds.size === 0}
+                  disabled={batchSelectedIds.size === 0 || batchDeleteMutation.isPending}
                   onClick={() => setBatchDeleteConfirmOpen(true)}
+                  aria-busy={batchDeleteMutation.isPending}
                   className="flex items-center gap-1 rounded-lg bg-destructive px-3 py-1.5 text-xs font-semibold text-destructive-foreground shadow-sm transition-all duration-150 hover:bg-destructive/90 active:translate-y-px disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  {tc("delete")}
+                  {batchDeleteMutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin" aria-hidden />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                  )}
+                  {batchDeleteMutation.isPending ? t("deletingSelected") : tc("delete")}
                 </button>
                 <button
                   type="button"
+                  disabled={batchDeleteMutation.isPending}
                   onClick={exitBatchMode}
-                  className="flex items-center justify-center rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  className="flex items-center justify-center rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-wait disabled:opacity-50"
                   aria-label={t("exitSelectionMode")}
                 >
                   <X className="h-4 w-4" />
@@ -986,8 +1118,20 @@ export function JobsClient({
                   {t("fitScan.sortByFit")}
                 </FilterPill>
                 {fitScan.state.status !== "scanning" ? (
-                  <FilterPill active={false} onClick={() => void handleIgnoreLowFit()}>
-                    {t("fitScan.ignoreLow")}
+                  <FilterPill
+                    active={false}
+                    disabled={ignorePending !== null}
+                    onClick={() => void handlePrepareIgnoreLowFit()}
+                    className="disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {ignorePending === "preview" ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Loader2 className="h-3 w-3 motion-safe:animate-spin" aria-hidden />
+                        {t("fitScan.checkingLowFit")}
+                      </span>
+                    ) : (
+                      t("fitScan.ignoreLow")
+                    )}
                   </FilterPill>
                 ) : null}
                 <FilterPill
@@ -1004,10 +1148,15 @@ export function JobsClient({
               <span className="flex min-w-0 items-center gap-2 text-sm text-foreground">
                 <Loader2 className="h-4 w-4 shrink-0 text-brand-emerald-600 motion-safe:animate-spin" aria-hidden />
                 <span className="truncate">
-                  {t("fitScan.bannerScanning", {
-                    scored: fitScan.state.scored + fitScan.state.prescreened,
-                    remaining: fitScan.state.remaining,
-                  })}
+                  {fitScan.state.leased > 0
+                    ? t("fitScan.bannerRecovering", {
+                        leased: fitScan.state.leased,
+                        remaining: fitScan.state.remaining,
+                      })
+                    : t("fitScan.bannerScanning", {
+                        scored: fitScan.state.scored + fitScan.state.prescreened,
+                        remaining: fitScan.state.remaining,
+                      })}
                 </span>
               </span>
               <button
@@ -1060,9 +1209,13 @@ export function JobsClient({
               <span className="flex shrink-0 items-center gap-1">
                 <button
                   type="button"
+                  disabled={ignorePending === "undo"}
                   onClick={() => void handleUndoIgnore()}
-                  className="rounded-md px-2 py-1 text-xs font-semibold text-brand-emerald-700 transition-colors hover:bg-brand-emerald-50"
+                  className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold text-brand-emerald-700 transition-colors hover:bg-brand-emerald-50 disabled:cursor-wait disabled:opacity-60"
                 >
+                  {ignorePending === "undo" ? (
+                    <Loader2 className="h-3 w-3 motion-safe:animate-spin" aria-hidden />
+                  ) : null}
                   {t("fitScan.undo")}
                 </button>
                 <button
@@ -1277,6 +1430,7 @@ export function JobsClient({
           }}
           selectedJob={selectedJob}
           selectedDescription={selectedDescription}
+          selectedFitMatrix={detailData?.fitMatrix ?? null}
           detailError={detailError}
           detailLoading={detailLoading}
           showLoadingOverlay={showLoadingOverlay}
@@ -1291,7 +1445,7 @@ export function JobsClient({
           onDelete={requestDelete}
           onGenerateResume={(job) => openLocalAiGenerate(job, "resume")}
           onGenerateCover={(job) => openLocalAiGenerate(job, "cover")}
-          onRetryDetail={() => void detailQuery.refetch()}
+          onRetryDetail={() => void refetchDetail()}
         />
         </section>
       </div>
@@ -1302,6 +1456,13 @@ export function JobsClient({
         count={batchSelectedIds.size}
         onConfirm={confirmBatchDelete}
         cancelLabel={tc("cancel")}
+      />
+      <JobBulkIgnoreDialog
+        open={ignoreDialogOpen}
+        count={ignorePreviewCount}
+        pending={ignorePending === "commit"}
+        onOpenChange={setIgnoreDialogOpen}
+        onConfirm={() => void handleIgnoreLowFit()}
       />
     </>
   );

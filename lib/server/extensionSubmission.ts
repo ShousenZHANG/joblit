@@ -11,7 +11,25 @@ interface CreateSubmissionInput {
   fieldMappings: Record<string, { source: string; profilePath?: string; confidence: number }>;
 }
 
+export class SubmissionJobAccessError extends Error {
+  constructor() {
+    super("The referenced job is not available for this user");
+    this.name = "SubmissionJobAccessError";
+  }
+}
+
 export async function createFormSubmission(input: CreateSubmissionInput) {
+  // `FormSubmission.jobId` has a plain foreign key, so the database alone
+  // cannot guarantee that the referenced job belongs to the same tenant.
+  // Resolve ownership before creating the relation.
+  if (input.jobId) {
+    const ownedJob = await prisma.job.findFirst({
+      where: { id: input.jobId, userId: input.userId },
+      select: { id: true },
+    });
+    if (!ownedJob) throw new SubmissionJobAccessError();
+  }
+
   return prisma.formSubmission.create({
     data: {
       userId: input.userId,

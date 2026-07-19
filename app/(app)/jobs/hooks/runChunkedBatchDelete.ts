@@ -8,6 +8,8 @@ interface ChunkResult {
 interface BatchDeleteSummary {
   deleted: number;
   notFound: number;
+  /** IDs whose chunk reached the server and returned a valid response. */
+  completedIds: string[];
   failedIds: string[];
   /** First error encountered. Other chunks continue regardless. */
   firstError?: Error;
@@ -57,6 +59,7 @@ export async function runChunkedBatchDelete(
 
   let deleted = 0;
   let notFound = 0;
+  const completedIds: string[] = [];
   const failedIds: string[] = [];
   let firstError: Error | undefined;
 
@@ -66,6 +69,7 @@ export async function runChunkedBatchDelete(
       const result = await options.sendChunk(chunk);
       deleted += result.deleted;
       notFound += result.notFound;
+      completedIds.push(...chunk);
     } catch (err) {
       failedIds.push(...chunk);
       if (!firstError) {
@@ -80,5 +84,5 @@ export async function runChunkedBatchDelete(
     });
   }
 
-  return { deleted, notFound, failedIds, firstError };
+  return { deleted, notFound, completedIds, failedIds, firstError };
 }

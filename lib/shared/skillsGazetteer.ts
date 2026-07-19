@@ -12,7 +12,7 @@
 //   - Coverage target: top ~250 skills that appear in >1% of SWE postings.
 //     Incomplete by design — gracefully degrades (just under-counts).
 
-interface GazetteerEntry {
+export interface GazetteerEntry {
   name: string;
   aliases: string[];
 }
@@ -25,6 +25,7 @@ export const SKILLS_GAZETTEER: GazetteerEntry[] = [
   { name: "Java", aliases: ["java"] },
   { name: "Kotlin", aliases: ["kotlin"] },
   { name: "Scala", aliases: ["scala"] },
+  // Bare "go" is resolved contextually below; global matching is too noisy.
   { name: "Go", aliases: ["golang", "go-lang"] },
   { name: "Rust", aliases: ["rust", "rust-lang"] },
   { name: "C++", aliases: ["c\\+\\+", "cpp"] },
@@ -86,6 +87,7 @@ export const SKILLS_GAZETTEER: GazetteerEntry[] = [
   { name: "Koa", aliases: ["koa", "koa\\.js"] },
   { name: "Deno", aliases: ["deno"] },
   { name: "Bun", aliases: ["bun"] },
+  // Bare "spring" is resolved contextually below; global matching is too noisy.
   { name: "Spring", aliases: ["spring framework"] },
   { name: "Spring Boot", aliases: ["spring boot", "springboot"] },
   { name: "Spring Cloud", aliases: ["spring cloud"] },
@@ -140,8 +142,19 @@ export const SKILLS_GAZETTEER: GazetteerEntry[] = [
 
   // ── Cloud / infra ─────────────────────────────────────
   { name: "AWS", aliases: ["aws", "amazon web services"] },
+  { name: "Amazon EC2", aliases: ["amazon ec2", "aws ec2", "ec2"] },
+  { name: "Amazon ECS", aliases: ["amazon ecs", "aws ecs", "ecs"] },
+  { name: "Amazon EKS", aliases: ["amazon eks", "aws eks", "eks"] },
+  { name: "Amazon RDS", aliases: ["amazon rds", "aws rds", "rds"] },
+  { name: "Amazon S3", aliases: ["amazon s3", "aws s3", "s3"] },
+  { name: "CloudFormation", aliases: ["cloudformation", "cloud formation"] },
   { name: "GCP", aliases: ["gcp", "google cloud", "google cloud platform"] },
+  { name: "Google Kubernetes Engine", aliases: ["google kubernetes engine", "gke"] },
+  { name: "Cloud Run", aliases: ["google cloud run", "cloud run"] },
   { name: "Azure", aliases: ["azure", "microsoft azure"] },
+  { name: "Azure Kubernetes Service", aliases: ["azure kubernetes service", "aks"] },
+  { name: "Azure DevOps", aliases: ["azure devops"] },
+  { name: "Azure Functions", aliases: ["azure functions"] },
   { name: "Vercel", aliases: ["vercel"] },
   { name: "Netlify", aliases: ["netlify"] },
   { name: "Cloudflare", aliases: ["cloudflare"] },
@@ -343,7 +356,12 @@ function compileGazetteerRegex(): RegExp {
   }
   // Sort longest-first so "node.js" matches before "node"
   parts.sort((a, b) => b.length - a.length);
-  return new RegExp(`\\b(?:${parts.join("|")})\\b`, "gi");
+  // Word boundaries fail for punctuation-led or trailing names such as .NET,
+  // C# and C++. Capture an optional separator instead.
+  return new RegExp(
+    `(^|[^A-Za-z0-9_])(${parts.join("|")})(?=$|[^A-Za-z0-9_])`,
+    "gi",
+  );
 }
 
 const GAZETTEER_REGEX = compileGazetteerRegex();
@@ -366,19 +384,133 @@ function buildAliasIndex(): Map<string, string> {
 
 const ALIAS_INDEX = buildAliasIndex();
 
+export type SkillMention = {
+  name: string;
+  alias: string;
+  index: number;
+};
+
+const CONTEXTUAL_SKILL_RULES: ReadonlyArray<{
+  name: "Go" | "Spring";
+  patterns: readonly RegExp[];
+}> = [
+  {
+    name: "Go",
+    patterns: [
+      /\b(?:experience|expertise|knowledge|proficiency)\s+(?:in|of|with)\s+(?:the\s+)?(go)\b/gi,
+      /\b(?:code|coding|develop(?:ment|ing)?|programming|services?\s+written|written)\s+(?:in|with)\s+(go)\b/gi,
+      /\b(go)\b(?=\s+(?:apis?|backend|codebase|developer|development|engineer|engineering|language|microservices?|modules?|programming|sdk|services?|tooling)\b)/gi,
+      /\b(?:c#|c\+\+|java|javascript|kotlin|python|rust|scala|terraform|typescript)\s*(?:,|\/|\+|\band\b|\bor\b)\s*(go)\b/gi,
+      /\b(Go)\b(?=\s*(?:[,;/)]|$|\band\b|\bor\b))/g,
+    ],
+  },
+  {
+    name: "Spring",
+    patterns: [
+      /\b(?:[Ee]xperience|[Ee]xpertise|[Kk]nowledge|[Pp]roficiency)\s+(?:in|of|with)\s+(?:the\s+)?(Spring)\b(?!\s+(?:boot|cloud|framework)\b)/g,
+      /\b(spring)\b(?=\s+(?:apis?|batch|data|developer|development|ecosystem|integration|mvc|security|services?|webflux)\b)/gi,
+      /\bjava\s*(?:,|\/|\+|\band\b|\bor\b)\s*(spring)\b(?!\s+(?:boot|cloud|framework)\b)/gi,
+      /\b(spring)\b(?!\s+(?:boot|cloud|framework)\b)\s*(?:,|\/|\+|\band\b|\bor\b)\s*java\b/gi,
+    ],
+  },
+];
+
+function extractContextualSkillMentions(text: string): SkillMention[] {
+  const mentions: SkillMention[] = [];
+  for (const rule of CONTEXTUAL_SKILL_RULES) {
+    for (const pattern of rule.patterns) {
+      pattern.lastIndex = 0;
+      let match: RegExpExecArray | null;
+      while ((match = pattern.exec(text)) !== null) {
+        const alias = match[1];
+        if (!alias) continue;
+        const relativeIndex = match[0].toLowerCase().lastIndexOf(
+          alias.toLowerCase(),
+        );
+        mentions.push({
+          name: rule.name,
+          alias,
+          index: match.index + Math.max(0, relativeIndex),
+        });
+      }
+    }
+  }
+  return mentions;
+}
+
+const SKILL_IMPLICATIONS: Readonly<Record<string, readonly string[]>> = {
+  TypeScript: ["JavaScript"],
+  "React Native": ["React"],
+  "Next.js": ["React"],
+  NestJS: ["Node.js"],
+  Express: ["Node.js"],
+  "Spring Boot": ["Spring", "Java"],
+  Django: ["Python"],
+  Flask: ["Python"],
+  FastAPI: ["Python"],
+  Rails: ["Ruby"],
+  Laravel: ["PHP"],
+  "ASP.NET": [".NET"],
+  "Amazon EKS": ["Kubernetes", "AWS"],
+  "Amazon ECS": ["AWS"],
+  "Amazon EC2": ["AWS"],
+  "Amazon RDS": ["AWS"],
+  "Amazon S3": ["AWS"],
+  CloudFormation: ["AWS"],
+  "Google Kubernetes Engine": ["Kubernetes", "GCP"],
+  "Cloud Run": ["GCP"],
+  "Azure Kubernetes Service": ["Kubernetes", "Azure"],
+  "Azure DevOps": ["Azure"],
+  "Azure Functions": ["Azure"],
+};
+
+/**
+ * Add only one-way, factually safe implications. EKS proves Kubernetes/AWS
+ * exposure, while generic Kubernetes does not prove EKS.
+ */
+export function expandSkillSet(skills: Iterable<string>): Set<string> {
+  const expanded = new Set(skills);
+  const queue = [...expanded];
+  while (queue.length) {
+    const skill = queue.shift();
+    if (!skill) continue;
+    for (const implied of SKILL_IMPLICATIONS[skill] ?? []) {
+      if (expanded.has(implied)) continue;
+      expanded.add(implied);
+      queue.push(implied);
+    }
+  }
+  return expanded;
+}
+
+/** Return every canonical skill occurrence with source position and alias. */
+export function extractSkillMentions(text: string): SkillMention[] {
+  if (!text) return [];
+  const mentions: SkillMention[] = extractContextualSkillMentions(text);
+  GAZETTEER_REGEX.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = GAZETTEER_REGEX.exec(text)) !== null) {
+    const alias = match[2];
+    if (!alias) continue;
+    const canonical = ALIAS_INDEX.get(alias.toLowerCase());
+    if (!canonical) continue;
+    mentions.push({
+      name: canonical,
+      alias,
+      index: match.index + (match[1]?.length ?? 0),
+    });
+  }
+  const unique = new Map<string, SkillMention>();
+  for (const mention of mentions) {
+    unique.set(`${mention.name}\u0000${mention.index}`, mention);
+  }
+  return [...unique.values()].sort((a, b) => a.index - b.index);
+}
+
 /**
  * Scan arbitrary text for gazetteer skills. Returns a deduplicated set of
  * canonical skill names (UI-friendly).
  */
 export function extractSkills(text: string): Set<string> {
-  const hits = new Set<string>();
-  if (!text) return hits;
-  // Reset regex state — global regex retains lastIndex across calls.
-  GAZETTEER_REGEX.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = GAZETTEER_REGEX.exec(text)) !== null) {
-    const canonical = ALIAS_INDEX.get(match[0].toLowerCase());
-    if (canonical) hits.add(canonical);
-  }
-  return hits;
+  return new Set(extractSkillMentions(text).map((mention) => mention.name));
 }

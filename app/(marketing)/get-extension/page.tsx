@@ -108,7 +108,7 @@ export default async function ExtensionGuidePage() {
             </div>
             <p className="mb-4 text-sm text-muted-foreground">{t("downloadDesc")}</p>
             <a
-              href="https://github.com/ShousenZHANG/joblit/releases/latest"
+              href="https://github.com/ShousenZHANG/jobflow-web/releases/latest"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-brand-emerald-700 px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-emerald-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background"

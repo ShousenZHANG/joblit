@@ -113,6 +113,7 @@ export async function processCnFetchRun(
           jobType: j.jobType,
           jobLevel: j.jobLevel,
           description: j.description,
+          listingDate: j.listingDate ? new Date(j.listingDate) : null,
           market: "CN",
           status: "NEW",
         })),

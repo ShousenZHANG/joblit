@@ -6,9 +6,10 @@ import time
 import math
 import random
 import logging
+import unicodedata
 from html import unescape
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit, parse_qs
+from urllib.parse import urlsplit, urlunsplit, parse_qs, urlencode, quote
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
@@ -36,6 +37,15 @@ DEFAULT_DETAIL_URL_RETRIES = 2
 DEFAULT_DETAIL_URL_BACKOFF_BASE_SEC = 1.5
 
 LINKEDIN_JOB_ID_RE = re.compile(r"linkedin\.com/jobs/view/(\d+)", re.IGNORECASE)
+IDENTITY_QUERY_GROUPS = (
+    ("gh_jid", ("gh_jid",)),
+    ("job_id", ("jobid", "job_id", "jid")),
+    (
+        "requisition_id",
+        ("requisitionid", "requisition_id", "reqid", "req_id"),
+    ),
+    ("posting_id", ("postingid", "posting_id")),
+)
 
 CANCELLED_ERROR = "Cancelled by user"
 
@@ -47,6 +57,12 @@ FETCH_EXCLUSION_MANIFEST_PATH = (
     / "lib"
     / "shared"
     / "fetchExclusionCriteria.config.json"
+)
+FETCH_ROLE_PACKS_MANIFEST_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "lib"
+    / "shared"
+    / "fetchRolePacks.config.json"
 )
 
 # Description-level rights/clearance/sponsorship filtering lives in
@@ -82,8 +98,37 @@ def _experience_rule_thresholds() -> Dict[str, int]:
     return out
 
 
+def _role_generic_signal_tokens() -> set[str]:
+    fallback = {
+        "application",
+        "dev",
+        "developer",
+        "development",
+        "engineer",
+        "engineering",
+        "full",
+        "fullstack",
+        "role",
+        "software",
+        "stack",
+    }
+    try:
+        manifest = json.loads(
+            FETCH_ROLE_PACKS_MANIFEST_PATH.read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError, TypeError):
+        return fallback
+    configured = {
+        str(token).strip().lower()
+        for token in manifest.get("genericTokens", [])
+        if str(token).strip()
+    }
+    return fallback | configured
+
+
 DESCRIPTION_RIGHTS_RULES = set(_description_rules_by_category("rights"))
 EXPERIENCE_RULE_THRESHOLDS = _experience_rule_thresholds()
+ROLE_GENERIC_SIGNAL_TOKENS = _role_generic_signal_tokens()
 
 EXPERIENCE_REQUIREMENT_PATTERNS = [
     re.compile(
@@ -114,6 +159,80 @@ EXPERIENCE_REQUIREMENT_PATTERNS = [
 
 EXPERIENCE_SOFT_GUARD_RE = re.compile(
     r"(?i)\b(?:up\s+to|less\s+than|fewer\s+than|under|within|no\s+more\s+than|maximum|max\.?|preferred|nice\s+to\s+have)\b"
+)
+
+AU_STATE_ALIASES = {
+    "NSW": ("nsw", "new south wales"),
+    "VIC": ("vic", "victoria"),
+    "QLD": ("qld", "queensland"),
+    "WA": ("wa", "western australia"),
+    "SA": ("sa", "south australia"),
+    "TAS": ("tas", "tasmania"),
+    "ACT": ("act", "australian capital territory"),
+    "NT": ("nt", "northern territory"),
+}
+
+INVALID_DESCRIPTION_RE = re.compile(
+    r"(?i)^\s*(?:"
+    r"sign\s+in\s+to\s+view\s+this\s+job|"
+    r"join\s+linkedin(?:\s+to\s+view\s+this\s+job)?|"
+    r"page\s+not\s+found|"
+    r"access\s+denied|"
+    r"enable\s+javascript(?:\s+to\s+continue)?|"
+    r"verify\s+you(?:'re|\s+are)\s+human|"
+    r"captcha"
+    r")[\s.!-]*$"
+)
+
+INVALID_TITLE_RE = re.compile(
+    r"(?i)^\s*(?:jobs?|job\s+search|careers?|vacancies|"
+    r"search\s+results?|view\s+all\s+jobs?|sign\s+in)\s*$"
+)
+
+ROLE_TOKENS = {
+    "architect",
+    "developer",
+    "development",
+    "engineer",
+    "engineering",
+    "programmer",
+}
+ROLE_NOISE_TOKENS = {
+    "entry",
+    "graduate",
+    "head",
+    "junior",
+    "lead",
+    "level",
+    "mid",
+    "principal",
+    "senior",
+    "staff",
+}
+CJK_ROLE_TERMS = (
+    "开发工程师",
+    "软件工程师",
+    "开发人员",
+    "技术专家",
+    "工程师",
+    "程序员",
+    "架构师",
+    "开发者",
+    "设计师",
+    "分析师",
+    "经理",
+    "顾问",
+    "专员",
+    "开发",
+)
+CJK_ROLE_NOISE_TERMS = (
+    "高级",
+    "资深",
+    "初级",
+    "中级",
+    "首席",
+    "应届",
+    "校招",
 )
 
 
@@ -231,15 +350,6 @@ def filter_experience_requirements(
     return kept, audit
 
 
-def _build_query_phrases(queries: List[str]) -> List[str]:
-    phrases: List[str] = []
-    for q in queries or []:
-        q2 = _normalize_text((q or "").strip().strip('"').strip("'"))
-        if q2:
-            phrases.append(q2.lower())
-    return phrases
-
-
 def _resolve_search_terms(title_query: str, queries: List[str]) -> List[str]:
     candidates = [*(queries or []), title_query]
     out: List[str] = []
@@ -254,6 +364,42 @@ def _resolve_search_terms(title_query: str, queries: List[str]) -> List[str]:
         seen.add(key)
         out.append(cleaned)
     return out
+
+
+def _clean_query_values(values: Any) -> List[str]:
+    if not isinstance(values, list):
+        return []
+    out: List[str] = []
+    seen = set()
+    for value in values:
+        if not isinstance(value, str):
+            continue
+        cleaned = value.strip()
+        key = cleaned.lower()
+        if not cleaned or key in seen:
+            continue
+        seen.add(key)
+        out.append(cleaned)
+    return out
+
+
+def _resolve_base_queries(
+    raw_queries: Any,
+    title_query: str,
+    expanded_queries: List[str],
+) -> List[str]:
+    if isinstance(raw_queries, dict):
+        explicit = _clean_query_values(raw_queries.get("baseQueries"))
+        if explicit:
+            return explicit
+        if raw_queries.get("smartExpand") is False:
+            legacy_unexpanded = _clean_query_values(expanded_queries)
+            if legacy_unexpanded:
+                return legacy_unexpanded
+        if title_query.strip():
+            return [title_query.strip()]
+    legacy = _clean_query_values(expanded_queries)
+    return legacy or ([title_query.strip()] if title_query.strip() else [])
 
 
 def _results_per_query(total_results: int, query_count: int) -> int:
@@ -332,6 +478,100 @@ def _normalize_text(text: str) -> str:
     s = re.sub(r"[^a-z0-9]+", " ", s)
     s = re.sub(r"\s+", " ", s).strip()
     return s
+
+
+def _normalize_role_text(text: str) -> str:
+    value = unicodedata.normalize("NFKC", str(text or "")).lower()
+    value = re.sub(r"\bfront[\s-]*end\b", "frontend", value)
+    value = re.sub(r"\bback[\s-]*end\b", "backend", value)
+    value = re.sub(r"\bfull[\s-]*stack\b", "fullstack", value)
+    value = re.sub(r"\bml\b", "machine learning", value)
+    return value
+
+
+def _contains_title_term(haystack: str, raw_needle: str) -> bool:
+    needle = _normalize_role_text(raw_needle).strip()
+    if not needle:
+        return False
+    body = _normalize_role_text(haystack)
+    if re.search(r"[\u3400-\u9fff]", needle):
+        return needle in body
+
+    parts = [p for p in re.split(r"[\s\-_/\.]+", needle) if p]
+    if not parts:
+        return False
+    phrase = r"[\s\-_/\.]+".join(re.escape(part) for part in parts)
+    return bool(re.search(rf"(?<![a-z0-9]){phrase}(?![a-z0-9])", body))
+
+
+def _role_tokens(value: str) -> List[str]:
+    return re.findall(r"[a-z][a-z0-9+#.]*", _normalize_role_text(value))
+
+
+def _has_role_marker(value: str) -> bool:
+    normalized = _normalize_role_text(value)
+    return any(token in ROLE_TOKENS for token in _role_tokens(normalized)) or any(
+        term in normalized for term in CJK_ROLE_TERMS
+    )
+
+
+def _ascii_role_signals(value: str) -> List[str]:
+    return [
+        token
+        for token in _role_tokens(value)
+        if token not in ROLE_TOKENS and token not in ROLE_NOISE_TOKENS
+    ]
+
+
+def _required_ascii_role_signals(value: str) -> List[str]:
+    return [
+        token
+        for token in _ascii_role_signals(value)
+        if token not in ROLE_GENERIC_SIGNAL_TOKENS
+    ]
+
+
+def _cjk_role_signals(value: str) -> List[str]:
+    normalized = re.sub(
+        r"[a-z][a-z0-9+#.]*",
+        " ",
+        _normalize_role_text(value),
+    )
+    for term in (*CJK_ROLE_TERMS, *CJK_ROLE_NOISE_TERMS):
+        normalized = normalized.replace(term, " ")
+    return re.findall(r"[\u3400-\u9fff]+", normalized)
+
+
+def _is_title_relevant(title: str, queries: List[str]) -> bool:
+    for query in queries:
+        if _contains_title_term(title, query):
+            return True
+        if not _has_role_marker(query) or not _has_role_marker(title):
+            continue
+        ascii_signals = _ascii_role_signals(query)
+        cjk_signals = _cjk_role_signals(query)
+        if not ascii_signals and not cjk_signals:
+            continue
+        if not all(_contains_title_term(title, signal) for signal in ascii_signals):
+            continue
+        normalized_title = _normalize_role_text(title)
+        if all(signal in normalized_title for signal in cjk_signals):
+            return True
+    return False
+
+
+def _matches_base_query_constraints(title: str, base_queries: List[str]) -> bool:
+    normalized_title = _normalize_role_text(title)
+    for query in base_queries:
+        ascii_signals = _required_ascii_role_signals(query)
+        cjk_signals = _cjk_role_signals(query)
+        if not ascii_signals and not cjk_signals:
+            return True
+        if not all(_contains_title_term(title, signal) for signal in ascii_signals):
+            continue
+        if all(signal in normalized_title for signal in cjk_signals):
+            return True
+    return False
 
 
 def _fingerprint_value(value: Any) -> str:
@@ -430,15 +670,20 @@ def _canonicalize_job_url(url: str) -> str:
     except Exception:
         return raw
     if not parts.scheme or not parts.netloc:
-        return raw
+        return ""
 
     scheme = parts.scheme.lower()
+    if scheme not in ("http", "https"):
+        return ""
     hostname = (parts.hostname or "").lower()
     if hostname.startswith("www."):
         hostname = hostname[4:]
     if hostname == "linkedin.com" or hostname.endswith(".linkedin.com"):
         hostname = "linkedin.com"
-    port = parts.port
+    try:
+        port = parts.port
+    except ValueError:
+        return ""
     if not hostname:
         return raw
     if port and not ((scheme == "https" and port == 443) or (scheme == "http" and port == 80)):
@@ -457,8 +702,26 @@ def _canonicalize_job_url(url: str) -> str:
         if not path:
             path = "/"
 
-    # Drop query and fragment to remove tracking variants.
-    return urlunsplit((scheme, netloc, path, "", ""))
+    query_values = parse_qs(parts.query or "", keep_blank_values=False)
+    lower_query_values = {
+        key.lower(): values
+        for key, values in query_values.items()
+    }
+    stable_query = ""
+    for canonical_key, aliases in IDENTITY_QUERY_GROUPS:
+        value = next(
+            (
+                str((lower_query_values.get(alias) or [""])[0]).strip()
+                for alias in aliases
+                if (lower_query_values.get(alias) or [""])[0]
+            ),
+            "",
+        )
+        if value and len(value) <= 200:
+            stable_query = urlencode({canonical_key: value}, quote_via=quote)
+            break
+
+    return urlunsplit((scheme, netloc, path, stable_query, ""))
 
 
 def dedupe_jobs(df: pd.DataFrame) -> pd.DataFrame:
@@ -497,23 +760,40 @@ def filter_title(
     queries: List[str],
     enforce_include: bool,
     exclude_terms: Optional[List[str]] = None,
+    base_queries: Optional[List[str]] = None,
 ) -> pd.DataFrame:
     if df.empty:
         return df
     t = df["title"].fillna("")
+    if "job_level" in df.columns:
+        level = df["job_level"].fillna("")
+    elif "seniority_level" in df.columns:
+        level = df["seniority_level"].fillna("")
+    else:
+        level = pd.Series("", index=df.index)
     exclude_re = _build_exclude_title_re(exclude_terms or [])
     if exclude_re:
-        exc = t.apply(lambda s: bool(exclude_re.search(s)))
+        exc = (t.astype(str) + " " + level.astype(str)).apply(
+            lambda value: bool(exclude_re.search(value))
+        )
     else:
         exc = t.apply(lambda s: False)
     out = df[~exc].copy()
     # Optional strict include mode for parity with includeFromQueries config.
     if enforce_include:
-        include_terms = _build_query_phrases(queries)
+        include_terms = [q.strip() for q in queries if q and q.strip()]
         if include_terms:
-            normalized_titles = out["title"].fillna("").apply(_normalize_text)
-            include_mask = normalized_titles.apply(
-                lambda value: any(term in value for term in include_terms)
+            constraints = [
+                q.strip()
+                for q in (base_queries or [])
+                if q and q.strip()
+            ]
+            include_mask = out["title"].fillna("").apply(
+                lambda value: _is_title_relevant(str(value), include_terms)
+                and (
+                    not constraints
+                    or _matches_base_query_constraints(str(value), constraints)
+                )
             )
             out = out[include_mask].copy()
     return out
@@ -529,12 +809,209 @@ def keep_columns(df: pd.DataFrame) -> pd.DataFrame:
         out["job_type"] = out["employment_type"]
     if "job_level" not in out.columns and "seniority_level" in out.columns:
         out["job_level"] = out["seniority_level"]
+    if "listing_date" not in out.columns and "date_posted" in out.columns:
+        out["listing_date"] = out["date_posted"]
 
-    for c in ["job_url", "title", "company", "location", "job_type", "job_level", "description"]:
+    for c in [
+        "job_url",
+        "title",
+        "company",
+        "location",
+        "job_type",
+        "job_level",
+        "description",
+        "listing_date",
+    ]:
         if c not in out.columns:
             out[c] = ""
 
-    return out[["job_url", "title", "company", "location", "job_type", "job_level", "description"]].fillna("")
+    out["listing_date"] = out["listing_date"].apply(_serialize_listing_date)
+    return out[
+        [
+            "job_url",
+            "title",
+            "company",
+            "location",
+            "job_type",
+            "job_level",
+            "description",
+            "listing_date",
+        ]
+    ].fillna("")
+
+
+def _serialize_listing_date(value: Any) -> str:
+    if value is None or (not isinstance(value, (list, dict)) and pd.isna(value)):
+        return ""
+    parsed = pd.to_datetime(value, utc=True, errors="coerce")
+    if pd.isna(parsed):
+        return ""
+    return parsed.isoformat()
+
+
+def _state_from_location(value: Any) -> str:
+    normalized = _normalize_text(str(value or ""))
+    if not normalized:
+        return ""
+
+    # Explicit state codes beat place names: "Victoria Point QLD" is QLD,
+    # not VIC. If several codes occur, the right-most location component wins.
+    code_hits: List[tuple[int, str]] = []
+    for state in AU_STATE_ALIASES:
+        for match in re.finditer(
+            rf"(?<![a-z0-9]){re.escape(state.lower())}(?![a-z0-9])",
+            normalized,
+        ):
+            code_hits.append((match.start(), state))
+    if code_hits:
+        return max(code_hits, key=lambda hit: hit[0])[1]
+
+    # Prefer a long state name in the terminal location component, optionally
+    # followed by "Australia", before considering a weaker anywhere match.
+    for state, aliases in AU_STATE_ALIASES.items():
+        long_aliases = [alias for alias in aliases if len(alias) > 3]
+        for alias in long_aliases:
+            if re.search(
+                rf"(?<![a-z0-9]){re.escape(alias)}(?:\s+australia)?$",
+                normalized,
+            ):
+                return state
+    for state, aliases in AU_STATE_ALIASES.items():
+        for alias in (alias for alias in aliases if len(alias) > 3):
+            if re.search(
+                rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])",
+                normalized,
+            ):
+                return state
+    return ""
+
+
+def _filter_audit_frame(df: pd.DataFrame, rows: List[dict]) -> pd.DataFrame:
+    columns = list(df.columns) + ["rule", "evidence"]
+    return pd.DataFrame(rows, columns=columns) if rows else pd.DataFrame(columns=columns)
+
+
+def filter_location(
+    df: pd.DataFrame,
+    requested_location: str,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Reject only provable Australian state mismatches.
+
+    Empty, remote, country-only, and same-state suburb labels stay. This
+    tightens obvious interstate noise without pretending we can geocode every
+    suburb from a provider label.
+    """
+    if df.empty or "location" not in df.columns:
+        return df.copy(), _filter_audit_frame(df, [])
+
+    requested_state = _state_from_location(requested_location)
+    if not requested_state:
+        return df.copy(), _filter_audit_frame(df, [])
+
+    keep_idx: List[int] = []
+    audit_rows: List[dict] = []
+    for idx, row in df.iterrows():
+        candidate = str(row.get("location") or "").strip()
+        normalized = _normalize_text(candidate)
+        candidate_state = _state_from_location(candidate)
+        if (
+            not candidate
+            or "remote" in normalized
+            or not candidate_state
+            or candidate_state == requested_state
+        ):
+            keep_idx.append(idx)
+            continue
+
+        entry = row.to_dict()
+        entry.update(
+            {
+                "rule": "location_mismatch",
+                "evidence": f"requested={requested_state}; found={candidate_state}",
+            }
+        )
+        audit_rows.append(entry)
+
+    return df.loc[keep_idx].copy(), _filter_audit_frame(df, audit_rows)
+
+
+def filter_listing_age(
+    df: pd.DataFrame,
+    hours_old: int,
+    now: Optional[pd.Timestamp] = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Verify provider freshness when a parseable listing timestamp exists.
+
+    Date-only feeds lose time-of-day, so one extra day is allowed. Unknown
+    dates remain eligible instead of being guessed stale.
+    """
+    if df.empty or "listing_date" not in df.columns or hours_old <= 0:
+        return df.copy(), _filter_audit_frame(df, [])
+
+    current = now if now is not None else pd.Timestamp.now(tz="UTC")
+    current = pd.to_datetime(current, utc=True)
+    cutoff = current - pd.Timedelta(hours=int(hours_old) + 24)
+    future_cutoff = current + pd.Timedelta(hours=24)
+
+    keep_idx: List[int] = []
+    audit_rows: List[dict] = []
+    for idx, row in df.iterrows():
+        raw = row.get("listing_date")
+        parsed = pd.to_datetime(raw, utc=True, errors="coerce")
+        if pd.isna(parsed):
+            keep_idx.append(idx)
+            continue
+
+        rule = ""
+        if parsed < cutoff:
+            rule = "listing_too_old"
+        elif parsed > future_cutoff:
+            rule = "listing_date_in_future"
+
+        if not rule:
+            keep_idx.append(idx)
+            continue
+        entry = row.to_dict()
+        entry.update({"rule": rule, "evidence": parsed.isoformat()})
+        audit_rows.append(entry)
+
+    return df.loc[keep_idx].copy(), _filter_audit_frame(df, audit_rows)
+
+
+def filter_job_quality(
+    df: pd.DataFrame,
+    require_description: bool,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Drop provable non-job rows and descriptions unusable for active gates."""
+    if df.empty:
+        return df.copy(), _filter_audit_frame(df, [])
+
+    keep_idx: List[int] = []
+    audit_rows: List[dict] = []
+    for idx, row in df.iterrows():
+        title = str(row.get("title") or "").strip()
+        url = str(row.get("job_url") or "").strip()
+        description = str(row.get("description") or "").strip()
+        rule = ""
+        evidence = ""
+
+        if not re.match(r"(?i)^https?://", url):
+            rule, evidence = "invalid_job_url", url[:120]
+        elif len(title) < 2 or INVALID_TITLE_RE.match(title):
+            rule, evidence = "invalid_job_title", title[:120]
+        elif description and INVALID_DESCRIPTION_RE.match(description):
+            rule, evidence = "invalid_description", description[:160]
+        elif require_description and not description:
+            rule, evidence = "missing_description", "active JD exclusions require evidence"
+
+        if not rule:
+            keep_idx.append(idx)
+            continue
+        entry = row.to_dict()
+        entry.update({"rule": rule, "evidence": evidence})
+        audit_rows.append(entry)
+
+    return df.loc[keep_idx].copy(), _filter_audit_frame(df, audit_rows)
 
 
 def _clean_description_text(text: str) -> str:
@@ -950,21 +1427,25 @@ def main():
     user_email = run["userEmail"]
     raw_queries = run["queries"] or {}
     if isinstance(raw_queries, list):
-        queries = raw_queries
+        queries = _clean_query_values(raw_queries)
         title_query = queries[0] if queries else ""
         apply_excludes = bool(run.get("filterDescription") if run.get("filterDescription") is not None else True)
         exclude_title_terms: List[str] = []
         exclude_desc_rules: List[str] = []
         source_options: Dict[str, Any] = {}
     elif isinstance(raw_queries, dict):
-        title_query = (raw_queries.get("title") or "").strip()
-        queries = raw_queries.get("queries") or ([title_query] if title_query else [])
+        raw_title = raw_queries.get("title")
+        title_query = raw_title.strip() if isinstance(raw_title, str) else ""
+        queries = _clean_query_values(raw_queries.get("queries"))
+        if not queries and title_query:
+            queries = [title_query]
         apply_excludes = bool(raw_queries.get("applyExcludes", True))
         exclude_title_terms = raw_queries.get("excludeTitleTerms") or []
         exclude_desc_rules = raw_queries.get("excludeDescriptionRules") or []
         source_options = raw_queries.get("sourceOptions") or {}
     else:
         raise RuntimeError("run.queries must be a list or object")
+    base_queries = _resolve_base_queries(raw_queries, title_query, queries)
 
     # v2 matcher: GLOBAL region (unions all country packs) maximizes recall,
     # balanced strictness is the calibrated default. Both fixed — the
@@ -975,7 +1456,11 @@ def main():
     location = run.get("location") or "Sydney, New South Wales, Australia"
     hours_old = int(run.get("hoursOld") or 48)
     results_wanted = int(run.get("resultsWanted") or DEFAULT_FULL_FETCH_RESULTS_WANTED)
-    include_from_queries = bool(run.get("includeFromQueries") or False)
+    include_from_queries = bool(
+        run.get("includeFromQueries")
+        if run.get("includeFromQueries") is not None
+        else True
+    )
     if not include_from_queries and isinstance(raw_queries, dict):
         include_from_queries = bool(raw_queries.get("includeFromQueries") or False)
     proxy_pool = _parse_csv_list(os.environ.get("FETCH_PROXY_POOL", ""))
@@ -1004,8 +1489,9 @@ def main():
     search_terms = _resolve_search_terms(title_query=title_query, queries=queries)
     results_budget_by_term = _build_results_budget_by_term(search_terms, results_wanted)
     logger.info(
-        "Search terms=%s results_budget_by_term=%s source_options=%s",
+        "Search terms=%s base_queries=%s results_budget_by_term=%s source_options=%s",
         len(search_terms),
+        len(base_queries),
         results_budget_by_term,
         {
             "proxyPoolSize": len(proxy_pool),
@@ -1030,9 +1516,24 @@ def main():
             search_terms,
             enforce_include=include_from_queries,
             exclude_terms=exclude_title_terms if apply_excludes else None,
+            base_queries=base_queries,
         )
         logger.info("Rows after title filter: %s", len(df))
         df = keep_columns(df)
+        df, location_audit_df = filter_location(df, requested_location=location)
+        if not location_audit_df.empty:
+            logger.info(
+                "filter_location dropped=%s by_rule=%s",
+                len(location_audit_df),
+                location_audit_df.groupby("rule").size().to_dict(),
+            )
+        df, date_audit_df = filter_listing_age(df, hours_old=hours_old)
+        if not date_audit_df.empty:
+            logger.info(
+                "filter_listing_age dropped=%s by_rule=%s",
+                len(date_audit_df),
+                date_audit_df.groupby("rule").size().to_dict(),
+            )
         # Clean before description exclusion for more consistent matching
         df = clean_description(df)
         # Phase2 JD backfill — JobSpy's linkedin_fetch_description hits the
@@ -1095,6 +1596,16 @@ def main():
                         experience_summary,
                     )
             logger.info("Rows after description filter: %s", len(df))
+        df, quality_audit_df = filter_job_quality(
+            df,
+            require_description=filter_desc,
+        )
+        if not quality_audit_df.empty:
+            logger.info(
+                "filter_job_quality dropped=%s by_rule=%s",
+                len(quality_audit_df),
+                quality_audit_df.groupby("rule").size().to_dict(),
+            )
         df = dedupe_jobs(df)
         items = df.to_dict(orient="records")
 

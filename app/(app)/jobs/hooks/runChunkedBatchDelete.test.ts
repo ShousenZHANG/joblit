@@ -28,6 +28,7 @@ describe("runChunkedBatchDelete", () => {
     });
     expect(summary.deleted).toBe(2);
     expect(summary.notFound).toBe(2);
+    expect(summary.completedIds).toEqual(["a", "b", "c", "d"]);
     expect(summary.failedIds).toEqual([]);
     expect(summary.firstError).toBeUndefined();
   });
@@ -45,6 +46,7 @@ describe("runChunkedBatchDelete", () => {
     });
     expect(sendChunk).toHaveBeenCalledTimes(3);
     expect(summary.deleted).toBe(3);
+    expect(summary.completedIds).toEqual(["a", "b", "e"]);
     expect(summary.failedIds).toEqual(["c", "d"]);
     expect(summary.firstError?.message).toBe("boom");
   });
@@ -109,6 +111,7 @@ describe("runChunkedBatchDelete", () => {
     expect(summary).toEqual({
       deleted: 0,
       notFound: 0,
+      completedIds: [],
       failedIds: [],
       firstError: undefined,
     });

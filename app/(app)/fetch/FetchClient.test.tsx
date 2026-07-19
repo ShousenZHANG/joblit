@@ -143,6 +143,7 @@ describe("FetchClient", () => {
       "Backend Engineer",
     ]);
     expect(body.smartExpand).toBe(true);
+    expect(body.includeFromQueries).toBe(true);
     expect(body.excludeDescriptionRules).toEqual([
       "identity_requirement",
       "experience_requirement_4_plus",

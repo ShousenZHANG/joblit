@@ -13,7 +13,10 @@ export const runtime = "nodejs";
 
 const BATCH_RATE_LIMIT = { limit: 60, windowSeconds: 60 } as const;
 
-/** Serve the next unscored batch; an empty jobIds array means the scan is done. */
+/**
+ * Serve the next unscored batch. Empty jobIds means done only when
+ * pendingTotal is zero; fresh leases return a retryAfterMs polling hint.
+ */
 export async function POST() {
   let session: SessionContext;
   try {

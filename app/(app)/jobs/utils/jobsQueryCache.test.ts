@@ -8,6 +8,7 @@ import {
   patchJobStatusInJobsCache,
   removeJobFromJobsCache,
   removeJobsFromJobsCache,
+  restoreJobsByIdsFromSnapshots,
   restoreJobsSnapshots,
   type JobsInfiniteData,
 } from "./jobsQueryCache";
@@ -160,6 +161,53 @@ describe("jobs query cache helpers", () => {
     const restored = client.getQueryData<JobsInfiniteData>(allKey);
     expect(restored?.pages[0]?.totalCount).toBe(2);
     expect(restored?.pages[1]?.items).toEqual([page2Job]);
+  });
+
+  it("restores only failed optimistic deletes without clobbering concurrent cache changes", () => {
+    const client = createClient();
+    const key = getJobsListQueryKey("status=NEW");
+    const failedJob = { ...baseJob, id: "33333333-3333-3333-3333-333333333333" };
+    const committedJob = { ...baseJob, id: "44444444-4444-4444-4444-444444444444" };
+    const concurrentJob = { ...baseJob, id: "55555555-5555-5555-5555-555555555555" };
+
+    client.setQueryData<JobsInfiniteData>(
+      key,
+      infinite({
+        items: [failedJob, committedJob],
+        nextCursor: null,
+        totalCount: 2,
+      }),
+    );
+
+    const snapshots = removeJobsFromJobsCache(
+      client,
+      new Set([failedJob.id, committedJob.id]),
+    );
+
+    client.setQueryData<JobsInfiniteData>(key, (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        pages: old.pages.map((page, index) =>
+          index === 0
+            ? {
+                ...page,
+                items: [...page.items, concurrentJob],
+                totalCount: 1,
+              }
+            : page,
+        ),
+      };
+    });
+
+    restoreJobsByIdsFromSnapshots(client, snapshots, new Set([failedJob.id]));
+
+    const restored = client.getQueryData<JobsInfiniteData>(key)?.pages[0];
+    expect(restored?.items.map((item) => item.id)).toEqual([
+      failedJob.id,
+      concurrentJob.id,
+    ]);
+    expect(restored?.totalCount).toBe(2);
   });
 
   it("patches generated artifact metadata across every cached jobs page", () => {

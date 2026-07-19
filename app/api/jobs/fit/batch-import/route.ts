@@ -9,6 +9,7 @@ import {
   type SessionContext,
 } from "@/lib/server/auth/requireSession";
 import { verdictForScore } from "@/lib/server/ai/fitScoring";
+import { fitClaimSource } from "@/lib/server/jobs/fitRunService";
 import { prisma } from "@/lib/server/prisma";
 
 export const runtime = "nodejs";
@@ -19,6 +20,7 @@ const MAX_MODEL_OUTPUT_CHARS = 80_000;
 const BodySchema = z
   .object({
     jobIds: z.array(z.string().uuid()).min(1).max(15),
+    claimToken: z.string().uuid(),
     modelOutput: z.string().min(2).max(MAX_MODEL_OUTPUT_CHARS),
     promptMeta: z.record(z.string(), z.unknown()).optional(),
   })
@@ -107,10 +109,16 @@ export async function POST(req: Request) {
       ? body.data.promptMeta.resumeSnapshotUpdatedAt
       : null;
   const now = new Date();
-  await prisma.$transaction(
+  const writes = await prisma.$transaction(
     updates.map((entry) =>
       prisma.job.updateMany({
-        where: { id: entry.jobId, userId },
+        where: {
+          id: entry.jobId,
+          userId,
+          status: "NEW",
+          fitScoredAt: null,
+          fitSource: fitClaimSource(body.data.claimToken),
+        },
         data: {
           fitScore: entry.matchScore,
           // Banding is Joblit's deterministic call, not the model's.
@@ -123,9 +131,17 @@ export async function POST(req: Request) {
       }),
     ),
   );
+  const persisted = updates.filter((_, index) => writes[index]?.count === 1);
+  if (persisted.length === 0) {
+    return errorJson(
+      "FIT_CLAIM_EXPIRED",
+      "This scoring batch is no longer active. Start or resume the scan.",
+      409,
+    );
+  }
 
   return NextResponse.json({
-    scored: updates.map((entry) => ({
+    scored: persisted.map((entry) => ({
       jobId: entry.jobId,
       fitScore: entry.matchScore,
       fitVerdict: verdictForScore(entry.matchScore),

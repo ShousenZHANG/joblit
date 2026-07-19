@@ -110,8 +110,12 @@ export async function POST(
   return NextResponse.json({
     jobId: params.data.id,
     fitScore: result.score,
+    rawFitScore: result.rawScore,
     fitVerdict: result.verdict,
     fitEligibility: result.eligibility,
+    gateStatus: result.gateStatus,
+    gateCap: result.gateCap,
+    criticalGaps: result.criticalGaps,
     typeScores: result.typeScores,
   });
 }

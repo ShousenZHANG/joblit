@@ -59,8 +59,11 @@ describe("job fit import api", () => {
     expect(json).toMatchObject({
       jobId: JOB_ID,
       fitScore: 50,
+      rawFitScore: 50,
       fitVerdict: "MODERATE",
       fitEligibility: "PASS",
+      gateStatus: "CLEAR",
+      gateCap: null,
     });
     expect(jobStore.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -73,6 +76,53 @@ describe("job fit import api", () => {
         }),
       }),
     );
+  });
+
+  it("caps a confirmed hard gate and returns explainable gap metadata", async () => {
+    const gatedMatrix = {
+      requirements: [
+        {
+          id: "r1",
+          type: "REQUIRED",
+          criticality: "GATE",
+          category: "TECHNICAL",
+          requirement: "Kubernetes production experience",
+          judgement: "GAP",
+          jdEvidence: "Kubernetes experience is mandatory",
+          note: "No Kubernetes evidence",
+        },
+        {
+          id: "r2",
+          type: "RESPONSIBILITY",
+          criticality: "CORE",
+          category: "RESPONSIBILITY",
+          requirement: "Lead platform delivery",
+          judgement: "MATCH",
+        },
+      ],
+      eligibility: { status: "PASS", reasons: [] },
+    };
+    const response = await POST(
+      fitRequest({ modelOutput: JSON.stringify(gatedMatrix) }),
+      ctx(),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toMatchObject({
+      fitScore: 29,
+      gateStatus: "BLOCKED",
+      gateCap: 29,
+      criticalGaps: [
+        {
+          id: "r1",
+          requirement: "Kubernetes production experience",
+          judgement: "GAP",
+          category: "TECHNICAL",
+        },
+      ],
+    });
+    expect(json.rawFitScore).toBeGreaterThan(29);
   });
 
   it("tolerates prose around the JSON object", async () => {

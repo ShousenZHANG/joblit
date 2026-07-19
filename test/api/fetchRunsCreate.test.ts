@@ -57,8 +57,10 @@ describe("fetch runs create api", () => {
     expect(res.status).toBe(201);
     const payload = fetchRunStore.create.mock.calls[0]?.[0]?.data?.queries;
     expect(payload.title).toBe("Software Engineer");
+    expect(payload.baseQueries).toEqual(["Software Engineer"]);
     expect(payload.queries).toContain("Forward Deployed Engineer");
     expect(payload.queries).toContain("Full Stack Engineer");
+    expect(payload.includeFromQueries).toBe(true);
   });
 
   it("can disable smart expand to keep only original query", async () => {
@@ -77,8 +79,136 @@ describe("fetch runs create api", () => {
     );
 
     const payload = fetchRunStore.create.mock.calls[0]?.[0]?.data?.queries;
+    expect(payload.baseQueries).toEqual(["Software Engineer"]);
     expect(payload.queries).toEqual(["Software Engineer"]);
     expect(payload.smartExpand).toBe(false);
+  });
+
+  it("trims and deduplicates bounded AU queries", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1", email: "user@example.com" },
+    });
+
+    const res = await POST(
+      new Request("http://localhost/api/fetch-runs", {
+        method: "POST",
+        body: JSON.stringify({
+          title: " Software Engineer ",
+          location: " Sydney ",
+          smartExpand: false,
+          queries: [" Java Developer ", "java developer"],
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    const data = fetchRunStore.create.mock.calls[0]?.[0]?.data;
+    expect(data.queries.title).toBe("Software Engineer");
+    expect(data.queries.queries).toEqual(["Java Developer"]);
+    expect(data.location).toBe("Sydney");
+  });
+
+  it("rejects oversized AU query, title, location, and query count", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1", email: "user@example.com" },
+    });
+
+    const invalidBodies = [
+      { title: "x".repeat(121) },
+      { title: "Engineer", location: "x".repeat(161) },
+      { title: "Engineer", queries: ["x".repeat(121)] },
+      {
+        title: "Engineer",
+        queries: Array.from({ length: 13 }, (_, index) => `role-${index}`),
+      },
+    ];
+
+    for (const body of invalidBodies) {
+      const res = await POST(
+        new Request("http://localhost/api/fetch-runs", {
+          method: "POST",
+          body: JSON.stringify(body),
+        }),
+      );
+      expect(res.status).toBe(400);
+    }
+    expect(fetchRunStore.create).not.toHaveBeenCalled();
+  });
+
+  it("caps smart-expanded AU queries while preserving every original query", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1", email: "user@example.com" },
+    });
+    const originals = [
+      "Software Engineer",
+      "Backend Engineer",
+      "Full Stack Engineer",
+      "AI Engineer",
+      "Power Platform Developer",
+      "Data Engineer",
+    ];
+
+    const res = await POST(
+      new Request("http://localhost/api/fetch-runs", {
+        method: "POST",
+        body: JSON.stringify({
+          title: originals[0],
+          queries: originals,
+          smartExpand: true,
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    const queries = fetchRunStore.create.mock.calls[0]?.[0]?.data?.queries?.queries;
+    const baseQueries =
+      fetchRunStore.create.mock.calls[0]?.[0]?.data?.queries?.baseQueries;
+    expect(queries.length).toBeLessThanOrEqual(24);
+    expect(queries).toEqual(expect.arrayContaining(originals));
+    expect(baseQueries).toEqual(originals);
+  });
+
+  it("normalizes and deduplicates bounded CN filters", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1", email: "user@example.com" },
+    });
+
+    const res = await POST(
+      new Request("http://localhost/api/fetch-runs", {
+        method: "POST",
+        body: JSON.stringify({
+          market: "CN",
+          queries: [" 前端工程师 ", "前端工程师"],
+          excludeKeywords: [" 实习 ", "实习"],
+          locations: [" 上海 ", "上海"],
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    const payload = fetchRunStore.create.mock.calls[0]?.[0]?.data?.queries;
+    expect(payload.queries).toEqual(["前端工程师"]);
+    expect(payload.excludeKeywords).toEqual(["实习"]);
+    expect(payload.locations).toEqual(["上海"]);
+  });
+
+  it("rejects an unbounded CN query list before creating a run", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1", email: "user@example.com" },
+    });
+
+    const res = await POST(
+      new Request("http://localhost/api/fetch-runs", {
+        method: "POST",
+        body: JSON.stringify({
+          market: "CN",
+          queries: Array.from({ length: 13 }, (_, index) => `role-${index}`),
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(400);
+    expect(fetchRunStore.create).not.toHaveBeenCalled();
   });
 
   it("keeps supported experience-based description exclusions from payload", async () => {

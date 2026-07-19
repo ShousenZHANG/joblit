@@ -20,6 +20,18 @@ export const FIT_JUDGEMENTS = ["MATCH", "PARTIAL", "GAP", "UNKNOWN"] as const;
 export type FitJudgement = (typeof FIT_JUDGEMENTS)[number];
 
 export const FIT_ELIGIBILITY = ["PASS", "RISK", "BLOCK"] as const;
+export const FIT_CRITICALITIES = ["GATE", "CORE", "SUPPORTING"] as const;
+export type FitCriticality = (typeof FIT_CRITICALITIES)[number];
+export const FIT_REQUIREMENT_CATEGORIES = [
+  "TECHNICAL",
+  "EXPERIENCE",
+  "RESPONSIBILITY",
+  "DOMAIN",
+  "CREDENTIAL",
+  "ELIGIBILITY",
+] as const;
+export type FitRequirementCategory =
+  (typeof FIT_REQUIREMENT_CATEGORIES)[number];
 
 export const FitRequirementSchema = z
   .object({
@@ -27,6 +39,12 @@ export const FitRequirementSchema = z
     type: z.enum(FIT_REQUIREMENT_TYPES),
     requirement: z.string().min(1).max(300),
     judgement: z.enum(FIT_JUDGEMENTS),
+    criticality: z.enum(FIT_CRITICALITIES).optional(),
+    category: z.enum(FIT_REQUIREMENT_CATEGORIES).optional(),
+    jdEvidence: z.string().min(1).max(400).optional(),
+    candidateEvidence: z.string().min(1).max(400).optional(),
+    // Backward-compatible field used by older Extension builds. New prompts
+    // prefer jdEvidence/candidateEvidence because their meaning is explicit.
     evidence: z.string().max(400).optional(),
     note: z.string().max(300).optional(),
   })

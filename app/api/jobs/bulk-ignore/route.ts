@@ -13,19 +13,25 @@ import { prisma } from "@/lib/server/prisma";
 export const runtime = "nodejs";
 
 const BULK_RATE_LIMIT = { limit: 20, windowSeconds: 60 } as const;
-const MAX_BULK_JOBS = 500;
+const MaxScoreSchema = z.number().int().min(0).max(44).default(44);
 
 // Ignore = move NEW -> REJECTED (reversible), never delete: deletion goes
 // through DeletedJobUrl tombstones and would permanently block re-import.
 const BodySchema = z.union([
   z
     .object({
-      maxScore: z.number().int().min(0).max(44).default(44),
+      maxScore: MaxScoreSchema,
       preview: z.boolean().optional(),
     })
     .strict(),
   z
-    .object({ restoreJobIds: z.array(z.string().uuid()).min(1).max(MAX_BULK_JOBS) })
+    .object({
+      restoreIgnoredAt: z
+        .string()
+        .datetime({ offset: true })
+        .transform((value) => new Date(value)),
+      maxScore: MaxScoreSchema,
+    })
     .strict(),
 ]);
 
@@ -54,9 +60,18 @@ export async function POST(req: Request) {
     });
   }
 
-  if ("restoreJobIds" in body.data) {
+  if ("restoreIgnoredAt" in body.data) {
     const restored = await prisma.job.updateMany({
-      where: { id: { in: body.data.restoreJobIds }, userId, status: "REJECTED" },
+      where: {
+        userId,
+        status: "REJECTED",
+        fitScore: { not: null, lte: body.data.maxScore },
+        // The commit writes one exact timestamp to every row it moved. This
+        // acts as a bounded, tenant-scoped operation marker without returning
+        // an unbounded UUID array to the browser. Any later edit changes
+        // updatedAt and intentionally opts that row out of undo.
+        updatedAt: body.data.restoreIgnoredAt,
+      },
       data: { status: "NEW" },
     });
     return NextResponse.json({ restored: restored.count });
@@ -74,17 +89,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ count });
   }
 
-  const targets = await prisma.job.findMany({
+  // One atomic statement changes the exact rows won by this request. A shared
+  // updatedAt value is the undo marker, so this remains reversible at any
+  // database size without sending thousands of job IDs over the wire.
+  const ignoredAt = new Date();
+  const ignored = await prisma.job.updateMany({
     where,
-    select: { id: true },
-    take: MAX_BULK_JOBS,
+    data: { status: "REJECTED", updatedAt: ignoredAt },
   });
-  if (targets.length === 0) return NextResponse.json({ count: 0, jobIds: [] });
-
-  const jobIds = targets.map((job) => job.id);
-  await prisma.job.updateMany({
-    where: { id: { in: jobIds }, userId, status: "NEW" },
-    data: { status: "REJECTED" },
+  return NextResponse.json({
+    count: ignored.count,
+    ignoredAt: ignoredAt.toISOString(),
   });
-  return NextResponse.json({ count: jobIds.length, jobIds });
 }

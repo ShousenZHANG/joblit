@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 
 const BodySchema = z.object({
   userEmail: z.string().email(),
-  items: z.array(ImportJobItemSchema).default([]),
+  items: z.array(ImportJobItemSchema).max(200).default([]),
 });
 
 function requireImportSecret(req: Request) {
