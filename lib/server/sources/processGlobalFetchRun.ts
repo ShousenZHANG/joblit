@@ -3,9 +3,19 @@ import { importJobsForUser } from "@/lib/server/jobs/jobImportService";
 import { runSourceFetch } from "./runSourceFetch";
 import { ALL_SOURCE_IDS, isKnownSourceId } from "./registry";
 
-// Queue processor for market="GLOBAL" runs. Unlike the AU path there is no
-// GitHub Actions dispatch: aggregator feeds are plain HTTP JSON, so the whole
-// run completes in-process.
+// Runner for one market="GLOBAL" FetchRun, called from
+// /api/fetch-runs/[id]/trigger.
+//
+// Unlike the AU path there is no GitHub Actions dispatch: aggregator feeds are
+// plain HTTP JSON, so the whole run completes in-process, the same way the CN
+// adapters already do. Fetches are user-triggered, so there is deliberately no
+// queue-sweeping variant — a sweep would only duplicate the trigger path.
+
+export interface GlobalFetchRunResult {
+  discovered: number;
+  imported: number;
+  error?: string;
+}
 
 function requestedSources(queries: unknown): string[] {
   const raw =
@@ -20,11 +30,11 @@ function requestedSources(queries: unknown): string[] {
   return cleaned.length ? cleaned : [...ALL_SOURCE_IDS];
 }
 
-async function processOne(run: {
-  id: string;
-  userId: string;
-  queries: unknown;
-}): Promise<void> {
+/** Execute one queued GLOBAL run and write its terminal status. */
+export async function processGlobalFetchRun(
+  userId: string,
+  run: { id: string; queries: unknown },
+): Promise<GlobalFetchRunResult> {
   try {
     const { jobs, diagnostics } = await runSourceFetch({
       sources: requestedSources(run.queries),
@@ -38,21 +48,18 @@ async function processOne(run: {
       const detail = failed
         .map((d) => `${d.source}: ${d.error ?? "unknown error"}`)
         .join("; ");
+      const error = `all sources failed: ${detail}`;
       await prisma.fetchRun.update({
         where: { id: run.id },
-        data: {
-          status: "FAILED",
-          importedCount: 0,
-          error: `all sources failed: ${detail}`,
-        },
+        data: { status: "FAILED", importedCount: 0, error },
       });
-      return;
+      return { discovered: 0, imported: 0, error };
     }
 
     let imported = 0;
     if (jobs.length > 0) {
       const result = await importJobsForUser({
-        userId: run.userId,
+        userId,
         items: jobs.map((job) => ({ ...job, market: "GLOBAL" as const })),
       });
       imported = result.imported;
@@ -62,30 +69,14 @@ async function processOne(run: {
       where: { id: run.id },
       data: { status: "SUCCEEDED", importedCount: imported, error: null },
     });
+    return { discovered: jobs.length, imported };
   } catch (err) {
+    const error = err instanceof Error ? err.message : "global_fetch_failed";
     await prisma.fetchRun.update({
       where: { id: run.id },
-      data: {
-        status: "FAILED",
-        importedCount: 0,
-        error: err instanceof Error ? err.message : "global_fetch_failed",
-      },
+      data: { status: "FAILED", importedCount: 0, error },
     });
+    return { discovered: 0, imported: 0, error };
   }
 }
 
-export async function processQueuedGlobalRuns(): Promise<void> {
-  const runs = await prisma.fetchRun.findMany({
-    where: { market: "GLOBAL", status: "QUEUED" },
-    select: { id: true, userId: true, queries: true },
-    orderBy: { createdAt: "asc" },
-    take: 10,
-  });
-
-  // Sequential: each run writes rows for a different user and the feeds are
-  // rate-limited, so parallelising runs would multiply upstream pressure for
-  // no user-visible gain.
-  for (const run of runs) {
-    await processOne(run);
-  }
-}

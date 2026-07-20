@@ -3,13 +3,15 @@ import { canonicalizeJobUrl } from "@/lib/shared/canonicalizeJobUrl";
 import { runCnFetch } from "./runCnFetch";
 import type { CnSource } from "./types";
 
-// Shared CN fetch pipeline per FetchRun. Called from:
-//   - /api/cron/fetch-cn  (sweeps all QUEUED CN runs)
-//   - /api/fetch-runs/[id]/trigger  (single-run in-process path)
+// CN fetch pipeline for one FetchRun. Called from
+// /api/fetch-runs/[id]/trigger, the single-run in-process path.
+//
 // The fetch must run in-process where the invocation happens — fire-and-
 // forget to an internal HTTP endpoint is fragile (depends on
 // JOBLIT_WEB_URL, serverless cold starts, secret handoff), so we keep
-// the work close to the click.
+// the work close to the click. A queue-sweeping cron variant existed for
+// this reason and was removed once nothing scheduled it: fetches are
+// user-triggered, so a sweep only ever duplicated the trigger path.
 
 interface CnRunConfig {
   queries: string[];
@@ -137,47 +139,4 @@ export async function processCnFetchRun(
       .catch(() => {});
     return { ...base, discovered: 0, imported: 0, error: message };
   }
-}
-
-/**
- * Sweep every user's most-recent QUEUED CN FetchRun. Used by the cron
- * endpoint (manual curl / future scheduled triggers). Per-user failures
- * do not abort the sweep.
- */
-export async function processAllQueuedCnRuns(
-  options: { limit?: number } = {},
-): Promise<{
-  startedAt: string;
-  processed: number;
-  users: ProcessResult[];
-}> {
-  const limit = options.limit ?? 50;
-  const queued = await prisma.fetchRun.findMany({
-    where: { market: "CN", status: "QUEUED" },
-    orderBy: { createdAt: "desc" },
-    select: { id: true, userId: true, queries: true },
-    take: limit * 4,
-  });
-
-  const latestByUser = new Map<
-    string,
-    { id: string; queries: unknown }
-  >();
-  for (const r of queued) {
-    if (!latestByUser.has(r.userId)) {
-      latestByUser.set(r.userId, { id: r.id, queries: r.queries });
-    }
-  }
-
-  const users: ProcessResult[] = [];
-  for (const [userId, run] of latestByUser) {
-    if (users.length >= limit) break;
-    users.push(await processCnFetchRun(userId, run));
-  }
-
-  return {
-    startedAt: new Date().toISOString(),
-    processed: users.length,
-    users,
-  };
 }

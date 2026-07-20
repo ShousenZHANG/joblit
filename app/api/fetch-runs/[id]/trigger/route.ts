@@ -7,6 +7,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import type { Prisma } from "@/lib/generated/prisma";
 import { processCnFetchRun } from "@/lib/server/cnFetch/processFetchRun";
+import { processGlobalFetchRun } from "@/lib/server/sources/processGlobalFetchRun";
 import {
   checkFetchRunQuota,
   fetchRunQuotaExceededResponse,
@@ -182,16 +183,16 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   // txResult.kind === "locked" — we hold the dispatch slot.
   //
-  // CN market: the aggregator pipeline runs in-process (Vercel serverless)
-  // via processCnFetchRun. The GitHub Actions dispatch path + cn-fetch.yml
-  // + Python scraper are retired, and we no longer hop through an internal
-  // fetch() to /api/cron/fetch-cn (that path silently dropped work when
-  // JOBLIT_WEB_URL was unset and left the UI pinned in "Queued"). We run
-  // the fetch here and return once it completes; the trigger function has
-  // a 60s budget which is ample for the aggregator's typical 5-15s pull.
+  // CN and GLOBAL markets: the aggregator pipelines run in-process (Vercel
+  // serverless). The GitHub Actions dispatch path + cn-fetch.yml + Python
+  // scraper are retired, and we no longer hop through an internal fetch() to
+  // a cron endpoint (that path silently dropped work when JOBLIT_WEB_URL was
+  // unset and left the UI pinned in "Queued"). We run the fetch here and
+  // return once it completes; the trigger function has a 60s budget which is
+  // ample for the aggregators' typical 5-15s pull.
   //
   // AU market: still dispatches to GitHub Actions (JobSpy pipeline).
-  if (txResult.market === "CN") {
+  if (txResult.market === "CN" || txResult.market === "GLOBAL") {
     await prisma.fetchRun.updateMany({
       where: { id: runId, userId, status: "QUEUED" },
       data: {
@@ -202,10 +203,16 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       },
     });
 
-    const result = await processCnFetchRun(userId, {
-      id: runId,
-      queries: txResult.queries,
-    });
+    const result =
+      txResult.market === "GLOBAL"
+        ? await processGlobalFetchRun(userId, {
+            id: runId,
+            queries: txResult.queries,
+          })
+        : await processCnFetchRun(userId, {
+            id: runId,
+            queries: txResult.queries,
+          });
     return NextResponse.json({
       ok: result.error === undefined,
       imported: result.imported,
