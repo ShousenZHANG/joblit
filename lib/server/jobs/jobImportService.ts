@@ -25,7 +25,8 @@ export const ImportJobItemSchema = z
     workArrangement: z.string().trim().max(80).optional().nullable(),
     listing_date: z.string().trim().max(80).optional().nullable(),
     listingDate: z.string().trim().max(80).optional().nullable(),
-    market: z.enum(["AU", "CN"]).optional().default("AU"),
+    market: z.enum(["AU", "CN", "GLOBAL"]).optional().default("AU"),
+    source: z.string().trim().max(60).optional().nullable(),
     site: z.string().trim().max(120).optional().nullable(),
   })
   .passthrough();
@@ -91,6 +92,7 @@ export async function importJobsForUser({
           optionalText(it.work_arrangement),
         listingDate,
         market: it.market ?? "AU",
+        source: optionalText(it.source),
         postingRisk: risk.score,
         postingRiskFlags: risk.flags,
         companyRoleKey: buildCompanyRoleKey({ company, title }),
@@ -133,6 +135,7 @@ export async function importJobsForUser({
         workArrangement: current.workArrangement,
         listingDate: current.listingDate,
         market: current.market,
+        source: current.source,
         postingRisk: current.postingRisk,
         postingRiskFlags: current.postingRiskFlags,
         companyRoleKey: current.companyRoleKey,

@@ -39,6 +39,60 @@ describe("fetch runs create api", () => {
     fetchRunStore.executeRawLock.mockResolvedValue(1);
   });
 
+  function signIn() {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1", email: "user@example.com" },
+    });
+  }
+
+  function postRun(body: Record<string, unknown>) {
+    return POST(
+      new Request("http://localhost/api/fetch-runs", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    );
+  }
+
+  it("creates a GLOBAL run with the requested sources", async () => {
+    signIn();
+
+    const res = await postRun({
+      market: "GLOBAL",
+      sources: ["remoteok", "jobicy"],
+    });
+
+    expect(res.status).toBe(201);
+    const data = fetchRunStore.create.mock.calls[0]?.[0]?.data;
+    expect(data.market).toBe("GLOBAL");
+    expect(data.queries).toEqual({ sources: ["remoteok", "jobicy"] });
+    // No GitHub Actions dispatch for this market — it runs in-process.
+    expect(data.location).toBeNull();
+  });
+
+  it("rejects an unknown source id", async () => {
+    signIn();
+
+    const res = await postRun({
+      market: "GLOBAL",
+      sources: ["definitely-not-a-source"],
+    });
+
+    expect(res.status).toBe(400);
+    expect(fetchRunStore.create).not.toHaveBeenCalled();
+  });
+
+  it("defaults a GLOBAL run to every registered source", async () => {
+    signIn();
+
+    const res = await postRun({ market: "GLOBAL" });
+
+    expect(res.status).toBe(201);
+    expect(fetchRunStore.create.mock.calls[0]?.[0]?.data.queries).toEqual({
+      sources: ["remoteok", "remotive", "jobicy"],
+    });
+  });
+
   it("auto expands a single role query by default", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "user-1", email: "user@example.com" },

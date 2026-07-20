@@ -46,9 +46,17 @@ describe("ImportJobItemSchema", () => {
       ImportJobItemSchema.safeParse({
         jobUrl: "https://example.com/jobs/123",
         title: "Software Engineer",
-        market: "GLOBAL",
+        market: "MARS",
       }).success,
     ).toBe(false);
+    // GLOBAL joined AU and CN when the aggregator sources landed.
+    expect(
+      ImportJobItemSchema.safeParse({
+        jobUrl: "https://example.com/jobs/123",
+        title: "Software Engineer",
+        market: "GLOBAL",
+      }).success,
+    ).toBe(true);
     expect(
       ImportJobItemSchema.safeParse({
         jobUrl: "https://example.com/jobs/123",
@@ -160,6 +168,37 @@ describe("ImportJobItemSchema", () => {
     await importJobsForUser({ userId: "user-1", items: [item] });
 
     expect(store.createMany.mock.calls[0][0].data[0].companyRoleKey).toBeNull();
+  });
+
+  it("persists the source and GLOBAL market on imported rows", async () => {
+    const item = ImportJobItemSchema.parse({
+      jobUrl: "https://remoteok.com/remote-jobs/1",
+      title: "AI Engineer",
+      market: "GLOBAL",
+      source: "remoteok",
+    });
+
+    const result = await importJobsForUser({ userId: "user-1", items: [item] });
+
+    expect(result.imported).toBe(1);
+    expect(store.createMany.mock.calls[0][0].data[0]).toMatchObject({
+      market: "GLOBAL",
+      source: "remoteok",
+    });
+  });
+
+  it("stores a null source when the producer does not supply one", async () => {
+    const item = ImportJobItemSchema.parse({
+      jobUrl: "https://example.com/1",
+      title: "Dev",
+    });
+
+    await importJobsForUser({ userId: "user-1", items: [item] });
+
+    expect(store.createMany.mock.calls[0][0].data[0]).toMatchObject({
+      market: "AU",
+      source: null,
+    });
   });
 
   it("uses a non-empty snake-case value when camel-case input is blank", async () => {

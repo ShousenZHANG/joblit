@@ -8,6 +8,7 @@ import {
   checkFetchRunQuota,
   fetchRunQuotaExceededResponse,
 } from "@/lib/server/fetchRuns/fetchRunQuota";
+import { ALL_SOURCE_IDS, isKnownSourceId } from "@/lib/server/sources/registry";
 
 export const runtime = "nodejs";
 
@@ -112,6 +113,27 @@ const CNSchema = z.object({
     .transform(uniqueStrings),
 });
 
+// GLOBAL runs read public aggregator feeds server-side. No queries, no
+// location, no GitHub Actions dispatch — the source list is the whole input,
+// and the worker completes the run in-process.
+const GlobalSchema = z.object({
+  market: z.literal("GLOBAL"),
+  sources: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(60)
+        .refine(isKnownSourceId, { message: "unknown source id" }),
+    )
+    .max(12)
+    .optional()
+    .transform((value) =>
+      value && value.length > 0 ? uniqueStrings(value) : [...ALL_SOURCE_IDS],
+    ),
+});
+
 export async function GET() {
   return withEmailSessionRoute(async ({ userId }) => {
     const runs = await prisma.fetchRun.findMany({
@@ -189,6 +211,39 @@ export async function POST(req: Request) {
               excludeKeywords: d.excludeKeywords,
               locations: d.locations,
             },
+            location: null,
+            hoursOld: null,
+            resultsWanted: null,
+            includeFromQueries: false,
+            filterDescription: false,
+          },
+          select: { id: true },
+        });
+        return { kind: "created" as const, id: run.id };
+      });
+
+      if (txResult.kind === "quota") {
+        return fetchRunQuotaExceededResponse(txResult.quotaViolation);
+      }
+      return NextResponse.json({ id: txResult.id }, { status: 201 });
+    }
+
+    if (marketHint === "GLOBAL") {
+      const parsed = parseJsonValue(json, GlobalSchema, requestId);
+      if (!parsed.ok) return parsed.response;
+      const d = parsed.data;
+      const txResult = await prisma.$transaction(async (tx) => {
+        const quotaViolation = await checkFetchRunQuota(tx, userId, "create");
+        if (quotaViolation) return { kind: "quota" as const, quotaViolation };
+
+        const run = await tx.fetchRun.create({
+          data: {
+            userId,
+            userEmail: userEmail.toLowerCase(),
+            status: "QUEUED",
+            market: "GLOBAL",
+            importedCount: 0,
+            queries: { sources: d.sources },
             location: null,
             hoursOld: null,
             resultsWanted: null,

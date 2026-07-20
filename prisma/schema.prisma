@@ -142,7 +142,10 @@ model Job {
   workArrangement String?   // "Remote" | "Hybrid" | "On-site"
   listingDate     DateTime? // when the source posted the role
   status      JobStatus @default(NEW)
-  market      String    @default("AU") // "AU" | "CN"
+  market      String    @default("AU") // "AU" | "CN" | "GLOBAL"
+  /// Ingestion provenance: "linkedin" | "nowcoder" | a source-registry id.
+  /// Null for rows imported before provenance tracking existed.
+  source      String?
 
   // AI role-fit triage. The matrix is model-produced per-requirement judgements;
   // the score/verdict are ALWAYS aggregated deterministically by Joblit.
@@ -181,6 +184,7 @@ model Job {
   @@index([userId, fitScore])
   @@index([userId, postingRisk])
   @@index([userId, companyRoleKey])
+  @@index([userId, source])
   // GIN trigram indexes (title, company, location) created via raw SQL migration
 }
 
