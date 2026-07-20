@@ -45,6 +45,53 @@ describe("compileLatexToPdf integrity check", () => {
     vi.restoreAllMocks();
   });
 
+  it("re-arms the breaker after a cooldown instead of latching open", async () => {
+    // The breaker counts failures since the last success. When it opened it
+    // kept that count, so after the cooldown a single failure pushed it back
+    // over the threshold and re-opened it — one bad patch left renders failing
+    // indefinitely even once the service recovered.
+    vi.resetModules();
+    vi.useFakeTimers();
+    try {
+      const { compileLatexToPdf: compile, LatexRenderError: RenderError } =
+        await import("./compilePdf");
+
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => ({
+          ok: false,
+          status: 503,
+          headers: { get: () => "text/plain" },
+          arrayBuffer: async () => new ArrayBuffer(0),
+          json: async () => ({}),
+          text: async () => "down",
+        })),
+      );
+
+      // Five infra failures trip it.
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await expect(compile("\\documentclass{article}")).rejects.toBeInstanceOf(
+          RenderError,
+        );
+      }
+      await expect(compile("\\documentclass{article}")).rejects.toThrow(
+        /circuit open/i,
+      );
+
+      // Cooldown elapses, then one more failure. That single failure must not
+      // be enough to re-open a freshly re-armed breaker.
+      vi.advanceTimersByTime(31_000);
+      await expect(compile("\\documentclass{article}")).rejects.toBeInstanceOf(
+        RenderError,
+      );
+      await expect(
+        compile("\\documentclass{article}"),
+      ).rejects.not.toThrow(/circuit open/i);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("returns the buffer for a well-formed PDF payload", async () => {
     const pdf = Buffer.concat([Buffer.from("%PDF-1.7\n"), Buffer.alloc(4000, 0x20)]);
     mockRenderResponse(pdf);

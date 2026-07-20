@@ -57,6 +57,11 @@ function recordBreakerFailure(): void {
   breaker.failures += 1;
   if (breaker.failures >= BREAKER_THRESHOLD) {
     breaker.openUntil = Date.now() + BREAKER_COOLDOWN_MS;
+    // Re-arm the count when opening. Keeping it meant the breaker was already
+    // at the threshold when the cooldown expired, so the first probe failure
+    // re-opened it and renders stayed broken long after the service recovered.
+    // Clearing it gives the recovered service a full threshold of attempts.
+    breaker.failures = 0;
   }
 }
 
