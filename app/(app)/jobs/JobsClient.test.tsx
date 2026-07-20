@@ -519,15 +519,27 @@ describe("JobsClient", () => {
     const input = within(toolbar).getAllByPlaceholderText("e.g. software engineer")[0];
     await user.clear(input);
     await user.type(input, "designer");
-    await new Promise((resolve) => setTimeout(resolve, 500));
 
-    const jobsCall = (global.fetch as unknown as { mock: { calls: Array<[RequestInfo, RequestInit | undefined]> } }).mock.calls.find(
-      ([request]) =>
-        typeof request === "string" && request.startsWith("/api/jobs?") && request.includes("q=designer"),
-    );
+    // Poll for the debounced request instead of sleeping past the debounce.
+    // A fixed delay races the debounce on a loaded machine and fails here
+    // intermittently; waitFor retries until the call actually lands.
+    const findJobsCall = () =>
+      (
+        global.fetch as unknown as {
+          mock: { calls: Array<[RequestInfo, RequestInit | undefined]> };
+        }
+      ).mock.calls.find(
+        ([request]) =>
+          typeof request === "string" &&
+          request.startsWith("/api/jobs?") &&
+          request.includes("q=designer"),
+      );
 
-    expect(jobsCall).toBeTruthy();
-    expect(jobsCall?.[1]?.cache).not.toBe("no-store");
+    await waitFor(() => {
+      expect(findJobsCall()).toBeTruthy();
+    });
+
+    expect(findJobsCall()?.[1]?.cache).not.toBe("no-store");
   });
 
   it("does not make a separate job-levels fetch request", async () => {
