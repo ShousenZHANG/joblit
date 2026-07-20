@@ -106,6 +106,19 @@ describe("fetchTrendingRepos", () => {
       },
     );
   });
+
+  it("rejects an empty parse so a markup change cannot overwrite last-known-good", async () => {
+    safeFetchMock.mockResolvedValueOnce(
+      new Response("<html><body>changed markup</body></html>", {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      }),
+    );
+
+    await expect(fetchTrendingRepos("monthly")).rejects.toThrow(
+      "GitHub trending returned no repository rows",
+    );
+  });
 });
 
 describe("parseTrendingHtml", () => {

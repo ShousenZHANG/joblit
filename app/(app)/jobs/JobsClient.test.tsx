@@ -1008,6 +1008,228 @@ describe("JobsClient", () => {
     });
   });
 
+  it("deletes the selected job without route navigation and preserves the visible row anchor", async () => {
+    const user = userEvent.setup();
+    const jobs = [
+      { ...baseJob, id: "aaaa-1111", title: "Alpha Engineer" },
+      { ...baseJob, id: "bbbb-2222", title: "Beta Developer" },
+      { ...baseJob, id: "cccc-3333", title: "Gamma Designer" },
+    ];
+    navigationMock.search = "utm=campaign";
+    window.history.replaceState(window.history.state, "", "/jobs?utm=campaign");
+
+    renderWithClient(<JobsClient initialItems={jobs} initialCursor={null} />);
+
+    const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
+    const list = within(resultsPane).getByRole("list");
+    await user.click(
+      within(list).getByRole("button", { name: /Beta Developer/i }),
+    );
+    navigationMock.replace.mockClear();
+    const replaceStateSpy = vi.spyOn(window.history, "replaceState");
+
+    const viewport = resultsPane.querySelector<HTMLElement>(
+      "[data-radix-scroll-area-viewport]",
+    )!;
+    const alphaRow = list.querySelector<HTMLElement>("[data-job-id='aaaa-1111']")!;
+    const betaRow = list.querySelector<HTMLElement>("[data-job-id='bbbb-2222']")!;
+    const gammaRow = list.querySelector<HTMLElement>("[data-job-id='cccc-3333']")!;
+    viewport.scrollTop = 500;
+    vi.spyOn(viewport, "getBoundingClientRect").mockReturnValue({
+      top: 100,
+      bottom: 700,
+      left: 0,
+      right: 400,
+      width: 400,
+      height: 600,
+      x: 0,
+      y: 100,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(alphaRow, "getBoundingClientRect").mockReturnValue({
+      top: 0,
+      bottom: 90,
+      left: 0,
+      right: 400,
+      width: 400,
+      height: 90,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(betaRow, "getBoundingClientRect").mockReturnValue({
+      top: 150,
+      bottom: 250,
+      left: 0,
+      right: 400,
+      width: 400,
+      height: 100,
+      x: 0,
+      y: 150,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(gammaRow, "getBoundingClientRect").mockImplementation(() => ({
+      top: betaRow.isConnected ? 280 : 160,
+      bottom: betaRow.isConnected ? 380 : 260,
+      left: 0,
+      right: 400,
+      width: 400,
+      height: 100,
+      x: 0,
+      y: betaRow.isConnected ? 280 : 160,
+      toJSON: () => ({}),
+    }));
+
+    await user.click(screen.getByTestId("job-remove-button"));
+
+    await waitFor(() => {
+      expect(within(list).queryByText("Beta Developer")).not.toBeInTheDocument();
+      expect(gammaRow).toHaveAttribute("aria-current", "true");
+    });
+    expect(viewport.scrollTop).toBe(380);
+    expect(navigationMock.replace).not.toHaveBeenCalled();
+    expect(replaceStateSpy).toHaveBeenCalledWith(
+      window.history.state,
+      "",
+      "/jobs?utm=campaign&job=cccc-3333",
+    );
+  });
+
+  it("does not remount the list renderer when a delete crosses the virtualization threshold", async () => {
+    const user = userEvent.setup();
+    const jobs = Array.from({ length: 81 }, (_, index) => ({
+      ...baseJob,
+      id: `virtual-${index}`,
+      title: `Virtual role ${index}`,
+    }));
+    let listFetches = 0;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url.startsWith("/api/jobs?")) {
+        listFetches += 1;
+        return new Response(
+          JSON.stringify({ items: jobs, nextCursor: null, totalCount: jobs.length }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.startsWith("/api/jobs/") && init?.method === "DELETE") {
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.startsWith("/api/jobs/")) {
+        return new Response(JSON.stringify({ description: "desc" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
+    }));
+
+    renderWithClient(<JobsClient initialItems={jobs} initialCursor={null} />);
+    const resultsPane = await screen.findByTestId("jobs-results-scroll");
+    await waitFor(() => expect(resultsPane).toHaveAttribute("data-virtual", "true"));
+    const listBeforeDelete = within(resultsPane).getByRole("list");
+    const fetchesBeforeDelete = listFetches;
+
+    await user.click(screen.getByTestId("job-remove-button"));
+
+    await waitFor(() => {
+      expect(resultsPane).toHaveAttribute("data-virtual", "true");
+      expect(within(resultsPane).getByRole("list")).toBe(listBeforeDelete);
+    });
+    expect(listFetches).toBe(fetchesBeforeDelete);
+  });
+
+  it("selects the next visible job when low-fit rows are hidden", async () => {
+    const user = userEvent.setup();
+    const jobs = [
+      { ...baseJob, id: "aaaa-1111", title: "Alpha Engineer", fitScore: 72 },
+      { ...baseJob, id: "bbbb-2222", title: "Hidden Beta", fitScore: 30 },
+      { ...baseJob, id: "cccc-3333", title: "Gamma Designer", fitScore: 68 },
+    ];
+
+    renderWithClient(<JobsClient initialItems={jobs} initialCursor={null} />);
+    await user.click(screen.getByRole("button", { name: /hide low fit/i }));
+
+    const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
+    const list = within(resultsPane).getByRole("list");
+    expect(within(list).queryByText("Hidden Beta")).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId("job-remove-button"));
+
+    await waitFor(() => {
+      expect(
+        list.querySelector<HTMLElement>("[data-job-id='cccc-3333']"),
+      ).toHaveAttribute("aria-current", "true");
+    });
+    expect(within(list).queryByText("Hidden Beta")).not.toBeInTheDocument();
+  });
+
+  it("rolls a failed delete back without refetching or overriding a newer selection", async () => {
+    vi.useFakeTimers();
+    const jobs = [
+      { ...baseJob, id: "aaaa-1111", title: "Alpha Engineer" },
+      { ...baseJob, id: "bbbb-2222", title: "Beta Developer" },
+      { ...baseJob, id: "cccc-3333", title: "Gamma Designer" },
+    ];
+    let listFetches = 0;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url.startsWith("/api/jobs?")) {
+        listFetches += 1;
+        return new Response(
+          JSON.stringify({ items: jobs, nextCursor: null, totalCount: jobs.length }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.startsWith("/api/jobs/") && init?.method === "DELETE") {
+        return new Response(JSON.stringify({ error: "Temporary delete failure" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.startsWith("/api/jobs/")) {
+        return new Response(JSON.stringify({ description: "desc" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
+    }));
+
+    try {
+      renderWithClient(<JobsClient initialItems={jobs} initialCursor={null} />);
+      const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
+      const list = within(resultsPane).getByRole("list");
+      fireEvent.click(
+        within(list).getByRole("button", { name: /Beta Developer/i }),
+      );
+      fireEvent.click(screen.getByTestId("job-remove-button"));
+      fireEvent.click(
+        within(list).getByRole("button", { name: /Alpha Engineer/i }),
+      );
+      const fetchesBeforeCommit = listFetches;
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+      vi.useRealTimers();
+
+      await waitFor(() => {
+        expect(within(list).getByText("Beta Developer")).toBeInTheDocument();
+        expect(
+          list.querySelector<HTMLElement>("[data-job-id='aaaa-1111']"),
+        ).toHaveAttribute("aria-current", "true");
+      });
+      expect(listFetches).toBe(fetchesBeforeCommit);
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
+  });
+
   it("flushes the pending delete on pagehide (tab close within the undo window)", async () => {
     const user = userEvent.setup();
     let deleteCalls = 0;

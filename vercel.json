@@ -1,4 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "node tools/deploy/vercel-build.mjs"
+  "buildCommand": "node tools/deploy/vercel-build.mjs",
+  "crons": [
+    {
+      "path": "/api/discover/refresh-daily",
+      "schedule": "0 6 * * *"
+    }
+  ]
 }

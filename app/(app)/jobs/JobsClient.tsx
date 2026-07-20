@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
@@ -90,6 +90,7 @@ export function JobsClient({
     queryString,
     urlState,
     replaceUrlState,
+    replaceUrlStateShallow,
   } = useJobFilters();
   const urlSelectedId = urlState.selectedId;
   const urlView = urlState.view;
@@ -109,6 +110,11 @@ export function JobsClient({
   const virtualJobListRef = useRef<VirtualJobListHandle>(null);
   const pendingWorkspaceUrlRef = useRef<string | null>(null);
   const workspaceUrlInitializedRef = useRef(false);
+  const pendingListViewportAnchorRef = useRef<{
+    jobId: string | null;
+    offsetTop: number;
+    scrollTop: number;
+  } | null>(null);
   // Seed from the session tombstones so a remount (SPA nav away and back)
   // keeps already-committed deletes hidden even while a flushed DELETE is
   // still in flight — see sessionDeletedJobIds in useJobMutations.
@@ -124,13 +130,53 @@ export function JobsClient({
     },
     [replaceUrlState],
   );
+  const persistWorkspaceUrlShallow = useCallback(
+    (patch: Partial<Pick<JobsUrlState, "selectedId" | "view">>) => {
+      const nextState = replaceUrlStateShallow(patch);
+      if (nextState) {
+        pendingWorkspaceUrlRef.current = getWorkspaceStateKey(nextState);
+      }
+    },
+    [replaceUrlStateShallow],
+  );
+  const captureListViewport = useCallback((excludedIds: ReadonlySet<string>) => {
+    const root = resultsScrollRef.current;
+    const viewport = root?.querySelector<HTMLElement>(
+      "[data-radix-scroll-area-viewport]",
+    );
+    if (!viewport) return;
+    // We compensate against a stable row identity below. Disable native
+    // overflow anchoring for this viewport so Chrome does not apply a second,
+    // competing correction for the same DOM change.
+    viewport.style.overflowAnchor = "none";
+
+    const viewportRect = viewport.getBoundingClientRect();
+    const viewportTop = viewportRect.top;
+    const rows = Array.from(
+      viewport.querySelectorAll<HTMLElement>("[data-job-id]"),
+    );
+    const anchor = rows.find((row) => {
+      const id = row.dataset.jobId;
+      if (!id || excludedIds.has(id)) return false;
+      const rowRect = row.getBoundingClientRect();
+      return rowRect.bottom > viewportTop && rowRect.top < viewportRect.bottom;
+    });
+
+    pendingListViewportAnchorRef.current = {
+      jobId: anchor?.dataset.jobId ?? null,
+      offsetTop: anchor
+        ? anchor.getBoundingClientRect().top - viewportTop
+        : 0,
+      scrollTop: viewport.scrollTop,
+    };
+  }, []);
   const setSelectedIdFromMutation = useCallback(
     (id: string | null) => {
       setSelectionExplicitlyCleared(false);
       setSelectedId(id);
-      persistWorkspaceUrl({ selectedId: id });
+      persistWorkspaceUrlShallow({ selectedId: id });
     },
-    [persistWorkspaceUrl],
+    [persistWorkspaceUrlShallow],
   );
 
   useEffect(() => {
@@ -164,16 +210,27 @@ export function JobsClient({
     suppressedDeletedIds,
     scrollRef: resultsScrollRef,
   });
+  const [hideLowFit, setHideLowFit] = useState(false);
+  // Unscored jobs stay visible: hiding is a triage aid, not a data filter.
+  // 45 is the WEAK/POOR boundary — the same threshold bulk-ignore uses.
+  const visibleItems = useMemo(
+    () =>
+      hideLowFit
+        ? items.filter((it) => it.fitScore == null || it.fitScore >= 45)
+        : items,
+    [hideLowFit, items],
+  );
 
   const {
     updateStatus, requestDelete, batchDeleteMutation,
     updatingIds, deletingIds,
     error: mutationError, setError,
   } = useJobMutations({
-    items,
+    items: visibleItems,
     selectedId,
     setSelectedId: setSelectedIdFromMutation,
     setSuppressedDeletedIds,
+    captureListViewport,
   });
 
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -215,7 +272,6 @@ export function JobsClient({
     onSucceeded: handleLocalAiSucceeded,
   });
   const fitScan = useFitScan({ onJobScored: refetch });
-  const [hideLowFit, setHideLowFit] = useState(false);
   // One undo window for the last bulk-ignore sweep.
   const [ignoredUndo, setIgnoredUndo] = useState<{
     count: number;
@@ -225,15 +281,47 @@ export function JobsClient({
   const [ignoreDialogOpen, setIgnoreDialogOpen] = useState(false);
   const [ignorePreviewCount, setIgnorePreviewCount] = useState(0);
   const [ignorePending, setIgnorePending] = useState<"preview" | "commit" | "undo" | null>(null);
-  // Unscored jobs stay visible: hiding is a triage aid, not a data filter.
-  // 45 is the WEAK/POOR boundary — the same threshold bulk-ignore uses.
-  const visibleItems = useMemo(
-    () =>
-      hideLowFit
-        ? items.filter((it) => it.fitScore == null || it.fitScore >= 45)
-        : items,
-    [hideLowFit, items],
+  // Keep renderer identity stable after virtualization first becomes useful.
+  // In particular, deleting row 81 must not swap the entire virtual subtree
+  // for the ordinary renderer when the visible count becomes 80.
+  const [virtualListEnabled, setVirtualListEnabled] = useState(
+    initialItems.length > 80,
   );
+  if (!virtualListEnabled && visibleItems.length > 80) {
+    setVirtualListEnabled(true);
+  }
+  const visibleItemsIdKey = useMemo(
+    () => visibleItems.map((item) => item.id).join("|"),
+    [visibleItems],
+  );
+
+  // Restore the first surviving visible row to the same viewport offset. This
+  // works for ordinary and virtual rows and avoids scroll/pointer displacement
+  // when a row above the pointer disappears or reappears after rollback.
+  useLayoutEffect(() => {
+    const snapshot = pendingListViewportAnchorRef.current;
+    if (!snapshot) return;
+    pendingListViewportAnchorRef.current = null;
+
+    const root = resultsScrollRef.current;
+    const viewport = root?.querySelector<HTMLElement>(
+      "[data-radix-scroll-area-viewport]",
+    );
+    if (!viewport) return;
+
+    if (snapshot.jobId) {
+      const anchor = viewport.querySelector<HTMLElement>(
+        `[data-job-id="${CSS.escape(snapshot.jobId)}"]`,
+      );
+      if (anchor) {
+        const viewportTop = viewport.getBoundingClientRect().top;
+        const nextOffsetTop = anchor.getBoundingClientRect().top - viewportTop;
+        viewport.scrollTop += nextOffsetTop - snapshot.offsetTop;
+        return;
+      }
+    }
+    viewport.scrollTop = snapshot.scrollTop;
+  }, [visibleItemsIdKey]);
 
   // Full-database sweep: preview the count, confirm, move NEW -> ignored
   // (REJECTED, reversible) server-side, then offer one-click undo.
@@ -365,8 +453,8 @@ export function JobsClient({
   // reference on every render (it comes from a chain of useMemos whose deps
   // include useQueries output), so reference comparison would loop forever.
   const itemsIdKey = useMemo(
-    () => items.map((it) => it.id).join("|"),
-    [items],
+    () => visibleItems.map((item) => item.id).join("|"),
+    [visibleItems],
   );
   const [prevItemsIdKey, setPrevItemsIdKey] = useState(itemsIdKey);
   if (itemsIdKey !== prevItemsIdKey) {
@@ -376,7 +464,7 @@ export function JobsClient({
       batchSelectedIds.size > 0 &&
       !batchDeleteMutation.isPending
     ) {
-      const currentIds = new Set(items.map((it) => it.id));
+      const currentIds = new Set(visibleItems.map((item) => item.id));
       const pruned = new Set(
         [...batchSelectedIds].filter((id) => currentIds.has(id)),
       );
@@ -547,10 +635,15 @@ export function JobsClient({
 
   const effectiveSelectedId = useMemo(() => {
     if (selectionExplicitlyCleared) return null;
-    if (!items.length) return null;
-    if (selectedId && items.some((it) => it.id === selectedId)) return selectedId;
-    return items[0]?.id ?? null;
-  }, [items, selectedId, selectionExplicitlyCleared]);
+    if (!visibleItems.length) return null;
+    if (
+      selectedId &&
+      visibleItems.some((item) => item.id === selectedId)
+    ) {
+      return selectedId;
+    }
+    return visibleItems[0]?.id ?? null;
+  }, [selectedId, selectionExplicitlyCleared, visibleItems]);
 
   const handleSelectJob = useCallback((id: string | null) => {
     const showDetail =
@@ -590,13 +683,14 @@ export function JobsClient({
 
   useKeyboardNavigation({
     containerRef: jobListRef,
-    items,
+    items: visibleItems,
     selectedId: effectiveSelectedId,
     onSelect: handleSelectJob,
     prepareRowFocus,
   });
 
-  const selectedJob = items.find((it) => it.id === effectiveSelectedId) ?? null;
+  const selectedJob =
+    visibleItems.find((item) => item.id === effectiveSelectedId) ?? null;
   const selectedTailorSource = selectedJob ? ext.tailorSourceByJob[selectedJob.id] : undefined;
   const highlightGenerate = isTaskHighlighted("generate_first_pdf");
 
@@ -1230,7 +1324,7 @@ export function JobsClient({
             type="scroll"
             data-testid="jobs-results-scroll"
             data-loading={showLoadingOverlay ? "true" : "false"}
-            data-virtual={items.length > 80 ? "true" : "false"}
+            data-virtual={virtualListEnabled ? "true" : "false"}
             className={`jobs-scroll-area max-h-full flex-1 min-h-0 transition-opacity duration-200 ease-out ${listOpacityClass}`}
           >
             {loadingInitial ? (
@@ -1245,7 +1339,7 @@ export function JobsClient({
               </div>
             ) : null}
             {visibleItems.length > 0 ? (
-              visibleItems.length > 80 ? (
+              virtualListEnabled ? (
                 <div
                   ref={jobListRef}
                   role="list"

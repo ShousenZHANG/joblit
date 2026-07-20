@@ -110,6 +110,13 @@ The product differentiator is the **Chrome extension**: every correction you mak
 - **No account gate** — there is no invitation, manual approval, subscription, or credit-card requirement
 - **Internal JobSpy import** — `/api/admin/import` is a service-to-service route for the fetch worker, protected by `IMPORT_SECRET`; it is not a user-facing admin console or an account-access mechanism
 
+### Discover Learning Feed
+
+- Curated, ranked YouTube videos across Codex, Claude, RAG, agents, and harness engineering
+- Official-order GitHub weekly/monthly trending repositories with an optional low-signal filter
+- One authenticated daily Vercel Cron refresh during the `06:00 UTC` target hour; DB-backed fresh and last-known-good caches survive serverless cold starts
+- GitHub refresh remains available when `YOUTUBE_API_KEY` is absent or exhausted; an empty/changed GitHub parse never overwrites known-good content
+
 ## Chrome Extension
 
 Manifest V3 extension that auto-fills job application forms using your Joblit resume profile.
@@ -331,6 +338,7 @@ A complete template lives in [`.env.example`](./.env.example).
 | `GITHUB_OWNER` / `GITHUB_REPO` / `GITHUB_TOKEN` / `GITHUB_WORKFLOW_FILE` | Fetch workflow dispatch |
 | `JOBLIT_WEB_URL` | Public URL for the extension callback |
 | `YOUTUBE_API_KEY` | Discover-page video pipeline |
+| `CRON_SECRET` | Bearer secret for the daily Discover-only refresh route |
 | `RSSHUB_URL` / `RSSHUB_JOB_ROUTES` / `GITHUB_CN_JOB_REPOS` | China job sources |
 | `SENTRY_DSN` | Error reporting (when SDK is installed) |
 
@@ -362,6 +370,11 @@ CI runs lint, dependency policy, full test suite, and (per-PR) Lighthouse agains
 - Vercel Production builds run `prisma migrate deploy` before `next build` and
   fail closed if migration fails. Preview, Development, custom-environment, and
   local builds never run production migrations.
+- Vercel invokes `/api/discover/refresh-daily` once per day during the
+  `06:00 UTC` target hour.
+  Configure `CRON_SECRET` and, for videos, `YOUTUBE_API_KEY`. This schedule
+  refreshes only Discover videos and GitHub repositories; job fetching remains
+  explicitly user-triggered and has no Cron schedule.
 
 ### Existing-environment cutover
 

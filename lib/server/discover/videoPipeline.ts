@@ -274,6 +274,7 @@ async function searchYouTube(
   publishedAfter: string,
   maxResults: number,
   order: YouTubeSearchOrder,
+  signal?: AbortSignal,
 ): Promise<string[]> {
   const url = new URL("https://www.googleapis.com/youtube/v3/search");
   url.searchParams.set("part", "snippet");
@@ -290,7 +291,11 @@ async function searchYouTube(
   // keeps practical-length videos competitive without amputating long-form.
   url.searchParams.set("key", apiKey);
 
-  const res = await safeOutboundFetch(url, {}, YOUTUBE_OUTBOUND_POLICY);
+  const res = await safeOutboundFetch(
+    url,
+    { signal },
+    YOUTUBE_OUTBOUND_POLICY,
+  );
   if (res.status === 403) {
     const err = new Error("YouTube search 403") as Error & { status: number };
     err.status = 403;
@@ -329,13 +334,18 @@ function parseISODuration(iso: string): number {
 async function fetchVideoStats(
   videoIds: string[],
   apiKey: string,
+  signal?: AbortSignal,
 ): Promise<RawVideo[]> {
   if (videoIds.length === 0) return [];
   const url = new URL("https://www.googleapis.com/youtube/v3/videos");
   url.searchParams.set("part", "statistics,snippet,contentDetails");
   url.searchParams.set("id", videoIds.join(","));
   url.searchParams.set("key", apiKey);
-  const res = await safeOutboundFetch(url, {}, YOUTUBE_OUTBOUND_POLICY);
+  const res = await safeOutboundFetch(
+    url,
+    { signal },
+    YOUTUBE_OUTBOUND_POLICY,
+  );
   if (res.status === 403) {
     const err = new Error("YouTube videos 403") as Error & { status: number };
     err.status = 403;
@@ -380,6 +390,7 @@ async function fetchVideoStats(
 async function fetchChannelSubscribers(
   channelIds: string[],
   apiKey: string,
+  signal?: AbortSignal,
 ): Promise<Map<string, number>> {
   if (channelIds.length === 0) return new Map();
   const out = new Map<string, number>();
@@ -389,7 +400,11 @@ async function fetchChannelSubscribers(
     url.searchParams.set("part", "statistics");
     url.searchParams.set("id", batch.join(","));
     url.searchParams.set("key", apiKey);
-    const res = await safeOutboundFetch(url, {}, YOUTUBE_OUTBOUND_POLICY);
+    const res = await safeOutboundFetch(
+      url,
+      { signal },
+      YOUTUBE_OUTBOUND_POLICY,
+    );
     if (res.status === 403) {
       const err = new Error("YouTube channels 403") as Error & {
         status: number;
@@ -418,6 +433,7 @@ export async function fetchVideosFromYouTube(
   timeWindow: VideoTimeWindow,
   apiKey: string,
   sort: VideoSort = "trending",
+  options: { signal?: AbortSignal } = {},
 ): Promise<VideoItem[]> {
   const queries = queriesForCategory(category);
   const perQuery = category === "all" ? 4 : 6;
@@ -429,7 +445,14 @@ export async function fetchVideosFromYouTube(
   const idLists: string[][] = [];
   for (const q of queries) {
     idLists.push(
-      await searchYouTube(q, apiKey, publishedAfter, perQuery, order),
+      await searchYouTube(
+        q,
+        apiKey,
+        publishedAfter,
+        perQuery,
+        order,
+        options.signal,
+      ),
     );
   }
 
@@ -447,13 +470,18 @@ export async function fetchVideosFromYouTube(
   const stats = await fetchVideoStats(
     uniqueIds.slice(0, VIDEO_ID_LIMIT),
     apiKey,
+    options.signal,
   );
   if (stats.length === 0) return [];
 
   const channelIds = Array.from(
     new Set(stats.map((s) => s.channelId).filter(Boolean)),
   );
-  const subsByChannel = await fetchChannelSubscribers(channelIds, apiKey);
+  const subsByChannel = await fetchChannelSubscribers(
+    channelIds,
+    apiKey,
+    options.signal,
+  );
 
   const videos = stats
     .filter(

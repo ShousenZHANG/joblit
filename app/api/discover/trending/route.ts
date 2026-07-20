@@ -8,15 +8,17 @@ import {
   type TrendingPeriod,
 } from "@/lib/server/discover/githubTrending";
 import { reportError } from "@/lib/server/observability/errorReporter";
+import {
+  buildRepoCacheKey,
+  readDiscoverCache,
+  writeDiscoverCache,
+} from "@/lib/server/discover/discoverCache";
+import { isFresh } from "@/lib/server/discover/videoCacheHelpers";
 
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
-
-const cache = new Map<string, { data: TrendingResponse; expiry: number }>();
-// Last-known-good payload per cache key, kept indefinitely (until replaced by a
-// successful fetch). Powers the stale-while-error fallback: GitHub markup
-// changes / rate limits / outages degrade to the previous good list instead of
-// a hard 502, so the Discover feed never goes blank on a transient failure.
-const lastGood = new Map<string, TrendingResponse>();
+// Slightly longer than the daily cron cadence. Serverless cold starts retain
+// the same DB-backed last-known-good payload instead of resetting an in-memory
+// Map and hitting GitHub again.
+const CACHE_TTL_MS = 25 * 60 * 60 * 1000;
 
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
@@ -31,34 +33,60 @@ export async function GET(request: Request) {
   // mostly-CJK / awesome-list / interview-prep rows from the official list.
   const clean = searchParams.get("clean") === "1";
 
-  const cacheKey = `trending:${period}:${clean ? "clean" : "raw"}`;
-  const cached = cache.get(cacheKey);
-  if (cached && Date.now() < cached.expiry) {
-    return NextResponse.json(cached.data);
+  const cacheKey = buildRepoCacheKey(period, clean);
+  const existing = await readDiscoverCache<TrendingResponse>(cacheKey).catch(
+    () => null,
+  );
+  if (existing && isFresh(existing, Date.now())) {
+    return NextResponse.json({
+      ...existing.payload,
+      cached: true,
+      fetchedAt: existing.fetchedAt.toISOString(),
+    } satisfies TrendingResponse);
   }
 
   try {
     // Scrapes github.com/trending?since={period} for exact parity with the
     // official leaderboard (no public API exists; see githubTrending.ts).
     const fetched = await fetchTrendingRepos(period);
-    const repos = clean ? filterTrendingNoise(fetched) : fetched;
-
-    const response: TrendingResponse = {
-      repos,
+    const cleanRepos = filterTrendingNoise(fetched);
+    const fetchedAt = new Date();
+    const rawResponse: TrendingResponse = {
+      repos: fetched,
       cached: false,
-      fetchedAt: new Date().toISOString(),
+      fetchedAt: fetchedAt.toISOString(),
     };
-    const cachedResponse: TrendingResponse = { ...response, cached: true };
-    cache.set(cacheKey, { data: cachedResponse, expiry: Date.now() + CACHE_TTL_MS });
-    lastGood.set(cacheKey, cachedResponse);
+    const cleanResponse: TrendingResponse = {
+      repos: cleanRepos,
+      cached: false,
+      fetchedAt: fetchedAt.toISOString(),
+    };
+    await Promise.all([
+      writeDiscoverCache(
+        buildRepoCacheKey(period, false),
+        rawResponse,
+        CACHE_TTL_MS,
+      ),
+      writeDiscoverCache(
+        buildRepoCacheKey(period, true),
+        cleanResponse,
+        CACHE_TTL_MS,
+      ),
+    ]).catch(() => {
+      // Cache persistence is an availability optimization. A live upstream
+      // result remains valid even if the DB cache write is temporarily down.
+    });
+    const response = clean ? cleanResponse : rawResponse;
     return NextResponse.json(response);
   } catch (err) {
-    // Stale-while-error: serve the last good payload (even past its TTL) so a
-    // transient upstream failure never blanks the feed. Only hard-fail when we
-    // have never successfully fetched this key.
-    const fallback = lastGood.get(cacheKey);
-    if (fallback) {
-      return NextResponse.json({ ...fallback, stale: true });
+    // Stale-while-error survives cold starts because the fallback is durable.
+    if (existing) {
+      return NextResponse.json({
+        ...existing.payload,
+        cached: true,
+        stale: true,
+        fetchedAt: existing.fetchedAt.toISOString(),
+      } satisfies TrendingResponse);
     }
     // Upstream error text stays server-side; the client gets a stable code.
     reportError(err, { scope: "discover.trending" });

@@ -1,5 +1,8 @@
-import { prisma } from "@/lib/server/prisma";
 import type { VideosResponse } from "@/app/(app)/discover/types";
+import {
+  readDiscoverCache,
+  writeDiscoverCache,
+} from "./discoverCache";
 
 export {
   isFresh,
@@ -22,14 +25,7 @@ interface VideoCacheEntry {
 export async function readCache(
   key: string,
 ): Promise<VideoCacheEntry | null> {
-  const row = await prisma.discoverVideoCache.findUnique({ where: { key } });
-  if (!row) return null;
-  return {
-    key: row.key,
-    payload: row.payload as unknown as VideosResponse,
-    fetchedAt: row.fetchedAt,
-    expiresAt: row.expiresAt,
-  };
+  return readDiscoverCache<VideosResponse>(key);
 }
 
 /**
@@ -41,20 +37,5 @@ export async function writeCache(
   payload: VideosResponse,
   ttlMs: number,
 ): Promise<void> {
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + ttlMs);
-  await prisma.discoverVideoCache.upsert({
-    where: { key },
-    create: {
-      key,
-      payload: payload as unknown as object,
-      fetchedAt: now,
-      expiresAt,
-    },
-    update: {
-      payload: payload as unknown as object,
-      fetchedAt: now,
-      expiresAt,
-    },
-  });
+  await writeDiscoverCache(key, payload, ttlMs);
 }

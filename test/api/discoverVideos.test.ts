@@ -24,6 +24,10 @@ const cacheMock = vi.hoisted(() => ({
   writeCache: vi.fn(),
 }));
 
+const errorReporterMock = vi.hoisted(() => ({
+  reportError: vi.fn(),
+}));
+
 vi.mock("@/auth", () => ({
   authOptions: {},
 }));
@@ -42,6 +46,10 @@ vi.mock("@/lib/server/discover/videoCache", () => ({
   isQuotaExceededError: cacheMock.isQuotaExceededError,
   readCache: cacheMock.readCache,
   writeCache: cacheMock.writeCache,
+}));
+
+vi.mock("@/lib/server/observability/errorReporter", () => ({
+  reportError: errorReporterMock.reportError,
 }));
 
 import { GET } from "@/app/api/discover/videos/route";
@@ -81,7 +89,9 @@ describe("discover videos api", () => {
     cacheMock.isFresh.mockReset();
     cacheMock.isQuotaExceededError.mockClear();
     cacheMock.readCache.mockReset();
+    cacheMock.readCache.mockResolvedValue(null);
     cacheMock.writeCache.mockReset();
+    errorReporterMock.reportError.mockReset();
     cacheMock.writeCache.mockResolvedValue(undefined);
     process.env.YOUTUBE_API_KEY = "youtube-key";
   });
@@ -109,6 +119,36 @@ describe("discover videos api", () => {
     expect(res.status).toBe(200);
     expect(json.noApiKey).toBe(true);
     expect(json.items).toEqual([]);
+  });
+
+  it("serves stale last-known-good cache when YouTube API key is missing", async () => {
+    mockAuthedUser();
+    delete process.env.YOUTUBE_API_KEY;
+    cacheMock.readCache.mockResolvedValueOnce({
+      key: "videos:codex:month",
+      payload: {
+        items: [makeVideo("cached")],
+        cached: false,
+        fetchedAt: "2026-05-01T00:00:00.000Z",
+      },
+      fetchedAt: new Date("2026-05-02T00:00:00.000Z"),
+      expiresAt: new Date("2026-05-03T00:00:00.000Z"),
+    });
+    cacheMock.isFresh.mockReturnValueOnce(false);
+
+    const res = await GET(
+      new Request(
+        "http://localhost/api/discover/videos?category=codex&window=month",
+      ),
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.items[0].id).toBe("cached");
+    expect(json.cached).toBe(true);
+    expect(json.stale).toBe(true);
+    expect(json.noApiKey).toBe(true);
+    expect(pipelineMock.fetchVideosFromYouTube).not.toHaveBeenCalled();
   });
 
   it("passes Codex and most-viewed sorting into the fetch pipeline and cache key", async () => {
@@ -205,5 +245,79 @@ describe("discover videos api", () => {
       2,
       "videos:codex:month",
     );
+  });
+
+  it("serves existing stale cache on a non-quota upstream failure and reports it", async () => {
+    mockAuthedUser();
+    const upstreamError = new Error("YouTube network failed");
+    cacheMock.readCache.mockResolvedValueOnce({
+      key: "videos:codex:month",
+      payload: {
+        items: [makeVideo("stale")],
+        cached: false,
+        fetchedAt: "2026-05-01T00:00:00.000Z",
+      },
+      fetchedAt: new Date("2026-05-02T00:00:00.000Z"),
+      expiresAt: new Date("2026-05-03T00:00:00.000Z"),
+    });
+    cacheMock.isFresh.mockReturnValueOnce(false);
+    pipelineMock.fetchVideosFromYouTube.mockRejectedValueOnce(upstreamError);
+
+    const res = await GET(
+      new Request(
+        "http://localhost/api/discover/videos?category=codex&window=month",
+      ),
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.items[0].id).toBe("stale");
+    expect(json.cached).toBe(true);
+    expect(json.stale).toBe(true);
+    expect(errorReporterMock.reportError).toHaveBeenCalledWith(upstreamError, {
+      scope: "discover.videos",
+    });
+  });
+
+  it("uses default LKG for alternate sort on a non-quota upstream failure", async () => {
+    mockAuthedUser();
+    const upstreamError = new Error("YouTube unavailable");
+    cacheMock.readCache
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        key: "videos:codex:month",
+        payload: {
+          items: [
+            makeVideo("old", {
+              publishedAt: "2026-05-01T00:00:00.000Z",
+            }),
+            makeVideo("new", {
+              publishedAt: "2026-05-03T00:00:00.000Z",
+            }),
+          ],
+          cached: false,
+          fetchedAt: "2026-05-01T00:00:00.000Z",
+        },
+        fetchedAt: new Date("2026-05-02T00:00:00.000Z"),
+        expiresAt: new Date("2026-05-03T00:00:00.000Z"),
+      });
+    pipelineMock.fetchVideosFromYouTube.mockRejectedValueOnce(upstreamError);
+
+    const res = await GET(
+      new Request(
+        "http://localhost/api/discover/videos?category=codex&window=month&sort=latest",
+      ),
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.items.map((item: VideoItem) => item.id)).toEqual([
+      "new",
+      "old",
+    ]);
+    expect(json.stale).toBe(true);
+    expect(errorReporterMock.reportError).toHaveBeenCalledWith(upstreamError, {
+      scope: "discover.videos",
+    });
   });
 });

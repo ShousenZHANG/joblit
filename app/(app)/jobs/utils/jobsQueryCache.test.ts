@@ -3,6 +3,7 @@ import { QueryClient } from "@tanstack/react-query";
 import type { JobItem, JobsResponse } from "../types";
 import {
   buildInitialJobsInfiniteData,
+  cancelJobsQueries,
   getJobsListQueryKey,
   patchGeneratedJobArtifactInJobsCache,
   patchJobStatusInJobsCache,
@@ -50,6 +51,51 @@ function infinite(...pages: JobsResponse[]): JobsInfiniteData {
 }
 
 describe("jobs query cache helpers", () => {
+  it("cancels an in-flight list without entering error before applying a cache delete", async () => {
+    const client = createClient();
+    const key = getJobsListQueryKey("status=NEW");
+    client.setQueryData<JobsInfiniteData>(
+      key,
+      infinite({ items: [baseJob], nextCursor: null, totalCount: 1 }),
+    );
+
+    let markStarted: () => void = () => {};
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const inFlight = client.fetchInfiniteQuery({
+      queryKey: key,
+      initialPageParam: null as string | null,
+      getNextPageParam: () => undefined,
+      queryFn: ({ signal }) => {
+        markStarted();
+        return new Promise<JobsResponse>((_resolve, reject) => {
+          signal.addEventListener(
+            "abort",
+            () => reject(new DOMException("Aborted", "AbortError")),
+            { once: true },
+          );
+        });
+      },
+    });
+    void inFlight.catch(() => undefined);
+    await started;
+
+    await cancelJobsQueries(client);
+
+    expect(client.getQueryState(key)).toMatchObject({
+      status: "success",
+      fetchStatus: "idle",
+      error: null,
+    });
+
+    removeJobFromJobsCache(client, baseJob.id);
+    expect(client.getQueryData<JobsInfiniteData>(key)?.pages[0]).toMatchObject({
+      items: [],
+      totalCount: 0,
+    });
+  });
+
   it("builds initial infinite data with job-level facets from the current payload", () => {
     expect(
       buildInitialJobsInfiniteData({

@@ -121,6 +121,28 @@ export function useJobFilters() {
     [pathname, router],
   );
 
+  // Selected row and mobile pane are workspace-only state. Using
+  // router.replace here would navigate the force-dynamic `/jobs` route and
+  // request a fresh RSC payload, which can remount the nested list viewport.
+  const replaceUrlStateShallow = useCallback(
+    (patch: Partial<JobsUrlState>): JobsUrlState | null => {
+      const currentParams = new URLSearchParams(latestParamsRef.current);
+      const nextParams = writeJobsUrlState(currentParams, patch);
+      const nextSearch = nextParams.toString();
+
+      if (nextSearch === latestParamsRef.current) return null;
+
+      latestParamsRef.current = nextSearch;
+      if (typeof window !== "undefined") {
+        const nextUrl = nextSearch ? `${pathname}?${nextSearch}` : pathname;
+        // Keep Next's internal history payload intact for back/forward.
+        window.history.replaceState(window.history.state, "", nextUrl);
+      }
+      return parseJobsUrlState(nextParams);
+    },
+    [pathname],
+  );
+
   const filters = useMemo(
     () => ({ statusFilter, locationFilter, jobLevelFilter, market, pageSize }),
     [statusFilter, locationFilter, jobLevelFilter, market, pageSize],
@@ -184,5 +206,6 @@ export function useJobFilters() {
     queryString,
     urlState,
     replaceUrlState,
+    replaceUrlStateShallow,
   };
 }

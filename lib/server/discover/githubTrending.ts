@@ -161,12 +161,12 @@ export function filterTrendingNoise(repos: TrendingRepo[]): TrendingRepo[] {
 }
 
 /**
- * Fetch github.com/trending for the given period and parse it. No auth needed
- * (public HTML). `_token` is accepted for call-site compatibility but unused.
+ * Fetch github.com/trending for the given period and parse it. No auth needed.
+ * Optional AbortSignal lets the daily refresh respect its serverless deadline.
  */
 export async function fetchTrendingRepos(
   period: TrendingPeriod,
-  _token?: string,
+  options: { signal?: AbortSignal } = {},
 ): Promise<TrendingRepo[]> {
   const since = PERIOD_TO_SINCE[period];
   const url = `https://github.com/trending?since=${since}`;
@@ -174,6 +174,7 @@ export async function fetchTrendingRepos(
   const res = await safeOutboundFetch(
     url,
     {
+      signal: options.signal,
       headers: {
       // A browser-like UA — GitHub serves the standard trending markup to it.
       "User-Agent":
@@ -193,5 +194,9 @@ export async function fetchTrendingRepos(
   }
 
   const html = await res.text();
-  return parseTrendingHtml(html);
+  const repos = parseTrendingHtml(html);
+  if (repos.length === 0) {
+    throw new Error("GitHub trending returned no repository rows");
+  }
+  return repos;
 }

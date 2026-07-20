@@ -36,6 +36,7 @@ export const sessionDeletedJobIds = new Set<string>();
 type PendingDelete = {
   timer: ReturnType<typeof setTimeout>;
   restoreSelection: boolean;
+  replacementSelectionId: string | null;
 };
 
 export function useJobMutations({
@@ -43,11 +44,13 @@ export function useJobMutations({
   selectedId,
   setSelectedId,
   setSuppressedDeletedIds,
+  captureListViewport,
 }: {
   items: JobItem[];
   selectedId: string | null;
   setSelectedId: (id: string | null) => void;
   setSuppressedDeletedIds: React.Dispatch<React.SetStateAction<Set<string>>>;
+  captureListViewport: (excludedIds: ReadonlySet<string>) => void;
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -56,6 +59,10 @@ export function useJobMutations({
   const [error, setError] = useState<string | null>(null);
   const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set());
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const selectedIdRef = useRef(selectedId);
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: JobStatus }) => {
@@ -169,16 +176,22 @@ export function useJobMutations({
       } catch (e) {
         // Commit failed — un-hide so the row reappears. The cache was never
         // mutated during the window, so there is no snapshot to restore.
+        captureListViewport(new Set());
         setSuppressedDeletedIds((prev) => {
           if (!prev.has(id)) return prev;
           const next = new Set(prev);
           next.delete(id);
           return next;
         });
-        if (pending.restoreSelection) {
+        if (
+          pending.restoreSelection &&
+          (
+            selectedIdRef.current === pending.replacementSelectionId ||
+            selectedIdRef.current === null
+          )
+        ) {
           setSelectedId(id);
         }
-        invalidateActiveJobsQueries(queryClient);
         setError(getErrorMessage(e, "Failed to delete job"));
         toast({
           title: "Delete failed",
@@ -196,7 +209,7 @@ export function useJobMutations({
         });
       }
     },
-    [queryClient, setSelectedId, setSuppressedDeletedIds, toast],
+    [captureListViewport, queryClient, setSelectedId, setSuppressedDeletedIds, toast],
   );
 
   const undoDelete = useCallback(
@@ -208,15 +221,24 @@ export function useJobMutations({
       // Cache was never mutated (row only hidden via suppressedDeletedIds), so
       // undo just un-hides it. No snapshot restore => overlapping undos in any
       // order can't clobber each other.
+      captureListViewport(new Set());
       setSuppressedDeletedIds((prev) => {
         if (!prev.has(id)) return prev;
         const next = new Set(prev);
         next.delete(id);
         return next;
       });
-      setSelectedId(id);
+      if (
+        pending.restoreSelection &&
+        (
+          selectedIdRef.current === pending.replacementSelectionId ||
+          selectedIdRef.current === null
+        )
+      ) {
+        setSelectedId(id);
+      }
     },
-    [setSelectedId, setSuppressedDeletedIds],
+    [captureListViewport, setSelectedId, setSuppressedDeletedIds],
   );
 
   const requestDelete = useCallback(
@@ -224,20 +246,20 @@ export function useJobMutations({
       const id = job.id;
       if (pendingDeletesRef.current.has(id) || deletingIds.has(id)) return;
       setError(null);
+      const currentIndex = items.findIndex((item) => item.id === id);
+      const adjacent =
+        items[currentIndex + 1] ??
+        items[currentIndex - 1] ??
+        items.find((item) => item.id !== id) ??
+        null;
+      captureListViewport(new Set([id]));
       setSuppressedDeletedIds((prev) => {
         if (prev.has(id)) return prev;
         const next = new Set(prev);
         next.add(id);
         return next;
       });
-      void cancelJobsQueries(queryClient);
       if (selectedId === id) {
-        const currentIndex = items.findIndex((item) => item.id === id);
-        const adjacent =
-          items[currentIndex + 1] ??
-          items[currentIndex - 1] ??
-          items.find((item) => item.id !== id) ??
-          null;
         setSelectedId(adjacent?.id ?? null);
       }
       // No cache mutation here — the row is hidden via suppressedDeletedIds
@@ -250,6 +272,7 @@ export function useJobMutations({
       pendingDeletesRef.current.set(id, {
         timer,
         restoreSelection: selectedId === id,
+        replacementSelectionId: adjacent?.id ?? null,
       });
       // Premium undo toast (Gmail/Linear): a NEUTRAL surface — a delete isn't a
       // "success", so the previous emerald-green styling was semantically
@@ -292,7 +315,7 @@ export function useJobMutations({
       deletingIds,
       items,
       selectedId,
-      queryClient,
+      captureListViewport,
       setSelectedId,
       setSuppressedDeletedIds,
       finalizeDelete,
@@ -377,6 +400,7 @@ export function useJobMutations({
     onMutate: async (ids) => {
       setError(null);
       const idSet = new Set(ids);
+      captureListViewport(idSet);
       setSuppressedDeletedIds((prev) => {
         const next = new Set(prev);
         for (const id of ids) next.add(id);
@@ -401,10 +425,11 @@ export function useJobMutations({
         setSelectedId(nextSelectedId);
       }
 
-      return { rollbackSnapshots, previousSelectedId };
+      return { rollbackSnapshots, previousSelectedId, nextSelectedId };
     },
     onError: (e, ids, context) => {
       setError(getErrorMessage(e, "Failed to batch delete"));
+      captureListViewport(new Set());
       setSuppressedDeletedIds((prev) => {
         const next = new Set(prev);
         for (const id of ids) next.delete(id);
@@ -415,8 +440,13 @@ export function useJobMutations({
         context?.rollbackSnapshots,
         new Set(ids),
       );
-      invalidateActiveJobsQueries(queryClient);
-      if (context?.previousSelectedId) {
+      if (
+        context?.previousSelectedId &&
+        (
+          selectedIdRef.current === context.nextSelectedId ||
+          selectedIdRef.current === null
+        )
+      ) {
         setSelectedId(context.previousSelectedId);
       }
       toast({
@@ -448,12 +478,12 @@ export function useJobMutations({
         // entirely — the optimistic removeJobsFromJobsCache() already removed
         // the rows + decremented totalCount, so invalidating would just dim
         // the list for no reason.
+        captureListViewport(new Set());
         restoreJobsByIdsFromSnapshots(
           queryClient,
           context?.rollbackSnapshots,
           new Set(data.failedIds),
         );
-        void invalidateActiveJobsQueries(queryClient);
         setSuppressedDeletedIds((prev) => {
           const next = new Set(prev);
           for (const id of data.failedIds) next.delete(id);

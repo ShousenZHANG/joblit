@@ -18,9 +18,7 @@ import {
   writeCache,
 } from "@/lib/server/discover/videoCache";
 
-// User-triggered refresh only. Long-lived DB cache protects YouTube quota;
-// stale data remains available if the upstream quota is exhausted.
-const DB_CACHE_TTL_MS = 25 * 60 * 60 * 1000;
+const DB_CACHE_TTL_MS = 25 * 60 * 60 * 1_000;
 
 const VALID_CATEGORIES: VideoCategory[] = [
   "all",
@@ -36,31 +34,26 @@ const VALID_WINDOWS: VideoTimeWindow[] = ["week", "month"];
 const VALID_SORTS: VideoSort[] = ["trending", "latest", "most_viewed"];
 
 function parseCategory(raw: string | null): VideoCategory {
-  const v = (raw ?? "all").toLowerCase();
-  return (VALID_CATEGORIES as string[]).includes(v)
-    ? (v as VideoCategory)
+  const value = (raw ?? "all").toLowerCase();
+  return (VALID_CATEGORIES as string[]).includes(value)
+    ? (value as VideoCategory)
     : "all";
 }
 
 function parseWindow(raw: string | null): VideoTimeWindow {
-  const v = (raw ?? "month").toLowerCase();
-  return (VALID_WINDOWS as string[]).includes(v)
-    ? (v as VideoTimeWindow)
+  const value = (raw ?? "month").toLowerCase();
+  return (VALID_WINDOWS as string[]).includes(value)
+    ? (value as VideoTimeWindow)
     : "month";
 }
 
 function parseSort(raw: string | null): VideoSort {
-  const v = (raw ?? "trending").toLowerCase();
-  return (VALID_SORTS as string[]).includes(v) ? (v as VideoSort) : "trending";
+  const value = (raw ?? "trending").toLowerCase();
+  return (VALID_SORTS as string[]).includes(value)
+    ? (value as VideoSort)
+    : "trending";
 }
 
-/**
- * Shared edge-cache headers. `s-maxage` lets Vercel's CDN serve the same
- * JSON for the next hour without re-invoking the function; `stale-while-
- * revalidate` allows serving the same cached JSON for up to 24 h while a
- * single background revalidation happens. This is the first defence
- * against quota drain — most users never touch the serverless function.
- */
 const EDGE_CACHE_HEADERS = {
   "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400",
 } as const;
@@ -84,20 +77,24 @@ function sortCachedItems(items: VideoItem[], sort: VideoSort): VideoItem[] {
   return items;
 }
 
+function cachedResponse(
+  entry: NonNullable<Awaited<ReturnType<typeof readCache>>>,
+  sort: VideoSort,
+  extra: Pick<VideosResponse, "stale" | "noApiKey"> = {},
+): VideosResponse {
+  return {
+    ...entry.payload,
+    items: sortCachedItems(entry.payload.items, sort),
+    cached: true,
+    fetchedAt: entry.fetchedAt.toISOString(),
+    ...extra,
+  };
+}
+
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const apiKey = process.env.YOUTUBE_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({
-      items: [],
-      cached: false,
-      fetchedAt: new Date().toISOString(),
-      noApiKey: true,
-    } satisfies VideosResponse);
   }
 
   const { searchParams } = new URL(request.url);
@@ -107,21 +104,44 @@ export async function GET(request: Request) {
   const cacheKey = buildCacheKey(category, timeWindow, sort);
   const defaultCacheKey =
     sort === "trending" ? cacheKey : buildCacheKey(category, timeWindow);
-
-  // ── L2: DB cache (fast path) ──────────────────────────
   const existing = await readCache(cacheKey).catch(() => null);
-  if (existing && isFresh(existing, Date.now())) {
-    return NextResponse.json(
-      {
-        ...existing.payload,
-        cached: true,
-        fetchedAt: existing.fetchedAt.toISOString(),
-      } satisfies VideosResponse,
-      { headers: EDGE_CACHE_HEADERS },
-    );
+  const apiKey = process.env.YOUTUBE_API_KEY;
+
+  // Configuration loss must not blank a previously-good feed. Treat the
+  // durable cache as stale because this invocation cannot refresh it.
+  if (!apiKey) {
+    if (existing) {
+      return NextResponse.json(
+        cachedResponse(existing, sort, { stale: true, noApiKey: true }),
+        { headers: EDGE_CACHE_HEADERS },
+      );
+    }
+    if (defaultCacheKey !== cacheKey) {
+      const fallback = await readCache(defaultCacheKey).catch(() => null);
+      if (fallback) {
+        return NextResponse.json(
+          cachedResponse(fallback, sort, {
+            stale: true,
+            noApiKey: true,
+          }),
+          { headers: EDGE_CACHE_HEADERS },
+        );
+      }
+    }
+    return NextResponse.json({
+      items: [],
+      cached: false,
+      fetchedAt: new Date().toISOString(),
+      noApiKey: true,
+    } satisfies VideosResponse);
   }
 
-  // ── Upstream fetch with quota-aware graceful fallback ─
+  if (existing && isFresh(existing, Date.now())) {
+    return NextResponse.json(cachedResponse(existing, sort), {
+      headers: EDGE_CACHE_HEADERS,
+    });
+  }
+
   try {
     const items = await fetchVideosFromYouTube(
       category,
@@ -129,48 +149,47 @@ export async function GET(request: Request) {
       apiKey,
       sort,
     );
+    if (items.length === 0) {
+      throw new Error(
+        `YouTube returned no videos for ${category}/${timeWindow}/${sort}`,
+      );
+    }
     const fresh: VideosResponse = {
       items,
       cached: false,
       fetchedAt: new Date().toISOString(),
     };
     await writeCache(cacheKey, fresh, DB_CACHE_TTL_MS).catch(() => {
-      // Cache write failures are non-fatal — user still gets the data.
+      // Cache persistence failure cannot invalidate a valid live response.
     });
     return NextResponse.json(fresh, { headers: EDGE_CACHE_HEADERS });
-  } catch (err) {
-    if (isQuotaExceededError(err) && existing) {
-      // Quota drained and we have *any* previously-stored payload — serve
-      // it and flag stale. UI will show "Updated X ago" instead of an
-      // empty state. This is the critical UX guarantee during quota burn.
+  } catch (error) {
+    const quotaExceeded = isQuotaExceededError(error);
+    if (!quotaExceeded) {
+      reportError(error, { scope: "discover.videos" });
+    }
+
+    // Every upstream failure uses LKG when available. This includes network,
+    // 5xx, parser, empty-result, and quota failures.
+    if (existing) {
       return NextResponse.json(
-        {
-          ...existing.payload,
-          cached: true,
-          stale: true,
-          fetchedAt: existing.fetchedAt.toISOString(),
-        } satisfies VideosResponse,
+        cachedResponse(existing, sort, { stale: true }),
         { headers: EDGE_CACHE_HEADERS },
       );
     }
-    if (isQuotaExceededError(err) && defaultCacheKey !== cacheKey) {
+    if (defaultCacheKey !== cacheKey) {
       const fallback = await readCache(defaultCacheKey).catch(() => null);
       if (fallback) {
         return NextResponse.json(
-          {
-            ...fallback.payload,
-            items: sortCachedItems(fallback.payload.items, sort),
-            cached: true,
-            stale: true,
-            fetchedAt: fallback.fetchedAt.toISOString(),
-          } satisfies VideosResponse,
+          cachedResponse(fallback, sort, { stale: true }),
           { headers: EDGE_CACHE_HEADERS },
         );
       }
     }
-    // Upstream (YouTube/network) error text stays server-side — it can carry
-    // internal URLs or key fragments. The client gets a stable code.
-    reportError(err, { scope: "discover.videos" });
-    return NextResponse.json({ error: "VIDEOS_UNAVAILABLE" }, { status: 502 });
+
+    return NextResponse.json(
+      { error: "VIDEOS_UNAVAILABLE" },
+      { status: 502 },
+    );
   }
 }
