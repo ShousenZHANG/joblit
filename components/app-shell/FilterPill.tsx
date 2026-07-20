@@ -14,10 +14,23 @@ interface FilterPillProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   active?: boolean;
   count?: number;
+  /**
+   * `solid` fills with emerald when on. `soft` tints instead, reserving the
+   * filled treatment for exclusive selection (see SegmentedControl) so a view
+   * toggle never looks like the currently selected filter.
+   */
+  variant?: "solid" | "soft";
 }
 
 export const FilterPill = React.forwardRef<HTMLButtonElement, FilterPillProps>(
-  function FilterPill({ active, count, className, children, ...rest }, ref) {
+  function FilterPill(
+    { active, count, variant = "solid", className, children, ...rest },
+    ref,
+  ) {
+    const activeClass =
+      variant === "soft"
+        ? "border-brand-emerald-300 bg-brand-emerald-50 text-brand-emerald-text dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-200"
+        : "border-brand-emerald-600 bg-brand-emerald-600 text-white shadow-sm";
     return (
       <button
         ref={ref}
@@ -26,7 +39,7 @@ export const FilterPill = React.forwardRef<HTMLButtonElement, FilterPillProps>(
         className={cn(
           "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] font-semibold transition-all duration-200",
           active
-            ? "border-brand-emerald-600 bg-brand-emerald-600 text-white shadow-sm"
+            ? activeClass
             : "border-border/70 bg-background/80 text-foreground/75 hover:border-border hover:bg-muted hover:text-foreground",
           className,
         )}
@@ -37,7 +50,7 @@ export const FilterPill = React.forwardRef<HTMLButtonElement, FilterPillProps>(
           <span
             className={cn(
               "rounded-full px-1.5 text-[10px] font-bold tabular-nums",
-              active
+              active && variant === "solid"
                 ? "bg-white/25 text-white"
                 : "bg-brand-emerald-50 text-brand-emerald-text",
             )}

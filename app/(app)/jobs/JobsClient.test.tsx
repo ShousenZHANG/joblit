@@ -190,13 +190,13 @@ describe("JobsClient", () => {
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
     expect((await screen.findAllByText("Frontend Engineer")).length).toBeGreaterThan(0);
 
-    await user.click(screen.getByRole("button", { name: messages.jobs.statusApplied }));
+    await user.click(screen.getByRole("radio", { name: messages.jobs.statusApplied }));
     await waitFor(() => {
       expect(screen.queryByText(messages.jobs.noJobs)).not.toBeInTheDocument();
       expect(screen.getAllByText("Frontend Engineer").length).toBeGreaterThan(0);
     });
 
-    await user.click(screen.getByRole("button", { name: messages.jobs.statusNew }));
+    await user.click(screen.getByRole("radio", { name: messages.jobs.statusNew }));
     await waitFor(() => {
       expect(screen.queryByText(messages.jobs.noJobs)).not.toBeInTheDocument();
       expect(screen.getAllByText("Frontend Engineer").length).toBeGreaterThan(0);
@@ -239,8 +239,8 @@ describe("JobsClient", () => {
     expect(screen.getByTestId("jobs-location-filter")).toHaveTextContent("Victoria");
     expect(screen.getByTestId("jobs-level-filter")).toHaveTextContent("Mid");
     expect(
-      screen.getByRole("button", { name: messages.jobs.statusApplied }),
-    ).toHaveAttribute("aria-pressed", "true");
+      screen.getByRole("radio", { name: messages.jobs.statusApplied }),
+    ).toHaveAttribute("aria-checked", "true");
     expect(navigationMock.replace).not.toHaveBeenCalled();
 
     await user.clear(search);
@@ -1854,6 +1854,82 @@ describe("JobsClient", () => {
       expect(cache?.pages[0]?.items).toHaveLength(1);
       expect(cache?.pages[0]?.items[0]?.id).toBe(appliedOnlyJob.id);
       expect(cache?.pages[0]?.totalCount).toBe(5);
+    });
+  });
+
+  describe("results toolbar", () => {
+    it("offers only the three triage statuses", async () => {
+      renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
+      await screen.findAllByText("Frontend Engineer");
+
+      const statuses = screen.getByRole("radiogroup", { name: messages.jobs.status });
+      const options = within(statuses).getAllByRole("radio");
+
+      expect(options.map((option) => option.textContent)).toEqual([
+        messages.jobs.statusNew,
+        messages.jobs.statusApplied,
+        messages.jobs.statusRejected,
+      ]);
+    });
+
+    it("does not expose the retired pipeline statuses", async () => {
+      renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
+      await screen.findAllByText("Frontend Engineer");
+
+      for (const label of [
+        messages.jobs.statusInterview,
+        messages.jobs.statusOffer,
+        messages.jobs.statusWithdrawn,
+        messages.jobs.statusAccepted,
+      ]) {
+        expect(screen.queryByRole("radio", { name: label })).not.toBeInTheDocument();
+      }
+    });
+
+    it("separates exclusive filters, view toggles and actions by role", async () => {
+      // The three control types used to be indistinguishable pills. Each now
+      // carries the semantics a user (and a screen reader) needs to tell them
+      // apart: exclusive choice, pressed state, or plain action.
+      renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
+      await screen.findAllByText("Frontend Engineer");
+
+      // Exclusive filter — radiogroup, not a set of independent toggles.
+      expect(
+        screen.getByRole("radio", { name: messages.jobs.statusNew }),
+      ).toHaveAttribute("aria-checked", "true");
+
+      // View toggles — pressed state, so "on" is announced.
+      for (const label of [
+        messages.jobs.fitScan.sortByFit,
+        messages.jobs.fitScan.hideLowFit,
+      ]) {
+        expect(screen.getByRole("button", { name: label })).toHaveAttribute(
+          "aria-pressed",
+          "false",
+        );
+      }
+
+      // Actions — no pressed state, because they do not represent a state.
+      for (const label of [
+        messages.jobs.fitScan.button,
+        messages.jobs.fitScan.ignoreLow,
+      ]) {
+        expect(
+          screen.getByRole("button", { name: label }),
+        ).not.toHaveAttribute("aria-pressed");
+      }
+    });
+
+    it("keeps the status group to one tab stop", async () => {
+      renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
+      await screen.findAllByText("Frontend Engineer");
+
+      expect(
+        screen.getByRole("radio", { name: messages.jobs.statusNew }),
+      ).toHaveAttribute("tabindex", "0");
+      expect(
+        screen.getByRole("radio", { name: messages.jobs.statusApplied }),
+      ).toHaveAttribute("tabindex", "-1");
     });
   });
 

@@ -7,7 +7,7 @@ import { unauthorizedError } from "@/lib/server/api/errorResponse";
 import { deleteJob } from "@/lib/server/jobs/jobDeleteService";
 import { updateJobStatus } from "@/lib/server/jobs/jobStatusService";
 import { FitMatrixSchema } from "@/lib/shared/schemas/fitMatrix";
-import { JOB_STATUS_VALUES } from "@/lib/shared/jobStatus";
+import { ACTIVE_JOB_STATUS_VALUES } from "@/lib/shared/jobStatus";
 import { applicationEventErrorResponse } from "@/lib/server/applications/applicationEventErrors";
 
 export const runtime = "nodejs";
@@ -16,8 +16,10 @@ const ParamsSchema = z.object({
   id: z.string().uuid(),
 });
 
+// Writes are restricted to the active triage states. Retired statuses stay
+// parseable elsewhere for ledger history, but nothing may create a new one.
 const PatchSchema = z.object({
-  status: z.enum(JOB_STATUS_VALUES).optional(),
+  status: z.enum(ACTIVE_JOB_STATUS_VALUES).optional(),
 });
 
 export async function PATCH(

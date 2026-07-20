@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, CheckCircle2, CheckSquare, Loader2, MapPin, RefreshCw, SlidersHorizontal, Square, Trash2, X } from "lucide-react";
+import { Archive, ArrowRight, ArrowUpDown, CheckCircle2, CheckSquare, EyeOff, Loader2, MapPin, RefreshCw, SlidersHorizontal, Sparkles, Square, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -22,7 +22,8 @@ import {
   type JobItem,
   type JobStatus,
 } from "./types";
-import { JOB_STATUS_VALUES } from "@/lib/shared/jobStatus";
+import { ACTIVE_JOB_STATUS_VALUES } from "@/lib/shared/jobStatus";
+import { SegmentedControl } from "@/components/app-shell/SegmentedControl";
 import { getErrorMessage } from "./types";
 import { useJobFilters } from "./hooks/useJobFilters";
 import { useJobPagination } from "./hooks/useJobPagination";
@@ -931,7 +932,7 @@ export function JobsClient({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {JOB_STATUS_VALUES.map((status) => (
+                  {ACTIVE_JOB_STATUS_VALUES.map((status) => (
                     <SelectItem key={status} value={status}>
                       {t(JOB_STATUS_LABEL_KEYS[status])}
                     </SelectItem>
@@ -1179,56 +1180,80 @@ export function JobsClient({
                   </button>
                 </div>
               </div>
-              {/* Status filter pills — horizontal-scroll row beneath the
-                  Results header so status filtering is one click away
-                  instead of buried in a select dropdown. */}
-              <div className="no-scrollbar -mt-1 flex items-center gap-1.5 overflow-x-auto px-4 pb-3">
-                {JOB_STATUS_VALUES.map((status) => (
+              {/* Toolbar. Three control types sat in one flat scrolling row of
+                  identical pills, so an exclusive filter, a view toggle and a
+                  bulk write were indistinguishable. Each now gets its own
+                  affordance: a connected track for the exclusive status
+                  choice, tinted toggles for view state, and plain icon
+                  buttons for the actions that actually do something. */}
+              <div className="-mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 pb-3">
+                <SegmentedControl
+                  ariaLabel={t("status")}
+                  value={statusFilter}
+                  onChange={(next) =>
+                    startTransition(() => setStatusFilter(next))
+                  }
+                  options={ACTIVE_JOB_STATUS_VALUES.map((status) => ({
+                    value: status,
+                    label: t(JOB_STATUS_LABEL_KEYS[status]),
+                  }))}
+                />
+
+                <div className="flex items-center gap-1.5">
                   <FilterPill
-                    key={status}
-                    active={statusFilter === status}
+                    variant="soft"
+                    active={sortByFit}
                     onClick={() =>
-                      startTransition(() => setStatusFilter(status))
+                      startTransition(() => setSortByFit((value) => !value))
                     }
                   >
-                    {t(JOB_STATUS_LABEL_KEYS[status])}
+                    <ArrowUpDown className="h-3 w-3" aria-hidden />
+                    {t("fitScan.sortByFit")}
                   </FilterPill>
-                ))}
-                <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-border" />
-                {fitScan.state.status !== "scanning" ? (
-                  <FilterPill active={false} onClick={() => void fitScan.start()}>
-                    {t("fitScan.button")}
-                  </FilterPill>
-                ) : null}
-                <FilterPill
-                  active={sortByFit}
-                  onClick={() => startTransition(() => setSortByFit((value) => !value))}
-                >
-                  {t("fitScan.sortByFit")}
-                </FilterPill>
-                {fitScan.state.status !== "scanning" ? (
                   <FilterPill
-                    active={false}
-                    disabled={ignorePending !== null}
-                    onClick={() => void handlePrepareIgnoreLowFit()}
-                    className="disabled:cursor-wait disabled:opacity-60"
+                    variant="soft"
+                    active={hideLowFit}
+                    onClick={() => setHideLowFit((value) => !value)}
                   >
-                    {ignorePending === "preview" ? (
-                      <span className="inline-flex items-center gap-1.5">
-                        <Loader2 className="h-3 w-3 motion-safe:animate-spin" aria-hidden />
-                        {t("fitScan.checkingLowFit")}
-                      </span>
-                    ) : (
-                      t("fitScan.ignoreLow")
-                    )}
+                    <EyeOff className="h-3 w-3" aria-hidden />
+                    {t("fitScan.hideLowFit")}
                   </FilterPill>
-                ) : null}
-                <FilterPill
-                  active={hideLowFit}
-                  onClick={() => setHideLowFit((value) => !value)}
-                >
-                  {t("fitScan.hideLowFit")}
-                </FilterPill>
+
+                  {fitScan.state.status !== "scanning" ? (
+                    <>
+                      <span
+                        aria-hidden
+                        className="mx-0.5 h-4 w-px shrink-0 bg-border"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void fitScan.start()}
+                        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold text-foreground/75 transition-colors hover:bg-muted hover:text-foreground"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                        {t("fitScan.button")}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={ignorePending !== null}
+                        onClick={() => void handlePrepareIgnoreLowFit()}
+                        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold text-foreground/75 transition-colors hover:bg-muted hover:text-foreground disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {ignorePending === "preview" ? (
+                          <Loader2
+                            className="h-3.5 w-3.5 motion-safe:animate-spin"
+                            aria-hidden
+                          />
+                        ) : (
+                          <Archive className="h-3.5 w-3.5" aria-hidden />
+                        )}
+                        {ignorePending === "preview"
+                          ? t("fitScan.checkingLowFit")
+                          : t("fitScan.ignoreLow")}
+                      </button>
+                    </>
+                  ) : null}
+                </div>
               </div>
             </div>
           )}

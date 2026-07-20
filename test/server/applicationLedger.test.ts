@@ -76,14 +76,24 @@ describe("application ledger invariants", () => {
 
   it("enforces deliberate lifecycle transitions", () => {
     expect(isAllowedStatusTransition("NEW", "APPLIED")).toBe(true);
-    expect(isAllowedStatusTransition("NEW", "INTERVIEW")).toBe(true);
-    expect(isAllowedStatusTransition("NEW", "OFFER")).toBe(true);
-    expect(isAllowedStatusTransition("APPLIED", "INTERVIEW")).toBe(true);
-    expect(isAllowedStatusTransition("INTERVIEW", "OFFER")).toBe(true);
-    expect(isAllowedStatusTransition("OFFER", "ACCEPTED")).toBe(true);
-    expect(isAllowedStatusTransition("NEW", "ACCEPTED")).toBe(false);
-    expect(isAllowedStatusTransition("ACCEPTED", "NEW")).toBe(false);
+    expect(isAllowedStatusTransition("NEW", "REJECTED")).toBe(true);
+    expect(isAllowedStatusTransition("APPLIED", "REJECTED")).toBe(true);
+    expect(isAllowedStatusTransition("REJECTED", "APPLIED")).toBe(true);
     expect(isAllowedStatusTransition("APPLIED", "APPLIED")).toBe(false);
+  });
+
+  it("never writes a status retired by the triage collapse", () => {
+    for (const target of ["INTERVIEW", "OFFER", "WITHDRAWN", "ACCEPTED"] as const) {
+      expect(isAllowedStatusTransition("NEW", target)).toBe(false);
+      expect(isAllowedStatusTransition("APPLIED", target)).toBe(false);
+    }
+  });
+
+  it("lets a row still holding a retired status move to an active one", () => {
+    // The ledger keeps historic INTERVIEW/OFFER rows readable, and any Job row
+    // the collapse migration missed must not be stranded.
+    expect(isAllowedStatusTransition("INTERVIEW", "REJECTED")).toBe(true);
+    expect(isAllowedStatusTransition("WITHDRAWN", "APPLIED")).toBe(true);
   });
 
   it("writes bulk projections and immutable events in one transaction", async () => {

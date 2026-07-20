@@ -1,5 +1,5 @@
 import type { JobStatus } from "../types";
-import { isJobStatus } from "@/lib/shared/jobStatus";
+import { isJobStatus, toActiveJobStatus } from "@/lib/shared/jobStatus";
 
 export type JobsUrlState = {
   q: string;
@@ -34,7 +34,11 @@ export function parseJobsUrlState(params: URLSearchParams): JobsUrlState {
 
   return {
     q: params.get(URL_KEYS.q) ?? DEFAULTS.q,
-    statusFilter: isJobStatus(status) ? status : DEFAULTS.statusFilter,
+    // A bookmark saved under a retired status resolves to the state that
+    // status now reads as, rather than silently snapping back to NEW.
+    statusFilter: isJobStatus(status)
+      ? toActiveJobStatus(status)
+      : DEFAULTS.statusFilter,
     locationFilter: params.get(URL_KEYS.locationFilter) || DEFAULTS.locationFilter,
     jobLevelFilter: params.get(URL_KEYS.jobLevelFilter) || DEFAULTS.jobLevelFilter,
     selectedId: params.get(URL_KEYS.selectedId),
