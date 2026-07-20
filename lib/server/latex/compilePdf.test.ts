@@ -1,8 +1,31 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// vi.mock is hoisted above ordinary declarations, so the stub error class has
+// to be hoisted with it.
+const { FakeSafeOutboundError } = vi.hoisted(() => ({
+  FakeSafeOutboundError: class extends Error {
+    constructor(
+      public readonly code: string,
+      message: string,
+    ) {
+      super(message);
+      this.name = "SafeOutboundError";
+    }
+  },
+}));
+
 vi.mock("@/lib/server/net/safeFetch", () => ({
-  SafeOutboundError: class SafeOutboundError extends Error {},
-  parseSafeOutboundUrl: (url: string | URL) => new URL(url),
+  SafeOutboundError: FakeSafeOutboundError,
+  // Mirrors the real parser's contract: the https requirement is the check
+  // that rejects a plain-http render URL, so the stub must enforce it too or
+  // the test would pass against a parser that never rejects anything.
+  parseSafeOutboundUrl: (url: string | URL) => {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") {
+      throw new FakeSafeOutboundError("HTTPS_REQUIRED", "must use https");
+    }
+    return parsed;
+  },
   safeOutboundFetch: (
     url: string | URL,
     init?: RequestInit,
@@ -90,6 +113,24 @@ describe("compileLatexToPdf integrity check", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("names why a render URL was rejected without echoing the URL", async () => {
+    // The catch collapsed every parse failure into "Render service URL is
+    // invalid", so an operator saw a 503 with no way to tell an http:// URL
+    // from a malformed one. The reason is surfaced; the URL is not, because
+    // it can carry a token in its path.
+    process.env.LATEX_RENDER_URL = "http://render.internal/compile";
+
+    const err = await compileLatexToPdf("\documentclass{article}").catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(err).toBeInstanceOf(LatexRenderError);
+    const rendered = err as LatexRenderError;
+    expect(rendered.code).toBe("LATEX_RENDER_CONFIG_MISSING");
+    expect(rendered.details).toEqual({ reason: "HTTPS_REQUIRED" });
+    expect(JSON.stringify(rendered.details)).not.toContain("render.internal");
   });
 
   it("returns the buffer for a well-formed PDF payload", async () => {

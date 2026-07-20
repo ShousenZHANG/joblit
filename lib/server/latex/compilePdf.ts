@@ -76,11 +76,16 @@ export async function compileLatexToPdf(tex: string, options?: { files?: Compile
   let renderHost: string;
   try {
     renderHost = parseSafeOutboundUrl(url).hostname;
-  } catch {
+  } catch (err) {
+    // Name which check rejected the URL. Collapsing every parse failure into
+    // one message left an operator with a 503 and no way to tell a plain-http
+    // URL from a malformed one. The URL itself stays out of the payload: it
+    // can carry a token in its path.
     throw new LatexRenderError(
       "LATEX_RENDER_CONFIG_MISSING",
       503,
       "Render service URL is invalid",
+      err instanceof SafeOutboundError ? { reason: err.code } : undefined,
     );
   }
 
