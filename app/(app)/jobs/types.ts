@@ -1,6 +1,26 @@
 import type { FitMatrix } from "@/lib/shared/schemas/fitMatrix";
+import type { JobStatusValue } from "@/lib/shared/jobStatus";
 
-export type JobStatus = "NEW" | "APPLIED" | "REJECTED";
+export type JobStatus = JobStatusValue;
+
+export const JOB_STATUS_LABEL_KEYS: Record<
+  JobStatus,
+  | "statusNew"
+  | "statusApplied"
+  | "statusInterview"
+  | "statusOffer"
+  | "statusRejected"
+  | "statusWithdrawn"
+  | "statusAccepted"
+> = {
+  NEW: "statusNew",
+  APPLIED: "statusApplied",
+  INTERVIEW: "statusInterview",
+  OFFER: "statusOffer",
+  REJECTED: "statusRejected",
+  WITHDRAWN: "statusWithdrawn",
+  ACCEPTED: "statusAccepted",
+};
 
 export type JobItem = {
   id: string;
@@ -24,6 +44,9 @@ export type JobItem = {
   fitScore?: number | null;
   fitVerdict?: string | null;
   fitEligibility?: string | null;
+  livenessStatus?: "ACTIVE" | "EXPIRED" | "UNCERTAIN";
+  livenessReason?: string | null;
+  possibleDuplicate?: boolean;
   createdAt: string;
   updatedAt: string;
 };

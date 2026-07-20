@@ -36,6 +36,7 @@
     "moreOptions": "More options",
     "openCommands": "Open commands",
     "jobs": "Jobs",
+    "career": "Career",
     "fetch": "Fetch",
     "resume": "Resume",
     "guide": "Guide",
@@ -54,6 +55,242 @@
     "paletteThemeLight": "Light theme",
     "paletteThemeDark": "Dark theme",
     "paletteThemeSystem": "System theme"
+  },
+  "career": {
+    "eyebrow": "Career command centre",
+    "privacyNote": "Private to your account",
+    "title": "Turn applications into momentum.",
+    "subtitle": "See where your search is moving, keep follow-ups on time, prepare evidence-backed interview stories, and compare every offer in one focused workspace.",
+    "headline": {
+      "reminders": "Open follow-ups",
+      "interviews": "Interview plans",
+      "offers": "Active offers"
+    },
+    "tabs": {
+      "label": "Career workspace sections",
+      "overview": "Overview",
+      "interviews": "Interviews",
+      "stories": "STAR stories",
+      "offers": "Offers"
+    },
+    "actions": {
+      "refresh": "Refresh",
+      "refreshing": "Refreshing…",
+      "retry": "Try again",
+      "cancel": "Cancel",
+      "delete": "Delete",
+      "close": "Close"
+    },
+    "errors": {
+      "loadTitle": "Career workspace unavailable",
+      "load": "We could not load your career data. Your saved records are unchanged.",
+      "action": "The action could not be completed. Try again."
+    },
+    "feedback": {
+      "reminderSaved": "Follow-up saved.",
+      "reminderCompleted": "Follow-up completed.",
+      "interviewCreated": "Interview plan created.",
+      "interviewCompleted": "Interview marked complete.",
+      "interviewDeleted": "Interview plan deleted.",
+      "questionsReady": "Interview questions are ready.",
+      "storyCreated": "STAR story saved.",
+      "storyDeleted": "STAR story deleted.",
+      "offerCreated": "Offer added to comparison.",
+      "offerDeleted": "Offer deleted.",
+      "scriptReady": "Negotiation script is ready."
+    },
+    "overview": {
+      "pipelineEyebrow": "Application runway",
+      "pipelineTitle": "Pipeline health",
+      "pipelineSubtitle": "Each stage counts roles that reached it, not only their current status.",
+      "totalApplied": "{count} applied",
+      "stages": {
+        "applied": "Applied",
+        "interview": "Interview",
+        "offer": "Offer",
+        "accepted": "Accepted"
+      },
+      "outcome": "Outcome",
+      "emptyPipeline": "Move a job to Applied to start measuring your pipeline.",
+      "velocityEyebrow": "Cycle velocity",
+      "velocityTitle": "How quickly opportunities advance",
+      "median": "Median time",
+      "sample": "{count} samples",
+      "days": "{count} days",
+      "transitions": {
+        "appliedToInterview": "Application → interview",
+        "interviewToOffer": "Interview → offer",
+        "offerToAccepted": "Offer → accepted"
+      },
+      "rejected": "{count} rejected",
+      "withdrawn": "{count} withdrawn"
+    },
+    "reminders": {
+      "eyebrow": "Follow-through",
+      "title": "Next actions",
+      "suggested": "Suggested",
+      "save": "Save",
+      "upNext": "Up next",
+      "complete": "Complete {title}",
+      "overdue": "Overdue",
+      "emptyTitle": "You are caught up",
+      "empty": "New follow-ups will appear as your applications advance.",
+      "suggestionTypes": {
+        "APPLICATION_FOLLOW_UP": {
+          "title": "Follow up on application",
+          "reason": "Five days have passed since the latest application update."
+        },
+        "INTERVIEW_THANK_YOU": {
+          "title": "Send interview thank-you",
+          "reason": "Send a concise thank-you while the conversation is fresh."
+        },
+        "OFFER_DEADLINE": {
+          "title": "Review offer deadline",
+          "reason": "The decision deadline is within two days."
+        }
+      }
+    },
+    "interviews": {
+      "eyebrow": "Interview studio",
+      "title": "Prepare from evidence, not memory",
+      "subtitle": "Turn each requirement into a question and connect it to a story you can defend.",
+      "questionLab": "Question lab",
+      "newPlan": "New plan",
+      "noJobs": "Add a job before creating a saved interview plan.",
+      "openJobs": "Open jobs",
+      "form": {
+        "title": "Create interview plan",
+        "hint": "One plan per job and round. Questions are generated from the requirements you provide.",
+        "job": "Job",
+        "chooseJob": "Choose a job",
+        "round": "Round",
+        "planTitle": "Plan title",
+        "titlePlaceholder": "Technical interview",
+        "scheduled": "Scheduled time",
+        "requirements": "Role requirements",
+        "requirementsPlaceholder": "System design at scale\nStrong stakeholder communication\nProduction experience with AWS",
+        "requirementsHint": "Add one clear requirement per line.",
+        "notes": "Preparation notes",
+        "save": "Create plan"
+      },
+      "lab": {
+        "title": "Question lab",
+        "subtitle": "Preview structured questions without creating a plan.",
+        "generate": "Generate questions",
+        "output": "Practice set",
+        "storyCount": "{count} stories checked",
+        "followUps": "Follow-up probes",
+        "emptyTitle": "Ready when the requirements are",
+        "empty": "Paste the most important requirements to build an evidence-first practice set."
+      },
+      "status": {
+        "draft": "Draft",
+        "ready": "Ready",
+        "completed": "Completed",
+        "archived": "Archived"
+      },
+      "round": "Round {count}",
+      "unknownJob": "Saved job",
+      "unscheduled": "Not scheduled",
+      "questionCount": "{count} questions",
+      "noQuestions": "No questions are stored in this plan.",
+      "markComplete": "Mark interview complete",
+      "deleteLabel": "Delete {title}",
+      "deleteTitle": "Delete this interview plan?",
+      "deleteDescription": "“{title}” and its generated questions will be permanently removed.",
+      "emptyTitle": "No interview plans yet",
+      "empty": "Create a focused plan when a role moves into the interview stage."
+    },
+    "stories": {
+      "eyebrow": "Evidence library",
+      "title": "Build reusable STAR+R stories",
+      "subtitle": "Capture proof once, then reuse it across interview plans without inventing details.",
+      "new": "New story",
+      "form": {
+        "title": "Add STAR+R story",
+        "hint": "Use only details you can verify and explain in an interview.",
+        "storyTitle": "Story title",
+        "titlePlaceholder": "Stabilised a high-traffic checkout",
+        "situation": "Situation",
+        "situationPlaceholder": "What was happening and why did it matter?",
+        "task": "Task",
+        "taskPlaceholder": "What outcome were you accountable for?",
+        "action": "Action",
+        "actionPlaceholder": "What did you personally decide and do?",
+        "result": "Result",
+        "resultPlaceholder": "What changed? Include verified measures when available.",
+        "reflection": "Reflection",
+        "reflectionPlaceholder": "What did you learn or improve afterwards?",
+        "skills": "Skills",
+        "skillsPlaceholder": "AWS, incident response, stakeholder management",
+        "tags": "Tags",
+        "tagsPlaceholder": "leadership, reliability, scale",
+        "save": "Save story"
+      },
+      "deleteLabel": "Delete {title}",
+      "deleteTitle": "Delete this STAR story?",
+      "deleteDescription": "“{title}” will be removed from future interview matching.",
+      "emptyTitle": "Your evidence library is empty",
+      "empty": "Start with one strong example that shows what you did and what changed."
+    },
+    "offers": {
+      "eyebrow": "Decision desk",
+      "title": "Compare the whole offer",
+      "subtitle": "Keep compensation, deadlines, benefits, and negotiation language grounded in one place.",
+      "new": "Add offer",
+      "form": {
+        "title": "Record an offer",
+        "hint": "Enter annual amounts in whole currency units. Unknown components can stay blank.",
+        "company": "Company",
+        "role": "Role",
+        "currency": "Currency",
+        "location": "Location",
+        "deadline": "Decision deadline",
+        "baseSalaryAnnual": "Base",
+        "bonusAnnual": "Bonus",
+        "equityAnnual": "Equity",
+        "otherAnnual": "Other",
+        "targetSalaryAnnual": "Target",
+        "benefits": "Benefits",
+        "benefitsPlaceholder": "One benefit per line",
+        "notes": "Notes",
+        "save": "Add to comparison"
+      },
+      "compare": {
+        "title": "Offer comparison",
+        "note": "Offers are ranked only within the same currency. No exchange rate is assumed.",
+        "count": "{count} offers",
+        "total": "Known annual total",
+        "incomplete": "Some components missing",
+        "belowTarget": "{amount} below target",
+        "atTarget": "At or above target"
+      },
+      "savedTitle": "Saved offers",
+      "status": {
+        "active": "Active",
+        "accepted": "Accepted",
+        "declined": "Declined",
+        "withdrawn": "Withdrawn"
+      },
+      "deleteLabel": "Delete offer from {company}",
+      "deleteTitle": "Delete this offer?",
+      "deleteDescription": "The saved offer from {company} and its comparison data will be permanently removed.",
+      "negotiate": {
+        "title": "Negotiation builder",
+        "subtitle": "Create a concise script using only the offer and strengths you supply.",
+        "offer": "Offer",
+        "strengths": "Verifiable strengths",
+        "strengthsPlaceholder": "One fact per line\nLed a verified 20% latency reduction\nOwns production AWS systems",
+        "grounded": "Add facts you can defend. Joblit does not invent supporting evidence.",
+        "generate": "Build script",
+        "script": "Your negotiation script",
+        "noInventedFacts": "No invented facts",
+        "emptyTitle": "Make the ask with clarity",
+        "empty": "Choose an offer and add your strongest verifiable evidence to create a grounded script."
+      },
+      "emptyTitle": "No offers to compare",
+      "empty": "When an offer arrives, record every component before deciding or negotiating."
+    }
   },
   "marketing": {
     "heroTitle": "AI-tailored resumes for every job you apply to",
@@ -193,7 +430,14 @@
     "oldestFirst": "Posted: oldest",
     "statusNew": "New",
     "statusApplied": "Applied",
+    "statusInterview": "Interview",
+    "statusOffer": "Offer",
     "statusRejected": "Rejected",
+    "statusWithdrawn": "Withdrawn",
+    "statusAccepted": "Accepted",
+    "livenessExpired": "Expired",
+    "livenessUncertain": "Status unknown",
+    "possibleDuplicate": "Possible duplicate",
     "postingRisk": "Risk {score}",
     "fitScan": {
       "button": "Score all jobs",
@@ -434,6 +678,23 @@
     "strictTitlesHint": "Keep only roles whose title is in the same family as your search. Turn off to cast a wider net.",
     "globalFeeds": "Global remote feeds",
     "globalFeedsHint": "Also search Remote OK, Remotive, and Jobicy. Results still follow your role, location, and title exclusions.",
+    "sourceHealth": {
+      "title": "Source health",
+      "checking": "Checking public feeds and ATS boards…",
+      "unavailable": "Health details are temporarily unavailable",
+      "ready": "{healthy} of {total} sources ready",
+      "attention": "{count, plural, one {# source needs attention} other {# sources need attention}}",
+      "errorHint": "You can still fetch. Joblit will isolate an unavailable source and keep valid results.",
+      "retry": "Check again",
+      "updatedAfterFetch": "Health updates after each fetch you start.",
+      "moreSources": "{count, plural, one {# additional ATS board is tracked} other {# additional ATS boards are tracked}}",
+      "status": {
+        "healthy": "Ready",
+        "degraded": "Degraded",
+        "down": "Offline",
+        "unknown": "Not checked"
+      }
+    },
     "excludeTitles": "Exclude titles",
     "startFetch": "Start fetch",
     "fetching": "Fetching…",
@@ -1128,6 +1389,17 @@
       "compareChanges": "Compare changes",
       "yourOriginal": "Your original",
       "aiAndYourEdits": "AI & your edits"
+    },
+    "review": {
+      "title": "Evidence review",
+      "coverage": "{percent}% of priority requirements covered",
+      "clear": "No unsupported claims detected.",
+      "finalizeHint": "Joblit re-runs evidence and ATS checks before finalizing.",
+      "verdict": {
+        "pass": "Ready",
+        "revise": "Review",
+        "blocked": "Blocked"
+      }
     },
     "preview": {
       "title": "PDF preview",

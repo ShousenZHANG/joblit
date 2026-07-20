@@ -9,6 +9,15 @@ const applicationStore = vi.hoisted(() => ({
   upsert: vi.fn(),
 }));
 
+const evidenceStore = vi.hoisted(() => ({
+  evidenceCreateMany: vi.fn(),
+  claimCreateMany: vi.fn(),
+}));
+
+const atsStore = vi.hoisted(() => ({
+  assertAtsPdf: vi.fn(),
+}));
+
 const blobStore = vi.hoisted(() => ({
   put: vi.fn(),
   del: vi.fn(),
@@ -30,6 +39,17 @@ vi.mock("@/lib/server/prisma", () => ({
 vi.mock("@vercel/blob", () => ({
   put: blobStore.put,
   del: blobStore.del,
+}));
+
+vi.mock("@/lib/server/applications/atsPdfValidator", () => ({
+  AtsPdfValidationError: class AtsPdfValidationError extends Error {
+    code = "ATS_PDF_VALIDATION_FAILED";
+    status = 422;
+    constructor(public report: unknown) {
+      super("ATS validation failed");
+    }
+  },
+  assertAtsPdf: atsStore.assertAtsPdf,
 }));
 
 vi.mock("@/auth", () => ({
@@ -185,16 +205,32 @@ describe("applications manual generate api", () => {
       async (
         callback: (tx: {
           application: typeof applicationStore;
+          evidenceSnapshot: { createMany: typeof evidenceStore.evidenceCreateMany };
+          claimEvidence: { createMany: typeof evidenceStore.claimCreateMany };
           $executeRaw: typeof transactionStore.executeRaw;
         }) => unknown,
       ) =>
         callback({
           application: applicationStore,
+          evidenceSnapshot: { createMany: evidenceStore.evidenceCreateMany },
+          claimEvidence: { createMany: evidenceStore.claimCreateMany },
           $executeRaw: transactionStore.executeRaw,
         }),
     );
     delete process.env.BLOB_READ_WRITE_TOKEN;
     applicationStore.findUnique.mockResolvedValue(null);
+    evidenceStore.evidenceCreateMany.mockReset().mockResolvedValue({ count: 1 });
+    evidenceStore.claimCreateMany.mockReset().mockResolvedValue({ count: 1 });
+    atsStore.assertAtsPdf.mockReset().mockResolvedValue({
+      passed: true,
+      pageCount: 1,
+      textLength: 400,
+      keywordCoverage: 100,
+      matchedKeywords: [],
+      missingKeywords: [],
+      errors: [],
+      warnings: [],
+    });
   });
 
   it("returns parse error for invalid model output", async () => {
@@ -362,6 +398,10 @@ describe("applications manual generate api", () => {
     (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
+      skills: [
+        { label: "Backend", items: ["Java", "Spring Boot"] },
+        { label: "Cloud", items: ["GCP"] },
+      ],
     });
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 

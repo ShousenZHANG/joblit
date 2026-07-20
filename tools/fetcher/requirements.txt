@@ -1,4 +1,4 @@
-# Pinned to compatible ranges for reproducible scheduled (cron) builds.
+# Pinned to compatible ranges for reproducible CI and worker builds.
 # python-jobspy is fast-moving — cap the minor so a breaking scrape change
 # can't silently land in the worker. Bump deliberately + re-run the suite.
 python-jobspy>=1.1.82,<1.2

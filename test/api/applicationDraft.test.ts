@@ -5,6 +5,8 @@ const prisma = vi.hoisted(() => ({
     findFirst: vi.fn(),
     updateMany: vi.fn(),
   },
+  evidenceSnapshot: { createMany: vi.fn() },
+  claimEvidence: { createMany: vi.fn() },
   transaction: vi.fn(),
   executeRaw: vi.fn(),
 }));
@@ -26,6 +28,7 @@ import {
   hashAiContent,
   type AiContent,
 } from "@/lib/shared/schemas/aiContent";
+import { attachEvidenceAndReview } from "@/lib/server/ai/evidenceLedger";
 
 const APP_ID = "11111111-1111-4111-9111-111111111111";
 const USER_ID = "user-1";
@@ -59,22 +62,43 @@ function makeRequest(body: unknown) {
 
 const params = Promise.resolve({ id: APP_ID });
 
+function storedApplication(
+  aiContent: AiContent,
+  aiContentHash: string | null,
+) {
+  return {
+    id: APP_ID,
+    userId: USER_ID,
+    jobId: "job-1",
+    aiContent,
+    aiContentHash,
+    resumeProfile: null,
+    job: null,
+  };
+}
+
 describe("PATCH /api/applications/[id]/draft", () => {
   beforeEach(() => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockReset();
     prisma.application.findFirst.mockReset();
     prisma.application.updateMany.mockReset();
     prisma.application.updateMany.mockResolvedValue({ count: 1 });
+    prisma.evidenceSnapshot.createMany.mockReset().mockResolvedValue({ count: 1 });
+    prisma.claimEvidence.createMany.mockReset().mockResolvedValue({ count: 1 });
     prisma.executeRaw.mockReset().mockResolvedValue(1);
     prisma.transaction.mockReset().mockImplementation(
       async (
         action: (tx: {
           application: typeof prisma.application;
+          evidenceSnapshot: typeof prisma.evidenceSnapshot;
+          claimEvidence: typeof prisma.claimEvidence;
           $executeRaw: typeof prisma.executeRaw;
         }) => Promise<unknown>,
       ) =>
         action({
           application: prisma.application,
+          evidenceSnapshot: prisma.evidenceSnapshot,
+          claimEvidence: prisma.claimEvidence,
           $executeRaw: prisma.executeRaw,
         }),
     );
@@ -85,12 +109,9 @@ describe("PATCH /api/applications/[id]/draft", () => {
       user: { id: USER_ID },
     });
     const incoming = makeAiContent();
-    prisma.application.findFirst.mockResolvedValueOnce({
-      id: APP_ID,
-      userId: USER_ID,
-      jobId: "job-1",
-      aiContentHash: null,
-    });
+    prisma.application.findFirst.mockResolvedValue(
+      storedApplication(incoming, null),
+    );
     const res = await PATCH(
       makeRequest({ aiContent: incoming, expectedHash: null }),
       { params },
@@ -179,12 +200,9 @@ describe("PATCH /api/applications/[id]/draft", () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: USER_ID },
     });
-    prisma.application.findFirst.mockResolvedValueOnce({
-      id: APP_ID,
-      userId: USER_ID,
-      jobId: "job-1",
-      aiContentHash: "expected",
-    });
+    prisma.application.findFirst.mockResolvedValue(
+      storedApplication(makeAiContent(), "expected"),
+    );
     prisma.application.updateMany.mockResolvedValueOnce({ count: 0 });
 
     const response = await PATCH(
@@ -205,5 +223,109 @@ describe("PATCH /api/applications/[id]/draft", () => {
         },
       }),
     );
+  });
+
+  it("ignores forged model output and evidence, then rebuilds review from server sources", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: USER_ID },
+    });
+    const profile = {
+      userId: USER_ID,
+      summary: "Built reliable TypeScript APIs.",
+      basics: null,
+      links: null,
+      skills: null,
+      experiences: null,
+      projects: null,
+      education: null,
+    };
+    const canonical = attachEvidenceAndReview({
+      aiContent: makeAiContent(),
+      resumeSnapshot: profile,
+      jobDescription: "Build reliable TypeScript APIs.",
+      scopeKey: USER_ID,
+    });
+    const expectedHash = hashAiContent(canonical);
+    const submitted = structuredClone(canonical);
+    submitted.cv.summary.aiText = "Improved revenue by 999%.";
+    submitted.cv.summary.userEdit = "Improved revenue by 999%.";
+    submitted.evidence = [
+      {
+        id: `ev_${"f".repeat(32)}`,
+        kind: "candidate",
+        path: "resume.summary",
+        contentHash: "f".repeat(64),
+        excerpt: "improved revenue by 999%",
+      },
+    ];
+    submitted.review = {
+      verdict: "pass",
+      reviewedAt: "2026-07-20T12:00:00.000Z",
+      coveragePercent: 100,
+      requirements: [],
+      issues: [],
+    };
+    prisma.application.findFirst.mockResolvedValue({
+      ...storedApplication(canonical, expectedHash),
+      resumeProfile: profile,
+      job: {
+        userId: USER_ID,
+        description: "Build reliable TypeScript APIs.",
+      },
+    });
+
+    const response = await PATCH(
+      makeRequest({ aiContent: submitted, expectedHash }),
+      { params },
+    );
+
+    expect(response.status).toBe(200);
+    const update = prisma.application.updateMany.mock.calls[0]?.[0];
+    const persisted = update.data.aiContent as AiContent;
+    expect(persisted.cv.summary.aiText).toBe("ai");
+    expect(persisted.cv.summary.userEdit).toBe("Improved revenue by 999%.");
+    expect(persisted.evidence).toEqual(canonical.evidence);
+    expect(persisted.evidence?.[0]?.id).not.toBe(`ev_${"f".repeat(32)}`);
+    expect(persisted.review?.verdict).toBe("blocked");
+    expect(persisted.review?.issues.join(" ")).toContain("999%");
+    expect(prisma.evidenceSnapshot.createMany).toHaveBeenCalled();
+  });
+
+  it("fails closed when canonical job evidence exists but the Job is gone", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: USER_ID },
+    });
+    const profile = {
+      userId: USER_ID,
+      summary: "Built reliable TypeScript APIs.",
+      basics: null,
+      links: null,
+      skills: null,
+      experiences: null,
+      projects: null,
+      education: null,
+    };
+    const canonical = attachEvidenceAndReview({
+      aiContent: makeAiContent(),
+      resumeSnapshot: profile,
+      jobDescription: "Build reliable TypeScript APIs.",
+      scopeKey: USER_ID,
+    });
+    const expectedHash = hashAiContent(canonical);
+    prisma.application.findFirst.mockResolvedValue({
+      ...storedApplication(canonical, expectedHash),
+      resumeProfile: profile,
+      job: null,
+    });
+
+    const response = await PATCH(
+      makeRequest({ aiContent: canonical, expectedHash }),
+      { params },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(json.error.code).toBe("CANONICAL_EVIDENCE_UNAVAILABLE");
+    expect(prisma.application.updateMany).not.toHaveBeenCalled();
   });
 });

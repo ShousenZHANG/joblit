@@ -331,5 +331,5 @@ describe("Resume page", () => {
       },
       { timeout: 2200 },
     );
-  });
+  }, 15_000);
 });

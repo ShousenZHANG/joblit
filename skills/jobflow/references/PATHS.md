@@ -34,9 +34,10 @@ Quick index of the most commonly used locations.
 ## Fetch workers
 
 - `tools/fetcher/run_jobspy.py` — AU JobSpy runner (GitHub Actions)
-- `lib/server/cnFetch/` — CN aggregator (in-process, Vercel cron):
+- `lib/server/cnFetch/` — CN aggregator (user-triggered, in-process):
   - `adapters/v2exJobs.ts`, `adapters/githubJobs.ts`, `adapters/rsshub.ts`
   - `normalize.ts`, `runCnFetch.ts`
-  - Invoked by `/api/cron/fetch-cn` and `/api/fetch-runs/[id]/trigger`.
+  - Invoked only by `/api/fetch-runs/[id]/trigger`.
   - Retired legacy: `tools/fetcher/run_cn_fetcher.py` + `cn_platforms/*`.
-
+- `lib/server/sources/` — GLOBAL public APIs, ATS boards, health tracking,
+  rediscovery, filtering, and user-triggered import.

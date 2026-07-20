@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import Mock, patch
 
 import os
 import sys
@@ -1026,6 +1027,65 @@ class RunJobspyDedupeTests(unittest.TestCase):
         self.assertEqual(calls, ["https://linkedin.com/jobs/view/123"])
         self.assertEqual(out.iloc[0]["description"], "Fetched JD for 123")
         self.assertEqual(out.iloc[2]["description"], "Already has details")
+
+    def test_detail_url_guard_rejects_private_dns_and_non_https(self):
+        def private_resolver(host, port, type):
+            self.assertEqual(host, "jobs.example.com")
+            self.assertEqual(port, 443)
+            self.assertEqual(type, rj.socket.SOCK_STREAM)
+            return [(rj.socket.AF_INET, type, 6, "", ("169.254.169.254", port))]
+
+        with self.assertRaisesRegex(ValueError, "non_public"):
+            rj._assert_safe_detail_url(
+                "https://jobs.example.com/role/1",
+                resolver=private_resolver,
+            )
+        with self.assertRaisesRegex(ValueError, "https_required"):
+            rj._assert_safe_detail_url("http://1.1.1.1/role/1")
+
+    def test_detail_url_guard_requires_every_dns_answer_to_be_public(self):
+        def split_horizon_resolver(host, port, type):
+            return [
+                (rj.socket.AF_INET, type, 6, "", ("1.1.1.1", port)),
+                (rj.socket.AF_INET, type, 6, "", ("127.0.0.1", port)),
+            ]
+
+        with self.assertRaisesRegex(ValueError, "non_public"):
+            rj._assert_safe_detail_url(
+                "https://jobs.example.com/role/1",
+                resolver=split_horizon_resolver,
+            )
+
+    def test_detail_url_guard_uses_dot_anchored_allowlist(self):
+        with self.assertRaisesRegex(ValueError, "host_not_allowed"):
+            rj._assert_safe_detail_url(
+                "https://evil-linkedin.com/role/1",
+                allowed_hosts=["linkedin.com"],
+                resolver=lambda *_args, **_kwargs: [],
+            )
+
+    def test_detail_redirect_is_revalidated_before_second_request(self):
+        class RedirectResponse:
+            status_code = 302
+            headers = {"location": "https://127.0.0.1/admin"}
+            encoding = "utf-8"
+
+            def close(self):
+                return None
+
+            def iter_content(self, chunk_size):
+                return iter(())
+
+        request = Mock(return_value=RedirectResponse())
+        with patch.object(rj.requests, "get", request):
+            with self.assertRaisesRegex(ValueError, "non_public"):
+                rj._request_safe_detail_text(
+                    "https://1.1.1.1/start",
+                    timeout_sec=1,
+                    headers={"User-Agent": "test"},
+                    proxies=None,
+                )
+        self.assertEqual(request.call_count, 1)
 
 if __name__ == "__main__":
     unittest.main()

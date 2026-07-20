@@ -114,6 +114,7 @@ design-system/
 *.zip
 
 # Generated Hermes profile packages, secrets, and local receipts
+/.tmp/
 /.tmp/hermes-*/
 *.sig
 *.key

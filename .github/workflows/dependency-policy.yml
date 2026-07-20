@@ -26,5 +26,8 @@ jobs:
       - name: Enforce dependency allowlist
         run: npm run deps:policy
 
+      - name: Enforce manifest and repository security policy
+        run: node tools/ci/check-security-policy.mjs
+
       - name: Security audit (prod dependencies)
         run: npm run deps:audit

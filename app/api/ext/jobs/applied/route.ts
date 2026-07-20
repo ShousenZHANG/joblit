@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireExtensionToken, ExtensionTokenError } from "@/lib/server/auth/requireExtensionToken";
 import { unauthorizedError, errorJson } from "@/lib/server/api/errorResponse";
 import { checkRateLimit, rateLimitKeyFromRequest, rateLimitHeaders } from "@/lib/server/api/rateLimit";
+import { appendApplicationEvent } from "@/lib/server/career/applicationEvents";
 import { prisma } from "@/lib/server/prisma";
 import { z } from "zod";
 
@@ -41,12 +42,22 @@ export async function POST(req: Request) {
 
     // Only transition from NEW to APPLIED
     if (job.status === "NEW") {
-      const updated = await prisma.job.update({
-        where: { id: job.id },
-        data: { status: "APPLIED" },
-        select: { id: true, status: true, title: true, company: true },
+      await appendApplicationEvent(userId, {
+        jobId: job.id,
+        type: "STATUS_CHANGED",
+        source: "EXTENSION",
+        toStatus: "APPLIED",
+        expectedFromStatus: "NEW",
+        note: "Application submitted from Chrome extension",
       });
-      return NextResponse.json({ data: updated });
+      return NextResponse.json({
+        data: {
+          id: job.id,
+          status: "APPLIED",
+          title: job.title,
+          company: job.company,
+        },
+      });
     }
 
     // Already in a terminal state — return current without modifying

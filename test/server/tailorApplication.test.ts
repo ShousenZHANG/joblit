@@ -239,4 +239,62 @@ describe("tailorApplicationContent", () => {
     expect(result.cover.paragraphOne).toContain("I am applying for the Software Engineer position at Example Co");
     expect(result.cover.paragraphOne).not.toBe("Generic opening.");
   });
+
+  it("runs an independent second pass and returns its grounded revision", async () => {
+    process.env.GEMINI_API_KEY = "test-key";
+    const callProviderSpy = vi
+      .spyOn(providers, "callProvider")
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          cvSummary: "Initial summary",
+          cover: {
+            paragraphOne: "Initial one",
+            paragraphTwo: "Initial two",
+            paragraphThree: "Initial three",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          cvSummary: "Reviewed TypeScript summary",
+          cover: {
+            paragraphOne: "Reviewed one",
+            paragraphTwo: "Reviewed TypeScript evidence",
+            paragraphThree: "Reviewed three",
+          },
+        }),
+      );
+
+    const result = await tailorApplicationContent(INPUT, {
+      maxReviewerPasses: 1,
+      requireIndependentReview: true,
+    });
+
+    expect(callProviderSpy).toHaveBeenCalledTimes(2);
+    expect(result.cvSummary).toBe("Reviewed TypeScript summary");
+    expect(result.reviewer).toMatchObject({ ran: true, revised: true });
+  });
+
+  it("fails closed when a required independent review is invalid", async () => {
+    process.env.GEMINI_API_KEY = "test-key";
+    vi.spyOn(providers, "callProvider")
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          cvSummary: "Initial summary",
+          cover: {
+            paragraphOne: "Initial one",
+            paragraphTwo: "Initial two",
+            paragraphThree: "Initial three",
+          },
+        }),
+      )
+      .mockResolvedValueOnce("not-json");
+
+    await expect(
+      tailorApplicationContent(INPUT, {
+        maxReviewerPasses: 1,
+        requireIndependentReview: true,
+      }),
+    ).rejects.toThrow("INDEPENDENT_REVIEW_INVALID");
+  });
 });

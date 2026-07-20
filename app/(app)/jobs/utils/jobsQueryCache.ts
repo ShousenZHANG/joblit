@@ -1,5 +1,6 @@
 import type { InfiniteData, QueryClient, QueryKey } from "@tanstack/react-query";
 import type { JobItem, JobsResponse, JobStatus } from "../types";
+import { isJobStatus } from "@/lib/shared/jobStatus";
 
 const JOBS_QUERY_KEY = ["jobs"] as const;
 
@@ -19,9 +20,7 @@ export function getJobDetailsQueryKey(jobId: string | null) {
 function readJobsQueryStatusFilter(queryKey: QueryKey): JobStatus {
   const serializedQuery = typeof queryKey[1] === "string" ? queryKey[1] : "";
   const statusParam = new URLSearchParams(serializedQuery).get("status");
-  if (statusParam === "NEW" || statusParam === "APPLIED" || statusParam === "REJECTED") {
-    return statusParam;
-  }
+  if (isJobStatus(statusParam)) return statusParam;
   // No "all statuses" view exists — a missing/invalid status means the default
   // NEW view (matches useJobFilters + the SSR-seeded key).
   return "NEW";

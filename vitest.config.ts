@@ -61,6 +61,10 @@ export default defineConfig({
       "everything-claude-code/**",
       // Hermes package policy suites use Node's built-in test runner.
       "tools/hermes/**/*.test.mjs",
+      // Extension release tooling also uses Node's built-in test runner.
+      "tools/ci/package-extension.test.mjs",
+      // Deployment-order policy uses Node's built-in test runner.
+      "tools/deploy/vercel-build.test.mjs",
     ],
   },
 });

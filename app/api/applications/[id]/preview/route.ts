@@ -62,6 +62,7 @@ export async function POST(
         aiContent: true,
         aiContentHash: true,
         jobId: true,
+        resumeProfileId: true,
         company: true,
         role: true,
         job: {
@@ -129,6 +130,7 @@ export async function POST(
         ? await renderCoverLetterPdf({
             applicationId: application.id,
             userId,
+            resumeProfileId: application.resumeProfileId ?? null,
             aiContent: aiContent.data,
             artifactVersion: application.aiContentHash,
             job,
@@ -136,6 +138,7 @@ export async function POST(
         : await renderApplicationPdf({
             applicationId: application.id,
             userId,
+            resumeProfileId: application.resumeProfileId ?? null,
             aiContent: aiContent.data,
             artifactVersion: application.aiContentHash,
             job,

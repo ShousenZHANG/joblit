@@ -9,6 +9,7 @@ const jobStore = vi.hoisted(() => ({
 }));
 const txMock = vi.hoisted(() => ({ transaction: vi.fn(), executeRaw: vi.fn() }));
 const profileMock = vi.hoisted(() => ({ get: vi.fn() }));
+const careerMock = vi.hoisted(() => ({ bulkAppendStatusEvents: vi.fn() }));
 
 vi.mock("@/lib/server/auth/requireSession", () => {
   class UnauthorizedError extends Error {}
@@ -21,6 +22,10 @@ vi.mock("@/lib/server/prisma", () => ({
 
 vi.mock("@/lib/server/resumeProfile", () => ({
   getResumeProfile: profileMock.get,
+}));
+
+vi.mock("@/lib/server/career/applicationEvents", () => ({
+  bulkAppendStatusEvents: careerMock.bulkAppendStatusEvents,
 }));
 
 vi.mock("@/lib/server/ai/resumePromptSnapshot", () => ({
@@ -57,6 +62,7 @@ describe("fit scoring center apis", () => {
     });
     jobStore.updateMany.mockResolvedValue({ count: 0 });
     jobStore.updateManyAndReturn.mockResolvedValue([]);
+    careerMock.bulkAppendStatusEvents.mockResolvedValue({ count: 0 });
     profileMock.get.mockImplementation(
       async (_userId: string, options?: { locale?: string }) =>
         options?.locale === "zh-CN"
@@ -260,16 +266,18 @@ describe("fit scoring center apis", () => {
     const preview = await bulkIgnorePOST(post("http://localhost/api/jobs/bulk-ignore", { maxScore: 44, preview: true }));
     expect(await preview.json()).toEqual({ count: 3 });
 
-    jobStore.updateMany.mockResolvedValueOnce({ count: 2 });
+    careerMock.bulkAppendStatusEvents.mockResolvedValueOnce({ count: 2 });
     const sweep = await bulkIgnorePOST(post("http://localhost/api/jobs/bulk-ignore", { maxScore: 44 }));
     const sweepBody = await sweep.json();
     expect(sweepBody).toEqual({
       count: 2,
       ignoredAt: expect.any(String),
     });
-    expect(jobStore.updateMany).toHaveBeenCalledWith(
+    expect(careerMock.bulkAppendStatusEvents).toHaveBeenCalledWith(
+      "user-1",
       expect.objectContaining({
         where: expect.objectContaining({
+          userId: "user-1",
           status: "NEW",
           fitScore: { not: null, lte: 44 },
           OR: [
@@ -279,28 +287,31 @@ describe("fit scoring center apis", () => {
             },
           ],
         }),
-        data: {
-          status: "REJECTED",
-          updatedAt: expect.any(Date),
-        },
+        fromStatus: "NEW",
+        toStatus: "REJECTED",
+        source: "USER",
+        projectionUpdatedAt: expect.any(Date),
       }),
     );
 
-    jobStore.updateMany.mockResolvedValueOnce({ count: 2 });
+    careerMock.bulkAppendStatusEvents.mockResolvedValueOnce({ count: 2 });
     const restore = await bulkIgnorePOST(post("http://localhost/api/jobs/bulk-ignore", {
       restoreIgnoredAt: sweepBody.ignoredAt,
       maxScore: 44,
     }));
     expect(await restore.json()).toEqual({ restored: 2 });
-    expect(jobStore.updateMany).toHaveBeenLastCalledWith({
-      where: {
-        userId: "user-1",
-        status: "REJECTED",
+    expect(careerMock.bulkAppendStatusEvents).toHaveBeenLastCalledWith(
+      "user-1",
+      expect.objectContaining({
+        where: {
         fitScore: { not: null, lte: 44 },
         updatedAt: new Date(sweepBody.ignoredAt),
       },
-      data: { status: "NEW" },
-    });
+        fromStatus: "REJECTED",
+        toStatus: "NEW",
+        source: "USER",
+      }),
+    );
   });
 
   it("rejects a bulk-ignore threshold above the WEAK/POOR boundary", async () => {
@@ -320,6 +331,6 @@ describe("fit scoring center apis", () => {
 
     expect(await response.json()).toEqual({ count: 0 });
     expect(jobStore.count).not.toHaveBeenCalled();
-    expect(jobStore.updateMany).not.toHaveBeenCalled();
+    expect(careerMock.bulkAppendStatusEvents).not.toHaveBeenCalled();
   });
 });

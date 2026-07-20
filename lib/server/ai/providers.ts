@@ -1,3 +1,5 @@
+import { safeOutboundFetch } from "@/lib/server/net/safeFetch";
+
 export type AiProviderName = "openai" | "gemini" | "claude";
 
 export type ProviderRequest = {
@@ -75,11 +77,17 @@ async function fetchWithRetry(
   url: string,
   init: RequestInit,
   errorPrefix: string,
+  allowedHost: string,
 ): Promise<Response> {
   let lastResponse: Response | null = null;
   let lastErrorBody = "";
   for (let attempt = 0; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
-    const response = await fetch(url, init);
+    const response = await safeOutboundFetch(url, init, {
+      allowedHosts: [allowedHost],
+      maxRedirects: 0,
+      maxResponseBytes: 2 * 1024 * 1024,
+      timeoutMs: 30_000,
+    });
     if (response.ok) return response;
     if (!RETRY_STATUSES.has(response.status) || attempt === MAX_RETRY_ATTEMPTS) {
       lastResponse = response;
@@ -123,6 +131,7 @@ export async function callOpenAI(request: ProviderRequest) {
       signal: request.signal,
     },
     "OPENAI",
+    "api.openai.com",
   );
 
   const json = (await response.json()) as {
@@ -159,6 +168,7 @@ export async function callGemini(request: ProviderRequest) {
       signal: request.signal,
     },
     "GEMINI",
+    "generativelanguage.googleapis.com",
   );
 
   const json = (await response.json()) as {
@@ -189,6 +199,7 @@ export async function callClaude(request: ProviderRequest) {
       signal: request.signal,
     },
     "CLAUDE",
+    "api.anthropic.com",
   );
 
   const json = (await response.json()) as {

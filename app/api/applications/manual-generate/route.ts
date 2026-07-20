@@ -11,6 +11,11 @@ import {
 } from "@/lib/server/files/applicationArtifactBlob";
 import { LatexRenderError, compileLatexToPdf } from "@/lib/server/latex/compilePdf";
 import { contentDispositionAttachment } from "@/lib/server/files/pdfFilename";
+import {
+  assertAtsPdf,
+  AtsPdfValidationError,
+  type AtsPdfValidation,
+} from "@/lib/server/applications/atsPdfValidator";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
 import { getActivePromptSkillRulesForUser } from "@/lib/server/promptRuleTemplates";
@@ -24,6 +29,7 @@ import {
 import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
 import { mergeAiContentForTarget } from "@/lib/server/applications/mergeAiContentForTarget";
 import { reportError } from "@/lib/server/observability/errorReporter";
+import { persistReviewLedger } from "@/lib/server/applications/persistReviewLedger";
 import {
   aiContentSchema,
   hashAiContent,
@@ -62,6 +68,7 @@ async function commitGeneratedApplication(input: {
   status: "DRAFT" | "FINAL";
   pdfUrl: string | null;
   pdfName: string | null;
+  atsValidation?: AtsPdfValidation | null;
 }) {
   return prisma.$transaction(async (tx) => {
     // The lock is intentionally first. Concurrent CV and cover imports for
@@ -76,6 +83,7 @@ async function commitGeneratedApplication(input: {
         resumePdfUrl: true,
         coverPdfUrl: true,
         aiContent: true,
+        atsValidation: true,
       },
     });
     const existingAiContent = aiContentSchema.safeParse(existing?.aiContent);
@@ -97,6 +105,16 @@ async function commitGeneratedApplication(input: {
           : {
               coverPdfUrl: input.pdfUrl,
             };
+    const existingAtsValidation =
+      existing?.atsValidation &&
+      typeof existing.atsValidation === "object" &&
+      !Array.isArray(existing.atsValidation)
+        ? existing.atsValidation
+        : {};
+    const atsValidation = {
+      ...existingAtsValidation,
+      [input.target]: input.atsValidation ?? null,
+    };
 
     const application = await tx.application.upsert({
       where: {
@@ -111,6 +129,8 @@ async function commitGeneratedApplication(input: {
         status: input.status,
         aiContent: mergedAiContent,
         aiContentHash,
+        atsValidation,
+        reviewReport: mergedAiContent.review ?? undefined,
         ...artifactPatch,
       },
       update: {
@@ -120,9 +140,17 @@ async function commitGeneratedApplication(input: {
         status: input.status,
         aiContent: mergedAiContent,
         aiContentHash,
+        atsValidation,
+        reviewReport: mergedAiContent.review ?? undefined,
         ...artifactPatch,
       },
       select: { id: true },
+    });
+    await persistReviewLedger(tx, {
+      userId: input.userId,
+      applicationId: application.id,
+      jobId: input.job.id,
+      aiContent: mergedAiContent,
     });
 
     return {
@@ -228,6 +256,7 @@ export async function POST(req: Request) {
   // Build the artifact regardless of finalize mode — even DRAFT mode
   // needs the aiContent provenance extracted from the AI output JSON.
   const artifact = buildManualImportArtifact({
+    evidenceScopeKey: userId,
     target: data.target,
     modelOutput: data.modelOutput,
     mode: data.source === "local_ai" ? "strict" : "legacy",
@@ -246,6 +275,15 @@ export async function POST(req: Request) {
     );
   }
 
+  if (finalize && artifact.aiContent.review?.verdict === "blocked") {
+    return errorJson(
+      "APPLICATION_REVIEW_BLOCKED",
+      "The draft contains claims that are not grounded in the master resume.",
+      422,
+      { details: artifact.aiContent.review, requestId },
+    );
+  }
+
   // DRAFT mode: skip PDF compile + Blob upload. Just persist the
   // aiContent snapshot and return JSON. Caller navigates to
   // /jobs/[id]/tailor to review.
@@ -259,6 +297,7 @@ export async function POST(req: Request) {
       status: "DRAFT",
       pdfUrl: null,
       pdfName: null,
+      atsValidation: null,
     });
     return NextResponse.json(
       {
@@ -285,15 +324,32 @@ export async function POST(req: Request) {
   let filename: string;
   let coverQualityGate = "pass";
   let coverQualityIssueCount = 0;
+  let atsValidation: AtsPdfValidation;
   try {
     pdf = await compileLatexToPdf(artifact.tex);
+    atsValidation = await assertAtsPdf(pdf, {
+      maxPages: 2,
+      minTextChars: data.target === "resume" ? 180 : 160,
+      requiredKeywords: (artifact.aiContent.review?.requirements ?? [])
+        .flatMap((item) => item.text.split(/[\s,/|():;-]+/))
+        .filter((item) => item.length >= 3)
+        .slice(0, 30),
+    });
     filename = artifact.filename;
     coverQualityGate = artifact.coverQualityGate;
     coverQualityIssueCount = artifact.coverQualityIssueCount;
   } catch (err) {
-    if (err instanceof LatexRenderError) {
+    if (err instanceof LatexRenderError || err instanceof AtsPdfValidationError) {
       return NextResponse.json(
-        { error: { code: err.code, message: err.message, details: err.details }, requestId },
+        {
+          error: {
+            code: err.code,
+            message: err.message,
+            details:
+              err instanceof AtsPdfValidationError ? err.report : err.details,
+          },
+          requestId,
+        },
         { status: err.status },
       );
     }
@@ -353,6 +409,7 @@ export async function POST(req: Request) {
       status: "FINAL",
       pdfUrl: currentArtifactUrl,
       pdfName: filename,
+      atsValidation,
     });
   } catch (error) {
     if (process.env.BLOB_READ_WRITE_TOKEN && currentArtifactUrl) {

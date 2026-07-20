@@ -1,15 +1,100 @@
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
+
+const safeFetchMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/server/net/safeFetch", () => ({
+  safeOutboundFetch: safeFetchMock,
+}));
+
 import {
+  fetchVideosFromYouTube,
   queriesForCategory,
   scoreRelevance,
   searchOrderForSort,
-  ALL_VIDEO_CACHE_COMBOS,
   trustScore,
   engagementScore,
   recencyScore,
   computeTrendingScore,
   type ScorableVideo,
 } from "./videoPipeline";
+
+beforeEach(() => {
+  safeFetchMock.mockReset();
+});
+
+describe("YouTube outbound policy", () => {
+  it("routes search, video, and channel calls through one exact-host policy", async () => {
+    for (let index = 0; index < 4; index += 1) {
+      safeFetchMock.mockResolvedValueOnce(
+        new Response(JSON.stringify({ items: [{ id: { videoId: "video-1" } }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    }
+    safeFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: "video-1",
+              snippet: {
+                title: "Claude coding agent deep dive",
+                thumbnails: { medium: { url: "https://i.ytimg.com/thumb.jpg" } },
+                channelTitle: "Engineering",
+                channelId: "channel-1",
+                publishedAt: "2026-07-19T00:00:00.000Z",
+                description: "Claude agent tutorial",
+              },
+              statistics: { viewCount: "1000", likeCount: "50" },
+              contentDetails: { duration: "PT10M" },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
+    safeFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: "channel-1",
+              statistics: { subscriberCount: "5000" },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
+
+    const videos = await fetchVideosFromYouTube(
+      "claude",
+      "month",
+      "test-api-key",
+    );
+
+    expect(videos).toHaveLength(1);
+    expect(safeFetchMock).toHaveBeenCalledTimes(6);
+    for (const [input, init, policy] of safeFetchMock.mock.calls) {
+      expect(input).toBeInstanceOf(URL);
+      expect((input as URL).hostname).toBe("www.googleapis.com");
+      expect(init).toEqual({});
+      expect(policy).toEqual({
+        allowedHosts: ["www.googleapis.com"],
+        timeoutMs: 8_000,
+        maxResponseBytes: 1024 * 1024,
+        maxRedirects: 0,
+      });
+    }
+  });
+});
 
 describe("queriesForCategory", () => {
   it('"all" returns exactly one query per sub-category (quota-safe)', () => {
@@ -91,27 +176,6 @@ describe("searchOrderForSort", () => {
     expect(searchOrderForSort("trending")).toBe("relevance");
     expect(searchOrderForSort("latest")).toBe("date");
     expect(searchOrderForSort("most_viewed")).toBe("viewCount");
-  });
-});
-
-describe("ALL_VIDEO_CACHE_COMBOS", () => {
-  it("covers 16 (cat, window) pairs: 8 categories x 2 windows", () => {
-    expect(ALL_VIDEO_CACHE_COMBOS.length).toBe(16);
-  });
-
-  it("contains every category exactly twice (once per window)", () => {
-    const counts = new Map<string, number>();
-    for (const c of ALL_VIDEO_CACHE_COMBOS) {
-      counts.set(c.category, (counts.get(c.category) ?? 0) + 1);
-    }
-    for (const n of counts.values()) expect(n).toBe(2);
-  });
-
-  it("has no duplicate (category, window) pairs", () => {
-    const keys = ALL_VIDEO_CACHE_COMBOS.map(
-      (c) => `${c.category}:${c.timeWindow}`,
-    );
-    expect(new Set(keys).size).toBe(keys.length);
   });
 });
 

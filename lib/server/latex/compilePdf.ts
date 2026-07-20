@@ -1,3 +1,9 @@
+import {
+  SafeOutboundError,
+  parseSafeOutboundUrl,
+  safeOutboundFetch,
+} from "@/lib/server/net/safeFetch";
+
 type LatexRenderErrorCode =
   | "LATEX_RENDER_CONFIG_MISSING"
   | "LATEX_RENDER_UNREACHABLE"
@@ -62,6 +68,16 @@ export async function compileLatexToPdf(tex: string, options?: { files?: Compile
     // Changed error code and message as per instruction, keeping original constructor argument order
     throw new LatexRenderError("LATEX_RENDER_CONFIG_MISSING", 503, "No render service configuration");
   }
+  let renderHost: string;
+  try {
+    renderHost = parseSafeOutboundUrl(url).hostname;
+  } catch {
+    throw new LatexRenderError(
+      "LATEX_RENDER_CONFIG_MISSING",
+      503,
+      "Render service URL is invalid",
+    );
+  }
 
   // Fast-fail while the breaker is open instead of queueing behind a dead
   // dependency and holding the request/connection for the full timeout.
@@ -73,8 +89,6 @@ export async function compileLatexToPdf(tex: string, options?: { files?: Compile
     );
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let res: Response;
 
   const body: Record<string, unknown> = { tex };
@@ -86,24 +100,32 @@ export async function compileLatexToPdf(tex: string, options?: { files?: Compile
   }
 
   try {
-    res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": token,
+    res = await safeOutboundFetch(
+      url,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": token,
+        },
+        body: JSON.stringify(body),
       },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
+      {
+        allowedHosts: [renderHost],
+        maxRedirects: 0,
+        maxResponseBytes: 12 * 1024 * 1024,
+        timeoutMs,
+      },
+    );
   } catch (err) {
-    clearTimeout(timeout);
     recordBreakerFailure(); // timeout / network failure = infra down
-    if ((err as Error).name === "AbortError") {
+    if (
+      (err as Error).name === "AbortError" ||
+      (err instanceof SafeOutboundError && err.code === "REQUEST_TIMEOUT")
+    ) {
       throw new LatexRenderError("LATEX_RENDER_TIMEOUT", 504, "Render request timed out");
     }
     throw new LatexRenderError("LATEX_RENDER_UNREACHABLE", 502, "Render service unreachable");
-  } finally {
-    clearTimeout(timeout);
   }
 
   if (!res.ok) {

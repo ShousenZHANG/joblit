@@ -9,6 +9,7 @@ import {
   type SessionContext,
 } from "@/lib/server/auth/requireSession";
 import { getCurrentFitSnapshotPredicates } from "@/lib/server/jobs/fitRunService";
+import { bulkAppendStatusEvents } from "@/lib/server/career/applicationEvents";
 import { prisma } from "@/lib/server/prisma";
 
 export const runtime = "nodejs";
@@ -62,18 +63,18 @@ export async function POST(req: Request) {
   }
 
   if ("restoreIgnoredAt" in body.data) {
-    const restored = await prisma.job.updateMany({
+    const restored = await bulkAppendStatusEvents(userId, {
       where: {
-        userId,
-        status: "REJECTED",
         fitScore: { not: null, lte: body.data.maxScore },
-        // The commit writes one exact timestamp to every row it moved. This
-        // acts as a bounded, tenant-scoped operation marker without returning
-        // an unbounded UUID array to the browser. Any later edit changes
-        // updatedAt and intentionally opts that row out of undo.
+        // One exact timestamp marks rows won by the original bulk operation.
+        // A later edit changes updatedAt and intentionally opts out of undo.
         updatedAt: body.data.restoreIgnoredAt,
       },
-      data: { status: "NEW" },
+      fromStatus: "REJECTED",
+      toStatus: "NEW",
+      source: "USER",
+      note: "Restored jobs from low-fit bulk ignore",
+      idempotencyPrefix: `bulk-ignore-undo:${body.data.restoreIgnoredAt.toISOString()}`,
     });
     return NextResponse.json({ restored: restored.count });
   }
@@ -100,12 +101,17 @@ export async function POST(req: Request) {
   }
 
   // One atomic statement changes the exact rows won by this request. A shared
-  // updatedAt value is the undo marker, so this remains reversible at any
-  // database size without sending thousands of job IDs over the wire.
+  // updatedAt value is the undo marker. Matching immutable events are inserted
+  // in the same transaction, so projection and history cannot diverge.
   const ignoredAt = new Date();
-  const ignored = await prisma.job.updateMany({
+  const ignored = await bulkAppendStatusEvents(userId, {
     where,
-    data: { status: "REJECTED", updatedAt: ignoredAt },
+    fromStatus: "NEW",
+    toStatus: "REJECTED",
+    source: "USER",
+    note: `Bulk ignored roles with fit score at or below ${body.data.maxScore}`,
+    idempotencyPrefix: `bulk-ignore:${ignoredAt.toISOString()}`,
+    projectionUpdatedAt: ignoredAt,
   });
   return NextResponse.json({
     count: ignored.count,

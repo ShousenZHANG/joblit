@@ -1,4 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/server/net/safeFetch", () => ({
+  safeOutboundFetch: (
+    url: string | URL,
+    init?: RequestInit,
+  ) => fetch(url, { ...init, redirect: "manual" }),
+}));
+
 import { assertAllowedUrl, fetchSourceJson } from "./http";
 
 describe("assertAllowedUrl", () => {
@@ -60,7 +68,7 @@ describe("fetchSourceJson", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const init = fetchMock.mock.calls[0][1] as RequestInit;
-    expect(init.redirect).toBe("error");
+    expect(init.redirect).toBe("manual");
   });
 
   it("sends an honest bot user agent", async () => {

@@ -6,6 +6,10 @@ const store = vi.hoisted(() => ({
   executeRawLock: vi.fn(),
   importJobs: vi.fn(),
   runSourceFetch: vi.fn(),
+  loadAtsAdapters: vi.fn(),
+  recoverAtsBoards: vi.fn(),
+  persistHealth: vi.fn(),
+  reconcileLiveness: vi.fn(),
 }));
 
 vi.mock("@/lib/server/prisma", () => ({
@@ -32,8 +36,21 @@ vi.mock("@/lib/server/jobs/jobImportService", () => ({
   importJobsForUser: store.importJobs,
 }));
 vi.mock("./runSourceFetch", () => ({ runSourceFetch: store.runSourceFetch }));
+vi.mock("./atsBoardStore", () => ({
+  loadEnabledAtsBoardAdapters: store.loadAtsAdapters,
+}));
+vi.mock("./atsRediscoveryService", () => ({
+  recoverAtsBoardsAfter404: store.recoverAtsBoards,
+}));
+vi.mock("./sourceHealthStore", () => ({
+  persistSourceHealthDiagnostics: store.persistHealth,
+}));
+vi.mock("@/lib/server/jobs/sourceLivenessService", () => ({
+  reconcileFetchedSourceJobLiveness: store.reconcileLiveness,
+}));
 
 import { processGlobalFetchRun } from "./processGlobalFetchRun";
+import { MAX_GLOBAL_SOURCES_PER_RUN } from "./limits";
 import type { RawSourceJob } from "./types";
 
 function sourceJob(jobUrl: string): RawSourceJob {
@@ -57,6 +74,14 @@ beforeEach(() => {
   store.findFirst.mockResolvedValue({ id: "run-1" });
   store.updateMany.mockResolvedValue({ count: 1 });
   store.executeRawLock.mockResolvedValue(1);
+  store.loadAtsAdapters.mockResolvedValue({
+    adapters: [],
+    boards: [],
+    issues: [],
+  });
+  store.recoverAtsBoards.mockResolvedValue({ recovered: [], errors: [] });
+  store.persistHealth.mockResolvedValue(undefined);
+  store.reconcileLiveness.mockResolvedValue(undefined);
 });
 
 describe("processGlobalFetchRun", () => {
@@ -123,6 +148,135 @@ describe("processGlobalFetchRun", () => {
 
     expect(store.runSourceFetch).toHaveBeenCalledWith({
       sources: ["remoteok"],
+    });
+  });
+
+  it("loads enabled DB-backed ATS adapters and persists source health", async () => {
+    const adapter = {
+      id: "ats:greenhouse:acme",
+      allowedHosts: ["boards-api.greenhouse.io"],
+      fetch: vi.fn(),
+    };
+    const board = {
+      id: "ats:greenhouse:acme",
+      provider: "greenhouse",
+      boardToken: "acme",
+      company: "Acme",
+    };
+    store.loadAtsAdapters.mockResolvedValue({
+      adapters: [adapter],
+      boards: [board],
+      issues: [],
+    });
+    const diagnostics = [
+      { source: "ats:greenhouse:acme", ok: true, raw: 1 },
+    ];
+    store.runSourceFetch.mockResolvedValue({ jobs: [], diagnostics });
+
+    await processGlobalFetchRun("user-1", {
+      id: "run-1",
+      queries: { sources: ["remoteok"], queries: ["AI Engineer"] },
+    });
+
+    expect(store.runSourceFetch).toHaveBeenCalledWith({
+      sources: ["remoteok", "ats:greenhouse:acme"],
+      adapters: expect.arrayContaining([adapter]),
+    });
+    expect(store.persistHealth).toHaveBeenCalledWith(diagnostics);
+    expect(store.recoverAtsBoards).toHaveBeenCalledWith({
+      boards: [board],
+      diagnostics,
+    });
+  });
+
+  it("honors a new explicit source selection without appending every ATS board", async () => {
+    const adapter = {
+      id: "ats:greenhouse:acme",
+      allowedHosts: ["boards-api.greenhouse.io"],
+      fetch: vi.fn(),
+    };
+    store.loadAtsAdapters.mockResolvedValue({
+      adapters: [adapter],
+      boards: [],
+      issues: [],
+    });
+    store.runSourceFetch.mockResolvedValue({
+      jobs: [],
+      diagnostics: [{ source: "remoteok", ok: true, raw: 0 }],
+    });
+
+    await processGlobalFetchRun("user-1", {
+      id: "run-1",
+      queries: {
+        sources: ["remoteok"],
+        sourceSelection: "explicit",
+        queries: ["AI Engineer"],
+      },
+    });
+
+    expect(store.runSourceFetch).toHaveBeenCalledWith({
+      sources: ["remoteok"],
+      adapters: expect.arrayContaining([adapter]),
+    });
+  });
+
+  it("imports jobs recovered from a rotated ATS board in the same run", async () => {
+    const adapter = {
+      id: "ats:greenhouse:acme",
+      allowedHosts: ["boards-api.greenhouse.io"],
+      fetch: vi.fn(),
+    };
+    const board = {
+      id: adapter.id,
+      provider: "greenhouse",
+      boardToken: "acme-old",
+      company: "Acme",
+      careersUrl: "https://careers.acme.example",
+    };
+    const recovered = {
+      source: adapter.id,
+      config: { ...board, boardToken: "acme-new" },
+      jobs: [
+        {
+          ...sourceJob("https://boards.greenhouse.io/acme-new/jobs/123"),
+          source: adapter.id,
+        },
+      ],
+    };
+    store.loadAtsAdapters.mockResolvedValue({
+      adapters: [adapter],
+      boards: [board],
+      issues: [],
+    });
+    store.runSourceFetch.mockResolvedValue({
+      jobs: [],
+      diagnostics: [
+        { source: adapter.id, ok: false, raw: 0, error: "HTTP 404" },
+      ],
+    });
+    store.recoverAtsBoards.mockResolvedValue({
+      recovered: [recovered],
+      errors: [],
+    });
+    store.importJobs.mockResolvedValue({ imported: 1, invalid: 0 });
+
+    const result = await processGlobalFetchRun("user-1", {
+      id: "run-1",
+      queries: { sources: [adapter.id], queries: ["AI Engineer"] },
+    });
+
+    expect(result).toEqual({ discovered: 1, imported: 1 });
+    expect(store.persistHealth).toHaveBeenCalledWith([
+      { source: adapter.id, ok: true, raw: 1 },
+    ]);
+    expect(store.importJobs).toHaveBeenCalledWith({
+      userId: "user-1",
+      items: [
+        expect.objectContaining({
+          jobUrl: recovered.jobs[0].jobUrl,
+          market: "GLOBAL",
+        }),
+      ],
     });
   });
 
@@ -210,6 +364,33 @@ describe("processGlobalFetchRun", () => {
       where: { id: "run-1", userId: "user-1", status: "RUNNING" },
       data: { status: "FAILED", importedCount: 0, error: "boom" },
     });
+  });
+
+  it("fails before network I/O when a legacy run exceeds the serverless source budget", async () => {
+    store.loadAtsAdapters.mockResolvedValue({
+      adapters: Array.from(
+        { length: MAX_GLOBAL_SOURCES_PER_RUN },
+        (_, index) => ({
+          id: `ats:greenhouse:company-${index}`,
+          allowedHosts: ["boards-api.greenhouse.io"],
+          fetch: vi.fn(),
+        }),
+      ),
+      boards: [],
+      issues: [],
+    });
+
+    const result = await processGlobalFetchRun("user-1", {
+      id: "run-1",
+      queries: { queries: ["AI Engineer"] },
+    });
+
+    expect(result).toMatchObject({
+      discovered: 0,
+      imported: 0,
+      error: expect.stringContaining("source limit exceeded"),
+    });
+    expect(store.runSourceFetch).not.toHaveBeenCalled();
   });
 
   it("does not import when cancellation wins before the commit phase", async () => {

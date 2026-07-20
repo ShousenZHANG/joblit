@@ -49,9 +49,8 @@ export function isQuotaExceededError(err: unknown): boolean {
 }
 
 /**
- * Stable cache-key builder. The cron pre-warmer and the request handler
- * must agree on the exact string; keeping this in one tiny pure helper
- * prevents drift.
+ * Stable cache-key builder shared by cache readers and writers. Keeping this
+ * in one tiny pure helper prevents drift.
  */
 export function buildCacheKey(
   category: string,

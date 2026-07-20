@@ -6,13 +6,16 @@
 2. UI triggers: `POST /api/fetch-runs/:id/trigger`.
 3. Dispatch path depends on market:
    - AU: GitHub Actions `jobspy-fetch.yml` (Python `tools/fetcher/run_jobspy.py`)
-   - CN: in-process Vercel cron endpoint `/api/cron/fetch-cn`
-     (no GitHub Actions, no cookie auth — aggregates V2EX / GitHub / RSSHub
-     via `lib/server/cnFetch/`)
+   - CN: the authenticated trigger runs the in-process public-source adapters
+     via `lib/server/cnFetch/`
+   - GLOBAL: the authenticated trigger runs public job APIs and enabled ATS
+     boards via `lib/server/sources/`
 4. AU worker pulls config: `GET /api/fetch-runs/:id/config` (guarded by secret).
 5. AU worker imports jobs: `POST /api/admin/import` (guarded by `x-import-secret`).
-   CN pipeline writes directly via Prisma inside the cron route.
+   CN and GLOBAL pipelines write through the same normalized import service.
 6. Jobs appear in `GET /api/jobs` and the `/jobs` UI.
+
+All fetches are user initiated. There is no scheduled product fetch path.
 
 ## 2) External model CV/CL generation (skill pack + strict JSON import)
 

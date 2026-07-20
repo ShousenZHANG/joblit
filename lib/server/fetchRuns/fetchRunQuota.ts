@@ -57,9 +57,9 @@ export async function checkFetchRunQuota(
   `;
 
   const activeStatuses: FetchRunStatus[] = ["QUEUED", "RUNNING"];
-  // No cron is required for quota recovery. Any create/trigger first expires
-  // abandoned rows while holding the same global quota lock, so stale activity
-  // cannot permanently consume user or service capacity.
+  // Any create/trigger first expires abandoned rows while holding the same
+  // global quota lock, so stale activity cannot permanently consume user or
+  // service capacity.
   await tx.fetchRun.updateMany({
     where: {
       status: { in: activeStatuses },

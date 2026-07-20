@@ -36,6 +36,7 @@
     "moreOptions": "更多选项",
     "openCommands": "打开命令面板",
     "jobs": "职位",
+    "career": "求职进展",
     "fetch": "抓取",
     "resume": "简历",
     "guide": "引导",
@@ -54,6 +55,242 @@
     "paletteThemeLight": "浅色主题",
     "paletteThemeDark": "深色主题",
     "paletteThemeSystem": "跟随系统"
+  },
+  "career": {
+    "eyebrow": "求职指挥中心",
+    "privacyNote": "仅你的账号可见",
+    "title": "让每次申请都持续向前。",
+    "subtitle": "集中查看求职进展、按时跟进、准备有证据支撑的面试故事，并清晰比较每一份 Offer。",
+    "headline": {
+      "reminders": "待办跟进",
+      "interviews": "面试计划",
+      "offers": "有效 Offer"
+    },
+    "tabs": {
+      "label": "求职工作台分区",
+      "overview": "总览",
+      "interviews": "面试",
+      "stories": "STAR 故事",
+      "offers": "Offer"
+    },
+    "actions": {
+      "refresh": "刷新",
+      "refreshing": "刷新中…",
+      "retry": "重试",
+      "cancel": "取消",
+      "delete": "删除",
+      "close": "关闭"
+    },
+    "errors": {
+      "loadTitle": "暂时无法打开求职工作台",
+      "load": "未能加载求职数据。已保存的记录不会受到影响。",
+      "action": "操作未完成，请重试。"
+    },
+    "feedback": {
+      "reminderSaved": "跟进事项已保存。",
+      "reminderCompleted": "跟进事项已完成。",
+      "interviewCreated": "面试计划已创建。",
+      "interviewCompleted": "面试已标记为完成。",
+      "interviewDeleted": "面试计划已删除。",
+      "questionsReady": "面试问题已生成。",
+      "storyCreated": "STAR 故事已保存。",
+      "storyDeleted": "STAR 故事已删除。",
+      "offerCreated": "Offer 已加入比较。",
+      "offerDeleted": "Offer 已删除。",
+      "scriptReady": "谈薪话术已生成。"
+    },
+    "overview": {
+      "pipelineEyebrow": "申请跑道",
+      "pipelineTitle": "求职漏斗健康度",
+      "pipelineSubtitle": "每个阶段统计曾到达该阶段的岗位，而不只是当前状态。",
+      "totalApplied": "已投递 {count}",
+      "stages": {
+        "applied": "已投递",
+        "interview": "面试",
+        "offer": "Offer",
+        "accepted": "已接受"
+      },
+      "outcome": "最终结果",
+      "emptyPipeline": "将岗位状态更新为“已投递”后，即可开始衡量求职漏斗。",
+      "velocityEyebrow": "流程速度",
+      "velocityTitle": "机会推进需要多久",
+      "median": "中位用时",
+      "sample": "{count} 个样本",
+      "days": "{count} 天",
+      "transitions": {
+        "appliedToInterview": "投递 → 面试",
+        "interviewToOffer": "面试 → Offer",
+        "offerToAccepted": "Offer → 接受"
+      },
+      "rejected": "已拒绝 {count}",
+      "withdrawn": "已撤回 {count}"
+    },
+    "reminders": {
+      "eyebrow": "持续跟进",
+      "title": "下一步行动",
+      "suggested": "智能建议",
+      "save": "保存",
+      "upNext": "即将到期",
+      "complete": "完成 {title}",
+      "overdue": "已逾期",
+      "emptyTitle": "当前事项已清空",
+      "empty": "申请状态推进后，新的跟进建议会自动出现在这里。",
+      "suggestionTypes": {
+        "APPLICATION_FOLLOW_UP": {
+          "title": "跟进申请进度",
+          "reason": "距离最近一次申请更新已经过去五天。"
+        },
+        "INTERVIEW_THANK_YOU": {
+          "title": "发送面试感谢信",
+          "reason": "趁沟通内容清晰时发送一封简洁的感谢信。"
+        },
+        "OFFER_DEADLINE": {
+          "title": "检查 Offer 截止时间",
+          "reason": "距离决策截止时间已不足两天。"
+        }
+      }
+    },
+    "interviews": {
+      "eyebrow": "面试工作室",
+      "title": "基于证据准备，而不是依赖临场回忆",
+      "subtitle": "把每项岗位要求转化为问题，并关联到你能清楚讲述和证明的真实经历。",
+      "questionLab": "问题实验室",
+      "newPlan": "新建计划",
+      "noJobs": "创建面试计划前，请先保存至少一个岗位。",
+      "openJobs": "打开职位",
+      "form": {
+        "title": "创建面试计划",
+        "hint": "同一岗位的每一轮面试对应一份计划，问题将根据你提供的要求生成。",
+        "job": "岗位",
+        "chooseJob": "选择岗位",
+        "round": "轮次",
+        "planTitle": "计划名称",
+        "titlePlaceholder": "技术面试",
+        "scheduled": "面试时间",
+        "requirements": "岗位要求",
+        "requirementsPlaceholder": "大规模系统设计\n良好的利益相关者沟通\nAWS 生产环境经验",
+        "requirementsHint": "每行填写一项清晰要求。",
+        "notes": "准备笔记",
+        "save": "创建计划"
+      },
+      "lab": {
+        "title": "问题实验室",
+        "subtitle": "无需保存计划，先快速生成并预览结构化面试问题。",
+        "generate": "生成问题",
+        "output": "练习题组",
+        "storyCount": "已检查 {count} 个故事",
+        "followUps": "追问方向",
+        "emptyTitle": "等待岗位要求",
+        "empty": "粘贴最重要的岗位要求，生成一组以证据为核心的练习题。"
+      },
+      "status": {
+        "draft": "草稿",
+        "ready": "已就绪",
+        "completed": "已完成",
+        "archived": "已归档"
+      },
+      "round": "第 {count} 轮",
+      "unknownJob": "已保存岗位",
+      "unscheduled": "未安排时间",
+      "questionCount": "{count} 个问题",
+      "noQuestions": "此计划暂未保存问题。",
+      "markComplete": "标记面试已完成",
+      "deleteLabel": "删除 {title}",
+      "deleteTitle": "删除这份面试计划？",
+      "deleteDescription": "“{title}”及其中生成的问题将被永久删除。",
+      "emptyTitle": "暂无面试计划",
+      "empty": "岗位进入面试阶段后，为每一轮创建一份聚焦的准备计划。"
+    },
+    "stories": {
+      "eyebrow": "证据库",
+      "title": "建立可复用的 STAR+R 故事",
+      "subtitle": "一次记录真实证据，后续在不同面试中复用，无需临时编造细节。",
+      "new": "新建故事",
+      "form": {
+        "title": "添加 STAR+R 故事",
+        "hint": "只记录你能在面试中解释并验证的真实细节。",
+        "storyTitle": "故事标题",
+        "titlePlaceholder": "稳定高流量结账系统",
+        "situation": "情境",
+        "situationPlaceholder": "当时发生了什么？为什么重要？",
+        "task": "任务",
+        "taskPlaceholder": "你需要对什么结果负责？",
+        "action": "行动",
+        "actionPlaceholder": "你本人做出了什么决定并采取了哪些行动？",
+        "result": "结果",
+        "resultPlaceholder": "最终发生了什么变化？有可靠数据时请写明。",
+        "reflection": "复盘",
+        "reflectionPlaceholder": "之后你学到了什么，或进一步改进了什么？",
+        "skills": "技能",
+        "skillsPlaceholder": "AWS、故障响应、利益相关者管理",
+        "tags": "标签",
+        "tagsPlaceholder": "领导力、可靠性、规模化",
+        "save": "保存故事"
+      },
+      "deleteLabel": "删除 {title}",
+      "deleteTitle": "删除这个 STAR 故事？",
+      "deleteDescription": "“{title}”将不再用于后续面试匹配。",
+      "emptyTitle": "证据库还是空的",
+      "empty": "从一个最有力的案例开始：你做了什么，最后带来了什么变化。"
+    },
+    "offers": {
+      "eyebrow": "决策工作台",
+      "title": "比较完整 Offer，而不只看基本工资",
+      "subtitle": "集中管理薪酬、截止时间、福利和谈薪话术，让每项决策都有依据。",
+      "new": "添加 Offer",
+      "form": {
+        "title": "记录 Offer",
+        "hint": "请填写年度整数金额；不确定的项目可以留空。",
+        "company": "公司",
+        "role": "岗位",
+        "currency": "币种",
+        "location": "地点",
+        "deadline": "决策截止时间",
+        "baseSalaryAnnual": "基本工资",
+        "bonusAnnual": "奖金",
+        "equityAnnual": "股权",
+        "otherAnnual": "其他",
+        "targetSalaryAnnual": "目标总包",
+        "benefits": "福利",
+        "benefitsPlaceholder": "每行填写一项福利",
+        "notes": "备注",
+        "save": "加入比较"
+      },
+      "compare": {
+        "title": "Offer 对比",
+        "note": "仅在相同币种内排名，不假设任何汇率。",
+        "count": "{count} 份 Offer",
+        "total": "已知年度总包",
+        "incomplete": "部分项目缺失",
+        "belowTarget": "比目标低 {amount}",
+        "atTarget": "达到或超过目标"
+      },
+      "savedTitle": "已保存 Offer",
+      "status": {
+        "active": "有效",
+        "accepted": "已接受",
+        "declined": "已拒绝",
+        "withdrawn": "已撤回"
+      },
+      "deleteLabel": "删除 {company} 的 Offer",
+      "deleteTitle": "删除这份 Offer？",
+      "deleteDescription": "{company} 的 Offer 及其比较数据将被永久删除。",
+      "negotiate": {
+        "title": "谈薪话术生成器",
+        "subtitle": "仅根据 Offer 和你提供的优势，生成简洁且有依据的沟通话术。",
+        "offer": "Offer",
+        "strengths": "可验证优势",
+        "strengthsPlaceholder": "每行填写一项事实\n主导并验证了 20% 的延迟下降\n负责生产环境 AWS 系统",
+        "grounded": "只填写你能证明的事实。Joblit 不会编造支撑材料。",
+        "generate": "生成话术",
+        "script": "你的谈薪话术",
+        "noInventedFacts": "无虚构事实",
+        "emptyTitle": "清晰提出你的诉求",
+        "empty": "选择一份 Offer，并填写最有力的可验证证据，生成有依据的谈薪话术。"
+      },
+      "emptyTitle": "暂无 Offer 可比较",
+      "empty": "收到 Offer 后，先完整记录每个组成部分，再决定或谈判。"
+    }
   },
   "marketing": {
     "heroTitle": "AI 为每份工作定制专属简历",
@@ -193,7 +430,14 @@
     "oldestFirst": "最早发布",
     "statusNew": "新职位",
     "statusApplied": "已投递",
+    "statusInterview": "面试中",
+    "statusOffer": "已获 Offer",
     "statusRejected": "已拒绝",
+    "statusWithdrawn": "已撤回",
+    "statusAccepted": "已接受",
+    "livenessExpired": "已过期",
+    "livenessUncertain": "状态待确认",
+    "possibleDuplicate": "可能重复",
     "postingRisk": "风险 {score}",
     "fitScan": {
       "button": "评分全部岗位",
@@ -434,6 +678,23 @@
     "strictTitlesHint": "仅保留标题与搜索同族的岗位。关闭以扩大范围。",
     "globalFeeds": "全球远程职位源",
     "globalFeedsHint": "同时搜索 Remote OK、Remotive 和 Jobicy，结果仍遵循职位、地点与标题排除条件。",
+    "sourceHealth": {
+      "title": "职位源健康状态",
+      "checking": "正在检查公开职位源与 ATS 看板…",
+      "unavailable": "暂时无法读取健康详情",
+      "ready": "{total} 个职位源中 {healthy} 个可用",
+      "attention": "{count} 个职位源需要关注",
+      "errorHint": "仍可继续抓取。Joblit 会隔离不可用来源，并保留其他有效结果。",
+      "retry": "重新检查",
+      "updatedAfterFetch": "每次由你发起抓取后，健康状态都会更新。",
+      "moreSources": "另有 {count} 个 ATS 看板正在跟踪",
+      "status": {
+        "healthy": "可用",
+        "degraded": "不稳定",
+        "down": "离线",
+        "unknown": "未检查"
+      }
+    },
     "excludeTitles": "排除职位",
     "startFetch": "开始抓取",
     "fetching": "抓取中…",
@@ -1128,6 +1389,17 @@
       "compareChanges": "对比改动",
       "yourOriginal": "你的原文",
       "aiAndYourEdits": "AI 与你的编辑"
+    },
+    "review": {
+      "title": "证据审查",
+      "coverage": "已覆盖 {percent}% 的优先要求",
+      "clear": "未发现无证据事实。",
+      "finalizeHint": "定稿前，Joblit 会重新执行证据与 ATS 检查。",
+      "verdict": {
+        "pass": "可定稿",
+        "revise": "需审阅",
+        "blocked": "已阻止"
+      }
     },
     "preview": {
       "title": "PDF 预览",

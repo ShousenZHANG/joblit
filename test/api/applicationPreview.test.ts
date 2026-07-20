@@ -75,7 +75,7 @@ describe("POST /api/applications/[id]/preview", () => {
     });
   });
 
-  it("streams a private resume PDF without persisting or uploading an artifact", async () => {
+  it("pins resume preview to the Application profile after the active profile changes", async () => {
     const aiContent = makeAiContent();
     const hash = hashAiContent(aiContent);
     prisma.application.findFirst.mockResolvedValue({
@@ -83,6 +83,7 @@ describe("POST /api/applications/[id]/preview", () => {
       aiContent,
       aiContentHash: hash,
       jobId: "job-1",
+      resumeProfileId: "profile-linked",
       company: "Acme",
       role: "Engineer",
       job: {
@@ -103,7 +104,13 @@ describe("POST /api/applications/[id]/preview", () => {
     expect(response.headers.get("content-type")).toBe("application/pdf");
     expect(response.headers.get("cache-control")).toContain("no-store");
     expect(await response.text()).toBe("%PDF-preview");
-    expect(renderer.renderApplicationPdf).toHaveBeenCalledOnce();
+    expect(renderer.renderApplicationPdf).toHaveBeenCalledWith(
+      expect.objectContaining({
+        applicationId: APP_ID,
+        userId: USER_ID,
+        resumeProfileId: "profile-linked",
+      }),
+    );
     expect(renderer.renderFinalApplication).not.toHaveBeenCalled();
     expect(prisma.application.update).not.toHaveBeenCalled();
     expect(renderLimiter.enforce).toHaveBeenCalledWith(
@@ -120,6 +127,7 @@ describe("POST /api/applications/[id]/preview", () => {
       aiContent,
       aiContentHash: hash,
       jobId: null,
+      resumeProfileId: "profile-linked",
       company: "Acme",
       role: "Engineer",
       job: null,
@@ -132,7 +140,13 @@ describe("POST /api/applications/[id]/preview", () => {
     const response = await POST(makeRequest(hash, "cover"), { params });
 
     expect(response.status).toBe(200);
-    expect(renderer.renderCoverLetterPdf).toHaveBeenCalledOnce();
+    expect(renderer.renderCoverLetterPdf).toHaveBeenCalledWith(
+      expect.objectContaining({
+        applicationId: APP_ID,
+        userId: USER_ID,
+        resumeProfileId: "profile-linked",
+      }),
+    );
     expect(renderer.renderFinalCoverLetter).not.toHaveBeenCalled();
     expect(prisma.application.update).not.toHaveBeenCalled();
   });

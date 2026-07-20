@@ -1,4 +1,5 @@
 import type { TrendingRepo } from "@/app/(app)/discover/types";
+import { safeOutboundFetch } from "@/lib/server/net/safeFetch";
 
 // GitHub trending — EXACT parity with github.com/trending.
 //
@@ -170,15 +171,23 @@ export async function fetchTrendingRepos(
   const since = PERIOD_TO_SINCE[period];
   const url = `https://github.com/trending?since=${since}`;
 
-  const res = await fetch(url, {
-    headers: {
+  const res = await safeOutboundFetch(
+    url,
+    {
+      headers: {
       // A browser-like UA — GitHub serves the standard trending markup to it.
       "User-Agent":
         "Mozilla/5.0 (compatible; Joblit-Discover/1.0; +https://www.joblit.tech)",
-      Accept: "text/html,application/xhtml+xml",
+        Accept: "text/html,application/xhtml+xml",
+      },
     },
-    signal: AbortSignal.timeout(8000),
-  });
+    {
+      allowedHosts: ["github.com"],
+      timeoutMs: 8_000,
+      maxResponseBytes: 1024 * 1024,
+      maxRedirects: 0,
+    },
+  );
   if (!res.ok) {
     throw new Error(`GitHub trending ${res.status}: ${res.statusText}`);
   }

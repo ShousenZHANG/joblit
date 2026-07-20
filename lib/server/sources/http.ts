@@ -1,4 +1,5 @@
 import type { SourceContext } from "./types";
+import { safeOutboundFetch } from "@/lib/server/net/safeFetch";
 
 // One gateway for every outbound request the source layer makes. Adapters get
 // no other network access, so these guarantees hold for all of them:
@@ -50,23 +51,24 @@ export async function fetchSourceJson(
   timeoutMs: number = DEFAULT_TIMEOUT_MS,
 ): Promise<unknown> {
   assertAllowedUrl(url, allowedHosts);
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, {
+  const res = await safeOutboundFetch(
+    url,
+    {
       method: "GET",
       headers: { "user-agent": USER_AGENT, accept: "application/json" },
-      redirect: "error",
-      signal: controller.signal,
-    });
-    if (!res.ok) {
-      throw new Error(`source fetch: HTTP ${res.status} for ${url}`);
-    }
-    return await res.json();
-  } finally {
-    clearTimeout(timer);
+    },
+    {
+      allowedHosts,
+      allowSubdomains: true,
+      maxRedirects: 0,
+      maxResponseBytes: 4 * 1024 * 1024,
+      timeoutMs,
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`source fetch: HTTP ${res.status} for ${url}`);
   }
+  return await res.json();
 }
 
 /** The real context handed to adapters in production. */

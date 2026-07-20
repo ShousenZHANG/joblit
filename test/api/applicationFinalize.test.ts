@@ -37,6 +37,7 @@ import {
   hashAiContent,
   type AiContent,
 } from "@/lib/shared/schemas/aiContent";
+import { attachEvidenceAndReview } from "@/lib/server/ai/evidenceLedger";
 
 const APP_ID = "22222222-2222-4222-9222-222222222222";
 const USER_ID = "user-1";
@@ -107,6 +108,7 @@ describe("POST /api/applications/[id]/finalize", () => {
       userId: USER_ID,
       aiContent: ai,
       aiContentHash: hash,
+      resumeProfileId: "profile-linked",
       resumePdfUrl: "https://blob/old.pdf",
       coverPdfUrl: null,
     });
@@ -124,6 +126,7 @@ describe("POST /api/applications/[id]/finalize", () => {
       expect.objectContaining({
         applicationId: APP_ID,
         userId: USER_ID,
+        resumeProfileId: "profile-linked",
         aiContent: ai,
         artifactVersion: expect.stringMatching(
           new RegExp(`^${hash}-[0-9a-f-]{36}$`),
@@ -349,6 +352,152 @@ describe("POST /api/applications/[id]/finalize", () => {
     const response = await POST(makeRequest({ expectedHash: hash }), { params });
 
     expect(response.status).toBe(429);
+    expect(renderer.renderFinalApplication).not.toHaveBeenCalled();
+    expect(prisma.application.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("rebuilds stored evidence from server sources and blocks a forged pass verdict", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: USER_ID },
+    });
+    const profile = {
+      userId: USER_ID,
+      summary: "Built reliable TypeScript APIs.",
+      basics: null,
+      links: null,
+      skills: null,
+      experiences: null,
+      projects: null,
+      education: null,
+    };
+    const forged = attachEvidenceAndReview({
+      aiContent: makeAiContent(),
+      resumeSnapshot: profile,
+      jobDescription: "Build reliable TypeScript APIs.",
+      scopeKey: USER_ID,
+    });
+    forged.cv.summary.userEdit = "Improved revenue by 999%.";
+    forged.evidence = [
+      {
+        id: `ev_${"f".repeat(32)}`,
+        kind: "candidate",
+        path: "resume.summary",
+        contentHash: "f".repeat(64),
+        excerpt: "improved revenue by 999%",
+      },
+    ];
+    forged.review = {
+      verdict: "pass",
+      reviewedAt: "2026-07-20T12:00:00.000Z",
+      coveragePercent: 100,
+      requirements: [],
+      issues: [],
+    };
+    const hash = hashAiContent(forged);
+    prisma.application.findFirst.mockResolvedValueOnce({
+      id: APP_ID,
+      userId: USER_ID,
+      status: "DRAFT",
+      aiContent: forged,
+      aiContentHash: hash,
+      resumePdfUrl: null,
+      resumePdfName: null,
+      coverPdfUrl: null,
+      atsValidation: null,
+      jobId: "job-1",
+      company: "Acme",
+      role: "Engineer",
+      resumeProfile: profile,
+      job: {
+        id: "job-1",
+        userId: USER_ID,
+        title: "Engineer",
+        company: "Acme",
+        market: "AU",
+        description: "Build reliable TypeScript APIs.",
+      },
+    });
+
+    const response = await POST(makeRequest({ expectedHash: hash }), { params });
+    const json = await response.json();
+
+    expect(response.status).toBe(422);
+    expect(json.error.code).toBe("APPLICATION_REVIEW_BLOCKED");
+    expect(json.error.details.issues.join(" ")).toContain("999%");
+    expect(renderer.renderFinalApplication).not.toHaveBeenCalled();
+    expect(prisma.application.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("blocks forged skill evidence before rendering the final resume", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: USER_ID },
+    });
+    const profile = {
+      userId: USER_ID,
+      summary: "Built reliable TypeScript APIs.",
+      basics: null,
+      links: null,
+      skills: [{ label: "Languages", items: ["TypeScript"] }],
+      experiences: null,
+      projects: null,
+      education: null,
+    };
+    const forged = attachEvidenceAndReview({
+      aiContent: {
+        ...makeAiContent(),
+        cv: {
+          ...makeAiContent().cv,
+          skillsAdditions: [
+            { label: "Platform", items: ["Kubernetes"], accepted: true },
+          ],
+        },
+      },
+      resumeSnapshot: profile,
+      jobDescription: "Build reliable TypeScript APIs.",
+      scopeKey: USER_ID,
+    });
+    forged.cv.skillsAdditions[0].evidenceIds = [
+      forged.evidence?.find((item) => item.kind === "candidate")?.id ??
+        `ev_${"f".repeat(32)}`,
+    ];
+    forged.review = {
+      verdict: "pass",
+      reviewedAt: "2026-07-20T12:00:00.000Z",
+      coveragePercent: 100,
+      requirements: [],
+      issues: [],
+    };
+    const hash = hashAiContent(forged);
+    prisma.application.findFirst.mockResolvedValueOnce({
+      id: APP_ID,
+      userId: USER_ID,
+      status: "DRAFT",
+      aiContent: forged,
+      aiContentHash: hash,
+      resumePdfUrl: null,
+      resumePdfName: null,
+      coverPdfUrl: null,
+      atsValidation: null,
+      jobId: "job-1",
+      company: "Acme",
+      role: "Engineer",
+      resumeProfile: profile,
+      job: {
+        id: "job-1",
+        userId: USER_ID,
+        title: "Engineer",
+        company: "Acme",
+        market: "AU",
+        description: "Build reliable TypeScript APIs.",
+      },
+    });
+
+    const response = await POST(makeRequest({ expectedHash: hash }), { params });
+    const json = await response.json();
+
+    expect(response.status).toBe(422);
+    expect(json.error.code).toBe("APPLICATION_REVIEW_BLOCKED");
+    expect(json.error.details.issues.join(" ")).toContain("Kubernetes");
     expect(renderer.renderFinalApplication).not.toHaveBeenCalled();
     expect(prisma.application.updateMany).not.toHaveBeenCalled();
   });

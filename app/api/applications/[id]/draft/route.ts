@@ -7,6 +7,12 @@ import {
   hashAiContent,
 } from "@/lib/shared/schemas/aiContent";
 import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
+import { persistReviewLedger } from "@/lib/server/applications/persistReviewLedger";
+import {
+  mergeClientAiContentEdits,
+  rebuildCanonicalAiContent,
+} from "@/lib/server/applications/canonicalAiContent";
+import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 
 export const runtime = "nodejs";
 
@@ -69,15 +75,92 @@ export async function PATCH(
       );
     }
 
-    const newHash = hashAiContent(aiContent);
-    const updated = await prisma.$transaction(
+    const committed = await prisma.$transaction(
       async (tx) => {
         await acquireApplicationMutationLock(
           tx,
           userId,
           existing.jobId ?? existing.id,
         );
-        return tx.application.updateMany({
+        const current = await tx.application.findFirst({
+          where: { id: existing.id, userId },
+          select: {
+            id: true,
+            jobId: true,
+            aiContent: true,
+            aiContentHash: true,
+            resumeProfile: {
+              select: {
+                userId: true,
+                name: true,
+                locale: true,
+                summary: true,
+                basics: true,
+                links: true,
+                skills: true,
+                experiences: true,
+                projects: true,
+                education: true,
+              },
+            },
+            job: {
+              select: { userId: true, description: true },
+            },
+          },
+        });
+        if (!current) return { kind: "not_found" as const };
+        if (current.aiContentHash !== expectedHash) {
+          return {
+            kind: "stale" as const,
+            currentHash: current.aiContentHash,
+          };
+        }
+
+        const canonical = aiContentSchema.safeParse(current.aiContent);
+        if (!canonical.success) return { kind: "invalid" as const };
+
+        const hasEvidenceContract =
+          canonical.data.evidence !== undefined ||
+          canonical.data.review !== undefined;
+        const hasAcceptedSkillAdditions =
+          canonical.data.cv.skillsAdditions.some((group) => group.accepted) ||
+          aiContent.cv.skillsAdditions.some((group) => group.accepted);
+        const requiresCanonicalEvidence =
+          hasEvidenceContract || hasAcceptedSkillAdditions;
+        const requiresJobEvidence =
+          canonical.data.evidence?.some((item) => item.kind === "job") ===
+            true ||
+          (canonical.data.review?.requirements.length ?? 0) > 0;
+        const profile =
+          current.resumeProfile?.userId === userId
+            ? current.resumeProfile
+            : null;
+        if (
+          requiresCanonicalEvidence &&
+          (!profile ||
+            (requiresJobEvidence && !current.job) ||
+            (current.job && current.job.userId !== userId))
+        ) {
+          return { kind: "evidence_unavailable" as const };
+        }
+
+        const reviewedContent =
+          requiresCanonicalEvidence && profile
+            ? rebuildCanonicalAiContent({
+                canonical: canonical.data,
+                submitted: aiContent,
+                resumeSnapshot: canonical.data.source
+                  ? {
+                      profile,
+                      renderInput: mapResumeProfile(profile),
+                    }
+                  : profile,
+                jobDescription: current.job?.description,
+                scopeKey: userId,
+              })
+            : mergeClientAiContentEdits(canonical.data, aiContent);
+        const newHash = hashAiContent(reviewedContent);
+        const result = await tx.application.updateMany({
           where: {
             id: existing.id,
             userId,
@@ -85,20 +168,67 @@ export async function PATCH(
           },
           data: {
             status: "DRAFT",
-            aiContent,
+            aiContent: reviewedContent,
             aiContentHash: newHash,
+            reviewReport: reviewedContent.review ?? undefined,
           },
         });
+        if (result.count !== 1) return { kind: "stale" as const };
+        await persistReviewLedger(tx, {
+          userId,
+          applicationId: existing.id,
+          jobId: current.jobId,
+          aiContent: reviewedContent,
+        });
+        return {
+          kind: "committed" as const,
+          aiContent: reviewedContent,
+          aiContentHash: newHash,
+        };
       },
       { timeout: 30_000 },
     );
-    if (updated.count !== 1) {
+    if (committed.kind === "not_found") {
+      return NextResponse.json(
+        { error: { code: "NOT_FOUND", message: "Application not found" }, requestId },
+        { status: 404 },
+      );
+    }
+    if (committed.kind === "invalid") {
+      return NextResponse.json(
+        {
+          error: {
+            code: "AI_CONTENT_INVALID",
+            message: "Stored aiContent failed schema validation",
+          },
+          requestId,
+        },
+        { status: 500 },
+      );
+    }
+    if (committed.kind === "evidence_unavailable") {
+      return NextResponse.json(
+        {
+          error: {
+            code: "CANONICAL_EVIDENCE_UNAVAILABLE",
+            message:
+              "The server source snapshot is unavailable. Re-generate this draft.",
+          },
+          requestId,
+        },
+        { status: 409 },
+      );
+    }
+    if (committed.kind === "stale") {
       return NextResponse.json(
         {
           error: {
             code: "STALE_WRITE",
             message: "Another tab updated this draft",
           },
+          ...("currentHash" in committed
+            ? { currentHash: committed.currentHash }
+            : {}),
           requestId,
         },
         { status: 409 },
@@ -107,7 +237,8 @@ export async function PATCH(
 
     return NextResponse.json({
       status: "DRAFT",
-      aiContentHash: newHash,
+      aiContent: committed.aiContent,
+      aiContentHash: committed.aiContentHash,
       requestId,
     });
   });

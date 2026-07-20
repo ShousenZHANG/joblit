@@ -1,3 +1,5 @@
+import { safeOutboundFetch } from "@/lib/server/net/safeFetch";
+
 /**
  * On-demand full-JD fetch for Seek jobs.
  *
@@ -77,16 +79,6 @@ function stripHtml(html: string): string {
     .slice(0, MAX_DESCRIPTION);
 }
 
-async function timedFetch(url: string, init: RequestInit): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 /**
  * Fetch the full JD for a Seek job URL, or null if disabled / not a Seek job /
  * unavailable. Never throws.
@@ -96,18 +88,27 @@ export async function fetchSeekJobDescription(jobUrl: string): Promise<string | 
   const id = extractSeekJobId(jobUrl); // numeric-id SSRF guard
   if (!id) return null;
   try {
-    const res = await timedFetch(SEEK_GRAPHQL_URL, {
-      method: "POST",
-      headers: {
-        "User-Agent": userAgent(),
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Origin: SEEK_ORIGIN,
-        Referer: `${SEEK_ORIGIN}/job/${id}`,
+    const res = await safeOutboundFetch(
+      SEEK_GRAPHQL_URL,
+      {
+        method: "POST",
+        headers: {
+          "User-Agent": userAgent(),
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Origin: SEEK_ORIGIN,
+          Referer: `${SEEK_ORIGIN}/job/${id}`,
+        },
+        // id is \d+ only, so this interpolation cannot inject GraphQL.
+        body: JSON.stringify({ query: `{ jobDetails(id: "${id}") { job { content } } }` }),
       },
-      // id is \d+ only, so this interpolation cannot inject GraphQL.
-      body: JSON.stringify({ query: `{ jobDetails(id: "${id}") { job { content } } }` }),
-    });
+      {
+        allowedHosts: [SEEK_HOST],
+        maxRedirects: 0,
+        maxResponseBytes: 1024 * 1024,
+        timeoutMs: REQUEST_TIMEOUT_MS,
+      },
+    );
     if (!res.ok) return null;
     const json = (await res.json().catch(() => null)) as
       | { data?: { jobDetails?: { job?: { content?: unknown } } } }

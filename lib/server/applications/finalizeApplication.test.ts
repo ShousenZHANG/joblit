@@ -21,12 +21,24 @@ vi.mock("@/lib/server/latex/mapResumeProfile", () => ({
   mapResumeProfile: dependencies.mapResumeProfile,
 }));
 
-import { renderApplicationPdf } from "./finalizeApplication";
+import {
+  renderApplicationPdf,
+  renderCoverLetterPdf,
+} from "./finalizeApplication";
 
 const aiContent: AiContent = {
   schemaVersion: 1,
   generatedAt: "2026-07-20T00:00:00.000Z",
   promptMetaHash: "sha256:test",
+  evidence: [
+    {
+      id: `ev_${"a".repeat(32)}`,
+      kind: "candidate",
+      path: "resume.skills[0]",
+      contentHash: "a".repeat(64),
+      excerpt: "aws cloud engineering",
+    },
+  ],
   cv: {
     summary: {
       aiText: "Security-focused engineer",
@@ -42,6 +54,7 @@ const aiContent: AiContent = {
         label: String.raw`Cloud & \input{secret}`,
         items: [String.raw`AWS 100% \write18{calc}`],
         accepted: true,
+        evidenceIds: [`ev_${"a".repeat(32)}`],
       },
     ],
   },
@@ -92,5 +105,45 @@ describe("renderApplicationPdf", () => {
     expect(tex).not.toContain(String.raw`\write18{calc}`);
     expect(tex).toContain(String.raw`Cloud \& \\input\{secret\}`);
     expect(tex).toContain(String.raw`AWS 100\% \\write18\{calc\}`);
+  });
+
+  it("loads the Application-linked profile instead of the current active profile", async () => {
+    await renderApplicationPdf({
+      applicationId: "application-1",
+      userId: "user-1",
+      resumeProfileId: "profile-linked",
+      aiContent,
+      job: {
+        id: "job-1",
+        title: "Engineer",
+        company: "Joblit",
+        market: "AU",
+      },
+    });
+
+    expect(dependencies.getResumeProfile).toHaveBeenCalledWith("user-1", {
+      profileId: "profile-linked",
+      locale: "en-AU",
+    });
+  });
+
+  it("uses the same Application-linked profile for cover letters", async () => {
+    await renderCoverLetterPdf({
+      applicationId: "application-1",
+      userId: "user-1",
+      resumeProfileId: "profile-linked",
+      aiContent,
+      job: {
+        id: "job-1",
+        title: "Engineer",
+        company: "Joblit",
+        market: "AU",
+      },
+    });
+
+    expect(dependencies.getResumeProfile).toHaveBeenCalledWith("user-1", {
+      profileId: "profile-linked",
+      locale: "en-AU",
+    });
   });
 });

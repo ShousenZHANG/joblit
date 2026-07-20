@@ -13,6 +13,7 @@ vi.mock("./jobSearchService", () => ({
 }));
 
 import { listJobs } from "./jobListService";
+import { computeSimHash64 } from "./simHash";
 
 const row = {
   id: "11111111-1111-1111-1111-111111111111",
@@ -32,6 +33,10 @@ const row = {
   fitScore: 82,
   fitVerdict: "STRONG",
   fitEligibility: "PASS",
+  companyRoleKey: null,
+  descriptionSimHash: null,
+  livenessStatus: "ACTIVE",
+  livenessReason: null,
   createdAt: new Date("2026-07-19T00:00:00.000Z"),
   updatedAt: new Date("2026-07-20T00:00:00.000Z"),
   market: "GLOBAL",
@@ -103,5 +108,29 @@ describe("listJobs market visibility", () => {
         },
       }),
     );
+  });
+
+  it("uses the persisted description SimHash to expose cross-source duplicates", async () => {
+    const fingerprint = computeSimHash64(
+      "Build reliable TypeScript APIs for distributed systems.",
+    )!;
+    prismaMock.job.findMany
+      .mockResolvedValueOnce([{ ...row, descriptionSimHash: fingerprint }])
+      .mockResolvedValueOnce([
+        {
+          id: "22222222-2222-2222-2222-222222222222",
+          descriptionSimHash: fingerprint,
+          createdAt: row.createdAt,
+        },
+      ]);
+
+    const result = await listJobs("user-1", {
+      limit: 10,
+      sort: "newest",
+      market: "AU",
+    });
+
+    expect(result.items[0]?.possibleDuplicate).toBe(true);
+    expect(result.items[0]).not.toHaveProperty("descriptionSimHash");
   });
 });

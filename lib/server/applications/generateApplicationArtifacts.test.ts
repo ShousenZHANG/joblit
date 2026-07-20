@@ -8,6 +8,12 @@ const stores = vi.hoisted(() => ({
     findUnique: vi.fn(),
     upsert: vi.fn(),
   },
+  evidenceSnapshot: {
+    createMany: vi.fn(),
+  },
+  claimEvidence: {
+    createMany: vi.fn(),
+  },
   executeRaw: vi.fn(),
   transaction: vi.fn(),
   operations: [] as string[],
@@ -18,6 +24,7 @@ const dependencies = vi.hoisted(() => ({
   getResumeProfile: vi.fn(),
   renderCoverLetterTex: vi.fn(),
   tailorApplicationContent: vi.fn(),
+  assertAtsPdf: vi.fn(),
 }));
 const blob = vi.hoisted(() => ({
   del: vi.fn(),
@@ -45,6 +52,9 @@ vi.mock("@/lib/server/latex/renderCoverLetter", () => ({
 }));
 vi.mock("@/lib/server/ai/tailorApplication", () => ({
   tailorApplicationContent: dependencies.tailorApplicationContent,
+}));
+vi.mock("@/lib/server/applications/atsPdfValidator", () => ({
+  assertAtsPdf: dependencies.assertAtsPdf,
 }));
 vi.mock("@vercel/blob", () => blob);
 
@@ -89,6 +99,8 @@ describe("generateApplicationArtifactsForJob", () => {
           }),
         },
         application: stores.application,
+        evidenceSnapshot: stores.evidenceSnapshot,
+        claimEvidence: stores.claimEvidence,
       }),
     );
     dependencies.getResumeProfile.mockResolvedValue({
@@ -105,13 +117,33 @@ describe("generateApplicationArtifactsForJob", () => {
         },
         summary: "Engineer",
       },
-    });
-    dependencies.tailorApplicationContent.mockResolvedValue({
-      cover: {
-        paragraphOne: "One",
-        paragraphTwo: "Two",
-        paragraphThree: "Three",
+      tailored: {
+        cvSummary: "Engineer",
+        cover: {
+          paragraphOne: "One",
+          paragraphTwo: "Two",
+          paragraphThree: "Three",
+        },
+        source: { cv: "ai", cover: "ai" },
+        reason: "ai_ok",
+        reviewer: {
+          ran: true,
+          revised: false,
+          requirementCoverage: [],
+        },
       },
+    });
+    stores.evidenceSnapshot.createMany.mockResolvedValue({ count: 1 });
+    stores.claimEvidence.createMany.mockResolvedValue({ count: 1 });
+    dependencies.assertAtsPdf.mockResolvedValue({
+      passed: true,
+      pageCount: 1,
+      textLength: 400,
+      keywordCoverage: 100,
+      matchedKeywords: [],
+      missingKeywords: [],
+      errors: [],
+      warnings: [],
     });
     dependencies.renderCoverLetterTex.mockReturnValue("cover tex");
     dependencies.compileLatexToPdf.mockResolvedValue(Buffer.from("cover"));
@@ -159,6 +191,8 @@ describe("generateApplicationArtifactsForJob", () => {
           }),
         },
         application: stores.application,
+        evidenceSnapshot: stores.evidenceSnapshot,
+        claimEvidence: stores.claimEvidence,
       }),
     );
 

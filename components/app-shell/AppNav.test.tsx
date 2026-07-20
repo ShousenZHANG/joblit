@@ -24,6 +24,11 @@ vi.mock("next-intl", () => ({
   useLocale: () => "en",
 }));
 
+const marketState = vi.hoisted(() => ({ value: "AU" as "AU" | "CN" }));
+vi.mock("@/hooks/useMarket", () => ({
+  useMarket: () => marketState.value,
+}));
+
 // next-auth
 const signOutMock = vi.fn();
 vi.mock("next-auth/react", () => ({
@@ -88,6 +93,7 @@ describe("AppNav", () => {
     signOutMock.mockResolvedValue(undefined);
     openGuideMock.mockClear();
     mockPathname = "/jobs";
+    marketState.value = "AU";
   });
 
   it("localizes navigation and exposes touch-safe controls", () => {
@@ -208,10 +214,11 @@ describe("AppNav", () => {
     ).toHaveClass("h-11", "w-11");
   });
 
-  it("renders all 5 primary app links in the desktop nav", () => {
+  it("renders all 6 primary AU app links in the desktop nav", () => {
     render(<AppNav />);
     const scope = desktopScope();
     expect(scope.getByRole("link", { name: /jobs/i })).toBeInTheDocument();
+    expect(scope.getByRole("link", { name: /career/i })).toBeInTheDocument();
     expect(scope.getByRole("link", { name: /fetch/i })).toBeInTheDocument();
     expect(scope.getByRole("link", { name: /resume/i })).toBeInTheDocument();
     expect(scope.getByRole("link", { name: /discover/i })).toBeInTheDocument();
@@ -219,6 +226,16 @@ describe("AppNav", () => {
       scope.getByRole("link", { name: /extension/i }),
     ).toBeInTheDocument();
     expect(scope.queryByRole("link", { name: /admin/i })).not.toBeInTheDocument();
+  });
+
+  it("hides AU-only Career navigation in the CN market", () => {
+    marketState.value = "CN";
+    render(<AppNav />);
+
+    const scope = desktopScope();
+    expect(scope.queryByRole("link", { name: /career/i })).not.toBeInTheDocument();
+    expect(scope.getByRole("link", { name: /resume/i })).toBeInTheDocument();
+    expect(scope.getByRole("link", { name: /discover/i })).toBeInTheDocument();
   });
 
   it("marks the link matching the current path as active", () => {

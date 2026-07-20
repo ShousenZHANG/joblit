@@ -58,6 +58,12 @@ jobs:
       - name: Enforce dependency policy
         run: npm run deps:policy
 
+      - name: Enforce manifest and repository security policy
+        run: node tools/ci/check-security-policy.mjs
+
+      - name: Test extension release integrity tooling
+        run: node --test tools/ci/package-extension.test.mjs tools/deploy/vercel-build.test.mjs
+
       - name: Audit production dependencies
         run: npm run deps:audit
 
@@ -84,6 +90,9 @@ jobs:
       - name: Build extension
         run: npm run build
         working-directory: chrome-extension
+
+      - name: Verify extension release file tree
+        run: node tools/ci/package-extension.mjs --root chrome-extension/dist --manifest .tmp/extension-files.json --source-commit "$GITHUB_SHA"
 
       - name: Build
         run: npm run build

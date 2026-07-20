@@ -4,13 +4,14 @@ import { requireSession, UnauthorizedError } from "@/lib/server/auth/requireSess
 import type { SessionContext } from "@/lib/server/auth/requireSession";
 import { unauthorizedError } from "@/lib/server/api/errorResponse";
 import { listJobs } from "@/lib/server/jobs/jobListService";
+import { JOB_STATUS_VALUES } from "@/lib/shared/jobStatus";
 
 export const runtime = "nodejs";
 
 const QuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(10),
   cursor: z.string().uuid().optional(),
-  status: z.enum(["NEW", "APPLIED", "REJECTED"]).optional(),
+  status: z.enum(JOB_STATUS_VALUES).optional(),
   q: z.string().trim().min(1).max(80).optional(),
   location: z.string().trim().min(1).max(80).optional(),
   jobLevel: z.string().trim().min(1).max(80).optional(),

@@ -284,6 +284,7 @@ Load `chrome-extension/dist` as an unpacked extension at `chrome://extensions`.
 |---|---|
 | `npm run dev` | Start Next.js dev server |
 | `npm run build` | Production build |
+| `npm run db:migrate:deploy` | Apply committed migrations in a deployment environment |
 | `npm test` | Run all tests once (Vitest) |
 | `npm run test:watch` | Tests in watch mode |
 | `npm run lint` | ESLint |
@@ -330,7 +331,6 @@ A complete template lives in [`.env.example`](./.env.example).
 | `GITHUB_OWNER` / `GITHUB_REPO` / `GITHUB_TOKEN` / `GITHUB_WORKFLOW_FILE` | Fetch workflow dispatch |
 | `JOBLIT_WEB_URL` | Public URL for the extension callback |
 | `YOUTUBE_API_KEY` | Discover-page video pipeline |
-| `CRON_SECRET` | Cron endpoint auth |
 | `RSSHUB_URL` / `RSSHUB_JOB_ROUTES` / `GITHUB_CN_JOB_REPOS` | China job sources |
 | `SENTRY_DSN` | Error reporting (when SDK is installed) |
 
@@ -359,6 +359,9 @@ CI runs lint, dependency policy, full test suite, and (per-PR) Lighthouse agains
 - **Recommended:** Vercel + Neon (PostgreSQL)
 - Configure all environment variables in the deployment platform
 - Chrome extension is distributed as a `.zip` for sideloading or via the Chrome Web Store
+- Vercel Production builds run `prisma migrate deploy` before `next build` and
+  fail closed if migration fails. Preview, Development, custom-environment, and
+  local builds never run production migrations.
 
 ### Existing-environment cutover
 

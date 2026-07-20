@@ -25,7 +25,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/u
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { FitMatrix } from "@/lib/shared/schemas/fitMatrix";
-import type { JobItem, JobStatus, CvSource, CoverSource } from "../types";
+import {
+  JOB_STATUS_LABEL_KEYS,
+  type JobItem,
+  type JobStatus,
+  type CvSource,
+  type CoverSource,
+} from "../types";
+import { selectableJobStatuses } from "@/lib/shared/jobStatus";
 import { FitAssessmentCard } from "./FitAssessmentCard";
 
 // Markdown body (react-markdown + rehype-highlight + highlight.js CSS) is the
@@ -49,7 +56,15 @@ const statusClass: Record<JobStatus, string> = {
   NEW: "bg-brand-emerald-100 text-brand-emerald-text ring-1 ring-brand-emerald-200",
   APPLIED:
     "bg-[theme(colors.tier-good-bg)] text-[theme(colors.tier-good-fg)] ring-1 ring-[theme(colors.tier-good-ring)]",
+  INTERVIEW:
+    "bg-violet-100 text-violet-800 ring-1 ring-violet-200 dark:bg-violet-500/15 dark:text-violet-300 dark:ring-violet-400/30",
+  OFFER:
+    "bg-amber-100 text-amber-800 ring-1 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-400/30",
   REJECTED: "bg-muted text-muted-foreground ring-1 ring-border",
+  WITHDRAWN:
+    "bg-slate-100 text-slate-700 ring-1 ring-slate-200 dark:bg-slate-500/15 dark:text-slate-300 dark:ring-slate-400/30",
+  ACCEPTED:
+    "bg-teal-100 text-teal-800 ring-1 ring-teal-200 dark:bg-teal-500/15 dark:text-teal-300 dark:ring-teal-400/30",
 };
 
 interface JobDetailPanelProps {
@@ -115,7 +130,11 @@ export function JobDetailPanel({
   const statusLabel: Record<JobStatus, string> = {
     NEW: t("statusNew"),
     APPLIED: t("statusApplied"),
+    INTERVIEW: t("statusInterview"),
+    OFFER: t("statusOffer"),
     REJECTED: t("statusRejected"),
+    WITHDRAWN: t("statusWithdrawn"),
+    ACCEPTED: t("statusAccepted"),
   };
   // Reset the description scroll to the top when the selected job changes —
   // the ScrollArea viewport DOM node is reused across selections, so without
@@ -170,7 +189,7 @@ export function JobDetailPanel({
                   {selectedJob.title}
                 </h2>
                 <Badge className={cn("rounded-full px-2.5 text-[10px] font-bold uppercase tracking-wider", statusClass[selectedJob.status])}>
-                  {selectedJob.status}
+                  {statusLabel[selectedJob.status]}
                 </Badge>
               </div>
               {/* Meta as icon chips — replaces the flat dotted text line for a
@@ -182,6 +201,16 @@ export function JobDetailPanel({
                 <MetaChip icon={BarChart3} value={selectedJob.jobLevel} />
                 <MetaChip icon={DollarSign} value={selectedJob.salary} />
                 <MetaChip icon={Wifi} value={selectedJob.workArrangement} />
+                <MetaChip
+                  icon={ClipboardList}
+                  value={
+                    selectedJob.livenessStatus === "EXPIRED"
+                      ? t("livenessExpired")
+                      : selectedJob.livenessStatus === "UNCERTAIN"
+                        ? t("livenessUncertain")
+                        : null
+                  }
+                />
                 <MetaChip
                   icon={CalendarDays}
                   value={
@@ -213,9 +242,11 @@ export function JobDetailPanel({
                     <span className="truncate">{statusLabel[selectedJob.status]}</span>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="NEW">{t("statusNew")}</SelectItem>
-                    <SelectItem value="APPLIED">{t("statusApplied")}</SelectItem>
-                    <SelectItem value="REJECTED">{t("statusRejected")}</SelectItem>
+                    {selectableJobStatuses(selectedJob.status).map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {t(JOB_STATUS_LABEL_KEYS[status])}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <Button

@@ -21,8 +21,9 @@ Job-search command center: fetch → triage → tailor CV/CL → export PDFs.
 
 - **Intake**
   - AU: FetchRun → GitHub Actions → Python JobSpy → import jobs (dedupe + tombstones)
-  - CN: FetchRun → GitHub Actions → Python CN fetcher → import jobs
-- **Workspace**: Jobs list + detail, search/filter, status `NEW`/`APPLIED`/`REJECTED`
+  - CN: user-triggered FetchRun → in-process public-source adapters → import jobs
+  - GLOBAL: user-triggered FetchRun → public job APIs + configured ATS boards → import jobs
+- **Workspace**: Jobs list + detail, search/filter, status ledger from `NEW` through `ACCEPTED`
 - **Tailoring**: prompt → external model → strict JSON import → LaTeX render → PDF
 
 ## Key Paths (start here)
@@ -31,7 +32,7 @@ Job-search command center: fetch → triage → tailor CV/CL → export PDFs.
 - API routes: `app/api/` (`jobs`, `fetch-runs`, `applications`, `application-batches`, `prompt-rules`, `admin/import`)
 - Server modules: `lib/server/` (AI prompts, LaTeX/PDF, persistence)
 - Fetch workers: AU via `tools/fetcher/run_jobspy.py` (GitHub Actions);
-  CN via `lib/server/cnFetch/` (in-process, Vercel cron)
+  CN and GLOBAL run in-process only after the user explicitly triggers a FetchRun
 - Schema: `prisma/schema.prisma`
 
 More: `references/PATHS.md` and `references/FLOWS.md`.
@@ -47,4 +48,3 @@ More: `references/PATHS.md` and `references/FLOWS.md`.
 - Calling `POST /api/applications/manual-generate` without the matching `promptMeta` from the prompt response → import will reject with 409; always use prompt API first and pass its `promptMeta` into manual-generate.
 - Assuming job URL is already normalized → use `canonicalizeJobUrl()` before dedupe checks or storage.
 - Using batch trigger for Codex/automation → trigger is disabled; follow `AGENTS.md` for batch flows.
-

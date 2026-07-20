@@ -9,6 +9,10 @@ const prismaStore = vi.hoisted(() => ({
   },
   job: {
     createMany: vi.fn(),
+    updateMany: vi.fn(),
+  },
+  applicationEvent: {
+    findMany: vi.fn(),
   },
   executeRaw: vi.fn(),
   $transaction: vi.fn(),
@@ -26,6 +30,8 @@ describe("admin import api", () => {
     prismaStore.user.findUnique.mockReset();
     prismaStore.deletedJobUrl.findMany.mockReset();
     prismaStore.job.createMany.mockReset();
+    prismaStore.job.updateMany.mockReset();
+    prismaStore.applicationEvent.findMany.mockReset();
     prismaStore.executeRaw.mockReset().mockResolvedValue(0);
     prismaStore.$transaction.mockReset().mockImplementation(async (callback) =>
       callback({
@@ -38,6 +44,8 @@ describe("admin import api", () => {
     prismaStore.user.findUnique.mockResolvedValue({ id: "user-1" });
     prismaStore.deletedJobUrl.findMany.mockResolvedValue([]);
     prismaStore.job.createMany.mockResolvedValue({ count: 1 });
+    prismaStore.job.updateMany.mockResolvedValue({ count: 1 });
+    prismaStore.applicationEvent.findMany.mockResolvedValue([]);
   });
 
   it("canonicalizes tracking variants and imports only one record", async () => {

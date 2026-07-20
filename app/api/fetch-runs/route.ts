@@ -9,6 +9,9 @@ import {
   fetchRunQuotaExceededResponse,
 } from "@/lib/server/fetchRuns/fetchRunQuota";
 import { ALL_SOURCE_IDS, isKnownSourceId } from "@/lib/server/sources/registry";
+import { loadEnabledAtsBoardAdapters } from "@/lib/server/sources/atsBoardStore";
+import { MAX_GLOBAL_SOURCES_PER_RUN } from "@/lib/server/sources/limits";
+import { reportError } from "@/lib/server/observability/errorReporter";
 
 export const runtime = "nodejs";
 
@@ -19,6 +22,8 @@ const TitleExcludeSchema = z.string().trim().toLowerCase().min(1).max(40);
 const MAX_AU_QUERIES = 12;
 const MAX_AU_QUERY_LENGTH = 120;
 const MAX_EXPANDED_AU_QUERIES = 24;
+const ATS_SOURCE_ID_RE =
+  /^ats:(?:greenhouse|lever|ashby|workable):[a-z0-9][a-z0-9:_-]*$/;
 
 function uniqueStrings(values: string[]): string[] {
   const seen = new Set<string>();
@@ -140,14 +145,71 @@ const GlobalSchema = z.object({
         .trim()
         .min(1)
         .max(60)
-        .refine(isKnownSourceId, { message: "unknown source id" }),
+        .refine(
+          (value) => isKnownSourceId(value) || ATS_SOURCE_ID_RE.test(value),
+          { message: "unknown source id" },
+        ),
     )
-    .max(12)
+    .min(1)
+    .max(MAX_GLOBAL_SOURCES_PER_RUN)
     .optional()
-    .transform((value) =>
-      value && value.length > 0 ? uniqueStrings(value) : [...ALL_SOURCE_IDS],
-    ),
+    .transform((value) => (value ? uniqueStrings(value) : undefined)),
 });
+
+async function resolveGlobalSources(
+  requested: readonly string[] | undefined,
+  userId: string,
+): Promise<
+  | { ok: true; sources: string[]; selection: "all" | "explicit" }
+  | { ok: false; kind: "unknown"; unknown: string[] }
+  | { ok: false; kind: "too_many"; configured: number; limit: number }
+> {
+  let dynamicIds: string[] = [];
+  try {
+    const loaded = await loadEnabledAtsBoardAdapters();
+    dynamicIds = loaded.adapters.map((adapter) => adapter.id);
+    if (loaded.issues.length) {
+      reportError(new Error("Invalid ATS board database configuration"), {
+        scope: "fetchRuns.sources.database_config",
+        severity: "warning",
+        userId,
+        extra: { issues: loaded.issues },
+      });
+    }
+  } catch (error) {
+    // Registry is additive. Core sources remain available during rollout or
+    // a transient AtsBoardSource read failure.
+    reportError(error, {
+      scope: "fetchRuns.sources.load",
+      severity: "warning",
+      userId,
+    });
+  }
+
+  if (!requested) {
+    const sources = [...new Set([...ALL_SOURCE_IDS, ...dynamicIds])];
+    if (sources.length > MAX_GLOBAL_SOURCES_PER_RUN) {
+      return {
+        ok: false,
+        kind: "too_many",
+        configured: sources.length,
+        limit: MAX_GLOBAL_SOURCES_PER_RUN,
+      };
+    }
+    return {
+      ok: true,
+      sources,
+      selection: "all",
+    };
+  }
+  const dynamic = new Set(dynamicIds);
+  const unknown = requested.filter(
+    (source) => !isKnownSourceId(source) && !dynamic.has(source),
+  );
+  return unknown.length
+    ? { ok: false, kind: "unknown", unknown }
+    : { ok: true, sources: [...requested], selection: "explicit" };
+}
 
 export async function GET() {
   return withEmailSessionRoute(async ({ userId }) => {
@@ -247,6 +309,37 @@ export async function POST(req: Request) {
       const parsed = parseJsonValue(json, GlobalSchema, requestId);
       if (!parsed.ok) return parsed.response;
       const d = parsed.data;
+      const sourceSelection = await resolveGlobalSources(d.sources, userId);
+      if (!sourceSelection.ok) {
+        if (sourceSelection.kind === "too_many") {
+          return NextResponse.json(
+            {
+              error: {
+                code: "SOURCE_LIMIT_EXCEEDED",
+                message:
+                  "Too many sources are enabled for one fetch. Select a smaller source set.",
+                details: {
+                  configured: sourceSelection.configured,
+                  limit: sourceSelection.limit,
+                },
+              },
+              requestId,
+            },
+            { status: 400 },
+          );
+        }
+        return NextResponse.json(
+          {
+            error: {
+              code: "INVALID_SOURCE",
+              message: "One or more sources are unavailable",
+              details: { sources: sourceSelection.unknown },
+            },
+            requestId,
+          },
+          { status: 400 },
+        );
+      }
       const baseQueries = d.baseQueries.length > 0 ? d.baseQueries : d.queries;
       const expandedQueries = d.smartExpand
         ? expandRoleQueries(d.queries)
@@ -277,7 +370,8 @@ export async function POST(req: Request) {
               applyExcludes: d.applyExcludes,
               excludeTitleTerms,
               excludeDescriptionRules,
-              sources: d.sources,
+              sources: sourceSelection.sources,
+              sourceSelection: sourceSelection.selection,
             },
             location: d.location ?? null,
             hoursOld: d.hoursOld ?? null,

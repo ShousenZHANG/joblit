@@ -1,7 +1,11 @@
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import { renderResumeTex } from "@/lib/server/latex/renderResume";
 import { compileLatexToPdf } from "@/lib/server/latex/compilePdf";
-import { tailorApplicationContent } from "@/lib/server/ai/tailorApplication";
+import {
+  tailorApplicationContent,
+  type TailorOptions,
+  type TailorResult,
+} from "@/lib/server/ai/tailorApplication";
 import { escapeLatexWithBold } from "@/lib/server/latex/escapeLatex";
 
 type ResumeJobContext = {
@@ -21,6 +25,7 @@ type ResumePdfResult = {
   coverSource: "ai" | "fallback";
   tailorReason: string;
   renderInput: ReturnType<typeof mapResumeProfile>;
+  tailored: TailorResult;
 };
 
 function normalizeMarkdownBold(value: string) {
@@ -38,6 +43,7 @@ export async function buildResumePdfForJob(input: {
   userId: string;
   profile: ResumeProfileRecord;
   job: ResumeJobContext;
+  tailorOptions?: TailorOptions;
 }): Promise<ResumePdfResult> {
   const renderInput = mapResumeProfile(input.profile);
   const baseSummaryRaw = typeof input.profile.summary === "string" ? input.profile.summary : "";
@@ -46,8 +52,9 @@ export async function buildResumePdfForJob(input: {
     jobTitle: input.job.title,
     company: input.job.company || "the company",
     description: input.job.description || "",
+    resumeSnapshot: input.profile,
     userId: input.userId,
-  });
+  }, input.tailorOptions);
 
   const tailoredSummary = tailored.cvSummary?.trim()
     ? escapeLatexWithBold(normalizeMarkdownBold(tailored.cvSummary))
@@ -68,5 +75,6 @@ export async function buildResumePdfForJob(input: {
     coverSource: tailored.source.cover,
     tailorReason: tailored.reason,
     renderInput,
+    tailored,
   };
 }

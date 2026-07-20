@@ -183,6 +183,7 @@ describe("manual import artifact builder", () => {
         label: "Backend",
         items: ["Spring Boot"],
         accepted: true,
+        evidenceIds: [],
       },
     ]);
   });
@@ -230,6 +231,7 @@ describe("manual import artifact builder", () => {
         label: String.raw`Cloud & \input{secret}`,
         items: [String.raw`AWS 100% \write18{calc}`],
         accepted: true,
+        evidenceIds: [],
       },
     ]);
   });

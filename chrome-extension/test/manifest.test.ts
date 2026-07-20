@@ -13,6 +13,18 @@ describe("extension manifest least privilege", () => {
     expect(manifest.host_permissions).not.toContain("https://*/*");
   });
 
+  it("locks the complete required permission set", () => {
+    expect(manifest.permissions).toEqual([
+      "storage",
+      "activeTab",
+      "scripting",
+    ]);
+    expect(manifest.content_security_policy).toEqual({
+      extension_pages: "script-src 'self'; object-src 'self'",
+    });
+    expect("externally_connectable" in manifest).toBe(false);
+  });
+
   it("requests generic and loopback hosts only as optional access", () => {
     expect(manifest.optional_host_permissions).toEqual(
       expect.arrayContaining([

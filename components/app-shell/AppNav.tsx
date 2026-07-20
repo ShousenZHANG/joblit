@@ -63,6 +63,7 @@ export function AppNav() {
       ]
     : [
         { href: "/jobs", label: t("jobs") },
+        { href: "/career", label: t("career") },
         { href: "/fetch", label: t("fetch") },
         { href: "/resume", label: t("resume") },
         { href: "/discover", label: t("discover") },

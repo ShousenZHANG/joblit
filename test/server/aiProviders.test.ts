@@ -1,4 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/server/net/safeFetch", () => ({
+  safeOutboundFetch: (
+    url: string | URL,
+    init?: RequestInit,
+  ) => fetch(url, { ...init, redirect: "manual" }),
+}));
+
 import { callClaude, callGemini, callOpenAI } from "@/lib/server/ai/providers";
 
 describe("ai providers", () => {

@@ -5,6 +5,7 @@ const fetchRunStore = vi.hoisted(() => ({
   count: vi.fn(),
   updateMany: vi.fn(),
   executeRawLock: vi.fn(),
+  loadAtsAdapters: vi.fn(),
 }));
 
 vi.mock("@/lib/server/prisma", () => ({
@@ -25,6 +26,9 @@ vi.mock("@/auth", () => ({
 vi.mock("next-auth/next", () => ({
   getServerSession: vi.fn(),
 }));
+vi.mock("@/lib/server/sources/atsBoardStore", () => ({
+  loadEnabledAtsBoardAdapters: fetchRunStore.loadAtsAdapters,
+}));
 
 import { getServerSession } from "next-auth/next";
 import { POST } from "@/app/api/fetch-runs/route";
@@ -39,6 +43,11 @@ describe("fetch runs create api", () => {
     fetchRunStore.create.mockResolvedValue({ id: "run-1" });
     fetchRunStore.count.mockResolvedValue(0);
     fetchRunStore.executeRawLock.mockResolvedValue(1);
+    fetchRunStore.loadAtsAdapters.mockReset().mockResolvedValue({
+      boards: [],
+      adapters: [],
+      issues: [],
+    });
   });
 
   function signIn() {
@@ -70,6 +79,7 @@ describe("fetch runs create api", () => {
         "experience_requirement_4_plus",
       ],
       sources: ["remoteok", "jobicy"],
+      sourceSelection: "explicit",
     });
 
     expect(res.status).toBe(201);
@@ -145,6 +155,43 @@ describe("fetch runs create api", () => {
     expect(fetchRunStore.create).not.toHaveBeenCalled();
   });
 
+  it("accepts an enabled DB-backed ATS source id", async () => {
+    signIn();
+    fetchRunStore.loadAtsAdapters.mockResolvedValueOnce({
+      boards: [],
+      adapters: [{ id: "ats:greenhouse:acme" }],
+      issues: [],
+    });
+
+    const res = await postRun({
+      market: "GLOBAL",
+      queries: ["AI Engineer"],
+      sources: ["ats:greenhouse:acme"],
+    });
+
+    expect(res.status).toBe(201);
+    expect(fetchRunStore.create.mock.calls[0]?.[0]?.data.queries).toMatchObject({
+      sources: ["ats:greenhouse:acme"],
+      sourceSelection: "explicit",
+    });
+  });
+
+  it("rejects a well-formed ATS source id that is not enabled", async () => {
+    signIn();
+
+    const res = await postRun({
+      market: "GLOBAL",
+      queries: ["AI Engineer"],
+      sources: ["ats:greenhouse:not-enabled"],
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      error: { code: "INVALID_SOURCE" },
+    });
+    expect(fetchRunStore.create).not.toHaveBeenCalled();
+  });
+
   it("defaults a GLOBAL run to every registered source", async () => {
     signIn();
 
@@ -153,7 +200,30 @@ describe("fetch runs create api", () => {
     expect(res.status).toBe(201);
     expect(fetchRunStore.create.mock.calls[0]?.[0]?.data.queries).toMatchObject({
       sources: ["remoteok", "remotive", "jobicy"],
+      sourceSelection: "all",
     });
+  });
+
+  it("rejects an implicit all-source run that cannot fit the serverless budget", async () => {
+    signIn();
+    fetchRunStore.loadAtsAdapters.mockResolvedValueOnce({
+      boards: [],
+      adapters: Array.from({ length: 22 }, (_, index) => ({
+        id: `ats:greenhouse:company-${index}`,
+      })),
+      issues: [],
+    });
+
+    const res = await postRun({ market: "GLOBAL", queries: ["AI Engineer"] });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      error: {
+        code: "SOURCE_LIMIT_EXCEEDED",
+        details: { configured: 25, limit: 24 },
+      },
+    });
+    expect(fetchRunStore.create).not.toHaveBeenCalled();
   });
 
   it("rejects an unfiltered GLOBAL feed import", async () => {

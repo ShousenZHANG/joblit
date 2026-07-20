@@ -7,10 +7,12 @@ import { makeSourceContext } from "./http";
 // recorded as a diagnostic instead of aborting — the user still gets whatever
 // the healthy sources returned.
 
-interface RunSourceFetchOptions {
+export interface RunSourceFetchOptions {
   sources: string[];
   /** Test seam: adapters to use instead of the production registry. */
   adapters?: SourceAdapter[];
+  /** Bound fan-out when a deployment configures many company ATS boards. */
+  maxConcurrency?: number;
 }
 
 export interface SourceDiagnostic {
@@ -34,22 +36,41 @@ export async function runSourceFetch(
 
   const ctx = makeSourceContext();
 
-  const results = await Promise.all(
-    options.sources.map(async (source): Promise<SourceAdapterResult> => {
-      const adapter = lookup.get(source);
-      if (!adapter) {
-        return { source, ok: false, jobs: [], error: "unknown_source" };
-      }
-      try {
-        const jobs = await adapter.fetch(ctx);
-        return { source, ok: true, jobs };
-      } catch (err) {
-        return {
-          source,
-          ok: false,
-          jobs: [],
-          error: err instanceof Error ? err.message : "adapter_throw",
-        };
+  const runOne = async (source: string): Promise<SourceAdapterResult> => {
+    const adapter = lookup.get(source);
+    if (!adapter) {
+      return { source, ok: false, jobs: [], error: "unknown_source" };
+    }
+    try {
+      const jobs = await adapter.fetch(ctx);
+      return { source, ok: true, jobs };
+    } catch (err) {
+      return {
+        source,
+        ok: false,
+        jobs: [],
+        error: err instanceof Error ? err.message : "adapter_throw",
+      };
+    }
+  };
+
+  const results = Array<SourceAdapterResult>(options.sources.length);
+  const requestedConcurrency =
+    typeof options.maxConcurrency === "number" &&
+    Number.isFinite(options.maxConcurrency)
+      ? Math.trunc(options.maxConcurrency)
+      : 8;
+  const concurrency = Math.min(
+    options.sources.length,
+    Math.max(1, Math.min(requestedConcurrency, 16)),
+  );
+  let cursor = 0;
+  await Promise.all(
+    Array.from({ length: concurrency }, async () => {
+      while (cursor < options.sources.length) {
+        const index = cursor;
+        cursor += 1;
+        results[index] = await runOne(options.sources[index]);
       }
     }),
   );

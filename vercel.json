@@ -1,9 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "crons": [
-    {
-      "path": "/api/discover/refresh-videos",
-      "schedule": "0 6 * * *"
-    }
-  ]
+  "buildCommand": "node tools/deploy/vercel-build.mjs"
 }

@@ -14,9 +14,8 @@ import type { Prisma } from "@/lib/generated/prisma";
 // The fetch must run in-process where the invocation happens — fire-and-
 // forget to an internal HTTP endpoint is fragile (depends on
 // JOBLIT_WEB_URL, serverless cold starts, secret handoff), so we keep
-// the work close to the click. A queue-sweeping cron variant existed for
-// this reason and was removed once nothing scheduled it: fetches are
-// user-triggered, so a sweep only ever duplicated the trigger path.
+// the work close to the click. Background queue sweeping was removed because
+// fetches are user-triggered and a sweep only duplicated the trigger path.
 
 interface CnRunConfig {
   queries: string[];

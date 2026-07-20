@@ -1,7 +1,6 @@
 // YouTube fetch pipeline: search → videos.list → channels.list → enrich.
-// Extracted from the API route so both the request handler and the cron
-// pre-warmer can call the same code path with identical ranking/relevance
-// semantics. All quota-sensitive constants live here.
+// Extracted from the API route so ranking and quota-sensitive behavior remain
+// testable without coupling them to the request handler.
 
 import type {
   VideoItem,
@@ -9,6 +8,7 @@ import type {
   VideoSort,
   VideoTimeWindow,
 } from "@/app/(app)/discover/types";
+import { safeOutboundFetch } from "@/lib/server/net/safeFetch";
 import trustedChannelsConfig from "@/lib/shared/trustedChannels.config.json";
 
 // ── Quota accounting ──────────────────────────────────────
@@ -29,6 +29,12 @@ import trustedChannelsConfig from "@/lib/shared/trustedChannels.config.json";
 const QUERIES_PER_CATEGORY = 4; // reduced from 6 to stay under quota
 const VIDEO_ID_LIMIT = 50; // videos.list caps at 50 IDs per call
 const MIN_VIDEO_SECONDS = 90; // avoid Shorts dominating "most viewed"
+const YOUTUBE_OUTBOUND_POLICY = {
+  allowedHosts: ["www.googleapis.com"],
+  timeoutMs: 8_000,
+  maxResponseBytes: 1024 * 1024,
+  maxRedirects: 0,
+} as const;
 
 // ── Category query banks ──────────────────────────────────
 
@@ -284,9 +290,7 @@ async function searchYouTube(
   // keeps practical-length videos competitive without amputating long-form.
   url.searchParams.set("key", apiKey);
 
-  const res = await fetch(url.toString(), {
-    signal: AbortSignal.timeout(8000),
-  });
+  const res = await safeOutboundFetch(url, {}, YOUTUBE_OUTBOUND_POLICY);
   if (res.status === 403) {
     const err = new Error("YouTube search 403") as Error & { status: number };
     err.status = 403;
@@ -331,9 +335,7 @@ async function fetchVideoStats(
   url.searchParams.set("part", "statistics,snippet,contentDetails");
   url.searchParams.set("id", videoIds.join(","));
   url.searchParams.set("key", apiKey);
-  const res = await fetch(url.toString(), {
-    signal: AbortSignal.timeout(8000),
-  });
+  const res = await safeOutboundFetch(url, {}, YOUTUBE_OUTBOUND_POLICY);
   if (res.status === 403) {
     const err = new Error("YouTube videos 403") as Error & { status: number };
     err.status = 403;
@@ -387,9 +389,7 @@ async function fetchChannelSubscribers(
     url.searchParams.set("part", "statistics");
     url.searchParams.set("id", batch.join(","));
     url.searchParams.set("key", apiKey);
-    const res = await fetch(url.toString(), {
-      signal: AbortSignal.timeout(8000),
-    });
+    const res = await safeOutboundFetch(url, {}, YOUTUBE_OUTBOUND_POLICY);
     if (res.status === 403) {
       const err = new Error("YouTube channels 403") as Error & {
         status: number;
@@ -516,27 +516,3 @@ export async function fetchVideosFromYouTube(
   );
   return scored.map((s) => s.v);
 }
-
-/** Every combination the cron pre-warmer needs to cover. */
-export const ALL_VIDEO_CACHE_COMBOS: Array<{
-  category: VideoCategory;
-  timeWindow: VideoTimeWindow;
-}> = (() => {
-  const categories: VideoCategory[] = [
-    "all",
-    "codex",
-    "claude",
-    "anthropic",
-    "rag",
-    "agents",
-    "agent-skills",
-    "harness-engineering",
-  ];
-  const windows: VideoTimeWindow[] = ["week", "month"];
-  const combos: Array<{ category: VideoCategory; timeWindow: VideoTimeWindow }> =
-    [];
-  for (const c of categories) for (const w of windows) {
-    combos.push({ category: c, timeWindow: w });
-  }
-  return combos;
-})();

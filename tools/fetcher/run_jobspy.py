@@ -7,9 +7,11 @@ import math
 import random
 import logging
 import unicodedata
+import ipaddress
+import socket
 from html import unescape
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit, parse_qs, urlencode, quote
+from urllib.parse import urljoin, urlsplit, urlunsplit, parse_qs, urlencode, quote
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
@@ -35,6 +37,8 @@ MAX_DETAIL_URL_WORKERS = 8
 DEFAULT_DETAIL_URL_TIMEOUT_SEC = 12.0
 DEFAULT_DETAIL_URL_RETRIES = 2
 DEFAULT_DETAIL_URL_BACKOFF_BASE_SEC = 1.5
+MAX_DETAIL_URL_REDIRECTS = 3
+MAX_DETAIL_RESPONSE_BYTES = 2 * 1024 * 1024
 
 LINKEDIN_JOB_ID_RE = re.compile(r"linkedin\.com/jobs/view/(\d+)", re.IGNORECASE)
 IDENTITY_QUERY_GROUPS = (
@@ -1237,6 +1241,117 @@ def _extract_description_from_html(html_text: str) -> str:
     return _clean_description_text(text) if text else ""
 
 
+def _assert_safe_detail_url(
+    raw_url: str,
+    allowed_hosts: Optional[List[str]] = None,
+    resolver=None,
+) -> str:
+    """Validate one detail-fetch hop before network I/O.
+
+    HTTPS is mandatory. Every DNS answer must be globally routable; one
+    loopback/private/link-local/metadata/CGNAT/reserved answer rejects the
+    hostname. The check is repeated for every redirect by
+    `_request_safe_detail_text`.
+    """
+    try:
+        parts = urlsplit(str(raw_url or "").strip())
+        port = parts.port or 443
+    except Exception as err:
+        raise ValueError("invalid_detail_url") from err
+
+    if parts.scheme.lower() != "https":
+        raise ValueError("detail_url_https_required")
+    if parts.username or parts.password:
+        raise ValueError("detail_url_credentials_forbidden")
+    hostname = (parts.hostname or "").rstrip(".").lower()
+    if not hostname:
+        raise ValueError("detail_url_host_missing")
+
+    if allowed_hosts:
+        normalized_hosts = [str(host).rstrip(".").lower() for host in allowed_hosts]
+        if not any(
+            hostname == host or hostname.endswith(f".{host}")
+            for host in normalized_hosts
+        ):
+            raise ValueError("detail_url_host_not_allowed")
+
+    try:
+        literal = ipaddress.ip_address(hostname)
+        addresses = [literal]
+    except ValueError:
+        resolve = resolver or socket.getaddrinfo
+        try:
+            answers = resolve(hostname, port, type=socket.SOCK_STREAM)
+        except Exception as err:
+            raise ValueError("detail_url_dns_failed") from err
+        addresses = []
+        for answer in answers:
+            try:
+                addresses.append(ipaddress.ip_address(answer[4][0].split("%", 1)[0]))
+            except (IndexError, ValueError, TypeError):
+                raise ValueError("detail_url_dns_invalid") from None
+
+    if not addresses:
+        raise ValueError("detail_url_dns_empty")
+    if any(not address.is_global for address in addresses):
+        raise ValueError("detail_url_non_public_address")
+    return parts.geturl()
+
+
+def _read_bounded_detail_response(response) -> str:
+    declared_raw = str(response.headers.get("content-length", "") or "").strip()
+    if declared_raw.isdigit() and int(declared_raw) > MAX_DETAIL_RESPONSE_BYTES:
+        raise ValueError("detail_response_too_large")
+
+    chunks = []
+    size = 0
+    for chunk in response.iter_content(chunk_size=64 * 1024):
+        if not chunk:
+            continue
+        size += len(chunk)
+        if size > MAX_DETAIL_RESPONSE_BYTES:
+            raise ValueError("detail_response_too_large")
+        chunks.append(chunk)
+    encoding = response.encoding or "utf-8"
+    return b"".join(chunks).decode(encoding, errors="replace")
+
+
+def _request_safe_detail_text(
+    url: str,
+    *,
+    timeout_sec: float,
+    headers: Dict[str, str],
+    proxies: Optional[Dict[str, str]],
+    allowed_hosts: Optional[List[str]] = None,
+) -> str:
+    current = url
+    for redirects in range(MAX_DETAIL_URL_REDIRECTS + 1):
+        current = _assert_safe_detail_url(current, allowed_hosts=allowed_hosts)
+        response = requests.get(
+            current,
+            timeout=timeout_sec,
+            headers=headers,
+            proxies=proxies,
+            allow_redirects=False,
+            stream=True,
+        )
+        try:
+            if response.status_code in (301, 302, 303, 307, 308):
+                location = str(response.headers.get("location", "") or "").strip()
+                if not location:
+                    raise ValueError("detail_redirect_location_missing")
+                if redirects >= MAX_DETAIL_URL_REDIRECTS:
+                    raise ValueError("detail_redirect_limit")
+                current = urljoin(current, location)
+                continue
+            if response.status_code >= 400:
+                raise RuntimeError(f"http_{response.status_code}")
+            return _read_bounded_detail_response(response)
+        finally:
+            response.close()
+    raise ValueError("detail_redirect_limit")
+
+
 def _fetch_description_for_url(
     job_url: str,
     proxy_pool: Optional[List[str]] = None,
@@ -1261,12 +1376,18 @@ def _fetch_description_for_url(
             linkedin_id = _extract_linkedin_job_id(canonical)
             if linkedin_id:
                 detail_url = f"https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{linkedin_id}"
+                allowed_hosts = ["linkedin.com"]
             else:
                 detail_url = canonical
-            res = requests.get(detail_url, timeout=timeout_sec, headers=headers, proxies=proxies)
-            if res.status_code >= 400:
-                raise RuntimeError(f"http_{res.status_code}")
-            description = _extract_description_from_html(res.text or "")
+                allowed_hosts = None
+            response_text = _request_safe_detail_text(
+                detail_url,
+                timeout_sec=timeout_sec,
+                headers=headers,
+                proxies=proxies,
+                allowed_hosts=allowed_hosts,
+            )
+            description = _extract_description_from_html(response_text)
             if description:
                 return description
             return ""

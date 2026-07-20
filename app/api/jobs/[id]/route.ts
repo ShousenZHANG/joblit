@@ -7,6 +7,8 @@ import { unauthorizedError } from "@/lib/server/api/errorResponse";
 import { deleteJob } from "@/lib/server/jobs/jobDeleteService";
 import { updateJobStatus } from "@/lib/server/jobs/jobStatusService";
 import { FitMatrixSchema } from "@/lib/shared/schemas/fitMatrix";
+import { JOB_STATUS_VALUES } from "@/lib/shared/jobStatus";
+import { careerErrorResponse } from "@/lib/server/career/errors";
 
 export const runtime = "nodejs";
 
@@ -15,7 +17,7 @@ const ParamsSchema = z.object({
 });
 
 const PatchSchema = z.object({
-  status: z.enum(["NEW", "APPLIED", "REJECTED"]).optional(),
+  status: z.enum(JOB_STATUS_VALUES).optional(),
 });
 
 export async function PATCH(
@@ -46,7 +48,18 @@ export async function PATCH(
     );
   }
 
-  const result = await updateJobStatus(userId, parsedParams.data.id, parsedBody.data.status);
+  let result;
+  try {
+    result = await updateJobStatus(
+      userId,
+      parsedParams.data.id,
+      parsedBody.data.status,
+    );
+  } catch (error) {
+    const response = careerErrorResponse(error);
+    if (response) return response;
+    throw error;
+  }
   if (!result) {
     return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   }

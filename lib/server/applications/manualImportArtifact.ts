@@ -1,5 +1,6 @@
 import { buildCoverEvidenceContext } from "@/lib/server/ai/coverContext";
 import { evaluateCoverQuality } from "@/lib/server/ai/coverQuality";
+import { attachEvidenceAndReview } from "@/lib/server/ai/evidenceLedger";
 import { buildPdfFilename } from "@/lib/server/files/pdfFilename";
 import { escapeLatexWithBold } from "@/lib/server/latex/escapeLatex";
 import type { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
@@ -87,6 +88,7 @@ function parseFilename(candidate: string, role: string, target: ManualImportTarg
 }
 
 export function buildManualImportArtifact(input: {
+  evidenceScopeKey?: string;
   target: ManualImportTarget;
   modelOutput: string;
   mode: ManualImportMode;
@@ -102,6 +104,7 @@ export function buildManualImportArtifact(input: {
 }
 
 function buildManualResumeArtifact(input: {
+  evidenceScopeKey?: string;
   modelOutput: string;
   mode: ManualImportMode;
   source: ManualImportSource;
@@ -229,7 +232,14 @@ function buildManualResumeArtifact(input: {
       ? sanitizedSkillsFinal
       : mergeSkillAdditions(input.renderInput.skills, sanitizedSkillAdditions);
 
-  const aiContent: AiContent = {
+  const aiContent = attachEvidenceAndReview({
+    scopeKey: input.evidenceScopeKey,
+    resumeSnapshot: {
+      profile: input.profile,
+      renderInput: input.renderInput,
+    },
+    jobDescription: input.job.description,
+    aiContent: {
     schemaVersion: AI_CONTENT_SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
     promptMetaHash: input.promptMetaHash,
@@ -247,7 +257,8 @@ function buildManualResumeArtifact(input: {
       skillsAdditions: reviewableSkillAdditions,
     },
     cover: emptyCover(),
-  };
+    },
+  });
 
   return {
     ok: true,
@@ -265,6 +276,7 @@ function buildManualResumeArtifact(input: {
 }
 
 function buildManualCoverArtifact(input: {
+  evidenceScopeKey?: string;
   modelOutput: string;
   mode: ManualImportMode;
   source: ManualImportSource;
@@ -348,21 +360,29 @@ function buildManualCoverArtifact(input: {
     filename: parseFilename(input.renderInput.candidate.name, input.job.title, "cover"),
     coverQualityGate: qualityReport.passed ? "pass" : "soft-fail",
     coverQualityIssueCount: qualityReport.issues.length,
-    aiContent: {
-      schemaVersion: AI_CONTENT_SCHEMA_VERSION,
-      generatedAt: new Date().toISOString(),
-      promptMetaHash: input.promptMetaHash,
-      source: input.source,
-      cv: {
-        summary: { aiText: "", originalText: input.renderInput.summary ?? "", accepted: false },
-        latestExperience: { experienceIndex: 0, addedBullets: [] },
-        skillsAdditions: EMPTY_AI_CONTENT_DEFAULTS.skillsAdditions,
+    aiContent: attachEvidenceAndReview({
+      scopeKey: input.evidenceScopeKey,
+      resumeSnapshot: {
+        profile: input.profile,
+        renderInput: input.renderInput,
       },
-      cover: {
-        paragraphOne: { aiText: p1, accepted: true },
-        paragraphTwo: { aiText: p2, accepted: true },
-        paragraphThree: { aiText: p3, accepted: true },
+      jobDescription: input.job.description,
+      aiContent: {
+        schemaVersion: AI_CONTENT_SCHEMA_VERSION,
+        generatedAt: new Date().toISOString(),
+        promptMetaHash: input.promptMetaHash,
+        source: input.source,
+        cv: {
+          summary: { aiText: "", originalText: input.renderInput.summary ?? "", accepted: false },
+          latestExperience: { experienceIndex: 0, addedBullets: [] },
+          skillsAdditions: EMPTY_AI_CONTENT_DEFAULTS.skillsAdditions,
+        },
+        cover: {
+          paragraphOne: { aiText: p1, accepted: true },
+          paragraphTwo: { aiText: p2, accepted: true },
+          paragraphThree: { aiText: p3, accepted: true },
+        },
       },
-    },
+    }),
   };
 }

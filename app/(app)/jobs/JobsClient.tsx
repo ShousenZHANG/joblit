@@ -16,7 +16,13 @@ import { useToast } from "@/hooks/use-toast";
 import { useGuide } from "@/app/GuideContext";
 import { useFetchStatus, type FetchRunStatus } from "@/app/FetchStatusContext";
 
-import type { JobDetailResponse, JobItem, JobStatus } from "./types";
+import {
+  JOB_STATUS_LABEL_KEYS,
+  type JobDetailResponse,
+  type JobItem,
+  type JobStatus,
+} from "./types";
+import { JOB_STATUS_VALUES } from "@/lib/shared/jobStatus";
 import { getErrorMessage } from "./types";
 import { useJobFilters } from "./hooks/useJobFilters";
 import { useJobPagination } from "./hooks/useJobPagination";
@@ -831,9 +837,11 @@ export function JobsClient({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="NEW">{t("statusNew")}</SelectItem>
-                  <SelectItem value="APPLIED">{t("statusApplied")}</SelectItem>
-                  <SelectItem value="REJECTED">{t("statusRejected")}</SelectItem>
+                  {JOB_STATUS_VALUES.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {t(JOB_STATUS_LABEL_KEYS[status])}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -1081,30 +1089,17 @@ export function JobsClient({
                   Results header so status filtering is one click away
                   instead of buried in a select dropdown. */}
               <div className="no-scrollbar -mt-1 flex items-center gap-1.5 overflow-x-auto px-4 pb-3">
-                <FilterPill
-                  active={statusFilter === "NEW"}
-                  onClick={() =>
-                    startTransition(() => setStatusFilter("NEW"))
-                  }
-                >
-                  {t("statusNew")}
-                </FilterPill>
-                <FilterPill
-                  active={statusFilter === "APPLIED"}
-                  onClick={() =>
-                    startTransition(() => setStatusFilter("APPLIED"))
-                  }
-                >
-                  {t("statusApplied")}
-                </FilterPill>
-                <FilterPill
-                  active={statusFilter === "REJECTED"}
-                  onClick={() =>
-                    startTransition(() => setStatusFilter("REJECTED"))
-                  }
-                >
-                  {t("statusRejected")}
-                </FilterPill>
+                {JOB_STATUS_VALUES.map((status) => (
+                  <FilterPill
+                    key={status}
+                    active={statusFilter === status}
+                    onClick={() =>
+                      startTransition(() => setStatusFilter(status))
+                    }
+                  >
+                    {t(JOB_STATUS_LABEL_KEYS[status])}
+                  </FilterPill>
+                ))}
                 <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-border" />
                 {fitScan.state.status !== "scanning" ? (
                   <FilterPill active={false} onClick={() => void fitScan.start()}>

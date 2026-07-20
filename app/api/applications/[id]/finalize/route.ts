@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
+import type { Prisma } from "@/lib/generated/prisma";
 import { withSessionRoute, parseJsonBody } from "@/lib/server/api/routeHandler";
 import { enforceApplicationRenderRateLimit } from "@/lib/server/api/applicationRenderRateLimit";
 import {
@@ -9,8 +10,18 @@ import {
   renderFinalApplication,
   renderFinalCoverLetter,
 } from "@/lib/server/applications/finalizeApplication";
-import { aiContentSchema } from "@/lib/shared/schemas/aiContent";
+import {
+  aiContentSchema,
+  hashAiContent,
+} from "@/lib/shared/schemas/aiContent";
 import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
+import { persistReviewLedger } from "@/lib/server/applications/persistReviewLedger";
+import { rebuildCanonicalAiContent } from "@/lib/server/applications/canonicalAiContent";
+import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
+import {
+  AtsPdfValidationError,
+  type AtsPdfValidation,
+} from "@/lib/server/applications/atsPdfValidator";
 
 export const runtime = "nodejs";
 
@@ -96,11 +107,34 @@ export async function POST(
         resumePdfUrl: true,
         resumePdfName: true,
         coverPdfUrl: true,
+        atsValidation: true,
         jobId: true,
+        resumeProfileId: true,
         company: true,
         role: true,
         job: {
-          select: { id: true, title: true, company: true, market: true },
+          select: {
+            id: true,
+            userId: true,
+            title: true,
+            company: true,
+            market: true,
+            description: true,
+          },
+        },
+        resumeProfile: {
+          select: {
+            userId: true,
+            name: true,
+            locale: true,
+            summary: true,
+            basics: true,
+            links: true,
+            skills: true,
+            experiences: true,
+            projects: true,
+            education: true,
+          },
         },
       },
     });
@@ -152,6 +186,70 @@ export async function POST(
         { status: 500 },
       );
     }
+    const hasEvidenceContract =
+      aiContentParsed.data.evidence !== undefined ||
+      aiContentParsed.data.review !== undefined;
+    const hasAcceptedSkillAdditions =
+      aiContentParsed.data.cv.skillsAdditions.some((group) => group.accepted);
+    const requiresCanonicalEvidence =
+      hasEvidenceContract || hasAcceptedSkillAdditions;
+    const requiresJobEvidence =
+      aiContentParsed.data.evidence?.some((item) => item.kind === "job") ===
+        true ||
+      (aiContentParsed.data.review?.requirements.length ?? 0) > 0;
+    const profile =
+      existing.resumeProfile?.userId === userId
+        ? existing.resumeProfile
+        : null;
+    if (
+      requiresCanonicalEvidence &&
+      (!profile ||
+        (requiresJobEvidence && !existing.job) ||
+        (existing.job && existing.job.userId !== userId))
+    ) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "CANONICAL_EVIDENCE_UNAVAILABLE",
+            message:
+              "The server source snapshot is unavailable. Re-generate this draft.",
+          },
+          requestId,
+        },
+        { status: 409 },
+      );
+    }
+    const canonicalContent =
+      requiresCanonicalEvidence && profile
+        ? rebuildCanonicalAiContent({
+            canonical: aiContentParsed.data,
+            resumeSnapshot: aiContentParsed.data.source
+              ? {
+                  profile,
+                  renderInput: mapResumeProfile(profile),
+                }
+              : profile,
+            jobDescription: existing.job?.description,
+            scopeKey: userId,
+            preserveReviewedAt: true,
+          })
+        : aiContentParsed.data;
+    const canonicalHash = hashAiContent(canonicalContent);
+
+    if (canonicalContent.review?.verdict === "blocked") {
+      return NextResponse.json(
+        {
+          error: {
+            code: "APPLICATION_REVIEW_BLOCKED",
+            message:
+              "Resolve unsupported claims before finalizing this application.",
+            details: canonicalContent.review,
+          },
+          requestId,
+        },
+        { status: 422 },
+      );
+    }
 
     const job = existing.job ?? {
       id: null,
@@ -171,12 +269,12 @@ export async function POST(
         ? isCurrentVersionedArtifact(
             existing.resumePdfUrl,
             "resume",
-            expectedHash,
+            canonicalHash,
           )
         : isCurrentVersionedArtifact(
             existing.coverPdfUrl,
             "cover",
-            expectedHash,
+            canonicalHash,
           ))
     ) {
       return NextResponse.json({
@@ -196,7 +294,7 @@ export async function POST(
 
     // A unique path makes an uncommitted render safe to delete if the CAS
     // below loses to an autosave or another finalizer.
-    const artifactVersion = `${existing.aiContentHash ?? "legacy"}-${randomUUID()}`;
+    const artifactVersion = `${canonicalHash}-${randomUUID()}`;
     const renderJob = {
       id: job.id ?? null,
       title: job.title ?? "Untitled",
@@ -205,13 +303,22 @@ export async function POST(
     };
 
     if (target === "cover") {
-      const { coverPdfUrl, coverPdfName } = await renderFinalCoverLetter({
-        applicationId: existing.id,
-        userId,
-        aiContent: aiContentParsed.data,
-        artifactVersion,
-        job: renderJob,
-      });
+      let renderedCover: Awaited<ReturnType<typeof renderFinalCoverLetter>>;
+      try {
+        renderedCover = await renderFinalCoverLetter({
+          applicationId: existing.id,
+          userId,
+          resumeProfileId: existing.resumeProfileId ?? null,
+          aiContent: canonicalContent,
+          artifactVersion,
+          job: renderJob,
+        });
+      } catch (error) {
+        const response = atsValidationErrorResponse(error, requestId);
+        if (response) return response;
+        throw error;
+      }
+      const { coverPdfUrl, coverPdfName, atsValidation } = renderedCover;
       let committed: { count: number };
       try {
         committed = await prisma.$transaction(
@@ -221,15 +328,35 @@ export async function POST(
               userId,
               existing.jobId ?? existing.id,
             );
-            return tx.application.updateMany({
+            const result = await tx.application.updateMany({
               where: {
                 id: existing.id,
                 userId,
                 aiContentHash: expectedHash,
                 coverPdfUrl: existing.coverPdfUrl,
               },
-              data: { status: "FINAL", coverPdfUrl },
+              data: {
+                status: "FINAL",
+                aiContent: canonicalContent,
+                aiContentHash: canonicalHash,
+                coverPdfUrl,
+                atsValidation: mergeAtsValidation(
+                  existing.atsValidation,
+                  "cover",
+                  atsValidation,
+                ),
+                reviewReport: canonicalContent.review ?? undefined,
+              },
             });
+            if (result.count === 1) {
+              await persistReviewLedger(tx, {
+                userId,
+                applicationId: existing.id,
+                jobId: existing.jobId,
+                aiContent: canonicalContent,
+              });
+            }
+            return result;
           },
           { timeout: 30_000 },
         );
@@ -252,17 +379,28 @@ export async function POST(
         status: "FINAL",
         coverPdfUrl,
         coverPdfName,
+        atsValidation,
+        aiContentHash: canonicalHash,
         requestId,
       });
     }
 
-    const { resumePdfUrl, resumePdfName } = await renderFinalApplication({
-      applicationId: existing.id,
-      userId,
-      aiContent: aiContentParsed.data,
-      artifactVersion,
-      job: renderJob,
-    });
+    let renderedResume: Awaited<ReturnType<typeof renderFinalApplication>>;
+    try {
+      renderedResume = await renderFinalApplication({
+        applicationId: existing.id,
+        userId,
+        resumeProfileId: existing.resumeProfileId ?? null,
+        aiContent: canonicalContent,
+        artifactVersion,
+        job: renderJob,
+      });
+    } catch (error) {
+      const response = atsValidationErrorResponse(error, requestId);
+      if (response) return response;
+      throw error;
+    }
+    const { resumePdfUrl, resumePdfName, atsValidation } = renderedResume;
 
     let committed: { count: number };
     try {
@@ -273,15 +411,36 @@ export async function POST(
             userId,
             existing.jobId ?? existing.id,
           );
-          return tx.application.updateMany({
+          const result = await tx.application.updateMany({
             where: {
               id: existing.id,
               userId,
               aiContentHash: expectedHash,
               resumePdfUrl: existing.resumePdfUrl,
             },
-            data: { status: "FINAL", resumePdfUrl, resumePdfName },
+            data: {
+              status: "FINAL",
+              aiContent: canonicalContent,
+              aiContentHash: canonicalHash,
+              resumePdfUrl,
+              resumePdfName,
+              atsValidation: mergeAtsValidation(
+                existing.atsValidation,
+                "resume",
+                atsValidation,
+              ),
+              reviewReport: canonicalContent.review ?? undefined,
+            },
           });
+          if (result.count === 1) {
+            await persistReviewLedger(tx, {
+              userId,
+              applicationId: existing.id,
+              jobId: existing.jobId,
+              aiContent: canonicalContent,
+            });
+          }
+          return result;
         },
         { timeout: 30_000 },
       );
@@ -305,7 +464,36 @@ export async function POST(
       status: "FINAL",
       resumePdfUrl,
       resumePdfName,
+      atsValidation,
+      aiContentHash: canonicalHash,
       requestId,
     });
   });
+}
+
+function mergeAtsValidation(
+  existing: unknown,
+  target: "resume" | "cover",
+  report: AtsPdfValidation | undefined,
+): Prisma.InputJsonValue {
+  const current =
+    existing && typeof existing === "object" && !Array.isArray(existing)
+      ? existing
+      : {};
+  return { ...current, [target]: report ?? null } as Prisma.InputJsonValue;
+}
+
+function atsValidationErrorResponse(error: unknown, requestId: string) {
+  if (!(error instanceof AtsPdfValidationError)) return null;
+  return NextResponse.json(
+    {
+      error: {
+        code: error.code,
+        message: error.message,
+        details: error.report,
+      },
+      requestId,
+    },
+    { status: error.status },
+  );
 }

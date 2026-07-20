@@ -6,11 +6,13 @@ import { listJobsWithRelevance } from "./jobSearchService";
 import { getVisibleJobMarkets } from "./jobMarketScope";
 import { normalizePostingRiskFlags } from "./jobListItemMapper";
 import { getJobLocationTerms } from "./jobLocationScope";
+import type { JobStatusValue } from "@/lib/shared/jobStatus";
+import { findNearDuplicateJobIds } from "./simHashDuplicateService";
 
 export type JobListQuery = {
   limit: number;
   cursor?: string;
-  status?: "NEW" | "APPLIED" | "REJECTED";
+  status?: JobStatusValue;
   q?: string;
   location?: string;
   jobLevel?: string;
@@ -46,6 +48,9 @@ export type JobListItem = {
   fitScore: number | null;
   fitVerdict: string | null;
   fitEligibility: string | null;
+  livenessStatus: "ACTIVE" | "EXPIRED" | "UNCERTAIN";
+  livenessReason: string | null;
+  possibleDuplicate: boolean;
   resumePdfUrl: string | null;
   resumePdfName: string | null;
   coverPdfUrl: string | null;
@@ -177,6 +182,10 @@ export async function listJobs(userId: string, query: JobListQuery): Promise<Job
         fitScore: true,
         fitVerdict: true,
         fitEligibility: true,
+        companyRoleKey: true,
+        descriptionSimHash: true,
+        livenessStatus: true,
+        livenessReason: true,
         createdAt: true,
         updatedAt: true,
         market: true,
@@ -188,12 +197,43 @@ export async function listJobs(userId: string, query: JobListQuery): Promise<Job
     prisma.job.count({ where }),
   ]);
 
+  const duplicateKeys = Array.from(
+    new Set(
+      jobsWithExtra
+        .map((job) => job.companyRoleKey)
+        .filter((key): key is string => Boolean(key)),
+    ),
+  );
+  const duplicateGroups = duplicateKeys.length
+    ? await prisma.job.groupBy({
+        by: ["companyRoleKey"],
+        where: { userId, companyRoleKey: { in: duplicateKeys } },
+        _count: { _all: true },
+      })
+    : [];
+  const duplicateCountByKey = new Map(
+    duplicateGroups.map((group) => [
+      group.companyRoleKey,
+      group._count._all,
+    ]),
+  );
+  const simHashDuplicateIds = await findNearDuplicateJobIds(
+    userId,
+    jobsWithExtra,
+  );
+
   const normalized = jobsWithExtra.map((job) => {
     const { applications, ...rest } = job;
     const application = applications?.[0] ?? null;
+    const { companyRoleKey, descriptionSimHash: _descriptionSimHash, ...publicFields } =
+      rest;
     return {
-      ...rest,
-      postingRiskFlags: normalizePostingRiskFlags(rest.postingRiskFlags),
+      ...publicFields,
+      postingRiskFlags: normalizePostingRiskFlags(publicFields.postingRiskFlags),
+      possibleDuplicate:
+        (companyRoleKey
+          ? (duplicateCountByKey.get(companyRoleKey) ?? 0) > 1
+          : false) || simHashDuplicateIds.has(job.id),
       resumePdfUrl: application?.resumePdfUrl ?? null,
       resumePdfName: application?.resumePdfName ?? null,
       coverPdfUrl: application?.coverPdfUrl ?? null,

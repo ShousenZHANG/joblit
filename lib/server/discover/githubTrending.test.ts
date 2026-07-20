@@ -1,5 +1,13 @@
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
+
+const safeFetchMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/server/net/safeFetch", () => ({
+  safeOutboundFetch: safeFetchMock,
+}));
+
 import {
+  fetchTrendingRepos,
   parseTrendingHtml,
   filterTrendingNoise,
   isMostlyCjk,
@@ -63,6 +71,42 @@ const FIXTURE = `<div class="Box">
   ${article({ owner: "openai", repo: "whisper", desc: "Robust speech recognition via &amp; large-scale weak supervision.", lang: "Python", stars: "75,123", forks: "8,901", gained: "1,234" })}
   ${article({ owner: "vercel", repo: "next.js", desc: "The React Framework.", lang: "TypeScript", stars: "120,000", forks: "25,000", gained: "987" })}
 </div>`;
+
+beforeEach(() => {
+  safeFetchMock.mockReset();
+});
+
+describe("fetchTrendingRepos", () => {
+  it("uses the exact GitHub host allowlist and bounded response policy", async () => {
+    safeFetchMock.mockResolvedValueOnce(
+      new Response(FIXTURE, {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      }),
+    );
+
+    const repos = await fetchTrendingRepos("weekly");
+
+    expect(repos.map((repo) => repo.fullName)).toEqual([
+      "openai/whisper",
+      "vercel/next.js",
+    ]);
+    expect(safeFetchMock).toHaveBeenCalledWith(
+      "https://github.com/trending?since=weekly",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Accept: "text/html,application/xhtml+xml",
+        }),
+      }),
+      {
+        allowedHosts: ["github.com"],
+        timeoutMs: 8_000,
+        maxResponseBytes: 1024 * 1024,
+        maxRedirects: 0,
+      },
+    );
+  });
+});
 
 describe("parseTrendingHtml", () => {
   it("parses repos in document order", () => {

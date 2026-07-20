@@ -1,3 +1,8 @@
+import {
+  sanitizeMarkdown,
+  sanitizePipelineUrl,
+} from "@/lib/server/security/untrustedOutput";
+
 // Field normalizers shared by the aggregator adapters. Each adapter still owns
 // its own payload shape; only the value-level cleanup is common.
 
@@ -19,7 +24,7 @@ export function stripHtml(value: unknown): string | null {
     .replace(/&#39;/gi, "'")
     .replace(/\s+/g, " ")
     .trim();
-  return plain || null;
+  return plain ? sanitizeMarkdown(plain) || null : null;
 }
 
 /**
@@ -45,8 +50,7 @@ export function httpsUrl(value: unknown): string | null {
   const raw = text(value);
   if (!raw) return null;
   try {
-    const parsed = new URL(raw);
-    return parsed.protocol === "https:" ? parsed.href : null;
+    return sanitizePipelineUrl(raw);
   } catch {
     return null;
   }

@@ -4,13 +4,11 @@ import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { CheckSquare, Square } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
-import type { JobItem, JobStatus } from "../types";
-
-const STATUS_LABEL_KEY: Record<JobStatus, "statusNew" | "statusApplied" | "statusRejected"> = {
-  NEW: "statusNew",
-  APPLIED: "statusApplied",
-  REJECTED: "statusRejected",
-};
+import {
+  JOB_STATUS_LABEL_KEYS,
+  type JobItem,
+  type JobStatus,
+} from "../types";
 
 const STATUS_CLASS: Record<JobStatus, string> = {
   // High-contrast semantic badges tuned for both themes:
@@ -23,9 +21,21 @@ const STATUS_CLASS: Record<JobStatus, string> = {
   APPLIED:
     "border border-sky-300/60 bg-sky-100 text-sky-800 " +
     "dark:border-sky-400/30 dark:bg-sky-500/15 dark:text-sky-300",
+  INTERVIEW:
+    "border border-violet-300/60 bg-violet-100 text-violet-800 " +
+    "dark:border-violet-400/30 dark:bg-violet-500/15 dark:text-violet-300",
+  OFFER:
+    "border border-amber-300/60 bg-amber-100 text-amber-800 " +
+    "dark:border-amber-400/30 dark:bg-amber-500/15 dark:text-amber-300",
   REJECTED:
     "border border-rose-300/60 bg-rose-100 text-rose-800 " +
     "dark:border-rose-400/30 dark:bg-rose-500/15 dark:text-rose-300",
+  WITHDRAWN:
+    "border border-slate-300/60 bg-slate-100 text-slate-700 " +
+    "dark:border-slate-400/30 dark:bg-slate-500/15 dark:text-slate-300",
+  ACCEPTED:
+    "border border-teal-300/60 bg-teal-100 text-teal-800 " +
+    "dark:border-teal-400/30 dark:bg-teal-500/15 dark:text-teal-300",
 };
 
 // AI role-fit badge tone by score band (deterministic verdict thresholds).
@@ -148,7 +158,9 @@ function JobListItemInner({
         >
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5">
-              <Badge className={STATUS_CLASS[job.status]}>{t(STATUS_LABEL_KEY[job.status])}</Badge>
+              <Badge className={STATUS_CLASS[job.status]}>
+                {t(JOB_STATUS_LABEL_KEYS[job.status])}
+              </Badge>
               {typeof job.fitScore === "number" ? (
                 <Badge className={fitBadgeClass(job.fitScore)} title={job.fitVerdict ?? undefined}>
                   {job.fitEligibility === "BLOCK" ? "⛔ " : ""}
@@ -165,6 +177,26 @@ function JobListItemInner({
                   title={(job.postingRiskFlags ?? []).join(", ")}
                 >
                   {t("postingRisk", { score: job.postingRisk })}
+                </Badge>
+              ) : null}
+              {job.livenessStatus === "EXPIRED" ? (
+                <Badge
+                  className="border border-rose-300/70 bg-rose-50 text-rose-800 dark:border-rose-400/30 dark:bg-rose-500/10 dark:text-rose-300"
+                  title={job.livenessReason ?? undefined}
+                >
+                  {t("livenessExpired")}
+                </Badge>
+              ) : job.livenessStatus === "UNCERTAIN" ? (
+                <Badge
+                  className="border border-border bg-muted/70 text-muted-foreground"
+                  title={job.livenessReason ?? undefined}
+                >
+                  {t("livenessUncertain")}
+                </Badge>
+              ) : null}
+              {job.possibleDuplicate ? (
+                <Badge className="border border-amber-300/70 bg-amber-50 text-amber-800 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-300">
+                  {t("possibleDuplicate")}
                 </Badge>
               ) : null}
             </div>

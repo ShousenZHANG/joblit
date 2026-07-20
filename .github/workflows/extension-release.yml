@@ -26,6 +26,11 @@ jobs:
         working-directory: chrome-extension
         run: npm ci
 
+      - name: Enforce release security policy
+        run: |
+          node tools/ci/check-security-policy.mjs
+          node --test tools/ci/package-extension.test.mjs
+
       - name: Run extension tests
         working-directory: chrome-extension
         run: npm test
@@ -40,8 +45,16 @@ jobs:
 
       - name: Package extension zip
         run: |
-          cd chrome-extension/dist
-          zip -r "../../joblit-autofill-v${{ steps.version.outputs.version }}.zip" .
+          archive="joblit-autofill-v${{ steps.version.outputs.version }}.zip"
+          metadata="${archive}.files.json"
+          node tools/ci/package-extension.mjs \
+            --root chrome-extension/dist \
+            --manifest "$metadata" \
+            --file-list .tmp/extension-files.txt \
+            --expected-version "${{ steps.version.outputs.version }}" \
+            --source-commit "$GITHUB_SHA"
+          (cd chrome-extension/dist && zip -X "../../${archive}" -@ < "../../.tmp/extension-files.txt")
+          sha256sum "$archive" > "${archive}.sha256"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -80,5 +93,7 @@ jobs:
             5. See the [full installation guide](https://www.joblit.tech/get-extension) for connecting to your account
           files: |
             joblit-autofill-v${{ steps.version.outputs.version }}.zip
+            joblit-autofill-v${{ steps.version.outputs.version }}.zip.sha256
+            joblit-autofill-v${{ steps.version.outputs.version }}.zip.files.json
           draft: false
           prerelease: false

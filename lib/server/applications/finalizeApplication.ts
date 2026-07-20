@@ -15,6 +15,10 @@ import {
 } from "@/lib/server/files/applicationArtifactBlob";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
+import {
+  assertAtsPdf,
+  type AtsPdfValidation,
+} from "@/lib/server/applications/atsPdfValidator";
 
 /**
  * Render the committed aiContent of a DRAFT Application into a final
@@ -34,16 +38,24 @@ import type { AiContent } from "@/lib/shared/schemas/aiContent";
 type RenderApplicationInput = {
   applicationId: string;
   userId: string;
+  resumeProfileId?: string | null;
   aiContent: AiContent;
   artifactVersion?: string | null;
   job: { id: string | null; title: string; company: string | null; market: string };
+};
+
+type FinalRenderApplicationInput = RenderApplicationInput & {
+  resumeProfileId: string | null;
 };
 
 export async function renderApplicationPdf(
   input: RenderApplicationInput,
 ): Promise<{ pdf: Buffer; filename: string }> {
   const profileLocale = marketStringToResumeLocale(input.job.market);
-  const profile = await getResumeProfile(input.userId, { locale: profileLocale });
+  const profile = await getResumeProfile(input.userId, {
+    profileId: input.resumeProfileId ?? undefined,
+    locale: profileLocale,
+  });
   if (!profile) {
     throw new Error("MASTER_PROFILE_MISSING");
   }
@@ -75,7 +87,16 @@ export async function renderApplicationPdf(
     : baseExperiences;
 
   // Compose final skills: existing + accepted additions
-  const acceptedSkillAdditions = input.aiContent.cv.skillsAdditions.filter((s) => s.accepted);
+  const candidateEvidenceIds = new Set(
+    (input.aiContent.evidence ?? [])
+      .filter((item) => item.kind === "candidate")
+      .map((item) => item.id),
+  );
+  const acceptedSkillAdditions = input.aiContent.cv.skillsAdditions.filter(
+    (group) =>
+      group.accepted &&
+      (group.evidenceIds ?? []).some((id) => candidateEvidenceIds.has(id)),
+  );
   const nextSkills =
     acceptedSkillAdditions.length === 0
       ? renderInput.skills
@@ -96,9 +117,18 @@ export async function renderApplicationPdf(
 }
 
 export async function renderFinalApplication(
-  input: RenderApplicationInput,
-): Promise<{ resumePdfUrl: string; resumePdfName: string }> {
+  input: FinalRenderApplicationInput,
+): Promise<{
+  resumePdfUrl: string;
+  resumePdfName: string;
+  atsValidation: AtsPdfValidation;
+}> {
   const { pdf, filename: resumePdfName } = await renderApplicationPdf(input);
+  const atsValidation = await assertAtsPdf(pdf, {
+    maxPages: 2,
+    minTextChars: 180,
+    requiredKeywords: buildAtsKeywords(input.aiContent, input.job.title),
+  });
   const blobPath = buildApplicationArtifactBlobPath({
     userId: input.userId,
     jobId: input.job.id ?? input.applicationId,
@@ -111,7 +141,7 @@ export async function renderFinalApplication(
     ...APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
   });
 
-  return { resumePdfUrl: blob.url, resumePdfName };
+  return { resumePdfUrl: blob.url, resumePdfName, atsValidation };
 }
 
 function mergeAcceptedSkillAdditions(
@@ -148,11 +178,21 @@ function mergeAcceptedSkillAdditions(
 export async function renderFinalCoverLetter(input: {
   applicationId: string;
   userId: string;
+  resumeProfileId: string | null;
   aiContent: AiContent;
   artifactVersion?: string | null;
   job: { id: string | null; title: string; company: string | null; market: string };
-}): Promise<{ coverPdfUrl: string; coverPdfName: string }> {
+}): Promise<{
+  coverPdfUrl: string;
+  coverPdfName: string;
+  atsValidation: AtsPdfValidation;
+}> {
   const { pdf, filename: coverPdfName } = await renderCoverLetterPdf(input);
+  const atsValidation = await assertAtsPdf(pdf, {
+    maxPages: 2,
+    minTextChars: 160,
+    requiredKeywords: buildAtsKeywords(input.aiContent, input.job.title),
+  });
   const blobPath = buildApplicationArtifactBlobPath({
     userId: input.userId,
     jobId: input.job.id ?? input.applicationId,
@@ -165,18 +205,22 @@ export async function renderFinalCoverLetter(input: {
     ...APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
   });
 
-  return { coverPdfUrl: blob.url, coverPdfName };
+  return { coverPdfUrl: blob.url, coverPdfName, atsValidation };
 }
 
 export async function renderCoverLetterPdf(input: {
   applicationId: string;
   userId: string;
+  resumeProfileId?: string | null;
   aiContent: AiContent;
   artifactVersion?: string | null;
   job: { id: string | null; title: string; company: string | null; market: string };
 }): Promise<{ pdf: Buffer; filename: string }> {
   const profileLocale = marketStringToResumeLocale(input.job.market);
-  const profile = await getResumeProfile(input.userId, { locale: profileLocale });
+  const profile = await getResumeProfile(input.userId, {
+    profileId: input.resumeProfileId ?? undefined,
+    locale: profileLocale,
+  });
   if (!profile) {
     throw new Error("MASTER_PROFILE_MISSING");
   }
@@ -221,4 +265,26 @@ export async function renderCoverLetterPdf(input: {
 export async function deleteApplicationArtifact(url: string | null | undefined) {
   if (!url || !process.env.BLOB_READ_WRITE_TOKEN) return;
   await del(url, { token: process.env.BLOB_READ_WRITE_TOKEN });
+}
+
+function buildAtsKeywords(aiContent: AiContent, jobTitle: string) {
+  const values = [
+    ...jobTitle.split(/[\s,/|()-]+/),
+    ...(aiContent.review?.requirements ?? []).flatMap((item) =>
+      item.text.split(/[\s,/|():;-]+/),
+    ),
+    ...aiContent.cv.skillsAdditions
+      .filter((group) => group.accepted)
+      .flatMap((group) => group.items),
+  ];
+  const seen = new Set<string>();
+  return values
+    .map((value) => value.normalize("NFKC").trim())
+    .filter((value) => {
+      const key = value.toLowerCase();
+      if (value.length < 3 || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 30);
 }

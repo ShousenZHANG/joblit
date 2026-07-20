@@ -18,7 +18,74 @@ datasource db {
 enum JobStatus {
   NEW
   APPLIED
+  INTERVIEW
+  OFFER
   REJECTED
+  WITHDRAWN
+  ACCEPTED
+}
+
+enum ApplicationEventType {
+  STATUS_CHANGED
+  NOTE_ADDED
+  INTERVIEW_PLANNED
+  INTERVIEW_COMPLETED
+  OFFER_RECORDED
+  OFFER_UPDATED
+  OFFER_DECIDED
+  FOLLOW_UP_CREATED
+  FOLLOW_UP_COMPLETED
+}
+
+enum ApplicationEventSource {
+  USER
+  EXTENSION
+  SYSTEM
+  IMPORT
+}
+
+enum EvidenceKind {
+  RESUME_PROFILE
+  JOB_DESCRIPTION
+  APPLICATION_DRAFT
+  USER_CLAIM
+  STAR_STORY
+  INTERVIEW_NOTE
+  OFFER
+}
+
+enum InterviewPlanStatus {
+  DRAFT
+  READY
+  COMPLETED
+  ARCHIVED
+}
+
+enum OfferStatus {
+  ACTIVE
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
+}
+
+enum FollowUpReminderType {
+  APPLICATION_FOLLOW_UP
+  INTERVIEW_THANK_YOU
+  OFFER_DEADLINE
+  CUSTOM
+}
+
+enum JobLivenessStatus {
+  ACTIVE
+  EXPIRED
+  UNCERTAIN
+}
+
+enum SourceHealthStatus {
+  HEALTHY
+  DEGRADED
+  DOWN
+  UNKNOWN
 }
 
 enum FetchRunStatus {
@@ -61,53 +128,60 @@ enum ApplicationStatus {
 }
 
 model User {
-  id        String   @id @default(uuid()) @db.Uuid
-  email     String?  @unique
-  name      String?
-  image     String?
+  id            String    @id @default(uuid()) @db.Uuid
+  email         String?   @unique
+  name          String?
+  image         String?
   emailVerified DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  accounts  Account[]
-  sessions  Session[]
+  accounts Account[]
+  sessions Session[]
 
-  jobs           Job[]
-  fetchRuns      FetchRun[]
-  deletedJobUrls DeletedJobUrl[]
-  dailyCheckins  DailyCheckin[]
-  resumeProfiles ResumeProfile[]
-  activeResumeProfiles ActiveResumeProfile[]
-  applications   Application[]
-  promptRuleTemplates PromptRuleTemplate[]
-  onboardingState OnboardingState?
-  localAiSetting LocalAiSetting?
-  applicationBatches ApplicationBatch[]
+  jobs                  Job[]
+  fetchRuns             FetchRun[]
+  deletedJobUrls        DeletedJobUrl[]
+  dailyCheckins         DailyCheckin[]
+  resumeProfiles        ResumeProfile[]
+  activeResumeProfiles  ActiveResumeProfile[]
+  applications          Application[]
+  promptRuleTemplates   PromptRuleTemplate[]
+  onboardingState       OnboardingState?
+  localAiSetting        LocalAiSetting?
+  applicationBatches    ApplicationBatch[]
   applicationBatchTasks ApplicationBatchTask[]
-  extensionTokens ExtensionToken[]
-  formSubmissions FormSubmission[]
-  fieldMappingRules FieldMappingRule[]
+  extensionTokens       ExtensionToken[]
+  formSubmissions       FormSubmission[]
+  fieldMappingRules     FieldMappingRule[]
+  applicationEvents     ApplicationEvent[]
+  evidenceSnapshots     EvidenceSnapshot[]
+  claimEvidence         ClaimEvidence[]
+  interviewPlans        InterviewPlan[]
+  starStories           StarStory[]
+  offers                Offer[]
+  followUpReminders     FollowUpReminder[]
 }
 
 model Account {
-  id                String  @id @default(uuid()) @db.Uuid
-  userId            String  @db.Uuid
-  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   type              String
   provider          String
   providerAccountId String
 
-  refresh_token     String?
-  access_token      String?
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String?
-  session_state     String?
+  refresh_token String?
+  access_token  String?
+  expires_at    Int?
+  token_type    String?
+  scope         String?
+  id_token      String?
+  session_state String?
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([provider, providerAccountId])
   @@index([userId])
@@ -120,42 +194,42 @@ model Session {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expires      DateTime
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
 }
 
 model Job {
-  id          String    @id @default(uuid()) @db.Uuid
-  userId      String    @db.Uuid
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  jobUrl      String
-  title       String
-  company     String?
-  location    String?
-  jobType     String?
-  jobLevel    String?
-  description String?
-  salary          String?   // e.g. "$120,000 – $150,000 per year" (source-provided label)
-  workArrangement String?   // "Remote" | "Hybrid" | "On-site"
+  jobUrl          String
+  title           String
+  company         String?
+  location        String?
+  jobType         String?
+  jobLevel        String?
+  description     String?
+  salary          String? // e.g. "$120,000 – $150,000 per year" (source-provided label)
+  workArrangement String? // "Remote" | "Hybrid" | "On-site"
   listingDate     DateTime? // when the source posted the role
-  status      JobStatus @default(NEW)
-  market      String    @default("AU") // "AU" | "CN" | "GLOBAL"
+  status          JobStatus @default(NEW)
+  market          String    @default("AU") // "AU" | "CN" | "GLOBAL"
   /// Ingestion provenance: "linkedin" | "nowcoder" | a source-registry id.
   /// Null for rows imported before provenance tracking existed.
-  source      String?
+  source          String?
 
   // AI role-fit triage. The matrix is model-produced per-requirement judgements;
   // the score/verdict are ALWAYS aggregated deterministically by Joblit.
   fitScore        Int?
-  fitVerdict      String?   // "STRONG" | "GOOD" | "MODERATE" | "WEAK" | "POOR"
-  fitEligibility  String?   // "PASS" | "RISK" | "BLOCK"
-  fitMatrix       Json?     // requirement matrix; null when only prescreened
-  fitSource       String?   // "prescreen" | "local_ai"
+  fitVerdict      String? // "STRONG" | "GOOD" | "MODERATE" | "WEAK" | "POOR"
+  fitEligibility  String? // "PASS" | "RISK" | "BLOCK"
+  fitMatrix       Json? // requirement matrix; null when only prescreened
+  fitSource       String? // "prescreen" | "local_ai"
   fitScoredAt     DateTime?
-  fitSnapshotHash String?   // resume snapshot hash the score was computed against
+  fitSnapshotHash String? // resume snapshot hash the score was computed against
 
   // Posting legitimacy — the third axis beside role fit and eligibility.
   // Deterministic, computed at import, zero LLM. Higher is riskier. Flags are
@@ -168,12 +242,26 @@ model Job {
   /// ever powers a "possible duplicate" hint, never an automatic removal.
   companyRoleKey String?
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  /// Deterministic 64-bit SimHash (16 lowercase hex chars) for advisory-only
+  /// near-duplicate detection. Never used as a unique key.
+  descriptionSimHash String?           @db.Char(16)
+  livenessStatus     JobLivenessStatus @default(UNCERTAIN)
+  livenessReason     String?
+  livenessCheckedAt  DateTime?
+  lastSeenAt         DateTime?
 
-  applications Application[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  applications          Application[]
   applicationBatchTasks ApplicationBatchTask[]
-  formSubmissions FormSubmission[]
+  formSubmissions       FormSubmission[]
+  applicationEvents     ApplicationEvent[]
+  evidenceSnapshots     EvidenceSnapshot[]
+  interviewPlans        InterviewPlan[]
+  offers                Offer[]
+  followUpReminders     FollowUpReminder[]
+  // GIN trigram indexes (title, company, location) created via raw SQL migration
 
   @@unique([userId, jobUrl])
   @@index([userId, createdAt])
@@ -184,20 +272,21 @@ model Job {
   @@index([userId, fitScore])
   @@index([userId, postingRisk])
   @@index([userId, companyRoleKey])
+  @@index([userId, descriptionSimHash])
+  @@index([userId, livenessStatus])
   @@index([userId, source])
-  // GIN trigram indexes (title, company, location) created via raw SQL migration
 }
 
 model ApplicationBatch {
-  id        String                @id @default(uuid()) @db.Uuid
-  userId    String                @db.Uuid
-  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  scope     ApplicationBatchScope @default(NEW)
-  status    ApplicationBatchStatus @default(QUEUED)
-  totalCount Int
-  error     String?
-  startedAt DateTime?
+  scope       ApplicationBatchScope  @default(NEW)
+  status      ApplicationBatchStatus @default(QUEUED)
+  totalCount  Int
+  error       String?
+  startedAt   DateTime?
   completedAt DateTime?
 
   createdAt DateTime @default(now())
@@ -210,19 +299,19 @@ model ApplicationBatch {
 }
 
 model ApplicationBatchTask {
-  id        String                    @id @default(uuid()) @db.Uuid
-  batchId   String                    @db.Uuid
-  batch     ApplicationBatch          @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  userId    String                    @db.Uuid
-  user      User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  jobId     String                    @db.Uuid
-  job       Job                       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  id      String           @id @default(uuid()) @db.Uuid
+  batchId String           @db.Uuid
+  batch   ApplicationBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  userId  String           @db.Uuid
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId   String           @db.Uuid
+  job     Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
-  status    ApplicationBatchTaskStatus @default(PENDING)
-  error     String?
-  startedAt DateTime?
+  status      ApplicationBatchTaskStatus @default(PENDING)
+  error       String?
+  startedAt   DateTime?
   completedAt DateTime?
-  attempt   Int                       @default(0)
+  attempt     Int                        @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -233,9 +322,9 @@ model ApplicationBatchTask {
 }
 
 model DeletedJobUrl {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   jobUrl    String
   deletedAt DateTime @default(now())
@@ -245,9 +334,9 @@ model DeletedJobUrl {
 }
 
 model DailyCheckin {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   localDate String
   checkedAt DateTime @default(now())
@@ -257,13 +346,13 @@ model DailyCheckin {
 }
 
 model FetchRun {
-  id        String         @id @default(uuid()) @db.Uuid
-  userId    String         @db.Uuid
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Snapshot for convenience (used by GitHub Actions to import to the correct user)
   userEmail String
-  market    String         @default("AU") // "AU" | "CN"
+  market    String @default("AU") // "AU" | "CN"
 
   status        FetchRunStatus @default(QUEUED)
   error         String?
@@ -285,12 +374,12 @@ model FetchRun {
 }
 
 model ResumeProfile {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name      String   @default("Custom Blank")
-  revision  Int      @default(1)
-  locale    String   @default("en-AU") // "en-AU" | "zh-CN"
+  id       String @id @default(uuid()) @db.Uuid
+  userId   String @db.Uuid
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name     String @default("Custom Blank")
+  revision Int    @default(1)
+  locale   String @default("en-AU") // "en-AU" | "zh-CN"
 
   summary     String?
   basics      Json?
@@ -303,7 +392,7 @@ model ResumeProfile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  applications Application[]
+  applications     Application[]
   activeSelections ActiveResumeProfile[]
 
   @@index([userId, name])
@@ -325,24 +414,24 @@ model ActiveResumeProfile {
 }
 
 model Application {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  jobId     String?  @db.Uuid
-  job       Job?     @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  jobId String? @db.Uuid
+  job   Job?    @relation(fields: [jobId], references: [id], onDelete: SetNull)
 
-  resumeProfileId String? @db.Uuid
+  resumeProfileId String?        @db.Uuid
   resumeProfile   ResumeProfile? @relation(fields: [resumeProfileId], references: [id], onDelete: SetNull)
 
-  company   String?
-  role      String?
+  company String?
+  role    String?
 
-  resumeTexUrl String?
-  resumePdfUrl String?
+  resumeTexUrl  String?
+  resumePdfUrl  String?
   resumePdfName String?
-  coverTexUrl  String?
-  coverPdfUrl  String?
+  coverTexUrl   String?
+  coverPdfUrl   String?
 
   // Tailor edit workflow (see ADR-0001 / ADR-0002).
   // status:        DRAFT during user review, FINAL once PDF is rendered.
@@ -353,26 +442,219 @@ model Application {
   status        ApplicationStatus @default(FINAL)
   aiContent     Json?
   aiContentHash String?
+  /// Last deterministic ATS/PDF machine-readability validation result.
+  atsValidation Json?
+  /// Last structured reviewer report, including evidence coverage.
+  reviewReport  Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  applicationEvents ApplicationEvent[]
+  evidenceSnapshots EvidenceSnapshot[]
+  claimEvidence     ClaimEvidence[]
+  followUpReminders FollowUpReminder[]
 
   @@unique([userId, jobId])
   @@index([userId, createdAt])
 }
 
-model PromptRuleTemplate {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+/// Immutable career-history ledger. Application code only creates rows; it
+/// never updates or deletes them. Job.status is a read-optimized projection
+/// updated in the same serializable transaction as STATUS_CHANGED events.
+model ApplicationEvent {
+  id            String       @id @default(uuid()) @db.Uuid
+  userId        String       @db.Uuid
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId         String?      @db.Uuid
+  job           Job?         @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  applicationId String?      @db.Uuid
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
 
-  name      String
-  version   Int
-  locale    String   @default("en-AU")
-  cvRules   Json
-  coverRules Json
+  /// Immutable display/cooldown identity retained after the source Job is
+  /// hard-deleted. New writers always populate both fields.
+  companySnapshot String?
+  titleSnapshot   String?
+
+  type           ApplicationEventType
+  source         ApplicationEventSource @default(USER)
+  fromStatus     JobStatus?
+  toStatus       JobStatus?
+  note           String?
+  metadata       Json?
+  idempotencyKey String?
+  occurredAt     DateTime               @default(now())
+  createdAt      DateTime               @default(now())
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, occurredAt])
+  @@index([userId, jobId, occurredAt])
+  @@index([applicationId, occurredAt])
+  @@index([userId, type, occurredAt])
+}
+
+/// Content-addressed evidence. `id` and `contentHash` are deterministic
+/// SHA-256 derivatives generated from canonical JSON; identical evidence
+/// within one tenant and kind is reused instead of copied.
+model EvidenceSnapshot {
+  id            String       @id
+  userId        String       @db.Uuid
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applicationId String?      @db.Uuid
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  jobId         String?      @db.Uuid
+  job           Job?         @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  kind        EvidenceKind
+  contentHash String
+  payload     Json
+  sourceLabel String?
+  createdAt   DateTime     @default(now())
+
+  claims      ClaimEvidence[]
+  starStories StarStory[]     @relation("StarStoryEvidence")
+
+  @@unique([userId, contentHash, kind])
+  @@index([userId, createdAt])
+  @@index([applicationId, kind])
+  @@index([jobId, kind])
+}
+
+/// Claim-to-evidence edge used by CV/CL review. Claims may reference multiple
+/// snapshots; no unsupported claim is considered grounded merely because an
+/// edge exists; caller must still show the referenced source to the user.
+model ClaimEvidence {
+  id                 String           @id
+  userId             String           @db.Uuid
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applicationId      String           @db.Uuid
+  application        Application      @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  evidenceSnapshotId String
+  evidenceSnapshot   EvidenceSnapshot @relation(fields: [evidenceSnapshotId], references: [id], onDelete: Restrict)
+
+  claimKey     String
+  claimText    String
+  claimHash    String
+  evidencePath String?
+  createdAt    DateTime @default(now())
+
+  @@unique([applicationId, claimHash, evidenceSnapshotId])
+  @@index([userId, applicationId])
+  @@index([evidenceSnapshotId])
+}
+
+model InterviewPlan {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId  String @db.Uuid
+  job    Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  round        Int                 @default(1)
+  title        String
+  status       InterviewPlanStatus @default(DRAFT)
+  scheduledAt  DateTime?
+  questions    Json
+  starMappings Json
+  notes        String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@unique([userId, jobId, round])
+  @@index([userId, status, scheduledAt])
+  @@index([userId, updatedAt])
+}
+
+model StarStory {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title            String
+  situation        String
+  task             String
+  action           String
+  result           String
+  reflection       String?
+  skills           Json
+  tags             Json
+  storyHash        String
+  sourceEvidenceId String?
+  sourceEvidence   EvidenceSnapshot? @relation("StarStoryEvidence", fields: [sourceEvidenceId], references: [id], onDelete: SetNull)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@unique([userId, storyHash])
+  @@index([userId, updatedAt])
+  @@index([sourceEvidenceId])
+}
+
+model Offer {
+  id     String  @id @default(uuid()) @db.Uuid
+  userId String  @db.Uuid
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId  String? @db.Uuid
+  job    Job?    @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  company            String
+  role               String
+  currency           String      @default("AUD")
+  /// Annual compensation components in whole currency units (not cents).
+  baseSalaryAnnual   Int?
+  bonusAnnual        Int?
+  equityAnnual       Int?
+  otherAnnual        Int?
+  targetSalaryAnnual Int?
+  benefits           Json
+  location           String?
+  status             OfferStatus @default(ACTIVE)
+  receivedAt         DateTime    @default(now())
+  deadlineAt         DateTime?
+  notes              String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  @@index([userId, status, receivedAt])
+  @@index([userId, deadlineAt])
+  @@index([jobId])
+}
+
+model FollowUpReminder {
+  id            String       @id @default(uuid()) @db.Uuid
+  userId        String       @db.Uuid
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId         String?      @db.Uuid
+  job           Job?         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  applicationId String?      @db.Uuid
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  type        FollowUpReminderType
+  title       String
+  dueAt       DateTime
+  note        String?
+  completedAt DateTime?
+  dismissedAt DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([userId, dueAt])
+  @@index([userId, completedAt, dismissedAt, dueAt])
+  @@index([jobId])
+  @@index([applicationId])
+}
+
+model PromptRuleTemplate {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name            String
+  version         Int
+  locale          String  @default("en-AU")
+  cvRules         Json
+  coverRules      Json
   hardConstraints Json
-  isActive  Boolean  @default(false)
+  isActive        Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -382,15 +664,15 @@ model PromptRuleTemplate {
 }
 
 model ExtensionToken {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  tokenHash String   @unique // SHA-256 hash of the actual token
-  name      String   @default("Chrome Extension")
+  tokenHash  String    @unique // SHA-256 hash of the actual token
+  name       String    @default("Chrome Extension")
   lastUsedAt DateTime?
-  expiresAt DateTime
-  revokedAt DateTime?
+  expiresAt  DateTime
+  revokedAt  DateTime?
 
   createdAt DateTime @default(now())
 
@@ -398,12 +680,12 @@ model ExtensionToken {
 }
 
 model FormSubmission {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  jobId     String?  @db.Uuid
-  job       Job?     @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  jobId String? @db.Uuid
+  job   Job?    @relation(fields: [jobId], references: [id], onDelete: SetNull)
 
   pageUrl       String
   pageDomain    String
@@ -421,37 +703,37 @@ model FormSubmission {
 }
 
 model FieldMappingRule {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  fieldSelector  String
-  fieldLabel     String?
-  atsProvider    String   @default("")
-  pageDomain     String   @default("")
+  fieldSelector String
+  fieldLabel    String?
+  atsProvider   String  @default("")
+  pageDomain    String  @default("")
 
-  profilePath    String
-  staticValue    String?
+  profilePath String
+  staticValue String?
 
-  source         String   @default("user")
-  confidence     Float    @default(1.0)
-  useCount       Int      @default(0)
+  source     String @default("user")
+  confidence Float  @default(1.0)
+  useCount   Int    @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([userId, fieldSelector, atsProvider, pageDomain])
   @@index([userId, atsProvider, fieldLabel])
   @@index([userId, pageDomain])
-  @@unique([userId, fieldSelector, atsProvider, pageDomain])
 }
 
 model OnboardingState {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @unique @db.Uuid
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  stage      OnboardingStage @default(NEW_USER)
-  checklist  Json?
+  stage       OnboardingStage @default(NEW_USER)
+  checklist   Json?
   dismissedAt DateTime?
   completedAt DateTime?
 
@@ -461,15 +743,12 @@ model OnboardingState {
   @@index([userId, stage, updatedAt])
 }
 
-// Persistent cache for the Discover → Videos pipeline. Replaces the
-// previous in-memory Map, which was wiped on every serverless cold
-// start and caused the YouTube quota (10k units/day) to drain within
-// a single user session. The cron pre-warmer at
-// /api/discover/refresh-videos writes here; the user-facing route
-// /api/discover/videos reads here and falls back to stale rows when
-// the upstream API returns quotaExceeded.
+// Persistent cache for the user-triggered Discover Videos pipeline. Replaces
+// the previous in-memory Map, which was wiped on every serverless cold start
+// and drained YouTube quota. The user-facing route reads this table and falls
+// back to stale rows when the upstream API returns quotaExceeded.
 model DiscoverVideoCache {
-  key       String   @id  // e.g. "videos:claude:week"
+  key       String   @id // e.g. "videos:claude:week"
   payload   Json
   fetchedAt DateTime
   expiresAt DateTime
@@ -487,4 +766,38 @@ model LocalAiSetting {
   hermesProfile  String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+/// Provider-level health is global operational data, never user-specific.
+model SourceHealth {
+  source              String             @id
+  status              SourceHealthStatus @default(UNKNOWN)
+  consecutiveFailures Int                @default(0)
+  lastCheckedAt       DateTime?
+  lastReachableAt     DateTime?
+  lastFailureAt       DateTime?
+  reason              String?
+  updatedAt           DateTime           @updatedAt
+
+  @@index([status, updatedAt])
+}
+
+/// Registry entry for public company ATS boards. Contains board identifiers
+/// only—never credentials. Disabled rows remain for audit and rediscovery.
+model AtsBoardSource {
+  id                 String    @id @default(uuid()) @db.Uuid
+  sourceId           String    @unique
+  provider           String
+  boardToken         String
+  company            String
+  region             String?
+  careersUrl         String?
+  enabled            Boolean   @default(true)
+  lastRediscoveredAt DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@unique([provider, boardToken])
+  @@index([enabled, provider])
+  @@index([company, region])
 }

@@ -16,6 +16,7 @@ import {
   buildResumePhotoCompileFile,
   parseTrustedResumePhotoUrl,
 } from "@/lib/server/resumePhotoBlob";
+import { safeOutboundFetch } from "@/lib/server/net/safeFetch";
 
 export const runtime = "nodejs";
 
@@ -96,7 +97,17 @@ export async function POST(req: Request) {
     const trustedPhotoUrl = photoUrl ? parseTrustedResumePhotoUrl(photoUrl, userId) : null;
     if (trustedPhotoUrl) {
       try {
-        const photoRes = await fetch(trustedPhotoUrl, { signal: AbortSignal.timeout(5000) });
+        const photoRes = await safeOutboundFetch(
+          trustedPhotoUrl,
+          {},
+          {
+            allowedHosts: ["public.blob.vercel-storage.com"],
+            allowSubdomains: true,
+            maxRedirects: 0,
+            maxResponseBytes: 2 * 1024 * 1024,
+            timeoutMs: 5_000,
+          },
+        );
         if (photoRes.ok) {
           const photoFile = await buildResumePhotoCompileFile(photoRes);
           if (photoFile) files.push(photoFile);

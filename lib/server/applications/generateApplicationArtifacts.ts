@@ -4,7 +4,6 @@ import { getResumeProfile } from "@/lib/server/resumeProfile";
 import { buildResumePdfForJob } from "@/lib/server/applications/buildResumePdf";
 import { renderCoverLetterTex } from "@/lib/server/latex/renderCoverLetter";
 import { compileLatexToPdf } from "@/lib/server/latex/compilePdf";
-import { tailorApplicationContent } from "@/lib/server/ai/tailorApplication";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
 import { buildPdfFilename } from "@/lib/server/files/pdfFilename";
 import {
@@ -13,6 +12,14 @@ import {
 } from "@/lib/server/files/applicationArtifactBlob";
 import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
 import { del, put } from "@vercel/blob";
+import { assertAtsPdf } from "@/lib/server/applications/atsPdfValidator";
+import { attachEvidenceAndReview } from "@/lib/server/ai/evidenceLedger";
+import {
+  AI_CONTENT_SCHEMA_VERSION,
+  hashAiContent,
+  type AiContent,
+} from "@/lib/shared/schemas/aiContent";
+import { persistReviewLedger } from "@/lib/server/applications/persistReviewLedger";
 
 type GenerateArtifactsInput = {
   userId: string;
@@ -95,6 +102,15 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
     userId: input.userId,
     profile,
     job,
+    tailorOptions: {
+      strictCoverQuality: true,
+      maxCoverRewritePasses: 2,
+      maxReviewerPasses: 1,
+      requireIndependentReview: true,
+      requireQualityPass: true,
+      localeProfile: profileLocale,
+      targetWordRange: { min: 280, max: 360 },
+    },
   });
   const resumePdfName = buildPdfFilename(
     resumeResult.renderInput.candidate.name,
@@ -105,29 +121,28 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
   let committed = false;
 
   try {
-    resumePdfUrl = await uploadPdfToBlob({
-      userId: input.userId,
-      jobId: job.id,
-      target: "resume",
-      pdf: resumeResult.pdf,
-    }).catch(() => null);
-
-    const tailored = await tailorApplicationContent(
-      {
-        baseSummary: resumeResult.renderInput.summary,
-        jobTitle: job.title,
-        company: job.company || "the company",
-        description: job.description || "",
-        resumeSnapshot: profile,
-        userId: input.userId,
-      },
-      {
-        strictCoverQuality: true,
-        maxCoverRewritePasses: 2,
-        localeProfile: profileLocale,
-        targetWordRange: { min: 280, max: 360 },
-      },
-    );
+    const tailored = resumeResult.tailored;
+    const aiContent = attachEvidenceAndReview({
+      scopeKey: input.userId,
+      resumeSnapshot: profile,
+      jobDescription: job.description,
+      aiContent: buildBatchAiContent(
+        tailored,
+        resumeResult.renderInput.summary,
+      ),
+    });
+    if (aiContent.review?.verdict === "blocked") {
+      throw new Error("APPLICATION_REVIEW_BLOCKED");
+    }
+    const requiredKeywords = (aiContent.review?.requirements ?? [])
+      .flatMap((item) => item.text.split(/[\s,/|():;-]+/))
+      .filter((item) => item.length >= 3)
+      .slice(0, 30);
+    const resumeAtsValidation = await assertAtsPdf(resumeResult.pdf, {
+      maxPages: 2,
+      minTextChars: 180,
+      requiredKeywords,
+    });
 
     const coverTex = renderCoverLetterTex({
       candidate: {
@@ -151,11 +166,22 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
       signatureName: tailored.cover.signatureName,
     });
     const coverPdf = await compileLatexToPdf(coverTex);
+    const coverAtsValidation = await assertAtsPdf(coverPdf, {
+      maxPages: 2,
+      minTextChars: 160,
+      requiredKeywords,
+    });
     const coverPdfName = buildPdfFilename(
       resumeResult.renderInput.candidate.name,
       job.title,
       "cl",
     );
+    resumePdfUrl = await uploadPdfToBlob({
+      userId: input.userId,
+      jobId: job.id,
+      target: "resume",
+      pdf: resumeResult.pdf,
+    }).catch(() => null);
     coverPdfUrl = await uploadPdfToBlob({
       userId: input.userId,
       jobId: job.id,
@@ -203,6 +229,18 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
             resumeProfileId: profile.id,
             company: job.company,
             role: job.title,
+            status: "FINAL",
+            aiContent,
+            aiContentHash: hashAiContent(aiContent),
+            atsValidation: {
+              resume: resumeAtsValidation,
+              cover: coverAtsValidation,
+            },
+            reviewReport: {
+              deterministic: aiContent.review ?? null,
+              independent: tailored.reviewer ?? null,
+              quality: tailored.qualityReport ?? null,
+            },
             ...(resumePdfUrl
               ? {
                   resumePdfUrl,
@@ -215,6 +253,18 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
             resumeProfileId: profile.id,
             company: job.company,
             role: job.title,
+            status: "FINAL",
+            aiContent,
+            aiContentHash: hashAiContent(aiContent),
+            atsValidation: {
+              resume: resumeAtsValidation,
+              cover: coverAtsValidation,
+            },
+            reviewReport: {
+              deterministic: aiContent.review ?? null,
+              independent: tailored.reviewer ?? null,
+              quality: tailored.qualityReport ?? null,
+            },
             ...(resumePdfUrl
               ? {
                   resumePdfUrl,
@@ -224,6 +274,12 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
             ...(coverPdfUrl ? { coverPdfUrl } : {}),
           },
           select: { id: true },
+        });
+        await persistReviewLedger(tx, {
+          userId: input.userId,
+          applicationId: application.id,
+          jobId: job.id,
+          aiContent,
         });
 
         return {
@@ -261,4 +317,40 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
     }
     throw error;
   }
+}
+
+function buildBatchAiContent(
+  tailored: Awaited<
+    ReturnType<typeof import("@/lib/server/ai/tailorApplication").tailorApplicationContent>
+  >,
+  originalSummary: string,
+): AiContent {
+  return {
+    schemaVersion: AI_CONTENT_SCHEMA_VERSION,
+    generatedAt: new Date().toISOString(),
+    promptMetaHash: "server-batch:reviewer-v1",
+    cv: {
+      summary: {
+        aiText: tailored.cvSummary,
+        originalText: originalSummary,
+        accepted: true,
+      },
+      latestExperience: { experienceIndex: 0, addedBullets: [] },
+      skillsAdditions: [],
+    },
+    cover: {
+      paragraphOne: {
+        aiText: tailored.cover.paragraphOne,
+        accepted: true,
+      },
+      paragraphTwo: {
+        aiText: tailored.cover.paragraphTwo,
+        accepted: true,
+      },
+      paragraphThree: {
+        aiText: tailored.cover.paragraphThree,
+        accepted: true,
+      },
+    },
+  };
 }

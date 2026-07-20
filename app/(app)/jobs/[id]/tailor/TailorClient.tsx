@@ -25,6 +25,7 @@ import { SkillsSection } from "./SkillsSection";
 import { CoverParagraphsSection } from "./CoverParagraphsSection";
 import { PdfPreview } from "./PdfPreview";
 import { ConflictDialog } from "./ConflictDialog";
+import { ReviewGateCard } from "./ReviewGateCard";
 
 type DocTab = "resume" | "cover";
 type ViewTab = "edit" | "preview";
@@ -285,6 +286,8 @@ export function TailorClient({
           </button>
         </div>
       ) : null}
+
+      <ReviewGateCard review={draft.aiContent.review} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <div

@@ -5,6 +5,8 @@ const store = vi.hoisted(() => ({
   executeRaw: vi.fn(),
   deletedFindMany: vi.fn(),
   createMany: vi.fn(),
+  updateMany: vi.fn(),
+  buildCooldownFilter: vi.fn(),
   operations: [] as string[],
 }));
 
@@ -15,6 +17,11 @@ vi.mock("@/lib/server/prisma", () => ({
 }));
 vi.mock("@/lib/server/observability/errorReporter", () => ({
   reportError: vi.fn(),
+}));
+vi.mock("@/lib/server/jobs/applicationCooldownService", () => ({
+  buildUserCooldownFilter: store.buildCooldownFilter,
+  inferApplicationRoleFamily: (title: string) =>
+    /backend/i.test(title) ? "backend" : null,
 }));
 
 import {
@@ -29,7 +36,10 @@ describe("ImportJobItemSchema", () => {
       callback({
         $executeRaw: store.executeRaw,
         deletedJobUrl: { findMany: store.deletedFindMany },
-        job: { createMany: store.createMany },
+        job: {
+          createMany: store.createMany,
+          updateMany: store.updateMany,
+        },
       }),
     );
     store.executeRaw.mockReset().mockImplementation(async () => {
@@ -45,6 +55,8 @@ describe("ImportJobItemSchema", () => {
       store.operations.push("insert");
       return { count: data.length };
     });
+    store.updateMany.mockReset().mockResolvedValue({ count: 0 });
+    store.buildCooldownFilter.mockReset().mockResolvedValue(() => true);
   });
 
   it("normalizes bounded producer fields", () => {
@@ -85,6 +97,22 @@ describe("ImportJobItemSchema", () => {
         title: "x".repeat(241),
       }).success,
     ).toBe(false);
+  });
+
+  it("revalidates internal producer rows at the persistence boundary", async () => {
+    const unsafeInternalRow = {
+      jobUrl: "https://example.com/jobs/oversized",
+      title: "x".repeat(241),
+      market: "GLOBAL",
+    } as Parameters<typeof importJobsForUser>[0]["items"][number];
+
+    const result = await importJobsForUser({
+      userId: "user-1",
+      items: [unsafeInternalRow],
+    });
+
+    expect(result).toEqual({ imported: 0, invalid: 1 });
+    expect(store.transaction).not.toHaveBeenCalled();
   });
 
   it("keeps distinct query-identified jobs and drops tracking parameters", async () => {
@@ -136,6 +164,55 @@ describe("ImportJobItemSchema", () => {
     expect(store.createMany.mock.calls[0]?.[0]?.data[0].jobUrl).toBe(
       "https://example.com/jobs/allowed",
     );
+  });
+
+  it("suppresses a recent same-company application before writing", async () => {
+    store.buildCooldownFilter.mockResolvedValue(
+      (candidate: { company: string; roleFamily: string | null }) =>
+        candidate.company !== "Acme" || candidate.roleFamily !== "backend",
+    );
+    const item = ImportJobItemSchema.parse({
+      jobUrl: "https://example.com/jobs/backend",
+      title: "Backend Engineer",
+      company: "Acme",
+    });
+
+    const result = await importJobsForUser({ userId: "user-1", items: [item] });
+
+    expect(result).toEqual({ imported: 0, invalid: 0 });
+    expect(store.transaction).not.toHaveBeenCalled();
+  });
+
+  it("fails open when cooldown history is temporarily unavailable", async () => {
+    store.buildCooldownFilter.mockRejectedValue(
+      new Error("ApplicationEvent table unavailable"),
+    );
+    const item = ImportJobItemSchema.parse({
+      jobUrl: "https://example.com/jobs/available",
+      title: "Backend Engineer",
+      company: "Acme",
+    });
+
+    const result = await importJobsForUser({ userId: "user-1", items: [item] });
+
+    expect(result.imported).toBe(1);
+    expect(store.createMany).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    "http://example.com/jobs/insecure",
+    "https://127.0.0.1/private-job",
+  ])("rejects an unsafe navigation URL at the shared import boundary: %s", async (jobUrl) => {
+    const item = ImportJobItemSchema.parse({
+      jobUrl,
+      title: "Backend Engineer",
+      company: "Acme",
+    });
+
+    const result = await importJobsForUser({ userId: "user-1", items: [item] });
+
+    expect(result).toEqual({ imported: 0, invalid: 1 });
+    expect(store.transaction).not.toHaveBeenCalled();
   });
 
   it("records a clean posting risk for an ordinary aggregator row", async () => {
@@ -233,6 +310,39 @@ describe("ImportJobItemSchema", () => {
     expect(store.createMany.mock.calls[0][0].data[0]).toMatchObject({
       market: "GLOBAL",
       source: "remoteok",
+    });
+  });
+
+  it("writes description fingerprint and refreshes liveness for seen urls", async () => {
+    const item = ImportJobItemSchema.parse({
+      jobUrl: "https://remoteok.com/remote-jobs/1",
+      title: "AI Engineer",
+      description:
+        "Design and operate reliable distributed machine learning services.",
+      market: "GLOBAL",
+      source: "remoteok",
+    });
+
+    await importJobsForUser({ userId: "user-1", items: [item] });
+
+    expect(store.createMany.mock.calls[0][0].data[0]).toMatchObject({
+      descriptionSimHash: expect.stringMatching(/^[0-9a-f]{16}$/),
+      livenessStatus: "ACTIVE",
+      livenessReason: "import_reachable",
+      livenessCheckedAt: expect.any(Date),
+      lastSeenAt: expect.any(Date),
+    });
+    expect(store.updateMany).toHaveBeenCalledWith({
+      where: {
+        userId: "user-1",
+        jobUrl: { in: ["https://remoteok.com/remote-jobs/1"] },
+      },
+      data: {
+        livenessStatus: "ACTIVE",
+        livenessReason: "import_reachable",
+        livenessCheckedAt: expect.any(Date),
+        lastSeenAt: expect.any(Date),
+      },
     });
   });
 

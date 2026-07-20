@@ -3,8 +3,14 @@ import { prisma } from "@/lib/server/prisma";
 import { canonicalizeJobUrl } from "@/lib/shared/canonicalizeJobUrl";
 import { scorePostingRisk } from "@/lib/server/jobs/postingRisk";
 import { buildCompanyRoleKey } from "@/lib/server/jobs/companyRoleKey";
+import { computeSimHash64 } from "@/lib/server/jobs/simHash";
+import {
+  buildUserCooldownFilter,
+  inferApplicationRoleFamily,
+} from "@/lib/server/jobs/applicationCooldownService";
 import { reportError } from "@/lib/server/observability/errorReporter";
 import { acquireJobMutationLock } from "@/lib/server/jobs/jobMutationLock";
+import { sanitizePipelineUrl } from "@/lib/server/security/untrustedOutput";
 
 // Canonical import-item schema, shared by every ingestion path (the Python
 // fetcher via /api/admin/import, and the browser extension via
@@ -47,6 +53,11 @@ const ENRICHMENT_COLUMNS = [
   "postingrisk",
   "postingriskflags",
   "companyrolekey",
+  "descriptionsimhash",
+  "livenessstatus",
+  "livenessreason",
+  "livenesscheckedat",
+  "lastseenat",
 ] as const;
 
 function optionalText(value: string | null | undefined): string | null {
@@ -89,9 +100,23 @@ export async function importJobsForUser({
   items: ImportJobItem[];
 }): Promise<ImportJobsResult> {
   let invalid = 0;
+  const observedAt = new Date();
   const normalizedRaw = items
-    .map((it) => {
-      const jobUrl = canonicalizeJobUrl(it.jobUrl ?? it.job_url ?? "");
+    .map((candidate) => {
+      // Public routes parse with this schema before calling us, but internal
+      // producers (source adapters, CN fetchers, tests) can otherwise bypass
+      // that runtime boundary through TypeScript's structural typing. Parse
+      // again at the shared persistence boundary so oversized or malformed
+      // third-party rows never reach Prisma.
+      const parsed = ImportJobItemSchema.safeParse(candidate);
+      if (!parsed.success) {
+        invalid += 1;
+        return null;
+      }
+      const it = parsed.data;
+      const jobUrl = sanitizePipelineUrl(
+        canonicalizeJobUrl(it.jobUrl ?? it.job_url ?? ""),
+      );
       const title = it.title?.trim();
       if (!jobUrl || !title) {
         invalid += 1;
@@ -102,6 +127,7 @@ export async function importJobsForUser({
       const listingDate =
         parsedListing && !Number.isNaN(parsedListing.getTime()) ? parsedListing : null;
       const company = optionalText(it.company);
+      const description = optionalText(it.description);
       // Scored against the canonical URL so tracking parameters cannot change
       // the verdict for what is really the same posting.
       const risk = scorePostingRisk({ jobUrl, company });
@@ -112,7 +138,7 @@ export async function importJobsForUser({
         location: optionalText(it.location),
         jobType: optionalText(it.jobType) ?? optionalText(it.job_type),
         jobLevel: optionalText(it.jobLevel) ?? optionalText(it.job_level),
-        description: optionalText(it.description),
+        description,
         salary: optionalText(it.salary),
         workArrangement:
           optionalText(it.workArrangement) ??
@@ -123,6 +149,7 @@ export async function importJobsForUser({
         postingRisk: risk.score,
         postingRiskFlags: risk.flags,
         companyRoleKey: buildCompanyRoleKey({ company, title }),
+        descriptionSimHash: description ? computeSimHash64(description) : null,
       };
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
@@ -134,7 +161,29 @@ export async function importJobsForUser({
     return true;
   });
 
-  if (deduplicated.length === 0) {
+  let eligibleForImport = deduplicated;
+  if (deduplicated.length > 0) {
+    try {
+      const keep = await buildUserCooldownFilter(userId);
+      eligibleForImport = deduplicated.filter((item) =>
+        keep({
+          company: item.company ?? "",
+          title: item.title,
+          roleFamily: inferApplicationRoleFamily(item.title),
+        }),
+      );
+    } catch (error) {
+      // Cooldown is additive policy. During the ApplicationEvent migration,
+      // fail open rather than silently losing otherwise valid job discoveries.
+      reportError(error, {
+        scope: "jobs.import.cooldown_unavailable",
+        severity: "warning",
+        userId,
+      });
+    }
+  }
+
+  if (eligibleForImport.length === 0) {
     return { imported: 0, invalid };
   }
 
@@ -148,14 +197,14 @@ export async function importJobsForUser({
         const deletedUrls = await tx.deletedJobUrl.findMany({
           where: {
             userId,
-            jobUrl: { in: deduplicated.map((item) => item.jobUrl) },
+            jobUrl: { in: eligibleForImport.map((item) => item.jobUrl) },
           },
           select: { jobUrl: true },
         });
         const deletedSet = new Set(
           deletedUrls.map((item) => canonicalizeJobUrl(item.jobUrl)),
         );
-        const normalized = deduplicated.filter(
+        const normalized = eligibleForImport.filter(
           (item) => !deletedSet.has(item.jobUrl),
         );
 
@@ -185,6 +234,12 @@ export async function importJobsForUser({
                 postingRiskFlags:
                   batch[batchIndex]?.postingRiskFlags ?? [],
                 companyRoleKey: batch[batchIndex]?.companyRoleKey ?? null,
+                descriptionSimHash:
+                  batch[batchIndex]?.descriptionSimHash ?? null,
+                livenessStatus: "ACTIVE" as const,
+                livenessReason: "import_reachable",
+                livenessCheckedAt: observedAt,
+                lastSeenAt: observedAt,
               }))
             : baseData;
           const result = await tx.job.createMany({
@@ -192,6 +247,22 @@ export async function importJobsForUser({
             skipDuplicates: true,
           });
           written += result.count;
+          if (includeEnrichment) {
+            // createMany intentionally skips existing canonical URLs. Seeing
+            // one again is still a liveness signal, so refresh it in bulk.
+            await tx.job.updateMany({
+              where: {
+                userId,
+                jobUrl: { in: batch.map((item) => item.jobUrl) },
+              },
+              data: {
+                livenessStatus: "ACTIVE",
+                livenessReason: "import_reachable",
+                livenessCheckedAt: observedAt,
+                lastSeenAt: observedAt,
+              },
+            });
+          }
         }
         return written;
       },

@@ -16,6 +16,26 @@ const inlineProcessors = vi.hoisted(() => ({
   global: vi.fn(),
 }));
 
+const safeFetchHarness = vi.hoisted(() => ({
+  fetch: vi.fn(),
+}));
+
+vi.mock("@/lib/server/net/safeFetch", () => {
+  class MockSafeOutboundError extends Error {
+    constructor(
+      public readonly code: string,
+      message: string,
+    ) {
+      super(message);
+      this.name = "SafeOutboundError";
+    }
+  }
+  return {
+    SafeOutboundError: MockSafeOutboundError,
+    safeOutboundFetch: safeFetchHarness.fetch,
+  };
+});
+
 vi.mock("@/lib/server/prisma", () => ({
   prisma: {
     fetchRun: {
@@ -58,6 +78,7 @@ vi.mock("@/lib/server/sources/processGlobalFetchRun", () => ({
 
 import { getServerSession } from "next-auth/next";
 import { POST } from "@/app/api/fetch-runs/[id]/trigger/route";
+import { SafeOutboundError } from "@/lib/server/net/safeFetch";
 
 const RUN_ID = "550e8400-e29b-41d4-a716-446655440000";
 
@@ -87,6 +108,11 @@ describe("fetch run trigger api", () => {
     fetchRunStore.countInTx.mockResolvedValue(0);
     inlineProcessors.cn.mockReset();
     inlineProcessors.global.mockReset();
+    safeFetchHarness.fetch
+      .mockReset()
+      .mockImplementation((url: string | URL, init?: RequestInit) =>
+        fetch(url, init),
+      );
     process.env.GITHUB_OWNER = "o";
     process.env.GITHUB_REPO = "r";
     process.env.GITHUB_TOKEN = "t";
@@ -118,6 +144,18 @@ describe("fetch run trigger api", () => {
     expect(fetchRunStore.queryRawLock).toHaveBeenCalled();
     expect(fetchRunStore.updateInTx).toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalled();
+    expect(safeFetchHarness.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /^https:\/\/api\.github\.com\/repos\/o\/r\/actions\/workflows\/jobspy-fetch\.yml\/dispatches$/,
+      ),
+      expect.objectContaining({ method: "POST" }),
+      {
+        allowedHosts: ["api.github.com"],
+        timeoutMs: 10_000,
+        maxResponseBytes: 64 * 1024,
+        maxRedirects: 0,
+      },
+    );
   });
 
   it("returns alreadyDispatched when advisory lock is contended", async () => {
@@ -356,6 +394,42 @@ describe("fetch run trigger api", () => {
       data: {
         status: "FAILED",
         error: "GITHUB_DISPATCH_UNREACHABLE",
+        queries: { title: "SWE", queries: ["SWE"] },
+      },
+    });
+  });
+
+  it("maps the safe outbound timeout to a stable dispatch timeout", async () => {
+    mockAuthedUser();
+    mockLockAcquired(true);
+    fetchRunStore.findFirstInTx.mockResolvedValueOnce({
+      id: RUN_ID,
+      status: "QUEUED",
+      market: "AU",
+      queries: { title: "SWE", queries: ["SWE"] },
+    });
+    fetchRunStore.updateInTx.mockResolvedValueOnce({});
+    fetchRunStore.updateMany.mockResolvedValue({ count: 1 });
+    safeFetchHarness.fetch.mockRejectedValueOnce(
+      new SafeOutboundError("REQUEST_TIMEOUT", "Outbound request timed out"),
+    );
+
+    const res = await POST(
+      new Request(`http://localhost/api/fetch-runs/${RUN_ID}/trigger`, {
+        method: "POST",
+      }),
+      { params: Promise.resolve({ id: RUN_ID }) },
+    );
+
+    expect(res.status).toBe(504);
+    await expect(res.json()).resolves.toEqual({
+      error: "GITHUB_DISPATCH_TIMEOUT",
+    });
+    expect(fetchRunStore.updateMany).toHaveBeenCalledWith({
+      where: { id: RUN_ID, userId: "user-1", status: "QUEUED" },
+      data: {
+        status: "FAILED",
+        error: "GITHUB_DISPATCH_TIMEOUT",
         queries: { title: "SWE", queries: ["SWE"] },
       },
     });

@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/server/net/safeFetch", () => ({
+  SafeOutboundError: class SafeOutboundError extends Error {},
+  parseSafeOutboundUrl: (url: string | URL) => new URL(url),
+  safeOutboundFetch: (
+    url: string | URL,
+    init?: RequestInit,
+  ) => fetch(url, { ...init, redirect: "manual" }),
+}));
+
 import { compileLatexToPdf, LatexRenderError } from "./compilePdf";
 
 function mockRenderResponse(body: Buffer, init?: { ok?: boolean; status?: number }) {

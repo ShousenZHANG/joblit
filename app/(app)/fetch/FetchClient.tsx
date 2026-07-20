@@ -31,6 +31,7 @@ import {
   TITLE_EXCLUSION_VALUES,
 } from "@/lib/shared/fetchExclusionCriteria";
 import { cn } from "@/lib/utils";
+import { SourceHealthPanel } from "./SourceHealthPanel";
 
 const RIGHTS_EXCLUSION_OPTIONS = DESCRIPTION_EXCLUSION_OPTIONS.filter(
   (o) => o.category === "rights",
@@ -978,6 +979,8 @@ export function FetchClient() {
               {t("globalFeeds")}
             </button>
           </div>
+
+          <SourceHealthPanel enabled={includeGlobalFeeds} />
 
           {/* Collapsible exclusion filters */}
           {applyExcludes && (

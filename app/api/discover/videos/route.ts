@@ -18,7 +18,9 @@ import {
   writeCache,
 } from "@/lib/server/discover/videoCache";
 
-const DB_CACHE_TTL_MS = 25 * 60 * 60 * 1000; // 25 h — slightly > 24h cron cadence so cache never expires between runs
+// User-triggered refresh only. Long-lived DB cache protects YouTube quota;
+// stale data remains available if the upstream quota is exhausted.
+const DB_CACHE_TTL_MS = 25 * 60 * 60 * 1000;
 
 const VALID_CATEGORIES: VideoCategory[] = [
   "all",

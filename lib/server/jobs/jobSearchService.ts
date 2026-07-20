@@ -6,6 +6,7 @@ import { getVisibleJobMarkets } from "./jobMarketScope";
 import { normalizePostingRiskFlags } from "./jobListItemMapper";
 import { getJobLocationTerms } from "./jobLocationScope";
 import { escapeLikePattern } from "./searchUtils";
+import { findNearDuplicateJobIds } from "./simHashDuplicateService";
 
 export async function listJobsWithRelevance(
   userId: string,
@@ -97,6 +98,10 @@ export async function listJobsWithRelevance(
     fitScore: number | null;
     fitVerdict: string | null;
     fitEligibility: string | null;
+    livenessStatus: "ACTIVE" | "EXPIRED" | "UNCERTAIN";
+    livenessReason: string | null;
+    possibleDuplicate: boolean;
+    descriptionSimHash: string | null;
     createdAt: Date;
     updatedAt: Date;
     resumePdfUrl: string | null;
@@ -113,6 +118,17 @@ export async function listJobsWithRelevance(
           j."status", j."market", j."source",
           j."postingRisk", j."postingRiskFlags",
           j."fitScore", j."fitVerdict", j."fitEligibility",
+          j."livenessStatus", j."livenessReason",
+          j."descriptionSimHash",
+          (
+            j."companyRoleKey" IS NOT NULL
+            AND (
+              SELECT COUNT(*) > 1
+              FROM "Job" duplicate
+              WHERE duplicate."userId" = j."userId"
+                AND duplicate."companyRoleKey" = j."companyRoleKey"
+            )
+          ) AS "possibleDuplicate",
           j."createdAt", j."updatedAt",
           a."resumePdfUrl", a."resumePdfName", a."coverPdfUrl",
           GREATEST(
@@ -143,7 +159,10 @@ export async function listJobsWithRelevance(
         ranked."workArrangement", ranked."listingDate", ranked."status",
         ranked."market", ranked."source", ranked."postingRisk",
         ranked."postingRiskFlags", ranked."fitScore", ranked."fitVerdict",
-        ranked."fitEligibility", ranked."createdAt", ranked."updatedAt",
+        ranked."fitEligibility", ranked."livenessStatus",
+        ranked."livenessReason", ranked."possibleDuplicate",
+        ranked."descriptionSimHash",
+        ranked."createdAt", ranked."updatedAt",
         ranked."resumePdfUrl", ranked."resumePdfName", ranked."coverPdfUrl"
       FROM ranked
       WHERE ${cursorClause}
@@ -157,13 +176,23 @@ export async function listJobsWithRelevance(
 
   const totalCount = Number(countResult[0]?.count ?? 0);
   const hasMore = rows.length > limit;
-  const items: JobListItem[] = rows.slice(0, limit).map((r) => ({
-    ...r,
-    postingRiskFlags: normalizePostingRiskFlags(r.postingRiskFlags),
-    resumePdfUrl: r.resumePdfUrl ?? null,
-    resumePdfName: r.resumePdfName ?? null,
-    coverPdfUrl: r.coverPdfUrl ?? null,
-  }));
+  const visibleRows = rows.slice(0, limit);
+  const simHashDuplicateIds = await findNearDuplicateJobIds(
+    userId,
+    visibleRows,
+  );
+  const items: JobListItem[] = visibleRows.map((r) => {
+    const { descriptionSimHash: _descriptionSimHash, ...publicFields } = r;
+    return {
+      ...publicFields,
+      possibleDuplicate:
+        r.possibleDuplicate || simHashDuplicateIds.has(r.id),
+      postingRiskFlags: normalizePostingRiskFlags(r.postingRiskFlags),
+      resumePdfUrl: r.resumePdfUrl ?? null,
+      resumePdfName: r.resumePdfName ?? null,
+      coverPdfUrl: r.coverPdfUrl ?? null,
+    };
+  });
   const nextCursor = hasMore ? items[items.length - 1]?.id ?? null : null;
 
   const jobLevels = Array.from(

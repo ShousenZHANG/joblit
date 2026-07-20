@@ -1,4 +1,5 @@
 import type { JobStatus } from "../types";
+import { isJobStatus } from "@/lib/shared/jobStatus";
 
 export type JobsUrlState = {
   q: string;
@@ -33,8 +34,7 @@ export function parseJobsUrlState(params: URLSearchParams): JobsUrlState {
 
   return {
     q: params.get(URL_KEYS.q) ?? DEFAULTS.q,
-    statusFilter:
-      status === "APPLIED" || status === "REJECTED" ? status : DEFAULTS.statusFilter,
+    statusFilter: isJobStatus(status) ? status : DEFAULTS.statusFilter,
     locationFilter: params.get(URL_KEYS.locationFilter) || DEFAULTS.locationFilter,
     jobLevelFilter: params.get(URL_KEYS.jobLevelFilter) || DEFAULTS.jobLevelFilter,
     selectedId: params.get(URL_KEYS.selectedId),

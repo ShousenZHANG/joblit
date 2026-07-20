@@ -28,7 +28,6 @@ const serverEnvSchema = z.object({
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().optional(),
   BLOB_READ_WRITE_TOKEN: z.string().optional(),
-  CRON_SECRET: z.string().optional(),
   YOUTUBE_API_KEY: z.string().optional(),
   GITHUB_OWNER: z.string().optional(),
   GITHUB_REPO: z.string().optional(),

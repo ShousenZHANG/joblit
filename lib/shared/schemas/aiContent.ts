@@ -27,6 +27,7 @@ const addedBulletSchema = z
     userEdit: z.string().optional(),
     accepted: z.boolean(),
     qualityGate: qualityGateSchema.optional(),
+    evidenceIds: z.array(z.string().regex(/^ev_[0-9a-f]{32}$/)).max(8).optional(),
   })
   .strict();
 
@@ -35,6 +36,12 @@ const skillsAdditionSchema = z
     label: z.string(),
     items: z.array(z.string()),
     accepted: z.boolean(),
+    /**
+     * Server-owned candidate evidence supporting this proposed skill group.
+     * The server recomputes this field from the current resume snapshot on
+     * draft save/finalize; browser-supplied identifiers are never trusted.
+     */
+    evidenceIds: z.array(z.string().regex(/^ev_[0-9a-f]{32}$/)).max(12).optional(),
   })
   .strict();
 
@@ -44,6 +51,7 @@ const summarySchema = z
     originalText: z.string(),
     userEdit: z.string().optional(),
     accepted: z.boolean().default(true),
+    evidenceIds: z.array(z.string().regex(/^ev_[0-9a-f]{32}$/)).max(12).optional(),
   })
   .strict();
 
@@ -67,6 +75,7 @@ const coverParagraphSchema = z
     aiText: z.string(),
     userEdit: z.string().optional(),
     accepted: z.boolean(),
+    evidenceIds: z.array(z.string().regex(/^ev_[0-9a-f]{32}$/)).max(12).optional(),
   })
   .strict();
 
@@ -75,6 +84,35 @@ const coverSchema = z
     paragraphOne: coverParagraphSchema,
     paragraphTwo: coverParagraphSchema,
     paragraphThree: coverParagraphSchema,
+  })
+  .strict();
+
+const evidenceReferenceSchema = z
+  .object({
+    id: z.string().regex(/^ev_[0-9a-f]{32}$/),
+    kind: z.enum(["candidate", "job"]),
+    path: z.string().min(1).max(160),
+    contentHash: z.string().regex(/^[0-9a-f]{64}$/),
+    excerpt: z.string().min(1).max(480),
+  })
+  .strict();
+
+const requirementCoverageSchema = z
+  .object({
+    id: z.string().regex(/^req_[0-9a-f]{16}$/),
+    text: z.string().min(1).max(500),
+    status: z.enum(["covered", "partial", "missing"]),
+    evidenceIds: z.array(z.string().regex(/^ev_[0-9a-f]{32}$/)).max(12),
+  })
+  .strict();
+
+const applicationReviewSchema = z
+  .object({
+    verdict: z.enum(["pass", "revise", "blocked"]),
+    reviewedAt: z.string().datetime(),
+    coveragePercent: z.number().int().min(0).max(100),
+    requirements: z.array(requirementCoverageSchema).max(12),
+    issues: z.array(z.string().min(1).max(300)).max(20),
   })
   .strict();
 
@@ -90,6 +128,8 @@ export const aiContentSchema = z
      */
     promptMetaHash: z.string(),
     source: z.enum(["manual_import", "local_ai"]).optional(),
+    evidence: z.array(evidenceReferenceSchema).max(320).optional(),
+    review: applicationReviewSchema.optional(),
     cv: cvSchema,
     cover: coverSchema,
   })
@@ -99,6 +139,8 @@ export type AiContent = z.infer<typeof aiContentSchema>;
 export type AiAddedBullet = z.infer<typeof addedBulletSchema>;
 export type AiSummary = z.infer<typeof summarySchema>;
 export type AiCoverParagraph = z.infer<typeof coverParagraphSchema>;
+export type AiEvidenceReference = z.infer<typeof evidenceReferenceSchema>;
+export type AiApplicationReview = z.infer<typeof applicationReviewSchema>;
 
 /* ───────────────────────── hashing ───────────────────────── */
 

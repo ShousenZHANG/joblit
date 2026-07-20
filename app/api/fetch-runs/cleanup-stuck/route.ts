@@ -14,7 +14,7 @@ export const runtime = "nodejs";
  *
  * Normal create, trigger, and status-poll traffic already performs guarded
  * stale-run recovery. This endpoint is retained only for manual diagnostics;
- * product correctness does not depend on a cron or queue sweep.
+ * product correctness does not depend on a background queue sweep.
  */
 export async function GET(req: Request) {
   const secret = process.env.FETCH_RUN_SECRET;

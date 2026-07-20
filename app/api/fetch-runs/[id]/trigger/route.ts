@@ -16,6 +16,10 @@ import {
   checkFetchRunQuota,
   fetchRunQuotaExceededResponse,
 } from "@/lib/server/fetchRuns/fetchRunQuota";
+import {
+  SafeOutboundError,
+  safeOutboundFetch,
+} from "@/lib/server/net/safeFetch";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -238,8 +242,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   //
   // CN and GLOBAL markets: the aggregator pipelines run in-process (Vercel
   // serverless). The GitHub Actions dispatch path + cn-fetch.yml + Python
-  // scraper are retired, and we no longer hop through an internal fetch() to
-  // a cron endpoint (that path silently dropped work when JOBLIT_WEB_URL was
+  // scraper are retired, and we no longer hop through an internal request to
+  // a background scheduler endpoint (that path silently dropped work when JOBLIT_WEB_URL was
   // unset and left the UI pinned in "Queued"). We run the fetch here and
   // return once it completes; the trigger function has a 60s budget which is
   // ample for the aggregators' typical 5-15s pull.
@@ -305,31 +309,31 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const token = envOrThrow("GITHUB_TOKEN");
     const workflow = process.env.GITHUB_WORKFLOW_FILE || "jobspy-fetch.yml";
     const ref = process.env.GITHUB_REF || "master";
-    const ghController = new AbortController();
-    const ghTimeout = setTimeout(() => ghController.abort(), 10_000);
-    try {
-      ghRes = await fetch(
-        `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflow}/dispatches`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/vnd.github+json",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ ref, inputs: { runId } }),
-          signal: ghController.signal,
+    ghRes = await safeOutboundFetch(
+      `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflow}/dispatches`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "Content-Type": "application/json",
         },
-      );
-    } finally {
-      clearTimeout(ghTimeout);
-    }
+        body: JSON.stringify({ ref, inputs: { runId } }),
+      },
+      {
+        allowedHosts: ["api.github.com"],
+        timeoutMs: 10_000,
+        maxResponseBytes: 64 * 1024,
+        maxRedirects: 0,
+      },
+    );
   } catch (err) {
     reportError(err, { scope: "fetch-runs.trigger.dispatch", userId, tags: { runId } });
     const error =
       err instanceof MissingDispatchConfigError
         ? "GITHUB_DISPATCH_NOT_CONFIGURED"
-        : (err as Error).name === "AbortError"
+        : err instanceof SafeOutboundError &&
+            err.code === "REQUEST_TIMEOUT"
           ? "GITHUB_DISPATCH_TIMEOUT"
           : "GITHUB_DISPATCH_UNREACHABLE";
     await failQueuedRun({

@@ -27,6 +27,15 @@ vi.mock("@/lib/server/latex/renderResume", () => ({
   renderResumeTex: vi.fn(() => "\\documentclass{article}"),
 }));
 
+vi.mock("@/lib/server/net/safeFetch", () => ({
+  SafeOutboundError: class SafeOutboundError extends Error {},
+  parseSafeOutboundUrl: (url: string | URL) => new URL(url),
+  safeOutboundFetch: (
+    url: string | URL,
+    init?: RequestInit,
+  ) => fetch(url, { ...init, redirect: "manual" }),
+}));
+
 import { getServerSession } from "next-auth/next";
 import { POST } from "@/app/api/resume-pdf/route";
 

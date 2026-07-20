@@ -113,4 +113,32 @@ describe("runSourceFetch", () => {
     expect(result.jobs).toEqual([]);
     expect(result.diagnostics).toEqual([]);
   });
+
+  it("bounds adapter concurrency while preserving source order", async () => {
+    let active = 0;
+    let peak = 0;
+    const sources = Array.from({ length: 7 }, (_, index) => `source-${index}`);
+    const adapters = sources.map(
+      (id): SourceAdapter => ({
+        id,
+        allowedHosts: ["example.com"],
+        fetch: async () => {
+          active += 1;
+          peak = Math.max(peak, active);
+          await Promise.resolve();
+          active -= 1;
+          return [job({ jobUrl: `https://example.com/${id}`, source: id })];
+        },
+      }),
+    );
+
+    const result = await runSourceFetch({
+      sources,
+      adapters,
+      maxConcurrency: 3,
+    });
+
+    expect(peak).toBe(3);
+    expect(result.diagnostics.map((item) => item.source)).toEqual(sources);
+  });
 });
