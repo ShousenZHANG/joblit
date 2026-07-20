@@ -469,6 +469,138 @@ class RunJobspyDedupeTests(unittest.TestCase):
             ],
         )
 
+    def test_filter_title_backend_query_keeps_its_own_role_pack(self):
+        # The backend pack expands into API / Platform titles. Without a domain
+        # class the base-query gate rejected every one of them, so the fetcher
+        # spent LinkedIn budget on rows it could never keep.
+        df = pd.DataFrame(
+            [
+                {"title": "Backend Engineer"},
+                {"title": "API Engineer"},
+                {"title": "Platform Engineer"},
+                {"title": "Senior Backend Developer"},
+                # Other domains must stay out.
+                {"title": "AI Engineer"},
+                {"title": "Data Engineer"},
+                {"title": "Accountant"},
+            ]
+        )
+
+        out = rj.filter_title(
+            df,
+            queries=["Backend Engineer", "API Engineer", "Platform Engineer"],
+            enforce_include=True,
+            exclude_terms=[],
+            base_queries=["Backend Engineer"],
+        )
+
+        kept = out["title"].tolist()
+        for title in (
+            "Backend Engineer",
+            "API Engineer",
+            "Platform Engineer",
+            "Senior Backend Developer",
+        ):
+            self.assertIn(title, kept)
+        for title in ("AI Engineer", "Data Engineer", "Accountant"):
+            self.assertNotIn(title, kept)
+
+    def test_filter_title_data_query_keeps_its_own_role_pack(self):
+        df = pd.DataFrame(
+            [
+                {"title": "Data Engineer"},
+                {"title": "Analytics Engineer"},
+                {"title": "ETL Developer"},
+                {"title": "Big Data Engineer"},
+                {"title": "Backend Engineer"},
+                {"title": "Marketing Manager"},
+            ]
+        )
+
+        out = rj.filter_title(
+            df,
+            queries=["Data Engineer", "Analytics Engineer", "ETL Developer"],
+            enforce_include=True,
+            exclude_terms=[],
+            base_queries=["Data Engineer"],
+        )
+
+        kept = out["title"].tolist()
+        for title in (
+            "Data Engineer",
+            "Analytics Engineer",
+            "ETL Developer",
+            "Big Data Engineer",
+        ):
+            self.assertIn(title, kept)
+        for title in ("Backend Engineer", "Marketing Manager"):
+            self.assertNotIn(title, kept)
+
+    def test_filter_title_power_platform_query_keeps_the_product_family(self):
+        # "Power Platform Developer" requires BOTH "power" and "platform", but
+        # none of the products in that ecosystem repeat those tokens — the pack
+        # was effectively non-functional under the gate.
+        df = pd.DataFrame(
+            [
+                {"title": "Power Platform Developer"},
+                {"title": "Power Apps Developer"},
+                {"title": "Power Automate Developer"},
+                {"title": "Copilot Studio Developer"},
+                {"title": "Dynamics 365 Developer"},
+                {"title": "Software Engineer"},
+                {"title": "Backend Engineer"},
+            ]
+        )
+
+        out = rj.filter_title(
+            df,
+            queries=[
+                "Power Platform Developer",
+                "Power Apps Developer",
+                "Copilot Studio Developer",
+                "Dynamics 365 Developer",
+            ],
+            enforce_include=True,
+            exclude_terms=[],
+            base_queries=["Power Platform Developer"],
+        )
+
+        kept = out["title"].tolist()
+        for title in (
+            "Power Platform Developer",
+            "Power Apps Developer",
+            "Power Automate Developer",
+            "Copilot Studio Developer",
+            "Dynamics 365 Developer",
+        ):
+            self.assertIn(title, kept)
+        for title in ("Software Engineer", "Backend Engineer"):
+            self.assertNotIn(title, kept)
+
+    def test_filter_title_platform_query_does_not_pull_the_power_family(self):
+        # A plain "Platform Engineer" search must NOT inherit the Power Platform
+        # product family: that family is keyed on both of its tokens together.
+        df = pd.DataFrame(
+            [
+                {"title": "Platform Engineer"},
+                {"title": "Copilot Studio Developer"},
+                {"title": "Dynamics 365 Developer"},
+            ]
+        )
+
+        out = rj.filter_title(
+            df,
+            queries=["Platform Engineer"],
+            enforce_include=True,
+            exclude_terms=[],
+            base_queries=["Platform Engineer"],
+        )
+
+        kept = out["title"].tolist()
+        self.assertIn("Platform Engineer", kept)
+        self.assertNotIn("Copilot Studio Developer", kept)
+        self.assertNotIn("Dynamics 365 Developer", kept)
+
     def test_filter_title_matches_mixed_chinese_and_ascii_role_query(self):
         df = pd.DataFrame(
             [

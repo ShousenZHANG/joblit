@@ -576,6 +576,24 @@ AI_DOMAIN_SYNONYMS: tuple[str, ...] = (
     "rag",
 )
 
+BACKEND_DOMAIN_SYNONYMS: tuple[str, ...] = (
+    "backend",
+    "api",
+    "platform",
+    "server side",
+    "serverside",
+    "microservices",
+)
+
+DATA_DOMAIN_SYNONYMS: tuple[str, ...] = (
+    "data",
+    "analytics",
+    "etl",
+    "elt",
+    "warehouse",
+    "business intelligence",
+)
+
 ROLE_SIGNAL_SYNONYMS: Dict[str, tuple[str, ...]] = {
     "ai": AI_DOMAIN_SYNONYMS,
     "ml": AI_DOMAIN_SYNONYMS,
@@ -587,7 +605,55 @@ ROLE_SIGNAL_SYNONYMS: Dict[str, tuple[str, ...]] = {
     "learning": AI_DOMAIN_SYNONYMS,
     "agent": ("agent", "agents", "agentic"),
     "agentic": ("agentic", "agent", "agents"),
+    # The backend and data packs expand into sibling titles that share no
+    # literal token with the query ("API Engineer", "Analytics Engineer"), so
+    # without these classes the gate rejected every expanded row.
+    "backend": BACKEND_DOMAIN_SYNONYMS,
+    "api": BACKEND_DOMAIN_SYNONYMS,
+    "platform": BACKEND_DOMAIN_SYNONYMS,
+    "data": DATA_DOMAIN_SYNONYMS,
+    "analytics": DATA_DOMAIN_SYNONYMS,
+    "etl": DATA_DOMAIN_SYNONYMS,
 }
+
+# Domain families keyed on a token COMBINATION rather than a single token.
+# "Power Platform Developer" requires both "power" and "platform", yet none of
+# the products in that ecosystem repeat either word — "Copilot Studio
+# Developer" and "Dynamics 365 Developer" are Power Platform roles by product,
+# not by name. A single-token class cannot express this without also making a
+# plain "Platform Engineer" search inherit the whole Microsoft catalogue, so
+# the trigger is the full token set.
+ROLE_DOMAIN_FAMILIES: tuple[tuple[frozenset[str], tuple[str, ...]], ...] = (
+    (
+        frozenset({"power", "platform"}),
+        (
+            "power platform",
+            "power apps",
+            "powerapps",
+            "power automate",
+            "power bi",
+            "powerbi",
+            "copilot",
+            "copilot studio",
+            "dynamics",
+            "dynamics 365",
+            "d365",
+            "dataverse",
+        ),
+    ),
+)
+
+
+def _matches_domain_family(title: str, signals: List[str]) -> bool:
+    """True when the query's signals trigger a multi-token domain family and the
+    title carries any member of it."""
+    signal_set = frozenset(signals)
+    for triggers, members in ROLE_DOMAIN_FAMILIES:
+        if triggers <= signal_set and any(
+            _contains_title_term(title, member) for member in members
+        ):
+            return True
+    return False
 
 
 def _signal_in_title(title: str, signal: str) -> bool:
@@ -614,7 +680,9 @@ def _is_title_relevant(title: str, queries: List[str]) -> bool:
             # A wholly generic query ("Software Engineer") carries no domain to
             # narrow on, so any titled engineering role is a legitimate hit.
             return True
-        if not all(_signal_in_title(title, signal) for signal in ascii_signals):
+        if not all(
+            _signal_in_title(title, signal) for signal in ascii_signals
+        ) and not _matches_domain_family(title, ascii_signals):
             continue
         normalized_title = _normalize_role_text(title)
         if all(signal in normalized_title for signal in cjk_signals):
@@ -629,7 +697,9 @@ def _matches_base_query_constraints(title: str, base_queries: List[str]) -> bool
         cjk_signals = _cjk_role_signals(query)
         if not ascii_signals and not cjk_signals:
             return True
-        if not all(_signal_in_title(title, signal) for signal in ascii_signals):
+        if not all(
+            _signal_in_title(title, signal) for signal in ascii_signals
+        ) and not _matches_domain_family(title, ascii_signals):
             continue
         if all(signal in normalized_title for signal in cjk_signals):
             return True
