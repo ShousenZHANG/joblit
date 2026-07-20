@@ -1,0 +1,133 @@
+[
+  {
+    "id": "clean-ai-match",
+    "title": "AI Engineer, strong match, no eligibility constraint",
+    "note": "Baseline. If a model cannot hold this one, nothing else matters.",
+    "reference": {
+      "requirements": [
+        { "id": "r1", "type": "REQUIRED", "requirement": "Python", "judgement": "MATCH", "criticality": "CORE" },
+        { "id": "r2", "type": "REQUIRED", "requirement": "LLM application development", "judgement": "MATCH", "criticality": "CORE" },
+        { "id": "r3", "type": "PREFERRED", "requirement": "RAG pipelines", "judgement": "MATCH", "criticality": "SUPPORTING" },
+        { "id": "r4", "type": "RESPONSIBILITY", "requirement": "Ship models to production", "judgement": "MATCH", "criticality": "CORE" }
+      ],
+      "eligibility": { "status": "PASS", "reasons": [] }
+    }
+  },
+  {
+    "id": "citizenship-block",
+    "title": "Defence role requiring citizenship the candidate does not hold",
+    "note": "Hard eligibility BLOCK. Skill match is irrelevant; the cap must bind.",
+    "reference": {
+      "requirements": [
+        { "id": "r1", "type": "REQUIRED", "requirement": "Go", "judgement": "MATCH", "criticality": "CORE" },
+        { "id": "r2", "type": "REQUIRED", "requirement": "Distributed systems", "judgement": "MATCH", "criticality": "CORE" },
+        { "id": "r3", "type": "CREDENTIAL", "requirement": "Australian citizenship + security clearance", "judgement": "GAP", "criticality": "GATE" }
+      ],
+      "eligibility": { "status": "BLOCK", "reasons": ["Requires citizenship the candidate does not hold"] }
+    }
+  },
+  {
+    "id": "visa-risk",
+    "title": "Role that prefers but does not require permanent residency",
+    "note": "RISK, not BLOCK. Must land in the review band, never the blocked band.",
+    "reference": {
+      "requirements": [
+        { "id": "r1", "type": "REQUIRED", "requirement": "TypeScript", "judgement": "MATCH", "criticality": "CORE" },
+        { "id": "r2", "type": "REQUIRED", "requirement": "React", "judgement": "MATCH", "criticality": "CORE" },
+        { "id": "r3", "type": "CREDENTIAL", "requirement": "PR preferred", "judgement": "PARTIAL", "criticality": "SUPPORTING" }
+      ],
+      "eligibility": { "status": "RISK", "reasons": ["Employer prefers permanent residency"] }
+    }
+  },
+  {
+    "id": "gate-requirement-gap",
+    "title": "Strong overall but missing a stated non-negotiable",
+    "note": "A GATE judged GAP must cap the score even when eligibility passes.",
+    "reference": {
+      "requirements": [
+        { "id": "r1", "type": "REQUIRED", "requirement": "Kubernetes in production", "judgement": "GAP", "criticality": "GATE" },
+        { "id": "r2", "type": "REQUIRED", "requirement": "Python", "judgement": "MATCH", "criticality": "CORE" },
+        { "id": "r3", "type": "RESPONSIBILITY", "requirement": "On-call rotation", "judgement": "MATCH", "criticality": "SUPPORTING" }
+      ],
+      "eligibility": { "status": "PASS", "reasons": [] }
+    }
+  },
+  {
+    "id": "gate-requirement-partial",
+    "title": "Partial evidence against a non-negotiable",
+    "note": "Distinguishes the review cap from the blocked cap. Easy to conflate.",
+    "reference": {
+      "requirements": [
+        { "id": "r1", "type": "REQUIRED", "requirement": "5 years commercial Java", "judgement": "PARTIAL", "criticality": "GATE" },
+        { "id": "r2", "type": "REQUIRED", "requirement": "Spring Boot", "judgement": "MATCH", "criticality": "CORE" },
+        { "id": "r3", "type": "PREFERRED", "requirement": "Kafka", "judgement": "MATCH", "criticality": "SUPPORTING" }
+      ],
+      "eligibility": { "status": "PASS", "reasons": [] }
+    }
+  },
+  {
+    "id": "seniority-stretch",
+    "title": "Skills line up but the role is a level above",
+    "note": "SENIORITY is its own type; a stretch must not read as a skill gap.",
+    "reference": {
+      "requirements": [
+        { "id": "r1", "type": "SENIORITY", "requirement": "Staff / Principal level", "judgement": "GAP", "criticality": "CORE" },
+        { "id": "r2", "type": "REQUIRED", "requirement": "TypeScript", "judgement": "MATCH", "criticality": "CORE" },
+        { "id": "r3", "type": "REQUIRED", "requirement": "System design", "judgement": "PARTIAL", "criticality": "CORE" }
+      ],
+      "eligibility": { "status": "PASS", "reasons": [] }
+    }
+  },
+  {
+    "id": "domain-mismatch",
+    "title": "Right stack, wrong industry domain",
+    "note": "DOMAIN gaps are recoverable; they must not read as a hard block.",
+    "reference": {
+      "requirements": [
+        { "id": "r1", "type": "DOMAIN", "requirement": "Clinical trial data", "judgement": "GAP", "criticality": "CORE" },
+        { "id": "r2", "type": "REQUIRED", "requirement": "Python", "judgement": "MATCH", "criticality": "CORE" },
+        { "id": "r3", "type": "REQUIRED", "requirement": "SQL", "judgement": "MATCH", "criticality": "CORE" }
+      ],
+      "eligibility": { "status": "PASS", "reasons": [] }
+    }
+  },
+  {
+    "id": "sparse-jd",
+    "title": "Marketing-copy JD that states almost no concrete requirement",
+    "note": "UNKNOWN must not be scored as MATCH. Models love to fill this in.",
+    "reference": {
+      "requirements": [
+        { "id": "r1", "type": "REQUIRED", "requirement": "Unspecified engineering skills", "judgement": "UNKNOWN", "criticality": "CORE" },
+        { "id": "r2", "type": "RESPONSIBILITY", "requirement": "Work with a passionate team", "judgement": "UNKNOWN", "criticality": "SUPPORTING" }
+      ],
+      "eligibility": { "status": "PASS", "reasons": [] }
+    }
+  },
+  {
+    "id": "mixed-partial",
+    "title": "Half the stack matches, half is adjacent",
+    "note": "Ambiguous middle. Cheap models tend to round this one optimistically.",
+    "reference": {
+      "requirements": [
+        { "id": "r1", "type": "REQUIRED", "requirement": "Rust", "judgement": "GAP", "criticality": "CORE" },
+        { "id": "r2", "type": "REQUIRED", "requirement": "Go", "judgement": "PARTIAL", "criticality": "CORE" },
+        { "id": "r3", "type": "REQUIRED", "requirement": "gRPC", "judgement": "MATCH", "criticality": "CORE" },
+        { "id": "r4", "type": "PREFERRED", "requirement": "Observability tooling", "judgement": "PARTIAL", "criticality": "SUPPORTING" }
+      ],
+      "eligibility": { "status": "PASS", "reasons": [] }
+    }
+  },
+  {
+    "id": "credential-only-gap",
+    "title": "Everything matches except a formal certification",
+    "note": "A SUPPORTING credential gap must barely move the score.",
+    "reference": {
+      "requirements": [
+        { "id": "r1", "type": "REQUIRED", "requirement": "AWS architecture", "judgement": "MATCH", "criticality": "CORE" },
+        { "id": "r2", "type": "REQUIRED", "requirement": "Terraform", "judgement": "MATCH", "criticality": "CORE" },
+        { "id": "r3", "type": "CREDENTIAL", "requirement": "AWS Solutions Architect certification", "judgement": "GAP", "criticality": "SUPPORTING" }
+      ],
+      "eligibility": { "status": "PASS", "reasons": [] }
+    }
+  }
+]
