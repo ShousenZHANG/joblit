@@ -48,6 +48,19 @@ export type SafeOutboundPolicy = {
   timeoutMs?: number;
   maxResponseBytes?: number;
   maxRedirects?: number;
+  /**
+   * Permit a plain-http destination.
+   *
+   * SSRF protection and transport encryption are separate concerns, and this
+   * flag relaxes only the second. Every address check still applies: a
+   * loopback, private, link-local or metadata address stays blocked whether or
+   * not this is set. It exists for an operator-configured endpoint — a URL
+   * that is trusted input by definition, unlike a URL derived from a request.
+   *
+   * Anything sent to such a destination, including credentials, travels in
+   * cleartext. Callers must gate this behind an explicit deployment opt-in.
+   */
+  allowInsecureHttp?: boolean;
   /** Test seam. Production callers must use the default DNS resolver. */
   resolver?: SafeHostResolver;
   /** Test seam. Production callers must use the platform fetch. */
@@ -214,7 +227,10 @@ async function defaultResolver(
 
 export function parseSafeOutboundUrl(
   input: string | URL,
-  policy: Pick<SafeOutboundPolicy, "allowedHosts" | "allowSubdomains"> = {},
+  policy: Pick<
+    SafeOutboundPolicy,
+    "allowedHosts" | "allowSubdomains" | "allowInsecureHttp"
+  > = {},
 ): URL {
   let parsed: URL;
   try {
@@ -222,7 +238,10 @@ export function parseSafeOutboundUrl(
   } catch (cause) {
     throw new SafeOutboundError("INVALID_URL", "Outbound URL is invalid", cause);
   }
-  if (parsed.protocol !== "https:") {
+  const schemeAllowed =
+    parsed.protocol === "https:" ||
+    (policy.allowInsecureHttp === true && parsed.protocol === "http:");
+  if (!schemeAllowed) {
     throw new SafeOutboundError(
       "HTTPS_REQUIRED",
       `Outbound URL must use HTTPS: ${displayUrl(parsed)}`,
@@ -365,7 +384,8 @@ function redirectedInit(
  * Unified server-only outbound gateway.
  *
  * Security invariants:
- * - HTTPS only and optional exact/subdomain host allowlist.
+ * - HTTPS by default; HTTP requires an explicit caller opt-in.
+ * - Optional exact/subdomain host allowlist.
  * - DNS is checked before every request, including each redirect hop.
  * - Any private/reserved answer rejects the whole hostname (DNS rebinding /
  *   split-horizon preflight protection). Platform fetch may resolve again at

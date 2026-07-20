@@ -92,6 +92,13 @@ Required: `DATABASE_URL`, `AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECR
 
 Optional: `GEMINI_API_KEY`, `GEMINI_MODEL`, `BLOB_READ_WRITE_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_TOKEN`, `GITHUB_WORKFLOW_FILE`, `JOBLIT_WEB_URL`, `YOUTUBE_API_KEY`, `CRON_SECRET`, `RSSHUB_URL`, `RSSHUB_JOB_ROUTES`, `GITHUB_CN_JOB_REPOS`
 
+`LATEX_RENDER_ALLOW_INSECURE_HTTP=true` lets `LATEX_RENDER_URL` be a plain-http
+endpoint. `LATEX_RENDER_TOKEN` is sent as a request header, so this puts a
+credential on the wire in cleartext — set it only for a self-hosted renderer
+that has no TLS yet, and treat putting TLS in front of that renderer as the
+actual fix. Every other outbound protection (host allowlist, private-address
+blocking, redirect and size limits) stays enforced regardless.
+
 ## Prisma Schema Notes
 
 After editing `prisma/schema.prisma`, always run `npx prisma generate`. The client generates to `lib/generated/prisma/`. The Neon serverless adapter is configured in `lib/server/prisma.ts` — do not use the standard Prisma client directly.

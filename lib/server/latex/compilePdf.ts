@@ -73,9 +73,17 @@ export async function compileLatexToPdf(tex: string, options?: { files?: Compile
     // Changed error code and message as per instruction, keeping original constructor argument order
     throw new LatexRenderError("LATEX_RENDER_CONFIG_MISSING", 503, "No render service configuration");
   }
+  // A self-hosted renderer may not have TLS yet. Allowing that is a deployment
+  // decision with a real cost — the render token rides in a header, so plain
+  // HTTP puts a credential on the wire — so it is opt-in rather than the
+  // default. Host, DNS, redirect, timeout and response-size checks stay on
+  // either way; only transport encryption is relaxed.
+  const allowInsecureHttp =
+    process.env.LATEX_RENDER_ALLOW_INSECURE_HTTP === "true";
+
   let renderHost: string;
   try {
-    renderHost = parseSafeOutboundUrl(url).hostname;
+    renderHost = parseSafeOutboundUrl(url, { allowInsecureHttp }).hostname;
   } catch (err) {
     // Name which check rejected the URL. Collapsing every parse failure into
     // one message left an operator with a 503 and no way to tell a plain-http
@@ -121,6 +129,7 @@ export async function compileLatexToPdf(tex: string, options?: { files?: Compile
         body: JSON.stringify(body),
       },
       {
+        allowInsecureHttp,
         allowedHosts: [renderHost],
         maxRedirects: 0,
         maxResponseBytes: 12 * 1024 * 1024,

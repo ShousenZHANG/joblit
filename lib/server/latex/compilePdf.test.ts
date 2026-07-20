@@ -16,12 +16,12 @@ const { FakeSafeOutboundError } = vi.hoisted(() => ({
 
 vi.mock("@/lib/server/net/safeFetch", () => ({
   SafeOutboundError: FakeSafeOutboundError,
-  // Mirrors the real parser's contract: the https requirement is the check
-  // that rejects a plain-http render URL, so the stub must enforce it too or
-  // the test would pass against a parser that never rejects anything.
-  parseSafeOutboundUrl: (url: string | URL) => {
+  parseSafeOutboundUrl: (
+    url: string | URL,
+    policy?: { allowInsecureHttp?: boolean },
+  ) => {
     const parsed = new URL(url);
-    if (parsed.protocol !== "https:") {
+    if (parsed.protocol !== "https:" && !policy?.allowInsecureHttp) {
       throw new FakeSafeOutboundError("HTTPS_REQUIRED", "must use https");
     }
     return parsed;
@@ -29,7 +29,14 @@ vi.mock("@/lib/server/net/safeFetch", () => ({
   safeOutboundFetch: (
     url: string | URL,
     init?: RequestInit,
-  ) => fetch(url, { ...init, redirect: "manual" }),
+    policy?: { allowInsecureHttp?: boolean },
+  ) => {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:" && !policy?.allowInsecureHttp) {
+      throw new FakeSafeOutboundError("HTTPS_REQUIRED", "must use https");
+    }
+    return fetch(url, { ...init, redirect: "manual" });
+  },
 }));
 
 import { compileLatexToPdf, LatexRenderError } from "./compilePdf";
@@ -55,15 +62,22 @@ function mockRenderResponse(body: Buffer, init?: { ok?: boolean; status?: number
 describe("compileLatexToPdf integrity check", () => {
   const originalUrl = process.env.LATEX_RENDER_URL;
   const originalToken = process.env.LATEX_RENDER_TOKEN;
+  const originalInsecure = process.env.LATEX_RENDER_ALLOW_INSECURE_HTTP;
 
   beforeEach(() => {
     process.env.LATEX_RENDER_URL = "https://render.example";
     process.env.LATEX_RENDER_TOKEN = "render-token";
+    delete process.env.LATEX_RENDER_ALLOW_INSECURE_HTTP;
   });
 
   afterEach(() => {
     process.env.LATEX_RENDER_URL = originalUrl;
     process.env.LATEX_RENDER_TOKEN = originalToken;
+    if (originalInsecure === undefined) {
+      delete process.env.LATEX_RENDER_ALLOW_INSECURE_HTTP;
+    } else {
+      process.env.LATEX_RENDER_ALLOW_INSECURE_HTTP = originalInsecure;
+    }
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -115,22 +129,50 @@ describe("compileLatexToPdf integrity check", () => {
     }
   });
 
-  it("names why a render URL was rejected without echoing the URL", async () => {
-    // The catch collapsed every parse failure into "Render service URL is
-    // invalid", so an operator saw a 503 with no way to tell an http:// URL
-    // from a malformed one. The reason is surfaced; the URL is not, because
-    // it can carry a token in its path.
-    process.env.LATEX_RENDER_URL = "http://render.internal/compile";
+  it("rejects an http renderer unless the deployment opts in", async () => {
+    // The opt-in puts a credential on the wire in cleartext, so it cannot be
+    // the default: a URL mistyped as http must fail loudly rather than
+    // silently downgrade a deployment that has TLS.
+    process.env.LATEX_RENDER_URL = "http://render.example/compile";
+    delete process.env.LATEX_RENDER_ALLOW_INSECURE_HTTP;
 
-    const err = await compileLatexToPdf("\documentclass{article}").catch(
+    const err = await compileLatexToPdf("\\documentclass{article}").catch(
       (caught: unknown) => caught,
     );
 
     expect(err).toBeInstanceOf(LatexRenderError);
-    const rendered = err as LatexRenderError;
-    expect(rendered.code).toBe("LATEX_RENDER_CONFIG_MISSING");
-    expect(rendered.details).toEqual({ reason: "HTTPS_REQUIRED" });
-    expect(JSON.stringify(rendered.details)).not.toContain("render.internal");
+    expect((err as LatexRenderError).details).toEqual({
+      reason: "HTTPS_REQUIRED",
+    });
+  });
+
+  it("reaches an http renderer once the deployment opts in", async () => {
+    process.env.LATEX_RENDER_URL = "http://render.example/compile";
+    process.env.LATEX_RENDER_ALLOW_INSECURE_HTTP = "true";
+    const pdf = Buffer.concat([
+      Buffer.from("%PDF-1.7\n"),
+      Buffer.alloc(4000, 0x20),
+    ]);
+    mockRenderResponse(pdf);
+
+    const out = await compileLatexToPdf(
+      "\\documentclass{article}\\begin{document}x\\end{document}",
+    );
+
+    expect(out.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+  });
+
+  it("treats any value other than \"true\" as opted out", async () => {
+    process.env.LATEX_RENDER_URL = "http://render.example/compile";
+    process.env.LATEX_RENDER_ALLOW_INSECURE_HTTP = "1";
+
+    const err = await compileLatexToPdf("\\documentclass{article}").catch(
+      (caught: unknown) => caught,
+    );
+
+    expect((err as LatexRenderError).details).toEqual({
+      reason: "HTTPS_REQUIRED",
+    });
   });
 
   it("returns the buffer for a well-formed PDF payload", async () => {

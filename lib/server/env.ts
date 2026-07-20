@@ -36,6 +36,12 @@ const serverEnvSchema = z.object({
   GITHUB_WORKFLOW_FILE: z.string().optional(),
   JOBLIT_WEB_URL: z.string().optional(),
   NEXTAUTH_URL: z.string().optional(),
+
+  // Set to "true" only when the LaTeX renderer is reachable over plain HTTP.
+  // The render token travels in a request header, so this puts a credential on
+  // the wire in cleartext; it exists for a self-hosted renderer that has not
+  // been fronted with TLS yet. Absent or anything else, HTTPS stays mandatory.
+  LATEX_RENDER_ALLOW_INSECURE_HTTP: z.string().optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

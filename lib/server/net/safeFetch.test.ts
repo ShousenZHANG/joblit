@@ -56,6 +56,29 @@ describe("safe outbound URL policy", () => {
     ).toBe("api.example.com");
   });
 
+  it("allows http only when the caller explicitly opts in", () => {
+    expect(
+      parseSafeOutboundUrl("http://render.example/compile", {
+        allowInsecureHttp: true,
+        allowedHosts: ["render.example"],
+      }).href,
+    ).toBe("http://render.example/compile");
+
+    expect(() =>
+      parseSafeOutboundUrl("http://other.example/compile", {
+        allowInsecureHttp: true,
+        allowedHosts: ["render.example"],
+      }),
+    ).toThrow(/allowlisted/i);
+
+    expect(() =>
+      parseSafeOutboundUrl("http://user:pass@render.example/compile", {
+        allowInsecureHttp: true,
+        allowedHosts: ["render.example"],
+      }),
+    ).toThrow(/credentials/i);
+  });
+
   it("fails closed when any DNS answer is private", async () => {
     await expect(
       assertPublicOutboundUrl("https://example.com/path", {
@@ -69,6 +92,48 @@ describe("safe outbound URL policy", () => {
 });
 
 describe("safeOutboundFetch", () => {
+  it("keeps DNS and response protections when http is explicitly allowed", async () => {
+    const renderResolver = vi.fn(async () => [
+      { address: "1.1.1.1", family: 4 },
+    ]);
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response("%PDF-".padEnd(2048, " "), {
+        status: 200,
+        headers: { "content-type": "application/pdf" },
+      }),
+    );
+
+    const response = await safeOutboundFetch(
+      "http://render.example/compile",
+      { method: "POST" },
+      {
+        allowInsecureHttp: true,
+        allowedHosts: ["render.example"],
+        resolver: renderResolver,
+        fetchImpl,
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(renderResolver).toHaveBeenCalledWith("render.example");
+  });
+
+  it("still blocks private destinations when http is explicitly allowed", async () => {
+    await expect(
+      safeOutboundFetch(
+        "http://render.example/compile",
+        { method: "POST" },
+        {
+          allowInsecureHttp: true,
+          allowedHosts: ["render.example"],
+          resolver: async () => [{ address: "127.0.0.1", family: 4 }],
+          fetchImpl: vi.fn<typeof fetch>(),
+        },
+      ),
+    ).rejects.toMatchObject({ code: "PRIVATE_ADDRESS_FORBIDDEN" });
+  });
+
   it("validates every redirect and strips cross-origin credentials", async () => {
     const fetchImpl = vi
       .fn<typeof fetch>()
