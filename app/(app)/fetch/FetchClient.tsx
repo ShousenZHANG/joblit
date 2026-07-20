@@ -535,6 +535,10 @@ export function FetchClient() {
   const [hoursOld, setHoursOld] = useState(48);
   const [smartExpand, setSmartExpand] = useState(true);
   const [applyExcludes, setApplyExcludes] = useState(true);
+  // Strict title matching keeps only roles whose title is in the same family as
+  // the search. On by default — it is what makes a role search precise — but
+  // surfaced so a deliberately wide net is one click away.
+  const [strictTitles, setStrictTitles] = useState(true);
   const [excludeTitleTerms, setExcludeTitleTerms] = useState<string[]>([
     "senior",
     "lead",
@@ -686,7 +690,7 @@ export function FetchClient() {
           location,
           hoursOld,
           smartExpand,
-          includeFromQueries: true,
+          includeFromQueries: strictTitles,
           applyExcludes,
           excludeTitleTerms,
           excludeDescriptionRules: [
@@ -890,7 +894,7 @@ export function FetchClient() {
               onClick={() => setSmartExpand(!smartExpand)}
             >
               <span className={`h-1.5 w-1.5 rounded-full ${smartExpand ? "bg-brand-emerald-500" : "bg-muted-foreground/30"}`} />
-              Smart expand
+              {t("smartExpand")}
             </button>
             <button
               type="button"
@@ -898,7 +902,17 @@ export function FetchClient() {
               onClick={() => setApplyExcludes(!applyExcludes)}
             >
               <span className={`h-1.5 w-1.5 rounded-full ${applyExcludes ? "bg-brand-emerald-500" : "bg-muted-foreground/30"}`} />
-              Apply exclusions
+              {t("applyExclusions")}
+            </button>
+            <button
+              type="button"
+              data-testid="strict-titles-chip"
+              title={t("strictTitlesHint")}
+              className={`filter-chip ${strictTitles ? "filter-chip--active" : "filter-chip--inactive"}`}
+              onClick={() => setStrictTitles(!strictTitles)}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${strictTitles ? "bg-brand-emerald-500" : "bg-muted-foreground/30"}`} />
+              {t("strictTitles")}
             </button>
           </div>
 

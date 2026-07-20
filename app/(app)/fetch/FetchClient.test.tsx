@@ -151,6 +151,31 @@ describe("FetchClient", () => {
     expect(body.sourceOptions).toBeUndefined();
   });
 
+  it("sends includeFromQueries=false once strict title match is switched off", async () => {
+    const user = userEvent.setup();
+
+    renderFetch();
+
+    const titleInput = screen.getAllByPlaceholderText(/e\.g\. software engineer/i)[0];
+    fireEvent.change(titleInput, { target: { value: "AI Engineer" } });
+    await user.click(screen.getByTestId("strict-titles-chip"));
+    await user.click(screen.getByRole("button", { name: /start fetch/i }));
+
+    await waitFor(() => {
+      expect(startRunMock).toHaveBeenCalledWith([{ id: "run-1", source: "jobspy" }]);
+    });
+
+    const fetchMock = global.fetch as unknown as {
+      mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> };
+    };
+    const createCall = fetchMock.mock.calls.find(
+      ([url, init]) => url === "/api/fetch-runs" && init?.method === "POST",
+    );
+    const body = JSON.parse(String(createCall?.[1]?.body ?? "{}"));
+
+    expect(body.includeFromQueries).toBe(false);
+  });
+
   it("renders fetch action buttons inside the card", () => {
     renderFetch();
 
