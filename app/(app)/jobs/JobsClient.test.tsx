@@ -803,9 +803,15 @@ describe("JobsClient", () => {
     vi.stubGlobal("fetch", mockFetch);
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
+    // A preference cannot gate an application, so it must not appear under
+    // "Screening gates". The grouping carries the qualifier, which is why the
+    // chips read as the bare constraint.
     expect(await screen.findByText("Screening gates")).toBeInTheDocument();
-    expect(await screen.findByText("Required: 5+ years")).toBeInTheDocument();
-    expect(await screen.findByText("Preferred: 3+ years")).toBeInTheDocument();
+    expect(await screen.findByText("Nice to have")).toBeInTheDocument();
+    expect(await screen.findByText("5+ years")).toBeInTheDocument();
+    expect(await screen.findByText("3+ years")).toBeInTheDocument();
+    expect(screen.queryByText("Required: 5+ years")).not.toBeInTheDocument();
+    expect(screen.queryByText("Preferred: 3+ years")).not.toBeInTheDocument();
   });
 
   it("keeps Saved CV/CL in the primary actions row and keeps Remove as a trailing secondary action", async () => {
@@ -844,74 +850,6 @@ describe("JobsClient", () => {
 
     const actionRows = await screen.findAllByTestId("job-primary-actions");
     expect(actionRows[0]).toHaveClass("grid", "grid-cols-1", "sm:grid-cols-2");
-  });
-
-  it("surfaces a bulk-ignore HTTP failure instead of reporting that no jobs qualify", async () => {
-    const user = userEvent.setup();
-    const mockFetch = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
-      const url = typeof input === "string" ? input : input.url;
-      if (url === "/api/jobs/bulk-ignore" && init?.method === "POST") {
-        return new Response(JSON.stringify({ error: "Too many requests" }), {
-          status: 429,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      if (url.startsWith("/api/jobs?")) {
-        return new Response(
-          JSON.stringify({ items: [baseJob], nextCursor: null, totalCount: 1 }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
-      }
-      if (url.startsWith("/api/jobs/")) {
-        return new Response(JSON.stringify({ id: baseJob.id, description: "desc" }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
-    });
-    vi.stubGlobal("fetch", mockFetch);
-
-    renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
-    await user.click(await screen.findByRole("button", { name: /ignore low fit/i }));
-
-    expect(await screen.findByText("Could not update jobs. Try again.")).toBeInTheDocument();
-    expect(screen.queryByText("No scored low-fit jobs to ignore.")).not.toBeInTheDocument();
-  });
-
-  it("uses an accessible in-app confirmation for bulk-ignore", async () => {
-    const user = userEvent.setup();
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
-    const mockFetch = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
-      const url = typeof input === "string" ? input : input.url;
-      if (url === "/api/jobs/bulk-ignore" && init?.method === "POST") {
-        return new Response(JSON.stringify({ count: 2 }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      if (url.startsWith("/api/jobs?")) {
-        return new Response(
-          JSON.stringify({ items: [baseJob], nextCursor: null, totalCount: 1 }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
-      }
-      if (url.startsWith("/api/jobs/")) {
-        return new Response(JSON.stringify({ id: baseJob.id, description: "desc" }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
-    });
-    vi.stubGlobal("fetch", mockFetch);
-
-    renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
-    await user.click(await screen.findByRole("button", { name: /ignore low fit/i }));
-
-    const dialog = await screen.findByRole("alertdialog");
-    expect(within(dialog).getByText(/move 2 low-fit jobs to rejected/i)).toBeInTheDocument();
-    expect(confirmSpy).not.toHaveBeenCalled();
   });
 
   it("keeps deleted job hidden without triggering an unnecessary refetch", async () => {
@@ -1152,31 +1090,6 @@ describe("JobsClient", () => {
       expect(within(resultsPane).getByRole("list")).toBe(listBeforeDelete);
     });
     expect(listFetches).toBe(fetchesBeforeDelete);
-  });
-
-  it("selects the next visible job when low-fit rows are hidden", async () => {
-    const user = userEvent.setup();
-    const jobs = [
-      { ...baseJob, id: "aaaa-1111", title: "Alpha Engineer", fitScore: 72 },
-      { ...baseJob, id: "bbbb-2222", title: "Hidden Beta", fitScore: 30 },
-      { ...baseJob, id: "cccc-3333", title: "Gamma Designer", fitScore: 68 },
-    ];
-
-    renderWithClient(<JobsClient initialItems={jobs} initialCursor={null} />);
-    await user.click(screen.getByRole("button", { name: /hide low fit/i }));
-
-    const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
-    const list = within(resultsPane).getByRole("list");
-    expect(within(list).queryByText("Hidden Beta")).not.toBeInTheDocument();
-
-    await user.click(screen.getByTestId("job-remove-button"));
-
-    await waitFor(() => {
-      expect(
-        list.querySelector<HTMLElement>("[data-job-id='cccc-3333']"),
-      ).toHaveAttribute("aria-current", "true");
-    });
-    expect(within(list).queryByText("Hidden Beta")).not.toBeInTheDocument();
   });
 
   it("rolls a failed delete back without refetching or overriding a newer selection", async () => {
@@ -1756,8 +1669,8 @@ describe("JobsClient", () => {
     const primaryActions = (await screen.findAllByTestId("job-primary-actions"))[0];
     const statusCombobox = within(primaryActions).getByRole("combobox");
     await user.click(statusCombobox);
-    // Scope to option role so we don't accidentally click the new
-    // status FilterPill in the list header (same visible text).
+    // Scope to option role so we don't accidentally click the status
+    // segmented control in the list header (same visible text).
     await user.click(await screen.findByRole("option", { name: "Applied" }));
 
     await screen.findByText("Update failed");
@@ -1883,40 +1796,6 @@ describe("JobsClient", () => {
         messages.jobs.statusAccepted,
       ]) {
         expect(screen.queryByRole("radio", { name: label })).not.toBeInTheDocument();
-      }
-    });
-
-    it("separates exclusive filters, view toggles and actions by role", async () => {
-      // The three control types used to be indistinguishable pills. Each now
-      // carries the semantics a user (and a screen reader) needs to tell them
-      // apart: exclusive choice, pressed state, or plain action.
-      renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
-      await screen.findAllByText("Frontend Engineer");
-
-      // Exclusive filter — radiogroup, not a set of independent toggles.
-      expect(
-        screen.getByRole("radio", { name: messages.jobs.statusNew }),
-      ).toHaveAttribute("aria-checked", "true");
-
-      // View toggles — pressed state, so "on" is announced.
-      for (const label of [
-        messages.jobs.fitScan.sortByFit,
-        messages.jobs.fitScan.hideLowFit,
-      ]) {
-        expect(screen.getByRole("button", { name: label })).toHaveAttribute(
-          "aria-pressed",
-          "false",
-        );
-      }
-
-      // Actions — no pressed state, because they do not represent a state.
-      for (const label of [
-        messages.jobs.fitScan.button,
-        messages.jobs.fitScan.ignoreLow,
-      ]) {
-        expect(
-          screen.getByRole("button", { name: label }),
-        ).not.toHaveAttribute("aria-pressed");
       }
     });
 
@@ -2222,50 +2101,6 @@ describe("JobsClient", () => {
 
       await user.click(screen.getByRole("button", { name: /deselect all/i }));
       expect(screen.getByText("Select all")).toBeInTheDocument();
-    });
-
-    it("select all includes only rows visible after low-fit hiding", async () => {
-      const user = userEvent.setup();
-      const lowFit = { ...jobA, fitScore: 20 };
-      const highFit = { ...jobB, fitScore: 82 };
-      const unscored = { ...jobC, fitScore: null };
-      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo) => {
-        const url = typeof input === "string" ? input : input.url;
-        if (url.startsWith("/api/jobs?")) {
-          return new Response(
-            JSON.stringify({
-              items: [lowFit, highFit, unscored],
-              nextCursor: null,
-              totalCount: 3,
-              facets: { jobLevels: ["Mid"] },
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        if (url.startsWith("/api/jobs/")) {
-          return new Response(JSON.stringify({ id: jobA.id, description: "desc" }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-        return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
-      }));
-
-      renderWithClient(
-        <JobsClient initialItems={[lowFit, highFit, unscored]} initialCursor={null} />,
-      );
-      await waitForJobsRendered();
-      await user.click(screen.getByRole("button", { name: /hide low fit/i }));
-      expect(
-        within(screen.getAllByTestId("jobs-results-scroll")[0]).queryByText(
-          "Alpha Engineer",
-        ),
-      ).not.toBeInTheDocument();
-
-      await user.click(screen.getByRole("button", { name: /enter selection mode/i }));
-      await user.click(screen.getByRole("button", { name: /select all/i }));
-
-      expect(screen.getByText("2 selected")).toBeInTheDocument();
     });
 
     it("batch delete sends a single batch-delete request and removes items from list", async () => {

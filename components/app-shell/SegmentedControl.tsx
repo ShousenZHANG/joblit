@@ -6,9 +6,8 @@ import { cn } from "@/lib/utils";
 /**
  * SegmentedControl — one choice out of a small fixed set.
  *
- * Distinct from FilterPill on purpose. Pills are independent on/off switches;
- * a segmented control sits on one connected track, which is what tells a user
- * the options are mutually exclusive before they click anything.
+ * The connected track is the point: it tells a user the options are mutually
+ * exclusive before they click anything, which a row of separate pills cannot.
  *
  * Rendered as a radiogroup with roving tabindex: the whole control is a single
  * tab stop and arrow keys move between segments, which is how assistive tech

@@ -1,6 +1,13 @@
 export type ExperienceRequirementSignal = {
   key: string;
+  /** Prefixed with Required/Preferred, for surfaces that show one flat list. */
   label: string;
+  /**
+   * The constraint alone. Surfaces that group by `isRequired` use this so the
+   * qualifier is not repeated on every chip inside a group that already says
+   * it — "Preferred: 5+ years" under a "Preferred" heading is noise.
+   */
+  shortLabel: string;
   evidence: string;
   minYears: number;
   isRequired: boolean;
@@ -55,6 +62,7 @@ export function parseExperienceGate(description: string): ExperienceRequirementS
     output.push({
       key,
       label: `${isRequired ? "Required" : "Preferred"}: ${label}`,
+      shortLabel: label,
       evidence: segment,
       minYears,
       isRequired,

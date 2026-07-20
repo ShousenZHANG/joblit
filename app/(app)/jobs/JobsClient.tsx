@@ -4,13 +4,12 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
-import { Archive, ArrowRight, ArrowUpDown, CheckCircle2, CheckSquare, EyeOff, Loader2, MapPin, RefreshCw, SlidersHorizontal, Sparkles, Square, Trash2, X } from "lucide-react";
+import { ArrowRight, CheckCircle2, CheckSquare, Loader2, MapPin, RefreshCw, SlidersHorizontal, Sparkles, Square, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FilterPill } from "@/components/app-shell/FilterPill";
 import { useAccessibleTabs } from "@/components/ui/useAccessibleTabs";
 import { useToast } from "@/hooks/use-toast";
 import { useGuide } from "@/app/GuideContext";
@@ -35,7 +34,6 @@ import { JobListItem } from "./components/JobListItem";
 import { useFitScan } from "./hooks/useFitScan";
 import { VirtualJobList, type VirtualJobListHandle } from "./components/VirtualJobList";
 import { JobBatchDeleteDialog } from "./components/JobBatchDeleteDialog";
-import { JobBulkIgnoreDialog } from "./components/JobBulkIgnoreDialog";
 import { JobSearchBar } from "./components/JobSearchBar";
 import { ExternalGenerateDialog } from "./components/ExternalGenerateDialog";
 import { LocalAiGenerateDialog } from "./components/LocalAiGenerateDialog";
@@ -87,7 +85,6 @@ export function JobsClient({
     locationFilter, setLocationFilter,
     jobLevelFilter, setJobLevelFilter,
     market,
-    sortByFit, setSortByFit,
     queryString,
     urlState,
     replaceUrlState,
@@ -211,16 +208,9 @@ export function JobsClient({
     suppressedDeletedIds,
     scrollRef: resultsScrollRef,
   });
-  const [hideLowFit, setHideLowFit] = useState(false);
-  // Unscored jobs stay visible: hiding is a triage aid, not a data filter.
-  // 45 is the WEAK/POOR boundary — the same threshold bulk-ignore uses.
-  const visibleItems = useMemo(
-    () =>
-      hideLowFit
-        ? items.filter((it) => it.fitScore == null || it.fitScore >= 45)
-        : items,
-    [hideLowFit, items],
-  );
+  // Sorting by score and hiding low-fit rows are not exposed yet, so every
+  // loaded row is shown. Both return with the fit tools they belong to.
+  const visibleItems = items;
 
   const {
     updateStatus, requestDelete, batchDeleteMutation,
@@ -273,15 +263,6 @@ export function JobsClient({
     onSucceeded: handleLocalAiSucceeded,
   });
   const fitScan = useFitScan({ onJobScored: refetch });
-  // One undo window for the last bulk-ignore sweep.
-  const [ignoredUndo, setIgnoredUndo] = useState<{
-    count: number;
-    ignoredAt: string;
-    maxScore: number;
-  } | null>(null);
-  const [ignoreDialogOpen, setIgnoreDialogOpen] = useState(false);
-  const [ignorePreviewCount, setIgnorePreviewCount] = useState(0);
-  const [ignorePending, setIgnorePending] = useState<"preview" | "commit" | "undo" | null>(null);
   // Keep renderer identity stable after virtualization first becomes useful.
   // In particular, deleting row 81 must not swap the entire virtual subtree
   // for the ordinary renderer when the visible count becomes 80.
@@ -326,101 +307,6 @@ export function JobsClient({
 
   // Full-database sweep: preview the count, confirm, move NEW -> ignored
   // (REJECTED, reversible) server-side, then offer one-click undo.
-  const handlePrepareIgnoreLowFit = useCallback(async () => {
-    if (ignorePending) return;
-    setIgnorePending("preview");
-    try {
-      const response = await fetch("/api/jobs/bulk-ignore", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ maxScore: 44, preview: true }),
-      });
-      const preview = (await response.json().catch(() => ({}))) as {
-        count?: number;
-        error?: string;
-      };
-      if (!response.ok) {
-        throw new Error(preview.error || t("fitScan.ignoreFailed"));
-      }
-      const count = preview.count ?? 0;
-      if (count === 0) {
-        toast({ description: t("fitScan.ignoreNone") });
-        return;
-      }
-      setIgnorePreviewCount(count);
-      setIgnoreDialogOpen(true);
-    } catch {
-      toast({ description: t("fitScan.ignoreFailed"), variant: "destructive" });
-    } finally {
-      setIgnorePending(null);
-    }
-  }, [ignorePending, t, toast]);
-
-  const handleIgnoreLowFit = useCallback(async () => {
-    if (ignorePending) return;
-    setIgnorePending("commit");
-    try {
-      const response = await fetch("/api/jobs/bulk-ignore", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ maxScore: 44 }),
-      });
-      const result = (await response.json().catch(() => ({}))) as {
-        count?: number;
-        ignoredAt?: string;
-        error?: string;
-      };
-      if (!response.ok) {
-        throw new Error(result.error || t("fitScan.ignoreFailed"));
-      }
-
-      const count = result.count ?? 0;
-      if (count === 0) {
-        setIgnoreDialogOpen(false);
-        toast({ description: t("fitScan.ignoreNone") });
-        return;
-      }
-      if (!result.ignoredAt || Number.isNaN(Date.parse(result.ignoredAt))) {
-        throw new Error("Invalid bulk-ignore response");
-      }
-      setIgnoredUndo({
-        count,
-        ignoredAt: result.ignoredAt,
-        maxScore: 44,
-      });
-      setIgnoreDialogOpen(false);
-      await invalidateJobsQueries(queryClient);
-    } catch {
-      toast({ description: t("fitScan.ignoreFailed"), variant: "destructive" });
-    } finally {
-      setIgnorePending(null);
-    }
-  }, [ignorePending, queryClient, t, toast]);
-
-  const handleUndoIgnore = useCallback(async () => {
-    if (!ignoredUndo || ignorePending) return;
-    setIgnorePending("undo");
-    try {
-      const response = await fetch("/api/jobs/bulk-ignore", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          restoreIgnoredAt: ignoredUndo.ignoredAt,
-          maxScore: ignoredUndo.maxScore,
-        }),
-      });
-      const result = (await response.json().catch(() => ({}))) as { error?: string };
-      if (!response.ok) {
-        throw new Error(result.error || t("fitScan.ignoreFailed"));
-      }
-      setIgnoredUndo(null);
-      await invalidateJobsQueries(queryClient);
-    } catch {
-      toast({ description: t("fitScan.ignoreFailed"), variant: "destructive" });
-    } finally {
-      setIgnorePending(null);
-    }
-  }, [ignorePending, ignoredUndo, queryClient, t, toast]);
   const localAiDialogVisible = localAiDialogOpen
     || ["starting", "queued", "running", "stopping", "importing"].includes(localAi.runState.status);
 
@@ -481,7 +367,6 @@ export function JobsClient({
   // state of .app-shell when the dialog unmounts.
   const anyDialogOpen =
     batchDeleteConfirmOpen ||
-    ignoreDialogOpen ||
     previewOpen ||
     ext.externalDialogOpen ||
     !!ext.tailorReviewDraft;
@@ -1199,61 +1084,21 @@ export function JobsClient({
                   }))}
                 />
 
-                <div className="flex items-center gap-1.5">
-                  <FilterPill
-                    variant="soft"
-                    active={sortByFit}
-                    onClick={() =>
-                      startTransition(() => setSortByFit((value) => !value))
-                    }
+                {/* One action, sized for the narrow results panel. Sorting,
+                    hiding and bulk-ignoring low fit are deliberately not
+                    rendered yet: four controls wrapped onto their own lines
+                    here and read as decoration rather than tools. */}
+                {fitScan.state.status !== "scanning" ? (
+                  <button
+                    type="button"
+                    onClick={() => void fitScan.start()}
+                    title={t("fitScan.button")}
+                    className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border/70 bg-background/80 px-3 py-1 text-[12px] font-semibold text-foreground/75 transition-colors hover:border-border hover:bg-muted hover:text-foreground"
                   >
-                    <ArrowUpDown className="h-3 w-3" aria-hidden />
-                    {t("fitScan.sortByFit")}
-                  </FilterPill>
-                  <FilterPill
-                    variant="soft"
-                    active={hideLowFit}
-                    onClick={() => setHideLowFit((value) => !value)}
-                  >
-                    <EyeOff className="h-3 w-3" aria-hidden />
-                    {t("fitScan.hideLowFit")}
-                  </FilterPill>
-
-                  {fitScan.state.status !== "scanning" ? (
-                    <>
-                      <span
-                        aria-hidden
-                        className="mx-0.5 h-4 w-px shrink-0 bg-border"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => void fitScan.start()}
-                        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold text-foreground/75 transition-colors hover:bg-muted hover:text-foreground"
-                      >
-                        <Sparkles className="h-3.5 w-3.5" aria-hidden />
-                        {t("fitScan.button")}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={ignorePending !== null}
-                        onClick={() => void handlePrepareIgnoreLowFit()}
-                        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold text-foreground/75 transition-colors hover:bg-muted hover:text-foreground disabled:cursor-wait disabled:opacity-60"
-                      >
-                        {ignorePending === "preview" ? (
-                          <Loader2
-                            className="h-3.5 w-3.5 motion-safe:animate-spin"
-                            aria-hidden
-                          />
-                        ) : (
-                          <Archive className="h-3.5 w-3.5" aria-hidden />
-                        )}
-                        {ignorePending === "preview"
-                          ? t("fitScan.checkingLowFit")
-                          : t("fitScan.ignoreLow")}
-                      </button>
-                    </>
-                  ) : null}
-                </div>
+                    <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                    {t("fitScan.scoreShort")}
+                  </button>
+                ) : null}
               </div>
             </div>
           )}
@@ -1313,34 +1158,6 @@ export function JobsClient({
               >
                 <X className="h-4 w-4" />
               </button>
-            </div>
-          ) : null}
-          {ignoredUndo ? (
-            <div className="flex items-center justify-between gap-3 border-b bg-muted/40 px-4 py-2.5" role="status">
-              <span className="min-w-0 truncate text-sm text-foreground">
-                {t("fitScan.ignoredBanner", { count: ignoredUndo.count })}
-              </span>
-              <span className="flex shrink-0 items-center gap-1">
-                <button
-                  type="button"
-                  disabled={ignorePending === "undo"}
-                  onClick={() => void handleUndoIgnore()}
-                  className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold text-brand-emerald-700 transition-colors hover:bg-brand-emerald-50 disabled:cursor-wait disabled:opacity-60"
-                >
-                  {ignorePending === "undo" ? (
-                    <Loader2 className="h-3 w-3 motion-safe:animate-spin" aria-hidden />
-                  ) : null}
-                  {t("fitScan.undo")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIgnoredUndo(null)}
-                  className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  aria-label={t("fitScan.dismiss")}
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </span>
             </div>
           ) : null}
           <div className="relative flex min-h-0 flex-1 flex-col">
@@ -1570,13 +1387,6 @@ export function JobsClient({
         count={batchSelectedIds.size}
         onConfirm={confirmBatchDelete}
         cancelLabel={tc("cancel")}
-      />
-      <JobBulkIgnoreDialog
-        open={ignoreDialogOpen}
-        count={ignorePreviewCount}
-        pending={ignorePending === "commit"}
-        onOpenChange={setIgnoreDialogOpen}
-        onConfirm={() => void handleIgnoreLowFit()}
       />
     </>
   );

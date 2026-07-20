@@ -6,6 +6,7 @@ import {
   CircleHelp,
   Cpu,
   ShieldAlert,
+  Sparkle,
   TriangleAlert,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -151,6 +152,8 @@ export function FitAssessmentCard({
     () => parseExperienceGate(description),
     [description],
   );
+  const requiredGates = structuralGates.filter((signal) => signal.isRequired);
+  const preferredGates = structuralGates.filter((signal) => !signal.isRequired);
   const gateRequirements = matrix?.requirements.filter(
     (requirement) => requirement.criticality === "GATE",
   ) ?? [];
@@ -217,8 +220,10 @@ export function FitAssessmentCard({
             >
               {t("title")}
             </h3>
+            {/* Before a scan there are no candidate gaps to show, so the
+                subtitle must not promise them. */}
             <p className="text-[11px] text-muted-foreground">
-              {t("subtitle")}
+              {matrix ? t("subtitle") : t("subtitleUnscored")}
             </p>
           </div>
         </div>
@@ -275,25 +280,44 @@ export function FitAssessmentCard({
         ) : null,
       )}
 
-      {structuralGates.length ? (
+      {/* Split by whether the constraint can actually block the application.
+          Both groups used to sit under "Screening gates", which told a user a
+          preference would gate them. The qualifier now lives in the heading,
+          so each chip carries only the constraint itself. */}
+      {requiredGates.length ? (
         <div className="mt-3 border-t border-border/60 pt-3">
-          <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+          <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-rose-700 dark:text-rose-300">
             <ShieldAlert className="h-3 w-3" aria-hidden />
             {t("screeningGates")}
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {structuralGates.map((signal) => (
+            {requiredGates.map((signal) => (
               <span
                 key={signal.key}
-                className={cn(
-                  "rounded-full border px-2.5 py-1 text-xs font-medium",
-                  signal.isRequired
-                    ? "border-rose-300/60 bg-rose-50 text-rose-800 dark:border-rose-400/30 dark:bg-rose-500/10 dark:text-rose-300"
-                    : "border-border bg-background text-foreground/70",
-                )}
+                className="rounded-full border border-rose-300/60 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-800 dark:border-rose-400/30 dark:bg-rose-500/10 dark:text-rose-200"
                 title={signal.evidence}
               >
-                {signal.label}
+                {signal.shortLabel}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {preferredGates.length ? (
+        <div className="mt-3 border-t border-border/60 pt-3">
+          <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+            <Sparkle className="h-3 w-3" aria-hidden />
+            {t("niceToHave")}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {preferredGates.map((signal) => (
+              <span
+                key={signal.key}
+                className="rounded-full border border-border/70 bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground/70"
+                title={signal.evidence}
+              >
+                {signal.shortLabel}
               </span>
             ))}
           </div>
