@@ -1,13 +1,32 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const store = vi.hoisted(() => ({
-  update: vi.fn(),
+  updateMany: vi.fn(),
+  findFirst: vi.fn(),
+  executeRawLock: vi.fn(),
   importJobs: vi.fn(),
   runSourceFetch: vi.fn(),
 }));
 
 vi.mock("@/lib/server/prisma", () => ({
-  prisma: { fetchRun: { update: store.update } },
+  prisma: {
+    $transaction: async (
+      action: (tx: {
+        fetchRun: {
+          findFirst: typeof store.findFirst;
+          updateMany: typeof store.updateMany;
+        };
+        $executeRaw: typeof store.executeRawLock;
+      }) => Promise<unknown>,
+    ) =>
+      action({
+        fetchRun: {
+          findFirst: store.findFirst,
+          updateMany: store.updateMany,
+        },
+        $executeRaw: store.executeRawLock,
+      }),
+  },
 }));
 vi.mock("@/lib/server/jobs/jobImportService", () => ({
   importJobsForUser: store.importJobs,
@@ -15,8 +34,9 @@ vi.mock("@/lib/server/jobs/jobImportService", () => ({
 vi.mock("./runSourceFetch", () => ({ runSourceFetch: store.runSourceFetch }));
 
 import { processGlobalFetchRun } from "./processGlobalFetchRun";
+import type { RawSourceJob } from "./types";
 
-function sourceJob(jobUrl: string) {
+function sourceJob(jobUrl: string): RawSourceJob {
   return {
     jobUrl,
     title: "AI Engineer",
@@ -34,7 +54,9 @@ function sourceJob(jobUrl: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  store.update.mockResolvedValue({});
+  store.findFirst.mockResolvedValue({ id: "run-1" });
+  store.updateMany.mockResolvedValue({ count: 1 });
+  store.executeRawLock.mockResolvedValue(1);
 });
 
 describe("processGlobalFetchRun", () => {
@@ -51,7 +73,7 @@ describe("processGlobalFetchRun", () => {
 
     const result = await processGlobalFetchRun("user-1", {
       id: "run-1",
-      queries: { sources: ["remoteok"] },
+      queries: { sources: ["remoteok"], queries: ["AI Engineer"] },
     });
 
     expect(result).toEqual({ discovered: 2, imported: 1 });
@@ -65,7 +87,7 @@ describe("processGlobalFetchRun", () => {
 
     const result = await processGlobalFetchRun("user-1", {
       id: "run-1",
-      queries: { sources: ["remoteok"] },
+      queries: { sources: ["remoteok"], queries: ["AI Engineer"] },
     });
 
     expect(result).toEqual({
@@ -78,7 +100,10 @@ describe("processGlobalFetchRun", () => {
   it("falls back to every registered source when none are specified", async () => {
     store.runSourceFetch.mockResolvedValue({ jobs: [], diagnostics: [] });
 
-    await processGlobalFetchRun("user-1", { id: "run-1", queries: {} });
+    await processGlobalFetchRun("user-1", {
+      id: "run-1",
+      queries: { queries: ["AI Engineer"] },
+    });
 
     expect(store.runSourceFetch).toHaveBeenCalledWith({
       sources: ["remoteok", "remotive", "jobicy"],
@@ -90,7 +115,10 @@ describe("processGlobalFetchRun", () => {
 
     await processGlobalFetchRun("user-1", {
       id: "run-1",
-      queries: { sources: ["remoteok", "not-a-source"] },
+      queries: {
+        sources: ["remoteok", "not-a-source"],
+        queries: ["AI Engineer"],
+      },
     });
 
     expect(store.runSourceFetch).toHaveBeenCalledWith({
@@ -106,13 +134,13 @@ describe("processGlobalFetchRun", () => {
 
     const result = await processGlobalFetchRun("user-1", {
       id: "run-1",
-      queries: { sources: ["remoteok"] },
+      queries: { sources: ["remoteok"], queries: ["AI Engineer"] },
     });
 
     expect(result).toEqual({ discovered: 0, imported: 0 });
     expect(store.importJobs).not.toHaveBeenCalled();
-    expect(store.update).toHaveBeenCalledWith({
-      where: { id: "run-1" },
+    expect(store.updateMany).toHaveBeenCalledWith({
+      where: { id: "run-1", userId: "user-1", status: "RUNNING" },
       data: { status: "SUCCEEDED", importedCount: 0, error: null },
     });
   });
@@ -129,10 +157,44 @@ describe("processGlobalFetchRun", () => {
 
     const result = await processGlobalFetchRun("user-1", {
       id: "run-1",
-      queries: { sources: ["remoteok", "jobicy"] },
+      queries: {
+        sources: ["remoteok", "jobicy"],
+        queries: ["AI Engineer"],
+      },
     });
 
     expect(result).toEqual({ discovered: 1, imported: 1 });
+  });
+
+  it("enforces persisted freshness and description exclusions before import", async () => {
+    const recent = sourceJob("https://remoteok.com/remote-jobs/recent");
+    recent.listingDate = "2026-07-20T00:00:00.000Z";
+    const old = sourceJob("https://remoteok.com/remote-jobs/old");
+    old.listingDate = "2020-01-01T00:00:00.000Z";
+    const gated = sourceJob("https://remoteok.com/remote-jobs/gated");
+    gated.description = "Candidates must have 6+ years of professional experience.";
+    store.runSourceFetch.mockResolvedValue({
+      jobs: [recent, old, gated],
+      diagnostics: [{ source: "remoteok", ok: true, raw: 3 }],
+    });
+    store.importJobs.mockResolvedValue({ imported: 1, invalid: 0 });
+
+    const result = await processGlobalFetchRun("user-1", {
+      id: "run-1",
+      queries: {
+        sources: ["remoteok"],
+        queries: ["AI Engineer"],
+        hoursOld: 24 * 30,
+        applyExcludes: true,
+        excludeDescriptionRules: ["experience_requirement_4_plus"],
+      },
+    });
+
+    expect(result).toEqual({ discovered: 1, imported: 1 });
+    expect(store.importJobs).toHaveBeenCalledWith({
+      userId: "user-1",
+      items: [expect.objectContaining({ jobUrl: recent.jobUrl, market: "GLOBAL" })],
+    });
   });
 
   it("surfaces a thrown fetch as an error result rather than rejecting", async () => {
@@ -140,13 +202,30 @@ describe("processGlobalFetchRun", () => {
 
     const result = await processGlobalFetchRun("user-1", {
       id: "run-1",
-      queries: {},
+      queries: { queries: ["AI Engineer"] },
     });
 
     expect(result).toEqual({ discovered: 0, imported: 0, error: "boom" });
-    expect(store.update).toHaveBeenCalledWith({
-      where: { id: "run-1" },
+    expect(store.updateMany).toHaveBeenCalledWith({
+      where: { id: "run-1", userId: "user-1", status: "RUNNING" },
       data: { status: "FAILED", importedCount: 0, error: "boom" },
     });
+  });
+
+  it("does not import when cancellation wins before the commit phase", async () => {
+    store.runSourceFetch.mockResolvedValue({
+      jobs: [sourceJob("https://remoteok.com/remote-jobs/1")],
+      diagnostics: [{ source: "remoteok", ok: true, raw: 1 }],
+    });
+    store.findFirst.mockResolvedValue(null);
+
+    const result = await processGlobalFetchRun("user-1", {
+      id: "run-1",
+      queries: { queries: ["AI Engineer"] },
+    });
+
+    expect(result).toEqual({ discovered: 0, imported: 0, cancelled: true });
+    expect(store.importJobs).not.toHaveBeenCalled();
+    expect(store.updateMany).not.toHaveBeenCalled();
   });
 });

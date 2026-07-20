@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const fetchRunStore = vi.hoisted(() => ({
   create: vi.fn(),
   count: vi.fn(),
+  updateMany: vi.fn(),
   executeRawLock: vi.fn(),
 }));
 
@@ -33,6 +34,7 @@ describe("fetch runs create api", () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockReset();
     fetchRunStore.create.mockReset();
     fetchRunStore.count.mockReset();
+    fetchRunStore.updateMany.mockReset().mockResolvedValue({ count: 0 });
     fetchRunStore.executeRawLock.mockReset();
     fetchRunStore.create.mockResolvedValue({ id: "run-1" });
     fetchRunStore.count.mockResolvedValue(0);
@@ -59,15 +61,75 @@ describe("fetch runs create api", () => {
 
     const res = await postRun({
       market: "GLOBAL",
+      queries: ["AI Engineer"],
+      hoursOld: 24,
+      applyExcludes: true,
+      excludeTitleTerms: ["intern"],
+      excludeDescriptionRules: [
+        "identity_requirement",
+        "experience_requirement_4_plus",
+      ],
       sources: ["remoteok", "jobicy"],
     });
 
     expect(res.status).toBe(201);
     const data = fetchRunStore.create.mock.calls[0]?.[0]?.data;
     expect(data.market).toBe("GLOBAL");
-    expect(data.queries).toEqual({ sources: ["remoteok", "jobicy"] });
+    expect(data.queries).toMatchObject({
+      title: "AI Engineer",
+      baseQueries: ["AI Engineer"],
+      queries: expect.arrayContaining(["AI Engineer", "Machine Learning Engineer"]),
+      hoursOld: 24,
+      applyExcludes: true,
+      excludeTitleTerms: ["intern"],
+      excludeDescriptionRules: [
+        "identity_requirement",
+        "experience_requirement_4_plus",
+      ],
+      sources: ["remoteok", "jobicy"],
+    });
     // No GitHub Actions dispatch for this market — it runs in-process.
     expect(data.location).toBeNull();
+    expect(data.hoursOld).toBe(24);
+    expect(data.includeFromQueries).toBe(true);
+    expect(data.filterDescription).toBe(true);
+  });
+
+  it("turns off every GLOBAL exclusion when applyExcludes is false", async () => {
+    signIn();
+
+    const res = await postRun({
+      market: "GLOBAL",
+      queries: ["Software Engineer"],
+      applyExcludes: false,
+      excludeTitleTerms: ["intern"],
+      excludeDescriptionRules: ["identity_requirement"],
+    });
+
+    expect(res.status).toBe(201);
+    const data = fetchRunStore.create.mock.calls[0]?.[0]?.data;
+    expect(data.queries).toMatchObject({
+      applyExcludes: false,
+      excludeTitleTerms: [],
+      excludeDescriptionRules: [],
+    });
+    expect(data.filterDescription).toBe(false);
+  });
+
+  it("does not expand GLOBAL roles when smartExpand is false", async () => {
+    signIn();
+
+    const res = await postRun({
+      market: "GLOBAL",
+      queries: ["Software Engineer"],
+      smartExpand: false,
+    });
+
+    expect(res.status).toBe(201);
+    expect(fetchRunStore.create.mock.calls[0]?.[0]?.data.queries).toMatchObject({
+      queries: ["Software Engineer"],
+      smartExpand: false,
+    });
   });
 
   it("rejects an unknown source id", async () => {
@@ -75,6 +137,7 @@ describe("fetch runs create api", () => {
 
     const res = await postRun({
       market: "GLOBAL",
+      queries: ["AI Engineer"],
       sources: ["definitely-not-a-source"],
     });
 
@@ -85,12 +148,21 @@ describe("fetch runs create api", () => {
   it("defaults a GLOBAL run to every registered source", async () => {
     signIn();
 
-    const res = await postRun({ market: "GLOBAL" });
+    const res = await postRun({ market: "GLOBAL", queries: ["AI Engineer"] });
 
     expect(res.status).toBe(201);
-    expect(fetchRunStore.create.mock.calls[0]?.[0]?.data.queries).toEqual({
+    expect(fetchRunStore.create.mock.calls[0]?.[0]?.data.queries).toMatchObject({
       sources: ["remoteok", "remotive", "jobicy"],
     });
+  });
+
+  it("rejects an unfiltered GLOBAL feed import", async () => {
+    signIn();
+
+    const res = await postRun({ market: "GLOBAL" });
+
+    expect(res.status).toBe(400);
+    expect(fetchRunStore.create).not.toHaveBeenCalled();
   });
 
   it("auto expands a single role query by default", async () => {

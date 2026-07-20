@@ -15,6 +15,7 @@ const applicationStore = vi.hoisted(() => ({
 }));
 
 const prismaStore = vi.hoisted(() => ({
+  executeRaw: vi.fn(),
   $transaction: vi.fn(),
 }));
 
@@ -57,10 +58,16 @@ describe("jobs delete api cleanup", () => {
     deletedJobUrlStore.upsert.mockReset();
     applicationStore.findUnique.mockReset();
     applicationStore.deleteMany.mockReset();
+    prismaStore.executeRaw.mockReset().mockResolvedValue(0);
     prismaStore.$transaction.mockReset();
     blobStore.del.mockReset();
-    prismaStore.$transaction.mockImplementation(async (ops: Array<Promise<unknown>>) =>
-      Promise.all(ops),
+    prismaStore.$transaction.mockImplementation(async (callback) =>
+      callback({
+        $executeRaw: prismaStore.executeRaw,
+        job: jobStore,
+        deletedJobUrl: deletedJobUrlStore,
+        application: applicationStore,
+      }),
     );
   });
 

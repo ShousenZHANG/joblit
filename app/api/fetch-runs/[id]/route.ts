@@ -4,6 +4,10 @@ import type { SessionContext } from "@/lib/server/auth/requireSession";
 import { unauthorizedError } from "@/lib/server/api/errorResponse";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
+import {
+  FETCH_RUN_STALE_ERROR,
+  fetchRunStaleCutoff,
+} from "@/lib/server/fetchRuns/fetchRunQuota";
 
 export const runtime = "nodejs";
 
@@ -70,7 +74,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const parsed = ParamsSchema.safeParse(params);
   if (!parsed.success) return NextResponse.json({ error: "INVALID_PARAMS" }, { status: 400 });
 
-  const run = await prisma.fetchRun.findFirst({
+  let run = await prisma.fetchRun.findFirst({
     where: { id: parsed.data.id, userId },
     select: {
       id: true,
@@ -84,6 +88,31 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   });
 
   if (!run) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+  const staleCutoff = fetchRunStaleCutoff();
+  if (
+    (run.status === "QUEUED" || run.status === "RUNNING") &&
+    run.updatedAt < staleCutoff
+  ) {
+    // Polling self-heals this run. Normal polls stay read-only; only a stale
+    // active row pays for the guarded write.
+    const expired = await prisma.fetchRun.updateMany({
+      where: {
+        id: run.id,
+        userId,
+        status: { in: ["QUEUED", "RUNNING"] },
+        updatedAt: { lt: staleCutoff },
+      },
+      data: { status: "FAILED", error: FETCH_RUN_STALE_ERROR },
+    });
+    if (expired.count > 0) {
+      run = {
+        ...run,
+        status: "FAILED",
+        error: FETCH_RUN_STALE_ERROR,
+        updatedAt: new Date(),
+      };
+    }
+  }
   const queryTerms = normalizeQueryTerms(run.queries);
   const queryTitle = resolveTitle(run.queries, queryTerms);
   const smartExpand = resolveSmartExpand(run.queries);

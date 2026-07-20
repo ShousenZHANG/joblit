@@ -1,6 +1,8 @@
 import { del } from "@vercel/blob";
 import { prisma } from "@/lib/server/prisma";
 import { canonicalizeJobUrl } from "@/lib/shared/canonicalizeJobUrl";
+import { acquireJobMutationLock } from "@/lib/server/jobs/jobMutationLock";
+import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
 
 type JobDeleteResult =
   | { alreadyDeleted: true }
@@ -20,6 +22,8 @@ type BlobCleanupResult = {
   deleted: number;
   failed: number;
 };
+
+const JOB_MUTATION_TRANSACTION_TIMEOUT_MS = 30_000;
 
 async function cleanupArtifacts(artifactUrls: string[]): Promise<BlobCleanupResult> {
   const urls = Array.from(
@@ -66,56 +70,65 @@ export async function deleteJob(
   userId: string,
   jobId: string,
 ): Promise<JobDeleteResult> {
-  const job = await prisma.job.findFirst({
-    where: { id: jobId, userId },
-    select: { id: true, jobUrl: true },
-  });
+  const transactionResult = await prisma.$transaction(
+    async (tx) => {
+      // Lock is deliberately the first transaction operation. Import takes the
+      // same per-user lock before reading tombstones and inserting jobs.
+      await acquireJobMutationLock(tx, userId);
 
-  if (!job) {
-    return { alreadyDeleted: true };
-  }
+      const job = await tx.job.findFirst({
+        where: { id: jobId, userId },
+        select: { id: true, jobUrl: true },
+      });
+      if (!job) return null;
 
-  const application = await prisma.application.findUnique({
-    where: { userId_jobId: { userId, jobId: job.id } },
-    select: {
-      resumeTexUrl: true,
-      resumePdfUrl: true,
-      coverTexUrl: true,
-      coverPdfUrl: true,
+      // Generation/autosave/finalize use this same lock. Take it before reading
+      // artifact URLs so no committed Blob can appear between read and delete.
+      await acquireApplicationMutationLock(tx, userId, job.id);
+      const application = await tx.application.findUnique({
+        where: { userId_jobId: { userId, jobId: job.id } },
+        select: {
+          resumeTexUrl: true,
+          resumePdfUrl: true,
+          coverTexUrl: true,
+          coverPdfUrl: true,
+        },
+      });
+      const canonicalJobUrl = canonicalizeJobUrl(job.jobUrl);
+      await tx.deletedJobUrl.upsert({
+        where: { userId_jobUrl: { userId, jobUrl: canonicalJobUrl } },
+        update: {},
+        create: { userId, jobUrl: canonicalJobUrl },
+      });
+      await tx.application.deleteMany({ where: { userId, jobId: job.id } });
+      // deleteMany keeps ownership in the write predicate and remains idempotent
+      // if another code path removed the row.
+      const deletedJob = await tx.job.deleteMany({
+        where: { id: job.id, userId },
+      });
+      return {
+        deleted: deletedJob.count > 0,
+        artifactUrls: [
+          application?.resumeTexUrl,
+          application?.resumePdfUrl,
+          application?.coverTexUrl,
+          application?.coverPdfUrl,
+        ].filter(
+          (value): value is string =>
+            typeof value === "string" && value.trim().length > 0,
+        ),
+      };
     },
-  });
+    { timeout: JOB_MUTATION_TRANSACTION_TIMEOUT_MS },
+  );
 
-  const canonicalJobUrl = canonicalizeJobUrl(job.jobUrl);
-  const transactionResult = await prisma.$transaction([
-    prisma.deletedJobUrl.upsert({
-      where: { userId_jobUrl: { userId, jobUrl: canonicalJobUrl } },
-      update: {},
-      create: { userId, jobUrl: canonicalJobUrl },
-    }),
-    prisma.application.deleteMany({ where: { userId, jobId: job.id } }),
-    // deleteMany makes a raced second DELETE idempotent and keeps ownership in
-    // the write predicate. job.delete({ id }) could throw P2025 after lookup.
-    prisma.job.deleteMany({ where: { id: job.id, userId } }),
-  ]);
-  const deletedJob = transactionResult[2];
-  if (!("count" in deletedJob) || deletedJob.count === 0) {
+  if (!transactionResult?.deleted) {
     return { alreadyDeleted: true };
   }
-
-  const artifactUrls = Array.from(
-    new Set(
-      [
-        application?.resumeTexUrl,
-        application?.resumePdfUrl,
-        application?.coverTexUrl,
-        application?.coverPdfUrl,
-      ].filter((value): value is string => typeof value === "string" && value.trim().length > 0),
-    ),
-  );
 
   return {
     alreadyDeleted: false,
-    blobCleanup: await cleanupArtifacts(artifactUrls),
+    blobCleanup: await cleanupArtifacts(transactionResult.artifactUrls),
   };
 }
 
@@ -124,56 +137,77 @@ export async function batchDeleteJobs(
   jobIds: string[],
 ): Promise<BatchDeleteResult> {
   const uniqueJobIds = Array.from(new Set(jobIds));
-  const jobs = await prisma.job.findMany({
-    where: { id: { in: uniqueJobIds }, userId },
-    select: { id: true, jobUrl: true },
-  });
-
-  if (jobs.length === 0) {
-    return { deleted: 0, notFound: uniqueJobIds.length, blobCleanup: { attempted: 0, deleted: 0, failed: 0 } };
+  if (uniqueJobIds.length === 0) {
+    return {
+      deleted: 0,
+      notFound: 0,
+      blobCleanup: { attempted: 0, deleted: 0, failed: 0 },
+    };
   }
 
-  const foundIds = jobs.map((j) => j.id);
+  const transactionResult = await prisma.$transaction(
+    async (tx) => {
+      await acquireJobMutationLock(tx, userId);
 
-  const applications = await prisma.application.findMany({
-    where: { userId, jobId: { in: foundIds } },
-    select: {
-      resumeTexUrl: true,
-      resumePdfUrl: true,
-      coverTexUrl: true,
-      coverPdfUrl: true,
+      const jobs = await tx.job.findMany({
+        where: { id: { in: uniqueJobIds }, userId },
+        select: { id: true, jobUrl: true },
+      });
+      if (jobs.length === 0) {
+        return { deleted: 0, artifactUrls: [] as string[] };
+      }
+
+      const foundIds = jobs.map((job) => job.id).sort();
+      // Fixed order prevents two overlapping batch deletes from waiting on
+      // the same application locks in opposite order.
+      for (const foundId of foundIds) {
+        await acquireApplicationMutationLock(tx, userId, foundId);
+      }
+      const applications = await tx.application.findMany({
+        where: { userId, jobId: { in: foundIds } },
+        select: {
+          resumeTexUrl: true,
+          resumePdfUrl: true,
+          coverTexUrl: true,
+          coverPdfUrl: true,
+        },
+      });
+      const canonicalUrls = jobs.map((job) =>
+        canonicalizeJobUrl(job.jobUrl),
+      );
+
+      // One tombstone write keeps query count bounded for large selections.
+      await tx.deletedJobUrl.createMany({
+        data: canonicalUrls.map((jobUrl) => ({ userId, jobUrl })),
+        skipDuplicates: true,
+      });
+      await tx.application.deleteMany({
+        where: { userId, jobId: { in: foundIds } },
+      });
+      const deletedJobs = await tx.job.deleteMany({
+        where: { id: { in: foundIds }, userId },
+      });
+      return {
+        deleted: deletedJobs.count,
+        artifactUrls: applications.flatMap((application) =>
+          [
+            application.resumeTexUrl,
+            application.resumePdfUrl,
+            application.coverTexUrl,
+            application.coverPdfUrl,
+          ].filter(
+            (value): value is string =>
+              typeof value === "string" && value.trim().length > 0,
+          ),
+        ),
+      };
     },
-  });
-
-  const canonicalUrls = jobs.map((j) => canonicalizeJobUrl(j.jobUrl));
-
-  // Replace N individual upserts with a single createMany(skipDuplicates).
-  // Per-batch query count drops from (N + 2) to 3, which keeps the whole
-  // transaction comfortably inside Neon's per-statement budget even when
-  // a chunk arrives at the absolute MAX_BATCH_SIZE.
-  const transactionResult = await prisma.$transaction([
-    prisma.deletedJobUrl.createMany({
-      data: canonicalUrls.map((url) => ({ userId, jobUrl: url })),
-      skipDuplicates: true,
-    }),
-    prisma.application.deleteMany({ where: { userId, jobId: { in: foundIds } } }),
-    prisma.job.deleteMany({ where: { id: { in: foundIds }, userId } }),
-  ]);
-  const deletedJobs = transactionResult[2];
-  const deletedCount = "count" in deletedJobs ? deletedJobs.count : 0;
-
-  const artifactUrls = Array.from(
-    new Set(
-      applications.flatMap((app) =>
-        [app.resumeTexUrl, app.resumePdfUrl, app.coverTexUrl, app.coverPdfUrl]
-          .filter((v): v is string => typeof v === "string" && v.trim().length > 0),
-      ),
-    ),
+    { timeout: JOB_MUTATION_TRANSACTION_TIMEOUT_MS },
   );
 
   return {
-    deleted: deletedCount,
-    notFound: uniqueJobIds.length - deletedCount,
-    blobCleanup: await cleanupArtifacts(artifactUrls),
+    deleted: transactionResult.deleted,
+    notFound: uniqueJobIds.length - transactionResult.deleted,
+    blobCleanup: await cleanupArtifacts(transactionResult.artifactUrls),
   };
 }

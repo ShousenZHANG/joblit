@@ -1,19 +1,11 @@
 import { prisma } from "@/lib/server/prisma";
 import { buildJobsListEtag } from "@/lib/server/jobsListEtag";
+import type { Market } from "@/lib/shared/market";
 import { shouldUseRelevanceSort } from "./searchUtils";
 import { listJobsWithRelevance } from "./jobSearchService";
-
-const STATE_LOCATION_MAP = {
-  NSW: ["NSW", "New South Wales", "Sydney", "Newcastle", "Wollongong"],
-  VIC: ["VIC", "Victoria", "Melbourne", "Geelong"],
-  QLD: ["QLD", "Queensland", "Brisbane", "Gold Coast", "Sunshine Coast"],
-  WA: ["WA", "Western Australia", "Perth"],
-  SA: ["SA", "South Australia", "Adelaide"],
-  ACT: ["ACT", "Australian Capital Territory", "Canberra"],
-  TAS: ["TAS", "Tasmania", "Hobart"],
-  NT: ["NT", "Northern Territory", "Darwin"],
-} as const;
-type StateKey = keyof typeof STATE_LOCATION_MAP;
+import { getVisibleJobMarkets } from "./jobMarketScope";
+import { normalizePostingRiskFlags } from "./jobListItemMapper";
+import { getJobLocationTerms } from "./jobLocationScope";
 
 export type JobListQuery = {
   limit: number;
@@ -25,7 +17,11 @@ export type JobListQuery = {
   sort: "newest" | "oldest" | "fit";
   /** Deterministic verdict bands over Job.fitScore (45/60/75 thresholds). */
   fitBand?: "strong" | "good" | "moderate" | "low" | "unscored";
-  market?: "AU" | "CN";
+  /**
+   * Locale-backed Jobs workspace. AU includes persisted GLOBAL source rows;
+   * CN remains CN-only. GLOBAL is intentionally not a UI Market.
+   */
+  market?: Market;
   platform?: string;
 };
 
@@ -44,6 +40,12 @@ export type JobListItem = {
   createdAt: Date;
   updatedAt: Date;
   market: string | null;
+  source: string | null;
+  postingRisk: number | null;
+  postingRiskFlags: string[] | null;
+  fitScore: number | null;
+  fitVerdict: string | null;
+  fitEligibility: string | null;
   resumePdfUrl: string | null;
   resumePdfName: string | null;
   coverPdfUrl: string | null;
@@ -77,19 +79,14 @@ function buildWhereClause(userId: string, query: JobListQuery): JobWhereClause {
   }
 
   if (location) {
-    if (location.startsWith("state:")) {
-      const stateKey = location.replace("state:", "") as StateKey;
-      const locationFilters = stateKey in STATE_LOCATION_MAP ? STATE_LOCATION_MAP[stateKey] : null;
-      if (locationFilters?.length) {
-        andClauses.push({
-          OR: locationFilters.map((loc) => ({
-            location: { contains: loc, mode: "insensitive" },
-          })),
-        });
-      }
+    const locationTerms = getJobLocationTerms(location);
+    if (locationTerms?.length) {
+      andClauses.push({
+        OR: locationTerms.map((term) => ({
+          location: { contains: term, mode: "insensitive" },
+        })),
+      });
       // Unknown state code → omit location filter (don't search for literal "state:XXX")
-    } else {
-      andClauses.push({ location: { contains: location, mode: "insensitive" } });
     }
   }
 
@@ -120,7 +117,7 @@ function buildWhereClause(userId: string, query: JobListQuery): JobWhereClause {
   return {
     userId,
     ...(status ? { status } : {}),
-    ...(market ? { market } : {}),
+    ...(market ? { market: { in: getVisibleJobMarkets(market) } } : {}),
     ...(andClauses.length ? { AND: andClauses } : {}),
   };
 }
@@ -174,6 +171,9 @@ export async function listJobs(userId: string, query: JobListQuery): Promise<Job
         workArrangement: true,
         listingDate: true,
         status: true,
+        source: true,
+        postingRisk: true,
+        postingRiskFlags: true,
         fitScore: true,
         fitVerdict: true,
         fitEligibility: true,
@@ -193,6 +193,7 @@ export async function listJobs(userId: string, query: JobListQuery): Promise<Job
     const application = applications?.[0] ?? null;
     return {
       ...rest,
+      postingRiskFlags: normalizePostingRiskFlags(rest.postingRiskFlags),
       resumePdfUrl: application?.resumePdfUrl ?? null,
       resumePdfName: application?.resumePdfName ?? null,
       coverPdfUrl: application?.coverPdfUrl ?? null,

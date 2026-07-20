@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { Prisma } from "@/lib/generated/prisma";
+import { Prisma } from "@/lib/generated/prisma";
 import { prescreenJobFit } from "@/lib/server/ai/fitPrescreen";
 import { verdictForScore } from "@/lib/server/ai/fitScoring";
 import { buildResumePromptSnapshot } from "@/lib/server/ai/resumePromptSnapshot";
@@ -70,6 +70,26 @@ function leasedFitWhere(
   };
 }
 
+const FIT_PROFILE_SCOPES = [
+  { locale: "en-AU" as const, markets: ["AU", "GLOBAL"] },
+  { locale: "zh-CN" as const, markets: ["CN"] },
+] as const;
+
+export async function getCurrentFitSnapshotPredicates(
+  userId: string,
+): Promise<Prisma.JobWhereInput[]> {
+  const predicates: Prisma.JobWhereInput[] = [];
+  for (const scope of FIT_PROFILE_SCOPES) {
+    const profile = await getResumeProfile(userId, { locale: scope.locale });
+    if (!profile) continue;
+    predicates.push({
+      market: { in: [...scope.markets] },
+      fitSnapshotHash: profile.updatedAt.toISOString(),
+    });
+  }
+  return predicates;
+}
+
 export type FitRunStats = {
   /** All NEW jobs for the user. */
   total: number;
@@ -104,6 +124,46 @@ export async function resetFailedFitBatches(userId: string): Promise<number> {
 }
 
 /**
+ * A saved score is valid only for the resume snapshot used to produce it.
+ * Re-queue stale rows when a profile changes, instead of continuing to sort
+ * and bulk-delete jobs using evidence the candidate has already replaced.
+ */
+export async function invalidateStaleFitScores(userId: string): Promise<number> {
+  let invalidated = 0;
+  for (const scope of FIT_PROFILE_SCOPES) {
+    const profile = await getResumeProfile(userId, { locale: scope.locale });
+    const snapshotVersion = profile?.updatedAt.toISOString() ?? null;
+    const result = await prisma.job.updateMany({
+      where: {
+        userId,
+        status: "NEW",
+        market: { in: [...scope.markets] },
+        fitScoredAt: { not: null },
+        ...(snapshotVersion
+          ? {
+              OR: [
+                { fitSnapshotHash: null },
+                { fitSnapshotHash: { not: snapshotVersion } },
+              ],
+            }
+          : {}),
+      },
+      data: {
+        fitScore: null,
+        fitVerdict: null,
+        fitEligibility: null,
+        fitMatrix: Prisma.DbNull,
+        fitSource: null,
+        fitScoredAt: null,
+        fitSnapshotHash: null,
+      },
+    });
+    invalidated += result.count;
+  }
+  return invalidated;
+}
+
+/**
  * Deterministic prescreen across ALL unscored NEW jobs: obvious mismatches are
  * banded POOR without an AI run. Returns how many were dequeued this way.
  */
@@ -115,26 +175,43 @@ export async function prescreenAllUnscored(userId: string): Promise<{ prescreene
   });
   if (jobs.length === 0) return { prescreened: 0 };
 
-  const resumeTextByLocale = new Map<string, string | null>();
-  async function resumeTextFor(market: string): Promise<string | null> {
+  const resumeByLocale = new Map<
+    string,
+    { text: string; snapshotVersion: string } | null
+  >();
+  async function resumeFor(
+    market: string,
+  ): Promise<{ text: string; snapshotVersion: string } | null> {
     const locale = marketStringToResumeLocale(market);
-    if (!resumeTextByLocale.has(locale)) {
+    if (!resumeByLocale.has(locale)) {
       const profile = await getResumeProfile(userId, { locale });
-      resumeTextByLocale.set(
+      resumeByLocale.set(
         locale,
-        profile ? JSON.stringify(buildResumePromptSnapshot(profile)) : null,
+        profile
+          ? {
+              text: JSON.stringify(buildResumePromptSnapshot(profile)),
+              snapshotVersion: profile.updatedAt.toISOString(),
+            }
+          : null,
       );
     }
-    return resumeTextByLocale.get(locale) ?? null;
+    return resumeByLocale.get(locale) ?? null;
   }
 
-  const poor: Array<{ jobId: string; score: number }> = [];
+  const poor: Array<{ jobId: string; score: number; snapshotVersion: string }> = [];
   for (const job of jobs) {
-    const resumeText = await resumeTextFor(job.market);
-    if (!resumeText) continue;
-    const outcome = prescreenJobFit({ jobDescription: job.description, resumeText });
+    const resume = await resumeFor(job.market);
+    if (!resume) continue;
+    const outcome = prescreenJobFit({
+      jobDescription: job.description,
+      resumeText: resume.text,
+    });
     if (outcome.decision === "poor") {
-      poor.push({ jobId: job.id, score: outcome.result.score });
+      poor.push({
+        jobId: job.id,
+        score: outcome.result.score,
+        snapshotVersion: resume.snapshotVersion,
+      });
     }
   }
 
@@ -153,7 +230,7 @@ export async function prescreenAllUnscored(userId: string): Promise<{ prescreene
             fitEligibility: null,
             fitSource: "prescreen",
             fitScoredAt: now,
-            fitSnapshotHash: null,
+            fitSnapshotHash: entry.snapshotVersion,
           },
         }),
       ),
@@ -193,14 +270,14 @@ export async function nextFitBatch(userId: string): Promise<ClaimedFitBatch> {
 
     const staleBefore = new Date(Date.now() - FIT_CLAIM_LEASE_MS);
     const where = claimableFitWhere(userId, staleBefore);
-    const candidates = await tx.job.findMany({
+    const candidateWindow = await tx.job.findMany({
       where,
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       take: FIT_BATCH_SIZE,
-      select: { id: true },
+      select: { id: true, market: true },
     });
 
-    if (candidates.length === 0) {
+    if (candidateWindow.length === 0) {
       const pendingTotal = await tx.job.count({
         where: pendingFitWhere(userId),
       });
@@ -218,6 +295,15 @@ export async function nextFitBatch(userId: string): Promise<ClaimedFitBatch> {
       };
     }
 
+    // A triage prompt has one resume snapshot. AU and GLOBAL share en-AU;
+    // CN uses zh-CN. Never lease a mixed-locale batch and accidentally score
+    // Chinese jobs against the English profile (or vice versa).
+    const batchLocale = marketStringToResumeLocale(
+      candidateWindow[0]?.market ?? "AU",
+    );
+    const candidates = candidateWindow.filter(
+      (job) => marketStringToResumeLocale(job.market) === batchLocale,
+    );
     const claimToken = randomUUID();
     const claimSource = fitClaimSource(claimToken);
     const claimedRows = await tx.job.updateManyAndReturn({

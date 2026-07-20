@@ -51,6 +51,17 @@ function fitBadgeClass(score: number): string {
   return "border border-border bg-muted text-muted-foreground";
 }
 
+function sourceLabel(source: string): string {
+  const labels: Record<string, string> = {
+    jobicy: "Jobicy",
+    jobspy: "LinkedIn",
+    nowcoder: "Nowcoder",
+    remoteok: "Remote OK",
+    remotive: "Remotive",
+  };
+  return labels[source] ?? source;
+}
+
 function JobListItemInner({
   job,
   isActive,
@@ -144,6 +155,18 @@ function JobListItemInner({
                   {job.fitScore}
                 </Badge>
               ) : null}
+              {typeof job.postingRisk === "number" && job.postingRisk >= 25 ? (
+                <Badge
+                  className={
+                    job.postingRisk >= 50
+                      ? "border border-rose-300/70 bg-rose-50 text-rose-800 dark:border-rose-400/30 dark:bg-rose-500/10 dark:text-rose-300"
+                      : "border border-amber-300/70 bg-amber-50 text-amber-800 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-300"
+                  }
+                  title={(job.postingRiskFlags ?? []).join(", ")}
+                >
+                  {t("postingRisk", { score: job.postingRisk })}
+                </Badge>
+              ) : null}
             </div>
             <span
               className="text-xs text-muted-foreground"
@@ -162,6 +185,11 @@ function JobListItemInner({
             {job.workArrangement ? (
               <span className="rounded-full bg-brand-emerald-50 px-1.5 py-0.5 font-medium text-brand-emerald-text ring-1 ring-brand-emerald-100">
                 {job.workArrangement}
+              </span>
+            ) : null}
+            {job.source ? (
+              <span className="rounded-full border border-border/70 bg-muted/45 px-1.5 py-0.5 font-medium text-foreground/65">
+                {sourceLabel(job.source)}
               </span>
             ) : null}
             {job.salary ? (

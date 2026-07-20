@@ -498,6 +498,7 @@ function FetchHistory({ onRerun }: { onRerun: (run: FetchRunListItem) => void })
                 {run.title ?? "Untitled search"}
               </div>
               <div className="truncate text-[11px] text-muted-foreground">
+                {run.market === "GLOBAL" ? `${t("globalFeeds")} · ` : ""}
                 {run.queryCount > 1 ? `${run.queryCount} roles · ` : ""}
                 {run.status === "SUCCEEDED"
                   ? `${run.importedCount} imported`
@@ -535,6 +536,7 @@ export function FetchClient() {
   const [hoursOld, setHoursOld] = useState(48);
   const [smartExpand, setSmartExpand] = useState(true);
   const [applyExcludes, setApplyExcludes] = useState(true);
+  const [includeGlobalFeeds, setIncludeGlobalFeeds] = useState(false);
   // Strict title matching keeps only roles whose title is in the same family as
   // the search. On by default — it is what makes a role search precise — but
   // surfaced so a deliberately wide net is one click away.
@@ -615,6 +617,7 @@ export function FetchClient() {
         location?: string;
         hoursOld?: number;
         smartExpand?: boolean;
+        includeGlobalFeeds?: boolean;
       };
       queueMicrotask(() => {
         if (cancelled) return;
@@ -622,6 +625,9 @@ export function FetchClient() {
         if (parsed.location) setLocation(parsed.location);
         if (parsed.hoursOld) setHoursOld(parsed.hoursOld);
         if (typeof parsed.smartExpand === "boolean") setSmartExpand(parsed.smartExpand);
+        if (typeof parsed.includeGlobalFeeds === "boolean") {
+          setIncludeGlobalFeeds(parsed.includeGlobalFeeds);
+        }
       });
     } catch {
       // ignore invalid local preference payload
@@ -644,11 +650,12 @@ export function FetchClient() {
           location,
           hoursOld,
           smartExpand,
+          includeGlobalFeeds,
         }),
       );
     }, 500);
     return () => window.clearTimeout(id);
-  }, [jobTitle, location, hoursOld, smartExpand]);
+  }, [jobTitle, location, hoursOld, smartExpand, includeGlobalFeeds]);
 
   function getErrorMessage(err: unknown, fallback = "Failed") {
     if (err instanceof Error) return err.message;
@@ -668,8 +675,26 @@ export function FetchClient() {
     return fallback;
   }
 
-  async function createRun() {
-    const body = market === "CN"
+  async function createRun(kind: "primary" | "global" = "primary") {
+    const body = kind === "global"
+      ? {
+          market: "GLOBAL",
+          queries,
+          baseQueries: queries,
+          location,
+          hoursOld,
+          smartExpand,
+          includeFromQueries: strictTitles,
+          applyExcludes,
+          excludeTitleTerms: applyExcludes ? excludeTitleTerms : [],
+          excludeDescriptionRules: applyExcludes
+            ? [
+                ...excludeDescriptionRules,
+                ...(experienceRule ? [experienceRule] : []),
+              ]
+            : [],
+        }
+      : market === "CN"
       ? {
           market: "CN",
           queries,
@@ -723,11 +748,37 @@ export function FetchClient() {
       if (!queries.length) {
         throw new Error("Please enter at least one job title to search.");
       }
-      // Single server-side pipeline: JobSpy (LinkedIn). Seek search runs in the
-      // browser extension, not here.
-      const created = [{ id: await createRun(), source: "jobspy" as const }];
+      const created: Array<{
+        id: string;
+        source: "jobspy" | "nowcoder" | "global";
+      }> = [];
+      try {
+        created.push({
+          id: await createRun(),
+          source: market === "CN" ? "nowcoder" : "jobspy",
+        });
+        if (market === "AU" && includeGlobalFeeds) {
+          created.push({ id: await createRun("global"), source: "global" });
+        }
+      } catch (error) {
+        // Creating a multi-source fetch is all-or-nothing. Release any row
+        // already created so it cannot become an invisible quota-consuming
+        // QUEUED run when the second create fails.
+        await Promise.allSettled(
+          created.map((run) =>
+            fetch(`/api/fetch-runs/${run.id}/cancel`, { method: "POST" }),
+          ),
+        );
+        throw error;
+      }
       startRuns(created);
-      await triggerRun(created[0].id);
+      const triggered = await Promise.allSettled(
+        created.map((run) => triggerRun(run.id)),
+      );
+      const failed = triggered.find(
+        (result): result is PromiseRejectedResult => result.status === "rejected",
+      );
+      if (failed) throw failed.reason;
       markTaskComplete("first_fetch");
     } catch (e: unknown) {
       setLocalError(getErrorMessage(e));
@@ -754,6 +805,7 @@ export function FetchClient() {
     if (run.market === "CN") {
       if (run.excludeKeywords) setCnExcludeKeywords(run.excludeKeywords.join(", "));
     } else {
+      setIncludeGlobalFeeds(run.market === "GLOBAL");
       if (run.location) setLocation(run.location);
       if (typeof run.hoursOld === "number") setHoursOld(run.hoursOld);
       if (typeof run.smartExpand === "boolean") setSmartExpand(run.smartExpand);
@@ -913,6 +965,17 @@ export function FetchClient() {
             >
               <span className={`h-1.5 w-1.5 rounded-full ${strictTitles ? "bg-brand-emerald-500" : "bg-muted-foreground/30"}`} />
               {t("strictTitles")}
+            </button>
+            <button
+              type="button"
+              data-testid="global-feeds-chip"
+              title={t("globalFeedsHint")}
+              aria-pressed={includeGlobalFeeds}
+              className={`filter-chip ${includeGlobalFeeds ? "filter-chip--active" : "filter-chip--inactive"}`}
+              onClick={() => setIncludeGlobalFeeds(!includeGlobalFeeds)}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${includeGlobalFeeds ? "bg-brand-emerald-500" : "bg-muted-foreground/30"}`} />
+              {t("globalFeeds")}
             </button>
           </div>
 

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { del, put } from "@vercel/blob";
 import { errorJson, notFoundError, validationError } from "@/lib/server/api/errorResponse";
@@ -20,7 +21,14 @@ import {
   ImportedPromptMetaSchema,
   ManualGenerateSchema,
 } from "@/lib/server/applications/manualImportParser";
-import { hashAiContent } from "@/lib/shared/schemas/aiContent";
+import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
+import { mergeAiContentForTarget } from "@/lib/server/applications/mergeAiContentForTarget";
+import { reportError } from "@/lib/server/observability/errorReporter";
+import {
+  aiContentSchema,
+  hashAiContent,
+  type AiContent,
+} from "@/lib/shared/schemas/aiContent";
 
 export const runtime = "nodejs";
 
@@ -37,6 +45,96 @@ function parseFinalizeFlag(req: Request): boolean {
   const v = url.searchParams.get("finalize");
   if (v === null) return true;
   return v !== "false" && v !== "0";
+}
+
+type ApplicationJob = {
+  id: string;
+  title: string;
+  company: string | null;
+};
+
+async function commitGeneratedApplication(input: {
+  userId: string;
+  job: ApplicationJob;
+  resumeProfileId: string;
+  incomingAiContent: AiContent;
+  target: "resume" | "cover";
+  status: "DRAFT" | "FINAL";
+  pdfUrl: string | null;
+  pdfName: string | null;
+}) {
+  return prisma.$transaction(async (tx) => {
+    // The lock is intentionally first. Concurrent CV and cover imports for
+    // the same job then re-read and merge against the preceding commit rather
+    // than both overwriting from one stale snapshot.
+    await acquireApplicationMutationLock(tx, input.userId, input.job.id);
+    const existing = await tx.application.findUnique({
+      where: {
+        userId_jobId: { userId: input.userId, jobId: input.job.id },
+      },
+      select: {
+        resumePdfUrl: true,
+        coverPdfUrl: true,
+        aiContent: true,
+      },
+    });
+    const existingAiContent = aiContentSchema.safeParse(existing?.aiContent);
+    const mergedAiContent = mergeAiContentForTarget(
+      existingAiContent.success ? existingAiContent.data : null,
+      input.incomingAiContent,
+      input.target,
+    );
+    const aiContentHash = hashAiContent(mergedAiContent);
+    const artifactPatch =
+      input.status !== "FINAL"
+        ? {}
+        : input.target === "resume"
+          ? {
+              // Never leave an older PDF attached to newly committed content.
+              resumePdfUrl: input.pdfUrl,
+              resumePdfName: input.pdfUrl ? input.pdfName : null,
+            }
+          : {
+              coverPdfUrl: input.pdfUrl,
+            };
+
+    const application = await tx.application.upsert({
+      where: {
+        userId_jobId: { userId: input.userId, jobId: input.job.id },
+      },
+      create: {
+        userId: input.userId,
+        jobId: input.job.id,
+        resumeProfileId: input.resumeProfileId,
+        company: input.job.company,
+        role: input.job.title,
+        status: input.status,
+        aiContent: mergedAiContent,
+        aiContentHash,
+        ...artifactPatch,
+      },
+      update: {
+        resumeProfileId: input.resumeProfileId,
+        company: input.job.company,
+        role: input.job.title,
+        status: input.status,
+        aiContent: mergedAiContent,
+        aiContentHash,
+        ...artifactPatch,
+      },
+      select: { id: true },
+    });
+
+    return {
+      applicationId: application.id,
+      aiContent: mergedAiContent,
+      aiContentHash,
+      previousArtifactUrl:
+        input.target === "resume"
+          ? existing?.resumePdfUrl ?? null
+          : existing?.coverPdfUrl ?? null,
+    };
+  });
 }
 
 export async function POST(req: Request) {
@@ -98,11 +196,6 @@ export async function POST(req: Request) {
     );
   }
 
-  const existingApplication = await prisma.application.findUnique({
-    where: { userId_jobId: { userId, jobId: job.id } },
-    select: { resumePdfUrl: true, coverPdfUrl: true },
-  });
-
   const activeRules = await getActivePromptSkillRulesForUser(userId);
   const expectedPromptMeta = buildPromptMeta({
     target: data.target,
@@ -157,35 +250,22 @@ export async function POST(req: Request) {
   // aiContent snapshot and return JSON. Caller navigates to
   // /jobs/[id]/tailor to review.
   if (!finalize) {
-    const aiContentHash = hashAiContent(artifact.aiContent);
-    const application = await prisma.application.upsert({
-      where: { userId_jobId: { userId, jobId: job.id } },
-      create: {
-        userId,
-        jobId: job.id,
-        resumeProfileId: profile.id,
-        company: job.company,
-        role: job.title,
-        status: "DRAFT",
-        aiContent: artifact.aiContent,
-        aiContentHash,
-      },
-      update: {
-        resumeProfileId: profile.id,
-        company: job.company,
-        role: job.title,
-        status: "DRAFT",
-        aiContent: artifact.aiContent,
-        aiContentHash,
-      },
-      select: { id: true },
+    const committed = await commitGeneratedApplication({
+      userId,
+      job,
+      resumeProfileId: profile.id,
+      incomingAiContent: artifact.aiContent,
+      target: data.target,
+      status: "DRAFT",
+      pdfUrl: null,
+      pdfName: null,
     });
     return NextResponse.json(
       {
-        applicationId: application.id,
+        applicationId: committed.applicationId,
         status: "DRAFT",
-        aiContentHash,
-        aiContent: artifact.aiContent,
+        aiContentHash: committed.aiContentHash,
+        aiContent: committed.aiContent,
         coverQualityGate: artifact.coverQualityGate,
         coverQualityIssueCount: artifact.coverQualityIssueCount,
         job: {
@@ -227,8 +307,14 @@ export async function POST(req: Request) {
   let persistedCoverPdfUrl: string | null = null;
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     try {
+      const artifactVersion = `${hashAiContent(artifact.aiContent)}-${randomUUID()}`;
       const blob = await put(
-        buildApplicationArtifactBlobPath({ userId, jobId: job.id, target: data.target }),
+        buildApplicationArtifactBlobPath({
+          userId,
+          jobId: job.id,
+          target: data.target,
+          version: artifactVersion,
+        }),
         pdf,
         {
           access: "public",
@@ -242,62 +328,59 @@ export async function POST(req: Request) {
       } else {
         persistedCoverPdfUrl = blob.url;
       }
-    } catch {
-      // Keep generation successful even if blob persistence fails.
+    } catch (error) {
+      // The caller still receives the compiled PDF, but the DB commit below
+      // clears the target's previous URL rather than mislabelling it as the
+      // artifact for this new content.
+      reportError(error, {
+        scope: "applications.manual-generate.blob-upload",
+        userId,
+        tags: { jobId: job.id, target: data.target },
+      });
     }
   }
 
-  // FINAL mode also persists aiContent so the user can later re-edit a
-  // committed Application without re-generating.
-  const aiContentHashFinal = hashAiContent(artifact.aiContent);
-  const application = await prisma.application.upsert({
-    where: { userId_jobId: { userId, jobId: job.id } },
-    create: {
-      userId,
-      jobId: job.id,
-      resumeProfileId: profile.id,
-      company: job.company,
-      role: job.title,
-      status: "FINAL",
-      aiContent: artifact.aiContent,
-      aiContentHash: aiContentHashFinal,
-      ...(data.target === "resume" && persistedResumePdfUrl
-        ? { resumePdfUrl: persistedResumePdfUrl, resumePdfName: filename }
-        : {}),
-      ...(data.target === "cover" && persistedCoverPdfUrl
-        ? { coverPdfUrl: persistedCoverPdfUrl }
-        : {}),
-    },
-    update: {
-      resumeProfileId: profile.id,
-      company: job.company,
-      role: job.title,
-      status: "FINAL",
-      aiContent: artifact.aiContent,
-      aiContentHash: aiContentHashFinal,
-      ...(data.target === "resume" && persistedResumePdfUrl
-        ? { resumePdfUrl: persistedResumePdfUrl, resumePdfName: filename }
-        : {}),
-      ...(data.target === "cover" && persistedCoverPdfUrl
-        ? { coverPdfUrl: persistedCoverPdfUrl }
-        : {}),
-    },
-    select: { id: true },
-  });
-
-  const previousArtifactUrl =
-    data.target === "resume"
-      ? existingApplication?.resumePdfUrl ?? null
-      : existingApplication?.coverPdfUrl ?? null;
   const currentArtifactUrl =
     data.target === "resume" ? persistedResumePdfUrl : persistedCoverPdfUrl;
+  let committed: Awaited<ReturnType<typeof commitGeneratedApplication>>;
+  try {
+    committed = await commitGeneratedApplication({
+      userId,
+      job,
+      resumeProfileId: profile.id,
+      incomingAiContent: artifact.aiContent,
+      target: data.target,
+      status: "FINAL",
+      pdfUrl: currentArtifactUrl,
+      pdfName: filename,
+    });
+  } catch (error) {
+    if (process.env.BLOB_READ_WRITE_TOKEN && currentArtifactUrl) {
+      await del(currentArtifactUrl, {
+        token: process.env.BLOB_READ_WRITE_TOKEN,
+      }).catch(() => undefined);
+    }
+    reportError(error, {
+      scope: "applications.manual-generate.commit",
+      userId,
+      tags: { jobId: job.id, target: data.target },
+    });
+    return errorJson(
+      "APPLICATION_PERSIST_FAILED",
+      "The PDF was rendered but could not be saved. Please try again.",
+      500,
+      { requestId },
+    );
+  }
+
   if (
     process.env.BLOB_READ_WRITE_TOKEN &&
-    previousArtifactUrl &&
-    currentArtifactUrl &&
-    previousArtifactUrl !== currentArtifactUrl
+    committed.previousArtifactUrl &&
+    committed.previousArtifactUrl !== currentArtifactUrl
   ) {
-    await del(previousArtifactUrl, { token: process.env.BLOB_READ_WRITE_TOKEN }).catch(() => undefined);
+    await del(committed.previousArtifactUrl, {
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    }).catch(() => undefined);
   }
 
   return new NextResponse(new Uint8Array(pdf), {
@@ -305,7 +388,7 @@ export async function POST(req: Request) {
     headers: {
       "content-type": "application/pdf",
       "content-disposition": contentDispositionAttachment(filename),
-      "x-application-id": application.id,
+      "x-application-id": committed.applicationId,
       "x-request-id": requestId,
       "x-tailor-cv-source": data.target === "resume" ? data.source : "base",
       "x-tailor-cover-source": data.target === "cover" ? data.source : "fallback",

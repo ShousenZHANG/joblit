@@ -12,7 +12,6 @@ import {
   cancelJobsQueries,
   getJobDetailsQueryKey,
   invalidateActiveJobsQueries,
-  patchGeneratedJobArtifactInJobsCache,
   patchJobStatusInJobsCache,
   removeJobFromJobsCache,
   removeJobsFromJobsCache,
@@ -67,12 +66,7 @@ export function useJobMutations({
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || "Failed to update status");
-      return json as {
-        resumeSaved?: boolean;
-        resumePdfUrl?: string | null;
-        resumePdfName?: string | null;
-        saveError?: { code: string; message: string } | null;
-      };
+      return json as { ok?: boolean };
     },
     onMutate: async ({ id, status }) => {
       setError(null);
@@ -94,10 +88,7 @@ export function useJobMutations({
           "border-destructive/30 bg-destructive/10 text-rose-900 animate-in fade-in zoom-in-95",
       });
     },
-    onSuccess: (data, variables) => {
-      if (data?.resumeSaved || data?.resumePdfUrl) {
-        markTaskComplete("generate_first_pdf");
-      }
+    onSuccess: (_data, variables) => {
       if (variables.status === "APPLIED") {
         markTaskComplete("mark_applied");
       }
@@ -108,35 +99,6 @@ export function useJobMutations({
         className:
           "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-900 animate-in fade-in zoom-in-95",
       });
-
-      if (data?.resumePdfUrl) {
-        patchGeneratedJobArtifactInJobsCache({
-          queryClient,
-          id: variables.id,
-          patch: {
-            resumePdfUrl: data.resumePdfUrl,
-            resumePdfName: data.resumePdfName,
-          },
-        });
-      }
-
-      if (data?.saveError) {
-        toast({
-          title: "Saved with warnings",
-          description: data.saveError.message,
-          duration: 2400,
-          className:
-            "border-amber-200 bg-amber-50 text-amber-900 animate-in fade-in zoom-in-95",
-        });
-      } else if (data?.resumeSaved) {
-        toast({
-          title: "Resume saved",
-          description: "Saved to your applied job.",
-          duration: 2000,
-          className:
-            "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-900 animate-in fade-in zoom-in-95",
-        });
-      }
     },
     onSettled: (_data, _error, variables) => {
       if (!variables) return;

@@ -11,6 +11,8 @@ const prismaStore = vi.hoisted(() => ({
   job: {
     createMany: vi.fn(),
   },
+  executeRaw: vi.fn(),
+  $transaction: vi.fn(),
 }));
 
 vi.mock("@/lib/server/prisma", () => ({ prisma: prismaStore }));
@@ -34,6 +36,14 @@ describe("ext jobs import api", () => {
     prismaStore.extensionToken.updateMany.mockReset();
     prismaStore.deletedJobUrl.findMany.mockReset();
     prismaStore.job.createMany.mockReset();
+    prismaStore.executeRaw.mockReset().mockResolvedValue(0);
+    prismaStore.$transaction.mockReset().mockImplementation(async (callback) =>
+      callback({
+        $executeRaw: prismaStore.executeRaw,
+        deletedJobUrl: prismaStore.deletedJobUrl,
+        job: prismaStore.job,
+      }),
+    );
 
     prismaStore.extensionToken.findFirst.mockResolvedValue({
       id: "tok-1",

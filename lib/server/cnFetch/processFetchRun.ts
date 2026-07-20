@@ -1,7 +1,12 @@
 import { prisma } from "@/lib/server/prisma";
-import { canonicalizeJobUrl } from "@/lib/shared/canonicalizeJobUrl";
+import {
+  ImportJobItemSchema,
+  importJobsForUser,
+} from "@/lib/server/jobs/jobImportService";
 import { runCnFetch } from "./runCnFetch";
 import type { CnSource } from "./types";
+import { acquireFetchRunLifecycleLock } from "@/lib/server/fetchRuns/fetchRunLifecycleLock";
+import type { Prisma } from "@/lib/generated/prisma";
 
 // CN fetch pipeline for one FetchRun. Called from
 // /api/fetch-runs/[id]/trigger, the single-run in-process path.
@@ -54,6 +59,25 @@ interface ProcessResult {
   discovered: number;
   imported: number;
   error?: string;
+  cancelled?: boolean;
+}
+
+async function updateActiveRun<T>(
+  runId: string,
+  action: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T | null> {
+  return prisma.$transaction(
+    async (tx) => {
+      await acquireFetchRunLifecycleLock(tx, runId);
+      const active = await tx.fetchRun.findFirst({
+        where: { id: runId, status: "RUNNING" },
+        select: { id: true },
+      });
+      if (!active) return null;
+      return action(tx);
+    },
+    { timeout: 30_000 },
+  );
 }
 
 /**
@@ -70,11 +94,6 @@ export async function processCnFetchRun(
   try {
     const config = readCnRunConfig(run.queries);
 
-    await prisma.fetchRun.update({
-      where: { id: run.id },
-      data: { status: "RUNNING", error: null },
-    });
-
     const result = await runCnFetch({
       sources: config.sources,
       queries: config.queries,
@@ -82,61 +101,65 @@ export async function processCnFetchRun(
       locations: config.locations,
     });
 
-    const discovered = result.jobs.length;
-    if (discovered === 0) {
-      await prisma.fetchRun.update({
-        where: { id: run.id },
-        data: { status: "SUCCEEDED", importedCount: 0 },
-      });
-      return { ...base, discovered: 0, imported: 0 };
-    }
-
-    // Tombstone filter — skip URLs the user previously deleted.
-    const deleted = await prisma.deletedJobUrl.findMany({
-      where: { userId },
-      select: { jobUrl: true },
-    });
-    const deletedSet = new Set(
-      deleted.map((d) => canonicalizeJobUrl(d.jobUrl)),
+    const failedSources = result.diagnostics.filter(
+      (diagnostic) => !diagnostic.ok,
     );
-    const filtered = result.jobs.filter((j) => !deletedSet.has(j.jobUrl));
-
-    const BATCH = 200;
-    let imported = 0;
-    for (let i = 0; i < filtered.length; i += BATCH) {
-      const batch = filtered.slice(i, i + BATCH);
-      const res = await prisma.job.createMany({
-        data: batch.map((j) => ({
-          userId,
-          jobUrl: j.jobUrl,
-          title: j.title,
-          company: j.company,
-          location: j.location,
-          jobType: j.jobType,
-          jobLevel: j.jobLevel,
-          description: j.description,
-          listingDate: j.listingDate ? new Date(j.listingDate) : null,
-          market: "CN",
-          status: "NEW",
-        })),
-        skipDuplicates: true,
+    if (
+      result.diagnostics.length > 0 &&
+      failedSources.length === result.diagnostics.length
+    ) {
+      const message = `all sources failed: ${failedSources
+        .map(
+          (diagnostic) =>
+            `${diagnostic.source}: ${diagnostic.error ?? "unknown error"}`,
+        )
+        .join("; ")}`;
+      const failedRun = await updateActiveRun(run.id, async (tx) => {
+        await tx.fetchRun.updateMany({
+          where: { id: run.id, userId, status: "RUNNING" },
+          data: { status: "FAILED", importedCount: 0, error: message },
+        });
+        return { ...base, discovered: 0, imported: 0, error: message };
       });
-      imported += res.count;
+      return failedRun ?? {
+        ...base,
+        discovered: 0,
+        imported: 0,
+        cancelled: true,
+      };
     }
 
-    await prisma.fetchRun.update({
-      where: { id: run.id },
-      data: { status: "SUCCEEDED", importedCount: imported },
+    const discovered = result.jobs.length;
+    const completed = await updateActiveRun(run.id, async (tx) => {
+      let imported = 0;
+      if (discovered > 0) {
+        const importResult = await importJobsForUser({
+          userId,
+          items: result.jobs.map((job) => ImportJobItemSchema.parse(job)),
+        });
+        imported = importResult.imported;
+      }
+      await tx.fetchRun.updateMany({
+        where: { id: run.id, userId, status: "RUNNING" },
+        data: { status: "SUCCEEDED", importedCount: imported, error: null },
+      });
+      return { ...base, discovered, imported };
     });
-    return { ...base, discovered, imported };
+    return completed ?? { ...base, discovered: 0, imported: 0, cancelled: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown";
-    await prisma.fetchRun
-      .update({
-        where: { id: run.id },
-        data: { status: "FAILED", error: message },
-      })
-      .catch(() => {});
-    return { ...base, discovered: 0, imported: 0, error: message };
+    const failedRun = await updateActiveRun(run.id, async (tx) => {
+      await tx.fetchRun.updateMany({
+        where: { id: run.id, userId, status: "RUNNING" },
+        data: { status: "FAILED", importedCount: 0, error: message },
+      });
+      return { ...base, discovered: 0, imported: 0, error: message };
+    }).catch(() => null);
+    return failedRun ?? {
+      ...base,
+      discovered: 0,
+      imported: 0,
+      cancelled: true,
+    };
   }
 }

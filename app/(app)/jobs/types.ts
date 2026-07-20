@@ -14,6 +14,10 @@ export type JobItem = {
   workArrangement?: string | null;
   listingDate?: string | null;
   status: JobStatus;
+  market?: string | null;
+  source?: string | null;
+  postingRisk?: number | null;
+  postingRiskFlags?: string[] | null;
   resumePdfUrl?: string | null;
   resumePdfName?: string | null;
   coverPdfUrl?: string | null;

@@ -11,6 +11,7 @@ import {
   APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
   buildApplicationArtifactBlobPath,
 } from "@/lib/server/files/applicationArtifactBlob";
+import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
 import { del, put } from "@vercel/blob";
 
 type GenerateArtifactsInput = {
@@ -52,6 +53,20 @@ async function uploadPdfToBlob(input: {
   return blob.url;
 }
 
+async function deleteBlobUrls(urls: Array<string | null | undefined>) {
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  if (!token) return;
+  const uniqueUrls = Array.from(
+    new Set(
+      urls.filter(
+        (url): url is string =>
+          typeof url === "string" && url.trim().length > 0,
+      ),
+    ),
+  );
+  await Promise.allSettled(uniqueUrls.map((url) => del(url, { token })));
+}
+
 export async function generateApplicationArtifactsForJob(input: GenerateArtifactsInput) {
   const job = await prisma.job.findFirst({
     where: {
@@ -70,19 +85,6 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
     throw new Error("JOB_NOT_FOUND");
   }
 
-  const existingApplication = await prisma.application.findUnique({
-    where: {
-      userId_jobId: {
-        userId: input.userId,
-        jobId: job.id,
-      },
-    },
-    select: {
-      resumePdfUrl: true,
-      coverPdfUrl: true,
-    },
-  });
-
   const profileLocale = marketStringToResumeLocale(job.market);
   const profile = await getResumeProfile(input.userId, { locale: profileLocale });
   if (!profile) {
@@ -94,132 +96,169 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
     profile,
     job,
   });
-  const resumePdfName = buildPdfFilename(resumeResult.renderInput.candidate.name, job.title);
-  const resumePdfUrl = await uploadPdfToBlob({
-    userId: input.userId,
-    jobId: job.id,
-    target: "resume",
-    pdf: resumeResult.pdf,
-  }).catch(() => null);
-
-  const tailored = await tailorApplicationContent(
-    {
-      baseSummary: resumeResult.renderInput.summary,
-      jobTitle: job.title,
-      company: job.company || "the company",
-      description: job.description || "",
-      resumeSnapshot: profile,
-      userId: input.userId,
-    },
-    {
-      strictCoverQuality: true,
-      maxCoverRewritePasses: 2,
-      localeProfile: profileLocale,
-      targetWordRange: { min: 280, max: 360 },
-    },
+  const resumePdfName = buildPdfFilename(
+    resumeResult.renderInput.candidate.name,
+    job.title,
   );
+  let resumePdfUrl: string | null = null;
+  let coverPdfUrl: string | null = null;
+  let committed = false;
 
-  const coverTex = renderCoverLetterTex({
-    candidate: {
-      name: resumeResult.renderInput.candidate.name,
-      title: resumeResult.renderInput.candidate.title,
-      phone: resumeResult.renderInput.candidate.phone,
-      email: resumeResult.renderInput.candidate.email,
-      linkedinUrl: resumeResult.renderInput.candidate.linkedinUrl,
-      linkedinText: resumeResult.renderInput.candidate.linkedinText,
-    },
-    company: job.company || "the company",
-    role: job.title,
-    candidateTitle: tailored.cover.candidateTitle,
-    subject: tailored.cover.subject,
-    date: tailored.cover.date,
-    salutation: tailored.cover.salutation,
-    paragraphOne: tailored.cover.paragraphOne,
-    paragraphTwo: tailored.cover.paragraphTwo,
-    paragraphThree: tailored.cover.paragraphThree,
-    closing: tailored.cover.closing,
-    signatureName: tailored.cover.signatureName,
-  });
-  const coverPdf = await compileLatexToPdf(coverTex);
-  const coverPdfName = buildPdfFilename(resumeResult.renderInput.candidate.name, job.title, "cl");
-  const coverPdfUrl = await uploadPdfToBlob({
-    userId: input.userId,
-    jobId: job.id,
-    target: "cover",
-    pdf: coverPdf,
-  }).catch(() => null);
-
-  const application = await prisma.application.upsert({
-    where: {
-      userId_jobId: {
-        userId: input.userId,
-        jobId: job.id,
-      },
-    },
-    create: {
+  try {
+    resumePdfUrl = await uploadPdfToBlob({
       userId: input.userId,
       jobId: job.id,
-      resumeProfileId: profile.id,
-      company: job.company,
+      target: "resume",
+      pdf: resumeResult.pdf,
+    }).catch(() => null);
+
+    const tailored = await tailorApplicationContent(
+      {
+        baseSummary: resumeResult.renderInput.summary,
+        jobTitle: job.title,
+        company: job.company || "the company",
+        description: job.description || "",
+        resumeSnapshot: profile,
+        userId: input.userId,
+      },
+      {
+        strictCoverQuality: true,
+        maxCoverRewritePasses: 2,
+        localeProfile: profileLocale,
+        targetWordRange: { min: 280, max: 360 },
+      },
+    );
+
+    const coverTex = renderCoverLetterTex({
+      candidate: {
+        name: resumeResult.renderInput.candidate.name,
+        title: resumeResult.renderInput.candidate.title,
+        phone: resumeResult.renderInput.candidate.phone,
+        email: resumeResult.renderInput.candidate.email,
+        linkedinUrl: resumeResult.renderInput.candidate.linkedinUrl,
+        linkedinText: resumeResult.renderInput.candidate.linkedinText,
+      },
+      company: job.company || "the company",
       role: job.title,
-      ...(resumePdfUrl
-        ? {
-            resumePdfUrl,
-            resumePdfName,
-          }
-        : {}),
-      ...(coverPdfUrl
-        ? {
-            coverPdfUrl,
-          }
-        : {}),
-    },
-    update: {
-      resumeProfileId: profile.id,
-      company: job.company,
-      role: job.title,
-      ...(resumePdfUrl
-        ? {
-            resumePdfUrl,
-            resumePdfName,
-          }
-        : {}),
-      ...(coverPdfUrl
-        ? {
-            coverPdfUrl,
-          }
-        : {}),
-    },
-    select: {
-      id: true,
-    },
-  });
+      candidateTitle: tailored.cover.candidateTitle,
+      subject: tailored.cover.subject,
+      date: tailored.cover.date,
+      salutation: tailored.cover.salutation,
+      paragraphOne: tailored.cover.paragraphOne,
+      paragraphTwo: tailored.cover.paragraphTwo,
+      paragraphThree: tailored.cover.paragraphThree,
+      closing: tailored.cover.closing,
+      signatureName: tailored.cover.signatureName,
+    });
+    const coverPdf = await compileLatexToPdf(coverTex);
+    const coverPdfName = buildPdfFilename(
+      resumeResult.renderInput.candidate.name,
+      job.title,
+      "cl",
+    );
+    coverPdfUrl = await uploadPdfToBlob({
+      userId: input.userId,
+      jobId: job.id,
+      target: "cover",
+      pdf: coverPdf,
+    }).catch(() => null);
 
-  const result: GenerateArtifactsResult = {
-    applicationId: application.id,
-    jobId: job.id,
-    resumePdfUrl,
-    resumePdfName,
-    coverPdfUrl,
-    coverPdfName,
-  };
+    // PDF/AI work stays outside the transaction. Only the ownership recheck
+    // and Application commit are serialized, keeping lock time bounded.
+    const commit = await prisma.$transaction(
+      async (tx) => {
+        await acquireApplicationMutationLock(
+          tx,
+          input.userId,
+          job.id,
+        );
+        const ownedJob = await tx.job.findFirst({
+          where: { id: job.id, userId: input.userId },
+          select: { id: true },
+        });
+        if (!ownedJob) throw new Error("JOB_NOT_FOUND");
 
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
-    const staleUrls = [
-      existingApplication?.resumePdfUrl && resumePdfUrl && existingApplication.resumePdfUrl !== resumePdfUrl
-        ? existingApplication.resumePdfUrl
-        : null,
-      existingApplication?.coverPdfUrl && coverPdfUrl && existingApplication.coverPdfUrl !== coverPdfUrl
-        ? existingApplication.coverPdfUrl
-        : null,
-    ].filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+        const currentApplication = await tx.application.findUnique({
+          where: {
+            userId_jobId: {
+              userId: input.userId,
+              jobId: job.id,
+            },
+          },
+          select: {
+            resumePdfUrl: true,
+            coverPdfUrl: true,
+          },
+        });
+        const application = await tx.application.upsert({
+          where: {
+            userId_jobId: {
+              userId: input.userId,
+              jobId: job.id,
+            },
+          },
+          create: {
+            userId: input.userId,
+            jobId: job.id,
+            resumeProfileId: profile.id,
+            company: job.company,
+            role: job.title,
+            ...(resumePdfUrl
+              ? {
+                  resumePdfUrl,
+                  resumePdfName,
+                }
+              : {}),
+            ...(coverPdfUrl ? { coverPdfUrl } : {}),
+          },
+          update: {
+            resumeProfileId: profile.id,
+            company: job.company,
+            role: job.title,
+            ...(resumePdfUrl
+              ? {
+                  resumePdfUrl,
+                  resumePdfName,
+                }
+              : {}),
+            ...(coverPdfUrl ? { coverPdfUrl } : {}),
+          },
+          select: { id: true },
+        });
 
-    if (staleUrls.length > 0) {
-      await Promise.allSettled(
-        staleUrls.map((url) => del(url, { token: process.env.BLOB_READ_WRITE_TOKEN })),
-      );
+        return {
+          applicationId: application.id,
+          staleUrls: [
+            currentApplication?.resumePdfUrl &&
+            resumePdfUrl &&
+            currentApplication.resumePdfUrl !== resumePdfUrl
+              ? currentApplication.resumePdfUrl
+              : null,
+            currentApplication?.coverPdfUrl &&
+            coverPdfUrl &&
+            currentApplication.coverPdfUrl !== coverPdfUrl
+              ? currentApplication.coverPdfUrl
+              : null,
+          ],
+        };
+      },
+      { timeout: 30_000 },
+    );
+    committed = true;
+    await deleteBlobUrls(commit.staleUrls);
+
+    return {
+      applicationId: commit.applicationId,
+      jobId: job.id,
+      resumePdfUrl,
+      resumePdfName,
+      coverPdfUrl,
+      coverPdfName,
+    } satisfies GenerateArtifactsResult;
+  } catch (error) {
+    if (!committed) {
+      await deleteBlobUrls([resumePdfUrl, coverPdfUrl]);
     }
+    throw error;
   }
-
-  return result;
 }

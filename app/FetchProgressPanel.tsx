@@ -9,7 +9,12 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useFetchStatus, type FetchRunLane } from "./FetchStatusContext";
 
-const SOURCE_LABEL: Record<string, string> = { jobspy: "LinkedIn", seek: "Seek" };
+const SOURCE_LABEL: Record<string, string> = {
+  jobspy: "LinkedIn",
+  seek: "Seek",
+  nowcoder: "Nowcoder",
+  global: "Global feeds",
+};
 
 // Fetch progress panel — bottom-right floating surface that tracks a
 // fetch run through queued → running → done. Supports three visual

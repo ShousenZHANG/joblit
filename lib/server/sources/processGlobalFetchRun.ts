@@ -2,6 +2,9 @@ import { prisma } from "@/lib/server/prisma";
 import { importJobsForUser } from "@/lib/server/jobs/jobImportService";
 import { runSourceFetch } from "./runSourceFetch";
 import { ALL_SOURCE_IDS, isKnownSourceId } from "./registry";
+import { filterSourceJobs, type SourceJobFilter } from "./filterSourceJobs";
+import { acquireFetchRunLifecycleLock } from "@/lib/server/fetchRuns/fetchRunLifecycleLock";
+import type { Prisma } from "@/lib/generated/prisma";
 
 // Runner for one market="GLOBAL" FetchRun, called from
 // /api/fetch-runs/[id]/trigger.
@@ -15,6 +18,7 @@ export interface GlobalFetchRunResult {
   discovered: number;
   imported: number;
   error?: string;
+  cancelled?: boolean;
 }
 
 function requestedSources(queries: unknown): string[] {
@@ -28,6 +32,53 @@ function requestedSources(queries: unknown): string[] {
     .map((s) => s.trim())
     .filter((s) => isKnownSourceId(s));
   return cleaned.length ? cleaned : [...ALL_SOURCE_IDS];
+}
+
+function readFilter(queries: unknown): SourceJobFilter {
+  const value =
+    queries && typeof queries === "object" && !Array.isArray(queries)
+      ? (queries as Record<string, unknown>)
+      : {};
+  const strings = (candidate: unknown) =>
+    Array.isArray(candidate)
+      ? candidate.filter((item): item is string => typeof item === "string")
+      : [];
+  const applyExcludes = value.applyExcludes !== false;
+  const hoursOld =
+    typeof value.hoursOld === "number" &&
+    Number.isInteger(value.hoursOld) &&
+    value.hoursOld > 0
+      ? value.hoursOld
+      : null;
+  return {
+    queries: strings(value.queries),
+    baseQueries: strings(value.baseQueries),
+    location: typeof value.location === "string" ? value.location : null,
+    hoursOld,
+    excludeTitleTerms: applyExcludes ? strings(value.excludeTitleTerms) : [],
+    excludeDescriptionRules: applyExcludes
+      ? strings(value.excludeDescriptionRules)
+      : [],
+    strictTitles: value.includeFromQueries !== false,
+  };
+}
+
+async function updateActiveRun<T>(
+  runId: string,
+  action: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T | null> {
+  return prisma.$transaction(
+    async (tx) => {
+      await acquireFetchRunLifecycleLock(tx, runId);
+      const active = await tx.fetchRun.findFirst({
+        where: { id: runId, status: "RUNNING" },
+        select: { id: true },
+      });
+      if (!active) return null;
+      return action(tx);
+    },
+    { timeout: 30_000 },
+  );
 }
 
 /** Execute one queued GLOBAL run and write its terminal status. */
@@ -49,34 +100,43 @@ export async function processGlobalFetchRun(
         .map((d) => `${d.source}: ${d.error ?? "unknown error"}`)
         .join("; ");
       const error = `all sources failed: ${detail}`;
-      await prisma.fetchRun.update({
-        where: { id: run.id },
+      const failedRun = await updateActiveRun(run.id, async (tx) => {
+        await tx.fetchRun.updateMany({
+          where: { id: run.id, userId, status: "RUNNING" },
+          data: { status: "FAILED", importedCount: 0, error },
+        });
+        return { discovered: 0, imported: 0, error };
+      });
+      return failedRun ?? { discovered: 0, imported: 0, cancelled: true };
+    }
+
+    const filteredJobs = filterSourceJobs(jobs, readFilter(run.queries));
+    const completed = await updateActiveRun(run.id, async (tx) => {
+      let imported = 0;
+      if (filteredJobs.length > 0) {
+        const result = await importJobsForUser({
+          userId,
+          items: filteredJobs.map((job) => ({ ...job, market: "GLOBAL" as const })),
+        });
+        imported = result.imported;
+      }
+
+      await tx.fetchRun.updateMany({
+        where: { id: run.id, userId, status: "RUNNING" },
+        data: { status: "SUCCEEDED", importedCount: imported, error: null },
+      });
+      return { discovered: filteredJobs.length, imported };
+    });
+    return completed ?? { discovered: 0, imported: 0, cancelled: true };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : "global_fetch_failed";
+    const failedRun = await updateActiveRun(run.id, async (tx) => {
+      await tx.fetchRun.updateMany({
+        where: { id: run.id, userId, status: "RUNNING" },
         data: { status: "FAILED", importedCount: 0, error },
       });
       return { discovered: 0, imported: 0, error };
-    }
-
-    let imported = 0;
-    if (jobs.length > 0) {
-      const result = await importJobsForUser({
-        userId,
-        items: jobs.map((job) => ({ ...job, market: "GLOBAL" as const })),
-      });
-      imported = result.imported;
-    }
-
-    await prisma.fetchRun.update({
-      where: { id: run.id },
-      data: { status: "SUCCEEDED", importedCount: imported, error: null },
-    });
-    return { discovered: jobs.length, imported };
-  } catch (err) {
-    const error = err instanceof Error ? err.message : "global_fetch_failed";
-    await prisma.fetchRun.update({
-      where: { id: run.id },
-      data: { status: "FAILED", importedCount: 0, error },
-    });
-    return { discovered: 0, imported: 0, error };
+    }).catch(() => null);
+    return failedRun ?? { discovered: 0, imported: 0, cancelled: true };
   }
 }
-

@@ -6,6 +6,7 @@ import {
   aiContentSchema,
   hashAiContent,
 } from "@/lib/shared/schemas/aiContent";
+import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
 
 export const runtime = "nodejs";
 
@@ -45,7 +46,7 @@ export async function PATCH(
 
     const existing = await prisma.application.findFirst({
       where: { id: parsedParams.data.id, userId },
-      select: { id: true, aiContentHash: true },
+      select: { id: true, jobId: true, aiContentHash: true },
     });
     if (!existing) {
       return NextResponse.json(
@@ -69,14 +70,40 @@ export async function PATCH(
     }
 
     const newHash = hashAiContent(aiContent);
-    await prisma.application.update({
-      where: { id: existing.id },
-      data: {
-        status: "DRAFT",
-        aiContent,
-        aiContentHash: newHash,
+    const updated = await prisma.$transaction(
+      async (tx) => {
+        await acquireApplicationMutationLock(
+          tx,
+          userId,
+          existing.jobId ?? existing.id,
+        );
+        return tx.application.updateMany({
+          where: {
+            id: existing.id,
+            userId,
+            aiContentHash: expectedHash,
+          },
+          data: {
+            status: "DRAFT",
+            aiContent,
+            aiContentHash: newHash,
+          },
+        });
       },
-    });
+      { timeout: 30_000 },
+    );
+    if (updated.count !== 1) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "STALE_WRITE",
+            message: "Another tab updated this draft",
+          },
+          requestId,
+        },
+        { status: 409 },
+      );
+    }
 
     return NextResponse.json({
       status: "DRAFT",

@@ -12,6 +12,7 @@ import {
 } from "@/lib/shared/schemas/aiContent";
 import {
   canonicalizeLatestBullets,
+  deriveReviewableSkillAdditions,
   getLatestRawBullets,
   isGroundedAddedBullet,
   isNonRedundantAddedBullet,
@@ -56,9 +57,8 @@ type ManualImportArtifactResult =
       /**
        * Provenance snapshot of every AI proposal + the user's
        * accept/reject/edit decisions. Persisted on Application.aiContent.
-       * For Phase 1 the resume target populates cv.summary +
-       * cv.latestExperience; skills + cover paragraphs stay empty
-       * defaults until Phase 2 lights them up.
+       * Resume target captures summary, grounded bullets, and reviewable
+       * skill additions. Cover target captures its three editable paragraphs.
        */
       aiContent: AiContent;
     }
@@ -207,6 +207,19 @@ function buildManualResumeArtifact(input: {
     category: group.category,
     items: group.items,
   }));
+  const proposedSkillGroups = resumeOutput.skillsFinal
+    ? resumeOutput.skillsFinal.map((group) => ({
+        label: group.label,
+        items: group.items,
+      }))
+    : (resumeOutput.skillsAdditions ?? []).map((group) => ({
+        label: group.category,
+        items: group.items,
+      }));
+  const reviewableSkillAdditions = deriveReviewableSkillAdditions(
+    input.renderInput.skills,
+    proposedSkillGroups,
+  );
   const nextExperiences =
     baseLatest && finalLatestBullets && finalLatestBullets.length > 0
       ? [{ ...baseLatest, bullets: finalLatestBullets }, ...input.renderInput.experiences.slice(1)]
@@ -231,7 +244,7 @@ function buildManualResumeArtifact(input: {
         experienceIndex: 0,
         addedBullets: aiAddedBullets,
       },
-      skillsAdditions: EMPTY_AI_CONTENT_DEFAULTS.skillsAdditions,
+      skillsAdditions: reviewableSkillAdditions,
     },
     cover: emptyCover(),
   };

@@ -8,6 +8,7 @@ import {
   UnauthorizedError,
   type SessionContext,
 } from "@/lib/server/auth/requireSession";
+import { getCurrentFitSnapshotPredicates } from "@/lib/server/jobs/fitRunService";
 import { prisma } from "@/lib/server/prisma";
 
 export const runtime = "nodejs";
@@ -77,11 +78,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ restored: restored.count });
   }
 
+  const currentSnapshots = await getCurrentFitSnapshotPredicates(userId);
+  if (currentSnapshots.length === 0) {
+    if (body.data.preview) {
+      return NextResponse.json({ count: 0 });
+    }
+    return NextResponse.json({ count: 0, ignoredAt: new Date().toISOString() });
+  }
+
   // Only scored low-fit jobs qualify; unscored/failed jobs are never swept.
   const where = {
     userId,
     status: "NEW" as const,
     fitScore: { not: null, lte: body.data.maxScore },
+    OR: currentSnapshots,
   };
 
   if (body.data.preview) {

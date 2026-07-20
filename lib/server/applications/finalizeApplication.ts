@@ -4,7 +4,10 @@ import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import { renderResumeTex } from "@/lib/server/latex/renderResume";
 import { renderCoverLetterTex } from "@/lib/server/latex/renderCoverLetter";
 import { compileLatexToPdf } from "@/lib/server/latex/compilePdf";
-import { escapeLatexWithBold } from "@/lib/server/latex/escapeLatex";
+import {
+  escapeLatex,
+  escapeLatexWithBold,
+} from "@/lib/server/latex/escapeLatex";
 import { buildPdfFilename } from "@/lib/server/files/pdfFilename";
 import {
   APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
@@ -28,13 +31,17 @@ import type { AiContent } from "@/lib/shared/schemas/aiContent";
  *     skills section. (Phase 2 wires the per-skill granularity; for
  *     Phase 1 we accept the full additions list as-is.)
  */
-export async function renderFinalApplication(input: {
+type RenderApplicationInput = {
   applicationId: string;
   userId: string;
   aiContent: AiContent;
   artifactVersion?: string | null;
   job: { id: string | null; title: string; company: string | null; market: string };
-}): Promise<{ resumePdfUrl: string; resumePdfName: string }> {
+};
+
+export async function renderApplicationPdf(
+  input: RenderApplicationInput,
+): Promise<{ pdf: Buffer; filename: string }> {
   const profileLocale = marketStringToResumeLocale(input.job.market);
   const profile = await getResumeProfile(input.userId, { locale: profileLocale });
   if (!profile) {
@@ -84,7 +91,14 @@ export async function renderFinalApplication(input: {
   const pdf = await compileLatexToPdf(tex, {
     engine: profileLocale === "zh-CN" ? "xelatex" : "pdflatex",
   });
-  const resumePdfName = buildPdfFilename(renderInput.candidate.name, input.job.title);
+  const filename = buildPdfFilename(renderInput.candidate.name, input.job.title);
+  return { pdf, filename };
+}
+
+export async function renderFinalApplication(
+  input: RenderApplicationInput,
+): Promise<{ resumePdfUrl: string; resumePdfName: string }> {
+  const { pdf, filename: resumePdfName } = await renderApplicationPdf(input);
   const blobPath = buildApplicationArtifactBlobPath({
     userId: input.userId,
     jobId: input.job.id ?? input.applicationId,
@@ -106,13 +120,21 @@ function mergeAcceptedSkillAdditions(
 ): ReturnType<typeof mapResumeProfile>["skills"] {
   const byLabel = new Map(baseSkills.map((s) => [s.label, [...s.items]]));
   for (const add of additions) {
-    const existing = byLabel.get(add.label);
+    // Profile fields are already escaped by mapResumeProfile. Draft fields are
+    // user-editable and must cross the same LaTeX trust boundary before merge.
+    const label = escapeLatex(add.label.trim()).trim();
+    const items = add.items
+      .map((item) => escapeLatex(item.trim()).trim())
+      .filter(Boolean);
+    if (!label || items.length === 0) continue;
+
+    const existing = byLabel.get(label);
     if (existing) {
-      for (const item of add.items) {
+      for (const item of items) {
         if (!existing.includes(item)) existing.push(item);
       }
     } else {
-      byLabel.set(add.label, [...add.items]);
+      byLabel.set(label, items);
     }
   }
   return Array.from(byLabel.entries()).map(([label, items]) => ({ label, items }));
@@ -130,6 +152,29 @@ export async function renderFinalCoverLetter(input: {
   artifactVersion?: string | null;
   job: { id: string | null; title: string; company: string | null; market: string };
 }): Promise<{ coverPdfUrl: string; coverPdfName: string }> {
+  const { pdf, filename: coverPdfName } = await renderCoverLetterPdf(input);
+  const blobPath = buildApplicationArtifactBlobPath({
+    userId: input.userId,
+    jobId: input.job.id ?? input.applicationId,
+    target: "cover",
+    version: input.artifactVersion,
+  });
+  const blob = await put(blobPath, pdf, {
+    access: "public",
+    contentType: "application/pdf",
+    ...APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
+  });
+
+  return { coverPdfUrl: blob.url, coverPdfName };
+}
+
+export async function renderCoverLetterPdf(input: {
+  applicationId: string;
+  userId: string;
+  aiContent: AiContent;
+  artifactVersion?: string | null;
+  job: { id: string | null; title: string; company: string | null; market: string };
+}): Promise<{ pdf: Buffer; filename: string }> {
   const profileLocale = marketStringToResumeLocale(input.job.market);
   const profile = await getResumeProfile(input.userId, { locale: profileLocale });
   if (!profile) {
@@ -165,24 +210,12 @@ export async function renderFinalCoverLetter(input: {
   const pdf = await compileLatexToPdf(tex, {
     engine: profileLocale === "zh-CN" ? "xelatex" : "pdflatex",
   });
-  const coverPdfName = buildPdfFilename(
+  const filename = buildPdfFilename(
     renderInput.candidate.name,
     input.job.title,
     "cl",
   );
-  const blobPath = buildApplicationArtifactBlobPath({
-    userId: input.userId,
-    jobId: input.job.id ?? input.applicationId,
-    target: "cover",
-    version: input.artifactVersion,
-  });
-  const blob = await put(blobPath, pdf, {
-    access: "public",
-    contentType: "application/pdf",
-    ...APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
-  });
-
-  return { coverPdfUrl: blob.url, coverPdfName };
+  return { pdf, filename };
 }
 
 export async function deleteApplicationArtifact(url: string | null | undefined) {

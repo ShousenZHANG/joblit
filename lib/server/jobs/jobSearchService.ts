@@ -2,6 +2,9 @@ import { Prisma } from "@/lib/generated/prisma";
 import { prisma } from "@/lib/server/prisma";
 import { buildJobsListEtag } from "@/lib/server/jobsListEtag";
 import type { JobListQuery, JobListResult, JobListItem } from "./jobListService";
+import { getVisibleJobMarkets } from "./jobMarketScope";
+import { normalizePostingRiskFlags } from "./jobListItemMapper";
+import { getJobLocationTerms } from "./jobLocationScope";
 import { escapeLikePattern } from "./searchUtils";
 
 export async function listJobsWithRelevance(
@@ -24,19 +27,56 @@ export async function listJobsWithRelevance(
   ];
 
   if (status) conditions.push(Prisma.sql`j."status" = ${status}::"JobStatus"`);
-  if (market) conditions.push(Prisma.sql`j."market" = ${market}`);
+  if (market) {
+    const visibleMarkets = getVisibleJobMarkets(market).map(
+      (value) => Prisma.sql`${value}`,
+    );
+    conditions.push(
+      Prisma.sql`j."market" IN (${Prisma.join(visibleMarkets)})`,
+    );
+  }
   if (jobLevel) conditions.push(Prisma.sql`LOWER(j."jobLevel") = LOWER(${jobLevel})`);
 
-  if (location && !location.startsWith("state:")) {
-    const locPattern = `%${escapeLikePattern(location)}%`;
-    conditions.push(Prisma.sql`j."location" ILIKE ${locPattern}`);
+  switch (query.fitBand) {
+    case "strong":
+      conditions.push(Prisma.sql`j."fitScore" >= 75`);
+      break;
+    case "good":
+      conditions.push(Prisma.sql`j."fitScore" >= 60 AND j."fitScore" < 75`);
+      break;
+    case "moderate":
+      conditions.push(Prisma.sql`j."fitScore" >= 45 AND j."fitScore" < 60`);
+      break;
+    case "low":
+      conditions.push(Prisma.sql`j."fitScore" < 45`);
+      break;
+    case "unscored":
+      conditions.push(Prisma.sql`j."fitScore" IS NULL`);
+      break;
   }
 
-  if (cursor) {
-    conditions.push(Prisma.sql`j."id" != ${cursor}::uuid`);
+  const locationTerms = getJobLocationTerms(location);
+  if (locationTerms?.length) {
+    const locationConditions = locationTerms.map((term) => {
+      const pattern = `%${escapeLikePattern(term)}%`;
+      return Prisma.sql`j."location" ILIKE ${pattern}`;
+    });
+    conditions.push(Prisma.sql`(${Prisma.join(locationConditions, " OR ")})`);
   }
 
   const whereClause = Prisma.join(conditions, " AND ");
+  const cursorClause = cursor
+    ? Prisma.sql`
+        ranked."rowNumber" > COALESCE(
+          (
+            SELECT cursor_row."rowNumber"
+            FROM ranked cursor_row
+            WHERE cursor_row."id" = ${cursor}::uuid
+          ),
+          9223372036854775807
+        )
+      `
+    : Prisma.sql`TRUE`;
 
   type RawRow = {
     id: string;
@@ -51,6 +91,12 @@ export async function listJobsWithRelevance(
     listingDate: Date | null;
     status: string;
     market: string | null;
+    source: string | null;
+    postingRisk: number | null;
+    postingRiskFlags: unknown;
+    fitScore: number | null;
+    fitVerdict: string | null;
+    fitEligibility: string | null;
     createdAt: Date;
     updatedAt: Date;
     resumePdfUrl: string | null;
@@ -60,27 +106,48 @@ export async function listJobsWithRelevance(
 
   const [rows, countResult] = await Promise.all([
     prisma.$queryRaw<RawRow[]>`
+      WITH matched AS (
+        SELECT
+          j."id", j."jobUrl", j."title", j."company", j."location",
+          j."jobType", j."jobLevel", j."salary", j."workArrangement", j."listingDate",
+          j."status", j."market", j."source",
+          j."postingRisk", j."postingRiskFlags",
+          j."fitScore", j."fitVerdict", j."fitEligibility",
+          j."createdAt", j."updatedAt",
+          a."resumePdfUrl", a."resumePdfName", a."coverPdfUrl",
+          GREATEST(
+            similarity(LOWER(j."title"), LOWER(${q})),
+            similarity(LOWER(COALESCE(j."company", '')), LOWER(${q})),
+            similarity(LOWER(COALESCE(j."location", '')), LOWER(${q}))
+          ) AS relevance
+        FROM "Job" j
+        LEFT JOIN LATERAL (
+          SELECT "resumePdfUrl", "resumePdfName", "coverPdfUrl"
+          FROM "Application"
+          WHERE "jobId" = j."id"
+          LIMIT 1
+        ) a ON true
+        WHERE ${whereClause}
+      ),
+      ranked AS (
+        SELECT
+          matched.*,
+          ROW_NUMBER() OVER (
+            ORDER BY relevance DESC, "createdAt" DESC, "id" DESC
+          ) AS "rowNumber"
+        FROM matched
+      )
       SELECT
-        j."id", j."jobUrl", j."title", j."company", j."location",
-        j."jobType", j."jobLevel", j."salary", j."workArrangement", j."listingDate",
-        j."status", j."market",
-        j."createdAt", j."updatedAt",
-        a."resumePdfUrl", a."resumePdfName", a."coverPdfUrl"
-      FROM "Job" j
-      LEFT JOIN LATERAL (
-        SELECT "resumePdfUrl", "resumePdfName", "coverPdfUrl"
-        FROM "Application"
-        WHERE "jobId" = j."id"
-        LIMIT 1
-      ) a ON true
-      WHERE ${whereClause}
-      ORDER BY
-        GREATEST(
-          similarity(LOWER(j."title"), LOWER(${q})),
-          similarity(LOWER(COALESCE(j."company", '')), LOWER(${q})),
-          similarity(LOWER(COALESCE(j."location", '')), LOWER(${q}))
-        ) DESC,
-        j."createdAt" DESC
+        ranked."id", ranked."jobUrl", ranked."title", ranked."company",
+        ranked."location", ranked."jobType", ranked."jobLevel", ranked."salary",
+        ranked."workArrangement", ranked."listingDate", ranked."status",
+        ranked."market", ranked."source", ranked."postingRisk",
+        ranked."postingRiskFlags", ranked."fitScore", ranked."fitVerdict",
+        ranked."fitEligibility", ranked."createdAt", ranked."updatedAt",
+        ranked."resumePdfUrl", ranked."resumePdfName", ranked."coverPdfUrl"
+      FROM ranked
+      WHERE ${cursorClause}
+      ORDER BY ranked."rowNumber"
       LIMIT ${limit + 1}
     `,
     prisma.$queryRaw<[{ count: bigint }]>`
@@ -92,6 +159,7 @@ export async function listJobsWithRelevance(
   const hasMore = rows.length > limit;
   const items: JobListItem[] = rows.slice(0, limit).map((r) => ({
     ...r,
+    postingRiskFlags: normalizePostingRiskFlags(r.postingRiskFlags),
     resumePdfUrl: r.resumePdfUrl ?? null,
     resumePdfName: r.resumePdfName ?? null,
     coverPdfUrl: r.coverPdfUrl ?? null,
@@ -110,6 +178,7 @@ export async function listJobsWithRelevance(
     `location=${location ?? ""}`,
     `jobLevel=${jobLevel ?? ""}`,
     `sort=${sort}`,
+    `fitBand=${query.fitBand ?? ""}`,
     `market=${market ?? ""}`,
   ].join("|");
 

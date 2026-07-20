@@ -11,17 +11,25 @@ const applicationStore = vi.hoisted(() => ({
 
 const blobStore = vi.hoisted(() => ({
   put: vi.fn(),
+  del: vi.fn(),
+}));
+
+const transactionStore = vi.hoisted(() => ({
+  run: vi.fn(),
+  executeRaw: vi.fn(),
 }));
 
 vi.mock("@/lib/server/prisma", () => ({
   prisma: {
     job: jobStore,
     application: applicationStore,
+    $transaction: transactionStore.run,
   },
 }));
 
 vi.mock("@vercel/blob", () => ({
   put: blobStore.put,
+  del: blobStore.del,
 }));
 
 vi.mock("@/auth", () => ({
@@ -110,6 +118,38 @@ const VALID_OUTPUT = JSON.stringify({
   },
 });
 
+function makeExistingAiContent() {
+  return {
+    schemaVersion: 1,
+    generatedAt: "2026-07-19T00:00:00.000Z",
+    promptMetaHash: "existing-prompt",
+    source: "local_ai",
+    cv: {
+      summary: {
+        aiText: "Existing CV summary",
+        originalText: "Base summary",
+        accepted: true,
+      },
+      latestExperience: {
+        experienceIndex: 0,
+        addedBullets: [
+          {
+            text: "Existing CV bullet",
+            accepted: true,
+            qualityGate: { passed: true },
+          },
+        ],
+      },
+      skillsAdditions: [],
+    },
+    cover: {
+      paragraphOne: { aiText: "Existing cover one", accepted: true },
+      paragraphTwo: { aiText: "Existing cover two", accepted: true },
+      paragraphThree: { aiText: "Existing cover three", accepted: true },
+    },
+  } as const;
+}
+
 describe("applications manual generate api", () => {
   beforeEach(() => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockReset();
@@ -136,6 +176,23 @@ describe("applications manual generate api", () => {
     applicationStore.findUnique.mockReset();
     applicationStore.upsert.mockReset();
     blobStore.put.mockReset();
+    blobStore.del.mockReset();
+    blobStore.del.mockResolvedValue(undefined);
+    transactionStore.executeRaw.mockReset();
+    transactionStore.executeRaw.mockResolvedValue(1);
+    transactionStore.run.mockReset();
+    transactionStore.run.mockImplementation(
+      async (
+        callback: (tx: {
+          application: typeof applicationStore;
+          $executeRaw: typeof transactionStore.executeRaw;
+        }) => unknown,
+      ) =>
+        callback({
+          application: applicationStore,
+          $executeRaw: transactionStore.executeRaw,
+        }),
+    );
     delete process.env.BLOB_READ_WRITE_TOKEN;
     applicationStore.findUnique.mockResolvedValue(null);
   });
@@ -987,7 +1044,11 @@ describe("applications manual generate api", () => {
     expect(res.status).toBe(200);
     expect(blobStore.put).toHaveBeenCalledTimes(1);
     expect(blobStore.put).toHaveBeenCalledWith(
-      `applications/user-1/${VALID_JOB_ID}/cover.latest.pdf`,
+      expect.stringMatching(
+        new RegExp(
+          `^applications/user-1/${VALID_JOB_ID}/cover\\.[0-9a-f]+-[0-9a-f-]{36}\\.pdf$`,
+        ),
+      ),
       expect.anything(),
       expect.objectContaining({
         allowOverwrite: true,
@@ -1058,6 +1119,120 @@ describe("applications manual generate api", () => {
     );
     // PDF compile + Blob put are skipped in DRAFT mode.
     expect(blobStore.put).not.toHaveBeenCalled();
+  });
+
+  it("preserves an existing cover letter when importing a resume draft", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    jobStore.findFirst.mockResolvedValueOnce({
+      id: VALID_JOB_ID,
+      title: "Software Engineer",
+      company: "Example Co",
+      location: "Sydney",
+      description: "Build product features",
+      market: "AU",
+    });
+    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "rp-1",
+      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
+    });
+    const existing = makeExistingAiContent();
+    applicationStore.findUnique.mockResolvedValueOnce({
+      resumePdfUrl: null,
+      coverPdfUrl: null,
+      aiContent: existing,
+    });
+    applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
+
+    const res = await POST(
+      new Request("http://localhost/api/applications/manual-generate?finalize=false", {
+        method: "POST",
+        body: JSON.stringify({
+          jobId: VALID_JOB_ID,
+          target: "resume",
+          modelOutput: VALID_OUTPUT,
+          promptMeta: {
+            ruleSetId: "rules-1",
+            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+          },
+        }),
+      }),
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.aiContent.cv.summary.aiText).toBe("Tailored summary");
+    expect(json.aiContent.cover).toEqual(existing.cover);
+    expect(applicationStore.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          aiContent: expect.objectContaining({
+            cover: existing.cover,
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("preserves an existing CV when importing a cover-letter draft", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    jobStore.findFirst.mockResolvedValueOnce({
+      id: VALID_JOB_ID,
+      title: "Software Engineer",
+      company: "Example Co",
+      location: "Sydney",
+      description: "Build product features",
+      market: "AU",
+    });
+    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "rp-1",
+      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
+    });
+    const existing = makeExistingAiContent();
+    applicationStore.findUnique.mockResolvedValueOnce({
+      resumePdfUrl: null,
+      coverPdfUrl: null,
+      aiContent: existing,
+    });
+    applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
+
+    const res = await POST(
+      new Request("http://localhost/api/applications/manual-generate?finalize=false", {
+        method: "POST",
+        body: JSON.stringify({
+          jobId: VALID_JOB_ID,
+          target: "cover",
+          modelOutput: JSON.stringify({
+            cover: {
+              paragraphOne: "New cover one",
+              paragraphTwo: "New cover two",
+              paragraphThree: "New cover three",
+            },
+          }),
+          promptMeta: {
+            ruleSetId: "rules-1",
+            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+          },
+        }),
+      }),
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.aiContent.cv).toEqual(existing.cv);
+    expect(json.aiContent.cover.paragraphOne.aiText).toBe("New cover one");
+    expect(applicationStore.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          aiContent: expect.objectContaining({
+            cv: existing.cv,
+          }),
+        }),
+      }),
+    );
   });
 
   it.each([
@@ -1164,5 +1339,163 @@ describe("applications manual generate api", () => {
     expect(json.aiContent.source).toBe("local_ai");
     expect(json.aiContent.promptMetaHash).toMatch(/^[0-9a-f]{64}$/);
     expect(blobStore.put).not.toHaveBeenCalled();
+  });
+
+  it("locks before re-reading and merging generated content", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    jobStore.findFirst.mockResolvedValueOnce({
+      id: VALID_JOB_ID,
+      title: "Software Engineer",
+      company: "Example Co",
+      location: "Sydney",
+      description: "Build product features",
+      market: "AU",
+    });
+    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "rp-1",
+      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
+    });
+    const order: string[] = [];
+    transactionStore.executeRaw.mockImplementationOnce(async () => {
+      order.push("lock");
+      return 1;
+    });
+    applicationStore.findUnique.mockImplementationOnce(async () => {
+      order.push("read");
+      return {
+        resumePdfUrl: null,
+        coverPdfUrl: null,
+        aiContent: makeExistingAiContent(),
+      };
+    });
+    applicationStore.upsert.mockImplementationOnce(async () => {
+      order.push("write");
+      return { id: "app-locked" };
+    });
+
+    const response = await POST(
+      new Request(
+        "http://localhost/api/applications/manual-generate?finalize=false",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            jobId: VALID_JOB_ID,
+            target: "resume",
+            modelOutput: VALID_OUTPUT,
+            promptMeta: {
+              ruleSetId: "rules-1",
+              resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+            },
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(order).toEqual(["lock", "read", "write"]);
+    expect(String(transactionStore.executeRaw.mock.calls[0]?.[0])).toContain(
+      "pg_advisory_xact_lock",
+    );
+  });
+
+  it("deletes an uploaded unique artifact when the DB commit fails", async () => {
+    process.env.BLOB_READ_WRITE_TOKEN = "blob-token";
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    jobStore.findFirst.mockResolvedValueOnce({
+      id: VALID_JOB_ID,
+      title: "Software Engineer",
+      company: "Example Co",
+      location: "Sydney",
+      description: "Build product features",
+      market: "AU",
+    });
+    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "rp-1",
+      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
+    });
+    blobStore.put.mockResolvedValueOnce({
+      url: "https://blob.vercel-storage.com/new-resume.pdf",
+    });
+    applicationStore.upsert.mockRejectedValueOnce(new Error("database down"));
+
+    const response = await POST(
+      new Request("http://localhost/api/applications/manual-generate", {
+        method: "POST",
+        body: JSON.stringify({
+          jobId: VALID_JOB_ID,
+          target: "resume",
+          modelOutput: VALID_OUTPUT,
+          promptMeta: {
+            ruleSetId: "rules-1",
+            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+          },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(blobStore.del).toHaveBeenCalledWith(
+      "https://blob.vercel-storage.com/new-resume.pdf",
+      { token: "blob-token" },
+    );
+  });
+
+  it("clears a stale target URL when Blob upload fails", async () => {
+    process.env.BLOB_READ_WRITE_TOKEN = "blob-token";
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    jobStore.findFirst.mockResolvedValueOnce({
+      id: VALID_JOB_ID,
+      title: "Software Engineer",
+      company: "Example Co",
+      location: "Sydney",
+      description: "Build product features",
+      market: "AU",
+    });
+    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "rp-1",
+      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
+    });
+    applicationStore.findUnique.mockResolvedValueOnce({
+      resumePdfUrl: "https://blob.vercel-storage.com/stale-resume.pdf",
+      coverPdfUrl: null,
+      aiContent: makeExistingAiContent(),
+    });
+    blobStore.put.mockRejectedValueOnce(new Error("blob unavailable"));
+    applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
+
+    const response = await POST(
+      new Request("http://localhost/api/applications/manual-generate", {
+        method: "POST",
+        body: JSON.stringify({
+          jobId: VALID_JOB_ID,
+          target: "resume",
+          modelOutput: VALID_OUTPUT,
+          promptMeta: {
+            ruleSetId: "rules-1",
+            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+          },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(applicationStore.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          resumePdfUrl: null,
+          resumePdfName: null,
+        }),
+      }),
+    );
+    expect(blobStore.del).toHaveBeenCalledWith(
+      "https://blob.vercel-storage.com/stale-resume.pdf",
+      { token: "blob-token" },
+    );
   });
 });

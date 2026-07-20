@@ -3,7 +3,7 @@ import { fetchNowcoderJobs } from "./adapters/nowcoder";
 import { normalizeCnJobs, type NormalizedCnJob } from "./normalize";
 
 // Multi-source orchestrator. Runs each enabled adapter in parallel (so a
-// slow source can't block the cron), merges results, then normalizes +
+// slow source cannot block the user-triggered run), merges results, then normalizes +
 // dedups. Per-source failures do not abort the run — the user still gets
 // whatever the other sources produced, plus a diagnostics report.
 

@@ -95,10 +95,18 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if ((current.error ?? null) !== nextError) patch.error = nextError;
 
   if (Object.keys(patch).length) {
-    await prisma.fetchRun.update({
-      where: { id: current.id },
+    const updated = await prisma.fetchRun.updateMany({
+      where: {
+        id: current.id,
+        status: current.status,
+        error: current.error,
+        importedCount: current.importedCount,
+      },
       data: patch,
     });
+    if (updated.count === 0) {
+      return NextResponse.json({ error: "STATE_CHANGED" }, { status: 409 });
+    }
   }
 
   return NextResponse.json({ ok: true });

@@ -1,13 +1,16 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import { withSessionRoute, parseJsonBody } from "@/lib/server/api/routeHandler";
+import { enforceApplicationRenderRateLimit } from "@/lib/server/api/applicationRenderRateLimit";
 import {
   deleteApplicationArtifact,
   renderFinalApplication,
   renderFinalCoverLetter,
 } from "@/lib/server/applications/finalizeApplication";
 import { aiContentSchema } from "@/lib/shared/schemas/aiContent";
+import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
 
 export const runtime = "nodejs";
 
@@ -24,6 +27,34 @@ const BodySchema = z.object({
 function parseTarget(req: Request): "resume" | "cover" {
   const url = new URL(req.url);
   return url.searchParams.get("target") === "cover" ? "cover" : "resume";
+}
+
+function staleFinalizeResponse(requestId: string) {
+  return NextResponse.json(
+    {
+      error: {
+        code: "STALE_WRITE",
+        message: "Another tab updated this draft",
+      },
+      requestId,
+    },
+    { status: 409 },
+  );
+}
+
+function isCurrentVersionedArtifact(
+  url: string | null,
+  target: "resume" | "cover",
+  expectedHash: string | null,
+): boolean {
+  if (!url || !expectedHash) return false;
+  try {
+    return decodeURIComponent(new URL(url).pathname).includes(
+      `/${target}.${expectedHash}-`,
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -59,9 +90,11 @@ export async function POST(
       select: {
         id: true,
         userId: true,
+        status: true,
         aiContent: true,
         aiContentHash: true,
         resumePdfUrl: true,
+        resumePdfName: true,
         coverPdfUrl: true,
         jobId: true,
         company: true,
@@ -128,7 +161,42 @@ export async function POST(
     };
 
     const target = parseTarget(req);
-    const artifactVersion = existing.aiContentHash ?? `${Date.now()}`;
+    // Repeat clicks for an already-committed artifact are a read, not another
+    // LaTeX compile + Blob upload. The versioned path ties the target URL to
+    // this exact aiContent hash; global Application status alone is not enough
+    // because CV and cover letter finalize independently.
+    if (
+      existing.status === "FINAL" &&
+      (target === "resume"
+        ? isCurrentVersionedArtifact(
+            existing.resumePdfUrl,
+            "resume",
+            expectedHash,
+          )
+        : isCurrentVersionedArtifact(
+            existing.coverPdfUrl,
+            "cover",
+            expectedHash,
+          ))
+    ) {
+      return NextResponse.json({
+        status: "FINAL",
+        ...(target === "resume"
+          ? {
+              resumePdfUrl: existing.resumePdfUrl,
+              resumePdfName: existing.resumePdfName,
+            }
+          : { coverPdfUrl: existing.coverPdfUrl }),
+        requestId,
+      });
+    }
+
+    const limited = enforceApplicationRenderRateLimit(userId, requestId);
+    if (limited) return limited;
+
+    // A unique path makes an uncommitted render safe to delete if the CAS
+    // below loses to an autosave or another finalizer.
+    const artifactVersion = `${existing.aiContentHash ?? "legacy"}-${randomUUID()}`;
     const renderJob = {
       id: job.id ?? null,
       title: job.title ?? "Untitled",
@@ -144,10 +212,39 @@ export async function POST(
         artifactVersion,
         job: renderJob,
       });
-      await prisma.application.update({
-        where: { id: existing.id },
-        data: { status: "FINAL", coverPdfUrl },
-      });
+      let committed: { count: number };
+      try {
+        committed = await prisma.$transaction(
+          async (tx) => {
+            await acquireApplicationMutationLock(
+              tx,
+              userId,
+              existing.jobId ?? existing.id,
+            );
+            return tx.application.updateMany({
+              where: {
+                id: existing.id,
+                userId,
+                aiContentHash: expectedHash,
+                coverPdfUrl: existing.coverPdfUrl,
+              },
+              data: { status: "FINAL", coverPdfUrl },
+            });
+          },
+          { timeout: 30_000 },
+        );
+      } catch (error) {
+        if (coverPdfUrl !== existing.coverPdfUrl) {
+          await deleteApplicationArtifact(coverPdfUrl).catch(() => undefined);
+        }
+        throw error;
+      }
+      if (committed.count !== 1) {
+        if (coverPdfUrl !== existing.coverPdfUrl) {
+          await deleteApplicationArtifact(coverPdfUrl).catch(() => undefined);
+        }
+        return staleFinalizeResponse(requestId);
+      }
       if (existing.coverPdfUrl && existing.coverPdfUrl !== coverPdfUrl) {
         await deleteApplicationArtifact(existing.coverPdfUrl).catch(() => undefined);
       }
@@ -167,10 +264,39 @@ export async function POST(
       job: renderJob,
     });
 
-    await prisma.application.update({
-      where: { id: existing.id },
-      data: { status: "FINAL", resumePdfUrl, resumePdfName },
-    });
+    let committed: { count: number };
+    try {
+      committed = await prisma.$transaction(
+        async (tx) => {
+          await acquireApplicationMutationLock(
+            tx,
+            userId,
+            existing.jobId ?? existing.id,
+          );
+          return tx.application.updateMany({
+            where: {
+              id: existing.id,
+              userId,
+              aiContentHash: expectedHash,
+              resumePdfUrl: existing.resumePdfUrl,
+            },
+            data: { status: "FINAL", resumePdfUrl, resumePdfName },
+          });
+        },
+        { timeout: 30_000 },
+      );
+    } catch (error) {
+      if (resumePdfUrl !== existing.resumePdfUrl) {
+        await deleteApplicationArtifact(resumePdfUrl).catch(() => undefined);
+      }
+      throw error;
+    }
+    if (committed.count !== 1) {
+      if (resumePdfUrl !== existing.resumePdfUrl) {
+        await deleteApplicationArtifact(resumePdfUrl).catch(() => undefined);
+      }
+      return staleFinalizeResponse(requestId);
+    }
     if (existing.resumePdfUrl && existing.resumePdfUrl !== resumePdfUrl) {
       await deleteApplicationArtifact(existing.resumePdfUrl).catch(() => undefined);
     }

@@ -60,6 +60,9 @@ export function useTailorDraft({
   const inFlightRef = useRef<Promise<string | null> | null>(null);
   const versionRef = useRef(0);
   const savedVersionRef = useRef(0);
+  const lastSaveErrorRef = useRef<{ version: number; error: Error } | null>(
+    null,
+  );
 
   const persist = useCallback(
     async (snapshot: AiContent, version: number): Promise<string | null> => {
@@ -77,6 +80,7 @@ export function useTailorDraft({
           },
         );
         const json = res as { aiContentHash: string };
+        lastSaveErrorRef.current = null;
         lastSavedHashRef.current = json.aiContentHash;
         setCurrentHash(json.aiContentHash);
         if (version === versionRef.current) {
@@ -88,15 +92,21 @@ export function useTailorDraft({
         return json.aiContentHash;
       } catch (err: unknown) {
         if (err instanceof ApiError && err.status === 409) {
+          const error = new Error(conflictMessage);
+          lastSaveErrorRef.current = { version, error };
           setSaveStatus({
             kind: "error",
-            message: conflictMessage,
+            message: error.message,
             conflict: true,
           });
           return lastSavedHashRef.current;
         }
         const message =
           err instanceof Error ? err.message : saveFailedMessage;
+        lastSaveErrorRef.current = {
+          version,
+          error: err instanceof Error ? err : new Error(message),
+        };
         setSaveStatus({ kind: "error", message });
         return lastSavedHashRef.current;
       }
@@ -145,24 +155,45 @@ export function useTailorDraft({
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
     }
-    if (savedVersionRef.current === versionRef.current) {
-      return lastSavedHashRef.current;
-    }
-    const activeSave = inFlightRef.current;
-    if (activeSave) {
-      await activeSave;
+
+    while (savedVersionRef.current !== versionRef.current) {
+      const activeSave = inFlightRef.current;
+      if (activeSave) {
+        await activeSave;
+        if (savedVersionRef.current === versionRef.current) {
+          return lastSavedHashRef.current;
+        }
+        const activeFailure = lastSaveErrorRef.current;
+        if (activeFailure?.version === versionRef.current) {
+          throw activeFailure.error;
+        }
+        continue;
+      }
+
+      const version = versionRef.current;
+      await startPersist(aiContentRef.current, version);
       if (savedVersionRef.current === versionRef.current) {
         return lastSavedHashRef.current;
       }
+      const failure = lastSaveErrorRef.current;
+      if (failure?.version === version && versionRef.current === version) {
+        throw failure.error;
+      }
     }
-    return startPersist(aiContentRef.current, versionRef.current);
+
+    return lastSavedHashRef.current;
   }, [startPersist]);
 
   const replaceFromServer = useCallback(
     (next: AiContent, hash: string | null) => {
       const resolvedHash = hash ?? hashAiContent(next);
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
       versionRef.current += 1;
       savedVersionRef.current = versionRef.current;
+      lastSaveErrorRef.current = null;
       aiContentRef.current = next;
       setAiContentState(next);
       lastSavedHashRef.current = resolvedHash;

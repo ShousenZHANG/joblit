@@ -191,8 +191,14 @@ export function PdfPreview({
   );
 }
 
-function withPreviewCacheBust(url: string, refreshedAt: number | null): string {
+export function withPreviewCacheBust(
+  url: string,
+  refreshedAt: number | null,
+): string {
   if (!refreshedAt) return url;
+  // Object URLs are immutable already. Appending a query creates a different
+  // blob URL that browsers cannot resolve.
+  if (url.startsWith("blob:")) return url;
   const separator = url.includes("?") ? "&" : "?";
   return `${url}${separator}preview=${refreshedAt}`;
 }

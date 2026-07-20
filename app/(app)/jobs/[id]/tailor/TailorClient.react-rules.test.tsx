@@ -1,5 +1,11 @@
-import { cleanup, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
 import { TailorClient } from "./TailorClient";
@@ -33,27 +39,38 @@ type MockDraft = {
 
 let mockDraft: MockDraft;
 
+const api = vi.hoisted(() => ({
+  fetchJson: vi.fn(),
+}));
+const router = vi.hoisted(() => ({
+  push: vi.fn(),
+}));
+
 vi.mock("./useTailorDraft", () => ({
   useTailorDraft: () => mockDraft,
 }));
 
+vi.mock("@/lib/api/fetchJson", () => ({
+  fetchJson: api.fetchJson,
+  ApiError: class ApiError extends Error {},
+}));
+
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => router,
 }));
 
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
 }));
 
-vi.mock("next/link", () => ({
-  default: ({ children, href }: { children: ReactNode; href: string }) => (
-    <a href={href}>{children}</a>
-  ),
-}));
-
 vi.mock("@/components/ui/alert-dialog", () => ({
   AlertDialog: ({ children }: { children: ReactNode }) => <>{children}</>,
-  AlertDialogAction: ({ children }: { children: ReactNode }) => <button>{children}</button>,
+  AlertDialogAction: ({
+    children,
+    ...props
+  }: ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button {...props}>{children}</button>
+  ),
   AlertDialogCancel: ({ children }: { children: ReactNode }) => <button>{children}</button>,
   AlertDialogContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   AlertDialogDescription: ({ children }: { children: ReactNode }) => <p>{children}</p>,
@@ -101,6 +118,8 @@ const props = {
 
 describe("TailorClient React rules", () => {
   beforeEach(() => {
+    api.fetchJson.mockReset();
+    router.push.mockReset();
     mockDraft = makeDraft({
       kind: "error",
       message: "Another tab changed this draft",
@@ -129,5 +148,63 @@ describe("TailorClient React rules", () => {
     rerender(<TailorClient {...props} />);
 
     expect(screen.queryByTestId("conflict-dialog")).not.toBeInTheDocument();
+  });
+
+  it("flushes pending edits before returning to jobs", async () => {
+    mockDraft = makeDraft({ kind: "saved", at: 1 });
+    render(<TailorClient {...props} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "backToJobs" }));
+
+    await waitFor(() => {
+      expect(mockDraft.flushNow).toHaveBeenCalledOnce();
+      expect(router.push).toHaveBeenCalledWith("/jobs");
+    });
+    expect(mockDraft.flushNow.mock.invocationCallOrder[0]).toBeLessThan(
+      router.push.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("stays in the editor when saving before navigation fails", async () => {
+    mockDraft = makeDraft({ kind: "saved", at: 1 });
+    mockDraft.flushNow.mockRejectedValueOnce(new Error("Save failed"));
+    render(<TailorClient {...props} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "backToJobs" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Save failed");
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it("flushes and sends the current hash before discarding edits", async () => {
+    mockDraft = makeDraft({ kind: "saved", at: 1 });
+    mockDraft.flushNow.mockResolvedValueOnce("latest-hash");
+    api.fetchJson.mockResolvedValueOnce({
+      aiContent,
+      aiContentHash: "reset-hash",
+    });
+    render(<TailorClient {...props} />);
+
+    const discardButtons = screen.getAllByRole("button", {
+      name: "discardChanges",
+    });
+    fireEvent.click(discardButtons.at(-1)!);
+
+    await waitFor(() => {
+      expect(api.fetchJson).toHaveBeenCalledWith(
+        "/api/applications/application-1/discard",
+        {
+          method: "POST",
+          body: JSON.stringify({ expectedHash: "latest-hash" }),
+        },
+      );
+    });
+    expect(mockDraft.flushNow.mock.invocationCallOrder[0]).toBeLessThan(
+      api.fetchJson.mock.invocationCallOrder[0],
+    );
+    expect(mockDraft.replaceFromServer).toHaveBeenCalledWith(
+      aiContent,
+      "reset-hash",
+    );
   });
 });

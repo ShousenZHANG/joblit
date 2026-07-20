@@ -194,6 +194,7 @@
     "statusNew": "新职位",
     "statusApplied": "已投递",
     "statusRejected": "已拒绝",
+    "postingRisk": "风险 {score}",
     "fitScan": {
       "button": "评分全部岗位",
       "bannerScanning": "本机评分中——已完成 {scored} 个，剩余 {remaining} 个。请保持页面打开。",
@@ -431,6 +432,8 @@
     "applyExclusions": "应用排除项",
     "strictTitles": "严格标题匹配",
     "strictTitlesHint": "仅保留标题与搜索同族的岗位。关闭以扩大范围。",
+    "globalFeeds": "全球远程职位源",
+    "globalFeedsHint": "同时搜索 Remote OK、Remotive 和 Jobicy，结果仍遵循职位、地点与标题排除条件。",
     "excludeTitles": "排除职位",
     "startFetch": "开始抓取",
     "fetching": "抓取中…",

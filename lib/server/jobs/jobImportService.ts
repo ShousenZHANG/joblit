@@ -3,6 +3,8 @@ import { prisma } from "@/lib/server/prisma";
 import { canonicalizeJobUrl } from "@/lib/shared/canonicalizeJobUrl";
 import { scorePostingRisk } from "@/lib/server/jobs/postingRisk";
 import { buildCompanyRoleKey } from "@/lib/server/jobs/companyRoleKey";
+import { reportError } from "@/lib/server/observability/errorReporter";
+import { acquireJobMutationLock } from "@/lib/server/jobs/jobMutationLock";
 
 // Canonical import-item schema, shared by every ingestion path (the Python
 // fetcher via /api/admin/import, and the browser extension via
@@ -39,10 +41,35 @@ interface ImportJobsResult {
 }
 
 const BATCH_SIZE = 200;
+const IMPORT_TRANSACTION_TIMEOUT_MS = 30_000;
+const ENRICHMENT_COLUMNS = [
+  "source",
+  "postingrisk",
+  "postingriskflags",
+  "companyrolekey",
+] as const;
 
 function optionalText(value: string | null | undefined): string | null {
   const normalized = value?.trim();
   return normalized || null;
+}
+
+function normalizeSource(value: string | null | undefined): string | null {
+  const source = optionalText(value)?.toLocaleLowerCase() ?? null;
+  return source === "linkedin" ? "jobspy" : source;
+}
+
+function isEnrichmentMigrationRace(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as {
+    code?: unknown;
+    message?: unknown;
+    meta?: unknown;
+  };
+  if (candidate.code !== "P2022") return false;
+  const detail = `${String(candidate.message ?? "")} ${JSON.stringify(candidate.meta ?? {})}`
+    .toLocaleLowerCase();
+  return ENRICHMENT_COLUMNS.some((column) => detail.includes(column));
 }
 
 /**
@@ -92,7 +119,7 @@ export async function importJobsForUser({
           optionalText(it.work_arrangement),
         listingDate,
         market: it.market ?? "AU",
-        source: optionalText(it.source),
+        source: normalizeSource(it.source ?? it.site),
         postingRisk: risk.score,
         postingRiskFlags: risk.flags,
         companyRoleKey: buildCompanyRoleKey({ company, title }),
@@ -100,50 +127,91 @@ export async function importJobsForUser({
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
 
-  const deletedUrls = await prisma.deletedJobUrl.findMany({
-    where: { userId },
-    select: { jobUrl: true },
-  });
-  const deletedSet = new Set(deletedUrls.map((it) => canonicalizeJobUrl(it.jobUrl)));
-
   const seen = new Set<string>();
-  const normalized = normalizedRaw.filter((it) => {
+  const deduplicated = normalizedRaw.filter((it) => {
     if (seen.has(it.jobUrl)) return false;
-    if (deletedSet.has(it.jobUrl)) return false;
     seen.add(it.jobUrl);
     return true;
   });
 
-  if (normalized.length === 0) {
+  if (deduplicated.length === 0) {
     return { imported: 0, invalid };
   }
 
-  let written = 0;
-  for (let i = 0; i < normalized.length; i += BATCH_SIZE) {
-    const batch = normalized.slice(i, i + BATCH_SIZE);
-    const result = await prisma.job.createMany({
-      data: batch.map((current) => ({
-        userId,
-        jobUrl: current.jobUrl,
-        title: current.title,
-        company: current.company,
-        location: current.location,
-        jobType: current.jobType,
-        jobLevel: current.jobLevel,
-        description: current.description,
-        salary: current.salary,
-        workArrangement: current.workArrangement,
-        listingDate: current.listingDate,
-        market: current.market,
-        source: current.source,
-        postingRisk: current.postingRisk,
-        postingRiskFlags: current.postingRiskFlags,
-        companyRoleKey: current.companyRoleKey,
-        status: "NEW",
-      })),
-      skipDuplicates: true,
+  async function runImportTransaction(includeEnrichment: boolean): Promise<number> {
+    return prisma.$transaction(
+      async (tx) => {
+        // Lock first. A delete for this user cannot commit a tombstone between
+        // this read and the inserts below.
+        await acquireJobMutationLock(tx, userId);
+
+        const deletedUrls = await tx.deletedJobUrl.findMany({
+          where: {
+            userId,
+            jobUrl: { in: deduplicated.map((item) => item.jobUrl) },
+          },
+          select: { jobUrl: true },
+        });
+        const deletedSet = new Set(
+          deletedUrls.map((item) => canonicalizeJobUrl(item.jobUrl)),
+        );
+        const normalized = deduplicated.filter(
+          (item) => !deletedSet.has(item.jobUrl),
+        );
+
+        let written = 0;
+        for (let index = 0; index < normalized.length; index += BATCH_SIZE) {
+          const batch = normalized.slice(index, index + BATCH_SIZE);
+          const baseData = batch.map((current) => ({
+            userId,
+            jobUrl: current.jobUrl,
+            title: current.title,
+            company: current.company,
+            location: current.location,
+            jobType: current.jobType,
+            jobLevel: current.jobLevel,
+            description: current.description,
+            salary: current.salary,
+            workArrangement: current.workArrangement,
+            listingDate: current.listingDate,
+            market: current.market,
+            status: "NEW" as const,
+          }));
+          const data = includeEnrichment
+            ? baseData.map((current, batchIndex) => ({
+                ...current,
+                source: batch[batchIndex]?.source ?? null,
+                postingRisk: batch[batchIndex]?.postingRisk ?? 0,
+                postingRiskFlags:
+                  batch[batchIndex]?.postingRiskFlags ?? [],
+                companyRoleKey: batch[batchIndex]?.companyRoleKey ?? null,
+              }))
+            : baseData;
+          const result = await tx.job.createMany({
+            data,
+            skipDuplicates: true,
+          });
+          written += result.count;
+        }
+        return written;
+      },
+      { timeout: IMPORT_TRANSACTION_TIMEOUT_MS },
+    );
+  }
+
+  let written: number;
+  try {
+    written = await runImportTransaction(true);
+  } catch (error) {
+    if (!isEnrichmentMigrationRace(error)) throw error;
+    // A failed PostgreSQL statement aborts its transaction. Restart the whole
+    // lock-read-filter-write sequence using only core columns; never retry a
+    // statement inside the aborted transaction.
+    reportError(error, {
+      scope: "jobs.import.enrichment_migration_race",
+      userId,
     });
-    written += result.count;
+    written = await runImportTransaction(false);
   }
 
   return { imported: written, invalid };

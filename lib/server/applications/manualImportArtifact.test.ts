@@ -178,6 +178,60 @@ describe("manual import artifact builder", () => {
         qualityGate: expect.objectContaining({ passed: false }),
       }),
     );
+    expect(result.aiContent.cv.skillsAdditions).toEqual([
+      {
+        label: "Backend",
+        items: ["Spring Boot"],
+        accepted: true,
+      },
+    ]);
+  });
+
+  it("escapes legacy skill additions before rendering while keeping review text raw", () => {
+    const result = buildManualImportArtifact({
+      target: "resume",
+      modelOutput: JSON.stringify({
+        cvSummary: "Focused on Java services.",
+        latestExperience: {
+          bullets: [
+            "Built Java APIs.",
+            "Maintained CI/CD pipelines on Linux.",
+          ],
+        },
+        skillsAdditions: [
+          {
+            category: String.raw`Cloud & \input{secret}`,
+            items: [String.raw`AWS 100% \write18{calc}`],
+          },
+        ],
+      }),
+      mode: "legacy",
+      source: "manual_import",
+      promptMetaHash: "prompt-hash",
+      renderInput,
+      profile,
+      job,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(resumeRender.renderResumeTex).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        skills: expect.arrayContaining([
+          {
+            label: String.raw`Cloud \& \\input\{secret\}`,
+            items: [String.raw`AWS 100\% \\write18\{calc\}`],
+          },
+        ]),
+      }),
+    );
+    expect(result.aiContent.cv.skillsAdditions).toEqual([
+      {
+        label: String.raw`Cloud & \input{secret}`,
+        items: [String.raw`AWS 100% \write18{calc}`],
+        accepted: true,
+      },
+    ]);
   });
 
   it("builds cover artifacts with quality gate metadata", () => {

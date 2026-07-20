@@ -194,6 +194,7 @@
     "statusNew": "New",
     "statusApplied": "Applied",
     "statusRejected": "Rejected",
+    "postingRisk": "Risk {score}",
     "fitScan": {
       "button": "Score all jobs",
       "bannerScanning": "Scoring on your computer — {scored} done, {remaining} to go. Keep this page open.",
@@ -431,6 +432,8 @@
     "applyExclusions": "Apply exclusions",
     "strictTitles": "Strict title match",
     "strictTitlesHint": "Keep only roles whose title is in the same family as your search. Turn off to cast a wider net.",
+    "globalFeeds": "Global remote feeds",
+    "globalFeedsHint": "Also search Remote OK, Remotive, and Jobicy. Results still follow your role, location, and title exclusions.",
     "excludeTitles": "Exclude titles",
     "startFetch": "Start fetch",
     "fetching": "Fetching…",

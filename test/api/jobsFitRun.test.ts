@@ -57,10 +57,15 @@ describe("fit scoring center apis", () => {
     });
     jobStore.updateMany.mockResolvedValue({ count: 0 });
     jobStore.updateManyAndReturn.mockResolvedValue([]);
-    profileMock.get.mockResolvedValue({
-      skills: "TypeScript React Node.js PostgreSQL AWS",
-      updatedAt: new Date(),
-    });
+    profileMock.get.mockImplementation(
+      async (_userId: string, options?: { locale?: string }) =>
+        options?.locale === "zh-CN"
+          ? null
+          : {
+              skills: "TypeScript React Node.js PostgreSQL AWS",
+              updatedAt: new Date("2026-07-20T00:00:00.000Z"),
+            },
+    );
   });
 
   it("run prescreens obvious mismatches across the whole database and reports stats", async () => {
@@ -71,6 +76,8 @@ describe("fit scoring center apis", () => {
       { id: JOB_B, description: "TypeScript, React, Node.js and AWS for a product team.", market: "AU" },
     ]);
     jobStore.updateMany
+      .mockResolvedValueOnce({ count: 2 })
+      .mockResolvedValueOnce({ count: 0 })
       .mockResolvedValueOnce({ count: 0 })
       .mockResolvedValueOnce({ count: 1 });
     txMock.transaction.mockImplementation(async (ops: unknown[]) =>
@@ -83,11 +90,20 @@ describe("fit scoring center apis", () => {
     const json = await response.json();
 
     expect(response.status).toBe(200);
-    expect(json).toMatchObject({ total: 10, pending: 1, scored: 9, prescreened: 1 });
+    expect(json).toMatchObject({
+      total: 10,
+      pending: 1,
+      scored: 9,
+      prescreened: 1,
+      invalidated: 2,
+    });
   });
 
   it("next-batch serves unscored ids from the database, not from the page", async () => {
-    jobStore.findMany.mockResolvedValueOnce([{ id: JOB_A }, { id: JOB_B }]);
+    jobStore.findMany.mockResolvedValueOnce([
+      { id: JOB_A, market: "AU" },
+      { id: JOB_B, market: "GLOBAL" },
+    ]);
     jobStore.updateManyAndReturn.mockResolvedValueOnce([{ id: JOB_A }, { id: JOB_B }]);
     jobStore.count
       .mockResolvedValueOnce(7)
@@ -119,6 +135,24 @@ describe("fit scoring center apis", () => {
       expect.objectContaining({
         data: expect.objectContaining({ fitSource: expect.stringMatching(/^claim:/) }),
         select: { id: true },
+      }),
+    );
+  });
+
+  it("never leases CN and English-market jobs into the same AI prompt", async () => {
+    jobStore.findMany.mockResolvedValueOnce([
+      { id: JOB_A, market: "CN" },
+      { id: JOB_B, market: "AU" },
+    ]);
+    jobStore.updateManyAndReturn.mockResolvedValueOnce([{ id: JOB_A }]);
+    jobStore.count.mockResolvedValueOnce(2).mockResolvedValueOnce(1);
+
+    const response = await nextBatchPOST();
+
+    expect(await response.json()).toMatchObject({ jobIds: [JOB_A] });
+    expect(jobStore.updateManyAndReturn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: { in: [JOB_A] } }),
       }),
     );
   });
@@ -238,6 +272,12 @@ describe("fit scoring center apis", () => {
         where: expect.objectContaining({
           status: "NEW",
           fitScore: { not: null, lte: 44 },
+          OR: [
+            {
+              market: { in: ["AU", "GLOBAL"] },
+              fitSnapshotHash: "2026-07-20T00:00:00.000Z",
+            },
+          ],
         }),
         data: {
           status: "REJECTED",
@@ -266,5 +306,20 @@ describe("fit scoring center apis", () => {
   it("rejects a bulk-ignore threshold above the WEAK/POOR boundary", async () => {
     const response = await bulkIgnorePOST(post("http://localhost/api/jobs/bulk-ignore", { maxScore: 80 }));
     expect(response.status).toBe(400);
+  });
+
+  it("never bulk-ignores scores when no current resume snapshot exists", async () => {
+    profileMock.get.mockResolvedValue(null);
+
+    const response = await bulkIgnorePOST(
+      post("http://localhost/api/jobs/bulk-ignore", {
+        maxScore: 44,
+        preview: true,
+      }),
+    );
+
+    expect(await response.json()).toEqual({ count: 0 });
+    expect(jobStore.count).not.toHaveBeenCalled();
+    expect(jobStore.updateMany).not.toHaveBeenCalled();
   });
 });

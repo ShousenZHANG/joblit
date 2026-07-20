@@ -347,8 +347,12 @@ export function mergeSkillAdditions(
   const result = [...base.map((group) => ({ ...group, items: [...group.items] }))];
 
   for (const addition of additions) {
-    const category = addition.category.trim();
-    const incoming = addition.items.map((item) => item.trim()).filter(Boolean);
+    // Base groups have already crossed mapResumeProfile's LaTeX boundary.
+    // Legacy model output has not, so normalize it before comparison/render.
+    const category = escapeLatex(addition.category.trim()).trim();
+    const incoming = addition.items
+      .map((item) => escapeLatex(item.trim()).trim())
+      .filter(Boolean);
     if (!category || incoming.length === 0) continue;
 
     const targetIndex = result.findIndex(
@@ -369,6 +373,51 @@ export function mergeSkillAdditions(
   }
 
   return result;
+}
+
+/**
+ * Convert a model's complete skill list into reviewable additions only.
+ * The stored aiContent remains raw UI text; rendering escapes it later.
+ */
+export function deriveReviewableSkillAdditions(
+  base: Array<{ label: string; items: string[] }>,
+  proposed: Array<{ label: string; items: string[] }>,
+) {
+  const baseByLabel = new Map(
+    base.map((group) => [
+      group.label.trim().toLowerCase(),
+      new Set(group.items.map((item) => item.trim().toLowerCase())),
+    ]),
+  );
+  const additions: Array<{
+    label: string;
+    items: string[];
+    accepted: true;
+  }> = [];
+
+  for (const group of proposed) {
+    const rawLabel = group.label.trim();
+    const safeLabel = escapeLatex(rawLabel).trim();
+    if (!rawLabel || !safeLabel) continue;
+
+    const baseItems =
+      baseByLabel.get(safeLabel.toLowerCase()) ?? new Set<string>();
+    const seen = new Set<string>();
+    const newItems: string[] = [];
+    for (const rawItemValue of group.items) {
+      const rawItem = rawItemValue.trim();
+      const safeItem = escapeLatex(rawItem).trim();
+      const key = safeItem.toLowerCase();
+      if (!rawItem || !safeItem || baseItems.has(key) || seen.has(key)) continue;
+      seen.add(key);
+      newItems.push(rawItem);
+    }
+    if (newItems.length > 0) {
+      additions.push({ label: rawLabel, items: newItems, accepted: true });
+    }
+  }
+
+  return additions;
 }
 
 export function sanitizeSkillGroups(

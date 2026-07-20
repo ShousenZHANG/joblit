@@ -4,10 +4,16 @@ const fetchRunStore = vi.hoisted(() => ({
   findFirst: vi.fn(),
   findFirstInTx: vi.fn(),
   updateInTx: vi.fn(),
+  expireInTx: vi.fn(),
   updateMany: vi.fn(),
   queryRawLock: vi.fn(),
   executeRawLock: vi.fn(),
   countInTx: vi.fn(),
+}));
+
+const inlineProcessors = vi.hoisted(() => ({
+  cn: vi.fn(),
+  global: vi.fn(),
 }));
 
 vi.mock("@/lib/server/prisma", () => ({
@@ -23,6 +29,7 @@ vi.mock("@/lib/server/prisma", () => ({
         fetchRun: {
           findFirst: fetchRunStore.findFirstInTx,
           update: fetchRunStore.updateInTx,
+          updateMany: fetchRunStore.expireInTx,
           count: fetchRunStore.countInTx,
         },
         $queryRaw: fetchRunStore.queryRawLock,
@@ -39,6 +46,14 @@ vi.mock("@/auth", () => ({
 
 vi.mock("next-auth/next", () => ({
   getServerSession: vi.fn(),
+}));
+
+vi.mock("@/lib/server/cnFetch/processFetchRun", () => ({
+  processCnFetchRun: inlineProcessors.cn,
+}));
+
+vi.mock("@/lib/server/sources/processGlobalFetchRun", () => ({
+  processGlobalFetchRun: inlineProcessors.global,
 }));
 
 import { getServerSession } from "next-auth/next";
@@ -60,14 +75,18 @@ describe("fetch run trigger api", () => {
   beforeEach(() => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockReset();
     fetchRunStore.findFirst.mockReset();
+    fetchRunStore.findFirst.mockResolvedValue({ id: RUN_ID });
     fetchRunStore.findFirstInTx.mockReset();
     fetchRunStore.updateInTx.mockReset();
+    fetchRunStore.expireInTx.mockReset().mockResolvedValue({ count: 0 });
     fetchRunStore.updateMany.mockReset();
     fetchRunStore.queryRawLock.mockReset();
     fetchRunStore.executeRawLock.mockReset();
     fetchRunStore.executeRawLock.mockResolvedValue(1);
     fetchRunStore.countInTx.mockReset();
     fetchRunStore.countInTx.mockResolvedValue(0);
+    inlineProcessors.cn.mockReset();
+    inlineProcessors.global.mockReset();
     process.env.GITHUB_OWNER = "o";
     process.env.GITHUB_REPO = "r";
     process.env.GITHUB_TOKEN = "t";
@@ -185,14 +204,15 @@ describe("fetch run trigger api", () => {
 
   it("returns 404 when run does not belong to user", async () => {
     mockAuthedUser();
-    mockLockAcquired(true);
-    fetchRunStore.findFirstInTx.mockResolvedValueOnce(null);
+    fetchRunStore.findFirst.mockResolvedValueOnce(null);
 
     const res = await POST(
       new Request(`http://localhost/api/fetch-runs/${RUN_ID}/trigger`, { method: "POST" }),
       { params: Promise.resolve({ id: RUN_ID }) },
     );
     expect(res.status).toBe(404);
+    expect(fetchRunStore.queryRawLock).not.toHaveBeenCalled();
+    expect(fetchRunStore.executeRawLock).not.toHaveBeenCalled();
   });
 
   it("returns 409 when run is not in QUEUED state", async () => {
@@ -246,7 +266,7 @@ describe("fetch run trigger api", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("unlocks when GitHub dispatch fails so user can retry", async () => {
+  it("marks the run failed when GitHub rejects the dispatch", async () => {
     mockAuthedUser();
     mockLockAcquired(true);
     fetchRunStore.findFirstInTx.mockResolvedValueOnce({
@@ -266,7 +286,110 @@ describe("fetch run trigger api", () => {
       { params: Promise.resolve({ id: RUN_ID }) },
     );
     expect(res.status).toBe(502);
-    // First updateMany = unlock (reset queries), second is not called after error
     expect(fetchRunStore.updateMany).toHaveBeenCalledTimes(1);
+    expect(fetchRunStore.updateMany).toHaveBeenCalledWith({
+      where: { id: RUN_ID, userId: "user-1", status: "QUEUED" },
+      data: {
+        status: "FAILED",
+        error: "GITHUB_DISPATCH_FAILED",
+        queries: { title: "SWE", queries: ["SWE"] },
+      },
+    });
   });
+
+  it("marks the run failed when AU dispatch configuration is missing", async () => {
+    mockAuthedUser();
+    mockLockAcquired(true);
+    delete process.env.GITHUB_TOKEN;
+    fetchRunStore.findFirstInTx.mockResolvedValueOnce({
+      id: RUN_ID,
+      status: "QUEUED",
+      market: "AU",
+      queries: { title: "SWE", queries: ["SWE"] },
+    });
+    fetchRunStore.updateInTx.mockResolvedValueOnce({});
+    fetchRunStore.updateMany.mockResolvedValue({ count: 1 });
+
+    const res = await POST(
+      new Request(`http://localhost/api/fetch-runs/${RUN_ID}/trigger`, { method: "POST" }),
+      { params: Promise.resolve({ id: RUN_ID }) },
+    );
+
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toEqual({
+      error: "GITHUB_DISPATCH_NOT_CONFIGURED",
+    });
+    expect(fetchRunStore.updateMany).toHaveBeenCalledWith({
+      where: { id: RUN_ID, userId: "user-1", status: "QUEUED" },
+      data: {
+        status: "FAILED",
+        error: "GITHUB_DISPATCH_NOT_CONFIGURED",
+        queries: { title: "SWE", queries: ["SWE"] },
+      },
+    });
+  });
+
+  it("marks the run failed when GitHub dispatch is unreachable", async () => {
+    mockAuthedUser();
+    mockLockAcquired(true);
+    fetchRunStore.findFirstInTx.mockResolvedValueOnce({
+      id: RUN_ID,
+      status: "QUEUED",
+      market: "AU",
+      queries: { title: "SWE", queries: ["SWE"] },
+    });
+    fetchRunStore.updateInTx.mockResolvedValueOnce({});
+    fetchRunStore.updateMany.mockResolvedValue({ count: 1 });
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("network down")));
+
+    const res = await POST(
+      new Request(`http://localhost/api/fetch-runs/${RUN_ID}/trigger`, { method: "POST" }),
+      { params: Promise.resolve({ id: RUN_ID }) },
+    );
+
+    expect(res.status).toBe(504);
+    await expect(res.json()).resolves.toEqual({
+      error: "GITHUB_DISPATCH_UNREACHABLE",
+    });
+    expect(fetchRunStore.updateMany).toHaveBeenCalledWith({
+      where: { id: RUN_ID, userId: "user-1", status: "QUEUED" },
+      data: {
+        status: "FAILED",
+        error: "GITHUB_DISPATCH_UNREACHABLE",
+        queries: { title: "SWE", queries: ["SWE"] },
+      },
+    });
+  });
+
+  it.each([
+    ["CN", inlineProcessors.cn, "CN_FETCH_FAILED"],
+    ["GLOBAL", inlineProcessors.global, "GLOBAL_FETCH_FAILED"],
+  ] as const)(
+    "returns a stable non-2xx error when %s inline processing fails",
+    async (market, processor, errorCode) => {
+      mockAuthedUser();
+      mockLockAcquired(true);
+      fetchRunStore.findFirstInTx.mockResolvedValueOnce({
+        id: RUN_ID,
+        status: "QUEUED",
+        market,
+        queries: { queries: ["SWE"], sources: ["nowcoder"] },
+      });
+      fetchRunStore.updateInTx.mockResolvedValueOnce({});
+      fetchRunStore.updateMany.mockResolvedValue({ count: 1 });
+      processor.mockResolvedValueOnce({
+        discovered: 0,
+        imported: 0,
+        error: "upstream detail",
+      });
+
+      const res = await POST(
+        new Request(`http://localhost/api/fetch-runs/${RUN_ID}/trigger`, { method: "POST" }),
+        { params: Promise.resolve({ id: RUN_ID }) },
+      );
+
+      expect(res.status).toBe(502);
+      await expect(res.json()).resolves.toEqual({ error: errorCode });
+    },
+  );
 });

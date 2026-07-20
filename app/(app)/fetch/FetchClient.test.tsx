@@ -176,6 +176,65 @@ describe("FetchClient", () => {
     expect(body.includeFromQueries).toBe(false);
   });
 
+  it("optionally adds a filtered GLOBAL run and tracks both source lanes", async () => {
+    const user = userEvent.setup();
+    let createCount = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url === "/api/fetch-runs" && init?.method === "POST") {
+        createCount += 1;
+        return new Response(JSON.stringify({ id: `run-${createCount}` }), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (/^\/api\/fetch-runs\/run-\d+\/trigger$/.test(url) && init?.method === "POST") {
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url === "/api/fetch-runs") {
+        return new Response(JSON.stringify({ runs: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderFetch();
+    await user.click(screen.getByTestId("global-feeds-chip"));
+    await user.click(screen.getByRole("button", { name: /start fetch/i }));
+
+    await waitFor(() => {
+      expect(startRunMock).toHaveBeenCalledWith([
+        { id: "run-1", source: "jobspy" },
+        { id: "run-2", source: "global" },
+      ]);
+    });
+
+    const createBodies = fetchMock.mock.calls
+      .filter(([url, init]) => url === "/api/fetch-runs" && init?.method === "POST")
+      .map(([, init]) => JSON.parse(String(init?.body ?? "{}")));
+    expect(createBodies[1]).toMatchObject({
+      market: "GLOBAL",
+      queries: ["Software Engineer"],
+      baseQueries: ["Software Engineer"],
+      location: "Sydney, New South Wales, Australia",
+      hoursOld: 48,
+      smartExpand: true,
+      includeFromQueries: true,
+      applyExcludes: true,
+      excludeTitleTerms: expect.arrayContaining(["senior", "lead"]),
+      excludeDescriptionRules: [
+        "identity_requirement",
+        "experience_requirement_4_plus",
+      ],
+    });
+  });
+
   it("renders fetch action buttons inside the card", () => {
     renderFetch();
 

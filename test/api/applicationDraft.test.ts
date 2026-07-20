@@ -3,11 +3,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const prisma = vi.hoisted(() => ({
   application: {
     findFirst: vi.fn(),
-    update: vi.fn(),
+    updateMany: vi.fn(),
   },
+  transaction: vi.fn(),
+  executeRaw: vi.fn(),
 }));
 
-vi.mock("@/lib/server/prisma", () => ({ prisma }));
+vi.mock("@/lib/server/prisma", () => ({
+  prisma: {
+    application: prisma.application,
+    $transaction: prisma.transaction,
+  },
+}));
 
 vi.mock("@/auth", () => ({ authOptions: {} }));
 vi.mock("next-auth/next", () => ({ getServerSession: vi.fn() }));
@@ -56,7 +63,21 @@ describe("PATCH /api/applications/[id]/draft", () => {
   beforeEach(() => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockReset();
     prisma.application.findFirst.mockReset();
-    prisma.application.update.mockReset();
+    prisma.application.updateMany.mockReset();
+    prisma.application.updateMany.mockResolvedValue({ count: 1 });
+    prisma.executeRaw.mockReset().mockResolvedValue(1);
+    prisma.transaction.mockReset().mockImplementation(
+      async (
+        action: (tx: {
+          application: typeof prisma.application;
+          $executeRaw: typeof prisma.executeRaw;
+        }) => Promise<unknown>,
+      ) =>
+        action({
+          application: prisma.application,
+          $executeRaw: prisma.executeRaw,
+        }),
+    );
   });
 
   it("writes aiContent + DRAFT status and returns the new hash", async () => {
@@ -67,10 +88,9 @@ describe("PATCH /api/applications/[id]/draft", () => {
     prisma.application.findFirst.mockResolvedValueOnce({
       id: APP_ID,
       userId: USER_ID,
+      jobId: "job-1",
       aiContentHash: null,
     });
-    prisma.application.update.mockResolvedValueOnce({});
-
     const res = await PATCH(
       makeRequest({ aiContent: incoming, expectedHash: null }),
       { params },
@@ -80,9 +100,13 @@ describe("PATCH /api/applications/[id]/draft", () => {
     expect(res.status).toBe(200);
     expect(json.status).toBe("DRAFT");
     expect(json.aiContentHash).toBe(hashAiContent(incoming));
-    expect(prisma.application.update).toHaveBeenCalledWith(
+    expect(prisma.application.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: APP_ID },
+        where: {
+          id: APP_ID,
+          userId: USER_ID,
+          aiContentHash: null,
+        },
         data: expect.objectContaining({
           status: "DRAFT",
           aiContent: incoming,
@@ -99,6 +123,7 @@ describe("PATCH /api/applications/[id]/draft", () => {
     prisma.application.findFirst.mockResolvedValueOnce({
       id: APP_ID,
       userId: USER_ID,
+      jobId: "job-1",
       aiContentHash: "actual-hash",
     });
 
@@ -108,7 +133,7 @@ describe("PATCH /api/applications/[id]/draft", () => {
     );
 
     expect(res.status).toBe(409);
-    expect(prisma.application.update).not.toHaveBeenCalled();
+    expect(prisma.application.updateMany).not.toHaveBeenCalled();
   });
 
   it("returns 404 when the Application belongs to a different user", async () => {
@@ -148,5 +173,37 @@ describe("PATCH /api/applications/[id]/draft", () => {
     );
 
     expect(res.status).toBe(401);
+  });
+
+  it("returns 409 when another tab writes after the initial hash check", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: USER_ID },
+    });
+    prisma.application.findFirst.mockResolvedValueOnce({
+      id: APP_ID,
+      userId: USER_ID,
+      jobId: "job-1",
+      aiContentHash: "expected",
+    });
+    prisma.application.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    const response = await PATCH(
+      makeRequest({
+        aiContent: makeAiContent(),
+        expectedHash: "expected",
+      }),
+      { params },
+    );
+
+    expect(response.status).toBe(409);
+    expect(prisma.application.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: APP_ID,
+          userId: USER_ID,
+          aiContentHash: "expected",
+        },
+      }),
+    );
   });
 });

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -76,6 +75,7 @@ export function TailorClient({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isDiscarding, setIsDiscarding] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
   const showConflictDialog =
@@ -169,13 +169,29 @@ export function TailorClient({
     }
   }
 
+  async function handleBack() {
+    setActionError(null);
+    setIsLeaving(true);
+    try {
+      await draft.flushNow();
+      router.push("/jobs");
+    } catch (err: unknown) {
+      setActionError(extractMessage(err, t("save.failedRetry")));
+      setIsLeaving(false);
+    }
+  }
+
   async function handleDiscard() {
     setActionError(null);
     setIsDiscarding(true);
     try {
+      const expectedHash = await draft.flushNow();
       const json = await fetchJson<undefined>(
         `/api/applications/${applicationId}/discard`,
-        { method: "POST" },
+        {
+          method: "POST",
+          body: JSON.stringify({ expectedHash }),
+        },
       );
       const data = json as { aiContent: AiContent; aiContentHash: string };
       draft.replaceFromServer(data.aiContent, data.aiContentHash);
@@ -196,13 +212,15 @@ export function TailorClient({
     // editor. The writing surface itself stays untouched.
     <div className="cosmos-focus mx-auto flex w-full max-w-[1400px] flex-col gap-4 px-4 pb-32 pt-6 lg:px-8">
       <header className="flex flex-wrap items-center gap-4">
-        <Link
-          href="/jobs"
+        <button
+          type="button"
+          onClick={() => void handleBack()}
+          disabled={isLeaving}
           className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden />
           {t("backToJobs")}
-        </Link>
+        </button>
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-lg font-semibold tracking-tight text-foreground sm:text-xl">
             {job.title}

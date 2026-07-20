@@ -10,6 +10,8 @@ const prismaStore = vi.hoisted(() => ({
   job: {
     createMany: vi.fn(),
   },
+  executeRaw: vi.fn(),
+  $transaction: vi.fn(),
 }));
 
 vi.mock("@/lib/server/prisma", () => ({
@@ -24,6 +26,14 @@ describe("admin import api", () => {
     prismaStore.user.findUnique.mockReset();
     prismaStore.deletedJobUrl.findMany.mockReset();
     prismaStore.job.createMany.mockReset();
+    prismaStore.executeRaw.mockReset().mockResolvedValue(0);
+    prismaStore.$transaction.mockReset().mockImplementation(async (callback) =>
+      callback({
+        $executeRaw: prismaStore.executeRaw,
+        deletedJobUrl: prismaStore.deletedJobUrl,
+        job: prismaStore.job,
+      }),
+    );
 
     prismaStore.user.findUnique.mockResolvedValue({ id: "user-1" });
     prismaStore.deletedJobUrl.findMany.mockResolvedValue([]);

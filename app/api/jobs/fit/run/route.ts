@@ -9,6 +9,7 @@ import {
 } from "@/lib/server/auth/requireSession";
 import {
   getFitRunStats,
+  invalidateStaleFitScores,
   prescreenAllUnscored,
   resetFailedFitBatches,
 } from "@/lib/server/jobs/fitRunService";
@@ -39,8 +40,9 @@ export async function POST() {
     );
   }
 
+  const invalidated = await invalidateStaleFitScores(userId);
   const retried = await resetFailedFitBatches(userId);
   const { prescreened } = await prescreenAllUnscored(userId);
   const stats = await getFitRunStats(userId);
-  return NextResponse.json({ ...stats, prescreened, retried });
+  return NextResponse.json({ ...stats, prescreened, retried, invalidated });
 }

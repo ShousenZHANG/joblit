@@ -118,6 +118,21 @@ const CNSchema = z.object({
 // and the worker completes the run in-process.
 const GlobalSchema = z.object({
   market: z.literal("GLOBAL"),
+  queries: queriesField.refine((value) => value.length > 0, {
+    message: "at least one role query is required",
+  }),
+  baseQueries: queriesField,
+  location: z.string().trim().min(1).max(160).optional(),
+  hoursOld: z.coerce.number().int().min(1).max(24 * 30).optional(),
+  smartExpand: z.coerce.boolean().optional().default(true),
+  includeFromQueries: z.coerce.boolean().optional().default(true),
+  applyExcludes: z.coerce.boolean().optional().default(true),
+  excludeTitleTerms: z.array(TitleExcludeSchema).max(24).optional().default([]),
+  excludeDescriptionRules: z
+    .array(z.string())
+    .optional()
+    .default([])
+    .transform(filterDescriptionExclusionRules),
   sources: z
     .array(
       z
@@ -232,6 +247,14 @@ export async function POST(req: Request) {
       const parsed = parseJsonValue(json, GlobalSchema, requestId);
       if (!parsed.ok) return parsed.response;
       const d = parsed.data;
+      const baseQueries = d.baseQueries.length > 0 ? d.baseQueries : d.queries;
+      const expandedQueries = d.smartExpand
+        ? expandRoleQueries(d.queries)
+        : d.queries;
+      const excludeTitleTerms = d.applyExcludes ? d.excludeTitleTerms : [];
+      const excludeDescriptionRules = d.applyExcludes
+        ? d.excludeDescriptionRules
+        : [];
       const txResult = await prisma.$transaction(async (tx) => {
         const quotaViolation = await checkFetchRunQuota(tx, userId, "create");
         if (quotaViolation) return { kind: "quota" as const, quotaViolation };
@@ -243,12 +266,24 @@ export async function POST(req: Request) {
             status: "QUEUED",
             market: "GLOBAL",
             importedCount: 0,
-            queries: { sources: d.sources },
-            location: null,
-            hoursOld: null,
+            queries: {
+              title: baseQueries[0] ?? d.queries[0],
+              baseQueries,
+              queries: expandedQueries,
+              location: d.location ?? null,
+              hoursOld: d.hoursOld ?? null,
+              smartExpand: d.smartExpand,
+              includeFromQueries: d.includeFromQueries,
+              applyExcludes: d.applyExcludes,
+              excludeTitleTerms,
+              excludeDescriptionRules,
+              sources: d.sources,
+            },
+            location: d.location ?? null,
+            hoursOld: d.hoursOld ?? null,
             resultsWanted: null,
-            includeFromQueries: false,
-            filterDescription: false,
+            includeFromQueries: d.includeFromQueries,
+            filterDescription: d.applyExcludes,
           },
           select: { id: true },
         });

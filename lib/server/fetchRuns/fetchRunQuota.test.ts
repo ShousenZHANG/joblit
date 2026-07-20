@@ -13,6 +13,10 @@ function fakeTransaction(counts: number[]) {
     order.push("lock");
     return 1;
   });
+  const updateMany = vi.fn(async () => {
+    order.push("expire");
+    return { count: 0 };
+  });
   const count = vi.fn(async () => {
     order.push("count");
     return remaining.shift() ?? 0;
@@ -21,10 +25,11 @@ function fakeTransaction(counts: number[]) {
   return {
     tx: {
       $executeRaw: executeRaw,
-      fetchRun: { count },
+      fetchRun: { count, updateMany },
     } as unknown as Prisma.TransactionClient,
     order,
     executeRaw,
+    updateMany,
     count,
   };
 }
@@ -88,8 +93,26 @@ describe("fetch run quota", () => {
 
     await checkFetchRunQuota(tx, "user-1", "create");
 
-    expect(order).toEqual(["lock", "count", "count", "count", "count"]);
+    expect(order).toEqual(["lock", "expire", "count", "count", "count", "count"]);
     expect(String(executeRaw.mock.calls[0]?.[0])).toContain("pg_advisory_xact_lock");
+  });
+
+  it("expires stale active rows under the quota lock before counting", async () => {
+    const { tx, updateMany } = fakeTransaction([0, 0, 0, 0]);
+    const now = new Date("2026-07-20T03:00:00.000Z");
+
+    await checkFetchRunQuota(tx, "user-1", "create", now);
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: {
+        status: { in: ["QUEUED", "RUNNING"] },
+        updatedAt: { lt: new Date("2026-07-20T02:30:00.000Z") },
+      },
+      data: {
+        status: "FAILED",
+        error: "Dispatch timeout: worker did not report status within 30 minutes",
+      },
+    });
   });
 
   it("returns the stable structured 429 response", async () => {

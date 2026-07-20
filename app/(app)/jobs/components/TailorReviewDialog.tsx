@@ -23,7 +23,7 @@ import { SummarySection } from "../[id]/tailor/SummarySection";
 import { useTailorDraft } from "../[id]/tailor/useTailorDraft";
 
 type TailorTarget = "resume" | "cover";
-type PreviewSyncStatus = "synced" | "pending" | "rendering";
+type PreviewSyncStatus = "synced" | "pending" | "rendering" | "error";
 
 const AUTO_PREVIEW_DEBOUNCE_MS = 1400;
 const QUEUED_PREVIEW_DEBOUNCE_MS = 500;
@@ -66,8 +66,19 @@ export function TailorReviewDialog({
   onOpenChange,
   onFinalized,
 }: TailorReviewDialogProps) {
+  const closeRequestRef = useRef<(() => void) | null>(null);
+
   return (
-    <Dialog open={open && !!draft} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open && !!draft}
+      onOpenChange={(nextOpen) => {
+        if (nextOpen) {
+          onOpenChange(true);
+          return;
+        }
+        closeRequestRef.current?.();
+      }}
+    >
       <DialogContent
         showCloseButton={false}
         className="fixed left-2 top-2 flex h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-none translate-x-0 translate-y-0 grid-rows-none flex-col gap-0 overflow-hidden rounded-[1.65rem] border border-white/70 dark:border-border/60 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_44%,#edf7f2_100%)] dark:bg-none dark:bg-card p-0 shadow-[0_34px_110px_-44px_rgba(15,23,42,0.70),0_16px_42px_-34px_rgba(15,23,42,0.45)] ring-1 ring-slate-900/5 dark:ring-white/10 sm:left-4 sm:top-4 sm:h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)] sm:max-w-none sm:rounded-[2rem]"
@@ -78,6 +89,7 @@ export function TailorReviewDialog({
             draft={draft}
             onClose={() => onOpenChange(false)}
             onFinalized={onFinalized}
+            closeRequestRef={closeRequestRef}
           />
         ) : null}
       </DialogContent>
@@ -89,10 +101,12 @@ function TailorReviewDialogBody({
   draft: initialDraft,
   onClose,
   onFinalized,
+  closeRequestRef,
 }: {
   draft: TailorReviewDraft;
   onClose: () => void;
   onFinalized: (result: TailorReviewFinalized) => void;
+  closeRequestRef: { current: (() => void) | null };
 }) {
   const draft = useTailorDraft({
     applicationId: initialDraft.applicationId,
@@ -114,6 +128,7 @@ function TailorReviewDialogBody({
   const [previewSyncStatus, setPreviewSyncStatus] =
     useState<PreviewSyncStatus>("synced");
   const [isFinalizing, setIsFinalizing] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const [isDiscarding, setIsDiscarding] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const initialPreviewUrl =
@@ -126,6 +141,10 @@ function TailorReviewDialogBody({
   const autoRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const renderInFlightRef = useRef(false);
   const renderQueuedRef = useRef(false);
+  const previewObjectUrlRef = useRef<string | null>(null);
+  const previewAbortRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
+  const closeInFlightRef = useRef(false);
   const latestHashRef = useRef<string | null>(draft.currentHash);
   const saveKindRef = useRef(draft.saveStatus.kind);
   const previewRenderRef = useRef<() => void>(() => {});
@@ -136,13 +155,15 @@ function TailorReviewDialogBody({
   const currentRefreshAt =
     target === "resume" ? lastResumeRefreshAt : lastCoverRefreshAt;
   const flushDraftNow = draft.flushNow;
-  const canClose = !isFinalizing;
+  const canClose = !isFinalizing && !isClosing && !isDiscarding;
   const previewStatusLabel =
     previewSyncStatus === "rendering"
       ? "Rendering preview"
       : previewSyncStatus === "pending"
         ? "Queued after edit"
-        : "Preview in sync";
+        : previewSyncStatus === "error"
+          ? "Preview needs refresh"
+          : "Preview in sync";
   const showConflictDialog =
     draft.saveStatus.kind === "error" && draft.saveStatus.conflict === true;
 
@@ -154,14 +175,22 @@ function TailorReviewDialogBody({
     saveKindRef.current = draft.saveStatus.kind;
   }, [draft.saveStatus.kind]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      previewAbortRef.current?.abort();
       if (autoRenderTimerRef.current) {
         clearTimeout(autoRenderTimerRef.current);
       }
-    },
-    [],
-  );
+      if (
+        previewObjectUrlRef.current &&
+        typeof URL.revokeObjectURL === "function"
+      ) {
+        URL.revokeObjectURL(previewObjectUrlRef.current);
+      }
+    };
+  }, []);
 
   function patchSummary(summary: AiContent["cv"]["summary"]) {
     setStatus("DRAFT");
@@ -213,6 +242,76 @@ function TailorReviewDialogBody({
     };
   }, [flushDraftNow, initialDraft.applicationId, target]);
 
+  const callPreview = useCallback(async () => {
+    const expectedHash = await flushDraftNow();
+    const controller = new AbortController();
+    previewAbortRef.current = controller;
+    try {
+      const response = await fetch(
+        `/api/applications/${initialDraft.applicationId}/preview?target=${target}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ expectedHash }),
+          signal: controller.signal,
+        },
+      );
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        const baseMessage =
+          payload &&
+          typeof payload === "object" &&
+          "error" in payload &&
+          payload.error &&
+          typeof payload.error === "object" &&
+          "message" in payload.error &&
+          typeof payload.error.message === "string"
+            ? payload.error.message
+            : "Preview render failed";
+        const retryAfterSeconds = parseRetryAfterSeconds(
+          response.headers.get("Retry-After"),
+        );
+        const retryMessage =
+          response.status === 429 && retryAfterSeconds !== null
+            ? ` Try again in ${retryAfterSeconds} seconds.`
+            : "";
+        throw new Error(`${baseMessage}${retryMessage}`);
+      }
+      const blob = await response.blob();
+      if (blob.type !== "application/pdf") {
+        throw new Error("Preview service returned an invalid document");
+      }
+      return {
+        expectedHash,
+        objectUrl: URL.createObjectURL(blob),
+      };
+    } finally {
+      if (previewAbortRef.current === controller) {
+        previewAbortRef.current = null;
+      }
+    }
+  }, [flushDraftNow, initialDraft.applicationId, target]);
+
+  const applyPreviewResult = useCallback(
+    (objectUrl: string) => {
+      if (
+        previewObjectUrlRef.current &&
+        typeof URL.revokeObjectURL === "function"
+      ) {
+        URL.revokeObjectURL(previewObjectUrlRef.current);
+      }
+      previewObjectUrlRef.current = objectUrl;
+      if (target === "resume") {
+        setResumePdf(objectUrl);
+        setLastResumeRefreshAt(Date.now());
+      } else {
+        setCoverPdf(objectUrl);
+        setLastCoverRefreshAt(Date.now());
+      }
+    },
+    [target],
+  );
+
   const applyFinalizedResult = useCallback((data: {
     status: "FINAL";
     resumePdfUrl?: string;
@@ -220,6 +319,13 @@ function TailorReviewDialogBody({
     coverPdfUrl?: string;
     coverPdfName?: string;
   }) => {
+    if (
+      previewObjectUrlRef.current &&
+      typeof URL.revokeObjectURL === "function"
+    ) {
+      URL.revokeObjectURL(previewObjectUrlRef.current);
+      previewObjectUrlRef.current = null;
+    }
     if (data.resumePdfUrl) {
       setResumePdf(data.resumePdfUrl);
       setLastResumeRefreshAt(Date.now());
@@ -273,30 +379,45 @@ function TailorReviewDialogBody({
     renderInFlightRef.current = true;
     setPreviewSyncStatus("rendering");
     setIsRefreshing(true);
+    let renderSucceeded = false;
     try {
-      const { data, expectedHash } = await callFinalize();
+      const { objectUrl, expectedHash } = await callPreview();
+      if (!mountedRef.current) {
+        if (typeof URL.revokeObjectURL === "function") {
+          URL.revokeObjectURL(objectUrl);
+        }
+        return;
+      }
       previewRenderedHashRef.current = expectedHash;
-      applyFinalizedResult(data);
+      applyPreviewResult(objectUrl);
+      renderSucceeded = true;
     } catch (err: unknown) {
-      setActionError(extractMessage(err, "Preview render failed"));
+      if (mountedRef.current && !isAbortError(err)) {
+        setActionError(extractMessage(err, "Preview render failed"));
+      }
     } finally {
       renderInFlightRef.current = false;
+      if (!mountedRef.current) return;
       setIsRefreshing(false);
       const latestHash = latestHashRef.current;
       const needsFollowUp =
-        renderQueuedRef.current ||
-        (saveKindRef.current === "saved" &&
+        renderSucceeded &&
+        saveKindRef.current === "saved" &&
           !!latestHash &&
-          previewRenderedHashRef.current !== latestHash);
+          previewRenderedHashRef.current !== latestHash;
       renderQueuedRef.current = false;
 
       if (needsFollowUp && latestHash && saveKindRef.current === "saved") {
         schedulePreviewRender(QUEUED_PREVIEW_DEBOUNCE_MS);
+      } else if (!renderSucceeded) {
+        // Persistent LaTeX/HTTP failures must not create a 500ms retry loop.
+        // A later edit or explicit Refresh starts the next attempt.
+        setPreviewSyncStatus("error");
       } else {
         setPreviewSyncStatus("synced");
       }
     }
-  }, [applyFinalizedResult, callFinalize, schedulePreviewRender]);
+  }, [applyPreviewResult, callPreview, schedulePreviewRender]);
 
   useEffect(() => {
     previewRenderRef.current = () => {
@@ -338,13 +459,47 @@ function TailorReviewDialogBody({
     }
   }
 
+  const handleClose = useCallback(async () => {
+    if (closeInFlightRef.current || isFinalizing || isDiscarding) return;
+    closeInFlightRef.current = true;
+    setActionError(null);
+    setIsClosing(true);
+    try {
+      await flushDraftNow();
+      onClose();
+    } catch (err: unknown) {
+      if (mountedRef.current) {
+        setActionError(extractMessage(err, "Save failed. Review is still open."));
+      }
+    } finally {
+      closeInFlightRef.current = false;
+      if (mountedRef.current) setIsClosing(false);
+    }
+  }, [flushDraftNow, isDiscarding, isFinalizing, onClose]);
+
+  useEffect(() => {
+    const requestClose = () => {
+      void handleClose();
+    };
+    closeRequestRef.current = requestClose;
+    return () => {
+      if (closeRequestRef.current === requestClose) {
+        closeRequestRef.current = null;
+      }
+    };
+  }, [closeRequestRef, handleClose]);
+
   async function handleDiscard() {
     setActionError(null);
     setIsDiscarding(true);
     try {
+      const expectedHash = await flushDraftNow();
       const json = await fetchJson<undefined>(
         `/api/applications/${initialDraft.applicationId}/discard`,
-        { method: "POST" },
+        {
+          method: "POST",
+          body: JSON.stringify({ expectedHash }),
+        },
       );
       const data = json as { aiContent: AiContent; aiContentHash: string };
       draft.replaceFromServer(data.aiContent, data.aiContentHash);
@@ -382,7 +537,7 @@ function TailorReviewDialogBody({
               variant="ghost"
               size="icon-sm"
               disabled={!canClose}
-              onClick={onClose}
+              onClick={() => void handleClose()}
               className="rounded-full text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-95"
               aria-label="Close review dialog"
             >
@@ -401,7 +556,11 @@ function TailorReviewDialogBody({
         </div>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 gap-5 overflow-hidden bg-[radial-gradient(circle_at_6%_0%,rgba(16,185,129,0.09),transparent_28%),radial-gradient(circle_at_82%_8%,rgba(59,130,246,0.055),transparent_30%)] p-4 md:p-6 lg:grid-cols-2">
+      <div
+        aria-busy={isClosing || isDiscarding || isFinalizing}
+        inert={isClosing || isDiscarding || isFinalizing ? true : undefined}
+        className="grid min-h-0 flex-1 gap-5 overflow-hidden bg-[radial-gradient(circle_at_6%_0%,rgba(16,185,129,0.09),transparent_28%),radial-gradient(circle_at_82%_8%,rgba(59,130,246,0.055),transparent_30%)] p-4 md:p-6 lg:grid-cols-2"
+      >
         <div className="flex min-h-0 flex-col overflow-hidden rounded-[1.65rem] border border-border/60 bg-card/75 p-3 shadow-[0_24px_70px_-48px_rgba(15,23,42,0.55),0_8px_20px_-18px_rgba(15,23,42,0.20)] ring-1 ring-border/40 backdrop-blur">
           <div className="mb-3 flex shrink-0 items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card/80 px-3 py-2.5 shadow-[0_10px_28px_-25px_rgba(15,23,42,0.42)]">
             <div className="min-w-0">
@@ -470,7 +629,7 @@ function TailorReviewDialogBody({
             variant="outline"
             size="sm"
             onClick={handleDiscard}
-            disabled={isDiscarding}
+            disabled={isDiscarding || isFinalizing || isClosing}
             className="h-10 rounded-full border-border bg-card px-4 text-sm font-semibold text-foreground/85 shadow-sm transition-all hover:-translate-y-px hover:bg-muted/60 hover:shadow-md active:translate-y-0"
           >
             <RotateCcw className="h-4 w-4" />
@@ -480,17 +639,17 @@ function TailorReviewDialogBody({
             type="button"
             variant="outline"
             size="sm"
-            onClick={canClose ? onClose : undefined}
+            onClick={canClose ? () => void handleClose() : undefined}
             disabled={!canClose}
             className="h-10 rounded-full border-border bg-card px-4 text-sm font-semibold text-foreground/85 shadow-sm transition-all hover:-translate-y-px hover:bg-muted/60 hover:shadow-md active:translate-y-0"
           >
-            Close
+            {isClosing ? "Saving..." : "Close"}
           </Button>
           <Button
             type="button"
             size="sm"
             onClick={handleFinalize}
-            disabled={isFinalizing}
+            disabled={isFinalizing || isDiscarding || isClosing || isRefreshing}
             className={cn(
               "h-10 rounded-full border border-brand-emerald-500 bg-brand-emerald-500 px-5 text-sm font-semibold text-white shadow-[0_14px_30px_-16px_rgba(16,185,129,0.85)] transition-all hover:-translate-y-px hover:border-brand-emerald-600 hover:bg-brand-emerald-600 hover:shadow-[0_18px_34px_-16px_rgba(16,185,129,0.95)] active:translate-y-0",
               "disabled:border-border disabled:bg-muted disabled:text-muted-foreground",
@@ -531,4 +690,16 @@ function extractMessage(err: unknown, fallback: string): string {
   if (err instanceof ApiError) return err.message;
   if (err instanceof Error) return err.message;
   return fallback;
+}
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException
+    ? err.name === "AbortError"
+    : err instanceof Error && err.name === "AbortError";
+}
+
+function parseRetryAfterSeconds(value: string | null): number | null {
+  if (!value) return null;
+  const seconds = Number.parseInt(value, 10);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
 }

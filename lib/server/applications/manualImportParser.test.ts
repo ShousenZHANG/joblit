@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   ManualGenerateSchema,
+  deriveReviewableSkillAdditions,
+  mergeSkillAdditions,
   parseCoverManualOutput,
   parseCoverStrictOutput,
   parseResumeManualOutput,
@@ -74,5 +76,42 @@ describe("manual import parser modes", () => {
     } as const;
     expect(ManualGenerateSchema.parse(base).source).toBe("manual_import");
     expect(ManualGenerateSchema.safeParse({ ...base, userId: "attacker" }).success).toBe(false);
+  });
+
+  it("derives only new skill items using case-insensitive safe comparisons", () => {
+    expect(
+      deriveReviewableSkillAdditions(
+        [{ label: String.raw`Cloud \& DevOps`, items: ["AWS", "Docker"] }],
+        [
+          {
+            label: "cloud & devops",
+            items: ["aws", "Kubernetes", "KUBERNETES"],
+          },
+        ],
+      ),
+    ).toEqual([
+      {
+        label: "cloud & devops",
+        items: ["Kubernetes"],
+        accepted: true,
+      },
+    ]);
+  });
+
+  it("escapes legacy skill additions before the LaTeX render boundary", () => {
+    const merged = mergeSkillAdditions(
+      [{ label: "Backend", items: ["TypeScript"] }],
+      [
+        {
+          category: String.raw`Cloud & \input{secret}`,
+          items: [String.raw`AWS 100% \write18{calc}`],
+        },
+      ],
+    );
+
+    expect(merged.at(-1)).toEqual({
+      label: String.raw`Cloud \& \\input\{secret\}`,
+      items: [String.raw`AWS 100\% \\write18\{calc\}`],
+    });
   });
 });

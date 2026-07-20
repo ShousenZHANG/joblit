@@ -3,6 +3,10 @@ import { requireSession, UnauthorizedError } from "@/lib/server/auth/requireSess
 import type { SessionContext } from "@/lib/server/auth/requireSession";
 import { unauthorizedError } from "@/lib/server/api/errorResponse";
 import { reportError } from "@/lib/server/observability/errorReporter";
+import {
+  checkRateLimit,
+  rateLimitHeaders,
+} from "@/lib/server/api/rateLimit";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import type { Prisma } from "@/lib/generated/prisma";
@@ -18,10 +22,13 @@ export const maxDuration = 60;
 
 const ParamsSchema = z.object({ id: z.string().uuid() });
 const IDEMPOTENCY_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+const TRIGGER_RATE_LIMIT = { limit: 30, windowSeconds: 60 } as const;
+
+class MissingDispatchConfigError extends Error {}
 
 function envOrThrow(key: string) {
   const v = process.env[key];
-  if (!v) throw new Error(`${key} is not set`);
+  if (!v) throw new MissingDispatchConfigError(`${key} is not set`);
   return v;
 }
 
@@ -65,6 +72,27 @@ function withDispatchMeta(raw: unknown, patch: Partial<DispatchMeta>) {
   };
 }
 
+async function failQueuedRun({
+  runId,
+  userId,
+  queries,
+  error,
+}: {
+  runId: string;
+  userId: string;
+  queries: unknown;
+  error: string;
+}) {
+  await prisma.fetchRun.updateMany({
+    where: { id: runId, userId, status: "QUEUED" },
+    data: {
+      status: "FAILED",
+      error,
+      queries: queries as Prisma.InputJsonValue,
+    },
+  });
+}
+
 /**
  * Stable 32-bit signed integer hash of a UUID for pg_advisory_xact_lock(bigint).
  * Postgres accepts a 64-bit bigint but also supports a 2-arg form using two
@@ -100,6 +128,28 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const idempotencyKey = req.headers.get("Idempotency-Key")?.trim() || null;
   const advisoryKey = runIdToAdvisoryKey(runId);
 
+  const rateLimit = checkRateLimit(
+    `fetch-runs:trigger:${userId}`,
+    TRIGGER_RATE_LIMIT,
+  );
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "TOO_MANY_TRIGGER_REQUESTS" },
+      { status: 429, headers: rateLimitHeaders(rateLimit) },
+    );
+  }
+
+  // Reject random or cross-tenant UUIDs before entering the global quota
+  // critical section. The row is read again under both locks below because a
+  // concurrent cancellation or stale expiry can still change its state.
+  const ownedRun = await prisma.fetchRun.findFirst({
+    where: { id: runId, userId },
+    select: { id: true },
+  });
+  if (!ownedRun) {
+    return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+  }
+
   // Pessimistic lock via Postgres transaction-scoped advisory lock.
   // Only one concurrent trigger per runId can hold this lock; others get
   // LOCK_CONTENDED immediately and return the canonical "alreadyDispatched"
@@ -111,6 +161,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (!lockRows?.[0]?.locked) {
       return { kind: "lock_contended" as const };
     }
+
+    // Quota check also expires abandoned rows under its global lock. Read the
+    // target afterwards so an expired target cannot still be dispatched.
+    const quotaViolation = await checkFetchRunQuota(tx, userId, "trigger");
 
     const run = await tx.fetchRun.findFirst({
       where: { id: runId, userId },
@@ -138,7 +192,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       return { kind: "already_dispatched" as const };
     }
 
-    const quotaViolation = await checkFetchRunQuota(tx, userId, "trigger");
     if (quotaViolation) return { kind: "quota" as const, quotaViolation };
 
     // Claim the dispatch slot inside this transaction — row won't change
@@ -193,15 +246,20 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   //
   // AU market: still dispatches to GitHub Actions (JobSpy pipeline).
   if (txResult.market === "CN" || txResult.market === "GLOBAL") {
-    await prisma.fetchRun.updateMany({
+    const claimed = await prisma.fetchRun.updateMany({
       where: { id: runId, userId, status: "QUEUED" },
       data: {
+        status: "RUNNING",
+        error: null,
         queries: withDispatchMeta(txResult.queries, {
           inFlightAt: undefined,
           dispatchedAt: new Date().toISOString(),
         }),
       },
     });
+    if (claimed.count === 0) {
+      return NextResponse.json({ error: "RUN_NO_LONGER_ACTIVE" }, { status: 409 });
+    }
 
     const result =
       txResult.market === "GLOBAL"
@@ -213,57 +271,77 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
             id: runId,
             queries: txResult.queries,
           });
+    if (result.cancelled) {
+      return NextResponse.json({ error: "RUN_CANCELLED" }, { status: 409 });
+    }
+    if (result.error) {
+      return NextResponse.json(
+        {
+          error:
+            txResult.market === "GLOBAL"
+              ? "GLOBAL_FETCH_FAILED"
+              : "CN_FETCH_FAILED",
+        },
+        { status: 502 },
+      );
+    }
     return NextResponse.json({
-      ok: result.error === undefined,
+      ok: true,
       imported: result.imported,
       discovered: result.discovered,
-      ...(result.error ? { error: result.error } : {}),
     });
   }
 
   // AU market dispatches the JobSpy (LinkedIn) fetcher on GitHub Actions. Seek
   // search moved to the browser extension — there is no server-side Seek
   // pipeline to select anymore.
-  const owner = envOrThrow("GITHUB_OWNER");
-  const repo = envOrThrow("GITHUB_REPO");
-  const token = envOrThrow("GITHUB_TOKEN");
-  const workflow = process.env.GITHUB_WORKFLOW_FILE || "jobspy-fetch.yml";
-  const ref = process.env.GITHUB_REF || "master";
-
   // Timeout the dispatch so a hung api.github.com connection can't pin the
   // 60s function budget while holding this run's dispatch slot — every other
   // external call already does this; this one was the gap.
-  const ghController = new AbortController();
-  const ghTimeout = setTimeout(() => ghController.abort(), 10_000);
   let ghRes: Response;
   try {
-    ghRes = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflow}/dispatches`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/vnd.github+json",
-          "Content-Type": "application/json",
+    const owner = envOrThrow("GITHUB_OWNER");
+    const repo = envOrThrow("GITHUB_REPO");
+    const token = envOrThrow("GITHUB_TOKEN");
+    const workflow = process.env.GITHUB_WORKFLOW_FILE || "jobspy-fetch.yml";
+    const ref = process.env.GITHUB_REF || "master";
+    const ghController = new AbortController();
+    const ghTimeout = setTimeout(() => ghController.abort(), 10_000);
+    try {
+      ghRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflow}/dispatches`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.github+json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ ref, inputs: { runId } }),
+          signal: ghController.signal,
         },
-        body: JSON.stringify({ ref, inputs: { runId } }),
-        signal: ghController.signal,
-      },
-    );
+      );
+    } finally {
+      clearTimeout(ghTimeout);
+    }
   } catch (err) {
     reportError(err, { scope: "fetch-runs.trigger.dispatch", userId, tags: { runId } });
-    // Best-effort unlock so the user can retry.
-    await prisma.fetchRun.updateMany({
-      where: { id: runId, userId, status: "QUEUED" },
-      data: { queries: txResult.queries as Prisma.InputJsonValue },
+    const error =
+      err instanceof MissingDispatchConfigError
+        ? "GITHUB_DISPATCH_NOT_CONFIGURED"
+        : (err as Error).name === "AbortError"
+          ? "GITHUB_DISPATCH_TIMEOUT"
+          : "GITHUB_DISPATCH_UNREACHABLE";
+    await failQueuedRun({
+      runId,
+      userId,
+      queries: txResult.queries,
+      error,
     });
-    const timedOut = (err as Error).name === "AbortError";
     return NextResponse.json(
-      { error: timedOut ? "GITHUB_DISPATCH_TIMEOUT" : "GITHUB_DISPATCH_UNREACHABLE" },
-      { status: 504 },
+      { error },
+      { status: error === "GITHUB_DISPATCH_NOT_CONFIGURED" ? 503 : 504 },
     );
-  } finally {
-    clearTimeout(ghTimeout);
   }
 
   if (!ghRes.ok) {
@@ -276,10 +354,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       tags: { status: ghRes.status, runId },
       extra: { body: text.slice(0, 500) },
     });
-    // Best-effort unlock so the user can retry.
-    await prisma.fetchRun.updateMany({
-      where: { id: runId, userId, status: "QUEUED" },
-      data: { queries: txResult.queries as Prisma.InputJsonValue },
+    await failQueuedRun({
+      runId,
+      userId,
+      queries: txResult.queries,
+      error: "GITHUB_DISPATCH_FAILED",
     });
     return NextResponse.json({ error: "GITHUB_DISPATCH_FAILED" }, { status: 502 });
   }

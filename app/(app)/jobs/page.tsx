@@ -10,6 +10,7 @@ import { listJobs } from "@/lib/server/jobs/jobListService";
 import { Skeleton } from "@/components/ui/skeleton";
 import { uiLocaleToMarket, type Market } from "@/lib/shared/market";
 import { getJobsListQueryKey } from "./utils/jobsQueryCache";
+import { serializeJobListItem } from "./utils/serializeJobListItem";
 import type { JobItem } from "./types";
 
 export const dynamic = "force-dynamic";
@@ -77,24 +78,7 @@ async function JobsListSection({
     market,
   });
 
-  const items: JobItem[] = result.items.map((it) => ({
-    id: it.id,
-    jobUrl: it.jobUrl,
-    title: it.title,
-    company: it.company,
-    location: it.location,
-    jobType: it.jobType,
-    jobLevel: it.jobLevel,
-    salary: it.salary,
-    workArrangement: it.workArrangement,
-    listingDate: it.listingDate?.toISOString() ?? null,
-    status: it.status as JobItem["status"],
-    resumePdfUrl: it.resumePdfUrl,
-    resumePdfName: it.resumePdfName,
-    coverPdfUrl: it.coverPdfUrl,
-    createdAt: it.createdAt.toISOString(),
-    updatedAt: it.updatedAt.toISOString(),
-  }));
+  const items: JobItem[] = result.items.map(serializeJobListItem);
 
   // Seed the infinite query — key ["jobs", queryString], a single-page
   // InfiniteData payload — so the client hydrates the first page with no

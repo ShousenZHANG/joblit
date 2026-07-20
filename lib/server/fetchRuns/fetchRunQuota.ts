@@ -9,6 +9,14 @@ export const FETCH_RUN_QUOTA_LIMITS = {
   windowSeconds: 60 * 60,
 } as const;
 
+export const FETCH_RUN_STALE_AFTER_MS = 30 * 60 * 1000;
+export const FETCH_RUN_STALE_ERROR =
+  "Dispatch timeout: worker did not report status within 30 minutes";
+
+export function fetchRunStaleCutoff(now = new Date()) {
+  return new Date(now.getTime() - FETCH_RUN_STALE_AFTER_MS);
+}
+
 export type FetchRunQuotaReason =
   | "USER_ACTIVE_LIMIT"
   | "GLOBAL_ACTIVE_LIMIT"
@@ -49,6 +57,17 @@ export async function checkFetchRunQuota(
   `;
 
   const activeStatuses: FetchRunStatus[] = ["QUEUED", "RUNNING"];
+  // No cron is required for quota recovery. Any create/trigger first expires
+  // abandoned rows while holding the same global quota lock, so stale activity
+  // cannot permanently consume user or service capacity.
+  await tx.fetchRun.updateMany({
+    where: {
+      status: { in: activeStatuses },
+      updatedAt: { lt: fetchRunStaleCutoff(now) },
+    },
+    data: { status: "FAILED", error: FETCH_RUN_STALE_ERROR },
+  });
+
   const windowStart = new Date(now.getTime() - FETCH_RUN_QUOTA_LIMITS.windowSeconds * 1000);
 
   // Read the complete quota snapshot under the lock before choosing a violation.

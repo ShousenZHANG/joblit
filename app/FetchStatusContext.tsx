@@ -12,7 +12,7 @@ import {
 import { useSession } from "next-auth/react";
 
 export type FetchRunStatus = "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
-export type FetchSource = "jobspy" | "seek";
+export type FetchSource = "jobspy" | "seek" | "nowcoder" | "global";
 
 // One tracked run (a single source). A fetch action starts one of these per
 // selected source — picking "Both" tracks two lanes (jobspy + seek) at once.
@@ -67,12 +67,6 @@ const ENDED_AT_KEY = "joblit_fetch_ended_at";
 // when no lane has terms — avoids churning the context value's useMemo deps.
 const EMPTY_TERMS: string[] = [];
 
-// Hard ceiling on how long we poll one run set. A GitHub Actions runner that is
-// cancelled or hard-killed never reaches its status callback, leaving the DB row
-// stuck on RUNNING forever — without this cap the panel would poll (and show
-// "Running") indefinitely. 8 min sits well beyond a normal fetch (~1–2 min).
-const MAX_POLL_MS = 8 * 60 * 1000;
-
 const isTerminal = (s: FetchRunStatus) => s === "SUCCEEDED" || s === "FAILED";
 
 /** Aggregate many lane statuses into one: any active → running/queued; else a
@@ -95,7 +89,10 @@ function parseRunMetas(raw: string | null): RunMeta[] {
         (r): r is RunMeta =>
           r &&
           typeof r.id === "string" &&
-          (r.source === "jobspy" || r.source === "seek"),
+          (r.source === "jobspy" ||
+            r.source === "seek" ||
+            r.source === "nowcoder" ||
+            r.source === "global"),
       )
       .slice(0, 4);
   } catch {
@@ -238,14 +235,26 @@ export function FetchStatusProvider({ children }: { children: React.ReactNode })
   const cancelRun = useCallback(async () => {
     const active = lanes.filter((l) => !isTerminal(l.status));
     if (!active.length) return;
-    await Promise.allSettled(
-      active.map((l) => fetch(`/api/fetch-runs/${l.id}/cancel`, { method: "POST" })),
+    const results = await Promise.all(
+      active.map(async (lane) => {
+        try {
+          const response = await fetch(`/api/fetch-runs/${lane.id}/cancel`, {
+            method: "POST",
+          });
+          return { id: lane.id, cancelled: response.ok };
+        } catch {
+          return { id: lane.id, cancelled: false };
+        }
+      }),
+    );
+    const cancelledIds = new Set(
+      results.filter((result) => result.cancelled).map((result) => result.id),
     );
     setLanes((prev) =>
       prev.map((l) =>
-        isTerminal(l.status)
-          ? l
-          : { ...l, status: "FAILED", error: "Cancelled by user" },
+        cancelledIds.has(l.id)
+          ? { ...l, status: "FAILED", error: "Cancelled by user" }
+          : l,
       ),
     );
   }, [lanes]);
@@ -322,20 +331,6 @@ export function FetchStatusProvider({ children }: { children: React.ReactNode })
           autoCloseTimer.current = setTimeout(() => setOpen(false), 3500);
         }
         return; // stop polling
-      }
-
-      // Hard ceiling: a cancelled / killed runner can leave the DB on RUNNING
-      // forever. Give up rather than poll indefinitely, and mark the unsettled
-      // lanes failed with an honest timeout so the panel never hangs.
-      const basisMs = Number.isNaN(startedMs) ? pollingStartedAt : startedMs;
-      if (Date.now() - basisMs > MAX_POLL_MS) {
-        localStorage.setItem(storageKeys.endedAt, String(Date.now()));
-        setLanes((prev) =>
-          prev.map((l) =>
-            isTerminal(l.status) ? l : { ...l, status: "FAILED", error: "FETCH_TIMEOUT" },
-          ),
-        );
-        return; // give up polling
       }
 
       if (alive) pollTimer = setTimeout(() => void poll(), nextDelayMs());
