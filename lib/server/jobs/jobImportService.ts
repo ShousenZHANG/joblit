@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import { canonicalizeJobUrl } from "@/lib/shared/canonicalizeJobUrl";
+import { scorePostingRisk } from "@/lib/server/jobs/postingRisk";
 
 // Canonical import-item schema, shared by every ingestion path (the Python
 // fetcher via /api/admin/import, and the browser extension via
@@ -71,10 +72,14 @@ export async function importJobsForUser({
       const parsedListing = rawListing ? new Date(rawListing) : null;
       const listingDate =
         parsedListing && !Number.isNaN(parsedListing.getTime()) ? parsedListing : null;
+      const company = optionalText(it.company);
+      // Scored against the canonical URL so tracking parameters cannot change
+      // the verdict for what is really the same posting.
+      const risk = scorePostingRisk({ jobUrl, company });
       return {
         jobUrl,
         title,
-        company: optionalText(it.company),
+        company,
         location: optionalText(it.location),
         jobType: optionalText(it.jobType) ?? optionalText(it.job_type),
         jobLevel: optionalText(it.jobLevel) ?? optionalText(it.job_level),
@@ -85,6 +90,8 @@ export async function importJobsForUser({
           optionalText(it.work_arrangement),
         listingDate,
         market: it.market ?? "AU",
+        postingRisk: risk.score,
+        postingRiskFlags: risk.flags,
       };
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
@@ -124,6 +131,8 @@ export async function importJobsForUser({
         workArrangement: current.workArrangement,
         listingDate: current.listingDate,
         market: current.market,
+        postingRisk: current.postingRisk,
+        postingRiskFlags: current.postingRiskFlags,
         status: "NEW",
       })),
       skipDuplicates: true,

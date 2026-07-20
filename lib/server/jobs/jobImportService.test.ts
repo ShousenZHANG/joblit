@@ -81,6 +81,53 @@ describe("ImportJobItemSchema", () => {
     ]);
   });
 
+  it("records a clean posting risk for an ordinary aggregator row", async () => {
+    const item = ImportJobItemSchema.parse({
+      jobUrl: "https://www.linkedin.com/jobs/view/123",
+      title: "AI Engineer",
+      company: "Acme Robotics",
+    });
+
+    await importJobsForUser({ userId: "user-1", items: [item] });
+
+    const row = store.createMany.mock.calls[0][0].data[0];
+    expect(row.postingRisk).toBe(0);
+    expect(row.postingRiskFlags).toEqual([]);
+  });
+
+  it("flags a shortener posting without dropping it", async () => {
+    const item = ImportJobItemSchema.parse({
+      jobUrl: "https://bit.ly/xyz",
+      title: "AI Engineer",
+      company: "Acme Robotics",
+    });
+
+    const result = await importJobsForUser({ userId: "user-1", items: [item] });
+
+    // Still imported — risk is advisory, never a drop.
+    expect(result.imported).toBe(1);
+    const row = store.createMany.mock.calls[0][0].data[0];
+    expect(row.postingRisk).toBe(40);
+    expect(row.postingRiskFlags).toEqual([
+      "suspicious_domain",
+      "company_domain_mismatch",
+    ]);
+  });
+
+  it("scores risk against the canonicalized url, not the raw input", async () => {
+    const item = ImportJobItemSchema.parse({
+      jobUrl: "https://bit.ly/xyz?utm_source=newsletter",
+      title: "AI Engineer",
+      company: "Acme Robotics",
+    });
+
+    await importJobsForUser({ userId: "user-1", items: [item] });
+
+    const row = store.createMany.mock.calls[0][0].data[0];
+    expect(row.jobUrl).toBe("https://bit.ly/xyz");
+    expect(row.postingRiskFlags).toContain("suspicious_domain");
+  });
+
   it("uses a non-empty snake-case value when camel-case input is blank", async () => {
     const item = ImportJobItemSchema.parse({
       jobUrl: "https://example.com/jobs/1",

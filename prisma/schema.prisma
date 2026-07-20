@@ -154,6 +154,12 @@ model Job {
   fitScoredAt     DateTime?
   fitSnapshotHash String?   // resume snapshot hash the score was computed against
 
+  // Posting legitimacy — the third axis beside role fit and eligibility.
+  // Deterministic, computed at import, zero LLM. Higher is riskier. Flags are
+  // advisory only: a risky posting is surfaced, never dropped.
+  postingRisk      Int?
+  postingRiskFlags Json?
+
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -168,6 +174,7 @@ model Job {
   @@index([userId, market, createdAt])
   @@index([userId, jobLevel])
   @@index([userId, fitScore])
+  @@index([userId, postingRisk])
   // GIN trigram indexes (title, company, location) created via raw SQL migration
 }
 
