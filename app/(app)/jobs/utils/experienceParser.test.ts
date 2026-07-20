@@ -74,3 +74,48 @@ describe("parseExperienceGate", () => {
     ).toBe(false);
   });
 });
+
+describe("competing experience thresholds", () => {
+  it("folds a preferred year count into the required one", () => {
+    // A JD that requires two years and prefers five states one hiring bar, not
+    // two. Emitting both left the reader reconciling a "2+ years" gate against
+    // a "5+ years" preference shown in a different group.
+    const signals = parseExperienceGate(
+      "Minimum 2 years of commercial experience is required. 5+ years experience preferred.",
+    );
+
+    const years = signals.filter((signal) => signal.minYears > 0);
+    expect(years).toHaveLength(1);
+    expect(years[0].isRequired).toBe(true);
+    expect(years[0].shortLabel).toBe("2+ years (5+ preferred)");
+  });
+
+  it("leaves a lone preferred threshold alone", () => {
+    const signals = parseExperienceGate("5+ years experience preferred.");
+    const years = signals.filter((signal) => signal.minYears > 0);
+
+    expect(years).toHaveLength(1);
+    expect(years[0].isRequired).toBe(false);
+    expect(years[0].shortLabel).toBe("5+ years");
+  });
+
+  it("keeps a required threshold untouched when nothing is preferred", () => {
+    const signals = parseExperienceGate("Minimum 3 years of experience required.");
+    const years = signals.filter((signal) => signal.minYears > 0);
+
+    expect(years).toHaveLength(1);
+    expect(years[0].shortLabel).toBe("3+ years");
+  });
+
+  it("does not fold a preference that asks for less than the requirement", () => {
+    // Nonsense pairing in a real posting; surfacing the requirement alone is
+    // safer than inventing a range that reads backwards.
+    const signals = parseExperienceGate(
+      "Minimum 5 years experience required. 2+ years preferred.",
+    );
+    const years = signals.filter((signal) => signal.minYears > 0);
+
+    expect(years).toHaveLength(1);
+    expect(years[0].shortLabel).toBe("5+ years");
+  });
+});

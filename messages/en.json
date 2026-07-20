@@ -226,7 +226,12 @@
       "screeningGates": "Screening gates",
       "niceToHave": "Nice to have",
       "gateGaps": "Gate gaps",
-      "coreGaps": "Core gaps"
+      "coreGaps": "Core gaps",
+      "categoryLANGUAGE": "Language",
+      "categoryFRAMEWORK": "Framework",
+      "categoryDATA": "Data",
+      "categoryPLATFORM": "Platform",
+      "categoryPRACTICE": "Practice"
     },
     "statusRemote": "Remote",
     "noJobs": "No jobs found.",

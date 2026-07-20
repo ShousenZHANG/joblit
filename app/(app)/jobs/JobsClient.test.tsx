@@ -774,8 +774,8 @@ describe("JobsClient", () => {
 
   it("shows screening-gate chips for year-limit requirements in JD", async () => {
     const jd =
-      "Requirements: Minimum of 5 years of experience in software engineering required. " +
-      "Nice to have: 3+ years in React.";
+      "Requirements: Minimum of 2 years of experience in software engineering required. " +
+      "A Bachelor's degree is preferred.";
 
     const mockFetch = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.url;
@@ -808,10 +808,12 @@ describe("JobsClient", () => {
     // chips read as the bare constraint.
     expect(await screen.findByText("Screening gates")).toBeInTheDocument();
     expect(await screen.findByText("Nice to have")).toBeInTheDocument();
-    expect(await screen.findByText("5+ years")).toBeInTheDocument();
-    expect(await screen.findByText("3+ years")).toBeInTheDocument();
-    expect(screen.queryByText("Required: 5+ years")).not.toBeInTheDocument();
-    expect(screen.queryByText("Preferred: 3+ years")).not.toBeInTheDocument();
+    expect(await screen.findByText("2+ years")).toBeInTheDocument();
+    expect(await screen.findByText("Bachelor's degree")).toBeInTheDocument();
+    expect(screen.queryByText("Required: 2+ years")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Preferred: Bachelor's degree"),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps Saved CV/CL in the primary actions row and keeps Remove as a trailing secondary action", async () => {

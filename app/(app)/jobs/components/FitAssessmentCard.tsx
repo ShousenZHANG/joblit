@@ -19,7 +19,11 @@ import {
   analyzeJobTechnicalRequirements,
   type TechnicalRequirement,
 } from "@/lib/shared/jdTechnicalAnalysis";
-import { extractSkills } from "@/lib/shared/skillsGazetteer";
+import {
+  categoryForSkill,
+  extractSkills,
+  type SkillCategory,
+} from "@/lib/shared/skillsGazetteer";
 import { cn } from "@/lib/utils";
 import { parseExperienceGate } from "../utils/experienceParser";
 
@@ -99,11 +103,26 @@ function signalTone(judgement?: FitJudgement): string {
   }
 }
 
+/**
+ * Two independent facts about a chip, so they get two independent channels:
+ * the dot carries which technology family the skill belongs to, the fill
+ * carries whether the candidate matches it. Encoding both as background colour
+ * would make an unscored Java chip and a matched one indistinguishable.
+ */
+const CATEGORY_DOT: Record<SkillCategory, string> = {
+  LANGUAGE: "bg-violet-500",
+  FRAMEWORK: "bg-sky-500",
+  DATA: "bg-amber-500",
+  PLATFORM: "bg-teal-500",
+  PRACTICE: "bg-slate-400",
+};
+
 function SignalChip({
   signal,
 }: {
   signal: TechnicalSignal;
 }) {
+  const category = categoryForSkill(signal.skill);
   return (
     <span
       className={cn(
@@ -112,6 +131,12 @@ function SignalChip({
       )}
       title={signal.evidence}
     >
+      {category && !signal.judgement ? (
+        <span
+          aria-hidden
+          className={cn("h-1.5 w-1.5 shrink-0 rounded-full", CATEGORY_DOT[category])}
+        />
+      ) : null}
       {signal.judgement === "MATCH" ? (
         <CheckCircle2 className="h-3 w-3" aria-hidden />
       ) : signal.judgement === "GAP" ? (
@@ -154,6 +179,14 @@ export function FitAssessmentCard({
   );
   const requiredGates = structuralGates.filter((signal) => signal.isRequired);
   const preferredGates = structuralGates.filter((signal) => !signal.isRequired);
+  const usedCategories = useMemo(() => {
+    const seen: SkillCategory[] = [];
+    for (const signal of technicalSignals) {
+      const category = categoryForSkill(signal.skill);
+      if (category && !seen.includes(category)) seen.push(category);
+    }
+    return seen;
+  }, [technicalSignals]);
   const gateRequirements = matrix?.requirements.filter(
     (requirement) => requirement.criticality === "GATE",
   ) ?? [];
@@ -279,6 +312,26 @@ export function FitAssessmentCard({
           </div>
         ) : null,
       )}
+
+      {/* A colour code without a key is decoration. The legend only appears
+          while the dots do — once a scan lands, fill colour carries judgement
+          and the family dots step aside. */}
+      {!matrix && usedCategories.length > 1 ? (
+        <ul className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+          {usedCategories.map((category) => (
+            <li
+              key={category}
+              className="inline-flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground"
+            >
+              <span
+                aria-hidden
+                className={cn("h-1.5 w-1.5 rounded-full", CATEGORY_DOT[category])}
+              />
+              {t(`category${category}`)}
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       {/* Split by whether the constraint can actually block the application.
           Both groups used to sit under "Screening gates", which told a user a

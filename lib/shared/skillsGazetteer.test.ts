@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   SKILLS_GAZETTEER,
+  SKILL_CATEGORIES,
+  categoryForSkill,
   expandSkillSet,
   extractSkillMentions,
   extractSkills,
@@ -198,5 +200,33 @@ describe("extractSkills", () => {
     expect(result.has("gRPC")).toBe(true);
     expect(result.has("REST")).toBe(true);
     expect(result.has("Git")).toBe(true);
+  });
+});
+
+describe("skill categories", () => {
+  it("assigns a category to every gazetteer entry", () => {
+    // The categories come from this file's own section headings, so a new
+    // entry added outside a section would silently lose its colour.
+    for (const entry of SKILLS_GAZETTEER) {
+      expect(
+        SKILL_CATEGORIES,
+        `${entry.name} has category ${entry.category}`,
+      ).toContain(entry.category);
+    }
+  });
+
+  it("resolves the family of a canonical skill", () => {
+    expect(categoryForSkill("Java")).toBe("LANGUAGE");
+    expect(categoryForSkill("Kotlin")).toBe("LANGUAGE");
+    expect(categoryForSkill("Spring Boot")).toBe("FRAMEWORK");
+    expect(categoryForSkill("PostgreSQL")).toBe("DATA");
+    expect(categoryForSkill("Kubernetes")).toBe("PLATFORM");
+  });
+
+  it("returns null outside the gazetteer rather than guessing", () => {
+    // The JD analyser surfaces context-inferred skills too; a wrong colour is
+    // worse than no colour.
+    expect(categoryForSkill("Event-driven architecture at Acme")).toBeNull();
+    expect(categoryForSkill("")).toBeNull();
   });
 });

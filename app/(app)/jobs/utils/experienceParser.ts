@@ -176,10 +176,45 @@ export function parseExperienceGate(description: string): ExperienceRequirementS
     break;
   }
 
-  return output
+  return mergeExperienceThresholds(output)
     .sort((a, b) => {
       if (a.isRequired !== b.isRequired) return a.isRequired ? -1 : 1;
       return b.minYears - a.minYears;
     })
     .slice(0, 6);
+}
+
+/**
+ * A posting that requires two years and prefers five states one hiring bar.
+ * Emitted separately they land in different groups — a gate and a nice-to-have
+ * — leaving the reader to work out which number actually applies. Fold the
+ * preference into the requirement so the constraint reads as one fact.
+ *
+ * A preference below the requirement is dropped rather than rendered: that
+ * pairing is a drafting error in the posting, and "5+ years (2+ preferred)"
+ * reads backwards.
+ */
+function mergeExperienceThresholds(
+  signals: ExperienceRequirementSignal[],
+): ExperienceRequirementSignal[] {
+  const required = signals.find(
+    (signal) => signal.isRequired && signal.minYears > 0,
+  );
+  const preferred = signals.find(
+    (signal) => !signal.isRequired && signal.minYears > 0,
+  );
+  if (!required || !preferred) return signals;
+
+  const merged =
+    preferred.minYears > required.minYears
+      ? {
+          ...required,
+          label: `Required: ${required.shortLabel} (${preferred.minYears}+ preferred)`,
+          shortLabel: `${required.shortLabel} (${preferred.minYears}+ preferred)`,
+        }
+      : required;
+
+  return signals
+    .filter((signal) => signal !== preferred)
+    .map((signal) => (signal === required ? merged : signal));
 }
