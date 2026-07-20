@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+/** Deterministic hashing primitives for persisted application evidence. */
 export type CanonicalJson =
   | null
   | boolean

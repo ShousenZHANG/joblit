@@ -9,7 +9,9 @@ const jobStore = vi.hoisted(() => ({
 }));
 const txMock = vi.hoisted(() => ({ transaction: vi.fn(), executeRaw: vi.fn() }));
 const profileMock = vi.hoisted(() => ({ get: vi.fn() }));
-const careerMock = vi.hoisted(() => ({ bulkAppendStatusEvents: vi.fn() }));
+const applicationEventMock = vi.hoisted(() => ({
+  bulkAppendStatusEvents: vi.fn(),
+}));
 
 vi.mock("@/lib/server/auth/requireSession", () => {
   class UnauthorizedError extends Error {}
@@ -24,8 +26,8 @@ vi.mock("@/lib/server/resumeProfile", () => ({
   getResumeProfile: profileMock.get,
 }));
 
-vi.mock("@/lib/server/career/applicationEvents", () => ({
-  bulkAppendStatusEvents: careerMock.bulkAppendStatusEvents,
+vi.mock("@/lib/server/applications/applicationEvents", () => ({
+  bulkAppendStatusEvents: applicationEventMock.bulkAppendStatusEvents,
 }));
 
 vi.mock("@/lib/server/ai/resumePromptSnapshot", () => ({
@@ -62,7 +64,7 @@ describe("fit scoring center apis", () => {
     });
     jobStore.updateMany.mockResolvedValue({ count: 0 });
     jobStore.updateManyAndReturn.mockResolvedValue([]);
-    careerMock.bulkAppendStatusEvents.mockResolvedValue({ count: 0 });
+    applicationEventMock.bulkAppendStatusEvents.mockResolvedValue({ count: 0 });
     profileMock.get.mockImplementation(
       async (_userId: string, options?: { locale?: string }) =>
         options?.locale === "zh-CN"
@@ -266,14 +268,16 @@ describe("fit scoring center apis", () => {
     const preview = await bulkIgnorePOST(post("http://localhost/api/jobs/bulk-ignore", { maxScore: 44, preview: true }));
     expect(await preview.json()).toEqual({ count: 3 });
 
-    careerMock.bulkAppendStatusEvents.mockResolvedValueOnce({ count: 2 });
+    applicationEventMock.bulkAppendStatusEvents.mockResolvedValueOnce({
+      count: 2,
+    });
     const sweep = await bulkIgnorePOST(post("http://localhost/api/jobs/bulk-ignore", { maxScore: 44 }));
     const sweepBody = await sweep.json();
     expect(sweepBody).toEqual({
       count: 2,
       ignoredAt: expect.any(String),
     });
-    expect(careerMock.bulkAppendStatusEvents).toHaveBeenCalledWith(
+    expect(applicationEventMock.bulkAppendStatusEvents).toHaveBeenCalledWith(
       "user-1",
       expect.objectContaining({
         where: expect.objectContaining({
@@ -294,13 +298,15 @@ describe("fit scoring center apis", () => {
       }),
     );
 
-    careerMock.bulkAppendStatusEvents.mockResolvedValueOnce({ count: 2 });
+    applicationEventMock.bulkAppendStatusEvents.mockResolvedValueOnce({
+      count: 2,
+    });
     const restore = await bulkIgnorePOST(post("http://localhost/api/jobs/bulk-ignore", {
       restoreIgnoredAt: sweepBody.ignoredAt,
       maxScore: 44,
     }));
     expect(await restore.json()).toEqual({ restored: 2 });
-    expect(careerMock.bulkAppendStatusEvents).toHaveBeenLastCalledWith(
+    expect(applicationEventMock.bulkAppendStatusEvents).toHaveBeenLastCalledWith(
       "user-1",
       expect.objectContaining({
         where: {
@@ -331,6 +337,8 @@ describe("fit scoring center apis", () => {
 
     expect(await response.json()).toEqual({ count: 0 });
     expect(jobStore.count).not.toHaveBeenCalled();
-    expect(careerMock.bulkAppendStatusEvents).not.toHaveBeenCalled();
+    expect(
+      applicationEventMock.bulkAppendStatusEvents,
+    ).not.toHaveBeenCalled();
   });
 });

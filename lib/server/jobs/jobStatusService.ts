@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/server/prisma";
-import { appendApplicationEvent } from "@/lib/server/career/applicationEvents";
+import { appendApplicationEvent } from "@/lib/server/applications/applicationEvents";
 import type { JobStatusValue } from "@/lib/shared/jobStatus";
 
 type JobStatusUpdateResult = {

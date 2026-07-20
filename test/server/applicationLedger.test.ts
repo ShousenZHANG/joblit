@@ -14,26 +14,18 @@ vi.mock("@/lib/server/prisma", () => ({
   prisma: { $transaction: db.transaction },
 }));
 import {
-  buildFunnelAnalytics,
-  compareOffers,
-} from "@/lib/server/career/analytics";
-import {
   bulkAppendStatusEvents,
   appendApplicationEvent,
   isAllowedStatusTransition,
-} from "@/lib/server/career/applicationEvents";
+} from "@/lib/server/applications/applicationEvents";
 import {
   canonicalJson,
   contentHash,
   stableClaimId,
   stableEvidenceId,
-} from "@/lib/server/career/hashing";
-import {
-  ApplicationEventCreateSchema,
-  EvidenceCreateSchema,
-} from "@/lib/server/career/schemas";
+} from "@/lib/server/applications/evidenceHashing";
 
-describe("career lifecycle invariants", () => {
+describe("application ledger invariants", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     db.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) =>
@@ -92,38 +84,6 @@ describe("career lifecycle invariants", () => {
     expect(isAllowedStatusTransition("NEW", "ACCEPTED")).toBe(false);
     expect(isAllowedStatusTransition("ACCEPTED", "NEW")).toBe(false);
     expect(isAllowedStatusTransition("APPLIED", "APPLIED")).toBe(false);
-  });
-
-  it("requires a target status only for status-change events", () => {
-    expect(
-      ApplicationEventCreateSchema.safeParse({
-        jobId: "13fd90f2-15e0-49fd-ad2c-ec2562714d69",
-        type: "STATUS_CHANGED",
-      }).success,
-    ).toBe(false);
-    expect(
-      ApplicationEventCreateSchema.safeParse({
-        jobId: "13fd90f2-15e0-49fd-ad2c-ec2562714d69",
-        type: "NOTE_ADDED",
-        toStatus: "APPLIED",
-      }).success,
-    ).toBe(false);
-  });
-
-  it("strictly validates evidence JSON and rejects unknown API fields", () => {
-    expect(
-      EvidenceCreateSchema.safeParse({
-        kind: "USER_CLAIM",
-        payload: { claim: "Built the migration", metric: 42 },
-      }).success,
-    ).toBe(true);
-    expect(
-      EvidenceCreateSchema.safeParse({
-        kind: "USER_CLAIM",
-        payload: { claim: "Built the migration" },
-        admin: true,
-      }).success,
-    ).toBe(false);
   });
 
   it("writes bulk projections and immutable events in one transaction", async () => {
@@ -204,86 +164,6 @@ describe("career lifecycle invariants", () => {
         fromStatus: "NEW",
         toStatus: "APPLIED",
       }),
-    });
-  });
-});
-
-describe("career analytics", () => {
-  it("calculates conversion and median velocity from first reached events", () => {
-    const day = (value: number) => new Date(`2026-07-${String(value).padStart(2, "0")}T00:00:00.000Z`);
-    const funnel = buildFunnelAnalytics(
-      [
-        { jobId: "job-1", toStatus: "APPLIED", occurredAt: day(1) },
-        { jobId: "job-1", toStatus: "INTERVIEW", occurredAt: day(3) },
-        { jobId: "job-1", toStatus: "OFFER", occurredAt: day(7) },
-        { jobId: "job-1", toStatus: "ACCEPTED", occurredAt: day(8) },
-        { jobId: "job-2", toStatus: "APPLIED", occurredAt: day(1) },
-        { jobId: "job-2", toStatus: "REJECTED", occurredAt: day(5) },
-      ],
-      [
-        { id: "job-1", status: "ACCEPTED" },
-        { id: "job-2", status: "REJECTED" },
-      ],
-    );
-
-    expect(funnel.counts).toMatchObject({
-      applied: 2,
-      interview: 1,
-      offer: 1,
-      accepted: 1,
-      rejected: 1,
-    });
-    expect(funnel.conversion).toEqual({
-      appliedToInterview: 0.5,
-      interviewToOffer: 1,
-      offerToAccepted: 1,
-    });
-    expect(funnel.medianDays).toEqual({
-      appliedToInterview: 2,
-      interviewToOffer: 4,
-      offerToAccepted: 1,
-    });
-  });
-
-  it("never compares offers across currencies", () => {
-    const comparison = compareOffers([
-      {
-        id: "aud",
-        company: "A",
-        role: "Engineer",
-        currency: "AUD",
-        baseSalaryAnnual: 150_000,
-        bonusAnnual: 10_000,
-        equityAnnual: 0,
-        otherAnnual: 0,
-        targetSalaryAnnual: 170_000,
-      },
-      {
-        id: "usd",
-        company: "B",
-        role: "Engineer",
-        currency: "USD",
-        baseSalaryAnnual: 140_000,
-        bonusAnnual: null,
-        equityAnnual: null,
-        otherAnnual: null,
-        targetSalaryAnnual: 160_000,
-      },
-    ]);
-
-    expect(comparison.crossCurrencyComparison).toBe(false);
-    expect(comparison.currencies.map((group) => group.currency)).toEqual([
-      "AUD",
-      "USD",
-    ]);
-    expect(comparison.currencies[0].offers[0]).toMatchObject({
-      totalAnnual: 160_000,
-      salaryGap: 10_000,
-      incomplete: false,
-    });
-    expect(comparison.currencies[1].offers[0]).toMatchObject({
-      incomplete: true,
-      salaryGap: null,
     });
   });
 });

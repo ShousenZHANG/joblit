@@ -20,7 +20,7 @@ vi.mock("@/lib/server/prisma", () => ({
   },
 }));
 
-vi.mock("@/lib/server/career/applicationEvents", () => ({
+vi.mock("@/lib/server/applications/applicationEvents", () => ({
   appendApplicationEvent: stores.appendApplicationEvent,
 }));
 

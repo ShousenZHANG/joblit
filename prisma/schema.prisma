@@ -459,7 +459,7 @@ model Application {
   @@index([userId, createdAt])
 }
 
-/// Immutable career-history ledger. Application code only creates rows; it
+/// Immutable application-history ledger. Application code only creates rows; it
 /// never updates or deletes them. Job.status is a read-optimized projection
 /// updated in the same serializable transaction as STATUS_CHANGED events.
 model ApplicationEvent {
@@ -543,6 +543,9 @@ model ClaimEvidence {
   @@index([evidenceSnapshotId])
 }
 
+// Legacy Career-workspace records are retained to avoid destructive data loss.
+// No active UI or public API writes these tables. Remove them only through an
+// explicit, separately approved retention migration.
 model InterviewPlan {
   id     String @id @default(uuid()) @db.Uuid
   userId String @db.Uuid

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireExtensionToken, ExtensionTokenError } from "@/lib/server/auth/requireExtensionToken";
 import { unauthorizedError, errorJson } from "@/lib/server/api/errorResponse";
 import { checkRateLimit, rateLimitKeyFromRequest, rateLimitHeaders } from "@/lib/server/api/rateLimit";
-import { appendApplicationEvent } from "@/lib/server/career/applicationEvents";
+import { appendApplicationEvent } from "@/lib/server/applications/applicationEvents";
 import { prisma } from "@/lib/server/prisma";
 import { z } from "zod";
 

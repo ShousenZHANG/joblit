@@ -8,7 +8,7 @@ import { deleteJob } from "@/lib/server/jobs/jobDeleteService";
 import { updateJobStatus } from "@/lib/server/jobs/jobStatusService";
 import { FitMatrixSchema } from "@/lib/shared/schemas/fitMatrix";
 import { JOB_STATUS_VALUES } from "@/lib/shared/jobStatus";
-import { careerErrorResponse } from "@/lib/server/career/errors";
+import { applicationEventErrorResponse } from "@/lib/server/applications/applicationEventErrors";
 
 export const runtime = "nodejs";
 
@@ -56,7 +56,7 @@ export async function PATCH(
       parsedBody.data.status,
     );
   } catch (error) {
-    const response = careerErrorResponse(error);
+    const response = applicationEventErrorResponse(error);
     if (response) return response;
     throw error;
   }

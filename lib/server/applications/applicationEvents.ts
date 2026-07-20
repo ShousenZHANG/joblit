@@ -1,7 +1,10 @@
 import type { JobStatus, Prisma } from "@/lib/generated/prisma";
 import { prisma } from "@/lib/server/prisma";
 import { canTransitionJobStatus } from "@/lib/shared/jobStatus";
-import { CareerConflictError, CareerNotFoundError } from "./errors";
+import {
+  ApplicationEventConflictError,
+  ApplicationRecordNotFoundError,
+} from "./applicationEventErrors";
 
 type EventInput = {
   jobId: string;
@@ -25,7 +28,7 @@ type EventInput = {
   occurredAt?: Date | null;
 };
 
-const CAREER_LOCK_NAMESPACE = 0x4a4f4243; // JOBC
+const APPLICATION_EVENT_LOCK_NAMESPACE = 0x4a4f4243; // JOBC
 
 function stableInt32(value: string): number {
   let hash = 0x811c9dc5;
@@ -36,14 +39,14 @@ function stableInt32(value: string): number {
   return hash | 0;
 }
 
-async function acquireCareerLock(
+async function acquireApplicationEventLock(
   tx: Prisma.TransactionClient,
   userId: string,
   jobId: string,
 ) {
   await tx.$executeRaw`
     SELECT pg_advisory_xact_lock(
-      ${CAREER_LOCK_NAMESPACE}::integer,
+      ${APPLICATION_EVENT_LOCK_NAMESPACE}::integer,
       ${stableInt32(`${userId}:${jobId}`)}::integer
     )
   `;
@@ -56,7 +59,7 @@ export function isAllowedStatusTransition(from: JobStatus, to: JobStatus): boole
 export async function appendApplicationEvent(userId: string, input: EventInput) {
   return prisma.$transaction(
     async (tx) => {
-      await acquireCareerLock(tx, userId, input.jobId);
+      await acquireApplicationEventLock(tx, userId, input.jobId);
 
       if (input.idempotencyKey) {
         const replay = await tx.applicationEvent.findUnique({
@@ -76,7 +79,7 @@ export async function appendApplicationEvent(userId: string, input: EventInput) 
             replay.toStatus === (input.toStatus ?? null) &&
             replay.note === (input.note ?? null);
           if (!sameRequest) {
-            throw new CareerConflictError(
+            throw new ApplicationEventConflictError(
               "IDEMPOTENCY_KEY_REUSED",
               "Idempotency key was already used for a different event",
             );
@@ -89,7 +92,7 @@ export async function appendApplicationEvent(userId: string, input: EventInput) 
         where: { id: input.jobId, userId },
         select: { id: true, status: true, company: true, title: true },
       });
-      if (!job) throw new CareerNotFoundError("job");
+      if (!job) throw new ApplicationRecordNotFoundError("job");
 
       if (input.applicationId) {
         const application = await tx.application.findFirst({
@@ -97,24 +100,27 @@ export async function appendApplicationEvent(userId: string, input: EventInput) 
           select: { id: true, jobId: true },
         });
         if (!application || application.jobId !== job.id) {
-          throw new CareerNotFoundError("application");
+          throw new ApplicationRecordNotFoundError("application");
         }
       }
 
       let fromStatus: JobStatus | undefined;
       if (input.type === "STATUS_CHANGED") {
         if (!input.toStatus) {
-          throw new CareerConflictError("STATUS_REQUIRED", "toStatus is required");
+          throw new ApplicationEventConflictError(
+            "STATUS_REQUIRED",
+            "toStatus is required",
+          );
         }
         fromStatus = job.status;
         if (input.expectedFromStatus && input.expectedFromStatus !== job.status) {
-          throw new CareerConflictError(
+          throw new ApplicationEventConflictError(
             "STALE_STATUS",
             `Job status changed from ${input.expectedFromStatus} to ${job.status}`,
           );
         }
         if (!isAllowedStatusTransition(job.status, input.toStatus)) {
-          throw new CareerConflictError(
+          throw new ApplicationEventConflictError(
             "INVALID_STATUS_TRANSITION",
             `Cannot move job from ${job.status} to ${input.toStatus}`,
           );
@@ -152,19 +158,6 @@ export async function appendApplicationEvent(userId: string, input: EventInput) 
   );
 }
 
-export async function listApplicationEvents(
-  userId: string,
-  options: { jobId?: string; cursor?: string; limit?: number },
-) {
-  const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
-  return prisma.applicationEvent.findMany({
-    where: { userId, ...(options.jobId ? { jobId: options.jobId } : {}) },
-    orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
-    take: limit,
-    ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
-  });
-}
-
 /**
  * Atomically append one status event per row won by a bulk projection update.
  * `updateManyAndReturn` is the concurrency boundary: only rows still matching
@@ -184,7 +177,7 @@ export async function bulkAppendStatusEvents(
   },
 ) {
   if (!isAllowedStatusTransition(input.fromStatus, input.toStatus)) {
-    throw new CareerConflictError(
+    throw new ApplicationEventConflictError(
       "INVALID_STATUS_TRANSITION",
       `Cannot move jobs from ${input.fromStatus} to ${input.toStatus}`,
     );

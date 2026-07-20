@@ -214,11 +214,10 @@ describe("AppNav", () => {
     ).toHaveClass("h-11", "w-11");
   });
 
-  it("renders all 6 primary AU app links in the desktop nav", () => {
+  it("renders all 5 primary AU app links in the desktop nav", () => {
     render(<AppNav />);
     const scope = desktopScope();
     expect(scope.getByRole("link", { name: /jobs/i })).toBeInTheDocument();
-    expect(scope.getByRole("link", { name: /career/i })).toBeInTheDocument();
     expect(scope.getByRole("link", { name: /fetch/i })).toBeInTheDocument();
     expect(scope.getByRole("link", { name: /resume/i })).toBeInTheDocument();
     expect(scope.getByRole("link", { name: /discover/i })).toBeInTheDocument();
@@ -228,14 +227,18 @@ describe("AppNav", () => {
     expect(scope.queryByRole("link", { name: /admin/i })).not.toBeInTheDocument();
   });
 
-  it("hides AU-only Career navigation in the CN market", () => {
+  it("keeps the CN navigation focused on Resume and Discover", () => {
     marketState.value = "CN";
     render(<AppNav />);
 
     const scope = desktopScope();
-    expect(scope.queryByRole("link", { name: /career/i })).not.toBeInTheDocument();
+    expect(scope.queryByRole("link", { name: /jobs/i })).not.toBeInTheDocument();
+    expect(scope.queryByRole("link", { name: /fetch/i })).not.toBeInTheDocument();
     expect(scope.getByRole("link", { name: /resume/i })).toBeInTheDocument();
     expect(scope.getByRole("link", { name: /discover/i })).toBeInTheDocument();
+    expect(
+      scope.queryByRole("link", { name: /extension/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("marks the link matching the current path as active", () => {

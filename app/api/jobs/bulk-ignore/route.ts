@@ -9,7 +9,7 @@ import {
   type SessionContext,
 } from "@/lib/server/auth/requireSession";
 import { getCurrentFitSnapshotPredicates } from "@/lib/server/jobs/fitRunService";
-import { bulkAppendStatusEvents } from "@/lib/server/career/applicationEvents";
+import { bulkAppendStatusEvents } from "@/lib/server/applications/applicationEvents";
 import { prisma } from "@/lib/server/prisma";
 
 export const runtime = "nodejs";

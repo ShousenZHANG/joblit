@@ -1,5 +1,9 @@
 import type { Prisma } from "@/lib/generated/prisma";
-import { canonicalJson, sha256, stableClaimId } from "@/lib/server/career/hashing";
+import {
+  canonicalJson,
+  sha256,
+  stableClaimId,
+} from "@/lib/server/applications/evidenceHashing";
 import { assertCanonicalEvidenceReferences } from "@/lib/server/ai/evidenceLedger";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
 
