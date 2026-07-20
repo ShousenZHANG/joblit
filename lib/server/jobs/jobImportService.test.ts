@@ -128,6 +128,40 @@ describe("ImportJobItemSchema", () => {
     expect(row.postingRiskFlags).toContain("suspicious_domain");
   });
 
+  it("keys a repost at the same company onto the imported row", async () => {
+    const items = [
+      ImportJobItemSchema.parse({
+        jobUrl: "https://www.linkedin.com/jobs/view/1",
+        title: "Senior Backend Engineer (Remote)",
+        company: "Acme Pty Ltd",
+      }),
+      ImportJobItemSchema.parse({
+        jobUrl: "https://remoteok.com/remote-jobs/2",
+        title: "Backend Engineer",
+        company: "Acme",
+      }),
+    ];
+
+    await importJobsForUser({ userId: "user-1", items });
+
+    const rows = store.createMany.mock.calls[0][0].data;
+    // Both rows import — the key is a hint, not a hard dedup.
+    expect(rows).toHaveLength(2);
+    expect(rows[0].companyRoleKey).toBe(rows[1].companyRoleKey);
+    expect(rows[0].companyRoleKey).not.toBeNull();
+  });
+
+  it("leaves the role key null when there is no company to key on", async () => {
+    const item = ImportJobItemSchema.parse({
+      jobUrl: "https://example.com/jobs/1",
+      title: "Backend Engineer",
+    });
+
+    await importJobsForUser({ userId: "user-1", items: [item] });
+
+    expect(store.createMany.mock.calls[0][0].data[0].companyRoleKey).toBeNull();
+  });
+
   it("uses a non-empty snake-case value when camel-case input is blank", async () => {
     const item = ImportJobItemSchema.parse({
       jobUrl: "https://example.com/jobs/1",

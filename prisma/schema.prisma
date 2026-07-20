@@ -160,6 +160,11 @@ model Job {
   postingRisk      Int?
   postingRiskFlags Json?
 
+  /// Soft "same opening" key for spotting a posting that reappears under a new
+  /// URL. Deliberately NOT unique: distinct openings can collide, so this only
+  /// ever powers a "possible duplicate" hint, never an automatic removal.
+  companyRoleKey String?
+
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -175,6 +180,7 @@ model Job {
   @@index([userId, jobLevel])
   @@index([userId, fitScore])
   @@index([userId, postingRisk])
+  @@index([userId, companyRoleKey])
   // GIN trigram indexes (title, company, location) created via raw SQL migration
 }
 

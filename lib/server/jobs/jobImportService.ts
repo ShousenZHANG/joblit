@@ -2,6 +2,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import { canonicalizeJobUrl } from "@/lib/shared/canonicalizeJobUrl";
 import { scorePostingRisk } from "@/lib/server/jobs/postingRisk";
+import { buildCompanyRoleKey } from "@/lib/server/jobs/companyRoleKey";
 
 // Canonical import-item schema, shared by every ingestion path (the Python
 // fetcher via /api/admin/import, and the browser extension via
@@ -92,6 +93,7 @@ export async function importJobsForUser({
         market: it.market ?? "AU",
         postingRisk: risk.score,
         postingRiskFlags: risk.flags,
+        companyRoleKey: buildCompanyRoleKey({ company, title }),
       };
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
@@ -133,6 +135,7 @@ export async function importJobsForUser({
         market: current.market,
         postingRisk: current.postingRisk,
         postingRiskFlags: current.postingRiskFlags,
+        companyRoleKey: current.companyRoleKey,
         status: "NEW",
       })),
       skipDuplicates: true,
