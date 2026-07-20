@@ -99,6 +99,9 @@ def _experience_rule_thresholds() -> Dict[str, int]:
 
 
 def _role_generic_signal_tokens() -> set[str]:
+    # "fullstack" is deliberately absent: `_normalize_role_text` collapses
+    # "full stack" into it, so treating it as generic erased the only domain
+    # signal a full-stack query carries and made that search match every role.
     fallback = {
         "application",
         "dev",
@@ -107,7 +110,6 @@ def _role_generic_signal_tokens() -> set[str]:
         "engineer",
         "engineering",
         "full",
-        "fullstack",
         "role",
         "software",
         "stack",
@@ -196,6 +198,11 @@ ROLE_TOKENS = {
     "engineer",
     "engineering",
     "programmer",
+    # "Data Scientist" / "Research Scientist" / "AI Researcher" are engineering
+    # roles for our purposes. Without these markers the whole signal path is
+    # skipped for them and only a literal full-title match can keep them.
+    "researcher",
+    "scientist",
 }
 ROLE_NOISE_TOKENS = {
     "entry",
@@ -547,32 +554,39 @@ def _cjk_role_signals(value: str) -> List[str]:
 # Engineer", "Data Scientist". Treat these as one signal class so an
 # "AI Engineer" query keeps them instead of rejecting the whole result set
 # (which left the strict include filter fetching nothing for AI searches).
+AI_DOMAIN_SYNONYMS: tuple[str, ...] = (
+    "ai",
+    "artificial intelligence",
+    "ml",
+    "mlops",
+    "machine learning",
+    "genai",
+    "gen ai",
+    "generative ai",
+    "llm",
+    "llms",
+    "nlp",
+    "deep learning",
+    "neural",
+    "agentic",
+    "data science",
+    "data scientist",
+    "computer vision",
+    "prompt",
+    "rag",
+)
+
 ROLE_SIGNAL_SYNONYMS: Dict[str, tuple[str, ...]] = {
-    "ai": (
-        "ai",
-        "artificial intelligence",
-        "ml",
-        "machine learning",
-        "genai",
-        "gen ai",
-        "generative ai",
-        "llm",
-        "llms",
-        "nlp",
-        "deep learning",
-        "agentic",
-    ),
-    "ml": (
-        "ml",
-        "machine learning",
-        "ai",
-        "artificial intelligence",
-        "deep learning",
-    ),
+    "ai": AI_DOMAIN_SYNONYMS,
+    "ml": AI_DOMAIN_SYNONYMS,
+    "genai": AI_DOMAIN_SYNONYMS,
+    "llm": AI_DOMAIN_SYNONYMS,
+    # `_normalize_role_text` rewrites a standalone "ml" to "machine learning",
+    # so an "ML Engineer" query arrives here as these two tokens.
+    "machine": AI_DOMAIN_SYNONYMS,
+    "learning": AI_DOMAIN_SYNONYMS,
     "agent": ("agent", "agents", "agentic"),
     "agentic": ("agentic", "agent", "agents"),
-    "genai": ("genai", "gen ai", "generative ai", "ai"),
-    "llm": ("llm", "llms", "ai"),
 }
 
 
@@ -590,10 +604,16 @@ def _is_title_relevant(title: str, queries: List[str]) -> bool:
             return True
         if not _has_role_marker(query) or not _has_role_marker(title):
             continue
-        ascii_signals = _ascii_role_signals(query)
+        # Match on the same domain signals the base-query gate uses. Keeping
+        # generic words like "software" here meant a "Software Engineer" search
+        # rejected "Developer", "Python Developer" and "Backend Engineer" — same
+        # family, no shared literal token.
+        ascii_signals = _required_ascii_role_signals(query)
         cjk_signals = _cjk_role_signals(query)
         if not ascii_signals and not cjk_signals:
-            continue
+            # A wholly generic query ("Software Engineer") carries no domain to
+            # narrow on, so any titled engineering role is a legitimate hit.
+            return True
         if not all(_signal_in_title(title, signal) for signal in ascii_signals):
             continue
         normalized_title = _normalize_role_text(title)

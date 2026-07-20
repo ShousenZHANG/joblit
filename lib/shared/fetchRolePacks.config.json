@@ -45,8 +45,7 @@
         "Back End Engineer",
         "Back End Developer",
         "API Engineer",
-        "Platform Engineer",
-        "Software Engineer"
+        "Platform Engineer"
       ]
     },
     {
@@ -64,8 +63,6 @@
       "roles": [
         "Full Stack Engineer",
         "Full Stack Developer",
-        "Software Engineer",
-        "Backend Engineer",
         "Full Stack Agentic Engineer",
         "AI Full Stack Engineer",
         "AI Agent Engineer"
@@ -106,7 +103,8 @@
         "LLM Engineer",
         "Machine Learning Engineer",
         "Applied AI Engineer",
-        "Software Engineer"
+        "Data Scientist",
+        "MLOps Engineer"
       ]
     },
     {
@@ -157,8 +155,7 @@
         "Data Pipeline Engineer",
         "ETL Developer",
         "Big Data Engineer",
-        "Data Platform Engineer",
-        "Software Engineer"
+        "Data Platform Engineer"
       ]
     }
   ],

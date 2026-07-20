@@ -360,6 +360,115 @@ class RunJobspyDedupeTests(unittest.TestCase):
         self.assertIn("AI Agent Engineer", kept)
         self.assertNotIn("Backend Engineer", kept)
 
+    def test_filter_title_ai_query_covers_the_wider_ai_vocabulary(self):
+        # AI listings are titled across a whole vocabulary, not just "AI".
+        # Every one of these is the role the user searched for; none of them
+        # shares a literal token with "AI Engineer".
+        df = pd.DataFrame(
+            [
+                {"title": "MLOps Engineer"},
+                {"title": "Data Scientist"},
+                {"title": "Senior Data Scientist"},
+                {"title": "Computer Vision Engineer"},
+                {"title": "Prompt Engineer"},
+                {"title": "Deep Learning Engineer"},
+                {"title": "NLP Engineer"},
+                # Generic engineering must still stay out of an AI search.
+                {"title": "Software Engineer"},
+                {"title": "Backend Engineer"},
+                {"title": "Data Engineer"},
+            ]
+        )
+
+        out = rj.filter_title(
+            df,
+            queries=["AI Engineer", "Machine Learning Engineer"],
+            enforce_include=True,
+            exclude_terms=[],
+            base_queries=["AI Engineer"],
+        )
+
+        kept = out["title"].tolist()
+        for title in (
+            "MLOps Engineer",
+            "Data Scientist",
+            "Senior Data Scientist",
+            "Computer Vision Engineer",
+            "Prompt Engineer",
+            "Deep Learning Engineer",
+            "NLP Engineer",
+        ):
+            self.assertIn(title, kept)
+        for title in ("Software Engineer", "Backend Engineer", "Data Engineer"):
+            self.assertNotIn(title, kept)
+
+    def test_filter_title_generic_query_keeps_same_family_roles(self):
+        # "Software Engineer" carries no domain to narrow on, so every titled
+        # engineering role is a legitimate hit. Requiring the literal token
+        # "software" previously threw away the bulk of the result set.
+        df = pd.DataFrame(
+            [
+                {"title": "Developer"},
+                {"title": "Senior Developer"},
+                {"title": "Python Developer"},
+                {"title": "Backend Engineer"},
+                {"title": "Software Engineer"},
+                {"title": "Accountant"},
+                {"title": "Registered Nurse"},
+            ]
+        )
+
+        out = rj.filter_title(
+            df,
+            queries=["Software Engineer", "Software Developer"],
+            enforce_include=True,
+            exclude_terms=[],
+            base_queries=["Software Engineer"],
+        )
+
+        kept = out["title"].tolist()
+        for title in (
+            "Developer",
+            "Senior Developer",
+            "Python Developer",
+            "Backend Engineer",
+            "Software Engineer",
+        ):
+            self.assertIn(title, kept)
+        self.assertNotIn("Accountant", kept)
+        self.assertNotIn("Registered Nurse", kept)
+
+    def test_filter_title_full_stack_query_stays_a_domain_signal(self):
+        # "full stack" normalizes to one token; treating it as a generic word
+        # erased the only signal the query had and matched every role.
+        df = pd.DataFrame(
+            [
+                {"title": "Full Stack Engineer"},
+                {"title": "Fullstack Engineer (React/Node)"},
+                {"title": "AI Full Stack Engineer"},
+                {"title": "Software Engineer"},
+                {"title": "Backend Engineer"},
+            ]
+        )
+
+        out = rj.filter_title(
+            df,
+            queries=["Full Stack Engineer", "Full Stack Developer"],
+            enforce_include=True,
+            exclude_terms=[],
+            base_queries=["Full Stack Engineer"],
+        )
+
+        kept = out["title"].tolist()
+        self.assertEqual(
+            kept,
+            [
+                "Full Stack Engineer",
+                "Fullstack Engineer (React/Node)",
+                "AI Full Stack Engineer",
+            ],
+        )
+
     def test_filter_title_matches_mixed_chinese_and_ascii_role_query(self):
         df = pd.DataFrame(
             [

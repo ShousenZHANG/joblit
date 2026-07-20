@@ -59,6 +59,18 @@ describe("fetch role packs", () => {
     expect(out).toContain("AI Engineer");
   });
 
+  it("keeps the AI pack in-domain so no expanded query is fetched then discarded", () => {
+    const out = expandRoleQueries(["AI Engineer"]);
+    expect(out).toContain("AI Agent Engineer");
+    expect(out).toContain("AI Full Stack Engineer");
+    expect(out).toContain("Machine Learning Engineer");
+    expect(out).toContain("Data Scientist");
+    expect(out).toContain("MLOps Engineer");
+    // The worker's base-query gate rejects every generic engineering title on
+    // an AI search, so expanding into one only burns fetch budget.
+    expect(out).not.toContain("Software Engineer");
+  });
+
   it("resolves Copilot Studio via its alias", () => {
     const out = expandRoleQueries(["Copilot Studio Developer"]);
     expect(out).toContain("Copilot Studio Developer");
