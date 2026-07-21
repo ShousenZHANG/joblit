@@ -3,7 +3,6 @@ import { render } from "@testing-library/react";
 import { axe } from "vitest-axe";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactElement } from "react";
-import { SkillsSection } from "./SkillsSection";
 import { CoverParagraphsSection } from "./CoverParagraphsSection";
 import { SummarySection } from "./SummarySection";
 import { BulletsSection } from "./BulletsSection";
@@ -17,11 +16,6 @@ const renderIntl = (ui: ReactElement) =>
       {ui}
     </NextIntlClientProvider>,
   );
-
-const skillsAdditions: AiContent["cv"]["skillsAdditions"] = [
-  { label: "Backend", items: ["Spring Boot", "Spring Cloud"], accepted: true },
-  { label: "Cloud", items: ["AWS", "Docker"], accepted: false },
-];
 
 const cover: AiContent["cover"] = {
   paragraphOne: { aiText: "Hook paragraph.", accepted: true },
@@ -48,13 +42,6 @@ const latestExperience: AiContent["cv"]["latestExperience"] = {
 };
 
 describe("tailor edit sections — accessibility", () => {
-  it("SkillsSection has no axe violations", async () => {
-    const { container } = renderIntl(
-      <SkillsSection skillsAdditions={skillsAdditions} onChange={() => {}} />,
-    );
-    expect(await axe(container)).toHaveNoViolations();
-  });
-
   it("CoverParagraphsSection has no axe violations", async () => {
     const { container } = renderIntl(
       <CoverParagraphsSection cover={cover} onChange={() => {}} />,

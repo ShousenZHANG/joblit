@@ -40,8 +40,9 @@ The persisted snapshot of every AI proposal made for an Application, paired with
 Captures:
 - **Summary**: AI rewritten text + the original (for diff display).
 - **Latest experience bullets**: AI-added bullets, each carrying `text`, `userEdit?`, `accepted`, and the quality-gate verdict.
-- **Skills additions**: AI-proposed skill items, each with `accepted`.
 - **Cover letter paragraphs**: AI drafts of the three body paragraphs, each with `userEdit?` and `accepted`.
+
+The skills section is not part of this snapshot. AI-proposed skill additions were removed: the model proposed skills the candidate had no evidence for, so the grounding gate blocked finalize on almost every draft that carried them. A CV's skills come from the master profile only.
 
 See **ADR-0001** for the persistence rationale.
 

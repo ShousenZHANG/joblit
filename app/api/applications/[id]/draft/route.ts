@@ -119,14 +119,9 @@ export async function PATCH(
         const canonical = aiContentSchema.safeParse(current.aiContent);
         if (!canonical.success) return { kind: "invalid" as const };
 
-        const hasEvidenceContract =
+        const requiresCanonicalEvidence =
           canonical.data.evidence !== undefined ||
           canonical.data.review !== undefined;
-        const hasAcceptedSkillAdditions =
-          canonical.data.cv.skillsAdditions.some((group) => group.accepted) ||
-          aiContent.cv.skillsAdditions.some((group) => group.accepted);
-        const requiresCanonicalEvidence =
-          hasEvidenceContract || hasAcceptedSkillAdditions;
         const requiresJobEvidence =
           canonical.data.evidence?.some((item) => item.kind === "job") ===
             true ||

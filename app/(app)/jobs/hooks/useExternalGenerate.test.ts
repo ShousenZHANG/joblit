@@ -10,7 +10,6 @@ const aiContent = {
   cv: {
     summary: { aiText: "Summary", originalText: "Original", accepted: true },
     latestExperience: { experienceIndex: 0, addedBullets: [] },
-    skillsAdditions: [],
   },
   cover: {
     paragraphOne: { aiText: "", accepted: false },

@@ -21,7 +21,6 @@ import { useTailorDraft } from "./useTailorDraft";
 import { SaveIndicator } from "./SaveIndicator";
 import { SummarySection } from "./SummarySection";
 import { BulletsSection } from "./BulletsSection";
-import { SkillsSection } from "./SkillsSection";
 import { CoverParagraphsSection } from "./CoverParagraphsSection";
 import { PdfPreview } from "./PdfPreview";
 import { ConflictDialog } from "./ConflictDialog";
@@ -106,12 +105,6 @@ export function TailorClient({
     draft.setAiContent({
       ...draft.aiContent,
       cv: { ...draft.aiContent.cv, latestExperience: le },
-    });
-  }
-  function patchSkills(sa: AiContent["cv"]["skillsAdditions"]) {
-    draft.setAiContent({
-      ...draft.aiContent,
-      cv: { ...draft.aiContent.cv, skillsAdditions: sa },
     });
   }
   function patchCover(cover: AiContent["cover"]) {
@@ -305,10 +298,6 @@ export function TailorClient({
               <BulletsSection
                 latestExperience={draft.aiContent.cv.latestExperience}
                 onChange={patchLatestExperience}
-              />
-              <SkillsSection
-                skillsAdditions={draft.aiContent.cv.skillsAdditions}
-                onChange={patchSkills}
               />
             </>
           ) : (

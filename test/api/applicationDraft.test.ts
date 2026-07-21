@@ -41,7 +41,6 @@ function makeAiContent(overrides: Partial<AiContent> = {}): AiContent {
     cv: {
       summary: { aiText: "ai", originalText: "orig", accepted: true },
       latestExperience: { experienceIndex: 0, addedBullets: [] },
-      skillsAdditions: [],
     },
     cover: {
       paragraphOne: { aiText: "", accepted: false },

@@ -336,7 +336,6 @@ function buildBatchAiContent(
         accepted: true,
       },
       latestExperience: { experienceIndex: 0, addedBullets: [] },
-      skillsAdditions: [],
     },
     cover: {
       paragraphOne: {

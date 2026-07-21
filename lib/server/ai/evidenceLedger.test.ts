@@ -28,7 +28,6 @@ function content(overrides?: Partial<AiContent>): AiContent {
           },
         ],
       },
-      skillsAdditions: [],
     },
     cover: {
       paragraphOne: { aiText: "I build secure TypeScript APIs.", accepted: true },
@@ -82,69 +81,42 @@ describe("evidence ledger", () => {
     expect(reviewed.review?.issues.join(" ")).toContain("700%");
   });
 
-  it("maps supported skill additions to candidate evidence", () => {
+  it("does not read a digit inside a product name as a quantified claim", () => {
+    // "Microsoft 365", "Windows 11", "Power BI 2.0" — the number names the
+    // product, it does not assert a result. Flagging these blocked a finalize
+    // over a word the candidate had actually written, and a gate that cries
+    // wolf teaches people to click past it.
     const draft = content();
-    draft.cv.skillsAdditions = [
-      { label: "Languages", items: ["TypeScript"], accepted: true },
-    ];
+    draft.cv.summary.aiText =
+      "Automation specialist delivering solutions across Power Platform, Dataverse and Microsoft 365.";
 
     const reviewed = attachEvidenceAndReview({
       aiContent: draft,
+      // The master profile writes the suite as "M365", so a literal "365"
+      // never appears in the candidate evidence.
       resumeSnapshot: {
-        summary: "Backend engineer building secure APIs and AWS delivery pipelines.",
-        skills: [{ label: "Languages", items: ["TypeScript"] }],
-        experiences: [
-          {
-            bullets: [
-              "Built secure TypeScript APIs and AWS deployment pipelines.",
-            ],
-          },
-        ],
+        summary: "Automation specialist working across Power Platform and M365.",
       },
-      jobDescription: "Build secure TypeScript APIs.",
-      scopeKey: "tenant-a",
+      jobDescription: "Build automation across Microsoft 365.",
     });
 
-    const evidenceIds = reviewed.cv.skillsAdditions[0]?.evidenceIds ?? [];
-    const candidateIds = new Set(
-      reviewed.evidence
-        ?.filter((item) => item.kind === "candidate")
-        .map((item) => item.id),
-    );
-    expect(evidenceIds.length).toBeGreaterThan(0);
-    expect(evidenceIds.every((id) => candidateIds.has(id))).toBe(true);
-    expect(reviewed.review?.verdict).not.toBe("blocked");
+    expect(reviewed.review?.issues.join(" ")).not.toContain("365");
   });
 
-  it("blocks an accepted skill group when any item lacks candidate evidence", () => {
+  it("still blocks a bare number the candidate never claimed", () => {
+    // The product-name exemption must not become a hole: a standalone figure
+    // is exactly the fabrication this gate exists to catch.
     const draft = content();
-    draft.cv.skillsAdditions = [
-      {
-        label: "Platform",
-        items: ["TypeScript", "Kubernetes"],
-        accepted: true,
-      },
-    ];
+    draft.cv.summary.aiText = "Automation specialist supporting 4200 users.";
 
     const reviewed = attachEvidenceAndReview({
       aiContent: draft,
-      resumeSnapshot: {
-        summary: "Backend engineer building secure APIs and AWS delivery pipelines.",
-        skills: [{ label: "Languages", items: ["TypeScript"] }],
-        experiences: [
-          {
-            bullets: [
-              "Built secure TypeScript APIs and AWS deployment pipelines.",
-            ],
-          },
-        ],
-      },
-      jobDescription: "Build secure TypeScript APIs.",
-      scopeKey: "tenant-a",
+      resumeSnapshot: { summary: "Automation specialist supporting users." },
+      jobDescription: "Support users.",
     });
 
     expect(reviewed.review?.verdict).toBe("blocked");
-    expect(reviewed.review?.issues.join(" ")).toContain("Kubernetes");
+    expect(reviewed.review?.issues.join(" ")).toContain("4200");
   });
 
   it("scopes evidence ids per tenant and revalidates user edits", () => {

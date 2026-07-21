@@ -28,9 +28,6 @@ function baseContent(): AiContent {
           },
         ],
       },
-      skillsAdditions: [
-        { label: "Languages", items: ["TypeScript"], accepted: false },
-      ],
     },
     cover: {
       paragraphOne: { aiText: "I build reliable services.", accepted: true },
@@ -62,12 +59,6 @@ describe("mergeClientAiContentEdits", () => {
       reason: "forged",
     };
     submitted.cv.latestExperience.addedBullets[0].accepted = false;
-    submitted.cv.skillsAdditions[0].label = "Forged";
-    submitted.cv.skillsAdditions[0].items = ["Forged"];
-    submitted.cv.skillsAdditions[0].accepted = true;
-    submitted.cv.skillsAdditions[0].evidenceIds = [
-      `ev_${"f".repeat(32)}`,
-    ];
     submitted.evidence = [
       {
         id: `ev_${"1".repeat(32)}`,
@@ -99,13 +90,9 @@ describe("mergeClientAiContentEdits", () => {
       ...canonical.cv.latestExperience.addedBullets[0],
       accepted: false,
     });
-    expect(merged.cv.skillsAdditions[0]).toEqual({
-      ...canonical.cv.skillsAdditions[0],
-      accepted: true,
-    });
   });
 
-  it("rebuilds skill evidence and blocks forged client provenance", () => {
+  it("rebuilds bullet evidence and blocks forged client provenance", () => {
     const canonical = attachEvidenceAndReview({
       aiContent: baseContent(),
       resumeSnapshot: {
@@ -116,8 +103,7 @@ describe("mergeClientAiContentEdits", () => {
       scopeKey: "tenant-1",
     });
     const submitted = structuredClone(canonical);
-    submitted.cv.skillsAdditions[0].accepted = true;
-    submitted.cv.skillsAdditions[0].evidenceIds = [
+    submitted.cv.latestExperience.addedBullets[0].evidenceIds = [
       `ev_${"f".repeat(32)}`,
     ];
     submitted.review = {
@@ -139,10 +125,10 @@ describe("mergeClientAiContentEdits", () => {
       scopeKey: "tenant-1",
     });
 
-    expect(rebuilt.cv.skillsAdditions[0].evidenceIds).not.toContain(
-      `ev_${"f".repeat(32)}`,
-    );
-    expect(rebuilt.cv.skillsAdditions[0].evidenceIds?.length).toBeGreaterThan(0);
+    const rebuiltEvidenceIds =
+      rebuilt.cv.latestExperience.addedBullets[0].evidenceIds ?? [];
+    expect(rebuiltEvidenceIds).not.toContain(`ev_${"f".repeat(32)}`);
+    expect(rebuiltEvidenceIds.length).toBeGreaterThan(0);
     expect(rebuilt.review?.verdict).not.toBe("blocked");
   });
 });

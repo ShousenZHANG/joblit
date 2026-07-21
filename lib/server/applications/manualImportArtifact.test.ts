@@ -178,17 +178,11 @@ describe("manual import artifact builder", () => {
         qualityGate: expect.objectContaining({ passed: false }),
       }),
     );
-    expect(result.aiContent.cv.skillsAdditions).toEqual([
-      {
-        label: "Backend",
-        items: ["Spring Boot"],
-        accepted: true,
-        evidenceIds: [],
-      },
-    ]);
   });
 
-  it("escapes legacy skill additions before rendering while keeping review text raw", () => {
+  // A model that still emits the retired delta shape must not smuggle skills
+  // onto the CV through the back door: the master profile's own list wins.
+  it("ignores a retired skillsAdditions key and renders the profile skills", () => {
     const result = buildManualImportArtifact({
       target: "resume",
       modelOutput: JSON.stringify({
@@ -217,23 +211,8 @@ describe("manual import artifact builder", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(resumeRender.renderResumeTex).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        skills: expect.arrayContaining([
-          {
-            label: String.raw`Cloud \& \\input\{secret\}`,
-            items: [String.raw`AWS 100\% \\write18\{calc\}`],
-          },
-        ]),
-      }),
+      expect.objectContaining({ skills: renderInput.skills }),
     );
-    expect(result.aiContent.cv.skillsAdditions).toEqual([
-      {
-        label: String.raw`Cloud & \input{secret}`,
-        items: [String.raw`AWS 100% \write18{calc}`],
-        accepted: true,
-        evidenceIds: [],
-      },
-    ]);
   });
 
   it("builds cover artifacts with quality gate metadata", () => {

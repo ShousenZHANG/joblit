@@ -49,14 +49,6 @@ const aiContent: AiContent = {
       experienceIndex: 0,
       addedBullets: [],
     },
-    skillsAdditions: [
-      {
-        label: String.raw`Cloud & \input{secret}`,
-        items: [String.raw`AWS 100% \write18{calc}`],
-        accepted: true,
-        evidenceIds: [`ev_${"a".repeat(32)}`],
-      },
-    ],
   },
   cover: {
     paragraphOne: { aiText: "One", accepted: true },
@@ -87,7 +79,9 @@ describe("renderApplicationPdf", () => {
     dependencies.compileLatexToPdf.mockResolvedValue(Buffer.from("%PDF"));
   });
 
-  it("escapes user-editable skill labels and items before rendering LaTeX", async () => {
+  // The AI no longer contributes skills, so the only path into the skills
+  // section is the master profile, which mapResumeProfile has already escaped.
+  it("renders the master-profile skills section untouched", async () => {
     await renderApplicationPdf({
       applicationId: "application-1",
       userId: "user-1",
@@ -101,10 +95,7 @@ describe("renderApplicationPdf", () => {
     });
 
     const tex = dependencies.compileLatexToPdf.mock.calls[0]?.[0] as string;
-    expect(tex).not.toContain(String.raw`\input{secret}`);
-    expect(tex).not.toContain(String.raw`\write18{calc}`);
-    expect(tex).toContain(String.raw`Cloud \& \\input\{secret\}`);
-    expect(tex).toContain(String.raw`AWS 100\% \\write18\{calc\}`);
+    expect(tex).toContain("TypeScript");
   });
 
   it("loads the Application-linked profile instead of the current active profile", async () => {

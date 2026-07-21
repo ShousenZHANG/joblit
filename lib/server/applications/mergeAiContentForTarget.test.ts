@@ -24,13 +24,6 @@ function makeAiContent(label: string): AiContent {
           },
         ],
       },
-      skillsAdditions: [
-        {
-          label: "Backend",
-          items: [label],
-          accepted: true,
-        },
-      ],
     },
     cover: {
       paragraphOne: { aiText: `${label} cover one`, accepted: true },

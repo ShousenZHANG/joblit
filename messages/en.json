@@ -1136,10 +1136,6 @@
       "acceptAria": "Accept bullet",
       "textAria": "Bullet text"
     },
-    "skills": {
-      "title": "Skills additions",
-      "acceptAria": "Accept skill addition for {label}"
-    },
     "summary": {
       "title": "Summary",
       "placeholder": "Summary",

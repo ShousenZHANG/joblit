@@ -38,13 +38,6 @@ function collectClaims(aiContent: AiContent): ClaimInput[] {
         text: bullet.userEdit?.trim() || bullet.text.trim(),
         evidenceIds: bullet.evidenceIds ?? [],
       })),
-    ...aiContent.cv.skillsAdditions
-      .filter((group) => group.accepted)
-      .map((group, index) => ({
-        key: `cv.skillsAdditions[${index}]`,
-        text: `${group.label}: ${group.items.join(", ")}`.trim(),
-        evidenceIds: group.evidenceIds ?? [],
-      })),
     ...(
       [
         ["cover.paragraphOne", aiContent.cover.paragraphOne],

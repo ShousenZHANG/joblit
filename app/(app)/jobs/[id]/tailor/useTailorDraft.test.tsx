@@ -22,7 +22,6 @@ const initialAiContent: AiContent = {
   cv: {
     summary: { aiText: "Initial", originalText: "Base", accepted: true },
     latestExperience: { experienceIndex: 0, addedBullets: [] },
-    skillsAdditions: [],
   },
   cover: {
     paragraphOne: { aiText: "One", accepted: true },

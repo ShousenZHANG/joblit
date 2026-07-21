@@ -160,7 +160,6 @@ function makeExistingAiContent() {
           },
         ],
       },
-      skillsAdditions: [],
     },
     cover: {
       paragraphOne: { aiText: "Existing cover one", accepted: true },

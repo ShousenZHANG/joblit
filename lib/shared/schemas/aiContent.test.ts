@@ -26,13 +26,6 @@ describe("aiContentSchema", () => {
             },
           ],
         },
-        skillsAdditions: [
-          {
-            label: "Backend",
-            items: ["Spring Boot"],
-            accepted: true,
-          },
-        ],
       },
       cover: {
         paragraphOne: { aiText: "Hook", accepted: true },
@@ -56,6 +49,24 @@ describe("aiContentSchema", () => {
     const stale = { ...validAiContent(), schemaVersion: 999 };
     const result = aiContentSchema.safeParse(stale);
     expect(result.success).toBe(false);
+  });
+
+  it("reads a row written before skillsAdditions was retired", () => {
+    const legacy = validAiContent();
+    (legacy.cv as Record<string, unknown>).skillsAdditions = [
+      { label: "Backend", items: ["Spring Boot"], accepted: true },
+    ];
+
+    const result = aiContentSchema.safeParse(legacy);
+
+    expect(result.success).toBe(true);
+    expect(result.success && "skillsAdditions" in result.data.cv).toBe(false);
+  });
+
+  it("still rejects unknown keys inside cv", () => {
+    const tampered = validAiContent();
+    (tampered.cv as Record<string, unknown>).surprise = 1;
+    expect(aiContentSchema.safeParse(tampered).success).toBe(false);
   });
 
   it("rejects unknown top-level keys (catch typos)", () => {

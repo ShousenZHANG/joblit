@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   ManualGenerateSchema,
-  deriveReviewableSkillAdditions,
-  mergeSkillAdditions,
   parseCoverManualOutput,
   parseCoverStrictOutput,
   parseResumeManualOutput,
@@ -50,7 +48,7 @@ describe("manual import parser modes", () => {
     ["trailing comma", `${JSON.stringify(resume).slice(0, -1)},}`],
     ["unknown key", JSON.stringify({ ...resume, prompt: "not allowed" })],
     ["skill category alias", JSON.stringify({ ...resume, skillsFinal: [{ category: "Backend", items: ["TypeScript"] }] })],
-    ["skills additions alias", JSON.stringify({ ...resume, skillsAdditions: [{ category: "Backend", items: ["TypeScript"] }] })],
+    ["retired skillsAdditions key", JSON.stringify({ ...resume, skillsAdditions: [{ category: "Backend", items: ["TypeScript"] }] })],
   ])("strict resume rejects %s", (_label, raw) => {
     expect(parseResumeStrictOutput(raw).data).toBeNull();
   });
@@ -78,40 +76,4 @@ describe("manual import parser modes", () => {
     expect(ManualGenerateSchema.safeParse({ ...base, userId: "attacker" }).success).toBe(false);
   });
 
-  it("derives only new skill items using case-insensitive safe comparisons", () => {
-    expect(
-      deriveReviewableSkillAdditions(
-        [{ label: String.raw`Cloud \& DevOps`, items: ["AWS", "Docker"] }],
-        [
-          {
-            label: "cloud & devops",
-            items: ["aws", "Kubernetes", "KUBERNETES"],
-          },
-        ],
-      ),
-    ).toEqual([
-      {
-        label: "cloud & devops",
-        items: ["Kubernetes"],
-        accepted: true,
-      },
-    ]);
-  });
-
-  it("escapes legacy skill additions before the LaTeX render boundary", () => {
-    const merged = mergeSkillAdditions(
-      [{ label: "Backend", items: ["TypeScript"] }],
-      [
-        {
-          category: String.raw`Cloud & \input{secret}`,
-          items: [String.raw`AWS 100% \write18{calc}`],
-        },
-      ],
-    );
-
-    expect(merged.at(-1)).toEqual({
-      label: String.raw`Cloud \& \\input\{secret\}`,
-      items: [String.raw`AWS 100\% \\write18\{calc\}`],
-    });
-  });
 });

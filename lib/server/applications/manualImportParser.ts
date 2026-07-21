@@ -29,13 +29,6 @@ export const ImportedPromptMetaSchema = z
   })
   .strict();
 
-const ResumeSkillAdditionSchema = z
-  .object({
-    category: z.string().trim().min(1).max(100),
-    items: z.array(z.string().trim().min(1).max(120)).min(1).max(30),
-  })
-  .strict();
-
 const ResumeSkillGroupSchema = z
   .object({
     label: z.string().trim().min(1).max(100).optional(),
@@ -59,7 +52,6 @@ const ResumeManualOutputSchema = z
         bullets: z.array(z.string().trim().min(1).max(320)).min(1).max(15),
       })
       .strict(),
-    skillsAdditions: z.array(ResumeSkillAdditionSchema).max(20).optional(),
     skillsFinal: z.array(ResumeSkillGroupSchema).min(1).max(20).optional(),
   })
   .strict();
@@ -259,7 +251,6 @@ export function parseResumeManualOutput(raw: string): {
           : Array.isArray(record.latest_experience_bullets)
             ? { bullets: record.latest_experience_bullets }
           : undefined,
-    skillsAdditions: Array.isArray(record.skillsAdditions) ? record.skillsAdditions : undefined,
     skillsFinal: Array.isArray(record.skillsFinal)
       ? record.skillsFinal
       : Array.isArray(record.skills_final)
@@ -338,87 +329,6 @@ export function parseCoverManualOutput(raw: string): {
 }
 
 // ── Skill Group Utilities ──
-
-export function mergeSkillAdditions(
-  base: Array<{ label: string; items: string[] }>,
-  additions?: Array<{ category: string; items: string[] }>,
-) {
-  if (!additions || additions.length === 0) return base;
-  const result = [...base.map((group) => ({ ...group, items: [...group.items] }))];
-
-  for (const addition of additions) {
-    // Base groups have already crossed mapResumeProfile's LaTeX boundary.
-    // Legacy model output has not, so normalize it before comparison/render.
-    const category = escapeLatex(addition.category.trim()).trim();
-    const incoming = addition.items
-      .map((item) => escapeLatex(item.trim()).trim())
-      .filter(Boolean);
-    if (!category || incoming.length === 0) continue;
-
-    const targetIndex = result.findIndex(
-      (group) => group.label.trim().toLowerCase() === category.toLowerCase(),
-    );
-    if (targetIndex >= 0) {
-      const existingSet = new Set(result[targetIndex].items.map((item) => item.toLowerCase()));
-      for (const item of incoming) {
-        if (!existingSet.has(item.toLowerCase())) {
-          result[targetIndex].items.push(item);
-          existingSet.add(item.toLowerCase());
-        }
-      }
-      continue;
-    }
-
-    result.push({ label: category, items: Array.from(new Set(incoming)) });
-  }
-
-  return result;
-}
-
-/**
- * Convert a model's complete skill list into reviewable additions only.
- * The stored aiContent remains raw UI text; rendering escapes it later.
- */
-export function deriveReviewableSkillAdditions(
-  base: Array<{ label: string; items: string[] }>,
-  proposed: Array<{ label: string; items: string[] }>,
-) {
-  const baseByLabel = new Map(
-    base.map((group) => [
-      group.label.trim().toLowerCase(),
-      new Set(group.items.map((item) => item.trim().toLowerCase())),
-    ]),
-  );
-  const additions: Array<{
-    label: string;
-    items: string[];
-    accepted: true;
-  }> = [];
-
-  for (const group of proposed) {
-    const rawLabel = group.label.trim();
-    const safeLabel = escapeLatex(rawLabel).trim();
-    if (!rawLabel || !safeLabel) continue;
-
-    const baseItems =
-      baseByLabel.get(safeLabel.toLowerCase()) ?? new Set<string>();
-    const seen = new Set<string>();
-    const newItems: string[] = [];
-    for (const rawItemValue of group.items) {
-      const rawItem = rawItemValue.trim();
-      const safeItem = escapeLatex(rawItem).trim();
-      const key = safeItem.toLowerCase();
-      if (!rawItem || !safeItem || baseItems.has(key) || seen.has(key)) continue;
-      seen.add(key);
-      newItems.push(rawItem);
-    }
-    if (newItems.length > 0) {
-      additions.push({ label: rawLabel, items: newItems, accepted: true });
-    }
-  }
-
-  return additions;
-}
 
 export function sanitizeSkillGroups(
   groups: Array<{ label: string; items: string[] }>,

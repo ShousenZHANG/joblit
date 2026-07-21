@@ -18,7 +18,6 @@ import { ConflictDialog } from "../[id]/tailor/ConflictDialog";
 import { CoverParagraphsSection } from "../[id]/tailor/CoverParagraphsSection";
 import { PdfPreview } from "../[id]/tailor/PdfPreview";
 import { SaveIndicator } from "../[id]/tailor/SaveIndicator";
-import { SkillsSection } from "../[id]/tailor/SkillsSection";
 import { SummarySection } from "../[id]/tailor/SummarySection";
 import { useTailorDraft } from "../[id]/tailor/useTailorDraft";
 
@@ -205,14 +204,6 @@ function TailorReviewDialogBody({
     draft.setAiContent({
       ...draft.aiContent,
       cv: { ...draft.aiContent.cv, latestExperience: le },
-    });
-  }
-
-  function patchSkills(sa: AiContent["cv"]["skillsAdditions"]) {
-    setStatus("DRAFT");
-    draft.setAiContent({
-      ...draft.aiContent,
-      cv: { ...draft.aiContent.cv, skillsAdditions: sa },
     });
   }
 
@@ -584,10 +575,6 @@ function TailorReviewDialogBody({
                 <BulletsSection
                   latestExperience={draft.aiContent.cv.latestExperience}
                   onChange={patchLatestExperience}
-                />
-                <SkillsSection
-                  skillsAdditions={draft.aiContent.cv.skillsAdditions}
-                  onChange={patchSkills}
                 />
               </>
             ) : (

@@ -50,7 +50,6 @@ function makeAiContent(): AiContent {
     cv: {
       summary: { aiText: "ai", originalText: "orig", accepted: true },
       latestExperience: { experienceIndex: 0, addedBullets: [] },
-      skillsAdditions: [],
     },
     cover: {
       paragraphOne: { aiText: "", accepted: false },
@@ -424,80 +423,6 @@ describe("POST /api/applications/[id]/finalize", () => {
     expect(response.status).toBe(422);
     expect(json.error.code).toBe("APPLICATION_REVIEW_BLOCKED");
     expect(json.error.details.issues.join(" ")).toContain("999%");
-    expect(renderer.renderFinalApplication).not.toHaveBeenCalled();
-    expect(prisma.application.updateMany).not.toHaveBeenCalled();
-  });
-
-  it("blocks forged skill evidence before rendering the final resume", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: USER_ID },
-    });
-    const profile = {
-      userId: USER_ID,
-      summary: "Built reliable TypeScript APIs.",
-      basics: null,
-      links: null,
-      skills: [{ label: "Languages", items: ["TypeScript"] }],
-      experiences: null,
-      projects: null,
-      education: null,
-    };
-    const forged = attachEvidenceAndReview({
-      aiContent: {
-        ...makeAiContent(),
-        cv: {
-          ...makeAiContent().cv,
-          skillsAdditions: [
-            { label: "Platform", items: ["Kubernetes"], accepted: true },
-          ],
-        },
-      },
-      resumeSnapshot: profile,
-      jobDescription: "Build reliable TypeScript APIs.",
-      scopeKey: USER_ID,
-    });
-    forged.cv.skillsAdditions[0].evidenceIds = [
-      forged.evidence?.find((item) => item.kind === "candidate")?.id ??
-        `ev_${"f".repeat(32)}`,
-    ];
-    forged.review = {
-      verdict: "pass",
-      reviewedAt: "2026-07-20T12:00:00.000Z",
-      coveragePercent: 100,
-      requirements: [],
-      issues: [],
-    };
-    const hash = hashAiContent(forged);
-    prisma.application.findFirst.mockResolvedValueOnce({
-      id: APP_ID,
-      userId: USER_ID,
-      status: "DRAFT",
-      aiContent: forged,
-      aiContentHash: hash,
-      resumePdfUrl: null,
-      resumePdfName: null,
-      coverPdfUrl: null,
-      atsValidation: null,
-      jobId: "job-1",
-      company: "Acme",
-      role: "Engineer",
-      resumeProfile: profile,
-      job: {
-        id: "job-1",
-        userId: USER_ID,
-        title: "Engineer",
-        company: "Acme",
-        market: "AU",
-        description: "Build reliable TypeScript APIs.",
-      },
-    });
-
-    const response = await POST(makeRequest({ expectedHash: hash }), { params });
-    const json = await response.json();
-
-    expect(response.status).toBe(422);
-    expect(json.error.code).toBe("APPLICATION_REVIEW_BLOCKED");
-    expect(json.error.details.issues.join(" ")).toContain("Kubernetes");
     expect(renderer.renderFinalApplication).not.toHaveBeenCalled();
     expect(prisma.application.updateMany).not.toHaveBeenCalled();
   });

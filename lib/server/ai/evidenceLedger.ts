@@ -169,31 +169,6 @@ function finalText(content: { aiText: string; userEdit?: string }) {
   return content.userEdit?.trim() || content.aiText.trim();
 }
 
-function reviewSkillAdditions(
-  skillsAdditions: AiContent["cv"]["skillsAdditions"],
-  evidence: AiEvidenceReference[],
-) {
-  return skillsAdditions.map((group) => {
-    const itemEvidence = group.items.map((item) => ({
-      item,
-      evidenceIds: bestEvidenceIds(item, evidence, "candidate", 4),
-    }));
-    const evidenceIds = Array.from(
-      new Set(itemEvidence.flatMap((item) => item.evidenceIds)),
-    ).slice(0, 12);
-
-    return {
-      group: {
-        ...group,
-        evidenceIds,
-      },
-      unsupportedItems: itemEvidence
-        .filter((item) => item.evidenceIds.length === 0)
-        .map((item) => item.item),
-    };
-  });
-}
-
 function numericClaims(text: string) {
   return Array.from(text.matchAll(NUMBER_CLAIM_RE), (match) => match[1]);
 }
@@ -215,10 +190,6 @@ function reviewContentWithEvidence(
       5,
     ),
   }));
-  const reviewedSkillAdditions = reviewSkillAdditions(
-    aiContent.cv.skillsAdditions,
-    evidence,
-  );
   const cover = {
     paragraphOne: {
       ...aiContent.cover.paragraphOne,
@@ -254,14 +225,6 @@ function reviewContentWithEvidence(
     ...addedBullets
       .filter((bullet) => bullet.accepted)
       .map((bullet) => bullet.userEdit?.trim() || bullet.text),
-    ...reviewedSkillAdditions
-      .filter(
-        ({ group, unsupportedItems }) =>
-          group.accepted &&
-          group.items.length > 0 &&
-          unsupportedItems.length === 0,
-      )
-      .map(({ group }) => `${group.label}: ${group.items.join(", ")}`),
     finalText(cover.paragraphOne),
     finalText(cover.paragraphTwo),
     finalText(cover.paragraphThree),
@@ -293,27 +256,6 @@ function reviewContentWithEvidence(
   if (ungroundedAcceptedBullets.length > 0) {
     issues.push(`${ungroundedAcceptedBullets.length} accepted CV bullet(s) lack candidate evidence.`);
   }
-  const ungroundedAcceptedSkills = reviewedSkillAdditions.filter(
-    ({ group, unsupportedItems }) =>
-      group.accepted &&
-      (group.items.length === 0 ||
-        (group.evidenceIds?.length ?? 0) === 0 ||
-        unsupportedItems.length > 0),
-  );
-  if (ungroundedAcceptedSkills.length > 0) {
-    const unsupportedItems = ungroundedAcceptedSkills
-      .flatMap(({ group, unsupportedItems: items }) =>
-        items.length > 0 ? items : group.items,
-      )
-      .filter(Boolean)
-      .slice(0, 6);
-    issues.push(
-      (
-        `${ungroundedAcceptedSkills.length} accepted CV skill addition(s) lack candidate evidence` +
-        (unsupportedItems.length > 0 ? `: ${unsupportedItems.join(", ")}` : ".")
-      ).slice(0, 300),
-    );
-  }
   const missingCount = requirements.filter((item) => item.status === "missing").length;
   if (missingCount > 0) {
     issues.push(`${missingCount} priority requirement(s) are not represented in the draft.`);
@@ -328,9 +270,7 @@ function reviewContentWithEvidence(
   }
 
   const hasBlocker =
-    ungroundedAcceptedBullets.length > 0 ||
-    ungroundedAcceptedSkills.length > 0 ||
-    unsupportedNumbers.size > 0;
+    ungroundedAcceptedBullets.length > 0 || unsupportedNumbers.size > 0;
   const review: AiApplicationReview = {
     verdict: hasBlocker ? "blocked" : coveragePercent < 67 ? "revise" : "pass",
     reviewedAt: new Date().toISOString(),
@@ -353,7 +293,6 @@ function reviewContentWithEvidence(
         ...aiContent.cv.latestExperience,
         addedBullets,
       },
-      skillsAdditions: reviewedSkillAdditions.map(({ group }) => group),
     },
     cover,
   };

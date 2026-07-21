@@ -13,11 +13,9 @@ import {
 } from "@/lib/shared/schemas/aiContent";
 import {
   canonicalizeLatestBullets,
-  deriveReviewableSkillAdditions,
   getLatestRawBullets,
   isGroundedAddedBullet,
   isNonRedundantAddedBullet,
-  mergeSkillAdditions,
   normalizeBulletForCompare,
   normalizeMarkdownBold,
   parseCoverManualOutput,
@@ -58,8 +56,8 @@ type ManualImportArtifactResult =
       /**
        * Provenance snapshot of every AI proposal + the user's
        * accept/reject/edit decisions. Persisted on Application.aiContent.
-       * Resume target captures summary, grounded bullets, and reviewable
-       * skill additions. Cover target captures its three editable paragraphs.
+       * Resume target captures the summary and grounded bullets. Cover
+       * target captures its three editable paragraphs.
        */
       aiContent: AiContent;
     }
@@ -68,16 +66,15 @@ type ManualImportArtifactResult =
       error: ManualImportArtifactError;
     };
 
-const EMPTY_AI_CONTENT_DEFAULTS = {
-  skillsAdditions: [] as AiContent["cv"]["skillsAdditions"],
-  emptyCoverParagraph: () => ({ aiText: "", accepted: false }),
-} as const;
+function emptyCoverParagraph() {
+  return { aiText: "", accepted: false };
+}
 
 function emptyCover(): AiContent["cover"] {
   return {
-    paragraphOne: EMPTY_AI_CONTENT_DEFAULTS.emptyCoverParagraph(),
-    paragraphTwo: EMPTY_AI_CONTENT_DEFAULTS.emptyCoverParagraph(),
-    paragraphThree: EMPTY_AI_CONTENT_DEFAULTS.emptyCoverParagraph(),
+    paragraphOne: emptyCoverParagraph(),
+    paragraphTwo: emptyCoverParagraph(),
+    paragraphThree: emptyCoverParagraph(),
   };
 }
 
@@ -206,23 +203,6 @@ function buildManualResumeArtifact(input: {
   const sanitizedSkillsFinal = resumeOutput.skillsFinal
     ? sanitizeSkillGroups(resumeOutput.skillsFinal)
     : [];
-  const sanitizedSkillAdditions = resumeOutput.skillsAdditions?.map((group) => ({
-    category: group.category,
-    items: group.items,
-  }));
-  const proposedSkillGroups = resumeOutput.skillsFinal
-    ? resumeOutput.skillsFinal.map((group) => ({
-        label: group.label,
-        items: group.items,
-      }))
-    : (resumeOutput.skillsAdditions ?? []).map((group) => ({
-        label: group.category,
-        items: group.items,
-      }));
-  const reviewableSkillAdditions = deriveReviewableSkillAdditions(
-    input.renderInput.skills,
-    proposedSkillGroups,
-  );
   const nextExperiences =
     baseLatest && finalLatestBullets && finalLatestBullets.length > 0
       ? [{ ...baseLatest, bullets: finalLatestBullets }, ...input.renderInput.experiences.slice(1)]
@@ -230,7 +210,7 @@ function buildManualResumeArtifact(input: {
   const nextSkills =
     sanitizedSkillsFinal.length > 0
       ? sanitizedSkillsFinal
-      : mergeSkillAdditions(input.renderInput.skills, sanitizedSkillAdditions);
+      : input.renderInput.skills;
 
   const aiContent = attachEvidenceAndReview({
     scopeKey: input.evidenceScopeKey,
@@ -254,7 +234,6 @@ function buildManualResumeArtifact(input: {
         experienceIndex: 0,
         addedBullets: aiAddedBullets,
       },
-      skillsAdditions: reviewableSkillAdditions,
     },
     cover: emptyCover(),
     },
@@ -375,7 +354,6 @@ function buildManualCoverArtifact(input: {
         cv: {
           summary: { aiText: "", originalText: input.renderInput.summary ?? "", accepted: false },
           latestExperience: { experienceIndex: 0, addedBullets: [] },
-          skillsAdditions: EMPTY_AI_CONTENT_DEFAULTS.skillsAdditions,
         },
         cover: {
           paragraphOne: { aiText: p1, accepted: true },

@@ -22,7 +22,6 @@ function content(): AiContent {
         accepted: true,
       },
       latestExperience: { experienceIndex: 0, addedBullets: [] },
-      skillsAdditions: [],
     },
     cover: {
       paragraphOne: { aiText: "", accepted: false, evidenceIds: [] },

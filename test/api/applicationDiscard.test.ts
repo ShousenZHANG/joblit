@@ -57,9 +57,6 @@ function makeEditedAiContent(): AiContent {
           },
         ],
       },
-      skillsAdditions: [
-        { label: "Backend", items: ["Spring"], accepted: false },
-      ],
     },
     cover: {
       paragraphOne: { aiText: "p1", userEdit: "edited", accepted: false },
@@ -130,9 +127,6 @@ describe("POST /api/applications/[id]/discard", () => {
 
     // Bullet 2 (failed gate): accepted=false (matches gate verdict)
     expect(persisted.cv.latestExperience.addedBullets[1]?.accepted).toBe(false);
-
-    // Skills: accepted reset to true
-    expect(persisted.cv.skillsAdditions[0]?.accepted).toBe(true);
 
     // Cover paragraphs: userEdit cleared, accepted=true
     expect(persisted.cover.paragraphOne.userEdit).toBeUndefined();

@@ -31,20 +31,6 @@ const addedBulletSchema = z
   })
   .strict();
 
-const skillsAdditionSchema = z
-  .object({
-    label: z.string(),
-    items: z.array(z.string()),
-    accepted: z.boolean(),
-    /**
-     * Server-owned candidate evidence supporting this proposed skill group.
-     * The server recomputes this field from the current resume snapshot on
-     * draft save/finalize; browser-supplied identifiers are never trusted.
-     */
-    evidenceIds: z.array(z.string().regex(/^ev_[0-9a-f]{32}$/)).max(12).optional(),
-  })
-  .strict();
-
 const summarySchema = z
   .object({
     aiText: z.string(),
@@ -62,13 +48,30 @@ const latestExperienceSchema = z
   })
   .strict();
 
-const cvSchema = z
+/**
+ * `skillsAdditions` (the AI's proposed new CV skill groups) was retired: the
+ * model kept proposing skills the candidate had no evidence for, so the
+ * grounding gate blocked finalize on almost every draft it produced.
+ *
+ * Rows written before the removal still carry the key, and every other field
+ * here stays `.strict()` on purpose — an unknown key is a signal that a client
+ * is smuggling server-owned state. Rather than loosen that guarantee for the
+ * whole object, drop this one retired key before validation so an old row (or
+ * a browser tab loaded before the deploy) still reads back cleanly instead of
+ * failing with AI_CONTENT_INVALID. No data migration is required; the key
+ * disappears on the next write.
+ */
+const cvSchema = z.preprocess((value) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  if (!("skillsAdditions" in value)) return value;
+  const { skillsAdditions: _retired, ...rest } = value as Record<string, unknown>;
+  return rest;
+}, z
   .object({
     summary: summarySchema,
     latestExperience: latestExperienceSchema,
-    skillsAdditions: z.array(skillsAdditionSchema),
   })
-  .strict();
+  .strict());
 
 const coverParagraphSchema = z
   .object({

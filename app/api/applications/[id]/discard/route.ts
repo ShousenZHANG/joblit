@@ -22,7 +22,6 @@ const BodySchema = z.object({ expectedHash: z.string().nullable() });
  *   - Reset summary.accepted = true.
  *   - Reset bullet.accepted to qualityGate.passed (or true if no
  *     gate verdict was recorded).
- *   - Reset skillsAdditions[i].accepted = true.
  *   - Reset cover paragraphs accepted = true.
  *
  * Status stays DRAFT. The caller's UI then re-renders from the reset
@@ -157,11 +156,6 @@ function resetToOriginalProposal(content: AiContent): AiContent {
           ...(b.qualityGate ? { qualityGate: b.qualityGate } : {}),
         })),
       },
-      skillsAdditions: content.cv.skillsAdditions.map((s) => ({
-        label: s.label,
-        items: [...s.items],
-        accepted: true,
-      })),
     },
     cover: {
       paragraphOne: { aiText: content.cover.paragraphOne.aiText, accepted: true },

@@ -186,13 +186,9 @@ export async function POST(
         { status: 500 },
       );
     }
-    const hasEvidenceContract =
+    const requiresCanonicalEvidence =
       aiContentParsed.data.evidence !== undefined ||
       aiContentParsed.data.review !== undefined;
-    const hasAcceptedSkillAdditions =
-      aiContentParsed.data.cv.skillsAdditions.some((group) => group.accepted);
-    const requiresCanonicalEvidence =
-      hasEvidenceContract || hasAcceptedSkillAdditions;
     const requiresJobEvidence =
       aiContentParsed.data.evidence?.some((item) => item.kind === "job") ===
         true ||

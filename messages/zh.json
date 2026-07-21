@@ -1136,10 +1136,6 @@
       "acceptAria": "采纳要点",
       "textAria": "要点内容"
     },
-    "skills": {
-      "title": "技能新增",
-      "acceptAria": "采纳 {label} 的技能新增"
-    },
     "summary": {
       "title": "个人总结",
       "placeholder": "个人总结",

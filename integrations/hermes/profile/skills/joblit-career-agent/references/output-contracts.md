@@ -6,8 +6,7 @@ The request's `expectedJsonSchema` is authoritative. These names mirror Joblit's
 
 - `cvSummary`: non-empty string.
 - `latestExperience.bullets`: non-empty string array. Preserve required source bullets under prompt rules.
-- `skillsFinal`: optional array of `{ "label": string, "items": string[] }` groups.
-- `skillsAdditions`: optional array of `{ "category": string, "items": string[] }` groups.
+- `skillsFinal`: optional array of `{ "label": string, "items": string[] }` groups. It is the complete skills list, never a delta; `skillsAdditions` is not accepted.
 
 ## Cover
 

@@ -62,11 +62,6 @@ export function mergeClientAiContentEdits(
             ),
           ),
       },
-      skillsAdditions: canonical.cv.skillsAdditions.map((group, index) => ({
-        ...group,
-        accepted:
-          submitted.cv.skillsAdditions[index]?.accepted ?? group.accepted,
-      })),
     },
     cover: {
       paragraphOne: mergeEditableText(

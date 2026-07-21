@@ -17,7 +17,6 @@ const aiContent: AiContent = {
   cv: {
     summary: { aiText: "Summary", originalText: "Original", accepted: true },
     latestExperience: { experienceIndex: 0, addedBullets: [] },
-    skillsAdditions: [],
   },
   cover: {
     paragraphOne: { aiText: "One", accepted: true },
@@ -81,7 +80,6 @@ vi.mock("@/components/ui/alert-dialog", () => ({
 
 vi.mock("./SummarySection", () => ({ SummarySection: () => null }));
 vi.mock("./BulletsSection", () => ({ BulletsSection: () => null }));
-vi.mock("./SkillsSection", () => ({ SkillsSection: () => null }));
 vi.mock("./CoverParagraphsSection", () => ({ CoverParagraphsSection: () => null }));
 vi.mock("./PdfPreview", () => ({ PdfPreview: () => null }));
 vi.mock("./SaveIndicator", () => ({ SaveIndicator: () => null }));

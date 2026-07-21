@@ -4,10 +4,7 @@ import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import { renderResumeTex } from "@/lib/server/latex/renderResume";
 import { renderCoverLetterTex } from "@/lib/server/latex/renderCoverLetter";
 import { compileLatexToPdf } from "@/lib/server/latex/compilePdf";
-import {
-  escapeLatex,
-  escapeLatexWithBold,
-} from "@/lib/server/latex/escapeLatex";
+import { escapeLatexWithBold } from "@/lib/server/latex/escapeLatex";
 import { buildPdfFilename } from "@/lib/server/files/pdfFilename";
 import {
   APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
@@ -31,9 +28,8 @@ import {
  *   - aiContent.cv.latestExperience.addedBullets where accepted=true
  *     are appended to the latest experience's bullet list (after the
  *     base bullets the user did not delete).
- *   - aiContent.cv.skillsAdditions where accepted=true merge into the
- *     skills section. (Phase 2 wires the per-skill granularity; for
- *     Phase 1 we accept the full additions list as-is.)
+ *   - The skills section comes from the master profile verbatim. The AI
+ *     does not contribute skills to a finalized CV.
  */
 type RenderApplicationInput = {
   applicationId: string;
@@ -86,27 +82,11 @@ export async function renderApplicationPdf(
       )
     : baseExperiences;
 
-  // Compose final skills: existing + accepted additions
-  const candidateEvidenceIds = new Set(
-    (input.aiContent.evidence ?? [])
-      .filter((item) => item.kind === "candidate")
-      .map((item) => item.id),
-  );
-  const acceptedSkillAdditions = input.aiContent.cv.skillsAdditions.filter(
-    (group) =>
-      group.accepted &&
-      (group.evidenceIds ?? []).some((id) => candidateEvidenceIds.has(id)),
-  );
-  const nextSkills =
-    acceptedSkillAdditions.length === 0
-      ? renderInput.skills
-      : mergeAcceptedSkillAdditions(renderInput.skills, acceptedSkillAdditions);
-
   const tex = renderResumeTex({
     ...renderInput,
     summary: escapeLatexWithBold(finalSummary),
     experiences: nextExperiences,
-    skills: nextSkills,
+    skills: renderInput.skills,
   });
 
   const pdf = await compileLatexToPdf(tex, {
@@ -143,33 +123,6 @@ export async function renderFinalApplication(
 
   return { resumePdfUrl: blob.url, resumePdfName, atsValidation };
 }
-
-function mergeAcceptedSkillAdditions(
-  baseSkills: ReturnType<typeof mapResumeProfile>["skills"],
-  additions: AiContent["cv"]["skillsAdditions"],
-): ReturnType<typeof mapResumeProfile>["skills"] {
-  const byLabel = new Map(baseSkills.map((s) => [s.label, [...s.items]]));
-  for (const add of additions) {
-    // Profile fields are already escaped by mapResumeProfile. Draft fields are
-    // user-editable and must cross the same LaTeX trust boundary before merge.
-    const label = escapeLatex(add.label.trim()).trim();
-    const items = add.items
-      .map((item) => escapeLatex(item.trim()).trim())
-      .filter(Boolean);
-    if (!label || items.length === 0) continue;
-
-    const existing = byLabel.get(label);
-    if (existing) {
-      for (const item of items) {
-        if (!existing.includes(item)) existing.push(item);
-      }
-    } else {
-      byLabel.set(label, items);
-    }
-  }
-  return Array.from(byLabel.entries()).map(([label, items]) => ({ label, items }));
-}
-
 
 /**
  * Cover-letter finalize: render LaTeX from accepted aiContent.cover
@@ -273,9 +226,6 @@ function buildAtsKeywords(aiContent: AiContent, jobTitle: string) {
     ...(aiContent.review?.requirements ?? []).flatMap((item) =>
       item.text.split(/[\s,/|():;-]+/),
     ),
-    ...aiContent.cv.skillsAdditions
-      .filter((group) => group.accepted)
-      .flatMap((group) => group.items),
   ];
   const seen = new Set<string>();
   return values
