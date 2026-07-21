@@ -109,7 +109,9 @@ const requirementCoverageSchema = z
   })
   .strict();
 
-const applicationReviewSchema = z
+/** Exported so a client parsing a blocked-finalize payload validates against
+ *  the same shape the server serialises, instead of trusting its own guess. */
+export const applicationReviewSchema = z
   .object({
     verdict: z.enum(["pass", "revise", "blocked"]),
     reviewedAt: z.string().datetime(),

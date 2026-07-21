@@ -12,12 +12,17 @@ import {
 } from "@/components/ui/dialog";
 import { fetchJson, ApiError } from "@/lib/api/fetchJson";
 import { buildPdfFilename } from "@/lib/shared/pdfFilename";
-import type { AiContent } from "@/lib/shared/schemas/aiContent";
+import {
+  applicationReviewSchema,
+  type AiApplicationReview,
+  type AiContent,
+} from "@/lib/shared/schemas/aiContent";
 import { cn } from "@/lib/utils";
 import { BulletsSection } from "../[id]/tailor/BulletsSection";
 import { ConflictDialog } from "../[id]/tailor/ConflictDialog";
 import { CoverParagraphsSection } from "../[id]/tailor/CoverParagraphsSection";
 import { PdfPreview } from "../[id]/tailor/PdfPreview";
+import { ReviewGateCard } from "../[id]/tailor/ReviewGateCard";
 import { SaveIndicator } from "../[id]/tailor/SaveIndicator";
 import { SummarySection } from "../[id]/tailor/SummarySection";
 import { useTailorDraft } from "../[id]/tailor/useTailorDraft";
@@ -133,6 +138,9 @@ function TailorReviewDialogBody({
   const [isClosing, setIsClosing] = useState(false);
   const [isDiscarding, setIsDiscarding] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [blockedReview, setBlockedReview] = useState<AiApplicationReview | null>(
+    null,
+  );
   const initialPreviewUrl =
     initialDraft.target === "resume"
       ? initialDraft.resumePdfUrl
@@ -377,6 +385,7 @@ function TailorReviewDialogBody({
     }
 
     setActionError(null);
+    setBlockedReview(null);
     renderInFlightRef.current = true;
     setPreviewSyncStatus("rendering");
     setIsRefreshing(true);
@@ -448,6 +457,7 @@ function TailorReviewDialogBody({
 
   async function handleFinalize() {
     setActionError(null);
+    setBlockedReview(null);
     setIsFinalizing(true);
     try {
       const { data, expectedHash } = await callFinalize();
@@ -455,6 +465,7 @@ function TailorReviewDialogBody({
       applyFinalizedResult(data);
     } catch (err: unknown) {
       setActionError(extractMessage(err, "Finalize failed"));
+      setBlockedReview(extractBlockedReview(err));
     } finally {
       setIsFinalizing(false);
     }
@@ -464,6 +475,7 @@ function TailorReviewDialogBody({
     if (closeInFlightRef.current || isFinalizing || isDiscarding) return;
     closeInFlightRef.current = true;
     setActionError(null);
+    setBlockedReview(null);
     setIsClosing(true);
     try {
       await flushDraftNow();
@@ -492,6 +504,7 @@ function TailorReviewDialogBody({
 
   async function handleDiscard() {
     setActionError(null);
+    setBlockedReview(null);
     setIsDiscarding(true);
     try {
       const expectedHash = await flushDraftNow();
@@ -548,7 +561,18 @@ function TailorReviewDialogBody({
         </div>
       </DialogHeader>
 
-      {actionError ? (
+      {/* A blocked finalize is not really an error message — the server has
+          already worked out which claims lack evidence and which requirements
+          are uncovered. Showing only "Resolve unsupported claims" left the user
+          stuck with no way to tell what to fix, while the full-page Tailor view
+          rendered the same data properly. Reuse that card here so the two
+          surfaces say the same thing. Everything else (network, conflict, rate
+          limit) has no structure to show and keeps the plain banner. */}
+      {actionError && blockedReview ? (
+        <div className="mx-5 mt-4 md:mx-7">
+          <ReviewGateCard review={blockedReview} />
+        </div>
+      ) : actionError ? (
         <div
           role="alert"
           className="mx-5 mt-4 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-sm font-medium text-destructive shadow-sm md:mx-7"
@@ -688,6 +712,28 @@ function extractMessage(err: unknown, fallback: string): string {
   if (err instanceof ApiError) return err.message;
   if (err instanceof Error) return err.message;
   return fallback;
+}
+
+/**
+ * A blocked finalize carries the whole review — which claims lack evidence,
+ * which requirements are uncovered, the coverage figure — as `error.details`.
+ * Parsed with the same schema the server serialises, so a payload that has
+ * drifted falls back to the plain message rather than rendering a half-built
+ * card.
+ */
+function extractBlockedReview(err: unknown): AiApplicationReview | null {
+  if (!(err instanceof ApiError) || err.status !== 422) return null;
+  const payload = err.payload;
+  if (!payload || typeof payload !== "object") return null;
+  const error = (payload as { error?: unknown }).error;
+  if (!error || typeof error !== "object") return null;
+  if ((error as { code?: unknown }).code !== "APPLICATION_REVIEW_BLOCKED") {
+    return null;
+  }
+  const parsed = applicationReviewSchema.safeParse(
+    (error as { details?: unknown }).details,
+  );
+  return parsed.success ? parsed.data : null;
 }
 
 function isAbortError(err: unknown): boolean {

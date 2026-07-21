@@ -47,9 +47,32 @@ vi.mock("../[id]/tailor/useTailorDraft", () => ({
   useTailorDraft: () => mockDraft,
 }));
 
+// Mirrors the real ApiError: status and payload are the fields the dialog
+// reads to decide whether a failure carries a review worth rendering, so a
+// stub without them would let the test pass against code that ignores both.
+// Hoisted alongside vi.mock, which runs before ordinary declarations.
+const { FakeApiError } = vi.hoisted(() => ({
+  FakeApiError: class extends Error {
+    constructor(
+      readonly status: number,
+      message: string,
+      readonly payload?: unknown,
+    ) {
+      super(message);
+      this.name = "ApiError";
+    }
+  },
+}));
+
+// ReviewGateCard translates its own chrome; the issue strings under test come
+// from the server and are rendered verbatim, so a key-passthrough is enough.
+vi.mock("next-intl", () => ({
+  useTranslations: () => (key: string) => key,
+}));
+
 vi.mock("@/lib/api/fetchJson", () => ({
   fetchJson: api.fetchJson,
-  ApiError: class ApiError extends Error {},
+  ApiError: FakeApiError,
 }));
 
 vi.mock("@/components/ui/dialog", () => ({
@@ -310,5 +333,67 @@ describe("TailorReviewDialog React rules", () => {
     expect(mockDraft.flushNow.mock.invocationCallOrder[0]).toBeLessThan(
       api.fetchJson.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     );
+  });
+
+  it("shows the evidence review instead of one line when finalize is blocked", async () => {
+    // The server already worked out which claims lack evidence. Rendering only
+    // error.message left the user blocked with nothing to act on, while the
+    // full-page Tailor view showed the same payload properly.
+    api.fetchJson.mockRejectedValueOnce(
+      new FakeApiError(422, "Resolve unsupported claims before finalizing this application.", {
+        error: {
+          code: "APPLICATION_REVIEW_BLOCKED",
+          message: "Resolve unsupported claims before finalizing this application.",
+          details: {
+            verdict: "blocked",
+            reviewedAt: "2026-07-21T09:04:49.996Z",
+            coveragePercent: 17,
+            requirements: [],
+            issues: [
+              "2 priority requirement(s) are not represented in the draft.",
+              "Unsupported numeric claim(s): 4200.",
+            ],
+          },
+        },
+      }),
+    );
+
+    render(
+      <TailorReviewDialog
+        open
+        draft={draft}
+        onOpenChange={vi.fn()}
+        onFinalized={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Finalize/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("2 priority requirement(s) are not represented in the draft."),
+      ).toBeInTheDocument();
+    });
+    expect(screen.getByText("Unsupported numeric claim(s): 4200.")).toBeInTheDocument();
+  });
+
+  it("keeps the plain banner for an error with no review to show", async () => {
+    // A network or conflict failure has no structure worth rendering as a card.
+    api.fetchJson.mockRejectedValueOnce(new Error("Network unreachable"));
+
+    render(
+      <TailorReviewDialog
+        open
+        draft={draft}
+        onOpenChange={vi.fn()}
+        onFinalized={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Finalize/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Network unreachable");
+    });
   });
 });
