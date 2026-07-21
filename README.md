@@ -83,13 +83,34 @@ transaction means a dead run resumes cleanly on the next call.
 
 ### How Codex was used to build Joblit
 
-<!-- HACKATHON: replace this block before submitting.
-     The rules require highlighting Codex's role in development and a Session
-     ID for core functionality. Only you can supply this — fill in which
-     features Codex wrote or refactored, and paste the Session ID. -->
+Codex worked as a development collaborator across three areas of the codebase.
+Most of that work was refinement rather than greenfield — taking a system that
+already ran and making it correct, faster, or harder to misuse.
 
-_TODO: describe the Codex development sessions and add the Codex Session ID for
-core functionality._
+**Hermes and the local GPT-5.6 integration.** Wiring a browser extension to a
+loopback AI runtime has an awkward shape: the page may not hold the API key, the
+service worker is the only component allowed to reach `127.0.0.1`, and a run can
+outlive the popup that started it. Codex worked through the bridge protocol, the
+run lifecycle, and the profile bootstrap that keeps a Joblit Hermes install
+isolated from a user's existing profiles. This part is **still in active
+development** — the local-AI path is shipping as Beta while the Hermes API
+surface continues to firm up.
+
+**The fetch pipeline.** Multi-source intake, the title-relevance filter in the
+Python JobSpy worker, and the adapter registry in `lib/server/sources/`. The
+filtering work was the fiddliest: a title filter that matches literal tokens
+looks correct until an "AI Engineer" search silently drops every Machine
+Learning Engineer, GenAI Engineer and MLOps Engineer because none of them
+contain the string "ai". Getting recall right meant measuring against a real
+title corpus rather than reasoning about regexes.
+
+**Scoring and grounding.** The deterministic aggregator in
+`lib/server/ai/fitScoring.ts`, the prescreen path, the evidence ledger in
+`lib/server/ai/evidenceLedger.ts`, and the frozen golden set that pins verdicts
+across model changes. This is where the model/scoring split described above was
+worked out and hardened.
+
+**Codex Session ID:** `019f497c-61d9-7363-a4d6-309eb78a7fdb`
 
 ## What is Joblit
 
