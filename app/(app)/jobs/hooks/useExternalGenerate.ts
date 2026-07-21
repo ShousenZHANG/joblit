@@ -36,6 +36,8 @@ export type PersistedGeneratedDraft = {
   status: "DRAFT" | "FINAL";
   aiContentHash: string | null;
   aiContent: AiContent;
+  /** Canonical `{Full Name} {Title}_{CV|CL}.pdf` for the review dialog's download. */
+  pdfName: string | null;
   job: {
     id: string;
     title: string;
@@ -79,6 +81,7 @@ export async function persistGeneratedDraft(input: {
     status: json.status === "FINAL" ? "FINAL" : "DRAFT",
     aiContentHash: typeof json.aiContentHash === "string" ? json.aiContentHash : null,
     aiContent: json.aiContent as AiContent,
+    pdfName: typeof json.pdfName === "string" ? json.pdfName : null,
     job: {
       id: json.job.id,
       title: json.job.title,
@@ -139,6 +142,7 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
       initialAiContentHash: draft.aiContentHash,
       resumePdfUrl: input.resumePdfUrl ?? null,
       coverPdfUrl: input.coverPdfUrl ?? null,
+      pdfName: draft.pdfName,
       source,
       job: draft.job,
     });

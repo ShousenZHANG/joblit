@@ -48,6 +48,7 @@ const renderInput = {
 };
 
 const profile = {
+  basics: { fullName: "Jane Doe", title: "Engineer" },
   summary: "Delivered Java services and Linux CI/CD improvements.",
   updatedAt: new Date("2026-02-22T10:00:00.000Z"),
   experiences: [
@@ -117,8 +118,7 @@ describe("manual import artifact builder", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.filename).toContain("Software Engineer");
-    expect(result.filename).toMatch(/_CV\.pdf$/);
+    expect(result.filename).toBe("Jane Doe Software Engineer_CV.pdf");
     expect(resumeRender.renderResumeTex).toHaveBeenCalledWith(
       expect.objectContaining({
         summary: expect.stringContaining("\\textbf{Java}"),
@@ -235,7 +235,7 @@ describe("manual import artifact builder", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.filename).toMatch(/_CL\.pdf$/);
+    expect(result.filename).toBe("Jane Doe Software Engineer_CL.pdf");
     expect(result.coverQualityGate).toBe("soft-fail");
     expect(coverRender.renderCoverLetterTex).toHaveBeenCalledWith(
       expect.objectContaining({

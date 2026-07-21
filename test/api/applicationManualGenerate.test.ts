@@ -1143,6 +1143,10 @@ describe("applications manual generate api", () => {
     expect(json.status).toBe("DRAFT");
     expect(typeof json.aiContentHash).toBe("string");
     expect(json.aiContent.cv.summary.aiText).toBe("Tailored summary");
+    // DRAFT mode renders nothing, so the review dialog would otherwise have no
+    // name for its object-URL download. A profile without basics degrades to
+    // the job title alone rather than to "undefined".
+    expect(json.pdfName).toBe("Software Engineer_CV.pdf");
 
     expect(applicationStore.upsert).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -9,7 +9,11 @@ import { getResumeProfile } from "@/lib/server/resumeProfile";
 import { buildResumePdfForJob } from "@/lib/server/applications/buildResumePdf";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
 import { enforceAiRateLimit } from "@/lib/server/api/aiRateLimit";
-import { buildPdfFilename, contentDispositionAttachment } from "@/lib/server/files/pdfFilename";
+import {
+  buildPdfFilename,
+  contentDispositionAttachment,
+  resumeFilenameSegments,
+} from "@/lib/server/files/pdfFilename";
 import { reportError } from "@/lib/server/observability/errorReporter";
 
 export const runtime = "nodejs";
@@ -122,7 +126,7 @@ export async function POST(req: Request) {
     },
   });
 
-  const filename = buildPdfFilename(pdfResult.renderInput.candidate.name, job.title);
+  const filename = buildPdfFilename(resumeFilenameSegments(profile).name, job.title);
 
   return new NextResponse(new Uint8Array(pdfResult.pdf), {
     status: 200,

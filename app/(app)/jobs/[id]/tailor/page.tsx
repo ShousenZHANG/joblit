@@ -2,7 +2,9 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth";
 import { prisma } from "@/lib/server/prisma";
+import { buildPdfFilename } from "@/lib/server/files/pdfFilename";
 import { aiContentSchema } from "@/lib/shared/schemas/aiContent";
+import { asRecord, toStringValue } from "@/lib/shared/utils/text";
 import { TailorClient } from "./TailorClient";
 import { LegacyApplicationBanner } from "./LegacyApplicationBanner";
 
@@ -43,6 +45,9 @@ export default async function TailorPage({ params }: TailorPageProps) {
           market: true,
         },
       },
+      // Only for the download filename. The raw profile name, not the
+      // LaTeX-escaped one mapResumeProfile produces.
+      resumeProfile: { select: { basics: true } },
     },
   });
 
@@ -78,6 +83,13 @@ export default async function TailorPage({ params }: TailorPageProps) {
     );
   }
 
+  const jobTitle = application.job?.title ?? application.role ?? "Untitled";
+  // Built here, from the same helper the finalize/preview routes use, so the
+  // in-page Download button cannot drift from the server's Content-Disposition.
+  const candidateName = toStringValue(
+    asRecord(application.resumeProfile?.basics).fullName,
+  );
+
   return (
     <TailorClient
       applicationId={application.id}
@@ -86,9 +98,11 @@ export default async function TailorPage({ params }: TailorPageProps) {
       initialAiContentHash={application.aiContentHash}
       resumePdfUrl={application.resumePdfUrl}
       coverPdfUrl={application.coverPdfUrl}
+      resumePdfName={buildPdfFilename(candidateName, jobTitle, "cv")}
+      coverPdfName={buildPdfFilename(candidateName, jobTitle, "cl")}
       job={{
         id: application.job?.id ?? null,
-        title: application.job?.title ?? application.role ?? "Untitled",
+        title: jobTitle,
         company: application.job?.company ?? application.company ?? null,
         location: application.job?.location ?? null,
         market: application.job?.market ?? "AU",

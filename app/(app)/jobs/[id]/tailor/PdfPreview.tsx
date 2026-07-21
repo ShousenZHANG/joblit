@@ -28,6 +28,13 @@ interface PdfPreviewProps {
   pdfUrl: string | null;
   /** Title used for the iframe a11y title. */
   jobTitle: string;
+  /**
+   * Canonical `{Full Name} {Title}_{CV|CL}.pdf` name for the Download button.
+   * Without it the browser names the file from the URL, which is a Blob
+   * storage path or an opaque `blob:` UUID — neither is a filename a user
+   * wants on disk.
+   */
+  downloadFilename: string;
   /** Triggered when the user clicks Refresh or after 30s idle. */
   onRefresh: () => Promise<void> | void;
   /** Render-in-progress flag. */
@@ -48,6 +55,7 @@ const IDLE_REFRESH_MS = 30_000;
 export function PdfPreview({
   pdfUrl,
   jobTitle,
+  downloadFilename,
   onRefresh,
   isRefreshing,
   lastRefreshedAt,
@@ -154,7 +162,7 @@ export function PdfPreview({
           {previewSrc ? (
             <a
               href={previewSrc}
-              download
+              download={downloadFilename}
               className="inline-flex h-7 items-center gap-1.5 rounded-md bg-emerald-600 px-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.97]"
             >
               <Download className="h-3.5 w-3.5" aria-hidden />

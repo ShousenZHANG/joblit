@@ -118,6 +118,36 @@ describe("POST /api/applications/[id]/preview", () => {
     );
   });
 
+  // A CJK filename in a raw `filename="..."` param throws when assigned to a
+  // response header, so a zh-CN profile used to break the preview outright.
+  it("emits an RFC 6266 disposition that survives a non-ASCII filename", async () => {
+    const aiContent = makeAiContent();
+    const hash = hashAiContent(aiContent);
+    prisma.application.findFirst.mockResolvedValue({
+      id: APP_ID,
+      aiContent,
+      aiContentHash: hash,
+      jobId: "job-1",
+      resumeProfileId: "profile-linked",
+      company: "Acme",
+      role: "Engineer",
+      job: { id: "job-1", title: "工程师", company: "Acme", market: "CN" },
+    });
+    renderer.renderApplicationPdf.mockResolvedValue({
+      pdf: Buffer.from("%PDF-preview"),
+      filename: "张三 工程师_CV.pdf",
+    });
+
+    const response = await POST(makeRequest(hash), { params });
+    const disposition = response.headers.get("content-disposition") ?? "";
+
+    expect(response.status).toBe(200);
+    expect(disposition.startsWith("inline; ")).toBe(true);
+    expect([...disposition].every((c) => c.charCodeAt(0) <= 255)).toBe(true);
+    const encoded = disposition.match(/filename\*=UTF-8''(.+)$/)?.[1] ?? "";
+    expect(decodeURIComponent(encoded)).toBe("张三 工程师_CV.pdf");
+  });
+
   it("renders the cover target through the non-persisting renderer", async () => {
     const aiContent = makeAiContent();
     const hash = hashAiContent(aiContent);

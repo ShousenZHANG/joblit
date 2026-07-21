@@ -105,6 +105,8 @@ const props = {
   initialAiContentHash: "hash",
   resumePdfUrl: "/resume.pdf",
   coverPdfUrl: "/cover.pdf",
+  resumePdfName: "Jane Doe Engineer_CV.pdf",
+  coverPdfName: "Jane Doe Engineer_CL.pdf",
   job: {
     id: "job-1",
     title: "Engineer",

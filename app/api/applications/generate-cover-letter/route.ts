@@ -10,7 +10,11 @@ import { renderCoverLetterTex } from "@/lib/server/latex/renderCoverLetter";
 import { LatexRenderError, compileLatexToPdf } from "@/lib/server/latex/compilePdf";
 import { tailorApplicationContent } from "@/lib/server/ai/tailorApplication";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
-import { buildPdfFilename, contentDispositionAttachment } from "@/lib/server/files/pdfFilename";
+import {
+  buildPdfFilename,
+  contentDispositionAttachment,
+  resumeFilenameSegments,
+} from "@/lib/server/files/pdfFilename";
 import { enforceAiRateLimit } from "@/lib/server/api/aiRateLimit";
 
 export const runtime = "nodejs";
@@ -169,7 +173,11 @@ export async function POST(req: Request) {
     },
   });
 
-  const filename = buildPdfFilename(renderInput.candidate.name, job.title, "cl");
+  const filename = buildPdfFilename(
+    resumeFilenameSegments(profile).name,
+    job.title,
+    "cl",
+  );
 
   return new NextResponse(new Uint8Array(pdf), {
     status: 200,

@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { fetchJson, ApiError } from "@/lib/api/fetchJson";
+import { buildPdfFilename } from "@/lib/shared/pdfFilename";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
 import { cn } from "@/lib/utils";
 import { BulletsSection } from "../[id]/tailor/BulletsSection";
@@ -35,6 +36,8 @@ export type TailorReviewDraft = {
   initialAiContentHash: string | null;
   resumePdfUrl: string | null;
   coverPdfUrl: string | null;
+  /** Canonical download name from the server; null falls back to the shared builder. */
+  pdfName?: string | null;
   source?: "manual_import" | "local_ai";
   job: {
     id: string | null;
@@ -150,6 +153,13 @@ function TailorReviewDialogBody({
 
   const target = initialDraft.target;
   const targetLabel = target === "resume" ? "CV" : "Cover Letter";
+  // Preview PDFs arrive as `blob:` object URLs, so the browser has nothing to
+  // name a download from. Prefer the server's canonical name; if an older
+  // response omitted it, the shared builder still yields the right shape from
+  // the job title alone rather than an opaque UUID.
+  const downloadFilename =
+    initialDraft.pdfName?.trim() ||
+    buildPdfFilename(null, initialDraft.job.title, target === "cover" ? "cl" : "cv");
   const currentPdf = target === "resume" ? resumePdf : coverPdf;
   const currentRefreshAt =
     target === "resume" ? lastResumeRefreshAt : lastCoverRefreshAt;
@@ -591,6 +601,7 @@ function TailorReviewDialogBody({
           <PdfPreview
             pdfUrl={currentPdf}
             jobTitle={initialDraft.job.title}
+            downloadFilename={downloadFilename}
             isRefreshing={isRefreshing}
             isPending={previewSyncStatus === "pending"}
             autoRefresh={false}

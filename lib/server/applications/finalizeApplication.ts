@@ -5,7 +5,10 @@ import { renderResumeTex } from "@/lib/server/latex/renderResume";
 import { renderCoverLetterTex } from "@/lib/server/latex/renderCoverLetter";
 import { compileLatexToPdf } from "@/lib/server/latex/compilePdf";
 import { escapeLatexWithBold } from "@/lib/server/latex/escapeLatex";
-import { buildPdfFilename } from "@/lib/server/files/pdfFilename";
+import {
+  buildPdfFilename,
+  resumeFilenameSegments,
+} from "@/lib/server/files/pdfFilename";
 import {
   APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
   buildApplicationArtifactBlobPath,
@@ -92,7 +95,10 @@ export async function renderApplicationPdf(
   const pdf = await compileLatexToPdf(tex, {
     engine: profileLocale === "zh-CN" ? "xelatex" : "pdflatex",
   });
-  const filename = buildPdfFilename(renderInput.candidate.name, input.job.title);
+  const filename = buildPdfFilename(
+    resumeFilenameSegments(profile).name,
+    input.job.title,
+  );
   return { pdf, filename };
 }
 
@@ -208,7 +214,7 @@ export async function renderCoverLetterPdf(input: {
     engine: profileLocale === "zh-CN" ? "xelatex" : "pdflatex",
   });
   const filename = buildPdfFilename(
-    renderInput.candidate.name,
+    resumeFilenameSegments(profile).name,
     input.job.title,
     "cl",
   );

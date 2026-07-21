@@ -51,8 +51,8 @@ export function buildPdfFilename(
 }
 
 /**
- * Build a `Content-Disposition: attachment` header value that survives the
- * ISO-8859-1 (ByteString) constraint on HTTP header values.
+ * Build a `Content-Disposition` header value that survives the ISO-8859-1
+ * (ByteString) constraint on HTTP header values.
  *
  * Non-ASCII filenames (e.g. CJK names) cannot go in a raw `filename="..."`
  * param — they throw when assigned to a header. Per RFC 6266 / 5987 we emit an
@@ -60,9 +60,26 @@ export function buildPdfFilename(
  * modern browsers prefer, so "张三 软件工程师_CV.pdf" downloads with its real
  * name while old clients still get a sane ASCII name.
  */
-export function contentDispositionAttachment(filename: string): string {
+function contentDisposition(
+  disposition: "attachment" | "inline",
+  filename: string,
+): string {
   const asciiFallback =
     filename.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_") || "download.pdf";
   const encoded = encodeURIComponent(filename);
-  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encoded}`;
+  return `${disposition}; filename="${asciiFallback}"; filename*=UTF-8''${encoded}`;
+}
+
+export function contentDispositionAttachment(filename: string): string {
+  return contentDisposition("attachment", filename);
+}
+
+/**
+ * `inline` variant for previews the browser renders in place. It still needs
+ * the same encoding: a preview the user then saves must land on disk with the
+ * canonical name, and a raw CJK filename in the header throws before the
+ * response is ever sent.
+ */
+export function contentDispositionInline(filename: string): string {
+  return contentDisposition("inline", filename);
 }

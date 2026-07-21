@@ -5,7 +5,10 @@ import { buildResumePdfForJob } from "@/lib/server/applications/buildResumePdf";
 import { renderCoverLetterTex } from "@/lib/server/latex/renderCoverLetter";
 import { compileLatexToPdf } from "@/lib/server/latex/compilePdf";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
-import { buildPdfFilename } from "@/lib/server/files/pdfFilename";
+import {
+  buildPdfFilename,
+  resumeFilenameSegments,
+} from "@/lib/server/files/pdfFilename";
 import {
   APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
   buildApplicationArtifactBlobPath,
@@ -113,7 +116,7 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
     },
   });
   const resumePdfName = buildPdfFilename(
-    resumeResult.renderInput.candidate.name,
+    resumeFilenameSegments(profile).name,
     job.title,
   );
   let resumePdfUrl: string | null = null;
@@ -172,7 +175,7 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
       requiredKeywords,
     });
     const coverPdfName = buildPdfFilename(
-      resumeResult.renderInput.candidate.name,
+      resumeFilenameSegments(profile).name,
       job.title,
       "cl",
     );

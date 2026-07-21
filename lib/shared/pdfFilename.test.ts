@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildPdfFilename, contentDispositionAttachment } from "./pdfFilename";
+import {
+  buildPdfFilename,
+  contentDispositionAttachment,
+  contentDispositionInline,
+} from "./pdfFilename";
 
 const isHeaderSafe = (value: string) => [...value].every((c) => c.charCodeAt(0) <= 255);
 
@@ -61,6 +65,26 @@ describe("buildPdfFilename", () => {
   it("accepts a custom fallback (e.g. localized)", () => {
     expect(buildPdfFilename("", "", "cv", "未命名简历")).toBe("未命名简历_CV.pdf");
   });
+
+  it("never leaks a missing segment into the name as undefined/null", () => {
+    const names = [
+      buildPdfFilename(undefined, "Software Engineer"),
+      buildPdfFilename("Alex Morgan", null, "cl"),
+      buildPdfFilename(undefined, undefined),
+    ];
+    for (const name of names) {
+      expect(name).not.toContain("undefined");
+      expect(name).not.toContain("null");
+      expect(name).toMatch(/^.+_(?:CV|CL)\.pdf$/);
+    }
+  });
+
+  it("keeps punctuation out of the head but never leaves it empty", () => {
+    expect(buildPdfFilename("O'Brien-Smith, Jr.", "Sr. Engineer (Backend)")).toBe(
+      "O Brien Smith Jr Sr Engineer Backend_CV.pdf",
+    );
+    expect(buildPdfFilename("***", "###")).toBe("Resume_CV.pdf");
+  });
 });
 
 describe("contentDispositionAttachment", () => {
@@ -82,5 +106,18 @@ describe("contentDispositionAttachment", () => {
     expect(value).toMatch(/filename="[\x20-\x7E]+"/);
     const encoded = value.match(/filename\*=UTF-8''(.+)$/)?.[1] ?? "";
     expect(decodeURIComponent(encoded)).toBe(filename);
+  });
+});
+
+describe("contentDispositionInline", () => {
+  it("encodes exactly like the attachment variant", () => {
+    const filename = buildPdfFilename("张三", "软件工程师", "cl");
+    const inline = contentDispositionInline(filename);
+
+    expect(inline.startsWith("inline; ")).toBe(true);
+    expect(isHeaderSafe(inline)).toBe(true);
+    expect(inline.replace(/^inline; /, "")).toBe(
+      contentDispositionAttachment(filename).replace(/^attachment; /, ""),
+    );
   });
 });

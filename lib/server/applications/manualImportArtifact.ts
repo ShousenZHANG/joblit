@@ -1,7 +1,10 @@
 import { buildCoverEvidenceContext } from "@/lib/server/ai/coverContext";
 import { evaluateCoverQuality } from "@/lib/server/ai/coverQuality";
 import { attachEvidenceAndReview } from "@/lib/server/ai/evidenceLedger";
-import { buildPdfFilename } from "@/lib/server/files/pdfFilename";
+import {
+  buildPdfFilename,
+  resumeFilenameSegments,
+} from "@/lib/server/files/pdfFilename";
 import { escapeLatexWithBold } from "@/lib/server/latex/escapeLatex";
 import type { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import { renderCoverLetterTex } from "@/lib/server/latex/renderCoverLetter";
@@ -247,7 +250,7 @@ function buildManualResumeArtifact(input: {
       experiences: nextExperiences,
       skills: nextSkills,
     }),
-    filename: parseFilename(input.renderInput.candidate.name, input.job.title, "resume"),
+    filename: parseFilename(resumeFilenameSegments(input.profile).name, input.job.title, "resume"),
     coverQualityGate: "pass",
     coverQualityIssueCount: 0,
     aiContent,
@@ -336,7 +339,7 @@ function buildManualCoverArtifact(input: {
       closing: coverOutput.cover.closing,
       signatureName: coverOutput.cover.signatureName,
     }),
-    filename: parseFilename(input.renderInput.candidate.name, input.job.title, "cover"),
+    filename: parseFilename(resumeFilenameSegments(input.profile).name, input.job.title, "cover"),
     coverQualityGate: qualityReport.passed ? "pass" : "soft-fail",
     coverQualityIssueCount: qualityReport.issues.length,
     aiContent: attachEvidenceAndReview({

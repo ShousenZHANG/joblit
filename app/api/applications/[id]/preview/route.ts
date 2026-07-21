@@ -10,6 +10,7 @@ import {
   renderApplicationPdf,
   renderCoverLetterPdf,
 } from "@/lib/server/applications/finalizeApplication";
+import { contentDispositionInline } from "@/lib/server/files/pdfFilename";
 import { prisma } from "@/lib/server/prisma";
 import { aiContentSchema } from "@/lib/shared/schemas/aiContent";
 
@@ -22,10 +23,6 @@ function parseTarget(req: Request): "resume" | "cover" {
   return new URL(req.url).searchParams.get("target") === "cover"
     ? "cover"
     : "resume";
-}
-
-function safeFilename(value: string): string {
-  return value.replace(/["\\\r\n]/g, "_");
 }
 
 /**
@@ -148,7 +145,7 @@ export async function POST(
       status: 200,
       headers: {
         "Cache-Control": "private, no-store, max-age=0",
-        "Content-Disposition": `inline; filename="${safeFilename(rendered.filename)}"`,
+        "Content-Disposition": contentDispositionInline(rendered.filename),
         "Content-Type": "application/pdf",
         "X-Content-Type-Options": "nosniff",
       },

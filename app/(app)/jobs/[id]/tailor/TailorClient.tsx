@@ -36,6 +36,8 @@ interface TailorClientProps {
   initialAiContentHash: string | null;
   resumePdfUrl: string | null;
   coverPdfUrl: string | null;
+  resumePdfName: string;
+  coverPdfName: string;
   job: {
     id: string | null;
     title: string;
@@ -52,6 +54,8 @@ export function TailorClient({
   initialAiContentHash,
   resumePdfUrl,
   coverPdfUrl,
+  resumePdfName,
+  coverPdfName,
   job,
 }: TailorClientProps) {
   const router = useRouter();
@@ -316,6 +320,9 @@ export function TailorClient({
           <PdfPreview
             pdfUrl={currentPdf}
             jobTitle={job.title}
+            downloadFilename={
+              docTab === "resume" ? resumePdfName : coverPdfName
+            }
             isRefreshing={isRefreshing}
             lastRefreshedAt={currentRefreshAt}
             onRefresh={handleRefresh}

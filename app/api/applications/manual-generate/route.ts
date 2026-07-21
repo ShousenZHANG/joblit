@@ -305,6 +305,10 @@ export async function POST(req: Request) {
         status: "DRAFT",
         aiContentHash: committed.aiContentHash,
         aiContent: committed.aiContent,
+        // DRAFT mode uploads nothing, so the review dialog's preview is an
+        // opaque object URL. Hand it the canonical name the artifact builder
+        // already computed rather than letting the browser invent one.
+        pdfName: artifact.filename,
         coverQualityGate: artifact.coverQualityGate,
         coverQualityIssueCount: artifact.coverQualityIssueCount,
         job: {

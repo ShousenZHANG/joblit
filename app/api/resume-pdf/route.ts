@@ -10,7 +10,11 @@ import { LatexRenderError, compileLatexToPdf } from "@/lib/server/latex/compileP
 import type { CompileFile } from "@/lib/server/latex/compilePdf";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import { mapResumeProfileCN } from "@/lib/server/latex/mapResumeProfileCN";
-import { buildPdfFilename, contentDispositionAttachment } from "@/lib/server/files/pdfFilename";
+import {
+  buildPdfFilename,
+  contentDispositionAttachment,
+  resumeFilenameSegments,
+} from "@/lib/server/files/pdfFilename";
 import { ResumeProfileSchema } from "@/lib/shared/schemas/resumeProfile";
 import {
   buildResumePhotoCompileFile,
@@ -81,15 +85,11 @@ export async function POST(req: Request) {
   const locale = typeof profileRecord.locale === "string" ? profileRecord.locale : "en-AU";
 
   let tex: string;
-  let candidateName: string;
-  let candidateTitle: string;
   const files: CompileFile[] = [];
 
   if (locale === "zh-CN") {
     const input = mapResumeProfileCN(sourceProfile);
     tex = renderResumeCNTex(input);
-    candidateName = input.candidate.name;
-    candidateTitle = input.candidate.title;
 
     // Only fetch photos uploaded through this user's Vercel Blob path.
     const basics = (sourceProfile as Record<string, unknown>).basics as Record<string, unknown> | undefined;
@@ -119,8 +119,6 @@ export async function POST(req: Request) {
   } else {
     const input = mapResumeProfile(sourceProfile);
     tex = renderResumeTex(input);
-    candidateName = input.candidate.name;
-    candidateTitle = input.candidate.title;
   }
 
   let pdf: Buffer;
@@ -152,7 +150,10 @@ export async function POST(req: Request) {
     );
   }
 
-  const filename = buildPdfFilename(candidateName, candidateTitle);
+  // No job is attached here — this is the user's master resume — so the title
+  // segment is their own profile headline, not a job title.
+  const { name, title } = resumeFilenameSegments(sourceProfile);
+  const filename = buildPdfFilename(name, title);
 
   const body = new Uint8Array(pdf);
   return new NextResponse(body, {
