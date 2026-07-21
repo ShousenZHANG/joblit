@@ -121,9 +121,12 @@ export function useJobFilters() {
     [pathname, router],
   );
 
-  // Selected row and mobile pane are workspace-only state. Using
-  // router.replace here would navigate the force-dynamic `/jobs` route and
-  // request a fresh RSC payload, which can remount the nested list viewport.
+  // Selected row and mobile pane are workspace-only state, so they are the ONLY
+  // writes exposed to callers — and they never navigate. Going through
+  // router.replace requests a fresh RSC payload from the force-dynamic `/jobs`
+  // route, which re-seeds the first page of results over the infinite query and
+  // discards every page the user scrolled in. `replaceUrlState` stays internal
+  // to the debounced filter sync below, where a re-query is the whole point.
   const replaceUrlStateShallow = useCallback(
     (patch: Partial<JobsUrlState>): JobsUrlState | null => {
       const currentParams = new URLSearchParams(latestParamsRef.current);
@@ -205,7 +208,6 @@ export function useJobFilters() {
     setSortByFit,
     queryString,
     urlState,
-    replaceUrlState,
     replaceUrlStateShallow,
   };
 }

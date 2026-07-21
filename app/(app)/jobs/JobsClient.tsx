@@ -87,7 +87,6 @@ export function JobsClient({
     market,
     queryString,
     urlState,
-    replaceUrlState,
     replaceUrlStateShallow,
   } = useJobFilters();
   const urlSelectedId = urlState.selectedId;
@@ -119,16 +118,18 @@ export function JobsClient({
   const [suppressedDeletedIds, setSuppressedDeletedIds] = useState<Set<string>>(
     () => new Set(sessionDeletedJobIds),
   );
+  // Every workspace-URL write goes through the shallow (history) path — there
+  // is deliberately no router.replace variant. Nothing the server renders
+  // depends on the selected row or the mobile pane, but `/jobs` is
+  // force-dynamic: a router.replace re-runs the page's server component, which
+  // re-seeds ONE page of rows and re-hydrates it over the infinite query with a
+  // fresher timestamp. Every page the user scrolled in is discarded, so
+  // selecting a row mid-triage snapped the list back to ten rows and threw the
+  // scroll position away. `pendingWorkspaceUrlRef` records what we wrote so the
+  // URL->state effect below can tell our own write from a genuine external
+  // change (back/forward, or the debounced filter sync republishing the merged
+  // URL) and leave the state we just set alone.
   const persistWorkspaceUrl = useCallback(
-    (patch: Partial<Pick<JobsUrlState, "selectedId" | "view">>) => {
-      const nextState = replaceUrlState(patch);
-      if (nextState) {
-        pendingWorkspaceUrlRef.current = getWorkspaceStateKey(nextState);
-      }
-    },
-    [replaceUrlState],
-  );
-  const persistWorkspaceUrlShallow = useCallback(
     (patch: Partial<Pick<JobsUrlState, "selectedId" | "view">>) => {
       const nextState = replaceUrlStateShallow(patch);
       if (nextState) {
@@ -172,9 +173,9 @@ export function JobsClient({
     (id: string | null) => {
       setSelectionExplicitlyCleared(false);
       setSelectedId(id);
-      persistWorkspaceUrlShallow({ selectedId: id });
+      persistWorkspaceUrl({ selectedId: id });
     },
-    [persistWorkspaceUrlShallow],
+    [persistWorkspaceUrl],
   );
 
   useEffect(() => {

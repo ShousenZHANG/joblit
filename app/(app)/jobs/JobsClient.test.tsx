@@ -295,6 +295,44 @@ describe("JobsClient", () => {
     ).toBeInTheDocument();
   });
 
+  it("selects a row without navigating the route", async () => {
+    // `/jobs` is force-dynamic, so any router.replace re-runs the server
+    // component. That re-seeds a SINGLE page of rows and re-hydrates it over
+    // the infinite query, throwing away every page the user scrolled in — the
+    // list snaps back to ten rows and the scroll position jumps. Row selection
+    // is workspace-only state, so it must go through the shallow history
+    // write, never a route navigation.
+    const user = userEvent.setup();
+    const secondJob = {
+      ...baseJob,
+      id: "22222222-2222-2222-2222-222222222222",
+      title: "Backend Engineer",
+    };
+    navigationMock.search = "utm=campaign";
+    window.history.replaceState(window.history.state, "", "/jobs?utm=campaign");
+
+    renderWithClient(
+      <JobsClient initialItems={[baseJob, secondJob]} initialCursor={null} />,
+    );
+    const replaceStateSpy = vi.spyOn(window.history, "replaceState");
+    const results = screen.getAllByTestId("jobs-results-scroll")[0];
+    await user.click(
+      within(results).getByRole("button", { name: /Backend Engineer/i }),
+    );
+
+    expect(navigationMock.replace).not.toHaveBeenCalled();
+    expect(replaceStateSpy).toHaveBeenCalledWith(
+      window.history.state,
+      "",
+      `/jobs?utm=campaign&job=${secondJob.id}`,
+    );
+    await waitFor(() => {
+      expect(
+        within(results).getByRole("button", { name: /Backend Engineer/i }),
+      ).toHaveAttribute("aria-current", "true");
+    });
+  });
+
   it("writes mobile row selection and view without losing unrelated params", async () => {
     const user = userEvent.setup();
     const secondJob = {
@@ -308,15 +346,18 @@ describe("JobsClient", () => {
     renderWithClient(
       <JobsClient initialItems={[baseJob, secondJob]} initialCursor={null} />,
     );
+    const replaceStateSpy = vi.spyOn(window.history, "replaceState");
     const results = screen.getAllByTestId("jobs-results-scroll")[0];
     await user.click(
       within(results).getByRole("button", { name: /Backend Engineer/i }),
     );
 
-    expect(navigationMock.replace.mock.calls).toContainEqual([
+    expect(replaceStateSpy).toHaveBeenCalledWith(
+      window.history.state,
+      "",
       `/jobs?utm=campaign&job=${secondJob.id}&view=detail`,
-      { scroll: false },
-    ]);
+    );
+    expect(navigationMock.replace).not.toHaveBeenCalled();
     expect(screen.getByRole("tab", { name: messages.jobs.tabDetail })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -337,6 +378,7 @@ describe("JobsClient", () => {
       renderWithClient(
         <JobsClient initialItems={[baseJob, secondJob]} initialCursor={null} />,
       );
+      const replaceStateSpy = vi.spyOn(window.history, "replaceState");
       fireEvent.change(screen.getAllByRole("textbox")[0], {
         target: { value: "platform" },
       });
@@ -345,22 +387,22 @@ describe("JobsClient", () => {
         within(results).getByRole("button", { name: /Backend Engineer/i }),
       );
 
-      expect(navigationMock.replace.mock.calls).toEqual([
-        [
-          `/jobs?utm=campaign&job=${secondJob.id}&view=detail`,
-          { scroll: false },
-        ],
-      ]);
+      // The selection lands immediately, but only in the address bar.
+      expect(replaceStateSpy).toHaveBeenCalledWith(
+        window.history.state,
+        "",
+        `/jobs?utm=campaign&job=${secondJob.id}&view=detail`,
+      );
+      expect(navigationMock.replace).not.toHaveBeenCalled();
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(250);
       });
 
+      // The debounced filter sync is a real navigation (the query has to be
+      // re-run), and it must carry the shallow-written selection with it —
+      // Next never published that write back through useSearchParams.
       expect(navigationMock.replace.mock.calls).toEqual([
-        [
-          `/jobs?utm=campaign&job=${secondJob.id}&view=detail`,
-          { scroll: false },
-        ],
         [
           `/jobs?utm=campaign&job=${secondJob.id}&view=detail&q=platform`,
           { scroll: false },
@@ -375,6 +417,7 @@ describe("JobsClient", () => {
   it("links mobile tabs to panels and supports automatic arrow activation", async () => {
     const user = userEvent.setup();
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
+    const replaceStateSpy = vi.spyOn(window.history, "replaceState");
 
     const listTab = screen.getByRole("tab", { name: /Jobs/ });
     const detailTab = screen.getByRole("tab", { name: messages.jobs.tabDetail });
@@ -391,9 +434,12 @@ describe("JobsClient", () => {
 
     expect(detailTab).toHaveFocus();
     expect(detailTab).toHaveAttribute("aria-selected", "true");
-    expect(navigationMock.replace).toHaveBeenLastCalledWith("/jobs?view=detail", {
-      scroll: false,
-    });
+    expect(replaceStateSpy).toHaveBeenCalledWith(
+      window.history.state,
+      "",
+      "/jobs?view=detail",
+    );
+    expect(navigationMock.replace).not.toHaveBeenCalled();
   });
 
   it("restores URL state after browser history navigation without rewriting it", async () => {
