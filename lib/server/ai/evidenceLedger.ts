@@ -169,8 +169,26 @@ function finalText(content: { aiText: string; userEdit?: string }) {
   return content.userEdit?.trim() || content.aiText.trim();
 }
 
+/**
+ * A digit that follows a capitalised word is naming a product, not asserting a
+ * result: "Microsoft 365", "Windows 11", "Power BI 2.0", "SQL Server 2019".
+ * Treating those as quantified claims blocked a finalize over wording the
+ * candidate had genuinely used, and a gate that cries wolf is one people learn
+ * to click past — which costs more than the fabrications it would have caught.
+ *
+ * A model that invents a product the candidate never used is still caught, by
+ * the skill and bullet evidence checks. This narrows only what counts as a
+ * NUMBER.
+ */
+const PRODUCT_VERSION_RE = /\p{Lu}[\p{L}\p{N}.&-]*\s+$/u;
+
 function numericClaims(text: string) {
-  return Array.from(text.matchAll(NUMBER_CLAIM_RE), (match) => match[1]);
+  return Array.from(text.matchAll(NUMBER_CLAIM_RE))
+    .filter((match) => {
+      const numberStart = match.index + match[0].length - match[1].length;
+      return !PRODUCT_VERSION_RE.test(text.slice(0, numberStart));
+    })
+    .map((match) => match[1]);
 }
 
 function reviewContentWithEvidence(

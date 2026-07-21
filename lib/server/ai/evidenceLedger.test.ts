@@ -92,10 +92,10 @@ describe("evidence ledger", () => {
 
     const reviewed = attachEvidenceAndReview({
       aiContent: draft,
-      // The master profile writes the suite as "M365", so a literal "365"
-      // never appears in the candidate evidence.
+      // The master profile names the suite without the version, so no "365"
+      // appears anywhere in the candidate evidence.
       resumeSnapshot: {
-        summary: "Automation specialist working across Power Platform and M365.",
+        summary: "Automation specialist working across Power Platform.",
       },
       jobDescription: "Build automation across Microsoft 365.",
     });
