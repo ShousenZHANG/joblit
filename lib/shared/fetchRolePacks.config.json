@@ -65,7 +65,9 @@
         "Full Stack Developer",
         "Full Stack Agentic Engineer",
         "AI Full Stack Engineer",
-        "AI Agent Engineer"
+        "AI Agent Engineer",
+        "Software Engineer",
+        "Backend Engineer"
       ]
     },
     {
@@ -104,7 +106,10 @@
         "Machine Learning Engineer",
         "Applied AI Engineer",
         "Data Scientist",
-        "MLOps Engineer"
+        "MLOps Engineer",
+        "Software Engineer",
+        "Full Stack Engineer",
+        "Backend Engineer"
       ]
     },
     {
@@ -155,7 +160,8 @@
         "Data Pipeline Engineer",
         "ETL Developer",
         "Big Data Engineer",
-        "Data Platform Engineer"
+        "Data Platform Engineer",
+        "Software Engineer"
       ]
     }
   ],

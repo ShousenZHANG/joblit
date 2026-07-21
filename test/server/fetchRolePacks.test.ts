@@ -59,16 +59,20 @@ describe("fetch role packs", () => {
     expect(out).toContain("AI Engineer");
   });
 
-  it("keeps the AI pack in-domain so no expanded query is fetched then discarded", () => {
+  it("expands an AI search across its own domain and the sibling engineering roles", () => {
     const out = expandRoleQueries(["AI Engineer"]);
     expect(out).toContain("AI Agent Engineer");
     expect(out).toContain("AI Full Stack Engineer");
     expect(out).toContain("Machine Learning Engineer");
     expect(out).toContain("Data Scientist");
     expect(out).toContain("MLOps Engineer");
-    // The worker's base-query gate rejects every generic engineering title on
-    // an AI search, so expanding into one only burns fetch budget.
-    expect(out).not.toContain("Software Engineer");
+    // These were dropped while the worker's base gate rejected every generic
+    // engineering title on a domain search, which made requesting them pure
+    // waste. The gate now defers to the include filter for a domain-only base
+    // query, so someone hiring into AI sees adjacent engineering roles again.
+    expect(out).toContain("Software Engineer");
+    expect(out).toContain("Full Stack Engineer");
+    expect(out).toContain("Backend Engineer");
   });
 
   it("resolves Copilot Studio via its alias", () => {

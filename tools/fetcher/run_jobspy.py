@@ -694,6 +694,24 @@ def _is_title_relevant(title: str, queries: List[str]) -> bool:
     return False
 
 
+# A base query whose only signal names a domain ("AI Engineer" -> "ai") states
+# which field the user is hiring into, not which stack they must have. Smart
+# expansion answers that with the domain's sibling roles, and the fetcher
+# really requests them, so rejecting every one wasted the request and hid
+# roles the user asked to see. A base query naming a concrete technology
+# ("Java backend developer" -> "java") is a different claim and stays pinned.
+DOMAIN_ONLY_BASE_SIGNALS: frozenset[str] = frozenset(
+    {*AI_DOMAIN_SYNONYMS, *BACKEND_DOMAIN_SYNONYMS, *DATA_DOMAIN_SYNONYMS}
+)
+
+
+def _base_query_is_domain_only(signals: List[str]) -> bool:
+    """True when every required signal names a domain rather than a stack."""
+    return bool(signals) and all(
+        signal in DOMAIN_ONLY_BASE_SIGNALS for signal in signals
+    )
+
+
 def _matches_base_query_constraints(title: str, base_queries: List[str]) -> bool:
     normalized_title = _normalize_role_text(title)
     for query in base_queries:
@@ -704,7 +722,12 @@ def _matches_base_query_constraints(title: str, base_queries: List[str]) -> bool
         if not all(
             _signal_in_title(title, signal) for signal in ascii_signals
         ) and not _matches_domain_family(title, ascii_signals):
-            continue
+            # A domain-only base query defers to the include filter, which has
+            # already checked the title against the expanded role pack. That
+            # keeps sibling engineering roles while still rejecting anything
+            # outside the family — a chef matches no expanded query either.
+            if not _base_query_is_domain_only(ascii_signals):
+                continue
         if all(signal in normalized_title for signal in cjk_signals):
             return True
     return False

@@ -619,6 +619,76 @@ class RunJobspyDedupeTests(unittest.TestCase):
 
         self.assertEqual(out["title"].tolist(), ["高级Java后端开发工程师"])
 
+    def test_domain_search_keeps_the_role_pack_it_expanded_into(self):
+        # Smart expand pulls sibling engineering roles into the search, and the
+        # fetcher really requests them. The base gate then dropped every one,
+        # so the run spent LinkedIn budget on rows it could never keep and the
+        # user saw only literal AI titles.
+        df = pd.DataFrame(
+            [
+                {"title": "AI Engineer"},
+                {"title": "Machine Learning Engineer"},
+                {"title": "Software Engineer"},
+                {"title": "Full Stack Engineer"},
+                {"title": "Backend Engineer"},
+                {"title": "Python Developer"},
+                # Nothing outside the engineering family may ride along.
+                {"title": "Chef"},
+                {"title": "Barista"},
+                {"title": "Registered Nurse"},
+                {"title": "Accountant"},
+            ]
+        )
+
+        out = rj.filter_title(
+            df,
+            queries=[
+                "AI Engineer",
+                "Machine Learning Engineer",
+                "Software Engineer",
+                "Full Stack Engineer",
+                "Backend Engineer",
+            ],
+            base_queries=["AI Engineer"],
+            enforce_include=True,
+            exclude_terms=[],
+        )
+
+        kept = out["title"].tolist()
+        for title in (
+            "AI Engineer",
+            "Machine Learning Engineer",
+            "Software Engineer",
+            "Full Stack Engineer",
+            "Backend Engineer",
+            "Python Developer",
+        ):
+            self.assertIn(title, kept)
+        for title in ("Chef", "Barista", "Registered Nurse", "Accountant"):
+            self.assertNotIn(title, kept)
+
+    def test_expansion_still_cannot_widen_a_named_technology(self):
+        # The relaxation is scoped to a domain base query. Naming a specific
+        # stack still pins the results to it — searching Java must not return
+        # Python roles just because both are "engineering".
+        df = pd.DataFrame(
+            [
+                {"title": "Senior Java Backend Engineer"},
+                {"title": "Python Developer"},
+                {"title": "Ruby Engineer"},
+            ]
+        )
+
+        out = rj.filter_title(
+            df,
+            queries=["Java Backend Developer", "Backend Engineer", "Software Engineer"],
+            base_queries=["Java backend developer"],
+            enforce_include=True,
+            exclude_terms=[],
+        )
+
+        self.assertEqual(out["title"].tolist(), ["Senior Java Backend Engineer"])
+
     def test_smart_expand_cannot_bypass_original_technical_direction(self):
         df = pd.DataFrame(
             [
