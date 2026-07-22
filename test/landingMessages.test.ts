@@ -2,23 +2,10 @@ import { describe, expect, it } from "vitest";
 import en from "../messages/en.json";
 import zh from "../messages/zh.json";
 
-function shape(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(shape);
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([key, child]) => [key, shape(child)]),
-    );
-  }
-  return typeof value;
-}
+// en/zh key-structure parity is asserted for every namespace in
+// test/messagesContract.test.ts. This file covers landing copy only.
 
 describe("landing message contract", () => {
-  it("keeps English and Chinese key structures aligned", () => {
-    expect(shape(zh.landing)).toEqual(shape(en.landing));
-  });
-
   it.each([
     ["en", en.landing.faq.items],
     ["zh", zh.landing.faq.items],

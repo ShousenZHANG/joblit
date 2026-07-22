@@ -186,7 +186,8 @@ const messages: Record<Locale, Record<string, string>> = {
     "common.cancel": "Cancel",
   },
   zh: {
-    "localAi.error.HERMES_ORIGIN_FORBIDDEN": "Hermes blocked this extension origin. Re-run the latest Joblit Hermes installer.",
+    "localAi.error.HERMES_ORIGIN_FORBIDDEN":
+      "Hermes 拒绝了此扩展来源。请重新运行最新版 Joblit Hermes 安装程序。",
     "app.name": "Joblit 自动填充",
     "app.loading": "加载中...",
     "app.unavailable": "扩展暂时不可用",
