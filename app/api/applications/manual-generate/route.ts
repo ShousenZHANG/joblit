@@ -1,20 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { del, put } from "@vercel/blob";
 import { errorJson, notFoundError, validationError } from "@/lib/server/api/errorResponse";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
+import { commitApplicationArtifact } from "@/lib/server/applications/commitApplicationArtifact";
 import { toErrorResponse } from "@/lib/server/api/appError";
 import { enforceAiRateLimit } from "@/lib/server/api/aiRateLimit";
 import { buildPromptMeta, validatePromptMetaForImport } from "@/lib/server/ai/promptContract";
-import {
-  APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
-  buildApplicationArtifactBlobPath,
-} from "@/lib/server/files/applicationArtifactBlob";
-import { LatexRenderError, compileLatexToPdf } from "@/lib/server/latex/compilePdf";
+import { compileLatexToPdf } from "@/lib/server/latex/compilePdf";
 import { contentDispositionAttachment } from "@/lib/server/files/pdfFilename";
 import {
   assertAtsPdf,
-  AtsPdfValidationError,
   type AtsPdfValidation,
 } from "@/lib/server/applications/atsPdfValidator";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
@@ -27,15 +22,8 @@ import {
   ImportedPromptMetaSchema,
   ManualGenerateSchema,
 } from "@/lib/server/applications/manualImportParser";
-import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
-import { mergeAiContentForTarget } from "@/lib/server/applications/mergeAiContentForTarget";
 import { reportError } from "@/lib/server/observability/errorReporter";
-import { persistReviewLedger } from "@/lib/server/applications/persistReviewLedger";
-import {
-  aiContentSchema,
-  hashAiContent,
-  type AiContent,
-} from "@/lib/shared/schemas/aiContent";
+import { hashAiContent } from "@/lib/shared/schemas/aiContent";
 
 export const runtime = "nodejs";
 
@@ -52,118 +40,6 @@ function parseFinalizeFlag(req: Request): boolean {
   const v = url.searchParams.get("finalize");
   if (v === null) return true;
   return v !== "false" && v !== "0";
-}
-
-type ApplicationJob = {
-  id: string;
-  title: string;
-  company: string | null;
-};
-
-async function commitGeneratedApplication(input: {
-  userId: string;
-  job: ApplicationJob;
-  resumeProfileId: string;
-  incomingAiContent: AiContent;
-  target: "resume" | "cover";
-  status: "DRAFT" | "FINAL";
-  pdfUrl: string | null;
-  pdfName: string | null;
-  atsValidation?: AtsPdfValidation | null;
-}) {
-  return prisma.$transaction(async (tx) => {
-    // The lock is intentionally first. Concurrent CV and cover imports for
-    // the same job then re-read and merge against the preceding commit rather
-    // than both overwriting from one stale snapshot.
-    await acquireApplicationMutationLock(tx, input.userId, input.job.id);
-    const existing = await tx.application.findUnique({
-      where: {
-        userId_jobId: { userId: input.userId, jobId: input.job.id },
-      },
-      select: {
-        resumePdfUrl: true,
-        coverPdfUrl: true,
-        aiContent: true,
-        atsValidation: true,
-      },
-    });
-    const existingAiContent = aiContentSchema.safeParse(existing?.aiContent);
-    const mergedAiContent = mergeAiContentForTarget(
-      existingAiContent.success ? existingAiContent.data : null,
-      input.incomingAiContent,
-      input.target,
-    );
-    const aiContentHash = hashAiContent(mergedAiContent);
-    const artifactPatch =
-      input.status !== "FINAL"
-        ? {}
-        : input.target === "resume"
-          ? {
-              // Never leave an older PDF attached to newly committed content.
-              resumePdfUrl: input.pdfUrl,
-              resumePdfName: input.pdfUrl ? input.pdfName : null,
-            }
-          : {
-              coverPdfUrl: input.pdfUrl,
-            };
-    const existingAtsValidation =
-      existing?.atsValidation &&
-      typeof existing.atsValidation === "object" &&
-      !Array.isArray(existing.atsValidation)
-        ? existing.atsValidation
-        : {};
-    const atsValidation = {
-      ...existingAtsValidation,
-      [input.target]: input.atsValidation ?? null,
-    };
-
-    const application = await tx.application.upsert({
-      where: {
-        userId_jobId: { userId: input.userId, jobId: input.job.id },
-      },
-      create: {
-        userId: input.userId,
-        jobId: input.job.id,
-        resumeProfileId: input.resumeProfileId,
-        company: input.job.company,
-        role: input.job.title,
-        status: input.status,
-        aiContent: mergedAiContent,
-        aiContentHash,
-        atsValidation,
-        reviewReport: mergedAiContent.review ?? undefined,
-        ...artifactPatch,
-      },
-      update: {
-        resumeProfileId: input.resumeProfileId,
-        company: input.job.company,
-        role: input.job.title,
-        status: input.status,
-        aiContent: mergedAiContent,
-        aiContentHash,
-        atsValidation,
-        reviewReport: mergedAiContent.review ?? undefined,
-        ...artifactPatch,
-      },
-      select: { id: true },
-    });
-    await persistReviewLedger(tx, {
-      userId: input.userId,
-      applicationId: application.id,
-      jobId: input.job.id,
-      aiContent: mergedAiContent,
-    });
-
-    return {
-      applicationId: application.id,
-      aiContent: mergedAiContent,
-      aiContentHash,
-      previousArtifactUrl:
-        input.target === "resume"
-          ? existing?.resumePdfUrl ?? null
-          : existing?.coverPdfUrl ?? null,
-    };
-  });
 }
 
 export async function POST(req: Request) {
@@ -289,17 +165,22 @@ export async function POST(req: Request) {
   // aiContent snapshot and return JSON. Caller navigates to
   // /jobs/[id]/tailor to review.
   if (!finalize) {
-    const committed = await commitGeneratedApplication({
+    const committed = await commitApplicationArtifact({
       userId,
       job,
       resumeProfileId: profile.id,
-      incomingAiContent: artifact.aiContent,
-      target: data.target,
+      aiContent: artifact.aiContent,
+      // A DRAFT renders nothing, so there is no artifact to upload — but the
+      // target still selects which half of the AI Content the merge preserves.
+      artifacts: [],
       status: "DRAFT",
-      pdfUrl: null,
-      pdfName: null,
-      atsValidation: null,
+      mergeTarget: data.target,
     });
+    if (committed.kind !== "committed") {
+      return errorJson("APPLICATION_PERSIST_FAILED", "Could not save the draft", 500, {
+        requestId,
+      });
+    }
     return NextResponse.json(
       {
         applicationId: committed.applicationId,
@@ -355,64 +236,44 @@ export async function POST(req: Request) {
     );
   }
 
-  let persistedResumePdfUrl: string | null = null;
-  let persistedCoverPdfUrl: string | null = null;
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
-    try {
-      const artifactVersion = `${hashAiContent(artifact.aiContent)}-${randomUUID()}`;
-      const blob = await put(
-        buildApplicationArtifactBlobPath({
-          userId,
-          jobId: job.id,
-          target: data.target,
-          version: artifactVersion,
-        }),
-        pdf,
-        {
-          access: "public",
-          contentType: "application/pdf",
-          token: process.env.BLOB_READ_WRITE_TOKEN,
-          ...APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
-        },
-      );
-      if (data.target === "resume") {
-        persistedResumePdfUrl = blob.url;
-      } else {
-        persistedCoverPdfUrl = blob.url;
-      }
-    } catch (error) {
-      // The caller still receives the compiled PDF, but the DB commit below
-      // clears the target's previous URL rather than mislabelling it as the
-      // artifact for this new content.
-      reportError(error, {
-        scope: "applications.manual-generate.blob-upload",
-        userId,
-        tags: { jobId: job.id, target: data.target },
-      });
-    }
-  }
-
-  const currentArtifactUrl =
-    data.target === "resume" ? persistedResumePdfUrl : persistedCoverPdfUrl;
-  let committed: Awaited<ReturnType<typeof commitGeneratedApplication>>;
+  let committed;
   try {
-    committed = await commitGeneratedApplication({
+    const result = await commitApplicationArtifact({
       userId,
       job,
       resumeProfileId: profile.id,
-      incomingAiContent: artifact.aiContent,
-      target: data.target,
+      aiContent: artifact.aiContent,
+      artifacts: [
+        {
+          target: data.target,
+          pdf,
+          filename,
+          atsValidation,
+          version: `${hashAiContent(artifact.aiContent)}-${randomUUID()}`,
+        },
+      ],
       status: "FINAL",
-      pdfUrl: currentArtifactUrl,
-      pdfName: filename,
-      atsValidation,
+      mergeTarget: data.target,
     });
-  } catch (error) {
-    if (process.env.BLOB_READ_WRITE_TOKEN && currentArtifactUrl) {
-      await del(currentArtifactUrl, {
-        token: process.env.BLOB_READ_WRITE_TOKEN,
-      }).catch(() => undefined);
+    if (result.kind !== "committed") {
+      // An upload failure used to be swallowed here, committing a null URL that
+      // cleared the user's previous PDF. It is now a plain failure.
+      if (result.kind === "upload_failed") {
+        reportError(result.cause, {
+          scope: "applications.manual-generate.blob-upload",
+          userId,
+          tags: { jobId: job.id, target: data.target },
+        });
+      }
+      return errorJson(
+        "APPLICATION_PERSIST_FAILED",
+        "The PDF was rendered but could not be saved. Please try again.",
+        500,
+        { requestId },
+      );
     }
+    committed = result;
+  } catch (error) {
     reportError(error, {
       scope: "applications.manual-generate.commit",
       userId,
@@ -424,16 +285,6 @@ export async function POST(req: Request) {
       500,
       { requestId },
     );
-  }
-
-  if (
-    process.env.BLOB_READ_WRITE_TOKEN &&
-    committed.previousArtifactUrl &&
-    committed.previousArtifactUrl !== currentArtifactUrl
-  ) {
-    await del(committed.previousArtifactUrl, {
-      token: process.env.BLOB_READ_WRITE_TOKEN,
-    }).catch(() => undefined);
   }
 
   return new NextResponse(new Uint8Array(pdf), {

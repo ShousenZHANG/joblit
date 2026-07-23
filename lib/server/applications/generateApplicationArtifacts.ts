@@ -9,20 +9,14 @@ import {
   buildPdfFilename,
   resumeFilenameSegments,
 } from "@/lib/server/files/pdfFilename";
-import {
-  APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
-  buildApplicationArtifactBlobPath,
-} from "@/lib/server/files/applicationArtifactBlob";
-import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
-import { del, put } from "@vercel/blob";
 import { assertAtsPdf } from "@/lib/server/applications/atsPdfValidator";
 import { attachEvidenceAndReview } from "@/lib/server/ai/evidenceLedger";
+import { commitApplicationArtifact } from "@/lib/server/applications/commitApplicationArtifact";
+import { AppError } from "@/lib/server/api/appError";
 import {
   AI_CONTENT_SCHEMA_VERSION,
-  hashAiContent,
   type AiContent,
 } from "@/lib/shared/schemas/aiContent";
-import { persistReviewLedger } from "@/lib/server/applications/persistReviewLedger";
 
 type GenerateArtifactsInput = {
   userId: string;
@@ -37,45 +31,6 @@ type GenerateArtifactsResult = {
   coverPdfUrl: string | null;
   coverPdfName: string;
 };
-
-async function uploadPdfToBlob(input: {
-  userId: string;
-  jobId: string;
-  target: "resume" | "cover";
-  pdf: Buffer;
-}) {
-  if (!process.env.BLOB_READ_WRITE_TOKEN) return null;
-  const blob = await put(
-    buildApplicationArtifactBlobPath({
-      userId: input.userId,
-      jobId: input.jobId,
-      target: input.target,
-      version: `${Date.now()}-${randomUUID().slice(0, 8)}`,
-    }),
-    input.pdf,
-    {
-      access: "public",
-      contentType: "application/pdf",
-      token: process.env.BLOB_READ_WRITE_TOKEN,
-      ...APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
-    },
-  );
-  return blob.url;
-}
-
-async function deleteBlobUrls(urls: Array<string | null | undefined>) {
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
-  if (!token) return;
-  const uniqueUrls = Array.from(
-    new Set(
-      urls.filter(
-        (url): url is string =>
-          typeof url === "string" && url.trim().length > 0,
-      ),
-    ),
-  );
-  await Promise.allSettled(uniqueUrls.map((url) => del(url, { token })));
-}
 
 export async function generateApplicationArtifactsForJob(input: GenerateArtifactsInput) {
   const job = await prisma.job.findFirst({
@@ -119,207 +74,115 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
     resumeFilenameSegments(profile).name,
     job.title,
   );
-  let resumePdfUrl: string | null = null;
-  let coverPdfUrl: string | null = null;
-  let committed = false;
-
-  try {
-    const tailored = resumeResult.tailored;
-    const aiContent = attachEvidenceAndReview({
-      scopeKey: input.userId,
-      resumeSnapshot: profile,
-      jobDescription: job.description,
-      aiContent: buildBatchAiContent(
-        tailored,
-        resumeResult.renderInput.summary,
-      ),
-    });
-    if (aiContent.review?.verdict === "blocked") {
-      throw new Error("APPLICATION_REVIEW_BLOCKED");
-    }
-    const requiredKeywords = (aiContent.review?.requirements ?? [])
-      .flatMap((item) => item.text.split(/[\s,/|():;-]+/))
-      .filter((item) => item.length >= 3)
-      .slice(0, 30);
-    const resumeAtsValidation = await assertAtsPdf(resumeResult.pdf, {
-      maxPages: 2,
-      minTextChars: 180,
-      requiredKeywords,
-    });
-
-    const coverTex = renderCoverLetterTex({
-      candidate: {
-        name: resumeResult.renderInput.candidate.name,
-        title: resumeResult.renderInput.candidate.title,
-        phone: resumeResult.renderInput.candidate.phone,
-        email: resumeResult.renderInput.candidate.email,
-        linkedinUrl: resumeResult.renderInput.candidate.linkedinUrl,
-        linkedinText: resumeResult.renderInput.candidate.linkedinText,
-      },
-      company: job.company || "the company",
-      role: job.title,
-      candidateTitle: tailored.cover.candidateTitle,
-      subject: tailored.cover.subject,
-      date: tailored.cover.date,
-      salutation: tailored.cover.salutation,
-      paragraphOne: tailored.cover.paragraphOne,
-      paragraphTwo: tailored.cover.paragraphTwo,
-      paragraphThree: tailored.cover.paragraphThree,
-      closing: tailored.cover.closing,
-      signatureName: tailored.cover.signatureName,
-    });
-    const coverPdf = await compileLatexToPdf(coverTex);
-    const coverAtsValidation = await assertAtsPdf(coverPdf, {
-      maxPages: 2,
-      minTextChars: 160,
-      requiredKeywords,
-    });
-    const coverPdfName = buildPdfFilename(
-      resumeFilenameSegments(profile).name,
-      job.title,
-      "cl",
-    );
-    resumePdfUrl = await uploadPdfToBlob({
-      userId: input.userId,
-      jobId: job.id,
-      target: "resume",
-      pdf: resumeResult.pdf,
-    }).catch(() => null);
-    coverPdfUrl = await uploadPdfToBlob({
-      userId: input.userId,
-      jobId: job.id,
-      target: "cover",
-      pdf: coverPdf,
-    }).catch(() => null);
-
-    // PDF/AI work stays outside the transaction. Only the ownership recheck
-    // and Application commit are serialized, keeping lock time bounded.
-    const commit = await prisma.$transaction(
-      async (tx) => {
-        await acquireApplicationMutationLock(
-          tx,
-          input.userId,
-          job.id,
-        );
-        const ownedJob = await tx.job.findFirst({
-          where: { id: job.id, userId: input.userId },
-          select: { id: true },
-        });
-        if (!ownedJob) throw new Error("JOB_NOT_FOUND");
-
-        const currentApplication = await tx.application.findUnique({
-          where: {
-            userId_jobId: {
-              userId: input.userId,
-              jobId: job.id,
-            },
-          },
-          select: {
-            resumePdfUrl: true,
-            coverPdfUrl: true,
-          },
-        });
-        const application = await tx.application.upsert({
-          where: {
-            userId_jobId: {
-              userId: input.userId,
-              jobId: job.id,
-            },
-          },
-          create: {
-            userId: input.userId,
-            jobId: job.id,
-            resumeProfileId: profile.id,
-            company: job.company,
-            role: job.title,
-            status: "FINAL",
-            aiContent,
-            aiContentHash: hashAiContent(aiContent),
-            atsValidation: {
-              resume: resumeAtsValidation,
-              cover: coverAtsValidation,
-            },
-            reviewReport: {
-              deterministic: aiContent.review ?? null,
-              independent: tailored.reviewer ?? null,
-              quality: tailored.qualityReport ?? null,
-            },
-            ...(resumePdfUrl
-              ? {
-                  resumePdfUrl,
-                  resumePdfName,
-                }
-              : {}),
-            ...(coverPdfUrl ? { coverPdfUrl } : {}),
-          },
-          update: {
-            resumeProfileId: profile.id,
-            company: job.company,
-            role: job.title,
-            status: "FINAL",
-            aiContent,
-            aiContentHash: hashAiContent(aiContent),
-            atsValidation: {
-              resume: resumeAtsValidation,
-              cover: coverAtsValidation,
-            },
-            reviewReport: {
-              deterministic: aiContent.review ?? null,
-              independent: tailored.reviewer ?? null,
-              quality: tailored.qualityReport ?? null,
-            },
-            ...(resumePdfUrl
-              ? {
-                  resumePdfUrl,
-                  resumePdfName,
-                }
-              : {}),
-            ...(coverPdfUrl ? { coverPdfUrl } : {}),
-          },
-          select: { id: true },
-        });
-        await persistReviewLedger(tx, {
-          userId: input.userId,
-          applicationId: application.id,
-          jobId: job.id,
-          aiContent,
-        });
-
-        return {
-          applicationId: application.id,
-          staleUrls: [
-            currentApplication?.resumePdfUrl &&
-            resumePdfUrl &&
-            currentApplication.resumePdfUrl !== resumePdfUrl
-              ? currentApplication.resumePdfUrl
-              : null,
-            currentApplication?.coverPdfUrl &&
-            coverPdfUrl &&
-            currentApplication.coverPdfUrl !== coverPdfUrl
-              ? currentApplication.coverPdfUrl
-              : null,
-          ],
-        };
-      },
-      { timeout: 30_000 },
-    );
-    committed = true;
-    await deleteBlobUrls(commit.staleUrls);
-
-    return {
-      applicationId: commit.applicationId,
-      jobId: job.id,
-      resumePdfUrl,
-      resumePdfName,
-      coverPdfUrl,
-      coverPdfName,
-    } satisfies GenerateArtifactsResult;
-  } catch (error) {
-    if (!committed) {
-      await deleteBlobUrls([resumePdfUrl, coverPdfUrl]);
-    }
-    throw error;
+  const tailored = resumeResult.tailored;
+  const aiContent = attachEvidenceAndReview({
+    scopeKey: input.userId,
+    resumeSnapshot: profile,
+    jobDescription: job.description,
+    aiContent: buildBatchAiContent(
+      tailored,
+      resumeResult.renderInput.summary,
+    ),
+  });
+  if (aiContent.review?.verdict === "blocked") {
+    throw new Error("APPLICATION_REVIEW_BLOCKED");
   }
+  const requiredKeywords = (aiContent.review?.requirements ?? [])
+    .flatMap((item) => item.text.split(/[\s,/|():;-]+/))
+    .filter((item) => item.length >= 3)
+    .slice(0, 30);
+  const resumeAtsValidation = await assertAtsPdf(resumeResult.pdf, {
+    maxPages: 2,
+    minTextChars: 180,
+    requiredKeywords,
+  });
+
+  const coverTex = renderCoverLetterTex({
+    candidate: {
+      name: resumeResult.renderInput.candidate.name,
+      title: resumeResult.renderInput.candidate.title,
+      phone: resumeResult.renderInput.candidate.phone,
+      email: resumeResult.renderInput.candidate.email,
+      linkedinUrl: resumeResult.renderInput.candidate.linkedinUrl,
+      linkedinText: resumeResult.renderInput.candidate.linkedinText,
+    },
+    company: job.company || "the company",
+    role: job.title,
+    candidateTitle: tailored.cover.candidateTitle,
+    subject: tailored.cover.subject,
+    date: tailored.cover.date,
+    salutation: tailored.cover.salutation,
+    paragraphOne: tailored.cover.paragraphOne,
+    paragraphTwo: tailored.cover.paragraphTwo,
+    paragraphThree: tailored.cover.paragraphThree,
+    closing: tailored.cover.closing,
+    signatureName: tailored.cover.signatureName,
+  });
+  const coverPdf = await compileLatexToPdf(coverTex);
+  const coverAtsValidation = await assertAtsPdf(coverPdf, {
+    maxPages: 2,
+    minTextChars: 160,
+    requiredKeywords,
+  });
+  const coverPdfName = buildPdfFilename(
+    resumeFilenameSegments(profile).name,
+    job.title,
+    "cl",
+  );
+  const artifactVersion = `${Date.now()}-${randomUUID().slice(0, 8)}`;
+  const commit = await commitApplicationArtifact({
+    userId: input.userId,
+    job: { id: job.id, title: job.title, company: job.company },
+    resumeProfileId: profile.id,
+    aiContent,
+    artifacts: [
+      {
+        target: "resume",
+        pdf: resumeResult.pdf,
+        filename: resumePdfName,
+        atsValidation: resumeAtsValidation,
+        version: artifactVersion,
+      },
+      {
+        target: "cover",
+        pdf: coverPdf,
+        atsValidation: coverAtsValidation,
+        version: artifactVersion,
+      },
+    ],
+    status: "FINAL",
+    // This path builds both halves, so there is nothing to merge against.
+    extraData: {
+      reviewReport: {
+        deterministic: aiContent.review ?? null,
+        independent: tailored.reviewer ?? null,
+        quality: tailored.qualityReport ?? null,
+      },
+    },
+  });
+  if (commit.kind === "job_missing") {
+    // The Job was deleted while the render was in flight. The Codex Batch
+    // runner records this message on the task, so keep the code stable.
+    throw new Error("JOB_NOT_FOUND");
+  }
+  if (commit.kind !== "committed") {
+    throw new AppError({
+      code: "APPLICATION_PERSIST_FAILED",
+      status: 500,
+      publicMessage: "The application could not be saved.",
+      privateDetails: commit.kind === "upload_failed" ? commit.cause : commit.kind,
+    });
+  }
+  // Blob lifecycle — upload, rollback on failure, GC of the superseded
+  // artifact — is owned by commitApplicationArtifact.
+  return {
+    applicationId: commit.applicationId,
+    jobId: job.id,
+    resumePdfUrl: commit.urls.resume ?? null,
+    resumePdfName,
+    coverPdfUrl: commit.urls.cover ?? null,
+    coverPdfName,
+  } satisfies GenerateArtifactsResult;
 }
 
 function buildBatchAiContent(

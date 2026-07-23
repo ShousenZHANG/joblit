@@ -2,13 +2,8 @@ import { NextResponse } from "next/server";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { z } from "zod";
 
-import { errorJson, unauthorizedError } from "@/lib/server/api/errorResponse";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/server/api/rateLimit";
-import {
-  requireSession,
-  UnauthorizedError,
-  type SessionContext,
-} from "@/lib/server/auth/requireSession";
 import { prescreenJobFit } from "@/lib/server/ai/fitPrescreen";
 import { buildResumePromptSnapshot } from "@/lib/server/ai/resumePromptSnapshot";
 import { prisma } from "@/lib/server/prisma";

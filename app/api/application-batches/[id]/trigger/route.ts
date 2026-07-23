@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { errorJson } from "@/lib/server/api/errorResponse";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { UuidParamSchema } from "@/lib/shared/schemas/common";

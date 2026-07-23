@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { errorJson } from "@/lib/server/api/errorResponse";
 import { UuidParamSchema } from "@/lib/shared/schemas/common";
-import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import { constantTimeEqual } from "@/lib/server/auth/constantTimeEqual";
 

@@ -5,11 +5,6 @@ import { z } from "zod";
 
 import { errorJson } from "@/lib/server/api/errorResponse";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/server/api/rateLimit";
-import {
-  requireSession,
-  UnauthorizedError,
-  type SessionContext,
-} from "@/lib/server/auth/requireSession";
 import { aggregateFitMatrix } from "@/lib/server/ai/fitScoring";
 import { prisma } from "@/lib/server/prisma";
 import { FitMatrixSchema } from "@/lib/shared/schemas/fitMatrix";

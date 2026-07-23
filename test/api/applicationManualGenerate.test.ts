@@ -192,6 +192,10 @@ describe("applications manual generate api", () => {
     });
     (renderResumeTex as unknown as ReturnType<typeof vi.fn>).mockReturnValue("\\documentclass{article}");
     jobStore.findFirst.mockReset();
+    // Each test seeds the route's own lookup with mockResolvedValueOnce; this
+    // default answers the ownership re-check commitApplicationArtifact makes
+    // under the lock.
+    jobStore.findFirst.mockResolvedValue({ id: VALID_JOB_ID });
     applicationStore.findUnique.mockReset();
     applicationStore.upsert.mockReset();
     blobStore.put.mockReset();
@@ -203,6 +207,7 @@ describe("applications manual generate api", () => {
     transactionStore.run.mockImplementation(
       async (
         callback: (tx: {
+          job: typeof jobStore;
           application: typeof applicationStore;
           evidenceSnapshot: { createMany: typeof evidenceStore.evidenceCreateMany };
           claimEvidence: { createMany: typeof evidenceStore.claimCreateMany };
@@ -210,6 +215,10 @@ describe("applications manual generate api", () => {
         }) => unknown,
       ) =>
         callback({
+          // commitApplicationArtifact re-checks Job ownership under the lock,
+          // so a delete racing the render is reported rather than surfacing as
+          // a foreign-key violation.
+          job: jobStore,
           application: applicationStore,
           evidenceSnapshot: { createMany: evidenceStore.evidenceCreateMany },
           claimEvidence: { createMany: evidenceStore.claimCreateMany },
@@ -1487,7 +1496,7 @@ describe("applications manual generate api", () => {
     );
   });
 
-  it("clears a stale target URL when Blob upload fails", async () => {
+  it("keeps the previous PDF when the Blob upload fails", async () => {
     process.env.BLOB_READ_WRITE_TOKEN = "blob-token";
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "user-1" },
@@ -1527,18 +1536,17 @@ describe("applications manual generate api", () => {
       }),
     );
 
-    expect(response.status).toBe(200);
-    expect(applicationStore.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        update: expect.objectContaining({
-          resumePdfUrl: null,
-          resumePdfName: null,
-        }),
-      }),
-    );
-    expect(blobStore.del).toHaveBeenCalledWith(
+    // This used to return 200 and commit a null URL, so a transient Blob
+    // outage silently destroyed the user's existing PDF. A failed upload is
+    // now a failed request, and the previous artifact is untouched.
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "APPLICATION_PERSIST_FAILED" },
+    });
+    expect(applicationStore.upsert).not.toHaveBeenCalled();
+    expect(blobStore.del).not.toHaveBeenCalledWith(
       "https://blob.vercel-storage.com/stale-resume.pdf",
-      { token: "blob-token" },
+      expect.anything(),
     );
   });
 });
