@@ -81,7 +81,15 @@ vi.mock("@/components/ui/alert-dialog", () => ({
 vi.mock("./SummarySection", () => ({ SummarySection: () => null }));
 vi.mock("./BulletsSection", () => ({ BulletsSection: () => null }));
 vi.mock("./CoverParagraphsSection", () => ({ CoverParagraphsSection: () => null }));
-vi.mock("./PdfPreview", () => ({ PdfPreview: () => null }));
+vi.mock("./PdfPreview", () => ({
+  // Exposes the refresh affordance so a test can drive it; the real component
+  // also fires it on a 30s idle timer.
+  PdfPreview: ({ onRefresh }: { onRefresh: () => void }) => (
+    <button type="button" onClick={onRefresh}>
+      refresh-preview
+    </button>
+  ),
+}));
 vi.mock("./SaveIndicator", () => ({ SaveIndicator: () => null }));
 vi.mock("./ConflictDialog", () => ({
   ConflictDialog: () => <div data-testid="conflict-dialog" />,
@@ -206,5 +214,31 @@ describe("TailorClient React rules", () => {
       aiContent,
       "reset-hash",
     );
+  });
+
+  it("refreshes the preview without committing the draft", async () => {
+    // This used to call /finalize and set the status to FINAL, so pressing
+    // Refresh published the draft — while the same control in the review
+    // dialog only re-rendered.
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(new Blob(["%PDF"]), {
+        status: 200,
+        headers: { "Content-Type": "application/pdf" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: vi.fn(() => "blob:preview"),
+      revokeObjectURL: vi.fn(),
+    });
+
+    render(<TailorClient {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "refresh-preview" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(fetchMock.mock.calls[0][0]).toContain("/preview");
+    expect(fetchMock.mock.calls[0][0]).not.toContain("/finalize");
+    expect(api.fetchJson).not.toHaveBeenCalled();
   });
 });

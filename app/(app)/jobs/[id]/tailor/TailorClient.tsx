@@ -99,6 +99,18 @@ export function TailorClient({
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [draft.saveStatus]);
 
+  // Preview renders produce object URLs; release whichever is still held when
+  // the page goes away. Committed artifacts are ordinary https URLs and are
+  // left alone.
+  useEffect(
+    () => () => {
+      for (const url of [resumePdf, coverPdf]) {
+        if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
+      }
+    },
+    [resumePdf, coverPdf],
+  );
+
   function patchSummary(summary: AiContent["cv"]["summary"]) {
     draft.setAiContent({
       ...draft.aiContent,
@@ -131,19 +143,47 @@ export function TailorClient({
     };
   }
 
+  /**
+   * Re-render the preview. This must not commit.
+   *
+   * It used to call `/finalize` and set the status to `FINAL`, so pressing
+   * "Refresh" published the draft — while the same control in the review dialog
+   * only re-rendered. Per CONTEXT.md, `FINAL` asserts that the stored PDF
+   * reflects committed AI Content, which a preview does not.
+   */
   async function handleRefresh() {
     setActionError(null);
     setIsRefreshing(true);
     try {
-      const data = await callFinalize(docTab);
-      if (docTab === "resume" && data.resumePdfUrl) {
-        setResumePdf(data.resumePdfUrl);
+      const expectedHash = await draft.flushNow();
+      const response = await fetch(
+        `/api/applications/${applicationId}/preview?target=${docTab}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ expectedHash }),
+        },
+      );
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as
+          | { error?: { message?: string } }
+          | null;
+        throw new Error(body?.error?.message ?? t("refreshFailed"));
+      }
+      const objectUrl = URL.createObjectURL(await response.blob());
+      if (docTab === "resume") {
+        setResumePdf((previous) => {
+          if (previous?.startsWith("blob:")) URL.revokeObjectURL(previous);
+          return objectUrl;
+        });
         setLastResumeRefreshAt(Date.now());
-      } else if (docTab === "cover" && data.coverPdfUrl) {
-        setCoverPdf(data.coverPdfUrl);
+      } else {
+        setCoverPdf((previous) => {
+          if (previous?.startsWith("blob:")) URL.revokeObjectURL(previous);
+          return objectUrl;
+        });
         setLastCoverRefreshAt(Date.now());
       }
-      setStatus("FINAL");
     } catch (err: unknown) {
       setActionError(extractMessage(err, t("refreshFailed")));
     } finally {
