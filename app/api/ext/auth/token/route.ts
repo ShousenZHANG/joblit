@@ -27,7 +27,7 @@ const RevokeTokenSchema = z.object({
 /** GET — List active (non-revoked) tokens for the current user. */
 export async function GET(req: Request) {
   const rl = checkRateLimit(rateLimitKeyFromRequest(req, "ext:token:list"), { limit: 30, windowSeconds: 60 });
-  if (!rl.allowed) return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: rateLimitHeaders(rl) });
+  if (!rl.allowed) return errorJson("RATE_LIMITED", "Too many requests", 429, { headers: rateLimitHeaders(rl) });
 
   return withSessionRoute(async ({ userId }) => {
     const tokens = await listExtensionTokens(userId);
@@ -38,7 +38,7 @@ export async function GET(req: Request) {
 /** POST — Generate a new extension token. Requires an active session (cookie auth). */
 export async function POST(req: Request) {
   const rl = checkRateLimit(rateLimitKeyFromRequest(req, "ext:token:create"), { limit: 10, windowSeconds: 60 });
-  if (!rl.allowed) return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: rateLimitHeaders(rl) });
+  if (!rl.allowed) return errorJson("RATE_LIMITED", "Too many requests", 429, { headers: rateLimitHeaders(rl) });
 
   return withSessionRoute(async ({ userId }) => {
     const body = await req.json().catch(() => ({}));
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
 /** DELETE — Revoke an extension token. */
 export async function DELETE(req: Request) {
   const rl = checkRateLimit(rateLimitKeyFromRequest(req, "ext:token:revoke"), { limit: 20, windowSeconds: 60 });
-  if (!rl.allowed) return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: rateLimitHeaders(rl) });
+  if (!rl.allowed) return errorJson("RATE_LIMITED", "Too many requests", 429, { headers: rateLimitHeaders(rl) });
 
   return withSessionRoute(async ({ userId }) => {
     const body = await req.json().catch(() => ({}));

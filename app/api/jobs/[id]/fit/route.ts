@@ -41,10 +41,9 @@ export async function POST(
     async ({ userId, params }) => {
       const rateLimit = checkRateLimit(`jobs:fit:${userId}`, FIT_RATE_LIMIT);
       if (!rateLimit.allowed) {
-        return NextResponse.json(
-          { error: "Too many requests" },
-          { status: 429, headers: rateLimitHeaders(rateLimit) },
-        );
+        return errorJson("RATE_LIMITED", "Too many requests", 429, {
+          headers: rateLimitHeaders(rateLimit),
+        });
       }
 
       const body = BodySchema.safeParse(await req.json().catch(() => null));

@@ -259,7 +259,7 @@ describe("extension application prompt api", () => {
       expect.objectContaining({ limit: expect.any(Number), windowSeconds: expect.any(Number) }),
     );
     expect(response.status).toBe(429);
-    expect(json).toEqual({ error: "Too many requests" });
+    expect(json).toMatchObject({ error: { code: "RATE_LIMITED" } });
     expect(response.headers.get("X-RateLimit-Remaining")).toBe("0");
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(applicationPrompt.build).not.toHaveBeenCalled();

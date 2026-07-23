@@ -68,10 +68,9 @@ export async function PUT(req: Request) {
 
   const rateLimit = checkRateLimit(`ext:local-ai:settings:${auth.userId}`, SETTINGS_RATE_LIMIT);
   if (!rateLimit.allowed) {
-    return NextResponse.json(
-      { error: "Too many requests" },
-      { status: 429, headers: { ...rateLimitHeaders(rateLimit), "Cache-Control": "no-store" } },
-    );
+    return errorJson("RATE_LIMITED", "Too many requests", 429, {
+      headers: { ...rateLimitHeaders(rateLimit), "Cache-Control": "no-store" },
+    });
   }
 
   const json = await req.json().catch(() => null);

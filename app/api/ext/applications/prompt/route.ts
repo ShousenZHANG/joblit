@@ -38,16 +38,9 @@ export async function POST(req: Request) {
     PROMPT_RATE_LIMIT,
   );
   if (!rateLimit.allowed) {
-    return NextResponse.json(
-      { error: "Too many requests" },
-      {
-        status: 429,
-        headers: {
-          ...rateLimitHeaders(rateLimit),
-          "Cache-Control": "no-store",
-        },
-      },
-    );
+    return errorJson("RATE_LIMITED", "Too many requests", 429, {
+      headers: { ...rateLimitHeaders(rateLimit), "Cache-Control": "no-store" },
+    });
   }
 
   const json = await req.json().catch(() => null);

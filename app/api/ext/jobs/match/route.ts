@@ -13,7 +13,7 @@ export const runtime = "nodejs";
  */
 export async function GET(req: Request) {
   const rl = checkRateLimit(rateLimitKeyFromRequest(req, "ext:jobs:match"), { limit: 60, windowSeconds: 60 });
-  if (!rl.allowed) return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: rateLimitHeaders(rl) });
+  if (!rl.allowed) return errorJson("RATE_LIMITED", "Too many requests", 429, { headers: rateLimitHeaders(rl) });
 
   try {
     const { userId } = await requireExtensionToken(req);

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
 
 import { checkRateLimit, rateLimitHeaders } from "@/lib/server/api/rateLimit";
@@ -21,10 +22,9 @@ export async function POST() {
   return withSessionRoute(async ({ userId }) => {
     const rateLimit = checkRateLimit(`jobs:fit:run:${userId}`, RUN_RATE_LIMIT);
     if (!rateLimit.allowed) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: rateLimitHeaders(rateLimit) },
-      );
+      return errorJson("RATE_LIMITED", "Too many requests", 429, {
+        headers: rateLimitHeaders(rateLimit),
+      });
     }
 
     const invalidated = await invalidateStaleFitScores(userId);

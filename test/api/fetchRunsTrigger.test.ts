@@ -463,7 +463,9 @@ describe("fetch run trigger api", () => {
       );
 
       expect(res.status).toBe(502);
-      await expect(res.json()).resolves.toEqual({ error: errorCode });
+      await expect(res.json()).resolves.toMatchObject({
+        error: { code: errorCode },
+      });
     },
   );
 });

@@ -3,7 +3,7 @@ import {
   requireExtensionToken,
   ExtensionTokenError,
 } from "@/lib/server/auth/requireExtensionToken";
-import { unauthorizedError } from "@/lib/server/api/errorResponse";
+import { errorJson, unauthorizedError } from "@/lib/server/api/errorResponse";
 import { checkRateLimit, rateLimitKeyFromRequest, rateLimitHeaders } from "@/lib/server/api/rateLimit";
 import { prisma } from "@/lib/server/prisma";
 import { flattenProfile } from "@/lib/server/extensionProfile";
@@ -22,7 +22,7 @@ function parseLocale(raw: string | null): SupportedLocale {
 /** GET — Return a flattened key-value map of the user's profile for form filling. */
 export async function GET(req: Request) {
   const rl = checkRateLimit(rateLimitKeyFromRequest(req, "ext:profile:flat"), { limit: 60, windowSeconds: 60 });
-  if (!rl.allowed) return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: rateLimitHeaders(rl) });
+  if (!rl.allowed) return errorJson("RATE_LIMITED", "Too many requests", 429, { headers: rateLimitHeaders(rl) });
 
   try {
     const { userId } = await requireExtensionToken(req);

@@ -15,6 +15,7 @@ import {
   checkFetchRunQuota,
   fetchRunQuotaExceededResponse,
 } from "@/lib/server/fetchRuns/fetchRunQuota";
+import { tryAcquireFetchRunDispatchLock } from "@/lib/server/fetchRuns/fetchRunLifecycleLock";
 import {
   SafeOutboundError,
   safeOutboundFetch,
@@ -95,29 +96,11 @@ async function failQueuedRun({
   });
 }
 
-/**
- * Stable 32-bit signed integer hash of a UUID for pg_advisory_xact_lock(bigint).
- * Postgres accepts a 64-bit bigint but also supports a 2-arg form using two
- * 32-bit ints — we use the single-arg form and pass a 31-bit positive value.
- * Collisions across different runIds are acceptable — lock is per-run, worst
- * case is two unrelated runs serializing trigger calls briefly.
- */
-function runIdToAdvisoryKey(uuid: string): number {
-  // djb2-style hash, masked to 31 bits so it fits a signed 32-bit range
-  // and never hits the sign bit (some drivers serialize negative bigints oddly).
-  let h = 5381;
-  for (let i = 0; i < uuid.length; i++) {
-    h = ((h << 5) + h + uuid.charCodeAt(i)) | 0;
-  }
-  return h & 0x7fffffff;
-}
-
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   return withSessionRoute(
     async ({ userId, params }) => {
       const runId = params.id;
       const idempotencyKey = req.headers.get("Idempotency-Key")?.trim() || null;
-      const advisoryKey = runIdToAdvisoryKey(runId);
 
       const rateLimit = checkRateLimit(
         `fetch-runs:trigger:${userId}`,
@@ -145,10 +128,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       // LOCK_CONTENDED immediately and return the canonical "alreadyDispatched"
       // response without racing against GitHub.
       const txResult = await prisma.$transaction(async (tx) => {
-        const lockRows = await tx.$queryRaw<{ locked: boolean }[]>`
-          SELECT pg_try_advisory_xact_lock(${advisoryKey}::bigint) AS locked
-        `;
-        if (!lockRows?.[0]?.locked) {
+        if (!(await tryAcquireFetchRunDispatchLock(tx, runId))) {
           return { kind: "lock_contended" as const };
         }
 
@@ -267,15 +247,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           return errorJson("RUN_CANCELLED", "The fetch run was cancelled", 409);
         }
         if (result.error) {
-          return NextResponse.json(
-            {
-              error:
-                txResult.market === "GLOBAL"
-                  ? "GLOBAL_FETCH_FAILED"
-                  : "CN_FETCH_FAILED",
-            },
-            { status: 502 },
-          );
+          return txResult.market === "GLOBAL"
+            ? errorJson("GLOBAL_FETCH_FAILED", "The global fetch failed", 502)
+            : errorJson("CN_FETCH_FAILED", "The CN fetch failed", 502);
         }
         return NextResponse.json({
           ok: true,

@@ -29,10 +29,7 @@ function authorized(request: Request): boolean {
 
 export async function GET(request: Request) {
   if (!authorized(request)) {
-    return NextResponse.json(
-      { error: "Unauthorized" },
-      { status: 401, headers: NO_STORE_HEADERS },
-    );
+    return errorJson("UNAUTHORIZED", "Unauthorized", 401, { headers: NO_STORE_HEADERS });
   }
 
   const startedAt = new Date();

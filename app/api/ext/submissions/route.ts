@@ -24,7 +24,7 @@ function clampInt(raw: string | null, def: number, min: number, max: number): nu
 
 export async function POST(req: Request) {
   const rl = checkRateLimit(rateLimitKeyFromRequest(req, "ext:sub:post"), { limit: 30, windowSeconds: 60 });
-  if (!rl.allowed) return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: rateLimitHeaders(rl) });
+  if (!rl.allowed) return errorJson("RATE_LIMITED", "Too many requests", 429, { headers: rateLimitHeaders(rl) });
 
   try {
     const { userId } = await requireExtensionToken(req);
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
 
 export async function GET(req: Request) {
   const rl = checkRateLimit(rateLimitKeyFromRequest(req, "ext:sub:get"), { limit: 60, windowSeconds: 60 });
-  if (!rl.allowed) return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: rateLimitHeaders(rl) });
+  if (!rl.allowed) return errorJson("RATE_LIMITED", "Too many requests", 429, { headers: rateLimitHeaders(rl) });
 
   try {
     const { userId } = await requireExtensionToken(req);

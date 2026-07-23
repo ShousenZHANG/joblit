@@ -26,10 +26,9 @@ export async function POST(req: Request) {
     windowSeconds: 60,
   });
   if (!rl.allowed) {
-    return NextResponse.json(
-      { error: "Too many requests" },
-      { status: 429, headers: rateLimitHeaders(rl) },
-    );
+    return errorJson("RATE_LIMITED", "Too many requests", 429, {
+      headers: rateLimitHeaders(rl),
+    });
   }
 
   try {

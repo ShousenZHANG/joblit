@@ -92,11 +92,17 @@ describe("route session seam", () => {
    */
   it("never returns the flat error shape", () => {
     const offenders = ROUTES.flatMap(({ path, source }) => {
+      // Any `error` key in a response body that is not the `{code, message}`
+      // object. Matching on a string literal alone missed a case where the
+      // value was a ternary picking between two codes, so this asserts the
+      // shape instead: `error:` must be followed by `{`.
+      //
       // Only a response body counts. `error:` also names a persisted column —
       // `failQueuedRun({ error: "GITHUB_DISPATCH_FAILED" })` writes
       // `FetchRun.error` and is not a wire shape.
-      const hits =
-        source.match(/NextResponse\.json\(\s*\{?\s*error:\s*"[A-Z][A-Z0-9_]*"/g) ?? [];
+      const hits = [
+        ...source.matchAll(/NextResponse\.json\(\s*\{\s*error:\s*(\S)/g),
+      ].filter((match) => match[1] !== "{");
       return hits.length > 0 ? [`${path} (${hits.length})`] : [];
     });
     expect(offenders).toEqual([]);
