@@ -50,6 +50,11 @@ describe("application batch execute api", () => {
 
   it("returns EXECUTE_DISABLED when server-side auto execute is disabled", async () => {
     process.env.ENABLE_BATCH_EXECUTE_AUTOGEN = "0";
+    // The session is resolved before the feature flag is read, so an
+    // unauthenticated caller cannot probe whether auto execute is enabled.
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
 
     const res = await POST(
       new Request(`http://localhost/api/application-batches/${BATCH_ID}/execute`, {

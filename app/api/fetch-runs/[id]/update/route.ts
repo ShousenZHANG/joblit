@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { UuidParamSchema } from "@/lib/shared/schemas/common";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import type { FetchRunStatus } from "@/lib/generated/prisma";
@@ -6,7 +7,6 @@ import { constantTimeEqual } from "@/lib/server/auth/constantTimeEqual";
 
 export const runtime = "nodejs";
 
-const ParamsSchema = z.object({ id: z.string().uuid() });
 const BodySchema = z.object({
   status: z.enum(["QUEUED", "RUNNING", "SUCCEEDED", "FAILED"]).optional(),
   importedCount: z.number().int().min(0).optional(),
@@ -28,7 +28,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   }
 
   const params = await ctx.params;
-  const parsedParams = ParamsSchema.safeParse(params);
+  const parsedParams = UuidParamSchema.safeParse(params);
   if (!parsedParams.success) return NextResponse.json({ error: "INVALID_PARAMS" }, { status: 400 });
 
   const json = await req.json().catch(() => null);

@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSession, UnauthorizedError } from "@/lib/server/auth/requireSession";
-import type { SessionContext } from "@/lib/server/auth/requireSession";
-import { unauthorizedError } from "@/lib/server/api/errorResponse";
+import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import {
@@ -90,188 +88,174 @@ function buildStatePayload(input: {
 }
 
 export async function GET() {
-  let ctx: SessionContext;
-  try {
-    ctx = await requireSession();
-  } catch (err) {
-    if (err instanceof UnauthorizedError) return unauthorizedError();
-    throw err;
-  }
-  const { userId } = ctx;
+  return withSessionRoute(async ({ userId }) => {
+    try {
+      const existing = await prisma.onboardingState.findUnique({
+        where: { userId },
+        select: {
+          stage: true,
+          checklist: true,
+          dismissedAt: true,
+          completedAt: true,
+        },
+      });
 
-  try {
-    const existing = await prisma.onboardingState.findUnique({
-      where: { userId },
-      select: {
-        stage: true,
-        checklist: true,
-        dismissedAt: true,
-        completedAt: true,
-      },
-    });
-
-    const checklist = normalizeOnboardingChecklist(existing?.checklist);
-    const stage = existing?.stage ?? "NEW_USER";
-    const state = buildStatePayload({
-      stage,
-      checklist,
-      dismissedAt: existing?.dismissedAt ?? null,
-      completedAt: existing?.completedAt ?? null,
-      persisted: true,
-    });
-
-    if (existing) {
-      return NextResponse.json({ tasks: ONBOARDING_TASKS, state });
-    }
-
-    const created = await prisma.onboardingState.create({
-      data: {
-        userId,
-        stage: "NEW_USER",
+      const checklist = normalizeOnboardingChecklist(existing?.checklist);
+      const stage = existing?.stage ?? "NEW_USER";
+      const state = buildStatePayload({
+        stage,
         checklist,
-      },
-      select: {
-        stage: true,
-        checklist: true,
-        dismissedAt: true,
-        completedAt: true,
-      },
-    });
-
-    return NextResponse.json({
-      tasks: ONBOARDING_TASKS,
-      state: buildStatePayload({
-        stage: created.stage,
-        checklist: normalizeOnboardingChecklist(created.checklist),
-        dismissedAt: created.dismissedAt,
-        completedAt: created.completedAt,
+        dismissedAt: existing?.dismissedAt ?? null,
+        completedAt: existing?.completedAt ?? null,
         persisted: true,
-      }),
-    });
-  } catch (error) {
-    if (isMissingTableError(error)) {
-      const fallbackChecklist = defaultOnboardingChecklist();
+      });
+
+      if (existing) {
+        return NextResponse.json({ tasks: ONBOARDING_TASKS, state });
+      }
+
+      const created = await prisma.onboardingState.create({
+        data: {
+          userId,
+          stage: "NEW_USER",
+          checklist,
+        },
+        select: {
+          stage: true,
+          checklist: true,
+          dismissedAt: true,
+          completedAt: true,
+        },
+      });
+
       return NextResponse.json({
         tasks: ONBOARDING_TASKS,
         state: buildStatePayload({
-          stage: "NEW_USER",
-          checklist: fallbackChecklist,
-          dismissedAt: null,
-          completedAt: null,
-          persisted: false,
+          stage: created.stage,
+          checklist: normalizeOnboardingChecklist(created.checklist),
+          dismissedAt: created.dismissedAt,
+          completedAt: created.completedAt,
+          persisted: true,
         }),
       });
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        const fallbackChecklist = defaultOnboardingChecklist();
+        return NextResponse.json({
+          tasks: ONBOARDING_TASKS,
+          state: buildStatePayload({
+            stage: "NEW_USER",
+            checklist: fallbackChecklist,
+            dismissedAt: null,
+            completedAt: null,
+            persisted: false,
+          }),
+        });
+      }
+      return NextResponse.json({ error: "ONBOARDING_STATE_FAILED" }, { status: 500 });
     }
-    return NextResponse.json({ error: "ONBOARDING_STATE_FAILED" }, { status: 500 });
-  }
+  });
 }
 
 export async function PATCH(req: Request) {
-  let ctx: SessionContext;
-  try {
-    ctx = await requireSession();
-  } catch (err) {
-    if (err instanceof UnauthorizedError) return unauthorizedError();
-    throw err;
-  }
-  const { userId } = ctx;
-
-  const json = await req.json().catch(() => null);
-  const parsed = PatchSchema.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "INVALID_BODY", details: parsed.error.flatten() },
-      { status: 400 },
-    );
-  }
-
-  try {
-    const existing = await prisma.onboardingState.findUnique({
-      where: { userId },
-      select: {
-        id: true,
-        stage: true,
-        checklist: true,
-        dismissedAt: true,
-        completedAt: true,
-      },
-    });
-
-    const checklist = normalizeOnboardingChecklist(existing?.checklist);
-    let nextChecklist = { ...checklist };
-    let nextDismissedAt = existing?.dismissedAt ?? null;
-
-    if (parsed.data.type === "complete_task") {
-      const taskId = parsed.data.taskId as OnboardingTaskId;
-      nextChecklist = mergeOnboardingChecklists(nextChecklist, parsed.data.checklist);
-      nextChecklist[taskId] = true;
-      nextDismissedAt = null;
-    } else if (parsed.data.type === "skip") {
-      nextDismissedAt = new Date();
-    } else if (parsed.data.type === "reopen") {
-      nextDismissedAt = null;
-    } else if (parsed.data.type === "reset") {
-      nextChecklist = defaultOnboardingChecklist();
-      nextDismissedAt = null;
+  return withSessionRoute(async ({ userId }) => {
+    const json = await req.json().catch(() => null);
+    const parsed = PatchSchema.safeParse(json);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "INVALID_BODY", details: parsed.error.flatten() },
+        { status: 400 },
+      );
     }
 
-    const previousStage = existing?.stage ?? "NEW_USER";
-    const nextStage = deriveStage(previousStage, nextChecklist, parsed.data.type);
-    const complete = isOnboardingComplete(nextChecklist);
-    const nextCompletedAt = complete ? existing?.completedAt ?? new Date() : null;
+    try {
+      const existing = await prisma.onboardingState.findUnique({
+        where: { userId },
+        select: {
+          id: true,
+          stage: true,
+          checklist: true,
+          dismissedAt: true,
+          completedAt: true,
+        },
+      });
 
-    const upserted = await prisma.onboardingState.upsert({
-      where: { userId },
-      create: {
-        userId,
-        stage: nextStage,
-        checklist: nextChecklist,
-        dismissedAt: nextDismissedAt,
-        completedAt: nextCompletedAt,
-      },
-      update: {
-        stage: nextStage,
-        checklist: nextChecklist,
-        dismissedAt: nextDismissedAt,
-        completedAt: nextCompletedAt,
-      },
-      select: {
-        stage: true,
-        checklist: true,
-        dismissedAt: true,
-        completedAt: true,
-      },
-    });
+      const checklist = normalizeOnboardingChecklist(existing?.checklist);
+      let nextChecklist = { ...checklist };
+      let nextDismissedAt = existing?.dismissedAt ?? null;
 
-    return NextResponse.json({
-      tasks: ONBOARDING_TASKS,
-      state: buildStatePayload({
-        stage: upserted.stage,
-        checklist: normalizeOnboardingChecklist(upserted.checklist),
-        dismissedAt: upserted.dismissedAt,
-        completedAt: upserted.completedAt,
-        persisted: true,
-      }),
-    });
-  } catch (error) {
-    if (isMissingTableError(error)) {
-      const fallbackChecklist = defaultOnboardingChecklist();
       if (parsed.data.type === "complete_task") {
-        const mergedChecklist = mergeOnboardingChecklists(fallbackChecklist, parsed.data.checklist);
-        Object.assign(fallbackChecklist, mergedChecklist);
-        fallbackChecklist[parsed.data.taskId] = true;
+        const taskId = parsed.data.taskId as OnboardingTaskId;
+        nextChecklist = mergeOnboardingChecklists(nextChecklist, parsed.data.checklist);
+        nextChecklist[taskId] = true;
+        nextDismissedAt = null;
+      } else if (parsed.data.type === "skip") {
+        nextDismissedAt = new Date();
+      } else if (parsed.data.type === "reopen") {
+        nextDismissedAt = null;
+      } else if (parsed.data.type === "reset") {
+        nextChecklist = defaultOnboardingChecklist();
+        nextDismissedAt = null;
       }
+
+      const previousStage = existing?.stage ?? "NEW_USER";
+      const nextStage = deriveStage(previousStage, nextChecklist, parsed.data.type);
+      const complete = isOnboardingComplete(nextChecklist);
+      const nextCompletedAt = complete ? existing?.completedAt ?? new Date() : null;
+
+      const upserted = await prisma.onboardingState.upsert({
+        where: { userId },
+        create: {
+          userId,
+          stage: nextStage,
+          checklist: nextChecklist,
+          dismissedAt: nextDismissedAt,
+          completedAt: nextCompletedAt,
+        },
+        update: {
+          stage: nextStage,
+          checklist: nextChecklist,
+          dismissedAt: nextDismissedAt,
+          completedAt: nextCompletedAt,
+        },
+        select: {
+          stage: true,
+          checklist: true,
+          dismissedAt: true,
+          completedAt: true,
+        },
+      });
+
       return NextResponse.json({
         tasks: ONBOARDING_TASKS,
         state: buildStatePayload({
-          stage: isOnboardingComplete(fallbackChecklist) ? "ACTIVATED_USER" : "NEW_USER",
-          checklist: fallbackChecklist,
-          dismissedAt: parsed.data.type === "skip" ? new Date() : null,
-          completedAt: isOnboardingComplete(fallbackChecklist) ? new Date() : null,
-          persisted: false,
+          stage: upserted.stage,
+          checklist: normalizeOnboardingChecklist(upserted.checklist),
+          dismissedAt: upserted.dismissedAt,
+          completedAt: upserted.completedAt,
+          persisted: true,
         }),
       });
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        const fallbackChecklist = defaultOnboardingChecklist();
+        if (parsed.data.type === "complete_task") {
+          const mergedChecklist = mergeOnboardingChecklists(fallbackChecklist, parsed.data.checklist);
+          Object.assign(fallbackChecklist, mergedChecklist);
+          fallbackChecklist[parsed.data.taskId] = true;
+        }
+        return NextResponse.json({
+          tasks: ONBOARDING_TASKS,
+          state: buildStatePayload({
+            stage: isOnboardingComplete(fallbackChecklist) ? "ACTIVATED_USER" : "NEW_USER",
+            checklist: fallbackChecklist,
+            dismissedAt: parsed.data.type === "skip" ? new Date() : null,
+            completedAt: isOnboardingComplete(fallbackChecklist) ? new Date() : null,
+            persisted: false,
+          }),
+        });
+      }
+      return NextResponse.json({ error: "ONBOARDING_STATE_FAILED" }, { status: 500 });
     }
-    return NextResponse.json({ error: "ONBOARDING_STATE_FAILED" }, { status: 500 });
-  }
+  });
 }

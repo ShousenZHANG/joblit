@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSession, UnauthorizedError } from "@/lib/server/auth/requireSession";
-import type { SessionContext } from "@/lib/server/auth/requireSession";
-import { unauthorizedError } from "@/lib/server/api/errorResponse";
+import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { z } from "zod";
 import { Prisma } from "@/lib/generated/prisma";
 import {
@@ -85,143 +83,122 @@ function parsePrismaError(error: unknown) {
 }
 
 export async function GET(req: Request) {
-  let ctx: SessionContext;
-  try {
-    ctx = await requireSession();
-  } catch (err) {
-    if (err instanceof UnauthorizedError) return unauthorizedError();
-    throw err;
-  }
-  const { userId } = ctx;
+  return withSessionRoute(async ({ userId }) => {
+    const { searchParams } = new URL(req.url);
+    const rawLocale = searchParams.get("locale") ?? "en-AU";
+    const locale = rawLocale === "zh-CN" ? "zh-CN" : "en-AU";
 
-  const { searchParams } = new URL(req.url);
-  const rawLocale = searchParams.get("locale") ?? "en-AU";
-  const locale = rawLocale === "zh-CN" ? "zh-CN" : "en-AU";
-
-  const state = await buildResumeProfileResponse(userId, locale);
-  return NextResponse.json(state, { status: 200 });
+    const state = await buildResumeProfileResponse(userId, locale);
+    return NextResponse.json(state, { status: 200 });
+  });
 }
 
 export async function POST(req: Request) {
-  let ctx: SessionContext;
-  try {
-    ctx = await requireSession();
-  } catch (err) {
-    if (err instanceof UnauthorizedError) return unauthorizedError();
-    throw err;
-  }
-  const { userId } = ctx;
+  return withSessionRoute(async ({ userId }) => {
+    const json = await req.json().catch(() => null);
+    const parsed = ResumeProfileUpsertSchema.safeParse(json);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "INVALID_BODY", details: parsed.error.flatten() },
+        { status: 400 },
+      );
+    }
 
-  const json = await req.json().catch(() => null);
-  const parsed = ResumeProfileUpsertSchema.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "INVALID_BODY", details: parsed.error.flatten() },
-      { status: 400 },
-    );
-  }
-
-  let profile;
-  try {
-    profile = await upsertResumeProfile(
-      userId,
-      {
-        summary: parsed.data.summary,
-        basics: parsed.data.basics,
-        links: parsed.data.links,
-        skills: parsed.data.skills,
-        experiences: parsed.data.experiences,
-        projects: parsed.data.projects,
-        education: parsed.data.education,
-      },
-      {
-        profileId: parsed.data.profileId,
-        name: parsed.data.name,
-        setActive: parsed.data.setActive,
-        locale: parsed.data.locale,
-      },
-    );
-  } catch (error) {
-    const prismaErrorResponse = parsePrismaError(error);
-    if (prismaErrorResponse) return prismaErrorResponse;
-    throw error;
-  }
-
-  if (!profile) {
-    return NextResponse.json({ error: "PROFILE_NOT_FOUND" }, { status: 404 });
-  }
-
-  const state = await buildResumeProfileResponse(userId, parsed.data.locale);
-  return NextResponse.json(state, { status: 200 });
-}
-
-export async function PATCH(req: Request) {
-  let ctx: SessionContext;
-  try {
-    ctx = await requireSession();
-  } catch (err) {
-    if (err instanceof UnauthorizedError) return unauthorizedError();
-    throw err;
-  }
-  const { userId } = ctx;
-
-  const json = await req.json().catch(() => null);
-  const parsed = ResumeProfilePatchSchema.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "INVALID_BODY", details: parsed.error.flatten() },
-      { status: 400 },
-    );
-  }
-
-  let locale = "en-AU";
-
-  if (parsed.data.action === "create") {
-    locale = parsed.data.locale;
+    let profile;
     try {
-      await createResumeProfile(userId, {
-        name: parsed.data.name,
-        setActive: true,
-        mode: parsed.data.mode,
-        sourceProfileId: parsed.data.sourceProfileId,
-        locale,
-      });
+      profile = await upsertResumeProfile(
+        userId,
+        {
+          summary: parsed.data.summary,
+          basics: parsed.data.basics,
+          links: parsed.data.links,
+          skills: parsed.data.skills,
+          experiences: parsed.data.experiences,
+          projects: parsed.data.projects,
+          education: parsed.data.education,
+        },
+        {
+          profileId: parsed.data.profileId,
+          name: parsed.data.name,
+          setActive: parsed.data.setActive,
+          locale: parsed.data.locale,
+        },
+      );
     } catch (error) {
       const prismaErrorResponse = parsePrismaError(error);
       if (prismaErrorResponse) return prismaErrorResponse;
       throw error;
     }
-  }
 
-  if (parsed.data.action === "activate") {
-    locale = parsed.data.locale;
-    const target = await setActiveResumeProfile(userId, locale, parsed.data.profileId);
-    if (!target) {
+    if (!profile) {
       return NextResponse.json({ error: "PROFILE_NOT_FOUND" }, { status: 404 });
     }
-  }
 
-  if (parsed.data.action === "rename") {
-    const target = await renameResumeProfile(userId, parsed.data.profileId, parsed.data.name);
-    if (!target) {
-      return NextResponse.json({ error: "PROFILE_NOT_FOUND" }, { status: 404 });
-    }
-  }
+    const state = await buildResumeProfileResponse(userId, parsed.data.locale);
+    return NextResponse.json(state, { status: 200 });
+  });
+}
 
-  if (parsed.data.action === "delete") {
-    locale = parsed.data.locale;
-    const result = await deleteResumeProfile(userId, locale, parsed.data.profileId);
-    if (result.status === "not_found") {
-      return NextResponse.json({ error: "PROFILE_NOT_FOUND" }, { status: 404 });
-    }
-    if (result.status === "last_profile") {
+export async function PATCH(req: Request) {
+  return withSessionRoute(async ({ userId }) => {
+    const json = await req.json().catch(() => null);
+    const parsed = ResumeProfilePatchSchema.safeParse(json);
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: "LAST_PROFILE", message: "At least one resume version is required." },
-        { status: 409 },
+        { error: "INVALID_BODY", details: parsed.error.flatten() },
+        { status: 400 },
       );
     }
-  }
 
-  const state = await buildResumeProfileResponse(userId, locale);
-  return NextResponse.json(state, { status: 200 });
+    let locale = "en-AU";
+
+    if (parsed.data.action === "create") {
+      locale = parsed.data.locale;
+      try {
+        await createResumeProfile(userId, {
+          name: parsed.data.name,
+          setActive: true,
+          mode: parsed.data.mode,
+          sourceProfileId: parsed.data.sourceProfileId,
+          locale,
+        });
+      } catch (error) {
+        const prismaErrorResponse = parsePrismaError(error);
+        if (prismaErrorResponse) return prismaErrorResponse;
+        throw error;
+      }
+    }
+
+    if (parsed.data.action === "activate") {
+      locale = parsed.data.locale;
+      const target = await setActiveResumeProfile(userId, locale, parsed.data.profileId);
+      if (!target) {
+        return NextResponse.json({ error: "PROFILE_NOT_FOUND" }, { status: 404 });
+      }
+    }
+
+    if (parsed.data.action === "rename") {
+      const target = await renameResumeProfile(userId, parsed.data.profileId, parsed.data.name);
+      if (!target) {
+        return NextResponse.json({ error: "PROFILE_NOT_FOUND" }, { status: 404 });
+      }
+    }
+
+    if (parsed.data.action === "delete") {
+      locale = parsed.data.locale;
+      const result = await deleteResumeProfile(userId, locale, parsed.data.profileId);
+      if (result.status === "not_found") {
+        return NextResponse.json({ error: "PROFILE_NOT_FOUND" }, { status: 404 });
+      }
+      if (result.status === "last_profile") {
+        return NextResponse.json(
+          { error: "LAST_PROFILE", message: "At least one resume version is required." },
+          { status: 409 },
+        );
+      }
+    }
+
+    const state = await buildResumeProfileResponse(userId, locale);
+    return NextResponse.json(state, { status: 200 });
+  });
 }

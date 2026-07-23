@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import { withSessionRoute, parseJsonBody } from "@/lib/server/api/routeHandler";
+import { UuidParamSchema } from "@/lib/shared/schemas/common";
 import {
   aiContentSchema,
   hashAiContent,
@@ -11,7 +12,6 @@ import { acquireApplicationMutationLock } from "@/lib/server/applications/applic
 
 export const runtime = "nodejs";
 
-const ParamsSchema = z.object({ id: z.string().uuid() });
 const BodySchema = z.object({ expectedHash: z.string().nullable() });
 
 /**
@@ -31,98 +31,92 @@ export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  return withSessionRoute(async ({ userId, requestId }) => {
-    const params = await ctx.params;
-    const parsedParams = ParamsSchema.safeParse(params);
-    if (!parsedParams.success) {
-      return NextResponse.json(
-        { error: { code: "INVALID_PARAMS", message: "Invalid application id" }, requestId },
-        { status: 400 },
-      );
-    }
+  return withSessionRoute(
+    async ({ userId, requestId, params }) => {
+      const parsedBody = await parseJsonBody(req, BodySchema, requestId);
+      if (!parsedBody.ok) return parsedBody.response;
+      const { expectedHash } = parsedBody.data;
 
-    const parsedBody = await parseJsonBody(req, BodySchema, requestId);
-    if (!parsedBody.ok) return parsedBody.response;
-    const { expectedHash } = parsedBody.data;
-
-    const existing = await prisma.application.findFirst({
-      where: { id: parsedParams.data.id, userId },
-      select: { id: true, jobId: true, aiContent: true, aiContentHash: true },
-    });
-    if (!existing) {
-      return NextResponse.json(
-        { error: { code: "NOT_FOUND", message: "Application not found" }, requestId },
-        { status: 404 },
-      );
-    }
-
-    if (expectedHash !== existing.aiContentHash) {
-      return staleDiscardResponse(requestId, existing.aiContentHash);
-    }
-
-    if (!existing.aiContent) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "NO_AI_CONTENT",
-            message: "No AI content to discard",
-          },
-          requestId,
-        },
-        { status: 400 },
-      );
-    }
-
-    const parsed = aiContentSchema.safeParse(existing.aiContent);
-    if (!parsed.success) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "AI_CONTENT_INVALID",
-            message: "Stored aiContent failed schema validation",
-          },
-          requestId,
-        },
-        { status: 500 },
-      );
-    }
-
-    const reset = resetToOriginalProposal(parsed.data);
-    const newHash = hashAiContent(reset);
-
-    const updated = await prisma.$transaction(
-      async (tx) => {
-        await acquireApplicationMutationLock(
-          tx,
-          userId,
-          existing.jobId ?? existing.id,
+      const existing = await prisma.application.findFirst({
+        where: { id: params.id, userId },
+        select: { id: true, jobId: true, aiContent: true, aiContentHash: true },
+      });
+      if (!existing) {
+        return NextResponse.json(
+          { error: { code: "NOT_FOUND", message: "Application not found" }, requestId },
+          { status: 404 },
         );
-        return tx.application.updateMany({
-          where: {
-            id: existing.id,
-            userId,
-            aiContentHash: expectedHash,
-          },
-          data: {
-            status: "DRAFT",
-            aiContent: reset,
-            aiContentHash: newHash,
-          },
-        });
-      },
-      { timeout: 30_000 },
-    );
-    if (updated.count !== 1) {
-      return staleDiscardResponse(requestId);
-    }
+      }
 
-    return NextResponse.json({
-      status: "DRAFT",
-      aiContent: reset,
-      aiContentHash: newHash,
-      requestId,
-    });
-  });
+      if (expectedHash !== existing.aiContentHash) {
+        return staleDiscardResponse(requestId, existing.aiContentHash);
+      }
+
+      if (!existing.aiContent) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "NO_AI_CONTENT",
+              message: "No AI content to discard",
+            },
+            requestId,
+          },
+          { status: 400 },
+        );
+      }
+
+      const parsed = aiContentSchema.safeParse(existing.aiContent);
+      if (!parsed.success) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "AI_CONTENT_INVALID",
+              message: "Stored aiContent failed schema validation",
+            },
+            requestId,
+          },
+          { status: 500 },
+        );
+      }
+
+      const reset = resetToOriginalProposal(parsed.data);
+      const newHash = hashAiContent(reset);
+
+      const updated = await prisma.$transaction(
+        async (tx) => {
+          await acquireApplicationMutationLock(
+            tx,
+            userId,
+            existing.jobId ?? existing.id,
+          );
+          return tx.application.updateMany({
+            where: {
+              id: existing.id,
+              userId,
+              aiContentHash: expectedHash,
+            },
+            data: {
+              status: "DRAFT",
+              aiContent: reset,
+              aiContentHash: newHash,
+            },
+          });
+        },
+        { timeout: 30_000 },
+      );
+      if (updated.count !== 1) {
+        return staleDiscardResponse(requestId);
+      }
+
+      return NextResponse.json({
+        status: "DRAFT",
+        aiContent: reset,
+        aiContentHash: newHash,
+        requestId,
+      });
+    },
+    { params: ctx.params, schema: UuidParamSchema },
+  );
 }
 
 function staleDiscardResponse(requestId: string, currentHash?: string | null) {

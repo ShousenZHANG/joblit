@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { z } from "zod";
 
 import { errorJson, unauthorizedError } from "@/lib/server/api/errorResponse";
@@ -23,34 +24,27 @@ const BodySchema = z
 
 /** Dequeue a failed AI batch so the pump never loops on the same jobs. */
 export async function POST(req: Request) {
-  let session: SessionContext;
-  try {
-    session = await requireSession();
-  } catch (err) {
-    if (err instanceof UnauthorizedError) return unauthorizedError();
-    throw err;
-  }
-  const { userId } = session;
+  return withSessionRoute(async ({ userId }) => {
+    const rateLimit = checkRateLimit(`jobs:fit:mark-failed:${userId}`, FAILED_RATE_LIMIT);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: rateLimitHeaders(rateLimit) },
+      );
+    }
 
-  const rateLimit = checkRateLimit(`jobs:fit:mark-failed:${userId}`, FAILED_RATE_LIMIT);
-  if (!rateLimit.allowed) {
-    return NextResponse.json(
-      { error: "Too many requests" },
-      { status: 429, headers: rateLimitHeaders(rateLimit) },
+    const body = BodySchema.safeParse(await req.json().catch(() => null));
+    if (!body.success) {
+      return errorJson("INVALID_BODY", "Invalid request body", 400, {
+        details: body.error.flatten(),
+      });
+    }
+
+    const count = await markFitBatchFailed(
+      userId,
+      body.data.jobIds,
+      body.data.claimToken,
     );
-  }
-
-  const body = BodySchema.safeParse(await req.json().catch(() => null));
-  if (!body.success) {
-    return errorJson("INVALID_BODY", "Invalid request body", 400, {
-      details: body.error.flatten(),
-    });
-  }
-
-  const count = await markFitBatchFailed(
-    userId,
-    body.data.jobIds,
-    body.data.claimToken,
-  );
-  return NextResponse.json({ count });
+    return NextResponse.json({ count });
+  });
 }

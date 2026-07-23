@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSession, UnauthorizedError } from "@/lib/server/auth/requireSession";
-import type { SessionContext } from "@/lib/server/auth/requireSession";
-import { unauthorizedError } from "@/lib/server/api/errorResponse";
+import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { put, del } from "@vercel/blob";
 import {
   buildResumePhotoBlobPath,
@@ -13,82 +11,68 @@ import {
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
-  let ctx: SessionContext;
-  try {
-    ctx = await requireSession();
-  } catch (err) {
-    if (err instanceof UnauthorizedError) return unauthorizedError();
-    throw err;
-  }
-  const { userId, requestId } = ctx;
-
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
-  if (!token) {
-    return NextResponse.json(
-      { error: { code: "BLOB_NOT_CONFIGURED", message: "Blob storage not configured" }, requestId },
-      { status: 503 },
-    );
-  }
-
-  const contentType = toResumePhotoContentType(req.headers.get("content-type"));
-  if (!contentType) {
-    return NextResponse.json(
-      { error: { code: "INVALID_TYPE", message: "Only JPEG, PNG, and WebP are allowed" }, requestId },
-      { status: 400 },
-    );
-  }
-
-  const body = await req.arrayBuffer();
-  if (body.byteLength > MAX_RESUME_PHOTO_BYTES) {
-    return NextResponse.json(
-      { error: { code: "TOO_LARGE", message: "Photo must be under 2 MB" }, requestId },
-      { status: 400 },
-    );
-  }
-
-  const blobPath = buildResumePhotoBlobPath(userId, contentType);
-
-  const blob = await put(blobPath, Buffer.from(body), {
-    access: "public",
-    contentType,
-    token,
-    addRandomSuffix: false,
-    allowOverwrite: true,
-  });
-
-  return NextResponse.json({ url: blob.url, requestId });
-}
-
-export async function DELETE(req: Request) {
-  let ctx: SessionContext;
-  try {
-    ctx = await requireSession();
-  } catch (err) {
-    if (err instanceof UnauthorizedError) return unauthorizedError();
-    throw err;
-  }
-  const { userId, requestId } = ctx;
-
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
-  if (!token) {
-    return NextResponse.json(
-      { error: { code: "BLOB_NOT_CONFIGURED", message: "Blob storage not configured" }, requestId },
-      { status: 503 },
-    );
-  }
-
-  const { searchParams } = new URL(req.url);
-  const photoUrl = searchParams.get("url");
-  if (photoUrl) {
-    const trustedPhotoUrl = parseTrustedResumePhotoUrl(photoUrl, userId);
-    if (!trustedPhotoUrl) {
+  return withSessionRoute(async ({ userId, requestId }) => {
+    const token = process.env.BLOB_READ_WRITE_TOKEN;
+    if (!token) {
       return NextResponse.json(
-        { error: { code: "INVALID_PHOTO_URL", message: "Photo URL is not owned by this profile" }, requestId },
+        { error: { code: "BLOB_NOT_CONFIGURED", message: "Blob storage not configured" }, requestId },
+        { status: 503 },
+      );
+    }
+
+    const contentType = toResumePhotoContentType(req.headers.get("content-type"));
+    if (!contentType) {
+      return NextResponse.json(
+        { error: { code: "INVALID_TYPE", message: "Only JPEG, PNG, and WebP are allowed" }, requestId },
         { status: 400 },
       );
     }
-    await Promise.resolve(del(trustedPhotoUrl.toString(), { token })).catch(() => {});
-  }
 
-  return NextResponse.json({ ok: true, requestId });
+    const body = await req.arrayBuffer();
+    if (body.byteLength > MAX_RESUME_PHOTO_BYTES) {
+      return NextResponse.json(
+        { error: { code: "TOO_LARGE", message: "Photo must be under 2 MB" }, requestId },
+        { status: 400 },
+      );
+    }
+
+    const blobPath = buildResumePhotoBlobPath(userId, contentType);
+
+    const blob = await put(blobPath, Buffer.from(body), {
+      access: "public",
+      contentType,
+      token,
+      addRandomSuffix: false,
+      allowOverwrite: true,
+    });
+
+    return NextResponse.json({ url: blob.url, requestId });
+  });
+}
+
+export async function DELETE(req: Request) {
+  return withSessionRoute(async ({ userId, requestId }) => {
+    const token = process.env.BLOB_READ_WRITE_TOKEN;
+    if (!token) {
+      return NextResponse.json(
+        { error: { code: "BLOB_NOT_CONFIGURED", message: "Blob storage not configured" }, requestId },
+        { status: 503 },
+      );
+    }
+
+    const { searchParams } = new URL(req.url);
+    const photoUrl = searchParams.get("url");
+    if (photoUrl) {
+      const trustedPhotoUrl = parseTrustedResumePhotoUrl(photoUrl, userId);
+      if (!trustedPhotoUrl) {
+        return NextResponse.json(
+          { error: { code: "INVALID_PHOTO_URL", message: "Photo URL is not owned by this profile" }, requestId },
+          { status: 400 },
+        );
+      }
+      await Promise.resolve(del(trustedPhotoUrl.toString(), { token })).catch(() => {});
+    }
+
+    return NextResponse.json({ ok: true, requestId });
+  });
 }

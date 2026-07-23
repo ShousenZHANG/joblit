@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
-import { requireSession, UnauthorizedError } from "@/lib/server/auth/requireSession";
-import type { SessionContext } from "@/lib/server/auth/requireSession";
-import { unauthorizedError } from "@/lib/server/api/errorResponse";
+import { withSessionRoute } from "@/lib/server/api/routeHandler";
+import { UuidParamSchema } from "@/lib/shared/schemas/common";
 import { reportError } from "@/lib/server/observability/errorReporter";
 import {
   checkRateLimit,
   rateLimitHeaders,
 } from "@/lib/server/api/rateLimit";
-import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import type { Prisma } from "@/lib/generated/prisma";
 import { processCnFetchRun } from "@/lib/server/cnFetch/processFetchRun";
@@ -24,7 +22,6 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const ParamsSchema = z.object({ id: z.string().uuid() });
 const IDEMPOTENCY_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
 const TRIGGER_RATE_LIMIT = { limit: 30, windowSeconds: 60 } as const;
 
@@ -115,268 +112,260 @@ function runIdToAdvisoryKey(uuid: string): number {
 }
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  let session: SessionContext;
-  try {
-    session = await requireSession();
-  } catch (err) {
-    if (err instanceof UnauthorizedError) return unauthorizedError();
-    throw err;
-  }
-  const { userId } = session;
+  return withSessionRoute(
+    async ({ userId, params }) => {
+      const runId = params.id;
+      const idempotencyKey = req.headers.get("Idempotency-Key")?.trim() || null;
+      const advisoryKey = runIdToAdvisoryKey(runId);
 
-  const params = await ctx.params;
-  const parsed = ParamsSchema.safeParse(params);
-  if (!parsed.success) return NextResponse.json({ error: "INVALID_PARAMS" }, { status: 400 });
-
-  const runId = parsed.data.id;
-  const idempotencyKey = req.headers.get("Idempotency-Key")?.trim() || null;
-  const advisoryKey = runIdToAdvisoryKey(runId);
-
-  const rateLimit = checkRateLimit(
-    `fetch-runs:trigger:${userId}`,
-    TRIGGER_RATE_LIMIT,
-  );
-  if (!rateLimit.allowed) {
-    return NextResponse.json(
-      { error: "TOO_MANY_TRIGGER_REQUESTS" },
-      { status: 429, headers: rateLimitHeaders(rateLimit) },
-    );
-  }
-
-  // Reject random or cross-tenant UUIDs before entering the global quota
-  // critical section. The row is read again under both locks below because a
-  // concurrent cancellation or stale expiry can still change its state.
-  const ownedRun = await prisma.fetchRun.findFirst({
-    where: { id: runId, userId },
-    select: { id: true },
-  });
-  if (!ownedRun) {
-    return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
-  }
-
-  // Pessimistic lock via Postgres transaction-scoped advisory lock.
-  // Only one concurrent trigger per runId can hold this lock; others get
-  // LOCK_CONTENDED immediately and return the canonical "alreadyDispatched"
-  // response without racing against GitHub.
-  const txResult = await prisma.$transaction(async (tx) => {
-    const lockRows = await tx.$queryRaw<{ locked: boolean }[]>`
-      SELECT pg_try_advisory_xact_lock(${advisoryKey}::bigint) AS locked
-    `;
-    if (!lockRows?.[0]?.locked) {
-      return { kind: "lock_contended" as const };
-    }
-
-    // Quota check also expires abandoned rows under its global lock. Read the
-    // target afterwards so an expired target cannot still be dispatched.
-    const quotaViolation = await checkFetchRunQuota(tx, userId, "trigger");
-
-    const run = await tx.fetchRun.findFirst({
-      where: { id: runId, userId },
-      select: { id: true, status: true, market: true, queries: true },
-    });
-    if (!run) return { kind: "not_found" as const };
-    if (run.status !== "QUEUED") {
-      return { kind: "invalid_state" as const, status: run.status };
-    }
-
-    const meta = readDispatchMeta(run.queries);
-
-    // Idempotency: if caller replays same key within window, return prior result.
-    if (idempotencyKey && meta.idempotencyKey === idempotencyKey && meta.idempotencyAt) {
-      const ageMs = Date.now() - Date.parse(meta.idempotencyAt);
-      if (!Number.isNaN(ageMs) && ageMs < IDEMPOTENCY_WINDOW_MS) {
-        return {
-          kind: "idempotent_replay" as const,
-          alreadyDispatched: Boolean(meta.dispatchedAt || meta.inFlightAt),
-        };
-      }
-    }
-
-    if (meta.dispatchedAt || meta.inFlightAt) {
-      return { kind: "already_dispatched" as const };
-    }
-
-    if (quotaViolation) return { kind: "quota" as const, quotaViolation };
-
-    // Claim the dispatch slot inside this transaction — row won't change
-    // between this update and commit because we hold the advisory lock.
-    await tx.fetchRun.update({
-      where: { id: runId },
-      data: {
-        queries: withDispatchMeta(run.queries, {
-          inFlightAt: new Date().toISOString(),
-          ...(idempotencyKey
-            ? {
-                idempotencyKey,
-                idempotencyAt: new Date().toISOString(),
-              }
-            : {}),
-        }),
-      },
-    });
-
-    return { kind: "locked" as const, market: run.market, queries: run.queries };
-  });
-
-  if (txResult.kind === "lock_contended" || txResult.kind === "already_dispatched") {
-    return NextResponse.json({ ok: true, alreadyDispatched: true });
-  }
-  if (txResult.kind === "idempotent_replay") {
-    return NextResponse.json({
-      ok: true,
-      alreadyDispatched: txResult.alreadyDispatched,
-      idempotent: true,
-    });
-  }
-  if (txResult.kind === "not_found") {
-    return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
-  }
-  if (txResult.kind === "invalid_state") {
-    return NextResponse.json({ error: "INVALID_STATE", status: txResult.status }, { status: 409 });
-  }
-  if (txResult.kind === "quota") {
-    return fetchRunQuotaExceededResponse(txResult.quotaViolation);
-  }
-
-  // txResult.kind === "locked" — we hold the dispatch slot.
-  //
-  // CN and GLOBAL markets: the aggregator pipelines run in-process (Vercel
-  // serverless). The GitHub Actions dispatch path + cn-fetch.yml + Python
-  // scraper are retired, and we no longer hop through an internal request to
-  // a background scheduler endpoint (that path silently dropped work when JOBLIT_WEB_URL was
-  // unset and left the UI pinned in "Queued"). We run the fetch here and
-  // return once it completes; the trigger function has a 60s budget which is
-  // ample for the aggregators' typical 5-15s pull.
-  //
-  // AU market: still dispatches to GitHub Actions (JobSpy pipeline).
-  if (txResult.market === "CN" || txResult.market === "GLOBAL") {
-    const claimed = await prisma.fetchRun.updateMany({
-      where: { id: runId, userId, status: "QUEUED" },
-      data: {
-        status: "RUNNING",
-        error: null,
-        queries: withDispatchMeta(txResult.queries, {
-          inFlightAt: undefined,
-          dispatchedAt: new Date().toISOString(),
-        }),
-      },
-    });
-    if (claimed.count === 0) {
-      return NextResponse.json({ error: "RUN_NO_LONGER_ACTIVE" }, { status: 409 });
-    }
-
-    const result =
-      txResult.market === "GLOBAL"
-        ? await processGlobalFetchRun(userId, {
-            id: runId,
-            queries: txResult.queries,
-          })
-        : await processCnFetchRun(userId, {
-            id: runId,
-            queries: txResult.queries,
-          });
-    if (result.cancelled) {
-      return NextResponse.json({ error: "RUN_CANCELLED" }, { status: 409 });
-    }
-    if (result.error) {
-      return NextResponse.json(
-        {
-          error:
-            txResult.market === "GLOBAL"
-              ? "GLOBAL_FETCH_FAILED"
-              : "CN_FETCH_FAILED",
-        },
-        { status: 502 },
+      const rateLimit = checkRateLimit(
+        `fetch-runs:trigger:${userId}`,
+        TRIGGER_RATE_LIMIT,
       );
-    }
-    return NextResponse.json({
-      ok: true,
-      imported: result.imported,
-      discovered: result.discovered,
-    });
-  }
+      if (!rateLimit.allowed) {
+        return NextResponse.json(
+          { error: "TOO_MANY_TRIGGER_REQUESTS" },
+          { status: 429, headers: rateLimitHeaders(rateLimit) },
+        );
+      }
 
-  // AU market dispatches the JobSpy (LinkedIn) fetcher on GitHub Actions. Seek
-  // search moved to the browser extension — there is no server-side Seek
-  // pipeline to select anymore.
-  // Timeout the dispatch so a hung api.github.com connection can't pin the
-  // 60s function budget while holding this run's dispatch slot — every other
-  // external call already does this; this one was the gap.
-  let ghRes: Response;
-  try {
-    const owner = envOrThrow("GITHUB_OWNER");
-    const repo = envOrThrow("GITHUB_REPO");
-    const token = envOrThrow("GITHUB_TOKEN");
-    const workflow = process.env.GITHUB_WORKFLOW_FILE || "jobspy-fetch.yml";
-    const ref = process.env.GITHUB_REF || "master";
-    ghRes = await safeOutboundFetch(
-      `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflow}/dispatches`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/vnd.github+json",
-          "Content-Type": "application/json",
+      // Reject random or cross-tenant UUIDs before entering the global quota
+      // critical section. The row is read again under both locks below because a
+      // concurrent cancellation or stale expiry can still change its state.
+      const ownedRun = await prisma.fetchRun.findFirst({
+        where: { id: runId, userId },
+        select: { id: true },
+      });
+      if (!ownedRun) {
+        return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+      }
+
+      // Pessimistic lock via Postgres transaction-scoped advisory lock.
+      // Only one concurrent trigger per runId can hold this lock; others get
+      // LOCK_CONTENDED immediately and return the canonical "alreadyDispatched"
+      // response without racing against GitHub.
+      const txResult = await prisma.$transaction(async (tx) => {
+        const lockRows = await tx.$queryRaw<{ locked: boolean }[]>`
+          SELECT pg_try_advisory_xact_lock(${advisoryKey}::bigint) AS locked
+        `;
+        if (!lockRows?.[0]?.locked) {
+          return { kind: "lock_contended" as const };
+        }
+
+        // Quota check also expires abandoned rows under its global lock. Read the
+        // target afterwards so an expired target cannot still be dispatched.
+        const quotaViolation = await checkFetchRunQuota(tx, userId, "trigger");
+
+        const run = await tx.fetchRun.findFirst({
+          where: { id: runId, userId },
+          select: { id: true, status: true, market: true, queries: true },
+        });
+        if (!run) return { kind: "not_found" as const };
+        if (run.status !== "QUEUED") {
+          return { kind: "invalid_state" as const, status: run.status };
+        }
+
+        const meta = readDispatchMeta(run.queries);
+
+        // Idempotency: if caller replays same key within window, return prior result.
+        if (idempotencyKey && meta.idempotencyKey === idempotencyKey && meta.idempotencyAt) {
+          const ageMs = Date.now() - Date.parse(meta.idempotencyAt);
+          if (!Number.isNaN(ageMs) && ageMs < IDEMPOTENCY_WINDOW_MS) {
+            return {
+              kind: "idempotent_replay" as const,
+              alreadyDispatched: Boolean(meta.dispatchedAt || meta.inFlightAt),
+            };
+          }
+        }
+
+        if (meta.dispatchedAt || meta.inFlightAt) {
+          return { kind: "already_dispatched" as const };
+        }
+
+        if (quotaViolation) return { kind: "quota" as const, quotaViolation };
+
+        // Claim the dispatch slot inside this transaction — row won't change
+        // between this update and commit because we hold the advisory lock.
+        await tx.fetchRun.update({
+          where: { id: runId },
+          data: {
+            queries: withDispatchMeta(run.queries, {
+              inFlightAt: new Date().toISOString(),
+              ...(idempotencyKey
+                ? {
+                    idempotencyKey,
+                    idempotencyAt: new Date().toISOString(),
+                  }
+                : {}),
+            }),
+          },
+        });
+
+        return { kind: "locked" as const, market: run.market, queries: run.queries };
+      });
+
+      if (txResult.kind === "lock_contended" || txResult.kind === "already_dispatched") {
+        return NextResponse.json({ ok: true, alreadyDispatched: true });
+      }
+      if (txResult.kind === "idempotent_replay") {
+        return NextResponse.json({
+          ok: true,
+          alreadyDispatched: txResult.alreadyDispatched,
+          idempotent: true,
+        });
+      }
+      if (txResult.kind === "not_found") {
+        return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+      }
+      if (txResult.kind === "invalid_state") {
+        return NextResponse.json({ error: "INVALID_STATE", status: txResult.status }, { status: 409 });
+      }
+      if (txResult.kind === "quota") {
+        return fetchRunQuotaExceededResponse(txResult.quotaViolation);
+      }
+
+      // txResult.kind === "locked" — we hold the dispatch slot.
+      //
+      // CN and GLOBAL markets: the aggregator pipelines run in-process (Vercel
+      // serverless). The GitHub Actions dispatch path + cn-fetch.yml + Python
+      // scraper are retired, and we no longer hop through an internal request to
+      // a background scheduler endpoint (that path silently dropped work when JOBLIT_WEB_URL was
+      // unset and left the UI pinned in "Queued"). We run the fetch here and
+      // return once it completes; the trigger function has a 60s budget which is
+      // ample for the aggregators' typical 5-15s pull.
+      //
+      // AU market: still dispatches to GitHub Actions (JobSpy pipeline).
+      if (txResult.market === "CN" || txResult.market === "GLOBAL") {
+        const claimed = await prisma.fetchRun.updateMany({
+          where: { id: runId, userId, status: "QUEUED" },
+          data: {
+            status: "RUNNING",
+            error: null,
+            queries: withDispatchMeta(txResult.queries, {
+              inFlightAt: undefined,
+              dispatchedAt: new Date().toISOString(),
+            }),
+          },
+        });
+        if (claimed.count === 0) {
+          return NextResponse.json({ error: "RUN_NO_LONGER_ACTIVE" }, { status: 409 });
+        }
+
+        const result =
+          txResult.market === "GLOBAL"
+            ? await processGlobalFetchRun(userId, {
+                id: runId,
+                queries: txResult.queries,
+              })
+            : await processCnFetchRun(userId, {
+                id: runId,
+                queries: txResult.queries,
+              });
+        if (result.cancelled) {
+          return NextResponse.json({ error: "RUN_CANCELLED" }, { status: 409 });
+        }
+        if (result.error) {
+          return NextResponse.json(
+            {
+              error:
+                txResult.market === "GLOBAL"
+                  ? "GLOBAL_FETCH_FAILED"
+                  : "CN_FETCH_FAILED",
+            },
+            { status: 502 },
+          );
+        }
+        return NextResponse.json({
+          ok: true,
+          imported: result.imported,
+          discovered: result.discovered,
+        });
+      }
+
+      // AU market dispatches the JobSpy (LinkedIn) fetcher on GitHub Actions. Seek
+      // search moved to the browser extension — there is no server-side Seek
+      // pipeline to select anymore.
+      // Timeout the dispatch so a hung api.github.com connection can't pin the
+      // 60s function budget while holding this run's dispatch slot — every other
+      // external call already does this; this one was the gap.
+      let ghRes: Response;
+      try {
+        const owner = envOrThrow("GITHUB_OWNER");
+        const repo = envOrThrow("GITHUB_REPO");
+        const token = envOrThrow("GITHUB_TOKEN");
+        const workflow = process.env.GITHUB_WORKFLOW_FILE || "jobspy-fetch.yml";
+        const ref = process.env.GITHUB_REF || "master";
+        ghRes = await safeOutboundFetch(
+          `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflow}/dispatches`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/vnd.github+json",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ ref, inputs: { runId } }),
+          },
+          {
+            allowedHosts: ["api.github.com"],
+            timeoutMs: 10_000,
+            maxResponseBytes: 64 * 1024,
+            maxRedirects: 0,
+          },
+        );
+      } catch (err) {
+        reportError(err, { scope: "fetch-runs.trigger.dispatch", userId, tags: { runId } });
+        const error =
+          err instanceof MissingDispatchConfigError
+            ? "GITHUB_DISPATCH_NOT_CONFIGURED"
+            : err instanceof SafeOutboundError &&
+                err.code === "REQUEST_TIMEOUT"
+              ? "GITHUB_DISPATCH_TIMEOUT"
+              : "GITHUB_DISPATCH_UNREACHABLE";
+        await failQueuedRun({
+          runId,
+          userId,
+          queries: txResult.queries,
+          error,
+        });
+        return NextResponse.json(
+          { error },
+          { status: error === "GITHUB_DISPATCH_NOT_CONFIGURED" ? 503 : 504 },
+        );
+      }
+
+      if (!ghRes.ok) {
+        const text = await ghRes.text().catch(() => "");
+        // Upstream detail goes to the error reporter (structured, server-side
+        // only) — never forwarded to the client.
+        reportError(new Error("GitHub dispatch failed"), {
+          scope: "fetch-runs.trigger",
+          userId,
+          tags: { status: ghRes.status, runId },
+          extra: { body: text.slice(0, 500) },
+        });
+        await failQueuedRun({
+          runId,
+          userId,
+          queries: txResult.queries,
+          error: "GITHUB_DISPATCH_FAILED",
+        });
+        return NextResponse.json({ error: "GITHUB_DISPATCH_FAILED" }, { status: 502 });
+      }
+
+      // Mark dispatch complete (still QUEUED until worker starts).
+      await prisma.fetchRun.updateMany({
+        where: { id: runId, userId, status: "QUEUED" },
+        data: {
+          queries: withDispatchMeta(txResult.queries, {
+            inFlightAt: undefined,
+            dispatchedAt: new Date().toISOString(),
+          }),
         },
-        body: JSON.stringify({ ref, inputs: { runId } }),
-      },
-      {
-        allowedHosts: ["api.github.com"],
-        timeoutMs: 10_000,
-        maxResponseBytes: 64 * 1024,
-        maxRedirects: 0,
-      },
-    );
-  } catch (err) {
-    reportError(err, { scope: "fetch-runs.trigger.dispatch", userId, tags: { runId } });
-    const error =
-      err instanceof MissingDispatchConfigError
-        ? "GITHUB_DISPATCH_NOT_CONFIGURED"
-        : err instanceof SafeOutboundError &&
-            err.code === "REQUEST_TIMEOUT"
-          ? "GITHUB_DISPATCH_TIMEOUT"
-          : "GITHUB_DISPATCH_UNREACHABLE";
-    await failQueuedRun({
-      runId,
-      userId,
-      queries: txResult.queries,
-      error,
-    });
-    return NextResponse.json(
-      { error },
-      { status: error === "GITHUB_DISPATCH_NOT_CONFIGURED" ? 503 : 504 },
-    );
-  }
+      });
 
-  if (!ghRes.ok) {
-    const text = await ghRes.text().catch(() => "");
-    // Upstream detail goes to the error reporter (structured, server-side
-    // only) — never forwarded to the client.
-    reportError(new Error("GitHub dispatch failed"), {
-      scope: "fetch-runs.trigger",
-      userId,
-      tags: { status: ghRes.status, runId },
-      extra: { body: text.slice(0, 500) },
-    });
-    await failQueuedRun({
-      runId,
-      userId,
-      queries: txResult.queries,
-      error: "GITHUB_DISPATCH_FAILED",
-    });
-    return NextResponse.json({ error: "GITHUB_DISPATCH_FAILED" }, { status: 502 });
-  }
-
-  // Mark dispatch complete (still QUEUED until worker starts).
-  await prisma.fetchRun.updateMany({
-    where: { id: runId, userId, status: "QUEUED" },
-    data: {
-      queries: withDispatchMeta(txResult.queries, {
-        inFlightAt: undefined,
-        dispatchedAt: new Date().toISOString(),
-      }),
+      return NextResponse.json({ ok: true });
     },
-  });
-
-  return NextResponse.json({ ok: true });
+    { params: ctx.params, schema: UuidParamSchema },
+  );
 }

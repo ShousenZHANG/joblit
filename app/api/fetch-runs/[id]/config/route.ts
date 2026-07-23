@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
+import { UuidParamSchema } from "@/lib/shared/schemas/common";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import { constantTimeEqual } from "@/lib/server/auth/constantTimeEqual";
 
 export const runtime = "nodejs";
 
-const ParamsSchema = z.object({ id: z.string().uuid() });
 
 function requireSecret(req: Request) {
   const expected = process.env.FETCH_RUN_SECRET;
@@ -20,7 +20,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   }
 
   const params = await ctx.params;
-  const parsed = ParamsSchema.safeParse(params);
+  const parsed = UuidParamSchema.safeParse(params);
   if (!parsed.success) return NextResponse.json({ error: "INVALID_PARAMS" }, { status: 400 });
 
   const run = await prisma.fetchRun.findUnique({

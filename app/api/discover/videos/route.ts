@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/auth";
+import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import type {
   VideoItem,
   VideoCategory,
@@ -92,104 +91,102 @@ function cachedResponse(
 }
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  return withSessionRoute(async () => {
 
-  const { searchParams } = new URL(request.url);
-  const category = parseCategory(searchParams.get("category"));
-  const timeWindow = parseWindow(searchParams.get("window"));
-  const sort = parseSort(searchParams.get("sort"));
-  const cacheKey = buildCacheKey(category, timeWindow, sort);
-  const defaultCacheKey =
-    sort === "trending" ? cacheKey : buildCacheKey(category, timeWindow);
-  const existing = await readCache(cacheKey).catch(() => null);
-  const apiKey = process.env.YOUTUBE_API_KEY;
+    const { searchParams } = new URL(request.url);
+    const category = parseCategory(searchParams.get("category"));
+    const timeWindow = parseWindow(searchParams.get("window"));
+    const sort = parseSort(searchParams.get("sort"));
+    const cacheKey = buildCacheKey(category, timeWindow, sort);
+    const defaultCacheKey =
+      sort === "trending" ? cacheKey : buildCacheKey(category, timeWindow);
+    const existing = await readCache(cacheKey).catch(() => null);
+    const apiKey = process.env.YOUTUBE_API_KEY;
 
-  // Configuration loss must not blank a previously-good feed. Treat the
-  // durable cache as stale because this invocation cannot refresh it.
-  if (!apiKey) {
-    if (existing) {
-      return NextResponse.json(
-        cachedResponse(existing, sort, { stale: true, noApiKey: true }),
-        { headers: EDGE_CACHE_HEADERS },
-      );
-    }
-    if (defaultCacheKey !== cacheKey) {
-      const fallback = await readCache(defaultCacheKey).catch(() => null);
-      if (fallback) {
+    // Configuration loss must not blank a previously-good feed. Treat the
+    // durable cache as stale because this invocation cannot refresh it.
+    if (!apiKey) {
+      if (existing) {
         return NextResponse.json(
-          cachedResponse(fallback, sort, {
-            stale: true,
-            noApiKey: true,
-          }),
+          cachedResponse(existing, sort, { stale: true, noApiKey: true }),
           { headers: EDGE_CACHE_HEADERS },
         );
       }
+      if (defaultCacheKey !== cacheKey) {
+        const fallback = await readCache(defaultCacheKey).catch(() => null);
+        if (fallback) {
+          return NextResponse.json(
+            cachedResponse(fallback, sort, {
+              stale: true,
+              noApiKey: true,
+            }),
+            { headers: EDGE_CACHE_HEADERS },
+          );
+        }
+      }
+      return NextResponse.json({
+        items: [],
+        cached: false,
+        fetchedAt: new Date().toISOString(),
+        noApiKey: true,
+      } satisfies VideosResponse);
     }
-    return NextResponse.json({
-      items: [],
-      cached: false,
-      fetchedAt: new Date().toISOString(),
-      noApiKey: true,
-    } satisfies VideosResponse);
-  }
 
-  if (existing && isFresh(existing, Date.now())) {
-    return NextResponse.json(cachedResponse(existing, sort), {
-      headers: EDGE_CACHE_HEADERS,
-    });
-  }
+    if (existing && isFresh(existing, Date.now())) {
+      return NextResponse.json(cachedResponse(existing, sort), {
+        headers: EDGE_CACHE_HEADERS,
+      });
+    }
 
-  try {
-    const items = await fetchVideosFromYouTube(
-      category,
-      timeWindow,
-      apiKey,
-      sort,
-    );
-    if (items.length === 0) {
-      throw new Error(
-        `YouTube returned no videos for ${category}/${timeWindow}/${sort}`,
+    try {
+      const items = await fetchVideosFromYouTube(
+        category,
+        timeWindow,
+        apiKey,
+        sort,
       );
-    }
-    const fresh: VideosResponse = {
-      items,
-      cached: false,
-      fetchedAt: new Date().toISOString(),
-    };
-    await writeCache(cacheKey, fresh, DB_CACHE_TTL_MS).catch(() => {
-      // Cache persistence failure cannot invalidate a valid live response.
-    });
-    return NextResponse.json(fresh, { headers: EDGE_CACHE_HEADERS });
-  } catch (error) {
-    const quotaExceeded = isQuotaExceededError(error);
-    if (!quotaExceeded) {
-      reportError(error, { scope: "discover.videos" });
-    }
+      if (items.length === 0) {
+        throw new Error(
+          `YouTube returned no videos for ${category}/${timeWindow}/${sort}`,
+        );
+      }
+      const fresh: VideosResponse = {
+        items,
+        cached: false,
+        fetchedAt: new Date().toISOString(),
+      };
+      await writeCache(cacheKey, fresh, DB_CACHE_TTL_MS).catch(() => {
+        // Cache persistence failure cannot invalidate a valid live response.
+      });
+      return NextResponse.json(fresh, { headers: EDGE_CACHE_HEADERS });
+    } catch (error) {
+      const quotaExceeded = isQuotaExceededError(error);
+      if (!quotaExceeded) {
+        reportError(error, { scope: "discover.videos" });
+      }
 
-    // Every upstream failure uses LKG when available. This includes network,
-    // 5xx, parser, empty-result, and quota failures.
-    if (existing) {
-      return NextResponse.json(
-        cachedResponse(existing, sort, { stale: true }),
-        { headers: EDGE_CACHE_HEADERS },
-      );
-    }
-    if (defaultCacheKey !== cacheKey) {
-      const fallback = await readCache(defaultCacheKey).catch(() => null);
-      if (fallback) {
+      // Every upstream failure uses LKG when available. This includes network,
+      // 5xx, parser, empty-result, and quota failures.
+      if (existing) {
         return NextResponse.json(
-          cachedResponse(fallback, sort, { stale: true }),
+          cachedResponse(existing, sort, { stale: true }),
           { headers: EDGE_CACHE_HEADERS },
         );
       }
-    }
+      if (defaultCacheKey !== cacheKey) {
+        const fallback = await readCache(defaultCacheKey).catch(() => null);
+        if (fallback) {
+          return NextResponse.json(
+            cachedResponse(fallback, sort, { stale: true }),
+            { headers: EDGE_CACHE_HEADERS },
+          );
+        }
+      }
 
-    return NextResponse.json(
-      { error: "VIDEOS_UNAVAILABLE" },
-      { status: 502 },
-    );
-  }
+      return NextResponse.json(
+        { error: "VIDEOS_UNAVAILABLE" },
+        { status: 502 },
+      );
+    }
+  });
 }

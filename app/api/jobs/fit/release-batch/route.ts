@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server";
+import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { z } from "zod";
 
-import { errorJson, unauthorizedError } from "@/lib/server/api/errorResponse";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/server/api/rateLimit";
-import {
-  requireSession,
-  UnauthorizedError,
-  type SessionContext,
-} from "@/lib/server/auth/requireSession";
 import { releaseFitBatchClaim } from "@/lib/server/jobs/fitRunService";
 
 export const runtime = "nodejs";
@@ -21,36 +17,23 @@ const BodySchema = z
   .strict();
 
 export async function POST(req: Request) {
-  let session: SessionContext;
-  try {
-    session = await requireSession();
-  } catch (error) {
-    if (error instanceof UnauthorizedError) return unauthorizedError();
-    throw error;
-  }
+  return withSessionRoute(async ({ userId }) => {
+    const rateLimit = checkRateLimit(`jobs:fit:release:${userId}`, RELEASE_RATE_LIMIT);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: rateLimitHeaders(rateLimit) },
+      );
+    }
 
-  const rateLimit = checkRateLimit(
-    `jobs:fit:release:${session.userId}`,
-    RELEASE_RATE_LIMIT,
-  );
-  if (!rateLimit.allowed) {
-    return NextResponse.json(
-      { error: "Too many requests" },
-      { status: 429, headers: rateLimitHeaders(rateLimit) },
-    );
-  }
+    const body = BodySchema.safeParse(await req.json().catch(() => null));
+    if (!body.success) {
+      return errorJson("INVALID_BODY", "Invalid request body", 400, {
+        details: body.error.flatten(),
+      });
+    }
 
-  const body = BodySchema.safeParse(await req.json().catch(() => null));
-  if (!body.success) {
-    return errorJson("INVALID_BODY", "Invalid request body", 400, {
-      details: body.error.flatten(),
-    });
-  }
-
-  const count = await releaseFitBatchClaim(
-    session.userId,
-    body.data.jobIds,
-    body.data.claimToken,
-  );
-  return NextResponse.json({ count });
+    const count = await releaseFitBatchClaim(userId, body.data.jobIds, body.data.claimToken);
+    return NextResponse.json({ count });
+  });
 }

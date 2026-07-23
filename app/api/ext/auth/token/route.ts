@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireSession, UnauthorizedError } from "@/lib/server/auth/requireSession";
-import { unauthorizedError, errorJson } from "@/lib/server/api/errorResponse";
+import { withSessionRoute } from "@/lib/server/api/routeHandler";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { checkRateLimit, rateLimitKeyFromRequest, rateLimitHeaders } from "@/lib/server/api/rateLimit";
 import { z } from "zod";
 import {
@@ -20,19 +20,19 @@ const RevokeTokenSchema = z.object({
   tokenId: z.string().uuid(),
 });
 
+// The rate limit is keyed by request rather than by user and stays outside the
+// session wrapper on purpose: it throttles anonymous callers before they can
+// drive a session lookup against the database.
+
 /** GET — List active (non-revoked) tokens for the current user. */
 export async function GET(req: Request) {
   const rl = checkRateLimit(rateLimitKeyFromRequest(req, "ext:token:list"), { limit: 30, windowSeconds: 60 });
   if (!rl.allowed) return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: rateLimitHeaders(rl) });
 
-  try {
-    const { userId } = await requireSession();
+  return withSessionRoute(async ({ userId }) => {
     const tokens = await listExtensionTokens(userId);
     return NextResponse.json({ data: tokens });
-  } catch (err) {
-    if (err instanceof UnauthorizedError) return unauthorizedError();
-    throw err;
-  }
+  });
 }
 
 /** POST — Generate a new extension token. Requires an active session (cookie auth). */
@@ -40,8 +40,7 @@ export async function POST(req: Request) {
   const rl = checkRateLimit(rateLimitKeyFromRequest(req, "ext:token:create"), { limit: 10, windowSeconds: 60 });
   if (!rl.allowed) return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: rateLimitHeaders(rl) });
 
-  try {
-    const { userId } = await requireSession();
+  return withSessionRoute(async ({ userId }) => {
     const body = await req.json().catch(() => ({}));
     const parsed = CreateTokenSchema.safeParse(body);
 
@@ -55,10 +54,7 @@ export async function POST(req: Request) {
     const result = await createExtensionToken(userId, name, expiryDays);
 
     return NextResponse.json({ data: result }, { status: 201 });
-  } catch (err) {
-    if (err instanceof UnauthorizedError) return unauthorizedError();
-    throw err;
-  }
+  });
 }
 
 /** DELETE — Revoke an extension token. */
@@ -66,8 +62,7 @@ export async function DELETE(req: Request) {
   const rl = checkRateLimit(rateLimitKeyFromRequest(req, "ext:token:revoke"), { limit: 20, windowSeconds: 60 });
   if (!rl.allowed) return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: rateLimitHeaders(rl) });
 
-  try {
-    const { userId } = await requireSession();
+  return withSessionRoute(async ({ userId }) => {
     const body = await req.json().catch(() => ({}));
     const parsed = RevokeTokenSchema.safeParse(body);
 
@@ -84,8 +79,5 @@ export async function DELETE(req: Request) {
     }
 
     return NextResponse.json({ data: { revoked: true } });
-  } catch (err) {
-    if (err instanceof UnauthorizedError) return unauthorizedError();
-    throw err;
-  }
+  });
 }

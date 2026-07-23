@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
+import { withSessionRoute } from "@/lib/server/api/routeHandler";
+import { UuidParamSchema } from "@/lib/shared/schemas/common";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
-import { requireSession, UnauthorizedError } from "@/lib/server/auth/requireSession";
-import type { SessionContext } from "@/lib/server/auth/requireSession";
-import { unauthorizedError } from "@/lib/server/api/errorResponse";
 import {
   BatchRunnerError,
   claimNextBatchTask,
@@ -18,10 +17,6 @@ export const runtime = "nodejs";
 function isAutoExecuteEnabled() {
   return process.env.ENABLE_BATCH_EXECUTE_AUTOGEN === "1";
 }
-
-const ParamsSchema = z.object({
-  id: z.string().uuid(),
-});
 
 const BodySchema = z.object({
   maxSteps: z.coerce.number().int().min(1).max(50).optional().default(20),
@@ -56,186 +51,179 @@ function toTaskErrorMessage(error: unknown) {
 }
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  if (!isAutoExecuteEnabled()) {
-    return NextResponse.json(
-      {
-        error: "EXECUTE_DISABLED",
-        message:
-          "Server-side auto execute is disabled. Use /codex-run with /applications/prompt and /applications/manual-generate.",
-      },
-      { status: 410 },
-    );
-  }
+  return withSessionRoute(
+    async ({ userId, params }) => {
+      if (!isAutoExecuteEnabled()) {
+        return NextResponse.json(
+          {
+            error: "EXECUTE_DISABLED",
+            message:
+              "Server-side auto execute is disabled. Use /codex-run with /applications/prompt and /applications/manual-generate.",
+          },
+          { status: 410 },
+        );
+      }
 
-  let session: SessionContext;
-  try {
-    session = await requireSession();
-  } catch (err) {
-    if (err instanceof UnauthorizedError) return unauthorizedError();
-    throw err;
-  }
-  const { userId } = session;
+      const json = await req.json().catch(() => ({}));
+      const parsedBody = BodySchema.safeParse(json ?? {});
+      if (!parsedBody.success) {
+        return NextResponse.json(
+          { error: "INVALID_BODY", details: parsedBody.error.flatten() },
+          { status: 400 },
+        );
+      }
 
-  const parsedParams = ParamsSchema.safeParse(await ctx.params);
-  if (!parsedParams.success) return NextResponse.json({ error: "INVALID_PARAMS" }, { status: 400 });
+      const batch = await prisma.applicationBatch.findFirst({
+        where: {
+          id: params.id,
+          userId,
+        },
+        select: {
+          id: true,
+          scope: true,
+          status: true,
+          totalCount: true,
+          error: true,
+        },
+      });
+      if (!batch) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
 
-  const json = await req.json().catch(() => ({}));
-  const parsedBody = BodySchema.safeParse(json ?? {});
-  if (!parsedBody.success) {
-    return NextResponse.json(
-      { error: "INVALID_BODY", details: parsedBody.error.flatten() },
-      { status: 400 },
-    );
-  }
+      const maxSteps = parsedBody.data.maxSteps;
+      const tasks: Array<{
+        taskId: string;
+        jobId: string;
+        job: {
+          title: string;
+          company: string | null;
+          jobUrl: string;
+        };
+        status: "SUCCEEDED" | "FAILED";
+        error: string | null;
+        artifacts: {
+          resumePdfUrl: string | null;
+          coverPdfUrl: string | null;
+        };
+      }> = [];
 
-  const batch = await prisma.applicationBatch.findFirst({
-    where: {
-      id: parsedParams.data.id,
-      userId,
-    },
-    select: {
-      id: true,
-      scope: true,
-      status: true,
-      totalCount: true,
-      error: true,
-    },
-  });
-  if (!batch) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+      let stopReason: StopReason = "LIMIT_REACHED";
+      let terminalStatus: string | null = null;
+      let doneStatus: string | null = null;
 
-  const maxSteps = parsedBody.data.maxSteps;
-  const tasks: Array<{
-    taskId: string;
-    jobId: string;
-    job: {
-      title: string;
-      company: string | null;
-      jobUrl: string;
-    };
-    status: "SUCCEEDED" | "FAILED";
-    error: string | null;
-    artifacts: {
-      resumePdfUrl: string | null;
-      coverPdfUrl: string | null;
-    };
-  }> = [];
+      if (!TERMINAL_BATCH_STATUSES.has(batch.status)) {
+        for (let i = 0; i < maxSteps; i += 1) {
+          const claimed = await claimNextBatchTask({
+            userId,
+            batchId: batch.id,
+          });
 
-  let stopReason: StopReason = "LIMIT_REACHED";
-  let terminalStatus: string | null = null;
-  let doneStatus: string | null = null;
+          if (claimed.kind === "not_found") {
+            return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+          }
+          if (claimed.kind === "terminal") {
+            terminalStatus = claimed.batchStatus;
+            stopReason = "BATCH_TERMINAL";
+            break;
+          }
+          if (claimed.kind === "done") {
+            doneStatus = claimed.batchStatus;
+            stopReason = "BATCH_COMPLETE";
+            break;
+          }
 
-  if (!TERMINAL_BATCH_STATUSES.has(batch.status)) {
-    for (let i = 0; i < maxSteps; i += 1) {
-      const claimed = await claimNextBatchTask({
+          const taskBase = {
+            taskId: claimed.task.id,
+            jobId: claimed.task.jobId,
+            job: {
+              title: claimed.task.title,
+              company: claimed.task.company,
+              jobUrl: claimed.task.jobUrl,
+            },
+          };
+
+          try {
+            const artifactResult = await generateApplicationArtifactsForJob({
+              userId,
+              jobId: claimed.task.jobId,
+            });
+            await completeBatchTask({
+              userId,
+              batchId: batch.id,
+              taskId: claimed.task.id,
+              status: "SUCCEEDED",
+            });
+            tasks.push({
+              ...taskBase,
+              status: "SUCCEEDED",
+              error: null,
+              artifacts: {
+                resumePdfUrl: artifactResult.resumePdfUrl,
+                coverPdfUrl: artifactResult.coverPdfUrl,
+              },
+            });
+          } catch (error) {
+            const failureMessage = toTaskErrorMessage(error);
+            try {
+              await completeBatchTask({
+                userId,
+                batchId: batch.id,
+                taskId: claimed.task.id,
+                status: "FAILED",
+                error: failureMessage,
+              });
+            } catch (completionError) {
+              if (!(completionError instanceof BatchRunnerError)) {
+                throw completionError;
+              }
+            }
+            tasks.push({
+              ...taskBase,
+              status: "FAILED",
+              error: failureMessage,
+              artifacts: {
+                resumePdfUrl: null,
+                coverPdfUrl: null,
+              },
+            });
+          }
+        }
+      } else {
+        terminalStatus = batch.status;
+        stopReason = "BATCH_TERMINAL";
+      }
+
+      const progress = await getBatchProgress({
         userId,
         batchId: batch.id,
       });
 
-      if (claimed.kind === "not_found") {
-        return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
-      }
-      if (claimed.kind === "terminal") {
-        terminalStatus = claimed.batchStatus;
-        stopReason = "BATCH_TERMINAL";
-        break;
-      }
-      if (claimed.kind === "done") {
-        doneStatus = claimed.batchStatus;
-        stopReason = "BATCH_COMPLETE";
-        break;
-      }
+      const batchStatus = toBatchStatusFromRun({
+        initialBatchStatus: batch.status,
+        progress,
+        claimedCount: tasks.length,
+        stopReason,
+        claimedDoneStatus: doneStatus,
+        terminalStatus,
+      });
 
-      const taskBase = {
-        taskId: claimed.task.id,
-        jobId: claimed.task.jobId,
-        job: {
-          title: claimed.task.title,
-          company: claimed.task.company,
-          jobUrl: claimed.task.jobUrl,
+      return NextResponse.json({
+        batch: {
+          id: batch.id,
+          scope: batch.scope,
+          status: batchStatus,
+          totalCount: batch.totalCount,
+          error: batch.error,
         },
-      };
-
-      try {
-        const artifactResult = await generateApplicationArtifactsForJob({
-          userId,
-          jobId: claimed.task.jobId,
-        });
-        await completeBatchTask({
-          userId,
-          batchId: batch.id,
-          taskId: claimed.task.id,
-          status: "SUCCEEDED",
-        });
-        tasks.push({
-          ...taskBase,
-          status: "SUCCEEDED",
-          error: null,
-          artifacts: {
-            resumePdfUrl: artifactResult.resumePdfUrl,
-            coverPdfUrl: artifactResult.coverPdfUrl,
-          },
-        });
-      } catch (error) {
-        const failureMessage = toTaskErrorMessage(error);
-        try {
-          await completeBatchTask({
-            userId,
-            batchId: batch.id,
-            taskId: claimed.task.id,
-            status: "FAILED",
-            error: failureMessage,
-          });
-        } catch (completionError) {
-          if (!(completionError instanceof BatchRunnerError)) {
-            throw completionError;
-          }
-        }
-        tasks.push({
-          ...taskBase,
-          status: "FAILED",
-          error: failureMessage,
-          artifacts: {
-            resumePdfUrl: null,
-            coverPdfUrl: null,
-          },
-        });
-      }
-    }
-  } else {
-    terminalStatus = batch.status;
-    stopReason = "BATCH_TERMINAL";
-  }
-
-  const progress = await getBatchProgress({
-    userId,
-    batchId: batch.id,
-  });
-
-  const batchStatus = toBatchStatusFromRun({
-    initialBatchStatus: batch.status,
-    progress,
-    claimedCount: tasks.length,
-    stopReason,
-    claimedDoneStatus: doneStatus,
-    terminalStatus,
-  });
-
-  return NextResponse.json({
-    batch: {
-      id: batch.id,
-      scope: batch.scope,
-      status: batchStatus,
-      totalCount: batch.totalCount,
-      error: batch.error,
+        progress,
+        tasks,
+        execution: {
+          requestedMaxSteps: maxSteps,
+          processedCount: tasks.length,
+          successCount: tasks.filter((task) => task.status === "SUCCEEDED").length,
+          failedCount: tasks.filter((task) => task.status === "FAILED").length,
+          stopReason,
+        },
+      });
     },
-    progress,
-    tasks,
-    execution: {
-      requestedMaxSteps: maxSteps,
-      processedCount: tasks.length,
-      successCount: tasks.filter((task) => task.status === "SUCCEEDED").length,
-      failedCount: tasks.filter((task) => task.status === "FAILED").length,
-      stopReason,
-    },
-  });
+    { params: ctx.params, schema: UuidParamSchema },
+  );
 }

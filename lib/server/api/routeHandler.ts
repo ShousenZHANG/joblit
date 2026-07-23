@@ -7,20 +7,65 @@ import {
   type SessionContext,
   type SessionContextWithEmail,
 } from "@/lib/server/auth/requireSession";
-import { unauthorizedError, validationError } from "@/lib/server/api/errorResponse";
+import {
+  errorJson,
+  unauthorizedError,
+  validationError,
+} from "@/lib/server/api/errorResponse";
 import { reportError } from "@/lib/server/observability/errorReporter";
 
 type SessionRouteHandler<TContext extends SessionContext> = (
   context: TContext,
 ) => Promise<NextResponse>;
 
+/**
+ * Route params validated before the handler runs.
+ *
+ * Dynamic segments arrive as `Promise<Record<string, string>>` from Next. Pass
+ * that promise and a schema; the handler receives the parsed value and never
+ * sees an unvalidated id.
+ */
+export type SessionRouteParams<TParams> = {
+  params: Promise<unknown>;
+  schema: z.ZodType<TParams>;
+};
+
+/**
+ * The session seam for every authenticated route.
+ *
+ * Guarantees, in this order: a session exists (401 otherwise), route params
+ * parse against the supplied schema (400 otherwise), and any other throw is
+ * reported through the observability seam before it bubbles to Next's 500.
+ * That last guarantee is the reason to use this rather than an inline
+ * `try/catch (UnauthorizedError)` — the two look equivalent and are not.
+ */
+export async function withSessionRoute<TParams>(
+  handler: SessionRouteHandler<SessionContext & { params: TParams }>,
+  options: SessionRouteParams<TParams>,
+): Promise<NextResponse>;
 export async function withSessionRoute(
   handler: SessionRouteHandler<SessionContext>,
+): Promise<NextResponse>;
+export async function withSessionRoute(
+  handler: (context: never) => Promise<NextResponse>,
+  options?: SessionRouteParams<unknown>,
 ): Promise<NextResponse> {
+  const run = handler as (context: SessionContext & { params?: unknown }) => Promise<NextResponse>;
+  let session: SessionContext;
   try {
-    return await handler(await requireSession());
+    session = await requireSession();
   } catch (err) {
     if (err instanceof UnauthorizedError) return unauthorizedError();
+    reportError(err, { scope: "route.session" });
+    throw err;
+  }
+
+  try {
+    if (!options) return await run(session);
+    const parsed = options.schema.safeParse(await options.params);
+    if (!parsed.success) return invalidParamsError(session.requestId);
+    return await run({ ...session, params: parsed.data });
+  } catch (err) {
     // Unexpected error reaching the wrapper — capture via the seam before it
     // bubbles to Next's 500 so it isn't invisible in prod.
     reportError(err, { scope: "route.session" });
@@ -38,6 +83,10 @@ export async function withEmailSessionRoute(
     reportError(err, { scope: "route.emailSession" });
     throw err;
   }
+}
+
+export function invalidParamsError(requestId?: string): NextResponse {
+  return errorJson("INVALID_PARAMS", "Invalid route parameters", 400, { requestId });
 }
 
 export async function parseJsonBody<TSchema extends z.ZodType>(
