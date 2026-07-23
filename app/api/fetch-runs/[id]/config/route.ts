@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { UuidParamSchema } from "@/lib/shared/schemas/common";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
@@ -16,12 +17,12 @@ function requireSecret(req: Request) {
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   if (!requireSecret(_req)) {
-    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+    return errorJson("UNAUTHORIZED", "Unauthorized", 401);
   }
 
   const params = await ctx.params;
   const parsed = UuidParamSchema.safeParse(params);
-  if (!parsed.success) return NextResponse.json({ error: "INVALID_PARAMS" }, { status: 400 });
+  if (!parsed.success) return errorJson("INVALID_PARAMS", "Invalid route parameters", 400);
 
   const run = await prisma.fetchRun.findUnique({
     where: { id: parsed.data.id },
@@ -39,7 +40,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       filterDescription: true,
     },
   });
-  if (!run) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+  if (!run) return errorJson("NOT_FOUND", "Not found", 404);
 
   return NextResponse.json({ run });
 }

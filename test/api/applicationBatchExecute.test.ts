@@ -66,7 +66,7 @@ describe("application batch execute api", () => {
     const json = await res.json();
 
     expect(res.status).toBe(410);
-    expect(json.error).toBe("EXECUTE_DISABLED");
+    expect(json.error.code).toBe("EXECUTE_DISABLED");
     expect(runner.claimNextBatchTask).not.toHaveBeenCalled();
     expect(artifacts.generateApplicationArtifactsForJob).not.toHaveBeenCalled();
   });

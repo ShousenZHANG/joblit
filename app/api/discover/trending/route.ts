@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import type { TrendingResponse } from "@/app/(app)/discover/types";
 import {
@@ -86,7 +87,7 @@ export async function GET(request: Request) {
       }
       // Upstream error text stays server-side; the client gets a stable code.
       reportError(err, { scope: "discover.trending" });
-      return NextResponse.json({ error: "TRENDING_UNAVAILABLE" }, { status: 502 });
+      return errorJson("TRENDING_UNAVAILABLE", "Trending repositories are unavailable", 502);
     }
   });
 }

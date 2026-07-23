@@ -120,6 +120,11 @@ describe("fetch run update api", () => {
     );
 
     expect(res.status).toBe(409);
-    await expect(res.json()).resolves.toEqual({ error: "STATE_CHANGED" });
+    await expect(res.json()).resolves.toEqual({
+      error: {
+        code: "STATE_CHANGED",
+        message: "The resource changed while this request was in flight",
+      },
+    });
   });
 });

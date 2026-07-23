@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
@@ -152,7 +153,7 @@ export async function GET() {
           }),
         });
       }
-      return NextResponse.json({ error: "ONBOARDING_STATE_FAILED" }, { status: 500 });
+      return errorJson("ONBOARDING_STATE_FAILED", "Onboarding state is unavailable", 500);
     }
   });
 }
@@ -162,10 +163,9 @@ export async function PATCH(req: Request) {
     const json = await req.json().catch(() => null);
     const parsed = PatchSchema.safeParse(json);
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "INVALID_BODY", details: parsed.error.flatten() },
-        { status: 400 },
-      );
+      return errorJson("INVALID_BODY", "Invalid request body", 400, {
+        details: parsed.error.flatten(),
+      });
     }
 
     try {
@@ -255,7 +255,7 @@ export async function PATCH(req: Request) {
           }),
         });
       }
-      return NextResponse.json({ error: "ONBOARDING_STATE_FAILED" }, { status: 500 });
+      return errorJson("ONBOARDING_STATE_FAILED", "Onboarding state is unavailable", 500);
     }
   });
 }

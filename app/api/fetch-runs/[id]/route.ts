@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { UuidParamSchema } from "@/lib/shared/schemas/common";
 import { prisma } from "@/lib/server/prisma";
@@ -72,7 +73,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
         },
       });
 
-      if (!run) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+      if (!run) return errorJson("NOT_FOUND", "Not found", 404);
       const staleCutoff = fetchRunStaleCutoff();
       if (
         (run.status === "QUEUED" || run.status === "RUNNING") &&

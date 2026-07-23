@@ -12,6 +12,7 @@ import {
   unauthorizedError,
   validationError,
 } from "@/lib/server/api/errorResponse";
+import { toErrorResponse } from "@/lib/server/api/appError";
 import { reportError } from "@/lib/server/observability/errorReporter";
 
 type SessionRouteHandler<TContext extends SessionContext> = (
@@ -66,9 +67,12 @@ export async function withSessionRoute(
     if (!parsed.success) return invalidParamsError(session.requestId);
     return await run({ ...session, params: parsed.data });
   } catch (err) {
-    // Unexpected error reaching the wrapper — capture via the seam before it
-    // bubbles to Next's 500 so it isn't invisible in prod.
-    reportError(err, { scope: "route.session" });
+    // A typed domain failure renders as the canonical envelope. Anything else
+    // is a bug: capture it via the seam before it bubbles to Next's 500 so it
+    // isn't invisible in prod.
+    const typed = toErrorResponse(err, session.requestId);
+    if (typed) return typed;
+    reportError(err, { scope: "route.session", requestId: session.requestId });
     throw err;
   }
 }

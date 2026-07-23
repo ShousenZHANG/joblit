@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { prisma } from "@/lib/server/prisma";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { UuidParamSchema } from "@/lib/shared/schemas/common";
@@ -33,7 +34,7 @@ export async function GET(
       });
 
       if (!batch) {
-        return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+        return errorJson("NOT_FOUND", "Not found", 404);
       }
 
       const grouped = await prisma.applicationBatchTask.groupBy({

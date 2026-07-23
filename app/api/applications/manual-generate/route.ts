@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { del, put } from "@vercel/blob";
 import { errorJson, notFoundError, validationError } from "@/lib/server/api/errorResponse";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
+import { toErrorResponse } from "@/lib/server/api/appError";
 import { enforceAiRateLimit } from "@/lib/server/api/aiRateLimit";
 import { buildPromptMeta, validatePromptMetaForImport } from "@/lib/server/ai/promptContract";
 import {
@@ -343,20 +344,11 @@ export async function POST(req: Request) {
     coverQualityGate = artifact.coverQualityGate;
     coverQualityIssueCount = artifact.coverQualityIssueCount;
   } catch (err) {
-    if (err instanceof LatexRenderError || err instanceof AtsPdfValidationError) {
-      return NextResponse.json(
-        {
-          error: {
-            code: err.code,
-            message: err.message,
-            details:
-              err instanceof AtsPdfValidationError ? err.report : err.details,
-          },
-          requestId,
-        },
-        { status: err.status },
-      );
-    }
+    // `toErrorResponse` reports a LatexRenderError's upstream body rather than
+    // returning it — that body can carry internal hostnames. The ATS report is
+    // ours and is returned as publicDetails.
+    const typed = toErrorResponse(err, requestId);
+    if (typed) return typed;
     return NextResponse.json(
       { error: { code: "UNKNOWN_ERROR", message: "Unknown render error" }, requestId },
       { status: 500 },

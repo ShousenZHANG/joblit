@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
@@ -33,10 +34,9 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const parsed = QuerySchema.safeParse(Object.fromEntries(url.searchParams));
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "INVALID_QUERY", details: parsed.error.flatten() },
-      { status: 400 },
-    );
+    return errorJson("INVALID_QUERY", "Invalid query parameters", 400, {
+      details: parsed.error.flatten(),
+    });
   }
 
   const q = parsed.data.q.toLowerCase();

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { prisma } from "@/lib/server/prisma";
 
@@ -141,10 +142,9 @@ export async function POST(req: Request) {
   });
 
   if (remainingNew > 0) {
-    return NextResponse.json(
-      { error: "HAS_NEW", remainingNew },
-      { status: 400 },
-    );
+    return errorJson("HAS_NEW", "Triage the remaining new jobs first", 400, {
+      details: { remainingNew },
+    });
   }
 
   await prisma.dailyCheckin.upsert({

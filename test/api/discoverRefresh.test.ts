@@ -134,7 +134,10 @@ describe("Discover daily cron route", () => {
 
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toEqual({
-      error: "DISCOVER_REFRESH_LEASE_LOST",
+      error: {
+        code: "DISCOVER_REFRESH_LEASE_LOST",
+        message: "Another worker holds the refresh lease",
+      },
     });
   });
 });

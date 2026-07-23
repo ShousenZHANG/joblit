@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import { reportError } from "@/lib/server/observability/errorReporter";
@@ -24,16 +25,15 @@ function requireImportSecret(req: Request) {
 export async function POST(req: Request) {
   try {
     if (!requireImportSecret(req)) {
-      return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+      return errorJson("UNAUTHORIZED", "Unauthorized", 401);
     }
 
     const json = await req.json().catch(() => null);
     const parsed = BodySchema.safeParse(json);
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "INVALID_BODY", details: parsed.error.flatten() },
-        { status: 400 },
-      );
+      return errorJson("INVALID_BODY", "Invalid request body", 400, {
+        details: parsed.error.flatten(),
+      });
     }
 
     const email = parsed.data.userEmail.trim().toLowerCase();
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
       select: { id: true },
     });
     if (!user) {
-      return NextResponse.json({ error: "USER_NOT_FOUND" }, { status: 404 });
+      return errorJson("USER_NOT_FOUND", "User not found", 404);
     }
 
     const { imported, invalid } = await importJobsForUser({
@@ -54,6 +54,6 @@ export async function POST(req: Request) {
     // Log the real cause server-side; return a generic message so DB /
     // stack internals never reach the client.
     reportError(err, { scope: "admin.import" });
-    return NextResponse.json({ error: "IMPORT_FAILED" }, { status: 500 });
+    return errorJson("IMPORT_FAILED", "Import failed", 500);
   }
 }

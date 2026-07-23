@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { UuidParamSchema } from "@/lib/shared/schemas/common";
 import { z } from "zod";
@@ -16,10 +17,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       const json = await req.json().catch(() => ({}));
       const parsedBody = BodySchema.safeParse(json ?? {});
       if (!parsedBody.success) {
-        return NextResponse.json(
-          { error: "INVALID_BODY", details: parsedBody.error.flatten() },
-          { status: 400 },
-        );
+        return errorJson("INVALID_BODY", "Invalid request body", 400, {
+          details: parsedBody.error.flatten(),
+        });
       }
 
       try {
@@ -31,10 +31,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         return NextResponse.json(result, { status: 201 });
       } catch (error) {
         if (error instanceof BatchRunnerError && error.code === "NOT_FOUND") {
-          return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+          return errorJson("NOT_FOUND", "Not found", 404);
         }
         if (error instanceof BatchRunnerError && error.code === "INVALID_STATE") {
-          return NextResponse.json({ error: "INVALID_STATE", message: error.message }, { status: 409 });
+          return errorJson("INVALID_STATE", error.message, 409);
         }
         throw error;
       }

@@ -61,7 +61,10 @@ describe("withSessionRoute", () => {
       }),
     ).rejects.toThrow(boom);
 
-    expect(reportError).toHaveBeenCalledWith(boom, { scope: "route.session" });
+    expect(reportError).toHaveBeenCalledWith(boom, {
+      scope: "route.session",
+      requestId: "req-1",
+    });
   });
 
   it("reports an unexpected error from session resolution before rethrowing", async () => {
@@ -70,6 +73,25 @@ describe("withSessionRoute", () => {
 
     await expect(withSessionRoute(async () => NextResponse.json({}))).rejects.toThrow(boom);
     expect(reportError).toHaveBeenCalledWith(boom, { scope: "route.session" });
+  });
+
+  it("renders an AppError thrown by the handler as the canonical envelope", async () => {
+    const { AppError } = await import("@/lib/server/api/appError");
+    const res = await withSessionRoute(async () => {
+      throw new AppError({
+        code: "NO_PROFILE",
+        status: 404,
+        publicMessage: "No Master Resume Profile for this locale.",
+      });
+    });
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({
+      error: { code: "NO_PROFILE", message: "No Master Resume Profile for this locale." },
+      requestId: "req-1",
+    });
+    // A typed domain failure is not a bug, so it is not reported.
+    expect(reportError).not.toHaveBeenCalled();
   });
 
   it("does not report an UnauthorizedError as an unexpected failure", async () => {

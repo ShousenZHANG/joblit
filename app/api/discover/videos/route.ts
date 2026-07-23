@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import type {
   VideoItem,
@@ -183,10 +184,7 @@ export async function GET(request: Request) {
         }
       }
 
-      return NextResponse.json(
-        { error: "VIDEOS_UNAVAILABLE" },
-        { status: 502 },
-      );
+      return errorJson("VIDEOS_UNAVAILABLE", "Videos are unavailable", 502);
     }
   });
 }

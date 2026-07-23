@@ -1,4 +1,5 @@
 import { del, put } from "@vercel/blob";
+import { AppError } from "@/lib/server/api/appError";
 import { getResumeProfile } from "@/lib/server/resumeProfile";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import { renderResumeTex } from "@/lib/server/latex/renderResume";
@@ -56,7 +57,11 @@ export async function renderApplicationPdf(
     locale: profileLocale,
   });
   if (!profile) {
-    throw new Error("MASTER_PROFILE_MISSING");
+    throw new AppError({
+      code: "NO_PROFILE",
+      status: 404,
+      publicMessage: "No Master Resume Profile for this locale.",
+    });
   }
   const renderInput = mapResumeProfile(profile);
 
@@ -181,7 +186,11 @@ export async function renderCoverLetterPdf(input: {
     locale: profileLocale,
   });
   if (!profile) {
-    throw new Error("MASTER_PROFILE_MISSING");
+    throw new AppError({
+      code: "NO_PROFILE",
+      status: 404,
+      publicMessage: "No Master Resume Profile for this locale.",
+    });
   }
   const renderInput = mapResumeProfile(profile);
 
@@ -191,7 +200,11 @@ export async function renderCoverLetterPdf(input: {
   const p3 = (c.paragraphThree.userEdit?.trim() || c.paragraphThree.aiText).trim();
 
   if (!p1 || !p2 || !p3) {
-    throw new Error("COVER_PARAGRAPHS_INCOMPLETE");
+    throw new AppError({
+      code: "COVER_PARAGRAPHS_INCOMPLETE",
+      status: 422,
+      publicMessage: "The cover letter is missing one or more body paragraphs.",
+    });
   }
 
   const tex = renderCoverLetterTex({

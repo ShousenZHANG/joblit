@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { z } from "zod";
 import { Prisma } from "@/lib/generated/prisma";
@@ -69,14 +70,7 @@ function parsePrismaError(error: unknown) {
   }
 
   if (error.code === "P2002" && String(error.meta?.target ?? "").includes("userId")) {
-    return NextResponse.json(
-      {
-        error: "MIGRATION_REQUIRED",
-        message:
-          "Database schema is outdated. Run `npx prisma migrate deploy` to remove ResumeProfile.userId uniqueness.",
-      },
-      { status: 409 },
-    );
+    return errorJson("MIGRATION_REQUIRED", "Database schema is outdated. Run `npx prisma migrate deploy` to remove ResumeProfile.userId uniqueness.", 409);
   }
 
   return null;
@@ -98,10 +92,9 @@ export async function POST(req: Request) {
     const json = await req.json().catch(() => null);
     const parsed = ResumeProfileUpsertSchema.safeParse(json);
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "INVALID_BODY", details: parsed.error.flatten() },
-        { status: 400 },
-      );
+      return errorJson("INVALID_BODY", "Invalid request body", 400, {
+        details: parsed.error.flatten(),
+      });
     }
 
     let profile;
@@ -131,7 +124,7 @@ export async function POST(req: Request) {
     }
 
     if (!profile) {
-      return NextResponse.json({ error: "PROFILE_NOT_FOUND" }, { status: 404 });
+      return errorJson("PROFILE_NOT_FOUND", "Resume profile not found", 404);
     }
 
     const state = await buildResumeProfileResponse(userId, parsed.data.locale);
@@ -144,10 +137,9 @@ export async function PATCH(req: Request) {
     const json = await req.json().catch(() => null);
     const parsed = ResumeProfilePatchSchema.safeParse(json);
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "INVALID_BODY", details: parsed.error.flatten() },
-        { status: 400 },
-      );
+      return errorJson("INVALID_BODY", "Invalid request body", 400, {
+        details: parsed.error.flatten(),
+      });
     }
 
     let locale = "en-AU";
@@ -173,14 +165,14 @@ export async function PATCH(req: Request) {
       locale = parsed.data.locale;
       const target = await setActiveResumeProfile(userId, locale, parsed.data.profileId);
       if (!target) {
-        return NextResponse.json({ error: "PROFILE_NOT_FOUND" }, { status: 404 });
+        return errorJson("PROFILE_NOT_FOUND", "Resume profile not found", 404);
       }
     }
 
     if (parsed.data.action === "rename") {
       const target = await renameResumeProfile(userId, parsed.data.profileId, parsed.data.name);
       if (!target) {
-        return NextResponse.json({ error: "PROFILE_NOT_FOUND" }, { status: 404 });
+        return errorJson("PROFILE_NOT_FOUND", "Resume profile not found", 404);
       }
     }
 
@@ -188,13 +180,10 @@ export async function PATCH(req: Request) {
       locale = parsed.data.locale;
       const result = await deleteResumeProfile(userId, locale, parsed.data.profileId);
       if (result.status === "not_found") {
-        return NextResponse.json({ error: "PROFILE_NOT_FOUND" }, { status: 404 });
+        return errorJson("PROFILE_NOT_FOUND", "Resume profile not found", 404);
       }
       if (result.status === "last_profile") {
-        return NextResponse.json(
-          { error: "LAST_PROFILE", message: "At least one resume version is required." },
-          { status: 409 },
-        );
+        return errorJson("LAST_PROFILE", "At least one resume version is required.", 409);
       }
     }
 

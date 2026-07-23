@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { z } from "zod";
 import { listJobs } from "@/lib/server/jobs/jobListService";
@@ -26,10 +27,9 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const parsed = QuerySchema.safeParse(Object.fromEntries(url.searchParams));
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "INVALID_QUERY", details: parsed.error.flatten() },
-        { status: 400 },
-      );
+      return errorJson("INVALID_QUERY", "Invalid query parameters", 400, {
+        details: parsed.error.flatten(),
+      });
     }
 
     const result = await listJobs(userId, parsed.data);

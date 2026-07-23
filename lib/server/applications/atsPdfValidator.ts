@@ -1,4 +1,5 @@
 import { truncate } from "@/lib/shared/utils/text";
+import { AppError } from "@/lib/server/api/appError";
 
 export type AtsPdfValidation = {
   passed: boolean;
@@ -11,13 +12,18 @@ export type AtsPdfValidation = {
   warnings: string[];
 };
 
-export class AtsPdfValidationError extends Error {
-  readonly code = "ATS_PDF_VALIDATION_FAILED";
-  readonly status = 422;
+export class AtsPdfValidationError extends AppError {
   readonly report: AtsPdfValidation;
 
   constructor(report: AtsPdfValidation) {
-    super(report.errors[0] ?? "PDF failed ATS readability validation.");
+    // The report is derived from our own PDF, not from an upstream body, so it
+    // is safe to return — it is what the Edit panel renders.
+    super({
+      code: "ATS_PDF_VALIDATION_FAILED",
+      status: 422,
+      publicMessage: report.errors[0] ?? "PDF failed ATS readability validation.",
+      publicDetails: report,
+    });
     this.name = "AtsPdfValidationError";
     this.report = report;
   }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { UuidParamSchema } from "@/lib/shared/schemas/common";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
@@ -24,20 +25,19 @@ function requireSecret(req: Request) {
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   if (!requireSecret(req)) {
-    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+    return errorJson("UNAUTHORIZED", "Unauthorized", 401);
   }
 
   const params = await ctx.params;
   const parsedParams = UuidParamSchema.safeParse(params);
-  if (!parsedParams.success) return NextResponse.json({ error: "INVALID_PARAMS" }, { status: 400 });
+  if (!parsedParams.success) return errorJson("INVALID_PARAMS", "Invalid route parameters", 400);
 
   const json = await req.json().catch(() => null);
   const parsedBody = BodySchema.safeParse(json);
   if (!parsedBody.success) {
-    return NextResponse.json(
-      { error: "INVALID_BODY", details: parsedBody.error.flatten() },
-      { status: 400 },
-    );
+    return errorJson("INVALID_BODY", "Invalid request body", 400, {
+      details: parsedBody.error.flatten(),
+    });
   }
 
   const current = await prisma.fetchRun.findUnique({
@@ -45,7 +45,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     select: { id: true, status: true, error: true, importedCount: true },
   });
 
-  if (!current) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+  if (!current) return errorJson("NOT_FOUND", "Not found", 404);
 
   const incoming = parsedBody.data;
   const nextImportedCount =
@@ -105,7 +105,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       data: patch,
     });
     if (updated.count === 0) {
-      return NextResponse.json({ error: "STATE_CHANGED" }, { status: 409 });
+      return errorJson("STATE_CHANGED", "The resource changed while this request was in flight", 409);
     }
   }
 

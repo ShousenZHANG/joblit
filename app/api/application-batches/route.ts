@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
@@ -18,10 +19,9 @@ export async function POST(req: Request) {
     const json = await req.json().catch(() => ({}));
     const parsed = CreateBatchSchema.safeParse(json ?? {});
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "INVALID_BODY", details: parsed.error.flatten() },
-        { status: 400 },
-      );
+      return errorJson("INVALID_BODY", "Invalid request body", 400, {
+        details: parsed.error.flatten(),
+      });
     }
 
     const activeBatch = await prisma.applicationBatch.findFirst({
@@ -41,10 +41,9 @@ export async function POST(req: Request) {
     });
 
     if (activeBatch) {
-      return NextResponse.json(
-        { error: "ACTIVE_BATCH_EXISTS", batchId: activeBatch.id, status: activeBatch.status },
-        { status: 409 },
-      );
+      return errorJson("ACTIVE_BATCH_EXISTS", "An active batch already exists", 409, {
+        details: { batchId: activeBatch.id, status: activeBatch.status },
+      });
     }
 
     const selectedJobIds = parsed.data.selectedJobIds
@@ -73,7 +72,7 @@ export async function POST(req: Request) {
     });
 
     if (jobs.length === 0) {
-      return NextResponse.json({ error: "NO_ELIGIBLE_JOBS" }, { status: 400 });
+      return errorJson("NO_ELIGIBLE_JOBS", "No eligible jobs", 400);
     }
 
     const batch = await prisma.$transaction(async (tx) => {

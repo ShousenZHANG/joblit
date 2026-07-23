@@ -93,7 +93,7 @@ export async function POST(
         },
       });
       if (updated.count === 0) {
-        return NextResponse.json({ error: "JOB_NOT_FOUND" }, { status: 404 });
+        return errorJson("JOB_NOT_FOUND", "Job not found", 404);
       }
 
       return NextResponse.json({

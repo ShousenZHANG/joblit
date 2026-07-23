@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { constantTimeEqual } from "@/lib/server/auth/constantTimeEqual";
 import {
   FETCH_RUN_STALE_AFTER_MS,
@@ -21,10 +22,10 @@ export async function GET(req: Request) {
   const provided = req.headers.get("x-fetch-run-secret") ?? "";
 
   if (!secret) {
-    return NextResponse.json({ error: "NOT_CONFIGURED" }, { status: 503 });
+    return errorJson("NOT_CONFIGURED", "This endpoint is not configured", 503);
   }
   if (!constantTimeEqual(provided, secret)) {
-    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+    return errorJson("UNAUTHORIZED", "Unauthorized", 401);
   }
 
   const cutoff = fetchRunStaleCutoff();

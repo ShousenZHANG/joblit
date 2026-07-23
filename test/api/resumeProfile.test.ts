@@ -164,7 +164,7 @@ describe("resume profile api", () => {
 
     expect(res.status).toBe(404);
     const json = await res.json();
-    expect(json.error).toBe("PROFILE_NOT_FOUND");
+    expect(json.error.code).toBe("PROFILE_NOT_FOUND");
   });
 
   it("activates selected profile on PATCH", async () => {
@@ -250,6 +250,6 @@ describe("resume profile api", () => {
 
     expect(res.status).toBe(409);
     const json = await res.json();
-    expect(json.error).toBe("LAST_PROFILE");
+    expect(json.error.code).toBe("LAST_PROFILE");
   });
 });

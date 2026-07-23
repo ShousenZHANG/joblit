@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { UuidParamSchema } from "@/lib/shared/schemas/common";
 import { reportError } from "@/lib/server/observability/errorReporter";
@@ -123,10 +124,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         TRIGGER_RATE_LIMIT,
       );
       if (!rateLimit.allowed) {
-        return NextResponse.json(
-          { error: "TOO_MANY_TRIGGER_REQUESTS" },
-          { status: 429, headers: rateLimitHeaders(rateLimit) },
-        );
+        return errorJson("TOO_MANY_TRIGGER_REQUESTS", "Too many trigger requests", 429, {
+          headers: rateLimitHeaders(rateLimit),
+        });
       }
 
       // Reject random or cross-tenant UUIDs before entering the global quota
@@ -137,7 +137,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         select: { id: true },
       });
       if (!ownedRun) {
-        return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+        return errorJson("NOT_FOUND", "Not found", 404);
       }
 
       // Pessimistic lock via Postgres transaction-scoped advisory lock.
@@ -215,10 +215,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         });
       }
       if (txResult.kind === "not_found") {
-        return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+        return errorJson("NOT_FOUND", "Not found", 404);
       }
       if (txResult.kind === "invalid_state") {
-        return NextResponse.json({ error: "INVALID_STATE", status: txResult.status }, { status: 409 });
+        return errorJson("INVALID_STATE", "The fetch run is not in a state that allows a trigger", 409, {
+          details: { status: txResult.status },
+        });
       }
       if (txResult.kind === "quota") {
         return fetchRunQuotaExceededResponse(txResult.quotaViolation);
@@ -248,7 +250,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           },
         });
         if (claimed.count === 0) {
-          return NextResponse.json({ error: "RUN_NO_LONGER_ACTIVE" }, { status: 409 });
+          return errorJson("RUN_NO_LONGER_ACTIVE", "The fetch run is no longer active", 409);
         }
 
         const result =
@@ -262,7 +264,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
                 queries: txResult.queries,
               });
         if (result.cancelled) {
-          return NextResponse.json({ error: "RUN_CANCELLED" }, { status: 409 });
+          return errorJson("RUN_CANCELLED", "The fetch run was cancelled", 409);
         }
         if (result.error) {
           return NextResponse.json(
@@ -350,7 +352,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           queries: txResult.queries,
           error: "GITHUB_DISPATCH_FAILED",
         });
-        return NextResponse.json({ error: "GITHUB_DISPATCH_FAILED" }, { status: 502 });
+        return errorJson("GITHUB_DISPATCH_FAILED", "Github dispatch failed", 502);
       }
 
       // Mark dispatch complete (still QUEUED until worker starts).

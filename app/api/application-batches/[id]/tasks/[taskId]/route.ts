@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { UuidWithTaskParamSchema } from "@/lib/shared/schemas/common";
 import { z } from "zod";
@@ -17,10 +18,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string; t
       const json = await req.json().catch(() => null);
       const parsedBody = BodySchema.safeParse(json);
       if (!parsedBody.success) {
-        return NextResponse.json(
-          { error: "INVALID_BODY", details: parsedBody.error.flatten() },
-          { status: 400 },
-        );
+        return errorJson("INVALID_BODY", "Invalid request body", 400, {
+          details: parsedBody.error.flatten(),
+        });
       }
 
       try {
@@ -34,10 +34,10 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string; t
         return NextResponse.json(result, { status: 200 });
       } catch (error) {
         if (error instanceof BatchRunnerError && error.code === "NOT_FOUND") {
-          return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+          return errorJson("NOT_FOUND", "Not found", 404);
         }
         if (error instanceof BatchRunnerError && error.code === "INVALID_STATE") {
-          return NextResponse.json({ error: "INVALID_STATE" }, { status: 409 });
+          return errorJson("INVALID_STATE", "The resource is not in a state that allows this operation", 409);
         }
         throw error;
       }

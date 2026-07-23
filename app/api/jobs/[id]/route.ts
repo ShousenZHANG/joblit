@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { UuidParamSchema } from "@/lib/shared/schemas/common";
 import { z } from "zod";
@@ -26,10 +27,9 @@ export async function PATCH(
       const json = await _req.json().catch(() => null);
       const parsedBody = PatchSchema.safeParse(json);
       if (!parsedBody.success) {
-        return NextResponse.json(
-          { error: "INVALID_BODY", details: parsedBody.error.flatten() },
-          { status: 400 },
-        );
+        return errorJson("INVALID_BODY", "Invalid request body", 400, {
+          details: parsedBody.error.flatten(),
+        });
       }
 
       let result;
@@ -45,7 +45,7 @@ export async function PATCH(
         throw error;
       }
       if (!result) {
-        return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+        return errorJson("NOT_FOUND", "Not found", 404);
       }
 
       return NextResponse.json(result);
@@ -66,7 +66,7 @@ export async function GET(
       });
 
       if (!job) {
-        return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+        return errorJson("NOT_FOUND", "Not found", 404);
       }
 
       const matrix = FitMatrixSchema.safeParse(job.fitMatrix);

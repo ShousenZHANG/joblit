@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { UuidParamSchema } from "@/lib/shared/schemas/common";
 import { prisma } from "@/lib/server/prisma";
@@ -45,13 +46,12 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
       );
 
       if (result.kind === "not_found") {
-        return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+        return errorJson("NOT_FOUND", "Not found", 404);
       }
       if (result.kind === "finished") {
-        return NextResponse.json(
-          { error: "ALREADY_FINISHED", status: result.status },
-          { status: 409 },
-        );
+        return errorJson("ALREADY_FINISHED", "The fetch run already finished", 409, {
+          details: { status: result.status },
+        });
       }
       return NextResponse.json({ ok: true });
     },

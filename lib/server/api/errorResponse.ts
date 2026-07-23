@@ -6,18 +6,25 @@ export function createRequestId(): string {
   return randomUUID();
 }
 
+/**
+ * The one error envelope: `{ error: { code, message, details? }, requestId? }`.
+ *
+ * Every non-2xx body in `app/api` goes through here — asserted by
+ * `test/api/routeSessionGuard.test.ts`. A client that has parsed one error
+ * response has parsed them all.
+ */
 export function errorJson(
   code: string,
   message: string,
   status: number,
-  options?: { details?: unknown; requestId?: string },
+  options?: { details?: unknown; requestId?: string; headers?: HeadersInit },
 ): NextResponse {
   return NextResponse.json(
     {
       error: { code, message, ...(options?.details ? { details: options.details } : {}) },
       ...(options?.requestId ? { requestId: options.requestId } : {}),
     },
-    { status },
+    { status, ...(options?.headers ? { headers: options.headers } : {}) },
   );
 }
 

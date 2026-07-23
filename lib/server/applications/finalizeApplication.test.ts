@@ -137,4 +137,36 @@ describe("renderApplicationPdf", () => {
       locale: "en-AU",
     });
   });
+
+  describe("when the Master Resume Profile is gone", () => {
+    // Deleting the profile between draft and finalize used to throw
+    // `new Error("MASTER_PROFILE_MISSING")`, which the finalize route did not
+    // rescue — the user got an opaque 500 with no code, while the same failure
+    // was a typed 404 on the manual path.
+    beforeEach(() => dependencies.getResumeProfile.mockResolvedValue(null));
+
+    it("fails the resume render with a typed 404", async () => {
+      await expect(
+        renderApplicationPdf({
+          applicationId: "application-1",
+          userId: "user-1",
+          resumeProfileId: "profile-linked",
+          aiContent,
+          job: { id: "job-1", title: "Engineer", company: "Joblit", market: "AU" },
+        }),
+      ).rejects.toMatchObject({ code: "NO_PROFILE", status: 404 });
+    });
+
+    it("fails the cover render with a typed 404", async () => {
+      await expect(
+        renderCoverLetterPdf({
+          applicationId: "application-1",
+          userId: "user-1",
+          resumeProfileId: "profile-linked",
+          aiContent,
+          job: { id: "job-1", title: "Engineer", company: "Joblit", market: "AU" },
+        }),
+      ).rejects.toMatchObject({ code: "NO_PROFILE", status: 404 });
+    });
+  });
 });

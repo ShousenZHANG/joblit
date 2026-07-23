@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { z } from "zod";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { batchDeleteJobs } from "@/lib/server/jobs/jobDeleteService";
@@ -20,10 +21,9 @@ export async function POST(req: Request) {
     const json = await req.json().catch(() => null);
     const parsed = BodySchema.safeParse(json);
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "INVALID_BODY", details: parsed.error.flatten() },
-        { status: 400 },
-      );
+      return errorJson("INVALID_BODY", "Invalid request body", 400, {
+        details: parsed.error.flatten(),
+      });
     }
 
     const result = await batchDeleteJobs(userId, parsed.data.ids);

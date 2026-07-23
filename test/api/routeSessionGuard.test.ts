@@ -83,4 +83,22 @@ describe("route session seam", () => {
     ).map(({ path }) => path);
     expect(offenders).toEqual([]);
   });
+
+  /**
+   * One error envelope: `{ error: { code, message, details? }, requestId? }`.
+   * The flat `{ error: "CODE" }` shape forced the client to guess which of
+   * three shapes it had received — see `extractErrorMessage` in
+   * `lib/api/fetchJson.ts`.
+   */
+  it("never returns the flat error shape", () => {
+    const offenders = ROUTES.flatMap(({ path, source }) => {
+      // Only a response body counts. `error:` also names a persisted column —
+      // `failQueuedRun({ error: "GITHUB_DISPATCH_FAILED" })` writes
+      // `FetchRun.error` and is not a wire shape.
+      const hits =
+        source.match(/NextResponse\.json\(\s*\{?\s*error:\s*"[A-Z][A-Z0-9_]*"/g) ?? [];
+      return hits.length > 0 ? [`${path} (${hits.length})`] : [];
+    });
+    expect(offenders).toEqual([]);
+  });
 });

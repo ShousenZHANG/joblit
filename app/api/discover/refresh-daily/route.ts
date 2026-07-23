@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { constantTimeEqual } from "@/lib/server/auth/constantTimeEqual";
 import {
   claimDailyDiscoverRefresh,
@@ -62,10 +63,9 @@ export async function GET(request: Request) {
       new Date(),
     );
     if (!completed) {
-      return NextResponse.json(
-        { error: "DISCOVER_REFRESH_LEASE_LOST" },
-        { status: 409, headers: NO_STORE_HEADERS },
-      );
+      return errorJson("DISCOVER_REFRESH_LEASE_LOST", "Another worker holds the refresh lease", 409, {
+        headers: NO_STORE_HEADERS,
+      });
     }
     return NextResponse.json(
       { runKey: claim.runKey, ...summary },
@@ -73,9 +73,8 @@ export async function GET(request: Request) {
     );
   } catch (error) {
     reportError(error, { scope: "discover.refresh-daily" });
-    return NextResponse.json(
-      { error: "DISCOVER_REFRESH_FAILED" },
-      { status: 500, headers: NO_STORE_HEADERS },
-    );
+    return errorJson("DISCOVER_REFRESH_FAILED", "Discover refresh failed", 500, {
+      headers: NO_STORE_HEADERS,
+    });
   }
 }

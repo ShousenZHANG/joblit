@@ -78,8 +78,11 @@ describe("fetch run cancel api", () => {
 
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toEqual({
-      error: "ALREADY_FINISHED",
-      status: "SUCCEEDED",
+      error: {
+        code: "ALREADY_FINISHED",
+        message: "The fetch run already finished",
+        details: { status: "SUCCEEDED" },
+      },
     });
     expect(store.updateMany).not.toHaveBeenCalled();
   });

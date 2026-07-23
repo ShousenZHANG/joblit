@@ -115,8 +115,8 @@ describe("application batches create api", () => {
     const json = await res.json();
 
     expect(res.status).toBe(409);
-    expect(json.error).toBe("ACTIVE_BATCH_EXISTS");
-    expect(json.batchId).toBe("batch-existing");
+    expect(json.error.code).toBe("ACTIVE_BATCH_EXISTS");
+    expect(json.error.details.batchId).toBe("batch-existing");
   });
 
   it("creates a batch from selected NEW job ids only", async () => {

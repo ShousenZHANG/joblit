@@ -32,7 +32,7 @@ describe("application batch trigger api", () => {
     const json = await res.json();
 
     expect(res.status).toBe(410);
-    expect(json.error).toBe("TRIGGER_DISABLED");
-    expect(json.batchId).toBe(BATCH_ID);
+    expect(json.error.code).toBe("TRIGGER_DISABLED");
+    expect(json.error.details.batchId).toBe(BATCH_ID);
   });
 });
