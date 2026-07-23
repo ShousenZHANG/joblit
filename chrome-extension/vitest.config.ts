@@ -5,6 +5,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@ext": resolve(__dirname, "src"),
+      "@shared": resolve(__dirname, "..", "lib", "shared"),
     },
   },
   test: {

@@ -1,16 +1,31 @@
-export const BRIDGE_CHANNEL = "joblit.hermes.v1" as const;
-export const BRIDGE_VERSION = 1 as const;
+import {
+  LOCAL_AI_BRIDGE_CHANNEL,
+  LOCAL_AI_BRIDGE_VERSION,
+  LOCAL_AI_BRIDGE_TTL_MS,
+  LOCAL_AI_BRIDGE_CLOCK_SKEW_MS,
+  LOCAL_AI_BRIDGE_MAX_REQUEST_BYTES,
+  LOCAL_AI_BRIDGE_MAX_RESPONSE_BYTES,
+  LOCAL_AI_MIN_MODEL_OUTPUT_CHARS,
+  LOCAL_AI_MAX_MODEL_OUTPUT_CHARS,
+  LOCAL_AI_MAX_TRIAGE_JOBS,
+  isLocalAiErrorCode,
+  type LocalAiErrorCode,
+  type LocalAiTarget,
+} from "@shared/localAiBridgeWire";
+
+export const BRIDGE_CHANNEL = LOCAL_AI_BRIDGE_CHANNEL;
+export const BRIDGE_VERSION = LOCAL_AI_BRIDGE_VERSION;
 export const JOBLIT_WEB_ORIGIN = "https://www.joblit.tech" as const;
-const BRIDGE_REQUEST_TTL_MS = 30_000;
-const BRIDGE_CLOCK_SKEW_MS = 5_000;
-const MAX_BRIDGE_REQUEST_BYTES = 4_096;
-export const MAX_BRIDGE_RESPONSE_BYTES = 96_000;
-export const MIN_MODEL_OUTPUT_CHARS = 20;
-export const MAX_MODEL_OUTPUT_CHARS = 80_000;
+const BRIDGE_REQUEST_TTL_MS = LOCAL_AI_BRIDGE_TTL_MS;
+const BRIDGE_CLOCK_SKEW_MS = LOCAL_AI_BRIDGE_CLOCK_SKEW_MS;
+const MAX_BRIDGE_REQUEST_BYTES = LOCAL_AI_BRIDGE_MAX_REQUEST_BYTES;
+export const MAX_BRIDGE_RESPONSE_BYTES = LOCAL_AI_BRIDGE_MAX_RESPONSE_BYTES;
+export const MIN_MODEL_OUTPUT_CHARS = LOCAL_AI_MIN_MODEL_OUTPUT_CHARS;
+export const MAX_MODEL_OUTPUT_CHARS = LOCAL_AI_MAX_MODEL_OUTPUT_CHARS;
 
-export type LocalAiTarget = "resume" | "cover" | "match" | "triage";
+export type { LocalAiErrorCode, LocalAiTarget };
 
-export const MAX_TRIAGE_JOBS = 15;
+export const MAX_TRIAGE_JOBS = LOCAL_AI_MAX_TRIAGE_JOBS;
 
 export interface BridgeEnvelopeBase {
   channel: typeof BRIDGE_CHANNEL;
@@ -109,45 +124,6 @@ export interface PublicLocalAiError {
   message: string;
   retryable: boolean;
 }
-
-export type LocalAiErrorCode =
-  | "EXTENSION_STORAGE_UNAVAILABLE"
-  | "FORBIDDEN_CALLER"
-  | "INVALID_REQUEST"
-  | "RATE_LIMITED"
-  | "HERMES_NOT_CONFIGURED"
-  | "HERMES_UNREACHABLE"
-  | "HERMES_AUTH_FAILED"
-  | "HERMES_ORIGIN_FORBIDDEN"
-  | "HERMES_INCOMPATIBLE"
-  | "HERMES_RATE_LIMITED"
-  | "HERMES_RESPONSE_TOO_LARGE"
-  | "HERMES_PROTOCOL_ERROR"
-  | "RUN_START_UNKNOWN"
-  | "RUN_LOST"
-  | "UNEXPECTED_APPROVAL_REQUIRED"
-  | "AI_OUTPUT_INVALID"
-  | "HERMES_RUN_FAILED";
-
-const LOCAL_AI_ERROR_CODES = new Set<LocalAiErrorCode>([
-  "EXTENSION_STORAGE_UNAVAILABLE",
-  "FORBIDDEN_CALLER",
-  "INVALID_REQUEST",
-  "RATE_LIMITED",
-  "HERMES_NOT_CONFIGURED",
-  "HERMES_UNREACHABLE",
-  "HERMES_AUTH_FAILED",
-  "HERMES_ORIGIN_FORBIDDEN",
-  "HERMES_INCOMPATIBLE",
-  "HERMES_RATE_LIMITED",
-  "HERMES_RESPONSE_TOO_LARGE",
-  "HERMES_PROTOCOL_ERROR",
-  "RUN_START_UNKNOWN",
-  "RUN_LOST",
-  "UNEXPECTED_APPROVAL_REQUIRED",
-  "AI_OUTPUT_INVALID",
-  "HERMES_RUN_FAILED",
-]);
 
 export interface BridgeSuccessResponse extends BridgeEnvelopeBase {
   direction: "extension-to-web";
@@ -372,8 +348,7 @@ export function isPublicLocalAiError(value: unknown): value is PublicLocalAiErro
   return (
     isPlainRecord(value) &&
     hasExactKeys(value, ["code", "message", "retryable"]) &&
-    typeof value.code === "string" &&
-    LOCAL_AI_ERROR_CODES.has(value.code as LocalAiErrorCode) &&
+    isLocalAiErrorCode(value.code) &&
     typeof value.message === "string" &&
     value.message.length > 0 &&
     value.message.length <= 240 &&

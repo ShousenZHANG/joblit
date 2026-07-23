@@ -15,9 +15,10 @@
     "types": ["vite/client", "chrome", "node"],
     "baseUrl": ".",
     "paths": {
-      "@ext/*": ["src/*"]
+      "@ext/*": ["src/*"],
+      "@shared/*": ["../lib/shared/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "../lib/shared/localAiBridgeWire.ts"],
   "exclude": ["node_modules"]
 }

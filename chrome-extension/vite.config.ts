@@ -12,6 +12,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@ext": resolve(__dirname, "src"),
+      // The bridge wire vocabulary is shared with the web app; it is
+      // dependency-free so importing it adds nothing to the bundle graph.
+      "@shared": resolve(__dirname, "..", "lib", "shared"),
     },
   },
   build: {
