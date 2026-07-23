@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const runner = vi.hoisted(() => ({
+  // Hoisted out of the claim loop: it scans the whole batch, so it is per-run
+  // work, not per-claim work.
+  reclaimStaleBatchTasks: vi.fn(),
   BatchRunnerError: class BatchRunnerError extends Error {
     code: "NOT_FOUND" | "INVALID_STATE";
 
@@ -147,6 +150,12 @@ describe("codex run context", () => {
       },
     ]);
     expect(result.stopReason).toBe("BATCH_COMPLETE");
+    // The reclaim scans every task in the batch. Running it per claim issued
+    // maxSteps full-batch writes when only the first could act on anything.
+    expect(runner.reclaimStaleBatchTasks).toHaveBeenCalledTimes(1);
+    expect(runner.claimNextBatchTask).toHaveBeenCalledWith(
+      expect.objectContaining({ skipStaleReclaim: true }),
+    );
   });
 
   it("dedupes completions and records runner-level rejections", async () => {

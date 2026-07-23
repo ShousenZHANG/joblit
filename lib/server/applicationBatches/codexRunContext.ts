@@ -7,6 +7,7 @@ import {
   BatchRunnerError,
   claimNextBatchTask,
   completeBatchTask,
+  reclaimStaleBatchTasks,
   type BatchProgress,
 } from "./runner";
 
@@ -16,7 +17,7 @@ const TERMINAL_BATCH_STATUSES = new Set<ApplicationBatchStatus>([
   "CANCELLED",
 ]);
 
-type BatchRunStopReason = "LIMIT_REACHED" | "BATCH_COMPLETE" | "BATCH_TERMINAL";
+export type BatchRunStopReason = "LIMIT_REACHED" | "BATCH_COMPLETE" | "BATCH_TERMINAL";
 
 type BatchRunTask = {
   taskId: string;
@@ -186,10 +187,16 @@ export async function claimBatchRunTasks(input: {
     };
   }
 
+  // Once per run, not once per claim: the reclaim scans the whole batch, so
+  // repeating it inside the loop issues maxSteps full-batch writes that only
+  // the first can act on.
+  await reclaimStaleBatchTasks({ userId: input.userId, batchId: input.batchId });
+
   for (let i = 0; i < input.maxSteps; i += 1) {
     const claimed = await claimNextBatchTask({
       userId: input.userId,
       batchId: input.batchId,
+      skipStaleReclaim: true,
     });
 
     if (claimed.kind === "not_found") {

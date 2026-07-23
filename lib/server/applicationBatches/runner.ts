@@ -166,9 +166,45 @@ async function reconcileBatchStatus(input: { userId: string; batchId: string }) 
   return { batchStatus: nextStatus, progress };
 }
 
+/**
+ * Return tasks stuck in RUNNING past the stale timeout to the queue.
+ *
+ * Scoped to the whole batch, so it is per-run work, not per-claim work. A
+ * caller claiming N tasks in a loop should call this once and then pass
+ * `skipStaleReclaim` — otherwise the same full-batch `updateMany` runs N times
+ * and only the first can do anything.
+ */
+export async function reclaimStaleBatchTasks(input: {
+  userId: string;
+  batchId: string;
+}): Promise<void> {
+  await prisma.applicationBatchTask.updateMany({
+    where: {
+      batchId: input.batchId,
+      userId: input.userId,
+      status: "RUNNING",
+      completedAt: null,
+      startedAt: {
+        lte: new Date(Date.now() - STALE_TASK_TIMEOUT_MS),
+      },
+    },
+    data: {
+      status: "PENDING",
+      startedAt: null,
+      completedAt: null,
+      error: "Task reclaimed after stale RUNNING timeout",
+      attempt: {
+        increment: 1,
+      },
+    },
+  });
+}
+
 export async function claimNextBatchTask(input: {
   userId: string;
   batchId: string;
+  /** Set when the caller already reclaimed for this run. */
+  skipStaleReclaim?: boolean;
 }): Promise<ClaimResult> {
   const batch = await prisma.applicationBatch.findFirst({
     where: {
@@ -200,26 +236,9 @@ export async function claimNextBatchTask(input: {
     });
   }
 
-  await prisma.applicationBatchTask.updateMany({
-    where: {
-      batchId: input.batchId,
-      userId: input.userId,
-      status: "RUNNING",
-      completedAt: null,
-      startedAt: {
-        lte: new Date(Date.now() - STALE_TASK_TIMEOUT_MS),
-      },
-    },
-    data: {
-      status: "PENDING",
-      startedAt: null,
-      completedAt: null,
-      error: "Task reclaimed after stale RUNNING timeout",
-      attempt: {
-        increment: 1,
-      },
-    },
-  });
+  if (!input.skipStaleReclaim) {
+    await reclaimStaleBatchTasks({ userId: input.userId, batchId: input.batchId });
+  }
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const candidate = await prisma.applicationBatchTask.findFirst({

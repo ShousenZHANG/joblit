@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const runner = vi.hoisted(() => ({
+  // Hoisted out of the claim loop: it scans the whole batch, so it is per-run
+  // work, not per-claim work.
+  reclaimStaleBatchTasks: vi.fn(),
   claimNextBatchTask: vi.fn(),
   completeBatchTask: vi.fn(),
   getBatchProgress: vi.fn(),

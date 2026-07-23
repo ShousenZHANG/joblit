@@ -12,6 +12,11 @@ import {
   type BatchProgress,
 } from "@/lib/server/applicationBatches/runner";
 import { generateApplicationArtifactsForJob } from "@/lib/server/applications/generateApplicationArtifacts";
+import {
+  deriveBatchStatusFromRun,
+  type BatchRunStopReason,
+} from "@/lib/server/applicationBatches/codexRunContext";
+import type { ApplicationBatchStatus } from "@/lib/generated/prisma";
 
 export const runtime = "nodejs";
 
@@ -24,25 +29,6 @@ const BodySchema = z.object({
 });
 
 const TERMINAL_BATCH_STATUSES = new Set(["SUCCEEDED", "FAILED", "CANCELLED"]);
-
-type StopReason = "LIMIT_REACHED" | "BATCH_COMPLETE" | "BATCH_TERMINAL";
-
-function toBatchStatusFromRun(input: {
-  initialBatchStatus: string;
-  progress: BatchProgress;
-  claimedCount: number;
-  stopReason: StopReason;
-  claimedDoneStatus: string | null;
-  terminalStatus: string | null;
-}) {
-  if (input.terminalStatus) return input.terminalStatus;
-  if (input.claimedDoneStatus) return input.claimedDoneStatus;
-  if (input.progress.pending > 0 || input.progress.running > 0) return "RUNNING";
-  if (input.progress.failed > 0) return "FAILED";
-  if (input.progress.succeeded > 0 || input.progress.skipped > 0) return "SUCCEEDED";
-  if (input.claimedCount > 0 || input.stopReason === "LIMIT_REACHED") return "RUNNING";
-  return input.initialBatchStatus;
-}
 
 function toTaskErrorMessage(error: unknown) {
   if (error instanceof Error && error.message.trim().length > 0) {
@@ -98,9 +84,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         };
       }> = [];
 
-      let stopReason: StopReason = "LIMIT_REACHED";
-      let terminalStatus: string | null = null;
-      let doneStatus: string | null = null;
+      let stopReason: BatchRunStopReason = "LIMIT_REACHED";
+      let terminalStatus: ApplicationBatchStatus | null = null;
+      let doneStatus: ApplicationBatchStatus | null = null;
 
       if (!TERMINAL_BATCH_STATUSES.has(batch.status)) {
         for (let i = 0; i < maxSteps; i += 1) {
@@ -189,7 +175,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         batchId: batch.id,
       });
 
-      const batchStatus = toBatchStatusFromRun({
+      const batchStatus = deriveBatchStatusFromRun({
         initialBatchStatus: batch.status,
         progress,
         claimedCount: tasks.length,
