@@ -6,10 +6,11 @@ Thanks for considering a contribution. This document covers the development work
 
 1. Fork and clone the repository.
 2. Install dependencies: `npm install`.
-3. Copy `.env.example` to `.env` and fill in credentials (see [README — Environment Variables](./README.md#environment-variables)).
-4. Run database migrations: `npx prisma migrate deploy`.
-5. Start the dev server: `npm run dev`.
-6. Run tests: `npm test`.
+3. Install the Chrome extension's dependencies: `npm install --prefix chrome-extension`. It is a separate npm project with its own lockfile and Vitest config.
+4. Copy `.env.example` to `.env` and fill in credentials (see [README — Environment Variables](./README.md#environment-variables)).
+5. Run database migrations: `npx prisma migrate deploy`.
+6. Start the dev server: `npm run dev`.
+7. Run every gate: `npm run verify`.
 
 ## Branching
 
@@ -38,9 +39,10 @@ Examples:
 
 Before requesting review:
 
-- [ ] `npm run lint` passes (0 warnings)
-- [ ] `npm test` passes
-- [ ] `npx tsc --noEmit` passes for files you touched
+- [ ] `npm run verify` passes — typecheck, lint, dependency policy, dead-code
+      gate, root tests, and the Chrome extension's own typecheck and tests.
+      CI runs this set plus the builds and dependency audits, which need
+      credentials or network.
 - [ ] New behaviour has tests (target 80%+ coverage on new code)
 - [ ] No secrets committed (check `git diff`)
 - [ ] If you added an env var, update `.env.example` and the README table

@@ -62,7 +62,7 @@ The **Edit** phase is new in v1.x. Before that, generate→finalize was atomic. 
 
 ### Quality Gate
 
-The set of post-generation filters that grade AI-added bullets. Implemented in `lib/server/applications/manualImportArtifact.ts` (`isGroundedAddedBullet`, `isNonRedundantAddedBullet`). Bullets that fail a gate are **shown but disabled** in the Edit panel; the user may override by editing the bullet text.
+The set of post-generation filters that grade AI-added bullets. Defined in `lib/server/applications/manualImportParser.ts` (`isGroundedAddedBullet`, `isNonRedundantAddedBullet`) and applied by `manualImportArtifact.ts`. Bullets that fail a gate are **shown but disabled** in the Edit panel; the user may override by editing the bullet text.
 
 Gates today:
 - **Grounded** — the bullet must reference at least one term from the JD or master profile.

@@ -88,9 +88,10 @@ skills-lock.json
 everything-claude-code/
 install.cmd
 
-# Generated reports and codemaps
+# Generated reports
+# docs/CODEMAPS/ was ignored here as a generated artifact. It is now
+# hand-written and checked in — CLAUDE.md and CONTEXT.md require it.
 .reports/
-docs/CODEMAPS/
 docs/refactor-report.md
 
 # typescript

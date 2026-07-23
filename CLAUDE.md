@@ -38,7 +38,7 @@ npm run deps:policy       # Check dependency policy
 
 - `app/(marketing)/` — Public landing pages, no auth
 - `app/(auth)/login/` — Authentication pages
-- `app/(app)/` — Protected workspace: `fetch/`, `jobs/`, `resume/`, `automation/`, `discover/`, `extension/`
+- `app/(app)/` — Protected workspace: `jobs/`, `fetch/`, `resume/`, `discover/`, `extension/`, plus `career/` (a redirect to `/jobs`, ADR-0006)
 - `app/api/` — All API routes
 
 ### Backend (`lib/server/`)
@@ -58,17 +58,20 @@ npm run deps:policy       # Check dependency policy
 ### Shared (`lib/shared/`)
 
 - `schemas/` — Zod v4 schemas (canonical validation layer for all API boundaries)
-- `locales/` — i18n string tables for `en-AU` and `zh-CN`
+- `locales/` — per-Resume-Locale prompt parameters (`coverWordRange`, `dateFormat`, `salutationStyle`, `toneRules`). UI string tables live in `messages/en.json` and `messages/zh.json`.
 - `skillsGazetteer` — Canonical skills vocabulary used in prompt quality gates
 - `aiPromptDefaults` — Default AI prompt parameters
 - `fetchRolePacks.config.json` — Role category definitions
 - `canonicalizeJobUrl`, `parseCnSalary`, `fetchExclusionCriteria` — Job normalization helpers
 
-### Prisma Models (18)
+### Prisma Models (28)
 
 Core workflow: `Job`, `FetchRun`, `ApplicationBatch`, `ApplicationBatchTask`, `Application`, `ResumeProfile`, `ActiveResumeProfile`, `PromptRuleTemplate`  
+Provenance: `ApplicationEvent` (immutable ledger, carries company/title snapshots so it outlives the Job), `EvidenceSnapshot`, `ClaimEvidence`  
 Auth: `User`, `Account`, `Session`, `ExtensionToken`  
-Supporting: `DeletedJobUrl` (dedup tombstone), `DailyCheckin`, `FormSubmission`, `FieldMappingRule`, `OnboardingState`, `DiscoverVideoCache`
+Fetch sources: `SourceHealth`, `AtsBoardSource`  
+Supporting: `DeletedJobUrl` (dedup tombstone), `DailyCheckin`, `FormSubmission`, `FieldMappingRule`, `OnboardingState`, `DiscoverVideoCache`, `LocalAiSetting`  
+Retained without writers pending a retention migration (ADR-0006): `InterviewPlan`, `StarStory`, `Offer`, `FollowUpReminder`
 
 ### Internationalization
 
@@ -119,11 +122,13 @@ Issues and PRDs are tracked in GitHub Issues for `ShousenZHANG/joblit`. See `doc
 
 ### Triage labels
 
-The repo uses the default mattpocock/skills triage labels, with `bug` and `enhancement` as category labels. See `docs/agents/triage-labels.md`.
+The repo uses the default mattpocock/skills triage labels, with `bug` and
+`enhancement` as category labels. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
-This is a single-context repo: one root `CONTEXT.md` and root `docs/adr/` for architectural decisions. See `docs/agents/domain.md`.
+This is a single-context repo: one root `CONTEXT.md` and root `docs/adr/` for
+architectural decisions. See `docs/agents/domain.md`.
 
 ## Skill routing
 

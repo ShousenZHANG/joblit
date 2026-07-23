@@ -1,0 +1,62 @@
+#!/usr/bin/env node
+/**
+ * The single pre-push check. `npm run verify` exits 0 iff every gate a
+ * contributor can run locally passes.
+ *
+ * CONTRIBUTING.md names this script rather than a checklist of commands, so
+ * the contributor loop cannot drift from CI the way a hand-maintained list
+ * does. The extension is a separate npm project with its own Vitest config,
+ * excluded from the root run — before this script existed, its suites were
+ * absent from every documented local command.
+ *
+ * Deliberately excluded, because they need credentials or network:
+ * `next build`, `npm run deps:audit`, and the extension release packaging.
+ * CI (.github/workflows/ci.yml) runs those on top of this set.
+ */
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const extensionRoot = join(repoRoot, "chrome-extension");
+
+/** @type {{ name: string, command: string, args: string[], cwd: string }[]} */
+const STEPS = [
+  { name: "typecheck", command: "npx", args: ["tsc", "--noEmit"], cwd: repoRoot },
+  { name: "lint", command: "npm", args: ["run", "lint"], cwd: repoRoot },
+  { name: "dependency policy", command: "npm", args: ["run", "deps:policy"], cwd: repoRoot },
+  { name: "dead code", command: "npm", args: ["run", "deadcode"], cwd: repoRoot },
+  { name: "tests", command: "npm", args: ["run", "test"], cwd: repoRoot },
+  { name: "extension typecheck", command: "npx", args: ["tsc", "--noEmit"], cwd: extensionRoot },
+  { name: "extension tests", command: "npm", args: ["run", "test"], cwd: extensionRoot },
+];
+
+function run(step) {
+  return new Promise((resolve) => {
+    const child = spawn(step.command, step.args, {
+      cwd: step.cwd,
+      stdio: "inherit",
+      shell: process.platform === "win32",
+    });
+    child.on("close", (code) => resolve(code ?? 1));
+    child.on("error", () => resolve(1));
+  });
+}
+
+const failed = [];
+for (const step of STEPS) {
+  process.stdout.write(`\n──── ${step.name} ────\n`);
+  const code = await run(step);
+  if (code !== 0) failed.push(step.name);
+}
+
+process.stdout.write("\n──── summary ────\n");
+for (const step of STEPS) {
+  process.stdout.write(`${failed.includes(step.name) ? "FAIL" : "ok  "}  ${step.name}\n`);
+}
+
+if (failed.length > 0) {
+  process.stdout.write(`\n${failed.length} step(s) failed: ${failed.join(", ")}\n`);
+  process.exit(1);
+}
+process.stdout.write("\nAll gates passed.\n");

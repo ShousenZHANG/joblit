@@ -34,6 +34,7 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "start": "next start",
     "lint": "eslint",
+    "verify": "node tools/ci/verify.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
