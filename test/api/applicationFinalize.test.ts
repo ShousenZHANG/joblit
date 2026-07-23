@@ -3,27 +3,36 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const prisma = vi.hoisted(() => ({
   application: {
     findFirst: vi.fn(),
-    updateMany: vi.fn(),
   },
-  transaction: vi.fn(),
-  executeRaw: vi.fn(),
 }));
 const renderer = vi.hoisted(() => ({
-  deleteApplicationArtifact: vi.fn(),
-  renderFinalApplication: vi.fn(),
-  renderFinalCoverLetter: vi.fn(),
+  buildAtsKeywords: vi.fn(() => []),
+  renderApplicationPdf: vi.fn(),
+  renderCoverLetterPdf: vi.fn(),
 }));
+const commit = vi.hoisted(() => ({ commitApplicationArtifact: vi.fn() }));
+const ats = vi.hoisted(() => ({ assertAtsPdf: vi.fn() }));
 const renderLimiter = vi.hoisted(() => ({
   enforce: vi.fn(),
 }));
 
 vi.mock("@/lib/server/prisma", () => ({
-  prisma: {
-    application: prisma.application,
-    $transaction: prisma.transaction,
-  },
+  prisma: { application: prisma.application },
 }));
 vi.mock("@/lib/server/applications/finalizeApplication", () => renderer);
+/**
+ * The blob lifecycle and the compare-and-swap moved into
+ * `commitApplicationArtifact` and are covered by its own tests — including
+ * that a lost CAS deletes the new blob and spares the superseded one, and that
+ * a throwing transaction deletes the new blob. What remains here is
+ * route-level: the pre-checks, the idempotent short-circuit, the review gate,
+ * and mapping commit results onto responses.
+ */
+vi.mock("@/lib/server/applications/commitApplicationArtifact", () => commit);
+vi.mock("@/lib/server/applications/atsPdfValidator", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/server/applications/atsPdfValidator")>()),
+  assertAtsPdf: ats.assertAtsPdf,
+}));
 vi.mock("@/lib/server/api/applicationRenderRateLimit", () => ({
   enforceApplicationRenderRateLimit: renderLimiter.enforce,
 }));
@@ -73,30 +82,35 @@ describe("POST /api/applications/[id]/finalize", () => {
   beforeEach(() => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockReset();
     prisma.application.findFirst.mockReset();
-    prisma.application.updateMany.mockReset();
-    prisma.application.updateMany.mockResolvedValue({ count: 1 });
-    prisma.executeRaw.mockReset().mockResolvedValue(1);
-    prisma.transaction.mockReset().mockImplementation(
-      async (
-        action: (tx: {
-          application: typeof prisma.application;
-          $executeRaw: typeof prisma.executeRaw;
-        }) => Promise<unknown>,
-      ) =>
-        action({
-          application: prisma.application,
-          $executeRaw: prisma.executeRaw,
-        }),
-    );
-    renderer.renderFinalApplication.mockReset();
-    renderer.renderFinalCoverLetter.mockReset();
-    renderer.deleteApplicationArtifact.mockReset();
-    renderer.deleteApplicationArtifact.mockResolvedValue(undefined);
-    renderLimiter.enforce.mockReset();
-    renderLimiter.enforce.mockReturnValue(null);
+    renderer.renderApplicationPdf.mockReset().mockResolvedValue({
+      pdf: Buffer.from("%PDF-1.7"),
+      filename: "Jane Doe Engineer_CV.pdf",
+    });
+    renderer.renderCoverLetterPdf.mockReset().mockResolvedValue({
+      pdf: Buffer.from("%PDF-1.7"),
+      filename: "Jane Doe Engineer_CL.pdf",
+    });
+    ats.assertAtsPdf.mockReset().mockResolvedValue({
+      passed: true,
+      pageCount: 1,
+      textLength: 400,
+      keywordCoverage: 100,
+      matchedKeywords: [],
+      missingKeywords: [],
+      errors: [],
+      warnings: [],
+    });
+    commit.commitApplicationArtifact.mockReset().mockResolvedValue({
+      kind: "committed",
+      applicationId: APP_ID,
+      aiContent: makeAiContent(),
+      aiContentHash: "committed-hash",
+      urls: { resume: "https://blob.example/new-resume.pdf" },
+    });
+    renderLimiter.enforce.mockReset().mockReturnValue(null);
   });
 
-  it("renders PDF, flips status to FINAL, returns the new resumePdfUrl", async () => {
+  it("renders the PDF and hands it to the commit module with the expected hash", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: USER_ID },
     });
@@ -111,51 +125,47 @@ describe("POST /api/applications/[id]/finalize", () => {
       resumePdfUrl: "https://blob/old.pdf",
       coverPdfUrl: null,
     });
-    renderer.renderFinalApplication.mockResolvedValueOnce({
-      resumePdfUrl: "https://blob/r.pdf",
-      resumePdfName: "r.pdf",
+    commit.commitApplicationArtifact.mockResolvedValueOnce({
+      kind: "committed",
+      applicationId: APP_ID,
+      aiContent: ai,
+      aiContentHash: "committed-hash",
+      urls: { resume: "https://blob/r.pdf" },
     });
+
     const res = await POST(makeRequest({ expectedHash: hash }), { params });
     const json = await res.json();
 
     expect(res.status).toBe(200);
     expect(json.status).toBe("FINAL");
     expect(json.resumePdfUrl).toBe("https://blob/r.pdf");
-    expect(renderer.renderFinalApplication).toHaveBeenCalledWith(
+    expect(json.aiContentHash).toBe("committed-hash");
+    expect(renderer.renderApplicationPdf).toHaveBeenCalledWith(
       expect.objectContaining({
         applicationId: APP_ID,
         userId: USER_ID,
         resumeProfileId: "profile-linked",
         aiContent: ai,
-        artifactVersion: expect.stringMatching(
-          new RegExp(`^${hash}-[0-9a-f-]{36}$`),
-        ),
       }),
     );
-    expect(prisma.application.updateMany).toHaveBeenCalledWith(
+    expect(commit.commitApplicationArtifact).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: {
-          id: APP_ID,
-          userId: USER_ID,
-          aiContentHash: hash,
-          resumePdfUrl: "https://blob/old.pdf",
-        },
-        data: expect.objectContaining({
-          status: "FINAL",
-          resumePdfUrl: "https://blob/r.pdf",
-        }),
+        userId: USER_ID,
+        expectedHash: hash,
+        status: "FINAL",
+        artifacts: [
+          expect.objectContaining({
+            target: "resume",
+            // A unique version makes an uncommitted render safe to delete.
+            version: expect.stringMatching(new RegExp("^" + hash + "-[0-9a-f-]{36}$")),
+          }),
+        ],
       }),
     );
-    expect(renderer.deleteApplicationArtifact).toHaveBeenCalledWith(
-      "https://blob/old.pdf",
-    );
-    expect(renderLimiter.enforce).toHaveBeenCalledWith(
-      USER_ID,
-      expect.any(String),
-    );
+    expect(renderLimiter.enforce).toHaveBeenCalledWith(USER_ID, expect.any(String));
   });
 
-  it("returns 409 on stale expectedHash", async () => {
+  it("returns 409 on stale expectedHash before rendering anything", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: USER_ID },
     });
@@ -169,8 +179,33 @@ describe("POST /api/applications/[id]/finalize", () => {
     const res = await POST(makeRequest({ expectedHash: "stale" }), { params });
 
     expect(res.status).toBe(409);
-    expect(renderer.renderFinalApplication).not.toHaveBeenCalled();
-    expect(prisma.application.updateMany).not.toHaveBeenCalled();
+    expect(renderer.renderApplicationPdf).not.toHaveBeenCalled();
+    expect(commit.commitApplicationArtifact).not.toHaveBeenCalled();
+  });
+
+  it("returns 409 when the commit module loses the compare-and-swap", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: USER_ID },
+    });
+    const ai = makeAiContent();
+    const hash = hashAiContent(ai);
+    prisma.application.findFirst.mockResolvedValueOnce({
+      id: APP_ID,
+      userId: USER_ID,
+      aiContent: ai,
+      aiContentHash: hash,
+      resumePdfUrl: "https://blob/old.pdf",
+      coverPdfUrl: null,
+    });
+    // An autosave landed between the read and the write.
+    commit.commitApplicationArtifact.mockResolvedValueOnce({ kind: "stale_write" });
+
+    const res = await POST(makeRequest({ expectedHash: hash }), { params });
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({
+      error: { code: "STALE_WRITE" },
+    });
   });
 
   it("returns 400 when the Application has no aiContent (legacy row)", async () => {
@@ -207,94 +242,6 @@ describe("POST /api/applications/[id]/finalize", () => {
     expect(res.status).toBe(401);
   });
 
-  it("deletes a distinct uncommitted Blob when autosave wins during render", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: USER_ID },
-    });
-    const ai = makeAiContent();
-    const hash = hashAiContent(ai);
-    prisma.application.findFirst.mockResolvedValueOnce({
-      id: APP_ID,
-      userId: USER_ID,
-      aiContent: ai,
-      aiContentHash: hash,
-      resumePdfUrl: "https://blob/old.pdf",
-      coverPdfUrl: null,
-    });
-    renderer.renderFinalApplication.mockResolvedValueOnce({
-      resumePdfUrl: "https://blob/uncommitted.pdf",
-      resumePdfName: "resume.pdf",
-    });
-    prisma.application.updateMany.mockResolvedValueOnce({ count: 0 });
-
-    const response = await POST(makeRequest({ expectedHash: hash }), { params });
-
-    expect(response.status).toBe(409);
-    expect(renderer.deleteApplicationArtifact).toHaveBeenCalledWith(
-      "https://blob/uncommitted.pdf",
-    );
-    expect(renderer.deleteApplicationArtifact).not.toHaveBeenCalledWith(
-      "https://blob/old.pdf",
-    );
-  });
-
-  it("does not delete a still-referenced Blob when a same-URL CAS loses", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: USER_ID },
-    });
-    const ai = makeAiContent();
-    const hash = hashAiContent(ai);
-    prisma.application.findFirst.mockResolvedValueOnce({
-      id: APP_ID,
-      userId: USER_ID,
-      aiContent: ai,
-      aiContentHash: hash,
-      resumePdfUrl: "https://blob/shared.pdf",
-      coverPdfUrl: null,
-    });
-    renderer.renderFinalApplication.mockResolvedValueOnce({
-      resumePdfUrl: "https://blob/shared.pdf",
-      resumePdfName: "resume.pdf",
-    });
-    prisma.application.updateMany.mockResolvedValueOnce({ count: 0 });
-
-    const response = await POST(makeRequest({ expectedHash: hash }), { params });
-
-    expect(response.status).toBe(409);
-    expect(renderer.deleteApplicationArtifact).not.toHaveBeenCalled();
-  });
-
-  it("deletes the uncommitted Blob when the database commit throws", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: USER_ID },
-    });
-    const ai = makeAiContent();
-    const hash = hashAiContent(ai);
-    prisma.application.findFirst.mockResolvedValueOnce({
-      id: APP_ID,
-      userId: USER_ID,
-      aiContent: ai,
-      aiContentHash: hash,
-      resumePdfUrl: "https://blob/old.pdf",
-      coverPdfUrl: null,
-    });
-    renderer.renderFinalApplication.mockResolvedValueOnce({
-      resumePdfUrl: "https://blob/uncommitted.pdf",
-      resumePdfName: "resume.pdf",
-    });
-    prisma.application.updateMany.mockRejectedValueOnce(new Error("db unavailable"));
-
-    await expect(
-      POST(makeRequest({ expectedHash: hash }), { params }),
-    ).rejects.toThrow("db unavailable");
-    expect(renderer.deleteApplicationArtifact).toHaveBeenCalledWith(
-      "https://blob/uncommitted.pdf",
-    );
-    expect(renderer.deleteApplicationArtifact).not.toHaveBeenCalledWith(
-      "https://blob/old.pdf",
-    );
-  });
-
   it("returns an already-versioned artifact without compiling it again", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: USER_ID },
@@ -320,8 +267,8 @@ describe("POST /api/applications/[id]/finalize", () => {
 
     expect(response.status).toBe(200);
     expect(json.resumePdfUrl).toBe(resumePdfUrl);
-    expect(renderer.renderFinalApplication).not.toHaveBeenCalled();
-    expect(prisma.application.updateMany).not.toHaveBeenCalled();
+    expect(renderer.renderApplicationPdf).not.toHaveBeenCalled();
+    expect(commit.commitApplicationArtifact).not.toHaveBeenCalled();
     expect(renderLimiter.enforce).not.toHaveBeenCalled();
   });
 
@@ -351,8 +298,8 @@ describe("POST /api/applications/[id]/finalize", () => {
     const response = await POST(makeRequest({ expectedHash: hash }), { params });
 
     expect(response.status).toBe(429);
-    expect(renderer.renderFinalApplication).not.toHaveBeenCalled();
-    expect(prisma.application.updateMany).not.toHaveBeenCalled();
+    expect(renderer.renderApplicationPdf).not.toHaveBeenCalled();
+    expect(commit.commitApplicationArtifact).not.toHaveBeenCalled();
   });
 
   it("rebuilds stored evidence from server sources and blocks a forged pass verdict", async () => {
@@ -423,7 +370,7 @@ describe("POST /api/applications/[id]/finalize", () => {
     expect(response.status).toBe(422);
     expect(json.error.code).toBe("APPLICATION_REVIEW_BLOCKED");
     expect(json.error.details.issues.join(" ")).toContain("999%");
-    expect(renderer.renderFinalApplication).not.toHaveBeenCalled();
-    expect(prisma.application.updateMany).not.toHaveBeenCalled();
+    expect(renderer.renderApplicationPdf).not.toHaveBeenCalled();
+    expect(commit.commitApplicationArtifact).not.toHaveBeenCalled();
   });
 });

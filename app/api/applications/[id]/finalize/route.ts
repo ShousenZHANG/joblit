@@ -2,24 +2,24 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
-import type { Prisma } from "@/lib/generated/prisma";
 import { withSessionRoute, parseJsonBody } from "@/lib/server/api/routeHandler";
 import { UuidParamSchema } from "@/lib/shared/schemas/common";
+import { commitApplicationArtifact } from "@/lib/server/applications/commitApplicationArtifact";
+import { errorJson, notFoundError } from "@/lib/server/api/errorResponse";
 import { enforceApplicationRenderRateLimit } from "@/lib/server/api/applicationRenderRateLimit";
 import {
-  deleteApplicationArtifact,
-  renderFinalApplication,
-  renderFinalCoverLetter,
+  buildAtsKeywords,
+  renderApplicationPdf,
+  renderCoverLetterPdf,
 } from "@/lib/server/applications/finalizeApplication";
 import {
   aiContentSchema,
   hashAiContent,
 } from "@/lib/shared/schemas/aiContent";
-import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
-import { persistReviewLedger } from "@/lib/server/applications/persistReviewLedger";
 import { rebuildCanonicalAiContent } from "@/lib/server/applications/canonicalAiContent";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import {
+  assertAtsPdf,
   AtsPdfValidationError,
   type AtsPdfValidation,
 } from "@/lib/server/applications/atsPdfValidator";
@@ -289,187 +289,76 @@ export async function POST(
         market: job.market ?? "AU",
       };
 
-      if (target === "cover") {
-        let renderedCover: Awaited<ReturnType<typeof renderFinalCoverLetter>>;
-        try {
-          renderedCover = await renderFinalCoverLetter({
-            applicationId: existing.id,
-            userId,
-            resumeProfileId: existing.resumeProfileId ?? null,
-            aiContent: canonicalContent,
-            artifactVersion,
-            job: renderJob,
-          });
-        } catch (error) {
-          const response = atsValidationErrorResponse(error, requestId);
-          if (response) return response;
-          throw error;
-        }
-        const { coverPdfUrl, coverPdfName, atsValidation } = renderedCover;
-        let committed: { count: number };
-        try {
-          committed = await prisma.$transaction(
-            async (tx) => {
-              await acquireApplicationMutationLock(
-                tx,
-                userId,
-                existing.jobId ?? existing.id,
-              );
-              const result = await tx.application.updateMany({
-                where: {
-                  id: existing.id,
-                  userId,
-                  aiContentHash: expectedHash,
-                  coverPdfUrl: existing.coverPdfUrl,
-                },
-                data: {
-                  status: "FINAL",
-                  aiContent: canonicalContent,
-                  aiContentHash: canonicalHash,
-                  coverPdfUrl,
-                  atsValidation: mergeAtsValidation(
-                    existing.atsValidation,
-                    "cover",
-                    atsValidation,
-                  ),
-                  reviewReport: canonicalContent.review ?? undefined,
-                },
-              });
-              if (result.count === 1) {
-                await persistReviewLedger(tx, {
-                  userId,
-                  applicationId: existing.id,
-                  jobId: existing.jobId,
-                  aiContent: canonicalContent,
-                });
-              }
-              return result;
-            },
-            { timeout: 30_000 },
-          );
-        } catch (error) {
-          if (coverPdfUrl !== existing.coverPdfUrl) {
-            await deleteApplicationArtifact(coverPdfUrl).catch(() => undefined);
-          }
-          throw error;
-        }
-        if (committed.count !== 1) {
-          if (coverPdfUrl !== existing.coverPdfUrl) {
-            await deleteApplicationArtifact(coverPdfUrl).catch(() => undefined);
-          }
-          return staleFinalizeResponse(requestId);
-        }
-        if (existing.coverPdfUrl && existing.coverPdfUrl !== coverPdfUrl) {
-          await deleteApplicationArtifact(existing.coverPdfUrl).catch(() => undefined);
-        }
-        return NextResponse.json({
-          status: "FINAL",
-          coverPdfUrl,
-          coverPdfName,
-          atsValidation,
-          aiContentHash: canonicalHash,
-          requestId,
-        });
-      }
-
-      let renderedResume: Awaited<ReturnType<typeof renderFinalApplication>>;
+      let pdf: Buffer;
+      let filename: string;
+      let atsValidation: AtsPdfValidation;
       try {
-        renderedResume = await renderFinalApplication({
-          applicationId: existing.id,
-          userId,
-          resumeProfileId: existing.resumeProfileId ?? null,
-          aiContent: canonicalContent,
-          artifactVersion,
-          job: renderJob,
+        const rendered =
+          target === "cover"
+            ? await renderCoverLetterPdf({
+                applicationId: existing.id,
+                userId,
+                resumeProfileId: existing.resumeProfileId ?? null,
+                aiContent: canonicalContent,
+                job: renderJob,
+              })
+            : await renderApplicationPdf({
+                applicationId: existing.id,
+                userId,
+                resumeProfileId: existing.resumeProfileId ?? null,
+                aiContent: canonicalContent,
+                job: renderJob,
+              });
+        pdf = rendered.pdf;
+        filename = rendered.filename;
+        atsValidation = await assertAtsPdf(pdf, {
+          maxPages: 2,
+          minTextChars: target === "cover" ? 160 : 180,
+          requiredKeywords: buildAtsKeywords(canonicalContent, renderJob.title),
         });
       } catch (error) {
         const response = atsValidationErrorResponse(error, requestId);
         if (response) return response;
         throw error;
       }
-      const { resumePdfUrl, resumePdfName, atsValidation } = renderedResume;
 
-      let committed: { count: number };
-      try {
-        committed = await prisma.$transaction(
-          async (tx) => {
-            await acquireApplicationMutationLock(
-              tx,
-              userId,
-              existing.jobId ?? existing.id,
-            );
-            const result = await tx.application.updateMany({
-              where: {
-                id: existing.id,
-                userId,
-                aiContentHash: expectedHash,
-                resumePdfUrl: existing.resumePdfUrl,
-              },
-              data: {
-                status: "FINAL",
-                aiContent: canonicalContent,
-                aiContentHash: canonicalHash,
-                resumePdfUrl,
-                resumePdfName,
-                atsValidation: mergeAtsValidation(
-                  existing.atsValidation,
-                  "resume",
-                  atsValidation,
-                ),
-                reviewReport: canonicalContent.review ?? undefined,
-              },
-            });
-            if (result.count === 1) {
-              await persistReviewLedger(tx, {
-                userId,
-                applicationId: existing.id,
-                jobId: existing.jobId,
-                aiContent: canonicalContent,
-              });
-            }
-            return result;
-          },
-          { timeout: 30_000 },
+      const commit = await commitApplicationArtifact({
+        userId,
+        job: { id: existing.jobId ?? existing.id, title: renderJob.title, company: renderJob.company },
+        resumeProfileId: existing.resumeProfileId ?? "",
+        aiContent: canonicalContent,
+        artifacts: [{ target, pdf, filename, atsValidation, version: artifactVersion }],
+        status: "FINAL",
+        // The canonical rebuild above already carries both halves.
+        expectedHash,
+      });
+
+      if (commit.kind === "stale_write") return staleFinalizeResponse(requestId);
+      if (commit.kind === "job_missing") return notFoundError("job", requestId);
+      if (commit.kind !== "committed") {
+        return errorJson(
+          "APPLICATION_PERSIST_FAILED",
+          "The PDF was rendered but could not be saved. Please try again.",
+          500,
+          { requestId },
         );
-      } catch (error) {
-        if (resumePdfUrl !== existing.resumePdfUrl) {
-          await deleteApplicationArtifact(resumePdfUrl).catch(() => undefined);
-        }
-        throw error;
-      }
-      if (committed.count !== 1) {
-        if (resumePdfUrl !== existing.resumePdfUrl) {
-          await deleteApplicationArtifact(resumePdfUrl).catch(() => undefined);
-        }
-        return staleFinalizeResponse(requestId);
-      }
-      if (existing.resumePdfUrl && existing.resumePdfUrl !== resumePdfUrl) {
-        await deleteApplicationArtifact(existing.resumePdfUrl).catch(() => undefined);
       }
 
       return NextResponse.json({
         status: "FINAL",
-        resumePdfUrl,
-        resumePdfName,
+        ...(target === "cover"
+          ? { coverPdfUrl: commit.urls.cover ?? null }
+          : {
+              resumePdfUrl: commit.urls.resume ?? null,
+              resumePdfName: filename,
+            }),
         atsValidation,
-        aiContentHash: canonicalHash,
+        aiContentHash: commit.aiContentHash,
         requestId,
       });
     },
     { params: ctx.params, schema: UuidParamSchema },
   );
-}
-
-function mergeAtsValidation(
-  existing: unknown,
-  target: "resume" | "cover",
-  report: AtsPdfValidation | undefined,
-): Prisma.InputJsonValue {
-  const current =
-    existing && typeof existing === "object" && !Array.isArray(existing)
-      ? existing
-      : {};
-  return { ...current, [target]: report ?? null } as Prisma.InputJsonValue;
 }
 
 function atsValidationErrorResponse(error: unknown, requestId: string) {

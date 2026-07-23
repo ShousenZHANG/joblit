@@ -107,71 +107,6 @@ export async function renderApplicationPdf(
   return { pdf, filename };
 }
 
-export async function renderFinalApplication(
-  input: FinalRenderApplicationInput,
-): Promise<{
-  resumePdfUrl: string;
-  resumePdfName: string;
-  atsValidation: AtsPdfValidation;
-}> {
-  const { pdf, filename: resumePdfName } = await renderApplicationPdf(input);
-  const atsValidation = await assertAtsPdf(pdf, {
-    maxPages: 2,
-    minTextChars: 180,
-    requiredKeywords: buildAtsKeywords(input.aiContent, input.job.title),
-  });
-  const blobPath = buildApplicationArtifactBlobPath({
-    userId: input.userId,
-    jobId: input.job.id ?? input.applicationId,
-    target: "resume",
-    version: input.artifactVersion,
-  });
-  const blob = await put(blobPath, pdf, {
-    access: "public",
-    contentType: "application/pdf",
-    ...APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
-  });
-
-  return { resumePdfUrl: blob.url, resumePdfName, atsValidation };
-}
-
-/**
- * Cover-letter finalize: render LaTeX from accepted aiContent.cover
- * paragraphs, compile to PDF, upload to Blob.
- */
-export async function renderFinalCoverLetter(input: {
-  applicationId: string;
-  userId: string;
-  resumeProfileId: string | null;
-  aiContent: AiContent;
-  artifactVersion?: string | null;
-  job: { id: string | null; title: string; company: string | null; market: string };
-}): Promise<{
-  coverPdfUrl: string;
-  coverPdfName: string;
-  atsValidation: AtsPdfValidation;
-}> {
-  const { pdf, filename: coverPdfName } = await renderCoverLetterPdf(input);
-  const atsValidation = await assertAtsPdf(pdf, {
-    maxPages: 2,
-    minTextChars: 160,
-    requiredKeywords: buildAtsKeywords(input.aiContent, input.job.title),
-  });
-  const blobPath = buildApplicationArtifactBlobPath({
-    userId: input.userId,
-    jobId: input.job.id ?? input.applicationId,
-    target: "cover",
-    version: input.artifactVersion,
-  });
-  const blob = await put(blobPath, pdf, {
-    access: "public",
-    contentType: "application/pdf",
-    ...APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
-  });
-
-  return { coverPdfUrl: blob.url, coverPdfName, atsValidation };
-}
-
 export async function renderCoverLetterPdf(input: {
   applicationId: string;
   userId: string;
@@ -234,12 +169,7 @@ export async function renderCoverLetterPdf(input: {
   return { pdf, filename };
 }
 
-export async function deleteApplicationArtifact(url: string | null | undefined) {
-  if (!url || !process.env.BLOB_READ_WRITE_TOKEN) return;
-  await del(url, { token: process.env.BLOB_READ_WRITE_TOKEN });
-}
-
-function buildAtsKeywords(aiContent: AiContent, jobTitle: string) {
+export function buildAtsKeywords(aiContent: AiContent, jobTitle: string) {
   const values = [
     ...jobTitle.split(/[\s,/|()-]+/),
     ...(aiContent.review?.requirements ?? []).flatMap((item) =>
