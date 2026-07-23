@@ -53,9 +53,27 @@ vi.mock("@/lib/server/latex/renderCoverLetter", () => ({
 vi.mock("@/lib/server/ai/tailorApplication", () => ({
   tailorApplicationContent: dependencies.tailorApplicationContent,
 }));
-vi.mock("@/lib/server/applications/atsPdfValidator", () => ({
-  assertAtsPdf: dependencies.assertAtsPdf,
-}));
+/**
+ * `assertAtsPdf` *throws* on failure — it does not resolve a report with
+ * `passed: false`. A stub that only ever resolved could not tell a working gate
+ * from one whose `if (!report.passed) throw` had been deleted, so the double
+ * keeps the real contract: hand it a report and it throws when the report
+ * fails, exactly as the module does.
+ */
+vi.mock("@/lib/server/applications/atsPdfValidator", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/server/applications/atsPdfValidator")>();
+  return {
+    ...actual,
+    assertAtsPdf: async (...args: unknown[]) => {
+      const report = await dependencies.assertAtsPdf(...args);
+      if (report && report.passed === false) {
+        throw new actual.AtsPdfValidationError(report);
+      }
+      return report;
+    },
+  };
+});
 vi.mock("@vercel/blob", () => blob);
 
 import { generateApplicationArtifactsForJob } from "./generateApplicationArtifacts";
@@ -232,5 +250,27 @@ describe("generateApplicationArtifactsForJob", () => {
       "https://blob/new-cover.pdf",
       { token: "blob-token" },
     );
+  });
+
+  it("aborts before uploading anything when the ATS gate rejects the PDF", async () => {
+    // Previously unreachable: the stub only ever resolved, so a deleted gate
+    // was indistinguishable from a working one.
+    dependencies.assertAtsPdf.mockResolvedValueOnce({
+      passed: false,
+      pageCount: 4,
+      textLength: 12,
+      keywordCoverage: 0,
+      matchedKeywords: [],
+      missingKeywords: ["typescript"],
+      errors: ["PDF has too little extractable text"],
+      warnings: [],
+    });
+
+    await expect(
+      generateApplicationArtifactsForJob({ userId: "user-1", jobId: job.id }),
+    ).rejects.toMatchObject({ code: "ATS_PDF_VALIDATION_FAILED", status: 422 });
+
+    expect(blob.put).not.toHaveBeenCalled();
+    expect(stores.application.upsert).not.toHaveBeenCalled();
   });
 });

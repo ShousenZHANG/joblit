@@ -138,6 +138,142 @@ describe("renderApplicationPdf", () => {
     });
   });
 
+  /**
+   * ADR-0001's composition rule: `userEdit ?? aiText` for the summary, and
+   * accepted `addedBullets` appended to the target experience.
+   *
+   * Every fixture above uses `experiences: []` and `addedBullets: []`, so
+   * neither branch of that rule ran in any test — the thing the ADR exists to
+   * protect was uncovered. These drive it with real values and read the TeX
+   * that `renderResumeTex` actually produced.
+   */
+  describe("the ADR-0001 composition rule", () => {
+    const withExperience = {
+      candidate: {
+        name: "Jane Doe",
+        title: "Engineer",
+        email: "jane@example.com",
+        phone: "+61 400 000 000",
+        linkedinUrl: "https://linkedin.com/in/jane",
+        linkedinText: "linkedin.com/in/jane",
+      },
+      summary: "Profile summary",
+      skills: [{ label: "Core", items: ["TypeScript"] }],
+      experiences: [
+        {
+          company: "Acme",
+          title: "Engineer",
+          location: "Sydney",
+          dates: "2024",
+          links: [],
+          bullets: ["Base bullet"],
+        },
+        {
+          company: "Globex",
+          title: "Engineer",
+          location: "Melbourne",
+          dates: "2022",
+          links: [],
+          bullets: ["Older bullet"],
+        },
+      ],
+      projects: [],
+      education: [],
+    };
+
+    async function renderTex(content: AiContent): Promise<string> {
+      dependencies.mapResumeProfile.mockReturnValue(withExperience);
+      await renderApplicationPdf({
+        applicationId: "application-1",
+        userId: "user-1",
+        aiContent: content,
+        job: { id: "job-1", title: "Engineer", company: "Joblit", market: "AU" },
+      });
+      return dependencies.compileLatexToPdf.mock.calls.at(-1)?.[0] as string;
+    }
+
+    it("prefers the user's edit over the AI summary", async () => {
+      const tex = await renderTex({
+        ...aiContent,
+        cv: {
+          ...aiContent.cv,
+          summary: { ...aiContent.cv.summary, userEdit: "Edited by the user" },
+        },
+      });
+
+      expect(tex).toContain("Edited by the user");
+      expect(tex).not.toContain("Security-focused engineer");
+    });
+
+    it("falls back to the profile summary when both are blank", async () => {
+      const tex = await renderTex({
+        ...aiContent,
+        cv: {
+          ...aiContent.cv,
+          summary: { aiText: "   ", originalText: "Engineer", accepted: true },
+        },
+      });
+
+      expect(tex).toContain("Profile summary");
+    });
+
+    it("appends accepted bullets to the targeted experience only", async () => {
+      const tex = await renderTex({
+        ...aiContent,
+        cv: {
+          ...aiContent.cv,
+          latestExperience: {
+            experienceIndex: 0,
+            addedBullets: [
+              { text: "Accepted addition", accepted: true },
+              { text: "Rejected addition", accepted: false },
+            ],
+          },
+        },
+      });
+
+      expect(tex).toContain("Base bullet");
+      expect(tex).toContain("Accepted addition");
+      expect(tex).not.toContain("Rejected addition");
+      // The second experience is untouched.
+      expect(tex).toContain("Older bullet");
+    });
+
+    it("prefers a bullet's user edit over its AI text", async () => {
+      const tex = await renderTex({
+        ...aiContent,
+        cv: {
+          ...aiContent.cv,
+          latestExperience: {
+            experienceIndex: 0,
+            addedBullets: [
+              { text: "AI wording", userEdit: "User wording", accepted: true },
+            ],
+          },
+        },
+      });
+
+      expect(tex).toContain("User wording");
+      expect(tex).not.toContain("AI wording");
+    });
+
+    it("leaves the experiences alone when experienceIndex is out of range", async () => {
+      const tex = await renderTex({
+        ...aiContent,
+        cv: {
+          ...aiContent.cv,
+          latestExperience: {
+            experienceIndex: 99,
+            addedBullets: [{ text: "Orphan addition", accepted: true }],
+          },
+        },
+      });
+
+      expect(tex).toContain("Base bullet");
+      expect(tex).not.toContain("Orphan addition");
+    });
+  });
+
   describe("when the Master Resume Profile is gone", () => {
     // Deleting the profile between draft and finalize used to throw
     // `new Error("MASTER_PROFILE_MISSING")`, which the finalize route did not
