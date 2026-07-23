@@ -45,13 +45,37 @@ describe("fetchJson", () => {
     });
   });
 
-  it("throws ApiError on non-2xx with legacy string error", async () => {
+  it("exposes the envelope's code and details on the ApiError", async () => {
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ error: "Not found" }, { status: 404 }),
+      jsonResponse(
+        {
+          error: {
+            code: "APPLICATION_REVIEW_BLOCKED",
+            message: "Review blocked",
+            details: { verdict: "blocked" },
+          },
+          requestId: "req-1",
+        },
+        { status: 422 },
+      ),
     );
     await expect(fetchJson("/api/x")).rejects.toMatchObject({
-      status: 404,
-      message: "Not found",
+      status: 422,
+      message: "Review blocked",
+      code: "APPLICATION_REVIEW_BLOCKED",
+      details: { verdict: "blocked" },
+    });
+  });
+
+  it("reports a null code for a body that is not the envelope", async () => {
+    // Responses from outside app/api — NextAuth, a proxy, a CDN.
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ message: "Bad gateway" }, { status: 502 }),
+    );
+    await expect(fetchJson("/api/x")).rejects.toMatchObject({
+      status: 502,
+      message: "Bad gateway",
+      code: null,
     });
   });
 

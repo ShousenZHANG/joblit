@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { fetchJson } from "@/lib/api/fetchJson";
 import { useSession } from "next-auth/react";
 
 export type FetchRunStatus = "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
@@ -203,10 +204,11 @@ export function FetchStatusProvider({ children }: { children: React.ReactNode })
   }, [refreshFromStorage]);
 
   const fetchRun = useCallback(async (id: string): Promise<FetchRunSnapshot> => {
-    const res = await fetch(`/api/fetch-runs/${id}`, { cache: "no-store" });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json?.error || "Failed to fetch run");
-    return json.run as FetchRunSnapshot;
+    const json = (await fetchJson(`/api/fetch-runs/${id}`, {
+      cache: "no-store",
+      fallbackError: "Failed to fetch run",
+    })) as { run: FetchRunSnapshot };
+    return json.run;
   }, []);
 
   const setOpen = useCallback(

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { fetchJson } from "@/lib/api/fetchJson";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, CheckCircle2, CheckSquare, Loader2, MapPin, RefreshCw, SlidersHorizontal, Sparkles, Square, Trash2, X } from "lucide-react";
@@ -584,10 +585,9 @@ export function JobsClient({
   const detailQuery = useQuery({
     queryKey: getJobDetailsQueryKey(effectiveSelectedId),
     queryFn: async () => {
-      const res = await fetch(`/api/jobs/${effectiveSelectedId}`);
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || t("errorLoadDetails"));
-      return json as JobDetailResponse;
+      return (await fetchJson(`/api/jobs/${effectiveSelectedId}`, {
+        fallbackError: t("errorLoadDetails"),
+      })) as JobDetailResponse;
     },
     enabled: Boolean(effectiveSelectedId),
     staleTime: 5 * 60 * 1000,

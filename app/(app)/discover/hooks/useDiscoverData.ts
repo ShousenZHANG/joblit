@@ -1,4 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { fetchJson } from "@/lib/api/fetchJson";
 import type {
   TrendingResponse,
   VideosResponse,
@@ -14,14 +15,10 @@ export function useTrendingRepos(
   return useQuery<TrendingResponse>({
     queryKey: ["discover-trending", period, clean],
     queryFn: async () => {
-      const res = await fetch(
+      return (await fetchJson(
         `/api/discover/trending?period=${period}${clean ? "&clean=1" : ""}`,
-      );
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error(json?.error ?? "Failed to load trending repos");
-      }
-      return res.json();
+        { fallbackError: "Failed to load trending repos" },
+      )) as TrendingResponse;
     },
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -45,12 +42,9 @@ export function useVideos(
         window: timeWindow,
         sort,
       });
-      const res = await fetch(`/api/discover/videos?${params.toString()}`);
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error(json?.error ?? "Failed to load videos");
-      }
-      return res.json();
+      return (await fetchJson(`/api/discover/videos?${params.toString()}`, {
+        fallbackError: "Failed to load videos",
+      })) as VideosResponse;
     },
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,

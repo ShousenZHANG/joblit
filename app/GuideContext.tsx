@@ -10,6 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { fetchJson } from "@/lib/api/fetchJson";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useMarket } from "@/hooks/useMarket";
@@ -300,14 +301,13 @@ export function GuideProvider({ children }: { children: ReactNode }) {
     }
     setLoading(true);
     try {
-      const res = await fetch("/api/onboarding/state", {
+      const json = (await fetchJson("/api/onboarding/state", {
         cache: "no-store",
         signal,
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || "Failed to load onboarding state");
+        fallbackError: "Failed to load onboarding state",
+      })) as { state: GuideState };
       if (signal?.aborted) return;
-      const nextState = json.state as GuideState;
+      const nextState = json.state;
       setState((prev) => {
         const resolved = resolveGuideState(prev, nextState, true);
         // Auto-open the panel for brand-new users on their very first visit
@@ -351,14 +351,12 @@ export function GuideProvider({ children }: { children: ReactNode }) {
     ) => {
       if (!userId) return;
       try {
-        const res = await fetch("/api/onboarding/state", {
+        const json = (await fetchJson("/api/onboarding/state", {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
-        });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(json?.error || "Failed to update onboarding state");
-        const nextState = json.state as GuideState;
+          fallbackError: "Failed to update onboarding state",
+        })) as { state: GuideState };
+        const nextState = json.state;
         setState((prev) => resolveGuideState(prev, nextState, payload.type !== "reset"));
       } catch {
         // Keep UI resilient even if persistence is temporarily unavailable.

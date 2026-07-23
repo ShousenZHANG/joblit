@@ -16,6 +16,15 @@ import type { ZodType } from "zod";
 
 export class ApiError extends Error {
   readonly status: number;
+  /**
+   * The server's error code, e.g. `STALE_WRITE`. Null only when the response
+   * did not come from `app/api` — every route there returns the envelope, which
+   * `test/api/routeSessionGuard.test.ts` asserts.
+   */
+  readonly code: string | null;
+  /** The envelope's `details`, if any. Shape is per-code. */
+  readonly details: unknown;
+  /** The whole parsed body, for the rare consumer that needs more. */
   readonly payload: unknown;
 
   constructor(status: number, message: string, payload?: unknown) {
@@ -23,7 +32,24 @@ export class ApiError extends Error {
     this.name = "ApiError";
     this.status = status;
     this.payload = payload;
+    const envelope = readEnvelope(payload);
+    this.code = envelope?.code ?? null;
+    this.details = envelope?.details;
   }
+}
+
+function readEnvelope(
+  payload: unknown,
+): { code?: string; message?: string; details?: unknown } | null {
+  if (!payload || typeof payload !== "object") return null;
+  const error = (payload as Record<string, unknown>).error;
+  if (!error || typeof error !== "object") return null;
+  const inner = error as Record<string, unknown>;
+  return {
+    code: typeof inner.code === "string" ? inner.code : undefined,
+    message: typeof inner.message === "string" ? inner.message : undefined,
+    details: inner.details,
+  };
 }
 
 interface FetchJsonOptions<TSchema extends ZodType | undefined = undefined>
@@ -71,21 +97,23 @@ export async function fetchJson<TSchema extends ZodType | undefined = undefined>
 }
 
 /**
- * Extract a string error message from an unknown payload. Handles the
- * Joblit error envelope (`error.message`), legacy `error: string`, and
- * raw string bodies.
+ * Read the message out of the Joblit error envelope.
+ *
+ * Routes outside `app/api` — NextAuth's handler, a proxy, an upstream CDN —
+ * are not bound by the envelope, so a bare `message` and a raw string body are
+ * still accepted. The legacy `error: "CODE"` branch is gone: no route emits it,
+ * and keeping it meant a body with `{error:{code}}` and no message rendered as
+ * `[object Object]`.
  */
 function extractErrorMessage(payload: unknown, fallback: string): string {
   if (payload == null) return fallback;
   if (typeof payload === "string") return payload;
   if (typeof payload !== "object") return fallback;
 
+  const envelope = readEnvelope(payload);
+  if (envelope?.message) return envelope.message;
+
   const obj = payload as Record<string, unknown>;
-  if (typeof obj.error === "string") return obj.error;
-  if (obj.error && typeof obj.error === "object") {
-    const inner = obj.error as Record<string, unknown>;
-    if (typeof inner.message === "string") return inner.message;
-  }
   if (typeof obj.message === "string") return obj.message;
   return fallback;
 }

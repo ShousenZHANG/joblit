@@ -1,3 +1,4 @@
+import { toActiveJobStatus } from "@/lib/shared/jobStatus";
 import type { JobListItem } from "@/lib/server/jobs/jobListService";
 import type { JobItem } from "../types";
 
@@ -18,7 +19,10 @@ export function serializeJobListItem(item: JobListItem): JobItem {
     salary: item.salary,
     workArrangement: item.workArrangement,
     listingDate: item.listingDate?.toISOString() ?? null,
-    status: item.status as JobItem["status"],
+    // ADR-0007: read the stored value through the projection rather than
+    // casting it. A row the migration missed would otherwise render a badge no
+    // filter can select.
+    status: toActiveJobStatus(item.status),
     market: item.market,
     source: item.source,
     postingRisk: item.postingRisk,

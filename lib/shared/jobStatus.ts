@@ -68,8 +68,13 @@ export function isActiveJobStatus(
  * before the collapse — and any that slip past a failed migration — stay
  * reachable rather than disappearing from a board that can no longer filter
  * for them.
+ *
+ * Takes `string`, not `JobStatusValue`, on purpose: a value that slipped past a
+ * migration is by definition not one the type system knows about. Requiring a
+ * pre-narrowed input would defeat the projection, and did — `serializeJobListItem`
+ * cast the stored status raw rather than call this.
  */
-export function toActiveJobStatus(value: JobStatusValue): ActiveJobStatusValue {
+export function toActiveJobStatus(value: string): ActiveJobStatusValue {
   return isActiveJobStatus(value)
     ? value
     : (RETIRED_STATUS_PROJECTION[value] ?? "NEW");

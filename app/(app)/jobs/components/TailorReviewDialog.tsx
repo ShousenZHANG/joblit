@@ -722,17 +722,9 @@ function extractMessage(err: unknown, fallback: string): string {
  * card.
  */
 function extractBlockedReview(err: unknown): AiApplicationReview | null {
-  if (!(err instanceof ApiError) || err.status !== 422) return null;
-  const payload = err.payload;
-  if (!payload || typeof payload !== "object") return null;
-  const error = (payload as { error?: unknown }).error;
-  if (!error || typeof error !== "object") return null;
-  if ((error as { code?: unknown }).code !== "APPLICATION_REVIEW_BLOCKED") {
-    return null;
-  }
-  const parsed = applicationReviewSchema.safeParse(
-    (error as { details?: unknown }).details,
-  );
+  if (!(err instanceof ApiError)) return null;
+  if (err.status !== 422 || err.code !== "APPLICATION_REVIEW_BLOCKED") return null;
+  const parsed = applicationReviewSchema.safeParse(err.details);
   return parsed.success ? parsed.data : null;
 }
 

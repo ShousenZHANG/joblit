@@ -1,4 +1,5 @@
 import { createElement, Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { ApiError, fetchJson } from "@/lib/api/fetchJson";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useToast } from "@/hooks/use-toast";
@@ -66,14 +67,11 @@ export function useJobMutations({
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: JobStatus }) => {
-      const res = await fetch(`/api/jobs/${id}`, {
+      return (await fetchJson(`/api/jobs/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || "Failed to update status");
-      return json as { ok?: boolean };
+        fallbackError: "Failed to update status",
+      })) as { ok?: boolean };
     },
     onMutate: async ({ id, status }) => {
       setError(null);
@@ -144,10 +142,14 @@ export function useJobMutations({
       pendingDeletesRef.current.delete(id);
       setDeletingIds((prev) => new Set(prev).add(id));
       try {
-        const res = await fetch(`/api/jobs/${id}`, { method: "DELETE" });
-        if (res.status !== 404 && !res.ok) {
-          const json = await res.json().catch(() => ({}));
-          throw new Error(json?.error || "Failed to delete job");
+        try {
+          await fetchJson(`/api/jobs/${id}`, {
+            method: "DELETE",
+            fallbackError: "Failed to delete job",
+          });
+        } catch (err) {
+          // A 404 means the row is already gone, which is the outcome we want.
+          if (!(err instanceof ApiError) || err.status !== 404) throw err;
         }
         // Commit succeeded — kill any in-flight list fetches FIRST. They were
         // dispatched before the server delete, so their (stale) payload still
@@ -367,20 +369,17 @@ export function useJobMutations({
       const summary = await runChunkedBatchDelete({
         ids,
         sendChunk: async (chunk) => {
-          const res = await fetch("/api/jobs/batch-delete", {
+          const json = (await fetchJson("/api/jobs/batch-delete", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ ids: chunk }),
-          });
-          const json = await res.json().catch(() => ({}));
-          if (!res.ok) {
-            throw new Error(json?.error || "Failed to batch delete");
-          }
-          const deleted = json?.deleted;
-          const notFound = json?.notFound;
+            fallbackError: "Failed to batch delete",
+          })) as { deleted?: unknown; notFound?: unknown };
+          const { deleted, notFound } = json;
           if (
+            typeof deleted !== "number" ||
             !Number.isInteger(deleted) ||
             deleted < 0 ||
+            typeof notFound !== "number" ||
             !Number.isInteger(notFound) ||
             notFound < 0 ||
             deleted + notFound !== chunk.length

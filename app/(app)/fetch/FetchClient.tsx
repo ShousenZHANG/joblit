@@ -668,7 +668,6 @@ export function FetchClient() {
     if (res.status === 429) return t("capacityLimited");
     if (!json || typeof json !== "object" || Array.isArray(json)) return fallback;
     const error = (json as { error?: unknown }).error;
-    if (typeof error === "string") return error;
     if (error && typeof error === "object" && !Array.isArray(error)) {
       const message = (error as { message?: unknown }).message;
       if (typeof message === "string") return message;

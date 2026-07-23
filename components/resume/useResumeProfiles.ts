@@ -186,8 +186,10 @@ export function useResumeProfiles({
         body: JSON.stringify({ action: "delete", profileId: selectedProfileId, locale }),
       });
       if (!res.ok) {
-        const code = (await res.json().catch(() => null))?.error;
-        if (code === "LAST_PROFILE") {
+        const body = (await res.json().catch(() => null)) as
+          | { error?: { code?: string } }
+          | null;
+        if (body?.error?.code === "LAST_PROFILE") {
           throw new Error("LAST_PROFILE");
         }
         throw new Error("Delete profile failed");

@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { ApiError, fetchJson } from "@/lib/api/fetchJson";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useGuide } from "@/app/GuideContext";
@@ -53,20 +54,31 @@ export async function persistGeneratedDraft(input: {
   promptMeta?: Record<string, unknown> | ExternalPromptMeta | null;
   source: GeneratedDraftSource;
 }): Promise<PersistedGeneratedDraft> {
-  const response = await fetch("/api/applications/manual-generate?finalize=false", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
-  const json = await response.json().catch(() => null);
-  if (!response.ok) {
-    const baseMessage = json?.error?.message || json?.error || "Failed to import generated content";
-    const details = Array.isArray(json?.error?.details)
-      ? json.error.details.filter((item: unknown) => typeof item === "string")
+  type ManualGenerateResponse = {
+    applicationId?: string;
+    status?: string;
+    aiContentHash?: unknown;
+    aiContent?: unknown;
+    pdfName?: unknown;
+    job?: { id?: string; title?: unknown; company?: unknown; location?: unknown };
+  };
+
+  let json: ManualGenerateResponse | null;
+  try {
+    json = (await fetchJson("/api/applications/manual-generate?finalize=false", {
+      method: "POST",
+      body: JSON.stringify(input),
+      fallbackError: "Failed to import generated content",
+    })) as ManualGenerateResponse | null;
+  } catch (err) {
+    if (!(err instanceof ApiError)) throw err;
+    // `details` is a string array for the import validators and a Zod flatten
+    // for a schema rejection; only the former is renderable.
+    const details = Array.isArray(err.details)
+      ? err.details.filter((item: unknown): item is string => typeof item === "string")
       : [];
     const detailText = details.length ? ` (${details.slice(0, 2).join(" | ")})` : "";
-    const code = typeof json?.error?.code === "string" ? json.error.code : null;
-    throw new DraftImportError(`${baseMessage}${detailText}`, code, details);
+    throw new DraftImportError(`${err.message}${detailText}`, err.code, details);
   }
   if (
     !json?.applicationId ||
@@ -153,15 +165,14 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
     shortPromptText: string;
     promptMeta: ExternalPromptMeta | null;
   }> {
-    const res = await fetch("/api/applications/prompt", {
+    const json = (await fetchJson("/api/applications/prompt", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ jobId: job.id, target }),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(json?.error?.message || json?.error || "Failed to build prompt");
-    }
+      fallbackError: "Failed to build prompt",
+    })) as {
+      prompt?: { systemPrompt?: string; userPrompt?: string; shortUserPrompt?: string };
+      promptMeta?: Record<string, unknown>;
+    };
     const fullPromptText = [
       "You are given SYSTEM and USER instructions below. Follow them strictly. Output exactly one valid JSON object (no markdown or code fences).",
       "",
@@ -286,10 +297,14 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
     setExternalSkillPackLoading(true);
     setError(null);
     try {
+      // A zip download, so this stays on raw `fetch` — `fetchJson` parses JSON.
       const res = await fetch("/api/prompt-rules/skill-pack", { cache: "no-store" });
       if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error(json?.error?.message || json?.error || "Failed to download skill pack");
+        const json = await res.json().catch(() => null);
+        const message =
+          (json as { error?: { message?: string } } | null)?.error?.message ??
+          "Failed to download skill pack";
+        throw new Error(message);
       }
       const blob = await res.blob();
       const fallbackName = "joblit-skills-v2.zip";

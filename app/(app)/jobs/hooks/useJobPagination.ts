@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { fetchJson } from "@/lib/api/fetchJson";
 import { keepPreviousData, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import type { JobItem, JobsResponse } from "../types";
 import {
@@ -50,9 +51,10 @@ export function useJobPagination({
     }): Promise<JobsResponse> => {
       const sp = new URLSearchParams(queryString);
       if (pageParam) sp.set("cursor", pageParam);
-      const res = await fetch(`/api/jobs?${sp.toString()}`, { signal });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || "Failed to load jobs");
+      const json = (await fetchJson(`/api/jobs?${sp.toString()}`, {
+        signal,
+        fallbackError: "Failed to load jobs",
+      })) as Partial<JobsResponse>;
       return {
         items: json.items ?? [],
         nextCursor: json.nextCursor ?? null,

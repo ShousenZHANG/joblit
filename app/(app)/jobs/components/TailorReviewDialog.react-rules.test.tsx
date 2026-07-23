@@ -9,6 +9,7 @@ import {
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
+import { ApiError } from "@/lib/api/fetchJson";
 import { TailorReviewDialog, type TailorReviewDraft } from "./TailorReviewDialog";
 
 const aiContent: AiContent = {
@@ -47,32 +48,19 @@ vi.mock("../[id]/tailor/useTailorDraft", () => ({
   useTailorDraft: () => mockDraft,
 }));
 
-// Mirrors the real ApiError: status and payload are the fields the dialog
-// reads to decide whether a failure carries a review worth rendering, so a
-// stub without them would let the test pass against code that ignores both.
-// Hoisted alongside vi.mock, which runs before ordinary declarations.
-const { FakeApiError } = vi.hoisted(() => ({
-  FakeApiError: class extends Error {
-    constructor(
-      readonly status: number,
-      message: string,
-      readonly payload?: unknown,
-    ) {
-      super(message);
-      this.name = "ApiError";
-    }
-  },
-}));
-
 // ReviewGateCard translates its own chrome; the issue strings under test come
 // from the server and are rendered verbatim, so a key-passthrough is enough.
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
 }));
 
-vi.mock("@/lib/api/fetchJson", () => ({
+// Only `fetchJson` is mocked — `ApiError` stays real. A hand-written double of
+// it drifted once already: it mirrored `status` and `payload` but not the
+// `code` and `details` the class derives from the envelope, so the dialog's
+// blocked-review branch stopped being exercised the moment those were added.
+vi.mock("@/lib/api/fetchJson", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/fetchJson")>()),
   fetchJson: api.fetchJson,
-  ApiError: FakeApiError,
 }));
 
 vi.mock("@/components/ui/dialog", () => ({
@@ -340,7 +328,7 @@ describe("TailorReviewDialog React rules", () => {
     // error.message left the user blocked with nothing to act on, while the
     // full-page Tailor view showed the same payload properly.
     api.fetchJson.mockRejectedValueOnce(
-      new FakeApiError(422, "Resolve unsupported claims before finalizing this application.", {
+      new ApiError(422, "Resolve unsupported claims before finalizing this application.", {
         error: {
           code: "APPLICATION_REVIEW_BLOCKED",
           message: "Resolve unsupported claims before finalizing this application.",
