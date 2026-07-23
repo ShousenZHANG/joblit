@@ -66,7 +66,6 @@ export function useJobFilters() {
   );
   // Fit sort is a session-local view toggle (not persisted to the URL): jobs
   // ordered by AI match score, unscored last, served entirely by the API.
-  const [sortByFit, setSortByFit] = useState(false);
   const pageSize = 10;
 
   const wrapUserSetter = useCallback(
@@ -173,9 +172,9 @@ export function useJobFilters() {
       sp.set("jobLevel", debouncedFilters.jobLevelFilter);
     }
     sp.set("market", debouncedFilters.market);
-    sp.set("sort", sortByFit ? "fit" : SORT_ORDER);
+    sp.set("sort", SORT_ORDER);
     return sp.toString();
-  }, [debouncedFilters, sortByFit]);
+  }, [debouncedFilters]);
 
   useEffect(() => {
     const nextFilterState = {
@@ -204,8 +203,6 @@ export function useJobFilters() {
     setJobLevelFilter,
     pageSize,
     market,
-    sortByFit,
-    setSortByFit,
     queryString,
     urlState,
     replaceUrlStateShallow,

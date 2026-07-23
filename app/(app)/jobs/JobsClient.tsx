@@ -38,7 +38,6 @@ import { JobBatchDeleteDialog } from "./components/JobBatchDeleteDialog";
 import { JobSearchBar } from "./components/JobSearchBar";
 import { ExternalGenerateDialog } from "./components/ExternalGenerateDialog";
 import { LocalAiGenerateDialog } from "./components/LocalAiGenerateDialog";
-import { PdfPreviewDialog } from "./components/PdfPreviewDialog";
 import { TailorReviewDialog } from "./components/TailorReviewDialog";
 import { JobDetailPanel } from "./components/JobDetailPanel";
 import { cn } from "@/lib/utils";
@@ -226,16 +225,6 @@ export function JobsClient({
     captureListViewport,
   });
 
-  const [previewOpen, setPreviewOpen] = useState(false);
-  // setPdfPreview is intentionally unused at the moment — `pdfPreview` is wired
-  // through to PdfPreview but no caller currently triggers it. Kept here so the
-  // wiring is preserved when reintroduced.
-  const [pdfPreview, _setPdfPreview] = useState<{
-    url: string;
-    filename: string;
-    label: string;
-  } | null>(null);
-
   const ext = useExternalGenerate(setError);
   const openTailorReviewFromPersistedDraft = ext.openTailorReviewFromPersistedDraft;
   const [localAiDialogOpen, setLocalAiDialogOpen] = useState(false);
@@ -369,7 +358,6 @@ export function JobsClient({
   // state of .app-shell when the dialog unmounts.
   const anyDialogOpen =
     batchDeleteConfirmOpen ||
-    previewOpen ||
     ext.externalDialogOpen ||
     !!ext.tailorReviewDraft;
   useEffect(() => {
@@ -381,15 +369,6 @@ export function JobsClient({
       appShell.classList.remove("jobs-scroll-lock");
     };
   }, [anyDialogOpen]);
-
-  // Cleanup PDF object URL
-  useEffect(() => {
-    return () => {
-      if (pdfPreview?.url) {
-        URL.revokeObjectURL(pdfPreview.url);
-      }
-    };
-  }, [pdfPreview?.url]);
 
   const reducedMotion = useReducedMotion();
   const showLoadingOverlay = (loading && !loadingMore) || isPending;
@@ -707,12 +686,6 @@ export function JobsClient({
           if (!open) ext.closeTailorReview();
         }}
         onFinalized={ext.handleTailorReviewFinalized}
-      />
-
-      <PdfPreviewDialog
-        open={previewOpen}
-        onOpenChange={setPreviewOpen}
-        pdfPreview={pdfPreview}
       />
 
       <div

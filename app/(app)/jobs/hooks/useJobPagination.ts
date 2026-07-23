@@ -213,7 +213,6 @@ export function useJobPagination({
     loadingInitial,
     showEmpty,
     loadingMore,
-    pageResponses: queryData?.pages ?? [],
     loadedCursors,
     resetPagination,
     firstQueryError,

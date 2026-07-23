@@ -9,7 +9,6 @@ import {
   claimNextBatchTask,
   completeBatchTask,
   getBatchProgress,
-  type BatchProgress,
 } from "@/lib/server/applicationBatches/runner";
 import { generateApplicationArtifactsForJob } from "@/lib/server/applications/generateApplicationArtifacts";
 import {

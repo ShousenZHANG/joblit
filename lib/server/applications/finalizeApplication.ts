@@ -1,4 +1,3 @@
-import { del, put } from "@vercel/blob";
 import { AppError } from "@/lib/server/api/appError";
 import { getResumeProfile } from "@/lib/server/resumeProfile";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
@@ -10,16 +9,8 @@ import {
   buildPdfFilename,
   resumeFilenameSegments,
 } from "@/lib/server/files/pdfFilename";
-import {
-  APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
-  buildApplicationArtifactBlobPath,
-} from "@/lib/server/files/applicationArtifactBlob";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
-import {
-  assertAtsPdf,
-  type AtsPdfValidation,
-} from "@/lib/server/applications/atsPdfValidator";
 
 /**
  * Render the committed aiContent of a DRAFT Application into a final
@@ -42,10 +33,6 @@ type RenderApplicationInput = {
   aiContent: AiContent;
   artifactVersion?: string | null;
   job: { id: string | null; title: string; company: string | null; market: string };
-};
-
-type FinalRenderApplicationInput = RenderApplicationInput & {
-  resumeProfileId: string | null;
 };
 
 export async function renderApplicationPdf(
