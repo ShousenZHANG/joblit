@@ -496,6 +496,13 @@ model ApplicationEvent {
 /// Content-addressed evidence. `id` and `contentHash` are deterministic
 /// SHA-256 derivatives generated from canonical JSON; identical evidence
 /// within one tenant and kind is reused instead of copied.
+/// Content-addressed evidence backing CV/CL claims.
+///
+/// Both foreign keys are SetNull rather than Cascade because one row is reused
+/// across Applications whose evidence text matches — the id is derived from
+/// (userId, kind, contentHash), not from the Job. `jobDeleteService` therefore
+/// removes only the rows no surviving ClaimEvidence still cites; a shared row
+/// outlives the Job it happens to point at, and its `jobId` becomes null.
 model EvidenceSnapshot {
   id            String       @id
   userId        String       @db.Uuid

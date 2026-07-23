@@ -14,6 +14,10 @@ const applicationStore = vi.hoisted(() => ({
   deleteMany: vi.fn(),
 }));
 
+const evidenceSnapshotStore = vi.hoisted(() => ({
+  deleteMany: vi.fn(),
+}));
+
 const prismaStore = vi.hoisted(() => ({
   executeRaw: vi.fn(),
   $transaction: vi.fn(),
@@ -67,6 +71,7 @@ describe("jobs delete api cleanup", () => {
         job: jobStore,
         deletedJobUrl: deletedJobUrlStore,
         application: applicationStore,
+        evidenceSnapshot: evidenceSnapshotStore,
       }),
     );
   });

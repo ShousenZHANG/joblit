@@ -15,6 +15,9 @@ const prismaStore = vi.hoisted(() => ({
     upsert: vi.fn(),
     createMany: vi.fn(),
   },
+  evidenceSnapshot: {
+    deleteMany: vi.fn(),
+  },
   executeRaw: vi.fn(),
   transaction: vi.fn(),
   operations: [] as string[],
@@ -82,12 +85,17 @@ describe("jobDeleteService", () => {
       prismaStore.operations.push("deletedJobUrl.createMany");
       return { count: 1 };
     });
+    prismaStore.evidenceSnapshot.deleteMany.mockImplementation(async () => {
+      prismaStore.operations.push("evidenceSnapshot.deleteMany");
+      return { count: 0 };
+    });
     prismaStore.transaction.mockImplementation(async (callback) =>
       callback({
         $executeRaw: prismaStore.executeRaw,
         job: prismaStore.job,
         application: prismaStore.application,
         deletedJobUrl: prismaStore.deletedJobUrl,
+        evidenceSnapshot: prismaStore.evidenceSnapshot,
       }),
     );
   });
@@ -119,6 +127,9 @@ describe("jobDeleteService", () => {
         "application.findUnique",
         "deletedJobUrl.upsert",
         "application.deleteMany",
+        // After the Application delete cascades its ClaimEvidence edges, and
+        // before the Job delete nulls the jobId these rows are found by.
+        "evidenceSnapshot.deleteMany",
         "job.deleteMany",
       ]);
       expect(prismaStore.job.deleteMany).toHaveBeenCalledWith({
@@ -220,9 +231,39 @@ describe("jobDeleteService", () => {
         "application.findMany",
         "deletedJobUrl.createMany",
         "application.deleteMany",
+        "evidenceSnapshot.deleteMany",
         "job.deleteMany",
       ]);
       expect(result).toMatchObject({ deleted: 2, notFound: 1 });
+    });
+
+    it("deletes only the evidence no surviving Application still cites", async () => {
+      prismaStore.job.findMany.mockImplementation(async () => {
+        prismaStore.operations.push("job.findMany");
+        return [
+          { id: "a", jobUrl: "https://example.com/a" },
+          { id: "b", jobUrl: "https://example.com/b" },
+        ];
+      });
+      prismaStore.job.deleteMany.mockImplementation(async () => {
+        prismaStore.operations.push("job.deleteMany");
+        return { count: 2 };
+      });
+
+      await batchDeleteJobs("user-1", ["a", "b"]);
+
+      // `claims: { none: {} }` is the whole point. Evidence ids are
+      // content-addressed on (userId, kind, contentHash), so one snapshot row
+      // is reused across Jobs whose text matches; deleting a row another
+      // Application still cites would hit the Restrict on
+      // ClaimEvidence.evidenceSnapshot and fail the entire delete.
+      expect(prismaStore.evidenceSnapshot.deleteMany).toHaveBeenCalledWith({
+        where: {
+          userId: "user-1",
+          jobId: { in: ["a", "b"] },
+          claims: { none: {} },
+        },
+      });
     });
 
     it("takes application locks in stable job-id order before reading artifacts", async () => {

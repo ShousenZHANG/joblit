@@ -25,6 +25,40 @@ type BlobCleanupResult = {
 
 const JOB_MUTATION_TRANSACTION_TIMEOUT_MS = 30_000;
 
+/**
+ * Remove the evidence snapshots the deleted Jobs leave behind.
+ *
+ * Both of `EvidenceSnapshot`'s foreign keys are `SetNull`, and nothing else in
+ * the codebase deletes the table, so without this a deleted Job left its
+ * extracted JD text and resume claims in Postgres with every non-user key null
+ * — unreachable through each index the model declares, and removable only by
+ * deleting the account.
+ *
+ * Two constraints shape this. It must run *after* the Application delete, so
+ * the cascaded `ClaimEvidence` edges are already gone, and *before* the Job
+ * delete, while `jobId` still identifies the rows. And it must skip snapshots
+ * that another Application still cites: ids are content-addressed on
+ * `(userId, kind, contentHash)` rather than on the Job, so one row is reused
+ * across Jobs whose evidence text matches. Deleting those would hit the
+ * `Restrict` on `ClaimEvidence.evidenceSnapshot` and fail the whole delete.
+ */
+async function deleteUnreferencedEvidence(
+  tx: {
+    evidenceSnapshot: {
+      deleteMany: (args: {
+        where: { userId: string; jobId: { in: string[] }; claims: { none: object } };
+      }) => Promise<{ count: number }>;
+    };
+  },
+  userId: string,
+  jobIds: string[],
+): Promise<void> {
+  if (jobIds.length === 0) return;
+  await tx.evidenceSnapshot.deleteMany({
+    where: { userId, jobId: { in: jobIds }, claims: { none: {} } },
+  });
+}
+
 async function cleanupArtifacts(artifactUrls: string[]): Promise<BlobCleanupResult> {
   const urls = Array.from(
     new Set(artifactUrls.filter((value) => value.trim().length > 0)),
@@ -101,6 +135,7 @@ export async function deleteJob(
         create: { userId, jobUrl: canonicalJobUrl },
       });
       await tx.application.deleteMany({ where: { userId, jobId: job.id } });
+      await deleteUnreferencedEvidence(tx, userId, [job.id]);
       // deleteMany keeps ownership in the write predicate and remains idempotent
       // if another code path removed the row.
       const deletedJob = await tx.job.deleteMany({
@@ -184,6 +219,7 @@ export async function batchDeleteJobs(
       await tx.application.deleteMany({
         where: { userId, jobId: { in: foundIds } },
       });
+      await deleteUnreferencedEvidence(tx, userId, foundIds);
       const deletedJobs = await tx.job.deleteMany({
         where: { id: { in: foundIds }, userId },
       });
