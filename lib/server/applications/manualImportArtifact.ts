@@ -88,7 +88,7 @@ function parseFilename(candidate: string, role: string, target: ManualImportTarg
 }
 
 export function buildManualImportArtifact(input: {
-  evidenceScopeKey?: string;
+  evidenceScopeKey: string;
   target: ManualImportTarget;
   modelOutput: string;
   mode: ManualImportMode;
@@ -104,7 +104,7 @@ export function buildManualImportArtifact(input: {
 }
 
 function buildManualResumeArtifact(input: {
-  evidenceScopeKey?: string;
+  evidenceScopeKey: string;
   modelOutput: string;
   mode: ManualImportMode;
   source: ManualImportSource;
@@ -258,7 +258,7 @@ function buildManualResumeArtifact(input: {
 }
 
 function buildManualCoverArtifact(input: {
-  evidenceScopeKey?: string;
+  evidenceScopeKey: string;
   modelOutput: string;
   mode: ManualImportMode;
   source: ManualImportSource;

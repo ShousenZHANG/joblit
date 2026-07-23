@@ -54,6 +54,7 @@ describe("evidence ledger", () => {
       },
       jobDescription:
         "Responsibilities:\n- Build secure TypeScript APIs\n- Own AWS delivery pipelines",
+      scopeKey: "user-1",
     };
 
     const first = attachEvidenceAndReview(input);
@@ -72,6 +73,7 @@ describe("evidence ledger", () => {
     draft.cv.summary.aiText = "Improved platform throughput by 700%.";
 
     const reviewed = attachEvidenceAndReview({
+      scopeKey: "user-1",
       aiContent: draft,
       resumeSnapshot: { summary: "Improved platform throughput." },
       jobDescription: "Improve platform throughput and reliability.",
@@ -91,6 +93,7 @@ describe("evidence ledger", () => {
       "Automation specialist delivering solutions across Power Platform, Dataverse and Microsoft 365.";
 
     const reviewed = attachEvidenceAndReview({
+      scopeKey: "user-1",
       aiContent: draft,
       // The master profile names the suite without the version, so no "365"
       // appears anywhere in the candidate evidence.
@@ -110,6 +113,7 @@ describe("evidence ledger", () => {
     draft.cv.summary.aiText = "Automation specialist supporting 4200 users.";
 
     const reviewed = attachEvidenceAndReview({
+      scopeKey: "user-1",
       aiContent: draft,
       resumeSnapshot: { summary: "Automation specialist supporting users." },
       jobDescription: "Support users.",
@@ -124,6 +128,7 @@ describe("evidence ledger", () => {
       aiContent: content(),
       resumeSnapshot: { summary: "Built secure TypeScript APIs." },
       jobDescription: "Build secure TypeScript APIs.",
+      scopeKey: "user-1",
     };
     const tenantA = attachEvidenceAndReview({ ...base, scopeKey: "tenant-a" });
     const tenantB = attachEvidenceAndReview({ ...base, scopeKey: "tenant-b" });
@@ -144,5 +149,36 @@ describe("evidence ledger", () => {
     expect(evidenceLedgerInternals.tokens("后端平台")).toEqual(
       new Set(["后端", "端平", "平台"]),
     );
+  });
+
+  it("drops a verdict it cannot re-derive rather than carrying it forward", () => {
+    // With no evidence there is nothing to re-check, so keeping the previous
+    // review would assert this content was reviewed when it was not. The old
+    // behaviour returned the input untouched, so a draft that lost its evidence
+    // kept a stale "pass" forever.
+    const withoutEvidence = {
+      schemaVersion: 1 as const,
+      generatedAt: "2026-07-23T00:00:00.000Z",
+      promptMetaHash: "p1",
+      evidence: [],
+      review: {
+        verdict: "pass" as const,
+        reviewedAt: "2026-07-23T00:00:00.000Z",
+        coveragePercent: 100,
+        requirements: [],
+        issues: [],
+      },
+      cv: {
+        summary: { aiText: "ai", originalText: "orig", accepted: true },
+        latestExperience: { experienceIndex: 0, addedBullets: [] },
+      },
+      cover: {
+        paragraphOne: { aiText: "One", accepted: true },
+        paragraphTwo: { aiText: "Two", accepted: true },
+        paragraphThree: { aiText: "Three", accepted: true },
+      },
+    };
+
+    expect(refreshEvidenceReview(withoutEvidence).review).toBeUndefined();
   });
 });

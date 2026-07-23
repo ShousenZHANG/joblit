@@ -12,7 +12,15 @@ type EvidenceInput = {
   aiContent: AiContent;
   resumeSnapshot: unknown;
   jobDescription: string | null | undefined;
-  scopeKey?: string;
+  /**
+   * The tenant every evidence id is derived from — always the user id.
+   *
+   * Required, not defaulted. It used to be optional with an "anonymous"
+   * fallback, so a caller that forgot it minted ids under the wrong scope and
+   * the mistake only surfaced later, as an INVALID_EVIDENCE_REFERENCE from
+   * assertCanonicalEvidenceReferences at persist time.
+   */
+  scopeKey: string;
 };
 
 const MAX_EVIDENCE_ITEMS = 280;
@@ -323,13 +331,17 @@ function reviewContentWithEvidence(
  */
 export function refreshEvidenceReview(aiContent: AiContent): AiContent {
   const evidence = [...(aiContent.evidence ?? [])];
-  return evidence.length === 0
-    ? aiContent
-    : reviewContentWithEvidence(aiContent, evidence);
+  // With no evidence there is nothing to re-check, so a verdict carried over
+  // from a previous edit would be a claim this content was reviewed when it
+  // was not. Drop it instead.
+  if (evidence.length === 0) {
+    return aiContent.review ? { ...aiContent, review: undefined } : aiContent;
+  }
+  return reviewContentWithEvidence(aiContent, evidence);
 }
 
 export function attachEvidenceAndReview(input: EvidenceInput): AiContent {
-  const scopeKey = input.scopeKey?.trim() || "anonymous";
+  const scopeKey = input.scopeKey.trim();
   const evidence = [
     ...collectCandidateEvidence(input.resumeSnapshot, scopeKey),
     ...collectJobEvidence(input.jobDescription, scopeKey),

@@ -74,6 +74,7 @@ describe("manual import artifact builder", () => {
 
   it("returns structured parse errors instead of HTTP responses", () => {
     const result = buildManualImportArtifact({
+    evidenceScopeKey: "user-1",
       target: "resume",
       modelOutput: "invalid-output-invalid-output",
       mode: "legacy",
@@ -96,6 +97,7 @@ describe("manual import artifact builder", () => {
 
   it("builds a resume artifact and keeps grounded latest-experience content", () => {
     const result = buildManualImportArtifact({
+    evidenceScopeKey: "user-1",
       target: "resume",
       modelOutput: JSON.stringify({
         cvSummary: "Focused on **Java** services and reliable delivery.",
@@ -134,6 +136,7 @@ describe("manual import artifact builder", () => {
 
   it("emits aiContent provenance covering summary diff and per-bullet quality gate verdicts", () => {
     const result = buildManualImportArtifact({
+    evidenceScopeKey: "user-1",
       target: "resume",
       modelOutput: JSON.stringify({
         cvSummary: "Focused on Java services and reliable delivery.",
@@ -184,6 +187,7 @@ describe("manual import artifact builder", () => {
   // onto the CV through the back door: the master profile's own list wins.
   it("ignores a retired skillsAdditions key and renders the profile skills", () => {
     const result = buildManualImportArtifact({
+    evidenceScopeKey: "user-1",
       target: "resume",
       modelOutput: JSON.stringify({
         cvSummary: "Focused on Java services.",
@@ -217,6 +221,7 @@ describe("manual import artifact builder", () => {
 
   it("builds cover artifacts with quality gate metadata", () => {
     const result = buildManualImportArtifact({
+    evidenceScopeKey: "user-1",
       target: "cover",
       modelOutput: JSON.stringify({
         cover: {
@@ -248,6 +253,7 @@ describe("manual import artifact builder", () => {
 
   it("returns stable INVALID_AI_RESULT for non-canonical local AI output", () => {
     const result = buildManualImportArtifact({
+    evidenceScopeKey: "user-1",
       target: "resume",
       modelOutput: `\`\`\`json\n{}\n\`\`\``,
       mode: "strict",
