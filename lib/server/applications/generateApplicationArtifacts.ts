@@ -5,18 +5,16 @@ import { buildResumePdfForJob } from "@/lib/server/applications/buildResumePdf";
 import { renderCoverLetterTex } from "@/lib/server/latex/renderCoverLetter";
 import { compileLatexToPdf } from "@/lib/server/latex/compilePdf";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
+import { getLocaleProfile } from "@/lib/shared/locales";
 import {
   buildPdfFilename,
   resumeFilenameSegments,
 } from "@/lib/server/files/pdfFilename";
 import { assertAtsPdf } from "@/lib/server/applications/atsPdfValidator";
-import { attachEvidenceAndReview } from "@/lib/server/ai/evidenceLedger";
 import { commitApplicationArtifact } from "@/lib/server/applications/commitApplicationArtifact";
 import { AppError } from "@/lib/server/api/appError";
-import {
-  AI_CONTENT_SCHEMA_VERSION,
-  type AiContent,
-} from "@/lib/shared/schemas/aiContent";
+import { acceptApplicationGeneration } from "./applicationGeneration";
+import { evolveApplicationAiContent } from "./applicationAiContentAggregate";
 
 type GenerateArtifactsInput = {
   userId: string;
@@ -31,6 +29,17 @@ type GenerateArtifactsResult = {
   coverPdfUrl: string | null;
   coverPdfName: string;
 };
+
+function acceptedCoverText(
+  paragraph: {
+    aiText: string;
+    userEdit?: string;
+    accepted: boolean;
+  },
+): string {
+  if (!paragraph.accepted) return "";
+  return paragraph.userEdit?.trim() || paragraph.aiText.trim();
+}
 
 export async function generateApplicationArtifactsForJob(input: GenerateArtifactsInput) {
   const job = await prisma.job.findFirst({
@@ -67,7 +76,7 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
       requireIndependentReview: true,
       requireQualityPass: true,
       localeProfile: profileLocale,
-      targetWordRange: { min: 280, max: 360 },
+      targetWordRange: getLocaleProfile(profileLocale).coverWordRange,
     },
   });
   const resumePdfName = buildPdfFilename(
@@ -75,18 +84,42 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
     job.title,
   );
   const tailored = resumeResult.tailored;
-  const aiContent = attachEvidenceAndReview({
-    scopeKey: input.userId,
-    resumeSnapshot: {
-      profile,
-      renderInput: resumeResult.renderInput,
-    },
-    jobDescription: job.description,
-    aiContent: buildBatchAiContent(
-      tailored,
-      resumeResult.cv,
-    ),
+  const coverAcceptance = acceptApplicationGeneration({
+    evidenceScopeKey: input.userId,
+    target: "cover",
+    source: "server_batch",
+    rawOutput: JSON.stringify({ cover: tailored.cover }),
+    promptMetaHash: tailored.promptMetaHash.cover,
+    master: resumeResult.renderInput,
+    profile,
+    job,
   });
+  if (!coverAcceptance.ok) {
+    throw new Error(
+      `INTERNAL_COVER_GENERATION_INVALID:${coverAcceptance.error.code}`,
+    );
+  }
+  const aggregate = evolveApplicationAiContent({
+    current: resumeResult.aiContent,
+    command: {
+      kind: "replace_target_proposal",
+      target: "cover",
+      proposal: coverAcceptance.aiContent,
+    },
+    reviewContext: {
+      scopeKey: input.userId,
+      resumeSnapshot: {
+        profile,
+        renderInput: resumeResult.renderInput,
+      },
+      jobDescription: job.description,
+      jobSourceAvailable: true,
+    },
+  });
+  if (aggregate.kind !== "evolved") {
+    throw new Error("APPLICATION_REVIEW_CONTEXT_REQUIRED");
+  }
+  const aiContent = aggregate.aiContent;
   if (aiContent.review?.verdict === "blocked") {
     throw new Error("APPLICATION_REVIEW_BLOCKED");
   }
@@ -111,15 +144,9 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
     },
     company: job.company || "the company",
     role: job.title,
-    candidateTitle: tailored.cover.candidateTitle,
-    subject: tailored.cover.subject,
-    date: tailored.cover.date,
-    salutation: tailored.cover.salutation,
-    paragraphOne: tailored.cover.paragraphOne,
-    paragraphTwo: tailored.cover.paragraphTwo,
-    paragraphThree: tailored.cover.paragraphThree,
-    closing: tailored.cover.closing,
-    signatureName: tailored.cover.signatureName,
+    paragraphOne: acceptedCoverText(aiContent.cover.paragraphOne),
+    paragraphTwo: acceptedCoverText(aiContent.cover.paragraphTwo),
+    paragraphThree: acceptedCoverText(aiContent.cover.paragraphThree),
   });
   const coverPdf = await compileLatexToPdf(coverTex);
   const coverAtsValidation = await assertAtsPdf(coverPdf, {
@@ -195,42 +222,4 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
     coverPdfUrl: commit.urls.cover ?? null,
     coverPdfName,
   } satisfies GenerateArtifactsResult;
-}
-
-function buildBatchAiContent(
-  tailored: Awaited<
-    ReturnType<typeof import("@/lib/server/ai/tailorApplication").tailorApplicationContent>
-  >,
-  cv: AiContent["cv"],
-): AiContent {
-  const generatedAt = new Date().toISOString();
-  const generation = {
-    generatedAt,
-    promptMetaHash: "server-batch:reviewer-v1",
-    source: "server_batch" as const,
-  };
-  return {
-    schemaVersion: AI_CONTENT_SCHEMA_VERSION,
-    generatedAt,
-    promptMetaHash: "server-batch:reviewer-v1",
-    provenance: {
-      resume: generation,
-      cover: generation,
-    },
-    cv,
-    cover: {
-      paragraphOne: {
-        aiText: tailored.cover.paragraphOne,
-        accepted: true,
-      },
-      paragraphTwo: {
-        aiText: tailored.cover.paragraphTwo,
-        accepted: true,
-      },
-      paragraphThree: {
-        aiText: tailored.cover.paragraphThree,
-        accepted: true,
-      },
-    },
-  };
 }

@@ -1,4 +1,8 @@
 import type { ResumeImportOutput, CoverImportOutput } from "../types";
+import {
+  CoverGenerationOutputSchema,
+  ResumeGenerationOutputSchema,
+} from "@/lib/shared/schemas/applicationGenerationOutput";
 
 function extractFirstJsonObject(value: string): string | null {
   let inString = false;
@@ -56,6 +60,71 @@ function parseCandidate(candidate: string): unknown {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasExactKeys(
+  value: Record<string, unknown>,
+  expected: readonly string[],
+): boolean {
+  const actual = Object.keys(value).sort();
+  const required = [...expected].sort();
+  return (
+    actual.length === required.length &&
+    actual.every((key, index) => key === required[index])
+  );
+}
+
+function hasOnlyKeys(
+  value: Record<string, unknown>,
+  allowed: readonly string[],
+): boolean {
+  const allowedSet = new Set(allowed);
+  return Object.keys(value).every((key) => allowedSet.has(key));
+}
+
+function hasValidLegacySkillGroups(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!Array.isArray(value) || value.length < 1 || value.length > 20) {
+    return false;
+  }
+  return value.every((item) => {
+    if (!isRecord(item) || !hasOnlyKeys(item, ["label", "category", "items"])) {
+      return false;
+    }
+    const label =
+      typeof item.label === "string"
+        ? item.label.trim()
+        : typeof item.category === "string"
+          ? item.category.trim()
+          : "";
+    return (
+      label.length > 0 &&
+      label.length <= 100 &&
+      Array.isArray(item.items) &&
+      item.items.length >= 1 &&
+      item.items.length <= 40 &&
+      item.items.every(
+        (skill) =>
+          typeof skill === "string" &&
+          skill.trim().length > 0 &&
+          skill.trim().length <= 120,
+      )
+    );
+  });
+}
+
+function isOptionalBoundedString(
+  value: unknown,
+  maxLength: number,
+): boolean {
+  return (
+    value === undefined ||
+    (typeof value === "string" && value.trim().length <= maxLength)
+  );
+}
+
 export function parseTailorOutput(
   raw: string,
   target: "resume" | "cover",
@@ -80,67 +149,97 @@ export function parseTailorOutput(
       if (firstObject) parsed = parseCandidate(firstObject);
     }
   }
-  if (!parsed || typeof parsed !== "object") return null;
+  if (!isRecord(parsed)) return null;
 
-  const obj = parsed as Record<string, unknown>;
+  const obj = parsed;
   if (target === "resume") {
+    const current = ResumeGenerationOutputSchema.safeParse(obj);
+    if (current.success) return current.data;
+
     const cvSummary =
-      typeof obj.cvSummary === "string"
-        ? obj.cvSummary.trim()
-        : typeof obj.summary === "string"
-          ? obj.summary.trim()
-          : "";
-    const latestExperience =
-      obj.latestExperience && typeof obj.latestExperience === "object"
-        ? (obj.latestExperience as Record<string, unknown>)
-        : null;
-    const bullets =
-      latestExperience && Array.isArray(latestExperience.bullets)
-        ? latestExperience.bullets.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean)
-        : [];
-    if (!cvSummary || bullets.length === 0) return null;
-    return { cvSummary };
+      typeof obj.cvSummary === "string" ? obj.cvSummary.trim() : "";
+    if (
+      !cvSummary ||
+      cvSummary.length > 2000 ||
+      !isRecord(obj.latestExperience)
+    ) return null;
+
+    const legacyBullets = obj.latestExperience.bullets;
+    if (
+      !hasOnlyKeys(obj, ["cvSummary", "latestExperience", "skillsFinal"]) ||
+      !hasExactKeys(obj.latestExperience, ["bullets"]) ||
+      !Array.isArray(legacyBullets) ||
+      legacyBullets.length < 1 ||
+      legacyBullets.length > 15 ||
+      !legacyBullets.every(
+        (item) =>
+          typeof item === "string" &&
+          item.trim().length > 0 &&
+          item.trim().length <= 320,
+      ) ||
+      !hasValidLegacySkillGroups(obj.skillsFinal)
+    ) {
+      return null;
+    }
+    return {
+      cvSummary,
+      latestExperience: { addedBullets: [] },
+    };
   }
 
-  const coverRoot =
-    obj.cover && typeof obj.cover === "object"
-      ? (obj.cover as Record<string, unknown>)
-      : obj;
+  const current = CoverGenerationOutputSchema.safeParse(obj);
+  if (current.success) return current.data;
+
+  if (!hasExactKeys(obj, ["cover"]) || !isRecord(obj.cover)) return null;
+  const coverRoot = obj.cover;
+  if (!hasOnlyKeys(coverRoot, [
+    "candidateTitle",
+    "subject",
+    "date",
+    "salutation",
+    "paragraphOne",
+    "paragraphTwo",
+    "paragraphThree",
+    "closing",
+    "signatureName",
+  ])) {
+    return null;
+  }
+  if (
+    !isOptionalBoundedString(coverRoot.candidateTitle, 160) ||
+    !isOptionalBoundedString(coverRoot.subject, 220) ||
+    !isOptionalBoundedString(coverRoot.date, 80) ||
+    !isOptionalBoundedString(coverRoot.salutation, 220) ||
+    !isOptionalBoundedString(coverRoot.closing, 300) ||
+    !isOptionalBoundedString(coverRoot.signatureName, 120)
+  ) {
+    return null;
+  }
   const paragraphOne =
     typeof coverRoot.paragraphOne === "string"
       ? coverRoot.paragraphOne.trim()
-      : typeof coverRoot.p1 === "string"
-        ? coverRoot.p1.trim()
-        : "";
+      : "";
   const paragraphTwo =
     typeof coverRoot.paragraphTwo === "string"
       ? coverRoot.paragraphTwo.trim()
-      : typeof coverRoot.p2 === "string"
-        ? coverRoot.p2.trim()
-        : "";
+      : "";
   const paragraphThree =
     typeof coverRoot.paragraphThree === "string"
       ? coverRoot.paragraphThree.trim()
-      : typeof coverRoot.p3 === "string"
-        ? coverRoot.p3.trim()
-        : "";
+      : "";
 
   if (!paragraphOne || !paragraphTwo || !paragraphThree) return null;
+  if (
+    paragraphOne.length > 2000 ||
+    paragraphTwo.length > 2000 ||
+    paragraphThree.length > 2000
+  ) return null;
 
   return {
     cover: {
-      subject: typeof coverRoot.subject === "string" ? coverRoot.subject.trim() : undefined,
-      date: typeof coverRoot.date === "string" ? coverRoot.date.trim() : undefined,
-      salutation:
-        typeof coverRoot.salutation === "string" ? coverRoot.salutation.trim() : undefined,
       paragraphOne,
       paragraphTwo,
       paragraphThree,
-      closing: typeof coverRoot.closing === "string" ? coverRoot.closing.trim() : undefined,
-      signatureName:
-        typeof coverRoot.signatureName === "string"
-          ? coverRoot.signatureName.trim()
-          : undefined,
     },
   };
 }

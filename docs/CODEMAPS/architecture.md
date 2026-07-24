@@ -66,13 +66,14 @@ the reversible path is `NEW → REJECTED`.
 
 ### 3. Tailoring — Job + Master Resume Profile → Application
 
-Two generation paths converge on one Edit phase (ADR-0002).
+Two durable generation paths converge on one persisted Application aggregate
+and Edit model (ADR-0002).
 
 ```
-Path A (Gemini, server-side)      Path B (manual / Local AI)
-  buildTailorPrompts                buildApplicationPromptForUser
+Path A (server auto-execute)     Path B (manual / Local AI)
+  generateApplicationArtifacts     buildApplicationPromptForUser
   callProvider("gemini")            [external LLM runs the prompt]
-  parseTailorModelOutput            parse*Output + Quality Gate
+  acceptApplicationGeneration      parse*Output + Quality Gate
         │                                 │
         └────────► attachEvidenceAndReview ◄────────┘
                           │
@@ -97,11 +98,20 @@ ordering (`lib/server/applications/applicationAiContentAggregate.ts`).
 CV and Cover have independent generation provenance, but evidence, review, and
 `aiContentHash` still cover the complete aggregate.
 
+Both paths share the current strict output contract: Resume emits a summary
+plus zero to three added latest-experience bullets, while Cover emits only its
+three body paragraphs. Existing bullets and skills are composed from the Master
+Resume Profile rather than copied through model output. Skill Pack V3
+distributes this contract together with the user's active effective rules.
+
 ### 4. Codex Batch — tailoring without a human
 
 `ApplicationBatch` over `NEW` Jobs. `POST /api/application-batches/[id]/run-once`
 is atomic: complete the previous task and claim the next in one call, idempotent
-for the same `taskId`. Protocol in `AGENTS.md`.
+for the same `taskId`; external Codex then persists output through
+`manual-generate`. The separate, feature-gated `/execute` route invokes
+`generateApplicationArtifactsForJob` for server-side generation. Protocol in
+`AGENTS.md`.
 
 ---
 

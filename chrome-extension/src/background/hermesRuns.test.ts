@@ -28,7 +28,7 @@ vi.mock("./api", () => {
   const envelope = {
     prompt: { input: "generate grounded JSON", instructions: "strict rules", sessionId: "server-session" },
     promptMeta: { promptHash: "sha256:test" },
-    promptVersion: "v3-local-ai",
+    promptVersion: "v4-application-proposal",
   };
   return {
     fetchAiPromptEnvelope: vi.fn().mockResolvedValue(envelope),

@@ -8,6 +8,7 @@ import {
 } from "@/lib/server/ai/tailorApplication";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
 import { composeApplicationResumeRenderInput } from "./applicationResumeComposition";
+import { acceptApplicationGeneration } from "./applicationGeneration";
 
 type ResumeJobContext = {
   title: string;
@@ -27,6 +28,7 @@ type ResumePdfResult = {
   tailorReason: string;
   renderInput: ReturnType<typeof mapResumeProfile>;
   cv: AiContent["cv"];
+  aiContent: AiContent;
   tailored: TailorResult;
 };
 
@@ -47,17 +49,27 @@ export async function buildResumePdfForJob(input: {
     userId: input.userId,
   }, input.tailorOptions);
 
-  const cv: AiContent["cv"] = {
-    summary: {
-      aiText: tailored.cvSummary,
-      originalText: renderInput.summary,
-      accepted: true,
-    },
-    latestExperience: {
-      experienceIndex: 0,
-      addedBullets: [],
-    },
-  };
+  const accepted = acceptApplicationGeneration({
+    evidenceScopeKey: input.userId,
+    target: "resume",
+    source: "server_batch",
+    rawOutput: JSON.stringify({
+      cvSummary: tailored.cvSummary,
+      latestExperience: {
+        addedBullets: tailored.addedBullets,
+      },
+    }),
+    promptMetaHash: tailored.promptMetaHash.resume,
+    master: renderInput,
+    profile: input.profile,
+    job: input.job,
+  });
+  if (!accepted.ok) {
+    throw new Error(
+      `INTERNAL_RESUME_GENERATION_INVALID:${accepted.error.code}`,
+    );
+  }
+  const cv: AiContent["cv"] = accepted.aiContent.cv;
   const tex = renderResumeTex(
     composeApplicationResumeRenderInput({
       master: renderInput,
@@ -74,6 +86,7 @@ export async function buildResumePdfForJob(input: {
     tailorReason: tailored.reason,
     renderInput,
     cv,
+    aiContent: accepted.aiContent,
     tailored,
   };
 }

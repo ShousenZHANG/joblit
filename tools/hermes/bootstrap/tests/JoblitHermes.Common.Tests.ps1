@@ -102,6 +102,30 @@ agent:
         (Test-JoblitProfileConfig -ConfigPath $config).Valid | Should -BeFalse
     }
 
+    It 'recognizes the current managed profile version and rejects stale profiles' {
+        $profileRoot = Join-Path $TestDrive 'joblit-0123456789abcdef'
+        New-Item -ItemType Directory -Path $profileRoot -Force | Out-Null
+        Set-Content `
+            -LiteralPath (Join-Path $profileRoot 'joblit-package-manifest.json') `
+            -Value '{"schemaVersion":1,"package":"joblit-hermes-profile"}' `
+            -Encoding utf8
+        $distributionPath = Join-Path $profileRoot 'distribution.yaml'
+        @'
+name: joblit-0123456789abcdef
+version: 0.2.0
+source: C:\verified\joblit
+installed_at: '2026-07-24T00:00:00+00:00'
+'@ | Set-Content -LiteralPath $distributionPath -Encoding utf8
+
+        Test-JoblitManagedProfile -ProfileRoot $profileRoot | Should -BeTrue
+
+        (Get-Content -Raw -LiteralPath $distributionPath).Replace(
+            'version: 0.2.0',
+            'version: 0.1.0'
+        ) | Set-Content -LiteralPath $distributionPath -Encoding utf8
+        Test-JoblitManagedProfile -ProfileRoot $profileRoot | Should -BeFalse
+    }
+
     It 'rejects a partial disabled-toolset list instead of accepting stale aliases' {
         $config = Join-Path $TestDrive 'partial-config.yaml'
         @'

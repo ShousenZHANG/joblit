@@ -5,13 +5,13 @@ The request's `expectedJsonSchema` is authoritative. These names mirror Joblit's
 ## Resume
 
 - `cvSummary`: non-empty string.
-- `latestExperience.bullets`: non-empty string array. Preserve required source bullets under prompt rules.
-- `skillsFinal`: optional array of `{ "label": string, "items": string[] }` groups. It is the complete skills list, never a delta; `skillsAdditions` is not accepted.
+- `latestExperience.addedBullets`: zero to three non-empty strings containing additions only. Existing experience bullets remain owned by the Master Resume Profile.
+- No skills field is accepted. Skills remain owned by the Master Resume Profile.
 
 ## Cover
 
 - `cover`: single object.
 - `cover.paragraphOne`, `cover.paragraphTwo`, `cover.paragraphThree`: required non-empty strings.
-- `cover.candidateTitle`, `cover.subject`, `cover.date`, `cover.salutation`, `cover.closing`, and `cover.signatureName`: optional strings governed by the request.
+- The `cover` object contains only those three paragraph fields.
 
 Return no wrapper, Markdown fence, prose preface, or keys forbidden by the supplied schema.

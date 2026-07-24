@@ -15,6 +15,7 @@ import {
   buildPromptMeta,
   getExpectedJsonSchemaForTarget,
   getExpectedJsonShapeForTarget,
+  type PromptMeta,
 } from "@/lib/server/ai/promptContract";
 import { computeTop3Coverage } from "@/lib/server/ai/responsibilityCoverage";
 import { buildResumePromptSnapshot } from "@/lib/server/ai/resumePromptSnapshot";
@@ -59,10 +60,10 @@ const MATCH_OUTPUT_SHAPE = {
 export interface ApplicationPromptPayload {
   requestId: string;
   prompt: { input: string; instructions: string; sessionId: string };
-  promptMeta: Record<string, unknown>;
+  promptMeta: PromptMeta;
   expectedJsonShape: string;
   expectedJsonSchema: Record<string, unknown>;
-  promptVersion: "v3-local-ai";
+  promptVersion: "v4-application-proposal";
 }
 
 export type ApplicationPromptErrorCode =
@@ -168,6 +169,12 @@ export async function buildTriagePromptForUser(input: {
     target: "triage",
     ruleSetId: rules.id,
     resumeSnapshotUpdatedAt: profile.updatedAt.toISOString(),
+    locale,
+    variant: "lean",
+    prompt: { instructions, input: promptInput },
+    effectiveRules: rules,
+    resumeSnapshot: candidate,
+    jobSnapshot: jobs,
   });
 
   return {
@@ -184,7 +191,7 @@ export async function buildTriagePromptForUser(input: {
       2,
     ),
     expectedJsonSchema: { type: "array" },
-    promptVersion: "v3-local-ai",
+    promptVersion: "v4-application-proposal",
   };
 }
 
@@ -195,7 +202,7 @@ export async function buildApplicationPromptForUser(input: {
   /**
    * "lean" produces a slimmed prompt for local reasoning models (Hermes) that
    * stall on the full V2 prompt; "full" (default) keeps the rich cloud/manual
-   * prompt. Both share identical promptMeta so import validation is unchanged.
+   * prompt. Metadata is bound to the exact variant and prompt bytes.
    */
   variant?: "full" | "lean";
 }): Promise<ApplicationPromptPayload> {
@@ -313,6 +320,12 @@ export async function buildApplicationPromptForUser(input: {
     target: parsed.data.target,
     ruleSetId: rules.id,
     resumeSnapshotUpdatedAt: profile.updatedAt.toISOString(),
+    locale,
+    variant: lean ? "lean" : "full",
+    prompt: { instructions, input: promptInput },
+    effectiveRules: rules,
+    resumeSnapshot: candidate,
+    jobSnapshot: jobInput,
   });
 
   return {
@@ -334,6 +347,6 @@ export async function buildApplicationPromptForUser(input: {
       parsed.data.target === "match"
         ? { type: "object", required: ["requirements", "eligibility"] }
         : getExpectedJsonSchemaForTarget(parsed.data.target),
-    promptVersion: "v3-local-ai",
+    promptVersion: "v4-application-proposal",
   };
 }

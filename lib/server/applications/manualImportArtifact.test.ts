@@ -3,13 +3,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 type ResumeRenderInput = Parameters<
   typeof import("@/lib/server/latex/renderResume").renderResumeTex
 >[0];
+type CoverRenderInput = Parameters<
+  typeof import("@/lib/server/latex/renderCoverLetter").renderCoverLetterTex
+>[0];
 
 const resumeRender = vi.hoisted(() => ({
   renderResumeTex: vi.fn((_input: ResumeRenderInput) => "\\documentclass{article}% resume"),
 }));
 
 const coverRender = vi.hoisted(() => ({
-  renderCoverLetterTex: vi.fn(() => "\\documentclass{article}% cover"),
+  renderCoverLetterTex: vi.fn(
+    (_input: CoverRenderInput) => "\\documentclass{article}% cover",
+  ),
 }));
 
 vi.mock("@/lib/server/latex/renderResume", () => resumeRender);
@@ -77,7 +82,6 @@ describe("manual import artifact builder", () => {
     evidenceScopeKey: "user-1",
       target: "resume",
       modelOutput: "invalid-output-invalid-output",
-      mode: "legacy",
       source: "manual_import",
       promptMetaHash: "prompt-hash",
       renderInput,
@@ -110,7 +114,6 @@ describe("manual import artifact builder", () => {
         },
         skillsFinal: [{ label: "Backend", items: ["Java", "Spring Boot"] }],
       }),
-      mode: "legacy",
       source: "manual_import",
       promptMetaHash: "prompt-hash",
       renderInput,
@@ -134,6 +137,38 @@ describe("manual import artifact builder", () => {
     ]);
   });
 
+  it("renders current-contract AI-added bullets through canonical AI Content", () => {
+    const result = buildManualImportArtifact({
+      evidenceScopeKey: "user-1",
+      target: "resume",
+      modelOutput: JSON.stringify({
+        cvSummary: "Focused on **Java** services and reliable delivery.",
+        latestExperience: {
+          addedBullets: ["Automated Java APIs delivery for production services."],
+        },
+      }),
+      source: "manual_import",
+      promptMetaHash: "prompt-hash",
+      renderInput,
+      profile,
+      job,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.aiContent.cv.latestExperience.addedBullets).toEqual([
+      expect.objectContaining({
+        text: "Automated Java APIs delivery for production services.",
+        accepted: true,
+      }),
+    ]);
+    expect(resumeRender.renderResumeTex.mock.calls[0][0].experiences[0].bullets).toEqual([
+      "Built Java APIs.",
+      "Maintained CI/CD pipelines on Linux.",
+      "Automated Java APIs delivery for production services.",
+    ]);
+  });
+
   it("emits aiContent provenance covering summary diff and per-bullet quality gate verdicts", () => {
     const result = buildManualImportArtifact({
     evidenceScopeKey: "user-1",
@@ -149,7 +184,6 @@ describe("manual import artifact builder", () => {
         },
         skillsFinal: [{ label: "Backend", items: ["Java", "Spring Boot"] }],
       }),
-      mode: "legacy",
       source: "manual_import",
       promptMetaHash: "prompt-hash",
       renderInput,
@@ -211,7 +245,6 @@ describe("manual import artifact builder", () => {
           },
         ],
       }),
-      mode: "legacy",
       source: "manual_import",
       promptMetaHash: "prompt-hash",
       renderInput,
@@ -232,12 +265,16 @@ describe("manual import artifact builder", () => {
       target: "cover",
       modelOutput: JSON.stringify({
         cover: {
+          candidateTitle: "Injected title",
+          subject: "Injected subject",
+          salutation: "Injected salutation",
           paragraphOne: "One",
           paragraphTwo: "Two",
           paragraphThree: "Three",
+          closing: "Injected closing",
+          signatureName: "Injected name",
         },
       }),
-      mode: "legacy",
       source: "manual_import",
       promptMetaHash: "prompt-hash",
       renderInput,
@@ -263,6 +300,11 @@ describe("manual import artifact builder", () => {
         paragraphOne: "One",
       }),
     );
+    const coverRenderInput = coverRender.renderCoverLetterTex.mock.calls[0][0];
+    expect(coverRenderInput).not.toHaveProperty("subject");
+    expect(coverRenderInput).not.toHaveProperty("salutation");
+    expect(coverRenderInput).not.toHaveProperty("closing");
+    expect(JSON.stringify(result.aiContent)).not.toContain("Injected");
   });
 
   it("returns stable INVALID_AI_RESULT for non-canonical local AI output", () => {
@@ -270,7 +312,6 @@ describe("manual import artifact builder", () => {
     evidenceScopeKey: "user-1",
       target: "resume",
       modelOutput: `\`\`\`json\n{}\n\`\`\``,
-      mode: "strict",
       source: "local_ai",
       promptMetaHash: "canonical-hash",
       renderInput,

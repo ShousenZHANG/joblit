@@ -29,22 +29,106 @@ function normalizeRuleList(value: unknown, fallback: string[]) {
   return cleaned.length > 0 ? cleaned : fallback;
 }
 
+const RETIRED_CV_OUTPUT_RULE_PATTERNS = [
+  /\bskillsFinal\b/i,
+  /\bskillsAdditions\b/i,
+  /\blatestExperience\.bullets\b/i,
+  /\bcomplete final bullet/i,
+  /\bfull ordered output\b/i,
+  /\breorder(?:ed|ing)?\b.*\bbullet/i,
+  /\bbullet.*\breorder(?:ed|ing)?\b/i,
+  /\bpreserve\b.*\b(?:existing|original|base)\b.*\bbullet/i,
+  /\b(?:existing|original|base)\b.*\bbullet.*\bpreserve\b/i,
+  /\boutput comments?\b/i,
+  /\bstill include\b.*\b(?:bullet|verbatim)\b/i,
+] as const;
+
+const RETIRED_COVER_OUTPUT_RULE_PATTERNS = [
+  /\bcandidateTitle\b/i,
+  /\bsignatureName\b/i,
+  /\bsubject should\b/i,
+  /\bsalutation should\b/i,
+] as const;
+
+function isRetiredCvOutputRule(rule: string): boolean {
+  return RETIRED_CV_OUTPUT_RULE_PATTERNS.some((pattern) => pattern.test(rule));
+}
+
+function isRetiredCoverOutputRule(rule: string): boolean {
+  return RETIRED_COVER_OUTPUT_RULE_PATTERNS.some((pattern) =>
+    pattern.test(rule),
+  );
+}
+
+/**
+ * Prompt rules predate the versioned output contract and are user-persisted.
+ * Keep semantic guidance, but prevent an old template from re-introducing
+ * superseded output fields or whole-document mutation instructions.
+ */
+export function sanitizePromptCvRules(value: unknown): string[] {
+  const normalized = normalizeRuleList(value, DEFAULT_RULES.cvRules);
+  const compatible = normalized.filter((rule) => !isRetiredCvOutputRule(rule));
+  return compatible.length > 0 ? compatible : [...DEFAULT_RULES.cvRules];
+}
+
+export function sanitizePromptCoverRules(value: unknown): string[] {
+  const normalized = normalizeRuleList(value, DEFAULT_RULES.coverRules);
+  const compatible = normalized.filter(
+    (rule) => !isRetiredCoverOutputRule(rule),
+  );
+  return compatible.length > 0 ? compatible : [...DEFAULT_RULES.coverRules];
+}
+
+export function sanitizePromptHardConstraints(value: unknown): string[] {
+  const normalized = normalizeRuleList(value, DEFAULT_RULES.hardConstraints);
+  const compatible = normalized.filter(
+    (rule) =>
+      !isRetiredCvOutputRule(rule) && !isRetiredCoverOutputRule(rule),
+  );
+  return compatible.length > 0
+    ? compatible
+    : [...DEFAULT_RULES.hardConstraints];
+}
+
+function sanitizeTemplateRecord<
+  T extends {
+    cvRules: unknown;
+    coverRules: unknown;
+    hardConstraints: unknown;
+  },
+>(
+  template: T,
+): T & {
+  cvRules: string[];
+  coverRules: string[];
+  hardConstraints: string[];
+} {
+  return {
+    ...template,
+    cvRules: sanitizePromptCvRules(template.cvRules),
+    coverRules: sanitizePromptCoverRules(template.coverRules),
+    hardConstraints: sanitizePromptHardConstraints(
+      template.hardConstraints,
+    ),
+  };
+}
+
 function toRuleSet(template: TemplateRecord): PromptSkillRuleSet {
   return {
     id: template.id,
     locale: "en-AU",
-    cvRules: normalizeRuleList(template.cvRules, DEFAULT_RULES.cvRules),
-    coverRules: normalizeRuleList(template.coverRules, DEFAULT_RULES.coverRules),
-    hardConstraints: normalizeRuleList(template.hardConstraints, DEFAULT_RULES.hardConstraints),
+    cvRules: sanitizePromptCvRules(template.cvRules),
+    coverRules: sanitizePromptCoverRules(template.coverRules),
+    hardConstraints: sanitizePromptHardConstraints(template.hardConstraints),
   };
 }
 
 function normalizeTemplateInput(input: PromptRuleTemplateInput): PromptRuleTemplateInput {
   return {
     name: input.name.trim() || `Rules v${Date.now()}`,
-    cvRules: normalizeRuleList(input.cvRules, DEFAULT_RULES.cvRules),
-    coverRules: normalizeRuleList(input.coverRules, DEFAULT_RULES.coverRules),
-    hardConstraints: normalizeRuleList(input.hardConstraints, DEFAULT_RULES.hardConstraints),
+    cvRules: sanitizePromptCvRules(input.cvRules),
+    coverRules: sanitizePromptCoverRules(input.coverRules),
+    hardConstraints: sanitizePromptHardConstraints(input.hardConstraints),
   };
 }
 
@@ -108,10 +192,11 @@ async function ensureDefaultPromptRuleTemplate(userId: string) {
 
 export async function listPromptRuleTemplates(userId: string) {
   await ensureDefaultPromptRuleTemplate(userId);
-  return prisma.promptRuleTemplate.findMany({
+  const templates = await prisma.promptRuleTemplate.findMany({
     where: { userId },
     orderBy: [{ version: "desc" }],
   });
+  return templates.map(sanitizeTemplateRecord);
 }
 
 export async function getActivePromptSkillRulesForUser(userId: string): Promise<PromptSkillRuleSet> {
@@ -132,7 +217,7 @@ export async function getActivePromptSkillRulesForUser(userId: string): Promise<
 
 export async function createPromptRuleTemplate(userId: string, input: PromptRuleTemplateInput) {
   const normalized = normalizeTemplateInput(input);
-  return withVersionRetry(() =>
+  const created = await withVersionRetry(() =>
     prisma.$transaction(async (tx) => {
       const nextVersion = await getNextVersion(tx, userId);
       return tx.promptRuleTemplate.create({
@@ -149,6 +234,7 @@ export async function createPromptRuleTemplate(userId: string, input: PromptRule
       });
     }),
   );
+  return sanitizeTemplateRecord(created);
 }
 
 export async function activatePromptRuleTemplate(userId: string, templateId: string) {
@@ -163,15 +249,16 @@ export async function activatePromptRuleTemplate(userId: string, templateId: str
       where: { userId, isActive: true },
       data: { isActive: false },
     });
-    return tx.promptRuleTemplate.update({
+    const activated = await tx.promptRuleTemplate.update({
       where: { id: templateId },
       data: { isActive: true },
     });
+    return sanitizeTemplateRecord(activated);
   });
 }
 
 export async function resetPromptRulesToDefault(userId: string) {
-  return withVersionRetry(() =>
+  const created = await withVersionRetry(() =>
     prisma.$transaction(async (tx) => {
       const nextVersion = await getNextVersion(tx, userId);
       await tx.promptRuleTemplate.updateMany({
@@ -192,4 +279,5 @@ export async function resetPromptRulesToDefault(userId: string) {
       });
     }),
   );
+  return sanitizeTemplateRecord(created);
 }

@@ -10,7 +10,7 @@ describe("fetchAiPromptEnvelope", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("uses the fixed extension-authenticated prompt route", async () => {
-    const payload = { prompt: { input: "input", instructions: "rules", sessionId: "session" }, promptMeta: {}, promptVersion: "v3-local-ai" };
+    const payload = { prompt: { input: "input", instructions: "rules", sessionId: "session" }, promptMeta: {}, promptVersion: "v4-application-proposal" };
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 

@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 import type { ApplicationBatchStatus, ApplicationBatchTaskStatus, JobStatus } from "@/lib/generated/prisma";
-import { buildPromptMeta, type PromptMeta } from "@/lib/server/ai/promptContract";
+import {
+  PROMPT_SCHEMA_VERSION,
+  PROMPT_TEMPLATE_VERSION,
+} from "@/lib/server/ai/promptContract";
 import { getActivePromptSkillRulesForUser } from "@/lib/server/promptRuleTemplates";
 import { prisma } from "@/lib/server/prisma";
 import {
@@ -34,10 +37,10 @@ type BatchRunTask = {
 };
 
 type BatchRunContext = {
-  promptMeta: PromptMeta;
-  promptMetaByTarget: {
-    resume: PromptMeta;
-    cover: PromptMeta;
+  generationContract: {
+    promptTemplateVersion: string;
+    schemaVersion: string;
+    promptReceiptEndpoint: "/api/applications/prompt";
   };
   rules: {
     locale: string;
@@ -75,32 +78,17 @@ export function buildResumeSnapshotHash(profile: unknown) {
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 }
 
-function getResumeSnapshotUpdatedAt(profile: { updatedAt?: unknown }) {
-  return profile.updatedAt instanceof Date ? profile.updatedAt.toISOString() : String(profile.updatedAt ?? "");
-}
-
 export async function buildBatchRunContext(input: {
   userId: string;
   profile: { updatedAt?: unknown };
 }): Promise<BatchRunContext> {
   const rules = await getActivePromptSkillRulesForUser(input.userId);
-  const resumeSnapshotUpdatedAt = getResumeSnapshotUpdatedAt(input.profile);
-  const resumePromptMeta = buildPromptMeta({
-    target: "resume",
-    ruleSetId: rules.id,
-    resumeSnapshotUpdatedAt,
-  });
-  const coverPromptMeta = buildPromptMeta({
-    target: "cover",
-    ruleSetId: rules.id,
-    resumeSnapshotUpdatedAt,
-  });
 
   return {
-    promptMeta: resumePromptMeta,
-    promptMetaByTarget: {
-      resume: resumePromptMeta,
-      cover: coverPromptMeta,
+    generationContract: {
+      promptTemplateVersion: PROMPT_TEMPLATE_VERSION,
+      schemaVersion: PROMPT_SCHEMA_VERSION,
+      promptReceiptEndpoint: "/api/applications/prompt",
     },
     rules: {
       locale: rules.locale,

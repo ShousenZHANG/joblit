@@ -73,18 +73,16 @@ export type CoverSource = "ai" | "fallback" | "manual_import" | "local_ai";
 
 export type ResumeImportOutput = {
   cvSummary: string;
+  latestExperience: {
+    addedBullets: string[];
+  };
 };
 
 export type CoverImportOutput = {
   cover: {
-    subject?: string;
-    date?: string;
-    salutation?: string;
     paragraphOne: string;
     paragraphTwo: string;
     paragraphThree: string;
-    closing?: string;
-    signatureName?: string;
   };
 };
 

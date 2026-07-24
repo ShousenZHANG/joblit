@@ -2,7 +2,7 @@
 
 > 文档状态：Consolidated / Active
 >
-> 最后更新：2026-07-17
+> 最后更新：2026-07-24
 >
 > 适用范围：Joblit Web、Joblit Chrome Extension、官方 Hermes 本地客户端
 >
@@ -152,12 +152,12 @@ Popup 显示 `Ready` 不能单独证明网页桥接可用。
 首发严格输出一个 JSON Object，至少包含：
 
 - `cvSummary`
-- `latestExperience.bullets`
-- `skillsFinal`
+- `latestExperience.addedBullets`
 
 约束：
 
-- `skillsFinal` 最多 5 个清晰类别。
+- `latestExperience.addedBullets` 只包含 0 至 3 条有证据支持的新增要点。
+- 不得输出 `skillsFinal` 或其他技能字段；技能始终由 Master Resume Profile 维护。
 - 不得输出 Markdown Code Fence、解释文字或第二个 JSON Object。
 - 保持 Joblit Resume Schema 兼容。
 - 无证据内容必须拒绝生成或明确标为缺口，不能进入最终文案。
@@ -170,7 +170,7 @@ Popup 显示 `Ready` 不能单独证明网页桥接可用。
 - 正文恰好 3 个短段落。
 - 第一人称候选人语气。
 - 只使用候选人快照中可证明的经历和技能。
-- Subject、Salutation 等元数据必须符合现有 Application 合同。
+- `cover` 只包含 `paragraphOne`、`paragraphTwo` 和 `paragraphThree` 三个正文字段。
 - 不得输出额外解释、Markdown Code Fence 或多个候选版本。
 
 ### 7.5 岗位匹配合同
@@ -646,16 +646,16 @@ UI 文案可本地化，但 Error Code 和恢复语义必须稳定。
 - 已具备 Hermes Profile/Package/Bootstrap/Verifier 的实现基线。
 - 已具备 Extension Popup 本地 Hermes 设置与 Service Worker Loopback 调用基线。
 - 已具备网页 Local AI Dialog、Prompt 获取与 DRAFT 导入的实现基线。
+- Resume/Cover 已收口为版本化 current-only 输出合同；`local_ai` 必须携带完整权威 `promptMeta`，Prompt Hash 已绑定目标、Prompt 原文、有效规则、Locale、Candidate Snapshot 与 Job Snapshot。
+- CV 与 Cover 已通过分目标增量合并进入同一个 `aiContent`；导入任一目标会保留另一个目标的内容、编辑与已知 Provenance。
 
 ### 当前 P0 阻塞
 
 - Popup 显示 Ready，但网页仍可能显示 `Joblit extension not detected`。
 - 当前 `GET_STATUS` 同时执行完整 Hermes Probe，耗时可显著超过网页 1.5 秒超时；页面又把所有异常统一映射为 `extension_missing`。这不是“插件未安装”的可靠证据。
 - Extension 安装或更新后，已经打开的 Joblit Tab 当前需要刷新；生产 Origin 当前只允许 `https://www.joblit.tech`。UI 必须明确提示这些前置条件。
-- `source: local_ai` 的 `promptMeta` 当前仍可缺省，且 Prompt Hash 尚未覆盖完整 Job/Candidate Snapshot，无法完整执行 `STALE_INPUT` 防护。
-- CV 与 Cover 分目标导入当前存在覆盖整块 `aiContent` 的风险；先生成一个目标，再生成另一个目标时，前一个编辑内容可能被清空。
 - Hermes 结果在 Import 成功前可能提前清除活动 `requestId`；导入失败或刷新后无法安全重试同一结果，Import API 也缺少服务端幂等键。
-- 必须完成 Presence/分层错误、分目标 Merge、强制 Prompt Meta、Snapshot Hash、Import Recovery 与幂等修复，才能把 CV/CL 本地闭环标记为可公开上线。
+- 必须完成 Presence/分层错误、Import Recovery 与服务端幂等修复，才能把 CV/CL 本地闭环标记为可公开上线。
 
 > 当前状态应以代码、真实 Chrome 和 CI 的最新验证结果为准；本文不把“已有代码”自动等同于“已通过上线验收”。
 

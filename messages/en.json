@@ -319,7 +319,6 @@
       "autoFixJson": "Auto-fix JSON",
       "summaryLabel": "Summary",
       "charsCount": "{count} chars",
-      "subjectLabel": "Subject",
       "paragraphsLabel": "Paragraphs",
       "paragraphIntent": "Intent",
       "paragraphEvidence": "Evidence",

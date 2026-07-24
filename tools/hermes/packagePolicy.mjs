@@ -6,7 +6,7 @@ export const MANIFEST_FILE = "joblit-package-manifest.json";
 export const SIGNATURE_FILE = "joblit-package-manifest.sig.json";
 export const PACKAGE_NAME = "joblit-hermes-profile";
 export const MANIFEST_SCHEMA_VERSION = 1;
-export const SUPPORTED_PROFILE_VERSION = "0.1.0";
+export const SUPPORTED_PROFILE_VERSION = "0.2.0";
 export const SUPPORTED_HERMES_REQUIREMENT = ">=0.18.2";
 export const MAX_FILE_COUNT = 32;
 export const MAX_FILE_SIZE = 256 * 1024;

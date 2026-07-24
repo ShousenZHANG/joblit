@@ -25,6 +25,8 @@ const dependencies = vi.hoisted(() => ({
   renderCoverLetterTex: vi.fn(),
   tailorApplicationContent: vi.fn(),
   assertAtsPdf: vi.fn(),
+  acceptApplicationGeneration: vi.fn(),
+  evolveApplicationAiContent: vi.fn(),
 }));
 const blob = vi.hoisted(() => ({
   del: vi.fn(),
@@ -52,6 +54,12 @@ vi.mock("@/lib/server/latex/renderCoverLetter", () => ({
 }));
 vi.mock("@/lib/server/ai/tailorApplication", () => ({
   tailorApplicationContent: dependencies.tailorApplicationContent,
+}));
+vi.mock("@/lib/server/applications/applicationGeneration", () => ({
+  acceptApplicationGeneration: dependencies.acceptApplicationGeneration,
+}));
+vi.mock("@/lib/server/applications/applicationAiContentAggregate", () => ({
+  evolveApplicationAiContent: dependencies.evolveApplicationAiContent,
 }));
 /**
  * `assertAtsPdf` *throws* on failure — it does not resolve a report with
@@ -85,6 +93,57 @@ const job = {
   description: "Build reliable systems",
   market: "AU",
 };
+
+const generatedAt = "2026-07-24T00:00:00.000Z";
+const resumeAiContent = {
+  schemaVersion: 1,
+  generatedAt,
+  promptMetaHash: "resume-hash",
+  provenance: {
+    resume: {
+      generatedAt,
+      promptMetaHash: "resume-hash",
+      source: "server_batch",
+    },
+  },
+  cv: {
+    summary: {
+      aiText: "Engineer",
+      originalText: "Engineer",
+      accepted: true,
+    },
+    latestExperience: {
+      experienceIndex: 0,
+      addedBullets: [],
+    },
+  },
+  cover: {
+    paragraphOne: { aiText: "", accepted: false },
+    paragraphTwo: { aiText: "", accepted: false },
+    paragraphThree: { aiText: "", accepted: false },
+  },
+} as const;
+const combinedAiContent = {
+  ...resumeAiContent,
+  promptMetaHash: "cover-hash",
+  provenance: {
+    ...resumeAiContent.provenance,
+    cover: {
+      generatedAt,
+      promptMetaHash: "cover-hash",
+      source: "server_batch",
+    },
+  },
+  cover: {
+    paragraphOne: { aiText: "Canonical one", accepted: true },
+    paragraphTwo: {
+      aiText: "Canonical two",
+      userEdit: "Canonical edited two",
+      accepted: true,
+    },
+    paragraphThree: { aiText: "Canonical three", accepted: true },
+  },
+} as const;
 
 describe("generateApplicationArtifactsForJob", () => {
   beforeEach(() => {
@@ -146,8 +205,14 @@ describe("generateApplicationArtifactsForJob", () => {
           addedBullets: [],
         },
       },
+      aiContent: resumeAiContent,
       tailored: {
         cvSummary: "Engineer",
+        addedBullets: [],
+        promptMetaHash: {
+          resume: "resume-hash",
+          cover: "cover-hash",
+        },
         cover: {
           paragraphOne: "One",
           paragraphTwo: "Two",
@@ -175,6 +240,18 @@ describe("generateApplicationArtifactsForJob", () => {
       warnings: [],
     });
     dependencies.renderCoverLetterTex.mockReturnValue("cover tex");
+    dependencies.acceptApplicationGeneration.mockReturnValue({
+      ok: true,
+      target: "cover",
+      inputFormat: "current",
+      aiContent: combinedAiContent,
+      coverQualityGate: "pass",
+      coverQualityIssueCount: 0,
+    });
+    dependencies.evolveApplicationAiContent.mockReturnValue({
+      kind: "evolved",
+      aiContent: combinedAiContent,
+    });
     dependencies.compileLatexToPdf.mockResolvedValue(Buffer.from("cover"));
     blob.put
       .mockResolvedValueOnce({ url: "https://blob/new-resume.pdf" })
@@ -189,6 +266,36 @@ describe("generateApplicationArtifactsForJob", () => {
     });
 
     expect(result.applicationId).toBe("application-1");
+    expect(dependencies.acceptApplicationGeneration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: "cover",
+        source: "server_batch",
+        promptMetaHash: "cover-hash",
+        rawOutput: JSON.stringify({
+          cover: {
+            paragraphOne: "One",
+            paragraphTwo: "Two",
+            paragraphThree: "Three",
+          },
+        }),
+      }),
+    );
+    expect(dependencies.evolveApplicationAiContent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        current: resumeAiContent,
+        command: expect.objectContaining({
+          kind: "replace_target_proposal",
+          target: "cover",
+        }),
+      }),
+    );
+    expect(dependencies.renderCoverLetterTex).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paragraphOne: "Canonical one",
+        paragraphTwo: "Canonical edited two",
+        paragraphThree: "Canonical three",
+      }),
+    );
     expect(stores.operations).toEqual([
       "application.lock",
       "job.findFirst",

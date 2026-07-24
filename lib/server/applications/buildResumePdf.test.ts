@@ -37,7 +37,7 @@ const master = {
       company: "Acme",
       location: "Sydney",
       dates: "2022-2024",
-      bullets: ["Master bullet"],
+      bullets: ["Built TypeScript platform services."],
       links: [],
     },
   ],
@@ -51,6 +51,8 @@ describe("buildResumePdfForJob", () => {
     dependencies.mapResumeProfile.mockReturnValue(master);
     dependencies.tailorApplicationContent.mockResolvedValue({
       cvSummary: "Tailored **summary** & delivery.",
+      addedBullets: ["Automated TypeScript platform delivery."],
+      promptMetaHash: { resume: "resume-hash", cover: "cover-hash" },
       cover: {
         paragraphOne: "One",
         paragraphTwo: "Two",
@@ -77,7 +79,7 @@ describe("buildResumePdfForJob", () => {
       },
     });
 
-    expect(result.cv).toEqual({
+    expect(result.cv).toMatchObject({
       summary: {
         aiText: "Tailored **summary** & delivery.",
         originalText: "Master summary",
@@ -85,12 +87,27 @@ describe("buildResumePdfForJob", () => {
       },
       latestExperience: {
         experienceIndex: 0,
-        addedBullets: [],
+        addedBullets: [
+          {
+            text: "Automated TypeScript platform delivery.",
+            accepted: true,
+            qualityGate: { passed: true },
+          },
+        ],
       },
     });
     expect(dependencies.renderResumeTex).toHaveBeenCalledWith({
       ...master,
       summary: "Tailored \\textbf{summary} \\& delivery.",
+      experiences: [
+        {
+          ...master.experiences[0],
+          bullets: [
+            "Built TypeScript platform services.",
+            "Automated TypeScript platform delivery.",
+          ],
+        },
+      ],
     });
   });
 });

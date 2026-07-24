@@ -10,8 +10,8 @@ Vocabulary is `CONTEXT.md`. Route-layer facts live in
 
 | Directory | Owns | Entry points |
 |---|---|---|
-| `ai/` | Prompt construction, provider calls, the Gemini Tailoring path, evidence/review ledger, cover quality, fit scoring, Skill Pack | `tailorApplication.ts:282` `tailorApplicationContent`, `buildPrompt.ts:29`, `providers.ts:211` `callProvider`, `evidenceLedger.ts:331` `attachEvidenceAndReview`, `promptContract.ts:212`, `skillPack.ts:209` |
-| `applications/` | Application lifecycle: target-aware AI Content evolution, canonical resume composition, manual-import parse, Quality Gate, finalize render, artifact commit, ATS validation, advisory lock, review ledger, `ApplicationEvent` append | `applicationAiContentAggregate.ts` `evolveApplicationAiContent`, `applicationResumeComposition.ts` `composeApplicationResumeRenderInput`, `commitApplicationArtifact.ts` `commitApplicationArtifact`, `generateApplicationArtifacts.ts`, `manualImportArtifact.ts`, `manualImportParser.ts`, `finalizeApplication.ts`, `persistReviewLedger.ts`, `applicationMutationLock.ts`, `atsPdfValidator.ts` |
+| `ai/` | Prompt construction, provider calls, the Gemini Tailoring path, evidence/review ledger, cover quality, fit scoring, Skill Pack V3 | `tailorApplication.ts` `tailorApplicationContent`, `buildPrompt.ts`, `providers.ts` `callProvider`, `evidenceLedger.ts` `attachEvidenceAndReview`, `promptContract.ts`, `skillPack.ts` `buildSkillPackV3Files` |
+| `applications/` | Application lifecycle: generation acceptance, target-aware AI Content evolution, canonical resume composition, finalize render, artifact commit, ATS validation, advisory lock, review ledger, `ApplicationEvent` append | `applicationGeneration.ts` `acceptApplicationGeneration`, `applicationAiContentAggregate.ts` `evolveApplicationAiContent`, `applicationResumeComposition.ts` `composeApplicationResumeRenderInput`, `commitApplicationArtifact.ts` `commitApplicationArtifact`, `generateApplicationArtifacts.ts`, `manualImportArtifact.ts`, `finalizeApplication.ts`, `persistReviewLedger.ts`, `applicationMutationLock.ts`, `atsPdfValidator.ts` |
 | `applicationBatches/` | Codex Batch state machine: claim, complete, cancel, retry | `runner.ts:169` `claimNextBatchTask`, `:282` `completeBatchTask`, `:334`, `:385`; `codexRunContext.ts:81`/`:189`/`:245`; `batchProgress.ts:9` |
 | `jobs/` | Job import/list/search/delete/status, fit leasing, cooldown, SimHash dedup, posting risk, liveness, market scoping | `jobImportService.ts:95`, `jobListService.ts:142`, `jobSearchService.ts:11`, `jobDeleteService.ts:69`/`:135`, `fitRunService.ts:262`, `jobMutationLock.ts:23`, `postingRisk.ts:121` |
 | `latex/` | Template rendering from `latexTemp/` + the remote render-service client | `compilePdf.ts:68` `compileLatexToPdf`, `renderResume.ts:203`, `renderResumeCN.ts:190`, `renderCoverLetter.ts:69`, `mapResumeProfile.ts:30` |
@@ -37,10 +37,11 @@ client.
 
 ## The Tailoring call chain
 
-### Path A — Gemini, server-side
+### Path A — durable server auto-execute
 
-Entry: `POST /api/applications/generate`, or `generateApplicationArtifactsForJob`
-(`generateApplicationArtifacts.ts:80`) from the Codex Batch execute route.
+Entry: `generateApplicationArtifactsForJob` from the Application Batch execute
+route when `ENABLE_BATCH_EXECUTE_AUTOGEN=1`. The retired session generate
+routes are not part of this call chain.
 
 1. `getResumeProfile(userId, {locale})` — `resumeProfile.ts:170`
 2. `buildResumePdfForJob` — `buildResumePdf.ts:42`
@@ -49,30 +50,43 @@ Entry: `POST /api/applications/generate`, or `generateApplicationArtifactsForJob
 5. Skill rules: `getActivePromptSkillRulesForUser` — `promptRuleTemplates.ts:117`
 6. No `GEMINI_API_KEY` → deterministic fallback (`tailorApplication.ts:100`), unless `requireIndependentReview` → throws `INDEPENDENT_REVIEW_UNAVAILABLE`
 7. `buildCoverEvidenceContext` — `coverContext.ts:27`
-8. `buildTailorPrompts` — `buildPrompt.ts:29`; every untrusted field passes `sanitizePromptText` (`ai/sanitize.ts:39`)
-9. `callProviderWithFallback` → `callGemini` — `providers.ts:143`. 12 s abort, retry on 429/502/503/504
-10. `parseTailorModelOutput` — `ai/schema.ts:271`
-11. Optional cover gate → rewrite pass → independent reviewer pass — `tailorApplication.ts:371`, `:387`, `:449`
-12. `renderResumeTex` — `renderResume.ts:203`
-13. `compileLatexToPdf` — `compilePdf.ts:68`
+8. `buildTailorPrompts` builds independent Resume and Cover prompts from the canonical builders; every untrusted field passes `sanitizePromptText`
+9. Two target-specific `callProviderWithFallback` calls run concurrently, then strict `parseResumeProviderOutput` / `parseCoverProviderOutput` decode the current contracts
+10. Optional Cover gate, rewrite pass, and combined independent-review pass
+11. `acceptApplicationGeneration(source = "server_batch")` owns strict contract acceptance, Quality Gates, provenance, evidence, and canonical `AiContent`
+12. `composeApplicationResumeRenderInput` composes the accepted Resume delta onto the Master Resume Profile
+13. `renderResumeTex` / `renderCoverLetterTex`, then `compileLatexToPdf`
 
 ### Path B — manual import / Local AI
 
 Entry: `POST /api/applications/manual-generate`.
 
 1. Prompt built separately by `buildApplicationPromptForUser` — `applicationPrompt.ts:191`. Seek JDs enriched at `:245`
-2. External LLM runs it; JSON is POSTed back, validated by `ManualGenerateSchema` — `manualImportParser.ts:11`
-3. Skill Pack freshness: `validatePromptMetaForImport` — `promptContract.ts:227` → `PROMPT_META_MISMATCH` 409
-4. `buildManualImportArtifact({evidenceScopeKey: userId, …})` — `manualImportArtifact.ts:90`
-5. Parse — `manualImportParser.ts:123`/`:222`/`:273`
-6. **Quality Gate** — `canonicalizeLatestBullets` (`:483`), then per bullet `isGroundedAddedBullet` (`:419`) and `isNonRedundantAddedBullet` (`:450`). Verdict written to `AiAddedBullet.qualityGate`; failing bullets are dropped from the rendered TeX
-7. `buildManualImportArtifact` records provenance only for the generated target and performs the initial evidence/review pass.
-8. `commitApplicationArtifact({ mergeTarget, reviewContext })` takes the Application lock, folds that target into the stored aggregate, preserves the other target and its known provenance, then re-reviews the complete aggregate.
-9. `?finalize=false` commits `DRAFT` with no artifact. FINAL mode compiles and validates the requested PDF before commit; a blocked combined review returns `review_blocked` and the new Blob is cleaned up.
+2. External LLM runs it; the route validates the request envelope with `ManualGenerateSchema`
+3. The route rebuilds the exact Full or Lean prompt and validates its generation receipt with `validatePromptMetaForImport`; stale receipts return `PROMPT_META_MISMATCH` 409
+4. `acceptApplicationGeneration` selects the decode policy from source: Local AI is strict-current; manual import also accepts the bounded v1 compatibility dialect
+5. The same accept seam owns normalization, Resume bullet grounding/non-redundancy gates, Cover quality, provenance, evidence, and canonical `AiContent`
+6. `buildManualImportArtifact` is a pure rendering adapter over the accepted canonical result
+7. `commitApplicationArtifact({ mergeTarget, reviewContext })` takes the Application lock, folds that target into the stored aggregate, preserves the other target and its known provenance, then re-reviews the complete aggregate
+8. `?finalize=false` commits `DRAFT` with no artifact. FINAL mode compiles and validates the requested PDF before commit; a blocked combined review returns `review_blocked` and the new Blob is cleaned up
+
+The current external output contract is intentionally small: Resume returns
+`cvSummary` and zero to three `latestExperience.addedBullets`; Cover returns
+only its three body paragraphs. Existing bullets and skills remain owned by the
+Master Resume Profile.
+
+`GET /api/prompt-rules/skill-pack` converts the user's active effective
+`PromptRuleTemplate` into the Skill Pack V3 structured representation. The
+download header hashes the final sorted logical files. This download content
+version is distinct from the generation receipt version retained in
+`PromptMeta.skillPackVersion`; `x-generation-receipt-version` proves that the
+download used the same locale-specific profile and effective rules before the
+UI marks it fresh. See ADR-0002.
 
 ### Convergence
 
 - `evolveApplicationAiContent` — the single interface for target replacement, client Edit commands, review refresh, and discard
+- `acceptApplicationGeneration` — the single interface for generated output parsing, compatibility policy, Quality Gates, target provenance, evidence, and initial canonical `AiContent`
 - `attachEvidenceAndReview` — rebuilds the aggregate-wide evidence and review projection
 - `composeApplicationResumeRenderInput` — the single pure composition seam for
   direct FINAL, server batch, Preview, and Editor Finalize. It combines the

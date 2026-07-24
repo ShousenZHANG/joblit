@@ -76,7 +76,12 @@ The **Edit** phase is new in v1.x. Before that, generate→finalize was atomic. 
 
 ### Quality Gate
 
-The set of post-generation filters that grade AI-added bullets. Defined in `lib/server/applications/manualImportParser.ts` (`isGroundedAddedBullet`, `isNonRedundantAddedBullet`) and applied by `manualImportArtifact.ts`. Bullets that fail a gate are **shown but disabled** in the Edit panel; the user may override by editing the bullet text.
+The set of post-generation filters that grade AI-added bullets.
+`acceptApplicationGeneration` is the single generation-acceptance seam and
+applies the grounding/non-redundancy checks from `manualImportParser.ts` for
+manual, Local AI, and server-batch output. Bullets that fail a gate are **shown
+but disabled** in the Edit panel; the user may override by editing the bullet
+text.
 
 Gates today:
 - **Grounded** — the bullet must reference at least one term from the JD or master profile.
@@ -84,7 +89,11 @@ Gates today:
 
 ### Codex Batch
 
-External orchestration protocol that loops over `NEW` jobs and tailors each one without human review. See `AGENTS.md`. Codex always sets `?finalize=true` on generation routes — it skips the **Edit** phase entirely.
+External orchestration protocol that loops over `NEW` jobs and tailors each
+one. See `AGENTS.md`. For every concrete job and target, Codex obtains the exact
+prompt and `promptMeta` generation receipt before importing through
+`manual-generate`; batch context itself carries contract identity, not a
+job-less receipt.
 
 ### Fetch Pipeline
 
@@ -92,7 +101,26 @@ The job-intake side: `FetchRun` task → GitHub Actions → Python JobSpy → ad
 
 ### Skill Pack
 
-The versioned set of prompt rules + canonical skills vocabulary used by the AI. Identified by `skillPackVersion`. The Edit panel displays the skill pack version that produced an `aiContent`; if the active version has moved on, a banner offers re-generation.
+The downloadable V3 distribution of the user's active effective prompt rules,
+current output schemas, prompt templates, examples, local validator, and
+optional Master Resume Profile snapshot. It does not distribute AI-authored
+skills: skills remain Master Resume Profile-owned.
+
+Two deterministic identities exist for different artifacts:
+
+- The historical `PromptMeta.skillPackVersion` field is the **generation
+  receipt version**. It covers the effective rules, current prompt/schema
+  contract, and Master Resume Profile snapshot used to construct a generation
+  request.
+- `GET /api/prompt-rules/skill-pack` returns
+  `x-skill-pack-version`, the **download content version** over the final sorted
+  logical file names and contents in that ZIP.
+- The same response returns `x-generation-receipt-version`; the UI checks it
+  against the current Prompt receipt before marking the locale-specific pack
+  as fresh.
+
+These identities answer different questions and are not required to be equal.
+Neither identity depends on ZIP timestamps or a wall-clock build date.
 
 ---
 

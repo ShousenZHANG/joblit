@@ -7,6 +7,8 @@ const buildTailorPrompts = vi.hoisted(() =>
     return {
       systemPrompt: "system",
       userPrompt: "user",
+      resume: { systemPrompt: "system", userPrompt: "resume-user" },
+      cover: { systemPrompt: "system", userPrompt: "cover-user" },
     };
   }),
 );
@@ -26,6 +28,7 @@ vi.mock("@/lib/server/promptRuleTemplates", () => ({
 }));
 
 import { tailorApplicationContent } from "@/lib/server/ai/tailorApplication";
+import { buildPromptContentHash } from "@/lib/server/ai/promptContract";
 import * as providers from "@/lib/server/ai/providers";
 
 const INPUT = {
@@ -34,6 +37,18 @@ const INPUT = {
   company: "Example Co",
   description: "Build customer-facing features with TypeScript and React.",
 };
+
+const RESUME_OUTPUT = JSON.stringify({
+  cvSummary: "AI Summary",
+  latestExperience: { addedBullets: [] },
+});
+const COVER_OUTPUT = JSON.stringify({
+  cover: {
+    paragraphOne: "One",
+    paragraphTwo: "Two",
+    paragraphThree: "Three",
+  },
+});
 
 describe("tailorApplicationContent", () => {
   const originalKey = process.env.GEMINI_API_KEY;
@@ -57,7 +72,7 @@ describe("tailorApplicationContent", () => {
 
   it("keeps base summary when AI response is invalid", async () => {
     process.env.GEMINI_API_KEY = "test-key";
-    vi.spyOn(providers, "callProvider").mockResolvedValueOnce("not-json");
+    vi.spyOn(providers, "callProvider").mockResolvedValue("not-json");
 
     const result = await tailorApplicationContent(INPUT);
     expect(result.cvSummary).toBe(INPUT.baseSummary);
@@ -66,16 +81,9 @@ describe("tailorApplicationContent", () => {
 
   it("uses default skill rules when prompting the model", async () => {
     process.env.GEMINI_API_KEY = "test-key";
-    vi.spyOn(providers, "callProvider").mockResolvedValueOnce(
-      JSON.stringify({
-        cvSummary: "AI Summary",
-        cover: {
-          paragraphOne: "One",
-          paragraphTwo: "Two",
-          paragraphThree: "Three",
-        },
-      }),
-    );
+    vi.spyOn(providers, "callProvider")
+      .mockResolvedValueOnce(RESUME_OUTPUT)
+      .mockResolvedValueOnce(COVER_OUTPUT);
 
     await tailorApplicationContent({ ...INPUT, userId: "user-1" });
 
@@ -90,16 +98,9 @@ describe("tailorApplicationContent", () => {
 
   it("builds cover evidence from resume snapshot and passes it to prompt builder", async () => {
     process.env.GEMINI_API_KEY = "test-key";
-    vi.spyOn(providers, "callProvider").mockResolvedValueOnce(
-      JSON.stringify({
-        cvSummary: "AI Summary",
-        cover: {
-          paragraphOne: "One",
-          paragraphTwo: "Two",
-          paragraphThree: "Three",
-        },
-      }),
-    );
+    vi.spyOn(providers, "callProvider")
+      .mockResolvedValueOnce(RESUME_OUTPUT)
+      .mockResolvedValueOnce(COVER_OUTPUT);
 
     await tailorApplicationContent({
       ...INPUT,
@@ -143,17 +144,17 @@ describe("tailorApplicationContent", () => {
 
     const callProviderSpy = vi
       .spyOn(providers, "callProvider")
-      .mockRejectedValueOnce(new Error("OPENAI_400"))
-      .mockResolvedValueOnce(
-        JSON.stringify({
-          cvSummary: "AI Summary",
-          cover: {
-            paragraphOne: "One",
-            paragraphTwo: "Two",
-            paragraphThree: "Three",
-          },
-        }),
-      );
+      .mockImplementation(async (_provider, request) => {
+        if (
+          request.model === "gemini-2.5-pro" &&
+          request.userPrompt === "resume-user"
+        ) {
+          throw new Error("OPENAI_400");
+        }
+        return request.userPrompt === "resume-user"
+          ? RESUME_OUTPUT
+          : COVER_OUTPUT;
+      });
 
     const result = await tailorApplicationContent({ ...INPUT, userId: "user-1" });
 
@@ -163,10 +164,12 @@ describe("tailorApplicationContent", () => {
       "gemini",
       expect.objectContaining({ model: "gemini-2.5-pro" }),
     );
-    expect(callProviderSpy).toHaveBeenNthCalledWith(
-      2,
+    expect(callProviderSpy).toHaveBeenCalledWith(
       "gemini",
-      expect.objectContaining({ model: "gemini-2.5-flash-lite" }),
+      expect.objectContaining({
+        model: "gemini-2.5-flash-lite",
+        userPrompt: "resume-user",
+      }),
     );
   });
 
@@ -175,9 +178,9 @@ describe("tailorApplicationContent", () => {
 
     const callProviderSpy = vi
       .spyOn(providers, "callProvider")
+      .mockResolvedValueOnce(RESUME_OUTPUT)
       .mockResolvedValueOnce(
         JSON.stringify({
-          cvSummary: "AI Summary",
           cover: {
             paragraphOne:
               "I am writing to express interest in this role and believe my background is a strong fit.",
@@ -190,10 +193,9 @@ describe("tailorApplicationContent", () => {
       )
       .mockResolvedValueOnce(
         JSON.stringify({
-          cvSummary: "AI Summary",
           cover: {
             paragraphOne:
-              "I am applying for the **Software Engineer** role at Example Co and bring delivery-focused experience in **TypeScript** and **React** for customer-facing products.",
+              "I am applying for the **Software Engineer** role at Example Co as a full-stack engineer with grounded product delivery experience in **TypeScript** and **React** for customer-facing features.",
             paragraphTwo:
               "Against your top responsibilities, I have shipped **TypeScript** features end-to-end, improved frontend performance in **React**, and coordinated reliable production releases with measurable quality improvements.",
             paragraphThree:
@@ -209,23 +211,38 @@ describe("tailorApplicationContent", () => {
       targetWordRange: { min: 60, max: 360 },
     });
 
-    expect(callProviderSpy).toHaveBeenCalledTimes(2);
+    expect(callProviderSpy).toHaveBeenCalledTimes(3);
     expect(result.cover.paragraphTwo).toContain("TypeScript");
-    expect(["ai_ok", "quality_gate_failed"]).toContain(result.reason);
+    expect(result.reason).toBe("ai_ok");
+    expect(result.promptMetaHash.cover).toMatch(/^[a-f0-9]{64}$/);
+    expect(result.promptMetaHash.cover).not.toBe(
+      buildPromptContentHash({
+        target: "cover",
+        ruleSetId: "rules-active-1",
+        resumeSnapshotUpdatedAt: "unknown",
+        locale: "en-AU",
+        variant: "full",
+        prompt: {
+          instructions: "system",
+          input: "cover-user",
+        },
+      }),
+    );
   });
 
   it("uses fallback cover text when strict cover quality still fails", async () => {
     process.env.GEMINI_API_KEY = "test-key";
-    vi.spyOn(providers, "callProvider").mockResolvedValueOnce(
-      JSON.stringify({
-        cvSummary: "AI Summary",
-        cover: {
+    vi.spyOn(providers, "callProvider")
+      .mockResolvedValueOnce(RESUME_OUTPUT)
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          cover: {
           paragraphOne: "Generic opening.",
           paragraphTwo: "Generic body.",
           paragraphThree: "Generic closing.",
-        },
-      }),
-    );
+          },
+        }),
+      );
 
     const result = await tailorApplicationContent(INPUT, {
       strictCoverQuality: true,
@@ -247,6 +264,13 @@ describe("tailorApplicationContent", () => {
       .mockResolvedValueOnce(
         JSON.stringify({
           cvSummary: "Initial summary",
+          latestExperience: {
+            addedBullets: ["Built TypeScript product features."],
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify({
           cover: {
             paragraphOne: "Initial one",
             paragraphTwo: "Initial two",
@@ -257,6 +281,9 @@ describe("tailorApplicationContent", () => {
       .mockResolvedValueOnce(
         JSON.stringify({
           cvSummary: "Reviewed TypeScript summary",
+          latestExperience: {
+            addedBullets: ["Built TypeScript product features."],
+          },
           cover: {
             paragraphOne: "Reviewed one",
             paragraphTwo: "Reviewed TypeScript evidence",
@@ -270,9 +297,36 @@ describe("tailorApplicationContent", () => {
       requireIndependentReview: true,
     });
 
-    expect(callProviderSpy).toHaveBeenCalledTimes(2);
+    expect(callProviderSpy).toHaveBeenCalledTimes(3);
     expect(result.cvSummary).toBe("Reviewed TypeScript summary");
+    expect(result.addedBullets).toEqual(["Built TypeScript product features."]);
     expect(result.reviewer).toMatchObject({ ran: true, revised: true });
+    expect(result.promptMetaHash.resume).not.toBe(
+      buildPromptContentHash({
+        target: "resume",
+        ruleSetId: "rules-active-1",
+        resumeSnapshotUpdatedAt: "unknown",
+        locale: "global",
+        variant: "full",
+        prompt: {
+          instructions: "system",
+          input: "resume-user",
+        },
+      }),
+    );
+    expect(result.promptMetaHash.cover).not.toBe(
+      buildPromptContentHash({
+        target: "cover",
+        ruleSetId: "rules-active-1",
+        resumeSnapshotUpdatedAt: "unknown",
+        locale: "global",
+        variant: "full",
+        prompt: {
+          instructions: "system",
+          input: "cover-user",
+        },
+      }),
+    );
   });
 
   it("fails closed when a required independent review is invalid", async () => {
@@ -281,6 +335,11 @@ describe("tailorApplicationContent", () => {
       .mockResolvedValueOnce(
         JSON.stringify({
           cvSummary: "Initial summary",
+          latestExperience: { addedBullets: [] },
+        }),
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify({
           cover: {
             paragraphOne: "Initial one",
             paragraphTwo: "Initial two",

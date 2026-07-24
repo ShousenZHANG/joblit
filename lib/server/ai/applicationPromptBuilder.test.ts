@@ -148,6 +148,49 @@ describe("self-contained application prompt builder", () => {
     expect(systemPrompt).toContain("<coverage-analysis>");
     expect(systemPrompt.toLowerCase()).toContain("untrusted data");
   });
+
+  it("uses the additions-only resume contract without retired skills or reorder instructions", () => {
+    const input = {
+      target: "resume" as const,
+      rules,
+      candidate,
+      job,
+      resume: {
+        baseLatestBullets: candidate.experiences[0].bullets,
+        coverage: {
+          topResponsibilities: ["Build distributed APIs"],
+          missingFromBase: ["Build distributed APIs"],
+          fallbackResponsibilities: [],
+          requiredNewBulletsMin: 1,
+          requiredNewBulletsMax: 2,
+        },
+      },
+    };
+
+    for (const prompt of [
+      buildV2ResumeUserPrompt(input),
+      buildLeanResumeUserPrompt(input),
+    ]) {
+      expect(prompt).toContain('"addedBullets"');
+      expect(prompt).not.toMatch(
+        /skillsFinal|skillsAdditions|latestExperience\.bullets|complete final bullet|reorder/i,
+      );
+    }
+  });
+
+  it("requests only the three persisted cover paragraphs", () => {
+    for (const prompt of [
+      buildV2CoverUserPrompt({ target: "cover", rules, candidate, job }),
+      buildLeanCoverUserPrompt({ target: "cover", rules, candidate, job }),
+    ]) {
+      expect(prompt).toContain('"paragraphOne"');
+      expect(prompt).toContain('"paragraphTwo"');
+      expect(prompt).toContain('"paragraphThree"');
+      expect(prompt).not.toMatch(
+        /"(?:candidateTitle|subject|salutation|signatureName|closing)"\s*:|cover\.(?:candidateTitle|subject|salutation|signatureName|closing)/,
+      );
+    }
+  });
 });
 
 describe("lean application prompt builder (local Hermes)", () => {

@@ -1,6 +1,7 @@
 Set-StrictMode -Version Latest
 
 $script:MinimumHermesVersion = '0.18.2'
+$script:ManagedProfileVersion = '0.2.0'
 $script:ManagedEnvironmentKeys = @(
     'API_SERVER_ENABLED',
     'API_SERVER_HOST',
@@ -315,12 +316,16 @@ function Test-JoblitManagedProfile {
         $profileName = [IO.Path]::GetFileName([IO.Path]::GetFullPath($ProfileRoot).TrimEnd([IO.Path]::DirectorySeparatorChar))
         $content = [IO.File]::ReadAllText($distributionPath)
         $namePattern = '(?m)^name:\s*[''"]?' + [regex]::Escape($profileName) + '[''"]?\s*$'
+        $versionPattern =
+            '(?m)^version:\s*[''"]?' +
+            [regex]::Escape($script:ManagedProfileVersion) +
+            '[''"]?\s*$'
         return (
             $profileName -match '^joblit-[a-f0-9]{16,64}$' -and
             $manifest.schemaVersion -eq 1 -and
             $manifest.package -eq 'joblit-hermes-profile' -and
             $content -match $namePattern -and
-            $content -match '(?m)^version:\s*["'']?0\.1\.0["'']?\s*$' -and
+            $content -match $versionPattern -and
             $content -match '(?m)^source:\s*.+$' -and
             $content -match '(?m)^installed_at:\s*.+$'
         )

@@ -14,10 +14,15 @@ import { z } from "zod";
  */
 export const AI_CONTENT_SCHEMA_VERSION = 1;
 
-const aiImportSourceSchema = z.enum(["manual_import", "local_ai"]);
+const aiImportSourceSchema = z.enum([
+  "manual_import",
+  "local_ai",
+  "codex_batch",
+]);
 const aiGenerationSourceSchema = z.enum([
   "manual_import",
   "local_ai",
+  "codex_batch",
   "server_batch",
 ]);
 
@@ -148,10 +153,10 @@ export const aiContentSchema = z
     schemaVersion: z.literal(AI_CONTENT_SCHEMA_VERSION),
     generatedAt: z.string().datetime(),
     /**
-     * Hash of the prompt rule template + skill pack version that
-     * produced this content. Empty string while the prompt-version
-     * tracking is unwired (Phase 4 will populate). Tightening to
-     * `.min(1)` is intentionally deferred — see ADR-0001.
+     * Hash of the authoritative generation receipt for the latest import.
+     * Empty string is reserved for compatibility-only manual imports that
+     * arrived without a complete receipt. Current Local AI, Codex Batch, and
+     * internal generation paths always populate target-aware provenance.
      */
     promptMetaHash: z.string(),
     source: aiImportSourceSchema.optional(),

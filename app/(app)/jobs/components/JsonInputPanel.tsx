@@ -49,8 +49,6 @@ function getCoverPreview(parsed: CoverImportOutput) {
     hasP2: Boolean(c.paragraphTwo),
     hasP3: Boolean(c.paragraphThree),
     p1Preview: (c.paragraphOne || "").slice(0, 80) + ((c.paragraphOne?.length ?? 0) > 80 ? "..." : ""),
-    subject: c.subject || "",
-    salutation: c.salutation || "",
   };
 }
 
@@ -81,7 +79,7 @@ export function JsonInputPanel({
           aria-label={t("pasteLabel")}
           placeholder={
             target === "resume"
-              ? '{\n  "cvSummary": "...",\n  "latestExperience": {\n    "bullets": ["..."]\n  },\n  "skillsFinal": [...]\n}'
+              ? '{\n  "cvSummary": "...",\n  "latestExperience": {\n    "addedBullets": []\n  }\n}'
               : '{\n  "cover": {\n    "paragraphOne": "...",\n    "paragraphTwo": "...",\n    "paragraphThree": "..."\n  }\n}'
           }
           className="min-h-[180px] resize-none font-mono text-xs leading-relaxed md:min-h-0"
@@ -210,12 +208,6 @@ function CoverPreviewContent({ parsed }: { parsed: CoverImportOutput }) {
   const preview = getCoverPreview(parsed);
   return (
     <div className="space-y-2.5 text-xs">
-      {preview.subject && (
-        <div>
-          <div className="font-medium text-foreground/85">{t("subjectLabel")}</div>
-          <p className="mt-0.5 text-muted-foreground">{preview.subject}</p>
-        </div>
-      )}
       <div>
         <div className="font-medium text-foreground/85">{t("paragraphsLabel")}</div>
         <div className="mt-1 space-y-1">

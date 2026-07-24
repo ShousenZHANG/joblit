@@ -163,11 +163,10 @@ describe("evolveApplicationAiContent", () => {
     );
   });
 
-  it("does not invent a source for a replacement proposal without provenance", () => {
+  it("does not reinterpret legacy root metadata as target provenance", () => {
     const existing = makeContent("existing");
     const incoming = makeContent("incoming");
     delete incoming.provenance;
-    delete incoming.source;
 
     const result = evolveApplicationAiContent({
       current: existing,

@@ -165,7 +165,7 @@ describe("application prompt service", () => {
         ruleSetId: "rules-1",
         resumeSnapshotUpdatedAt: "2026-07-15T00:00:00.000Z",
       });
-      expect(payload.promptVersion).toBe("v3-local-ai");
+      expect(payload.promptVersion).toBe("v4-application-proposal");
     },
   );
 
@@ -191,6 +191,26 @@ describe("application prompt service", () => {
       where: { id: JOB_ID, userId: USER_ID },
       data: { description: "Full Seek description with distributed systems ownership." },
     });
+  });
+
+  it("binds prompt metadata to the full or lean prompt bytes", async () => {
+    arrangeSuccess();
+    const full = await buildApplicationPromptForUser({
+      userId: USER_ID,
+      jobId: JOB_ID,
+      target: "resume",
+      variant: "full",
+    });
+    const lean = await buildApplicationPromptForUser({
+      userId: USER_ID,
+      jobId: JOB_ID,
+      target: "resume",
+      variant: "lean",
+    });
+
+    expect(full.promptMeta.promptHash).not.toBe(lean.promptMeta.promptHash);
+    expect(full.expectedJsonSchema).toEqual(lean.expectedJsonSchema);
+    expect(full.prompt.input).not.toBe(lean.prompt.input);
   });
 
   it("rejects invalid service input before database access", async () => {

@@ -1,72 +1,168 @@
 import { describe, expect, it } from "vitest";
 
-import { buildSkillPackV2Files } from "@/lib/server/ai/skillPack";
-import { getStructuredSkillRules } from "@/lib/server/ai/promptSkills";
+import {
+  buildSkillPackContentVersion,
+  buildSkillPackV3Files,
+} from "@/lib/server/ai/skillPack";
+import {
+  buildStructuredSkillRulesFromEffective,
+  getStructuredSkillRules,
+} from "@/lib/server/ai/promptSkills";
 
 const rules = getStructuredSkillRules("en-AU");
 
 function get(files: { name: string; content: string }[], name: string) {
-  const file = files.find((f) => f.name === name);
+  const file = files.find((candidate) => candidate.name === name);
   if (!file) throw new Error(`missing skill pack file: ${name}`);
   return file;
 }
 
-describe("skill pack V2 (single source of truth)", () => {
+describe("skill pack V3 (single source of truth)", () => {
   it("ships a root SKILL.md naming the joblit-tailoring skill and validator", () => {
-    const skill = get(buildSkillPackV2Files(rules), "SKILL.md");
+    const skill = get(buildSkillPackV3Files(rules), "SKILL.md");
     expect(skill.content).toContain("name: joblit-tailoring");
     expect(skill.content).toContain("scripts/validate.mjs");
   });
 
   it("renders instructions/system.md from the canonical in-app builder", () => {
-    const sys = get(buildSkillPackV2Files(rules), "joblit-skills-v2/instructions/system.md");
-    // Markers unique to buildV2SystemPrompt — proves the pack reuses it.
-    expect(sys.content).toContain("<role>");
-    expect(sys.content).toContain("<hard-constraints>");
-    expect(sys.content).toContain("<locale-profile>");
+    const system = get(
+      buildSkillPackV3Files(rules),
+      "joblit-skills-v3/instructions/system.md",
+    );
+    expect(system.content).toContain("<role>");
+    expect(system.content).toContain("<hard-constraints>");
+    expect(system.content).toContain("<locale-profile>");
   });
 
   it("renders prompt templates with job placeholders and XML task tags", () => {
-    const files = buildSkillPackV2Files(rules);
-    const resume = get(files, "joblit-skills-v2/prompts/resume-job-prompt.template.md");
-    const cover = get(files, "joblit-skills-v2/prompts/cover-job-prompt.template.md");
+    const files = buildSkillPackV3Files(rules);
+    const resume = get(
+      files,
+      "joblit-skills-v3/prompts/resume-job-prompt.template.md",
+    );
+    const cover = get(
+      files,
+      "joblit-skills-v3/prompts/cover-job-prompt.template.md",
+    );
     expect(resume.content).toContain("{{JOB_TITLE}}");
     expect(resume.content).toContain("<task>");
     expect(resume.content).toContain("<self-check>");
     expect(cover.content).toContain("{{JOB_DESCRIPTION}}");
     expect(cover.content).toContain("<cover-structure>");
+    expect(resume.content).not.toMatch(
+      /\{\{(?:BASE_LATEST|TOP_RESPONSIBILITY|MISSING_RESPONSIBILITY|FALLBACK_RESPONSIBILITY)/,
+    );
   });
 
-  it("ships the deterministic validator script + readme", () => {
-    const files = buildSkillPackV2Files(rules);
-    const script = get(files, "joblit-skills-v2/scripts/validate.mjs");
-    const readme = get(files, "joblit-skills-v2/scripts/README.md");
+  it("embeds the packaged candidate snapshot into both prompt templates", () => {
+    const files = buildSkillPackV3Files(rules, {
+      resumeSnapshot: {
+        summary: "Backend engineer with grounded platform experience",
+        experiences: [
+          {
+            title: "Engineer",
+            company: "Acme",
+            bullets: ["Built TypeScript APIs for enterprise workflows"],
+          },
+        ],
+      },
+      resumeSnapshotUpdatedAt: "2026-07-24T00:00:00.000Z",
+    });
+    const resume = get(
+      files,
+      "joblit-skills-v3/prompts/resume-job-prompt.template.md",
+    );
+    const cover = get(
+      files,
+      "joblit-skills-v3/prompts/cover-job-prompt.template.md",
+    );
+
+    expect(resume.content).toContain(
+      "Backend engineer with grounded platform experience",
+    );
+    expect(resume.content).toContain(
+      "Built TypeScript APIs for enterprise workflows",
+    );
+    expect(cover.content).toContain(
+      "Backend engineer with grounded platform experience",
+    );
+    expect(resume.content).not.toContain("<candidate-evidence>\n{}");
+    expect(cover.content).not.toContain("<candidate-evidence>\n{}");
+  });
+
+  it("ships the deterministic validator script and readme", () => {
+    const files = buildSkillPackV3Files(rules);
+    const script = get(files, "joblit-skills-v3/scripts/validate.mjs");
+    const readme = get(files, "joblit-skills-v3/scripts/README.md");
     expect(script.content).toContain("node:fs");
     expect(script.content).toContain("--target=");
     expect(readme.content).toContain("validate.mjs");
   });
 
-  it("ships the canonical 9-gate quality gates document", () => {
-    const qg = get(buildSkillPackV2Files(rules), "joblit-skills-v2/instructions/quality-gates.md");
-    expect(qg.content).toContain("BULLET_PRESERVATION");
-    expect(qg.content).toContain("WORD_COUNT_RANGE");
+  it("ships the canonical quality gates document", () => {
+    const qualityGates = get(
+      buildSkillPackV3Files(rules),
+      "joblit-skills-v3/instructions/quality-gates.md",
+    );
+    expect(qualityGates.content).toContain("ADDITIONS_ONLY");
+    expect(qualityGates.content).toContain("WORD_COUNT_RANGE");
   });
 
-  it("exports formal JSON schemas for resume and cover contracts", () => {
-    const files = buildSkillPackV2Files(rules);
+  it("exports the current delta-only resume and three-paragraph cover schemas", () => {
+    const files = buildSkillPackV3Files(rules);
     const resumeSchema = JSON.parse(
-      get(files, "joblit-skills-v2/schema/resume-output.schema.json").content,
+      get(files, "joblit-skills-v3/schema/resume-output.schema.json").content,
     );
     const coverSchema = JSON.parse(
-      get(files, "joblit-skills-v2/schema/cover-output.schema.json").content,
+      get(files, "joblit-skills-v3/schema/cover-output.schema.json").content,
     );
-    expect(resumeSchema.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
-    expect(resumeSchema.type).toBe("object");
-    expect(coverSchema.type).toBe("object");
+
+    expect(resumeSchema.$schema).toBe(
+      "https://json-schema.org/draft/2020-12/schema",
+    );
+    expect(resumeSchema.required).toEqual(["cvSummary", "latestExperience"]);
+    expect(resumeSchema.properties).not.toHaveProperty("skillsFinal");
+    expect(resumeSchema.properties.latestExperience.required).toEqual([
+      "addedBullets",
+    ]);
+    expect(
+      resumeSchema.properties.latestExperience.properties.addedBullets,
+    ).toMatchObject({
+      minItems: 0,
+      maxItems: 3,
+    });
+    expect(Object.keys(coverSchema.properties.cover.properties).sort()).toEqual([
+      "paragraphOne",
+      "paragraphThree",
+      "paragraphTwo",
+    ]);
+  });
+
+  it("ships examples that exactly match the current contracts", () => {
+    const files = buildSkillPackV3Files(rules);
+    const resume = JSON.parse(
+      get(files, "joblit-skills-v3/examples/resume-output.full.json").content,
+    );
+    const cover = JSON.parse(
+      get(files, "joblit-skills-v3/examples/cover-output.full.json").content,
+    );
+
+    expect(Object.keys(resume).sort()).toEqual([
+      "cvSummary",
+      "latestExperience",
+    ]);
+    expect(Object.keys(resume.latestExperience)).toEqual(["addedBullets"]);
+    expect(resume.latestExperience.addedBullets.length).toBeLessThanOrEqual(3);
+    expect(Object.keys(cover)).toEqual(["cover"]);
+    expect(Object.keys(cover.cover).sort()).toEqual([
+      "paragraphOne",
+      "paragraphThree",
+      "paragraphTwo",
+    ]);
   });
 
   it("supports redacted skill pack context export", () => {
-    const files = buildSkillPackV2Files(
+    const files = buildSkillPackV3Files(
       rules,
       {
         resumeSnapshot: {
@@ -77,25 +173,104 @@ describe("skill pack V2 (single source of truth)", () => {
       },
       { redactContext: true },
     );
-    const parsed = JSON.parse(get(files, "joblit-skills-v2/context/resume-snapshot.json").content);
+    const parsed = JSON.parse(
+      get(files, "joblit-skills-v3/context/resume-snapshot.json").content,
+    );
     expect(parsed.summary).toBe("[REDACTED]");
-    expect(Array.isArray(parsed.experiences)).toBe(true);
-    expect(parsed.experiences).toHaveLength(0);
+    expect(parsed.experiences).toBeUndefined();
   });
 
-  it("produces a deterministic manifest (build stamp, not wall-clock)", () => {
-    const a = JSON.parse(get(buildSkillPackV2Files(rules), "joblit-skills-v2/meta/manifest.json").content);
-    const b = JSON.parse(get(buildSkillPackV2Files(rules), "joblit-skills-v2/meta/manifest.json").content);
-    expect(a).toEqual(b); // identical across builds
-    expect(a.packName).toBe("joblit-skills-v2");
-    expect(typeof a.buildStamp).toBe("string");
-    expect("generatedAt" in a).toBe(false);
-    expect(a.files).toContain("joblit-skills-v2/meta/manifest.json");
+  it("produces a deterministic V3 manifest", () => {
+    const first = JSON.parse(
+      get(
+        buildSkillPackV3Files(rules),
+        "joblit-skills-v3/meta/manifest.json",
+      ).content,
+    );
+    const second = JSON.parse(
+      get(
+        buildSkillPackV3Files(rules),
+        "joblit-skills-v3/meta/manifest.json",
+      ).content,
+    );
+
+    expect(first).toEqual(second);
+    expect(first.packName).toBe("joblit-skills-v3");
+    expect(first.packVersion).toBe("3.0.0");
+    expect(typeof first.buildStamp).toBe("string");
+    expect("generatedAt" in first).toBe(false);
+    expect(first.files).toContain("joblit-skills-v3/meta/manifest.json");
   });
 
-  it("no longer ships the removed thinner skill definitions", () => {
-    const files = buildSkillPackV2Files(rules);
-    expect(files.find((f) => f.name === "joblit-skills-v2/instructions/resume-skill.md")).toBeUndefined();
-    expect(files.find((f) => f.name === "joblit-skills-v2/instructions/cover-skill.md")).toBeUndefined();
+  it("does not ship V2 paths or the removed thinner skill definitions", () => {
+    const files = buildSkillPackV3Files(rules);
+    expect(
+      files.find(
+        (file) =>
+          file.name === "joblit-skills-v3/instructions/resume-skill.md",
+      ),
+    ).toBeUndefined();
+    expect(
+      files.find(
+        (file) =>
+          file.name === "joblit-skills-v3/instructions/cover-skill.md",
+      ),
+    ).toBeUndefined();
+    expect(files.some((file) => file.name.startsWith("joblit-skills-v2/"))).toBe(
+      false,
+    );
+  });
+
+  it("converts the user's effective active rules without falling back to defaults", () => {
+    const effective = buildStructuredSkillRulesFromEffective(
+      {
+        id: "active-template",
+        locale: "en-AU",
+        cvRules: ["active resume rule"],
+        coverRules: ["active cover rule"],
+        hardConstraints: ["active hard constraint"],
+      },
+      "zh-CN",
+    );
+    const files = buildSkillPackV3Files(effective, undefined, {
+      locale: "zh-CN",
+    });
+    const resumeRules = JSON.parse(
+      get(files, "joblit-skills-v3/rules/resume-rules.json").content,
+    );
+    const coverRules = JSON.parse(
+      get(files, "joblit-skills-v3/rules/cover-rules.json").content,
+    );
+    const hardConstraints = JSON.parse(
+      get(files, "joblit-skills-v3/rules/hard-constraints.json").content,
+    );
+
+    expect(
+      resumeRules.rules.map((rule: { text: string }) => rule.text),
+    ).toEqual(["active resume rule"]);
+    expect(
+      coverRules.rules.map((rule: { text: string }) => rule.text),
+    ).toEqual(["active cover rule"]);
+    expect(
+      hardConstraints.rules.map((rule: { text: string }) => rule.text),
+    ).toEqual(["active hard constraint"]);
+    expect(resumeRules.version).toBe("3.0.0");
+  });
+
+  it("hashes final sorted file names and contents independent of input order", () => {
+    const files = buildSkillPackV3Files(rules);
+    const version = buildSkillPackContentVersion(files);
+
+    expect(version).toHaveLength(64);
+    expect(buildSkillPackContentVersion([...files].reverse())).toBe(version);
+    expect(
+      buildSkillPackContentVersion(
+        files.map((file, index) =>
+          index === 0
+            ? { ...file, content: `${file.content}\nchanged` }
+            : file,
+        ),
+      ),
+    ).not.toBe(version);
   });
 });

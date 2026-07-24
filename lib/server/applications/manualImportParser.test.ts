@@ -10,6 +10,11 @@ import {
 
 const resume = {
   cvSummary: "Evidence-grounded engineer",
+  latestExperience: { addedBullets: ["Built new production APIs."] },
+};
+
+const legacyResume = {
+  cvSummary: "Evidence-grounded engineer",
   latestExperience: { bullets: ["Built production APIs."] },
   skillsFinal: [{ label: "Backend", items: ["TypeScript"] }],
 };
@@ -26,13 +31,16 @@ describe("manual import parser modes", () => {
   it("keeps legacy resume aliases, fences, and trailing-comma repair", () => {
     const result = parseResumeManualOutput(
       `\`\`\`json\n${JSON.stringify({
-        cv_summary: resume.cvSummary,
-        latest_experience: resume.latestExperience,
+        cv_summary: legacyResume.cvSummary,
+        latest_experience: legacyResume.latestExperience,
         skills_final: [{ category: "Backend", items: ["TypeScript"] }],
       }).replace(/}$/, ",}")}\n\`\`\``,
     );
 
-    expect(result.data?.cvSummary).toBe(resume.cvSummary);
+    expect(result.data).toEqual({
+      cvSummary: legacyResume.cvSummary,
+      latestExperience: legacyResume.latestExperience,
+    });
   });
 
   it("keeps legacy flat cover aliases", () => {
@@ -42,12 +50,31 @@ describe("manual import parser modes", () => {
     expect(result.data?.cover.paragraphTwo).toBe("Two");
   });
 
+  it("reads legacy cover headers without exposing them as canonical content", () => {
+    const result = parseCoverManualOutput(
+      JSON.stringify({
+        cover: {
+          subject: "Legacy subject",
+          salutation: "Legacy greeting",
+          paragraphOne: "One",
+          paragraphTwo: "Two",
+          paragraphThree: "Three",
+          closing: "Legacy closing",
+          signatureName: "Legacy signature",
+        },
+      }),
+    );
+
+    expect(result.data).toEqual(cover);
+  });
+
   it.each([
     ["fenced JSON", `\`\`\`json\n${JSON.stringify(resume)}\n\`\`\``],
     ["snake_case alias", JSON.stringify({ ...resume, cvSummary: undefined, cv_summary: "Alias" })],
     ["trailing comma", `${JSON.stringify(resume).slice(0, -1)},}`],
     ["unknown key", JSON.stringify({ ...resume, prompt: "not allowed" })],
-    ["skill category alias", JSON.stringify({ ...resume, skillsFinal: [{ category: "Backend", items: ["TypeScript"] }] })],
+    ["legacy full bullets", JSON.stringify(legacyResume)],
+    ["retired skillsFinal key", JSON.stringify({ ...resume, skillsFinal: legacyResume.skillsFinal })],
     ["retired skillsAdditions key", JSON.stringify({ ...resume, skillsAdditions: [{ category: "Backend", items: ["TypeScript"] }] })],
   ])("strict resume rejects %s", (_label, raw) => {
     expect(parseResumeStrictOutput(raw).data).toBeNull();
@@ -73,6 +100,9 @@ describe("manual import parser modes", () => {
       modelOutput: JSON.stringify(resume),
     } as const;
     expect(ManualGenerateSchema.parse(base).source).toBe("manual_import");
+    expect(
+      ManualGenerateSchema.parse({ ...base, source: "codex_batch" }).source,
+    ).toBe("codex_batch");
     expect(ManualGenerateSchema.safeParse({ ...base, userId: "attacker" }).success).toBe(false);
   });
 

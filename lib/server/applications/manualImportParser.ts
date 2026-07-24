@@ -4,6 +4,10 @@
  */
 
 import { z } from "zod";
+import {
+  CoverGenerationOutputSchema,
+  ResumeGenerationOutputSchema,
+} from "@/lib/server/ai/promptContract";
 
 // ── Zod Schemas ──
 
@@ -13,7 +17,9 @@ export const ManualGenerateSchema = z
     target: z.enum(["resume", "cover"]),
     modelOutput: z.string().min(1).max(80_000),
     promptMeta: z.record(z.string(), z.unknown()).optional(),
-    source: z.enum(["manual_import", "local_ai"]).default("manual_import"),
+    source: z
+      .enum(["manual_import", "local_ai", "codex_batch"])
+      .default("manual_import"),
   })
   .strict();
 
@@ -43,7 +49,9 @@ const ResumeSkillGroupSchema = z
     message: "skillsFinal item must include label or category",
   });
 
-const ResumeManualOutputSchema = z
+const ResumeCurrentOutputSchema = ResumeGenerationOutputSchema;
+
+const ResumeLegacyOutputSchema = z
   .object({
     cvSummary: z.string().trim().min(1).max(2000),
     latestExperience: z
@@ -53,31 +61,20 @@ const ResumeManualOutputSchema = z
       .strict(),
     skillsFinal: z.array(ResumeSkillGroupSchema).min(1).max(20).optional(),
   })
-  .strict();
+  .strict()
+  .transform(({ cvSummary, latestExperience }) => ({
+    cvSummary,
+    latestExperience,
+  }));
 
-const ResumeStrictOutputSchema = z
-  .object({
-    cvSummary: z.string().trim().min(1).max(2000),
-    latestExperience: z
-      .object({
-        bullets: z.array(z.string().trim().min(1).max(320)).min(1).max(15),
-      })
-      .strict(),
-    skillsFinal: z
-      .array(
-        z
-          .object({
-            label: z.string().trim().min(1).max(100),
-            items: z.array(z.string().trim().min(1).max(120)).min(1).max(20),
-          })
-          .strict(),
-      )
-      .min(1)
-      .max(5),
-  })
-  .strict();
+const ResumeManualOutputSchema = z.union([
+  ResumeCurrentOutputSchema,
+  ResumeLegacyOutputSchema,
+]);
 
-const CoverContentSchema = z
+const ResumeStrictOutputSchema = ResumeCurrentOutputSchema;
+
+const CoverLegacyContentSchema = z
   .object({
     candidateTitle: z.string().trim().max(160).optional(),
     subject: z.string().trim().max(220).optional(),
@@ -89,9 +86,15 @@ const CoverContentSchema = z
     closing: z.string().trim().max(300).optional(),
     signatureName: z.string().trim().max(120).optional(),
   })
-  .strict();
+  .strict()
+  .transform(({ paragraphOne, paragraphTwo, paragraphThree }) => ({
+    paragraphOne,
+    paragraphTwo,
+    paragraphThree,
+  }));
 
-const CoverManualOutputSchema = z.object({ cover: CoverContentSchema }).strict();
+const CoverManualOutputSchema = z.object({ cover: CoverLegacyContentSchema }).strict();
+const CoverStrictOutputSchema = CoverGenerationOutputSchema;
 
 type ResumeManualOutput = z.infer<typeof ResumeManualOutputSchema>;
 type CoverManualOutput = z.infer<typeof CoverManualOutputSchema>;
@@ -124,7 +127,7 @@ export function parseResumeStrictOutput(raw: string): ParsedOutput<ResumeManualO
 }
 
 export function parseCoverStrictOutput(raw: string): ParsedOutput<CoverManualOutput> {
-  return parseStrictJson(raw, CoverManualOutputSchema);
+  return parseStrictJson(raw, CoverStrictOutputSchema);
 }
 
 // ── JSON Parsing ──
@@ -232,6 +235,28 @@ export function parseResumeManualOutput(raw: string): {
     (record.latestExperience as unknown) ??
     (record.latest_experience as unknown) ??
     (record.latestExperienceBlock as unknown);
+  const latestExperienceRecord =
+    latestExperienceCandidate &&
+    typeof latestExperienceCandidate === "object" &&
+    !Array.isArray(latestExperienceCandidate)
+      ? (latestExperienceCandidate as Record<string, unknown>)
+      : null;
+  const currentAddedBullets = Array.isArray(latestExperienceRecord?.addedBullets)
+    ? latestExperienceRecord.addedBullets
+    : Array.isArray(latestExperienceRecord?.added_bullets)
+      ? latestExperienceRecord.added_bullets
+      : Array.isArray(record.addedBullets)
+        ? record.addedBullets
+        : Array.isArray(record.added_bullets)
+          ? record.added_bullets
+          : null;
+  const legacyBullets = Array.isArray(latestExperienceRecord?.bullets)
+    ? latestExperienceRecord.bullets
+    : Array.isArray(record.latestExperienceBullets)
+      ? record.latestExperienceBullets
+      : Array.isArray(record.latest_experience_bullets)
+        ? record.latest_experience_bullets
+        : null;
 
   const payload: Record<string, unknown> = {
     cvSummary:
@@ -239,24 +264,25 @@ export function parseResumeManualOutput(raw: string): {
         ? record.cvSummary
         : typeof record.cv_summary === "string"
           ? record.cv_summary
-        : typeof record.summary === "string"
-          ? record.summary
-          : "",
-    latestExperience:
-      latestExperienceCandidate && typeof latestExperienceCandidate === "object"
-        ? latestExperienceCandidate
-        : Array.isArray(record.latestExperienceBullets)
-          ? { bullets: record.latestExperienceBullets }
-          : Array.isArray(record.latest_experience_bullets)
-            ? { bullets: record.latest_experience_bullets }
-          : undefined,
-    skillsFinal: Array.isArray(record.skillsFinal)
-      ? record.skillsFinal
-      : Array.isArray(record.skills_final)
-        ? record.skills_final
-      : Array.isArray(record.skills)
-        ? record.skills
+          : typeof record.summary === "string"
+            ? record.summary
+            : "",
+    latestExperience: currentAddedBullets
+      ? { addedBullets: currentAddedBullets }
+      : legacyBullets
+        ? { bullets: legacyBullets }
         : undefined,
+    ...(currentAddedBullets
+      ? {}
+      : {
+          skillsFinal: Array.isArray(record.skillsFinal)
+            ? record.skillsFinal
+            : Array.isArray(record.skills_final)
+              ? record.skills_final
+              : Array.isArray(record.skills)
+                ? record.skills
+                : undefined,
+        }),
   };
 
   const parsed = ResumeManualOutputSchema.safeParse(payload);
@@ -379,9 +405,12 @@ function bulletSimilarityScore(a: string, b: string) {
   return union === 0 ? 0 : intersection / union;
 }
 
-export function isGroundedAddedBullet(addedBullet: string, baseBullets: string[]) {
+export function isGroundedAddedBullet(
+  addedBullet: string,
+  candidateEvidence: string[],
+) {
   if (!addedBullet.trim()) return false;
-  if (baseBullets.length === 0) return false;
+  if (candidateEvidence.length === 0) return false;
 
   let bestScore = 0;
   let bestSharedTokens = 0;
@@ -393,10 +422,13 @@ export function isGroundedAddedBullet(addedBullet: string, baseBullets: string[]
   );
   if (addedTokens.size === 0) return false;
 
-  for (const baseBullet of baseBullets) {
-    bestScore = Math.max(bestScore, bulletSimilarityScore(addedBullet, baseBullet));
+  for (const evidenceItem of candidateEvidence) {
+    bestScore = Math.max(
+      bestScore,
+      bulletSimilarityScore(addedBullet, evidenceItem),
+    );
     const baseTokens = new Set(
-      Array.from(tokenizeBulletForSimilarity(baseBullet)).filter(
+      Array.from(tokenizeBulletForSimilarity(evidenceItem)).filter(
         (token) => !BULLET_KEYWORD_STOPWORDS.has(token),
       ),
     );

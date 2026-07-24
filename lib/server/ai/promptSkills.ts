@@ -14,7 +14,7 @@ export type PromptSkillRuleSet = {
   hardConstraints: string[];
 };
 
-/* ── V2 structured rule types ── */
+/* ── Structured rule types ── */
 
 export type RuleCategory =
   | "grounding"
@@ -42,15 +42,12 @@ export type StructuredRuleSet = {
   hardConstraints: SkillRule[];
 };
 
-const DEFAULT_HARD_CONSTRAINTS: string[] = [
-  "Return JSON only (no code fences, no markdown prose outside JSON). Markdown bold markers inside JSON string values are allowed when explicitly requested.",
-  "Do not output LaTeX in model response.",
-  "Never invent skills, tools, metrics, employers, or responsibilities not in provided context.",
-  "If JD responsibilities or required skills are unclear, keep edits conservative and only add content when grounded in provided context.",
-];
+const DEFAULT_HARD_CONSTRAINTS = STRUCTURED_HARD_CONSTRAINTS.map(
+  (rule) => rule.text,
+);
 
 export const DEFAULT_RULES: PromptSkillRuleSet = {
-  id: "joblit-default-v1",
+  id: "joblit-default-v3",
   locale: "en-AU",
   cvRules: DEFAULT_CV_RULES,
   coverRules: DEFAULT_COVER_RULES,
@@ -75,9 +72,9 @@ export function getPromptSkillRules(
   };
 }
 
-/* ── V2 structured rules ── */
+/* ── V3 structured rules ── */
 
-const SKILL_PACK_VERSION = "2.0.0";
+export const SKILL_PACK_VERSION = "3.0.0";
 
 /**
  * Build a StructuredRuleSet for the given locale.
@@ -90,7 +87,7 @@ export function getStructuredSkillRules(
     !rule.locale || rule.locale === "all" || rule.locale === locale;
 
   return {
-    id: `joblit-v2-${locale}`,
+    id: `joblit-v3-${locale}`,
     version: SKILL_PACK_VERSION,
     locale,
     rules: [
@@ -98,6 +95,51 @@ export function getStructuredSkillRules(
       ...STRUCTURED_COVER_RULES.filter(filterByLocale),
     ],
     hardConstraints: STRUCTURED_HARD_CONSTRAINTS.filter(filterByLocale),
+  };
+}
+
+/**
+ * Lift an already-normalized active rule template into the structured
+ * representation consumed by Skill Pack generation.
+ *
+ * Active templates store ordered strings rather than category metadata. Keep
+ * that order and content exact: generated metadata is deliberately generic so
+ * packaging never replaces user rules with defaults or infers semantics that
+ * are not present in the template.
+ */
+export function buildStructuredSkillRulesFromEffective(
+  effective: PromptSkillRuleSet,
+  locale: "en-AU" | "zh-CN" = effective.locale,
+): StructuredRuleSet {
+  const toTargetRules = (
+    texts: string[],
+    target: "resume" | "cover",
+  ): SkillRule[] =>
+    texts.map((text, index) => ({
+      id: `effective.${target}.${String(index + 1).padStart(2, "0")}`,
+      category: "content",
+      priority: "high",
+      text,
+      appliesTo: [target],
+      locale: "all",
+    }));
+
+  return {
+    id: effective.id,
+    version: SKILL_PACK_VERSION,
+    locale,
+    rules: [
+      ...toTargetRules(effective.cvRules, "resume"),
+      ...toTargetRules(effective.coverRules, "cover"),
+    ],
+    hardConstraints: effective.hardConstraints.map((text, index) => ({
+      id: `effective.hard.${String(index + 1).padStart(2, "0")}`,
+      category: "structure",
+      priority: "critical",
+      text,
+      appliesTo: ["resume", "cover"],
+      locale: "all",
+    })),
   };
 }
 
