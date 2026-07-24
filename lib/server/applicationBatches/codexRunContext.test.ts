@@ -64,7 +64,7 @@ describe("codex run context", () => {
     expect(buildResumeSnapshotHash(profile)).toHaveLength(64);
   });
 
-  it("builds prompt context for both import targets", async () => {
+  it("publishes contract identity without fabricating a job-less prompt receipt", async () => {
     promptRules.getActivePromptSkillRulesForUser.mockResolvedValueOnce({
       id: "rules-1",
       locale: "en-AU",
@@ -80,10 +80,13 @@ describe("codex run context", () => {
       },
     });
 
-    expect(context.promptMeta.ruleSetId).toBe("rules-1");
-    expect(context.promptMetaByTarget.resume.promptHash).not.toBe(
-      context.promptMetaByTarget.cover.promptHash,
-    );
+    expect(context).not.toHaveProperty("promptMeta");
+    expect(context).not.toHaveProperty("promptMetaByTarget");
+    expect(context.generationContract).toEqual({
+      promptTemplateVersion: "2026.07.v2",
+      schemaVersion: "2026-07-24",
+      promptReceiptEndpoint: "/api/applications/prompt",
+    });
     expect(context.rules).toEqual({
       locale: "en-AU",
       cvRules: ["cv-1"],

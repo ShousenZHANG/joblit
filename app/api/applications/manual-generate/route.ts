@@ -5,7 +5,7 @@ import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { commitApplicationArtifact } from "@/lib/server/applications/commitApplicationArtifact";
 import { toErrorResponse } from "@/lib/server/api/appError";
 import { enforceAiRateLimit } from "@/lib/server/api/aiRateLimit";
-import { buildPromptMeta, validatePromptMetaForImport } from "@/lib/server/ai/promptContract";
+import { validatePromptMetaForImport } from "@/lib/server/ai/promptContract";
 import { compileLatexToPdf } from "@/lib/server/latex/compilePdf";
 import { contentDispositionAttachment } from "@/lib/server/files/pdfFilename";
 import {
@@ -14,10 +14,13 @@ import {
 } from "@/lib/server/applications/atsPdfValidator";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
-import { getActivePromptSkillRulesForUser } from "@/lib/server/promptRuleTemplates";
 import { prisma } from "@/lib/server/prisma";
 import { getResumeProfile } from "@/lib/server/resumeProfile";
 import { buildManualImportArtifact } from "@/lib/server/applications/manualImportArtifact";
+import {
+  ApplicationPromptError,
+  buildApplicationPromptForUser,
+} from "@/lib/server/applications/applicationPrompt";
 import {
   ImportedPromptMetaSchema,
   ManualGenerateSchema,
@@ -42,6 +45,14 @@ function parseFinalizeFlag(req: Request): boolean {
   return v !== "false" && v !== "0";
 }
 
+function requiresAuthoritativeReceipt(source: string): boolean {
+  return source !== "manual_import";
+}
+
+function generationSourceLabel(source: string): string {
+  return source === "local_ai" ? "Local AI" : "Codex Batch";
+}
+
 export async function POST(req: Request) {
   const finalize = parseFinalizeFlag(req);
   return withSessionRoute(async ({ userId, requestId }) => {
@@ -51,17 +62,22 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => null);
     const parsed = ManualGenerateSchema.safeParse(body);
     if (!parsed.success) {
-      const localAiOutputTooLarge =
+      const strictOutputTooLarge =
         body &&
         typeof body === "object" &&
-        (body as { source?: unknown }).source === "local_ai" &&
+        requiresAuthoritativeReceipt(
+          String((body as { source?: unknown }).source ?? "manual_import"),
+        ) &&
         parsed.error.issues.some(
           (issue) => issue.path.join(".") === "modelOutput" && issue.code === "too_big",
         );
-      if (localAiOutputTooLarge) {
+      if (strictOutputTooLarge) {
+        const source = String(
+          (body as { source?: unknown }).source ?? "manual_import",
+        );
         return errorJson(
           "INVALID_AI_RESULT",
-          "Local AI output exceeds the 80,000 character limit.",
+          `${generationSourceLabel(source)} output exceeds the 80,000 character limit.`,
           400,
           { requestId },
         );
@@ -101,17 +117,52 @@ export async function POST(req: Request) {
     );
   }
 
-  const activeRules = await getActivePromptSkillRulesForUser(userId);
-  const expectedPromptMeta = buildPromptMeta({
-    target: data.target,
-    ruleSetId: activeRules.id,
-    resumeSnapshotUpdatedAt: profile.updatedAt.toISOString(),
-  });
+  if (requiresAuthoritativeReceipt(data.source) && !data.promptMeta) {
+    return errorJson(
+      "PROMPT_META_REQUIRED",
+      `${generationSourceLabel(data.source)} output must include the generation receipt. Run the current prompt again.`,
+      400,
+      { requestId },
+    );
+  }
 
+  let promptMetaHash = "";
   if (data.promptMeta) {
+    let expectedPromptMeta;
+    try {
+      const prepared = await buildApplicationPromptForUser({
+        userId,
+        jobId: data.jobId,
+        target: data.target,
+        variant: data.source === "local_ai" ? "lean" : "full",
+      });
+      expectedPromptMeta = prepared.promptMeta;
+    } catch (error) {
+      if (error instanceof ApplicationPromptError) {
+        return errorJson(error.code, error.message, error.status, {
+          details: error.details,
+          requestId,
+        });
+      }
+      throw error;
+    }
     const importedPromptMeta = ImportedPromptMetaSchema.safeParse(data.promptMeta);
     if (!importedPromptMeta.success) {
       return validationError(importedPromptMeta.error, requestId);
+    }
+    if (
+      requiresAuthoritativeReceipt(data.source) &&
+      (!importedPromptMeta.data.promptTemplateVersion ||
+        !importedPromptMeta.data.schemaVersion ||
+        !importedPromptMeta.data.skillPackVersion ||
+        !importedPromptMeta.data.promptHash)
+    ) {
+      return errorJson(
+        "PROMPT_META_REQUIRED",
+        `${generationSourceLabel(data.source)} output must include the complete generation receipt. Run the current prompt again.`,
+        400,
+        { requestId },
+      );
     }
     const promptMetaValidation = validatePromptMetaForImport({
       expected: expectedPromptMeta,
@@ -126,6 +177,12 @@ export async function POST(req: Request) {
         { details: promptMetaValidation, requestId },
       );
     }
+    // A partial legacy receipt can prove only the rule/profile epoch. It does
+    // not prove which target, variant, job snapshot, or prompt bytes produced
+    // the output, so never attribute it to the current exact prompt.
+    if (importedPromptMeta.data.promptHash) {
+      promptMetaHash = expectedPromptMeta.promptHash;
+    }
   }
 
   const renderInput = mapResumeProfile(profile);
@@ -136,9 +193,8 @@ export async function POST(req: Request) {
     evidenceScopeKey: userId,
     target: data.target,
     modelOutput: data.modelOutput,
-    mode: data.source === "local_ai" ? "strict" : "legacy",
     source: data.source,
-    promptMetaHash: expectedPromptMeta.promptHash,
+    promptMetaHash,
     renderInput,
     profile,
     job,

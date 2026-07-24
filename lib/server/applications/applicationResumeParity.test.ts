@@ -48,7 +48,7 @@ const masterRenderInput: ResumeRenderInput = {
       company: "Acme",
       location: "Sydney",
       dates: "2022-2024",
-      bullets: ["Built APIs.", "Maintained CI/CD."],
+      bullets: ["Built TypeScript APIs.", "Maintained CI/CD."],
       links: [],
     },
   ],
@@ -63,7 +63,7 @@ const profile = {
     {
       title: "Engineer",
       company: "Acme",
-      bullets: ["Built APIs.", "Maintained CI/CD."],
+      bullets: ["Built TypeScript APIs.", "Maintained CI/CD."],
     },
   ],
 };
@@ -83,11 +83,11 @@ describe("Application resume render parity", () => {
       modelOutput: JSON.stringify({
         cvSummary: "Tailored **summary**.",
         latestExperience: {
-          bullets: ["Maintained CI/CD.", "Built APIs."],
+          addedBullets: [
+            "Automated TypeScript APIs delivery for production services.",
+          ],
         },
-        skillsFinal: [{ label: "Injected", items: ["Unpersisted skill"] }],
       }),
-      mode: "legacy",
       source: "manual_import",
       promptMetaHash: "prompt-hash",
       renderInput: masterRenderInput,
@@ -95,7 +95,7 @@ describe("Application resume render parity", () => {
       job: {
         title: "Platform Engineer",
         company: "Example Co",
-        description: "Build APIs and maintain CI/CD.",
+        description: "Build TypeScript APIs and maintain CI/CD.",
       },
     });
 
@@ -123,8 +123,9 @@ describe("Application resume render parity", () => {
     );
     expect(directRenderInput?.skills).toEqual(masterRenderInput.skills);
     expect(directRenderInput?.experiences[0]?.bullets).toEqual([
-      "Built APIs.",
+      "Built TypeScript APIs.",
       "Maintained CI/CD.",
+      "Automated TypeScript APIs delivery for production services.",
     ]);
   });
 });

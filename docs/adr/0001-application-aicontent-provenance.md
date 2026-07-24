@@ -11,16 +11,25 @@
 > review for the combined aggregate. This is an additive, optional schema-v1
 > field so legacy rows remain readable; missing provenance means historically
 > unknown and must never be inferred from the latest root metadata.
+>
+> Generation output is a separate, versioned contract. The current contract is
+> prompt template `2026.07.v2` / output schema `2026-07-24`. `local_ai`,
+> `codex_batch`, and `server_batch` must use that contract and an authoritative
+> target receipt. `manual_import` alone retains a compatibility reader for
+> legacy user-supplied JSON; compatibility inputs do not expand the current
+> generation contract.
 
 ## Context
 
-When the user clicks **Generate CV** on a Job, an AI model produces three kinds of mutations on top of the Master Resume Profile:
+When the user clicks **Generate CV** on a Job, an AI model produces two kinds of
+proposals on top of the Master Resume Profile:
 
 1. A rewritten **Summary** paragraph.
 2. A set of new **bullets** appended to the latest experience.
-3. New **skill items** (and possibly new categories).
 
-The cover letter likewise consists of three AI-drafted paragraphs.
+Skills and skill categories are not AI generation outputs. They remain owned by
+the Master Resume Profile. The cover letter consists of three AI-drafted
+paragraphs.
 
 Until v1.x the pipeline merged AI proposals into the final document and immediately rendered a PDF — there was no representation of "what the AI proposed" once the merge happened.
 
@@ -42,7 +51,7 @@ Schema sketch:
 type GenerationProvenance = {
   generatedAt: string;
   promptMetaHash: string;
-  source: "manual_import" | "local_ai" | "server_batch";
+  source: "manual_import" | "local_ai" | "codex_batch" | "server_batch";
 };
 
 type AiContent = {
@@ -51,7 +60,7 @@ type AiContent = {
   // Legacy/latest-import metadata; not authoritative for a preserved target.
   generatedAt: string;
   promptMetaHash: string;
-  source?: "manual_import" | "local_ai";
+  source?: "manual_import" | "local_ai" | "codex_batch";
 
   provenance?: {
     resume?: GenerationProvenance;
@@ -87,6 +96,34 @@ type AiContent = {
   review?: ApplicationReview;
 };
 ```
+
+The current model-facing output contract is strict and target-specific:
+
+```ts
+// Prompt template 2026.07.v2 / output schema 2026-07-24
+type ResumeGenerationOutput = {
+  cvSummary: string;
+  latestExperience: {
+    addedBullets: string[]; // 0..3; additions only
+  };
+};
+
+type CoverGenerationOutput = {
+  cover: {
+    paragraphOne: string;
+    paragraphTwo: string;
+    paragraphThree: string;
+  };
+};
+```
+
+Unknown keys and legacy generated fields such as `skillsFinal` are rejected on
+all current-only paths. The authoritative `promptMetaHash` binds the target,
+prompt variant, exact prompt bytes, effective rules, locale, Resume snapshot,
+Job snapshot, prompt-template version, and output-schema version. A
+`codex_batch` import must echo the complete `promptMeta` issued for that exact
+job and target; batch run context exposes contract identity only and is not a
+generation receipt.
 
 Pair this with `aiContentHash`, a stable non-cryptographic hash of canonicalized
 JSON, for stale-write detection across concurrent tabs. It is a UX
@@ -141,7 +178,10 @@ A dedicated table for in-progress edits, gating the existing `Application` row t
 
 ### Neutral
 
-- `manualImportArtifact.ts` produces one target proposal and records provenance only for that target.
+- `applicationGeneration.ts` is the canonical issue/accept boundary for current
+  Resume and Cover outputs, validation, evidence, and target provenance.
+- `manualImportArtifact.ts` adapts manual/local/Codex imports to that boundary
+  and records provenance only for the imported target.
 - `applicationAiContentAggregate.ts` owns target preservation, browser-edit filtering, discard semantics, and merge-before-review ordering.
 - `commitApplicationArtifact.ts` folds a single target under the Application mutation lock and persists the rebuilt aggregate and review ledger together.
 - The existing **Quality Gate** stays in place — it now decorates `aiContent.addedBullets[i].qualityGate` instead of dropping bullets silently.
@@ -157,6 +197,10 @@ A dedicated table for in-progress edits, gating the existing `Application` row t
 ## References
 
 - `prisma/schema.prisma` — Application model
-- `lib/server/applications/manualImportArtifact.ts` — current bullet pipeline
+- `lib/shared/schemas/applicationGenerationOutput.ts` — current model-facing
+  Resume/Cover output schemas
+- `lib/server/applications/applicationGeneration.ts` — canonical acceptance
+  boundary
+- `lib/server/applications/manualImportArtifact.ts` — import adapter
 - ADR-0002 — Unified tailor → edit → finalize flow
 - CONTEXT.md — `Application`, `AI Content`, `Quality Gate`

@@ -94,7 +94,7 @@ test("verifies a stock-Hermes installed profile while allowing runtime-owned sta
     path.join(installed, "distribution.yaml"),
     [
       "name: joblit-0123456789abcdef",
-      "version: 0.1.0",
+      "version: 0.2.0",
       "description: Grounded CV and cover-letter generation for Joblit through stock Hermes",
       "hermes_requires: '>=0.18.2'",
       "author: Joblit contributors",

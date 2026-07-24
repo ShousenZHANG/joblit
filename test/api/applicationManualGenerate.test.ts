@@ -28,6 +28,19 @@ const transactionStore = vi.hoisted(() => ({
   executeRaw: vi.fn(),
 }));
 
+const applicationPrompt = vi.hoisted(() => ({
+  buildApplicationPromptForUser: vi.fn(async () => ({
+    promptMeta: {
+      ruleSetId: "rules-1",
+      resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+      promptTemplateVersion: "2026.07.v2",
+      schemaVersion: "2026-07-24",
+      skillPackVersion: "b".repeat(64),
+      promptHash: "c".repeat(64),
+    },
+  })),
+}));
+
 vi.mock("@/lib/server/prisma", () => ({
   prisma: {
     job: jobStore,
@@ -66,6 +79,21 @@ vi.mock("@/lib/server/api/aiRateLimit", () => ({
 
 vi.mock("@/lib/server/resumeProfile", () => ({
   getResumeProfile: vi.fn(),
+}));
+
+vi.mock("@/lib/server/applications/applicationPrompt", () => ({
+  ApplicationPromptError: class ApplicationPromptError extends Error {
+    constructor(
+      public code: string,
+      message: string,
+      public status: number,
+      public details?: unknown,
+    ) {
+      super(message);
+    }
+  },
+  buildApplicationPromptForUser:
+    applicationPrompt.buildApplicationPromptForUser,
 }));
 
 vi.mock("@/lib/server/latex/mapResumeProfile", () => ({
@@ -171,6 +199,7 @@ function makeExistingAiContent() {
 
 describe("applications manual generate api", () => {
   beforeEach(() => {
+    applicationPrompt.buildApplicationPromptForUser.mockClear();
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockReset();
     (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockReset();
     (mapResumeProfile as unknown as ReturnType<typeof vi.fn>).mockReset();
@@ -266,6 +295,10 @@ describe("applications manual generate api", () => {
           promptMeta: {
             ruleSetId: "rules-1",
             resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+            promptTemplateVersion: "2026.07.v2",
+            schemaVersion: "2026-07-24",
+            skillPackVersion: "b".repeat(64),
+            promptHash: "c".repeat(64),
           },
         }),
       }),
@@ -307,8 +340,48 @@ describe("applications manual generate api", () => {
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(json.aiContent.promptMetaHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(json.aiContent.promptMetaHash).toBe("");
     expect(json.aiContent.source).toBe("manual_import");
+    expect(json.aiContent.provenance).toBeUndefined();
+  });
+
+  it("does not attribute a partial legacy receipt to the current exact prompt", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    jobStore.findFirst.mockResolvedValueOnce({
+      id: VALID_JOB_ID,
+      title: "Software Engineer",
+      company: "Example Co",
+      location: "Sydney",
+      description: "Build product features",
+      market: "AU",
+    });
+    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "rp-1",
+      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
+    });
+    applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
+
+    const res = await POST(
+      new Request("http://localhost/api/applications/manual-generate?finalize=false", {
+        method: "POST",
+        body: JSON.stringify({
+          jobId: VALID_JOB_ID,
+          target: "resume",
+          modelOutput: VALID_OUTPUT,
+          promptMeta: {
+            ruleSetId: "rules-1",
+            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+          },
+        }),
+      }),
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.aiContent.promptMetaHash).toBe("");
+    expect(json.aiContent.provenance).toBeUndefined();
   });
 
   it("generates resume pdf from imported JSON", async () => {
@@ -337,6 +410,10 @@ describe("applications manual generate api", () => {
           promptMeta: {
             ruleSetId: "rules-1",
             resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+            promptTemplateVersion: "2026.07.v2",
+            schemaVersion: "2026-07-24",
+            skillPackVersion: "b".repeat(64),
+            promptHash: "c".repeat(64),
           },
         }),
       }),
@@ -845,6 +922,16 @@ describe("applications manual generate api", () => {
     (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-07T00:00:00.000Z"),
+    });
+    applicationPrompt.buildApplicationPromptForUser.mockResolvedValueOnce({
+      promptMeta: {
+        ruleSetId: "rules-1",
+        resumeSnapshotUpdatedAt: "2026-02-07T00:00:00.000Z",
+        promptTemplateVersion: "2026.07.v2",
+        schemaVersion: "2026-07-24",
+        skillPackVersion: "b".repeat(64),
+        promptHash: "c".repeat(64),
+      },
     });
 
     const res = await POST(
@@ -1376,12 +1463,154 @@ describe("applications manual generate api", () => {
           promptMeta: {
             ruleSetId: "rules-1",
             resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+            promptTemplateVersion: "2026.07.v2",
+            schemaVersion: "2026-07-24",
+            skillPackVersion: "b".repeat(64),
+            promptHash: "c".repeat(64),
           },
         }),
       },
     ));
     expect(res.status).toBe(400);
     expect((await res.json()).error.code).toBe("INVALID_AI_RESULT");
+  });
+
+  it.each(["local_ai", "codex_batch"] as const)(
+    "requires a current prompt receipt for %s output",
+    async (source) => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    jobStore.findFirst.mockResolvedValueOnce({
+      id: VALID_JOB_ID,
+      title: "Software Engineer",
+      company: "Example Co",
+      location: "Sydney",
+      description: "Build product features",
+      market: "AU",
+    });
+    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "rp-1",
+      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
+    });
+
+    const res = await POST(
+      new Request(
+        "http://localhost/api/applications/manual-generate?finalize=false",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            jobId: VALID_JOB_ID,
+            target: "resume",
+            modelOutput: JSON.stringify({
+              cvSummary: "Strict",
+              latestExperience: { addedBullets: [] },
+            }),
+            source,
+          }),
+        },
+      ),
+    );
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe("PROMPT_META_REQUIRED");
+    expect(applicationPrompt.buildApplicationPromptForUser).not.toHaveBeenCalled();
+    },
+  );
+
+  it("rejects legacy Resume JSON from Codex Batch even with a complete receipt", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    jobStore.findFirst.mockResolvedValueOnce({
+      id: VALID_JOB_ID,
+      title: "Software Engineer",
+      company: "Example Co",
+      location: "Sydney",
+      description: "Build product features",
+      market: "AU",
+    });
+    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "rp-1",
+      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
+    });
+
+    const res = await POST(
+      new Request(
+        "http://localhost/api/applications/manual-generate?finalize=false",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            jobId: VALID_JOB_ID,
+            target: "resume",
+            modelOutput: JSON.stringify({
+              cvSummary: "Legacy",
+              latestExperience: { bullets: ["Built APIs."] },
+            }),
+            source: "codex_batch",
+            promptMeta: {
+              ruleSetId: "rules-1",
+              resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+              promptTemplateVersion: "2026.07.v2",
+              schemaVersion: "2026-07-24",
+              skillPackVersion: "b".repeat(64),
+              promptHash: "c".repeat(64),
+            },
+          }),
+        },
+      ),
+    );
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe("INVALID_AI_RESULT");
+    expect(applicationPrompt.buildApplicationPromptForUser).toHaveBeenCalledWith(
+      expect.objectContaining({ target: "resume", variant: "full" }),
+    );
+    expect(applicationStore.upsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects a partial legacy receipt from Codex Batch", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    jobStore.findFirst.mockResolvedValueOnce({
+      id: VALID_JOB_ID,
+      title: "Software Engineer",
+      company: "Example Co",
+      location: "Sydney",
+      description: "Build product features",
+      market: "AU",
+    });
+    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "rp-1",
+      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
+    });
+
+    const res = await POST(
+      new Request(
+        "http://localhost/api/applications/manual-generate?finalize=false",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            jobId: VALID_JOB_ID,
+            target: "resume",
+            modelOutput: JSON.stringify({
+              cvSummary: "Strict",
+              latestExperience: { addedBullets: [] },
+            }),
+            source: "codex_batch",
+            promptMeta: {
+              ruleSetId: "rules-1",
+              resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+            },
+          }),
+        },
+      ),
+    );
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe("PROMPT_META_REQUIRED");
+    expect(applicationStore.upsert).not.toHaveBeenCalled();
   });
 
   it("rejects oversized local AI output with INVALID_AI_RESULT before persistence", async () => {
@@ -1400,7 +1629,12 @@ describe("applications manual generate api", () => {
     expect(jobStore.findFirst).not.toHaveBeenCalled();
   });
 
-  it("persists canonical local provenance and returns authoritative DRAFT job metadata", async () => {
+  it.each([
+    { source: "local_ai" as const, variant: "lean" as const },
+    { source: "codex_batch" as const, variant: "full" as const },
+  ])(
+    "persists canonical $source provenance and authoritative DRAFT job metadata",
+    async ({ source, variant }) => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: "user-1" } });
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
@@ -1417,8 +1651,9 @@ describe("applications manual generate api", () => {
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-local" });
     const modelOutput = JSON.stringify({
       cvSummary: "Strict local summary",
-      latestExperience: { bullets: ["Built TypeScript APIs."] },
-      skillsFinal: [{ label: "Backend", items: ["TypeScript"] }],
+      latestExperience: {
+        addedBullets: ["Automated TypeScript APIs delivery."],
+      },
     });
 
     const res = await POST(new Request(
@@ -1429,10 +1664,14 @@ describe("applications manual generate api", () => {
           jobId: VALID_JOB_ID,
           target: "resume",
           modelOutput,
-          source: "local_ai",
+          source,
           promptMeta: {
             ruleSetId: "rules-1",
             resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+            promptTemplateVersion: "2026.07.v2",
+            schemaVersion: "2026-07-24",
+            skillPackVersion: "b".repeat(64),
+            promptHash: "c".repeat(64),
           },
         }),
       },
@@ -1445,10 +1684,14 @@ describe("applications manual generate api", () => {
       company: "Authoritative Co",
       location: "Melbourne",
     });
-    expect(json.aiContent.source).toBe("local_ai");
+    expect(json.aiContent.source).toBe(source);
     expect(json.aiContent.promptMetaHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(applicationPrompt.buildApplicationPromptForUser).toHaveBeenCalledWith(
+      expect.objectContaining({ target: "resume", variant }),
+    );
     expect(blobStore.put).not.toHaveBeenCalled();
-  });
+    },
+  );
 
   it("locks before re-reading and merging generated content", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({

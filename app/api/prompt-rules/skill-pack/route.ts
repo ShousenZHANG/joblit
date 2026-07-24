@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { getActivePromptSkillRulesForUser } from "@/lib/server/promptRuleTemplates";
-import { buildSkillPackV2Files } from "@/lib/server/ai/skillPack";
-import { getStructuredSkillRules } from "@/lib/server/ai/promptSkills";
+import {
+  buildSkillPackContentVersion,
+  buildSkillPackV3Files,
+} from "@/lib/server/ai/skillPack";
+import { buildSkillPackVersion } from "@/lib/server/ai/promptContract";
+import { buildStructuredSkillRulesFromEffective } from "@/lib/server/ai/promptSkills";
+import { buildResumePromptSnapshot } from "@/lib/server/ai/resumePromptSnapshot";
 import { createZip } from "@/lib/server/archive/zip";
 import { getResumeProfile } from "@/lib/server/resumeProfile";
-import { buildSkillPackVersion } from "@/lib/server/ai/promptContract";
 
 export const runtime = "nodejs";
 
@@ -41,22 +45,30 @@ export async function GET(req: Request) {
     const redactContext = url.searchParams.get("redact") === "true";
 
     const rules = await getActivePromptSkillRulesForUser(userId);
-    const profile = await getResumeProfile(userId);
+    const profile = await getResumeProfile(userId, { locale });
     const context = profile ? buildResumeContext(profile) : undefined;
-    const resumeSnapshotUpdatedAt = context?.resumeSnapshotUpdatedAt ?? "missing-profile";
-    const skillPackVersion = buildSkillPackVersion({
-      ruleSetId: rules.id,
-      resumeSnapshotUpdatedAt,
-    });
+    const generationReceiptVersion = profile
+      ? buildSkillPackVersion({
+          ruleSetId: rules.id,
+          resumeSnapshotUpdatedAt: profile.updatedAt.toISOString(),
+          locale,
+          effectiveRules: rules,
+          resumeSnapshot: buildResumePromptSnapshot(profile),
+        })
+      : null;
 
-    const structuredRules = getStructuredSkillRules(locale);
-    const v2Files = buildSkillPackV2Files(structuredRules, context, {
+    const structuredRules = buildStructuredSkillRulesFromEffective(
+      rules,
+      locale,
+    );
+    const files = buildSkillPackV3Files(structuredRules, context, {
       locale,
       redactContext,
     });
-    const zip = createZip(v2Files);
+    const skillPackVersion = buildSkillPackContentVersion(files);
+    const zip = createZip(files);
     const today = new Date().toISOString().slice(0, 10);
-    const filename = `joblit-skills-v2-${locale}-${today}.zip`;
+    const filename = `joblit-skills-v3-${locale}-${today}.zip`;
 
     return new NextResponse(new Uint8Array(zip), {
       status: 200,
@@ -67,6 +79,9 @@ export async function GET(req: Request) {
         "x-skill-pack-redacted": redactContext ? "1" : "0",
         "x-skill-pack-version": skillPackVersion,
         "x-skill-pack-locale": locale,
+        ...(generationReceiptVersion
+          ? { "x-generation-receipt-version": generationReceiptVersion }
+          : {}),
       },
     });
   });

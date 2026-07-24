@@ -47,7 +47,7 @@ describe("Joblit Hermes profile source", () => {
 
     expect(distribution).toEqual({
       name: "joblit-local-ai",
-      version: "0.1.0",
+      version: "0.2.0",
       description: "Grounded CV and cover-letter generation for Joblit through stock Hermes",
       hermesRequires: ">=0.18.2",
       author: "Joblit contributors",
@@ -102,11 +102,14 @@ describe("Joblit Hermes profile source", () => {
     );
 
     expect(outputContracts).toContain("`cvSummary`");
-    expect(outputContracts).toContain("`latestExperience.bullets`");
-    expect(outputContracts).toContain("`skillsFinal`");
+    expect(outputContracts).toContain("`latestExperience.addedBullets`");
+    expect(outputContracts).toContain("zero to three");
+    expect(outputContracts).not.toContain("`latestExperience.bullets`");
+    expect(outputContracts).not.toContain("`skillsFinal`");
     expect(outputContracts).toContain("`cover.paragraphOne`");
     expect(outputContracts).toContain("`cover.paragraphTwo`");
     expect(outputContracts).toContain("`cover.paragraphThree`");
+    expect(outputContracts).toContain("only those three paragraph fields");
   });
 
   it.each([

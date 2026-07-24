@@ -25,7 +25,19 @@ Given a filtered set of `NEW` jobs, run a deterministic loop:
 ## Rules
 
 - Do not use `/trigger` for execution. It is intentionally disabled.
-- Always send `promptMeta` from prompt response to `manual-generate`.
+- For every claimed task and target, call `/api/applications/prompt`; always
+  send that exact response's complete, unmodified `promptMeta` to
+  `manual-generate`: `ruleSetId`, `resumeSnapshotUpdatedAt`,
+  `promptTemplateVersion`, `schemaVersion`, `skillPackVersion`, and
+  `promptHash` are all required.
+- Every Batch import payload must set `source: "codex_batch"`. It must conform
+  to the current target `expectedJsonSchema`: Resume is
+  `{ cvSummary, latestExperience: { addedBullets } }` with 0–3 additions;
+  Cover is `{ cover: { paragraphOne, paragraphTwo, paragraphThree } }`.
+- Batch import is current-only. Do not send legacy fields such as
+  `skillsFinal`, full experience bullet lists, or section/header aliases.
+- Batch run context exposes contract identity only. It never fabricates a
+  `promptMeta` before a concrete job prompt exists.
 - Mark task `FAILED` with concise error when any step cannot recover.
 - Keep idempotent behavior: same job/task should not produce inconsistent state.
 - Prefer schema-valid JSON only; no markdown wrapper around payload JSON.

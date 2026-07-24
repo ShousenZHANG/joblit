@@ -1,5 +1,10 @@
+import { createHash } from "node:crypto";
+
 import type { StructuredRuleSet, SkillRule } from "@/lib/server/ai/promptSkills";
-import { flattenStructuredRules } from "@/lib/server/ai/promptSkills";
+import {
+  flattenStructuredRules,
+  SKILL_PACK_VERSION,
+} from "@/lib/server/ai/promptSkills";
 import {
   PROMPT_SCHEMA_VERSION,
   PROMPT_TEMPLATE_VERSION,
@@ -9,8 +14,8 @@ import {
   buildV2SystemPrompt,
   buildV2ResumeUserPrompt,
   buildV2CoverUserPrompt,
-  getTemplateResumePromptInput,
 } from "@/lib/server/ai/applicationPromptBuilder";
+import { buildResumePromptSnapshot } from "@/lib/server/ai/resumePromptSnapshot";
 import { buildQualityGatesDocument } from "@/lib/server/ai/qualityGatesEmbed";
 import { getLocaleProfile } from "@/lib/shared/locales";
 import {
@@ -29,15 +34,42 @@ type SkillPackContext = {
   resumeSnapshotUpdatedAt: string;
 };
 
-type SkillPackV2Options = {
+type SkillPackV3Options = {
   locale?: "en-AU" | "zh-CN";
   redactContext?: boolean;
 };
 
-// Stable build stamp so the same inputs produce byte-identical pack files
-// (deterministic ZIP). The per-pack identity that actually changes with rules
-// or resume edits is the skillPackVersion hash carried in the response header.
+export type SkillPackFile = {
+  name: string;
+  content: string;
+};
+
+// Stable build stamp so the logical package files remain deterministic. ZIP
+// timestamps are intentionally excluded from the content identity; the hash in
+// the response header changes with the final packaged rules or resume content.
 const SKILL_PACK_BUILD_STAMP = `${PROMPT_TEMPLATE_VERSION}+${PROMPT_SCHEMA_VERSION}`;
+const SKILL_PACK_PREFIX = "joblit-skills-v3";
+
+/**
+ * Content identity for a downloadable Skill Pack.
+ *
+ * This is intentionally independent of ZIP metadata and input order: it hashes
+ * the final logical file names and bytes after sorting by name. Any rule,
+ * schema, prompt, context, example, validator, or manifest change therefore
+ * produces a different download receipt.
+ */
+export function buildSkillPackContentVersion(
+  files: readonly SkillPackFile[],
+): string {
+  const canonicalFiles = [...files]
+    .sort((left, right) =>
+      left.name < right.name ? -1 : left.name > right.name ? 1 : 0,
+    )
+    .map(({ name, content }) => [name, content]);
+  return createHash("sha256")
+    .update(JSON.stringify(canonicalFiles))
+    .digest("hex");
+}
 
 // Placeholder job used when rendering the pack's prompt templates. Real values
 // are substituted by Joblit per job; here they stay as {{TOKENS}} the user
@@ -46,6 +78,18 @@ const PLACEHOLDER_JOB = {
   title: "{{JOB_TITLE}}",
   company: "{{COMPANY}}",
   description: "{{JOB_DESCRIPTION}}",
+};
+
+const PLACEHOLDER_RESUME_SNAPSHOT = {
+  basics: {
+    fullName: "{{CANDIDATE_NAME}}",
+    title: "{{CANDIDATE_TITLE}}",
+  },
+  summary: "{{RESUME_SUMMARY}}",
+  skills: [],
+  experiences: [],
+  projects: [],
+  education: [],
 };
 
 function redactResumeSnapshot(snapshot: unknown) {
@@ -71,7 +115,7 @@ function buildRulesJson(target: "resume" | "cover", rules: SkillRule[]): string 
   const filtered = filterRulesByTarget(rules, target);
   return JSON.stringify(
     {
-      version: "2.0.0",
+      version: SKILL_PACK_VERSION,
       rules: filtered.map((r) => ({
         id: r.id,
         category: r.category,
@@ -87,7 +131,7 @@ function buildRulesJson(target: "resume" | "cover", rules: SkillRule[]): string 
 function buildHardConstraintsJson(constraints: SkillRule[]): string {
   return JSON.stringify(
     {
-      version: "2.0.0",
+      version: SKILL_PACK_VERSION,
       rules: constraints.map((r) => ({
         id: r.id,
         category: r.category,
@@ -116,7 +160,7 @@ function buildLocaleJson(locale: "en-AU" | "zh-CN"): string {
   );
 }
 
-function buildV2PlatformNotesMd(): string {
+function buildV3PlatformNotesMd(): string {
   return `# Platform Import Notes
 
 ## Claude (Projects / Skills)
@@ -143,8 +187,8 @@ function buildV2PlatformNotesMd(): string {
 - Schema files enforce strict output structure for Joblit import compatibility.`;
 }
 
-function buildV2ReadmeMd(locale: "en-AU" | "zh-CN"): string {
-  return `# Joblit Skills V2
+function buildV3ReadmeMd(locale: "en-AU" | "zh-CN"): string {
+  return `# Joblit Skills V3
 
 Structured skill pack for AI-powered resume and cover letter tailoring. The
 behaviour here is the SAME spec Joblit's app uses when you click Generate —
@@ -179,8 +223,16 @@ This pack is configured for: ${locale}
 `;
 }
 
-function buildV2ChangelogMd(): string {
+function buildV3ChangelogMd(): string {
   return `# Changelog
+
+## 3.0.0
+
+- Resume output is delta-only: \`cvSummary\` plus zero to three
+  \`latestExperience.addedBullets\`; skills remain Master Resume Profile-owned.
+- Cover output contains only the three body paragraphs.
+- Downloaded packs use the user's active effective rule template and a
+  deterministic content version over every final logical file.
 
 ## 2.1.0
 
@@ -202,33 +254,40 @@ function buildV2ChangelogMd(): string {
 }
 
 /**
- * Build the V2 skill pack. The instruction/prompt files are rendered from the
+ * Build the V3 skill pack. The instruction/prompt files are rendered from the
  * SAME builders the in-app prompt (`POST /api/applications/prompt`) uses, so the
  * downloaded pack and the live prompt are a single source of truth.
  */
-export function buildSkillPackV2Files(
+export function buildSkillPackV3Files(
   rules: StructuredRuleSet,
   context?: SkillPackContext,
-  options?: SkillPackV2Options,
-): { name: string; content: string }[] {
+  options?: SkillPackV3Options,
+): SkillPackFile[] {
   const locale = options?.locale ?? rules.locale;
-  const prefix = "joblit-skills-v2";
+  const prefix = SKILL_PACK_PREFIX;
 
   // Flatten to the rule-set shape the canonical builders consume, then render
   // the exact in-app system prompt, quality gates, and job prompt templates.
   const flatRules = flattenStructuredRules(rules);
-  const templateResume = getTemplateResumePromptInput([]);
+  const candidateSnapshot = buildResumePromptSnapshot(
+    context
+      ? options?.redactContext
+        ? redactResumeSnapshot(context.resumeSnapshot)
+        : context.resumeSnapshot
+      : PLACEHOLDER_RESUME_SNAPSHOT,
+  );
   const systemMd = buildV2SystemPrompt(flatRules, locale);
   const qualityGatesMd = buildQualityGatesDocument(locale);
   const resumePromptTemplate = buildV2ResumeUserPrompt({
     target: "resume",
     rules: flatRules,
+    candidate: candidateSnapshot,
     job: PLACEHOLDER_JOB,
-    resume: templateResume,
   });
   const coverPromptTemplate = buildV2CoverUserPrompt({
     target: "cover",
     rules: flatRules,
+    candidate: candidateSnapshot,
     job: PLACEHOLDER_JOB,
   });
 
@@ -261,19 +320,19 @@ export function buildSkillPackV2Files(
     "- Bold JD-critical keywords with **keyword** markers.",
     "- Run the quality gates self-check (instructions/quality-gates.md) before returning.",
     "",
-    `## Pack Version: ${rules.version}`,
+    `## Pack Version: ${SKILL_PACK_VERSION}`,
     `## Locale: ${locale}`,
     "",
     "instructions/ and prompts/ are rendered from Joblit's canonical prompt builder —",
     "this pack matches the in-app Generate prompt exactly.",
   ].join("\n");
 
-  const files: { name: string; content: string }[] = [
+  const files: SkillPackFile[] = [
     // Root SKILL.md (required by Claude skill upload)
     { name: "SKILL.md", content: rootSkillMd },
 
-    { name: `${prefix}/README.md`, content: buildV2ReadmeMd(locale) },
-    { name: `${prefix}/CHANGELOG.md`, content: buildV2ChangelogMd() },
+    { name: `${prefix}/README.md`, content: buildV3ReadmeMd(locale) },
+    { name: `${prefix}/CHANGELOG.md`, content: buildV3ChangelogMd() },
 
     // Instructions — canonical (same as in-app prompt)
     { name: `${prefix}/instructions/system.md`, content: systemMd },
@@ -311,18 +370,14 @@ export function buildSkillPackV2Files(
     { name: `${prefix}/scripts/README.md`, content: SKILL_PACK_VALIDATOR_README },
 
     // Meta
-    { name: `${prefix}/meta/platform-notes.md`, content: buildV2PlatformNotesMd() },
+    { name: `${prefix}/meta/platform-notes.md`, content: buildV3PlatformNotesMd() },
   ];
 
   // Context (optional)
   if (context) {
-    const snapshot = options?.redactContext
-      ? redactResumeSnapshot(context.resumeSnapshot)
-      : context.resumeSnapshot ?? {};
-
     files.push({
       name: `${prefix}/context/resume-snapshot.json`,
-      content: JSON.stringify(snapshot, null, 2),
+      content: JSON.stringify(candidateSnapshot, null, 2),
     });
     files.push({
       name: `${prefix}/context/snapshot-meta.json`,
@@ -341,8 +396,8 @@ export function buildSkillPackV2Files(
   // stable build stamp, not wall-clock, so identical inputs yield identical bytes.
   const fileList = files.map((f) => f.name).concat(`${prefix}/meta/manifest.json`);
   const manifest = {
-    packName: "joblit-skills-v2",
-    packVersion: rules.version,
+    packName: SKILL_PACK_PREFIX,
+    packVersion: SKILL_PACK_VERSION,
     locale,
     buildStamp: SKILL_PACK_BUILD_STAMP,
     promptTemplateVersion: PROMPT_TEMPLATE_VERSION,

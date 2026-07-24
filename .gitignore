@@ -93,6 +93,7 @@ install.cmd
 # hand-written and checked in — CLAUDE.md and CONTEXT.md require it.
 .reports/
 docs/refactor-report.md
+testResults.xml
 
 # typescript
 *.tsbuildinfo

@@ -7,7 +7,11 @@
 
 ## Summary
 
-Insert an interactive **Edit phase** between AI generation and PDF finalization in the Joblit tailoring pipeline. The user reviews each AI proposal (summary, latest-experience bullets, skills additions, cover letter paragraphs), accepts/rejects/edits inline, then explicitly **Finalizes** to render the PDF.
+Insert an interactive **Edit phase** between AI generation and PDF finalization
+in the Joblit tailoring pipeline. The user reviews each AI proposal (summary,
+latest-experience bullet additions, and cover letter paragraphs),
+accepts/rejects/edits inline, then explicitly **Finalizes** to render the PDF.
+Skills and existing bullets remain Master Resume Profile-owned.
 
 Today the pipeline is atomic: AI generates → PDF renders → Application saved. The user has no review step. AI quality is uneven, especially for bullets that fail grounding checks. The Edit step closes that gap.
 
@@ -42,11 +46,10 @@ As a job seeker, after I generate AI proposals for a Job, I land on `/jobs/[id]/
 - **Auto-save** every 2 s, displayed as `Saved 3s ago` / `Saving…`.
 - **Finalize** button at the bottom — re-renders PDF, locks the Application as `FINAL`, and routes to the success modal.
 
-### S2 — Skills + Cover Letter review (Phase 2)
+### S2 — Cover Letter review (Phase 2)
 
 The Edit page gains:
 
-- **Skills additions** section — each AI-proposed skill item has its own checkbox, scoped per-category.
 - **Cover Letter tab** with three paragraph editors, each with character count and Reset-to-AI.
 - **Per-document Finalize** — CV can be Final while CL stays Draft, or vice versa.
 
@@ -54,9 +57,12 @@ The Edit page gains:
 
 A user revisits a previous job (status `APPLIED`), hits **Edit Tailored Resume** in the Job detail panel. Status flips to `DRAFT`, the Edit page loads with the saved `aiContent`. PDF on the right is the existing finalized PDF until they Finalize again.
 
-### S4 — Codex Batch (unchanged)
+### S4 — Application Batch
 
-Codex Batch calls `POST /api/applications/manual-generate?finalize=true` and bypasses the Edit page entirely. Behavior identical to today.
+Feature-gated server auto-execute calls the durable
+`generateApplicationArtifactsForJob` service and bypasses the interactive Edit
+page. External Codex orchestration claims work through `run-once` and persists
+returned model output through `manual-generate?finalize=true`.
 
 ### S5 — Migration of existing Applications
 
@@ -93,13 +99,16 @@ Shape per [ADR-0001](../adr/0001-application-aicontent-provenance.md#decision).
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/api/applications/manual-generate?finalize=<bool>` | Existing route. New `finalize` flag. |
-| `POST` | `/api/applications/generate?finalize=<bool>` | Existing route. New `finalize` flag. |
-| `POST` | `/api/applications/generate-cover-letter?finalize=<bool>` | Existing route. New `finalize` flag (Phase 2). |
 | `PATCH` | `/api/applications/[id]/draft` | Auto-save target. Body: partial `aiContent`. Returns updated `aiContentHash`. |
 | `POST` | `/api/applications/[id]/finalize` | Renders PDF from current `aiContent`. Body: `{ aiContentHash }` (stale-write guard). Sets `status = FINAL`. |
 | `POST` | `/api/applications/[id]/discard` | Reverts `aiContent` to the original AI proposal. Status stays `DRAFT`. |
 
-`finalize=true` is the default when the request lacks a user session (Codex Batch context). Web UI explicitly opts to `finalize=false`.
+The interactive web UI explicitly uses `finalize=false` for manual import.
+Server auto-execute persists through `generateApplicationArtifactsForJob`;
+external Codex persists through `manual-generate`. The retired
+`/api/applications/generate` and
+`/api/applications/generate-cover-letter` routes are not part of the current
+surface.
 
 ### Page route
 
@@ -137,10 +146,14 @@ Bullets that fail a quality gate (`isGroundedAddedBullet`, `isNonRedundantAddedB
 - Become enabled the moment the user types into the bullet's editor (the user is re-grounding it).
 - Stored verdict moves into `aiContent.cv.latestExperience.addedBullets[i].qualityGate`.
 
-### Codex Batch contract
+### Application Batch contract
 
-- Codex Batch must include `?finalize=true` on every generation call.
-- The server enforces: requests without a session that omit `finalize=true` get a `400 BAD_REQUEST` with body `{ error: "FINALIZE_REQUIRED_FOR_BATCH" }`.
+- Server auto-execute calls `generateApplicationArtifactsForJob` through its
+  authenticated, feature-gated execute route.
+- External Codex claims/completes tasks through `run-once` and imports through
+  `manual-generate?finalize=true`.
+- Both modes persist an Application aggregate; neither uses a retired session
+  generation route.
 
 ## Non-functional requirements
 
@@ -185,9 +198,6 @@ Layout sketch:
 │   ☐ Bullet text                   │                          │
 │      ⚠ Low grounding              │                          │
 │                                   │                          │
-│  Skills additions                 │                          │
-│   ☑ Spring Cloud → Backend        │                          │
-│   ☐ Kubernetes → New: Cloud       │                          │
 ├──────────────────────────────────┴──────────────────────────┤
 │            [Discard changes]    [Finalize →]                 │
 └──────────────────────────────────────────────────────────────┘
@@ -199,7 +209,7 @@ Layout sketch:
 
 - Schema migration (`add_application_edit_workflow`).
 - `aiContent` Zod schema + types.
-- Route changes: `?finalize` flag on `manual-generate` and `generate`.
+- Route changes: `?finalize` flag on `manual-generate`.
 - New routes: `/draft` (PATCH), `/finalize` (POST), `/discard` (POST).
 - `lib/server/applications/manualImportArtifact.ts` extended to emit full `aiContent` instead of merging silently.
 - New page `/jobs/[id]/tailor` with split-pane shell.
@@ -211,11 +221,9 @@ Layout sketch:
 - Banner for legacy `aiContent = NULL` Applications.
 - Test coverage ≥ 80% on new code.
 
-### Phase 2 — Skills + Cover Letter (2 dev-days)
+### Phase 2 — Cover Letter (2 dev-days)
 
-- Skills additions UI (per-skill checkbox).
 - Cover Letter tab + paragraph editors.
-- `generate-cover-letter` route gets `?finalize` flag.
 - Independent finalize per CV / CL.
 
 ### Phase 3 — Polish (2 dev-days)
@@ -240,7 +248,7 @@ Layout sketch:
 | LaTeX render service backpressure on auto-refresh | 30 s idle threshold + per-user debounce; reuse existing render service quotas. |
 | `aiContent` schema drift between client and server | Zod schema in `lib/shared/`, shared between frontend and API; `schemaVersion` field for migrations. |
 | Concurrent tabs corrupting drafts | `aiContentHash` stale-write guard with explicit `Reload / Overwrite` dialog. |
-| Codex Batch forgetting `finalize=true` | Server-side assertion: batch contexts without `finalize=true` return `400 FINALIZE_REQUIRED_FOR_BATCH`. |
+| Manual and server-batch contract drift | Both paths pass current output through the canonical Application generation acceptance boundary; contract tests cover both sources. |
 | User edits a heavy Application then accidentally re-generates | Confirmation dialog summarizing how many edited fields will be lost. |
 
 ## Test plan
@@ -248,7 +256,8 @@ Layout sketch:
 - **Schema migration test**: backfill correctness on a seeded fixture.
 - **Auto-save concurrency test**: two parallel PATCH calls, hash mismatch returns 409.
 - **Finalize idempotency test**: running finalize twice with the same `aiContentHash` is a no-op.
-- **Codex Batch regression**: existing batch-related tests must continue to pass with `?finalize=true` default.
+- **Application Batch regression**: batch-related tests must prove durable
+  Application persistence through the server generation service.
 - **Editor unit tests**: accept/reject/edit on bullets updates `aiContent` correctly.
 - **E2E (deferred to Phase 3)**: full generate → edit → finalize → re-edit → finalize loop.
 

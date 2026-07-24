@@ -13,6 +13,7 @@ import type {
 } from "../components/TailorReviewDialog";
 import { isSkillPackFresh, writeSavedSkillPackMeta } from "../utils/skillPackMeta";
 import { parseTailorOutput, filenameFromDisposition } from "../utils/tailorParser";
+import { marketStringToResumeLocale } from "@/lib/shared/market";
 import {
   invalidateActiveJobsQueries,
   patchGeneratedJobArtifactInJobsCache,
@@ -119,6 +120,8 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
   const [externalStep, setExternalStep] = useState<1 | 2 | 3>(1);
   const [externalPromptMeta, setExternalPromptMeta] = useState<ExternalPromptMeta | null>(null);
   const [externalSkillPackFresh, setExternalSkillPackFresh] = useState(false);
+  const [externalSkillPackLocale, setExternalSkillPackLocale] =
+    useState<"en-AU" | "zh-CN">("en-AU");
   const [dialogPhase, setDialogPhase] = useState<DialogPhase>(1);
   const [promptCopied, setPromptCopied] = useState(false);
   const [tailorSourceByJob, setTailorSourceByJob] = useState<
@@ -227,6 +230,9 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
     setExternalShortPromptText("");
     setExternalPromptMeta(null);
     setExternalSkillPackFresh(false);
+    setExternalSkillPackLocale(
+      marketStringToResumeLocale(job.market ?? "AU"),
+    );
     setPromptCopied(false);
     setError(null);
     setExternalPromptLoading(true);
@@ -298,7 +304,10 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
     setError(null);
     try {
       // A zip download, so this stays on raw `fetch` — `fetchJson` parses JSON.
-      const res = await fetch("/api/prompt-rules/skill-pack", { cache: "no-store" });
+      const res = await fetch(
+        `/api/prompt-rules/skill-pack?locale=${encodeURIComponent(externalSkillPackLocale)}`,
+        { cache: "no-store" },
+      );
       if (!res.ok) {
         const json = await res.json().catch(() => null);
         const message =
@@ -307,7 +316,18 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
         throw new Error(message);
       }
       const blob = await res.blob();
-      const fallbackName = "joblit-skills-v2.zip";
+      const generationReceiptVersion = res.headers.get(
+        "x-generation-receipt-version",
+      );
+      if (
+        externalPromptMeta.skillPackVersion &&
+        generationReceiptVersion !== externalPromptMeta.skillPackVersion
+      ) {
+        throw new Error(
+          "The downloaded skill pack does not match the current resume/rules receipt. Refresh and try again.",
+        );
+      }
+      const fallbackName = "joblit-skills-v3.zip";
       const filename = filenameFromDisposition(res.headers.get("content-disposition")) || fallbackName;
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");

@@ -59,8 +59,8 @@ function registryKey(publicKey, overrides = {}) {
     id: "release-2026",
     algorithm: "Ed25519",
     publicKey: publicKey.export({ type: "spki", format: "pem" }).toString(),
-    minimumProfileVersion: "0.1.0",
-    maximumProfileVersion: "0.1.0",
+    minimumProfileVersion: "0.2.0",
+    maximumProfileVersion: "0.2.0",
     revoked: false,
     ...overrides,
   };
@@ -126,7 +126,7 @@ test("rejects unknown, revoked, duplicate, malformed, and out-of-range trusted k
     ["malformed", () => [{ id: "release-2026", algorithm: "Ed25519", publicKey: "invalid", revoked: false }], /INVALID_RELEASE_KEY/],
     [
       "out of range",
-      (item) => [registryKey(item.publicKey, { minimumProfileVersion: "0.2.0", maximumProfileVersion: "0.9.0" })],
+      (item) => [registryKey(item.publicKey, { minimumProfileVersion: "0.3.0", maximumProfileVersion: "0.9.0" })],
       /KEY_VERSION_OUT_OF_RANGE/,
     ],
   ];

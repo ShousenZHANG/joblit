@@ -1515,7 +1515,7 @@ describe("JobsClient", () => {
         return new Response(new Blob(["skill-pack"]), {
           status: 200,
           headers: {
-            "content-disposition": 'attachment; filename="joblit-skills-v2.zip"',
+            "content-disposition": 'attachment; filename="joblit-skills-v3.zip"',
           },
         });
       }
@@ -1608,8 +1608,8 @@ describe("JobsClient", () => {
             promptMeta: {
               ruleSetId: "rules-1",
               resumeSnapshotUpdatedAt: "2026-02-08T00:00:00.000Z",
-              promptTemplateVersion: "2026.02.v1",
-              schemaVersion: "2026-02-22",
+              promptTemplateVersion: "2026.07.v2",
+              schemaVersion: "2026-07-24",
               skillPackVersion: "spv-1",
               promptHash,
             },
@@ -1621,8 +1621,9 @@ describe("JobsClient", () => {
         return new Response(new Blob(["skill-pack"]), {
           status: 200,
           headers: {
-            "content-disposition": 'attachment; filename="joblit-skills-v2.zip"',
+            "content-disposition": 'attachment; filename="joblit-skills-v3.zip"',
             "x-skill-pack-version": "spv-1",
+            "x-generation-receipt-version": "spv-1",
           },
         });
       }
@@ -1656,6 +1657,9 @@ describe("JobsClient", () => {
       return requestUrl.startsWith("/api/prompt-rules/skill-pack");
     });
     expect(downloadCalls).toHaveLength(1);
+    expect(downloadCalls[0]?.[0]).toBe(
+      "/api/prompt-rules/skill-pack?locale=en-AU",
+    );
     expect(createObjectUrlSpy).toHaveBeenCalledTimes(1);
     expect(revokeObjectUrlSpy).toHaveBeenCalledTimes(1);
     expect(anchorClickSpy).toHaveBeenCalledTimes(1);

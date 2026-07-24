@@ -12,7 +12,7 @@ Describe 'Test-JoblitHermesReadiness' {
         New-Item -ItemType Directory -Path $script:ProfileRoot -Force | Out-Null
         $script:DistributionSource = Get-JoblitDistributionSourceRoot $script:ProfileName
         New-Item -ItemType Directory -Path $script:DistributionSource -Force | Out-Null
-        Set-Content -LiteralPath (Join-Path $script:ProfileRoot 'distribution.yaml') -Value "name: $($script:ProfileName)`nversion: 0.1.0`nsource: $($script:DistributionSource)`ninstalled_at: '2026-07-16T00:00:00+00:00'"
+        Set-Content -LiteralPath (Join-Path $script:ProfileRoot 'distribution.yaml') -Value "name: $($script:ProfileName)`nversion: 0.2.0`nsource: $($script:DistributionSource)`ninstalled_at: '2026-07-16T00:00:00+00:00'"
         Set-Content -LiteralPath (Join-Path $script:ProfileRoot 'joblit-package-manifest.json') -Value '{"schemaVersion":1,"package":"joblit-hermes-profile"}' -Encoding utf8
         Set-Content -LiteralPath (Join-Path $script:ProfileRoot '.no-bundled-skills') -Value '' -NoNewline
         @'
@@ -47,7 +47,7 @@ agent:
 
         Mock Resolve-JoblitExecutable { return 'fake-hermes' } -ModuleName JoblitHermes.Common
         Mock Get-JoblitHermesVersion { return '0.18.2' } -ModuleName JoblitHermes.Common
-        Mock Invoke-JoblitPackageVerifier { return [pscustomobject]@{ profileVersion = '0.1.0'; trustLevel = 'integrity-only' } } -ModuleName JoblitHermes.Common
+        Mock Invoke-JoblitPackageVerifier { return [pscustomobject]@{ profileVersion = '0.2.0'; trustLevel = 'integrity-only' } } -ModuleName JoblitHermes.Common
         Mock Invoke-JoblitProcess {
             param($FilePath, $Arguments, $AllowFailure)
             $joined = $Arguments -join ' '

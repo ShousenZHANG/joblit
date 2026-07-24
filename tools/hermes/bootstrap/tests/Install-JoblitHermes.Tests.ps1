@@ -12,7 +12,7 @@ Describe 'Invoke-JoblitHermesInstall' {
         New-Item -ItemType Directory -Path (Join-Path $script:PackageRoot 'skills\joblit-career-agent\references') -Force | Out-Null
         @'
 name: joblit-local-ai
-version: 0.1.0
+version: 0.2.0
 '@ | Set-Content -LiteralPath (Join-Path $script:PackageRoot 'distribution.yaml') -Encoding utf8
         @'
 model:
@@ -45,7 +45,7 @@ agent:
         Mock Test-JoblitPortAvailable { return $true } -ModuleName JoblitHermes.Common
         Mock Invoke-JoblitPackageVerifier {
             $global:JoblitTestEvents.Add('verify')
-            return [pscustomobject]@{ profileVersion = '0.1.0'; trustLevel = 'verified-release' }
+            return [pscustomobject]@{ profileVersion = '0.2.0'; trustLevel = 'verified-release' }
         } -ModuleName JoblitHermes.Common
         Mock Invoke-JoblitProbe { return $true } -ModuleName JoblitHermes.Common
         Mock Invoke-JoblitProcess {
@@ -65,7 +65,7 @@ agent:
                 Copy-Item -Path (Join-Path $sourceRoot '*') -Destination $profileRoot -Recurse -Force
                 @"
 name: $profileName
-version: 0.1.0
+version: 0.2.0
 source: $sourceRoot
 installed_at: '2026-07-16T00:00:00+00:00'
 "@ | Set-Content -LiteralPath (Join-Path $profileRoot 'distribution.yaml') -Encoding utf8
@@ -78,7 +78,7 @@ installed_at: '2026-07-16T00:00:00+00:00'
                 Copy-Item -Path (Join-Path $sourceRoot '*') -Destination $profileRoot -Recurse -Force
                 @"
 name: $profileName
-version: 0.1.0
+version: 0.2.0
 source: $sourceRoot
 installed_at: '2026-07-16T00:00:00+00:00'
 "@ | Set-Content -LiteralPath (Join-Path $profileRoot 'distribution.yaml') -Encoding utf8
@@ -209,7 +209,7 @@ installed_at: '2026-07-16T00:00:00+00:00'
                 $profileRoot = Get-JoblitProfileRoot -ProfileName $profileName
                 New-Item -ItemType Directory -Path $profileRoot -Force | Out-Null
                 Copy-Item -Path (Join-Path $sourceRoot '*') -Destination $profileRoot -Recurse -Force
-                "name: $profileName`nversion: 0.1.0`nsource: $sourceRoot`ninstalled_at: '2026-07-16T00:00:00+00:00'" |
+                "name: $profileName`nversion: 0.2.0`nsource: $sourceRoot`ninstalled_at: '2026-07-16T00:00:00+00:00'" |
                     Set-Content -LiteralPath (Join-Path $profileRoot 'distribution.yaml') -Encoding utf8
             }
             if ($joined -match 'auth status openai-codex') {

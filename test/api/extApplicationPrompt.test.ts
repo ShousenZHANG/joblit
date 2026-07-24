@@ -64,6 +64,7 @@ import {
   ApplicationPromptError,
   type ApplicationPromptPayload,
 } from "@/lib/server/applications/applicationPrompt";
+import { buildPromptMeta } from "@/lib/server/ai/promptContract";
 import { ExtensionTokenError } from "@/lib/server/auth/requireExtensionToken";
 
 const VALID_JOB_ID = "550e8400-e29b-41d4-a716-446655440000";
@@ -81,13 +82,19 @@ const servicePayload: ApplicationPromptPayload = {
     instructions: "system instructions",
     sessionId: "22222222-2222-4222-8222-222222222222",
   },
-  promptMeta: {
+  promptMeta: buildPromptMeta({
+    target: "resume",
     ruleSetId: "rules-1",
     resumeSnapshotUpdatedAt: "2026-07-15T00:00:00.000Z",
-  },
+    variant: "full",
+    prompt: {
+      input: "<candidate-evidence>{}</candidate-evidence>",
+      instructions: "system instructions",
+    },
+  }),
   expectedJsonShape: '{"cvSummary":"string"}',
   expectedJsonSchema: { type: "object" },
-  promptVersion: "v3-local-ai",
+  promptVersion: "v4-application-proposal",
 };
 
 function extensionRequest(body: unknown, token = "jfext_valid") {

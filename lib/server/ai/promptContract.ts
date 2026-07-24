@@ -1,11 +1,23 @@
 import { createHash } from "node:crypto";
+import { z } from "zod";
+import {
+  CoverGenerationOutputSchema,
+  ResumeGenerationOutputSchema,
+} from "@/lib/shared/schemas/applicationGenerationOutput";
+export {
+  CoverGenerationOutputSchema,
+  ResumeGenerationOutputSchema,
+  type CoverGenerationOutput,
+  type ResumeGenerationOutput,
+} from "@/lib/shared/schemas/applicationGenerationOutput";
 
 export type PromptTarget = "resume" | "cover";
 /** Prompt targets that produce non-application artifacts (job-fit triage). */
 export type ExtendedPromptTarget = PromptTarget | "match" | "triage";
+export type PromptVariant = "full" | "lean";
 
-export const PROMPT_TEMPLATE_VERSION = "2026.02.v1";
-export const PROMPT_SCHEMA_VERSION = "2026-02-22";
+export const PROMPT_TEMPLATE_VERSION = "2026.07.v2";
+export const PROMPT_SCHEMA_VERSION = "2026-07-24";
 
 export type PromptMeta = {
   ruleSetId: string;
@@ -27,145 +39,69 @@ type PromptMetaMismatch = {
   received: string;
 };
 
-const RESUME_OUTPUT_SHAPE = {
-  cvSummary: "string",
-  latestExperience: {
-    bullets: ["string"],
-  },
-  skillsFinal: [
-    {
-      label: "string",
-      items: ["string"],
-    },
-  ],
+function stableSerialize(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(stableSerialize).join(",")}]`;
+  }
+  return `{${Object.entries(value as Record<string, unknown>)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, item]) => `${JSON.stringify(key)}:${stableSerialize(item)}`)
+    .join(",")}}`;
+}
+
+type JsonSchemaNode = {
+  type?: string;
+  properties?: Record<string, JsonSchemaNode>;
+  items?: JsonSchemaNode;
+  [key: string]: unknown;
 };
 
-const COVER_OUTPUT_SHAPE = {
+function toPromptJsonSchema(schema: z.ZodType): JsonSchemaNode {
+  return z.toJSONSchema(schema, {
+    target: "draft-2020-12",
+    unrepresentable: "throw",
+  }) as JsonSchemaNode;
+}
+
+function shapeFromJsonSchema(schema: JsonSchemaNode): unknown {
+  if (schema.type === "object") {
+    return Object.fromEntries(
+      Object.entries(schema.properties ?? {}).map(([key, property]) => [
+        key,
+        shapeFromJsonSchema(property),
+      ]),
+    );
+  }
+  if (schema.type === "array") {
+    return [shapeFromJsonSchema(schema.items ?? {})];
+  }
+  if (schema.type === "boolean") return "boolean";
+  if (schema.type === "integer" || schema.type === "number") return "number";
+  return "string";
+}
+
+const RESUME_OUTPUT_JSON_SCHEMA = toPromptJsonSchema(
+  ResumeGenerationOutputSchema,
+);
+const COVER_OUTPUT_JSON_SCHEMA = toPromptJsonSchema(
+  CoverGenerationOutputSchema,
+);
+const RESUME_OUTPUT_SHAPE = shapeFromJsonSchema(
+  RESUME_OUTPUT_JSON_SCHEMA,
+) as {
+  cvSummary: "string";
+  latestExperience: { addedBullets: ["string"] };
+};
+const COVER_OUTPUT_SHAPE = shapeFromJsonSchema(COVER_OUTPUT_JSON_SCHEMA) as {
   cover: {
-    candidateTitle: "string (optional)",
-    subject: "string (optional)",
-    date: "string (optional)",
-    salutation: "string (optional)",
-    paragraphOne: "string",
-    paragraphTwo: "string",
-    paragraphThree: "string",
-    closing: "string (optional)",
-    signatureName: "string (optional)",
-  },
+    paragraphOne: "string";
+    paragraphTwo: "string";
+    paragraphThree: "string";
+  };
 };
-
-const RESUME_OUTPUT_JSON_SCHEMA = {
-  $schema: "https://json-schema.org/draft/2020-12/schema",
-  type: "object",
-  additionalProperties: false,
-  required: ["cvSummary", "latestExperience", "skillsFinal"],
-  properties: {
-    cvSummary: {
-      type: "string",
-      minLength: 1,
-      maxLength: 2000,
-    },
-    latestExperience: {
-      type: "object",
-      additionalProperties: false,
-      required: ["bullets"],
-      properties: {
-        bullets: {
-          type: "array",
-          minItems: 1,
-          maxItems: 15,
-          items: {
-            type: "string",
-            minLength: 1,
-            maxLength: 320,
-          },
-        },
-      },
-    },
-    skillsFinal: {
-      type: "array",
-      minItems: 1,
-      maxItems: 5,
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["label", "items"],
-        properties: {
-          label: {
-            type: "string",
-            minLength: 1,
-            maxLength: 100,
-          },
-          items: {
-            type: "array",
-            minItems: 1,
-            maxItems: 20,
-            items: {
-              type: "string",
-              minLength: 1,
-              maxLength: 120,
-            },
-          },
-        },
-      },
-    },
-  },
-} as const;
-
-const COVER_OUTPUT_JSON_SCHEMA = {
-  $schema: "https://json-schema.org/draft/2020-12/schema",
-  type: "object",
-  additionalProperties: false,
-  required: ["cover"],
-  properties: {
-    cover: {
-      type: "object",
-      additionalProperties: false,
-      required: ["paragraphOne", "paragraphTwo", "paragraphThree"],
-      properties: {
-        candidateTitle: {
-          type: "string",
-          maxLength: 160,
-        },
-        subject: {
-          type: "string",
-          maxLength: 220,
-        },
-        date: {
-          type: "string",
-          maxLength: 80,
-        },
-        salutation: {
-          type: "string",
-          maxLength: 220,
-        },
-        paragraphOne: {
-          type: "string",
-          minLength: 1,
-          maxLength: 2000,
-        },
-        paragraphTwo: {
-          type: "string",
-          minLength: 1,
-          maxLength: 2000,
-        },
-        paragraphThree: {
-          type: "string",
-          minLength: 1,
-          maxLength: 2000,
-        },
-        closing: {
-          type: "string",
-          maxLength: 300,
-        },
-        signatureName: {
-          type: "string",
-          maxLength: 120,
-        },
-      },
-    },
-  },
-} as const;
 
 export function getExpectedJsonShapeForTarget(target: PromptTarget) {
   return target === "resume" ? RESUME_OUTPUT_SHAPE : COVER_OUTPUT_SHAPE;
@@ -175,19 +111,62 @@ export function getExpectedJsonSchemaForTarget(target: PromptTarget) {
   return target === "resume" ? RESUME_OUTPUT_JSON_SCHEMA : COVER_OUTPUT_JSON_SCHEMA;
 }
 
-function buildPromptHash(input: {
+export function buildPromptContentHash(input: {
   target: ExtendedPromptTarget;
   ruleSetId: string;
   resumeSnapshotUpdatedAt: string;
+  locale?: string;
+  variant?: PromptVariant;
+  prompt?: {
+    instructions: string;
+    input: string;
+  };
+  effectiveRules?: unknown;
+  resumeSnapshot?: unknown;
+  jobSnapshot?: unknown;
 }) {
   return createHash("sha256")
     .update(
-      JSON.stringify({
+      stableSerialize({
         target: input.target,
         ruleSetId: input.ruleSetId,
         resumeSnapshotUpdatedAt: input.resumeSnapshotUpdatedAt,
+        locale: input.locale ?? null,
         promptTemplateVersion: PROMPT_TEMPLATE_VERSION,
         schemaVersion: PROMPT_SCHEMA_VERSION,
+        variant: input.variant ?? "legacy",
+        prompt: input.prompt ?? null,
+        effectiveRules: input.effectiveRules ?? null,
+        resumeSnapshot: input.resumeSnapshot ?? null,
+        jobSnapshot: input.jobSnapshot ?? null,
+      }),
+    )
+    .digest("hex");
+}
+
+/**
+ * Chains a post-generation transformation onto the prompt receipt that
+ * produced its input. This keeps persisted provenance attached to the prompt
+ * that produced the final accepted target, not only to the first draft.
+ */
+export function buildGenerationLineageHash(input: {
+  target: PromptTarget;
+  parentPromptHash: string;
+  stage: "cover_quality_rewrite" | "independent_review";
+  prompt: {
+    instructions: string;
+    input: string;
+  };
+}) {
+  return createHash("sha256")
+    .update(
+      stableSerialize({
+        target: input.target,
+        parentPromptHash: input.parentPromptHash,
+        stage: input.stage,
+        promptTemplateVersion: PROMPT_TEMPLATE_VERSION,
+        schemaVersion: PROMPT_SCHEMA_VERSION,
+        prompt: input.prompt,
       }),
     )
     .digest("hex");
@@ -196,14 +175,20 @@ function buildPromptHash(input: {
 export function buildSkillPackVersion(input: {
   ruleSetId: string;
   resumeSnapshotUpdatedAt: string;
+  locale?: string;
+  effectiveRules?: unknown;
+  resumeSnapshot?: unknown;
 }) {
   return createHash("sha256")
     .update(
-      JSON.stringify({
+      stableSerialize({
         ruleSetId: input.ruleSetId,
         resumeSnapshotUpdatedAt: input.resumeSnapshotUpdatedAt,
+        locale: input.locale ?? null,
         promptTemplateVersion: PROMPT_TEMPLATE_VERSION,
         schemaVersion: PROMPT_SCHEMA_VERSION,
+        effectiveRules: input.effectiveRules ?? null,
+        resumeSnapshot: input.resumeSnapshot ?? null,
       }),
     )
     .digest("hex");
@@ -213,6 +198,15 @@ export function buildPromptMeta(input: {
   target: ExtendedPromptTarget;
   ruleSetId: string;
   resumeSnapshotUpdatedAt: string;
+  locale?: string;
+  variant?: PromptVariant;
+  prompt?: {
+    instructions: string;
+    input: string;
+  };
+  effectiveRules?: unknown;
+  resumeSnapshot?: unknown;
+  jobSnapshot?: unknown;
 }): PromptMeta {
   return {
     ruleSetId: input.ruleSetId,
@@ -220,7 +214,7 @@ export function buildPromptMeta(input: {
     promptTemplateVersion: PROMPT_TEMPLATE_VERSION,
     schemaVersion: PROMPT_SCHEMA_VERSION,
     skillPackVersion: buildSkillPackVersion(input),
-    promptHash: buildPromptHash(input),
+    promptHash: buildPromptContentHash(input),
   };
 }
 

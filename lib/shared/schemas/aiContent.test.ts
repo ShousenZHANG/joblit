@@ -65,6 +65,24 @@ describe("aiContentSchema", () => {
     expect(aiContentSchema.parse(value).provenance).toEqual(value.provenance);
   });
 
+  it("accepts Codex Batch as an authoritative external generation source", () => {
+    const value = {
+      ...validAiContent(),
+      source: "codex_batch" as const,
+      provenance: {
+        resume: {
+          generatedAt: "2026-07-24T00:00:00.000Z",
+          promptMetaHash: "codex-prompt",
+          source: "codex_batch" as const,
+        },
+      },
+    };
+
+    expect(aiContentSchema.parse(value).provenance?.resume?.source).toBe(
+      "codex_batch",
+    );
+  });
+
   it("rejects a payload with an unknown schemaVersion", () => {
     const stale = { ...validAiContent(), schemaVersion: 999 };
     const result = aiContentSchema.safeParse(stale);

@@ -1,11 +1,204 @@
 import { describe, expect, it } from "vitest";
-import { buildPromptMeta, validatePromptMetaForImport } from "./promptContract";
+import {
+  PROMPT_SCHEMA_VERSION,
+  PROMPT_TEMPLATE_VERSION,
+  buildGenerationLineageHash,
+  buildPromptMeta,
+  buildSkillPackVersion,
+  getExpectedJsonSchemaForTarget,
+  getExpectedJsonShapeForTarget,
+  validatePromptMetaForImport,
+} from "./promptContract";
 
 describe("prompt contract", () => {
   const expected = buildPromptMeta({
     target: "resume",
     ruleSetId: "rules-1",
     resumeSnapshotUpdatedAt: "2026-02-22T10:00:00.000Z",
+    variant: "full",
+    prompt: {
+      instructions: "Use only grounded evidence.",
+      input: "Tailor this resume for job one.",
+    },
+  });
+
+  it("publishes the current additions-only resume contract and paragraph-only cover contract", () => {
+    expect(PROMPT_TEMPLATE_VERSION).not.toBe("2026.02.v1");
+    expect(PROMPT_SCHEMA_VERSION).not.toBe("2026-02-22");
+    expect(getExpectedJsonShapeForTarget("resume")).toEqual({
+      cvSummary: "string",
+      latestExperience: {
+        addedBullets: ["string"],
+      },
+    });
+    expect(getExpectedJsonSchemaForTarget("resume")).toMatchObject({
+      additionalProperties: false,
+      required: ["cvSummary", "latestExperience"],
+      properties: {
+        latestExperience: {
+          additionalProperties: false,
+          required: ["addedBullets"],
+          properties: {
+            addedBullets: {
+              type: "array",
+              minItems: 0,
+              maxItems: 3,
+            },
+          },
+        },
+      },
+    });
+    expect(JSON.stringify(getExpectedJsonSchemaForTarget("resume"))).not.toMatch(
+      /skillsFinal|skillsAdditions|"\s*bullets\s*"/,
+    );
+
+    expect(getExpectedJsonShapeForTarget("cover")).toEqual({
+      cover: {
+        paragraphOne: "string",
+        paragraphTwo: "string",
+        paragraphThree: "string",
+      },
+    });
+    expect(getExpectedJsonSchemaForTarget("cover")).toMatchObject({
+      properties: {
+        cover: {
+          additionalProperties: false,
+          required: ["paragraphOne", "paragraphTwo", "paragraphThree"],
+          properties: {
+            paragraphOne: expect.any(Object),
+            paragraphTwo: expect.any(Object),
+            paragraphThree: expect.any(Object),
+          },
+        },
+      },
+    });
+    expect(
+      Object.keys(
+        getExpectedJsonSchemaForTarget("cover").properties?.cover?.properties ??
+          {},
+      ),
+    ).toEqual(["paragraphOne", "paragraphTwo", "paragraphThree"]);
+  });
+
+  it("hashes the actual prompt bytes and variant", () => {
+    const base = {
+      target: "resume" as const,
+      ruleSetId: "rules-1",
+      resumeSnapshotUpdatedAt: "2026-02-22T10:00:00.000Z",
+      variant: "full" as const,
+      prompt: {
+        instructions: "Use only grounded evidence.",
+        input: "Tailor this resume for job one.",
+      },
+    };
+
+    const same = buildPromptMeta(base);
+    const changedJob = buildPromptMeta({
+      ...base,
+      prompt: { ...base.prompt, input: "Tailor this resume for job two." },
+    });
+    const changedRules = buildPromptMeta({
+      ...base,
+      prompt: {
+        ...base.prompt,
+        instructions: "Use only grounded evidence. Prefer concise writing.",
+      },
+    });
+    const lean = buildPromptMeta({ ...base, variant: "lean" });
+    const changedEffectiveRules = buildPromptMeta({
+      ...base,
+      effectiveRules: { cvRules: ["Prefer concise writing."] },
+    });
+    const changedResumeSnapshot = buildPromptMeta({
+      ...base,
+      resumeSnapshot: { summary: "A different candidate snapshot." },
+    });
+    const changedJobSnapshot = buildPromptMeta({
+      ...base,
+      jobSnapshot: { description: "A different job snapshot." },
+    });
+
+    expect(buildPromptMeta(base).promptHash).toBe(same.promptHash);
+    expect(changedJob.promptHash).not.toBe(same.promptHash);
+    expect(changedRules.promptHash).not.toBe(same.promptHash);
+    expect(lean.promptHash).not.toBe(same.promptHash);
+    expect(changedEffectiveRules.promptHash).not.toBe(same.promptHash);
+    expect(changedResumeSnapshot.promptHash).not.toBe(same.promptHash);
+    expect(changedJobSnapshot.promptHash).not.toBe(same.promptHash);
+  });
+
+  it("chains post-generation prompts to the parent target receipt", () => {
+    const base = {
+      target: "resume" as const,
+      parentPromptHash: "primary-resume",
+      stage: "independent_review" as const,
+      prompt: {
+        instructions: "Review independently.",
+        input: "Review draft A.",
+      },
+    };
+
+    const same = buildGenerationLineageHash(base);
+    expect(buildGenerationLineageHash(base)).toBe(same);
+    expect(
+      buildGenerationLineageHash({
+        ...base,
+        parentPromptHash: "different-primary",
+      }),
+    ).not.toBe(same);
+    expect(
+      buildGenerationLineageHash({
+        ...base,
+        prompt: { ...base.prompt, input: "Review draft B." },
+      }),
+    ).not.toBe(same);
+    expect(
+      buildGenerationLineageHash({ ...base, target: "cover" }),
+    ).not.toBe(same);
+  });
+
+  it("versions a skill pack from deterministic effective rules and resume bytes", () => {
+    const base = {
+      ruleSetId: "rules-1",
+      resumeSnapshotUpdatedAt: "2026-02-22T10:00:00.000Z",
+      locale: "en-AU",
+      effectiveRules: {
+        hardConstraints: ["Ground every claim."],
+        cvRules: ["Return additions only."],
+      },
+      resumeSnapshot: {
+        summary: "Backend engineer.",
+        skills: ["TypeScript"],
+      },
+    };
+
+    expect(buildSkillPackVersion(base)).toBe(
+      buildSkillPackVersion({
+        ...base,
+        effectiveRules: {
+          cvRules: ["Return additions only."],
+          hardConstraints: ["Ground every claim."],
+        },
+      }),
+    );
+    expect(
+      buildSkillPackVersion({
+        ...base,
+        effectiveRules: { ...base.effectiveRules, cvRules: ["Different rule."] },
+      }),
+    ).not.toBe(buildSkillPackVersion(base));
+    expect(
+      buildSkillPackVersion({
+        ...base,
+        resumeSnapshot: { ...base.resumeSnapshot, summary: "Changed." },
+      }),
+    ).not.toBe(buildSkillPackVersion(base));
+    expect(
+      buildSkillPackVersion({
+        ...base,
+        locale: "zh-CN",
+      }),
+    ).not.toBe(buildSkillPackVersion(base));
   });
 
   it("accepts legacy import metadata with only required fields", () => {

@@ -31,6 +31,21 @@ describe("default prompt rules", () => {
     expect(prompts.systemPrompt.toLowerCase()).toContain("senior recruiter-level");
   });
 
+  it("uses the canonical additions-only resume contract for internal generation", () => {
+    const prompts = buildTailorPrompts(DEFAULT_RULES, {
+      baseSummary: "Base summary",
+      jobTitle: "Software Engineer",
+      company: "Example Co",
+      description: "Build product features.",
+    });
+    const text = `${prompts.systemPrompt}\n${prompts.userPrompt}`;
+
+    expect(text).toContain('"addedBullets"');
+    expect(text).not.toContain("skillsFinal");
+    expect(text).not.toContain('"bullets"');
+    expect(text.toLowerCase()).not.toContain("reorder");
+  });
+
   it("allows markdown bold markers inside JSON string values for cv summary keyword emphasis", () => {
     const prompts = buildTailorPrompts(DEFAULT_RULES, {
       baseSummary: "Base summary",

@@ -1,15 +1,9 @@
 import type { CoverEvidenceContext } from "./coverContext";
 
 export type CoverDraft = {
-  candidateTitle?: string;
-  subject?: string;
-  date?: string;
-  salutation?: string;
   paragraphOne: string;
   paragraphTwo: string;
   paragraphThree: string;
-  closing?: string;
-  signatureName?: string;
 };
 
 export type CoverQualityIssue = {
@@ -34,6 +28,7 @@ type EvaluateCoverQualityInput = {
   context: CoverEvidenceContext;
   company: string;
   targetWordRange: { min: number; max: number };
+  localeProfile?: "en-AU" | "en-US" | "zh-CN" | "global";
 };
 
 const STOPWORDS = new Set([
@@ -69,17 +64,37 @@ const STOPWORDS = new Set([
   "company",
 ]);
 
-function tokenize(value: string) {
-  return value
+function tokenize(
+  value: string,
+  localeProfile: EvaluateCoverQualityInput["localeProfile"],
+) {
+  const normalized = value
     .toLowerCase()
-    .replace(/\*\*/g, "")
+    .replace(/\*\*/g, "");
+  if (localeProfile === "zh-CN") {
+    const cjk = (normalized.match(/[\u4e00-\u9fff]/g) ?? []).join("");
+    const cjkBigrams: string[] = [];
+    for (let index = 0; index < cjk.length - 1; index += 1) {
+      cjkBigrams.push(cjk.slice(index, index + 2));
+    }
+    const latin = normalized.match(/[a-z0-9+#./-]{2,}/g) ?? [];
+    return [...new Set([...cjkBigrams, ...latin])];
+  }
+  return normalized
     .replace(/[^a-z0-9\s+/#.-]/g, " ")
     .split(/\s+/)
     .map((token) => token.trim())
     .filter((token) => token.length >= 4 && !STOPWORDS.has(token));
 }
 
-function countWords(value: string) {
+function countWords(
+  value: string,
+  localeProfile: EvaluateCoverQualityInput["localeProfile"],
+) {
+  if (localeProfile === "zh-CN") {
+    return (value.replace(/\*\*/g, "").match(/[\u4e00-\u9fff]/g) ?? [])
+      .length;
+  }
   return value
     .trim()
     .split(/\s+/)
@@ -98,9 +113,13 @@ function getBoldTerms(value: string) {
   return terms;
 }
 
-function hasResponsibilityCoverage(paragraph: string, responsibility: string) {
-  const paragraphTokens = new Set(tokenize(paragraph));
-  const responsibilityTokens = tokenize(responsibility);
+function hasResponsibilityCoverage(
+  paragraph: string,
+  responsibility: string,
+  localeProfile: EvaluateCoverQualityInput["localeProfile"],
+) {
+  const paragraphTokens = new Set(tokenize(paragraph, localeProfile));
+  const responsibilityTokens = tokenize(responsibility, localeProfile);
   if (!responsibilityTokens.length) return false;
   let hits = 0;
   for (const token of responsibilityTokens) {
@@ -109,9 +128,15 @@ function hasResponsibilityCoverage(paragraph: string, responsibility: string) {
   return hits >= Math.min(2, responsibilityTokens.length);
 }
 
-function hasEvidenceGrounding(draftText: string, evidenceLines: string[]) {
-  const draftTokens = new Set(tokenize(draftText));
-  const evidenceTokens = evidenceLines.flatMap((line) => tokenize(line)).slice(0, 80);
+function hasEvidenceGrounding(
+  draftText: string,
+  evidenceLines: string[],
+  localeProfile: EvaluateCoverQualityInput["localeProfile"],
+) {
+  const draftTokens = new Set(tokenize(draftText, localeProfile));
+  const evidenceTokens = evidenceLines
+    .flatMap((line) => tokenize(line, localeProfile))
+    .slice(0, 80);
   let hits = 0;
   for (const token of evidenceTokens) {
     if (draftTokens.has(token)) hits += 1;
@@ -125,7 +150,10 @@ export function evaluateCoverQuality(input: EvaluateCoverQualityInput): CoverQua
   const p1 = input.draft.paragraphOne.trim();
   const p2 = input.draft.paragraphTwo.trim();
   const p3 = input.draft.paragraphThree.trim();
-  const wordCount = countWords(`${p1} ${p2} ${p3}`);
+  const wordCount = countWords(
+    `${p1} ${p2} ${p3}`,
+    input.localeProfile,
+  );
 
   if (!p1 || !p2 || !p3 || p1.length < 60 || p2.length < 90 || p3.length < 60) {
     issues.push({
@@ -142,7 +170,9 @@ export function evaluateCoverQuality(input: EvaluateCoverQualityInput): CoverQua
   }
 
   const topThree = input.context.topResponsibilities.slice(0, 3);
-  const coveredTopCount = topThree.filter((item) => hasResponsibilityCoverage(p2, item)).length;
+  const coveredTopCount = topThree.filter((item) =>
+    hasResponsibilityCoverage(p2, item, input.localeProfile),
+  ).length;
   if (topThree.length && coveredTopCount < Math.min(2, topThree.length)) {
     issues.push({
       code: "TOP_RESPONSIBILITY_COVERAGE",
@@ -150,7 +180,13 @@ export function evaluateCoverQuality(input: EvaluateCoverQualityInput): CoverQua
     });
   }
 
-  if (!hasEvidenceGrounding(`${p1} ${p2}`, input.context.matchedEvidence)) {
+  if (
+    !hasEvidenceGrounding(
+      `${p1} ${p2}`,
+      input.context.matchedEvidence,
+      input.localeProfile,
+    )
+  ) {
     issues.push({
       code: "EVIDENCE_GROUNDING",
       message: "Claims are not grounded enough in resume evidence.",
@@ -169,7 +205,11 @@ export function evaluateCoverQuality(input: EvaluateCoverQualityInput): CoverQua
   const mentionsCompany = input.company && p3Lower.includes(input.company.toLowerCase());
   const mentionsSpecificToken = input.context.topResponsibilities
     .slice(0, 3)
-    .some((item) => tokenize(item).some((token) => p3Lower.includes(token)));
+    .some((item) =>
+      tokenize(item, input.localeProfile).some((token) =>
+        p3Lower.includes(token),
+      ),
+    );
   if (!mentionsCompany && !mentionsSpecificToken) {
     issues.push({
       code: "GENERIC_MOTIVATION",

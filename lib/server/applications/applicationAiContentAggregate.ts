@@ -121,14 +121,7 @@ function generationProvenance(
   proposal: AiContent,
   target: ApplicationAiContentTarget,
 ): AiGenerationProvenance | undefined {
-  const targetProvenance = proposal.provenance?.[target];
-  if (targetProvenance) return targetProvenance;
-  if (!proposal.source) return undefined;
-  return {
-    generatedAt: proposal.generatedAt,
-    promptMetaHash: proposal.promptMetaHash,
-    source: proposal.source,
-  };
+  return proposal.provenance?.[target];
 }
 
 function replaceTargetProposal(
@@ -137,27 +130,30 @@ function replaceTargetProposal(
   target: ApplicationAiContentTarget,
 ): AiContent {
   const replacementProvenance = generationProvenance(proposal, target);
+  const provenance = {
+    ...(target === "resume"
+      ? replacementProvenance
+        ? { resume: replacementProvenance }
+        : {}
+      : current?.provenance?.resume
+        ? { resume: current.provenance.resume }
+        : {}),
+    ...(target === "cover"
+      ? replacementProvenance
+        ? { cover: replacementProvenance }
+        : {}
+      : current?.provenance?.cover
+        ? { cover: current.provenance.cover }
+        : {}),
+  };
+  const { provenance: _proposalProvenance, ...proposalWithoutProvenance } =
+    proposal;
   return {
-    ...proposal,
+    ...proposalWithoutProvenance,
     cv: target === "resume" || !current ? proposal.cv : current.cv,
     cover:
       target === "cover" || !current ? proposal.cover : current.cover,
-    provenance: {
-      ...(target === "resume"
-        ? replacementProvenance
-          ? { resume: replacementProvenance }
-          : {}
-        : current?.provenance?.resume
-          ? { resume: current.provenance.resume }
-          : {}),
-      ...(target === "cover"
-        ? replacementProvenance
-          ? { cover: replacementProvenance }
-          : {}
-        : current?.provenance?.cover
-          ? { cover: current.provenance.cover }
-          : {}),
-    },
+    ...(Object.keys(provenance).length > 0 ? { provenance } : {}),
   };
 }
 

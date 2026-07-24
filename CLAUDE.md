@@ -30,9 +30,17 @@ npm run deps:policy       # Check dependency policy
 ### Key Data Flow
 
 1. **Job Intake**: `FetchRun` tasks dispatch GitHub Actions (Python JobSpy fetcher) → import via `/api/admin/import` with dedupe on `userId + jobUrl` and tombstone filtering (`DeletedJobUrl`)
-2. **Tailoring**: `Job` + `ResumeProfile` → AI prompt (via versioned `PromptRuleTemplate`) → external model or `/api/applications/generate` → import JSON artifact → PDF render via LaTeX external service
-3. **Batch (Codex)**: `ApplicationBatch` with `NEW` jobs → atomic claim+generate+import per task via `/api/application-batches/[id]/run-once`
+2. **Tailoring**: `Job` + `ResumeProfile` → AI prompt (via versioned `PromptRuleTemplate`) → external model imported through `/api/applications/manual-generate`, or durable server generation through `generateApplicationArtifactsForJob` → persisted Application aggregate → PDF render via LaTeX external service
+3. **Batch**: External Codex atomically completes/claims tasks through `/api/application-batches/[id]/run-once` and persists output through `manual-generate`; feature-gated server auto-execute uses `/execute` → `generateApplicationArtifactsForJob`
 4. **Extension**: Chrome extension authenticates via `/api/ext/auth/token` → reads flat profile → logs field mappings and form submissions for learning auto-fill rules
+
+Current tailoring output is delta-only: Resume returns `cvSummary` plus zero to
+three `latestExperience.addedBullets`; Cover returns only its three body
+paragraphs. Existing bullets and skills remain owned by `ResumeProfile`. Skill
+Pack V3 must package the user's active effective `PromptRuleTemplate`, not
+defaults. The retired `/api/applications/generate` and
+`/api/applications/generate-cover-letter` session routes must not be
+reintroduced.
 
 ### Route Groups
 

@@ -34,6 +34,7 @@ import {
   ApplicationPromptError,
   type ApplicationPromptPayload,
 } from "@/lib/server/applications/applicationPrompt";
+import { buildPromptMeta } from "@/lib/server/ai/promptContract";
 import { POST } from "@/app/api/applications/prompt/route";
 
 const VALID_JOB_ID = "550e8400-e29b-41d4-a716-446655440000";
@@ -45,13 +46,19 @@ const servicePayload: ApplicationPromptPayload = {
     instructions: "system instructions",
     sessionId: "22222222-2222-4222-8222-222222222222",
   },
-  promptMeta: {
+  promptMeta: buildPromptMeta({
+    target: "resume",
     ruleSetId: "rules-1",
     resumeSnapshotUpdatedAt: "2026-07-15T00:00:00.000Z",
-  },
+    variant: "full",
+    prompt: {
+      input: "<candidate-evidence>{}</candidate-evidence>",
+      instructions: "system instructions",
+    },
+  }),
   expectedJsonShape: '{"cvSummary":"string"}',
   expectedJsonSchema: { type: "object" },
-  promptVersion: "v3-local-ai",
+  promptVersion: "v4-application-proposal",
 };
 
 function request(body: unknown) {
@@ -96,7 +103,7 @@ describe("applications prompt api", () => {
     expect(applicationPrompt.build).not.toHaveBeenCalled();
   });
 
-  it("delegates authenticated business orchestration and returns the v3 envelope", async () => {
+  it("delegates authenticated business orchestration and returns the v4 envelope", async () => {
     const response = await POST(request({ jobId: VALID_JOB_ID, target: "resume" }));
     const json = await response.json();
 
@@ -116,7 +123,7 @@ describe("applications prompt api", () => {
       promptMeta: servicePayload.promptMeta,
       expectedJsonShape: servicePayload.expectedJsonShape,
       expectedJsonSchema: servicePayload.expectedJsonSchema,
-      promptVersion: "v3-local-ai",
+      promptVersion: "v4-application-proposal",
     });
     expect(json.requestId).not.toBe(servicePayload.requestId);
     expect(json.requestId).toMatch(/^[0-9a-f-]{36}$/i);
