@@ -11,7 +11,7 @@ Vocabulary is `CONTEXT.md`. Route-layer facts live in
 | Directory | Owns | Entry points |
 |---|---|---|
 | `ai/` | Prompt construction, provider calls, the Gemini Tailoring path, evidence/review ledger, cover quality, fit scoring, Skill Pack | `tailorApplication.ts:282` `tailorApplicationContent`, `buildPrompt.ts:29`, `providers.ts:211` `callProvider`, `evidenceLedger.ts:331` `attachEvidenceAndReview`, `promptContract.ts:212`, `skillPack.ts:209` |
-| `applications/` | Application lifecycle: target-aware AI Content evolution, manual-import parse, Quality Gate, finalize render, artifact commit, ATS validation, advisory lock, review ledger, `ApplicationEvent` append | `applicationAiContentAggregate.ts` `evolveApplicationAiContent`, `commitApplicationArtifact.ts` `commitApplicationArtifact`, `generateApplicationArtifacts.ts`, `manualImportArtifact.ts`, `manualImportParser.ts`, `finalizeApplication.ts`, `persistReviewLedger.ts`, `applicationMutationLock.ts`, `atsPdfValidator.ts` |
+| `applications/` | Application lifecycle: target-aware AI Content evolution, canonical resume composition, manual-import parse, Quality Gate, finalize render, artifact commit, ATS validation, advisory lock, review ledger, `ApplicationEvent` append | `applicationAiContentAggregate.ts` `evolveApplicationAiContent`, `applicationResumeComposition.ts` `composeApplicationResumeRenderInput`, `commitApplicationArtifact.ts` `commitApplicationArtifact`, `generateApplicationArtifacts.ts`, `manualImportArtifact.ts`, `manualImportParser.ts`, `finalizeApplication.ts`, `persistReviewLedger.ts`, `applicationMutationLock.ts`, `atsPdfValidator.ts` |
 | `applicationBatches/` | Codex Batch state machine: claim, complete, cancel, retry | `runner.ts:169` `claimNextBatchTask`, `:282` `completeBatchTask`, `:334`, `:385`; `codexRunContext.ts:81`/`:189`/`:245`; `batchProgress.ts:9` |
 | `jobs/` | Job import/list/search/delete/status, fit leasing, cooldown, SimHash dedup, posting risk, liveness, market scoping | `jobImportService.ts:95`, `jobListService.ts:142`, `jobSearchService.ts:11`, `jobDeleteService.ts:69`/`:135`, `fitRunService.ts:262`, `jobMutationLock.ts:23`, `postingRisk.ts:121` |
 | `latex/` | Template rendering from `latexTemp/` + the remote render-service client | `compilePdf.ts:68` `compileLatexToPdf`, `renderResume.ts:203`, `renderResumeCN.ts:190`, `renderCoverLetter.ts:69`, `mapResumeProfile.ts:30` |
@@ -74,6 +74,10 @@ Entry: `POST /api/applications/manual-generate`.
 
 - `evolveApplicationAiContent` — the single interface for target replacement, client Edit commands, review refresh, and discard
 - `attachEvidenceAndReview` — rebuilds the aggregate-wide evidence and review projection
+- `composeApplicationResumeRenderInput` — the single pure composition seam for
+  direct FINAL, server batch, Preview, and Editor Finalize. It combines the
+  Master Resume Profile spine with canonical `aiContent.cv`; model-only skills
+  and reordered base bullets cannot bypass persisted Application state.
 - `compileLatexToPdf` — the single renderer
 - `commitApplicationArtifact` — the artifact persistence sequence shared by server generation, manual/Local AI generation, and Editor Finalize
 - `persistReviewLedger` — reached through the commit module plus non-artifact draft and discard transactions

@@ -393,7 +393,7 @@ describe("applications manual generate api", () => {
     expect(res.headers.get("content-type")).toBe("application/pdf");
   });
 
-  it("applies latest experience bullets and full skillsFinal for resume target", async () => {
+  it("preserves Master Profile bullets and skills for the resume target", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "user-1" },
     });
@@ -469,12 +469,11 @@ describe("applications manual generate api", () => {
     const renderCallArg = (renderResumeTex as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(renderCallArg.summary).toBe("Tailored summary");
     expect(renderCallArg.experiences[0].bullets).toEqual([
-      "Maintained CI/CD pipelines on Linux.",
       "Built Java services for internal APIs.",
+      "Maintained CI/CD pipelines on Linux.",
     ]);
     expect(renderCallArg.skills).toEqual([
-      { label: "Backend", items: ["Java", "Spring Boot"] },
-      { label: "Cloud", items: ["GCP"] },
+      { label: "Backend", items: ["Java"] },
     ]);
   });
 

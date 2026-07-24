@@ -135,6 +135,17 @@ describe("generateApplicationArtifactsForJob", () => {
         },
         summary: "Engineer",
       },
+      cv: {
+        summary: {
+          aiText: "Engineer",
+          originalText: "Engineer",
+          accepted: true,
+        },
+        latestExperience: {
+          experienceIndex: 0,
+          addedBullets: [],
+        },
+      },
       tailored: {
         cvSummary: "Engineer",
         cover: {

@@ -6,7 +6,8 @@ import {
   type TailorOptions,
   type TailorResult,
 } from "@/lib/server/ai/tailorApplication";
-import { escapeLatexWithBold } from "@/lib/server/latex/escapeLatex";
+import type { AiContent } from "@/lib/shared/schemas/aiContent";
+import { composeApplicationResumeRenderInput } from "./applicationResumeComposition";
 
 type ResumeJobContext = {
   title: string;
@@ -25,19 +26,9 @@ type ResumePdfResult = {
   coverSource: "ai" | "fallback";
   tailorReason: string;
   renderInput: ReturnType<typeof mapResumeProfile>;
+  cv: AiContent["cv"];
   tailored: TailorResult;
 };
-
-function normalizeMarkdownBold(value: string) {
-  return value.replace(/\*\*([^*]+)\*\*/g, (_match, inner: string) => {
-    const raw = inner ?? "";
-    const leading = raw.match(/^\s*/)?.[0] ?? "";
-    const trailing = raw.match(/\s*$/)?.[0] ?? "";
-    const core = raw.trim();
-    if (!core) return "";
-    return `${leading}**${core}**${trailing}`;
-  });
-}
 
 export async function buildResumePdfForJob(input: {
   userId: string;
@@ -56,16 +47,23 @@ export async function buildResumePdfForJob(input: {
     userId: input.userId,
   }, input.tailorOptions);
 
-  const tailoredSummary = tailored.cvSummary?.trim()
-    ? escapeLatexWithBold(normalizeMarkdownBold(tailored.cvSummary))
-    : renderInput.summary;
-
-  const cvInput = {
-    ...renderInput,
-    summary: tailoredSummary,
+  const cv: AiContent["cv"] = {
+    summary: {
+      aiText: tailored.cvSummary,
+      originalText: renderInput.summary,
+      accepted: true,
+    },
+    latestExperience: {
+      experienceIndex: 0,
+      addedBullets: [],
+    },
   };
-
-  const tex = renderResumeTex(cvInput);
+  const tex = renderResumeTex(
+    composeApplicationResumeRenderInput({
+      master: renderInput,
+      cv,
+    }),
+  );
   const pdf = await compileLatexToPdf(tex);
 
   return {
@@ -75,6 +73,7 @@ export async function buildResumePdfForJob(input: {
     coverSource: tailored.source.cover,
     tailorReason: tailored.reason,
     renderInput,
+    cv,
     tailored,
   };
 }

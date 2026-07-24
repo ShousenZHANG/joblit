@@ -4,13 +4,13 @@ import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import { renderResumeTex } from "@/lib/server/latex/renderResume";
 import { renderCoverLetterTex } from "@/lib/server/latex/renderCoverLetter";
 import { compileLatexToPdf } from "@/lib/server/latex/compilePdf";
-import { escapeLatexWithBold } from "@/lib/server/latex/escapeLatex";
 import {
   buildPdfFilename,
   resumeFilenameSegments,
 } from "@/lib/server/files/pdfFilename";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
+import { composeApplicationResumeRenderInput } from "./applicationResumeComposition";
 
 /**
  * Render the committed aiContent of a DRAFT Application into a final
@@ -51,38 +51,12 @@ export async function renderApplicationPdf(
     });
   }
   const renderInput = mapResumeProfile(profile);
-
-  // Compose final summary
-  const finalSummary =
-    input.aiContent.cv.summary.userEdit?.trim() ||
-    input.aiContent.cv.summary.aiText.trim() ||
-    renderInput.summary;
-
-  // Compose final latest-experience bullets: base bullets + accepted AI adds
-  const acceptedAdded = input.aiContent.cv.latestExperience.addedBullets
-    .filter((b) => b.accepted)
-    .map((b) => (b.userEdit?.trim() || b.text).trim())
-    .filter(Boolean);
-  const expIdx = input.aiContent.cv.latestExperience.experienceIndex;
-  const baseExperiences = renderInput.experiences;
-  const targetExp = baseExperiences[expIdx];
-  const nextExperiences = targetExp
-    ? baseExperiences.map((exp, i) =>
-        i === expIdx
-          ? {
-              ...exp,
-              bullets: [...exp.bullets, ...acceptedAdded.map((b) => escapeLatexWithBold(b))],
-            }
-          : exp,
-      )
-    : baseExperiences;
-
-  const tex = renderResumeTex({
-    ...renderInput,
-    summary: escapeLatexWithBold(finalSummary),
-    experiences: nextExperiences,
-    skills: renderInput.skills,
-  });
+  const tex = renderResumeTex(
+    composeApplicationResumeRenderInput({
+      master: renderInput,
+      cv: input.aiContent.cv,
+    }),
+  );
 
   const pdf = await compileLatexToPdf(tex, {
     engine: profileLocale === "zh-CN" ? "xelatex" : "pdflatex",

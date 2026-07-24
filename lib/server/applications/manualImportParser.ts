@@ -4,7 +4,6 @@
  */
 
 import { z } from "zod";
-import { escapeLatex } from "@/lib/server/latex/escapeLatex";
 
 // ── Zod Schemas ──
 
@@ -328,42 +327,6 @@ export function parseCoverManualOutput(raw: string): {
   };
 }
 
-// ── Skill Group Utilities ──
-
-export function sanitizeSkillGroups(
-  groups: Array<{ label: string; items: string[] }>,
-): Array<{ label: string; items: string[] }> {
-  const out: Array<{ label: string; items: string[] }> = [];
-  const seenLabels = new Set<string>();
-
-  for (const group of groups) {
-    const rawLabel = group.label.trim();
-    if (!rawLabel) continue;
-    const labelKey = rawLabel.toLowerCase();
-    if (seenLabels.has(labelKey)) continue;
-    seenLabels.add(labelKey);
-
-    const seenItems = new Set<string>();
-    const items = group.items
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .filter((item) => {
-        const key = item.toLowerCase();
-        if (seenItems.has(key)) return false;
-        seenItems.add(key);
-        return true;
-      })
-      .slice(0, 20)
-      .map((item) => escapeLatex(item));
-
-    if (items.length === 0) continue;
-    out.push({ label: escapeLatex(rawLabel), items });
-    if (out.length >= 5) break;
-  }
-
-  return out;
-}
-
 // ── Bullet Canonicalization ──
 
 export function normalizeBulletForCompare(value: string) {
@@ -528,17 +491,6 @@ export function canonicalizeLatestBullets(baseBullets: string[], incomingBullets
   }
 
   return { canonicalBullets, addedBullets };
-}
-
-export function normalizeMarkdownBold(value: string) {
-  return value.replace(/\*\*([^*]+)\*\*/g, (_match, inner: string) => {
-    const raw = inner ?? "";
-    const leading = raw.match(/^\s*/)?.[0] ?? "";
-    const trailing = raw.match(/\s*$/)?.[0] ?? "";
-    const core = raw.trim();
-    if (!core) return "";
-    return `${leading}**${core}**${trailing}`;
-  });
 }
 
 export function getLatestRawBullets(profile: unknown): string[] {

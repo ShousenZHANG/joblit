@@ -6,6 +6,16 @@
 
 > **Accepted amendment:** ADR-0004 keeps current Codex Batch `finalize=true` behavior only as a migration exception. When ADR-0004 Phase 4 ships, Codex Batch will generate evidence-complete drafts instead of immediately finalizing. All other decisions in this ADR remain active.
 
+> **Accepted amendment (2026-07-24):** Every Application resume path, including
+> direct FINAL, server batch, preview, and DRAFT-to-FINAL, composes its render
+> input through `composeApplicationResumeRenderInput`. The Master Resume Profile
+> remains the document spine; canonical `aiContent` may replace the summary and
+> append accepted bullets, but skills and existing bullets remain Master-owned.
+> Legacy `skillsFinal` input is accepted for compatibility and has no render
+> effect. During the compatibility window, existing versioned strict contracts
+> may still require the field; removing it requires a coordinated Prompt Schema
+> and Skill Pack version bump.
+
 ## Context
 
 Joblit has two ways to produce AI proposals for an Application:

@@ -95,7 +95,7 @@ describe("manual import artifact builder", () => {
     );
   });
 
-  it("builds a resume artifact and keeps grounded latest-experience content", () => {
+  it("builds a reproducible resume from canonical AI content and the Master Profile", () => {
     const result = buildManualImportArtifact({
     evidenceScopeKey: "user-1",
       target: "resume",
@@ -124,13 +124,13 @@ describe("manual import artifact builder", () => {
     expect(resumeRender.renderResumeTex).toHaveBeenCalledWith(
       expect.objectContaining({
         summary: expect.stringContaining("\\textbf{Java}"),
-        skills: [{ label: "Backend", items: ["Java", "Spring Boot"] }],
+        skills: renderInput.skills,
       }),
     );
     const renderArg = resumeRender.renderResumeTex.mock.calls[0][0];
     expect(renderArg.experiences[0].bullets).toEqual([
-      "Maintained CI/CD pipelines on Linux.",
       "Built Java APIs.",
+      "Maintained CI/CD pipelines on Linux.",
     ]);
   });
 

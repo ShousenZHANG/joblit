@@ -5,7 +5,6 @@ import {
   buildPdfFilename,
   resumeFilenameSegments,
 } from "@/lib/server/files/pdfFilename";
-import { escapeLatexWithBold } from "@/lib/server/latex/escapeLatex";
 import type { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import { renderCoverLetterTex } from "@/lib/server/latex/renderCoverLetter";
 import { renderResumeTex } from "@/lib/server/latex/renderResume";
@@ -19,14 +18,12 @@ import {
   getLatestRawBullets,
   isGroundedAddedBullet,
   isNonRedundantAddedBullet,
-  normalizeBulletForCompare,
-  normalizeMarkdownBold,
   parseCoverManualOutput,
   parseCoverStrictOutput,
   parseResumeManualOutput,
   parseResumeStrictOutput,
-  sanitizeSkillGroups,
 } from "./manualImportParser";
+import { composeApplicationResumeRenderInput } from "./applicationResumeComposition";
 
 type ResumeRenderInput = ReturnType<typeof mapResumeProfile>;
 
@@ -57,7 +54,7 @@ type ManualImportArtifactResult =
       coverQualityGate: string;
       coverQualityIssueCount: number;
       /**
-       * Provenance snapshot of every AI proposal + the user's
+       * Canonical, render-reproducible AI proposals + the user's
        * accept/reject/edit decisions. Persisted on Application.aiContent.
        * Resume target captures the summary and grounded bullets. Cover
        * target captures its three editable paragraphs.
@@ -126,7 +123,7 @@ function buildManualResumeArtifact(input: {
         message:
           input.mode === "strict"
             ? "Local AI returned invalid resume JSON. Run it again or use the manual method."
-            : "Unable to parse model output. Resume JSON must include cvSummary and latestExperience.bullets (skillsFinal preferred).",
+            : "Unable to parse model output. Resume JSON must include cvSummary and latestExperience.bullets.",
         details: resumeParsed.issues.slice(0, 8),
       },
     };
@@ -141,7 +138,6 @@ function buildManualResumeArtifact(input: {
       ? baseLatestRawBullets
       : baseLatest?.bullets.map((item) => item.trim()).filter(Boolean) ?? [];
   const incomingBullets = resumeOutput.latestExperience?.bullets;
-  let finalLatestBullets = incomingBullets ?? [];
   const aiAddedBullets: AiAddedBullet[] = [];
 
   if (baseLatest && incomingBullets) {
@@ -157,12 +153,10 @@ function buildManualResumeArtifact(input: {
       };
     }
 
-    const { canonicalBullets, addedBullets } = canonicalizeLatestBullets(
+    const { addedBullets } = canonicalizeLatestBullets(
       baseBulletsForMatch,
       incomingBullets,
     );
-    const addedKeys = new Set(addedBullets.map(normalizeBulletForCompare));
-    const allowedAddedKeys = new Set<string>();
     const acceptedAddedBullets: string[] = [];
 
     for (const bullet of addedBullets) {
@@ -185,35 +179,9 @@ function buildManualResumeArtifact(input: {
 
       if (passed) {
         acceptedAddedBullets.push(bullet);
-        allowedAddedKeys.add(normalizeBulletForCompare(bullet));
       }
     }
-
-    const filteredCanonical =
-      addedKeys.size > 0
-        ? canonicalBullets.filter((bullet) => {
-            const key = normalizeBulletForCompare(bullet);
-            if (!addedKeys.has(key)) return true;
-            return allowedAddedKeys.has(key);
-          })
-        : canonicalBullets;
-
-    finalLatestBullets = filteredCanonical.map((bullet) =>
-      escapeLatexWithBold(normalizeMarkdownBold(bullet)),
-    );
   }
-
-  const sanitizedSkillsFinal = resumeOutput.skillsFinal
-    ? sanitizeSkillGroups(resumeOutput.skillsFinal)
-    : [];
-  const nextExperiences =
-    baseLatest && finalLatestBullets && finalLatestBullets.length > 0
-      ? [{ ...baseLatest, bullets: finalLatestBullets }, ...input.renderInput.experiences.slice(1)]
-      : input.renderInput.experiences;
-  const nextSkills =
-    sanitizedSkillsFinal.length > 0
-      ? sanitizedSkillsFinal
-      : input.renderInput.skills;
 
   const generatedAt = new Date().toISOString();
   const aiContent = attachEvidenceAndReview({
@@ -252,12 +220,12 @@ function buildManualResumeArtifact(input: {
 
   return {
     ok: true,
-    tex: renderResumeTex({
-      ...input.renderInput,
-      summary: escapeLatexWithBold(normalizeMarkdownBold(cvSummary)),
-      experiences: nextExperiences,
-      skills: nextSkills,
-    }),
+    tex: renderResumeTex(
+      composeApplicationResumeRenderInput({
+        master: input.renderInput,
+        cv: aiContent.cv,
+      }),
+    ),
     filename: parseFilename(resumeFilenameSegments(input.profile).name, input.job.title, "resume"),
     coverQualityGate: "pass",
     coverQualityIssueCount: 0,

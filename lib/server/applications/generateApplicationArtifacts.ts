@@ -84,7 +84,7 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
     jobDescription: job.description,
     aiContent: buildBatchAiContent(
       tailored,
-      resumeResult.renderInput.summary,
+      resumeResult.cv,
     ),
   });
   if (aiContent.review?.verdict === "blocked") {
@@ -201,7 +201,7 @@ function buildBatchAiContent(
   tailored: Awaited<
     ReturnType<typeof import("@/lib/server/ai/tailorApplication").tailorApplicationContent>
   >,
-  originalSummary: string,
+  cv: AiContent["cv"],
 ): AiContent {
   const generatedAt = new Date().toISOString();
   const generation = {
@@ -217,14 +217,7 @@ function buildBatchAiContent(
       resume: generation,
       cover: generation,
     },
-    cv: {
-      summary: {
-        aiText: tailored.cvSummary,
-        originalText: originalSummary,
-        accepted: true,
-      },
-      latestExperience: { experienceIndex: 0, addedBullets: [] },
-    },
+    cv,
     cover: {
       paragraphOne: {
         aiText: tailored.cover.paragraphOne,
