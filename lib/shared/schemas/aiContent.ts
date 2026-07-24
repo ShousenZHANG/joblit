@@ -14,6 +14,28 @@ import { z } from "zod";
  */
 export const AI_CONTENT_SCHEMA_VERSION = 1;
 
+const aiImportSourceSchema = z.enum(["manual_import", "local_ai"]);
+const aiGenerationSourceSchema = z.enum([
+  "manual_import",
+  "local_ai",
+  "server_batch",
+]);
+
+export const aiGenerationProvenanceSchema = z
+  .object({
+    generatedAt: z.string().datetime(),
+    promptMetaHash: z.string(),
+    source: aiGenerationSourceSchema,
+  })
+  .strict();
+
+const aiTargetProvenanceSchema = z
+  .object({
+    resume: aiGenerationProvenanceSchema.optional(),
+    cover: aiGenerationProvenanceSchema.optional(),
+  })
+  .strict();
+
 const qualityGateSchema = z
   .object({
     passed: z.boolean(),
@@ -132,7 +154,17 @@ export const aiContentSchema = z
      * `.min(1)` is intentionally deferred — see ADR-0001.
      */
     promptMetaHash: z.string(),
-    source: z.enum(["manual_import", "local_ai"]).optional(),
+    source: aiImportSourceSchema.optional(),
+    /**
+     * Authoritative generation metadata for each independently generated
+     * target. The legacy root fields above describe only the most recent
+     * import and cannot safely attribute a preserved CV or cover letter.
+     *
+     * Optional for rows written before target-aware provenance existed. A
+     * missing target entry means "historically unknown", never "same as the
+     * latest root metadata".
+     */
+    provenance: aiTargetProvenanceSchema.optional(),
     evidence: z.array(evidenceReferenceSchema).max(320).optional(),
     review: applicationReviewSchema.optional(),
     cv: cvSchema,
@@ -141,6 +173,9 @@ export const aiContentSchema = z
   .strict();
 
 export type AiContent = z.infer<typeof aiContentSchema>;
+export type AiGenerationProvenance = z.infer<
+  typeof aiGenerationProvenanceSchema
+>;
 export type AiAddedBullet = z.infer<typeof addedBulletSchema>;
 export type AiSummary = z.infer<typeof summarySchema>;
 export type AiCoverParagraph = z.infer<typeof coverParagraphSchema>;

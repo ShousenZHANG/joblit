@@ -197,7 +197,7 @@ rest.
 | `Job.postingRiskFlags` | `string[]` advisory flags | **Nothing** — coerced by `normalizePostingRiskFlags` |
 | `FetchRun.queries` | Free-form fetch parameters, JSON so it can evolve without migrations (`:361`) | **Nothing on the column**; request bodies use route-local Zod, read-back is an untyped cast |
 | `ResumeProfile.{basics,links,skills,experiences,projects,education}` | Master Resume Profile sections | `ResumeProfileSchema` — `lib/shared/schemas/resumeProfile.ts:72` |
-| `Application.aiContent` | **AI Content** — the ADR-0001 provenance snapshot | `aiContentSchema` — `lib/shared/schemas/aiContent.ts:124`, `.strict()`. The retired `skillsAdditions` key is stripped by a `z.preprocess` at `:64-74` |
+| `Application.aiContent` | **AI Content** — the ADR-0001 current-proposal snapshot with per-target provenance plus aggregate evidence/review | `aiContentSchema` — `lib/shared/schemas/aiContent.ts`, `.strict()`. Target provenance is optional for legacy v1 rows; a missing entry means unknown. The retired `skillsAdditions` key is stripped by a `z.preprocess` |
 | `Application.atsValidation` | Last ATS/PDF machine-readability result | **Nothing** — written as an object literal, read back through a `typeof` guard |
 | `Application.reviewReport` | Reviewer report; the same object also lives at `aiContent.review` | `applicationReviewSchema` on write; **no server-side parse of the stored column** |
 | `ApplicationEvent.metadata` | Arbitrary payload | **Nothing** |

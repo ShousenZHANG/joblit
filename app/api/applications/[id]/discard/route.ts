@@ -6,9 +6,11 @@ import { UuidParamSchema } from "@/lib/shared/schemas/common";
 import {
   aiContentSchema,
   hashAiContent,
-  type AiContent,
 } from "@/lib/shared/schemas/aiContent";
 import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
+import { persistReviewLedger } from "@/lib/server/applications/persistReviewLedger";
+import { evolveApplicationAiContent } from "@/lib/server/applications/applicationAiContentAggregate";
+import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 
 export const runtime = "nodejs";
 
@@ -39,7 +41,29 @@ export async function POST(
 
       const existing = await prisma.application.findFirst({
         where: { id: params.id, userId },
-        select: { id: true, jobId: true, aiContent: true, aiContentHash: true },
+        select: {
+          id: true,
+          jobId: true,
+          aiContent: true,
+          aiContentHash: true,
+          resumeProfile: {
+            select: {
+              userId: true,
+              name: true,
+              locale: true,
+              summary: true,
+              basics: true,
+              links: true,
+              skills: true,
+              experiences: true,
+              projects: true,
+              education: true,
+            },
+          },
+          job: {
+            select: { userId: true, description: true },
+          },
+        },
       });
       if (!existing) {
         return NextResponse.json(
@@ -79,7 +103,44 @@ export async function POST(
         );
       }
 
-      const reset = resetToOriginalProposal(parsed.data);
+      const profile =
+        existing.resumeProfile?.userId === userId
+          ? existing.resumeProfile
+          : null;
+      const jobOwned = existing.job?.userId === userId;
+      const evolved = evolveApplicationAiContent({
+        current: parsed.data,
+        command: { kind: "discard_edits" },
+        ...(profile
+          ? {
+              reviewContext: {
+                scopeKey: userId,
+                resumeSnapshot: {
+                  profile,
+                  renderInput: mapResumeProfile(profile),
+                },
+                jobDescription: jobOwned
+                  ? existing.job?.description
+                  : undefined,
+                jobSourceAvailable: jobOwned,
+              },
+            }
+          : {}),
+      });
+      if (evolved.kind !== "evolved") {
+        return NextResponse.json(
+          {
+            error: {
+              code: "CANONICAL_EVIDENCE_UNAVAILABLE",
+              message:
+                "The server source snapshot is unavailable. Re-generate this draft.",
+            },
+            requestId,
+          },
+          { status: 409 },
+        );
+      }
+      const reset = evolved.aiContent;
       const newHash = hashAiContent(reset);
 
       const updated = await prisma.$transaction(
@@ -89,7 +150,7 @@ export async function POST(
             userId,
             existing.jobId ?? existing.id,
           );
-          return tx.application.updateMany({
+          const result = await tx.application.updateMany({
             where: {
               id: existing.id,
               userId,
@@ -99,8 +160,18 @@ export async function POST(
               status: "DRAFT",
               aiContent: reset,
               aiContentHash: newHash,
+              reviewReport: reset.review ?? undefined,
             },
           });
+          if (result.count === 1) {
+            await persistReviewLedger(tx, {
+              userId,
+              applicationId: existing.id,
+              jobId: existing.jobId,
+              aiContent: reset,
+            });
+          }
+          return result;
         },
         { timeout: 30_000 },
       );
@@ -131,30 +202,4 @@ function staleDiscardResponse(requestId: string, currentHash?: string | null) {
     },
     { status: 409 },
   );
-}
-
-function resetToOriginalProposal(content: AiContent): AiContent {
-  return {
-    ...content,
-    cv: {
-      summary: {
-        aiText: content.cv.summary.aiText,
-        originalText: content.cv.summary.originalText,
-        accepted: true,
-      },
-      latestExperience: {
-        experienceIndex: content.cv.latestExperience.experienceIndex,
-        addedBullets: content.cv.latestExperience.addedBullets.map((b) => ({
-          text: b.text,
-          accepted: b.qualityGate?.passed ?? true,
-          ...(b.qualityGate ? { qualityGate: b.qualityGate } : {}),
-        })),
-      },
-    },
-    cover: {
-      paragraphOne: { aiText: content.cover.paragraphOne.aiText, accepted: true },
-      paragraphTwo: { aiText: content.cover.paragraphTwo.aiText, accepted: true },
-      paragraphThree: { aiText: content.cover.paragraphThree.aiText, accepted: true },
-    },
-  };
 }

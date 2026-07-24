@@ -16,7 +16,7 @@ import {
   aiContentSchema,
   hashAiContent,
 } from "@/lib/shared/schemas/aiContent";
-import { rebuildCanonicalAiContent } from "@/lib/server/applications/canonicalAiContent";
+import { evolveApplicationAiContent } from "@/lib/server/applications/applicationAiContentAggregate";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import {
   assertAtsPdf,
@@ -177,23 +177,31 @@ export async function POST(
           { status: 500 },
         );
       }
-      const requiresCanonicalEvidence =
-        aiContentParsed.data.evidence !== undefined ||
-        aiContentParsed.data.review !== undefined;
-      const requiresJobEvidence =
-        aiContentParsed.data.evidence?.some((item) => item.kind === "job") ===
-          true ||
-        (aiContentParsed.data.review?.requirements.length ?? 0) > 0;
       const profile =
         existing.resumeProfile?.userId === userId
           ? existing.resumeProfile
           : null;
-      if (
-        requiresCanonicalEvidence &&
-        (!profile ||
-          (requiresJobEvidence && !existing.job) ||
-          (existing.job && existing.job.userId !== userId))
-      ) {
+      const jobOwned = existing.job?.userId === userId;
+      const evolved = evolveApplicationAiContent({
+        current: aiContentParsed.data,
+        command: { kind: "refresh_review", preserveReviewedAt: true },
+        ...(profile
+          ? {
+              reviewContext: {
+                scopeKey: userId,
+                resumeSnapshot: {
+                  profile,
+                  renderInput: mapResumeProfile(profile),
+                },
+                jobDescription: jobOwned
+                  ? existing.job?.description
+                  : undefined,
+                jobSourceAvailable: jobOwned,
+              },
+            }
+          : {}),
+      });
+      if (evolved.kind !== "evolved") {
         return NextResponse.json(
           {
             error: {
@@ -206,21 +214,7 @@ export async function POST(
           { status: 409 },
         );
       }
-      const canonicalContent =
-        requiresCanonicalEvidence && profile
-          ? rebuildCanonicalAiContent({
-              canonical: aiContentParsed.data,
-              resumeSnapshot: aiContentParsed.data.source
-                ? {
-                    profile,
-                    renderInput: mapResumeProfile(profile),
-                  }
-                : profile,
-              jobDescription: existing.job?.description,
-              scopeKey: userId,
-              preserveReviewedAt: true,
-            })
-          : aiContentParsed.data;
+      const canonicalContent = evolved.aiContent;
       const canonicalHash = hashAiContent(canonicalContent);
 
       if (canonicalContent.review?.verdict === "blocked") {
@@ -335,6 +329,14 @@ export async function POST(
 
       if (commit.kind === "stale_write") return staleFinalizeResponse(requestId);
       if (commit.kind === "job_missing") return notFoundError("job", requestId);
+      if (commit.kind === "review_blocked") {
+        return errorJson(
+          "APPLICATION_REVIEW_BLOCKED",
+          "Resolve unsupported claims before finalizing this application.",
+          422,
+          { details: commit.review, requestId },
+        );
+      }
       if (commit.kind !== "committed") {
         return errorJson(
           "APPLICATION_PERSIST_FAILED",

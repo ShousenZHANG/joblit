@@ -4,6 +4,14 @@
 - **Date:** 2026-05-06
 - **Context owner:** Joblit Engineering
 
+> **Accepted amendment — 2026-07-24:** CV and Cover are independently
+> generated targets within one `aiContent` aggregate. Each target may carry its
+> own authoritative generation provenance. Target replacement preserves the
+> other target's content and known provenance, then rebuilds evidence and
+> review for the combined aggregate. This is an additive, optional schema-v1
+> field so legacy rows remain readable; missing provenance means historically
+> unknown and must never be inferred from the latest root metadata.
+
 ## Context
 
 When the user clicks **Generate CV** on a Job, an AI model produces three kinds of mutations on top of the Master Resume Profile:
@@ -24,41 +32,65 @@ We now want an **Edit phase** between generation and PDF render, where the user 
 
 ## Decision
 
-Add an `aiContent` JSON column to `Application`. Persist the full structured snapshot of every AI proposal plus the user's edits on every save.
+Add an `aiContent` JSON column to `Application`. Persist the structured
+snapshot of the current proposal for each Application target, plus the user's
+edits.
 
 Schema sketch:
 
 ```ts
+type GenerationProvenance = {
+  generatedAt: string;
+  promptMetaHash: string;
+  source: "manual_import" | "local_ai" | "server_batch";
+};
+
 type AiContent = {
+  schemaVersion: 1;
+
+  // Legacy/latest-import metadata; not authoritative for a preserved target.
+  generatedAt: string;
+  promptMetaHash: string;
+  source?: "manual_import" | "local_ai";
+
+  provenance?: {
+    resume?: GenerationProvenance;
+    cover?: GenerationProvenance;
+  };
+
   cv: {
-    summary: { aiText: string; originalText: string };
+    summary: {
+      aiText: string;
+      originalText: string;
+      userEdit?: string;
+      accepted: boolean;
+      evidenceIds?: string[];
+    };
     latestExperience: {
       experienceIndex: number;
       addedBullets: Array<{
-        text: string;        // AI's original proposal
-        userEdit?: string;   // user's overwrite, if any
+        text: string;
+        userEdit?: string;
         accepted: boolean;
         qualityGate?: { passed: boolean; reason?: string };
+        evidenceIds?: string[];
       }>;
     };
-    skillsAdditions: Array<{
-      label: string;
-      items: string[];
-      accepted: boolean;
-    }>;
   };
   cover: {
     paragraphOne: { aiText: string; userEdit?: string; accepted: boolean };
     paragraphTwo: { aiText: string; userEdit?: string; accepted: boolean };
     paragraphThree: { aiText: string; userEdit?: string; accepted: boolean };
   };
-  generatedAt: string;
-  promptMetaHash: string;    // hash of skill pack version + prompt rule template
-  schemaVersion: number;     // bumped when AiContent shape changes
+
+  evidence?: EvidenceReference[];
+  review?: ApplicationReview;
 };
 ```
 
-Pair this with `aiContentHash` (sha256 of the JSON) for stale-write detection across concurrent tabs.
+Pair this with `aiContentHash`, a stable non-cryptographic hash of canonicalized
+JSON, for stale-write detection across concurrent tabs. It is a UX
+compare-and-swap guard, not a security digest.
 
 ## Alternatives considered
 
@@ -97,19 +129,21 @@ A dedicated table for in-progress edits, gating the existing `Application` row t
 
 - **Visual diff is cheap** — the Edit panel reads `aiContent` directly, no server-side diff required.
 - **Lossless audit** — even after the user finalizes a heavily-edited application, we still have the AI's original proposal stored.
-- **Quality regression analysis** — `promptMetaHash` lets us bucket acceptance rates by prompt version.
+- **Quality regression analysis** — per-target `promptMetaHash` lets us bucket acceptance rates without attributing the latest target's prompt to a preserved target.
 - **Cheap "Reset to AI"** — every editable field has its own `aiText` to revert to.
 - **Migration target is additive** — adding versioning later (a side `ApplicationVersion` table) does not require reshaping `aiContent`.
 
 ### Negative
 
 - **Storage cost** — each Application carries a JSON blob of ~5–20 KB. Not material for the current scale (single-tenant SaaS, low thousands of rows). Revisit if rows reach low millions.
-- **Schema lock-in** — changing the `AiContent` shape requires a `schemaVersion` bump and a forward-compatible reader. Migrations are linear-scan, not free.
+- **Schema lock-in** — non-additive shape changes require a `schemaVersion` bump and a forward-compatible reader. Additive optional metadata must retain honest legacy semantics. Migrations are linear-scan, not free.
 - **Hydration coupling** — the Edit page must understand the JSON shape; bugs in shape vs. UI cause silent data loss. Mitigate with Zod validation at the API boundary.
 
 ### Neutral
 
-- The `manualImportArtifact.ts` pipeline already produces the necessary intermediate values (`addedBullets`, `skillsAdditions`); persisting them is mechanical.
+- `manualImportArtifact.ts` produces one target proposal and records provenance only for that target.
+- `applicationAiContentAggregate.ts` owns target preservation, browser-edit filtering, discard semantics, and merge-before-review ordering.
+- `commitApplicationArtifact.ts` folds a single target under the Application mutation lock and persists the rebuilt aggregate and review ledger together.
 - The existing **Quality Gate** stays in place — it now decorates `aiContent.addedBullets[i].qualityGate` instead of dropping bullets silently.
 
 ## Rollout
@@ -117,6 +151,8 @@ A dedicated table for in-progress edits, gating the existing `Application` row t
 1. Schema migration adds `aiContent: Json?`, `aiContentHash: String?`, `status: ApplicationStatus`.
 2. Existing rows backfill `status = FINAL`, `aiContent = NULL`. Editing them prompts the user to re-generate.
 3. New rows always populate `aiContent`. Finalize commits the JSON and renders the PDF from it.
+4. Target-aware provenance is lazy and additive. Existing rows are not backfilled with guessed provenance.
+5. The next generation of a target writes that target's provenance. A preserved legacy target remains without a provenance entry until it is regenerated.
 
 ## References
 

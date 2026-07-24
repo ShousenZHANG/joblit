@@ -77,7 +77,10 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
   const tailored = resumeResult.tailored;
   const aiContent = attachEvidenceAndReview({
     scopeKey: input.userId,
-    resumeSnapshot: profile,
+    resumeSnapshot: {
+      profile,
+      renderInput: resumeResult.renderInput,
+    },
     jobDescription: job.description,
     aiContent: buildBatchAiContent(
       tailored,
@@ -165,6 +168,15 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
     // runner records this message on the task, so keep the code stable.
     throw new Error("JOB_NOT_FOUND");
   }
+  if (commit.kind === "review_blocked") {
+    throw new AppError({
+      code: "APPLICATION_REVIEW_BLOCKED",
+      status: 422,
+      publicMessage:
+        "The draft contains claims that are not grounded in the master resume.",
+      publicDetails: commit.review,
+    });
+  }
   if (commit.kind !== "committed") {
     throw new AppError({
       code: "APPLICATION_PERSIST_FAILED",
@@ -191,10 +203,20 @@ function buildBatchAiContent(
   >,
   originalSummary: string,
 ): AiContent {
+  const generatedAt = new Date().toISOString();
+  const generation = {
+    generatedAt,
+    promptMetaHash: "server-batch:reviewer-v1",
+    source: "server_batch" as const,
+  };
   return {
     schemaVersion: AI_CONTENT_SCHEMA_VERSION,
-    generatedAt: new Date().toISOString(),
+    generatedAt,
     promptMetaHash: "server-batch:reviewer-v1",
+    provenance: {
+      resume: generation,
+      cover: generation,
+    },
     cv: {
       summary: {
         aiText: tailored.cvSummary,

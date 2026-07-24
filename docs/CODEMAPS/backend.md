@@ -11,7 +11,7 @@ Vocabulary is `CONTEXT.md`. Route-layer facts live in
 | Directory | Owns | Entry points |
 |---|---|---|
 | `ai/` | Prompt construction, provider calls, the Gemini Tailoring path, evidence/review ledger, cover quality, fit scoring, Skill Pack | `tailorApplication.ts:282` `tailorApplicationContent`, `buildPrompt.ts:29`, `providers.ts:211` `callProvider`, `evidenceLedger.ts:331` `attachEvidenceAndReview`, `promptContract.ts:212`, `skillPack.ts:209` |
-| `applications/` | Application row lifecycle: artifact build, manual-import parse, Quality Gate, canonical AI Content merge, finalize render, ATS validation, advisory lock, review ledger, `ApplicationEvent` append | `generateApplicationArtifacts.ts:80`, `manualImportArtifact.ts:90`, `manualImportParser.ts` (gates `:419`, `:450`), `finalizeApplication.ts:105`/`:137`, `canonicalAiContent.ts:43`/`:83`, `mergeAiContentForTarget.ts:13`, `persistReviewLedger.ts:64`, `applicationMutationLock.ts:26`, `atsPdfValidator.ts:150` |
+| `applications/` | Application lifecycle: target-aware AI Content evolution, manual-import parse, Quality Gate, finalize render, artifact commit, ATS validation, advisory lock, review ledger, `ApplicationEvent` append | `applicationAiContentAggregate.ts` `evolveApplicationAiContent`, `commitApplicationArtifact.ts` `commitApplicationArtifact`, `generateApplicationArtifacts.ts`, `manualImportArtifact.ts`, `manualImportParser.ts`, `finalizeApplication.ts`, `persistReviewLedger.ts`, `applicationMutationLock.ts`, `atsPdfValidator.ts` |
 | `applicationBatches/` | Codex Batch state machine: claim, complete, cancel, retry | `runner.ts:169` `claimNextBatchTask`, `:282` `completeBatchTask`, `:334`, `:385`; `codexRunContext.ts:81`/`:189`/`:245`; `batchProgress.ts:9` |
 | `jobs/` | Job import/list/search/delete/status, fit leasing, cooldown, SimHash dedup, posting risk, liveness, market scoping | `jobImportService.ts:95`, `jobListService.ts:142`, `jobSearchService.ts:11`, `jobDeleteService.ts:69`/`:135`, `fitRunService.ts:262`, `jobMutationLock.ts:23`, `postingRisk.ts:121` |
 | `latex/` | Template rendering from `latexTemp/` + the remote render-service client | `compilePdf.ts:68` `compileLatexToPdf`, `renderResume.ts:203`, `renderResumeCN.ts:190`, `renderCoverLetter.ts:69`, `mapResumeProfile.ts:30` |
@@ -66,42 +66,44 @@ Entry: `POST /api/applications/manual-generate`.
 4. `buildManualImportArtifact({evidenceScopeKey: userId, …})` — `manualImportArtifact.ts:90`
 5. Parse — `manualImportParser.ts:123`/`:222`/`:273`
 6. **Quality Gate** — `canonicalizeLatestBullets` (`:483`), then per bullet `isGroundedAddedBullet` (`:419`) and `isNonRedundantAddedBullet` (`:450`). Verdict written to `AiAddedBullet.qualityGate`; failing bullets are dropped from the rendered TeX
-7. `attachEvidenceAndReview` — `evidenceLedger.ts:331`
-8. `?finalize=false` → commit `DRAFT`, no render. Otherwise `compileLatexToPdf`
+7. `buildManualImportArtifact` records provenance only for the generated target and performs the initial evidence/review pass.
+8. `commitApplicationArtifact({ mergeTarget, reviewContext })` takes the Application lock, folds that target into the stored aggregate, preserves the other target and its known provenance, then re-reviews the complete aggregate.
+9. `?finalize=false` commits `DRAFT` with no artifact. FINAL mode compiles and validates the requested PDF before commit; a blocked combined review returns `review_blocked` and the new Blob is cleaned up.
 
 ### Convergence
 
-- `attachEvidenceAndReview` — both paths produce the same AI Content shape
+- `evolveApplicationAiContent` — the single interface for target replacement, client Edit commands, review refresh, and discard
+- `attachEvidenceAndReview` — rebuilds the aggregate-wide evidence and review projection
 - `compileLatexToPdf` — the single renderer
-- `persistReviewLedger` — `persistReviewLedger.ts:64`, called from five sites
+- `commitApplicationArtifact` — the artifact persistence sequence shared by server generation, manual/Local AI generation, and Editor Finalize
+- `persistReviewLedger` — reached through the commit module plus non-artifact draft and discard transactions
 
 Once a `DRAFT` Application exists, `app/api/applications/[id]/finalize/route.ts`
 is the single terminal renderer for both paths (ADR-0002).
 
 ---
 
-## The Application commit sequence
+## The Application artifact commit sequence
 
-Canonical shape: **render → ATS validate → upload → transaction (lock → recheck
-→ write → ledger) → GC stale blobs**. It exists in three places, and they
-differ.
+All artifact writers use `commitApplicationArtifact`:
 
-| | `generateApplicationArtifacts.ts` | `manual-generate/route.ts` | `finalize/route.ts` |
-|---|---|---|---|
-| Scope | CV **and** cover in one call | One target per call | One target per call |
-| Write | `upsert`, always overwrites (`:222`) | `upsert` (`:119`) | **CAS** `updateMany` on `aiContentHash` + prior URL (`:327`, `:410`) |
-| Stale-write guard | none | none | `expectedHash` → `STALE_WRITE` 409 (`:162`) |
-| Merge obligation | n/a | `mergeAiContentForTarget` (`:90`) | n/a — rebuilds canonical |
-| Upload failure | `.catch(() => null)`, commits a null URL (`:182-193`) | reported, commits a null URL that **clears the previous PDF** (`:391-400`) | delete the new blob, rethrow (`:443-457`) |
-| Rollback | `deleteBlobUrls` (`:66`) | inline `del` (`:419`) | `deleteApplicationArtifact` (`finalizeApplication.ts:224`), silent no-op without a Blob token |
-| Lock key | `jobId` (`:199`) | `jobId` (`:77`) | `existing.jobId ?? existing.id` (`:322`) |
-| Blob version | `${Date.now()}-${uuid.slice(0,8)}` | `${hashAiContent()}-${uuid}` | `${canonicalHash}-${uuid}` |
-| Idempotency | none | none | short-circuits when the versioned URL already carries `canonicalHash` (`:262-286`) |
+**upload → transaction (Application lock → Job ownership recheck → optional
+aggregate CAS → optional single-target fold + full re-review → FINAL review
+gate → hash → upsert → review ledger) → GC superseded blobs**
 
-The finalize path is the reference implementation. The other two predate it.
+| Caller | Owns | `mergeTarget` | CAS |
+|---|---|---:|---:|
+| `generateApplicationArtifacts.ts` | CV + Cover | no | no |
+| `manual-generate/route.ts` | one target | yes, with required `reviewContext` | no |
+| `finalize/route.ts` | already-canonical full aggregate, one rendered artifact | no | `expectedHash` |
 
-Sharing the lock+CAS shape without a render: `draft/route.ts:78-185` (autosave)
-and `discard/route.ts:93-113`.
+Upload failure never clears an existing artifact. A failed transaction, lost
+CAS, missing Job, or blocked FINAL deletes the newly uploaded Blob. A
+superseded Blob is deleted only after the transaction commits.
+
+Editor Auto-save and discard render no artifact. They retain their own lock +
+aggregate-CAS transactions, evolve AI Content through
+`evolveApplicationAiContent`, and persist the review ledger.
 
 ---
 
@@ -117,28 +119,41 @@ order (`applicationMutationLock.ts:16-25`). Honoured in `jobDeleteService.ts:77`
 → `:87` and `:150` → `:160-165`. Nothing enforces it.
 
 **Evidence scope key must be `userId`.** `attachEvidenceAndReview` derives every
-evidence id from it (`evidenceLedger.ts:28-30`). The parameter is optional and
-silently defaults to the literal `"anonymous"` (`:332`), which produces a ledger
-that `assertCanonicalEvidenceReferences` will later reject with
-`INVALID_EVIDENCE_REFERENCE` (`:358`).
+evidence id from it. The parameter is required and there is no anonymous
+fallback; `assertCanonicalEvidenceReferences` checks the tenant-bound ids again
+before ledger persistence.
 
-**Merge before persisting a single-target artifact.** `manual-generate` produces
-a complete AI Content whose non-target half is empty stubs
-(`manualImportArtifact.ts:76-82`). Persisting it directly erases the other
-artifact. `mergeAiContentForTarget` (`mergeAiContentForTarget.ts:13`) is the
-only guard, and the obligation is documented only in that file's comment.
+**Evolve AI Content through one interface.**
+`evolveApplicationAiContent` owns target preservation, per-target provenance,
+browser-edit filtering, discard semantics, and merge-before-review ordering.
+Routes express an intent rather than manually spreading an `AiContent` object.
+
+**A single-target replacement requires canonical review context.**
+`CommitInput` makes `reviewContext` mandatory whenever `mergeTarget` is
+present. The target is folded into the current row under the Application lock
+and the combined CV + Cover aggregate is re-reviewed before persistence.
 
 **Client payloads are edit commands, not snapshots.**
-`mergeClientAiContentEdits` (`canonicalAiContent.ts:43`) takes only `accepted`
-and `userEdit` from the browser. Model output, evidence, review results, hashes
-and source metadata stay server-owned.
+Only `accepted` and `userEdit` are copied from browser content. Model output,
+Quality Gate results, target provenance, evidence, review, and hashes remain
+server-owned.
 
-**Re-review after any edit.** `refreshEvidenceReview` (`evidenceLedger.ts:324`)
-re-evaluates edited content against the immutable snapshot, so an edit cannot
-retain a stale `pass` verdict. It is a no-op when `evidence` is empty.
+**The hash and review are aggregate-wide.**
+Target replacement and every evidence-aware browser edit, review refresh, or
+discard rebuild the complete CV + Cover review. `Application.aiContentHash`
+protects the complete snapshot; per-target provenance does not introduce
+per-target review, hashes, CAS, or lifecycle state.
 
-**Blob GC ordering.** Delete the *new* blob when the CAS loses; delete the *old*
-blob only after it wins (`finalize/route.ts:366`, `:371`).
+**FINAL never trusts missing legacy review metadata.**
+Editor Finalize always rebuilds evidence/review from the owned Master Resume
+Profile and Job, including for schema-v1 rows that predate evidence fields.
+A non-null stored `aiContent` that fails schema validation is not treated as an
+empty aggregate; single-target generation fails closed instead of erasing the
+preserved target.
+
+**Blob GC ordering.** `commitApplicationArtifact` deletes the *new* blob when a
+commit does not land and deletes the *old* blob only after a successful
+transaction.
 
 **Circuit breaker and rate limiter state is per-isolate.** The LaTeX breaker
 (`compilePdf.ts:41`) and the rate limiter (`api/rateLimit.ts:15`) are
@@ -213,26 +228,19 @@ do not do this.
 
 ## Tests
 
-67 colocated `.test.ts` under `lib/server/`, 35 more in `test/server/`, plus
-`test/api/` for routes.
-
 Well covered: the pure modules — `evidenceLedger`, `promptContract`,
 `responsibilityCoverage`, `coverQuality`, `safeFetch` (URL policy, redirect
 header stripping, private-address rejection), `compilePdf` (PDF integrity
 floor), `jobImportService` (437 lines, the largest).
 
-Known gaps, stated so a reader does not assume coverage:
+`applicationAiContentAggregate.test.ts` directly covers target preservation,
+per-target provenance, legacy attribution, full-aggregate re-review, forged
+browser provenance, discard, review timestamps, and fail-closed canonical
+sources. `commitApplicationArtifact.test.ts` covers CAS, invalid stored
+content, FINAL review blocking, partial-upload rollback, and Blob-GC ordering.
 
-- `assertAtsPdf` is stubbed to *resolve* `{passed:true}` in
-  `generateApplicationArtifacts.test.ts:139-146`; the real contract throws. A
-  double returning `{passed:false}` would also pass, so the test cannot detect a
-  deleted gate.
-- `finalizeApplication.test.ts` fixtures use `addedBullets: []` and
-  `experiences: []`, so neither branch of the ADR-0001 composition rule at
-  `finalizeApplication.ts:77-86` executes, and `buildAtsKeywords` is never
-  called.
-- The Quality Gate has no direct test. `bulletSimilarityScore` and its threshold
-  are unexercised.
-- 35 of 46 files in `test/api/` mock Prisma with filter-blind `vi.fn()`s, so an
-  ownership filter regression would not fail a test. Only two files assert a
+Known gap, stated so a reader does not assume coverage:
+
+- Many files in `test/api/` mock Prisma with filter-blind `vi.fn()`s, so an
+  ownership-filter regression may not fail unless the test asserts the
   `findFirst` argument.

@@ -215,6 +215,7 @@ function buildManualResumeArtifact(input: {
       ? sanitizedSkillsFinal
       : input.renderInput.skills;
 
+  const generatedAt = new Date().toISOString();
   const aiContent = attachEvidenceAndReview({
     scopeKey: input.evidenceScopeKey,
     resumeSnapshot: {
@@ -223,22 +224,29 @@ function buildManualResumeArtifact(input: {
     },
     jobDescription: input.job.description,
     aiContent: {
-    schemaVersion: AI_CONTENT_SCHEMA_VERSION,
-    generatedAt: new Date().toISOString(),
-    promptMetaHash: input.promptMetaHash,
-    source: input.source,
-    cv: {
-      summary: {
-        aiText: cvSummary,
-        originalText: input.renderInput.summary ?? "",
-        accepted: true,
+      schemaVersion: AI_CONTENT_SCHEMA_VERSION,
+      generatedAt,
+      promptMetaHash: input.promptMetaHash,
+      source: input.source,
+      provenance: {
+        resume: {
+          generatedAt,
+          promptMetaHash: input.promptMetaHash,
+          source: input.source,
+        },
       },
-      latestExperience: {
-        experienceIndex: 0,
-        addedBullets: aiAddedBullets,
+      cv: {
+        summary: {
+          aiText: cvSummary,
+          originalText: input.renderInput.summary ?? "",
+          accepted: true,
+        },
+        latestExperience: {
+          experienceIndex: 0,
+          addedBullets: aiAddedBullets,
+        },
       },
-    },
-    cover: emptyCover(),
+      cover: emptyCover(),
     },
   });
 
@@ -316,6 +324,7 @@ function buildManualCoverArtifact(input: {
     targetWordRange: { min: 280, max: 360 },
   });
 
+  const generatedAt = new Date().toISOString();
   return {
     ok: true,
     tex: renderCoverLetterTex({
@@ -351,9 +360,16 @@ function buildManualCoverArtifact(input: {
       jobDescription: input.job.description,
       aiContent: {
         schemaVersion: AI_CONTENT_SCHEMA_VERSION,
-        generatedAt: new Date().toISOString(),
+        generatedAt,
         promptMetaHash: input.promptMetaHash,
         source: input.source,
+        provenance: {
+          cover: {
+            generatedAt,
+            promptMetaHash: input.promptMetaHash,
+            source: input.source,
+          },
+        },
         cv: {
           summary: { aiText: "", originalText: input.renderInput.summary ?? "", accepted: false },
           latestExperience: { experienceIndex: 0, addedBullets: [] },

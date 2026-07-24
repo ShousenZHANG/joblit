@@ -47,9 +47,39 @@ import {
   type AiContent,
 } from "@/lib/shared/schemas/aiContent";
 import { attachEvidenceAndReview } from "@/lib/server/ai/evidenceLedger";
+import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 
 const APP_ID = "22222222-2222-4222-9222-222222222222";
 const USER_ID = "user-1";
+const PROFILE = {
+  id: "profile-linked",
+  userId: USER_ID,
+  summary: "Built reliable TypeScript APIs.",
+  basics: null,
+  links: null,
+  skills: null,
+  experiences: null,
+  projects: null,
+  education: null,
+};
+const JOB = {
+  id: "job-1",
+  userId: USER_ID,
+  title: "Engineer",
+  company: "Acme",
+  market: "AU",
+  description: "Build reliable TypeScript APIs.",
+};
+
+function ownedReviewSources() {
+  return {
+    jobId: JOB.id,
+    company: JOB.company,
+    role: JOB.title,
+    resumeProfile: PROFILE,
+    job: JOB,
+  };
+}
 
 function makeAiContent(): AiContent {
   return {
@@ -117,6 +147,7 @@ describe("POST /api/applications/[id]/finalize", () => {
     const ai = makeAiContent();
     const hash = hashAiContent(ai);
     prisma.application.findFirst.mockResolvedValueOnce({
+      ...ownedReviewSources(),
       id: APP_ID,
       userId: USER_ID,
       aiContent: ai,
@@ -145,7 +176,19 @@ describe("POST /api/applications/[id]/finalize", () => {
         applicationId: APP_ID,
         userId: USER_ID,
         resumeProfileId: "profile-linked",
-        aiContent: ai,
+        aiContent: expect.objectContaining({
+          cv: expect.objectContaining({
+            summary: expect.objectContaining({
+              aiText: ai.cv.summary.aiText,
+            }),
+          }),
+          cover: expect.objectContaining({
+            paragraphOne: expect.objectContaining({
+              aiText: ai.cover.paragraphOne.aiText,
+            }),
+          }),
+          review: expect.any(Object),
+        }),
       }),
     );
     expect(commit.commitApplicationArtifact).toHaveBeenCalledWith(
@@ -157,7 +200,7 @@ describe("POST /api/applications/[id]/finalize", () => {
           expect.objectContaining({
             target: "resume",
             // A unique version makes an uncommitted render safe to delete.
-            version: expect.stringMatching(new RegExp("^" + hash + "-[0-9a-f-]{36}$")),
+            version: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f-]{36}$/),
           }),
         ],
       }),
@@ -170,6 +213,7 @@ describe("POST /api/applications/[id]/finalize", () => {
       user: { id: USER_ID },
     });
     prisma.application.findFirst.mockResolvedValueOnce({
+      ...ownedReviewSources(),
       id: APP_ID,
       userId: USER_ID,
       aiContent: makeAiContent(),
@@ -190,6 +234,7 @@ describe("POST /api/applications/[id]/finalize", () => {
     const ai = makeAiContent();
     const hash = hashAiContent(ai);
     prisma.application.findFirst.mockResolvedValueOnce({
+      ...ownedReviewSources(),
       id: APP_ID,
       userId: USER_ID,
       aiContent: ai,
@@ -246,12 +291,21 @@ describe("POST /api/applications/[id]/finalize", () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: USER_ID },
     });
-    const ai = makeAiContent();
+    const ai = attachEvidenceAndReview({
+      aiContent: makeAiContent(),
+      resumeSnapshot: {
+        profile: PROFILE,
+        renderInput: mapResumeProfile(PROFILE),
+      },
+      jobDescription: JOB.description,
+      scopeKey: USER_ID,
+    });
     const hash = hashAiContent(ai);
     const resumePdfUrl =
       `https://blob.vercel-storage.com/applications/${USER_ID}/job-1/` +
       `resume.${hash}-123e4567-e89b-42d3-a456-426614174000.pdf`;
     prisma.application.findFirst.mockResolvedValueOnce({
+      ...ownedReviewSources(),
       id: APP_ID,
       userId: USER_ID,
       status: "FINAL",
@@ -279,6 +333,7 @@ describe("POST /api/applications/[id]/finalize", () => {
     const ai = makeAiContent();
     const hash = hashAiContent(ai);
     prisma.application.findFirst.mockResolvedValueOnce({
+      ...ownedReviewSources(),
       id: APP_ID,
       userId: USER_ID,
       status: "DRAFT",
@@ -298,6 +353,39 @@ describe("POST /api/applications/[id]/finalize", () => {
     const response = await POST(makeRequest({ expectedHash: hash }), { params });
 
     expect(response.status).toBe(429);
+    expect(renderer.renderApplicationPdf).not.toHaveBeenCalled();
+    expect(commit.commitApplicationArtifact).not.toHaveBeenCalled();
+  });
+
+  it("blocks unsupported claims in a legacy row with no prior review", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: USER_ID },
+    });
+    const legacy = makeAiContent();
+    legacy.cover.paragraphOne = {
+      aiText: "I increased revenue by 999% without supporting evidence.",
+      accepted: true,
+    };
+    const hash = hashAiContent(legacy);
+    prisma.application.findFirst.mockResolvedValueOnce({
+      ...ownedReviewSources(),
+      id: APP_ID,
+      userId: USER_ID,
+      status: "DRAFT",
+      aiContent: legacy,
+      aiContentHash: hash,
+      resumePdfUrl: null,
+      resumePdfName: null,
+      coverPdfUrl: null,
+      atsValidation: null,
+    });
+
+    const response = await POST(makeRequest({ expectedHash: hash }), { params });
+    const json = await response.json();
+
+    expect(response.status).toBe(422);
+    expect(json.error.code).toBe("APPLICATION_REVIEW_BLOCKED");
+    expect(json.error.details.issues.join(" ")).toContain("999%");
     expect(renderer.renderApplicationPdf).not.toHaveBeenCalled();
     expect(commit.commitApplicationArtifact).not.toHaveBeenCalled();
   });

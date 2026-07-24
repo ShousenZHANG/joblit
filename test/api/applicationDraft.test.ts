@@ -283,7 +283,9 @@ describe("PATCH /api/applications/[id]/draft", () => {
     const persisted = update.data.aiContent as AiContent;
     expect(persisted.cv.summary.aiText).toBe("ai");
     expect(persisted.cv.summary.userEdit).toBe("Improved revenue by 999%.");
-    expect(persisted.evidence).toEqual(canonical.evidence);
+    expect(persisted.evidence?.map((item) => item.id)).toEqual(
+      canonical.evidence?.map((item) => item.id),
+    );
     expect(persisted.evidence?.[0]?.id).not.toBe(`ev_${"f".repeat(32)}`);
     expect(persisted.review?.verdict).toBe("blocked");
     expect(persisted.review?.issues.join(" ")).toContain("999%");

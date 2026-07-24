@@ -5,6 +5,8 @@ const prisma = vi.hoisted(() => ({
     findFirst: vi.fn(),
     updateMany: vi.fn(),
   },
+  evidenceSnapshot: { createMany: vi.fn() },
+  claimEvidence: { createMany: vi.fn() },
   transaction: vi.fn(),
   executeRaw: vi.fn(),
 }));
@@ -79,16 +81,22 @@ describe("POST /api/applications/[id]/discard", () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockReset();
     prisma.application.findFirst.mockReset();
     prisma.application.updateMany.mockReset().mockResolvedValue({ count: 1 });
+    prisma.evidenceSnapshot.createMany.mockReset().mockResolvedValue({ count: 1 });
+    prisma.claimEvidence.createMany.mockReset().mockResolvedValue({ count: 1 });
     prisma.executeRaw.mockReset().mockResolvedValue(1);
     prisma.transaction.mockReset().mockImplementation(
       async (
         action: (tx: {
           application: typeof prisma.application;
+          evidenceSnapshot: typeof prisma.evidenceSnapshot;
+          claimEvidence: typeof prisma.claimEvidence;
           $executeRaw: typeof prisma.executeRaw;
         }) => Promise<unknown>,
       ) =>
         action({
           application: prisma.application,
+          evidenceSnapshot: prisma.evidenceSnapshot,
+          claimEvidence: prisma.claimEvidence,
           $executeRaw: prisma.executeRaw,
         }),
     );
@@ -100,12 +108,27 @@ describe("POST /api/applications/[id]/discard", () => {
     });
     const edited = makeEditedAiContent();
     const expectedHash = hashAiContent(edited);
+    const profile = {
+      userId: USER_ID,
+      summary: "Built reliable TypeScript APIs.",
+      basics: null,
+      links: null,
+      skills: null,
+      experiences: null,
+      projects: null,
+      education: null,
+    };
     prisma.application.findFirst.mockResolvedValueOnce({
       id: APP_ID,
       userId: USER_ID,
       jobId: "job-1",
       aiContent: edited,
       aiContentHash: expectedHash,
+      resumeProfile: profile,
+      job: {
+        userId: USER_ID,
+        description: "Build reliable TypeScript APIs.",
+      },
     });
 
     const res = await POST(request(expectedHash), { params });
@@ -133,6 +156,8 @@ describe("POST /api/applications/[id]/discard", () => {
     expect(persisted.cover.paragraphOne.accepted).toBe(true);
 
     expect(updateCall.data.status).toBe("DRAFT");
+    expect(persisted.review).toBeDefined();
+    expect(prisma.evidenceSnapshot.createMany).toHaveBeenCalled();
   });
 
   it("returns 400 when there is no aiContent to discard", async () => {

@@ -9,10 +9,7 @@ import {
 } from "@/lib/shared/schemas/aiContent";
 import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
 import { persistReviewLedger } from "@/lib/server/applications/persistReviewLedger";
-import {
-  mergeClientAiContentEdits,
-  rebuildCanonicalAiContent,
-} from "@/lib/server/applications/canonicalAiContent";
+import { evolveApplicationAiContent } from "@/lib/server/applications/applicationAiContentAggregate";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 
 export const runtime = "nodejs";
@@ -110,41 +107,34 @@ export async function PATCH(
           const canonical = aiContentSchema.safeParse(current.aiContent);
           if (!canonical.success) return { kind: "invalid" as const };
 
-          const requiresCanonicalEvidence =
-            canonical.data.evidence !== undefined ||
-            canonical.data.review !== undefined;
-          const requiresJobEvidence =
-            canonical.data.evidence?.some((item) => item.kind === "job") ===
-              true ||
-            (canonical.data.review?.requirements.length ?? 0) > 0;
           const profile =
             current.resumeProfile?.userId === userId
               ? current.resumeProfile
               : null;
-          if (
-            requiresCanonicalEvidence &&
-            (!profile ||
-              (requiresJobEvidence && !current.job) ||
-              (current.job && current.job.userId !== userId))
-          ) {
+          const jobOwned = current.job?.userId === userId;
+          const evolved = evolveApplicationAiContent({
+            current: canonical.data,
+            command: { kind: "apply_client_edits", submitted: aiContent },
+            ...(profile
+              ? {
+                  reviewContext: {
+                    scopeKey: userId,
+                    resumeSnapshot: {
+                      profile,
+                      renderInput: mapResumeProfile(profile),
+                    },
+                    jobDescription: jobOwned
+                      ? current.job?.description
+                      : undefined,
+                    jobSourceAvailable: jobOwned,
+                  },
+                }
+              : {}),
+          });
+          if (evolved.kind !== "evolved") {
             return { kind: "evidence_unavailable" as const };
           }
-
-          const reviewedContent =
-            requiresCanonicalEvidence && profile
-              ? rebuildCanonicalAiContent({
-                  canonical: canonical.data,
-                  submitted: aiContent,
-                  resumeSnapshot: canonical.data.source
-                    ? {
-                        profile,
-                        renderInput: mapResumeProfile(profile),
-                      }
-                    : profile,
-                  jobDescription: current.job?.description,
-                  scopeKey: userId,
-                })
-              : mergeClientAiContentEdits(canonical.data, aiContent);
+          const reviewedContent = evolved.aiContent;
           const newHash = hashAiContent(reviewedContent);
           const result = await tx.application.updateMany({
             where: {

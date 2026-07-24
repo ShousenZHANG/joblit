@@ -45,6 +45,26 @@ describe("aiContentSchema", () => {
     expect(aiContentSchema.parse(value).source).toBe("local_ai");
   });
 
+  it("accepts authoritative provenance for independently generated targets", () => {
+    const value = {
+      ...validAiContent(),
+      provenance: {
+        resume: {
+          generatedAt: "2026-05-06T00:00:00.000Z",
+          promptMetaHash: "resume-prompt",
+          source: "local_ai" as const,
+        },
+        cover: {
+          generatedAt: "2026-05-07T00:00:00.000Z",
+          promptMetaHash: "cover-prompt",
+          source: "server_batch" as const,
+        },
+      },
+    };
+
+    expect(aiContentSchema.parse(value).provenance).toEqual(value.provenance);
+  });
+
   it("rejects a payload with an unknown schemaVersion", () => {
     const stale = { ...validAiContent(), schemaVersion: 999 };
     const result = aiContentSchema.safeParse(stale);

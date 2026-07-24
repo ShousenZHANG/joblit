@@ -35,7 +35,21 @@ The lifecycle is single-row, in-place. See **ADR-0002**.
 
 ### AI Content (`aiContent`)
 
-The persisted snapshot of every AI proposal made for an Application, paired with the user's accept/reject/edit decisions. Stored as JSON on the `Application` row.
+The persisted snapshot of the current AI proposal for each Application target,
+paired with the user's accept/reject/edit decisions. Stored as JSON on the
+`Application` row. Re-generating a target replaces that target's proposal; this
+is not a history of every proposal ever generated.
+
+CV and Cover may be generated independently. `aiContent.provenance.resume` and
+`aiContent.provenance.cover` carry the authoritative generation metadata for
+each target when known: `generatedAt`, `promptMetaHash`, and source. The legacy
+root `generatedAt`, `promptMetaHash`, and optional `source` describe the latest
+whole import only and must not be attributed to a preserved target.
+
+Evidence and review remain aggregate-wide. After a target replacement or an
+evidence-aware Edit/discard, the server rebuilds evidence and reviews the
+combined CV + Cover snapshot before persistence. The browser may change only
+`accepted` and `userEdit`.
 
 Captures:
 - **Summary**: AI rewritten text + the original (for diff display).
@@ -104,7 +118,7 @@ Short locale code used by next-intl for translation strings. `en | zh`. Always d
 |---|---|
 | "Resume" (alone) | **Master Resume Profile** or **Application** (be specific) |
 | "Save" | **Auto-save** (background, debounced) or **Finalize** (explicit, renders PDF) |
-| "AI bullets" | **AI-added bullets** (the additions) or **AI proposals** (any AI mutation: bullets, summary, skills, cover) |
+| "AI bullets" | **AI-added bullets** (the additions) or **AI proposals** (summary, AI-added bullets, or Cover paragraphs) |
 | "Generate" (alone) | **Generate AI proposals** or **Tailor** (the full pipeline) |
 | "Cover letter" (as separate noun) | Treat as part of **Application** — a single Application has both CV and CL artifacts |
 | "Draft" (vague) | **`DRAFT` Application** or **AI proposal** |

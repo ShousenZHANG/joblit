@@ -2,12 +2,20 @@ import { del, put } from "@vercel/blob";
 import { prisma } from "@/lib/server/prisma";
 import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
 import { persistReviewLedger } from "@/lib/server/applications/persistReviewLedger";
-import { mergeAiContentForTarget } from "@/lib/server/applications/mergeAiContentForTarget";
+import {
+  evolveApplicationAiContent,
+  type ApplicationAiContentReviewContext,
+} from "@/lib/server/applications/applicationAiContentAggregate";
 import {
   APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
   buildApplicationArtifactBlobPath,
 } from "@/lib/server/files/applicationArtifactBlob";
-import { aiContentSchema, hashAiContent, type AiContent } from "@/lib/shared/schemas/aiContent";
+import {
+  aiContentSchema,
+  hashAiContent,
+  type AiApplicationReview,
+  type AiContent,
+} from "@/lib/shared/schemas/aiContent";
 import type { AtsPdfValidation } from "@/lib/server/applications/atsPdfValidator";
 
 /**
@@ -50,24 +58,12 @@ export type CommitArtifact = {
   version: string;
 };
 
-export type CommitInput = {
+type CommitBaseFields = {
   userId: string;
   job: { id: string; title: string; company: string | null };
   resumeProfileId: string;
   /** The AI Content for the target(s) being committed. */
   aiContent: AiContent;
-  /** Rendered PDFs to upload. Empty for a DRAFT commit, which renders nothing. */
-  artifacts: CommitArtifact[];
-  status: "DRAFT" | "FINAL";
-  /**
-   * Which half of the AI Content this write owns, when it owns only one.
-   *
-   * A single-target build produces a complete AI Content whose other half is
-   * empty stubs; persisting that directly erases the other artifact. Set this
-   * and the module merges against the row instead. Omit it only when the
-   * incoming content covers both halves.
-   */
-  mergeTarget?: CommitTarget;
   /**
    * Present means compare-and-swap: the write only lands if the row still
    * holds this hash. `null` matches a row that has no AI Content yet.
@@ -77,6 +73,35 @@ export type CommitInput = {
   /** Extra columns to write, e.g. a reviewer report. */
   extraData?: Record<string, unknown>;
 };
+
+type CommitBaseInput = CommitBaseFields &
+  (
+    | {
+        status: "DRAFT";
+        /** DRAFT is content-only and cannot own an uploaded artifact. */
+        artifacts: [];
+      }
+    | {
+        status: "FINAL";
+        artifacts: CommitArtifact[];
+      }
+  );
+
+export type CommitInput =
+  | (CommitBaseInput & {
+      /**
+       * A single-target proposal is folded into the stored Application under
+       * the mutation lock, then the complete aggregate is re-reviewed before
+       * it can be persisted.
+       */
+      mergeTarget: CommitTarget;
+      reviewContext: ApplicationAiContentReviewContext;
+    })
+  | (CommitBaseInput & {
+      /** Omit only when the incoming AI Content owns both targets. */
+      mergeTarget?: undefined;
+      reviewContext?: never;
+    });
 
 export type CommitResult =
   | {
@@ -88,6 +113,8 @@ export type CommitResult =
     }
   | { kind: "stale_write" }
   | { kind: "job_missing" }
+  | { kind: "invalid_ai_content" }
+  | { kind: "review_blocked"; review: AiApplicationReview }
   | { kind: "upload_failed"; cause: unknown };
 
 function blobToken(): string | undefined {
@@ -115,31 +142,39 @@ async function uploadArtifacts(
   if (!token) return {};
 
   const urls: Partial<Record<CommitTarget, string>> = {};
-  for (const artifact of artifacts) {
-    const blob = await put(
-      buildApplicationArtifactBlobPath({
-        userId,
-        jobId,
-        target: artifact.target,
-        version: artifact.version,
-      }),
-      artifact.pdf,
-      {
-        access: "public",
-        contentType: "application/pdf",
-        token,
-        ...APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
-      },
-    );
-    urls[artifact.target] = blob.url;
+  try {
+    for (const artifact of artifacts) {
+      const blob = await put(
+        buildApplicationArtifactBlobPath({
+          userId,
+          jobId,
+          target: artifact.target,
+          version: artifact.version,
+        }),
+        artifact.pdf,
+        {
+          access: "public",
+          contentType: "application/pdf",
+          token,
+          ...APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
+        },
+      );
+      urls[artifact.target] = blob.url;
+    }
+  } catch (cause) {
+    await deleteBlobs(Object.values(urls));
+    throw cause;
   }
   return urls;
 }
 
 export async function commitApplicationArtifact(input: CommitInput): Promise<CommitResult> {
+  // DRAFT commits are content-only. Ignore an untyped JavaScript caller that
+  // supplies artifacts so it cannot upload an unreachable Blob.
+  const artifacts = input.status === "FINAL" ? input.artifacts : [];
   let uploaded: Partial<Record<CommitTarget, string>>;
   try {
-    uploaded = await uploadArtifacts(input.userId, input.job.id, input.artifacts);
+    uploaded = await uploadArtifacts(input.userId, input.job.id, artifacts);
   } catch (cause) {
     // Deliberately not a partial commit. Writing a null URL here is what let
     // a transient Blob outage clear a user's previous PDF.
@@ -180,20 +215,44 @@ export async function commitApplicationArtifact(input: CommitInput): Promise<Com
 
         let aiContent = input.aiContent;
         if (input.mergeTarget) {
-          const parsed = aiContentSchema.safeParse(existing?.aiContent);
-          aiContent = mergeAiContentForTarget(
-            parsed.success ? parsed.data : null,
-            input.aiContent,
-            input.mergeTarget,
-          );
+          let current: AiContent | null = null;
+          if (existing?.aiContent != null) {
+            const parsed = aiContentSchema.safeParse(existing.aiContent);
+            if (!parsed.success) {
+              return { kind: "invalid_ai_content" as const };
+            }
+            current = parsed.data;
+          }
+          const evolved = evolveApplicationAiContent({
+            current,
+            command: {
+              kind: "replace_target_proposal",
+              target: input.mergeTarget,
+              proposal: input.aiContent,
+            },
+            reviewContext: input.reviewContext,
+          });
+          // reviewContext is required by CommitInput for a target replacement;
+          // this is an implementation invariant, not a recoverable caller
+          // outcome.
+          if (evolved.kind !== "evolved") {
+            throw new Error("APPLICATION_AI_CONTENT_REVIEW_CONTEXT_REQUIRED");
+          }
+          aiContent = evolved.aiContent;
         }
         const aiContentHash = hashAiContent(aiContent);
+        if (input.status === "FINAL" && aiContent.review?.verdict === "blocked") {
+          return {
+            kind: "review_blocked" as const,
+            review: aiContent.review,
+          };
+        }
 
         const artifactColumns: Record<string, unknown> = {};
         // A DRAFT commit records content only — the rendered PDF, if any, still
         // belongs to the previous FINAL.
         if (input.status === "FINAL") {
-          for (const artifact of input.artifacts) {
+          for (const artifact of artifacts) {
             const url = uploaded[artifact.target] ?? null;
             if (artifact.target === "resume") {
               artifactColumns.resumePdfUrl = url;
@@ -211,7 +270,7 @@ export async function commitApplicationArtifact(input: CommitInput): Promise<Com
             ? existing.atsValidation
             : {};
         const atsValidation = { ...existingAts };
-        for (const artifact of input.artifacts) {
+        for (const artifact of artifacts) {
           if (artifact.atsValidation !== undefined) {
             (atsValidation as Record<string, unknown>)[artifact.target] =
               artifact.atsValidation ?? null;
@@ -245,7 +304,7 @@ export async function commitApplicationArtifact(input: CommitInput): Promise<Com
           aiContent,
         });
 
-        const superseded = input.artifacts
+        const superseded = artifacts
           .map((artifact) => {
             const previous =
               artifact.target === "resume" ? existing?.resumePdfUrl : existing?.coverPdfUrl;

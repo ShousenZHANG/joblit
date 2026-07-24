@@ -46,6 +46,16 @@ const BASE = {
   status: "FINAL" as const,
 };
 
+const REVIEW_CONTEXT = {
+  scopeKey: "user-1",
+  resumeSnapshot: {
+    summary: "Summary",
+    skills: [{ label: "Languages", items: ["TypeScript"] }],
+  },
+  jobDescription: "Build reliable TypeScript systems.",
+  jobSourceAvailable: true,
+};
+
 const resumeArtifact = {
   target: "resume" as const,
   pdf: Buffer.from("%PDF-1.7"),
@@ -96,6 +106,32 @@ describe("commitApplicationArtifact", () => {
 
     expect(result).toEqual({ kind: "upload_failed", cause });
     expect(store.upsert).not.toHaveBeenCalled();
+  });
+
+  it("deletes earlier uploads when a later artifact upload fails", async () => {
+    const cause = new Error("cover upload failed");
+    blob.put
+      .mockResolvedValueOnce({ url: "https://blob.example/new-resume.pdf" })
+      .mockRejectedValueOnce(cause);
+
+    const result = await commitApplicationArtifact({
+      ...BASE,
+      artifacts: [
+        resumeArtifact,
+        {
+          target: "cover",
+          pdf: Buffer.from("%PDF-1.7"),
+          version: "v1",
+        },
+      ],
+    });
+
+    expect(result).toEqual({ kind: "upload_failed", cause });
+    expect(store.upsert).not.toHaveBeenCalled();
+    expect(blob.del).toHaveBeenCalledWith(
+      "https://blob.example/new-resume.pdf",
+      { token: "token" },
+    );
   });
 
   it("deletes the new blob when the compare-and-swap loses", async () => {
@@ -168,15 +204,18 @@ describe("commitApplicationArtifact", () => {
   });
 
   it("writes no artifact columns for a DRAFT commit", async () => {
-    await commitApplicationArtifact({
-      ...BASE,
-      status: "DRAFT",
-      artifacts: [resumeArtifact],
-    });
+    await commitApplicationArtifact(
+      {
+        ...BASE,
+        status: "DRAFT",
+        artifacts: [resumeArtifact],
+      } as unknown as Parameters<typeof commitApplicationArtifact>[0],
+    );
 
     const written = store.upsert.mock.calls[0]?.[0]?.update;
     expect(written).not.toHaveProperty("resumePdfUrl");
     expect(written.status).toBe("DRAFT");
+    expect(blob.put).not.toHaveBeenCalled();
   });
 
   it("commits without Blob configured rather than failing the request", async () => {
@@ -208,11 +247,99 @@ describe("commitApplicationArtifact", () => {
     await commitApplicationArtifact({
       ...BASE,
       mergeTarget: "resume",
+      reviewContext: REVIEW_CONTEXT,
       artifacts: [resumeArtifact],
     });
 
     const written = store.upsert.mock.calls[0]?.[0]?.update.aiContent as AiContent;
     expect(written.cover.paragraphOne.aiText).toBe("Existing cover");
+  });
+
+  it("fails closed instead of overwriting an unknown stored schema", async () => {
+    store.findUnique.mockResolvedValue({
+      resumePdfUrl: null,
+      coverPdfUrl: "https://blob.example/existing-cover.pdf",
+      aiContent: {
+        ...aiContent,
+        schemaVersion: 999,
+      },
+      aiContentHash: null,
+      atsValidation: null,
+    });
+
+    const result = await commitApplicationArtifact({
+      ...BASE,
+      mergeTarget: "resume",
+      reviewContext: REVIEW_CONTEXT,
+      artifacts: [resumeArtifact],
+    });
+
+    expect(result).toEqual({ kind: "invalid_ai_content" });
+    expect(store.upsert).not.toHaveBeenCalled();
+    expect(blob.del).toHaveBeenCalledWith("https://blob.example/new.pdf", {
+      token: "token",
+    });
+    expect(blob.del).not.toHaveBeenCalledWith(
+      "https://blob.example/existing-cover.pdf",
+      expect.anything(),
+    );
+  });
+
+  it("blocks a FINAL single-target commit when the preserved target fails review", async () => {
+    const stored = structuredClone(aiContent);
+    stored.cover.paragraphOne.aiText =
+      "I increased revenue by 999% without supporting evidence.";
+    store.findUnique.mockResolvedValue({
+      resumePdfUrl: null,
+      coverPdfUrl: "https://blob.example/existing-cover.pdf",
+      aiContent: stored,
+      aiContentHash: null,
+      atsValidation: null,
+    });
+
+    const result = await commitApplicationArtifact({
+      ...BASE,
+      mergeTarget: "resume",
+      reviewContext: REVIEW_CONTEXT,
+      artifacts: [resumeArtifact],
+    });
+
+    expect(result.kind).toBe("review_blocked");
+    if (result.kind !== "review_blocked") return;
+    expect(result.review.issues.join(" ")).toContain("999%");
+    expect(store.upsert).not.toHaveBeenCalled();
+    expect(blob.del).toHaveBeenCalledWith("https://blob.example/new.pdf", {
+      token: "token",
+    });
+    expect(blob.del).not.toHaveBeenCalledWith(
+      "https://blob.example/existing-cover.pdf",
+      expect.anything(),
+    );
+  });
+
+  it("persists a blocked aggregate as DRAFT so the user can resolve it", async () => {
+    const stored = structuredClone(aiContent);
+    stored.cover.paragraphOne.aiText =
+      "I increased revenue by 999% without supporting evidence.";
+    store.findUnique.mockResolvedValue({
+      resumePdfUrl: null,
+      coverPdfUrl: null,
+      aiContent: stored,
+      aiContentHash: null,
+      atsValidation: null,
+    });
+
+    const result = await commitApplicationArtifact({
+      ...BASE,
+      status: "DRAFT",
+      mergeTarget: "resume",
+      reviewContext: REVIEW_CONTEXT,
+      artifacts: [],
+    });
+
+    expect(result.kind).toBe("committed");
+    const written = store.upsert.mock.calls[0]?.[0]?.update.aiContent as AiContent;
+    expect(written.review?.verdict).toBe("blocked");
   });
 
   it("reports a Job deleted mid-render instead of hitting the foreign key", async () => {

@@ -163,6 +163,13 @@ describe("manual import artifact builder", () => {
     expect(result.aiContent.schemaVersion).toBe(AI_CONTENT_SCHEMA_VERSION);
     expect(result.aiContent.promptMetaHash).toBe("prompt-hash");
     expect(result.aiContent.source).toBe("manual_import");
+    expect(result.aiContent.provenance).toEqual({
+      resume: {
+        generatedAt: result.aiContent.generatedAt,
+        promptMetaHash: "prompt-hash",
+        source: "manual_import",
+      },
+    });
 
     expect(result.aiContent.cv.summary).toEqual(
       expect.objectContaining({
@@ -242,6 +249,13 @@ describe("manual import artifact builder", () => {
     if (!result.ok) return;
     expect(result.filename).toBe("Jane Doe Software Engineer_CL.pdf");
     expect(result.coverQualityGate).toBe("soft-fail");
+    expect(result.aiContent.provenance).toEqual({
+      cover: {
+        generatedAt: result.aiContent.generatedAt,
+        promptMetaHash: "prompt-hash",
+        source: "manual_import",
+      },
+    });
     expect(coverRender.renderCoverLetterTex).toHaveBeenCalledWith(
       expect.objectContaining({
         company: "Example Co",

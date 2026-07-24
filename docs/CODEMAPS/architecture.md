@@ -86,10 +86,16 @@ Path A (Gemini, server-side)      Path B (manual / Local AI)
                    FINAL Application + PDFs
 ```
 
-`AI Content` is the persisted provenance snapshot: every AI proposal paired
+`AI Content` is the persisted provenance snapshot: the current proposal for
+each Application target paired
 with the user's decision (ADR-0001). The client may only change `accepted` and
 `userEdit`; model output, evidence, review verdicts and hashes stay
-server-owned (`lib/server/applications/canonicalAiContent.ts:38-42`).
+server-owned. `evolveApplicationAiContent` treats browser payloads as Edit
+commands and owns target preservation, provenance, discard, and review
+ordering (`lib/server/applications/applicationAiContentAggregate.ts`).
+
+CV and Cover have independent generation provenance, but evidence, review, and
+`aiContentHash` still cover the complete aggregate.
 
 ### 4. Codex Batch — tailoring without a human
 
@@ -140,10 +146,13 @@ canonicalization, the Local AI bridge contract.
 
 **Known deviations from this shape**, as of this snapshot:
 
-- Business logic sits inline in the fattest routes — `finalize` (495 lines),
-  `manual-generate` (462), `fetch-runs` (454), `fetch-runs/[id]/trigger` (382).
-- The Application commit sequence is written three times with three different
-  upload-failure semantics. See [backend.md](./backend.md#the-application-commit-sequence).
+- Business logic still sits inline in large route handlers such as `finalize`,
+  `manual-generate`, `fetch-runs`, and `fetch-runs/[id]/trigger`.
+- Artifact persistence is centralized in `commitApplicationArtifact`.
+  Non-artifact Auto-save and discard still own route-local lock + CAS
+  transactions, but both delegate AI Content semantics to
+  `evolveApplicationAiContent`. See
+  [backend.md](./backend.md#the-application-artifact-commit-sequence).
 - `lib/api/fetchJson.ts` is the intended client seam and has three importers
   against 36 hand-rolled `fetch` call sites.
 - The Chrome extension cannot import `lib/shared/**` — its tsconfig cannot
@@ -163,10 +172,15 @@ Application locks in sorted job-id order
 (`lib/server/applications/applicationMutationLock.ts:16-25`). Full table in
 [data.md](./data.md#advisory-locks).
 
-Compare-and-swap on `Application.aiContentHash` guards the Edit phase against
-lost updates. `expectedHash` in, `STALE_WRITE` 409 out. Present in
-`finalize`, `draft` and `discard`; absent from `manual-generate` and
-`generateApplicationArtifacts`, which rely on the advisory lock alone.
+Compare-and-swap on the aggregate-wide `Application.aiContentHash` guards
+Editor Finalize, Auto-save, and discard. `expectedHash` in, `STALE_WRITE` 409
+out. Manual and server generation do not send an expected hash; they serialize
+through the Application advisory lock. A manual single-target import folds
+into the latest row and re-reviews the combined aggregate while holding that
+lock.
+
+Per-target provenance is attribution metadata only. It does not provide
+per-target hashes, per-target CAS, or independent target lifecycle state.
 
 ---
 
@@ -193,7 +207,7 @@ runs that set plus the builds and dependency audits.
 | What the AI is asked | `lib/server/ai/applicationPromptBuilder.ts`, `lib/server/applications/applicationPrompt.ts` |
 | Which AI proposals are allowed through | The Quality Gate — `lib/server/applications/manualImportParser.ts:419`, `:450` |
 | How a PDF is produced | `lib/server/latex/`, then `lib/server/latex/compilePdf.ts:68` |
-| What "finalized" means | `app/api/applications/[id]/finalize/route.ts`, `lib/server/applications/finalizeApplication.ts` |
+| What "finalized" means | `app/api/applications/[id]/finalize/route.ts`, `lib/server/applications/applicationAiContentAggregate.ts`, `lib/server/applications/commitApplicationArtifact.ts`, `lib/server/applications/finalizeApplication.ts` |
 | The jobs list UI | `app/(app)/jobs/JobsClient.tsx` and `app/(app)/jobs/hooks/` |
 | The Master Resume Profile editor | `components/resume/ResumeContext.tsx` |
 | A user-facing string | `messages/en.json` **and** `messages/zh.json` — parity is gated by `test/messagesContract.test.ts` |

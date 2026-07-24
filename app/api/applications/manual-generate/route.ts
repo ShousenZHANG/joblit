@@ -160,6 +160,12 @@ export async function POST(req: Request) {
       { details: artifact.aiContent.review, requestId },
     );
   }
+  const reviewContext = {
+    scopeKey: userId,
+    resumeSnapshot: { profile, renderInput },
+    jobDescription: job.description,
+    jobSourceAvailable: true,
+  };
 
   // DRAFT mode: skip PDF compile + Blob upload. Just persist the
   // aiContent snapshot and return JSON. Caller navigates to
@@ -175,7 +181,16 @@ export async function POST(req: Request) {
       artifacts: [],
       status: "DRAFT",
       mergeTarget: data.target,
+      reviewContext,
     });
+    if (committed.kind === "invalid_ai_content") {
+      return errorJson(
+        "AI_CONTENT_INVALID",
+        "The stored application content cannot be safely merged. Re-generate both targets.",
+        409,
+        { requestId },
+      );
+    }
     if (committed.kind !== "committed") {
       return errorJson("APPLICATION_PERSIST_FAILED", "Could not save the draft", 500, {
         requestId,
@@ -254,7 +269,24 @@ export async function POST(req: Request) {
       ],
       status: "FINAL",
       mergeTarget: data.target,
+      reviewContext,
     });
+    if (result.kind === "review_blocked") {
+      return errorJson(
+        "APPLICATION_REVIEW_BLOCKED",
+        "The combined draft contains claims that are not grounded in the master resume.",
+        422,
+        { details: result.review, requestId },
+      );
+    }
+    if (result.kind === "invalid_ai_content") {
+      return errorJson(
+        "AI_CONTENT_INVALID",
+        "The stored application content cannot be safely merged. Re-generate both targets.",
+        409,
+        { requestId },
+      );
+    }
     if (result.kind !== "committed") {
       // An upload failure used to be swallowed here, committing a null URL that
       // cleared the user's previous PDF. It is now a plain failure.

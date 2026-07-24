@@ -1215,12 +1215,17 @@ describe("applications manual generate api", () => {
 
     expect(res.status).toBe(200);
     expect(json.aiContent.cv.summary.aiText).toBe("Tailored summary");
-    expect(json.aiContent.cover).toEqual(existing.cover);
+    expect(json.aiContent.cover).toMatchObject(existing.cover);
+    expect(json.aiContent.review).toBeDefined();
     expect(applicationStore.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         update: expect.objectContaining({
           aiContent: expect.objectContaining({
-            cover: existing.cover,
+            cover: expect.objectContaining({
+              paragraphOne: expect.objectContaining({
+                aiText: existing.cover.paragraphOne.aiText,
+              }),
+            }),
           }),
         }),
       }),
@@ -1274,17 +1279,70 @@ describe("applications manual generate api", () => {
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(json.aiContent.cv).toEqual(existing.cv);
+    expect(json.aiContent.cv).toMatchObject(existing.cv);
     expect(json.aiContent.cover.paragraphOne.aiText).toBe("New cover one");
+    expect(json.aiContent.review).toBeDefined();
     expect(applicationStore.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         update: expect.objectContaining({
           aiContent: expect.objectContaining({
-            cv: existing.cv,
+            cv: expect.objectContaining({
+              summary: expect.objectContaining({
+                aiText: existing.cv.summary.aiText,
+              }),
+            }),
           }),
         }),
       }),
     );
+  });
+
+  it("fails closed when a single-target import encounters an unknown stored schema", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    jobStore.findFirst.mockResolvedValueOnce({
+      id: VALID_JOB_ID,
+      title: "Software Engineer",
+      company: "Example Co",
+      location: "Sydney",
+      description: "Build product features",
+      market: "AU",
+    });
+    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "rp-1",
+      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
+    });
+    applicationStore.findUnique.mockResolvedValueOnce({
+      resumePdfUrl: null,
+      coverPdfUrl: "https://blob.example/existing-cover.pdf",
+      aiContent: {
+        ...makeExistingAiContent(),
+        schemaVersion: 999,
+      },
+      aiContentHash: null,
+      atsValidation: null,
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/applications/manual-generate?finalize=false", {
+        method: "POST",
+        body: JSON.stringify({
+          jobId: VALID_JOB_ID,
+          target: "resume",
+          modelOutput: VALID_OUTPUT,
+          promptMeta: {
+            ruleSetId: "rules-1",
+            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+          },
+        }),
+      }),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(json.error.code).toBe("AI_CONTENT_INVALID");
+    expect(applicationStore.upsert).not.toHaveBeenCalled();
   });
 
   it.each([
