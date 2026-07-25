@@ -5,6 +5,7 @@ import {
   stableClaimId,
 } from "@/lib/server/applications/evidenceHashing";
 import { assertCanonicalEvidenceReferences } from "@/lib/server/ai/evidenceLedger";
+import { addedBulletText, proposalText } from "@/lib/shared/aiContentText";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
 
 type PersistReviewLedgerInput = {
@@ -20,22 +21,20 @@ type ClaimInput = {
   evidenceIds: readonly string[];
 };
 
-function finalText(value: { aiText: string; userEdit?: string }) {
-  return value.userEdit?.trim() || value.aiText.trim();
-}
-
 function collectClaims(aiContent: AiContent): ClaimInput[] {
   const claims: ClaimInput[] = [
     {
       key: "cv.summary",
-      text: finalText(aiContent.cv.summary),
+      text: proposalText(aiContent.cv.summary),
       evidenceIds: aiContent.cv.summary.evidenceIds ?? [],
     },
+    // The index is the position among accepted bullets, not among all of them.
+    // It feeds stableClaimId, so renumbering would orphan existing ledger rows.
     ...aiContent.cv.latestExperience.addedBullets
       .filter((bullet) => bullet.accepted)
       .map((bullet, index) => ({
         key: `cv.latestExperience.addedBullets[${index}]`,
-        text: bullet.userEdit?.trim() || bullet.text.trim(),
+        text: addedBulletText(bullet),
         evidenceIds: bullet.evidenceIds ?? [],
       })),
     ...(
@@ -46,7 +45,7 @@ function collectClaims(aiContent: AiContent): ClaimInput[] {
       ] as const
     ).map(([key, value]) => ({
       key,
-      text: finalText(value),
+      text: proposalText(value),
       evidenceIds: value.evidenceIds ?? [],
     })),
   ];

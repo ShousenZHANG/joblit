@@ -1,5 +1,11 @@
 import { createHash } from "node:crypto";
 import { extractTopResponsibilities } from "@/lib/server/ai/responsibilityCoverage";
+import {
+  acceptedAddedBulletTexts,
+  addedBulletText,
+  coverParagraphTexts,
+  proposalText,
+} from "@/lib/shared/aiContentText";
 import type {
   AiApplicationReview,
   AiContent,
@@ -173,10 +179,6 @@ function bestEvidenceIds(
     .map((item) => item.id);
 }
 
-function finalText(content: { aiText: string; userEdit?: string }) {
-  return content.userEdit?.trim() || content.aiText.trim();
-}
-
 /**
  * A digit that follows a capitalised word is naming a product, not asserting a
  * result: "Microsoft 365", "Windows 11", "Power BI 2.0", "SQL Server 2019".
@@ -205,12 +207,12 @@ function reviewContentWithEvidence(
 ): AiContent {
   const candidateEvidence = evidence.filter((item) => item.kind === "candidate");
   const jobEvidence = evidence.filter((item) => item.kind === "job");
-  const summaryText = finalText(aiContent.cv.summary);
+  const summaryText = proposalText(aiContent.cv.summary);
   const summaryEvidenceIds = bestEvidenceIds(summaryText, evidence, "candidate", 8);
   const addedBullets = aiContent.cv.latestExperience.addedBullets.map((bullet) => ({
     ...bullet,
     evidenceIds: bestEvidenceIds(
-      bullet.userEdit?.trim() || bullet.text,
+      addedBulletText(bullet),
       evidence,
       "candidate",
       5,
@@ -220,7 +222,7 @@ function reviewContentWithEvidence(
     paragraphOne: {
       ...aiContent.cover.paragraphOne,
       evidenceIds: bestEvidenceIds(
-        finalText(aiContent.cover.paragraphOne),
+        proposalText(aiContent.cover.paragraphOne),
         evidence,
         "candidate",
         6,
@@ -229,7 +231,7 @@ function reviewContentWithEvidence(
     paragraphTwo: {
       ...aiContent.cover.paragraphTwo,
       evidenceIds: bestEvidenceIds(
-        finalText(aiContent.cover.paragraphTwo),
+        proposalText(aiContent.cover.paragraphTwo),
         evidence,
         "candidate",
         6,
@@ -238,7 +240,7 @@ function reviewContentWithEvidence(
     paragraphThree: {
       ...aiContent.cover.paragraphThree,
       evidenceIds: bestEvidenceIds(
-        finalText(aiContent.cover.paragraphThree),
+        proposalText(aiContent.cover.paragraphThree),
         evidence,
         "candidate",
         6,
@@ -248,12 +250,8 @@ function reviewContentWithEvidence(
 
   const claims = [
     summaryText,
-    ...addedBullets
-      .filter((bullet) => bullet.accepted)
-      .map((bullet) => bullet.userEdit?.trim() || bullet.text),
-    finalText(cover.paragraphOne),
-    finalText(cover.paragraphTwo),
-    finalText(cover.paragraphThree),
+    ...acceptedAddedBulletTexts(addedBullets),
+    ...coverParagraphTexts(cover),
   ].filter(Boolean);
   const combinedClaims = claims.join("\n");
   const candidateText = candidateEvidence.map((item) => item.excerpt).join("\n");

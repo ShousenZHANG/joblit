@@ -1,5 +1,9 @@
 import { escapeLatexWithBold } from "@/lib/server/latex/escapeLatex";
 import type { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
+import {
+  acceptedAddedBulletTexts,
+  proposalText,
+} from "@/lib/shared/aiContentText";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
 
 type ResumeRenderInput = ReturnType<typeof mapResumeProfile>;
@@ -15,13 +19,10 @@ export function composeApplicationResumeRenderInput(input: {
   master: ResumeRenderInput;
   cv: AiContent["cv"];
 }): ResumeRenderInput {
-  const proposedSummary =
-    input.cv.summary.userEdit?.trim() || input.cv.summary.aiText.trim();
-  const acceptedAddedBullets = input.cv.latestExperience.addedBullets
-    .filter((bullet) => bullet.accepted)
-    .map((bullet) => (bullet.userEdit?.trim() || bullet.text).trim())
-    .filter(Boolean)
-    .map(escapeLatexWithBold);
+  const proposedSummary = proposalText(input.cv.summary);
+  const acceptedAddedBullets = acceptedAddedBulletTexts(
+    input.cv.latestExperience.addedBullets,
+  ).map(escapeLatexWithBold);
 
   const experienceIndex = input.cv.latestExperience.experienceIndex;
   const targetExperience = input.master.experiences[experienceIndex];

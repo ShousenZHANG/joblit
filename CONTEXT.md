@@ -18,6 +18,14 @@ Synonyms to avoid: "master resume", "base resume" — use **Master Resume Profil
 
 A role record imported from a job board (LinkedIn, Indeed, etc.) via the **Fetch Pipeline**. Has `status` ∈ `NEW | APPLIED | REJECTED`. Belongs to one user, identified within that user by canonical `jobUrl`.
 
+### FetchRun
+
+A durable execution of the **Fetch Pipeline** for one user and market. Its
+versioned `FetchRunConfig` snapshots the execution input (apart from
+`dispatchMeta` bookkeeping); ordered `FetchRunCommitReceipt` rows are the
+evidence that result batches crossed the database commit boundary.
+`SUCCEEDED`, `FAILED`, and `PARTIAL` are terminal.
+
 ### Application
 
 The artifact produced by **tailoring** the Master Resume Profile to a specific Job. One per `(userId, jobId)`. Holds `resumePdfUrl`, `coverPdfUrl`, plus the `aiContent` snapshot used to render them.
@@ -58,6 +66,18 @@ Captures:
 
 The skills section is not part of this snapshot. AI-proposed skill additions were removed: the model proposed skills the candidate had no evidence for, so the grounding gate blocked finalize on almost every draft that carried them. A CV's skills come from the master profile only.
 
+**`accepted` gates additions, not replacements.** An AI-added bullet is an
+addition: the user opts in, and an unaccepted bullet is omitted from the
+document. The summary and the three Cover paragraphs are replacements of
+required content — a Cover letter missing a body paragraph is invalid, not
+shorter, and Finalize rejects it with `COVER_PARAGRAPHS_INCOMPLETE`. Rejecting
+a replacement therefore cannot mean omitting it; the user edits it instead, and
+`userEdit` already wins when present.
+
+The one derivation of a proposal's final text lives in
+`lib/shared/aiContentText.ts` and is used by the LaTeX composition, the evidence
+ledger, and the claim ledger, so all three describe the same document.
+
 See **ADR-0001** for the persistence rationale.
 
 ---
@@ -97,7 +117,15 @@ job-less receipt.
 
 ### Fetch Pipeline
 
-The job-intake side: `FetchRun` task → GitHub Actions → Python JobSpy → admin import. Out of scope for tailoring.
+The job-intake side. A `FetchRun` stores a versioned, market-discriminated
+configuration, performs network discovery through the AU worker or an
+in-process CN/GLOBAL adapter, then commits ordered result batches through the
+`fetch-run-commit/v1` protocol.
+
+The **FetchRun commit boundary** is the transaction that persists Jobs, the
+batch receipt, counters, and terminal projection while holding `FRUN → JOBJ`
+locks. Cancellation competes for `FRUN`: it stops future commits but never
+pretends that receipt-backed Jobs were rolled back. See **ADR-0008**.
 
 ### Skill Pack
 
@@ -130,6 +158,10 @@ Neither identity depends on ZIP timestamps or a wall-clock build date.
 
 Geographic region governing which job sources to fetch and which resume locale to use. `AU | CN`. See `lib/shared/market.ts`.
 
+`FetchRunConfig.market` also accepts `GLOBAL` for the global public-feed/ATS
+adapter. That is an execution-source selector, not a third UI or Resume Market;
+it follows the AU locale path.
+
 ### Resume Locale
 
 BCP 47 tag stored on `ResumeProfile` and used by the LaTeX renderer. `en-AU | zh-CN`. Always derivable from Market.
@@ -157,5 +189,6 @@ Short locale code used by next-intl for translation strings. `en | zh`. Always d
 
 - [ADR-0001](./docs/adr/0001-application-aicontent-provenance.md) — Why we persist AI provenance.
 - [ADR-0002](./docs/adr/0002-unified-tailor-edit-flow.md) — Why both generate paths converge through the Edit phase.
+- [ADR-0008](./docs/adr/0008-fetch-run-execution-commit-protocol.md) — Why all Fetch Pipeline adapters share one durable commit boundary.
 - [AGENTS.md](./AGENTS.md) — Codex Batch protocol.
 - [docs/CODEMAPS/](./docs/CODEMAPS) — Architecture snapshots.

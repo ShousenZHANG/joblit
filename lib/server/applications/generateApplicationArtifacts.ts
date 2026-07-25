@@ -6,6 +6,7 @@ import { renderCoverLetterTex } from "@/lib/server/latex/renderCoverLetter";
 import { compileLatexToPdf } from "@/lib/server/latex/compilePdf";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
 import { getLocaleProfile } from "@/lib/shared/locales";
+import { coverParagraphTexts } from "@/lib/shared/aiContentText";
 import {
   buildPdfFilename,
   resumeFilenameSegments,
@@ -29,17 +30,6 @@ type GenerateArtifactsResult = {
   coverPdfUrl: string | null;
   coverPdfName: string;
 };
-
-function acceptedCoverText(
-  paragraph: {
-    aiText: string;
-    userEdit?: string;
-    accepted: boolean;
-  },
-): string {
-  if (!paragraph.accepted) return "";
-  return paragraph.userEdit?.trim() || paragraph.aiText.trim();
-}
 
 export async function generateApplicationArtifactsForJob(input: GenerateArtifactsInput) {
   const job = await prisma.job.findFirst({
@@ -133,6 +123,9 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
     requiredKeywords,
   });
 
+  const [paragraphOne, paragraphTwo, paragraphThree] = coverParagraphTexts(
+    aiContent.cover,
+  );
   const coverTex = renderCoverLetterTex({
     candidate: {
       name: resumeResult.renderInput.candidate.name,
@@ -144,9 +137,9 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
     },
     company: job.company || "the company",
     role: job.title,
-    paragraphOne: acceptedCoverText(aiContent.cover.paragraphOne),
-    paragraphTwo: acceptedCoverText(aiContent.cover.paragraphTwo),
-    paragraphThree: acceptedCoverText(aiContent.cover.paragraphThree),
+    paragraphOne,
+    paragraphTwo,
+    paragraphThree,
   });
   const coverPdf = await compileLatexToPdf(coverTex);
   const coverAtsValidation = await assertAtsPdf(coverPdf, {

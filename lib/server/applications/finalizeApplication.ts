@@ -9,6 +9,7 @@ import {
   resumeFilenameSegments,
 } from "@/lib/server/files/pdfFilename";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
+import { coverParagraphTexts } from "@/lib/shared/aiContentText";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
 import { composeApplicationResumeRenderInput } from "./applicationResumeComposition";
 
@@ -90,10 +91,7 @@ export async function renderCoverLetterPdf(input: {
   }
   const renderInput = mapResumeProfile(profile);
 
-  const c = input.aiContent.cover;
-  const p1 = (c.paragraphOne.userEdit?.trim() || c.paragraphOne.aiText).trim();
-  const p2 = (c.paragraphTwo.userEdit?.trim() || c.paragraphTwo.aiText).trim();
-  const p3 = (c.paragraphThree.userEdit?.trim() || c.paragraphThree.aiText).trim();
+  const [p1, p2, p3] = coverParagraphTexts(input.aiContent.cover);
 
   if (!p1 || !p2 || !p3) {
     throw new AppError({
