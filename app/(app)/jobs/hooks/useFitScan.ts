@@ -89,6 +89,7 @@ async function runTriageBatch(
   claimToken: string,
   isCancelled: () => boolean,
   retryBackoffMs: number,
+  pollMs: number,
 ): Promise<number> {
   const requestId = crypto.randomUUID();
   const deadline = Date.now() + TRIAGE_RUN_BUDGET_MS;
@@ -113,7 +114,7 @@ async function runTriageBatch(
         if (run.status === "failed") throw new Error(run.error.code);
         continue;
       }
-      await new Promise((resolve) => setTimeout(resolve, FIT_POLL_MS));
+      await new Promise((resolve) => setTimeout(resolve, pollMs));
       const run = await sendLocalAiBridgeRequest(
         "GET_RUN",
         { requestId },
@@ -133,7 +134,10 @@ async function runTriageBatch(
       }
       // A requestId the worker no longer knows (worker restart) cannot recover
       // by polling; after a few consecutive not-found polls start fresh.
-      if (started && error instanceof LocalAiBridgeError && error.code === "HERMES_RUN_NOT_FOUND") {
+      // The extension raises HERMES_RUN_NOT_FOUND internally but rewrites it to
+      // RUN_LOST before the response crosses the bridge, so RUN_LOST is the only
+      // code the web side can ever observe for a forgotten run.
+      if (started && error instanceof LocalAiBridgeError && error.code === "RUN_LOST") {
         notFoundStreak += 1;
         if (notFoundStreak >= 3) {
           started = false;
@@ -158,8 +162,11 @@ export function useFitScan(options: {
   retryBackoffMs?: number;
   /** Test seam; production never polls a live lease more often than every 5s. */
   leasePollMinMs?: number;
+  /** Test seam; production polls a live run every 1.5s. */
+  pollMs?: number;
 }) {
   const retryBackoffMs = options.retryBackoffMs ?? RETRY_BACKOFF_MS;
+  const pollMs = Math.max(1, Math.floor(options.pollMs ?? FIT_POLL_MS));
   const leasePollMinMs = Math.max(
     1,
     Math.floor(options.leasePollMinMs ?? DEFAULT_LEASE_POLL_MS),
@@ -249,6 +256,7 @@ export function useFitScan(options: {
             batch.claimToken,
             () => cancelRef.current,
             retryBackoffMs,
+            pollMs,
           );
           const failed = batch.jobIds.length - scored;
           if (failed > 0) {
@@ -301,7 +309,7 @@ export function useFitScan(options: {
     } finally {
       runningRef.current = false;
     }
-  }, [leasePollMinMs, retryBackoffMs]);
+  }, [leasePollMinMs, pollMs, retryBackoffMs]);
 
   const stop = useCallback(() => {
     cancelRef.current = true;

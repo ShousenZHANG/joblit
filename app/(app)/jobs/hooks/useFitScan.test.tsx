@@ -74,6 +74,15 @@ function succeededRun(jobIds: string[]) {
   };
 }
 
+function runningRun(jobIds: string[]) {
+  return {
+    requestId: crypto.randomUUID(),
+    jobId: jobIds[0],
+    target: "triage" as const,
+    status: "running" as const,
+  };
+}
+
 describe("useFitScan (database-backed pump)", () => {
   beforeEach(() => {
     bridge.send.mockReset();
@@ -247,6 +256,55 @@ describe("useFitScan (database-backed pump)", () => {
       remaining: 0,
       leased: 0,
     });
+  });
+
+  it("starts a fresh run when the service worker forgets the one it is polling", async () => {
+    // A service-worker restart drops the run registry, so GET_RUN on the old
+    // requestId can never succeed. The extension raises HERMES_RUN_NOT_FOUND
+    // internally, but apiErrors.toPublicLocalAiError rewrites it to RUN_LOST
+    // before it crosses the bridge — RUN_LOST is what the web side actually
+    // sees, and it arrives retryable. Polling cannot recover; only a new
+    // requestId can.
+    mockServer({
+      run: { total: 1, scored: 0, pending: 1, prescreened: 0 },
+      batches: [[JOB_A], []],
+    });
+    let startCalls = 0;
+    let getRunCalls = 0;
+    bridge.send.mockImplementation(
+      async (action: string, payload: { jobIds?: string[] }) => {
+        if (action === "START_RUN") {
+          startCalls += 1;
+          // The first attempt is accepted and then forgotten; the second
+          // attempt runs to completion.
+          return startCalls === 1
+            ? runningRun(payload.jobIds ?? [])
+            : succeededRun(payload.jobIds ?? []);
+        }
+        if (action === "GET_RUN") {
+          getRunCalls += 1;
+          throw new LocalAiBridgeError("RUN_LOST", "run is gone", true);
+        }
+        if (action === "STOP_RUN") return undefined;
+        throw new Error(`unexpected ${action}`);
+      },
+    );
+
+    const { result } = renderHook(() =>
+      useFitScan({ onJobScored: vi.fn(), retryBackoffMs: 1, pollMs: 1 }),
+    );
+    await act(async () => result.current.start());
+
+    await waitFor(() =>
+      expect(result.current.state).toMatchObject({
+        status: "done",
+        scored: 1,
+        failed: 0,
+      }),
+    );
+    // Restarted once rather than polling a dead run until the 240s budget ran out.
+    expect(startCalls).toBe(2);
+    expect(getRunCalls).toBe(3);
   });
 
   it("reports failed when the server run endpoint rejects", async () => {
