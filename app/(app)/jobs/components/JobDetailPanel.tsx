@@ -113,15 +113,13 @@ export function JobDetailPanel({
   // CN market ships a single Chinese résumé end-to-end — no AI CV tailoring or
   // cover-letter generation — so those actions are hidden there.
   const isCN = useMarket() === "CN";
-  const statusLabel: Record<JobStatus, string> = {
-    NEW: t("statusNew"),
-    APPLIED: t("statusApplied"),
-    INTERVIEW: t("statusInterview"),
-    OFFER: t("statusOffer"),
-    REJECTED: t("statusRejected"),
-    WITHDRAWN: t("statusWithdrawn"),
-    ACCEPTED: t("statusAccepted"),
-  };
+  // Label, colour and the Select's own value all come from one projection, so
+  // a row still carrying a status ADR-0007 retired cannot render its retired
+  // name on an active colour, or seed the Select with a value absent from its
+  // options.
+  const statusPresentation = selectedJob
+    ? jobStatusPresentation(selectedJob.status)
+    : null;
   // Reset the description scroll to the top when the selected job changes —
   // the ScrollArea viewport DOM node is reused across selections, so without
   // this a new job opens stuck at the previous job's scroll offset.
@@ -174,8 +172,8 @@ export function JobDetailPanel({
                 <h2 className="text-xl font-bold tracking-tight text-foreground">
                   {selectedJob.title}
                 </h2>
-                <Badge className={cn("rounded-full px-2.5 text-[10px] font-bold uppercase tracking-wider", jobStatusPresentation(selectedJob.status).headerClass)}>
-                  {statusLabel[selectedJob.status]}
+                <Badge className={cn("rounded-full px-2.5 text-[10px] font-bold uppercase tracking-wider", statusPresentation?.headerClass)}>
+                  {statusPresentation ? t(statusPresentation.labelKey) : null}
                 </Badge>
               </div>
               {/* Meta as icon chips — replaces the flat dotted text line for a
@@ -216,7 +214,7 @@ export function JobDetailPanel({
                 className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center"
               >
                 <Select
-                  value={selectedJob.status}
+                  value={statusPresentation?.status}
                   onValueChange={(v) => onUpdateStatus(selectedJob.id, v as JobStatus)}
                   disabled={updatingIds.has(selectedJob.id)}
                 >
@@ -225,7 +223,9 @@ export function JobDetailPanel({
                       isAppliedSelected ? "h-9 w-full px-3 text-sm sm:w-[118px]" : "h-10 w-full sm:w-[132px]"
                     }`}
                   >
-                    <span className="truncate">{statusLabel[selectedJob.status]}</span>
+                    <span className="truncate">
+                      {statusPresentation ? t(statusPresentation.labelKey) : null}
+                    </span>
                   </SelectTrigger>
                   <SelectContent>
                     {selectableJobStatuses(selectedJob.status).map((status) => (
