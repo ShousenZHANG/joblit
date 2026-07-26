@@ -1,4 +1,5 @@
 import type { AdapterResult, RawCnJob } from "../types";
+import { safeOutboundFetch } from "@/lib/server/net/safeFetch";
 
 // Nowcoder (牛客) is the single CN job source. Its job board (牛客优聘) is a
 // client-rendered SPA, but Nowcoder server-renders the full listing for crawler
@@ -14,6 +15,8 @@ const CENTERS = [
 ];
 const UA = "Mozilla/5.0 (compatible; JoblitBot/1.0; +https://www.joblit.tech)";
 const DEFAULT_TIMEOUT_MS = 12_000;
+const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
+const NOWCODER_HOST = "www.nowcoder.com";
 const STATE_MARKER = "__INITIAL_STATE__=";
 
 interface NcJobData {
@@ -166,7 +169,6 @@ interface NowcoderAdapterOptions {
 export async function fetchNowcoderJobs(
   options: NowcoderAdapterOptions = {},
 ): Promise<AdapterResult> {
-  const fetchImpl = options.fetchImpl ?? fetch;
   const centers = options.centers ?? CENTERS;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
@@ -174,10 +176,19 @@ export async function fetchNowcoderJobs(
   const errors: string[] = [];
   for (const url of centers) {
     try {
-      const res = await fetchImpl(url, {
+      const init: RequestInit = {
         signal: AbortSignal.timeout(timeoutMs),
         headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml" },
-      });
+      };
+      const res = options.fetchImpl
+        ? await options.fetchImpl(url, init)
+        : await safeOutboundFetch(url, init, {
+            allowedHosts: [NOWCODER_HOST],
+            allowSubdomains: false,
+            maxRedirects: 0,
+            maxResponseBytes: MAX_RESPONSE_BYTES,
+            timeoutMs,
+          });
       if (!res.ok) {
         errors.push(`${res.status}`);
         continue;

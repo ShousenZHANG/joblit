@@ -9,6 +9,7 @@ import logging
 import unicodedata
 import ipaddress
 import socket
+import uuid
 from html import unescape
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit, urlunsplit, parse_qs, urlencode, quote
@@ -24,7 +25,8 @@ logger = logging.getLogger("jobspy_runner")
 
 SCRAPE_RETRIES = 2
 SCRAPE_BACKOFF_SEC = 2
-IMPORT_RETRIES = 2
+COMMIT_RETRIES = 2
+FETCH_RUN_COMMIT_PROTOCOL = "fetch-run-commit/v1"
 DEFAULT_FETCH_QUERY_CONCURRENCY = 2
 MAX_FETCH_QUERY_CONCURRENCY = 6
 DEFAULT_RATE_LIMIT_RETRIES = 5
@@ -52,6 +54,21 @@ IDENTITY_QUERY_GROUPS = (
 )
 
 CANCELLED_ERROR = "Cancelled by user"
+
+
+class FetchRunCancelled(SystemExit):
+    """A clean worker exit after the server linearizes cancellation first."""
+
+    def __init__(self):
+        super().__init__(0)
+
+
+class FetchRunSuperseded(SystemExit):
+    """Another worker established the canonical batch stream first."""
+
+    def __init__(self):
+        super().__init__(0)
+
 
 # Title exclusion regex is built per-run from the user's selected terms in
 # `_build_exclude_title_re` — there is no hardcoded title pattern, so the UI
@@ -1664,7 +1681,9 @@ def headers_secret(secret_env: str, header_name: str) -> Dict[str, str]:
 
 
 def _is_cancelled_run(run: Dict[str, Any]) -> bool:
-    return (run or {}).get("status") == "FAILED" and (run or {}).get("error") == CANCELLED_ERROR
+    return (run or {}).get("status") in ("FAILED", "PARTIAL") and (
+        run or {}
+    ).get("error") == CANCELLED_ERROR
 
 
 def _fetch_run_config(base: str, run_id: str, headers: Dict[str, str]) -> Dict[str, Any]:
@@ -1677,12 +1696,242 @@ def _fetch_run_config(base: str, run_id: str, headers: Dict[str, str]) -> Dict[s
     return cfg_res.json()["run"]
 
 
-def _abort_if_cancelled(base: str, run_id: str, headers: Dict[str, str], stage: str) -> None:
-    run = _fetch_run_config(base, run_id, headers=headers)
-    if _is_cancelled_run(run):
-        logger.info("FetchRun cancelled at stage=%s. exiting.", stage)
-        # SystemExit is not caught by the bottom-level Exception handler.
-        sys.exit(0)
+def _fetch_run_commit_url(base: str, run_id: str) -> str:
+    return f"{base}/api/fetch-runs/{run_id}/commit"
+
+
+def _response_error_code(response: requests.Response) -> str:
+    try:
+        body = response.json()
+    except (TypeError, ValueError):
+        return ""
+    if not isinstance(body, dict):
+        return ""
+    direct_code = body.get("code")
+    if isinstance(direct_code, str):
+        return direct_code
+    error = body.get("error")
+    if isinstance(error, dict) and isinstance(error.get("code"), str):
+        return error["code"]
+    return ""
+
+
+def _read_fetch_run_success(response: requests.Response) -> Dict[str, Any]:
+    body = response.json()
+    if not isinstance(body, dict) or body.get("ok") is not True:
+        raise RuntimeError("fetch-run command returned an invalid success body")
+    return body
+
+
+def _raise_for_fetch_run_conflict(
+    response: requests.Response,
+    command: Dict[str, Any],
+    error_code: str,
+) -> None:
+    if response.status_code != 409:
+        return
+    if error_code == "RUN_CANCELLED":
+        logger.info(
+            "FetchRun cancellation won before command=%s. exiting.",
+            command.get("command"),
+        )
+        raise FetchRunCancelled()
+    if error_code not in {
+        "EXECUTION_LEASE_HELD",
+        "EXECUTION_LEASE_LOST",
+        "RUN_ALREADY_TERMINAL",
+    }:
+        return
+    logger.warning(
+        "Another FetchRun worker owns the canonical stream "
+        "(command=%s code=%s). exiting without changing run state.",
+        command.get("command"),
+        error_code,
+    )
+    # SystemExit is intentionally outside the top-level Exception handler, so
+    # this duplicate cannot poison the active worker by reporting a failure.
+    raise FetchRunSuperseded()
+
+
+def _fetch_run_response_error(
+    response: requests.Response,
+    command: Dict[str, Any],
+) -> tuple[RuntimeError, bool]:
+    error_code = _response_error_code(response)
+    _raise_for_fetch_run_conflict(response, command, error_code)
+    error = RuntimeError(
+        "fetch-run command failed "
+        f"status={response.status_code} code={error_code or 'UNKNOWN'} "
+        f"body={response.text[:500]}"
+    )
+    retryable = (
+        response.status_code in (408, 425, 429)
+        or response.status_code >= 500
+    )
+    return error, retryable
+
+
+def _post_fetch_run_command(
+    base: str,
+    run_id: str,
+    headers: Dict[str, str],
+    command: Dict[str, Any],
+    *,
+    timeout: int = 120,
+) -> Dict[str, Any]:
+    payload = {
+        "protocol": FETCH_RUN_COMMIT_PROTOCOL,
+        **command,
+    }
+    response = None
+    last_error: Optional[BaseException] = None
+    for attempt in range(COMMIT_RETRIES + 1):
+        try:
+            response = requests.post(
+                _fetch_run_commit_url(base, run_id),
+                headers=headers,
+                json=payload,
+                timeout=timeout,
+            )
+        except requests.RequestException as error:
+            last_error = error
+            if attempt >= COMMIT_RETRIES:
+                raise RuntimeError(
+                    f"fetch-run command failed after retries: {error}"
+                ) from error
+        else:
+            if response.ok:
+                return _read_fetch_run_success(response)
+
+            last_error, retryable = _fetch_run_response_error(response, command)
+            if not retryable or attempt >= COMMIT_RETRIES:
+                raise last_error
+
+        time.sleep(2 * (attempt + 1))
+
+    # The loop always returns or raises. This guard keeps the return type honest.
+    raise RuntimeError(f"fetch-run command failed: {last_error}")
+
+
+def _fetch_run_batch_command(
+    items: List[Dict[str, Any]],
+    *,
+    attempt_id: str,
+    batch_index: int,
+    batch_count: int,
+    discovered_count: int,
+) -> Dict[str, Any]:
+    return {
+        "command": "commit",
+        "attemptId": attempt_id,
+        "batchKey": (
+            "batch-empty" if discovered_count == 0 else f"batch-{batch_index:06d}"
+        ),
+        "batchIndex": batch_index,
+        "batchCount": batch_count,
+        "items": items,
+        "terminal": batch_index == batch_count - 1,
+        "discoveredCount": discovered_count,
+    }
+
+
+def _commit_fetch_run_batch(
+    base: str,
+    run_id: str,
+    headers: Dict[str, str],
+    items: List[Dict[str, Any]],
+    *,
+    attempt_id: str,
+    batch_index: int,
+    batch_count: int,
+    discovered_count: int,
+) -> Dict[str, Any]:
+    return _post_fetch_run_command(
+        base,
+        run_id,
+        headers,
+        _fetch_run_batch_command(
+            items,
+            attempt_id=attempt_id,
+            batch_index=batch_index,
+            batch_count=batch_count,
+            discovered_count=discovered_count,
+        ),
+    )
+
+
+def _commit_items(
+    base: str,
+    run_id: str,
+    headers: Dict[str, str],
+    items: List[Dict[str, Any]],
+    *,
+    attempt_id: str,
+    batch_size: int = 50,
+) -> int:
+    if batch_size < 1:
+        raise ValueError("batch_size must be positive")
+    discovered_count = len(items)
+    batch_count = max(1, math.ceil(discovered_count / batch_size))
+    if not items:
+        result = _commit_fetch_run_batch(
+            base,
+            run_id,
+            headers,
+            [],
+            attempt_id=attempt_id,
+            batch_index=0,
+            batch_count=1,
+            discovered_count=0,
+        )
+        return int(result.get("totalImported") or 0)
+
+    total_imported = 0
+    for batch_index, offset in enumerate(range(0, discovered_count, batch_size)):
+        batch = items[offset : offset + batch_size]
+        result = _commit_fetch_run_batch(
+            base,
+            run_id,
+            headers,
+            batch,
+            attempt_id=attempt_id,
+            batch_index=batch_index,
+            batch_count=batch_count,
+            discovered_count=discovered_count,
+        )
+        total_imported = int(result.get("totalImported") or 0)
+        logger.info(
+            "Committed FetchRun batch=%s/%s disposition=%s batchImported=%s totalImported=%s",
+            batch_index + 1,
+            batch_count,
+            result.get("disposition"),
+            result.get("batchImported"),
+            total_imported,
+        )
+    return total_imported
+
+
+def _report_fetch_run_failure(
+    base: str,
+    run_id: str,
+    headers: Dict[str, str],
+    attempt_id: str,
+    error: BaseException,
+) -> None:
+    try:
+        _post_fetch_run_command(
+            base,
+            run_id,
+            headers,
+            {
+                "command": "fail",
+                "attemptId": attempt_id,
+                "error": str(error)[:1900] or "worker_failed",
+            },
+            timeout=30,
+        )
+    except (Exception, FetchRunCancelled, FetchRunSuperseded) as report_error:
+        logger.warning("Best-effort FetchRun failure report failed: %s", report_error)
 
 
 def main():
@@ -1693,6 +1942,21 @@ def main():
     base = api_base()
 
     fetch_headers = headers_secret("FETCH_RUN_SECRET", "x-fetch-run-secret")
+    attempt_id = os.environ.get("FETCH_RUN_ATTEMPT_ID", "").strip()
+    if not attempt_id:
+        attempt_id = str(uuid.uuid4())
+        os.environ["FETCH_RUN_ATTEMPT_ID"] = attempt_id
+
+    # Claim execution authority before reading or interpreting the config. A
+    # duplicate GitHub worker exits here and therefore cannot report an
+    # ordinary discovery failure against the canonical worker's run.
+    _post_fetch_run_command(
+        base,
+        run_id,
+        fetch_headers,
+        {"command": "start", "attemptId": attempt_id},
+        timeout=30,
+    )
 
     # Get run config
     run = _fetch_run_config(base, run_id, headers=fetch_headers)
@@ -1700,8 +1964,9 @@ def main():
         logger.info("FetchRun already cancelled before start. exiting.")
         sys.exit(0)
 
-    user_email = run["userEmail"]
-    raw_queries = run["queries"] or {}
+    # `config` is the versioned FetchRun execution contract. The queries
+    # fallback keeps a rolling deployment compatible with pre-v1 API nodes.
+    raw_queries = run.get("config") or run.get("queries") or {}
     if isinstance(raw_queries, list):
         queries = _clean_query_values(raw_queries)
         title_query = queries[0] if queries else ""
@@ -1752,14 +2017,6 @@ def main():
         else []
     )
     filter_desc = bool(active_rights_rules or active_experience_rules)
-
-    # Mark running
-    requests.patch(
-        f"{base}/api/fetch-runs/{run_id}/update",
-        headers=fetch_headers,
-        data=json.dumps({"status": "RUNNING"}),
-        timeout=30,
-    ).raise_for_status()
 
     t0 = time.time()
     search_terms = _resolve_search_terms(title_query=title_query, queries=queries)
@@ -1885,39 +2142,14 @@ def main():
         df = dedupe_jobs(df)
         items = df.to_dict(orient="records")
 
-    # Import into DB via Vercel API (chunked to avoid payload/time limits)
-    imported = 0
-    if items:
-        _abort_if_cancelled(base, run_id, headers=fetch_headers, stage="before_import")
-        batch_size = 50
-        for i in range(0, len(items), batch_size):
-            _abort_if_cancelled(base, run_id, headers=fetch_headers, stage=f"before_import_batch_{i}")
-            batch = items[i : i + batch_size]
-            imp_res = None
-            for attempt in range(IMPORT_RETRIES + 1):
-                imp_res = requests.post(
-                    f"{base}/api/admin/import",
-                    headers=headers_secret("IMPORT_SECRET", "x-import-secret"),
-                    data=json.dumps({"userEmail": user_email, "items": batch}),
-                    timeout=120,
-                )
-                if imp_res.ok:
-                    break
-                if attempt >= IMPORT_RETRIES:
-                    raise RuntimeError(
-                        f"import failed status={imp_res.status_code} body={imp_res.text}"
-                    )
-                time.sleep(2 * (attempt + 1))
-            imported += int(imp_res.json().get("imported", 0))
-
-    # Update run
-    _abort_if_cancelled(base, run_id, headers=fetch_headers, stage="before_succeeded_update")
-    requests.patch(
-        f"{base}/api/fetch-runs/{run_id}/update",
-        headers=fetch_headers,
-        data=json.dumps({"status": "SUCCEEDED", "importedCount": imported, "error": None}),
-        timeout=30,
-    ).raise_for_status()
+    # The terminal batch and FetchRun completion commit atomically on the server.
+    imported = _commit_items(
+        base,
+        run_id,
+        fetch_headers,
+        items,
+        attempt_id=attempt_id,
+    )
 
     logger.info("Done. imported=%s elapsed=%.1fs", imported, time.time() - t0)
 
@@ -1926,15 +2158,17 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        # Best effort: mark failed
+        # Best effort: mark failed (or PARTIAL when prior batches committed).
         try:
             rid = os.environ.get("RUN_ID", "").strip()
-            if rid:
-                requests.patch(
-                    f"{api_base()}/api/fetch-runs/{rid}/update",
-                    headers=headers_secret("FETCH_RUN_SECRET", "x-fetch-run-secret"),
-                    data=json.dumps({"status": "FAILED", "error": str(e)}),
-                    timeout=30,
+            attempt_id = os.environ.get("FETCH_RUN_ATTEMPT_ID", "").strip()
+            if rid and attempt_id:
+                _report_fetch_run_failure(
+                    api_base(),
+                    rid,
+                    headers_secret("FETCH_RUN_SECRET", "x-fetch-run-secret"),
+                    attempt_id,
+                    e,
                 )
         except Exception:
             pass

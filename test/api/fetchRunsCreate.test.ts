@@ -65,6 +65,19 @@ describe("fetch runs create api", () => {
     );
   }
 
+  it("derives ownership from the session id without persisting an email snapshot", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+
+    const res = await postRun({ title: "Software Engineer" });
+
+    expect(res.status).toBe(201);
+    const data = fetchRunStore.create.mock.calls[0]?.[0]?.data;
+    expect(data.userId).toBe("user-1");
+    expect(data).not.toHaveProperty("userEmail");
+  });
+
   it("creates a GLOBAL run with the requested sources", async () => {
     signIn();
 
@@ -86,6 +99,8 @@ describe("fetch runs create api", () => {
     const data = fetchRunStore.create.mock.calls[0]?.[0]?.data;
     expect(data.market).toBe("GLOBAL");
     expect(data.queries).toMatchObject({
+      schemaVersion: 1,
+      market: "GLOBAL",
       title: "AI Engineer",
       baseQueries: ["AI Engineer"],
       queries: expect.arrayContaining(["AI Engineer", "Machine Learning Engineer"]),
@@ -252,6 +267,8 @@ describe("fetch runs create api", () => {
 
     expect(res.status).toBe(201);
     const payload = fetchRunStore.create.mock.calls[0]?.[0]?.data?.queries;
+    expect(payload.schemaVersion).toBe(1);
+    expect(payload.market).toBe("AU");
     expect(payload.title).toBe("Software Engineer");
     expect(payload.baseQueries).toEqual(["Software Engineer"]);
     expect(payload.queries).toContain("Forward Deployed Engineer");

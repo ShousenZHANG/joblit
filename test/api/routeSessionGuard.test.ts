@@ -37,9 +37,8 @@ const ROUTES = routeFiles(API_ROOT).map((file) => ({
  */
 const NON_SESSION_ROUTES = new Set([
   "app/api/auth/[...nextauth]/route.ts",
-  "app/api/admin/import/route.ts",
   "app/api/fetch-runs/cleanup-stuck/route.ts",
-  "app/api/fetch-runs/[id]/update/route.ts",
+  "app/api/fetch-runs/[id]/commit/route.ts",
   "app/api/fetch-runs/[id]/config/route.ts",
   "app/api/discover/refresh-daily/route.ts",
   "app/api/me/route.ts",

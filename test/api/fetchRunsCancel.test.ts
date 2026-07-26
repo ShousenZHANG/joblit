@@ -55,11 +55,19 @@ describe("fetch run cancel api", () => {
   });
 
   it("cancels only an active run owned by the current user", async () => {
-    store.findFirst.mockResolvedValueOnce({ id: RUN_ID, status: "RUNNING" });
+    store.findFirst.mockResolvedValueOnce({
+      id: RUN_ID,
+      status: "RUNNING",
+      commitStartedAt: null,
+    });
 
     const response = await cancel();
 
     expect(response.status).toBe(200);
+    await expect(response.clone().json()).resolves.toEqual({
+      ok: true,
+      status: "FAILED",
+    });
     expect(store.executeRawLock).toHaveBeenCalled();
     expect(store.updateMany).toHaveBeenCalledWith({
       where: {
@@ -67,12 +75,44 @@ describe("fetch run cancel api", () => {
         userId: "user-1",
         status: { in: ["QUEUED", "RUNNING"] },
       },
-      data: { status: "FAILED", error: "Cancelled by user" },
+      data: {
+        status: "FAILED",
+        error: "Cancelled by user",
+        terminalAt: expect.any(Date),
+      },
     });
   });
 
+  it("preserves committed batches as a PARTIAL terminal result", async () => {
+    store.findFirst.mockResolvedValueOnce({
+      id: RUN_ID,
+      status: "RUNNING",
+      commitStartedAt: new Date("2026-07-24T00:00:00.000Z"),
+    });
+
+    const response = await cancel();
+
+    expect(response.status).toBe(200);
+    await expect(response.clone().json()).resolves.toEqual({
+      ok: true,
+      status: "PARTIAL",
+    });
+    expect(store.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "PARTIAL",
+          error: "Cancelled by user",
+        }),
+      }),
+    );
+  });
+
   it("cannot overwrite a run that completed before the lifecycle lock", async () => {
-    store.findFirst.mockResolvedValueOnce({ id: RUN_ID, status: "SUCCEEDED" });
+    store.findFirst.mockResolvedValueOnce({
+      id: RUN_ID,
+      status: "SUCCEEDED",
+      commitStartedAt: new Date(),
+    });
 
     const response = await cancel();
 

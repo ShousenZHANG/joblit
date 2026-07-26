@@ -1,8 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 
 /**
- * Constant-time string comparison for shared secrets (IMPORT_SECRET,
- * FETCH_RUN_SECRET). Plain `===` short-circuits on the first
+ * Constant-time string comparison for service secrets such as
+ * FETCH_RUN_SECRET. Plain `===` short-circuits on the first
  * differing byte, leaking secret length/prefix to a timing attacker. This
  * compares in time independent of where the mismatch is.
  *

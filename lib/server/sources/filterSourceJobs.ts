@@ -4,6 +4,7 @@ import { violatesDescriptionExclusions } from "./descriptionExclusions";
 export type SourceJobFilter = {
   queries: string[];
   baseQueries?: string[];
+  queryMode?: "query" | "source-only";
   location?: string | null;
   hoursOld?: number | null;
   excludeTitleTerms?: string[];
@@ -167,8 +168,8 @@ function isFreshEnough(
 
 /**
  * Apply user intent before public-feed rows reach the shared importer.
- * Empty query sets fail closed: a source-registry run must never import an
- * unrelated feed wholesale.
+ * Empty query sets fail closed unless the persisted config explicitly carries
+ * the legacy `source-only` compatibility mode.
  */
 export function filterSourceJobs(
   jobs: readonly RawSourceJob[],
@@ -187,7 +188,10 @@ export function filterSourceJobs(
   return jobs.filter((job) => {
     const normalizedTitle = normalize(job.title);
     if (excluded.some((term) => normalizedTitle.includes(term))) return false;
-    if (!matchesRole(job.title, queries, baseQueries, filter.strictTitles !== false)) {
+    if (
+      filter.queryMode !== "source-only" &&
+      !matchesRole(job.title, queries, baseQueries, filter.strictTitles !== false)
+    ) {
       return false;
     }
     if (!matchesLocation(job, filter.location)) return false;

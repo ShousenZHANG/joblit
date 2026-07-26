@@ -1,4 +1,11 @@
-import { describe, it, expect, vi } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
+
+const safeFetchMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/server/net/safeFetch", () => ({
+  safeOutboundFetch: safeFetchMock,
+}));
+
 import {
   extractInitialState,
   collectJobItems,
@@ -101,6 +108,43 @@ describe("parseNowcoderHtml", () => {
 });
 
 describe("fetchNowcoderJobs", () => {
+  beforeEach(() => {
+    safeFetchMock.mockReset();
+  });
+
+  it("uses the safe outbound gateway with an exact production host allowlist", async () => {
+    safeFetchMock.mockResolvedValue(
+      new Response(htmlWithState(STATE), {
+        status: 200,
+        headers: { "Content-Type": "text/html" },
+      }),
+    );
+
+    const res = await fetchNowcoderJobs({
+      centers: ["https://www.nowcoder.com/jobs/fulltime/center"],
+      timeoutMs: 3_000,
+    });
+
+    expect(safeFetchMock).toHaveBeenCalledWith(
+      "https://www.nowcoder.com/jobs/fulltime/center",
+      expect.objectContaining({
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (compatible; JoblitBot/1.0; +https://www.joblit.tech)",
+          Accept: "text/html,application/xhtml+xml",
+        },
+      }),
+      {
+        allowedHosts: ["www.nowcoder.com"],
+        allowSubdomains: false,
+        maxRedirects: 0,
+        maxResponseBytes: 4 * 1024 * 1024,
+        timeoutMs: 3_000,
+      },
+    );
+    expect(res.jobs).toHaveLength(2);
+  });
+
   it("fetches + dedups across centers with an honest bot UA", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       new Response(htmlWithState(STATE), {
@@ -113,6 +157,7 @@ describe("fetchNowcoderJobs", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     const ua = fetchImpl.mock.calls[0][1].headers["User-Agent"];
     expect(ua).toMatch(/JoblitBot/);
+    expect(safeFetchMock).not.toHaveBeenCalled();
     expect(res.source).toBe("nowcoder");
     expect(res.jobs).toHaveLength(2);
   });

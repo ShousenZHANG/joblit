@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const store = vi.hoisted(() => ({
-  updateMany: vi.fn(),
-  findFirst: vi.fn(),
-  executeRawLock: vi.fn(),
-  importJobs: vi.fn(),
+  commitFetchRun: vi.fn(),
   runSourceFetch: vi.fn(),
   loadAtsAdapters: vi.fn(),
   recoverAtsBoards: vi.fn(),
@@ -12,29 +9,33 @@ const store = vi.hoisted(() => ({
   reconcileLiveness: vi.fn(),
 }));
 
-vi.mock("@/lib/server/prisma", () => ({
-  prisma: {
-    $transaction: async (
-      action: (tx: {
-        fetchRun: {
-          findFirst: typeof store.findFirst;
-          updateMany: typeof store.updateMany;
-        };
-        $executeRaw: typeof store.executeRawLock;
-      }) => Promise<unknown>,
-    ) =>
-      action({
-        fetchRun: {
-          findFirst: store.findFirst,
-          updateMany: store.updateMany,
-        },
-        $executeRaw: store.executeRawLock,
-      }),
-  },
-}));
-vi.mock("@/lib/server/jobs/jobImportService", () => ({
-  importJobsForUser: store.importJobs,
-}));
+vi.mock("@/lib/server/fetchRuns/fetchRunCommit", () => {
+  class MockFetchRunCommitError extends Error {
+    constructor(
+      readonly code: string,
+      message: string,
+      readonly status = 409,
+    ) {
+      super(message);
+    }
+  }
+  return {
+    FETCH_RUN_COMMIT_PROTOCOL: "fetch-run-commit/v1",
+    FetchRunCommitError: MockFetchRunCommitError,
+    commitFetchRun: store.commitFetchRun,
+    fetchRunExecutionStopReason: (error: unknown) => {
+      if (!(error instanceof MockFetchRunCommitError)) return null;
+      if (error.code === "RUN_CANCELLED") return "cancelled";
+      return [
+        "RUN_ALREADY_TERMINAL",
+        "EXECUTION_LEASE_HELD",
+        "EXECUTION_LEASE_LOST",
+      ].includes(error.code)
+        ? "superseded"
+        : null;
+    },
+  };
+});
 vi.mock("./runSourceFetch", () => ({ runSourceFetch: store.runSourceFetch }));
 vi.mock("./atsBoardStore", () => ({
   loadEnabledAtsBoardAdapters: store.loadAtsAdapters,
@@ -52,6 +53,11 @@ vi.mock("@/lib/server/jobs/sourceLivenessService", () => ({
 import { processGlobalFetchRun } from "./processGlobalFetchRun";
 import { MAX_GLOBAL_SOURCES_PER_RUN } from "./limits";
 import type { RawSourceJob } from "./types";
+import { FetchRunCommitError } from "@/lib/server/fetchRuns/fetchRunCommit";
+import { buildGlobalFetchRunConfigV1 } from "@/lib/shared/schemas/fetchRunConfig";
+
+const ATTEMPT_ID = "11111111-1111-4111-8111-111111111111";
+const OTHER_ATTEMPT_ID = "22222222-2222-4222-8222-222222222222";
 
 function sourceJob(jobUrl: string): RawSourceJob {
   return {
@@ -71,9 +77,22 @@ function sourceJob(jobUrl: string): RawSourceJob {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  store.findFirst.mockResolvedValue({ id: "run-1" });
-  store.updateMany.mockResolvedValue({ count: 1 });
-  store.executeRawLock.mockResolvedValue(1);
+  store.commitFetchRun.mockImplementation(
+    async (command: {
+      command: string;
+      attemptId?: string;
+      items?: unknown[];
+    }) => ({
+      disposition: "APPLIED",
+      executionAttemptId: command.attemptId ?? null,
+      batchImported:
+        command.command === "commit" && command.items?.length ? 1 : 0,
+      batchInvalid: 0,
+      totalImported:
+        command.command === "commit" && command.items?.length ? 1 : 0,
+      status: command.command === "fail" ? "FAILED" : "SUCCEEDED",
+    }),
+  );
   store.loadAtsAdapters.mockResolvedValue({
     adapters: [],
     boards: [],
@@ -93,15 +112,94 @@ describe("processGlobalFetchRun", () => {
       ],
       diagnostics: [{ source: "remoteok", ok: true, raw: 2 }],
     });
-    // One row was already known, so the importer keeps only the other.
-    store.importJobs.mockResolvedValue({ imported: 1, invalid: 0 });
-
     const result = await processGlobalFetchRun("user-1", {
       id: "run-1",
+      attemptId: ATTEMPT_ID,
       queries: { sources: ["remoteok"], queries: ["AI Engineer"] },
     });
 
     expect(result).toEqual({ discovered: 2, imported: 1 });
+    expect(store.commitFetchRun.mock.invocationCallOrder[0]).toBeLessThan(
+      store.persistHealth.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER,
+    );
+    expect(store.commitFetchRun.mock.invocationCallOrder[0]).toBeLessThan(
+      store.reconcileLiveness.mock.invocationCallOrder[0] ??
+        Number.MAX_SAFE_INTEGER,
+    );
+    const observedAt = store.persistHealth.mock.calls[0]?.[1];
+    expect(observedAt).toBeInstanceOf(Date);
+    expect(store.reconcileLiveness).toHaveBeenCalledWith(
+      expect.objectContaining({ checkedAt: observedAt }),
+    );
+  });
+
+  it("executes a historical source-only row without inventing a role filter", async () => {
+    store.runSourceFetch.mockResolvedValue({
+      jobs: [
+        {
+          ...sourceJob("https://remoteok.com/remote-jobs/accountant"),
+          title: "Commercial Accountant",
+        },
+      ],
+      diagnostics: [{ source: "remoteok", ok: true, raw: 1 }],
+    });
+
+    const result = await processGlobalFetchRun("user-1", {
+      id: "run-source-only",
+      attemptId: ATTEMPT_ID,
+      queries: { sources: ["remoteok"] },
+    });
+
+    expect(result).toEqual({ discovered: 1, imported: 1 });
+    expect(store.commitFetchRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: "commit",
+        runId: "run-source-only",
+        items: [
+          expect.objectContaining({
+            title: "Commercial Accountant",
+            market: "GLOBAL",
+          }),
+        ],
+      }),
+    );
+  });
+
+  it("fails closed when an explicit source-only ATS board is no longer enabled", async () => {
+    const disabledSource = "ats:greenhouse:disabled";
+    store.runSourceFetch.mockResolvedValue({
+      jobs: [],
+      diagnostics: [
+        {
+          source: disabledSource,
+          ok: false,
+          raw: 0,
+          error: "unknown_source",
+        },
+      ],
+    });
+
+    const result = await processGlobalFetchRun("user-1", {
+      id: "run-disabled-source-only",
+      attemptId: ATTEMPT_ID,
+      queries: { sources: [disabledSource] },
+    });
+
+    expect(store.runSourceFetch).toHaveBeenCalledWith({
+      sources: [disabledSource],
+    });
+    expect(result).toEqual({
+      discovered: 0,
+      imported: 0,
+      error: `all sources failed: ${disabledSource}: unknown_source`,
+    });
+    expect(store.commitFetchRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: "fail",
+        runId: "run-disabled-source-only",
+        error: `all sources failed: ${disabledSource}: unknown_source`,
+      }),
+    );
   });
 
   it("returns the error it wrote to the run when every source failed", async () => {
@@ -112,6 +210,7 @@ describe("processGlobalFetchRun", () => {
 
     const result = await processGlobalFetchRun("user-1", {
       id: "run-1",
+      attemptId: ATTEMPT_ID,
       queries: { sources: ["remoteok"], queries: ["AI Engineer"] },
     });
 
@@ -127,6 +226,7 @@ describe("processGlobalFetchRun", () => {
 
     await processGlobalFetchRun("user-1", {
       id: "run-1",
+      attemptId: ATTEMPT_ID,
       queries: { queries: ["AI Engineer"] },
     });
 
@@ -140,6 +240,7 @@ describe("processGlobalFetchRun", () => {
 
     await processGlobalFetchRun("user-1", {
       id: "run-1",
+      attemptId: ATTEMPT_ID,
       queries: {
         sources: ["remoteok", "not-a-source"],
         queries: ["AI Engineer"],
@@ -175,6 +276,7 @@ describe("processGlobalFetchRun", () => {
 
     await processGlobalFetchRun("user-1", {
       id: "run-1",
+      attemptId: ATTEMPT_ID,
       queries: { sources: ["remoteok"], queries: ["AI Engineer"] },
     });
 
@@ -182,10 +284,65 @@ describe("processGlobalFetchRun", () => {
       sources: ["remoteok", "ats:greenhouse:acme"],
       adapters: expect.arrayContaining([adapter]),
     });
-    expect(store.persistHealth).toHaveBeenCalledWith(diagnostics);
+    expect(store.persistHealth).toHaveBeenCalledWith(
+      diagnostics,
+      expect.any(Date),
+    );
     expect(store.recoverAtsBoards).toHaveBeenCalledWith({
       boards: [board],
       diagnostics,
+    });
+  });
+
+  it("executes a versioned all-source run from its creation-time source snapshot", async () => {
+    const persistedSource = "ats:greenhouse:persisted";
+    const newlyEnabledSource = "ats:greenhouse:new";
+    const newlyEnabledAdapter = {
+      id: newlyEnabledSource,
+      allowedHosts: ["boards-api.greenhouse.io"],
+      fetch: vi.fn(),
+    };
+    store.loadAtsAdapters.mockResolvedValue({
+      adapters: [newlyEnabledAdapter],
+      boards: [],
+      issues: [],
+    });
+    store.runSourceFetch.mockResolvedValue({
+      jobs: [],
+      diagnostics: [
+        { source: "remoteok", ok: true, raw: 0 },
+        {
+          source: persistedSource,
+          ok: false,
+          raw: 0,
+          error: "unknown_source",
+        },
+      ],
+    });
+
+    await processGlobalFetchRun("user-1", {
+      id: "run-snapshotted-all",
+      attemptId: ATTEMPT_ID,
+      queries: buildGlobalFetchRunConfigV1({
+        title: "AI Engineer",
+        baseQueries: ["AI Engineer"],
+        queries: ["AI Engineer"],
+        location: null,
+        hoursOld: null,
+        resultsWanted: null,
+        smartExpand: false,
+        includeFromQueries: true,
+        applyExcludes: false,
+        excludeTitleTerms: [],
+        excludeDescriptionRules: [],
+        sources: ["remoteok", persistedSource],
+        sourceSelection: "all",
+      }),
+    });
+
+    expect(store.runSourceFetch).toHaveBeenCalledWith({
+      sources: ["remoteok", persistedSource],
+      adapters: expect.arrayContaining([newlyEnabledAdapter]),
     });
   });
 
@@ -207,6 +364,7 @@ describe("processGlobalFetchRun", () => {
 
     await processGlobalFetchRun("user-1", {
       id: "run-1",
+      attemptId: ATTEMPT_ID,
       queries: {
         sources: ["remoteok"],
         sourceSelection: "explicit",
@@ -218,6 +376,45 @@ describe("processGlobalFetchRun", () => {
       sources: ["remoteok"],
       adapters: expect.arrayContaining([adapter]),
     });
+  });
+
+  it("keeps an unavailable source in a mixed explicit selection and reports PARTIAL", async () => {
+    const disabledSource = "ats:greenhouse:disabled";
+    store.runSourceFetch.mockResolvedValue({
+      jobs: [sourceJob("https://remoteok.com/remote-jobs/1")],
+      diagnostics: [
+        { source: "remoteok", ok: true, raw: 1 },
+        {
+          source: disabledSource,
+          ok: false,
+          raw: 0,
+          error: "unknown_source",
+        },
+      ],
+    });
+
+    const result = await processGlobalFetchRun("user-1", {
+      id: "run-mixed-explicit",
+      attemptId: ATTEMPT_ID,
+      queries: {
+        sources: ["remoteok", disabledSource],
+        sourceSelection: "explicit",
+        queries: ["AI Engineer"],
+      },
+    });
+
+    expect(store.runSourceFetch).toHaveBeenCalledWith({
+      sources: ["remoteok", disabledSource],
+    });
+    expect(result).toEqual({ discovered: 1, imported: 1 });
+    expect(store.commitFetchRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: "commit",
+        runId: "run-mixed-explicit",
+        terminalOutcome: "PARTIAL",
+        error: `${disabledSource}: unknown_source`,
+      }),
+    );
   });
 
   it("imports jobs recovered from a rotated ATS board in the same run", async () => {
@@ -258,26 +455,30 @@ describe("processGlobalFetchRun", () => {
       recovered: [recovered],
       errors: [],
     });
-    store.importJobs.mockResolvedValue({ imported: 1, invalid: 0 });
-
     const result = await processGlobalFetchRun("user-1", {
       id: "run-1",
+      attemptId: ATTEMPT_ID,
       queries: { sources: [adapter.id], queries: ["AI Engineer"] },
     });
 
     expect(result).toEqual({ discovered: 1, imported: 1 });
-    expect(store.persistHealth).toHaveBeenCalledWith([
-      { source: adapter.id, ok: true, raw: 1 },
-    ]);
-    expect(store.importJobs).toHaveBeenCalledWith({
-      userId: "user-1",
-      items: [
-        expect.objectContaining({
-          jobUrl: recovered.jobs[0].jobUrl,
-          market: "GLOBAL",
-        }),
-      ],
-    });
+    expect(store.persistHealth).toHaveBeenCalledWith(
+      [{ source: adapter.id, ok: true, raw: 1 }],
+      expect.any(Date),
+    );
+    expect(store.commitFetchRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: "commit",
+        runId: "run-1",
+        attemptId: ATTEMPT_ID,
+        items: [
+          expect.objectContaining({
+            jobUrl: recovered.jobs[0].jobUrl,
+            market: "GLOBAL",
+          }),
+        ],
+      }),
+    );
   });
 
   it("succeeds with zero imports when a healthy source returns nothing", async () => {
@@ -288,15 +489,18 @@ describe("processGlobalFetchRun", () => {
 
     const result = await processGlobalFetchRun("user-1", {
       id: "run-1",
+      attemptId: ATTEMPT_ID,
       queries: { sources: ["remoteok"], queries: ["AI Engineer"] },
     });
 
     expect(result).toEqual({ discovered: 0, imported: 0 });
-    expect(store.importJobs).not.toHaveBeenCalled();
-    expect(store.updateMany).toHaveBeenCalledWith({
-      where: { id: "run-1", userId: "user-1", status: "RUNNING" },
-      data: { status: "SUCCEEDED", importedCount: 0, error: null },
-    });
+    expect(store.commitFetchRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: "commit",
+        items: [],
+        terminal: true,
+      }),
+    );
   });
 
   it("still succeeds when only some sources failed", async () => {
@@ -307,10 +511,9 @@ describe("processGlobalFetchRun", () => {
         { source: "jobicy", ok: false, raw: 0, error: "timeout" },
       ],
     });
-    store.importJobs.mockResolvedValue({ imported: 1, invalid: 0 });
-
     const result = await processGlobalFetchRun("user-1", {
       id: "run-1",
+      attemptId: ATTEMPT_ID,
       queries: {
         sources: ["remoteok", "jobicy"],
         queries: ["AI Engineer"],
@@ -331,10 +534,9 @@ describe("processGlobalFetchRun", () => {
       jobs: [recent, old, gated],
       diagnostics: [{ source: "remoteok", ok: true, raw: 3 }],
     });
-    store.importJobs.mockResolvedValue({ imported: 1, invalid: 0 });
-
     const result = await processGlobalFetchRun("user-1", {
       id: "run-1",
+      attemptId: ATTEMPT_ID,
       queries: {
         sources: ["remoteok"],
         queries: ["AI Engineer"],
@@ -345,10 +547,14 @@ describe("processGlobalFetchRun", () => {
     });
 
     expect(result).toEqual({ discovered: 1, imported: 1 });
-    expect(store.importJobs).toHaveBeenCalledWith({
-      userId: "user-1",
-      items: [expect.objectContaining({ jobUrl: recent.jobUrl, market: "GLOBAL" })],
-    });
+    expect(store.commitFetchRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: "commit",
+        items: [
+          expect.objectContaining({ jobUrl: recent.jobUrl, market: "GLOBAL" }),
+        ],
+      }),
+    );
   });
 
   it("surfaces a thrown fetch as an error result rather than rejecting", async () => {
@@ -356,14 +562,41 @@ describe("processGlobalFetchRun", () => {
 
     const result = await processGlobalFetchRun("user-1", {
       id: "run-1",
+      attemptId: ATTEMPT_ID,
       queries: { queries: ["AI Engineer"] },
     });
 
     expect(result).toEqual({ discovered: 0, imported: 0, error: "boom" });
-    expect(store.updateMany).toHaveBeenCalledWith({
-      where: { id: "run-1", userId: "user-1", status: "RUNNING" },
-      data: { status: "FAILED", importedCount: 0, error: "boom" },
+    expect(store.commitFetchRun).toHaveBeenCalledWith({
+      protocol: "fetch-run-commit/v1",
+      command: "fail",
+      runId: "run-1",
+      attemptId: ATTEMPT_ID,
+      error: "boom",
     });
+  });
+
+  it("reports supersession when failure reporting discovers a newer executor", async () => {
+    store.runSourceFetch.mockRejectedValue(new Error("boom"));
+    store.commitFetchRun.mockRejectedValue(
+      new FetchRunCommitError(
+        "EXECUTION_LEASE_LOST",
+        "Another executor owns the run",
+      ),
+    );
+
+    const result = await processGlobalFetchRun("user-1", {
+      id: "run-1",
+      attemptId: ATTEMPT_ID,
+      queries: { queries: ["AI Engineer"] },
+    });
+
+    expect(result).toEqual({
+      discovered: 0,
+      imported: 0,
+      superseded: true,
+    });
+    expect(store.commitFetchRun).toHaveBeenCalledTimes(1);
   });
 
   it("fails before network I/O when a legacy run exceeds the serverless source budget", async () => {
@@ -382,6 +615,7 @@ describe("processGlobalFetchRun", () => {
 
     const result = await processGlobalFetchRun("user-1", {
       id: "run-1",
+      attemptId: ATTEMPT_ID,
       queries: { queries: ["AI Engineer"] },
     });
 
@@ -398,15 +632,141 @@ describe("processGlobalFetchRun", () => {
       jobs: [sourceJob("https://remoteok.com/remote-jobs/1")],
       diagnostics: [{ source: "remoteok", ok: true, raw: 1 }],
     });
-    store.findFirst.mockResolvedValue(null);
+    store.commitFetchRun.mockRejectedValue(
+      new FetchRunCommitError("RUN_CANCELLED", "Fetch run was cancelled"),
+    );
 
     const result = await processGlobalFetchRun("user-1", {
       id: "run-1",
+      attemptId: ATTEMPT_ID,
       queries: { queries: ["AI Engineer"] },
     });
 
     expect(result).toEqual({ discovered: 0, imported: 0, cancelled: true });
-    expect(store.importJobs).not.toHaveBeenCalled();
-    expect(store.updateMany).not.toHaveBeenCalled();
+    expect(store.commitFetchRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not fail the canonical run when this executor loses the batch stream", async () => {
+    store.runSourceFetch.mockResolvedValue({
+      jobs: [sourceJob("https://remoteok.com/remote-jobs/1")],
+      diagnostics: [{ source: "remoteok", ok: true, raw: 1 }],
+    });
+    store.commitFetchRun.mockRejectedValue(
+      new FetchRunCommitError(
+        "EXECUTION_LEASE_LOST",
+        "Another executor owns the run",
+      ),
+    );
+
+    const result = await processGlobalFetchRun("user-1", {
+      id: "run-1",
+      attemptId: ATTEMPT_ID,
+      queries: { queries: ["AI Engineer"] },
+    });
+
+    expect(result).toEqual({ discovered: 0, imported: 0, superseded: true });
+    expect(store.commitFetchRun).toHaveBeenCalledTimes(1);
+    expect(store.persistHealth).not.toHaveBeenCalled();
+    expect(store.reconcileLiveness).not.toHaveBeenCalled();
+  });
+
+  it("does not publish stale observations when an identical receipt belongs to attempt B", async () => {
+    const canonicalDiagnostics = [
+      { source: "remoteok", ok: true, raw: 0 },
+    ];
+    const staleDiagnostics = [
+      { source: "remoteok", ok: true, raw: 99 },
+    ];
+    store.runSourceFetch
+      .mockResolvedValueOnce({
+        jobs: [],
+        diagnostics: canonicalDiagnostics,
+      })
+      .mockResolvedValueOnce({
+        jobs: [
+          {
+            ...sourceJob("https://remoteok.com/remote-jobs/accountant"),
+            title: "Commercial Accountant",
+          },
+        ],
+        diagnostics: staleDiagnostics,
+      });
+    store.commitFetchRun.mockImplementation(
+      async (command: {
+        command: string;
+        attemptId?: string;
+        items?: unknown[];
+      }) => ({
+        disposition:
+          command.attemptId === OTHER_ATTEMPT_ID ? "APPLIED" : "REPLAYED",
+        executionAttemptId: OTHER_ATTEMPT_ID,
+        batchImported: 0,
+        batchInvalid: 0,
+        totalImported: 0,
+        status: "SUCCEEDED",
+      }),
+    );
+
+    await processGlobalFetchRun("user-1", {
+      id: "run-1",
+      attemptId: OTHER_ATTEMPT_ID,
+      queries: { sources: ["remoteok"], queries: ["AI Engineer"] },
+    });
+    await processGlobalFetchRun("user-1", {
+      id: "run-1",
+      attemptId: ATTEMPT_ID,
+      queries: { sources: ["remoteok"], queries: ["AI Engineer"] },
+    });
+
+    const commitCommands = store.commitFetchRun.mock.calls
+      .map(([command]) => command)
+      .filter((command) => command.command === "commit");
+    expect(commitCommands).toHaveLength(2);
+    expect(commitCommands[0]).toMatchObject({
+      attemptId: OTHER_ATTEMPT_ID,
+      items: [],
+      terminal: true,
+    });
+    expect(commitCommands[1]).toMatchObject({
+      attemptId: ATTEMPT_ID,
+      items: [],
+      terminal: true,
+    });
+    expect(store.persistHealth).toHaveBeenCalledTimes(1);
+    expect(store.persistHealth).toHaveBeenCalledWith(
+      canonicalDiagnostics,
+      expect.any(Date),
+    );
+    expect(store.persistHealth).not.toHaveBeenCalledWith(
+      staleDiagnostics,
+      expect.any(Date),
+    );
+    expect(store.reconcileLiveness).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports a malformed local batch stream instead of masking it as cancellation", async () => {
+    store.runSourceFetch.mockResolvedValue({
+      jobs: [sourceJob("https://remoteok.com/remote-jobs/1")],
+      diagnostics: [{ source: "remoteok", ok: true, raw: 1 }],
+    });
+    store.commitFetchRun.mockRejectedValue(
+      new FetchRunCommitError(
+        "BATCH_OUT_OF_ORDER",
+        "Local executor emitted an invalid stream",
+      ),
+    );
+
+    const result = await processGlobalFetchRun("user-1", {
+      id: "run-1",
+      attemptId: ATTEMPT_ID,
+      queries: { queries: ["AI Engineer"] },
+    });
+
+    expect(result).toEqual({
+      discovered: 0,
+      imported: 0,
+      error: "Local executor emitted an invalid stream",
+    });
+    expect(store.commitFetchRun).toHaveBeenCalledTimes(2);
   });
 });

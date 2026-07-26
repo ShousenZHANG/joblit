@@ -7,8 +7,28 @@ import {
   FETCH_RUN_STALE_ERROR,
   fetchRunStaleCutoff,
 } from "@/lib/server/fetchRuns/fetchRunQuota";
+import {
+  FETCH_RUN_COMMIT_PROTOCOL,
+  FetchRunCommitError,
+  commitFetchRun,
+} from "@/lib/server/fetchRuns/fetchRunCommit";
+import type { Prisma } from "@/lib/generated/prisma";
 
 export const runtime = "nodejs";
+
+const FETCH_RUN_STATUS_SELECT = {
+  id: true,
+  status: true,
+  importedCount: true,
+  error: true,
+  queries: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.FetchRunSelect;
+
+type FetchRunStatusRow = Prisma.FetchRunGetPayload<{
+  select: typeof FETCH_RUN_STATUS_SELECT;
+}>;
 
 function normalizeQueryTerms(raw: unknown) {
   const out: string[] = [];
@@ -57,65 +77,80 @@ function resolveSmartExpand(raw: unknown) {
   return true;
 }
 
+function isStaleActiveRun(run: FetchRunStatusRow, cutoff: Date): boolean {
+  return (
+    (run.status === "QUEUED" || run.status === "RUNNING") &&
+    run.updatedAt < cutoff
+  );
+}
+
+async function readFetchRunStatus(
+  userId: string,
+  runId: string,
+): Promise<FetchRunStatusRow | null> {
+  return prisma.fetchRun.findFirst({
+    where: { id: runId, userId },
+    select: FETCH_RUN_STATUS_SELECT,
+  });
+}
+
+function isExpectedRecoveryRace(error: unknown): boolean {
+  return (
+    error instanceof FetchRunCommitError &&
+    (error.code === "RUN_CANCELLED" || error.code === "RUN_NOT_FOUND")
+  );
+}
+
+async function recoverStaleFetchRun(
+  userId: string,
+  run: FetchRunStatusRow,
+  staleBefore: Date,
+): Promise<FetchRunStatusRow | null> {
+  try {
+    await commitFetchRun({
+      protocol: FETCH_RUN_COMMIT_PROTOCOL,
+      command: "fail",
+      runId: run.id,
+      error: FETCH_RUN_STALE_ERROR,
+      staleBefore,
+    });
+  } catch (error) {
+    if (!isExpectedRecoveryRace(error)) throw error;
+  }
+  return readFetchRunStatus(userId, run.id);
+}
+
+function statusResponse(run: FetchRunStatusRow): NextResponse {
+  const queryTerms = normalizeQueryTerms(run.queries);
+  return NextResponse.json({
+    run: {
+      id: run.id,
+      status: run.status,
+      importedCount: run.importedCount,
+      error: run.error,
+      createdAt: run.createdAt,
+      updatedAt: run.updatedAt,
+      queryTitle: resolveTitle(run.queries, queryTerms),
+      queryTerms,
+      smartExpand: resolveSmartExpand(run.queries),
+    },
+  });
+}
+
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   return withSessionRoute(
     async ({ userId, params }) => {
-      let run = await prisma.fetchRun.findFirst({
-        where: { id: params.id, userId },
-        select: {
-          id: true,
-          status: true,
-          importedCount: true,
-          error: true,
-          queries: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
-
+      let run = await readFetchRunStatus(userId, params.id);
       if (!run) return errorJson("NOT_FOUND", "Not found", 404);
       const staleCutoff = fetchRunStaleCutoff();
-      if (
-        (run.status === "QUEUED" || run.status === "RUNNING") &&
-        run.updatedAt < staleCutoff
-      ) {
-        // Polling self-heals this run. Normal polls stay read-only; only a stale
-        // active row pays for the guarded write.
-        const expired = await prisma.fetchRun.updateMany({
-          where: {
-            id: run.id,
-            userId,
-            status: { in: ["QUEUED", "RUNNING"] },
-            updatedAt: { lt: staleCutoff },
-          },
-          data: { status: "FAILED", error: FETCH_RUN_STALE_ERROR },
-        });
-        if (expired.count > 0) {
-          run = {
-            ...run,
-            status: "FAILED",
-            error: FETCH_RUN_STALE_ERROR,
-            updatedAt: new Date(),
-          };
-        }
+      if (isStaleActiveRun(run, staleCutoff)) {
+        // Polling self-heals through the same FRUN-locked state transition as
+        // every worker failure. If a batch committed after this snapshot, the
+        // run becomes PARTIAL; if completion won the lock, it stays terminal.
+        run = await recoverStaleFetchRun(userId, run, staleCutoff);
+        if (!run) return errorJson("NOT_FOUND", "Not found", 404);
       }
-      const queryTerms = normalizeQueryTerms(run.queries);
-      const queryTitle = resolveTitle(run.queries, queryTerms);
-      const smartExpand = resolveSmartExpand(run.queries);
-
-      return NextResponse.json({
-        run: {
-          id: run.id,
-          status: run.status,
-          importedCount: run.importedCount,
-          error: run.error,
-          createdAt: run.createdAt,
-          updatedAt: run.updatedAt,
-          queryTitle,
-          queryTerms,
-          smartExpand,
-        },
-      });
+      return statusResponse(run);
     },
     { params: ctx.params, schema: UuidParamSchema },
   );

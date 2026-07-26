@@ -139,8 +139,7 @@ test runner).
 | Neon Postgres | `DATABASE_URL` | everything |
 | NextAuth | `AUTH_SECRET`, `GOOGLE_CLIENT_ID/SECRET`, `GITHUB_ID/SECRET` | sign-in |
 | LaTeX render service | `LATEX_RENDER_URL`, `LATEX_RENDER_TOKEN` | every PDF |
-| JobSpy import | `IMPORT_SECRET` | `/api/admin/import` |
-| Fetch worker callbacks | `FETCH_RUN_SECRET` | `/api/fetch-runs/[id]/{update,config}` |
+| Fetch worker config + commits | `FETCH_RUN_SECRET` | `/api/fetch-runs/[id]/{config,commit}` |
 | Encryption | `APP_ENC_KEY` (base64) | — |
 | Gemini | `GEMINI_API_KEY`, `GEMINI_MODEL` | optional — absent, Tailoring falls back deterministically |
 | Vercel Blob | `BLOB_READ_WRITE_TOKEN` | optional — absent, artifact upload degrades |
@@ -150,6 +149,12 @@ test runner).
 
 `lib/server/env.ts:55` `validateServerEnv` is the single place that states which
 are required.
+
+`IMPORT_SECRET` and the split `/api/admin/import` +
+`/api/fetch-runs/[id]/update` callback flow were retired by ADR-0008. The AU
+worker now authenticates configuration reads and `fetch-run-commit/v1`
+commands with the one `FETCH_RUN_SECRET`; CN and GLOBAL enter the same commit
+module in-process and do not need an HTTP credential.
 
 `LATEX_RENDER_ALLOW_INSECURE_HTTP=true` relaxes transport encryption only. The
 render token travels as a request header, so on plain HTTP it crosses the

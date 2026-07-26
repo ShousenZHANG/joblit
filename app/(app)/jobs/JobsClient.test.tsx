@@ -692,7 +692,9 @@ describe("JobsClient", () => {
     expect(screen.queryByText("Old cached job")).not.toBeInTheDocument();
   });
 
-  it("keeps infinite scrolling and resets to the first loaded page when a fetch run finishes", async () => {
+  it.each(["SUCCEEDED", "PARTIAL"] as const)(
+    "keeps infinite scrolling and resets to the first loaded page when a fetch run finishes as %s",
+    async (terminalStatus) => {
     const page1Job = { ...baseJob };
     const page2Job = { ...baseJob, id: "44444444-4444-4444-4444-444444444444", title: "Page 2 job" };
 
@@ -748,7 +750,27 @@ describe("JobsClient", () => {
       expect(screen.getAllByText("Page 2 job").length).toBeGreaterThan(0);
     });
 
-    fetchStatusMock.state = { runId: "run-1", status: "SUCCEEDED", importedCount: 3 };
+    // The imported count can advance while this view is on page 2. That
+    // in-progress poll intentionally does not reset pagination.
+    fetchStatusMock.state = {
+      runId: "run-1",
+      status: "RUNNING",
+      importedCount: 3,
+    };
+    rerender(
+      wrap(<JobsClient initialItems={[page1Job]} initialCursor={"55555555-5555-5555-5555-555555555555"} />),
+    );
+    await waitFor(() => {
+      expect(screen.getAllByText("Page 2 job").length).toBeGreaterThan(0);
+    });
+
+    // Terminal reconciliation must still reset all pages even though the
+    // final poll repeats the same imported count.
+    fetchStatusMock.state = {
+      runId: "run-1",
+      status: terminalStatus,
+      importedCount: 3,
+    };
     rerender(
       wrap(<JobsClient initialItems={[page1Job]} initialCursor={"55555555-5555-5555-5555-555555555555"} />),
     );
@@ -765,7 +787,67 @@ describe("JobsClient", () => {
 
     expect(listCalls.some((u) => u.includes("cursor="))).toBe(true);
     expect(listCalls.some((u) => !u.includes("cursor="))).toBe(true);
-  });
+    },
+  );
+
+  it.each([
+    {
+      terminalStatus: "SUCCEEDED",
+      title: "Jobs imported",
+      description: "Imported 3 new jobs. Refreshing list.",
+      toneClass: "border-brand-emerald-200",
+      excludedTitle: "Fetch partially completed",
+    },
+    {
+      terminalStatus: "PARTIAL",
+      title: "Fetch partially completed",
+      description:
+        "Imported 3 new jobs. Some sources did not finish; refreshing saved results.",
+      toneClass: "border-[var(--tier-fair-ring)]",
+      excludedTitle: "Jobs imported",
+    },
+  ] as const)(
+    "uses the $terminalStatus import toast copy and tone",
+    async ({ terminalStatus, title, description, toneClass, excludedTitle }) => {
+      fetchStatusMock.state = {
+        runId: "toast-run",
+        status: "RUNNING",
+        importedCount: 0,
+      };
+      const client = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false },
+        },
+      });
+      const wrap = (ui: React.ReactElement) => (
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <QueryClientProvider client={client}>
+            {ui}
+            <Toaster />
+          </QueryClientProvider>
+        </NextIntlClientProvider>
+      );
+      const { rerender } = render(
+        wrap(<JobsClient initialItems={[baseJob]} initialCursor={null} />),
+      );
+
+      await waitFor(() => {
+        expect(screen.getAllByText("Frontend Engineer").length).toBeGreaterThan(0);
+      });
+
+      fetchStatusMock.state = {
+        runId: "toast-run",
+        status: terminalStatus,
+        importedCount: 3,
+      };
+      rerender(wrap(<JobsClient initialItems={[baseJob]} initialCursor={null} />));
+
+      const toastTitle = await screen.findByText(title);
+      expect(screen.getByText(description)).toBeInTheDocument();
+      expect(screen.queryByText(excludedTitle)).not.toBeInTheDocument();
+      expect(toastTitle.closest("li")).toHaveClass(toneClass);
+    },
+  );
 
   it("renders markdown with SaaS-style headings and lists", async () => {
     const markdown = "## Requirements\n\n- Ownership\n\n> Note";

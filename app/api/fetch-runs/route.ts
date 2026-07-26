@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { withEmailSessionRoute, parseJsonValue } from "@/lib/server/api/routeHandler";
+import { withSessionRoute, parseJsonValue } from "@/lib/server/api/routeHandler";
 import { prisma } from "@/lib/server/prisma";
 import { expandRoleQueries } from "@/lib/shared/fetchRolePacks";
 import { filterDescriptionExclusionRules } from "@/lib/shared/fetchExclusionCriteria";
@@ -12,6 +12,11 @@ import { ALL_SOURCE_IDS, isKnownSourceId } from "@/lib/server/sources/registry";
 import { loadEnabledAtsBoardAdapters } from "@/lib/server/sources/atsBoardStore";
 import { MAX_GLOBAL_SOURCES_PER_RUN } from "@/lib/server/sources/limits";
 import { reportError } from "@/lib/server/observability/errorReporter";
+import {
+  buildAuFetchRunConfigV1,
+  buildCnFetchRunConfigV1,
+  buildGlobalFetchRunConfigV1,
+} from "@/lib/shared/schemas/fetchRunConfig";
 
 export const runtime = "nodejs";
 
@@ -212,7 +217,7 @@ async function resolveGlobalSources(
 }
 
 export async function GET() {
-  return withEmailSessionRoute(async ({ userId }) => {
+  return withSessionRoute(async ({ userId }) => {
     const runs = await prisma.fetchRun.findMany({
       where: { userId },
       orderBy: { createdAt: "desc" },
@@ -260,7 +265,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  return withEmailSessionRoute(async ({ userId, userEmail, requestId }) => {
+  return withSessionRoute(async ({ userId, requestId }) => {
     const json = await req.json().catch(() => null);
     const marketHint =
       json && typeof json === "object" && "market" in json ? json.market : "AU";
@@ -277,17 +282,16 @@ export async function POST(req: Request) {
         const run = await tx.fetchRun.create({
           data: {
             userId,
-            userEmail: userEmail.toLowerCase(),
             status: "QUEUED",
             market: "CN",
             importedCount: 0,
-            queries: {
+            queries: buildCnFetchRunConfigV1({
               title,
               queries: d.queries,
               sources: d.sources,
               excludeKeywords: d.excludeKeywords,
               locations: d.locations,
-            },
+            }),
             location: null,
             hoursOld: null,
             resultsWanted: null,
@@ -355,16 +359,16 @@ export async function POST(req: Request) {
         const run = await tx.fetchRun.create({
           data: {
             userId,
-            userEmail: userEmail.toLowerCase(),
             status: "QUEUED",
             market: "GLOBAL",
             importedCount: 0,
-            queries: {
+            queries: buildGlobalFetchRunConfigV1({
               title: baseQueries[0] ?? d.queries[0],
               baseQueries,
               queries: expandedQueries,
               location: d.location ?? null,
               hoursOld: d.hoursOld ?? null,
+              resultsWanted: null,
               smartExpand: d.smartExpand,
               includeFromQueries: d.includeFromQueries,
               applyExcludes: d.applyExcludes,
@@ -372,7 +376,7 @@ export async function POST(req: Request) {
               excludeDescriptionRules,
               sources: sourceSelection.sources,
               sourceSelection: sourceSelection.selection,
-            },
+            }),
             location: d.location ?? null,
             hoursOld: d.hoursOld ?? null,
             resultsWanted: null,
@@ -417,20 +421,22 @@ export async function POST(req: Request) {
 
     const createData = {
       userId,
-      userEmail: userEmail.toLowerCase(),
       status: "QUEUED" as const,
       importedCount: 0,
-      queries: {
+      queries: buildAuFetchRunConfigV1({
         title,
         baseQueries,
         queries,
+        location: data.location ?? null,
+        hoursOld: data.hoursOld ?? null,
+        resultsWanted: null,
         smartExpand: data.smartExpand,
         includeFromQueries: data.includeFromQueries,
         applyExcludes: data.applyExcludes,
         excludeTitleTerms: data.excludeTitleTerms,
         excludeDescriptionRules: data.excludeDescriptionRules,
         source: data.source,
-      },
+      }),
       location: data.location ?? null,
       hoursOld: data.hoursOld ?? null,
       resultsWanted: null,

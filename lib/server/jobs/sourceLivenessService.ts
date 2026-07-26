@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/server/prisma";
+import type { Prisma } from "@/lib/generated/prisma";
 import { canonicalizeJobUrl } from "@/lib/shared/canonicalizeJobUrl";
 import type { SourceDiagnostic } from "@/lib/server/sources/runSourceFetch";
 import type { RawSourceJob } from "@/lib/server/sources/types";
@@ -9,6 +10,99 @@ import {
 
 const URL_BATCH_SIZE = 500;
 const LIVENESS_TRANSACTION_TIMEOUT_MS = 30_000;
+
+interface SourceLivenessContext {
+  userId: string;
+  source: string;
+  urls: string[];
+  checkedAt: Date;
+  missingStatus: ReturnType<typeof toPersistedJobLivenessStatus>;
+  missingReason: string;
+}
+
+async function markSeenJobsActive(
+  tx: Prisma.TransactionClient,
+  context: SourceLivenessContext,
+): Promise<void> {
+  for (let index = 0; index < context.urls.length; index += URL_BATCH_SIZE) {
+    await tx.job.updateMany({
+      where: {
+        userId: context.userId,
+        source: context.source,
+        jobUrl: { in: context.urls.slice(index, index + URL_BATCH_SIZE) },
+        livenessStatus: { not: "EXPIRED" },
+        OR: [
+          { livenessCheckedAt: null },
+          { livenessCheckedAt: { lt: context.checkedAt } },
+        ],
+      },
+      data: {
+        livenessStatus: "ACTIVE",
+        livenessReason: "source_feed_reachable",
+        livenessCheckedAt: context.checkedAt,
+        lastSeenAt: context.checkedAt,
+      },
+    });
+  }
+}
+
+async function markMissingJobsUncertain(
+  tx: Prisma.TransactionClient,
+  context: SourceLivenessContext,
+): Promise<void> {
+  // Seen rows were advanced first. Their checkedAt now equals this snapshot,
+  // so the strict guard excludes them without an unbounded NOT IN list.
+  await tx.job.updateMany({
+    where: {
+      userId: context.userId,
+      source: context.source,
+      livenessStatus: "ACTIVE",
+      OR: [
+        { livenessCheckedAt: null },
+        { livenessCheckedAt: { lt: context.checkedAt } },
+      ],
+    },
+    data: {
+      livenessStatus: context.missingStatus,
+      livenessReason: context.missingReason,
+      livenessCheckedAt: context.checkedAt,
+    },
+  });
+}
+
+async function reconcileSourceLiveness(
+  tx: Prisma.TransactionClient,
+  context: SourceLivenessContext,
+): Promise<void> {
+  await markSeenJobsActive(tx, context);
+  await markMissingJobsUncertain(tx, context);
+}
+
+function successfulSourceIds(
+  diagnostics: readonly SourceDiagnostic[],
+): string[] {
+  return [
+    ...new Set(
+      diagnostics
+        .filter((diagnostic) => diagnostic.ok)
+        .map((diagnostic) => diagnostic.source),
+    ),
+  ].sort();
+}
+
+function seenUrlsBySource(
+  sources: readonly string[],
+  jobs: readonly RawSourceJob[],
+): Map<string, Set<string>> {
+  const seen = new Map(sources.map((source) => [source, new Set<string>()]));
+  for (const job of jobs) {
+    const sourceUrls = seen.get(job.source);
+    if (!sourceUrls) continue;
+    const canonical = canonicalizeJobUrl(job.jobUrl);
+    if (canonical) sourceUrls.add(canonical);
+  }
+  return seen;
+}
 
 /**
  * Consume a successful full-source observation.
@@ -24,13 +118,7 @@ export async function reconcileFetchedSourceJobLiveness(options: {
   jobs: readonly RawSourceJob[];
   checkedAt?: Date;
 }): Promise<void> {
-  const successfulSources = [
-    ...new Set(
-      options.diagnostics
-        .filter((diagnostic) => diagnostic.ok)
-        .map((diagnostic) => diagnostic.source),
-    ),
-  ].sort();
+  const successfulSources = successfulSourceIds(options.diagnostics);
   if (!successfulSources.length) return;
 
   const checkedAt = options.checkedAt ?? new Date();
@@ -39,48 +127,19 @@ export async function reconcileFetchedSourceJobLiveness(options: {
     seenInSourceFeed: false,
     checkedAt: checkedAt.toISOString(),
   });
-  const seenBySource = new Map<string, Set<string>>();
-  for (const source of successfulSources) seenBySource.set(source, new Set());
-  for (const job of options.jobs) {
-    const seen = seenBySource.get(job.source);
-    if (!seen) continue;
-    const canonical = canonicalizeJobUrl(job.jobUrl);
-    if (canonical) seen.add(canonical);
-  }
+  const seenBySource = seenUrlsBySource(successfulSources, options.jobs);
 
   await prisma.$transaction(
     async (tx) => {
       for (const source of successfulSources) {
-        await tx.job.updateMany({
-          where: {
-            userId: options.userId,
-            source,
-            livenessStatus: "ACTIVE",
-          },
-          data: {
-            livenessStatus: toPersistedJobLivenessStatus(missing.status),
-            livenessReason: missing.reason,
-            livenessCheckedAt: checkedAt,
-          },
+        await reconcileSourceLiveness(tx, {
+          userId: options.userId,
+          source,
+          urls: [...(seenBySource.get(source) ?? [])],
+          checkedAt,
+          missingStatus: toPersistedJobLivenessStatus(missing.status),
+          missingReason: missing.reason,
         });
-
-        const urls = [...(seenBySource.get(source) ?? [])];
-        for (let index = 0; index < urls.length; index += URL_BATCH_SIZE) {
-          await tx.job.updateMany({
-            where: {
-              userId: options.userId,
-              source,
-              jobUrl: { in: urls.slice(index, index + URL_BATCH_SIZE) },
-              livenessStatus: { not: "EXPIRED" },
-            },
-            data: {
-              livenessStatus: "ACTIVE",
-              livenessReason: "source_feed_reachable",
-              livenessCheckedAt: checkedAt,
-              lastSeenAt: checkedAt,
-            },
-          });
-        }
       }
     },
     { maxWait: 5_000, timeout: LIVENESS_TRANSACTION_TIMEOUT_MS },

@@ -1,12 +1,11 @@
-import { prisma } from "@/lib/server/prisma";
-import {
-  ImportJobItemSchema,
-  importJobsForUser,
-} from "@/lib/server/jobs/jobImportService";
 import { runCnFetch } from "./runCnFetch";
 import type { CnSource } from "./types";
-import { acquireFetchRunLifecycleLock } from "@/lib/server/fetchRuns/fetchRunLifecycleLock";
-import type { Prisma } from "@/lib/generated/prisma";
+import {
+  FETCH_RUN_COMMIT_PROTOCOL,
+  commitFetchRun,
+  fetchRunExecutionStopReason,
+} from "@/lib/server/fetchRuns/fetchRunCommit";
+import { normalizeFetchRunConfigV1 } from "@/lib/shared/schemas/fetchRunConfig";
 
 // CN fetch pipeline for one FetchRun. Called from
 // /api/fetch-runs/[id]/trigger, the single-run in-process path.
@@ -30,25 +29,15 @@ interface CnRunConfig {
  * source) so stale runs from before the single-source migration still work.
  */
 function readCnRunConfig(raw: unknown): CnRunConfig {
-  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  const queries = Array.isArray(obj.queries)
-    ? (obj.queries as unknown[]).filter((q): q is string => typeof q === "string")
-    : [];
-  const excludeKeywords = Array.isArray(obj.excludeKeywords)
-    ? (obj.excludeKeywords as unknown[]).filter(
-        (q): q is string => typeof q === "string",
-      )
-    : [];
-  const locations = Array.isArray(obj.locations)
-    ? (obj.locations as unknown[]).filter((q): q is string => typeof q === "string")
-    : [];
-  const rawSources = Array.isArray(obj.sources) ? (obj.sources as unknown[]) : [];
-  const sources = rawSources.filter((s): s is CnSource => s === "nowcoder");
+  const config = normalizeFetchRunConfigV1({ market: "CN", queries: raw });
+  if (config.market !== "CN") {
+    throw new Error("FetchRun config market must be CN");
+  }
   return {
-    queries,
-    sources: sources.length > 0 ? sources : ["nowcoder"],
-    excludeKeywords,
-    locations,
+    queries: config.queries,
+    sources: config.sources as CnSource[],
+    excludeKeywords: config.excludeKeywords,
+    locations: config.locations,
   };
 }
 
@@ -59,24 +48,153 @@ interface ProcessResult {
   imported: number;
   error?: string;
   cancelled?: boolean;
+  superseded?: boolean;
 }
 
-async function updateActiveRun<T>(
-  runId: string,
-  action: (tx: Prisma.TransactionClient) => Promise<T>,
-): Promise<T | null> {
-  return prisma.$transaction(
-    async (tx) => {
-      await acquireFetchRunLifecycleLock(tx, runId);
-      const active = await tx.fetchRun.findFirst({
-        where: { id: runId, status: "RUNNING" },
-        select: { id: true },
-      });
-      if (!active) return null;
-      return action(tx);
-    },
-    { timeout: 30_000 },
-  );
+interface CnFetchRunInput {
+  id: string;
+  queries: unknown;
+  attemptId: string;
+}
+
+type CnDiscovery = Awaited<ReturnType<typeof runCnFetch>>;
+type CnDiagnostic = CnDiscovery["diagnostics"][number];
+
+interface CnDiagnosticSummary {
+  failed: CnDiagnostic[];
+  allFailed: boolean;
+  detail?: string;
+}
+
+async function discoverCnRun(config: CnRunConfig): Promise<CnDiscovery> {
+  return runCnFetch({
+    sources: config.sources,
+    queries: config.queries,
+    excludeKeywords: config.excludeKeywords,
+    locations: config.locations,
+  });
+}
+
+function summarizeCnDiagnostics(
+  diagnostics: CnDiscovery["diagnostics"],
+): CnDiagnosticSummary {
+  const failed = diagnostics.filter((diagnostic) => !diagnostic.ok);
+  const detail =
+    failed.length > 0
+      ? failed
+          .map(
+            (diagnostic) =>
+              `${diagnostic.source}: ${diagnostic.error ?? "unknown error"}`,
+          )
+          .join("; ")
+      : undefined;
+  return {
+    failed,
+    allFailed: diagnostics.length > 0 && failed.length === diagnostics.length,
+    ...(detail ? { detail } : {}),
+  };
+}
+
+async function failCnRun(
+  base: Pick<ProcessResult, "userId" | "runId">,
+  run: CnFetchRunInput,
+  error: string,
+): Promise<ProcessResult> {
+  await commitFetchRun({
+    protocol: FETCH_RUN_COMMIT_PROTOCOL,
+    command: "fail",
+    runId: run.id,
+    attemptId: run.attemptId,
+    error,
+  });
+  return { ...base, discovered: 0, imported: 0, error };
+}
+
+async function commitCnDiscovery(
+  base: Pick<ProcessResult, "userId" | "runId">,
+  run: CnFetchRunInput,
+  discovery: CnDiscovery,
+  diagnostics: CnDiagnosticSummary,
+): Promise<ProcessResult> {
+  const discovered = discovery.jobs.length;
+  const completed = await commitFetchRun({
+    protocol: FETCH_RUN_COMMIT_PROTOCOL,
+    command: "commit",
+    runId: run.id,
+    attemptId: run.attemptId,
+    batchKey: "cn-result-v1",
+    batchIndex: 0,
+    batchCount: 1,
+    items: discovery.jobs,
+    terminal: true,
+    discoveredCount: discovered,
+    terminalOutcome: diagnostics.failed.length > 0 ? "PARTIAL" : "SUCCEEDED",
+    ...(diagnostics.detail ? { error: diagnostics.detail } : {}),
+  });
+  return { ...base, discovered, imported: completed.totalImported };
+}
+
+async function executeCnFetchRun(
+  userId: string,
+  run: CnFetchRunInput,
+): Promise<ProcessResult> {
+  const base = { userId, runId: run.id };
+  const config = readCnRunConfig(run.queries);
+  const discovery = await discoverCnRun(config);
+  const diagnostics = summarizeCnDiagnostics(discovery.diagnostics);
+  if (diagnostics.allFailed) {
+    return failCnRun(
+      base,
+      run,
+      `all sources failed: ${diagnostics.detail ?? "unknown error"}`,
+    );
+  }
+  return commitCnDiscovery(base, run, discovery, diagnostics);
+}
+
+function stoppedCnRunResult(
+  base: Pick<ProcessResult, "userId" | "runId">,
+  stopReason: NonNullable<ReturnType<typeof fetchRunExecutionStopReason>>,
+): ProcessResult {
+  return {
+    ...base,
+    discovered: 0,
+    imported: 0,
+    ...(stopReason === "cancelled"
+      ? { cancelled: true }
+      : { superseded: true }),
+  };
+}
+
+async function reportCnRunFailure(
+  run: CnFetchRunInput,
+  message: string,
+): Promise<ReturnType<typeof fetchRunExecutionStopReason>> {
+  try {
+    await commitFetchRun({
+      protocol: FETCH_RUN_COMMIT_PROTOCOL,
+      command: "fail",
+      runId: run.id,
+      attemptId: run.attemptId,
+      error: message,
+    });
+    return null;
+  } catch (error) {
+    return fetchRunExecutionStopReason(error);
+  }
+}
+
+async function recoverCnRunFailure(
+  base: Pick<ProcessResult, "userId" | "runId">,
+  run: CnFetchRunInput,
+  error: unknown,
+): Promise<ProcessResult> {
+  const stopReason = fetchRunExecutionStopReason(error);
+  if (stopReason) return stoppedCnRunResult(base, stopReason);
+  const message = error instanceof Error ? error.message : "unknown";
+  const failureStopReason = await reportCnRunFailure(run, message);
+  if (failureStopReason) return stoppedCnRunResult(base, failureStopReason);
+  return { ...base, discovered: 0, imported: 0, error: message };
 }
 
 /**
@@ -87,78 +205,12 @@ async function updateActiveRun<T>(
  */
 export async function processCnFetchRun(
   userId: string,
-  run: { id: string; queries: unknown },
+  run: CnFetchRunInput,
 ): Promise<ProcessResult> {
   const base = { userId, runId: run.id };
   try {
-    const config = readCnRunConfig(run.queries);
-
-    const result = await runCnFetch({
-      sources: config.sources,
-      queries: config.queries,
-      excludeKeywords: config.excludeKeywords,
-      locations: config.locations,
-    });
-
-    const failedSources = result.diagnostics.filter(
-      (diagnostic) => !diagnostic.ok,
-    );
-    if (
-      result.diagnostics.length > 0 &&
-      failedSources.length === result.diagnostics.length
-    ) {
-      const message = `all sources failed: ${failedSources
-        .map(
-          (diagnostic) =>
-            `${diagnostic.source}: ${diagnostic.error ?? "unknown error"}`,
-        )
-        .join("; ")}`;
-      const failedRun = await updateActiveRun(run.id, async (tx) => {
-        await tx.fetchRun.updateMany({
-          where: { id: run.id, userId, status: "RUNNING" },
-          data: { status: "FAILED", importedCount: 0, error: message },
-        });
-        return { ...base, discovered: 0, imported: 0, error: message };
-      });
-      return failedRun ?? {
-        ...base,
-        discovered: 0,
-        imported: 0,
-        cancelled: true,
-      };
-    }
-
-    const discovered = result.jobs.length;
-    const completed = await updateActiveRun(run.id, async (tx) => {
-      let imported = 0;
-      if (discovered > 0) {
-        const importResult = await importJobsForUser({
-          userId,
-          items: result.jobs.map((job) => ImportJobItemSchema.parse(job)),
-        });
-        imported = importResult.imported;
-      }
-      await tx.fetchRun.updateMany({
-        where: { id: run.id, userId, status: "RUNNING" },
-        data: { status: "SUCCEEDED", importedCount: imported, error: null },
-      });
-      return { ...base, discovered, imported };
-    });
-    return completed ?? { ...base, discovered: 0, imported: 0, cancelled: true };
+    return await executeCnFetchRun(userId, run);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "unknown";
-    const failedRun = await updateActiveRun(run.id, async (tx) => {
-      await tx.fetchRun.updateMany({
-        where: { id: run.id, userId, status: "RUNNING" },
-        data: { status: "FAILED", importedCount: 0, error: message },
-      });
-      return { ...base, discovered: 0, imported: 0, error: message };
-    }).catch(() => null);
-    return failedRun ?? {
-      ...base,
-      discovered: 0,
-      imported: 0,
-      cancelled: true,
-    };
+    return recoverCnRunFailure(base, run, err);
   }
 }

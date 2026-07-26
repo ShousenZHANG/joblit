@@ -29,7 +29,7 @@ npm run deps:policy       # Check dependency policy
 
 ### Key Data Flow
 
-1. **Job Intake**: `FetchRun` tasks dispatch GitHub Actions (Python JobSpy fetcher) → import via `/api/admin/import` with dedupe on `userId + jobUrl` and tombstone filtering (`DeletedJobUrl`)
+1. **Job Intake**: `FetchRun` tasks persist a strict market-specific config, then dispatch the AU GitHub Actions worker or run CN/GLOBAL adapters in-process. Every adapter enters `commitFetchRun`; ordered receipts, Jobs, counters, and terminal state commit atomically with dedupe on `userId + jobUrl` and tombstone filtering (`DeletedJobUrl`)
 2. **Tailoring**: `Job` + `ResumeProfile` → AI prompt (via versioned `PromptRuleTemplate`) → external model imported through `/api/applications/manual-generate`, or durable server generation through `generateApplicationArtifactsForJob` → persisted Application aggregate → PDF render via LaTeX external service
 3. **Batch**: External Codex atomically completes/claims tasks through `/api/application-batches/[id]/run-once` and persists output through `manual-generate`; feature-gated server auto-execute uses `/execute` → `generateApplicationArtifactsForJob`
 4. **Extension**: Chrome extension authenticates via `/api/ext/auth/token` → reads flat profile → logs field mappings and form submissions for learning auto-fill rules
@@ -56,9 +56,10 @@ reintroduced.
 - `applications/` — Resume/cover artifact generation and storage
 - `applicationBatches/` — Batch task orchestration (Codex protocol, progress tracking)
 - `jobs/` — Job CRUD, filtering, deletion cascade (jobListService, jobDeleteService, jobSearchService)
+- `fetchRuns/` — FetchRun quota, lifecycle lock, and the shared `fetch-run-commit/v1` transaction boundary
 - `files/` — Vercel Blob operations and PDF filename utilities
 - `discover/` — YouTube video pipeline: fetch, cache, refresh
-- `cnFetch/` — China job sources: GitHub repos, RSSHub, V2EX adapters
+- `cnFetch/` — China Fetch Pipeline and the Nowcoder adapter
 - `api/` — Shared route utilities: `errorResponse`, `rateLimit`, `routeHandler`
 - `auth/` — Session middleware: `requireSession`, `requireExtensionToken`
 - `prisma.ts` — Prisma singleton with Neon serverless adapter
@@ -66,18 +67,19 @@ reintroduced.
 ### Shared (`lib/shared/`)
 
 - `schemas/` — Zod v4 schemas (canonical validation layer for all API boundaries)
+- `schemas/fetchRunConfig.ts` — versioned AU/CN/GLOBAL FetchRun execution contract and legacy reader
 - `locales/` — per-Resume-Locale prompt parameters (`coverWordRange`, `dateFormat`, `salutationStyle`, `toneRules`). UI string tables live in `messages/en.json` and `messages/zh.json`.
 - `skillsGazetteer` — Canonical skills vocabulary used in prompt quality gates
 - `aiPromptDefaults` — Default AI prompt parameters
 - `fetchRolePacks.config.json` — Role category definitions
 - `canonicalizeJobUrl`, `parseCnSalary`, `fetchExclusionCriteria` — Job normalization helpers
 
-### Prisma Models (28)
+### Prisma Models (29)
 
 Core workflow: `Job`, `FetchRun`, `ApplicationBatch`, `ApplicationBatchTask`, `Application`, `ResumeProfile`, `ActiveResumeProfile`, `PromptRuleTemplate`  
 Provenance: `ApplicationEvent` (immutable ledger, carries company/title snapshots so it outlives the Job), `EvidenceSnapshot`, `ClaimEvidence`  
 Auth: `User`, `Account`, `Session`, `ExtensionToken`  
-Fetch sources: `SourceHealth`, `AtsBoardSource`  
+Fetch execution and sources: `FetchRunCommitReceipt`, `SourceHealth`, `AtsBoardSource`
 Supporting: `DeletedJobUrl` (dedup tombstone), `DailyCheckin`, `FormSubmission`, `FieldMappingRule`, `OnboardingState`, `DiscoverVideoCache`, `LocalAiSetting`  
 Retained without writers pending a retention migration (ADR-0006): `InterviewPlan`, `StarStory`, `Offer`, `FollowUpReminder`
 
@@ -87,7 +89,7 @@ Two locales: `en-AU` and `zh-CN` via next-intl. Locale is cookie-based. Resume p
 
 ### Authentication
 
-NextAuth v4 with GitHub + Google OAuth, Prisma adapter (database sessions). Sign-in is free, open, and self-service: no invitation or manual approval is required. Session includes `user.id`. Background routes use service-secret boundaries: `/api/admin/import` is an internal JobSpy import route protected by `IMPORT_SECRET`, while fetch-run callbacks use `FETCH_RUN_SECRET`.
+NextAuth v4 with GitHub + Google OAuth, Prisma adapter (database sessions). Sign-in is free, open, and self-service: no invitation or manual approval is required. Session includes `user.id`. The AU worker uses `FETCH_RUN_SECRET` for `/api/fetch-runs/[id]/config` and `/api/fetch-runs/[id]/commit`; the commit module derives tenant identity from the stored run. The retired `/api/admin/import` and `/api/fetch-runs/[id]/update` routes must not be reintroduced.
 
 ### Testing
 
@@ -99,7 +101,7 @@ Path alias `@/*` maps to the project root. Import as `@/lib/...`, `@/app/...`, `
 
 ## Environment Variables
 
-Required: `DATABASE_URL`, `AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_ID`, `GITHUB_SECRET`, `IMPORT_SECRET`, `FETCH_RUN_SECRET`, `APP_ENC_KEY` (base64), `LATEX_RENDER_URL`, `LATEX_RENDER_TOKEN`
+Required: `DATABASE_URL`, `AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_ID`, `GITHUB_SECRET`, `FETCH_RUN_SECRET`, `APP_ENC_KEY` (base64), `LATEX_RENDER_URL`, `LATEX_RENDER_TOKEN`
 
 Optional: `GEMINI_API_KEY`, `GEMINI_MODEL`, `BLOB_READ_WRITE_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_TOKEN`, `GITHUB_WORKFLOW_FILE`, `JOBLIT_WEB_URL`, `YOUTUBE_API_KEY`, `CRON_SECRET`, `RSSHUB_URL`, `RSSHUB_JOB_ROUTES`, `GITHUB_CN_JOB_REPOS`
 
@@ -113,6 +115,11 @@ blocking, redirect and size limits) stays enforced regardless.
 ## Prisma Schema Notes
 
 After editing `prisma/schema.prisma`, always run `npx prisma generate`. The client generates to `lib/generated/prisma/`. The Neon serverless adapter is configured in `lib/server/prisma.ts` — do not use the standard Prisma client directly.
+
+FetchRun execution follows ADR-0008. Preserve the `FRUN → JOBJ` advisory-lock
+order, keep network I/O outside the commit transaction, and route AU, CN, and
+GLOBAL results through `commitFetchRun`. `PARTIAL` is terminal and means some
+work may already be receipt-backed; cancellation never rolls those Jobs back.
 
 ## Codex Batch Workflow
 

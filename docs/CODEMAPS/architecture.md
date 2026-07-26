@@ -15,11 +15,12 @@ A job-search workflow product: **fetch** roles → **triage** them → **tailor*
 CV and cover letter → export PDFs. One user, many Jobs, one Application per
 Job.
 
-Two markets: `AU` and `CN` (`lib/shared/market.ts:22`). Market is derived from
-the UI Locale cookie, and it decides which sources are fetched, which Resume
-Locale the LaTeX renderer uses, and which pages appear in the nav
+Two UI and Resume Markets: `AU` and `CN` (`lib/shared/market.ts:22`). Market is
+derived from the UI Locale cookie, and it decides which Resume Locale the LaTeX
+renderer uses and which pages appear in the nav
 (`components/app-shell/AppNav.tsx:59-70` — CN sees only `/resume` and
-`/discover`).
+`/discover`). The Fetch Pipeline additionally uses `GLOBAL` as a source-adapter
+selector; it is not a third UI or Resume Market.
 
 ---
 
@@ -30,23 +31,71 @@ Locale the LaTeX renderer uses, and which pages appear in the nav
 `FetchRun` is the unit of work. Creation and dispatch are separate steps.
 
 ```
-POST /api/fetch-runs            → FetchRun row (QUEUED), quota-checked
+POST /api/fetch-runs            → FetchRun row (QUEUED)
+                                  + versioned FetchRunConfig v1
 POST /api/fetch-runs/[id]/trigger
   ├─ market AU     → GitHub Actions workflow_dispatch → Python JobSpy
-  │                  → POST /api/admin/import (IMPORT_SECRET)
-  │                  → callbacks to /api/fetch-runs/[id]/update (FETCH_RUN_SECRET)
+  │                  → GET  /api/fetch-runs/[id]/config
+  │                  → POST /api/fetch-runs/[id]/commit
   ├─ market CN     → lib/server/cnFetch/processFetchRun.ts, in-process
   └─ market GLOBAL → lib/server/sources/processGlobalFetchRun.ts, in-process
+                               │
+                               ▼
+                  lib/server/fetchRuns/fetchRunCommit.ts
+                  FRUN → attempt fence → JOBJ
+                  → Job + receipt + run projection
 ```
 
-The AU branch is asynchronous and finishes through a worker callback; the other
-two complete inside the request and write their own terminal status. The branch
-lives in `app/api/fetch-runs/[id]/trigger/route.ts:251-345`.
+The AU branch is asynchronous and reaches the commit module through the
+`FETCH_RUN_SECRET`-guarded HTTP adapter. CN and GLOBAL call the same module
+directly. `start`, ordered `commit`, and `fail` commands form
+`fetch-run-commit/v1`; adapters finish network discovery before entering it.
+The module derives the owner and market from the stored run.
+
+Every executor carries a UUID attempt. `start` records
+`executionAttemptId` + `executionLeaseExpiresAt` under `FRUN` (90 seconds for
+inline CN/GLOBAL, 30 minutes for AU). A same-attempt `start` renews; a different
+attempt is blocked until expiry, then may take over. Expiry only makes takeover
+eligible: the current attempt remains valid until another `start` actually
+replaces it. New `commit` and external `fail` commands must match the current
+attempt; a non-terminal commit renews the lease.
+
+`dispatchMeta` in the JSON config is not this fence. Its timestamps and
+idempotency key claim the short pre-`start` dispatch window. For a rolling
+upgrade, they also suppress overlap on RUNNING inline rows whose relational
+`executionAttemptId` is still null. After `start`, only the relational attempt
+and lease authorize new execution writes.
+
+Each applied result batch writes a `FetchRunCommitReceipt` in the same
+transaction as Jobs, import counters, and any terminal projection. A replay
+with the same `(runId, batchKey)` and request hash returns the receipt; different
+content conflicts. Batch indexes are ordered and unique per run, and only the
+final declared batch may be terminal. The receipt records the applying
+`executionAttemptId`; exact receipt replay remains run-scoped after a takeover,
+but the result identifies the canonical receipt attempt and does not authorize a
+stale attempt to append work or publish auxiliary projections. See ADR-0008.
+
+Historical GLOBAL rows containing only `sources` normalize to
+`queryMode: "source-only"` without synthesizing title or query fields. This
+compatibility mode is restricted to explicitly named sources and skips only
+role matching. Invalid versioned rows still fail closed.
+
+Inline client recovery observes the same run through one lease interval and
+retries that run ID once. Lease loss is a supersession/handoff, not a user
+cancellation. GLOBAL source-health and Job-liveness projections run only after
+the fenced terminal command, only for its canonical result attempt. Both stores
+reject equal or older discovery timestamps, so neither a superseded executor nor
+an older cross-run snapshot can overwrite newer observations.
 
 Import dedupes in three layers — an in-payload `Set`, the `DeletedJobUrl`
 tombstone table, and the `@@unique([userId, jobUrl])` constraint. All three key
 on `canonicalizeJobUrl` (`lib/shared/canonicalizeJobUrl.ts:59`). See
 [data.md](./data.md#the-deletedjoburl-tombstone).
+
+Cancellation and commits linearize on `FRUN`. A cancellation that wins rejects
+future batches. A batch that wins commits its Jobs and receipt before
+cancellation is evaluated; those rows are not rolled back. A cancelled or
+failed run after the first commit is terminal `PARTIAL`, not `FAILED`.
 
 ### 2. Triage — which roles are worth applying to
 
@@ -121,15 +170,15 @@ for the same `taskId`; external Codex then persists output through
 |---|---|---|
 | Browser → API | NextAuth database session | `lib/server/auth/requireSession.ts:17` |
 | Extension → API | Bearer token, SHA-256 hash stored | `lib/server/auth/requireExtensionToken.ts:34` |
-| JobSpy worker → API | `IMPORT_SECRET` header, constant-time compare | `app/api/admin/import/route.ts` |
-| Fetch worker → API | `FETCH_RUN_SECRET` header | `app/api/fetch-runs/[id]/{update,config}` |
+| Fetch worker → API | `FETCH_RUN_SECRET` header, constant-time compare | `app/api/fetch-runs/[id]/{config,commit}` |
 | Cron → API | `Authorization: Bearer CRON_SECRET` | `app/api/discover/refresh-daily` |
 | Server → internet | `safeOutboundFetch` | `lib/server/net/safeFetch.ts:396` |
 
-Every one of the 68 routes is guarded. `safeOutboundFetch` enforces HTTPS, a
+Every route is guarded. `safeOutboundFetch` enforces HTTPS, a
 host allowlist, DNS re-checking on every hop, private-address rejection,
-bounded redirects with credential stripping, and a streaming size ceiling. One
-outbound edge bypasses it: `lib/server/cnFetch/adapters/nowcoder.ts:169`.
+bounded redirects with credential stripping, and a streaming size ceiling.
+Nowcoder also uses this gateway in production; its injectable `fetchImpl` is a
+test adapter, not a production network path.
 
 `LATEX_RENDER_ALLOW_INSECURE_HTTP=true` relaxes **transport encryption only**
 for a self-hosted renderer without TLS. Every other protection stays enforced.
@@ -147,7 +196,7 @@ app/(marketing)  app/(auth)  app/(app)        ← React, next-intl, React Query
                                   │
                             lib/server/**      ← business logic
                                   │
-                    prisma (Neon serverless)   ← 28 models
+                    prisma (Neon serverless)   ← 29 models
 ```
 
 `lib/shared/**` is imported by both sides and is the only place a contract may
@@ -176,11 +225,17 @@ These are recorded because a reader will meet them, not as a plan.
 
 ## Concurrency
 
-Postgres transaction-scoped advisory locks, seven namespaces, all taken as the
-first statement of their transaction. Ordering rule: broader lock first, then
-Application locks in sorted job-id order
+Postgres transaction-scoped advisory locks use seven namespaces. A lock is the
+module's first database effect; composed modules follow an explicit order.
+Fetch commits always acquire `FRUN` before `JOBJ`, then persist Jobs, the
+receipt, counters, and status in that transaction. Application mutation locks
+remain sorted by job ID
 (`lib/server/applications/applicationMutationLock.ts:16-25`). Full table in
 [data.md](./data.md#advisory-locks).
+
+The execution lease is a persisted fencing protocol, not an advisory lock.
+`FRUN` serializes ownership changes and cancellation; the UUID attempt is what
+rejects a superseded executor after the transaction releases the lock.
 
 Compare-and-swap on the aggregate-wide `Application.aiContentHash` guards
 Editor Finalize, Auto-save, and discard. `expectedHash` in, `STALE_WRITE` 409
@@ -214,6 +269,8 @@ runs that set plus the builds and dependency audits.
 | I want to change… | Start at |
 |---|---|
 | How a Job is imported or deduped | `lib/server/jobs/jobImportService.ts` |
+| How a FetchRun starts, commits, fails, or races cancellation | `lib/server/fetchRuns/fetchRunCommit.ts`, then ADR-0008 |
+| The persisted FetchRun execution contract | `lib/shared/schemas/fetchRunConfig.ts` |
 | What the AI is asked | `lib/server/ai/applicationPromptBuilder.ts`, `lib/server/applications/applicationPrompt.ts` |
 | Which AI proposals are allowed through | The Quality Gate — `lib/server/applications/manualImportParser.ts:419`, `:450` |
 | How a PDF is produced | `lib/server/latex/`, then `lib/server/latex/compilePdf.ts:68` |

@@ -14,7 +14,6 @@ const serverEnvSchema = z.object({
   DATABASE_URL: nonEmpty,
   AUTH_SECRET: nonEmpty,
   APP_ENC_KEY: nonEmpty,
-  IMPORT_SECRET: nonEmpty,
   FETCH_RUN_SECRET: nonEmpty,
   LATEX_RENDER_URL: z.string().url(),
   LATEX_RENDER_TOKEN: nonEmpty,

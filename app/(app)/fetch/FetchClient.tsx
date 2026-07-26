@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Briefcase, ChevronDown, Loader2, RotateCcw } from "lucide-react";
 import { useSession } from "next-auth/react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +30,7 @@ import {
   TITLE_EXCLUSION_OPTIONS,
   TITLE_EXCLUSION_VALUES,
 } from "@/lib/shared/fetchExclusionCriteria";
+import { triggerFetchRunWithRecovery } from "@/lib/client/triggerFetchRun";
 import { cn } from "@/lib/utils";
 import { SourceHealthPanel } from "./SourceHealthPanel";
 
@@ -378,7 +379,7 @@ function LocationCombobox({
 
 type FetchRunListItem = {
   id: string;
-  status: "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
+  status: "QUEUED" | "RUNNING" | "SUCCEEDED" | "PARTIAL" | "FAILED";
   market: string;
   importedCount: number;
   title: string | null;
@@ -395,18 +396,23 @@ type FetchRunListItem = {
   createdAt: string;
 };
 
-function relativeTime(iso: string) {
+function relativeTime(iso: string, locale: string) {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
+  const formatter = new Intl.RelativeTimeFormat(locale, {
+    numeric: "auto",
+    style: "narrow",
+  });
+  if (mins < 1) return formatter.format(0, "second");
+  if (mins < 60) return formatter.format(-mins, "minute");
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  if (hours < 24) return formatter.format(-hours, "hour");
+  return formatter.format(-Math.floor(hours / 24), "day");
 }
 
 const STATUS_DOT: Record<string, string> = {
   SUCCEEDED: "bg-brand-emerald-500",
+  PARTIAL: "bg-amber-500",
   RUNNING: "bg-amber-500",
   QUEUED: "bg-amber-400",
   FAILED: "bg-destructive",
@@ -418,6 +424,7 @@ const STATUS_DOT: Record<string, string> = {
 // so a just-completed fetch appears without a manual refresh.
 function FetchHistory({ onRerun }: { onRerun: (run: FetchRunListItem) => void }) {
   const t = useTranslations("fetch");
+  const locale = useLocale();
   const { runId, status } = useFetchStatus();
   const [runs, setRuns] = useState<FetchRunListItem[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -496,26 +503,36 @@ function FetchHistory({ onRerun }: { onRerun: (run: FetchRunListItem) => void })
             />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium text-foreground">
-                {run.title ?? "Untitled search"}
+                {run.title ?? t("historyUntitled")}
               </div>
               <div className="truncate text-[11px] text-muted-foreground">
                 {run.market === "GLOBAL" ? `${t("globalFeeds")} · ` : ""}
-                {run.queryCount > 1 ? `${run.queryCount} roles · ` : ""}
+                {run.queryCount > 1
+                  ? `${t("historyRoleCount", { count: run.queryCount })} · `
+                  : ""}
                 {run.status === "SUCCEEDED"
-                  ? `${run.importedCount} imported`
-                  : run.status.toLowerCase()}
+                  ? t("historyImported", { count: run.importedCount })
+                  : run.status === "PARTIAL"
+                    ? t("historyPartial", { count: run.importedCount })
+                    : run.status === "QUEUED"
+                      ? t("historyStatusQUEUED")
+                      : run.status === "RUNNING"
+                        ? t("historyStatusRUNNING")
+                        : t("historyStatusFAILED")}
                 {" · "}
-                {relativeTime(run.createdAt)}
+                {relativeTime(run.createdAt, locale)}
               </div>
             </div>
             <button
               type="button"
               onClick={() => onRerun(run)}
-              aria-label={`Re-run ${run.title ?? "search"}`}
+              aria-label={t("historyRerunAria", {
+                title: run.title ?? t("historyUntitled"),
+              })}
               className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border px-3 text-xs font-semibold text-foreground/80 transition-colors hover:border-brand-emerald-300 hover:bg-brand-emerald-50/60 hover:text-brand-emerald-text"
             >
               <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-              Re-run
+              {t("historyRerun")}
             </button>
           </li>
         ))}
@@ -735,10 +752,14 @@ export function FetchClient() {
     return json.id as string;
   }
 
-  async function triggerRun(id: string) {
-    const res = await fetch(`/api/fetch-runs/${id}/trigger`, { method: "POST" });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(getApiErrorMessage(res, json, "Failed to trigger run"));
+  async function triggerRun(run: {
+    id: string;
+    source: "jobspy" | "nowcoder" | "global";
+  }) {
+    await triggerFetchRunWithRecovery(run, {
+      errorMessage: (response, body) =>
+        getApiErrorMessage(response, body, "Failed to trigger run"),
+    });
   }
 
   async function onSubmit() {
@@ -773,7 +794,7 @@ export function FetchClient() {
       }
       startRuns(created);
       const triggered = await Promise.allSettled(
-        created.map((run) => triggerRun(run.id)),
+        created.map((run) => triggerRun(run)),
       );
       const failed = triggered.find(
         (result): result is PromiseRejectedResult => result.status === "rejected",

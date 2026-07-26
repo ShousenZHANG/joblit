@@ -27,6 +27,8 @@ vi.mock("@/lib/server/jobs/applicationCooldownService", () => ({
 import {
   ImportJobItemSchema,
   importJobsForUser,
+  persistPreparedJobImport,
+  prepareJobImportForUser,
 } from "./jobImportService";
 
 describe("ImportJobItemSchema", () => {
@@ -336,6 +338,10 @@ describe("ImportJobItemSchema", () => {
       where: {
         userId: "user-1",
         jobUrl: { in: ["https://remoteok.com/remote-jobs/1"] },
+        OR: [
+          { livenessCheckedAt: null },
+          { livenessCheckedAt: { lt: expect.any(Date) } },
+        ],
       },
       data: {
         livenessStatus: "ACTIVE",
@@ -345,6 +351,78 @@ describe("ImportJobItemSchema", () => {
       },
     });
   });
+
+  it.each(["ACTIVE", "UNCERTAIN"] as const)(
+    "does not let an older FetchRun overwrite a newer %s liveness snapshot",
+    async (newerStatus) => {
+      const olderAt = new Date("2026-07-20T00:00:00.000Z");
+      const newerAt = new Date("2026-07-20T00:01:00.000Z");
+      const item = ImportJobItemSchema.parse({
+        jobUrl: "https://remoteok.com/remote-jobs/1",
+        title: "AI Engineer",
+        market: "GLOBAL",
+        source: "remoteok",
+      });
+      const olderPrepared = await prepareJobImportForUser({
+        userId: "user-1",
+        items: [item],
+      });
+      olderPrepared.observedAt = olderAt;
+
+      const row = {
+        livenessStatus: newerStatus,
+        livenessReason:
+          newerStatus === "ACTIVE"
+            ? "source_feed_reachable"
+            : "missing_from_source_feed",
+        livenessCheckedAt: newerAt,
+        lastSeenAt: newerAt,
+      };
+      const expected = { ...row };
+      store.createMany.mockResolvedValue({ count: 0 });
+      store.updateMany.mockImplementation(async ({ where, data }) => {
+        const cutoff = where.OR?.find(
+          (condition: { livenessCheckedAt?: { lt?: Date } }) =>
+            condition.livenessCheckedAt?.lt,
+        )?.livenessCheckedAt?.lt;
+        if (
+          cutoff &&
+          row.livenessCheckedAt &&
+          row.livenessCheckedAt >= cutoff
+        ) {
+          return { count: 0 };
+        }
+        Object.assign(row, data);
+        return { count: 1 };
+      });
+      const tx = {
+        $executeRaw: store.executeRaw,
+        deletedJobUrl: { findMany: store.deletedFindMany },
+        job: {
+          createMany: store.createMany,
+          updateMany: store.updateMany,
+        },
+      } as unknown as Parameters<typeof persistPreparedJobImport>[0];
+
+      await persistPreparedJobImport(tx, {
+        userId: "user-1",
+        prepared: olderPrepared,
+        includeEnrichment: true,
+      });
+
+      expect(row).toEqual(expected);
+      expect(store.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: [
+              { livenessCheckedAt: null },
+              { livenessCheckedAt: { lt: olderAt } },
+            ],
+          }),
+        }),
+      );
+    },
+  );
 
   it("maps the JobSpy site field to the canonical source badge", async () => {
     const item = ImportJobItemSchema.parse({

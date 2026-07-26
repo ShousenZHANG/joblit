@@ -4,7 +4,6 @@ const REQUIRED = {
   DATABASE_URL: "postgresql://u:p@localhost:5432/db",
   AUTH_SECRET: "x".repeat(32),
   APP_ENC_KEY: "dGVzdHRlc3R0ZXN0dGVzdA==",
-  IMPORT_SECRET: "import-secret",
   FETCH_RUN_SECRET: "fetch-secret",
   LATEX_RENDER_URL: "https://render.example.com",
   LATEX_RENDER_TOKEN: "latex-token",
@@ -32,10 +31,10 @@ describe("validateServerEnv", () => {
   });
 
   it("throws listing the missing required key", async () => {
-    const { IMPORT_SECRET: _omit, ...rest } = REQUIRED;
-    process.env = { ...original, ...rest, IMPORT_SECRET: "" };
+    const { FETCH_RUN_SECRET: _omit, ...rest } = REQUIRED;
+    process.env = { ...original, ...rest, FETCH_RUN_SECRET: "" };
     const { validateServerEnv } = await loadFresh();
-    expect(() => validateServerEnv()).toThrow(/IMPORT_SECRET/);
+    expect(() => validateServerEnv()).toThrow(/FETCH_RUN_SECRET/);
   });
 
   it("rejects a non-URL LATEX_RENDER_URL", async () => {

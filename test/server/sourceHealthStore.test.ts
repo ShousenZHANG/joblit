@@ -99,6 +99,37 @@ describe("source health store", () => {
     expect(store.transaction).not.toHaveBeenCalled();
   });
 
+  it("does not let an older run overwrite a newer source observation", async () => {
+    let current: Record<string, unknown> | null = null;
+    store.findMany.mockImplementation(async () => (current ? [current] : []));
+    store.upsert.mockImplementation(async ({ create, update }) => {
+      current = current
+        ? { source: "remoteok", ...current, ...update }
+        : create;
+      return current;
+    });
+    const newerAt = new Date("2026-07-20T00:00:00Z");
+    const olderAt = new Date("2026-07-19T00:00:00Z");
+
+    await persistSourceHealthDiagnostics(
+      [{ source: "remoteok", ok: true, raw: 1 }],
+      newerAt,
+    );
+    await persistSourceHealthDiagnostics(
+      [{ source: "remoteok", ok: false, raw: 0, error: "HTTP 503" }],
+      olderAt,
+    );
+
+    expect(store.upsert).toHaveBeenCalledTimes(1);
+    expect(current).toMatchObject({
+      source: "remoteok",
+      status: "HEALTHY",
+      consecutiveFailures: 0,
+      lastCheckedAt: newerAt,
+      reason: "reachable",
+    });
+  });
+
   it("locks and reads all sources in one roundtrip before updating them", async () => {
     await persistSourceHealthDiagnostics(
       [

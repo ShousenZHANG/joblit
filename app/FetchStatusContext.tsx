@@ -12,7 +12,12 @@ import {
 import { fetchJson } from "@/lib/api/fetchJson";
 import { useSession } from "next-auth/react";
 
-export type FetchRunStatus = "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
+export type FetchRunStatus =
+  | "QUEUED"
+  | "RUNNING"
+  | "SUCCEEDED"
+  | "PARTIAL"
+  | "FAILED";
 export type FetchSource = "jobspy" | "seek" | "nowcoder" | "global";
 
 // One tracked run (a single source). A fetch action starts one of these per
@@ -52,6 +57,8 @@ type FetchStatusContextValue = {
   elapsedSeconds: number;
   // Per-source lanes for the progress panel.
   lanes: FetchRunLane[];
+  cancelling: boolean;
+  cancelError: string | null;
   open: boolean;
   setOpen: (open: boolean) => void;
   startRuns: (runs: RunMeta[]) => void;
@@ -64,18 +71,28 @@ const RUNS_KEY = "joblit_fetch_runs";
 const STARTED_AT_KEY = "joblit_fetch_started_at";
 const PANEL_OPEN_KEY = "joblit_fetch_panel_open";
 const ENDED_AT_KEY = "joblit_fetch_ended_at";
+const CANCEL_FAILED_MESSAGE =
+  "Some fetch runs could not be cancelled. They are still being monitored.";
 // Stable empty array so the aggregate `queryTerms` keeps a constant reference
 // when no lane has terms — avoids churning the context value's useMemo deps.
 const EMPTY_TERMS: string[] = [];
 
-const isTerminal = (s: FetchRunStatus) => s === "SUCCEEDED" || s === "FAILED";
+const isTerminal = (s: FetchRunStatus) =>
+  s === "SUCCEEDED" || s === "PARTIAL" || s === "FAILED";
 
 /** Aggregate many lane statuses into one: any active → running/queued; else a
- *  partial success counts as success; only all-failed reads as failed. */
+ *  mixed or explicitly partial outcomes stay visible as partial. */
 function aggregateStatus(lanes: FetchRunLane[]): FetchRunStatus | null {
   if (!lanes.length) return null;
   if (lanes.some((l) => l.status === "RUNNING")) return "RUNNING";
   if (lanes.some((l) => l.status === "QUEUED")) return "QUEUED";
+  if (lanes.some((l) => l.status === "PARTIAL")) return "PARTIAL";
+  if (
+    lanes.some((l) => l.status === "SUCCEEDED") &&
+    lanes.some((l) => l.status === "FAILED")
+  ) {
+    return "PARTIAL";
+  }
   if (lanes.some((l) => l.status === "SUCCEEDED")) return "SUCCEEDED";
   return "FAILED";
 }
@@ -114,13 +131,54 @@ function laneFromMeta(meta: RunMeta): FetchRunLane {
   };
 }
 
+type CancelOutcome =
+  | { id: string; kind: "cancelled"; status: FetchRunStatus }
+  | { id: string; kind: "failed" };
+
+type CancelOperation = {
+  version: number;
+  token: symbol;
+  promise: Promise<void>;
+};
+
+function terminalStatus(value: unknown): FetchRunStatus | null {
+  return value === "SUCCEEDED" || value === "PARTIAL" || value === "FAILED"
+    ? value
+    : null;
+}
+
+async function requestRunCancellation(
+  lane: FetchRunLane,
+): Promise<CancelOutcome> {
+  try {
+    const response = await fetch(`/api/fetch-runs/${lane.id}/cancel`, {
+      method: "POST",
+    });
+    if (!response.ok) return { id: lane.id, kind: "failed" };
+
+    const body = (await response.json().catch(() => null)) as {
+      status?: unknown;
+    } | null;
+    const status = terminalStatus(body?.status);
+    return status
+      ? { id: lane.id, kind: "cancelled", status }
+      : { id: lane.id, kind: "failed" };
+  } catch {
+    return { id: lane.id, kind: "failed" };
+  }
+}
+
 export function FetchStatusProvider({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const userId = session?.user?.id ?? null;
   const [lanes, setLanes] = useState<FetchRunLane[]>([]);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [open, setOpenState] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const autoCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelOperationRef = useRef<CancelOperation | null>(null);
+  const runSetVersionRef = useRef(0);
 
   const storageKeys = useMemo(() => {
     const suffix = userId ?? "anonymous";
@@ -135,9 +193,13 @@ export function FetchStatusProvider({ children }: { children: React.ReactNode })
   const prevKeysRef = useRef<typeof storageKeys | null>(null);
 
   const resetState = useCallback(() => {
+    runSetVersionRef.current += 1;
+    cancelOperationRef.current = null;
     setLanes([]);
     setElapsedSeconds(0);
     setOpenState(false);
+    setCancelling(false);
+    setCancelError(null);
   }, []);
 
   const refreshFromStorage = useCallback(() => {
@@ -222,8 +284,12 @@ export function FetchStatusProvider({ children }: { children: React.ReactNode })
   const startRuns = useCallback(
     (runs: RunMeta[]) => {
       const metas = runs.slice(0, 4);
+      runSetVersionRef.current += 1;
+      cancelOperationRef.current = null;
       setLanes(metas.map(laneFromMeta));
       setElapsedSeconds(0);
+      setCancelling(false);
+      setCancelError(null);
       setOpen(true);
       localStorage.setItem(storageKeys.runs, JSON.stringify(metas));
       localStorage.setItem(storageKeys.startedAt, String(Date.now()));
@@ -234,31 +300,54 @@ export function FetchStatusProvider({ children }: { children: React.ReactNode })
     [setOpen, storageKeys],
   );
 
-  const cancelRun = useCallback(async () => {
+  const cancelRun = useCallback((): Promise<void> => {
+    const currentVersion = runSetVersionRef.current;
+    const existing = cancelOperationRef.current;
+    if (existing?.version === currentVersion) return existing.promise;
+
     const active = lanes.filter((l) => !isTerminal(l.status));
-    if (!active.length) return;
-    const results = await Promise.all(
-      active.map(async (lane) => {
-        try {
-          const response = await fetch(`/api/fetch-runs/${lane.id}/cancel`, {
-            method: "POST",
-          });
-          return { id: lane.id, cancelled: response.ok };
-        } catch {
-          return { id: lane.id, cancelled: false };
-        }
-      }),
-    );
-    const cancelledIds = new Set(
-      results.filter((result) => result.cancelled).map((result) => result.id),
-    );
-    setLanes((prev) =>
-      prev.map((l) =>
-        cancelledIds.has(l.id)
-          ? { ...l, status: "FAILED", error: "Cancelled by user" }
-          : l,
-      ),
-    );
+    if (!active.length) return Promise.resolve();
+
+    setCancelling(true);
+    setCancelError(null);
+    const operationToken = Symbol("fetch-cancellation");
+    const promise = Promise.all(active.map(requestRunCancellation))
+      .then((results) => {
+        if (runSetVersionRef.current !== currentVersion) return;
+        const statuses = new Map(
+          results
+            .filter((result) => result.kind === "cancelled")
+            .map((result) => [result.id, result.status] as const),
+        );
+        setLanes((prev) =>
+          prev.map((lane) => {
+            const status = statuses.get(lane.id);
+            if (!status) return lane;
+            return {
+              ...lane,
+              status,
+              error: status === "SUCCEEDED" ? lane.error : "Cancelled by user",
+            };
+          }),
+        );
+        setCancelError(
+          results.some((result) => result.kind === "failed")
+            ? CANCEL_FAILED_MESSAGE
+            : null,
+        );
+      })
+      .finally(() => {
+        if (cancelOperationRef.current?.token !== operationToken) return;
+        cancelOperationRef.current = null;
+        setCancelling(false);
+      });
+    const operation = {
+      version: currentVersion,
+      token: operationToken,
+      promise,
+    };
+    cancelOperationRef.current = operation;
+    return promise;
   }, [lanes]);
 
   // Poll every non-terminal lane on a shared backoff until all settle.
@@ -290,6 +379,7 @@ export function FetchStatusProvider({ children }: { children: React.ReactNode })
           );
           if (!r || r.status !== "fulfilled") return lane; // keep prior on a failed poll
           const s = r.value.snap;
+          if (isTerminal(lane.status) && !isTerminal(s.status)) return lane;
           return {
             ...lane,
             status: s.status,
@@ -387,6 +477,8 @@ export function FetchStatusProvider({ children }: { children: React.ReactNode })
       smartExpand,
       elapsedSeconds,
       lanes,
+      cancelling,
+      cancelError,
       open,
       setOpen,
       startRuns,
@@ -402,6 +494,8 @@ export function FetchStatusProvider({ children }: { children: React.ReactNode })
       smartExpand,
       elapsedSeconds,
       lanes,
+      cancelling,
+      cancelError,
       open,
       setOpen,
       startRuns,

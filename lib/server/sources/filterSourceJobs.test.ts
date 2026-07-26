@@ -38,6 +38,18 @@ describe("filterSourceJobs", () => {
     expect(filterSourceJobs(rows, { queries: [] })).toEqual([]);
   });
 
+  it("skips only role matching for an explicit legacy source-only run", () => {
+    const rows = [job("Commercial Accountant", "Remote")];
+
+    expect(
+      filterSourceJobs(rows, {
+        queries: [],
+        baseQueries: [],
+        queryMode: "source-only",
+      }),
+    ).toEqual(rows);
+  });
+
   it("preserves a base technology gate across expanded roles", () => {
     const rows = [job("Java Backend Engineer"), job("Backend Engineer")];
 

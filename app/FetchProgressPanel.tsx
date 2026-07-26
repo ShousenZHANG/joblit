@@ -1,533 +1,75 @@
 "use client";
 
-import React from "react";
-import Link from "next/link";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { CheckCircle2, ChevronDown, Loader2, Minus, X, XCircle } from "lucide-react";
-import { useTranslations } from "next-intl";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { useFetchStatus, type FetchRunLane } from "./FetchStatusContext";
+import { useCallback, useRef } from "react";
+import { AnimatePresence, useReducedMotion } from "framer-motion";
+import {
+  FetchProgressDialog,
+  FetchProgressFab,
+} from "./fetch-progress/FetchProgressView";
+import { useFetchProgressModel } from "./fetch-progress/useFetchProgressModel";
+import { useFetchStatus } from "./FetchStatusContext";
 
-const SOURCE_LABEL: Record<string, string> = {
-  jobspy: "LinkedIn",
-  seek: "Seek",
-  nowcoder: "Nowcoder",
-  global: "Global feeds",
-};
-
-// Fetch progress panel — bottom-right floating surface that tracks a
-// fetch run through queued → running → done. Supports three visual
-// modes:
-//   1. expanded card (full status + query chips + cancel)
-//   2. minimized to a FAB (progress ring, click to reopen)
-//   3. hidden (runId null)
-// Theme-token chrome so light and dark render cleanly. Motion is
-// framer-motion spring for the card, Loader2 spin for the running
-// spinner, and the existing CSS keyframes for progress shimmer.
-
-const SPRING = {
-  type: "spring" as const,
-  stiffness: 320,
-  damping: 28,
-  mass: 0.6,
-};
-const MOTION_EASE = [0.16, 1, 0.3, 1] as const;
+function useFabFocusControl(setOpen: (open: boolean) => void) {
+  const shouldFocusFabRef = useRef(false);
+  const setFabRef = useCallback((node: HTMLButtonElement | null) => {
+    if (!node || !shouldFocusFabRef.current) return;
+    node.focus({ preventScroll: true });
+    shouldFocusFabRef.current = false;
+  }, []);
+  const minimize = useCallback(() => {
+    shouldFocusFabRef.current = true;
+    setOpen(false);
+  }, [setOpen]);
+  return { setFabRef, minimize };
+}
 
 export function FetchProgressPanel() {
-  const {
-    runId,
-    status,
-    importedCount,
-    error,
-    queryTitle,
-    queryTerms,
-    smartExpand,
-    elapsedSeconds,
-    lanes,
-    open,
-    setOpen,
-    cancelRun,
-  } = useFetchStatus();
-  const t = useTranslations("fetchProgress");
+  const state = useFetchStatus();
   const reducedMotion = useReducedMotion();
-
-  const isRunning = status === "RUNNING" || status === "QUEUED";
-  // Partial outcome: aggregate reads SUCCEEDED but at least one source failed
-  // (e.g. Seek rate-limited while LinkedIn imported). Celebrate calmly, name the
-  // source that dropped, and never imply a clean full run.
-  const failedSources = lanes
-    .filter((l) => l.status === "FAILED")
-    .map((l) => SOURCE_LABEL[l.source] ?? l.source);
-  const isPartial =
-    status === "SUCCEEDED" &&
-    failedSources.length > 0 &&
-    lanes.some((l) => l.status === "SUCCEEDED");
-  const progressValue =
-    status === "SUCCEEDED"
-      ? 100
-      : status === "FAILED"
-        ? 0
-        : status === "RUNNING"
-          ? Math.min(92, 20 + Math.floor(elapsedSeconds * 2))
-          : 10;
-
-  const statusLabel =
-    status === "RUNNING"
-      ? t("statusRunning")
-      : status === "QUEUED"
-        ? t("statusQueued")
-        : status === "SUCCEEDED"
-          ? t("statusCompleted")
-          : status === "FAILED"
-            ? t("statusFailed")
-            : t("statusStarting");
-
-  const statusTone =
-    status === "FAILED"
-      ? "bg-destructive/10 text-destructive"
-      : status === "SUCCEEDED"
-        ? "bg-brand-emerald-100 text-brand-emerald-text"
-        : status === "RUNNING"
-          ? "bg-[theme(colors.tier-good-bg)] text-[theme(colors.tier-good-fg)]"
-          : "bg-muted text-muted-foreground";
-
-  const shownTerms = queryTerms.slice(0, 6);
-  const hiddenTerms = Math.max(0, queryTerms.length - shownTerms.length);
-
-  const circumference = 2 * Math.PI * 22;
-  const strokeDashoffset =
-    circumference - (progressValue / 100) * circumference;
-
-  if (!runId) return null;
+  const model = useFetchProgressModel(state);
+  const { setFabRef, minimize } = useFabFocusControl(state.setOpen);
+  if (!state.runId) return null;
 
   return (
-    <AnimatePresence mode="wait">
-      {!open ? (
-        <motion.button
-          key="fab"
-          type="button"
-          initial={{ opacity: 0, scale: 0.85, y: 12 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.85, y: 12 }}
-          transition={SPRING}
-          onClick={() => setOpen(true)}
-          aria-label={t("openAria")}
-          className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full border border-border/60 bg-background/95 shadow-lg backdrop-blur transition-shadow hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-500"
-        >
-          <svg className="h-11 w-11 -rotate-90" viewBox="0 0 48 48">
-            <circle
-              cx="24"
-              cy="24"
-              r="22"
-              fill="none"
-              stroke="var(--color-muted, #e2e8f0)"
-              strokeWidth="3"
-            />
-            <motion.circle
-              cx="24"
-              cy="24"
-              r="22"
-              fill="none"
-              stroke={
-                status === "FAILED"
-                  ? "var(--color-destructive, #ef4444)"
-                  : "var(--color-brand-emerald-500, #10b981)"
-              }
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeDasharray={circumference}
-              animate={{ strokeDashoffset }}
-              transition={{
-                duration: reducedMotion ? 0 : 0.26,
-                ease: MOTION_EASE,
-              }}
-            />
-          </svg>
-          <span
-            // Remount on status change so the burst plays exactly once, at the
-            // moment the run settles into success.
-            key={status}
-            className={cn(
-              "absolute text-[11px] font-bold tabular-nums text-foreground",
-              status === "SUCCEEDED" && "cosmos-burst",
-            )}
-          >
-            {status === "SUCCEEDED"
-              ? "\u2713"
-              : status === "FAILED"
-                ? "\u2715"
-                : importedCount > 0
-                  ? importedCount
-                  : "\u22ef"}
-          </span>
-          {isRunning && (
-            <span className="pointer-events-none absolute inset-0 rounded-full border-2 border-brand-emerald-400 opacity-20 motion-safe:animate-ping" />
-          )}
-        </motion.button>
-      ) : (
-        <motion.div
-          key="panel"
-          role="dialog"
-          aria-label="Fetch progress"
-          data-testid="fetch-progress-panel"
-          initial={{ opacity: 0, scale: 0.94, y: 16 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.94, y: 16 }}
-          transition={SPRING}
-          className={cn(
-            "fixed bottom-6 right-6 z-50 w-[380px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-3xl border border-border/60 bg-background/95 shadow-[0_28px_60px_-24px_rgba(15,23,42,0.22)] backdrop-blur-xl motion-reduce:transition-none",
-            // Scanning deep space while a run is in flight.
-            isRunning && "cosmos-scan",
-          )}
-        >
-          {/* Header — title, status chip, minimize, close */}
-          <div className="flex items-center justify-between gap-2 border-b border-border/50 px-4 py-3">
-            <div className="flex min-w-0 items-center gap-2">
-              {isRunning ? (
-                <Loader2
-                  className="h-4 w-4 shrink-0 animate-spin text-brand-emerald-600 motion-reduce:animate-none"
-                  aria-hidden
-                />
-              ) : status === "SUCCEEDED" ? (
-                <CheckCircle2
-                  className="h-4 w-4 shrink-0 text-brand-emerald-600"
-                  aria-hidden
-                />
-              ) : null}
-              <div className="truncate text-sm font-semibold text-foreground">
-                {t("title")}
-              </div>
-              <span
-                className={cn(
-                  "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-                  statusTone,
-                )}
-              >
-                {statusLabel}
-              </span>
-            </div>
-            <div className="flex shrink-0 items-center gap-0.5">
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-500"
-                aria-label={t("minimize")}
-                title={t("minimize")}
-              >
-                <Minus className="h-4 w-4" aria-hidden />
-              </button>
-              {!isRunning ? (
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
-                  aria-label={t("close")}
-                  title={t("close")}
-                >
-                  <X className="h-4 w-4" aria-hidden />
-                </button>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="space-y-3 px-4 py-4">
-            {/* Step indicator */}
-            <StepIndicator status={status} />
-
-            {/* Per-source lanes — only when more than one source is running
-                (e.g. "Both"). Each lane shows its own live status + import count
-                so a stalled or rate-limited source is visible independently. */}
-            {lanes.length > 1 ? <SourceLanes lanes={lanes} /> : null}
-
-            {/* Status line */}
-            <div className="text-xs text-muted-foreground">
-              {status === "RUNNING"
-                ? t("lineRunning")
-                : status === "SUCCEEDED"
-                  ? t("lineCompleted")
-                  : status === "FAILED"
-                    ? t("lineFailed")
-                    : t("lineQueued")}
-            </div>
-
-            {/* Live import count — real signal while the worker streams results
-                in, instead of relying on the time-based progress bar alone. */}
-            {isRunning && importedCount > 0 ? (
-              <div className="text-sm font-semibold text-brand-emerald-text">
-                {t("importedSoFar", { n: importedCount })}
-              </div>
-            ) : null}
-
-            {/* Query terms panel */}
-            {queryTerms.length ? (
-              <div className="rounded-xl border border-border/60 bg-muted/40 p-3">
-                <div className="text-[11px] text-muted-foreground">
-                  {smartExpand && queryTitle
-                    ? t("smartExpanded", { title: queryTitle, n: queryTerms.length })
-                    : t("roleQueries", { n: queryTerms.length })}
-                </div>
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {shownTerms.map((term) => (
-                    <span
-                      key={term}
-                      className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground/85"
-                    >
-                      {term}
-                    </span>
-                  ))}
-                  {hiddenTerms ? (
-                    <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-muted-foreground">
-                      {t("moreTerms", { n: hiddenTerms })}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-
-            {/* Progress bar */}
-            <div className="space-y-1.5">
-              <div
-                role="progressbar"
-                aria-label={t("title")}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={progressValue}
-                className="h-2 overflow-hidden rounded-full bg-brand-emerald-100/60"
-              >
-                <div
-                  data-testid="fetch-progress-fill"
-                  className={cn(
-                    "h-full w-full origin-left bg-gradient-to-r from-brand-emerald-500 to-brand-emerald-600 shadow-[0_0_10px_rgba(16,185,129,0.4)] transition-transform duration-[260ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
-                    status === "FAILED" &&
-                      "from-destructive to-destructive bg-destructive",
-                  )}
-                  style={{ transform: `scaleX(${progressValue / 100})` }}
-                />
-              </div>
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground tabular-nums">
-                {/* No fake percentage — show the real state instead. The bar
-                    itself is ambient motion, the numbers below are truthful. */}
-                <span className="font-medium text-foreground/80">
-                  {status === "SUCCEEDED"
-                    ? t("barDone")
-                    : status === "FAILED"
-                      ? t("barStopped")
-                      : isRunning && importedCount > 0
-                        ? t("barImported", { n: importedCount })
-                        : t("barWorking")}
-                </span>
-                <span>{t("elapsed", { n: elapsedSeconds })}</span>
-              </div>
-            </div>
-
-            {/* Success footer — celebrate only when there's something to
-                celebrate. A run that imported 0 new roles gets a calm
-                "nothing new" state with a nudge to widen filters, not confetti
-                over an empty result. */}
-            {status === "SUCCEEDED" ? (
-              importedCount > 0 ? (
-                <>
-                  <div className="relative overflow-hidden rounded-lg bg-brand-emerald-50/60 py-3 text-center">
-                    {isPartial ? null : <ConfettiDots />}
-                    <div className="text-sm font-semibold text-brand-emerald-text">
-                      {t("importedNew", { n: importedCount })}
-                    </div>
-                    {isPartial ? (
-                      <div className="mt-1 text-xs font-medium text-muted-foreground">
-                        {t("partialNote", { sources: failedSources.join(", ") })}
-                      </div>
-                    ) : null}
-                  </div>
-                  <Button
-                    className="h-10 w-full rounded-full bg-brand-emerald-600 text-[13px] font-semibold text-white shadow-sm hover:bg-brand-emerald-700"
-                    onClick={() => setOpen(false)}
-                    asChild
-                  >
-                    <Link href="/jobs">{t("viewJobs")}</Link>
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <div className="rounded-lg border border-border/60 bg-muted/40 px-3 py-3 text-center">
-                    <div className="text-sm font-semibold text-foreground">
-                      {t("noNew")}
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {t("noNewHint")}
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    className="h-10 w-full rounded-full text-[13px] font-semibold"
-                    onClick={() => setOpen(false)}
-                  >
-                    {t("dismiss")}
-                  </Button>
-                </>
-              )
-            ) : null}
-
-            {error ? (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {/FETCH_TIMEOUT/.test(error)
-                  ? t("timeoutHint")
-                  : /(challenge|cloudflare|status=403|status=429)/i.test(error)
-                    ? "The job source is rate-limiting us right now — wait a moment and try again, or switch source."
-                    : /seek_disabled/i.test(error)
-                      ? "Seek fetching is currently turned off. Use LinkedIn, or try again later."
-                      : /(request failed|timeout|connectionpool|unreachable)/i.test(error)
-                        ? "Couldn't reach the job source. Please retry shortly."
-                        : error}
-              </div>
-            ) : null}
-
-            {isRunning ? (
-              <Button
-                variant="outline"
-                className="h-10 w-full rounded-full border-destructive/30 bg-destructive/5 text-[13px] font-semibold text-destructive shadow-sm transition-colors hover:border-destructive/50 hover:bg-destructive/15 hover:text-destructive"
-                onClick={cancelRun}
-              >
-                {t("cancel")}
-              </Button>
-            ) : null}
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-}
-
-function StepIndicator({ status }: { status: string | null }) {
-  const t = useTranslations("fetchProgress");
-  const steps = [
-    {
-      label: t("stepQueued"),
-      done: status !== "QUEUED",
-      active: status === "QUEUED",
-    },
-    {
-      label: t("stepFetching"),
-      done: status === "SUCCEEDED" || status === "FAILED",
-      active: status === "RUNNING",
-    },
-    {
-      label: t("stepDone"),
-      done: status === "SUCCEEDED",
-      active: false,
-    },
-  ];
-
-  return (
-    <div className="flex items-center gap-1">
-      {steps.map((step, i) => (
-        <React.Fragment key={step.label}>
-          <div className="flex min-w-0 flex-col items-center gap-1">
-            <div
-              className={cn(
-                "flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold transition-colors",
-                step.active && "motion-safe:animate-pulse",
-                step.done
-                  ? "bg-brand-emerald-500 text-white"
-                  : step.active
-                    ? "bg-[theme(colors.tier-good-fg)] text-white"
-                    : "bg-muted text-muted-foreground",
-              )}
-            >
-              {step.done ? <ChevronDown className="h-3 w-3 rotate-[-135deg]" strokeWidth={3} aria-hidden /> : i + 1}
-            </div>
-            <span className="text-[10px] font-medium text-muted-foreground">
-              {step.label}
-            </span>
-          </div>
-          {i < steps.length - 1 && (
-            <div className="relative mb-4 h-0.5 flex-1 overflow-hidden rounded-full bg-muted">
-              <motion.div
-                initial={false}
-                animate={{ scaleX: step.done ? 1 : 0 }}
-                transition={{ duration: 0.26, ease: MOTION_EASE }}
-                className="absolute inset-y-0 left-0 w-full origin-left bg-brand-emerald-500"
-              />
-            </div>
-          )}
-        </React.Fragment>
-      ))}
-    </div>
-  );
-}
-
-function SourceLanes({ lanes }: { lanes: FetchRunLane[] }) {
-  const t = useTranslations("fetchProgress");
-  return (
-    <ul className="space-y-1.5" aria-label="Sources">
-      {lanes.map((lane) => {
-        const active = lane.status === "RUNNING" || lane.status === "QUEUED";
-        const label =
-          lane.status === "RUNNING"
-            ? t("statusRunning")
-            : lane.status === "QUEUED"
-              ? t("statusQueued")
-              : lane.status === "SUCCEEDED"
-                ? t("statusCompleted")
-                : t("statusFailed");
-        return (
-          <li
-            key={lane.id}
-            className="flex items-center justify-between gap-2 rounded-lg border border-border/50 bg-muted/30 px-2.5 py-1.5"
-          >
-            <div className="flex min-w-0 items-center gap-2">
-              {active ? (
-                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-brand-emerald-600 motion-reduce:animate-none" aria-hidden />
-              ) : lane.status === "SUCCEEDED" ? (
-                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-brand-emerald-600" aria-hidden />
-              ) : (
-                <XCircle className="h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden />
-              )}
-              <span className="truncate text-xs font-semibold text-foreground">
-                {SOURCE_LABEL[lane.source] ?? lane.source}
-              </span>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              {lane.importedCount > 0 ? (
-                <span className="text-[11px] font-semibold tabular-nums text-brand-emerald-text">
-                  +{lane.importedCount}
-                </span>
-              ) : null}
-              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                {label}
-              </span>
-            </div>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-function ConfettiDots() {
-  const dots = [
-    { color: "bg-brand-emerald-400", x: -30, delay: "0ms" },
-    { color: "bg-[theme(colors.tier-good-fg)]", x: 20, delay: "100ms" },
-    { color: "bg-[theme(colors.tier-fair-fg)]", x: -15, delay: "200ms" },
-    { color: "bg-destructive", x: 35, delay: "50ms" },
-    { color: "bg-brand-emerald-300", x: 10, delay: "250ms" },
-    { color: "bg-brand-emerald-500", x: -40, delay: "150ms" },
-  ];
-
-  return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center">
-      {dots.map((dot, i) => (
-        <span
-          key={i}
-          className={`absolute h-1.5 w-1.5 rounded-full ${dot.color} animate-confetti-pop`}
-          style={
-            {
-              "--confetti-x": `${dot.x}px`,
-              animationDelay: dot.delay,
-            } as React.CSSProperties
-          }
-        />
-      ))}
-    </div>
+    <>
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+        data-testid="fetch-progress-announcement"
+      >
+        {model.liveAnnouncement}
+      </div>
+      <AnimatePresence mode="wait" initial={!reducedMotion}>
+        {!state.open ? (
+          <FetchProgressFab
+            {...model}
+            status={state.status}
+            importedCount={state.importedCount}
+            reducedMotion={reducedMotion}
+            setFabRef={setFabRef}
+            onOpen={() => state.setOpen(true)}
+          />
+        ) : (
+          <FetchProgressDialog
+            {...model}
+            status={state.status}
+            importedCount={state.importedCount}
+            error={state.error}
+            queryTitle={state.queryTitle}
+            queryTerms={state.queryTerms}
+            smartExpand={state.smartExpand}
+            elapsedSeconds={state.elapsedSeconds}
+            lanes={state.lanes}
+            cancelling={state.cancelling}
+            cancelError={state.cancelError}
+            reducedMotion={reducedMotion}
+            onMinimize={minimize}
+            onCancel={state.cancelRun}
+          />
+        )}
+      </AnimatePresence>
+    </>
   );
 }

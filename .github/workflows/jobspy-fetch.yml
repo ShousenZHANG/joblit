@@ -25,13 +25,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r tools/fetcher/requirements.txt
 
-      - name: Run jobspy and import
+      - name: Run JobSpy fetch
         env:
           RUN_ID: ${{ inputs.runId }}
           JOBLIT_WEB_URL: ${{ secrets.JOBLIT_WEB_URL }}
-          IMPORT_SECRET: ${{ secrets.IMPORT_SECRET }}
           FETCH_RUN_SECRET: ${{ secrets.FETCH_RUN_SECRET }}
           FETCH_PROXY_POOL: ${{ secrets.FETCH_PROXY_POOL }}
         run: |
           python tools/fetcher/run_jobspy.py
-

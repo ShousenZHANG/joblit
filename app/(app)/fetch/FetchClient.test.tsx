@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import { FetchClient } from "./FetchClient";
 import messages from "../../../messages/en.json";
+import zhMessages from "../../../messages/zh.json";
 
 Object.defineProperty(window.HTMLElement.prototype, "scrollIntoView", {
   value: vi.fn(),
@@ -13,6 +14,7 @@ Object.defineProperty(window.HTMLElement.prototype, "scrollIntoView", {
 const pushMock = vi.fn();
 const startRunMock = vi.fn();
 const markTaskCompleteMock = vi.fn();
+const marketMock = vi.hoisted(() => ({ value: "AU" as const }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -51,10 +53,17 @@ vi.mock("@/app/FetchStatusContext", () => ({
   }),
 }));
 
+vi.mock("@/hooks/useMarket", () => ({
+  useMarket: () => marketMock.value,
+}));
+
 describe("FetchClient", () => {
-  function renderFetch() {
+  function renderFetch(locale: "en" | "zh" = "en") {
     return render(
-      <NextIntlClientProvider locale="en" messages={messages}>
+      <NextIntlClientProvider
+        locale={locale}
+        messages={locale === "zh" ? zhMessages : messages}
+      >
         <FetchClient />
       </NextIntlClientProvider>,
     );
@@ -91,6 +100,7 @@ describe("FetchClient", () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
   });
 
   it("does not start a page-level polling interval after submitting fetch", async () => {
@@ -318,6 +328,70 @@ describe("FetchClient", () => {
       expect(titleInput.value).toBe("Platform Engineer");
     });
   });
+
+  it.each([
+    [
+      "en",
+      "3 imported · partially completed",
+      "Re-run",
+      "Re-run Reliability Engineer",
+    ],
+    [
+      "zh",
+      "已导入 3 个 · 部分完成",
+      "重新抓取",
+      "重新抓取 Reliability Engineer",
+    ],
+  ] as const)(
+    "renders localized PARTIAL fetch history as an amber terminal outcome in %s",
+    async (locale, statusText, rerunText, rerunName) => {
+      const fetchMock = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url === "/api/fetch-runs" && init?.method !== "POST") {
+          return new Response(
+            JSON.stringify({
+              runs: [
+                {
+                  id: "partial-run",
+                  status: "PARTIAL",
+                  market: "GLOBAL",
+                  importedCount: 3,
+                  title: "Reliability Engineer",
+                  queryCount: 1,
+                  location: null,
+                  hoursOld: 24,
+                  smartExpand: true,
+                  sources: ["remoteok"],
+                  excludeKeywords: null,
+                  createdAt: new Date().toISOString(),
+                },
+              ],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      renderFetch(locale);
+
+      const title = await screen.findByText("Reliability Engineer");
+      const row = title.closest("li");
+      expect(row).not.toBeNull();
+      expect(row).toHaveTextContent(statusText);
+      expect(row?.querySelector("span[aria-hidden]")).toHaveClass("bg-amber-500");
+      expect(screen.getByRole("button", { name: rerunName })).toHaveTextContent(
+        rerunText,
+      );
+      if (locale === "zh") {
+        expect(row).not.toHaveTextContent(/imported|partially completed|re-run/i);
+      }
+    },
+  );
 
   it("sends a custom title term and the default experience exclusion in the run body", async () => {
     const user = userEvent.setup();

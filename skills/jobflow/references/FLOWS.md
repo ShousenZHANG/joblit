@@ -1,21 +1,29 @@
 # Joblit flows (high signal)
 
-## 1) FetchRun → GitHub Actions → import → Jobs list
+## 1) FetchRun → discovery → receipt-backed commit → Jobs list
 
-1. UI creates FetchRun: `POST /api/fetch-runs` (market AU or CN).
+1. UI creates FetchRun: `POST /api/fetch-runs` (market AU, CN, or GLOBAL).
+   The row stores a strict `FetchRunConfig` v1.
 2. UI triggers: `POST /api/fetch-runs/:id/trigger`.
 3. Dispatch path depends on market:
    - AU: GitHub Actions `jobspy-fetch.yml` (Python `tools/fetcher/run_jobspy.py`)
    - CN: the authenticated trigger runs the in-process public-source adapters
      via `lib/server/cnFetch/`
    - GLOBAL: the authenticated trigger runs public job APIs and enabled ATS
-     boards via `lib/server/sources/`
+      boards via `lib/server/sources/`
 4. AU worker pulls config: `GET /api/fetch-runs/:id/config` (guarded by secret).
-5. AU worker imports jobs: `POST /api/admin/import` (guarded by `x-import-secret`).
-   CN and GLOBAL pipelines write through the same normalized import service.
-6. Jobs appear in `GET /api/jobs` and the `/jobs` UI.
+5. AU worker sends `start`, ordered `commit`, or `fail` commands to
+   `POST /api/fetch-runs/:id/commit`, guarded by `x-fetch-run-secret`. CN and
+   GLOBAL call `commitFetchRun` in-process.
+6. `commitFetchRun` acquires `FRUN → JOBJ`, then atomically writes Jobs, a
+   `FetchRunCommitReceipt`, counters, and any terminal status. Identical batch
+   retries replay the stored receipt.
+7. Jobs appear in `GET /api/jobs` and the `/jobs` UI.
 
 All fetches are user initiated. There is no scheduled product fetch path.
+Cancellation competes with commits for `FRUN`: it stops later batches but does
+not roll back receipt-backed Jobs. A cancellation or failure after the first
+commit is terminal `PARTIAL`. See ADR-0008.
 
 ## 2) External model CV/CL generation (skill pack + strict JSON import)
 

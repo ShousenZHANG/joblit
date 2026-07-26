@@ -414,15 +414,23 @@ export function JobsClient({
     if (!current.runId || !current.status) return;
     if (!previous || previous.runId !== current.runId) return;
 
-    const delta = current.importedCount - previous.importedCount;
-    if (delta <= 0) return;
-
-    const isTerminal = current.status === "SUCCEEDED" || current.status === "FAILED";
-    const wasTerminal = previous.status === "SUCCEEDED" || previous.status === "FAILED";
+    const isTerminal =
+      current.status === "SUCCEEDED" ||
+      current.status === "PARTIAL" ||
+      current.status === "FAILED";
+    const wasTerminal =
+      previous.status === "SUCCEEDED" ||
+      previous.status === "PARTIAL" ||
+      previous.status === "FAILED";
     const justBecameTerminal = isTerminal && !wasTerminal;
     const isFirstPage = loadedCursors.length === 1 && loadedCursors[0] === null;
     const inProgress = current.status === "RUNNING" || current.status === "QUEUED";
+    const delta = current.importedCount - previous.importedCount;
 
+    // A terminal transition invalidates every loaded page even when the final
+    // poll repeats the last RUNNING count. Otherwise page 2 can stay stale
+    // forever after the imported count advanced on an earlier poll.
+    if (!justBecameTerminal && delta <= 0) return;
     if (!justBecameTerminal && !(inProgress && isFirstPage)) return;
 
     if (!justBecameTerminal) {
@@ -434,13 +442,18 @@ export function JobsClient({
     resetPagination();
     invalidateActiveJobsQueries(queryClient);
 
-    if (justBecameTerminal) {
+    if (justBecameTerminal && delta > 0) {
+      const isPartial = current.status === "PARTIAL";
       toast({
-        title: t("importedToastTitle"),
-        description: t("importedToastDesc", { delta }),
+        title: t(isPartial ? "partialImportToastTitle" : "importedToastTitle"),
+        description: t(
+          isPartial ? "partialImportToastDesc" : "importedToastDesc",
+          { delta },
+        ),
         duration: 2200,
-        className:
-          "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-900 animate-in fade-in zoom-in-95",
+        className: isPartial
+          ? "border-[var(--tier-fair-ring)] bg-[theme(colors.tier-fair-bg)] text-[theme(colors.tier-fair-fg)] animate-in fade-in zoom-in-95"
+          : "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-900 animate-in fade-in zoom-in-95",
       });
     }
   }, [

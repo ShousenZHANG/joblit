@@ -22,7 +22,6 @@ env:
   DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
   AUTH_SECRET: ci-dummy-auth-secret-not-real
   APP_ENC_KEY: dGVzdHRlc3R0ZXN0dGVzdHRlc3R0ZXN0dGVzdDEyMw==
-  IMPORT_SECRET: ci-dummy
   FETCH_RUN_SECRET: ci-dummy
   LATEX_RENDER_URL: https://example.com/render
   LATEX_RENDER_TOKEN: ci-dummy

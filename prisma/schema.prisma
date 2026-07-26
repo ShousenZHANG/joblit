@@ -350,13 +350,26 @@ model FetchRun {
   userId String @db.Uuid
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Snapshot for convenience (used by GitHub Actions to import to the correct user)
-  userEmail String
-  market    String @default("AU") // "AU" | "CN"
+  // Nullable compatibility snapshot for pre-v1 rows. Execution and commits
+  // never read or expose it; ownership is derived exclusively from userId.
+  userEmail String?
+  market    String  @default("AU") // "AU" | "CN" | "GLOBAL"
 
-  status        FetchRunStatus @default(QUEUED)
-  error         String?
-  importedCount Int            @default(0)
+  status          FetchRunStatus @default(QUEUED)
+  error           String?
+  importedCount   Int            @default(0)
+  discoveredCount Int            @default(0)
+  invalidCount    Int            @default(0)
+
+  // Execution/commit protocol projection. Batch receipts are the durable
+  // idempotency source of truth; these fields make the current projection
+  // cheap to read and enforce one ordered batch stream per run.
+  commitStartedAt         DateTime?
+  terminalAt              DateTime?
+  expectedBatchCount      Int?
+  nextBatchIndex          Int       @default(0)
+  executionAttemptId      String?   @db.Uuid
+  executionLeaseExpiresAt DateTime?
 
   // Fetch parameters (JSON so we can evolve without migrations)
   queries            Json
@@ -369,8 +382,31 @@ model FetchRun {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  commitReceipts FetchRunCommitReceipt[]
+
   @@index([userId, createdAt])
   @@index([userId, status])
+}
+
+model FetchRunCommitReceipt {
+  id         String   @id @default(uuid()) @db.Uuid
+  fetchRunId String   @db.Uuid
+  fetchRun   FetchRun @relation(fields: [fetchRunId], references: [id], onDelete: Cascade)
+
+  batchKey           String
+  executionAttemptId String   @db.Uuid
+  batchIndex         Int
+  batchCount         Int
+  requestHash        String
+  itemCount          Int
+  importedCount      Int
+  invalidCount       Int
+  terminal           Boolean  @default(false)
+  createdAt          DateTime @default(now())
+
+  @@unique([fetchRunId, batchKey])
+  @@unique([fetchRunId, batchIndex])
+  @@index([fetchRunId, createdAt])
 }
 
 model ResumeProfile {
