@@ -390,6 +390,7 @@
     },
     "startFetch": "Start fetch",
     "fetching": "Fetching…",
+    "retry": "Retry",
     "capacityLimited": "Free fetch capacity is busy right now. Try again shortly.",
     "suggestions": "Suggestions",
     "popular": "Popular",

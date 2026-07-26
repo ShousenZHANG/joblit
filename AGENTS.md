@@ -61,4 +61,9 @@ Given a filtered set of `NEW` jobs, run a deterministic loop:
 
 ## Deletion Contract
 
-When deleting a job (`DELETE /api/jobs/:id`), related application records and blob artifacts should be cleaned up best-effort.
+When deleting a job (`DELETE /api/jobs/:id`), remove the owned Application in
+the same transaction that durably queues all current artifact pointers as
+`ApplicationArtifact.DELETE_PENDING`. The protected reconciler owns the later
+Blob deletion and claim-fenced settlement; do not perform network deletion
+inside the Job mutation transaction or report a queued object as synchronously
+deleted.

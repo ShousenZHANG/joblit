@@ -142,13 +142,16 @@ test runner).
 | Fetch worker config + commits | `FETCH_RUN_SECRET` | `/api/fetch-runs/[id]/{config,commit}` |
 | Encryption | `APP_ENC_KEY` (base64) | — |
 | Gemini | `GEMINI_API_KEY`, `GEMINI_MODEL` | optional — absent, Tailoring falls back deterministically |
-| Vercel Blob | `BLOB_READ_WRITE_TOKEN` | optional — absent, artifact upload degrades |
+| Vercel Blob | `BLOB_READ_WRITE_TOKEN` | required for FINAL artifact persistence outside tests and for reconciliation; DRAFT does not upload |
 | GitHub Actions | `GITHUB_OWNER/REPO/TOKEN/WORKFLOW_FILE` | optional — AU fetch dispatch |
 | YouTube | `YOUTUBE_API_KEY` | optional — Discover videos |
-| Cron | `CRON_SECRET` | optional — daily Discover refresh |
+| Cron | `CRON_SECRET` | Vercel's bearer credential for scheduled daily refresh and artifact reconciliation |
+| Artifact reconcile | `ARTIFACT_RECONCILE_SECRET` | optional additional bearer for manual/operator calls; it does not replace `CRON_SECRET` for Vercel Cron |
+| Artifact reconcile kill switch | `ARTIFACT_RECONCILE_ENABLED` | default off; only exact `true` / `1` enables inventory, claim, and delete |
 
-`lib/server/env.ts:55` `validateServerEnv` is the single place that states which
-are required.
+`lib/server/env.ts:55` `validateServerEnv` owns baseline boot requirements.
+`BLOB_READ_WRITE_TOKEN` is enforced at the FINAL/reconciler boundary
+instead of global boot because DRAFT edits do not touch Blob storage.
 
 `IMPORT_SECRET` and the split `/api/admin/import` +
 `/api/fetch-runs/[id]/update` callback flow were retired by ADR-0008. The AU

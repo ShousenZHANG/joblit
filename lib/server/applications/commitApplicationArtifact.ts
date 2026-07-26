@@ -1,4 +1,3 @@
-import { del, put } from "@vercel/blob";
 import { prisma } from "@/lib/server/prisma";
 import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
 import { persistReviewLedger } from "@/lib/server/applications/persistReviewLedger";
@@ -7,9 +6,14 @@ import {
   type ApplicationAiContentReviewContext,
 } from "@/lib/server/applications/applicationAiContentAggregate";
 import {
-  APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
-  buildApplicationArtifactBlobPath,
-} from "@/lib/server/files/applicationArtifactBlob";
+  markArtifactsReferencedAndRetireSuperseded,
+  recordUploadedArtifact,
+  retireStagedArtifacts,
+  stageApplicationArtifact,
+  type ApplicationArtifactTarget,
+} from "@/lib/server/artifacts/applicationArtifactLifecycle";
+import { isArtifactBlobPortUnavailable } from "@/lib/server/artifacts/artifactBlobPort";
+import { vercelArtifactBlobPort } from "@/lib/server/artifacts/vercelBlobAdapter";
 import {
   aiContentSchema,
   hashAiContent,
@@ -30,7 +34,8 @@ import type { TailoringRunTransaction } from "@/lib/server/tailoringRuns/tailori
  * This owns the sequence that used to be written out three times, with three
  * different answers to "what happens when the upload half-succeeds":
  *
- *   upload → transaction(lock → read → merge → write → ledger) → GC stale blob
+ *   stage -> upload -> transaction(lock -> read -> merge -> write -> ledger)
+ *   -> enqueue superseded artifact for reconciliation
  *
  * The only fact a caller carries forward is the returned `aiContentHash`: it is
  * what the next write must send as `expectedHash`.
@@ -41,14 +46,32 @@ import type { TailoringRunTransaction } from "@/lib/server/tailoringRuns/tailori
  *   CV and cover commits for one Job merge against each other rather than both
  *   overwriting from one stale snapshot.
  * - An upload failure aborts the commit. It never writes a null URL over a
- *   good one — `manual-generate` used to do exactly that, clearing the user's
+ *   good one -- `manual-generate` used to do exactly that, clearing the user's
  *   previous PDF whenever Blob was briefly unavailable.
- * - The newly uploaded blob is deleted if the commit does not land, for any
- *   reason including a lost compare-and-swap.
- * - The superseded blob is deleted only after the commit lands.
+ * - If the commit does not land, the staged object is durably queued for
+ *   retirement; a process crash cannot erase that cleanup intent.
+ * - A superseded object becomes DELETE_PENDING in the same transaction that
+ *   moves the Application pointer. Blob deletion happens later through a
+ *   leased, claim-fenced reconciler.
  */
 
 export type CommitTarget = "resume" | "cover";
+
+export const APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE = {
+  code: "ARTIFACT_STORAGE_UNAVAILABLE",
+  status: 503,
+  message:
+    "PDF storage is not configured. Please try again after deployment configuration is restored.",
+} as const;
+
+class DuplicateApplicationArtifactTargetError extends Error {
+  readonly code = "DUPLICATE_APPLICATION_ARTIFACT_TARGET";
+
+  constructor(readonly target: CommitTarget) {
+    super(`Duplicate application artifact target: ${target}`);
+    this.name = "DuplicateApplicationArtifactTargetError";
+  }
+}
 
 export type CommitArtifact = {
   target: CommitTarget;
@@ -127,73 +150,165 @@ export type CommitResult =
   | { kind: "job_missing" }
   | { kind: "invalid_ai_content" }
   | { kind: "review_blocked"; review: AiApplicationReview }
+  | { kind: "blob_not_configured" }
   | { kind: "upload_failed"; cause: unknown };
 
-function blobToken(): string | undefined {
-  return process.env.BLOB_READ_WRITE_TOKEN;
+type UploadedArtifact = {
+  artifactId: string;
+  target: CommitTarget;
+  lifecycleTarget: ApplicationArtifactTarget;
+  pathname: string;
+  url: string;
+};
+
+type UploadedArtifactBundle = {
+  urls: Partial<Record<CommitTarget, string>>;
+  artifacts: UploadedArtifact[];
+  stagedArtifactIds: string[];
+};
+
+function lifecycleTarget(target: CommitTarget): ApplicationArtifactTarget {
+  return target === "resume" ? "RESUME_PDF" : "COVER_PDF";
 }
 
-async function deleteBlobs(urls: Array<string | null | undefined>): Promise<void> {
-  const token = blobToken();
-  if (!token) return;
-  const unique = Array.from(
-    new Set(urls.filter((url): url is string => typeof url === "string" && url.trim() !== "")),
-  );
-  if (unique.length === 0) return;
-  await Promise.allSettled(unique.map((url) => del(url, { token })));
+function blobConfigured(): boolean {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim());
+}
+
+function findDuplicateArtifactTarget(
+  artifacts: readonly CommitArtifact[],
+): CommitTarget | null {
+  const seen = new Set<CommitTarget>();
+  for (const artifact of artifacts) {
+    if (seen.has(artifact.target)) return artifact.target;
+    seen.add(artifact.target);
+  }
+  return null;
+}
+
+async function scheduleStagedRetirement(input: {
+  userId: string;
+  jobId: string;
+  artifactIds: readonly string[];
+}): Promise<void> {
+  if (input.artifactIds.length === 0) return;
+  // Failure here does not lose the cleanup intent. Every row was durably
+  // STAGED before the Blob call, and the expiry reconciler can recover it by
+  // pathname even when the upload response itself was lost.
+  await retireStagedArtifacts(input).catch(() => undefined);
+}
+
+async function uploadStagedArtifact(
+  userId: string,
+  artifact: CommitArtifact,
+  staged: Awaited<ReturnType<typeof stageApplicationArtifact>>,
+): Promise<UploadedArtifact> {
+  // An exact retry can reuse the already referenced immutable object without
+  // another network call.
+  let url =
+    staged.artifact.state === "REFERENCED" ? staged.artifact.url : null;
+  if (!url) {
+    const blob = await vercelArtifactBlobPort.put({
+      pathname: staged.pathname,
+      body: artifact.pdf,
+      contentType: "application/pdf",
+    });
+    const recorded = await recordUploadedArtifact({
+      artifactId: staged.artifact.id,
+      userId,
+      pathname: staged.pathname,
+      url: blob.url,
+    });
+    url = recorded.artifact.url;
+  }
+  if (!url) throw new Error("APPLICATION_ARTIFACT_UPLOAD_URL_MISSING");
+  return {
+    artifactId: staged.artifact.id,
+    target: artifact.target,
+    lifecycleTarget: lifecycleTarget(artifact.target),
+    pathname: staged.pathname,
+    url,
+  };
 }
 
 async function uploadArtifacts(
   userId: string,
   jobId: string,
   artifacts: CommitArtifact[],
-): Promise<Partial<Record<CommitTarget, string>>> {
-  const token = blobToken();
-  // No Blob configured is a deployment state, not a per-request failure: the
-  // commit proceeds and the row simply carries no URL for this target.
-  if (!token) return {};
-
+): Promise<UploadedArtifactBundle> {
   const urls: Partial<Record<CommitTarget, string>> = {};
+  const uploaded: UploadedArtifact[] = [];
+  const stagedArtifactIds: string[] = [];
   try {
     for (const artifact of artifacts) {
-      const blob = await put(
-        buildApplicationArtifactBlobPath({
-          userId,
-          jobId,
-          target: artifact.target,
-          version: artifact.version,
-        }),
-        artifact.pdf,
-        {
-          access: "public",
-          contentType: "application/pdf",
-          token,
-          ...APPLICATION_ARTIFACT_OVERWRITE_OPTIONS,
-        },
+      const staged = await stageApplicationArtifact({
+        userId,
+        jobId,
+        target: lifecycleTarget(artifact.target),
+        contentVersion: artifact.version,
+        content: artifact.pdf,
+      });
+      stagedArtifactIds.push(staged.artifact.id);
+      const uploadedArtifact = await uploadStagedArtifact(
+        userId,
+        artifact,
+        staged,
       );
-      urls[artifact.target] = blob.url;
+      urls[artifact.target] = uploadedArtifact.url;
+      uploaded.push(uploadedArtifact);
     }
   } catch (cause) {
-    await deleteBlobs(Object.values(urls));
+    await scheduleStagedRetirement({
+      userId,
+      jobId,
+      artifactIds: stagedArtifactIds,
+    });
     throw cause;
   }
-  return urls;
+  return { urls, artifacts: uploaded, stagedArtifactIds };
 }
 
 export async function commitApplicationArtifact(input: CommitInput): Promise<CommitResult> {
   // DRAFT commits are content-only. Ignore an untyped JavaScript caller that
   // supplies artifacts so it cannot upload an unreachable Blob.
   const artifacts = input.status === "FINAL" ? input.artifacts : [];
-  let uploaded: Partial<Record<CommitTarget, string>>;
+  const duplicateTarget = findDuplicateArtifactTarget(artifacts);
+  if (duplicateTarget) {
+    return {
+      kind: "upload_failed",
+      cause: new DuplicateApplicationArtifactTargetError(duplicateTarget),
+    };
+  }
+  if (
+    artifacts.length > 0 &&
+    !blobConfigured() &&
+    process.env.NODE_ENV !== "test"
+  ) {
+    return { kind: "blob_not_configured" };
+  }
+
+  let uploadBundle: UploadedArtifactBundle;
   try {
-    uploaded = await uploadArtifacts(input.userId, input.job.id, artifacts);
+    // Unit tests can exercise the content-only FINAL path without provisioning
+    // Blob. Every interactive runtime fails closed above so it cannot clear a
+    // previously valid URL with a null pseudo-success.
+    uploadBundle =
+      artifacts.length === 0 || !blobConfigured()
+        ? { urls: {}, artifacts: [], stagedArtifactIds: [] }
+        : await uploadArtifacts(input.userId, input.job.id, artifacts);
   } catch (cause) {
+    if (
+      process.env.NODE_ENV === "production" &&
+      isArtifactBlobPortUnavailable(cause)
+    ) {
+      return { kind: "blob_not_configured" };
+    }
     // Deliberately not a partial commit. Writing a null URL here is what let
     // a transient Blob outage clear a user's previous PDF.
     return { kind: "upload_failed", cause };
   }
 
-  const uploadedUrls = Object.values(uploaded);
+  const uploaded = uploadBundle.urls;
   let committed = false;
 
   try {
@@ -353,6 +468,46 @@ export async function commitApplicationArtifact(input: CommitInput): Promise<Com
           select: { id: true },
         });
 
+        const superseded = artifacts
+          .map((artifact) => {
+            const previous =
+              artifact.target === "resume"
+                ? existing?.resumePdfUrl
+                : existing?.coverPdfUrl;
+            const next = uploaded[artifact.target];
+            return previous && next && previous !== next
+              ? {
+                  target: lifecycleTarget(artifact.target),
+                  url: previous,
+                }
+              : null;
+          })
+          .filter(
+            (
+              artifact,
+            ): artifact is {
+              target: ApplicationArtifactTarget;
+              url: string;
+            } => artifact !== null,
+          );
+
+        await markArtifactsReferencedAndRetireSuperseded(
+          tx as unknown as Parameters<
+            typeof markArtifactsReferencedAndRetireSuperseded
+          >[0],
+          {
+            userId: input.userId,
+            jobId: input.job.id,
+            applicationId: application.id,
+            referenced: uploadBundle.artifacts.map((artifact) => ({
+              target: artifact.lifecycleTarget,
+              pathname: artifact.pathname,
+              url: artifact.url,
+            })),
+            superseded,
+          },
+        );
+
         await persistReviewLedger(tx, {
           userId: input.userId,
           applicationId: application.id,
@@ -371,21 +526,11 @@ export async function commitApplicationArtifact(input: CommitInput): Promise<Com
           );
         }
 
-        const superseded = artifacts
-          .map((artifact) => {
-            const previous =
-              artifact.target === "resume" ? existing?.resumePdfUrl : existing?.coverPdfUrl;
-            const next = uploaded[artifact.target];
-            return previous && next && previous !== next ? previous : null;
-          })
-          .filter((url): url is string => url !== null);
-
         return {
           kind: "committed" as const,
           applicationId: application.id,
           aiContent,
           aiContentHash,
-          superseded,
           ...(preparedTailoring
             ? { tailoringDisposition: "APPLIED" as const }
             : {}),
@@ -395,12 +540,20 @@ export async function commitApplicationArtifact(input: CommitInput): Promise<Com
     );
 
     if (result.kind !== "committed") {
-      await deleteBlobs(uploadedUrls);
+      await scheduleStagedRetirement({
+        userId: input.userId,
+        jobId: input.job.id,
+        artifactIds: uploadBundle.stagedArtifactIds,
+      });
       return result;
     }
 
     if (result.tailoringDisposition === "REPLAYED") {
-      await deleteBlobs(uploadedUrls);
+      await scheduleStagedRetirement({
+        userId: input.userId,
+        jobId: input.job.id,
+        artifactIds: uploadBundle.stagedArtifactIds,
+      });
       committed = true;
       return {
         kind: "committed",
@@ -413,7 +566,6 @@ export async function commitApplicationArtifact(input: CommitInput): Promise<Com
     }
 
     committed = true;
-    await deleteBlobs(result.superseded);
     return {
       kind: "committed",
       applicationId: result.applicationId,
@@ -425,7 +577,13 @@ export async function commitApplicationArtifact(input: CommitInput): Promise<Com
         : {}),
     };
   } catch (error) {
-    if (!committed) await deleteBlobs(uploadedUrls);
+    if (!committed) {
+      await scheduleStagedRetirement({
+        userId: input.userId,
+        jobId: input.job.id,
+        artifactIds: uploadBundle.stagedArtifactIds,
+      });
+    }
     throw error;
   }
 }

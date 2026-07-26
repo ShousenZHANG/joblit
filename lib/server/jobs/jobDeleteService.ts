@@ -1,29 +1,122 @@
-import { del } from "@vercel/blob";
 import { prisma } from "@/lib/server/prisma";
 import { canonicalizeJobUrl } from "@/lib/shared/canonicalizeJobUrl";
 import { acquireJobMutationLock } from "@/lib/server/jobs/jobMutationLock";
 import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
+import {
+  canonicalizeApplicationArtifactStorageIdentity,
+  enqueueApplicationArtifactRetirements,
+} from "@/lib/server/artifacts/applicationArtifactLifecycle";
+import type { Prisma } from "@/lib/generated/prisma";
 
-type JobDeleteResult =
-  | { alreadyDeleted: true }
-  | {
-      alreadyDeleted: false;
-      blobCleanup: { attempted: number; deleted: number; failed: number };
-    };
-
-type BatchDeleteResult = {
-  deleted: number;
-  notFound: number;
-  blobCleanup: { attempted: number; deleted: number; failed: number };
-};
-
-type BlobCleanupResult = {
+type ArtifactRetirementResult = { queued: number };
+type LegacyBlobCleanupResult = {
   attempted: number;
   deleted: number;
   failed: number;
 };
 
+type JobDeleteResult =
+  | { alreadyDeleted: true }
+  | {
+      alreadyDeleted: false;
+      artifactRetirement: ArtifactRetirementResult;
+      /** @deprecated Use artifactRetirement.queued. */
+      blobCleanup: LegacyBlobCleanupResult;
+    };
+
+type BatchDeleteResult = {
+  deleted: number;
+  notFound: number;
+  artifactRetirement: ArtifactRetirementResult;
+  /** @deprecated Use artifactRetirement.queued. */
+  blobCleanup: LegacyBlobCleanupResult;
+};
+
 const JOB_MUTATION_TRANSACTION_TIMEOUT_MS = 30_000;
+
+type ApplicationArtifactProjection = {
+  id: string;
+  jobId: string | null;
+  resumeTexUrl: string | null;
+  resumePdfUrl: string | null;
+  coverTexUrl: string | null;
+  coverPdfUrl: string | null;
+};
+
+type RetirementArtifact = {
+  target: "RESUME_PDF" | "COVER_PDF" | "RESUME_TEX" | "COVER_TEX";
+  url: string;
+};
+
+function retirementIdentity(url: string): string {
+  return (
+    canonicalizeApplicationArtifactStorageIdentity(url)?.key ??
+    `legacy:${url}`
+  );
+}
+
+function retirementArtifacts(
+  application: ApplicationArtifactProjection,
+): RetirementArtifact[] {
+  const seen = new Set<string>();
+  return [
+    { target: "RESUME_PDF" as const, url: application.resumePdfUrl },
+    { target: "COVER_PDF" as const, url: application.coverPdfUrl },
+    { target: "RESUME_TEX" as const, url: application.resumeTexUrl },
+    { target: "COVER_TEX" as const, url: application.coverTexUrl },
+  ].flatMap((artifact) => {
+    const url =
+      typeof artifact.url === "string" ? artifact.url.trim() : "";
+    if (!url) return [];
+    const identity = retirementIdentity(url);
+    if (seen.has(identity)) return [];
+    seen.add(identity);
+    return [{ target: artifact.target, url }];
+  });
+}
+
+function artifactRetirementResult(queued: number): {
+  artifactRetirement: ArtifactRetirementResult;
+  blobCleanup: LegacyBlobCleanupResult;
+} {
+  return {
+    artifactRetirement: { queued },
+    // Compatibility only: no Blob call occurs in this request.
+    blobCleanup: { attempted: queued, deleted: 0, failed: 0 },
+  };
+}
+
+async function enqueueApplicationRetirements(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  applications: readonly ApplicationArtifactProjection[],
+): Promise<number> {
+  let queued = 0;
+  const seenIdentities = new Set<string>();
+  const ordered = [...applications].sort((left, right) =>
+    `${left.jobId ?? ""}:${left.id}`.localeCompare(
+      `${right.jobId ?? ""}:${right.id}`,
+    ),
+  );
+  for (const application of ordered) {
+    if (!application.jobId) continue;
+    const artifacts = retirementArtifacts(application).filter((artifact) => {
+      const identity = retirementIdentity(artifact.url);
+      if (seenIdentities.has(identity)) return false;
+      seenIdentities.add(identity);
+      return true;
+    });
+    if (artifacts.length === 0) continue;
+    const retirement = await enqueueApplicationArtifactRetirements(tx, {
+      userId,
+      jobId: application.jobId,
+      applicationId: application.id,
+      artifacts,
+    });
+    queued += retirement.queued;
+  }
+  return queued;
+}
 
 /**
  * Remove the evidence snapshots the deleted Jobs leave behind.
@@ -34,70 +127,54 @@ const JOB_MUTATION_TRANSACTION_TIMEOUT_MS = 30_000;
  * — unreachable through each index the model declares, and removable only by
  * deleting the account.
  *
- * Two constraints shape this. It must run *after* the Application delete, so
- * the cascaded `ClaimEvidence` edges are already gone, and *before* the Job
- * delete, while `jobId` still identifies the rows. And it must skip snapshots
- * that another Application still cites: ids are content-addressed on
- * `(userId, kind, contentHash)` rather than on the Job, so one row is reused
- * across Jobs whose evidence text matches. Deleting those would hit the
- * `Restrict` on `ClaimEvidence.evidenceSnapshot` and fail the whole delete.
+ * Two constraints shape this. Candidate ids must be captured *before* the
+ * Application delete because a snapshot shared from an older Job may already
+ * have `jobId = null`; deletion must run *after* that Application delete so its
+ * ClaimEvidence edges have cascaded. It must still skip any snapshot another
+ * Application cites or a retained STAR story uses as provenance: ids are
+ * content-addressed on `(userId, kind, contentHash)` rather than on the Job.
  */
-async function deleteUnreferencedEvidence(
-  tx: {
-    evidenceSnapshot: {
-      deleteMany: (args: {
-        where: { userId: string; jobId: { in: string[] }; claims: { none: object } };
-      }) => Promise<{ count: number }>;
-    };
-  },
+type EvidenceCleanupTransaction = Pick<
+  Prisma.TransactionClient,
+  "claimEvidence" | "evidenceSnapshot"
+>;
+
+async function collectEvidenceSnapshotIds(
+  tx: EvidenceCleanupTransaction,
   userId: string,
-  jobIds: string[],
-): Promise<void> {
-  if (jobIds.length === 0) return;
-  await tx.evidenceSnapshot.deleteMany({
-    where: { userId, jobId: { in: jobIds }, claims: { none: {} } },
+  applicationIds: string[],
+): Promise<string[]> {
+  if (applicationIds.length === 0) return [];
+  const rows = await tx.claimEvidence.findMany({
+    where: {
+      userId,
+      applicationId: { in: applicationIds },
+    },
+    select: { evidenceSnapshotId: true },
   });
+  return [...new Set(rows.map((row) => row.evidenceSnapshotId))];
 }
 
-async function cleanupArtifacts(artifactUrls: string[]): Promise<BlobCleanupResult> {
-  const urls = Array.from(
-    new Set(artifactUrls.filter((value) => value.trim().length > 0)),
-  );
-  const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
-  if (urls.length === 0) {
-    return { attempted: 0, deleted: 0, failed: 0 };
+async function deleteUnreferencedEvidence(
+  tx: EvidenceCleanupTransaction,
+  userId: string,
+  jobIds: string[],
+  evidenceSnapshotIds: string[],
+): Promise<void> {
+  const identities: Prisma.EvidenceSnapshotWhereInput[] = [];
+  if (jobIds.length > 0) identities.push({ jobId: { in: jobIds } });
+  if (evidenceSnapshotIds.length > 0) {
+    identities.push({ id: { in: evidenceSnapshotIds } });
   }
-  if (!blobToken) {
-    // Surface deployment misconfiguration instead of reporting a clean
-    // no-op while user artifacts remain in storage.
-    return { attempted: urls.length, deleted: 0, failed: urls.length };
-  }
-
-  // @vercel/blob accepts an array. One request is materially faster than up to
-  // four requests per application (and hundreds during a batch delete).
-  try {
-    await del(urls, { token: blobToken });
-    return { attempted: urls.length, deleted: urls.length, failed: 0 };
-  } catch {
-    // A bulk request can fail because of one malformed/missing object. Retry
-    // individually in bounded waves so healthy artifacts are still removed
-    // without creating an unbounded burst against Blob.
-    let deleted = 0;
-    const fallbackChunkSize = 20;
-    for (let index = 0; index < urls.length; index += fallbackChunkSize) {
-      const results = await Promise.allSettled(
-        urls
-          .slice(index, index + fallbackChunkSize)
-          .map((url) => del(url, { token: blobToken })),
-      );
-      deleted += results.filter((result) => result.status === "fulfilled").length;
-    }
-    return {
-      attempted: urls.length,
-      deleted,
-      failed: urls.length - deleted,
-    };
-  }
+  if (identities.length === 0) return;
+  await tx.evidenceSnapshot.deleteMany({
+    where: {
+      userId,
+      OR: identities,
+      claims: { none: {} },
+      starStories: { none: {} },
+    },
+  });
 }
 
 export async function deleteJob(
@@ -122,6 +199,8 @@ export async function deleteJob(
       const application = await tx.application.findUnique({
         where: { userId_jobId: { userId, jobId: job.id } },
         select: {
+          id: true,
+          jobId: true,
           resumeTexUrl: true,
           resumePdfUrl: true,
           coverTexUrl: true,
@@ -134,8 +213,23 @@ export async function deleteJob(
         update: {},
         create: { userId, jobUrl: canonicalJobUrl },
       });
+      const queued = await enqueueApplicationRetirements(
+        tx,
+        userId,
+        application ? [application] : [],
+      );
+      const evidenceSnapshotIds = await collectEvidenceSnapshotIds(
+        tx,
+        userId,
+        application ? [application.id] : [],
+      );
       await tx.application.deleteMany({ where: { userId, jobId: job.id } });
-      await deleteUnreferencedEvidence(tx, userId, [job.id]);
+      await deleteUnreferencedEvidence(
+        tx,
+        userId,
+        [job.id],
+        evidenceSnapshotIds,
+      );
       // deleteMany keeps ownership in the write predicate and remains idempotent
       // if another code path removed the row.
       const deletedJob = await tx.job.deleteMany({
@@ -143,15 +237,7 @@ export async function deleteJob(
       });
       return {
         deleted: deletedJob.count > 0,
-        artifactUrls: [
-          application?.resumeTexUrl,
-          application?.resumePdfUrl,
-          application?.coverTexUrl,
-          application?.coverPdfUrl,
-        ].filter(
-          (value): value is string =>
-            typeof value === "string" && value.trim().length > 0,
-        ),
+        queued,
       };
     },
     { timeout: JOB_MUTATION_TRANSACTION_TIMEOUT_MS },
@@ -163,7 +249,7 @@ export async function deleteJob(
 
   return {
     alreadyDeleted: false,
-    blobCleanup: await cleanupArtifacts(transactionResult.artifactUrls),
+    ...artifactRetirementResult(transactionResult.queued),
   };
 }
 
@@ -176,7 +262,7 @@ export async function batchDeleteJobs(
     return {
       deleted: 0,
       notFound: 0,
-      blobCleanup: { attempted: 0, deleted: 0, failed: 0 },
+      ...artifactRetirementResult(0),
     };
   }
 
@@ -189,7 +275,7 @@ export async function batchDeleteJobs(
         select: { id: true, jobUrl: true },
       });
       if (jobs.length === 0) {
-        return { deleted: 0, artifactUrls: [] as string[] };
+        return { deleted: 0, queued: 0 };
       }
 
       const foundIds = jobs.map((job) => job.id).sort();
@@ -201,6 +287,8 @@ export async function batchDeleteJobs(
       const applications = await tx.application.findMany({
         where: { userId, jobId: { in: foundIds } },
         select: {
+          id: true,
+          jobId: true,
           resumeTexUrl: true,
           resumePdfUrl: true,
           coverTexUrl: true,
@@ -216,26 +304,31 @@ export async function batchDeleteJobs(
         data: canonicalUrls.map((jobUrl) => ({ userId, jobUrl })),
         skipDuplicates: true,
       });
+      const queued = await enqueueApplicationRetirements(
+        tx,
+        userId,
+        applications,
+      );
+      const evidenceSnapshotIds = await collectEvidenceSnapshotIds(
+        tx,
+        userId,
+        applications.map((application) => application.id),
+      );
       await tx.application.deleteMany({
         where: { userId, jobId: { in: foundIds } },
       });
-      await deleteUnreferencedEvidence(tx, userId, foundIds);
+      await deleteUnreferencedEvidence(
+        tx,
+        userId,
+        foundIds,
+        evidenceSnapshotIds,
+      );
       const deletedJobs = await tx.job.deleteMany({
         where: { id: { in: foundIds }, userId },
       });
       return {
         deleted: deletedJobs.count,
-        artifactUrls: applications.flatMap((application) =>
-          [
-            application.resumeTexUrl,
-            application.resumePdfUrl,
-            application.coverTexUrl,
-            application.coverPdfUrl,
-          ].filter(
-            (value): value is string =>
-              typeof value === "string" && value.trim().length > 0,
-          ),
-        ),
+        queued,
       };
     },
     { timeout: JOB_MUTATION_TRANSACTION_TIMEOUT_MS },
@@ -244,6 +337,6 @@ export async function batchDeleteJobs(
   return {
     deleted: transactionResult.deleted,
     notFound: uniqueJobIds.length - transactionResult.deleted,
-    blobCleanup: await cleanupArtifacts(transactionResult.artifactUrls),
+    ...artifactRetirementResult(transactionResult.queued),
   };
 }

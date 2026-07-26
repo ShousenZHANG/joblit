@@ -18,6 +18,9 @@ const prismaStore = vi.hoisted(() => ({
   evidenceSnapshot: {
     deleteMany: vi.fn(),
   },
+  claimEvidence: {
+    findMany: vi.fn(),
+  },
   executeRaw: vi.fn(),
   transaction: vi.fn(),
   operations: [] as string[],
@@ -26,8 +29,23 @@ const prismaStore = vi.hoisted(() => ({
 vi.mock("@/lib/server/prisma", () => ({
   prisma: { $transaction: prismaStore.transaction },
 }));
-const blobDel = vi.hoisted(() => vi.fn(async () => ({})));
-vi.mock("@vercel/blob", () => ({ del: blobDel }));
+const artifactStore = vi.hoisted(() => ({
+  enqueue: vi.fn(),
+}));
+vi.mock("@/lib/server/artifacts/applicationArtifactLifecycle", () => ({
+  enqueueApplicationArtifactRetirements: artifactStore.enqueue,
+  canonicalizeApplicationArtifactStorageIdentity: (value: string) => {
+    const parsed = new URL(value.trim());
+    const pathname = decodeURIComponent(parsed.pathname).replace(/^\/+/, "");
+    return {
+      storeHost: parsed.hostname.toLowerCase(),
+      pathname,
+      key: `${parsed.hostname.toLowerCase()}/${pathname}`,
+    };
+  },
+}));
+const blobDelete = vi.hoisted(() => vi.fn());
+vi.mock("@vercel/blob", () => ({ del: blobDelete }));
 const applicationLock = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/server/applications/applicationMutationLock", () => ({
   acquireApplicationMutationLock: applicationLock,
@@ -41,8 +59,19 @@ import {
 describe("jobDeleteService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    delete process.env.BLOB_READ_WRITE_TOKEN;
+    blobDelete.mockReset().mockRejectedValue(new Error("Blob unavailable"));
     prismaStore.operations.length = 0;
+    artifactStore.enqueue.mockReset().mockImplementation(
+      async (
+        _tx,
+        input: { artifacts: Array<{ target: string; url: string }> },
+      ) => {
+        prismaStore.operations.push("artifact.enqueue");
+        return {
+          queued: new Set(input.artifacts.map((artifact) => artifact.url)).size,
+        };
+      },
+    );
     applicationLock.mockReset().mockImplementation(
       async (_tx, _userId, jobId: string) => {
         prismaStore.operations.push(`application.lock:${jobId}`);
@@ -89,6 +118,10 @@ describe("jobDeleteService", () => {
       prismaStore.operations.push("evidenceSnapshot.deleteMany");
       return { count: 0 };
     });
+    prismaStore.claimEvidence.findMany.mockImplementation(async () => {
+      prismaStore.operations.push("claimEvidence.findMany");
+      return [];
+    });
     prismaStore.transaction.mockImplementation(async (callback) =>
       callback({
         $executeRaw: prismaStore.executeRaw,
@@ -96,6 +129,7 @@ describe("jobDeleteService", () => {
         application: prismaStore.application,
         deletedJobUrl: prismaStore.deletedJobUrl,
         evidenceSnapshot: prismaStore.evidenceSnapshot,
+        claimEvidence: prismaStore.claimEvidence,
       }),
     );
   });
@@ -173,21 +207,80 @@ describe("jobDeleteService", () => {
       expect(prismaStore.operations[0]).toBe("lock");
     });
 
-    it("reports artifact cleanup failure when Blob token is missing", async () => {
+    it("queues retirement without requiring a Blob token or port", async () => {
+      delete process.env.BLOB_READ_WRITE_TOKEN;
       prismaStore.job.findFirst.mockResolvedValueOnce({
         id: "job-1",
         jobUrl: "https://e.com/1",
       });
       prismaStore.application.findUnique.mockResolvedValueOnce({
+        id: "application-1",
+        jobId: "job-1",
+        resumeTexUrl: null,
         resumePdfUrl: "https://blob/cv.pdf",
+        coverTexUrl: null,
+        coverPdfUrl: null,
       });
-
       const result = await deleteJob("user-1", "job-1");
 
-      expect(blobDel).not.toHaveBeenCalled();
+      expect(artifactStore.enqueue).toHaveBeenCalledWith(
+        expect.anything(),
+        {
+          userId: "user-1",
+          jobId: "job-1",
+          applicationId: "application-1",
+          artifacts: [
+            { target: "RESUME_PDF", url: "https://blob/cv.pdf" },
+          ],
+        },
+      );
+      expect(prismaStore.operations).toEqual(
+        expect.arrayContaining([
+          "artifact.enqueue",
+          "application.deleteMany",
+          "job.deleteMany",
+        ]),
+      );
+      expect(prismaStore.operations.indexOf("artifact.enqueue")).toBeLessThan(
+        prismaStore.operations.indexOf("application.deleteMany"),
+      );
+      expect(blobDelete).not.toHaveBeenCalled();
       expect(result).toMatchObject({
         alreadyDeleted: false,
-        blobCleanup: { attempted: 1, deleted: 0, failed: 1 },
+        artifactRetirement: { queued: 1 },
+        blobCleanup: { attempted: 1, deleted: 0, failed: 0 },
+      });
+    });
+
+    it("preserves evidence that still backs a retained STAR story", async () => {
+      prismaStore.job.findFirst.mockResolvedValueOnce({
+        id: "job-1",
+        jobUrl: "https://e.com/1",
+      });
+      prismaStore.application.findUnique.mockResolvedValueOnce({
+        id: "application-1",
+        jobId: "job-1",
+        resumeTexUrl: null,
+        resumePdfUrl: null,
+        coverTexUrl: null,
+        coverPdfUrl: null,
+      });
+      prismaStore.claimEvidence.findMany.mockResolvedValueOnce([
+        { evidenceSnapshotId: "star-evidence" },
+      ]);
+
+      await deleteJob("user-1", "job-1");
+
+      expect(prismaStore.evidenceSnapshot.deleteMany).toHaveBeenCalledWith({
+        where: {
+          userId: "user-1",
+          OR: [
+            { jobId: { in: ["job-1"] } },
+            { id: { in: ["star-evidence"] } },
+          ],
+          claims: { none: {} },
+          starStories: { none: {} },
+        },
       });
     });
   });
@@ -199,6 +292,7 @@ describe("jobDeleteService", () => {
       expect(result).toEqual({
         deleted: 0,
         notFound: 3,
+        artifactRetirement: { queued: 0 },
         blobCleanup: { attempted: 0, deleted: 0, failed: 0 },
       });
       expect(prismaStore.operations).toEqual(["lock", "job.findMany"]);
@@ -249,19 +343,56 @@ describe("jobDeleteService", () => {
         prismaStore.operations.push("job.deleteMany");
         return { count: 2 };
       });
+      prismaStore.application.findMany.mockImplementation(async () => {
+        prismaStore.operations.push("application.findMany");
+        return [
+          {
+            id: "application-a",
+            jobId: "a",
+            resumeTexUrl: null,
+            resumePdfUrl: null,
+            coverTexUrl: null,
+            coverPdfUrl: null,
+          },
+          {
+            id: "application-b",
+            jobId: "b",
+            resumeTexUrl: null,
+            resumePdfUrl: null,
+            coverTexUrl: null,
+            coverPdfUrl: null,
+          },
+        ];
+      });
+      prismaStore.claimEvidence.findMany.mockImplementation(async () => {
+        prismaStore.operations.push("claimEvidence.findMany");
+        return [
+          { evidenceSnapshotId: "shared-evidence" },
+          { evidenceSnapshotId: "shared-evidence" },
+        ];
+      });
 
       await batchDeleteJobs("user-1", ["a", "b"]);
 
-      // `claims: { none: {} }` is the whole point. Evidence ids are
-      // content-addressed on (userId, kind, contentHash), so one snapshot row
-      // is reused across Jobs whose text matches; deleting a row another
-      // Application still cites would hit the Restrict on
-      // ClaimEvidence.evidenceSnapshot and fail the entire delete.
+      expect(prismaStore.claimEvidence.findMany).toHaveBeenCalledWith({
+        where: {
+          userId: "user-1",
+          applicationId: { in: ["application-a", "application-b"] },
+        },
+        select: { evidenceSnapshotId: true },
+      });
+      // Candidate ids are captured before the Application cascade. This finds
+      // a shared snapshot again when its original Job was deleted earlier and
+      // its scalar jobId has already become null.
       expect(prismaStore.evidenceSnapshot.deleteMany).toHaveBeenCalledWith({
         where: {
           userId: "user-1",
-          jobId: { in: ["a", "b"] },
+          OR: [
+            { jobId: { in: ["a", "b"] } },
+            { id: { in: ["shared-evidence"] } },
+          ],
           claims: { none: {} },
+          starStories: { none: {} },
         },
       });
     });
@@ -302,65 +433,117 @@ describe("jobDeleteService", () => {
       expect(result).toMatchObject({ deleted: 1, notFound: 0 });
     });
 
-    it("deletes all application artifacts in one Blob request", async () => {
-      process.env.BLOB_READ_WRITE_TOKEN = "blob-token";
+    it("queues all application artifacts before deletion for asynchronous drain", async () => {
       prismaStore.job.findMany.mockResolvedValueOnce([
         { id: "a", jobUrl: "https://e.com/a" },
       ]);
       prismaStore.application.findMany.mockResolvedValueOnce([
         {
+          id: "application-a",
+          jobId: "a",
           resumeTexUrl: "https://blob/cv.tex",
           resumePdfUrl: "https://blob/cv.pdf",
           coverTexUrl: "https://blob/cover.tex",
           coverPdfUrl: "https://blob/cover.pdf",
         },
       ]);
-
       const result = await batchDeleteJobs("user-1", ["a"]);
 
-      expect(blobDel).toHaveBeenCalledTimes(1);
-      expect(blobDel).toHaveBeenCalledWith(
-        [
-          "https://blob/cv.tex",
-          "https://blob/cv.pdf",
-          "https://blob/cover.tex",
-          "https://blob/cover.pdf",
-        ],
-        { token: "blob-token" },
+      expect(artifactStore.enqueue).toHaveBeenCalledWith(
+        expect.anything(),
+        {
+          userId: "user-1",
+          jobId: "a",
+          applicationId: "application-a",
+          artifacts: [
+            { target: "RESUME_PDF", url: "https://blob/cv.pdf" },
+            { target: "COVER_PDF", url: "https://blob/cover.pdf" },
+            { target: "RESUME_TEX", url: "https://blob/cv.tex" },
+            { target: "COVER_TEX", url: "https://blob/cover.tex" },
+          ],
+        },
+      );
+      expect(prismaStore.operations.indexOf("artifact.enqueue")).toBeLessThan(
+        prismaStore.operations.indexOf("application.deleteMany"),
       );
       expect(result.blobCleanup).toEqual({
         attempted: 4,
-        deleted: 4,
+        deleted: 0,
         failed: 0,
       });
+      expect(result.artifactRetirement).toEqual({ queued: 4 });
     });
 
-    it("falls back to bounded cleanup when bulk Blob delete fails", async () => {
-      process.env.BLOB_READ_WRITE_TOKEN = "blob-token";
+    it("does not contact Blob while deleting database rows", async () => {
       prismaStore.job.findMany.mockResolvedValueOnce([
         { id: "a", jobUrl: "https://e.com/a" },
       ]);
       prismaStore.application.findMany.mockResolvedValueOnce([
         {
+          id: "application-a",
+          jobId: "a",
           resumeTexUrl: null,
           resumePdfUrl: "https://blob/cv.pdf",
           coverTexUrl: null,
           coverPdfUrl: "https://blob/cover.pdf",
         },
       ]);
-      blobDel
-        .mockRejectedValueOnce(new Error("bulk failed"))
-        .mockResolvedValueOnce({})
-        .mockRejectedValueOnce(new Error("object failed"));
-
       const result = await batchDeleteJobs("user-1", ["a"]);
 
-      expect(blobDel).toHaveBeenCalledTimes(3);
+      expect(artifactStore.enqueue).toHaveBeenCalledTimes(1);
+      expect(blobDelete).not.toHaveBeenCalled();
+      expect(prismaStore.application.deleteMany).toHaveBeenCalledTimes(1);
+      expect(prismaStore.job.deleteMany).toHaveBeenCalledTimes(1);
       expect(result.blobCleanup).toEqual({
         attempted: 2,
-        deleted: 1,
-        failed: 1,
+        deleted: 0,
+        failed: 0,
       });
+      expect(result.artifactRetirement).toEqual({ queued: 2 });
+    });
+
+    it("deduplicates shared artifact URLs across a batch before enqueue", async () => {
+      prismaStore.job.findMany.mockResolvedValueOnce([
+        { id: "a", jobUrl: "https://e.com/a" },
+        { id: "b", jobUrl: "https://e.com/b" },
+      ]);
+      prismaStore.job.deleteMany.mockResolvedValueOnce({ count: 2 });
+      prismaStore.application.findMany.mockResolvedValueOnce([
+        {
+          id: "application-a",
+          jobId: "a",
+          resumeTexUrl: null,
+          resumePdfUrl: "https://blob/shared.pdf?download=1",
+          coverTexUrl: null,
+          coverPdfUrl: null,
+        },
+        {
+          id: "application-b",
+          jobId: "b",
+          resumeTexUrl: null,
+          resumePdfUrl: "https://blob/shared.pdf",
+          coverTexUrl: null,
+          coverPdfUrl: "https://blob/unique-cover.pdf",
+        },
+      ]);
+      const result = await batchDeleteJobs("user-1", ["a", "b"]);
+
+      expect(artifactStore.enqueue).toHaveBeenCalledTimes(2);
+      expect(artifactStore.enqueue.mock.calls[0]?.[1].artifacts).toEqual([
+        {
+          target: "RESUME_PDF",
+          url: "https://blob/shared.pdf?download=1",
+        },
+      ]);
+      expect(artifactStore.enqueue.mock.calls[1]?.[1].artifacts).toEqual([
+        { target: "COVER_PDF", url: "https://blob/unique-cover.pdf" },
+      ]);
+      expect(result.blobCleanup).toEqual({
+        attempted: 2,
+        deleted: 0,
+        failed: 0,
+      });
+      expect(result.artifactRetirement).toEqual({ queued: 2 });
     });
   });
 });

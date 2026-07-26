@@ -10,11 +10,6 @@ export function buildApplicationArtifactBlobPath(input: {
   return `applications/${input.userId}/${input.jobId}/${input.target}.${version}.pdf`;
 }
 
-export const APPLICATION_ARTIFACT_OVERWRITE_OPTIONS = {
-  addRandomSuffix: false,
-  allowOverwrite: true,
-} as const;
-
 function sanitizeArtifactVersion(version: string) {
-  return version.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 80) || "latest";
+  return version.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 160) || "latest";
 }

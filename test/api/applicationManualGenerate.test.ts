@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const jobStore = vi.hoisted(() => ({
   findFirst: vi.fn(),
@@ -21,6 +21,13 @@ const atsStore = vi.hoisted(() => ({
 const blobStore = vi.hoisted(() => ({
   put: vi.fn(),
   del: vi.fn(),
+}));
+
+const artifactLifecycle = vi.hoisted(() => ({
+  stageApplicationArtifact: vi.fn(),
+  recordUploadedArtifact: vi.fn(),
+  markArtifactsReferencedAndRetireSuperseded: vi.fn(),
+  retireStagedArtifacts: vi.fn(),
 }));
 
 const transactionStore = vi.hoisted(() => ({
@@ -79,6 +86,11 @@ vi.mock("@vercel/blob", () => ({
   put: blobStore.put,
   del: blobStore.del,
 }));
+
+vi.mock(
+  "@/lib/server/artifacts/applicationArtifactLifecycle",
+  () => artifactLifecycle,
+);
 
 vi.mock("@/lib/server/applications/atsPdfValidator", () => ({
   AtsPdfValidationError: class AtsPdfValidationError extends Error {
@@ -231,6 +243,8 @@ function makeExistingAiContent() {
 
 describe("applications manual generate api", () => {
   beforeEach(() => {
+    vi.unstubAllEnvs();
+    vi.stubEnv("NODE_ENV", "test");
     applicationPrompt.buildApplicationPromptForUser.mockReset().mockResolvedValue({
       promptMeta: {
         ruleSetId: "rules-1",
@@ -290,6 +304,48 @@ describe("applications manual generate api", () => {
     blobStore.put.mockReset();
     blobStore.del.mockReset();
     blobStore.del.mockResolvedValue(undefined);
+    artifactLifecycle.stageApplicationArtifact
+      .mockReset()
+      .mockImplementation(async (input) => {
+        const stem = input.target === "RESUME_PDF" ? "resume" : "cover";
+        const pathname =
+          `applications/${input.userId}/${input.jobId}/` +
+          `${stem}.${input.contentVersion}-1234abcd-${"0".repeat(64)}.pdf`;
+        return {
+          disposition: "STAGED",
+          pathname,
+          contentHash: "0".repeat(64),
+          artifact: {
+            id: `artifact-${artifactLifecycle.stageApplicationArtifact.mock.calls.length}`,
+            userId: input.userId,
+            jobId: input.jobId,
+            applicationId: null,
+            target: input.target,
+            state: "STAGED",
+            pathname,
+            url: null,
+            contentVersion: input.contentVersion,
+            contentHash: "0".repeat(64),
+          },
+        };
+      });
+    artifactLifecycle.recordUploadedArtifact
+      .mockReset()
+      .mockImplementation(async (input) => ({
+        disposition: "RECORDED",
+        artifact: {
+          id: input.artifactId,
+          state: "STAGED",
+          pathname: input.pathname,
+          url: input.url,
+        },
+      }));
+    artifactLifecycle.markArtifactsReferencedAndRetireSuperseded
+      .mockReset()
+      .mockResolvedValue({ referenced: 1, retired: 0 });
+    artifactLifecycle.retireStagedArtifacts
+      .mockReset()
+      .mockResolvedValue({ queued: 1, awaitingUploadResolution: 0 });
     transactionStore.executeRaw.mockReset();
     transactionStore.executeRaw.mockResolvedValue(1);
     transactionStore.run.mockReset();
@@ -328,6 +384,10 @@ describe("applications manual generate api", () => {
       errors: [],
       warnings: [],
     });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it("returns parse error for invalid model output", async () => {
@@ -1197,6 +1257,53 @@ describe("applications manual generate api", () => {
     expect(res.headers.get("content-disposition")).toContain("_CL.pdf");
   });
 
+  it("returns 503 before staging a production FINAL when Blob is not configured", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("BLOB_READ_WRITE_TOKEN", "");
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    jobStore.findFirst.mockResolvedValueOnce({
+      id: VALID_JOB_ID,
+      title: "Software Engineer",
+      company: "Example Co",
+      description: "Build product features",
+    });
+    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "rp-1",
+      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/applications/manual-generate", {
+        method: "POST",
+        body: JSON.stringify({
+          jobId: VALID_JOB_ID,
+          target: "cover",
+          modelOutput: JSON.stringify({
+            cover: {
+              paragraphOne: "I am applying for this role.",
+              paragraphTwo: "My experience aligns with your responsibilities.",
+              paragraphThree: "I am motivated by your product impact.",
+            },
+          }),
+          promptMeta: {
+            ruleSetId: "rules-1",
+            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+          },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "ARTIFACT_STORAGE_UNAVAILABLE" },
+    });
+    expect(artifactLifecycle.stageApplicationArtifact).not.toHaveBeenCalled();
+    expect(blobStore.put).not.toHaveBeenCalled();
+    expect(applicationStore.upsert).not.toHaveBeenCalled();
+  });
+
   it("persists cover pdf url when blob token is configured", async () => {
     process.env.BLOB_READ_WRITE_TOKEN = "blob-token";
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -1245,7 +1352,7 @@ describe("applications manual generate api", () => {
     expect(blobStore.put).toHaveBeenCalledWith(
       expect.stringMatching(
         new RegExp(
-          `^applications/user-1/${VALID_JOB_ID}/cover\\.[0-9a-f]+-[0-9a-f-]{36}\\.pdf$`,
+          `^applications/user-1/${VALID_JOB_ID}/cover\\.[0-9a-f]{8}-[0-9a-f]{8}-[0-9a-f]{64}\\.pdf$`,
         ),
       ),
       expect.anything(),
@@ -1253,6 +1360,30 @@ describe("applications manual generate api", () => {
         allowOverwrite: true,
         addRandomSuffix: false,
         token: "blob-token",
+      }),
+    );
+    expect(artifactLifecycle.stageApplicationArtifact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user-1",
+        jobId: VALID_JOB_ID,
+        target: "COVER_PDF",
+        contentVersion: expect.stringMatching(/^[0-9a-f]{8}$/),
+      }),
+    );
+    expect(
+      artifactLifecycle.markArtifactsReferencedAndRetireSuperseded,
+    ).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "user-1",
+        jobId: VALID_JOB_ID,
+        applicationId: "app-1",
+        referenced: [
+          expect.objectContaining({
+            target: "COVER_PDF",
+            url: "https://blob.vercel-storage.com/cover.pdf",
+          }),
+        ],
       }),
     );
     expect(applicationStore.upsert).toHaveBeenCalledWith(
@@ -1265,6 +1396,8 @@ describe("applications manual generate api", () => {
   });
 
   it("?finalize=false skips PDF render and returns aiContent JSON for the editor", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("BLOB_READ_WRITE_TOKEN", "");
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "user-1" },
     });
@@ -1322,6 +1455,7 @@ describe("applications manual generate api", () => {
     );
     // PDF compile + Blob put are skipped in DRAFT mode.
     expect(blobStore.put).not.toHaveBeenCalled();
+    expect(artifactLifecycle.stageApplicationArtifact).not.toHaveBeenCalled();
   });
 
   it("preserves an existing cover letter when importing a resume draft", async () => {
@@ -1854,7 +1988,7 @@ describe("applications manual generate api", () => {
     );
   });
 
-  it("deletes an uploaded unique artifact when the DB commit fails", async () => {
+  it("durably retires an uploaded unique artifact when the DB commit fails", async () => {
     process.env.BLOB_READ_WRITE_TOKEN = "blob-token";
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "user-1" },
@@ -1892,10 +2026,12 @@ describe("applications manual generate api", () => {
     );
 
     expect(response.status).toBe(500);
-    expect(blobStore.del).toHaveBeenCalledWith(
-      "https://blob.vercel-storage.com/new-resume.pdf",
-      { token: "blob-token" },
-    );
+    expect(artifactLifecycle.retireStagedArtifacts).toHaveBeenCalledWith({
+      userId: "user-1",
+      jobId: VALID_JOB_ID,
+      artifactIds: ["artifact-1"],
+    });
+    expect(blobStore.del).not.toHaveBeenCalled();
   });
 
   it("keeps the previous PDF when the Blob upload fails", async () => {
@@ -1946,6 +2082,11 @@ describe("applications manual generate api", () => {
       error: { code: "APPLICATION_PERSIST_FAILED" },
     });
     expect(applicationStore.upsert).not.toHaveBeenCalled();
+    expect(artifactLifecycle.retireStagedArtifacts).toHaveBeenCalledWith({
+      userId: "user-1",
+      jobId: VALID_JOB_ID,
+      artifactIds: ["artifact-1"],
+    });
     expect(blobStore.del).not.toHaveBeenCalledWith(
       "https://blob.vercel-storage.com/stale-resume.pdf",
       expect.anything(),

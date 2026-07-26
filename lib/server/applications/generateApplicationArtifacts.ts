@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/server/prisma";
 import { getResumeProfile } from "@/lib/server/resumeProfile";
 import { buildResumePdfForJob } from "@/lib/server/applications/buildResumePdf";
@@ -12,7 +11,11 @@ import {
   resumeFilenameSegments,
 } from "@/lib/server/files/pdfFilename";
 import { assertAtsPdf } from "@/lib/server/applications/atsPdfValidator";
-import { commitApplicationArtifact } from "@/lib/server/applications/commitApplicationArtifact";
+import {
+  APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE,
+  commitApplicationArtifact,
+  type CommitArtifact,
+} from "@/lib/server/applications/commitApplicationArtifact";
 import { AppError } from "@/lib/server/api/appError";
 import { acceptApplicationGeneration } from "./applicationGeneration";
 import { evolveApplicationAiContent } from "./applicationAiContentAggregate";
@@ -27,10 +30,10 @@ import {
 import { hashTailoringRunValue } from "@/lib/server/tailoringRuns/tailoringRunHash";
 import type { TailoringAcceptanceRequest } from "@/lib/server/tailoringRuns/tailoringRunTypes";
 import type { TailoringRunHandle } from "@/lib/shared/tailoringRunContract";
+import { hashAiContent } from "@/lib/shared/schemas/aiContent";
 import {
   applicationBatchTargetProgress,
 } from "@/lib/server/applicationBatches/tailoringTaskContract";
-import type { CommitArtifact } from "@/lib/server/applications/commitApplicationArtifact";
 
 type BatchTarget = "RESUME" | "COVER";
 
@@ -282,7 +285,10 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
     job.title,
     "cl",
   );
-  const artifactVersion = `${Date.now()}-${randomUUID().slice(0, 8)}`;
+  // Blob path identity also includes the rendered PDF digest inside the
+  // lifecycle module. This stable aggregate version makes exact retries reuse
+  // the same object without letting different bytes overwrite one another.
+  const artifactVersion = hashAiContent(aiContent);
   let tailoringAcceptance: readonly TailoringAcceptanceRequest[] | undefined;
   if (input.batch && tailoringHandle) {
     for (const target of remainingTargets) {
@@ -389,6 +395,13 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
       publicDetails: commit.review,
     });
   }
+  if (commit.kind === "blob_not_configured") {
+    throw new AppError({
+      code: APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE.code,
+      status: APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE.status,
+      publicMessage: APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE.message,
+    });
+  }
   if (commit.kind !== "committed") {
     throw new AppError({
       code: "APPLICATION_PERSIST_FAILED",
@@ -397,8 +410,8 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
       privateDetails: commit.kind === "upload_failed" ? commit.cause : commit.kind,
     });
   }
-  // Blob lifecycle — upload, rollback on failure, GC of the superseded
-  // artifact — is owned by commitApplicationArtifact.
+  // Durable staging, upload compensation, and retirement of superseded
+  // artifacts are all owned by commitApplicationArtifact.
   return {
     applicationId: commit.applicationId,
     jobId: job.id,

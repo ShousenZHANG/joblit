@@ -1,6 +1,6 @@
 # Data — `prisma/schema.prisma`
 
-31 models, 19 enums, 48 migrations. Client generates to `lib/generated/prisma`
+33 models, 21 enums, 49 migrations. Client generates to `lib/generated/prisma`
 and is reached through the singleton in `lib/server/prisma.ts:13` over
 `PrismaNeon`. Vocabulary is `CONTEXT.md`.
 
@@ -10,36 +10,38 @@ and is reached through the singleton in `lib/server/prisma.ts:13` over
 
 | Model (line) | Domain meaning | Status |
 |---|---|---|
-| `User` (`:156`) | Tenant root, OAuth identity | Live — adapter-owned |
-| `Account` (`:193`), `Session` (`:217`) | NextAuth records | Live — adapter-owned |
-| `Job` (`:230`) | A **Job** from the Fetch Pipeline | Live |
-| `ApplicationBatch` (`:308`) | A **Codex Batch** run header | Live |
-| `ApplicationBatchTask` (`:329`) | One Job's slot in a batch | Live |
-| `TailoringRun` (`:358`) | Durable execution/fencing identity for one issued Application tailoring operation | Live |
-| `TailoringRunReceipt` (`:411`) | Immutable per-target acceptance receipt | Live, append-only |
-| `DeletedJobUrl` (`:431`) | Tombstone for a canonical `jobUrl` the user deleted | Live |
-| `DailyCheckin` (`:443`) | Per-local-date triage streak | Live |
-| `FetchRun` (`:455`) | A Fetch Pipeline task | Live |
-| `FetchRunCommitReceipt` (`:498`) | Durable idempotency receipt for one ordered FetchRun batch and applying attempt | Live, append-only |
-| `ResumeProfile` (`:519`) | A **Master Resume Profile**, per name per Resume Locale | Live |
-| `ActiveResumeProfile` (`:547`) | Pointer to the active profile per `(userId, locale)` | Live |
-| `Application` (`:560`) | The **Application** for one `(userId, jobId)` | Live |
-| `ApplicationEvent` (`:611`) | Immutable status ledger — the source of truth per ADR-0007 | Live, append-only |
-| `EvidenceSnapshot` (`:652`) | Content-addressed evidence backing AI claims | **Written, never read** |
-| `ClaimEvidence` (`:679`) | Claim → evidence edge | **Written, never read** |
-| `InterviewPlan` (`:702`) | Retired Career workspace | **ADR-0006 retained, no writers** |
-| `StarStory` (`:724`) | Retired Career workspace | **ADR-0006 retained, no writers** |
-| `Offer` (`:748`) | Retired Career workspace | **ADR-0006 retained, no writers** |
-| `FollowUpReminder` (`:778`) | Retired Career workspace | **ADR-0006 retained, no writers** |
-| `PromptRuleTemplate` (`:802`) | Per-user **Skill Pack** rule set | Live |
-| `ExtensionToken` (`:822`) | Extension bearer token, SHA-256 hash only | Live |
-| `FormSubmission` (`:838`) | Extension-captured ATS form submission | Live |
-| `FieldMappingRule` (`:861`) | Learned autofill selector → profile path | Live |
-| `OnboardingState` (`:886`) | Onboarding checklist and stage | Live |
-| `DiscoverVideoCache` (`:906`) | Global Discover cache + daily-refresh lease (ADR-0005) | Live |
-| `LocalAiSetting` (`:918`) | Non-secret local-AI endpoint per user (ADR-0004) | Live |
-| `SourceHealth` (`:928`) | Global per-source status/counters/timestamps | Live — upserted by `sourceHealthStore.ts`, read through `readSourceHealth.ts` |
-| `AtsBoardSource` (`:943`) | Global ATS board registry | Live — **no insert path in TypeScript**; DB rows require external provisioning, while `JOBLIT_ATS_BOARDS_JSON` remains runtime-only |
+| `User` (`:171`) | Tenant root, OAuth identity | Live — adapter-owned |
+| `Account` (`:208`), `Session` (`:232`) | NextAuth records | Live — adapter-owned |
+| `Job` (`:245`) | A **Job** from the Fetch Pipeline | Live |
+| `ApplicationBatch` (`:323`) | A **Codex Batch** run header | Live |
+| `ApplicationBatchTask` (`:344`) | One Job's slot in a batch | Live |
+| `TailoringRun` (`:378`) | Durable execution/fencing identity for one issued Application tailoring operation | Live |
+| `TailoringRunReceipt` (`:431`) | Immutable per-target acceptance receipt | Live, append-only |
+| `DeletedJobUrl` (`:451`) | Tombstone for a canonical `jobUrl` the user deleted | Live |
+| `DailyCheckin` (`:463`) | Per-local-date triage streak | Live |
+| `FetchRun` (`:475`) | A Fetch Pipeline task | Live |
+| `FetchRunCommitReceipt` (`:518`) | Durable idempotency receipt for one ordered FetchRun batch and applying attempt | Live, append-only |
+| `ResumeProfile` (`:539`) | A **Master Resume Profile**, per name per Resume Locale | Live |
+| `ActiveResumeProfile` (`:567`) | Pointer to the active profile per `(userId, locale)` | Live |
+| `Application` (`:580`) | The **Application** for one `(userId, jobId)` | Live |
+| `ApplicationArtifact` (`:630`) | Durable PDF/TeX Blob lifecycle ledger (ADR-0010); scalar identity snapshots, no source foreign keys | Live |
+| `ApplicationArtifactInventoryCheckpoint` (`:678`) | Singleton lease/cursor for bounded, resumable Blob inventory | Live |
+| `ApplicationEvent` (`:692`) | Immutable status ledger — the source of truth per ADR-0007 | Live, append-only |
+| `EvidenceSnapshot` (`:734`) | Content-addressed evidence backing AI claims | **Written, never read** |
+| `ClaimEvidence` (`:761`) | Claim → evidence edge | **Written, never read** |
+| `InterviewPlan` (`:784`) | Retired Career workspace | **ADR-0006 retained, no writers** |
+| `StarStory` (`:806`) | Retired Career workspace | **ADR-0006 retained, no writers** |
+| `Offer` (`:830`) | Retired Career workspace | **ADR-0006 retained, no writers** |
+| `FollowUpReminder` (`:860`) | Retired Career workspace | **ADR-0006 retained, no writers** |
+| `PromptRuleTemplate` (`:884`) | Per-user **Skill Pack** rule set | Live |
+| `ExtensionToken` (`:904`) | Extension bearer token, SHA-256 hash only | Live |
+| `FormSubmission` (`:920`) | Extension-captured ATS form submission | Live |
+| `FieldMappingRule` (`:943`) | Learned autofill selector → profile path | Live |
+| `OnboardingState` (`:968`) | Onboarding checklist and stage | Live |
+| `DiscoverVideoCache` (`:988`) | Global Discover cache + daily-refresh lease (ADR-0005) | Live |
+| `LocalAiSetting` (`:1000`) | Non-secret local-AI endpoint per user (ADR-0004) | Live |
+| `SourceHealth` (`:1010`) | Global per-source status/counters/timestamps | Live — upserted by `sourceHealthStore.ts`, read through `readSourceHealth.ts` |
+| `AtsBoardSource` (`:1025`) | Global ATS board registry | Live — **no insert path in TypeScript**; DB rows require external provisioning, while `JOBLIT_ATS_BOARDS_JSON` remains runtime-only |
 
 The four retained-without-writers models carry a block comment at
 `schema.prisma:589-591`; the decision is ADR-0006 lines 21-23. `EvidenceSnapshot`
@@ -59,9 +61,13 @@ at `:448`),
 denormalised `userId`, so a tenant filter never needs a join.
 `FetchRunCommitReceipt` and `TailoringRunReceipt` deliberately scope ownership
 through their required run parent; commit callers never supply a tenant id.
+`ApplicationArtifact.userId`, `jobId`, and `applicationId` are deliberately
+denormalised identity snapshots with no relations. Lifecycle rows survive
+source deletion and must be retired explicitly rather than by cascade.
 
-Three models are global: `DiscoverVideoCache` (`key @id`), `SourceHealth`
-(`source @id`, deliberate per the comment at `:817`), `AtsBoardSource`.
+Four models are global: `ApplicationArtifactInventoryCheckpoint` (`key @id`),
+`DiscoverVideoCache` (`key @id`), `SourceHealth` (`source @id`, deliberate per
+the schema comment), and `AtsBoardSource`.
 
 | Family | Scoping |
 |---|---|
@@ -101,6 +107,38 @@ the fields above.
 | `ApplicationBatchTask.executionAttemptId` | Batch-side projection of the same active attempt. |
 | `tailoringProtocolVersion` + `completionAttemptId` | Historical rows remain v0. A v1 claim upgrades atomically and clears proof; v1 success is database-valid only when the final receipt writes `completionAttemptId = executionAttemptId`. |
 
+### Application Artifact lifecycle projection
+
+| Field/state | Authority |
+|---|---|
+| `pathname` / `url` | Logical immutable path and its optional presentation. Physical identity is the unique canonical `storageIdentity`; `provisionalIdentity` serializes the pre-upload window. |
+| `STAGED` / `REFERENCED` | Durable upload intent versus an object committed into one of the four current Application URL columns. |
+| `DELETE_PENDING` | Durable retirement with pathname, grace deadline, request time, retry count, and optional URL/next attempt. |
+| `DELETING` | Leased UUID claim. URL is optional so an expired stage can be deleted idempotently by pathname. |
+| `DELETED` | Fenced settlement observation with `deletedAt`; metadata is retained only until explicit account-erasure cleanup proves it is safe to purge. |
+| `ApplicationArtifactInventoryCheckpoint` | Singleton claim/lease plus persistent Blob cursor; each run drains outbox work first, then scans at most two 50-object pages by default. |
+
+The migration backfills current URL pointers as `REFERENCED`. Standard Vercel
+Blob `applications/` paths retain their pathname; non-standard or colliding
+legacy paths receive stable `legacy/<md5(storageIdentity)>` pathnames. The
+same change dual-writes lifecycle state and supplies the protected worker;
+production still deploys the migration before the writer binary and validates
+one bounded deletion run before broad scheduling.
+`ARTIFACT_RECONCILE_ENABLED` is default-off and only exact
+`true` / `1` permits inventory, claim, or delete. Phase C waits until old
+binaries have drained. Deletion must query all four live Application URL
+columns immediately before the external call, and inventory must scan only
+`applications/`, never `resume-photos/`.
+
+An exact retry may reuse an active `STAGED` or `REFERENCED` pathname. Retirement
+is irreversible: once a pathname reaches `DELETE_PENDING`, `DELETING`, or
+`DELETED`, it remains a permanent tombstone, and later identical content uses a
+UUID incarnation pathname. This prevents an expired worker's delayed external
+delete from erasing a newer generation. Trusted writer paths use a finite
+reference lookup; metadata-null legacy rows use a 200-candidate fallback that
+fails closed when its budget is exhausted. Inventory requeues a reappearing
+`DELETED` object for deletion instead of reviving it.
+
 ---
 
 ## Cascade and deletion
@@ -130,41 +168,73 @@ Selected relations. `Cascade` from `User` is universal and omitted here.
 | `FormSubmission.job` | `Job?` | SetNull | `734` |
 
 `ClaimEvidence.evidenceSnapshot` is the only `Restrict` in the schema.
+`ApplicationArtifact` is intentionally absent from the relation table: its
+scalar snapshots have no foreign keys and survive User, Job, and Application
+deletion until durable retirement and privacy cleanup settle.
+
+### Account erasure integration point
+
+No supported account-deletion route currently exists. A future account
+deletion service must use one database transaction and call
+`prepareApplicationArtifactsForAccountErasure(tx, { userId })` before deleting
+the `User` row in that same transaction. The hook:
+
+- makes `STAGED`, `REFERENCED`, and existing `DELETE_PENDING` rows immediately
+  eligible for deletion, including a stage with no recorded URL;
+- preserves and reports `DELETING` rows instead of stealing a live worker
+  claim; and
+- purges already-settled `DELETED` rows transactionally.
+
+The reconciler handles the asynchronous tail after the User cascade. Once an
+object settles, `purgeDeletedApplicationArtifactsForErasedUser` proves the
+User is absent before removing only that user's `DELETED` ledger rows.
+In-flight writers can still create a final `STAGED` row around the deletion
+boundary because the ledger intentionally has no User foreign key; the
+absent-user sweep is the required safety net. A legacy physical object shared
+with another live Application remains pointer-protected until its last live
+reference retires, so its erased-user ledger snapshot cannot be purged sooner.
+Storage erasure stalls while the protected reconciler is disabled or unhealthy;
+no account-erasure request/status model currently monitors that tail.
 
 ### What `jobDeleteService.ts` actually does
 
 `deleteJob(userId, jobId)` — one transaction, 30 s timeout:
 
-1. `acquireJobMutationLock(tx, userId)` — `:77`, deliberately first
-2. `tx.job.findFirst({id, userId})` — `:79`; `null` → `{alreadyDeleted: true}`
-3. `acquireApplicationMutationLock(tx, userId, job.id)` — `:87`
-4. Read the four Blob URLs — `:88`
-5. `canonicalizeJobUrl(job.jobUrl)` — `:97`
-6. `tx.deletedJobUrl.upsert` with an empty `update: {}` so re-deleting does not move `deletedAt` — `:98`
-7. `tx.application.deleteMany({userId, jobId})` — `:103`
-8. `tx.job.deleteMany({id, userId})` — `:106`
-9. **Outside** the transaction: delete the Blob objects — `:131`
+1. Take the per-user Job mutation lock first.
+2. Read the owned Job; `null` returns `{alreadyDeleted: true}`.
+3. Take the Application mutation lock before reading artifact pointers.
+4. Upsert the canonical `DeletedJobUrl` tombstone.
+5. In the same transaction, convert the four current artifact pointers into
+   durable `ApplicationArtifact.DELETE_PENDING` work.
+6. Capture the Application's content-addressed EvidenceSnapshot ids, delete the
+   Application, then remove only candidate snapshots with no surviving claims
+   and no retained STAR story using them as provenance. Captured ids let the
+   final shared reference be reclaimed even when an older Job deletion already
+   set the snapshot's `jobId` to null.
+7. Delete the owned Job row.
+8. Return `artifactRetirement.queued`; the protected reconciler owns the later
+   Blob call and fenced settlement. The deprecated `blobCleanup` projection is
+   retained additively for API compatibility while clients migrate.
 
 `batchDeleteJobs` is the same shape, taking Application locks in **sorted id
-order** (`:160-165`) and using one `createMany({skipDuplicates: true})` for the
-tombstones.
+order**, deduplicating artifact URLs, and using one
+`createMany({skipDuplicates: true})` for the tombstones.
 
 ### Rows that survive with every non-user FK null
 
-Three, all reachable from an ordinary delete:
+Two are reachable from an ordinary delete:
 
-1. **`EvidenceSnapshot`** — `applicationId` and `jobId` both become NULL. Nothing
-   reads the table, so nothing re-links it; it is removed only when the `User`
-   row goes. The payload holds the JD excerpt and resume claims. The service
-   deletes four Blob artifacts with a retry fallback and does not touch this.
-2. **`ApplicationEvent`** — designed for it. `companySnapshot` and `titleSnapshot`
+1. **`ApplicationEvent`** — designed for it. `companySnapshot` and `titleSnapshot`
    (`:510-513`) exist so the row stays meaningful after the Job is gone, and
    `applicationCooldownService.ts:103` reads them.
-3. **`FormSubmission`** — `pageUrl` / `pageDomain` / `formSignature` remain as
+2. **`FormSubmission`** — `pageUrl` / `pageDomain` / `formSignature` remain as
    the only identity.
 
-The contrast between 1 and 2 is the point: `ApplicationEvent` documents its
-reader, `EvidenceSnapshot` does not.
+`EvidenceSnapshot` no longer joins this set by default: after
+Application-owned claim edges cascade, the delete service removes snapshots
+with neither a surviving claim nor a retained STAR-story provenance reference.
+`ApplicationArtifact` can retain all three scalar snapshot identifiers, by
+design, until external retirement and privacy cleanup settle.
 
 ---
 
@@ -198,11 +268,14 @@ matching.
 
 ## Enums
 
-19 enums. Referenced by generated name in TypeScript: `JobStatus`,
+21 enums. Referenced by generated name in TypeScript: `JobStatus`,
 `FetchRunStatus`, `ApplicationBatchStatus`, `ApplicationBatchTaskStatus`. The
-other 15 are
+15 pre-ADR-0010 enums are
 duplicated as inline string unions or literals — including `ApplicationStatus`
 (`DRAFT | FINAL`) and the four Tailoring Run enums.
+`ApplicationArtifactTarget` and `ApplicationArtifactState` establish the
+stage/reference/retirement vocabulary used by the artifact lifecycle module
+and reconciler.
 
 Enums with no TypeScript reference at all: `InterviewPlanStatus`, `OfferStatus`,
 `FollowUpReminderType` (ADR-0006 retained), and `ApplicationBatchScope` (one
@@ -255,23 +328,24 @@ rest.
 
 | Constraint | Rule |
 |---|---|
-| `Job @@unique([userId, jobUrl])` (`:266`) | A Job is identified within a user by its canonical `jobUrl`. With `skipDuplicates` this makes import idempotent with no find-then-create race. |
-| `DeletedJobUrl @@unique([userId, jobUrl])` (`:332`) | One tombstone per user per URL; makes both delete paths idempotent. |
-| `FetchRunCommitReceipt @@unique([fetchRunId, batchKey])` (`:407`) and `@@unique([fetchRunId, batchIndex])` (`:408`) | One request identity and one ordered slot per run; same-content retries replay across attempts, while conflicting content or order fails closed. The receipt's `executionAttemptId` is attribution, not part of either unique key. |
-| `Application @@unique([userId, jobId])` (`:494`) | One Application per `(userId, jobId)`. Note `jobId` is nullable and Postgres treats NULLs as distinct, so this does not bound orphaned Applications. |
-| `ActiveResumeProfile @@id([userId, locale])` (`:448`) | Exactly one active Master Resume Profile per `(user, Resume Locale)` — enforced as the primary key, so upsert is the only way to move the pointer. |
-| `ApplicationEvent @@unique([userId, idempotencyKey])` (`:525`) | Replay safety for the status ledger. A reused key with a different payload raises `IDEMPOTENCY_KEY_REUSED`. |
-| `EvidenceSnapshot @@unique([userId, contentHash, kind])` (`:560`) | Content-addressed reuse — identical evidence within one tenant is reused, not copied. |
-| `ClaimEvidence @@unique([applicationId, claimHash, evidenceSnapshotId])` (`:584`) | Claim edges are append-only and idempotent; a retry cannot duplicate the audit trail. |
-| `ApplicationBatchTask @@unique([batchId, jobId])` (`:319`) | A Job appears at most once per batch. |
-| `TailoringRun @@unique([userId, issueKey])` (`:403`) | Issuing the same operation is idempotent within a tenant; `issueHash` detects conflicting reuse. |
-| `TailoringRun.applicationBatchTaskId @unique` (`:368`) | A batch task has at most one Tailoring Run. |
-| `TailoringRunReceipt @@unique([runId, target])` (`:425`) | At most one immutable acceptance receipt per target; exact retries replay it. |
-| `FieldMappingRule @@unique([userId, fieldSelector, atsProvider, pageDomain])` (`:771`) | One learned mapping per selector per ATS and domain. `atsProvider` and `pageDomain` are `NOT NULL DEFAULT ''` **because** nullable columns made the upsert never match — see `20260405000000_fix_field_mapping_nullable_unique`. |
-| `ExtensionToken.tokenHash @unique` (`:717`) | Lookup by hash only; the raw token is never stored. |
-| `Job.companyRoleKey` — **index, deliberately not unique** (`:274`) | A soft "same opening" hint. Distinct openings can collide (`:240-242`), so it powers a possible-duplicate badge and never an automatic removal. |
-| `Job.descriptionSimHash` — **index only** (`:275`) | Advisory 64-bit SimHash near-duplicate detection. "Never used as a unique key" (`:245`). |
-| Trigram GIN on `Job.title/company/location` | Created by raw SQL in `20260330000000_search_optimization`, not by Prisma. Exists in the database but not in the model — flagged at `:264`. Powers the ILIKE relevance path. |
+| `Job @@unique([userId, jobUrl])` (`:309`) | A Job is identified within a user by its canonical `jobUrl`. With `skipDuplicates` this makes import idempotent with no find-then-create race. |
+| `DeletedJobUrl @@unique([userId, jobUrl])` (`:459`) | One tombstone per user per URL; makes both delete paths idempotent. |
+| `FetchRunCommitReceipt @@unique([fetchRunId, batchKey])` (`:534`) and `@@unique([fetchRunId, batchIndex])` (`:535`) | One request identity and one ordered slot per run; same-content retries replay across attempts, while conflicting content or order fails closed. The receipt's `executionAttemptId` is attribution, not part of either unique key. |
+| `Application @@unique([userId, jobId])` (`:624`) | One Application per `(userId, jobId)`. Note `jobId` is nullable and Postgres treats NULLs as distinct, so this does not bound orphaned Applications. |
+| `ActiveResumeProfile @@id([userId, locale])` (`:576`) | Exactly one active Master Resume Profile per `(user, Resume Locale)` — enforced as the primary key, so upsert is the only way to move the pointer. |
+| `ApplicationEvent @@unique([userId, idempotencyKey])` (`:716`) | Replay safety for the status ledger. A reused key with a different payload raises `IDEMPOTENCY_KEY_REUSED`. |
+| `EvidenceSnapshot @@unique([userId, contentHash, kind])` (`:752`) | Content-addressed reuse — identical evidence within one tenant is reused, not copied. |
+| `ClaimEvidence @@unique([applicationId, claimHash, evidenceSnapshotId])` (`:776`) | Claim edges are append-only and idempotent; a retry cannot duplicate the audit trail. |
+| `ApplicationBatchTask @@unique([batchId, jobId])` (`:371`) | A Job appears at most once per batch. |
+| `TailoringRun @@unique([userId, issueKey])` (`:423`) | Issuing the same operation is idempotent within a tenant; `issueHash` detects conflicting reuse. |
+| `TailoringRun.applicationBatchTaskId @unique` (`:388`) | A batch task has at most one Tailoring Run. |
+| `TailoringRunReceipt @@unique([runId, target])` (`:446`) | At most one immutable acceptance receipt per target; exact retries replay it. |
+| `ApplicationArtifact.storageIdentity @unique` / `provisionalIdentity @unique` | One canonical physical identity per recorded object and one upload reservation per immutable pathname. Pathname and URL presentation aliases are deliberately non-unique. SQL checks also enforce non-negative retries, paired claims/leases, and state-compatible nullable fields. |
+| `FieldMappingRule @@unique([userId, fieldSelector, atsProvider, pageDomain])` (`:963`) | One learned mapping per selector per ATS and domain. `atsProvider` and `pageDomain` are `NOT NULL DEFAULT ''` **because** nullable columns made the upsert never match — see `20260405000000_fix_field_mapping_nullable_unique`. |
+| `ExtensionToken.tokenHash @unique` (`:909`) | Lookup by hash only; the raw token is never stored. |
+| `Job.companyRoleKey` — **index, deliberately not unique** (`:317`) | A soft "same opening" hint. Distinct openings can collide, so it powers a possible-duplicate badge and never an automatic removal. |
+| `Job.descriptionSimHash` — **index only** (`:318`) | Advisory 64-bit SimHash near-duplicate detection. It is never used as a unique key. |
+| Trigram GIN on `Job.title/company/location` | Created by raw SQL in `20260330000000_search_optimization`, not by Prisma. Exists in the database but not in the model — flagged at `:307`. Powers the ILIKE relevance path. |
 
 ---
 
@@ -306,8 +380,8 @@ lease fenced by a random `ownerToken` (ADR-0005).
 
 ## Migration history
 
-48 migrations, `20260114042057_init_auth_jobs` →
-`20260726090000_tailoring_run_acceptance_protocol`.
+49 migrations, `20260114042057_init_auth_jobs` →
+`20260726120000_application_artifact_lifecycle`.
 Most are a single additive `ALTER TABLE`. The ones that changed a domain rule:
 
 | Migration | Change |
@@ -325,6 +399,7 @@ Most are a single additive `ALTER TABLE`. The ones that changed a domain rule:
 | `20260720190000_collapse_job_status` | **Data-only, ADR-0007.** Projects retired statuses. No enum values dropped — that would rewrite `ApplicationEvent` history. |
 | `20260724090000_fetch_run_commit_protocol` | ADR-0008: adds `PARTIAL`, ordered-batch counters, UUID attempt + lease pair check, non-negative/range checks, and receipt attempt attribution; makes the legacy `userEmail` snapshot nullable without dropping it. |
 | `20260726090000_tailoring_run_acceptance_protocol` | ADR-0009: adds Tailoring Run/Receipt, per-target masks and receipt uniqueness, UUID attempt fences, explicit legacy/v1 batch protocol version, current-attempt completion proof, and additive nullable relations without fabricating historical run evidence. |
+| `20260726120000_application_artifact_lifecycle` | ADR-0010: adds the durable Application PDF/TeX lifecycle ledger, state/claim projection checks, indexes, and conflict-tolerant backfill of the four current Application URL columns. |
 | `20260330000000_search_optimization` | The only extension-installing migration: `pg_trgm` plus three GIN indexes. |
 
 After editing `prisma/schema.prisma`, run `npx prisma generate`.

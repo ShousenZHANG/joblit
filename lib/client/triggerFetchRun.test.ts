@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { triggerFetchRunWithRecovery } from "./triggerFetchRun";
 
 function jsonResponse(body: unknown, status = 200) {
@@ -9,6 +9,28 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 describe("triggerFetchRunWithRecovery", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("invokes the browser fetch implementation with the Window receiver", async () => {
+    const browserFetch = vi.fn(function (this: unknown) {
+      if (this !== globalThis) {
+        throw new TypeError(
+          "Failed to execute 'fetch' on 'Window': Illegal invocation",
+        );
+      }
+      return Promise.resolve(jsonResponse({ ok: true }));
+    });
+    vi.stubGlobal("fetch", browserFetch);
+
+    await expect(
+      triggerFetchRunWithRecovery({ id: "browser-run", source: "jobspy" }),
+    ).resolves.toBeUndefined();
+
+    expect(browserFetch.mock.contexts[0]).toBe(globalThis);
+  });
+
   it("retries the same inline run once after the execution lease expires", async () => {
     const fetchImpl = vi
       .fn()

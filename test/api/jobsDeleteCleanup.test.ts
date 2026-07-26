@@ -18,18 +18,30 @@ const evidenceSnapshotStore = vi.hoisted(() => ({
   deleteMany: vi.fn(),
 }));
 
+const claimEvidenceStore = vi.hoisted(() => ({
+  findMany: vi.fn(),
+}));
+
 const prismaStore = vi.hoisted(() => ({
   executeRaw: vi.fn(),
   $transaction: vi.fn(),
 }));
 
-const blobStore = vi.hoisted(() => ({
-  del: vi.fn(),
+const artifactStore = vi.hoisted(() => ({
+  enqueue: vi.fn(),
 }));
 
-vi.mock("@vercel/blob", () => ({
-  put: vi.fn(),
-  del: blobStore.del,
+vi.mock("@/lib/server/artifacts/applicationArtifactLifecycle", () => ({
+  enqueueApplicationArtifactRetirements: artifactStore.enqueue,
+  canonicalizeApplicationArtifactStorageIdentity: (value: string) => {
+    const parsed = new URL(value.trim());
+    const pathname = decodeURIComponent(parsed.pathname).replace(/^\/+/, "");
+    return {
+      storeHost: parsed.hostname.toLowerCase(),
+      pathname,
+      key: `${parsed.hostname.toLowerCase()}/${pathname}`,
+    };
+  },
 }));
 
 vi.mock("@/lib/server/prisma", () => ({
@@ -62,9 +74,10 @@ describe("jobs delete api cleanup", () => {
     deletedJobUrlStore.upsert.mockReset();
     applicationStore.findUnique.mockReset();
     applicationStore.deleteMany.mockReset();
+    claimEvidenceStore.findMany.mockReset().mockResolvedValue([]);
     prismaStore.executeRaw.mockReset().mockResolvedValue(0);
     prismaStore.$transaction.mockReset();
-    blobStore.del.mockReset();
+    artifactStore.enqueue.mockReset().mockResolvedValue({ queued: 2 });
     prismaStore.$transaction.mockImplementation(async (callback) =>
       callback({
         $executeRaw: prismaStore.executeRaw,
@@ -72,12 +85,12 @@ describe("jobs delete api cleanup", () => {
         deletedJobUrl: deletedJobUrlStore,
         application: applicationStore,
         evidenceSnapshot: evidenceSnapshotStore,
+        claimEvidence: claimEvidenceStore,
       }),
     );
   });
 
-  it("deletes job and removes linked blob artifacts", async () => {
-    process.env.BLOB_READ_WRITE_TOKEN = "token";
+  it("deletes the job after durably queuing linked Blob artifacts", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "user-1" },
     });
@@ -86,6 +99,8 @@ describe("jobs delete api cleanup", () => {
       jobUrl: "https://www.linkedin.com/jobs/view/1/?tracking=abc",
     });
     applicationStore.findUnique.mockResolvedValueOnce({
+      id: "application-1",
+      jobId: JOB_ID,
       resumePdfUrl: "https://blob.vercel-storage.com/r1.pdf",
       coverPdfUrl: "https://blob.vercel-storage.com/c1.pdf",
       resumeTexUrl: null,
@@ -94,7 +109,6 @@ describe("jobs delete api cleanup", () => {
     deletedJobUrlStore.upsert.mockResolvedValueOnce({ id: "deleted-url-1" });
     applicationStore.deleteMany.mockResolvedValueOnce({ count: 1 });
     jobStore.deleteMany.mockResolvedValueOnce({ count: 1 });
-    blobStore.del.mockResolvedValue(undefined);
 
     const res = await DELETE(
       new Request(`http://localhost/api/jobs/${JOB_ID}`, { method: "DELETE" }),
@@ -107,13 +121,29 @@ describe("jobs delete api cleanup", () => {
     expect(applicationStore.deleteMany).toHaveBeenCalledWith({
       where: { userId: "user-1", jobId: JOB_ID },
     });
-    expect(blobStore.del).toHaveBeenCalledTimes(1);
-    expect(blobStore.del).toHaveBeenCalledWith(
-      [
-        "https://blob.vercel-storage.com/r1.pdf",
-        "https://blob.vercel-storage.com/c1.pdf",
-      ],
-      { token: "token" },
+    expect(artifactStore.enqueue).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        userId: "user-1",
+        jobId: JOB_ID,
+        applicationId: "application-1",
+        artifacts: [
+          {
+            target: "RESUME_PDF",
+            url: "https://blob.vercel-storage.com/r1.pdf",
+          },
+          {
+            target: "COVER_PDF",
+            url: "https://blob.vercel-storage.com/c1.pdf",
+          },
+        ],
+      },
     );
+    expect(json.blobCleanup).toEqual({
+      attempted: 2,
+      deleted: 0,
+      failed: 0,
+    });
+    expect(json.artifactRetirement).toEqual({ queued: 2 });
   });
 });

@@ -1,10 +1,13 @@
-import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import { withSessionRoute, parseJsonBody } from "@/lib/server/api/routeHandler";
 import { UuidParamSchema } from "@/lib/shared/schemas/common";
-import { commitApplicationArtifact } from "@/lib/server/applications/commitApplicationArtifact";
+import {
+  APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE,
+  commitApplicationArtifact,
+} from "@/lib/server/applications/commitApplicationArtifact";
+import { buildApplicationArtifactVersionPrefix } from "@/lib/server/artifacts/applicationArtifactLifecycle";
 import { errorJson, notFoundError } from "@/lib/server/api/errorResponse";
 import { enforceApplicationRenderRateLimit } from "@/lib/server/api/applicationRenderRateLimit";
 import {
@@ -59,8 +62,13 @@ function isCurrentVersionedArtifact(
 ): boolean {
   if (!url || !expectedHash) return false;
   try {
-    return decodeURIComponent(new URL(url).pathname).includes(
-      `/${target}.${expectedHash}-`,
+    const pathname = decodeURIComponent(new URL(url).pathname);
+    const lifecycleVersionPrefix =
+      buildApplicationArtifactVersionPrefix(expectedHash);
+    return (
+      pathname.includes(`/${target}.${expectedHash}-`) ||
+      pathname.includes(`/${target}.${lifecycleVersionPrefix}`) ||
+      pathname.endsWith(`/${target}.${expectedHash}.pdf`)
     );
   } catch {
     return false;
@@ -273,9 +281,10 @@ export async function POST(
       const limited = enforceApplicationRenderRateLimit(userId, requestId);
       if (limited) return limited;
 
-      // A unique path makes an uncommitted render safe to delete if the CAS
-      // below loses to an autosave or another finalizer.
-      const artifactVersion = `${canonicalHash}-${randomUUID()}`;
+      // The lifecycle module combines this canonical content version with the
+      // rendered PDF digest. Exact retries therefore reuse one pathname while
+      // different bytes can never overwrite a currently referenced artifact.
+      const artifactVersion = canonicalHash;
       const renderJob = {
         id: job.id ?? null,
         title: job.title ?? "Untitled",
@@ -335,6 +344,14 @@ export async function POST(
           "Resolve unsupported claims before finalizing this application.",
           422,
           { details: commit.review, requestId },
+        );
+      }
+      if (commit.kind === "blob_not_configured") {
+        return errorJson(
+          APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE.code,
+          APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE.message,
+          APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE.status,
+          { requestId },
         );
       }
       if (commit.kind !== "committed") {

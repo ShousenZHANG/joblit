@@ -1,17 +1,28 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
 
 const blob = vi.hoisted(() => ({ put: vi.fn(), del: vi.fn() }));
 const store = vi.hoisted(() => ({ findUnique: vi.fn(), upsert: vi.fn() }));
 const jobStore = vi.hoisted(() => ({ findFirst: vi.fn() }));
+const database = vi.hoisted(() => ({ transaction: vi.fn() }));
 const ledger = vi.hoisted(() => ({ persistReviewLedger: vi.fn() }));
 const lock = vi.hoisted(() => ({ acquireApplicationMutationLock: vi.fn() }));
+const lifecycle = vi.hoisted(() => ({
+  stageApplicationArtifact: vi.fn(),
+  recordUploadedArtifact: vi.fn(),
+  markArtifactsReferencedAndRetireSuperseded: vi.fn(),
+  retireStagedArtifacts: vi.fn(),
+}));
 const tailoringAcceptance = vi.hoisted(() => ({
   prepareTailoringRunAcceptance: vi.fn(),
   completeTailoringRunAcceptance: vi.fn(),
 }));
 
 vi.mock("@vercel/blob", () => blob);
+vi.mock(
+  "@/lib/server/artifacts/applicationArtifactLifecycle",
+  () => lifecycle,
+);
 vi.mock("@/lib/server/applications/persistReviewLedger", () => ledger);
 vi.mock("@/lib/server/applications/applicationMutationLock", () => lock);
 vi.mock(
@@ -23,7 +34,7 @@ vi.mock("@/lib/server/prisma", () => ({
     application: store,
     // The fake `tx` exposes only what the module is allowed to touch, so a new
     // dependency shows up as a failure rather than passing silently.
-    $transaction: (fn: (tx: unknown) => unknown) => fn({ application: store, job: jobStore }),
+    $transaction: database.transaction,
   },
 }));
 
@@ -71,6 +82,12 @@ const resumeArtifact = {
   version: "v1",
 };
 
+const coverArtifact = {
+  target: "cover" as const,
+  pdf: Buffer.from("%PDF-1.7 cover"),
+  version: "v1",
+};
+
 const tailoringRequest = {
   handle: {
     id: "11111111-1111-4111-8111-111111111111",
@@ -86,12 +103,58 @@ const tailoringRequest = {
 };
 
 beforeEach(() => {
+  vi.unstubAllEnvs();
   vi.clearAllMocks();
-  process.env.BLOB_READ_WRITE_TOKEN = "token";
+  vi.stubEnv("NODE_ENV", "test");
+  vi.stubEnv("BLOB_READ_WRITE_TOKEN", "token");
+  database.transaction.mockImplementation((fn) =>
+    fn({ application: store, job: jobStore }),
+  );
   jobStore.findFirst.mockResolvedValue({ id: "job-1" });
   store.findUnique.mockResolvedValue(null);
   store.upsert.mockResolvedValue({ id: "application-1" });
   blob.put.mockResolvedValue({ url: "https://blob.example/new.pdf" });
+  lifecycle.stageApplicationArtifact.mockImplementation(async (input) => {
+    const stem = input.target === "RESUME_PDF" ? "resume" : "cover";
+    const sequence = lifecycle.stageApplicationArtifact.mock.calls.length;
+    const pathname =
+      `applications/${input.userId}/${input.jobId}/` +
+      `${stem}.${input.contentVersion}-1234abcd-${"0".repeat(64)}.pdf`;
+    return {
+      disposition: "STAGED",
+      pathname,
+      contentHash: "0".repeat(64),
+      artifact: {
+        id: `artifact-${sequence}`,
+        userId: input.userId,
+        jobId: input.jobId,
+        applicationId: null,
+        target: input.target,
+        state: "STAGED",
+        pathname,
+        url: null,
+        contentVersion: input.contentVersion,
+        contentHash: "0".repeat(64),
+      },
+    };
+  });
+  lifecycle.recordUploadedArtifact.mockImplementation(async (input) => ({
+    disposition: "RECORDED",
+    artifact: {
+      id: input.artifactId,
+      state: "STAGED",
+      pathname: input.pathname,
+      url: input.url,
+    },
+  }));
+  lifecycle.markArtifactsReferencedAndRetireSuperseded.mockResolvedValue({
+    referenced: 1,
+    retired: 0,
+  });
+  lifecycle.retireStagedArtifacts.mockResolvedValue({
+    queued: 1,
+    awaitingUploadResolution: 0,
+  });
   tailoringAcceptance.prepareTailoringRunAcceptance.mockImplementation(
     async (_tx, input) => ({
       userId: input.userId,
@@ -106,7 +169,47 @@ beforeEach(() => {
   });
 });
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("commitApplicationArtifact", () => {
+  it.each([
+    ["resume", resumeArtifact],
+    ["cover", coverArtifact],
+  ] as const)(
+    "rejects a duplicate %s target before any artifact, Blob, or database side effect",
+    async (target, artifact) => {
+      const result = await commitApplicationArtifact({
+        ...BASE,
+        artifacts: [artifact, { ...artifact, pdf: Buffer.from("%PDF duplicate") }],
+      });
+
+      expect(result).toMatchObject({
+        kind: "upload_failed",
+        cause: {
+          code: "DUPLICATE_APPLICATION_ARTIFACT_TARGET",
+          message: `Duplicate application artifact target: ${target}`,
+        },
+      });
+      expect(lifecycle.stageApplicationArtifact).not.toHaveBeenCalled();
+      expect(blob.put).not.toHaveBeenCalled();
+      expect(database.transaction).not.toHaveBeenCalled();
+    },
+  );
+
+  it("preserves a valid resume and cover commit", async () => {
+    const result = await commitApplicationArtifact({
+      ...BASE,
+      artifacts: [resumeArtifact, coverArtifact],
+    });
+
+    expect(result.kind).toBe("committed");
+    expect(lifecycle.stageApplicationArtifact).toHaveBeenCalledTimes(2);
+    expect(blob.put).toHaveBeenCalledTimes(2);
+    expect(database.transaction).toHaveBeenCalledTimes(1);
+  });
+
   it("uploads, commits, and returns the hash the next write must send", async () => {
     const result = await commitApplicationArtifact({ ...BASE, artifacts: [resumeArtifact] });
 
@@ -115,6 +218,34 @@ describe("commitApplicationArtifact", () => {
     expect(result.applicationId).toBe("application-1");
     expect(result.aiContentHash).toMatch(/^[a-f0-9]+$/);
     expect(result.urls.resume).toBe("https://blob.example/new.pdf");
+    expect(lifecycle.stageApplicationArtifact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user-1",
+        jobId: "job-1",
+        target: "RESUME_PDF",
+        contentVersion: "v1",
+      }),
+    );
+    expect(blob.put).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /^applications\/user-1\/job-1\/resume\.v1-[a-f0-9]{8}-[a-f0-9]{64}\.pdf$/,
+      ),
+      resumeArtifact.pdf,
+      {
+        access: "public",
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        contentType: "application/pdf",
+        token: "token",
+      },
+    );
+    expect(lifecycle.recordUploadedArtifact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        artifactId: "artifact-1",
+        userId: "user-1",
+        url: "https://blob.example/new.pdf",
+      }),
+    );
   });
 
   it("takes the advisory lock before reading the row", async () => {
@@ -140,9 +271,15 @@ describe("commitApplicationArtifact", () => {
 
     expect(result).toEqual({ kind: "upload_failed", cause });
     expect(store.upsert).not.toHaveBeenCalled();
+    expect(lifecycle.retireStagedArtifacts).toHaveBeenCalledWith({
+      userId: "user-1",
+      jobId: "job-1",
+      artifactIds: ["artifact-1"],
+    });
+    expect(blob.del).not.toHaveBeenCalled();
   });
 
-  it("deletes earlier uploads when a later artifact upload fails", async () => {
+  it("durably retires every stage when a later artifact upload fails", async () => {
     const cause = new Error("cover upload failed");
     blob.put
       .mockResolvedValueOnce({ url: "https://blob.example/new-resume.pdf" })
@@ -162,13 +299,15 @@ describe("commitApplicationArtifact", () => {
 
     expect(result).toEqual({ kind: "upload_failed", cause });
     expect(store.upsert).not.toHaveBeenCalled();
-    expect(blob.del).toHaveBeenCalledWith(
-      "https://blob.example/new-resume.pdf",
-      { token: "token" },
-    );
+    expect(lifecycle.retireStagedArtifacts).toHaveBeenCalledWith({
+      userId: "user-1",
+      jobId: "job-1",
+      artifactIds: ["artifact-1", "artifact-2"],
+    });
+    expect(blob.del).not.toHaveBeenCalled();
   });
 
-  it("deletes the new blob when the compare-and-swap loses", async () => {
+  it("durably retires the new blob when the compare-and-swap loses", async () => {
     store.findUnique.mockResolvedValue({
       resumePdfUrl: "https://blob.example/old.pdf",
       coverPdfUrl: null,
@@ -185,12 +324,14 @@ describe("commitApplicationArtifact", () => {
 
     expect(result).toEqual({ kind: "stale_write" });
     expect(store.upsert).not.toHaveBeenCalled();
-    expect(blob.del).toHaveBeenCalledWith("https://blob.example/new.pdf", { token: "token" });
-    // The superseded artifact survives a lost race.
-    expect(blob.del).not.toHaveBeenCalledWith(
-      "https://blob.example/old.pdf",
-      expect.anything(),
-    );
+    expect(lifecycle.retireStagedArtifacts).toHaveBeenCalledWith({
+      userId: "user-1",
+      jobId: "job-1",
+      artifactIds: ["artifact-1"],
+    });
+    expect(
+      lifecycle.markArtifactsReferencedAndRetireSuperseded,
+    ).not.toHaveBeenCalled();
   });
 
   it("matches a row with no AI Content when expectedHash is null", async () => {
@@ -211,7 +352,7 @@ describe("commitApplicationArtifact", () => {
     expect(result.kind).toBe("committed");
   });
 
-  it("deletes the superseded blob only after the commit lands", async () => {
+  it("upserts the Application before retiring the superseded blob in the same transaction", async () => {
     store.findUnique.mockResolvedValue({
       resumePdfUrl: "https://blob.example/old.pdf",
       coverPdfUrl: null,
@@ -223,10 +364,36 @@ describe("commitApplicationArtifact", () => {
     await commitApplicationArtifact({ ...BASE, artifacts: [resumeArtifact] });
 
     expect(store.upsert).toHaveBeenCalled();
-    expect(blob.del).toHaveBeenCalledWith("https://blob.example/old.pdf", { token: "token" });
+    expect(
+      lifecycle.markArtifactsReferencedAndRetireSuperseded,
+    ).toHaveBeenCalledWith(
+      lock.acquireApplicationMutationLock.mock.calls[0]?.[0],
+      {
+        userId: "user-1",
+        jobId: "job-1",
+        applicationId: "application-1",
+        referenced: [
+          expect.objectContaining({
+            target: "RESUME_PDF",
+            url: "https://blob.example/new.pdf",
+          }),
+        ],
+        superseded: [
+          {
+            target: "RESUME_PDF",
+            url: "https://blob.example/old.pdf",
+          },
+        ],
+      },
+    );
+    expect(store.upsert.mock.invocationCallOrder[0]).toBeLessThan(
+      lifecycle.markArtifactsReferencedAndRetireSuperseded.mock
+        .invocationCallOrder[0],
+    );
+    expect(blob.del).not.toHaveBeenCalled();
   });
 
-  it("deletes the new blob when the transaction throws", async () => {
+  it("durably retires the new blob when the transaction throws", async () => {
     const boom = new Error("constraint violation");
     store.upsert.mockRejectedValueOnce(boom);
 
@@ -234,7 +401,12 @@ describe("commitApplicationArtifact", () => {
       commitApplicationArtifact({ ...BASE, artifacts: [resumeArtifact] }),
     ).rejects.toThrow(boom);
 
-    expect(blob.del).toHaveBeenCalledWith("https://blob.example/new.pdf", { token: "token" });
+    expect(lifecycle.retireStagedArtifacts).toHaveBeenCalledWith({
+      userId: "user-1",
+      jobId: "job-1",
+      artifactIds: ["artifact-1"],
+    });
+    expect(blob.del).not.toHaveBeenCalled();
   });
 
   it("writes no artifact columns for a DRAFT commit", async () => {
@@ -250,15 +422,40 @@ describe("commitApplicationArtifact", () => {
     expect(written).not.toHaveProperty("resumePdfUrl");
     expect(written.status).toBe("DRAFT");
     expect(blob.put).not.toHaveBeenCalled();
+    expect(lifecycle.stageApplicationArtifact).not.toHaveBeenCalled();
   });
 
-  it("commits without Blob configured rather than failing the request", async () => {
-    delete process.env.BLOB_READ_WRITE_TOKEN;
+  it.each(["production", "development"])(
+    "fails closed in %s before staging FINAL when Blob is not configured",
+    async (nodeEnv) => {
+      vi.stubEnv("NODE_ENV", nodeEnv);
+      vi.stubEnv("BLOB_READ_WRITE_TOKEN", "");
 
-    const result = await commitApplicationArtifact({ ...BASE, artifacts: [resumeArtifact] });
+      const result = await commitApplicationArtifact({
+        ...BASE,
+        artifacts: [resumeArtifact],
+      });
+
+      expect(result).toEqual({ kind: "blob_not_configured" });
+      expect(blob.put).not.toHaveBeenCalled();
+      expect(lifecycle.stageApplicationArtifact).not.toHaveBeenCalled();
+    },
+  );
+
+  it("keeps DRAFT content-only commits working without Blob configured", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("BLOB_READ_WRITE_TOKEN", "");
+
+    const result = await commitApplicationArtifact({
+      ...BASE,
+      status: "DRAFT",
+      artifacts: [],
+    });
 
     expect(result.kind).toBe("committed");
+    expect(store.upsert).toHaveBeenCalledOnce();
     expect(blob.put).not.toHaveBeenCalled();
+    expect(lifecycle.stageApplicationArtifact).not.toHaveBeenCalled();
   });
 
   it("merges a single-target commit against the row so the other half survives", async () => {
@@ -310,13 +507,12 @@ describe("commitApplicationArtifact", () => {
 
     expect(result).toEqual({ kind: "invalid_ai_content" });
     expect(store.upsert).not.toHaveBeenCalled();
-    expect(blob.del).toHaveBeenCalledWith("https://blob.example/new.pdf", {
-      token: "token",
+    expect(lifecycle.retireStagedArtifacts).toHaveBeenCalledWith({
+      userId: "user-1",
+      jobId: "job-1",
+      artifactIds: ["artifact-1"],
     });
-    expect(blob.del).not.toHaveBeenCalledWith(
-      "https://blob.example/existing-cover.pdf",
-      expect.anything(),
-    );
+    expect(blob.del).not.toHaveBeenCalled();
   });
 
   it("blocks a FINAL single-target commit when the preserved target fails review", async () => {
@@ -342,13 +538,12 @@ describe("commitApplicationArtifact", () => {
     if (result.kind !== "review_blocked") return;
     expect(result.review.issues.join(" ")).toContain("999%");
     expect(store.upsert).not.toHaveBeenCalled();
-    expect(blob.del).toHaveBeenCalledWith("https://blob.example/new.pdf", {
-      token: "token",
+    expect(lifecycle.retireStagedArtifacts).toHaveBeenCalledWith({
+      userId: "user-1",
+      jobId: "job-1",
+      artifactIds: ["artifact-1"],
     });
-    expect(blob.del).not.toHaveBeenCalledWith(
-      "https://blob.example/existing-cover.pdf",
-      expect.anything(),
-    );
+    expect(blob.del).not.toHaveBeenCalled();
   });
 
   it("persists a blocked aggregate as DRAFT so the user can resolve it", async () => {
@@ -383,7 +578,12 @@ describe("commitApplicationArtifact", () => {
 
     expect(result).toEqual({ kind: "job_missing" });
     expect(store.upsert).not.toHaveBeenCalled();
-    expect(blob.del).toHaveBeenCalledWith("https://blob.example/new.pdf", { token: "token" });
+    expect(lifecycle.retireStagedArtifacts).toHaveBeenCalledWith({
+      userId: "user-1",
+      jobId: "job-1",
+      artifactIds: ["artifact-1"],
+    });
+    expect(blob.del).not.toHaveBeenCalled();
   });
 
   it("persists the review ledger inside the transaction", async () => {
@@ -420,6 +620,12 @@ describe("commitApplicationArtifact", () => {
       order.push("application");
       return { id: "application-1" };
     });
+    lifecycle.markArtifactsReferencedAndRetireSuperseded.mockImplementationOnce(
+      async () => {
+        order.push("artifact-lifecycle");
+        return { referenced: 1, retired: 0 };
+      },
+    );
     ledger.persistReviewLedger.mockImplementationOnce(async () => {
       order.push("review-ledger");
     });
@@ -443,6 +649,7 @@ describe("commitApplicationArtifact", () => {
       "prepare",
       "joba-lock",
       "application",
+      "artifact-lifecycle",
       "review-ledger",
       "complete",
     ]);
@@ -456,6 +663,9 @@ describe("commitApplicationArtifact", () => {
     expect(ledger.persistReviewLedger.mock.calls[0]?.[0]).toBe(
       transactionClient,
     );
+    expect(
+      lifecycle.markArtifactsReferencedAndRetireSuperseded.mock.calls[0]?.[0],
+    ).toBe(transactionClient);
     expect(
       tailoringAcceptance.completeTailoringRunAcceptance.mock.calls[0]?.[0],
     ).toBe(transactionClient);
@@ -523,13 +733,15 @@ describe("commitApplicationArtifact", () => {
     expect(
       tailoringAcceptance.completeTailoringRunAcceptance,
     ).not.toHaveBeenCalled();
-    expect(blob.del).toHaveBeenCalledWith("https://blob.example/new.pdf", {
-      token: "token",
+    expect(lifecycle.retireStagedArtifacts).toHaveBeenCalledWith({
+      userId: "user-1",
+      jobId: "job-1",
+      artifactIds: ["artifact-1"],
     });
-    expect(blob.del).not.toHaveBeenCalledWith(
-      "https://blob.example/current-resume.pdf",
-      expect.anything(),
-    );
+    expect(
+      lifecycle.markArtifactsReferencedAndRetireSuperseded,
+    ).not.toHaveBeenCalled();
+    expect(blob.del).not.toHaveBeenCalled();
   });
 
   it("aborts an acceptance conflict before Application mutation and cleans the upload", async () => {
@@ -552,9 +764,12 @@ describe("commitApplicationArtifact", () => {
     expect(
       tailoringAcceptance.completeTailoringRunAcceptance,
     ).not.toHaveBeenCalled();
-    expect(blob.del).toHaveBeenCalledWith("https://blob.example/new.pdf", {
-      token: "token",
+    expect(lifecycle.retireStagedArtifacts).toHaveBeenCalledWith({
+      userId: "user-1",
+      jobId: "job-1",
+      artifactIds: ["artifact-1"],
     });
+    expect(blob.del).not.toHaveBeenCalled();
   });
 
   it("rejects the transaction when acceptance completion conflicts after the write", async () => {
@@ -578,8 +793,11 @@ describe("commitApplicationArtifact", () => {
     expect(
       tailoringAcceptance.completeTailoringRunAcceptance,
     ).toHaveBeenCalledOnce();
-    expect(blob.del).toHaveBeenCalledWith("https://blob.example/new.pdf", {
-      token: "token",
+    expect(lifecycle.retireStagedArtifacts).toHaveBeenCalledWith({
+      userId: "user-1",
+      jobId: "job-1",
+      artifactIds: ["artifact-1"],
     });
+    expect(blob.del).not.toHaveBeenCalled();
   });
 });

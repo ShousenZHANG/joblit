@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import { FetchClient } from "./FetchClient";
@@ -117,6 +124,65 @@ describe("FetchClient", () => {
 
     const pollingCalls = setIntervalSpy.mock.calls.filter((call) => call[1] === 3000);
     expect(pollingCalls).toHaveLength(0);
+  });
+
+  it("submits through a receiver-sensitive browser fetch implementation", async () => {
+    const user = userEvent.setup();
+    const browserFetch = vi.fn(function (
+      this: unknown,
+      input: RequestInfo,
+      init?: RequestInit,
+    ) {
+      const url = typeof input === "string" ? input : input.url;
+      // A bare global fetch call is valid in browsers. The regression was the
+      // trigger dependency being invoked as a method of its context object.
+      if (
+        url === "/api/fetch-runs/browser-run/trigger" &&
+        this !== globalThis
+      ) {
+        throw new TypeError(
+          "Failed to execute 'fetch' on 'Window': Illegal invocation",
+        );
+      }
+      if (url === "/api/fetch-runs" && init?.method === "POST") {
+        return Promise.resolve(
+          new Response(JSON.stringify({ id: "browser-run" }), {
+            status: 201,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+      if (
+        url === "/api/fetch-runs/browser-run/trigger" &&
+        init?.method === "POST"
+      ) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ runs: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    });
+    vi.stubGlobal("fetch", browserFetch);
+
+    renderFetch();
+    await user.click(screen.getByRole("button", { name: /start fetch/i }));
+
+    await waitFor(() => {
+      expect(startRunMock).toHaveBeenCalledWith([
+        { id: "browser-run", source: "jobspy" },
+      ]);
+    });
+    expect(
+      screen.queryByText(/illegal invocation/i),
+    ).not.toBeInTheDocument();
   });
 
   it("splits multiple titles into queries when creating a fetch run", async () => {
@@ -243,6 +309,88 @@ describe("FetchClient", () => {
         "experience_requirement_4_plus",
       ],
     });
+  });
+
+  it("keeps a created lane visible when multi-source rollback cannot cancel it", async () => {
+    const user = userEvent.setup();
+    let createCount = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url === "/api/fetch-runs" && init?.method === "POST") {
+        createCount += 1;
+        if (createCount === 1) {
+          return new Response(JSON.stringify({ id: "run-visible" }), {
+            status: 201,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return new Response(
+          JSON.stringify({ error: { message: "Global create failed" } }),
+          {
+            status: 503,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+      if (
+        url === "/api/fetch-runs/run-visible/cancel" &&
+        init?.method === "POST"
+      ) {
+        return new Response(
+          JSON.stringify({ error: { message: "Cancel unavailable" } }),
+          {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+      return new Response(JSON.stringify({ runs: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderFetch();
+    await user.click(screen.getByTestId("global-feeds-chip"));
+    await user.click(screen.getByRole("button", { name: /start fetch/i }));
+
+    await waitFor(() => {
+      expect(startRunMock).toHaveBeenCalledWith([
+        { id: "run-visible", source: "jobspy" },
+      ]);
+    });
+  });
+
+  it("localizes Retry and keeps the error recovery target touch-sized", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url === "/api/fetch-runs" && init?.method === "POST") {
+          return new Response(
+            JSON.stringify({ error: { message: "Create failed" } }),
+            {
+              status: 500,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+        return new Response(JSON.stringify({ runs: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }),
+    );
+
+    renderFetch("zh");
+    await user.click(
+      within(screen.getByTestId("fetch-actions")).getByRole("button"),
+    );
+
+    const retry = await screen.findByRole("button", { name: "重试" });
+    expect(retry).toHaveClass("h-11");
   });
 
   it("renders fetch action buttons inside the card", () => {

@@ -65,7 +65,10 @@ function createRecoveryContext(
 ): TriggerRecoveryContext {
   return {
     target,
-    fetchImpl,
+    // Window.fetch is a Web IDL method and validates its receiver in browsers.
+    // Binding here also prevents the context object below from becoming `this`
+    // when the dependency is invoked through `context.fetchImpl(...)`.
+    fetchImpl: fetchImpl.bind(globalThis),
     wait,
     errorMessage,
     observationMs: Math.max(0, recoveryObservationMs),

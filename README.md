@@ -146,6 +146,28 @@ require a TailoringRun handle for Local AI imports. Historical v0 rows remain
 legacy audit history. Never backfill synthetic run or receipt evidence merely
 to make old data look v1.
 
+### Application Artifact lifecycle rollout
+
+ADR-0010 implements durable lifecycle handling for Application PDF and TeX
+Blobs. Artifacts move through stage, reference, and retirement states; deletion
+uses a leased claim, an external call, and a claim-fenced settle. The migration
+safely registers existing `Application` URL pointers as `REFERENCED`, while the
+same change adds dual-writing, Job-deletion retirement, and reconciliation.
+Once retirement begins, a pathname is never reused: identical later content
+gets a UUID incarnation path so a delayed stale delete cannot erase new bytes.
+Legacy reference checks are bounded and fail closed, and inventory never
+revives a retired pathname.
+
+Production still deploys the migration before the writer binary. The existing
+Application URL columns remain the current aggregate pointers and a mandatory
+second deletion fence. The scheduled route has no inventory, claim, or delete
+side effect unless `ARTIFACT_RECONCILE_ENABLED` is exactly `true` or `1`; keep
+it disabled until the writer is deployed and all older binaries have drained,
+then enable one bounded Phase C run explicitly. The worker drains retirement
+work first; inventory is limited to two 50-object pages per run, resumes from a
+leased database checkpoint, scans only `applications/`, and never scans Resume
+Photos under `resume-photos/`.
+
 ### How Codex was used to build Joblit
 
 Codex worked as a development collaborator across three areas of the codebase.
@@ -248,7 +270,7 @@ The product differentiator is the **Chrome extension**: every correction you mak
 ### PDF Export
 
 - LaTeX-based resume and cover-letter rendering with bilingual templates
-- Optional persistent storage via Vercel Blob
+- FINAL artifacts persist through Vercel Blob outside tests; DRAFT edits do not upload
 
 ### Batch Automation (Codex Workflow)
 
@@ -407,7 +429,8 @@ test/                 API + server test suites
 - Node.js **>= 20.10**
 - npm **>= 10**
 - PostgreSQL database (Neon recommended; any Postgres 14+ works)
-- Optional: Gemini API key, Vercel Blob token, Chrome 120+ for the extension
+- Vercel Blob token for FINAL export and artifact reconciliation
+- Optional: Gemini API key and Chrome 120+ for the extension
 
 ### Setup
 
@@ -483,6 +506,7 @@ A complete template lives in [`.env.example`](./.env.example).
 | `FETCH_RUN_SECRET` | Auth for AU worker config reads and FetchRun v1 commits |
 | `APP_ENC_KEY` | Extension token encryption key (base64) |
 | `LATEX_RENDER_URL` / `LATEX_RENDER_TOKEN` | External LaTeX render service |
+| `BLOB_READ_WRITE_TOKEN` | FINAL PDF persistence and artifact reconciliation; DRAFT edits do not require Blob |
 
 ### Optional
 
@@ -490,11 +514,12 @@ A complete template lives in [`.env.example`](./.env.example).
 |---|---|
 | `SEEK_FETCH_ENABLED` | Kill-switch for **server-side** Seek fetching (`1` / `true` to enable). **Off by default** — Seek is unreachable from datacenter / CI IPs (Cloudflare blocks every endpoint); the supported path is the browser extension. See [ADR-0003](docs/adr/0003-seek-fetch-via-browser-extension.md). |
 | `GEMINI_API_KEY` / `GEMINI_MODEL` | AI provider |
-| `BLOB_READ_WRITE_TOKEN` | Vercel Blob storage |
 | `GITHUB_OWNER` / `GITHUB_REPO` / `GITHUB_TOKEN` / `GITHUB_WORKFLOW_FILE` | Fetch workflow dispatch |
 | `JOBLIT_WEB_URL` | Public URL for the extension callback |
 | `YOUTUBE_API_KEY` | Discover-page video pipeline |
-| `CRON_SECRET` | Bearer secret for the daily Discover-only refresh route |
+| `CRON_SECRET` | Bearer secret Vercel attaches to scheduled daily refresh and artifact-reconciliation calls |
+| `ARTIFACT_RECONCILE_SECRET` | Optional additional bearer for manual artifact-reconciliation calls; it does not replace `CRON_SECRET` for Vercel Cron |
+| `ARTIFACT_RECONCILE_ENABLED` | Default-off kill switch; only `true` / `1` permits Application artifact inventory, claim, and deletion |
 | `RSSHUB_URL` / `RSSHUB_JOB_ROUTES` / `GITHUB_CN_JOB_REPOS` | China job sources |
 | `SENTRY_DSN` | Error reporting (when SDK is installed) |
 
@@ -535,8 +560,13 @@ CI runs lint, dependency policy, full test suite, and (per-PR) Lighthouse agains
 - Vercel invokes `/api/discover/refresh-daily` once per day during the
   `06:00 UTC` target hour.
   Configure `CRON_SECRET` and, for videos, `YOUTUBE_API_KEY`. This schedule
-  refreshes only Discover videos and GitHub repositories; job fetching remains
-  explicitly user-triggered and has no Cron schedule.
+  refreshes only Discover videos and GitHub repositories.
+- Vercel invokes `/api/artifacts/reconcile` at `07:00 UTC`, but the route has no
+  inventory, claim, or delete side effect until
+  `ARTIFACT_RECONCILE_ENABLED=true` (or `1`). When enabling Phase C, also
+  configure `BLOB_READ_WRITE_TOKEN` and `CRON_SECRET`;
+  `ARTIFACT_RECONCILE_SECRET` is an optional additional operator credential.
+- Job fetching remains explicitly user-triggered and has no Cron schedule.
 
 ### FetchRun v1 / JobSpy drain and cutover
 

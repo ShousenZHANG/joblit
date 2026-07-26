@@ -127,6 +127,21 @@ enum ApplicationStatus {
   FINAL
 }
 
+enum ApplicationArtifactTarget {
+  RESUME_PDF
+  COVER_PDF
+  RESUME_TEX
+  COVER_TEX
+}
+
+enum ApplicationArtifactState {
+  STAGED
+  REFERENCED
+  DELETE_PENDING
+  DELETING
+  DELETED
+}
+
 enum TailoringRunSource {
   MANUAL_IMPORT
   LOCAL_AI
@@ -610,6 +625,67 @@ model Application {
   @@index([userId, createdAt])
 }
 
+/// Durable Blob lifecycle ledger. Snapshot identifiers intentionally have no
+/// foreign keys so retirement evidence survives source-row deletion.
+model ApplicationArtifact {
+  id            String                    @id @default(uuid()) @db.Uuid
+  userId        String                    @db.Uuid
+  jobId         String?                   @db.Uuid
+  applicationId String?                   @db.Uuid
+  target        ApplicationArtifactTarget
+
+  /// Logical Blob pathname. It is not globally unique because two stores may
+  /// legitimately contain different physical objects at the same pathname.
+  pathname            String
+  url                 String?
+  /// Lower-cased storage hostname plus decoded pathname. URL query/fragment
+  /// aliases therefore converge while different stores remain distinct.
+  storeHost           String?
+  storageIdentity     String? @unique
+  /// Serializes the upload-response-lost window before the store hostname is
+  /// known. Cleared as soon as a canonical storage identity is recorded.
+  provisionalIdentity String? @unique
+  contentVersion      String?
+  contentHash         String?
+
+  state         ApplicationArtifactState @default(STAGED)
+  deleteAfter   DateTime?
+  retryCount    Int                      @default(0)
+  nextAttemptAt DateTime?
+
+  claimId             String?   @db.Uuid
+  claimLeaseExpiresAt DateTime?
+  lastError           String?
+
+  stagedAt          DateTime  @default(now())
+  referencedAt      DateTime?
+  deleteRequestedAt DateTime?
+  deletedAt         DateTime?
+  inventorySeenAt   DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([state, nextAttemptAt])
+  @@index([state, deleteAfter])
+  @@index([userId, jobId])
+  @@index([applicationId])
+  @@index([pathname])
+  @@index([url])
+}
+
+/// Singleton checkpoint for bounded, resumable Blob inventory. The claim pair
+/// fences concurrent cron invocations; cursor advances only under that lease.
+model ApplicationArtifactInventoryCheckpoint {
+  key                 String    @id
+  cursor              String?
+  claimId             String?   @db.Uuid
+  claimLeaseExpiresAt DateTime?
+  scanStartedAt       DateTime?
+  completedAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
 /// Immutable application-history ledger. Application code only creates rows; it
 /// never updates or deletes them. Job.status is a read-optimized projection
 /// updated in the same serializable transaction as STATUS_CHANGED events.
@@ -652,8 +728,9 @@ model ApplicationEvent {
 /// Both foreign keys are SetNull rather than Cascade because one row is reused
 /// across Applications whose evidence text matches — the id is derived from
 /// (userId, kind, contentHash), not from the Job. `jobDeleteService` therefore
-/// removes only the rows no surviving ClaimEvidence still cites; a shared row
-/// outlives the Job it happens to point at, and its `jobId` becomes null.
+/// removes only rows with no surviving ClaimEvidence or STAR-story provenance
+/// reference; a shared row outlives the Job it happens to point at, and its
+/// `jobId` becomes null.
 model EvidenceSnapshot {
   id            String       @id
   userId        String       @db.Uuid

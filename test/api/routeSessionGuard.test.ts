@@ -41,6 +41,7 @@ const NON_SESSION_ROUTES = new Set([
   "app/api/fetch-runs/[id]/commit/route.ts",
   "app/api/fetch-runs/[id]/config/route.ts",
   "app/api/discover/refresh-daily/route.ts",
+  "app/api/artifacts/reconcile/route.ts",
   "app/api/me/route.ts",
 ]);
 

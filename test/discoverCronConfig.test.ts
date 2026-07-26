@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 describe("Vercel Discover cron contract", () => {
-  it("keeps the production build gate and schedules only one daily Discover refresh", async () => {
+  it("keeps the production build gate and the bounded maintenance schedules", async () => {
     const config = JSON.parse(
       await readFile(`${process.cwd()}/vercel.json`, "utf8"),
     ) as {
@@ -15,6 +15,10 @@ describe("Vercel Discover cron contract", () => {
       {
         path: "/api/discover/refresh-daily",
         schedule: "0 6 * * *",
+      },
+      {
+        path: "/api/artifacts/reconcile",
+        schedule: "0 7 * * *",
       },
     ]);
     expect(

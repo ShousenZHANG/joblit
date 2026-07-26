@@ -1,8 +1,10 @@
-import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { errorJson, notFoundError, validationError } from "@/lib/server/api/errorResponse";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
-import { commitApplicationArtifact } from "@/lib/server/applications/commitApplicationArtifact";
+import {
+  APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE,
+  commitApplicationArtifact,
+} from "@/lib/server/applications/commitApplicationArtifact";
 import { toErrorResponse } from "@/lib/server/api/appError";
 import { enforceAiRateLimit } from "@/lib/server/api/aiRateLimit";
 import { validatePromptMetaForImport } from "@/lib/server/ai/promptContract";
@@ -502,7 +504,9 @@ export async function POST(req: Request) {
           pdf,
           filename,
           atsValidation,
-          version: `${hashAiContent(artifact.aiContent)}-${randomUUID()}`,
+          // The lifecycle module appends the PDF digest, keeping this
+          // content-addressed without allowing different bytes to collide.
+          version: hashAiContent(artifact.aiContent),
         },
       ],
       status: "FINAL",
@@ -523,6 +527,14 @@ export async function POST(req: Request) {
         "AI_CONTENT_INVALID",
         "The stored application content cannot be safely merged. Re-generate both targets.",
         409,
+        { requestId },
+      );
+    }
+    if (result.kind === "blob_not_configured") {
+      return errorJson(
+        APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE.code,
+        APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE.message,
+        APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE.status,
         { requestId },
       );
     }

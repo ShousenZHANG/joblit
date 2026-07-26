@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const stores = vi.hoisted(() => ({
   job: {
@@ -37,6 +37,12 @@ const dependencies = vi.hoisted(() => ({
 const blob = vi.hoisted(() => ({
   del: vi.fn(),
   put: vi.fn(),
+}));
+const artifactLifecycle = vi.hoisted(() => ({
+  stageApplicationArtifact: vi.fn(),
+  recordUploadedArtifact: vi.fn(),
+  markArtifactsReferencedAndRetireSuperseded: vi.fn(),
+  retireStagedArtifacts: vi.fn(),
 }));
 
 vi.mock("@/lib/server/prisma", () => ({
@@ -114,6 +120,10 @@ vi.mock("@/lib/server/applications/atsPdfValidator", async (importOriginal) => {
   };
 });
 vi.mock("@vercel/blob", () => blob);
+vi.mock(
+  "@/lib/server/artifacts/applicationArtifactLifecycle",
+  () => artifactLifecycle,
+);
 
 import { generateApplicationArtifactsForJob } from "./generateApplicationArtifacts";
 
@@ -191,8 +201,9 @@ const combinedAiContent = {
 
 describe("generateApplicationArtifactsForJob", () => {
   beforeEach(() => {
+    vi.unstubAllEnvs();
     vi.clearAllMocks();
-    process.env.BLOB_READ_WRITE_TOKEN = "blob-token";
+    vi.stubEnv("BLOB_READ_WRITE_TOKEN", "blob-token");
     stores.operations.length = 0;
     stores.job.findFirst.mockResolvedValue(job);
     stores.application.findUnique.mockImplementation(async () => {
@@ -322,9 +333,59 @@ describe("generateApplicationArtifactsForJob", () => {
       .mockResolvedValueOnce({ url: "https://blob/new-resume.pdf" })
       .mockResolvedValueOnce({ url: "https://blob/new-cover.pdf" });
     blob.del.mockResolvedValue(undefined);
+    artifactLifecycle.stageApplicationArtifact.mockImplementation(
+      async (input) => {
+        const stem = input.target === "RESUME_PDF" ? "resume" : "cover";
+        const pathname =
+          `applications/${input.userId}/${input.jobId}/` +
+          `${stem}.${input.contentVersion}-1234abcd-${"0".repeat(64)}.pdf`;
+        return {
+          disposition: "STAGED",
+          pathname,
+          contentHash: "0".repeat(64),
+          artifact: {
+            id: `artifact-${artifactLifecycle.stageApplicationArtifact.mock.calls.length}`,
+            userId: input.userId,
+            jobId: input.jobId,
+            applicationId: null,
+            target: input.target,
+            state: "STAGED",
+            pathname,
+            url: null,
+            contentVersion: input.contentVersion,
+            contentHash: "0".repeat(64),
+          },
+        };
+      },
+    );
+    artifactLifecycle.recordUploadedArtifact.mockImplementation(
+      async (input) => ({
+        disposition: "RECORDED",
+        artifact: {
+          id: input.artifactId,
+          state: "STAGED",
+          pathname: input.pathname,
+          url: input.url,
+        },
+      }),
+    );
+    artifactLifecycle.markArtifactsReferencedAndRetireSuperseded.mockImplementation(
+      async () => {
+        stores.operations.push("artifact.mark");
+        return { referenced: 2, retired: 2 };
+      },
+    );
+    artifactLifecycle.retireStagedArtifacts.mockResolvedValue({
+      queued: 2,
+      awaitingUploadResolution: 0,
+    });
   });
 
-  it("locks, rechecks ownership, commits, then deletes only stale artifacts", async () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("locks, rechecks ownership, and commits reference plus retirements atomically", async () => {
     const result = await generateApplicationArtifactsForJob({
       userId: "user-1",
       jobId: job.id,
@@ -366,19 +427,50 @@ describe("generateApplicationArtifactsForJob", () => {
       "job.findFirst",
       "application.findUnique",
       "application.upsert",
+      "artifact.mark",
     ]);
-    expect(blob.del).toHaveBeenCalledWith(
-      "https://blob/old-resume.pdf",
-      { token: "blob-token" },
+    expect(blob.put).toHaveBeenCalledTimes(2);
+    expect(blob.put).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(
+        /^applications\/user-1\/job-1\/resume\.[0-9a-f]{8}-[0-9a-f]{8}-[0-9a-f]{64}\.pdf$/,
+      ),
+      Buffer.from("resume"),
+      expect.objectContaining({
+        allowOverwrite: true,
+        addRandomSuffix: false,
+        token: "blob-token",
+      }),
     );
-    expect(blob.del).toHaveBeenCalledWith(
-      "https://blob/old-cover.pdf",
-      { token: "blob-token" },
-    );
-    expect(blob.del).not.toHaveBeenCalledWith(
-      "https://blob/new-resume.pdf",
+    expect(
+      artifactLifecycle.markArtifactsReferencedAndRetireSuperseded,
+    ).toHaveBeenCalledWith(
       expect.anything(),
+      expect.objectContaining({
+        userId: "user-1",
+        jobId: "job-1",
+        applicationId: "application-1",
+        referenced: [
+          expect.objectContaining({
+            target: "RESUME_PDF",
+            url: "https://blob/new-resume.pdf",
+          }),
+          expect.objectContaining({
+            target: "COVER_PDF",
+            url: "https://blob/new-cover.pdf",
+          }),
+        ],
+        superseded: [
+          { target: "RESUME_PDF", url: "https://blob/old-resume.pdf" },
+          { target: "COVER_PDF", url: "https://blob/old-cover.pdf" },
+        ],
+      }),
     );
+    expect(stores.application.upsert.mock.invocationCallOrder[0]).toBeLessThan(
+      artifactLifecycle.markArtifactsReferencedAndRetireSuperseded.mock
+        .invocationCallOrder[0],
+    );
+    expect(blob.del).not.toHaveBeenCalled();
   });
 
   it("does not recreate an application when the job was deleted during generation", async () => {
@@ -405,17 +497,15 @@ describe("generateApplicationArtifactsForJob", () => {
     ).rejects.toThrow("JOB_NOT_FOUND");
 
     expect(stores.application.upsert).not.toHaveBeenCalled();
-    expect(blob.del).toHaveBeenCalledWith(
-      "https://blob/new-resume.pdf",
-      { token: "blob-token" },
-    );
-    expect(blob.del).toHaveBeenCalledWith(
-      "https://blob/new-cover.pdf",
-      { token: "blob-token" },
-    );
+    expect(artifactLifecycle.retireStagedArtifacts).toHaveBeenCalledWith({
+      userId: "user-1",
+      jobId: "job-1",
+      artifactIds: ["artifact-1", "artifact-2"],
+    });
+    expect(blob.del).not.toHaveBeenCalled();
   });
 
-  it("rolls back newly uploaded artifacts when the commit fails", async () => {
+  it("durably retires newly uploaded artifacts when the commit fails", async () => {
     stores.application.upsert.mockRejectedValueOnce(new Error("DB_DOWN"));
 
     await expect(
@@ -425,14 +515,12 @@ describe("generateApplicationArtifactsForJob", () => {
       }),
     ).rejects.toThrow("DB_DOWN");
 
-    expect(blob.del).toHaveBeenCalledWith(
-      "https://blob/new-resume.pdf",
-      { token: "blob-token" },
-    );
-    expect(blob.del).toHaveBeenCalledWith(
-      "https://blob/new-cover.pdf",
-      { token: "blob-token" },
-    );
+    expect(artifactLifecycle.retireStagedArtifacts).toHaveBeenCalledWith({
+      userId: "user-1",
+      jobId: "job-1",
+      artifactIds: ["artifact-1", "artifact-2"],
+    });
+    expect(blob.del).not.toHaveBeenCalled();
   });
 
   it("aborts before uploading anything when the ATS gate rejects the PDF", async () => {
@@ -455,6 +543,21 @@ describe("generateApplicationArtifactsForJob", () => {
 
     expect(blob.put).not.toHaveBeenCalled();
     expect(stores.application.upsert).not.toHaveBeenCalled();
+  });
+
+  it("maps unavailable artifact storage to a typed retryable service error", async () => {
+    dependencies.commitApplicationArtifact.mockResolvedValueOnce({
+      kind: "blob_not_configured",
+    });
+
+    await expect(
+      generateApplicationArtifactsForJob({ userId: "user-1", jobId: job.id }),
+    ).rejects.toMatchObject({
+      code: "ARTIFACT_STORAGE_UNAVAILABLE",
+      status: 503,
+      publicMessage:
+        "PDF storage is not configured. Please try again after deployment configuration is restored.",
+    });
   });
 
   it("binds a server batch run and commits both target receipts atomically", async () => {

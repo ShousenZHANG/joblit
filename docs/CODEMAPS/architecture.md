@@ -207,11 +207,11 @@ in the clear — treat TLS in front of the renderer as the actual fix.
 ```
 app/(marketing)  app/(auth)  app/(app)        ← React, next-intl, React Query
                                   │
-                             app/api/**        ← 68 route handlers
+                             app/api/**        ← 69 route handlers
                                   │
                             lib/server/**      ← business logic
                                   │
-                    prisma (Neon serverless)   ← 29 models
+                    prisma (Neon serverless)   ← 33 models
 ```
 
 `lib/shared/**` is imported by both sides and is the only place a contract may
@@ -227,6 +227,11 @@ canonicalization, the Local AI bridge contract.
   transactions, but both delegate AI Content semantics to
   `evolveApplicationAiContent`. See
   [backend.md](./backend.md#the-application-artifact-commit-sequence).
+- ADR-0010 adds the `ApplicationArtifact` lifecycle seam: durable
+  stage/reference/retirement, claim-call-fenced settlement, and a reconciler
+  restricted to `applications/`. It is side-effect free unless the default-off
+  `ARTIFACT_RECONCILE_ENABLED` kill switch is explicitly enabled. Resume Photos
+  remain a separate lifecycle.
 - `lib/api/fetchJson.ts` is the intended client seam and has three importers
   against 36 hand-rolled `fetch` call sites.
 - The Chrome extension cannot import `lib/shared/**` — its tsconfig cannot
@@ -290,6 +295,7 @@ runs that set plus the builds and dependency audits.
 | Which AI proposals are allowed through | The Quality Gate — `lib/server/applications/manualImportParser.ts:419`, `:450` |
 | How a PDF is produced | `lib/server/latex/`, then `lib/server/latex/compilePdf.ts:68` |
 | What "finalized" means | `app/api/applications/[id]/finalize/route.ts`, `lib/server/applications/applicationAiContentAggregate.ts`, `lib/server/applications/commitApplicationArtifact.ts`, `lib/server/applications/finalizeApplication.ts` |
+| How Application Blobs are staged, referenced, retired, or reconciled | `lib/server/artifacts/`, `app/api/artifacts/reconcile/route.ts`, then ADR-0010 |
 | The jobs list UI | `app/(app)/jobs/JobsClient.tsx` and `app/(app)/jobs/hooks/` |
 | The Master Resume Profile editor | `components/resume/ResumeContext.tsx` |
 | A user-facing string | `messages/en.json` **and** `messages/zh.json` — parity is gated by `test/messagesContract.test.ts` |

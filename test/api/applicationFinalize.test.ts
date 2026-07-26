@@ -10,7 +10,15 @@ const renderer = vi.hoisted(() => ({
   renderApplicationPdf: vi.fn(),
   renderCoverLetterPdf: vi.fn(),
 }));
-const commit = vi.hoisted(() => ({ commitApplicationArtifact: vi.fn() }));
+const commit = vi.hoisted(() => ({
+  APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE: {
+    code: "ARTIFACT_STORAGE_UNAVAILABLE",
+    status: 503,
+    message:
+      "PDF storage is not configured. Please try again after deployment configuration is restored.",
+  },
+  commitApplicationArtifact: vi.fn(),
+}));
 const ats = vi.hoisted(() => ({ assertAtsPdf: vi.fn() }));
 const renderLimiter = vi.hoisted(() => ({
   enforce: vi.fn(),
@@ -23,8 +31,8 @@ vi.mock("@/lib/server/applications/finalizeApplication", () => renderer);
 /**
  * The blob lifecycle and the compare-and-swap moved into
  * `commitApplicationArtifact` and are covered by its own tests — including
- * that a lost CAS deletes the new blob and spares the superseded one, and that
- * a throwing transaction deletes the new blob. What remains here is
+ * that a lost CAS durably retires the new Blob and spares the current one, and
+ * that a throwing transaction preserves the same retirement intent. What remains here is
  * route-level: the pre-checks, the idempotent short-circuit, the review gate,
  * and mapping commit results onto responses.
  */
@@ -48,6 +56,7 @@ import {
 } from "@/lib/shared/schemas/aiContent";
 import { attachEvidenceAndReview } from "@/lib/server/ai/evidenceLedger";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
+import { buildApplicationArtifactVersionPrefix } from "@/lib/server/artifacts/applicationArtifactLifecycle";
 
 const APP_ID = "22222222-2222-4222-9222-222222222222";
 const USER_ID = "user-1";
@@ -199,8 +208,9 @@ describe("POST /api/applications/[id]/finalize", () => {
         artifacts: [
           expect.objectContaining({
             target: "resume",
-            // A unique version makes an uncommitted render safe to delete.
-            version: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f-]{36}$/),
+            // The lifecycle module combines this stable aggregate version
+            // with the actual PDF digest for immutable object identity.
+            version: expect.stringMatching(/^[0-9a-f]{8}$/),
           }),
         ],
       }),
@@ -253,6 +263,33 @@ describe("POST /api/applications/[id]/finalize", () => {
     });
   });
 
+  it("returns a typed 503 when production artifact storage is unavailable", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: USER_ID },
+    });
+    const ai = makeAiContent();
+    const hash = hashAiContent(ai);
+    prisma.application.findFirst.mockResolvedValueOnce({
+      ...ownedReviewSources(),
+      id: APP_ID,
+      userId: USER_ID,
+      aiContent: ai,
+      aiContentHash: hash,
+      resumePdfUrl: null,
+      coverPdfUrl: null,
+    });
+    commit.commitApplicationArtifact.mockResolvedValueOnce({
+      kind: "blob_not_configured",
+    });
+
+    const res = await POST(makeRequest({ expectedHash: hash }), { params });
+
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toMatchObject({
+      error: { code: "ARTIFACT_STORAGE_UNAVAILABLE" },
+    });
+  });
+
   it("returns 400 when the Application has no aiContent (legacy row)", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: USER_ID },
@@ -301,9 +338,11 @@ describe("POST /api/applications/[id]/finalize", () => {
       scopeKey: USER_ID,
     });
     const hash = hashAiContent(ai);
+    const lifecycleVersionPrefix =
+      buildApplicationArtifactVersionPrefix(hash);
     const resumePdfUrl =
       `https://blob.vercel-storage.com/applications/${USER_ID}/job-1/` +
-      `resume.${hash}-123e4567-e89b-42d3-a456-426614174000.pdf`;
+      `resume.${lifecycleVersionPrefix}${"a".repeat(64)}.pdf`;
     prisma.application.findFirst.mockResolvedValueOnce({
       ...ownedReviewSources(),
       id: APP_ID,

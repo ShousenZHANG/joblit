@@ -785,11 +785,30 @@ export function FetchClient() {
         // Creating a multi-source fetch is all-or-nothing. Release any row
         // already created so it cannot become an invisible quota-consuming
         // QUEUED run when the second create fails.
-        await Promise.allSettled(
-          created.map((run) =>
-            fetch(`/api/fetch-runs/${run.id}/cancel`, { method: "POST" }),
-          ),
+        const rollbackResults = await Promise.allSettled(
+          created.map(async (run) => {
+            const response = await fetch(`/api/fetch-runs/${run.id}/cancel`, {
+              method: "POST",
+            });
+            // Missing or already-terminal rows no longer consume active
+            // capacity, so both are successful compensation outcomes.
+            if (
+              !response.ok &&
+              response.status !== 404 &&
+              response.status !== 409
+            ) {
+              throw new Error(`Fetch run rollback failed (${response.status})`);
+            }
+          }),
         );
+        const visibleRuns = created.filter(
+          (_run, index) => rollbackResults[index]?.status === "rejected",
+        );
+        if (visibleRuns.length > 0) {
+          // A failed compensation must stay observable so the progress panel
+          // can poll it and give the user another Cancel affordance.
+          startRuns(visibleRuns);
+        }
         throw error;
       }
       startRuns(created);
@@ -869,10 +888,10 @@ export function FetchClient() {
               type="button"
               onClick={onSubmit}
               disabled={isSubmitting || isRunning}
-              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-destructive/40 bg-background/70 px-3 text-xs font-semibold text-destructive transition-colors hover:bg-background disabled:pointer-events-none disabled:opacity-50"
+              className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full border border-destructive/40 bg-background/70 px-4 text-sm font-semibold text-destructive transition-colors hover:bg-background disabled:pointer-events-none disabled:opacity-50"
             >
               <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-              Retry
+              {t("retry")}
             </button>
           ) : null}
         </div>

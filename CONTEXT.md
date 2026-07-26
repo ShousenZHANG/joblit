@@ -32,6 +32,17 @@ The artifact produced by **tailoring** the Master Resume Profile to a specific J
 
 Distinct from **Job**: Job is the role, Application is what the user submits *to* the role.
 
+### Application Artifact (`ApplicationArtifact`)
+
+A durable lifecycle record for one Application PDF or TeX Blob. It tracks the
+object from `STAGED` through `REFERENCED` and eventual retirement; it is not the
+current Application aggregate. Its user, Job, and Application identifiers are
+scalar identity snapshots without foreign keys so cleanup evidence survives
+source-row deletion. A future account-deletion transaction must invoke the
+explicit artifact-erasure preparation hook before deleting the User; no
+supported account-deletion route is currently wired. Settled metadata may be
+purged only after proving the User is absent. See **ADR-0010**.
+
 ### Application Status
 
 | Value | Meaning |

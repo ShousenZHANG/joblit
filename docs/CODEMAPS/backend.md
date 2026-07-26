@@ -12,6 +12,7 @@ Vocabulary is `CONTEXT.md`. Route-layer facts live in
 |---|---|---|
 | `ai/` | Prompt construction, provider calls, the Gemini Tailoring path, evidence/review ledger, cover quality, fit scoring, Skill Pack V3 | `tailorApplication.ts` `tailorApplicationContent`, `buildPrompt.ts`, `providers.ts` `callProvider`, `evidenceLedger.ts` `attachEvidenceAndReview`, `promptContract.ts`, `skillPack.ts` `buildSkillPackV3Files` |
 | `applications/` | Application lifecycle: generation acceptance, target-aware AI Content evolution, canonical resume composition, finalize render, artifact commit, ATS validation, advisory lock, review ledger, `ApplicationEvent` append | `applicationGeneration.ts` `acceptApplicationGeneration`, `applicationAiContentAggregate.ts` `evolveApplicationAiContent`, `applicationResumeComposition.ts` `composeApplicationResumeRenderInput`, `commitApplicationArtifact.ts` `commitApplicationArtifact`, `generateApplicationArtifacts.ts`, `manualImportArtifact.ts`, `finalizeApplication.ts`, `persistReviewLedger.ts`, `applicationMutationLock.ts`, `atsPdfValidator.ts` |
+| `artifacts/` | ADR-0010 Application Blob lifecycle, account-erasure hooks, Vercel adapter, inventory, claim/call/fenced settle | `applicationArtifactLifecycle.ts` `prepareApplicationArtifactsForAccountErasure` / `purgeDeletedApplicationArtifactsForErasedUser`, `artifactReconciler.ts`, `artifactBlobPort.ts`, `vercelBlobAdapter.ts` |
 | `applicationBatches/` | Codex Batch state machine: claim, complete, cancel, retry | `runner.ts:169` `claimNextBatchTask`, `:282` `completeBatchTask`, `:334`, `:385`; `codexRunContext.ts:81`/`:189`/`:245`; `batchProgress.ts:9` |
 | `jobs/` | Job import/list/search/delete/status, fit leasing, cooldown, SimHash dedup, posting risk, liveness, market scoping | `jobImportService.ts:95`, `jobListService.ts:142`, `jobSearchService.ts:11`, `jobDeleteService.ts:69`/`:135`, `fitRunService.ts:262`, `jobMutationLock.ts:23`, `postingRisk.ts:121` |
 | `latex/` | Template rendering from `latexTemp/` + the remote render-service client | `compilePdf.ts:68` `compileLatexToPdf`, `renderResume.ts:203`, `renderResumeCN.ts:190`, `renderCoverLetter.ts:69`, `mapResumeProfile.ts:30` |
@@ -128,11 +129,12 @@ All artifact writers use `commitApplicationArtifact`. Generated writers may
 prepend the `ABAT -> TLRN` locks and complete Tailoring Run acceptance around
 the Application mutation:
 
-**upload → transaction (optional Batch lock → optional Tailoring Run lock →
-Application lock → Job ownership recheck → optional aggregate CAS → optional
-single-target fold + full re-review → FINAL review gate → hash → upsert →
-review ledger → immutable target receipt → run/task projection) → GC
-superseded blobs**
+**durable STAGED row → upload → record URL → transaction (optional Batch lock
+→ optional Tailoring Run lock → Application lock → Job ownership recheck →
+optional aggregate CAS → optional single-target fold + full re-review → FINAL
+review gate → hash → Application upsert + REFERENCED transition + superseded
+DELETE_PENDING outbox → review ledger → immutable target receipt → run/task
+projection)**
 
 When the accepted receipt completes a batch run's required target mask, that
 same transaction marks the linked task `SUCCEEDED`. Neither task `PATCH` nor
@@ -146,12 +148,56 @@ same transaction marks the linked task `SUCCEEDED`. Neither task `PATCH` nor
 | `finalize/route.ts` | already-canonical full aggregate, one rendered artifact | no | `expectedHash` |
 
 Upload failure never clears an existing artifact. A failed transaction, lost
-CAS, missing Job, or blocked FINAL deletes the newly uploaded Blob. A
-superseded Blob is deleted only after the transaction commits.
+CAS, missing Job, or blocked FINAL durably retires any completed upload; a
+superseded Blob becomes eligible only after its replacement transaction
+commits. The protected reconciler owns both external deletion and settlement.
 
 Editor Auto-save and discard render no artifact. They retain their own lock +
 aggregate-CAS transactions, evolve AI Content through
 `evolveApplicationAiContent`, and persist the review ledger.
+
+### ADR-0010 lifecycle cutover status
+
+This change implements Phase A and Phase B together: the additive
+`ApplicationArtifact` schema and current-pointer backfill ship with the writer,
+Job-deletion retirement outbox, and protected reconciliation worker. Production
+still deploys the migration before the application binary so no new writer can
+target a missing table.
+
+The runtime reserves a `STAGED` pathname before upload, transitions it
+to `REFERENCED` in the same transaction as the Application URL pointer, and
+records every superseded or failed artifact as durable retirement work.
+Deletion uses claim → external call → claim-fenced settle. An expired stage
+whose upload response was lost can be deleted idempotently by pathname even
+when its URL was never recorded.
+
+Path reuse stops permanently when retirement begins. Exact retries reuse only
+an active stage/reference; a later generation of the same bytes receives a UUID
+incarnation pathname. This is the cross-system ABA fence for a delayed external
+delete whose database claim has expired. The current-pointer safety check uses
+a finite lookup for trusted writer paths and a capped, fail-closed legacy scan
+for metadata-null migration/inventory rows. A reappearing `DELETED` Blob is
+requeued for deletion, never restored to an active lifecycle state.
+
+The inventory reconciler is restricted to the `applications/` prefix. Before
+any delete it must query all four current Application URL columns as a second
+reference fence. It drains the outbox first, then processes at most two
+50-object inventory pages and persists a leased, claim-fenced cursor.
+`resume-photos/` and the Resume Photo module are outside this lifecycle. The
+scheduled route has no inventory, claim, or delete side effect unless
+`ARTIFACT_RECONCILE_ENABLED` is exactly `true` or `1`. Production enables that
+kill switch only after the writer is deployed and old binaries have drained;
+rollout and backfill rules are in ADR-0010.
+
+Account erasure is a required service integration point, not a currently
+wired route. The future User-deletion transaction must call
+`prepareApplicationArtifactsForAccountErasure` before deleting the User in the
+same transaction. It immediately queues all unclaimed tenant artifacts,
+preserves/reports active deletion claims, and removes rows already settled as
+`DELETED`. After the worker settles the asynchronous tail,
+`purgeDeletedApplicationArtifactsForErasedUser` refuses to purge unless the
+User row is absent. The reconciler's absent-user sweep covers an in-flight
+writer that stages after the pre-delete scan.
 
 ---
 
@@ -199,9 +245,10 @@ A non-null stored `aiContent` that fails schema validation is not treated as an
 empty aggregate; single-target generation fails closed instead of erasing the
 preserved target.
 
-**Blob GC ordering.** `commitApplicationArtifact` deletes the *new* blob when a
-commit does not land and deletes the *old* blob only after a successful
-transaction.
+**Blob lifecycle ordering.** Reserve `STAGED` before `put`; make the new object
+`REFERENCED` and the old object `DELETE_PENDING` with the Application mutation;
+perform no external delete until after that transaction. The worker settles
+only the UUID claim it owns.
 
 **Circuit breaker and rate limiter state is per-isolate.** The LaTeX breaker
 (`compilePdf.ts:41`) and the rate limiter (`api/rateLimit.ts:15`) are
@@ -217,7 +264,7 @@ module-level in-memory. Documented at their definitions.
 | OpenAI | `providers.ts:112` | Yes — reachable only from tests |
 | Anthropic | `providers.ts:182` | Yes — reachable only from tests |
 | LaTeX render service | `compilePdf.ts:68` | Yes — host pre-parsed, 12 MiB, 20 s. Plain HTTP only under `LATEX_RENDER_ALLOW_INSECURE_HTTP` |
-| Vercel Blob put/del | `generateApplicationArtifacts.ts:48`, `finalizeApplication.ts:124`, `jobDeleteService.ts:45` | No — SDK-internal |
+| Vercel Blob put/list/del | `artifacts/vercelBlobAdapter.ts`, reached through Application commit and the protected reconciler | No — SDK-internal |
 | Vercel Blob read (resume photo) | `resumePhotoBlob.ts:99` | Yes — path must be `resume-photos/${userId}/…` |
 | GitHub Actions dispatch | `app/api/fetch-runs/[id]/trigger/route.ts:312` | Yes — AU market only |
 | GitHub trending HTML | `githubTrending.ts:167` | Yes |
