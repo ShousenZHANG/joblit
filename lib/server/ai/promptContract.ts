@@ -52,6 +52,18 @@ function stableSerialize(value: unknown): string {
     .join(",")}}`;
 }
 
+/**
+ * Content-address one of the bounded snapshots used to construct a prompt.
+ *
+ * TailoringRun persists only this digest (and the PromptMeta receipt), never
+ * the prompt or source snapshot itself. Exporting the same canonicalizer used
+ * by PromptMeta prevents the run protocol from inventing a second notion of
+ * snapshot equality.
+ */
+export function buildPromptSnapshotHash(value: unknown): string {
+  return createHash("sha256").update(stableSerialize(value)).digest("hex");
+}
+
 type JsonSchemaNode = {
   type?: string;
   properties?: Record<string, JsonSchemaNode>;

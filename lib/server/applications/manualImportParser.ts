@@ -8,6 +8,7 @@ import {
   CoverGenerationOutputSchema,
   ResumeGenerationOutputSchema,
 } from "@/lib/server/ai/promptContract";
+import { TailoringRunHandleSchema } from "@/lib/shared/tailoringRunContract";
 
 // ── Zod Schemas ──
 
@@ -17,6 +18,7 @@ export const ManualGenerateSchema = z
     target: z.enum(["resume", "cover"]),
     modelOutput: z.string().min(1).max(80_000),
     promptMeta: z.record(z.string(), z.unknown()).optional(),
+    tailoringRun: TailoringRunHandleSchema.optional(),
     source: z
       .enum(["manual_import", "local_ai", "codex_batch"])
       .default("manual_import"),

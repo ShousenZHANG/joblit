@@ -6,6 +6,7 @@ import {
   isRepairRunPayload,
   isRunLookupPayload,
   isStartRunPayload,
+  isTailoringRunHandle,
   jsonByteLength,
   validatePublicRunResult,
   type HermesSettingsInput,
@@ -15,6 +16,7 @@ import {
   type RepairRunPayload,
   type RunLookupPayload,
   type StartRunPayload,
+  type TailoringRunHandle,
 } from "@ext/shared/hermesTypes";
 import {
   fetchAiPromptEnvelope,
@@ -55,6 +57,8 @@ interface RegistryBase extends StartRunPayload {
   createdAt: number;
   updatedAt: number;
   promptMeta: Record<string, unknown>;
+  /** Optional only so registry rows created before TailoringRun v1 remain readable. */
+  tailoringRun?: TailoringRunHandle;
 }
 
 type RegistryEntry =
@@ -106,10 +110,14 @@ function makeApi(settings: SecretSettings) {
   return createHermesApi(settings);
 }
 
-function validatePositionIndependentPrompt(value: unknown): {
+function validatePositionIndependentPrompt(
+  value: unknown,
+  target: StartRunPayload["target"],
+): {
   input: string;
   instructions: string;
   promptMeta: Record<string, unknown>;
+  tailoringRun?: TailoringRunHandle;
 } {
   if (!isRecord(value) || !isRecord(value.prompt) || !isRecord(value.promptMeta)) {
     throw new HermesApiError("HERMES_PROTOCOL_ERROR", "Joblit prompt response is invalid");
@@ -127,7 +135,26 @@ function validatePositionIndependentPrompt(value: unknown): {
   ) {
     throw new HermesApiError("HERMES_PROTOCOL_ERROR", "Joblit prompt response is invalid");
   }
-  return { input, instructions, promptMeta: value.promptMeta };
+  const tailoringRun = value.tailoringRun;
+  const legacyTailoringRunProtocol =
+    value.legacyTailoringRunProtocol === true;
+  const requiresTailoringRun = target === "resume" || target === "cover";
+  if (
+    (tailoringRun !== undefined && !isTailoringRunHandle(tailoringRun)) ||
+    (
+      requiresTailoringRun &&
+      !legacyTailoringRunProtocol &&
+      !isTailoringRunHandle(tailoringRun)
+    )
+  ) {
+    throw new HermesApiError("HERMES_PROTOCOL_ERROR", "Joblit prompt response is invalid");
+  }
+  return {
+    input,
+    instructions,
+    promptMeta: value.promptMeta,
+    ...(isTailoringRunHandle(tailoringRun) ? { tailoringRun } : {}),
+  };
 }
 
 function isRegistryEntry(value: unknown, requestId: string): value is RegistryEntry {
@@ -145,7 +172,8 @@ function isRegistryEntry(value: unknown, requestId: string): value is RegistryEn
     typeof value.updatedAt !== "number" ||
     !Number.isFinite(value.updatedAt) ||
     !isRecord(value.promptMeta) ||
-    jsonByteLength(value.promptMeta) > MAX_PROMPT_META_BYTES
+    jsonByteLength(value.promptMeta) > MAX_PROMPT_META_BYTES ||
+    (value.tailoringRun !== undefined && !isTailoringRunHandle(value.tailoringRun))
   ) return false;
 
   if (value.stage === "starting" || value.stage === "unknown") return true;
@@ -238,17 +266,17 @@ function putEntry(entry: RegistryEntry, expectedEpoch = registryEpoch): Promise<
   }, expectedEpoch);
 }
 
-function deleteEntry(requestId: string, expectedEpoch = registryEpoch): Promise<void> {
-  return mutateRegistry((registry) => {
-    delete registry[requestId];
-  }, expectedEpoch);
-}
-
 function publicActive(
   entry: RegistryBase,
   status: "queued" | "running" | "stopping",
 ): Extract<PublicRunResult, { status: "queued" | "running" | "stopping" | "cancelled" }> {
-  return { requestId: entry.requestId, jobId: entry.jobId, target: entry.target, status };
+  return {
+    requestId: entry.requestId,
+    jobId: entry.jobId,
+    target: entry.target,
+    status,
+    ...(entry.tailoringRun ? { tailoringRun: entry.tailoringRun } : {}),
+  };
 }
 
 function publicFailure(
@@ -268,6 +296,7 @@ function publicFailure(
     target: entry.target,
     status: "failed",
     error: { code, message, retryable: code === "HERMES_RUN_FAILED" },
+    ...(entry.tailoringRun ? { tailoringRun: entry.tailoringRun } : {}),
   };
 }
 
@@ -399,17 +428,32 @@ async function startOnce(payload: StartRunPayload): Promise<PublicRunResult> {
     }
     if (existing.stage === "terminal") return existing.terminal;
     if (existing.stage === "active") return publicActive(existing, existing.lastStatus);
-    throw new HermesApiError("RUN_START_UNKNOWN", "Hermes start state is ambiguous", { retryable: false });
+    // The private Hermes id is unknown, but the public Joblit operation and
+    // TailoringRun handle are durable. Surface a resumable public state so the
+    // page can still cancel/fail the server run without exposing or inventing
+    // a private executor identity.
+    return publicActive(existing, "queued");
   }
 
   const settings = await readSecretSettings();
   const prompt = validatePositionIndependentPrompt(
     await (payload.target === "triage" && payload.jobIds
       ? fetchAiTriagePromptEnvelope({ jobIds: payload.jobIds })
-      : fetchAiPromptEnvelope({ jobId: payload.jobId, target: payload.target })),
+      : fetchAiPromptEnvelope({
+          jobId: payload.jobId,
+          target: payload.target,
+          issueKey: payload.requestId,
+        })),
+    payload.target,
   );
   const now = Date.now();
-  const base: RegistryBase = { ...payload, createdAt: now, updatedAt: now, promptMeta: prompt.promptMeta };
+  const base: RegistryBase = {
+    ...payload,
+    createdAt: now,
+    updatedAt: now,
+    promptMeta: prompt.promptMeta,
+    ...(prompt.tailoringRun ? { tailoringRun: prompt.tailoringRun } : {}),
+  };
   await putEntry({ ...base, stage: "starting" }, expectedEpoch);
 
   let runId: string;
@@ -422,10 +466,18 @@ async function startOnce(payload: StartRunPayload): Promise<PublicRunResult> {
   } catch (error) {
     if (error instanceof HermesApiError && error.ambiguousStart) {
       await putEntry({ ...base, stage: "unknown", updatedAt: Date.now() }, expectedEpoch);
-      throw new HermesApiError("RUN_START_UNKNOWN", "Hermes start state is ambiguous", { retryable: false });
+      return publicActive(base, "queued");
     }
-    await deleteEntry(payload.requestId, expectedEpoch);
-    throw error;
+    // Prompt issuance already created the durable Joblit run. Preserve its
+    // public handle in a terminal registry row so the web hook can project the
+    // definite Hermes start failure back to TailoringRun instead of orphaning
+    // it in RUNNING.
+    const terminal = publicFailure(base, "HERMES_RUN_FAILED");
+    await putEntry(
+      { ...base, stage: "terminal", terminal, updatedAt: Date.now() },
+      expectedEpoch,
+    );
+    return terminal;
   }
 
   try {
@@ -460,7 +512,7 @@ export async function getLocalAiRun(payload: RunLookupPayload): Promise<PublicRu
   const entry = registry[payload.requestId];
   if (!entry) throw new HermesApiError("HERMES_RUN_NOT_FOUND", "Run mapping is missing", { retryable: true });
   if (entry.stage === "unknown" || entry.stage === "starting") {
-    throw new HermesApiError("RUN_START_UNKNOWN", "Hermes start state is ambiguous");
+    return publicActive(entry, "queued");
   }
   if (entry.stage === "terminal") return entry.terminal;
   if (entry.stage === "repairing") {
@@ -528,13 +580,20 @@ export async function getLocalAiRun(payload: RunLookupPayload): Promise<PublicRu
         status: "succeeded",
         modelOutput: run.output,
         promptMeta: entry.promptMeta,
+        ...(entry.tailoringRun ? { tailoringRun: entry.tailoringRun } : {}),
       };
       terminal = validatePublicRunResult(success)
         ? success
         : publicFailure(entry, "AI_OUTPUT_INVALID");
     }
   } else if (run.status === "cancelled") {
-    terminal = { requestId: entry.requestId, jobId: entry.jobId, target: entry.target, status: "cancelled" };
+    terminal = {
+      requestId: entry.requestId,
+      jobId: entry.jobId,
+      target: entry.target,
+      status: "cancelled",
+      ...(entry.tailoringRun ? { tailoringRun: entry.tailoringRun } : {}),
+    };
   } else {
     terminal = publicFailure(entry, "HERMES_RUN_FAILED");
   }
@@ -574,6 +633,7 @@ export async function repairLocalAiRun(payload: RepairRunPayload): Promise<Publi
     target: entry.target,
     createdAt: entry.createdAt,
     promptMeta: entry.promptMeta,
+    ...(entry.tailoringRun ? { tailoringRun: entry.tailoringRun } : {}),
     stage: "repairing",
     repairStartedAt: Date.now(),
     updatedAt: Date.now(),
@@ -594,6 +654,7 @@ export async function repairLocalAiRun(payload: RepairRunPayload): Promise<Publi
         status: "succeeded",
         modelOutput: content,
         promptMeta: entry.promptMeta,
+        ...(entry.tailoringRun ? { tailoringRun: entry.tailoringRun } : {}),
       };
       terminal = validatePublicRunResult(success)
         ? success
@@ -633,8 +694,23 @@ export async function stopLocalAiRun(payload: RunLookupPayload): Promise<PublicR
       jobId: entry.jobId,
       target: entry.target,
       status: "cancelled",
+      ...(entry.tailoringRun ? { tailoringRun: entry.tailoringRun } : {}),
     };
     await putEntry({ ...entry, stage: "terminal", terminal, repaired: true, updatedAt: Date.now() }, expectedEpoch);
+    return terminal;
+  }
+  if (entry.stage === "unknown" || entry.stage === "starting") {
+    const terminal: PublicRunResult = {
+      requestId: entry.requestId,
+      jobId: entry.jobId,
+      target: entry.target,
+      status: "cancelled",
+      ...(entry.tailoringRun ? { tailoringRun: entry.tailoringRun } : {}),
+    };
+    await putEntry(
+      { ...entry, stage: "terminal", terminal, updatedAt: Date.now() },
+      expectedEpoch,
+    );
     return terminal;
   }
   if (entry.stage !== "active") throw new HermesApiError("RUN_START_UNKNOWN", "Hermes start state is ambiguous");

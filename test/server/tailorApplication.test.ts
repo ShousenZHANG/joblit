@@ -96,6 +96,75 @@ describe("tailorApplicationContent", () => {
     expect(passedRules.coverRules.length).toBeGreaterThan(0);
   });
 
+  it("calls only the missing cover target during partial recovery", async () => {
+    process.env.GEMINI_API_KEY = "test-key";
+    const callProviderSpy = vi
+      .spyOn(providers, "callProvider")
+      .mockResolvedValueOnce(COVER_OUTPUT);
+
+    const result = await tailorApplicationContent(INPUT, {
+      targets: ["cover"],
+    });
+
+    expect(callProviderSpy).toHaveBeenCalledOnce();
+    expect(callProviderSpy).toHaveBeenCalledWith(
+      "gemini",
+      expect.objectContaining({ userPrompt: "cover-user" }),
+    );
+    expect(result.source.cv).toBe("base");
+    expect(result.source.cover).toBe("ai");
+  });
+
+  it("calls only the missing resume target during partial recovery", async () => {
+    process.env.GEMINI_API_KEY = "test-key";
+    const callProviderSpy = vi
+      .spyOn(providers, "callProvider")
+      .mockResolvedValueOnce(RESUME_OUTPUT);
+
+    const result = await tailorApplicationContent(INPUT, {
+      targets: ["resume"],
+    });
+
+    expect(callProviderSpy).toHaveBeenCalledOnce();
+    expect(callProviderSpy).toHaveBeenCalledWith(
+      "gemini",
+      expect.objectContaining({ userPrompt: "resume-user" }),
+    );
+    expect(result.source.cv).toBe("ai");
+    expect(result.source.cover).toBe("fallback");
+  });
+
+  it("keeps an independent cover review target-scoped", async () => {
+    process.env.GEMINI_API_KEY = "test-key";
+    const callProviderSpy = vi
+      .spyOn(providers, "callProvider")
+      .mockResolvedValueOnce(COVER_OUTPUT)
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          cover: {
+            paragraphOne: "Reviewed one",
+            paragraphTwo: "Reviewed TypeScript evidence",
+            paragraphThree: "Reviewed three",
+          },
+        }),
+      );
+
+    const result = await tailorApplicationContent(INPUT, {
+      targets: ["cover"],
+      maxReviewerPasses: 1,
+      requireIndependentReview: true,
+    });
+
+    expect(callProviderSpy).toHaveBeenCalledTimes(2);
+    expect(
+      callProviderSpy.mock.calls.some(
+        ([, request]) => request.userPrompt === "resume-user",
+      ),
+    ).toBe(false);
+    expect(result.cover.paragraphTwo).toContain("TypeScript");
+    expect(result.reviewer).toMatchObject({ ran: true, revised: true });
+  });
+
   it("builds cover evidence from resume snapshot and passes it to prompt builder", async () => {
     process.env.GEMINI_API_KEY = "test-key";
     vi.spyOn(providers, "callProvider")

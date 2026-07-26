@@ -17,7 +17,8 @@ export const runtime = "nodejs";
 
 const CompletedTaskSchema = z.object({
   taskId: z.string().uuid(),
-  status: z.enum(["SUCCEEDED", "FAILED", "SKIPPED"]),
+  attemptId: z.string().uuid(),
+  status: z.enum(["FAILED", "SKIPPED"]),
   error: z.string().trim().max(500).optional().nullable(),
 });
 

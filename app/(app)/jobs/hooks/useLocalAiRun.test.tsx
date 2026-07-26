@@ -23,6 +23,10 @@ import { DraftImportError } from "./useExternalGenerate";
 
 const REQUEST_ID = "550e8400-e29b-41d4-a716-446655440000";
 const JOB_ID = "22222222-2222-4222-8222-222222222222";
+const tailoringRun = {
+  id: "8f8f8f8f-8f8f-4f8f-8f8f-8f8f8f8f8f8f",
+  attemptId: "9a9a9a9a-9a9a-4a9a-8a9a-9a9a9a9a9a9a",
+};
 const promptMeta = {
   ruleSetId: "rules-1",
   resumeSnapshotUpdatedAt: "2026-07-15T00:00:00.000Z",
@@ -45,6 +49,7 @@ describe("useLocalAiRun", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("detects a missing extension with a bounded status request", async () => {
@@ -79,11 +84,35 @@ describe("useLocalAiRun", () => {
     let getRunCalls = 0;
     bridge.send.mockImplementation(async (action: string) => {
       if (action === "GET_STATUS") return { state: "ready", joblitConnected: true };
-      if (action === "START_RUN") return { requestId: REQUEST_ID, jobId: JOB_ID, target: "resume", status: "queued" };
+      if (action === "START_RUN") {
+        return {
+          requestId: REQUEST_ID,
+          jobId: JOB_ID,
+          target: "resume",
+          status: "queued",
+          tailoringRun,
+        };
+      }
       if (action === "GET_RUN") {
         getRunCalls += 1;
-        if (getRunCalls === 1) return { requestId: REQUEST_ID, jobId: JOB_ID, target: "resume", status: "running" };
-        return { requestId: REQUEST_ID, jobId: JOB_ID, target: "resume", status: "succeeded", modelOutput: "{\"validOutput\":true}", promptMeta };
+        if (getRunCalls === 1) {
+          return {
+            requestId: REQUEST_ID,
+            jobId: JOB_ID,
+            target: "resume",
+            status: "running",
+            tailoringRun,
+          };
+        }
+        return {
+          requestId: REQUEST_ID,
+          jobId: JOB_ID,
+          target: "resume",
+          status: "succeeded",
+          modelOutput: "{\"validOutput\":true}",
+          promptMeta,
+          tailoringRun,
+        };
       }
       throw new Error(`unexpected ${action}`);
     });
@@ -97,6 +126,70 @@ describe("useLocalAiRun", () => {
       { timeout: LOCAL_AI_POLL_MS * 4 },
     );
     expect(imported).toHaveBeenCalledTimes(1);
+    expect(imported).toHaveBeenCalledWith(expect.objectContaining({
+      status: "succeeded",
+      tailoringRun,
+    }));
+    expect(result.current.runState).toMatchObject({
+      status: "succeeded",
+      tailoringRun,
+    });
+    expect(sessionStorage.getItem(LOCAL_AI_ACTIVE_REQUEST_KEY)).toBeNull();
+  });
+
+  it("replays the same terminal request after an import response is lost", async () => {
+    const imported = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("response lost"))
+      .mockResolvedValueOnce(undefined);
+    bridge.send.mockImplementation(async (action: string) => {
+      if (action === "GET_STATUS") {
+        return { state: "ready", joblitConnected: true };
+      }
+      if (action === "START_RUN") {
+        return {
+          requestId: REQUEST_ID,
+          jobId: JOB_ID,
+          target: "resume",
+          status: "queued",
+          tailoringRun,
+        };
+      }
+      if (action === "GET_RUN") {
+        return {
+          requestId: REQUEST_ID,
+          jobId: JOB_ID,
+          target: "resume",
+          status: "succeeded",
+          modelOutput: "{\"validOutput\":true}",
+          promptMeta,
+          tailoringRun,
+        };
+      }
+      throw new Error(`unexpected ${action}`);
+    });
+    const { result } = renderHook(() =>
+      useLocalAiRun({ enabled: true, onSucceeded: imported }),
+    );
+
+    await waitFor(() => expect(result.current.availability).toBe("ready"));
+    await act(async () => result.current.start(JOB_ID, "resume"));
+    await waitFor(() =>
+      expect(result.current.runState).toMatchObject({
+        status: "failed",
+        requestId: REQUEST_ID,
+        error: { code: "IMPORT_FAILED", retryable: true },
+      }),
+    );
+    expect(sessionStorage.getItem(LOCAL_AI_ACTIVE_REQUEST_KEY)).toBe(REQUEST_ID);
+
+    await act(async () => result.current.retry());
+    await waitFor(() => expect(result.current.runState.status).toBe("succeeded"));
+
+    expect(imported).toHaveBeenCalledTimes(2);
+    expect(
+      bridge.send.mock.calls.filter(([action]) => action === "START_RUN"),
+    ).toHaveLength(1);
     expect(sessionStorage.getItem(LOCAL_AI_ACTIVE_REQUEST_KEY)).toBeNull();
   });
 
@@ -236,16 +329,415 @@ describe("useLocalAiRun", () => {
   });
 
   it("stops an active run and exposes cancellation", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ run: { status: "CANCELLED" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
     bridge.send.mockImplementation(async (action: string) => {
       if (action === "GET_STATUS") return { state: "ready", joblitConnected: true };
-      if (action === "START_RUN" || action === "GET_RUN") return { requestId: REQUEST_ID, jobId: JOB_ID, target: "cover", status: "queued" };
-      if (action === "STOP_RUN") return { requestId: REQUEST_ID, jobId: JOB_ID, target: "cover", status: "cancelled" };
+      if (action === "START_RUN" || action === "GET_RUN") {
+        return {
+          requestId: REQUEST_ID,
+          jobId: JOB_ID,
+          target: "cover",
+          status: "queued",
+          tailoringRun,
+        };
+      }
+      if (action === "STOP_RUN") {
+        return {
+          requestId: REQUEST_ID,
+          jobId: JOB_ID,
+          target: "cover",
+          status: "cancelled",
+          tailoringRun,
+        };
+      }
+      throw new Error(`unexpected ${action}`);
     });
     const { result } = renderHook(() => useLocalAiRun({ enabled: true, onSucceeded: vi.fn() }));
     await waitFor(() => expect(result.current.availability).toBe("ready"));
     await act(async () => result.current.start(JOB_ID, "cover"));
     await act(async () => result.current.stop());
-    expect(result.current.runState.status).toBe("cancelled");
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/tailoring-runs/${tailoringRun.id}/cancel`,
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ attemptId: tailoringRun.attemptId }),
+      }),
+    );
+    const stopCall = bridge.send.mock.calls.find(([action]) => action === "STOP_RUN");
+    expect(stopCall?.[1]).toEqual({ requestId: REQUEST_ID });
+    expect(fetchMock.mock.invocationCallOrder[0]).toBeLessThan(
+      bridge.send.mock.invocationCallOrder[
+        bridge.send.mock.calls.findIndex(([action]) => action === "STOP_RUN")
+      ],
+    );
+    expect(result.current.runState).toMatchObject({
+      status: "cancelled",
+      tailoringRun,
+    });
+  });
+
+  it.each(["queued", "running"] as const)(
+    "cancels the durable %s run before stopping Hermes when switching to manual",
+    async (status) => {
+      const fetchMock = vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            disposition: "REPLAYED",
+            run: { status: "CANCELLED" },
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+      bridge.send.mockImplementation(async (action: string) => {
+        if (action === "START_RUN" || action === "GET_RUN") {
+          return {
+            requestId: REQUEST_ID,
+            jobId: JOB_ID,
+            target: "resume",
+            status,
+            tailoringRun,
+          };
+        }
+        if (action === "STOP_RUN") {
+          return {
+            requestId: REQUEST_ID,
+            jobId: JOB_ID,
+            target: "resume",
+            status: "cancelled",
+            tailoringRun,
+          };
+        }
+        throw new Error(`unexpected ${action}`);
+      });
+      const { result } = renderHook(() =>
+        useLocalAiRun({ enabled: true, onSucceeded: vi.fn() }),
+      );
+      await waitFor(() => expect(result.current.availability).toBe("ready"));
+      await act(async () => result.current.start(JOB_ID, "resume"));
+      await waitFor(() => expect(result.current.runState.status).toBe(status));
+
+      let switched = false;
+      await act(async () => {
+        switched = await result.current.switchToManual();
+      });
+
+      expect(switched).toBe(true);
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/tailoring-runs/${tailoringRun.id}/cancel`,
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ attemptId: tailoringRun.attemptId }),
+        }),
+      );
+      const stopCallIndex = bridge.send.mock.calls.findIndex(
+        ([action]) => action === "STOP_RUN",
+      );
+      expect(stopCallIndex).toBeGreaterThanOrEqual(0);
+      expect(fetchMock.mock.invocationCallOrder[0]).toBeLessThan(
+        bridge.send.mock.invocationCallOrder[stopCallIndex],
+      );
+      expect(result.current.runState).toEqual({ status: "idle" });
+      expect(sessionStorage.getItem(LOCAL_AI_ACTIVE_REQUEST_KEY)).toBeNull();
+    },
+  );
+
+  it("keeps manual closed and preserves recovery when durable cancellation fails", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          error: { code: "ATTEMPT_FENCED", message: "Attempt is stale" },
+        }),
+        {
+          status: 409,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    bridge.send.mockImplementation(async (action: string) => {
+      if (action === "START_RUN" || action === "GET_RUN") {
+        return {
+          requestId: REQUEST_ID,
+          jobId: JOB_ID,
+          target: "resume",
+          status: "queued",
+          tailoringRun,
+        };
+      }
+      throw new Error(`unexpected ${action}`);
+    });
+    const { result } = renderHook(() =>
+      useLocalAiRun({ enabled: true, onSucceeded: vi.fn() }),
+    );
+    await waitFor(() => expect(result.current.availability).toBe("ready"));
+    await act(async () => result.current.start(JOB_ID, "resume"));
+
+    let switched = true;
+    await act(async () => {
+      switched = await result.current.switchToManual();
+    });
+
+    expect(switched).toBe(false);
+    expect(result.current.runState).toMatchObject({
+      status: "failed",
+      tailoringRun,
+      error: { code: "RUN_CANCEL_FAILED", retryable: true },
+    });
+    expect(
+      bridge.send.mock.calls.filter(([action]) => action === "STOP_RUN"),
+    ).toHaveLength(0);
+    expect(sessionStorage.getItem(LOCAL_AI_ACTIVE_REQUEST_KEY)).toBe(REQUEST_ID);
+  });
+
+  it("keeps manual closed and preserves recovery when Hermes stop fails", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          disposition: "REPLAYED",
+          run: { status: "CANCELLED" },
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    bridge.send.mockImplementation(async (action: string) => {
+      if (action === "START_RUN" || action === "GET_RUN") {
+        return {
+          requestId: REQUEST_ID,
+          jobId: JOB_ID,
+          target: "resume",
+          status: "running",
+          tailoringRun,
+        };
+      }
+      if (action === "STOP_RUN") throw new Error("Hermes stop failed");
+      throw new Error(`unexpected ${action}`);
+    });
+    const { result } = renderHook(() =>
+      useLocalAiRun({ enabled: true, onSucceeded: vi.fn() }),
+    );
+    await waitFor(() => expect(result.current.availability).toBe("ready"));
+    await act(async () => result.current.start(JOB_ID, "resume"));
+
+    let switched = true;
+    await act(async () => {
+      switched = await result.current.switchToManual();
+    });
+
+    expect(switched).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(
+      bridge.send.mock.calls.filter(([action]) => action === "STOP_RUN"),
+    ).toHaveLength(1);
+    expect(result.current.runState).toMatchObject({
+      status: "failed",
+      tailoringRun,
+      error: { code: "RUN_STOP_FAILED", retryable: true },
+    });
+    expect(sessionStorage.getItem(LOCAL_AI_ACTIVE_REQUEST_KEY)).toBe(REQUEST_ID);
+  });
+
+  it("converges a Hermes failure to cancelled when durable failure replays cancellation", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          disposition: "REPLAYED",
+          run: { status: "CANCELLED" },
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    bridge.send.mockImplementation(async (action: string) => {
+      if (action === "START_RUN") {
+        return {
+          requestId: REQUEST_ID,
+          jobId: JOB_ID,
+          target: "resume",
+          status: "failed",
+          tailoringRun,
+          error: {
+            code: "HERMES_RUN_FAILED",
+            message: "Hermes could not complete this generation.",
+            retryable: true,
+          },
+        };
+      }
+      throw new Error(`unexpected ${action}`);
+    });
+    const { result } = renderHook(() =>
+      useLocalAiRun({ enabled: true, onSucceeded: vi.fn() }),
+    );
+    await waitFor(() => expect(result.current.availability).toBe("ready"));
+    await act(async () => result.current.start(JOB_ID, "resume"));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/tailoring-runs/${tailoringRun.id}/fail`,
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(result.current.runState).toMatchObject({
+      status: "cancelled",
+      tailoringRun,
+    });
+    expect(sessionStorage.getItem(LOCAL_AI_ACTIVE_REQUEST_KEY)).toBeNull();
+  });
+
+  it("converges a Hermes cancellation to failed when durable cancellation replays failure", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          disposition: "REPLAYED",
+          run: { status: "FAILED" },
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    bridge.send.mockImplementation(async (action: string) => {
+      if (action === "START_RUN") {
+        return {
+          requestId: REQUEST_ID,
+          jobId: JOB_ID,
+          target: "cover",
+          status: "cancelled",
+          tailoringRun,
+        };
+      }
+      throw new Error(`unexpected ${action}`);
+    });
+    const { result } = renderHook(() =>
+      useLocalAiRun({ enabled: true, onSucceeded: vi.fn() }),
+    );
+    await waitFor(() => expect(result.current.availability).toBe("ready"));
+    await act(async () => result.current.start(JOB_ID, "cover"));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/tailoring-runs/${tailoringRun.id}/cancel`,
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(result.current.runState).toMatchObject({
+      status: "failed",
+      tailoringRun,
+      error: { code: "TAILORING_RUN_FAILED", retryable: false },
+    });
+    expect(sessionStorage.getItem(LOCAL_AI_ACTIVE_REQUEST_KEY)).toBeNull();
+  });
+
+  it("records a terminal Hermes failure against the durable attempt", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ run: { status: "FAILED" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    bridge.send.mockImplementation(async (action: string) => {
+      if (action === "GET_STATUS") return { state: "ready", joblitConnected: true };
+      if (action === "START_RUN") {
+        return {
+          requestId: REQUEST_ID,
+          jobId: JOB_ID,
+          target: "resume",
+          status: "queued",
+          tailoringRun,
+        };
+      }
+      if (action === "GET_RUN") {
+        return {
+          requestId: REQUEST_ID,
+          jobId: JOB_ID,
+          target: "resume",
+          status: "failed",
+          tailoringRun,
+          error: {
+            code: "HERMES_RUN_FAILED",
+            message: "Hermes could not complete this generation.",
+            retryable: true,
+          },
+        };
+      }
+      throw new Error(`unexpected ${action}`);
+    });
+    const { result } = renderHook(() =>
+      useLocalAiRun({ enabled: true, onSucceeded: vi.fn() }),
+    );
+    await waitFor(() => expect(result.current.availability).toBe("ready"));
+    await act(async () => result.current.start(JOB_ID, "resume"));
+
+    await waitFor(() => expect(result.current.runState).toMatchObject({
+      status: "failed",
+      tailoringRun,
+      error: { code: "HERMES_RUN_FAILED" },
+    }));
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/tailoring-runs/${tailoringRun.id}/fail`,
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          attemptId: tailoringRun.attemptId,
+          code: "HERMES_RUN_FAILED",
+        }),
+      }),
+    );
+  });
+
+  it("does not stop Hermes when durable cancellation fails", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({
+        error: { code: "ATTEMPT_FENCED", message: "Attempt is stale" },
+      }), {
+        status: 409,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    bridge.send.mockImplementation(async (action: string) => {
+      if (action === "GET_STATUS") return { state: "ready", joblitConnected: true };
+      if (action === "START_RUN" || action === "GET_RUN") {
+        return {
+          requestId: REQUEST_ID,
+          jobId: JOB_ID,
+          target: "cover",
+          status: "queued",
+          tailoringRun,
+        };
+      }
+      throw new Error(`unexpected ${action}`);
+    });
+    const { result } = renderHook(() =>
+      useLocalAiRun({ enabled: true, onSucceeded: vi.fn() }),
+    );
+    await waitFor(() => expect(result.current.availability).toBe("ready"));
+    await act(async () => result.current.start(JOB_ID, "cover"));
+    await act(async () => result.current.stop());
+
+    expect(result.current.runState).toMatchObject({
+      status: "failed",
+      tailoringRun,
+      error: { code: "RUN_CANCEL_FAILED", retryable: true },
+    });
+    expect(
+      bridge.send.mock.calls.filter(([action]) => action === "STOP_RUN"),
+    ).toHaveLength(0);
   });
 
   it.each([

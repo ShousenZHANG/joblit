@@ -127,6 +127,32 @@ enum ApplicationStatus {
   FINAL
 }
 
+enum TailoringRunSource {
+  MANUAL_IMPORT
+  LOCAL_AI
+  CODEX_BATCH
+  SERVER_BATCH
+}
+
+enum TailoringRunDelivery {
+  DRAFT
+  FINAL
+}
+
+enum TailoringRunStatus {
+  ISSUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  PARTIAL
+}
+
+enum TailoringRunTarget {
+  RESUME
+  COVER
+}
+
 model User {
   id            String    @id @default(uuid()) @db.Uuid
   email         String?   @unique
@@ -151,6 +177,7 @@ model User {
   localAiSetting        LocalAiSetting?
   applicationBatches    ApplicationBatch[]
   applicationBatchTasks ApplicationBatchTask[]
+  tailoringRuns         TailoringRun[]
   extensionTokens       ExtensionToken[]
   formSubmissions       FormSubmission[]
   fieldMappingRules     FieldMappingRule[]
@@ -255,6 +282,7 @@ model Job {
 
   applications          Application[]
   applicationBatchTasks ApplicationBatchTask[]
+  tailoringRuns         TailoringRun[]
   formSubmissions       FormSubmission[]
   applicationEvents     ApplicationEvent[]
   evidenceSnapshots     EvidenceSnapshot[]
@@ -313,12 +341,96 @@ model ApplicationBatchTask {
   completedAt DateTime?
   attempt     Int                        @default(0)
 
+  executionAttemptId       String?   @db.Uuid
+  executionLeaseExpiresAt  DateTime?
+  /// 0 = legacy task semantics; a v1 claim upgrades this atomically before work.
+  tailoringProtocolVersion Int       @default(0)
+  /// Durable proof that the current attempt completed through TailoringRun acceptance.
+  completionAttemptId      String?   @db.Uuid
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  tailoringRun TailoringRun?
 
   @@unique([batchId, jobId])
   @@index([batchId, status, createdAt])
   @@index([userId, status, createdAt])
+  @@index([executionAttemptId])
+  @@index([completionAttemptId])
+}
+
+model TailoringRun {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId  String @db.Uuid
+  job    Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  resumeProfileId String?        @db.Uuid
+  resumeProfile   ResumeProfile? @relation(fields: [resumeProfileId], references: [id], onDelete: SetNull)
+
+  applicationBatchTaskId String?               @unique @db.Uuid
+  applicationBatchTask   ApplicationBatchTask? @relation(fields: [applicationBatchTaskId], references: [id], onDelete: SetNull)
+
+  applicationId String?      @db.Uuid
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+
+  source   TailoringRunSource
+  delivery TailoringRunDelivery
+  status   TailoringRunStatus   @default(ISSUED)
+
+  requiredTargetMask Int
+  acceptedTargetMask Int @default(0)
+
+  issueKey       String
+  issueHash      String
+  promptReceipts Json
+
+  resumeSnapshotHash String
+  jobSnapshotHash    String
+
+  executionAttemptId      String?   @db.Uuid
+  executionLeaseExpiresAt DateTime?
+  attempt                 Int       @default(0)
+
+  errorCode    String?
+  errorMessage String?
+
+  issuedAt   DateTime  @default(now())
+  startedAt  DateTime?
+  terminalAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  receipts TailoringRunReceipt[]
+
+  @@unique([userId, issueKey])
+  @@index([userId, status, updatedAt])
+  @@index([jobId, status, createdAt])
+  @@index([resumeProfileId])
+  @@index([applicationId, createdAt])
+  @@index([executionAttemptId])
+}
+
+model TailoringRunReceipt {
+  id    String       @id @default(uuid()) @db.Uuid
+  runId String       @db.Uuid
+  run   TailoringRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  target             TailoringRunTarget
+  executionAttemptId String             @db.Uuid
+  requestHash        String
+
+  applicationId String?              @db.Uuid
+  application   Application?         @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  aiContentHash String
+  delivery      TailoringRunDelivery
+  createdAt     DateTime             @default(now())
+
+  @@unique([runId, target])
+  @@index([applicationId, createdAt])
+  @@index([executionAttemptId])
 }
 
 model DeletedJobUrl {
@@ -430,6 +542,7 @@ model ResumeProfile {
 
   applications     Application[]
   activeSelections ActiveResumeProfile[]
+  tailoringRuns    TailoringRun[]
 
   @@index([userId, name])
   @@index([userId, updatedAt])
@@ -490,6 +603,8 @@ model Application {
   evidenceSnapshots EvidenceSnapshot[]
   claimEvidence     ClaimEvidence[]
   followUpReminders FollowUpReminder[]
+  tailoringRuns     TailoringRun[]
+  tailoringReceipts TailoringRunReceipt[]
 
   @@unique([userId, jobId])
   @@index([userId, createdAt])

@@ -18,6 +18,7 @@ import { getServerSession } from "next-auth/next";
 import { POST } from "@/app/api/application-batches/[id]/claim/route";
 
 const BATCH_ID = "550e8400-e29b-41d4-a716-446655440000";
+const ATTEMPT_ID = "880e8400-e29b-41d4-a716-446655440000";
 
 describe("application batch claim api", () => {
   beforeEach(() => {
@@ -33,6 +34,7 @@ describe("application batch claim api", () => {
       kind: "claimed",
       task: {
         id: "task-1",
+        attemptId: ATTEMPT_ID,
         jobId: "job-1",
         title: "Software Engineer",
         company: "Acme",
@@ -49,6 +51,7 @@ describe("application batch claim api", () => {
     expect(res.status).toBe(200);
     expect(json.kind).toBe("claimed");
     expect(json.task.id).toBe("task-1");
+    expect(json.task.attemptId).toBe(ATTEMPT_ID);
   });
 
   it("returns done when no pending tasks remain", async () => {

@@ -57,12 +57,15 @@ import { POST } from "@/app/api/application-batches/[id]/run-once/route";
 const BATCH_ID = "550e8400-e29b-41d4-a716-446655440000";
 const TASK_ID = "660e8400-e29b-41d4-a716-446655440000";
 const JOB_ID = "770e8400-e29b-41d4-a716-446655440000";
+const COMPLETED_ATTEMPT_ID = "880e8400-e29b-41d4-a716-446655440000";
+const NEXT_ATTEMPT_ID = "990e8400-e29b-41d4-a716-446655440000";
 
 describe("application batch run-once api", () => {
   beforeEach(() => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockReset();
     applicationBatchStore.findFirst.mockReset();
     jobStore.findFirst.mockReset();
+    runner.reclaimStaleBatchTasks.mockReset();
     runner.claimNextBatchTask.mockReset();
     runner.completeBatchTask.mockReset();
     runner.getBatchProgress.mockReset();
@@ -70,7 +73,7 @@ describe("application batch run-once api", () => {
     resumeProfile.getResumeProfile.mockReset();
   });
 
-  it("applies completions and claims next tasks in one request", async () => {
+  it("applies fenced failure completion and claims the next attempt", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "user-1" },
     });
@@ -97,13 +100,13 @@ describe("application batch run-once api", () => {
       hardConstraints: ["hard-1"],
     });
     runner.completeBatchTask.mockResolvedValueOnce({
-      taskStatus: "SUCCEEDED",
+      taskStatus: "FAILED",
       batchStatus: "RUNNING",
       progress: {
         pending: 2,
         running: 0,
-        succeeded: 1,
-        failed: 0,
+        succeeded: 0,
+        failed: 1,
         skipped: 0,
       },
     });
@@ -112,6 +115,7 @@ describe("application batch run-once api", () => {
         kind: "claimed",
         task: {
           id: TASK_ID,
+          attemptId: NEXT_ATTEMPT_ID,
           jobId: JOB_ID,
           title: "Software Engineer",
           company: "Acme",
@@ -151,7 +155,14 @@ describe("application batch run-once api", () => {
         method: "POST",
         body: JSON.stringify({
           maxSteps: 2,
-          completedTasks: [{ taskId: TASK_ID, status: "SUCCEEDED" }],
+          completedTasks: [
+            {
+              taskId: TASK_ID,
+              attemptId: COMPLETED_ATTEMPT_ID,
+              status: "FAILED",
+              error: "compile failed",
+            },
+          ],
         }),
       }),
       { params: Promise.resolve({ id: BATCH_ID }) },
@@ -162,15 +173,45 @@ describe("application batch run-once api", () => {
     expect(json.batch.id).toBe(BATCH_ID);
     expect(json.tasks).toHaveLength(1);
     expect(json.tasks[0].taskId).toBe(TASK_ID);
+    expect(json.tasks[0].attemptId).toBe(NEXT_ATTEMPT_ID);
     expect(json.execution.completedCount).toBe(1);
     expect(runner.completeBatchTask).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "user-1",
         batchId: BATCH_ID,
         taskId: TASK_ID,
-        status: "SUCCEEDED",
+        attemptId: COMPLETED_ATTEMPT_ID,
+        status: "FAILED",
+        error: "compile failed",
       }),
     );
   });
-});
 
+  it("rejects independent success completion before touching the batch", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+
+    const res = await POST(
+      new Request(`http://localhost/api/application-batches/${BATCH_ID}/run-once`, {
+        method: "POST",
+        body: JSON.stringify({
+          completedTasks: [
+            {
+              taskId: TASK_ID,
+              attemptId: COMPLETED_ATTEMPT_ID,
+              status: "SUCCEEDED",
+            },
+          ],
+        }),
+      }),
+      { params: Promise.resolve({ id: BATCH_ID }) },
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error.code).toBe("INVALID_BODY");
+    expect(applicationBatchStore.findFirst).not.toHaveBeenCalled();
+    expect(runner.completeBatchTask).not.toHaveBeenCalled();
+  });
+});

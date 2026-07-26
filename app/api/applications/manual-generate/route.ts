@@ -26,7 +26,21 @@ import {
   ManualGenerateSchema,
 } from "@/lib/server/applications/manualImportParser";
 import { reportError } from "@/lib/server/observability/errorReporter";
-import { hashAiContent } from "@/lib/shared/schemas/aiContent";
+import {
+  aiContentSchema,
+  hashAiContent,
+} from "@/lib/shared/schemas/aiContent";
+import {
+  hashManualTailoringAcceptance,
+  probeTailoringRunAcceptanceReplay,
+} from "@/lib/server/tailoringRuns/tailoringRunAcceptance";
+import {
+  TailoringRunError,
+  type TailoringRunDelivery,
+  type TailoringRunSource,
+  type TailoringRunTarget,
+} from "@/lib/server/tailoringRuns/tailoringRunProtocol";
+import type { TailoringAcceptanceRequest } from "@/lib/server/tailoringRuns/tailoringRunTypes";
 
 export const runtime = "nodejs";
 
@@ -49,16 +63,30 @@ function requiresAuthoritativeReceipt(source: string): boolean {
   return source !== "manual_import";
 }
 
+function requiresTailoringRun(source: string): boolean {
+  // Codex Batch is a coordinated server contract and has no legacy client
+  // population. Local AI keeps an additive compatibility reader for extension
+  // versions that predate TailoringRun handles.
+  return source === "codex_batch";
+}
+
 function generationSourceLabel(source: string): string {
   return source === "local_ai" ? "Local AI" : "Codex Batch";
+}
+
+function protocolSource(source: string): TailoringRunSource {
+  if (source === "local_ai") return "LOCAL_AI";
+  if (source === "codex_batch") return "CODEX_BATCH";
+  return "MANUAL_IMPORT";
+}
+
+function protocolTarget(target: "resume" | "cover"): TailoringRunTarget {
+  return target === "resume" ? "RESUME" : "COVER";
 }
 
 export async function POST(req: Request) {
   const finalize = parseFinalizeFlag(req);
   return withSessionRoute(async ({ userId, requestId }) => {
-    const limited = enforceAiRateLimit(userId, requestId);
-    if (limited) return limited;
-
     const body = await req.json().catch(() => null);
     const parsed = ManualGenerateSchema.safeParse(body);
     if (!parsed.success) {
@@ -85,6 +113,139 @@ export async function POST(req: Request) {
       return validationError(parsed.error, requestId);
     }
     const data = parsed.data;
+
+  if (requiresAuthoritativeReceipt(data.source) && !data.promptMeta) {
+    return errorJson(
+      "PROMPT_META_REQUIRED",
+      `${generationSourceLabel(data.source)} output must include the generation receipt. Run the current prompt again.`,
+      400,
+      { requestId },
+    );
+  }
+  if (data.tailoringRun && !data.promptMeta) {
+    return errorJson(
+      "PROMPT_META_REQUIRED",
+      "A TailoringRun import must include the prompt receipt issued with that run.",
+      400,
+      { requestId },
+    );
+  }
+  const importedPromptMeta = data.promptMeta
+    ? ImportedPromptMetaSchema.safeParse(data.promptMeta)
+    : null;
+  if (importedPromptMeta && !importedPromptMeta.success) {
+    return validationError(importedPromptMeta.error, requestId);
+  }
+  if (
+    importedPromptMeta?.success &&
+    requiresAuthoritativeReceipt(data.source) &&
+    (!importedPromptMeta.data.promptTemplateVersion ||
+      !importedPromptMeta.data.schemaVersion ||
+      !importedPromptMeta.data.skillPackVersion ||
+      !importedPromptMeta.data.promptHash)
+  ) {
+    return errorJson(
+      "PROMPT_META_REQUIRED",
+      `${generationSourceLabel(data.source)} output must include the complete generation receipt. Run the current prompt again.`,
+      400,
+      { requestId },
+    );
+  }
+
+  const delivery: TailoringRunDelivery = finalize ? "FINAL" : "DRAFT";
+  const target = protocolTarget(data.target);
+  const receivedPromptHash =
+    importedPromptMeta?.success && importedPromptMeta.data.promptHash
+      ? importedPromptMeta.data.promptHash
+      : null;
+
+  // Exact receipt replay must not depend on today's prompt rules, resume
+  // snapshot, renderer, or Blob service. The immutable receipt is probed
+  // before any of those adapters run.
+  if (data.tailoringRun && receivedPromptHash) {
+    let replay;
+    try {
+      replay = await prisma.$transaction((tx) =>
+        probeTailoringRunAcceptanceReplay(
+          tx as unknown as Parameters<
+            typeof probeTailoringRunAcceptanceReplay
+          >[0],
+          {
+            userId,
+            jobId: data.jobId,
+            request: {
+              handle: data.tailoringRun!,
+              source: protocolSource(data.source),
+              delivery,
+              target,
+              requestHash: hashManualTailoringAcceptance({
+                target,
+                delivery,
+                promptHash: receivedPromptHash,
+                modelOutput: data.modelOutput,
+              }),
+              promptHash: receivedPromptHash,
+            },
+          },
+        ),
+      );
+    } catch (error) {
+      if (error instanceof TailoringRunError) {
+        return errorJson(error.code, error.message, error.status, { requestId });
+      }
+      throw error;
+    }
+
+    if (replay) {
+      const currentAiContent = aiContentSchema.safeParse(
+        replay.application.aiContent,
+      );
+      if (!currentAiContent.success) {
+        return errorJson(
+          "AI_CONTENT_INVALID",
+          "The accepted Application content is unavailable.",
+          409,
+          { requestId },
+        );
+      }
+      const replayHeaders = {
+        "x-application-id": replay.application.id,
+        "x-request-id": requestId,
+        "x-tailoring-replay": "exact",
+        "x-tailoring-delivery": delivery,
+      };
+      if (!finalize) {
+        return NextResponse.json(
+          {
+            applicationId: replay.application.id,
+            status: replay.application.status,
+            aiContentHash: replay.application.aiContentHash,
+            aiContent: currentAiContent.data,
+            pdfName: replay.application.resumePdfName,
+            job: replay.application.job,
+            replayed: true,
+            requestId,
+          },
+          { status: 200, headers: replayHeaders },
+        );
+      }
+      return NextResponse.json(
+        {
+          applicationId: replay.application.id,
+          status: replay.application.status,
+          aiContentHash: replay.application.aiContentHash,
+          acceptedDelivery: "FINAL",
+          target: data.target,
+          replayed: true,
+          requestId,
+        },
+        { status: 200, headers: replayHeaders },
+      );
+    }
+  }
+
+  const limited = enforceAiRateLimit(userId, requestId);
+  if (limited) return limited;
 
   const job = await prisma.job.findFirst({
     where: { id: data.jobId, userId },
@@ -117,17 +278,15 @@ export async function POST(req: Request) {
     );
   }
 
-  if (requiresAuthoritativeReceipt(data.source) && !data.promptMeta) {
-    return errorJson(
-      "PROMPT_META_REQUIRED",
-      `${generationSourceLabel(data.source)} output must include the generation receipt. Run the current prompt again.`,
-      400,
-      { requestId },
-    );
-  }
-
   let promptMetaHash = "";
-  if (data.promptMeta) {
+  let promptSnapshotBinding:
+    | {
+        resumeProfileId: string;
+        resumeSnapshotHash: string;
+        jobSnapshotHash: string;
+      }
+    | undefined;
+  if (importedPromptMeta?.success) {
     let expectedPromptMeta;
     try {
       const prepared = await buildApplicationPromptForUser({
@@ -137,6 +296,7 @@ export async function POST(req: Request) {
         variant: data.source === "local_ai" ? "lean" : "full",
       });
       expectedPromptMeta = prepared.promptMeta;
+      promptSnapshotBinding = prepared.snapshotBinding;
     } catch (error) {
       if (error instanceof ApplicationPromptError) {
         return errorJson(error.code, error.message, error.status, {
@@ -145,24 +305,6 @@ export async function POST(req: Request) {
         });
       }
       throw error;
-    }
-    const importedPromptMeta = ImportedPromptMetaSchema.safeParse(data.promptMeta);
-    if (!importedPromptMeta.success) {
-      return validationError(importedPromptMeta.error, requestId);
-    }
-    if (
-      requiresAuthoritativeReceipt(data.source) &&
-      (!importedPromptMeta.data.promptTemplateVersion ||
-        !importedPromptMeta.data.schemaVersion ||
-        !importedPromptMeta.data.skillPackVersion ||
-        !importedPromptMeta.data.promptHash)
-    ) {
-      return errorJson(
-        "PROMPT_META_REQUIRED",
-        `${generationSourceLabel(data.source)} output must include the complete generation receipt. Run the current prompt again.`,
-        400,
-        { requestId },
-      );
     }
     const promptMetaValidation = validatePromptMetaForImport({
       expected: expectedPromptMeta,
@@ -207,6 +349,14 @@ export async function POST(req: Request) {
       { details: artifact.error.details, requestId },
     );
   }
+  if (requiresTailoringRun(data.source) && !data.tailoringRun) {
+    return errorJson(
+      "TAILORING_RUN_REQUIRED",
+      `${generationSourceLabel(data.source)} output must include its TailoringRun handle. Run the current prompt again.`,
+      400,
+      { requestId },
+    );
+  }
 
   if (finalize && artifact.aiContent.review?.verdict === "blocked") {
     return errorJson(
@@ -222,23 +372,55 @@ export async function POST(req: Request) {
     jobDescription: job.description,
     jobSourceAvailable: true,
   };
+  const tailoringAcceptance: readonly TailoringAcceptanceRequest[] | undefined =
+    data.tailoringRun && promptSnapshotBinding
+      ? [
+          {
+            handle: data.tailoringRun,
+            source: protocolSource(data.source),
+            delivery,
+            target,
+            requestHash: hashManualTailoringAcceptance({
+              target,
+              delivery,
+              promptHash: promptMetaHash,
+              modelOutput: data.modelOutput,
+            }),
+            promptHash: promptMetaHash,
+            resumeSnapshotHash: promptSnapshotBinding.resumeSnapshotHash,
+            jobSnapshotHash: promptSnapshotBinding.jobSnapshotHash,
+            ...(data.source === "codex_batch"
+              ? { batchExecutionAttemptId: data.tailoringRun.attemptId }
+              : {}),
+          },
+        ]
+      : undefined;
 
   // DRAFT mode: skip PDF compile + Blob upload. Just persist the
   // aiContent snapshot and return JSON. Caller navigates to
   // /jobs/[id]/tailor to review.
   if (!finalize) {
-    const committed = await commitApplicationArtifact({
-      userId,
-      job,
-      resumeProfileId: profile.id,
-      aiContent: artifact.aiContent,
-      // A DRAFT renders nothing, so there is no artifact to upload — but the
-      // target still selects which half of the AI Content the merge preserves.
-      artifacts: [],
-      status: "DRAFT",
-      mergeTarget: data.target,
-      reviewContext,
-    });
+    let committed;
+    try {
+      committed = await commitApplicationArtifact({
+        userId,
+        job,
+        resumeProfileId: profile.id,
+        aiContent: artifact.aiContent,
+        // A DRAFT renders nothing, so there is no artifact to upload — but the
+        // target still selects which half of the AI Content the merge preserves.
+        artifacts: [],
+        status: "DRAFT",
+        mergeTarget: data.target,
+        reviewContext,
+        ...(tailoringAcceptance ? { tailoring: tailoringAcceptance } : {}),
+      });
+    } catch (error) {
+      if (error instanceof TailoringRunError) {
+        return errorJson(error.code, error.message, error.status, { requestId });
+      }
+      throw error;
+    }
     if (committed.kind === "invalid_ai_content") {
       return errorJson(
         "AI_CONTENT_INVALID",
@@ -326,6 +508,7 @@ export async function POST(req: Request) {
       status: "FINAL",
       mergeTarget: data.target,
       reviewContext,
+      ...(tailoringAcceptance ? { tailoring: tailoringAcceptance } : {}),
     });
     if (result.kind === "review_blocked") {
       return errorJson(
@@ -362,6 +545,9 @@ export async function POST(req: Request) {
     }
     committed = result;
   } catch (error) {
+    if (error instanceof TailoringRunError) {
+      return errorJson(error.code, error.message, error.status, { requestId });
+    }
     reportError(error, {
       scope: "applications.manual-generate.commit",
       userId,

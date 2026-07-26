@@ -48,12 +48,14 @@ import { POST } from "@/app/api/application-batches/[id]/codex-run/route";
 const BATCH_ID = "550e8400-e29b-41d4-a716-446655440000";
 const TASK_ID = "660e8400-e29b-41d4-a716-446655440000";
 const JOB_ID = "770e8400-e29b-41d4-a716-446655440000";
+const ATTEMPT_ID = "880e8400-e29b-41d4-a716-446655440000";
 
 describe("application batch codex-run api", () => {
   beforeEach(() => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockReset();
     applicationBatchStore.findFirst.mockReset();
     jobStore.findFirst.mockReset();
+    runner.reclaimStaleBatchTasks.mockReset();
     runner.claimNextBatchTask.mockReset();
     runner.getBatchProgress.mockReset();
     promptRules.getActivePromptSkillRulesForUser.mockReset();
@@ -90,6 +92,11 @@ describe("application batch codex-run api", () => {
         kind: "claimed",
         task: {
           id: TASK_ID,
+          attemptId: ATTEMPT_ID,
+          issueKey: "990e8400-e29b-51d4-a716-446655440000",
+          protocolVersion: 1,
+          acceptedTargets: ["RESUME"],
+          remainingTargets: ["COVER"],
           jobId: JOB_ID,
           title: "Software Engineer",
           company: "Acme",
@@ -137,6 +144,13 @@ describe("application batch codex-run api", () => {
     expect(json.batch.id).toBe(BATCH_ID);
     expect(json.tasks).toHaveLength(1);
     expect(json.tasks[0].taskId).toBe(TASK_ID);
+    expect(json.tasks[0].attemptId).toBe(ATTEMPT_ID);
+    expect(json.tasks[0]).toMatchObject({
+      issueKey: "990e8400-e29b-51d4-a716-446655440000",
+      protocolVersion: 1,
+      acceptedTargets: ["RESUME"],
+      remainingTargets: ["COVER"],
+    });
     expect(json.tasks[0].job.id).toBe(JOB_ID);
     expect(json.context).not.toHaveProperty("promptMeta");
     expect(json.context).not.toHaveProperty("promptMetaByTarget");

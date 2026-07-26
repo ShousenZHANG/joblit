@@ -17,6 +17,12 @@ import {
   type AiContent,
 } from "@/lib/shared/schemas/aiContent";
 import type { AtsPdfValidation } from "@/lib/server/applications/atsPdfValidator";
+import {
+  completeTailoringRunAcceptance,
+  prepareTailoringRunAcceptance,
+} from "@/lib/server/tailoringRuns/tailoringRunAcceptance";
+import type { TailoringAcceptanceRequest } from "@/lib/server/tailoringRuns/tailoringRunTypes";
+import type { TailoringRunTransaction } from "@/lib/server/tailoringRuns/tailoringRunDatabase";
 
 /**
  * Commit a rendered Application artifact.
@@ -72,6 +78,11 @@ type CommitBaseFields = {
   expectedHash?: string | null;
   /** Extra columns to write, e.g. a reviewer report. */
   extraData?: Record<string, unknown>;
+  /**
+   * Optional generation Acceptance commands. When present, their attempt
+   * fences and receipts are committed in the same transaction as Application.
+   */
+  tailoring?: readonly TailoringAcceptanceRequest[];
 };
 
 type CommitBaseInput = CommitBaseFields &
@@ -110,6 +121,7 @@ export type CommitResult =
       aiContent: AiContent;
       aiContentHash: string;
       urls: Partial<Record<CommitTarget, string>>;
+      tailoringDisposition?: "APPLIED" | "REPLAYED";
     }
   | { kind: "stale_write" }
   | { kind: "job_missing" }
@@ -187,6 +199,21 @@ export async function commitApplicationArtifact(input: CommitInput): Promise<Com
   try {
     const result = await prisma.$transaction(
       async (tx) => {
+        const preparedTailoring =
+          input.tailoring && input.tailoring.length > 0
+            ? await prepareTailoringRunAcceptance(
+                tx as unknown as TailoringRunTransaction,
+                {
+                  userId: input.userId,
+                  jobId: input.job.id,
+                  resumeProfileId: input.resumeProfileId,
+                  requests: input.tailoring,
+                },
+              )
+            : null;
+
+        // Tailoring acceptance owns the broader locks first:
+        // ABAT (when bound) -> TLRN -> JOBA.
         await acquireApplicationMutationLock(tx, input.userId, input.job.id);
 
         // Under the lock, so a delete racing the render is reported as a
@@ -200,6 +227,7 @@ export async function commitApplicationArtifact(input: CommitInput): Promise<Com
         const existing = await tx.application.findUnique({
           where: { userId_jobId: { userId: input.userId, jobId: input.job.id } },
           select: {
+            id: true,
             resumePdfUrl: true,
             coverPdfUrl: true,
             aiContent: true,
@@ -207,6 +235,34 @@ export async function commitApplicationArtifact(input: CommitInput): Promise<Com
             atsValidation: true,
           },
         });
+
+        // A durable target receipt is authoritative after a lost response.
+        // Return the current Application projection without reapplying the
+        // command; the uploaded retry blobs are cleaned up by the caller.
+        if (preparedTailoring && preparedTailoring.pending.length === 0) {
+          if (!existing?.aiContent || !existing.aiContentHash) {
+            return { kind: "invalid_ai_content" as const };
+          }
+          const parsed = aiContentSchema.safeParse(existing.aiContent);
+          if (!parsed.success) {
+            return { kind: "invalid_ai_content" as const };
+          }
+          return {
+            kind: "committed" as const,
+            applicationId:
+              preparedTailoring.replayed[0]?.applicationId ?? existing.id,
+            aiContent: parsed.data,
+            aiContentHash: existing.aiContentHash,
+            superseded: [] as string[],
+            urls: {
+              ...(existing.resumePdfUrl
+                ? { resume: existing.resumePdfUrl }
+                : {}),
+              ...(existing.coverPdfUrl ? { cover: existing.coverPdfUrl } : {}),
+            } satisfies Partial<Record<CommitTarget, string>>,
+            tailoringDisposition: "REPLAYED" as const,
+          };
+        }
 
         if (input.expectedHash !== undefined) {
           const currentHash = existing?.aiContentHash ?? null;
@@ -304,6 +360,17 @@ export async function commitApplicationArtifact(input: CommitInput): Promise<Com
           aiContent,
         });
 
+        if (preparedTailoring) {
+          await completeTailoringRunAcceptance(
+            tx as unknown as TailoringRunTransaction,
+            {
+            prepared: preparedTailoring,
+            applicationId: application.id,
+            aiContentHash,
+            },
+          );
+        }
+
         const superseded = artifacts
           .map((artifact) => {
             const previous =
@@ -319,6 +386,9 @@ export async function commitApplicationArtifact(input: CommitInput): Promise<Com
           aiContent,
           aiContentHash,
           superseded,
+          ...(preparedTailoring
+            ? { tailoringDisposition: "APPLIED" as const }
+            : {}),
         };
       },
       { timeout: 30_000 },
@@ -329,6 +399,19 @@ export async function commitApplicationArtifact(input: CommitInput): Promise<Com
       return result;
     }
 
+    if (result.tailoringDisposition === "REPLAYED") {
+      await deleteBlobs(uploadedUrls);
+      committed = true;
+      return {
+        kind: "committed",
+        applicationId: result.applicationId,
+        aiContent: result.aiContent,
+        aiContentHash: result.aiContentHash,
+        urls: result.urls,
+        tailoringDisposition: "REPLAYED",
+      };
+    }
+
     committed = true;
     await deleteBlobs(result.superseded);
     return {
@@ -337,6 +420,9 @@ export async function commitApplicationArtifact(input: CommitInput): Promise<Com
       aiContent: result.aiContent,
       aiContentHash: result.aiContentHash,
       urls: uploaded,
+      ...(result.tailoringDisposition
+        ? { tailoringDisposition: result.tailoringDisposition }
+        : {}),
     };
   } catch (error) {
     if (!committed) await deleteBlobs(uploadedUrls);

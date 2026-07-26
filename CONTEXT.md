@@ -94,6 +94,24 @@ The end-to-end process of converting a Master Resume Profile + a Job into a fini
 
 The **Edit** phase is new in v1.x. Before that, generate→finalize was atomic. See **ADR-0002**.
 
+### Tailoring Run (`TailoringRun`)
+
+A durable execution that generates the required Resume and/or Cover AI
+proposals for one Job from one issued set of prompt receipts and source
+snapshots. It owns execution progress and cancellation; unlike an Application,
+it is execution history rather than the user's current artifact.
+
+Synonyms to avoid: "AI task", "generation session" — use **Tailoring Run**.
+
+### Tailoring Run Receipt (`TailoringRunReceipt`)
+
+Immutable evidence that one target of a Tailoring Run crossed the Application
+acceptance seam. There is at most one accepted receipt for each required target;
+an identical retry reuses that evidence instead of creating another acceptance.
+
+Synonyms to avoid: "completion flag", "callback record" — use **Tailoring Run
+Receipt**.
+
 ### Quality Gate
 
 The set of post-generation filters that grade AI-added bullets.
@@ -190,5 +208,6 @@ Short locale code used by next-intl for translation strings. `en | zh`. Always d
 - [ADR-0001](./docs/adr/0001-application-aicontent-provenance.md) — Why we persist AI provenance.
 - [ADR-0002](./docs/adr/0002-unified-tailor-edit-flow.md) — Why both generate paths converge through the Edit phase.
 - [ADR-0008](./docs/adr/0008-fetch-run-execution-commit-protocol.md) — Why all Fetch Pipeline adapters share one durable commit boundary.
+- [ADR-0009](./docs/adr/0009-tailoring-run-acceptance-protocol.md) — Why all AI proposal sources share one durable acceptance protocol.
 - [AGENTS.md](./AGENTS.md) — Codex Batch protocol.
 - [docs/CODEMAPS/](./docs/CODEMAPS) — Architecture snapshots.

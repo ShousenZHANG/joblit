@@ -13,6 +13,7 @@ import {
 } from "@/lib/server/ai/applicationPromptBuilder";
 import {
   buildPromptMeta,
+  buildPromptSnapshotHash,
   getExpectedJsonSchemaForTarget,
   getExpectedJsonShapeForTarget,
   type PromptMeta,
@@ -64,6 +65,16 @@ export interface ApplicationPromptPayload {
   expectedJsonShape: string;
   expectedJsonSchema: Record<string, unknown>;
   promptVersion: "v4-application-proposal";
+  /**
+   * Issuance evidence represented only as hashes so a TailoringRun can bind the
+   * exact Master Resume Profile and Job snapshots without persisting either
+   * snapshot or the prompt text. Triage payloads do not issue Tailoring Runs.
+   */
+  snapshotBinding?: {
+    resumeProfileId: string;
+    resumeSnapshotHash: string;
+    jobSnapshotHash: string;
+  };
 }
 
 export type ApplicationPromptErrorCode =
@@ -348,5 +359,10 @@ export async function buildApplicationPromptForUser(input: {
         ? { type: "object", required: ["requirements", "eligibility"] }
         : getExpectedJsonSchemaForTarget(parsed.data.target),
     promptVersion: "v4-application-proposal",
+    snapshotBinding: {
+      resumeProfileId: profile.id,
+      resumeSnapshotHash: buildPromptSnapshotHash(candidate),
+      jobSnapshotHash: buildPromptSnapshotHash(jobInput),
+    },
   };
 }

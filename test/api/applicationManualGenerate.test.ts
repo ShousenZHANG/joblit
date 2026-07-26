@@ -28,6 +28,10 @@ const transactionStore = vi.hoisted(() => ({
   executeRaw: vi.fn(),
 }));
 
+const rateLimitStore = vi.hoisted(() => ({
+  enforce: vi.fn(() => null),
+}));
+
 const applicationPrompt = vi.hoisted(() => ({
   buildApplicationPromptForUser: vi.fn(async () => ({
     promptMeta: {
@@ -38,6 +42,28 @@ const applicationPrompt = vi.hoisted(() => ({
       skillPackVersion: "b".repeat(64),
       promptHash: "c".repeat(64),
     },
+    snapshotBinding: {
+      resumeProfileId: "660e8400-e29b-41d4-a716-446655440000",
+      resumeSnapshotHash: "d".repeat(64),
+      jobSnapshotHash: "e".repeat(64),
+    },
+  })),
+}));
+
+const tailoringAcceptance = vi.hoisted(() => ({
+  hashManualTailoringAcceptance: vi.fn(() => "request-hash"),
+  probeTailoringRunAcceptanceReplay: vi.fn(
+    async (): Promise<unknown> => null,
+  ),
+  prepareTailoringRunAcceptance: vi.fn(async (_tx, input) => ({
+    userId: input.userId,
+    pending: input.requests,
+    replayed: [],
+    runs: [],
+  })),
+  completeTailoringRunAcceptance: vi.fn(async () => ({
+    receipts: [],
+    completedRunIds: [],
   })),
 }));
 
@@ -74,7 +100,7 @@ vi.mock("next-auth/next", () => ({
 }));
 
 vi.mock("@/lib/server/api/aiRateLimit", () => ({
-  enforceAiRateLimit: vi.fn(() => null),
+  enforceAiRateLimit: rateLimitStore.enforce,
 }));
 
 vi.mock("@/lib/server/resumeProfile", () => ({
@@ -95,6 +121,8 @@ vi.mock("@/lib/server/applications/applicationPrompt", () => ({
   buildApplicationPromptForUser:
     applicationPrompt.buildApplicationPromptForUser,
 }));
+
+vi.mock("@/lib/server/tailoringRuns/tailoringRunAcceptance", () => tailoringAcceptance);
 
 vi.mock("@/lib/server/latex/mapResumeProfile", () => ({
   mapResumeProfile: vi.fn(() => ({
@@ -151,9 +179,13 @@ import { getResumeProfile } from "@/lib/server/resumeProfile";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import { renderResumeTex } from "@/lib/server/latex/renderResume";
 import { renderCoverLetterTex } from "@/lib/server/latex/renderCoverLetter";
+import { compileLatexToPdf } from "@/lib/server/latex/compilePdf";
+import { TailoringRunError } from "@/lib/server/tailoringRuns/tailoringRunProtocol";
 import { POST } from "@/app/api/applications/manual-generate/route";
 
 const VALID_JOB_ID = "550e8400-e29b-41d4-a716-446655440000";
+const TAILORING_RUN_ID = "770e8400-e29b-41d4-a716-446655440000";
+const TAILORING_ATTEMPT_ID = "880e8400-e29b-41d4-a716-446655440000";
 const VALID_OUTPUT = JSON.stringify({
   cvSummary: "Tailored summary",
   latestExperience: {
@@ -199,11 +231,36 @@ function makeExistingAiContent() {
 
 describe("applications manual generate api", () => {
   beforeEach(() => {
-    applicationPrompt.buildApplicationPromptForUser.mockClear();
+    applicationPrompt.buildApplicationPromptForUser.mockReset().mockResolvedValue({
+      promptMeta: {
+        ruleSetId: "rules-1",
+        resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+        promptTemplateVersion: "2026.07.v2",
+        schemaVersion: "2026-07-24",
+        skillPackVersion: "b".repeat(64),
+        promptHash: "c".repeat(64),
+      },
+      snapshotBinding: {
+        resumeProfileId: "660e8400-e29b-41d4-a716-446655440000",
+        resumeSnapshotHash: "d".repeat(64),
+        jobSnapshotHash: "e".repeat(64),
+      },
+    });
+    tailoringAcceptance.hashManualTailoringAcceptance.mockClear();
+    tailoringAcceptance.probeTailoringRunAcceptanceReplay
+      .mockReset()
+      .mockResolvedValue(null);
+    tailoringAcceptance.prepareTailoringRunAcceptance.mockClear();
+    tailoringAcceptance.completeTailoringRunAcceptance.mockClear();
+    rateLimitStore.enforce.mockReset().mockReturnValue(null);
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockReset();
     (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockReset();
     (mapResumeProfile as unknown as ReturnType<typeof vi.fn>).mockReset();
     (renderResumeTex as unknown as ReturnType<typeof vi.fn>).mockReset();
+    (renderCoverLetterTex as unknown as ReturnType<typeof vi.fn>).mockReset();
+    (compileLatexToPdf as unknown as ReturnType<typeof vi.fn>)
+      .mockReset()
+      .mockResolvedValue(Buffer.from([37, 80, 68, 70]));
     (mapResumeProfile as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       candidate: {
         name: "Jane Doe",
@@ -220,6 +277,9 @@ describe("applications manual generate api", () => {
       education: [],
     });
     (renderResumeTex as unknown as ReturnType<typeof vi.fn>).mockReturnValue("\\documentclass{article}");
+    (renderCoverLetterTex as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      "\\documentclass{article}",
+    );
     jobStore.findFirst.mockReset();
     // Each test seeds the route's own lookup with mockResolvedValueOnce; this
     // default answers the ownership re-check commitApplicationArtifact makes
@@ -932,6 +992,11 @@ describe("applications manual generate api", () => {
         skillPackVersion: "b".repeat(64),
         promptHash: "c".repeat(64),
       },
+      snapshotBinding: {
+        resumeProfileId: "rp-1",
+        resumeSnapshotHash: "d".repeat(64),
+        jobSnapshotHash: "e".repeat(64),
+      },
     });
 
     const res = await POST(
@@ -1630,11 +1695,24 @@ describe("applications manual generate api", () => {
   });
 
   it.each([
-    { source: "local_ai" as const, variant: "lean" as const },
-    { source: "codex_batch" as const, variant: "full" as const },
+    {
+      source: "manual_import" as const,
+      variant: "full" as const,
+      protocolSource: "MANUAL_IMPORT" as const,
+    },
+    {
+      source: "local_ai" as const,
+      variant: "lean" as const,
+      protocolSource: "LOCAL_AI" as const,
+    },
+    {
+      source: "codex_batch" as const,
+      variant: "full" as const,
+      protocolSource: "CODEX_BATCH" as const,
+    },
   ])(
     "persists canonical $source provenance and authoritative DRAFT job metadata",
-    async ({ source, variant }) => {
+    async ({ source, variant, protocolSource }) => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: "user-1" } });
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
@@ -1673,6 +1751,10 @@ describe("applications manual generate api", () => {
             skillPackVersion: "b".repeat(64),
             promptHash: "c".repeat(64),
           },
+          tailoringRun: {
+            id: TAILORING_RUN_ID,
+            attemptId: TAILORING_ATTEMPT_ID,
+          },
         }),
       },
     ));
@@ -1688,6 +1770,26 @@ describe("applications manual generate api", () => {
     expect(json.aiContent.promptMetaHash).toMatch(/^[0-9a-f]{64}$/);
     expect(applicationPrompt.buildApplicationPromptForUser).toHaveBeenCalledWith(
       expect.objectContaining({ target: "resume", variant }),
+    );
+    expect(tailoringAcceptance.prepareTailoringRunAcceptance).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "user-1",
+        jobId: VALID_JOB_ID,
+        resumeProfileId: "rp-1",
+        requests: [
+          expect.objectContaining({
+            handle: {
+              id: TAILORING_RUN_ID,
+              attemptId: TAILORING_ATTEMPT_ID,
+            },
+            source: protocolSource,
+            delivery: "DRAFT",
+            target: "RESUME",
+            promptHash: "c".repeat(64),
+          }),
+        ],
+      }),
     );
     expect(blobStore.put).not.toHaveBeenCalled();
     },
@@ -1848,5 +1950,251 @@ describe("applications manual generate api", () => {
       "https://blob.vercel-storage.com/stale-resume.pdf",
       expect.anything(),
     );
+  });
+
+  it("replays an exact DRAFT before changed prompt rules or render adapters run", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    rateLimitStore.enforce.mockImplementation(() => {
+      throw new Error("rate limiter unavailable");
+    });
+    jobStore.findFirst.mockRejectedValue(new Error("current Job loader unavailable"));
+    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("current profile loader unavailable"),
+    );
+    applicationPrompt.buildApplicationPromptForUser.mockRejectedValue(
+      new Error("the current rules are unavailable"),
+    );
+    (compileLatexToPdf as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("renderer unavailable"),
+    );
+    tailoringAcceptance.probeTailoringRunAcceptanceReplay.mockResolvedValueOnce({
+      receipt: {
+        runId: TAILORING_RUN_ID,
+        target: "RESUME",
+        executionAttemptId: TAILORING_ATTEMPT_ID,
+        requestHash: "request-hash",
+        applicationId: "app-replayed",
+        aiContentHash: "receipt-content-hash",
+        delivery: "DRAFT",
+      },
+      application: {
+        id: "app-replayed",
+        status: "DRAFT",
+        aiContent: makeExistingAiContent(),
+        aiContentHash: "current-content-hash",
+        resumePdfName: "Jane Doe Software Engineer_CV.pdf",
+        job: {
+          id: VALID_JOB_ID,
+          title: "Software Engineer",
+          company: "Example Co",
+          location: "Sydney",
+        },
+      },
+    });
+
+    const response = await POST(
+      new Request(
+        "http://localhost/api/applications/manual-generate?finalize=false",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            jobId: VALID_JOB_ID,
+            target: "resume",
+            modelOutput: VALID_OUTPUT,
+            source: "local_ai",
+            promptMeta: {
+              ruleSetId: "rules-1",
+              resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+              promptTemplateVersion: "2026.07.v2",
+              schemaVersion: "2026-07-24",
+              skillPackVersion: "b".repeat(64),
+              promptHash: "c".repeat(64),
+            },
+            tailoringRun: {
+              id: TAILORING_RUN_ID,
+              attemptId: TAILORING_ATTEMPT_ID,
+            },
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-tailoring-replay")).toBe("exact");
+    await expect(response.json()).resolves.toMatchObject({
+      applicationId: "app-replayed",
+      status: "DRAFT",
+      aiContentHash: "current-content-hash",
+      aiContent: makeExistingAiContent(),
+      pdfName: "Jane Doe Software Engineer_CV.pdf",
+      job: {
+        id: VALID_JOB_ID,
+        title: "Software Engineer",
+        company: "Example Co",
+        location: "Sydney",
+      },
+      replayed: true,
+    });
+    expect(rateLimitStore.enforce).not.toHaveBeenCalled();
+    expect(jobStore.findFirst).not.toHaveBeenCalled();
+    expect(getResumeProfile).not.toHaveBeenCalled();
+    expect(applicationPrompt.buildApplicationPromptForUser).not.toHaveBeenCalled();
+    expect(mapResumeProfile).not.toHaveBeenCalled();
+    expect(renderResumeTex).not.toHaveBeenCalled();
+    expect(compileLatexToPdf).not.toHaveBeenCalled();
+    expect(blobStore.put).not.toHaveBeenCalled();
+    expect(applicationStore.upsert).not.toHaveBeenCalled();
+  });
+
+  it("returns 409 when an accepted target is retried with different content", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    rateLimitStore.enforce.mockImplementation(() => {
+      throw new Error("rate limiter unavailable");
+    });
+    jobStore.findFirst.mockRejectedValue(new Error("current Job loader unavailable"));
+    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("current profile loader unavailable"),
+    );
+    tailoringAcceptance.probeTailoringRunAcceptanceReplay.mockRejectedValueOnce(
+      new TailoringRunError(
+        "RECEIPT_CONFLICT",
+        "The target was already accepted with different content",
+      ),
+    );
+
+    const response = await POST(
+      new Request(
+        "http://localhost/api/applications/manual-generate?finalize=false",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            jobId: VALID_JOB_ID,
+            target: "resume",
+            modelOutput: VALID_OUTPUT.replace(
+              "Tailored summary",
+              "Changed summary",
+            ),
+            source: "local_ai",
+            promptMeta: {
+              ruleSetId: "rules-1",
+              resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+              promptTemplateVersion: "2026.07.v2",
+              schemaVersion: "2026-07-24",
+              skillPackVersion: "b".repeat(64),
+              promptHash: "c".repeat(64),
+            },
+            tailoringRun: {
+              id: TAILORING_RUN_ID,
+              attemptId: TAILORING_ATTEMPT_ID,
+            },
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "RECEIPT_CONFLICT" },
+    });
+    expect(rateLimitStore.enforce).not.toHaveBeenCalled();
+    expect(jobStore.findFirst).not.toHaveBeenCalled();
+    expect(getResumeProfile).not.toHaveBeenCalled();
+    expect(applicationPrompt.buildApplicationPromptForUser).not.toHaveBeenCalled();
+    expect(applicationStore.upsert).not.toHaveBeenCalled();
+  });
+
+  it("returns an exact FINAL acknowledgement without prompt, PDF, or Blob dependencies", async () => {
+    process.env.BLOB_READ_WRITE_TOKEN = "blob-token";
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    rateLimitStore.enforce.mockImplementation(() => {
+      throw new Error("rate limiter unavailable");
+    });
+    jobStore.findFirst.mockRejectedValue(new Error("current Job loader unavailable"));
+    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("current profile loader unavailable"),
+    );
+    applicationPrompt.buildApplicationPromptForUser.mockRejectedValue(
+      new Error("the current rules are unavailable"),
+    );
+    (compileLatexToPdf as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("renderer unavailable"),
+    );
+    blobStore.put.mockRejectedValue(new Error("blob unavailable"));
+    tailoringAcceptance.probeTailoringRunAcceptanceReplay.mockResolvedValueOnce({
+      receipt: {
+        runId: TAILORING_RUN_ID,
+        target: "COVER",
+        executionAttemptId: TAILORING_ATTEMPT_ID,
+        requestHash: "request-hash",
+        applicationId: "app-final-replayed",
+        aiContentHash: "receipt-content-hash",
+        delivery: "FINAL",
+      },
+      application: {
+        id: "app-final-replayed",
+        status: "FINAL",
+        aiContent: makeExistingAiContent(),
+        aiContentHash: "current-final-hash",
+        resumePdfName: "Jane Doe Software Engineer_CV.pdf",
+        job: {
+          id: VALID_JOB_ID,
+          title: "Software Engineer",
+          company: "Example Co",
+          location: "Sydney",
+        },
+      },
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/applications/manual-generate", {
+        method: "POST",
+        body: JSON.stringify({
+          jobId: VALID_JOB_ID,
+          target: "cover",
+          modelOutput: VALID_OUTPUT,
+          source: "codex_batch",
+          promptMeta: {
+            ruleSetId: "rules-1",
+            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+            promptTemplateVersion: "2026.07.v2",
+            schemaVersion: "2026-07-24",
+            skillPackVersion: "b".repeat(64),
+            promptHash: "c".repeat(64),
+          },
+          tailoringRun: {
+            id: TAILORING_RUN_ID,
+            attemptId: TAILORING_ATTEMPT_ID,
+          },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    expect(response.headers.get("x-tailoring-replay")).toBe("exact");
+    expect(response.headers.get("x-tailoring-delivery")).toBe("FINAL");
+    await expect(response.json()).resolves.toMatchObject({
+      applicationId: "app-final-replayed",
+      status: "FINAL",
+      aiContentHash: "current-final-hash",
+      acceptedDelivery: "FINAL",
+      target: "cover",
+      replayed: true,
+    });
+    expect(rateLimitStore.enforce).not.toHaveBeenCalled();
+    expect(jobStore.findFirst).not.toHaveBeenCalled();
+    expect(getResumeProfile).not.toHaveBeenCalled();
+    expect(applicationPrompt.buildApplicationPromptForUser).not.toHaveBeenCalled();
+    expect(mapResumeProfile).not.toHaveBeenCalled();
+    expect(renderCoverLetterTex).not.toHaveBeenCalled();
+    expect(compileLatexToPdf).not.toHaveBeenCalled();
+    expect(blobStore.put).not.toHaveBeenCalled();
+    expect(applicationStore.upsert).not.toHaveBeenCalled();
   });
 });

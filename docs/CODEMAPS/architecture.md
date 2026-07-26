@@ -156,11 +156,26 @@ distributes this contract together with the user's active effective rules.
 ### 4. Codex Batch — tailoring without a human
 
 `ApplicationBatch` over `NEW` Jobs. `POST /api/application-batches/[id]/run-once`
-is atomic: complete the previous task and claim the next in one call, idempotent
-for the same `taskId`; external Codex then persists output through
-`manual-generate`. The separate, feature-gated `/execute` route invokes
-`generateApplicationArtifactsForJob` for server-side generation. Protocol in
-`AGENTS.md`.
+reports only a previous `FAILED`/`SKIPPED` attempt and claims new tasks. Each
+task response includes its fencing `attemptId`, stable derived `issueKey`, and
+durable `acceptedTargets`/`remainingTargets`. External Codex requests only the
+missing target prompts with `source = codex_batch`, `delivery = FINAL`, the
+claimed `issueKey`, and the batch/task/attempt binding, then echoes each
+response's `promptMeta` and public `tailoringRun` handle through
+`manual-generate`. Reclaim preserves the accepted Application half.
+
+There is no independent success callback. The final required target is the
+point of no return: its transaction commits the Application mutation,
+immutable `TailoringRunReceipt`, terminal `TailoringRun`, and
+`ApplicationBatchTask = SUCCEEDED` together. Task `PATCH` and `run-once`
+completion input therefore accept only `FAILED`/`SKIPPED` with the claimed
+`attemptId`. The separate, feature-gated `/execute` route invokes
+`generateApplicationArtifactsForJob` through the same acceptance boundary.
+For protocol-v1 tasks, the same transaction also writes
+`completionAttemptId = executionAttemptId`; a database constraint rejects an
+old worker's unreceipted success after a new claim.
+Private Hermes `run_*` identifiers stay in the extension and never enter
+Joblit's domain model. Protocol in `AGENTS.md`; durability details in ADR-0009.
 
 ---
 

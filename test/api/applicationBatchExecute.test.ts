@@ -36,6 +36,7 @@ import { POST } from "@/app/api/application-batches/[id]/execute/route";
 const BATCH_ID = "550e8400-e29b-41d4-a716-446655440000";
 const TASK_ID = "660e8400-e29b-41d4-a716-446655440000";
 const JOB_ID = "770e8400-e29b-41d4-a716-446655440000";
+const ATTEMPT_ID = "880e8400-e29b-41d4-a716-446655440000";
 
 describe("application batch execute api", () => {
   beforeEach(() => {
@@ -87,6 +88,11 @@ describe("application batch execute api", () => {
         kind: "claimed",
         task: {
           id: TASK_ID,
+          attemptId: ATTEMPT_ID,
+          issueKey: "990e8400-e29b-51d4-a716-446655440000",
+          protocolVersion: 1,
+          acceptedTargets: ["RESUME"],
+          remainingTargets: ["COVER"],
           jobId: JOB_ID,
           title: "Software Engineer",
           company: "Acme",
@@ -149,14 +155,15 @@ describe("application batch execute api", () => {
     expect(artifacts.generateApplicationArtifactsForJob).toHaveBeenCalledWith({
       userId: "user-1",
       jobId: JOB_ID,
-    });
-    expect(runner.completeBatchTask).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: "user-1",
+      batch: {
         batchId: BATCH_ID,
         taskId: TASK_ID,
-        status: "SUCCEEDED",
-      }),
-    );
+        executionAttemptId: ATTEMPT_ID,
+        issueKey: "990e8400-e29b-51d4-a716-446655440000",
+        acceptedTargets: ["RESUME"],
+        remainingTargets: ["COVER"],
+      },
+    });
+    expect(runner.completeBatchTask).not.toHaveBeenCalled();
   });
 });

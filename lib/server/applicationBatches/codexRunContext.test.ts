@@ -42,6 +42,7 @@ import {
 
 describe("codex run context", () => {
   beforeEach(() => {
+    runner.reclaimStaleBatchTasks.mockReset();
     runner.claimNextBatchTask.mockReset();
     runner.completeBatchTask.mockReset();
     promptRules.getActivePromptSkillRulesForUser.mockReset();
@@ -101,6 +102,11 @@ describe("codex run context", () => {
         kind: "claimed",
         task: {
           id: "task-1",
+          attemptId: "880e8400-e29b-41d4-a716-446655440000",
+          issueKey: "990e8400-e29b-51d4-a716-446655440000",
+          protocolVersion: 1,
+          acceptedTargets: ["RESUME"],
+          remainingTargets: ["COVER"],
           jobId: "job-1",
           title: "Software Engineer",
           company: "Acme",
@@ -140,6 +146,11 @@ describe("codex run context", () => {
     expect(result.tasks).toEqual([
       {
         taskId: "task-1",
+        attemptId: "880e8400-e29b-41d4-a716-446655440000",
+        issueKey: "990e8400-e29b-51d4-a716-446655440000",
+        protocolVersion: 1,
+        acceptedTargets: ["RESUME"],
+        remainingTargets: ["COVER"],
         jobId: "job-1",
         job: {
           id: "job-1",
@@ -164,13 +175,13 @@ describe("codex run context", () => {
   it("dedupes completions and records runner-level rejections", async () => {
     runner.completeBatchTask
       .mockResolvedValueOnce({
-        taskStatus: "SUCCEEDED",
+        taskStatus: "FAILED",
         batchStatus: "RUNNING",
         progress: {
           pending: 1,
           running: 0,
-          succeeded: 1,
-          failed: 0,
+          succeeded: 0,
+          failed: 1,
           skipped: 0,
         },
       })
@@ -180,17 +191,50 @@ describe("codex run context", () => {
       userId: "user-1",
       batchId: "batch-1",
       completedTasks: [
-        { taskId: "task-1", status: "SUCCEEDED" },
-        { taskId: "task-1", status: "FAILED", error: "duplicate ignored" },
-        { taskId: "task-2", status: "FAILED", error: "compile failed" },
+        {
+          taskId: "task-1",
+          attemptId: "880e8400-e29b-41d4-a716-446655440000",
+          status: "FAILED",
+          error: "model output invalid",
+        },
+        {
+          taskId: "task-1",
+          attemptId: "990e8400-e29b-41d4-a716-446655440000",
+          status: "SKIPPED",
+          error: "duplicate ignored",
+        },
+        {
+          taskId: "task-2",
+          attemptId: "aa0e8400-e29b-41d4-a716-446655440000",
+          status: "SKIPPED",
+        },
       ],
     });
 
     expect(runner.completeBatchTask).toHaveBeenCalledTimes(2);
     expect(results).toEqual([
-      { taskId: "task-1", status: "SUCCEEDED", accepted: true },
-      { taskId: "task-2", status: "FAILED", accepted: false, error: "INVALID_STATE" },
+      {
+        taskId: "task-1",
+        attemptId: "880e8400-e29b-41d4-a716-446655440000",
+        status: "FAILED",
+        accepted: true,
+      },
+      {
+        taskId: "task-2",
+        attemptId: "aa0e8400-e29b-41d4-a716-446655440000",
+        status: "SKIPPED",
+        accepted: false,
+        error: "INVALID_STATE",
+      },
     ]);
+    expect(runner.completeBatchTask).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        taskId: "task-1",
+        attemptId: "880e8400-e29b-41d4-a716-446655440000",
+        status: "FAILED",
+      }),
+    );
   });
 
   it("derives the response batch status from terminal, progress, and claim results", () => {

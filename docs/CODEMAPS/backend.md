@@ -62,13 +62,32 @@ routes are not part of this call chain.
 Entry: `POST /api/applications/manual-generate`.
 
 1. Prompt built separately by `buildApplicationPromptForUser` — `applicationPrompt.ts:191`. Seek JDs enriched at `:245`
-2. External LLM runs it; the route validates the request envelope with `ManualGenerateSchema`
-3. The route rebuilds the exact Full or Lean prompt and validates its generation receipt with `validatePromptMetaForImport`; stale receipts return `PROMPT_META_MISMATCH` 409
-4. `acceptApplicationGeneration` selects the decode policy from source: Local AI is strict-current; manual import also accepts the bounded v1 compatibility dialect
-5. The same accept seam owns normalization, Resume bullet grounding/non-redundancy gates, Cover quality, provenance, evidence, and canonical `AiContent`
-6. `buildManualImportArtifact` is a pure rendering adapter over the accepted canonical result
-7. `commitApplicationArtifact({ mergeTarget, reviewContext })` takes the Application lock, folds that target into the stored aggregate, preserves the other target and its known provenance, then re-reviews the complete aggregate
-8. `?finalize=false` commits `DRAFT` with no artifact. FINAL mode compiles and validates the requested PDF before commit; a blocked combined review returns `review_blocked` and the new Blob is cleaned up
+2. Current Resume/Cover prompt responses include a public Tailoring Run
+   `{ id, attemptId }` handle. Codex Batch must return it unchanged. During the
+   Phase A/B rolling window, an extension talking to an old service may label a
+   Local AI response as legacy and import without manufacturing a run; Phase C
+   makes the handle mandatory after legacy telemetry reaches zero. A private
+   Hermes `run_*` identifier never crosses into Joblit
+3. External LLM runs the prompt; the route validates the request envelope with
+   `ManualGenerateSchema`
+4. The route rebuilds the exact Full or Lean prompt and validates its generation
+   receipt with `validatePromptMetaForImport`; stale receipts return
+   `PROMPT_META_MISMATCH` 409
+5. `acceptApplicationGeneration` selects the decode policy from source: Local AI
+   is strict-current; manual import also accepts the bounded v1 compatibility
+   dialect
+6. The same accept seam owns normalization, Resume bullet
+   grounding/non-redundancy gates, Cover quality, provenance, evidence, and
+   canonical `AiContent`
+7. `buildManualImportArtifact` is a pure rendering adapter over the accepted
+   canonical result
+8. `commitApplicationArtifact({ mergeTarget, reviewContext, tailoring })`
+   validates the run attempt and immutable target receipt before the Application
+   mutation, folds that target into the stored aggregate, preserves the other
+   target and its known provenance, then re-reviews the complete aggregate
+9. `?finalize=false` commits `DRAFT` with no artifact. FINAL mode compiles and
+   validates the requested PDF before commit; a blocked combined review returns
+   `review_blocked` and the new Blob is cleaned up
 
 The current external output contract is intentionally small: Resume returns
 `cvSummary` and zero to three `latestExperience.addedBullets`; Cover returns
@@ -93,7 +112,9 @@ UI marks it fresh. See ADR-0002.
   Master Resume Profile spine with canonical `aiContent.cv`; model-only skills
   and reordered base bullets cannot bypass persisted Application state.
 - `compileLatexToPdf` — the single renderer
-- `commitApplicationArtifact` — the artifact persistence sequence shared by server generation, manual/Local AI generation, and Editor Finalize
+- `commitApplicationArtifact` — the artifact persistence sequence shared by
+  server generation, manual/Local AI generation, and Editor Finalize; generated
+  writers also use it as the Tailoring Run acceptance boundary
 - `persistReviewLedger` — reached through the commit module plus non-artifact draft and discard transactions
 
 Once a `DRAFT` Application exists, `app/api/applications/[id]/finalize/route.ts`
@@ -103,11 +124,20 @@ is the single terminal renderer for both paths (ADR-0002).
 
 ## The Application artifact commit sequence
 
-All artifact writers use `commitApplicationArtifact`:
+All artifact writers use `commitApplicationArtifact`. Generated writers may
+prepend the `ABAT -> TLRN` locks and complete Tailoring Run acceptance around
+the Application mutation:
 
-**upload → transaction (Application lock → Job ownership recheck → optional
-aggregate CAS → optional single-target fold + full re-review → FINAL review
-gate → hash → upsert → review ledger) → GC superseded blobs**
+**upload → transaction (optional Batch lock → optional Tailoring Run lock →
+Application lock → Job ownership recheck → optional aggregate CAS → optional
+single-target fold + full re-review → FINAL review gate → hash → upsert →
+review ledger → immutable target receipt → run/task projection) → GC
+superseded blobs**
+
+When the accepted receipt completes a batch run's required target mask, that
+same transaction marks the linked task `SUCCEEDED`. Neither task `PATCH` nor
+`run-once` may write success independently; they accept only `FAILED` or
+`SKIPPED` with the claimed `attemptId`.
 
 | Caller | Owns | `mergeTarget` | CAS |
 |---|---|---:|---:|

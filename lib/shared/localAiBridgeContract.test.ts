@@ -10,6 +10,10 @@ import {
 
 const ID = "550e8400-e29b-41d4-a716-446655440000";
 const NONCE = "22222222-2222-4222-8222-222222222222";
+const TAILORING_RUN = {
+  id: "8f8f8f8f-8f8f-4f8f-8f8f-8f8f8f8f8f8f",
+  attemptId: "9a9a9a9a-9a9a-4a9a-8a9a-9a9a9a9a9a9a",
+};
 const NOW = 1_800_000_000_000;
 
 function request(overrides: Record<string, unknown> = {}) {
@@ -108,6 +112,88 @@ describe("local AI bridge contract", () => {
     expect(parseBridgeResponse({ ...base, data: { ...run, progressChars: -1 } })).toBeNull();
     expect(
       parseBridgeResponse({ ...base, data: { ...run, status: "queued", progressChars: 5 } }),
+    ).toBeNull();
+  });
+
+  it("accepts a strict optional TailoringRun handle on public run states", () => {
+    const base = {
+      channel: LOCAL_AI_BRIDGE_CHANNEL,
+      direction: "extension-to-web",
+      version: 1,
+      messageId: ID,
+      nonce: NONCE,
+      ok: true,
+    };
+    const active = {
+      requestId: ID,
+      jobId: NONCE,
+      target: "resume",
+      status: "running",
+      tailoringRun: TAILORING_RUN,
+    };
+
+    expect(parseBridgeResponse({ ...base, data: active })).toMatchObject({
+      ok: true,
+      data: { tailoringRun: TAILORING_RUN },
+    });
+    expect(
+      parseBridgeResponse({
+        ...base,
+        data: {
+          ...active,
+          status: "succeeded",
+          modelOutput: JSON.stringify({ cvSummary: "A".repeat(30) }),
+          promptMeta: { promptHash: "sha256:test" },
+        },
+      }),
+    ).toMatchObject({
+      ok: true,
+      data: { status: "succeeded", tailoringRun: TAILORING_RUN },
+    });
+    expect(
+      parseBridgeResponse({
+        ...base,
+        data: {
+          ...active,
+          tailoringRun: { ...TAILORING_RUN, attemptId: "not-a-uuid" },
+        },
+      }),
+    ).toBeNull();
+  });
+
+  it("keeps legacy handle-less run results readable and rejects private identifiers", () => {
+    const base = {
+      channel: LOCAL_AI_BRIDGE_CHANNEL,
+      direction: "extension-to-web",
+      version: 1,
+      messageId: ID,
+      nonce: NONCE,
+      ok: true,
+    };
+    const succeeded = {
+      requestId: ID,
+      jobId: NONCE,
+      target: "resume",
+      status: "succeeded",
+      modelOutput: JSON.stringify({ cvSummary: "A".repeat(30) }),
+      promptMeta: { promptHash: "sha256:test" },
+    };
+
+    expect(parseBridgeResponse({ ...base, data: succeeded })).toMatchObject({
+      ok: true,
+      data: { status: "succeeded" },
+    });
+    expect(
+      parseBridgeResponse({
+        ...base,
+        data: { ...succeeded, runId: "run_private" },
+      }),
+    ).toBeNull();
+    expect(
+      parseBridgeResponse({
+        ...base,
+        data: { ...succeeded, sessionId: "private-session" },
+      }),
     ).toBeNull();
   });
 

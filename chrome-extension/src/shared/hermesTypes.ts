@@ -12,6 +12,7 @@ import {
   type LocalAiErrorCode,
   type LocalAiTarget,
 } from "@shared/localAiBridgeWire";
+import type { TailoringRunHandle } from "@shared/tailoringRunContract";
 
 export const BRIDGE_CHANNEL = LOCAL_AI_BRIDGE_CHANNEL;
 export const BRIDGE_VERSION = LOCAL_AI_BRIDGE_VERSION;
@@ -23,7 +24,7 @@ export const MAX_BRIDGE_RESPONSE_BYTES = LOCAL_AI_BRIDGE_MAX_RESPONSE_BYTES;
 export const MIN_MODEL_OUTPUT_CHARS = LOCAL_AI_MIN_MODEL_OUTPUT_CHARS;
 export const MAX_MODEL_OUTPUT_CHARS = LOCAL_AI_MAX_MODEL_OUTPUT_CHARS;
 
-export type { LocalAiErrorCode, LocalAiTarget };
+export type { LocalAiErrorCode, LocalAiTarget, TailoringRunHandle };
 
 export const MAX_TRIAGE_JOBS = LOCAL_AI_MAX_TRIAGE_JOBS;
 
@@ -96,6 +97,8 @@ export interface PublicRunBase {
   jobId: string;
   target: LocalAiTarget;
   status: PublicRunStatus;
+  /** Durable Joblit execution identity. Missing only on legacy registry rows. */
+  tailoringRun?: TailoringRunHandle;
 }
 
 export interface PublicRunProgress {
@@ -200,6 +203,15 @@ function jsonBytes(value: unknown): number {
 
 function isUuid(value: unknown): value is string {
   return typeof value === "string" && UUID_RE.test(value);
+}
+
+export function isTailoringRunHandle(value: unknown): value is TailoringRunHandle {
+  return (
+    isPlainRecord(value) &&
+    hasExactKeys(value, ["attemptId", "id"]) &&
+    isUuid(value.id) &&
+    isUuid(value.attemptId)
+  );
 }
 
 export function isStartRunPayload(value: unknown): value is StartRunPayload {
@@ -311,10 +323,21 @@ export function validatePublicRunResult(value: unknown): value is PublicRunResul
   ) {
     return false;
   }
-  if (["run_id", "runId", "prompt", "endpoint", "apiKey", "token"].some((key) => key in value)) return false;
+  if (
+    ["run_id", "runId", "session_id", "sessionId", "prompt", "endpoint", "apiKey", "token"]
+      .some((key) => key in value)
+  ) return false;
+  if (value.tailoringRun !== undefined && !isTailoringRunHandle(value.tailoringRun)) return false;
+  const identityKeys = [
+    "jobId",
+    "requestId",
+    "status",
+    "target",
+    ...(value.tailoringRun === undefined ? [] : ["tailoringRun"]),
+  ];
   if (value.status === "succeeded") {
     return (
-      hasExactKeys(value, ["jobId", "modelOutput", "promptMeta", "requestId", "status", "target"]) &&
+      hasExactKeys(value, [...identityKeys, "modelOutput", "promptMeta"]) &&
       typeof value.modelOutput === "string" &&
       value.modelOutput.length >= MIN_MODEL_OUTPUT_CHARS &&
       value.modelOutput.length <= MAX_MODEL_OUTPUT_CHARS &&
@@ -322,7 +345,7 @@ export function validatePublicRunResult(value: unknown): value is PublicRunResul
     );
   }
   if (value.status === "failed") {
-    return hasExactKeys(value, ["error", "jobId", "requestId", "status", "target"]) && isPublicLocalAiError(value.error);
+    return hasExactKeys(value, [...identityKeys, "error"]) && isPublicLocalAiError(value.error);
   }
   if (
     value.status !== "queued" &&
@@ -334,14 +357,14 @@ export function validatePublicRunResult(value: unknown): value is PublicRunResul
   }
   if (value.progressChars !== undefined) {
     return (
-      hasExactKeys(value, ["jobId", "progressChars", "requestId", "status", "target"]) &&
+      hasExactKeys(value, [...identityKeys, "progressChars"]) &&
       typeof value.progressChars === "number" &&
       Number.isInteger(value.progressChars) &&
       value.progressChars >= 0 &&
       value.progressChars <= MAX_MODEL_OUTPUT_CHARS
     );
   }
-  return hasExactKeys(value, ["jobId", "requestId", "status", "target"]);
+  return hasExactKeys(value, identityKeys);
 }
 
 export function isPublicLocalAiError(value: unknown): value is PublicLocalAiError {

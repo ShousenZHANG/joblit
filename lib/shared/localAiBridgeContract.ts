@@ -10,6 +10,7 @@ import {
   LOCAL_AI_BRIDGE_MAX_RESPONSE_BYTES as SHARED_MAX_RESPONSE_BYTES,
   LOCAL_AI_MAX_MODEL_OUTPUT_CHARS as SHARED_MAX_MODEL_OUTPUT_CHARS,
 } from "@/lib/shared/localAiBridgeWire";
+import { TailoringRunHandleSchema } from "@/lib/shared/tailoringRunContract";
 
 export const LOCAL_AI_BRIDGE_CHANNEL = SHARED_CHANNEL;
 export const LOCAL_AI_BRIDGE_VERSION = SHARED_VERSION;
@@ -141,6 +142,7 @@ const runBase = {
   requestId: uuid,
   jobId: uuid,
   target: z.enum(["resume", "cover", "match", "triage"]),
+  tailoringRun: TailoringRunHandleSchema.optional(),
 };
 
 export const LocalAiPublicRunSchema = z.discriminatedUnion("status", [

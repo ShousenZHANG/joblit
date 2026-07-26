@@ -225,15 +225,43 @@ export async function putFieldMapping(data: Record<string, unknown>) {
 export async function fetchAiPromptEnvelope(input: {
   jobId: string;
   target: LocalAiTarget;
+  issueKey: string;
 }): Promise<unknown> {
-  const res = await apiFetch("/api/ext/applications/prompt", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-  if (!res.ok) {
-    throw new ApiRequestError(res.status, `AI prompt fetch failed: ${res.status}`);
+  const requestPrompt = (body: Record<string, unknown>) =>
+    apiFetch("/api/ext/applications/prompt", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  const res = await requestPrompt(input);
+  if (res.ok) {
+    return res.json();
   }
-  return res.json();
+
+  const errorBody = await res.clone().json().catch(() => null) as {
+    error?: { code?: unknown };
+  } | null;
+  if (res.status === 400 && errorBody?.error?.code === "INVALID_BODY") {
+    // Rolling-deploy bridge: pre-TailoringRun servers used a strict body that
+    // rejected the additive issueKey. Retry exactly once with the historical
+    // shape, and mark the trusted envelope only inside the extension so the
+    // validator can permit a handle-less legacy run during the drain window.
+    const legacy = await requestPrompt({
+      jobId: input.jobId,
+      target: input.target,
+    });
+    if (legacy.ok) {
+      const payload = await legacy.json();
+      return payload && typeof payload === "object" && !Array.isArray(payload)
+        ? { ...payload, legacyTailoringRunProtocol: true }
+        : payload;
+    }
+    throw new ApiRequestError(
+      legacy.status,
+      `AI prompt fetch failed: ${legacy.status}`,
+    );
+  }
+
+  throw new ApiRequestError(res.status, `AI prompt fetch failed: ${res.status}`);
 }
 
 export async function fetchAiTriagePromptEnvelope(input: {

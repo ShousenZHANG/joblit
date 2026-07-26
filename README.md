@@ -70,16 +70,81 @@ agent. Codex runs Joblit's batch loop through a documented HTTP protocol
 ([AGENTS.md](./AGENTS.md)):
 
 ```
-POST /api/application-batches            → create a batch from NEW-status jobs
-POST /api/application-batches/:id/run-once → atomic: complete previous + claim next
+POST /api/application-batches              → create a batch from NEW-status jobs
+POST /api/application-batches/:id/run-once → report failure/skip + claim next
+POST /api/applications/prompt              → issue the task-bound Tailoring Run
+POST /api/applications/manual-generate     → accept one target with its run handle
 GET  /api/application-batches/:id/summary  → progress
 ```
 
-`run-once` is one call rather than separate claim and complete calls, and it is
-idempotent for the same `taskId`. That matters because an agent loop dies —
-rate limit, timeout, closed laptop. With two calls, a death between them leaves
-a task claimed but never completed and the batch stalls. Folding both into one
-transaction means a dead run resumes cleanly on the next call.
+Every claimed task carries an attempt UUID plus a stable, Joblit-derived
+`issueKey`. The claim also reports `acceptedTargets` and `remainingTargets`;
+after stale reclaim, Codex and the server executor process only the missing
+targets and preserve the already accepted Application half. Missing-target
+prompt requests reuse the claimed `issueKey` and bind the batch, task, and
+attempt; each import echoes the returned public Tailoring Run handle.
+`run-once` and the task
+`PATCH` endpoint report only `FAILED` or `SKIPPED`. Success has no independent
+callback: accepting the final required target atomically commits the
+Application, immutable receipt, Tailoring Run, and batch task. Lost responses
+can therefore replay the same receipt without fabricating a second success.
+
+### TailoringRun rolling cutover
+
+TailoringRun uses an expand-and-drain rollout so old data stays honest and an
+old batch worker cannot certify a newly claimed attempt.
+
+**Phase A — expand and compatibility.** Deploy the additive migration and
+mixed-version readers first. Historical `ApplicationBatchTask` rows remain
+`tailoringProtocolVersion = 0`; they are not backfilled with attempts,
+completion proofs, Tailoring Runs, or receipts. During this window the
+extension may retry an old prompt endpoint without `issueKey` and mark the
+resulting envelope legacy. Local AI legacy imports without a run handle remain
+temporarily readable, but they do not manufacture TailoringRun evidence.
+
+**Phase B — drain and switch writers.** Pause Codex/server batch dispatch, wait
+for old deployments and claimed tasks to drain, then deploy the v1 claim and
+acceptance writers. A new claim atomically sets
+`tailoringProtocolVersion = 1`, replaces `executionAttemptId`, clears
+`completionAttemptId`, and returns its stable `issueKey` plus durable target
+progress. PostgreSQL permits a v1 task to become `SUCCEEDED` only when
+TailoringRun acceptance writes `completionAttemptId = executionAttemptId`.
+Consequently, an old worker that finishes after a new claim cannot write an
+unreceipted success even if it still reaches the database.
+
+Before resuming dispatch, verify no old active task remains:
+
+```sql
+SELECT id, status, "executionAttemptId", "tailoringProtocolVersion",
+       "completionAttemptId"
+FROM "ApplicationBatchTask"
+WHERE status IN ('PENDING', 'RUNNING')
+ORDER BY "updatedAt";
+```
+
+Canary a fresh two-target task, then force or observe one stale reclaim after
+the first target is accepted. The reclaimed claim must return that target in
+`acceptedTargets`, only the other in `remainingTargets`, and finish with:
+
+```sql
+SELECT t.id, t.status, t."executionAttemptId",
+       t."tailoringProtocolVersion", t."completionAttemptId",
+       r."acceptedTargetMask", r."requiredTargetMask"
+FROM "ApplicationBatchTask" t
+JOIN "TailoringRun" r ON r."applicationBatchTaskId" = t.id
+WHERE t.id = '<canary-task-uuid>';
+```
+
+Healthy v1 success is `tailoringProtocolVersion = 1`,
+`completionAttemptId = executionAttemptId`, and equal accepted/required masks.
+If the canary fails, pause dispatch again; do not repair it with a direct
+`SUCCEEDED` update.
+
+**Phase C — contract.** After legacy Local AI envelope telemetry reaches zero
+and every old client/deployment has drained, remove the extension fallback and
+require a TailoringRun handle for Local AI imports. Historical v0 rows remain
+legacy audit history. Never backfill synthetic run or receipt evidence merely
+to make old data look v1.
 
 ### How Codex was used to build Joblit
 
@@ -252,6 +317,8 @@ Joblit can generate a grounded CV or cover letter through the official Hermes cl
 - Keeps a verified persistent local distribution source so official profile updates remain repeatable
 - Reuses an existing `openai-codex` login and opens OAuth only when Hermes reports logged out
 - Preserves the existing manual Skill/copy/paste method as fallback
+- Keeps private Hermes `run_*` identifiers inside the extension; Joblit receives
+  only its public Tailoring Run `{ id, attemptId }` handle
 
 Windows setup is user-launched and isolated from existing Hermes profiles:
 
@@ -437,9 +504,15 @@ External orchestration protocol for AI-assisted batch tailoring is documented in
 
 1. Fetch jobs and keep target roles as `NEW`.
 2. `POST /api/application-batches` with scope `NEW`.
-3. Loop `POST /api/application-batches/:id/run-once` (atomic claim + complete).
-4. For each task: generate prompt, run external model, import result.
-5. Track progress with `GET /api/application-batches/:id/summary`.
+3. Claim tasks through `codex-run` or `run-once`; retain each task's
+   `attemptId`, `issueKey`, `acceptedTargets`, and `remainingTargets`.
+4. Only for `remainingTargets`, request the prompt with
+   `source: "codex_batch"`, `delivery: "FINAL"`, the claimed `issueKey`, and
+   the batch/task/attempt binding.
+5. Import each result through `manual-generate`, echoing its exact `promptMeta`
+   and `tailoringRun` handle. The final target import commits task success.
+6. Report only `FAILED` or `SKIPPED` with `attemptId`, then track progress with
+   `GET /api/application-batches/:id/summary`.
 
 ## Testing
 

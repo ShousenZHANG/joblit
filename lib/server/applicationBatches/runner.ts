@@ -1,17 +1,38 @@
+import { randomUUID } from "node:crypto";
 import type {
   ApplicationBatchStatus,
   ApplicationBatchTaskStatus,
+  Prisma,
 } from "@/lib/generated/prisma";
 import { prisma } from "@/lib/server/prisma";
+import {
+  acquireApplicationBatchLock,
+  acquireTailoringRunLocks,
+} from "@/lib/server/tailoringRuns/tailoringRunLock";
+import {
+  reconcileBoundApplicationBatch,
+  settleBoundRunFromTask,
+} from "@/lib/server/tailoringRuns/tailoringBatchProjection";
+import { TailoringRunError } from "@/lib/server/tailoringRuns/tailoringRunProtocol";
+import type { TailoringRunTransaction } from "@/lib/server/tailoringRuns/tailoringRunDatabase";
+import { APPLICATION_BATCH_TASK_LEASE_MS } from "@/lib/server/tailoringRuns/tailoringRunLease";
+import {
+  APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION,
+  applicationBatchTailoringIssueKey,
+  applicationBatchTargetProgress,
+} from "./tailoringTaskContract";
 
 const TERMINAL_BATCH_STATUSES: ApplicationBatchStatus[] = ["SUCCEEDED", "FAILED", "CANCELLED"];
 
 const TERMINAL_TASK_STATUSES: ApplicationBatchTaskStatus[] = ["SUCCEEDED", "FAILED", "SKIPPED"];
-const STALE_TASK_TIMEOUT_MS = (() => {
-  const parsed = Number(process.env.APPLICATION_BATCH_TASK_STALE_MS);
-  if (!Number.isFinite(parsed) || parsed <= 0) return 20 * 60 * 1000;
-  return Math.max(parsed, 60_000);
-})();
+const STALE_TASK_TIMEOUT_MS = APPLICATION_BATCH_TASK_LEASE_MS;
+const TASK_LEASE_MS = APPLICATION_BATCH_TASK_LEASE_MS;
+
+function safeTaskError(error: string | null | undefined): string {
+  return (error?.trim() || "TASK_FAILED")
+    .replace(/run_[A-Za-z0-9_-]+/g, "[private executor id]")
+    .slice(0, 500);
+}
 
 export class BatchRunnerError extends Error {
   code: "NOT_FOUND" | "INVALID_STATE";
@@ -35,6 +56,11 @@ type ClaimResult =
       kind: "claimed";
       task: {
         id: string;
+        attemptId: string;
+        issueKey: string;
+        protocolVersion: typeof APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION;
+        acceptedTargets: Array<"RESUME" | "COVER">;
+        remainingTargets: Array<"RESUME" | "COVER">;
         jobId: string;
         title: string;
         company: string | null;
@@ -89,8 +115,9 @@ export async function getBatchProgress(input: { userId: string; batchId: string 
 }
 
 async function reconcileBatchStatus(input: { userId: string; batchId: string }) {
-  const [batch, grouped] = await Promise.all([
-    prisma.applicationBatch.findFirst({
+  return prisma.$transaction(async (tx) => {
+    await acquireApplicationBatchLock(tx, input.batchId);
+    const batch = await tx.applicationBatch.findFirst({
       where: {
         id: input.batchId,
         userId: input.userId,
@@ -101,8 +128,8 @@ async function reconcileBatchStatus(input: { userId: string; batchId: string }) 
         startedAt: true,
         completedAt: true,
       },
-    }),
-    prisma.applicationBatchTask.groupBy({
+    });
+    const grouped = await tx.applicationBatchTask.groupBy({
       by: ["status"],
       where: {
         batchId: input.batchId,
@@ -111,31 +138,30 @@ async function reconcileBatchStatus(input: { userId: string; batchId: string }) 
       _count: {
         _all: true,
       },
-    }),
-  ]);
+    });
 
-  if (!batch) throw new BatchRunnerError("NOT_FOUND", "Batch not found");
+    if (!batch) throw new BatchRunnerError("NOT_FOUND", "Batch not found");
 
-  const progress = toProgress(grouped);
+    const progress = toProgress(grouped);
 
-  let nextStatus: ApplicationBatchStatus = batch.status;
-  if (progress.pending > 0 || progress.running > 0) {
-    nextStatus = "RUNNING";
-  } else if (progress.failed > 0) {
-    nextStatus = "FAILED";
-  } else if (progress.succeeded > 0 || progress.skipped > 0) {
-    nextStatus = "SUCCEEDED";
-  }
+    let nextStatus: ApplicationBatchStatus = batch.status;
+    if (progress.pending > 0 || progress.running > 0) {
+      nextStatus = "RUNNING";
+    } else if (progress.failed > 0) {
+      nextStatus = "FAILED";
+    } else if (progress.succeeded > 0 || progress.skipped > 0) {
+      nextStatus = "SUCCEEDED";
+    }
 
-  if (TERMINAL_BATCH_STATUSES.includes(batch.status)) {
-    return { batchStatus: batch.status, progress };
-  }
+    if (TERMINAL_BATCH_STATUSES.includes(batch.status)) {
+      return { batchStatus: batch.status, progress };
+    }
 
-  const shouldComplete = nextStatus === "SUCCEEDED" || nextStatus === "FAILED";
-  const batchError =
-    nextStatus === "FAILED"
-      ? (
-          await prisma.applicationBatchTask.findFirst({
+    const shouldComplete = nextStatus === "SUCCEEDED" || nextStatus === "FAILED";
+    const batchError =
+      nextStatus === "FAILED"
+        ? (
+            await tx.applicationBatchTask.findFirst({
             where: {
               batchId: input.batchId,
               userId: input.userId,
@@ -147,23 +173,60 @@ async function reconcileBatchStatus(input: { userId: string; batchId: string }) 
             select: {
               error: true,
             },
-          })
-        )?.error ?? "One or more tasks failed."
-      : null;
+            })
+          )?.error ?? "One or more tasks failed."
+        : null;
 
-  await prisma.applicationBatch.update({
+    await tx.applicationBatch.update({
+      where: {
+        id: batch.id,
+      },
+      data: {
+        status: nextStatus,
+        startedAt: batch.startedAt ?? new Date(),
+        completedAt: shouldComplete ? batch.completedAt ?? new Date() : null,
+        error: nextStatus === "FAILED" ? batchError : null,
+      },
+    });
+
+    return { batchStatus: nextStatus, progress };
+  });
+}
+
+async function reclaimStaleBatchTasksTx(
+  tx: Prisma.TransactionClient,
+  input: { userId: string; batchId: string },
+): Promise<void> {
+  const now = new Date();
+  await tx.applicationBatchTask.updateMany({
     where: {
-      id: batch.id,
+      batchId: input.batchId,
+      userId: input.userId,
+      status: "RUNNING",
+      completedAt: null,
+      OR: [
+        { executionLeaseExpiresAt: { lte: now } },
+        {
+          executionLeaseExpiresAt: null,
+          startedAt: {
+            lte: new Date(now.getTime() - STALE_TASK_TIMEOUT_MS),
+          },
+        },
+      ],
     },
     data: {
-      status: nextStatus,
-      startedAt: batch.startedAt ?? new Date(),
-      completedAt: shouldComplete ? batch.completedAt ?? new Date() : null,
-      error: nextStatus === "FAILED" ? batchError : null,
+      status: "PENDING",
+      startedAt: null,
+      completedAt: null,
+      executionAttemptId: null,
+      executionLeaseExpiresAt: null,
+      completionAttemptId: null,
+      error: "Task reclaimed after stale RUNNING timeout",
+      attempt: {
+        increment: 1,
+      },
     },
   });
-
-  return { batchStatus: nextStatus, progress };
 }
 
 /**
@@ -178,25 +241,9 @@ export async function reclaimStaleBatchTasks(input: {
   userId: string;
   batchId: string;
 }): Promise<void> {
-  await prisma.applicationBatchTask.updateMany({
-    where: {
-      batchId: input.batchId,
-      userId: input.userId,
-      status: "RUNNING",
-      completedAt: null,
-      startedAt: {
-        lte: new Date(Date.now() - STALE_TASK_TIMEOUT_MS),
-      },
-    },
-    data: {
-      status: "PENDING",
-      startedAt: null,
-      completedAt: null,
-      error: "Task reclaimed after stale RUNNING timeout",
-      attempt: {
-        increment: 1,
-      },
-    },
+  await prisma.$transaction(async (tx) => {
+    await acquireApplicationBatchLock(tx, input.batchId);
+    await reclaimStaleBatchTasksTx(tx, input);
   });
 }
 
@@ -206,42 +253,44 @@ export async function claimNextBatchTask(input: {
   /** Set when the caller already reclaimed for this run. */
   skipStaleReclaim?: boolean;
 }): Promise<ClaimResult> {
-  const batch = await prisma.applicationBatch.findFirst({
-    where: {
-      id: input.batchId,
-      userId: input.userId,
-    },
-    select: {
-      id: true,
-      status: true,
-    },
-  });
+  const claimed = await prisma.$transaction(async (tx) => {
+    await acquireApplicationBatchLock(tx, input.batchId);
 
-  if (!batch) return { kind: "not_found" };
-  if (TERMINAL_BATCH_STATUSES.includes(batch.status)) {
-    return { kind: "terminal", batchStatus: batch.status };
-  }
-
-  if (batch.status === "QUEUED") {
-    await prisma.applicationBatch.updateMany({
+    const batch = await tx.applicationBatch.findFirst({
       where: {
-        id: batch.id,
+        id: input.batchId,
         userId: input.userId,
-        status: "QUEUED",
       },
-      data: {
-        status: "RUNNING",
-        startedAt: new Date(),
+      select: {
+        id: true,
+        status: true,
       },
     });
-  }
 
-  if (!input.skipStaleReclaim) {
-    await reclaimStaleBatchTasks({ userId: input.userId, batchId: input.batchId });
-  }
+    if (!batch) return { kind: "not_found" as const };
+    if (TERMINAL_BATCH_STATUSES.includes(batch.status)) {
+      return { kind: "terminal" as const, batchStatus: batch.status };
+    }
 
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const candidate = await prisma.applicationBatchTask.findFirst({
+    if (batch.status === "QUEUED") {
+      await tx.applicationBatch.updateMany({
+        where: {
+          id: batch.id,
+          userId: input.userId,
+          status: "QUEUED",
+        },
+        data: {
+          status: "RUNNING",
+          startedAt: new Date(),
+        },
+      });
+    }
+
+    if (!input.skipStaleReclaim) {
+      await reclaimStaleBatchTasksTx(tx, input);
+    }
+
+    const candidate = await tx.applicationBatchTask.findFirst({
       where: {
         batchId: input.batchId,
         userId: input.userId,
@@ -260,144 +309,270 @@ export async function claimNextBatchTask(input: {
             jobUrl: true,
           },
         },
+        tailoringRun: {
+          select: {
+            requiredTargetMask: true,
+            acceptedTargetMask: true,
+            issueKey: true,
+          },
+        },
       },
     });
 
-    if (!candidate) {
-      const reconciled = await reconcileBatchStatus(input);
-      return { kind: "done", batchStatus: reconciled.batchStatus, progress: reconciled.progress };
-    }
+    if (!candidate) return { kind: "empty" as const };
 
-    const locked = await prisma.applicationBatchTask.updateMany({
+    const executionAttemptId = randomUUID();
+    await tx.applicationBatchTask.update({
       where: {
         id: candidate.id,
-        status: "PENDING",
       },
       data: {
         status: "RUNNING",
         startedAt: new Date(),
+        executionAttemptId,
+        executionLeaseExpiresAt: new Date(Date.now() + TASK_LEASE_MS),
+        tailoringProtocolVersion:
+          APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION,
+        completionAttemptId: null,
         error: null,
       },
     });
+    const targetProgress = applicationBatchTargetProgress({
+      requiredTargetMask: candidate.tailoringRun?.requiredTargetMask,
+      acceptedTargetMask: candidate.tailoringRun?.acceptedTargetMask,
+    });
 
-    if (locked.count === 1) {
-      return {
-        kind: "claimed",
-        task: {
-          id: candidate.id,
-          jobId: candidate.jobId,
-          title: candidate.job.title,
-          company: candidate.job.company,
-          jobUrl: candidate.job.jobUrl,
-        },
-      };
-    }
-  }
+    return {
+      kind: "claimed" as const,
+      task: {
+        id: candidate.id,
+        attemptId: executionAttemptId,
+        issueKey:
+          candidate.tailoringRun?.issueKey ??
+          applicationBatchTailoringIssueKey(candidate.id),
+        protocolVersion: APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION,
+        ...targetProgress,
+        jobId: candidate.jobId,
+        title: candidate.job.title,
+        company: candidate.job.company,
+        jobUrl: candidate.job.jobUrl,
+      },
+    };
+  });
 
+  if (claimed.kind !== "empty") return claimed;
   const reconciled = await reconcileBatchStatus(input);
-  return { kind: "done", batchStatus: reconciled.batchStatus, progress: reconciled.progress };
+  return {
+    kind: "done",
+    batchStatus: reconciled.batchStatus,
+    progress: reconciled.progress,
+  };
 }
 
 export async function completeBatchTask(input: {
   userId: string;
   batchId: string;
   taskId: string;
+  attemptId: string;
   status: Extract<ApplicationBatchTaskStatus, "SUCCEEDED" | "FAILED" | "SKIPPED">;
   error?: string | null;
 }) {
-  const task = await prisma.applicationBatchTask.findFirst({
-    where: {
-      id: input.taskId,
-      batchId: input.batchId,
-      userId: input.userId,
-    },
-    select: {
-      id: true,
-      status: true,
-    },
-  });
-  if (!task) throw new BatchRunnerError("NOT_FOUND", "Task not found");
+  return prisma.$transaction(async (tx) => {
+    await acquireApplicationBatchLock(tx, input.batchId);
+    const task = await tx.applicationBatchTask.findFirst({
+      where: {
+        id: input.taskId,
+        batchId: input.batchId,
+        userId: input.userId,
+      },
+      select: {
+        id: true,
+        status: true,
+        executionAttemptId: true,
+      },
+    });
+    if (!task) throw new BatchRunnerError("NOT_FOUND", "Task not found");
 
-  if (task.status !== "RUNNING") {
-    if (TERMINAL_TASK_STATUSES.includes(task.status) && task.status === input.status) {
-      const reconciled = await reconcileBatchStatus({ userId: input.userId, batchId: input.batchId });
-      return {
-        taskStatus: task.status,
-        batchStatus: reconciled.batchStatus,
-        progress: reconciled.progress,
-      };
+    if (task.executionAttemptId !== input.attemptId) {
+      throw new BatchRunnerError("INVALID_STATE", "Task execution attempt is stale");
     }
-    throw new BatchRunnerError("INVALID_STATE", "Task is not running");
-  }
 
-  await prisma.applicationBatchTask.update({
-    where: {
-      id: task.id,
-    },
-    data: {
-      status: input.status,
-      error: input.status === "FAILED" ? input.error?.trim() || "TASK_FAILED" : null,
-      completedAt: new Date(),
-    },
+    if (task.status !== "RUNNING") {
+      if (
+        TERMINAL_TASK_STATUSES.includes(task.status) &&
+        task.status === input.status
+      ) {
+        const projection = await reconcileBoundApplicationBatch(
+          tx as unknown as TailoringRunTransaction,
+          input.userId,
+          input.batchId,
+        );
+        return {
+          taskStatus: task.status,
+          ...projection,
+        };
+      }
+      throw new BatchRunnerError("INVALID_STATE", "Task is not running");
+    }
+
+    if (input.status === "SUCCEEDED") {
+      throw new BatchRunnerError(
+        "INVALID_STATE",
+        "Task success is committed by TailoringRun acceptance",
+      );
+    }
+
+    const taskError =
+      input.status === "FAILED" ? safeTaskError(input.error) : null;
+    try {
+      await settleBoundRunFromTask(
+        tx as unknown as TailoringRunTransaction,
+        {
+          userId: input.userId,
+          taskId: task.id,
+          executionAttemptId: input.attemptId,
+          status: input.status,
+          error: taskError,
+        },
+      );
+    } catch (error) {
+      if (error instanceof TailoringRunError) {
+        throw new BatchRunnerError("INVALID_STATE", error.message);
+      }
+      throw error;
+    }
+
+    await tx.applicationBatchTask.update({
+      where: {
+        id: task.id,
+      },
+      data: {
+        status: input.status,
+        error: taskError,
+        completedAt: new Date(),
+        executionLeaseExpiresAt: null,
+        completionAttemptId: null,
+      },
+    });
+    const projection = await reconcileBoundApplicationBatch(
+      tx as unknown as TailoringRunTransaction,
+      input.userId,
+      input.batchId,
+    );
+    return {
+      taskStatus: input.status,
+      ...projection,
+    };
   });
-
-  const reconciled = await reconcileBatchStatus({ userId: input.userId, batchId: input.batchId });
-
-  return {
-    taskStatus: input.status,
-    batchStatus: reconciled.batchStatus,
-    progress: reconciled.progress,
-  };
 }
 
 export async function cancelBatch(input: { userId: string; batchId: string }) {
-  const batch = await prisma.applicationBatch.findFirst({
-    where: {
-      id: input.batchId,
-      userId: input.userId,
-    },
-    select: {
-      id: true,
-      status: true,
-    },
-  });
+  const cancelled = await prisma.$transaction(async (tx) => {
+    await acquireApplicationBatchLock(tx, input.batchId);
+    const batch = await tx.applicationBatch.findFirst({
+      where: {
+        id: input.batchId,
+        userId: input.userId,
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
 
-  if (!batch) throw new BatchRunnerError("NOT_FOUND", "Batch not found");
-  if (TERMINAL_BATCH_STATUSES.includes(batch.status)) {
-    return {
-      batchStatus: batch.status,
-      progress: await getBatchProgress(input),
-      alreadyTerminal: true,
-    };
-  }
+    if (!batch) throw new BatchRunnerError("NOT_FOUND", "Batch not found");
+    if (TERMINAL_BATCH_STATUSES.includes(batch.status)) {
+      return { batchStatus: batch.status, alreadyTerminal: true };
+    }
 
-  await prisma.$transaction([
-    prisma.applicationBatch.update({
+    const terminalAt = new Date();
+    await tx.applicationBatch.update({
       where: { id: batch.id },
       data: {
         status: "CANCELLED",
         error: "Cancelled by user",
-        completedAt: new Date(),
+        completedAt: terminalAt,
       },
-    }),
-    prisma.applicationBatchTask.updateMany({
+    });
+    await tx.applicationBatchTask.updateMany({
       where: {
         batchId: batch.id,
         userId: input.userId,
-        status: "PENDING",
+        status: {
+          in: ["PENDING", "RUNNING"],
+        },
       },
       data: {
         status: "SKIPPED",
         error: "Cancelled by user",
-        completedAt: new Date(),
+        completedAt: terminalAt,
+        executionLeaseExpiresAt: null,
+        completionAttemptId: null,
       },
-    }),
-  ]);
+    });
+    const boundRuns = await tx.tailoringRun.findMany({
+      where: {
+        applicationBatchTask: {
+          batchId: batch.id,
+          userId: input.userId,
+        },
+        status: {
+          in: ["ISSUED", "RUNNING"],
+        },
+      },
+      select: { id: true },
+    });
+    await acquireTailoringRunLocks(
+      tx,
+      boundRuns.map((run) => run.id),
+    );
+    await tx.tailoringRun.updateMany({
+      where: {
+        applicationBatchTask: {
+          batchId: batch.id,
+          userId: input.userId,
+        },
+        status: {
+          in: ["ISSUED", "RUNNING"],
+        },
+        acceptedTargetMask: 0,
+      },
+      data: {
+        status: "CANCELLED",
+        errorCode: "BATCH_CANCELLED",
+        errorMessage: "Cancelled by user",
+        executionLeaseExpiresAt: null,
+        terminalAt,
+      },
+    });
+    await tx.tailoringRun.updateMany({
+      where: {
+        applicationBatchTask: {
+          batchId: batch.id,
+          userId: input.userId,
+        },
+        status: {
+          in: ["ISSUED", "RUNNING"],
+        },
+        acceptedTargetMask: {
+          gt: 0,
+        },
+      },
+      data: {
+        status: "PARTIAL",
+        errorCode: "BATCH_CANCELLED",
+        errorMessage: "Cancelled after partial acceptance",
+        executionLeaseExpiresAt: null,
+        terminalAt,
+      },
+    });
+    return { batchStatus: "CANCELLED" as const, alreadyTerminal: false };
+  });
 
   return {
-    batchStatus: "CANCELLED" as const,
+    batchStatus: cancelled.batchStatus,
     progress: await getBatchProgress(input),
-    alreadyTerminal: false,
+    alreadyTerminal: cancelled.alreadyTerminal,
   };
 }
 

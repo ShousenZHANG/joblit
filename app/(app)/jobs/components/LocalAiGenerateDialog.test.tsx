@@ -85,4 +85,21 @@ describe("LocalAiGenerateDialog", () => {
     await user.click(screen.getByRole("button", { name: "Use manual method" }));
     expect(props.onUseManual).toHaveBeenCalledTimes(1);
   });
+
+  it.each(["starting", "stopping"] as const)(
+    "disables the manual fallback while the run is %s",
+    (status) => {
+      const props = renderDialog({
+        status,
+        requestId: job.id,
+        jobId: job.id,
+        target: "resume",
+      });
+
+      expect(
+        screen.getByRole("button", { name: "Use manual method" }),
+      ).toBeDisabled();
+      expect(props.onUseManual).not.toHaveBeenCalled();
+    },
+  );
 });

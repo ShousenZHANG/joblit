@@ -24,6 +24,11 @@ export type BatchRunStopReason = "LIMIT_REACHED" | "BATCH_COMPLETE" | "BATCH_TER
 
 type BatchRunTask = {
   taskId: string;
+  attemptId: string;
+  issueKey: string;
+  protocolVersion: 1;
+  acceptedTargets: Array<"RESUME" | "COVER">;
+  remainingTargets: Array<"RESUME" | "COVER">;
   jobId: string;
   job: {
     id: string;
@@ -53,7 +58,8 @@ type BatchRunContext = {
 
 type BatchTaskCompletionInput = {
   taskId: string;
-  status: Extract<ApplicationBatchTaskStatus, "SUCCEEDED" | "FAILED" | "SKIPPED">;
+  attemptId: string;
+  status: Extract<ApplicationBatchTaskStatus, "FAILED" | "SKIPPED">;
   error?: string | null;
 };
 
@@ -120,11 +126,13 @@ export async function completeBatchRunTasks(input: {
         userId: input.userId,
         batchId: input.batchId,
         taskId: completion.taskId,
+        attemptId: completion.attemptId,
         status: completion.status,
         error: completion.error,
       });
       completionResults.push({
         taskId: completion.taskId,
+        attemptId: completion.attemptId,
         status: completion.status,
         accepted: true,
       });
@@ -132,6 +140,7 @@ export async function completeBatchRunTasks(input: {
       if (error instanceof BatchRunnerError) {
         completionResults.push({
           taskId: completion.taskId,
+          attemptId: completion.attemptId,
           status: completion.status,
           accepted: false,
           error: error.code,
@@ -220,6 +229,11 @@ export async function claimBatchRunTasks(input: {
     if (job) {
       tasks.push({
         taskId: claimed.task.id,
+        attemptId: claimed.task.attemptId,
+        issueKey: claimed.task.issueKey,
+        protocolVersion: claimed.task.protocolVersion,
+        acceptedTargets: claimed.task.acceptedTargets,
+        remainingTargets: claimed.task.remainingTargets,
         jobId: claimed.task.jobId,
         job: {
           id: job.id,

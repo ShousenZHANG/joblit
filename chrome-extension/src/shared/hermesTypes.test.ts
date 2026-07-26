@@ -9,6 +9,10 @@ import {
 const now = 1_750_000_000_000;
 const requestId = "550e8400-e29b-41d4-a716-446655440000";
 const jobId = "c56a4180-65aa-42ec-a945-5fd21dec0538";
+const tailoringRun = {
+  id: "8f8f8f8f-8f8f-4f8f-8f8f-8f8f8f8f8f8f",
+  attemptId: "9a9a9a9a-9a9a-4a9a-8a9a-9a9a9a9a9a9a",
+};
 
 function request(overrides: Record<string, unknown> = {}) {
   return {
@@ -85,7 +89,7 @@ describe("parseBridgeRequest", () => {
 });
 
 describe("validatePublicRunResult", () => {
-  it("accepts a bounded successful terminal result", () => {
+  it("accepts a bounded successful terminal result with a TailoringRun handle", () => {
     expect(
       validatePublicRunResult({
         requestId,
@@ -94,12 +98,53 @@ describe("validatePublicRunResult", () => {
         status: "succeeded",
         modelOutput: JSON.stringify({ cover: "A".repeat(30) }),
         promptMeta: { promptHash: "sha256:test" },
+        tailoringRun,
       }),
     ).toBe(true);
   });
 
-  it("rejects run ids, short output, and oversized output", () => {
+  it("keeps legacy handle-less results readable but rejects malformed handles", () => {
+    expect(
+      validatePublicRunResult({
+        requestId,
+        jobId,
+        target: "resume",
+        status: "succeeded",
+        modelOutput: JSON.stringify({ cvSummary: "A".repeat(30) }),
+        promptMeta: { promptHash: "sha256:test" },
+      }),
+    ).toBe(true);
+    expect(
+      validatePublicRunResult({
+        requestId,
+        jobId,
+        target: "resume",
+        status: "running",
+        tailoringRun: { ...tailoringRun, attemptId: "not-a-uuid" },
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects private run/session ids, short output, and oversized output", () => {
     expect(validatePublicRunResult({ requestId, status: "running", run_id: "run_secret" })).toBe(false);
+    expect(
+      validatePublicRunResult({
+        requestId,
+        jobId,
+        target: "resume",
+        status: "running",
+        sessionId: "private-session",
+      }),
+    ).toBe(false);
+    expect(
+      validatePublicRunResult({
+        requestId,
+        jobId,
+        target: "resume",
+        status: "running",
+        session_id: "private-session",
+      }),
+    ).toBe(false);
     expect(
       validatePublicRunResult({ requestId, jobId, target: "resume", status: "succeeded", modelOutput: "{}", promptMeta: {} }),
     ).toBe(false);

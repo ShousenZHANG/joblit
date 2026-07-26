@@ -14,6 +14,8 @@ import {
   type LocalAiSucceededRun,
 } from "@/lib/shared/localAiBridgeContract";
 import { DraftImportError } from "./useExternalGenerate";
+import { fetchJson } from "@/lib/api/fetchJson";
+import type { TailoringRunHandle } from "@/lib/shared/tailoringRunContract";
 
 export const LOCAL_AI_ACTIVE_REQUEST_KEY = "joblit.local-ai.active-request.v1";
 export const LOCAL_AI_LAST_START_KEY = "joblit.local-ai.last-start.v1";
@@ -25,6 +27,13 @@ export const LOCAL_AI_MAX_RUN_MS = 180_000;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type LastStart = { jobId: string; target: "resume" | "cover" };
+type DurableRunStatus =
+  | "ISSUED"
+  | "RUNNING"
+  | "SUCCEEDED"
+  | "FAILED"
+  | "CANCELLED"
+  | "PARTIAL";
 
 export type LocalAiAvailability =
   | "detecting"
@@ -38,16 +47,36 @@ export type LocalAiRunState =
       requestId: string;
       jobId?: string;
       target?: "resume" | "cover";
+      tailoringRun?: TailoringRunHandle;
       progressChars?: number;
     }
-  | { status: "importing"; requestId: string; jobId: string; target: "resume" | "cover" }
-  | { status: "succeeded"; requestId: string; jobId: string; target: "resume" | "cover" }
-  | { status: "cancelled"; requestId: string; jobId: string; target: "resume" | "cover" }
+  | {
+      status: "importing";
+      requestId: string;
+      jobId: string;
+      target: "resume" | "cover";
+      tailoringRun?: TailoringRunHandle;
+    }
+  | {
+      status: "succeeded";
+      requestId: string;
+      jobId: string;
+      target: "resume" | "cover";
+      tailoringRun?: TailoringRunHandle;
+    }
+  | {
+      status: "cancelled";
+      requestId: string;
+      jobId: string;
+      target: "resume" | "cover";
+      tailoringRun?: TailoringRunHandle;
+    }
   | {
       status: "failed";
       requestId?: string;
       jobId?: string;
       target?: "resume" | "cover";
+      tailoringRun?: TailoringRunHandle;
       error: { code: string; retryable: boolean };
     };
 
@@ -89,6 +118,47 @@ function repairFeedbackFromError(error: DraftImportError): string {
     0,
     LOCAL_AI_MAX_REPAIR_FEEDBACK_CHARS,
   );
+}
+
+async function failDurableRun(
+  handle: TailoringRunHandle,
+  code: string,
+): Promise<DurableRunStatus> {
+  const result = await fetchJson(`/api/tailoring-runs/${handle.id}/fail`, {
+    method: "POST",
+    body: JSON.stringify({ attemptId: handle.attemptId, code }),
+    fallbackError: "Failed to record Local AI failure",
+  });
+  return durableRunStatus(result);
+}
+
+async function cancelDurableRun(
+  handle: TailoringRunHandle,
+): Promise<DurableRunStatus> {
+  const result = await fetchJson(`/api/tailoring-runs/${handle.id}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ attemptId: handle.attemptId }),
+    fallbackError: "Failed to cancel Local AI run",
+  });
+  return durableRunStatus(result);
+}
+
+function durableRunStatus(value: unknown): DurableRunStatus {
+  const status =
+    value && typeof value === "object" && "run" in value
+      ? (value as { run?: { status?: unknown } }).run?.status
+      : null;
+  if (
+    status === "ISSUED" ||
+    status === "RUNNING" ||
+    status === "SUCCEEDED" ||
+    status === "FAILED" ||
+    status === "CANCELLED" ||
+    status === "PARTIAL"
+  ) {
+    return status;
+  }
+  throw new Error("TailoringRun response shape invalid");
 }
 
 export function useLocalAiRun(options: {
@@ -154,21 +224,23 @@ export function useLocalAiRun(options: {
     if (run.status === "succeeded") {
       if (terminalConsumedRef.current.has(run.requestId)) return;
       terminalConsumedRef.current.add(run.requestId);
-      clearActiveRequest();
       setRunState({
         status: "importing",
         requestId: run.requestId,
         jobId: run.jobId,
         target: run.target,
+        ...(run.tailoringRun ? { tailoringRun: run.tailoringRun } : {}),
       });
       try {
         await onSucceededRef.current(run);
+        clearActiveRequest();
         forgetLastStart();
         setRunState({
           status: "succeeded",
           requestId: run.requestId,
           jobId: run.jobId,
           target: run.target,
+          ...(run.tailoringRun ? { tailoringRun: run.tailoringRun } : {}),
         });
       } catch (error) {
         // Strict-import rejections get exactly one AI repair on the same local
@@ -196,17 +268,27 @@ export function useLocalAiRun(options: {
               requestId: run.requestId,
               jobId: run.jobId,
               target: run.target,
+              ...(run.tailoringRun ? { tailoringRun: run.tailoringRun } : {}),
             });
             return;
           } catch {
             // Repair could not start; fall through to the import failure.
           }
         }
+        // Keep the same durable request recoverable. A retry polls the
+        // extension's persisted terminal result and replays the receipt-backed
+        // Application acceptance instead of starting another model run.
+        terminalConsumedRef.current.delete(run.requestId);
+        window.sessionStorage.setItem(
+          LOCAL_AI_ACTIVE_REQUEST_KEY,
+          run.requestId,
+        );
         setRunState({
           status: "failed",
           requestId: run.requestId,
           jobId: run.jobId,
           target: run.target,
+          ...(run.tailoringRun ? { tailoringRun: run.tailoringRun } : {}),
           error: {
             code: error instanceof DraftImportError && error.code === "INVALID_AI_RESULT"
               ? "INVALID_AI_RESULT"
@@ -218,24 +300,111 @@ export function useLocalAiRun(options: {
       return;
     }
     if (run.status === "failed") {
+      let durableStatus: DurableRunStatus = "FAILED";
+      if (run.tailoringRun) {
+        try {
+          durableStatus = await failDurableRun(
+            run.tailoringRun,
+            run.error.code,
+          );
+        } catch {
+          window.sessionStorage.setItem(
+            LOCAL_AI_ACTIVE_REQUEST_KEY,
+            run.requestId,
+          );
+          setRunState({
+            status: "failed",
+            requestId: run.requestId,
+            jobId: run.jobId,
+            target: run.target,
+            tailoringRun: run.tailoringRun,
+            error: { code: "RUN_FAILURE_SYNC_FAILED", retryable: true },
+          });
+          return;
+        }
+      }
       clearActiveRequest();
+      forgetLastStart();
+      if (durableStatus === "CANCELLED") {
+        setRunState({
+          status: "cancelled",
+          requestId: run.requestId,
+          jobId: run.jobId,
+          target: run.target,
+          ...(run.tailoringRun ? { tailoringRun: run.tailoringRun } : {}),
+        });
+        return;
+      }
+      if (durableStatus === "SUCCEEDED") {
+        setRunState({
+          status: "succeeded",
+          requestId: run.requestId,
+          jobId: run.jobId,
+          target: run.target,
+          ...(run.tailoringRun ? { tailoringRun: run.tailoringRun } : {}),
+        });
+        return;
+      }
       setRunState({
         status: "failed",
         requestId: run.requestId,
         jobId: run.jobId,
         target: run.target,
+        ...(run.tailoringRun ? { tailoringRun: run.tailoringRun } : {}),
         error: { code: run.error.code, retryable: run.error.retryable },
       });
       return;
     }
     if (run.status === "cancelled") {
+      let durableStatus: DurableRunStatus = "CANCELLED";
+      if (run.tailoringRun) {
+        try {
+          durableStatus = await cancelDurableRun(run.tailoringRun);
+        } catch {
+          window.sessionStorage.setItem(
+            LOCAL_AI_ACTIVE_REQUEST_KEY,
+            run.requestId,
+          );
+          setRunState({
+            status: "failed",
+            requestId: run.requestId,
+            jobId: run.jobId,
+            target: run.target,
+            tailoringRun: run.tailoringRun,
+            error: { code: "RUN_CANCEL_FAILED", retryable: true },
+          });
+          return;
+        }
+      }
       clearActiveRequest();
       forgetLastStart();
+      if (durableStatus === "SUCCEEDED") {
+        setRunState({
+          status: "succeeded",
+          requestId: run.requestId,
+          jobId: run.jobId,
+          target: run.target,
+          ...(run.tailoringRun ? { tailoringRun: run.tailoringRun } : {}),
+        });
+        return;
+      }
+      if (durableStatus === "FAILED" || durableStatus === "PARTIAL") {
+        setRunState({
+          status: "failed",
+          requestId: run.requestId,
+          jobId: run.jobId,
+          target: run.target,
+          ...(run.tailoringRun ? { tailoringRun: run.tailoringRun } : {}),
+          error: { code: "TAILORING_RUN_FAILED", retryable: false },
+        });
+        return;
+      }
       setRunState({
         status: "cancelled",
         requestId: run.requestId,
         jobId: run.jobId,
         target: run.target,
+        ...(run.tailoringRun ? { tailoringRun: run.tailoringRun } : {}),
       });
       return;
     }
@@ -244,6 +413,7 @@ export function useLocalAiRun(options: {
       requestId: run.requestId,
       jobId: run.jobId,
       target: run.target,
+      ...(run.tailoringRun ? { tailoringRun: run.tailoringRun } : {}),
       ...(run.status === "running" && run.progressChars !== undefined
         ? { progressChars: run.progressChars }
         : {}),
@@ -281,6 +451,7 @@ export function useLocalAiRun(options: {
               requestId: activeRequestId,
               jobId: run.jobId,
               target: run.target === "match" || run.target === "triage" ? undefined : run.target,
+              ...(run.tailoringRun ? { tailoringRun: run.tailoringRun } : {}),
               error: { code: "AI_TIMEOUT", retryable: true },
             });
             return;
@@ -296,6 +467,9 @@ export function useLocalAiRun(options: {
           requestId: activeRequestId,
           jobId: "jobId" in current ? current.jobId : undefined,
           target: "target" in current ? current.target : undefined,
+          ...("tailoringRun" in current && current.tailoringRun
+            ? { tailoringRun: current.tailoringRun }
+            : {}),
           error: failure,
         }));
       }
@@ -362,11 +536,47 @@ export function useLocalAiRun(options: {
 
   const stop = useCallback(async () => {
     if (!activeRequestId) return;
+    const durableHandle =
+      "tailoringRun" in runState ? runState.tailoringRun : undefined;
+    if (durableHandle) {
+      try {
+        const status = await cancelDurableRun(durableHandle);
+        if (status === "SUCCEEDED") {
+          clearActiveRequest();
+          forgetLastStart();
+          setRunState((current) => {
+            const jobId = "jobId" in current ? current.jobId : undefined;
+            const target = "target" in current ? current.target : undefined;
+            return jobId && target
+              ? {
+                  status: "succeeded",
+                  requestId: activeRequestId,
+                  jobId,
+                  target,
+                  tailoringRun: durableHandle,
+                }
+              : { status: "idle" };
+          });
+          return;
+        }
+      } catch {
+        setRunState((current) => ({
+          status: "failed",
+          requestId: activeRequestId,
+          jobId: "jobId" in current ? current.jobId : undefined,
+          target: "target" in current ? current.target : undefined,
+          tailoringRun: durableHandle,
+          error: { code: "RUN_CANCEL_FAILED", retryable: true },
+        }));
+        return;
+      }
+    }
     setRunState((current) => ({
       status: "stopping",
       requestId: activeRequestId,
       jobId: "jobId" in current ? current.jobId : undefined,
       target: "target" in current ? current.target : undefined,
+      ...(durableHandle ? { tailoringRun: durableHandle } : {}),
     }));
     try {
       await acceptRun(
@@ -378,10 +588,136 @@ export function useLocalAiRun(options: {
         requestId: activeRequestId,
         jobId: "jobId" in current ? current.jobId : undefined,
         target: "target" in current ? current.target : undefined,
+        ...(durableHandle ? { tailoringRun: durableHandle } : {}),
         error: bridgeFailure(error, "RUN_STOP_FAILED"),
       }));
     }
-  }, [acceptRun, activeRequestId]);
+  }, [
+    acceptRun,
+    activeRequestId,
+    clearActiveRequest,
+    forgetLastStart,
+    runState,
+  ]);
+
+  const switchToManual = useCallback(async (): Promise<boolean> => {
+    // START_RUN may still be between prompt issuance and registry persistence.
+    // The dialog disables switching during that narrow state so reset cannot
+    // race an in-flight start into an orphaned run.
+    if (runState.status === "starting" || startInFlightRef.current) return false;
+    if (!activeRequestId) {
+      clearActiveRequest();
+      forgetLastStart();
+      setRunState({ status: "idle" });
+      return true;
+    }
+
+    let observed: LocalAiPublicRun | null = null;
+    let durableHandle =
+      "tailoringRun" in runState ? runState.tailoringRun : undefined;
+    if (!durableHandle) {
+      try {
+        observed = await sendLocalAiBridgeRequest(
+          "GET_RUN",
+          { requestId: activeRequestId },
+          { timeoutMs: 10_000 },
+        );
+        durableHandle = observed.tailoringRun;
+      } catch {
+        // STOP_RUN remains the authority for legacy extension rows that have
+        // no TailoringRun handle. If it also fails we keep the recovery key.
+      }
+    }
+
+    if (durableHandle) {
+      try {
+        const status = await cancelDurableRun(durableHandle);
+        if (status === "SUCCEEDED") {
+          clearActiveRequest();
+          forgetLastStart();
+          setRunState((current) => {
+            const jobId =
+              observed?.jobId ??
+              ("jobId" in current ? current.jobId : undefined);
+            const target =
+              observed?.target === "resume" || observed?.target === "cover"
+                ? observed.target
+                : "target" in current
+                  ? current.target
+                  : undefined;
+            return jobId && target
+              ? {
+                  status: "succeeded",
+                  requestId: activeRequestId,
+                  jobId,
+                  target,
+                  tailoringRun: durableHandle,
+                }
+              : { status: "idle" };
+          });
+          return false;
+        }
+      } catch {
+        setRunState((current) => ({
+          status: "failed",
+          requestId: activeRequestId,
+          jobId: "jobId" in current ? current.jobId : undefined,
+          target: "target" in current ? current.target : undefined,
+          tailoringRun: durableHandle,
+          error: { code: "RUN_CANCEL_FAILED", retryable: true },
+        }));
+        return false;
+      }
+    }
+
+    let stopped: LocalAiPublicRun;
+    try {
+      stopped = await sendLocalAiBridgeRequest(
+        "STOP_RUN",
+        { requestId: activeRequestId },
+        { timeoutMs: 10_000 },
+      );
+    } catch (error) {
+      setRunState((current) => ({
+        status: "failed",
+        requestId: activeRequestId,
+        jobId: "jobId" in current ? current.jobId : undefined,
+        target: "target" in current ? current.target : undefined,
+        ...(durableHandle ? { tailoringRun: durableHandle } : {}),
+        error: bridgeFailure(error, "RUN_STOP_FAILED"),
+      }));
+      return false;
+    }
+
+    if (!durableHandle && stopped.tailoringRun) {
+      try {
+        await cancelDurableRun(stopped.tailoringRun);
+      } catch {
+        setRunState({
+          status: "failed",
+          requestId: activeRequestId,
+          jobId: stopped.jobId,
+          target:
+            stopped.target === "resume" || stopped.target === "cover"
+              ? stopped.target
+              : undefined,
+          tailoringRun: stopped.tailoringRun,
+          error: { code: "RUN_CANCEL_FAILED", retryable: true },
+        });
+        return false;
+      }
+    }
+
+    clearActiveRequest();
+    forgetLastStart();
+    setRunState({ status: "idle" });
+    return true;
+  }, [
+    activeRequestId,
+    clearActiveRequest,
+    forgetLastStart,
+    runState,
+  ]);
 
   const retry = useCallback((fallbackJobId?: string, fallbackTarget?: "resume" | "cover") => {
     if (runState.status === "failed" && runState.error.code === "RUN_LOST") {
@@ -400,14 +736,27 @@ export function useLocalAiRun(options: {
       }
       return;
     }
-    if (activeRequestId) {
+    const durableRetryRequestId =
+      runState.status === "failed" &&
+      runState.requestId &&
+      runState.tailoringRun &&
+      window.sessionStorage.getItem(LOCAL_AI_ACTIVE_REQUEST_KEY) ===
+        runState.requestId
+        ? runState.requestId
+        : null;
+    const requestId = activeRequestId ?? durableRetryRequestId;
+    if (requestId) {
       runDeadlineRef.current = null;
       setRunState((current) => ({
         status: "queued",
-        requestId: activeRequestId,
+        requestId,
         jobId: "jobId" in current ? current.jobId : undefined,
         target: "target" in current ? current.target : undefined,
+        ...("tailoringRun" in current && current.tailoringRun
+          ? { tailoringRun: current.tailoringRun }
+          : {}),
       }));
+      setActiveRequestId(requestId);
       setPollEpoch((value) => value + 1);
       return;
     }
@@ -416,19 +765,13 @@ export function useLocalAiRun(options: {
     }
   }, [activeRequestId, runState, start]);
 
-  const reset = useCallback(() => {
-    clearActiveRequest();
-    forgetLastStart();
-    setRunState({ status: "idle" });
-  }, [clearActiveRequest, forgetLastStart]);
-
   return {
     availability,
     runState,
     start,
     stop,
     retry,
-    reset,
+    switchToManual,
     checkAvailability,
   };
 }

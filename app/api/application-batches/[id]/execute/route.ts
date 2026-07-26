@@ -122,12 +122,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
             const artifactResult = await generateApplicationArtifactsForJob({
               userId,
               jobId: claimed.task.jobId,
-            });
-            await completeBatchTask({
-              userId,
-              batchId: batch.id,
-              taskId: claimed.task.id,
-              status: "SUCCEEDED",
+              batch: {
+                batchId: batch.id,
+                taskId: claimed.task.id,
+                executionAttemptId: claimed.task.attemptId,
+                issueKey: claimed.task.issueKey,
+                acceptedTargets: claimed.task.acceptedTargets,
+                remainingTargets: claimed.task.remainingTargets,
+              },
             });
             tasks.push({
               ...taskBase,
@@ -145,6 +147,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
                 userId,
                 batchId: batch.id,
                 taskId: claimed.task.id,
+                attemptId: claimed.task.attemptId,
                 status: "FAILED",
                 error: failureMessage,
               });

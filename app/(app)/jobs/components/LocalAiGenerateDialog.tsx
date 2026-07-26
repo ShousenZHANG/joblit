@@ -189,7 +189,12 @@ export function LocalAiGenerateDialog({
             <button
               type="button"
               className="text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-50"
-              disabled={isImporting || !job}
+              disabled={
+                isImporting ||
+                runState.status === "starting" ||
+                runState.status === "stopping" ||
+                !job
+              }
               onClick={onUseManual}
             >
               {t("useManual")}

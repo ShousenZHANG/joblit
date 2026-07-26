@@ -9,6 +9,30 @@ const payload = {
   target: "resume" as const,
 };
 
+const promptApi = vi.hoisted(() => {
+  const tailoringRun = {
+    id: "8f8f8f8f-8f8f-4f8f-8f8f-8f8f8f8f8f8f",
+    attemptId: "9a9a9a9a-9a9a-4a9a-8a9a-9a9a9a9a9a9a",
+  };
+  const prompt = {
+    input: "generate grounded JSON",
+    instructions: "strict rules",
+    sessionId: "server-session",
+  };
+  const baseEnvelope = {
+    prompt,
+    promptMeta: { promptHash: "sha256:test" },
+    promptVersion: "v4-application-proposal",
+  };
+  return {
+    tailoringRun,
+    applicationEnvelope: { ...baseEnvelope, tailoringRun },
+    otherEnvelope: baseEnvelope,
+    fetchApplication: vi.fn(),
+    fetchTriage: vi.fn(),
+  };
+});
+
 const remoteDefaults = vi.hoisted(() => ({
   fetch: vi.fn().mockResolvedValue(null),
   push: vi.fn().mockResolvedValue(undefined),
@@ -24,19 +48,12 @@ const api = vi.hoisted(() => ({
 }));
 
 vi.mock("./hermesApi", () => ({ createHermesApi: () => api }));
-vi.mock("./api", () => {
-  const envelope = {
-    prompt: { input: "generate grounded JSON", instructions: "strict rules", sessionId: "server-session" },
-    promptMeta: { promptHash: "sha256:test" },
-    promptVersion: "v4-application-proposal",
-  };
-  return {
-    fetchAiPromptEnvelope: vi.fn().mockResolvedValue(envelope),
-    fetchAiTriagePromptEnvelope: vi.fn().mockResolvedValue(envelope),
+vi.mock("./api", () => ({
+    fetchAiPromptEnvelope: promptApi.fetchApplication,
+    fetchAiTriagePromptEnvelope: promptApi.fetchTriage,
     fetchLocalAiDefaults: remoteDefaults.fetch,
     pushLocalAiDefaults: remoteDefaults.push,
-  };
-});
+}));
 vi.mock("./auth", () => ({
   getAuthStatus: vi.fn().mockResolvedValue({ authenticated: true, userId: null, expiresAt: null }),
 }));
@@ -44,6 +61,12 @@ vi.mock("./auth", () => ({
 describe("Hermes run registry", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
+    promptApi.fetchApplication.mockImplementation(async (input: { target: string }) =>
+      input.target === "match"
+        ? promptApi.otherEnvelope
+        : promptApi.applicationEnvelope,
+    );
+    promptApi.fetchTriage.mockResolvedValue(promptApi.otherEnvelope);
     await chrome.storage.local.clear();
     await chrome.storage.session.clear();
     await chrome.storage.local.set({
@@ -52,18 +75,40 @@ describe("Hermes run registry", () => {
       [STORAGE_KEYS.HERMES_PROFILE_NAME]: "joblit-0123456789abcdef",
     });
     api.startRun.mockResolvedValue({ runId });
+    api.peekRunProgress.mockResolvedValue(null);
   });
 
-  it("starts once, keeps the private run id in session storage, and returns public state", async () => {
+  it("issues once, persists the TailoringRun handle with the private mapping, and returns public state", async () => {
     const { startLocalAiRun } = await import("./hermesRuns");
-    await expect(startLocalAiRun(payload)).resolves.toEqual({ ...payload, status: "queued" });
-    await expect(startLocalAiRun(payload)).resolves.toEqual({ ...payload, status: "queued" });
+    const publicRun = await startLocalAiRun(payload);
+    expect(publicRun).toEqual({
+      ...payload,
+      status: "queued",
+      tailoringRun: promptApi.tailoringRun,
+    });
+    await expect(startLocalAiRun(payload)).resolves.toEqual({
+      ...payload,
+      status: "queued",
+      tailoringRun: promptApi.tailoringRun,
+    });
     expect(api.startRun).toHaveBeenCalledTimes(1);
+    expect(promptApi.fetchApplication).toHaveBeenCalledWith({
+      jobId: payload.jobId,
+      target: payload.target,
+      issueKey: payload.requestId,
+    });
     const stored = await chrome.storage.local.get(STORAGE_KEYS.HERMES_RUN_REGISTRY);
-    expect(JSON.stringify(stored)).toContain(runId);
+    expect(stored[STORAGE_KEYS.HERMES_RUN_REGISTRY]).toMatchObject({
+      [payload.requestId]: {
+        runId,
+        tailoringRun: promptApi.tailoringRun,
+      },
+    });
+    expect(JSON.stringify(publicRun)).not.toContain(runId);
+    expect(JSON.stringify(publicRun)).not.toContain("server-session");
   });
 
-  it("returns one bounded terminal result with prompt metadata", async () => {
+  it("returns one bounded terminal result with prompt metadata and its TailoringRun handle", async () => {
     api.getRun.mockResolvedValue({
       object: "hermes.run",
       runId,
@@ -76,16 +121,93 @@ describe("Hermes run registry", () => {
       ...payload,
       status: "succeeded",
       promptMeta: { promptHash: "sha256:test" },
+      tailoringRun: promptApi.tailoringRun,
     });
   });
 
-  it("marks an ambiguous start and never retries it", async () => {
+  it.each([
+    ["missing", undefined],
+    [
+      "malformed",
+      { ...promptApi.tailoringRun, attemptId: "private-session-id" },
+    ],
+  ])("rejects a %s TailoringRun handle before starting Hermes", async (_label, tailoringRun) => {
+    promptApi.fetchApplication.mockResolvedValueOnce({
+      ...promptApi.otherEnvelope,
+      ...(tailoringRun === undefined ? {} : { tailoringRun }),
+    });
+    const { startLocalAiRun } = await import("./hermesRuns");
+
+    await expect(startLocalAiRun(payload)).rejects.toMatchObject({
+      code: "HERMES_PROTOCOL_ERROR",
+    });
+    expect(api.startRun).not.toHaveBeenCalled();
+  });
+
+  it("accepts the explicitly marked legacy prompt envelope during cutover", async () => {
+    promptApi.fetchApplication.mockResolvedValueOnce({
+      ...promptApi.otherEnvelope,
+      legacyTailoringRunProtocol: true,
+    });
+    const { startLocalAiRun } = await import("./hermesRuns");
+
+    await expect(startLocalAiRun(payload)).resolves.toEqual({
+      ...payload,
+      status: "queued",
+    });
+    expect(api.startRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves the public handle for an ambiguous start without retrying it", async () => {
     api.startRun.mockRejectedValue(
       new HermesApiError("HERMES_UNREACHABLE", "timeout", { retryable: true, ambiguousStart: true }),
     );
-    const { startLocalAiRun } = await import("./hermesRuns");
-    await expect(startLocalAiRun(payload)).rejects.toMatchObject({ code: "RUN_START_UNKNOWN" });
-    await expect(startLocalAiRun(payload)).rejects.toMatchObject({ code: "RUN_START_UNKNOWN" });
+    const { getLocalAiRun, startLocalAiRun, stopLocalAiRun } = await import("./hermesRuns");
+    await expect(startLocalAiRun(payload)).resolves.toMatchObject({
+      ...payload,
+      status: "queued",
+      tailoringRun: promptApi.tailoringRun,
+    });
+    await expect(startLocalAiRun(payload)).resolves.toMatchObject({
+      status: "queued",
+      tailoringRun: promptApi.tailoringRun,
+    });
+    await expect(
+      getLocalAiRun({ requestId: payload.requestId }),
+    ).resolves.toMatchObject({
+      status: "queued",
+      tailoringRun: promptApi.tailoringRun,
+    });
+    await expect(
+      stopLocalAiRun({ requestId: payload.requestId }),
+    ).resolves.toMatchObject({
+      status: "cancelled",
+      tailoringRun: promptApi.tailoringRun,
+    });
+    expect(api.startRun).toHaveBeenCalledTimes(1);
+    expect(api.stopRun).not.toHaveBeenCalled();
+  });
+
+  it("retains the durable handle when Hermes definitely fails to start", async () => {
+    api.startRun.mockRejectedValue(
+      new HermesApiError("HERMES_UNREACHABLE", "connection refused", {
+        retryable: true,
+      }),
+    );
+    const { getLocalAiRun, startLocalAiRun } = await import("./hermesRuns");
+
+    await expect(startLocalAiRun(payload)).resolves.toMatchObject({
+      ...payload,
+      status: "failed",
+      tailoringRun: promptApi.tailoringRun,
+      error: { code: "HERMES_RUN_FAILED", retryable: true },
+    });
+    await expect(
+      getLocalAiRun({ requestId: payload.requestId }),
+    ).resolves.toMatchObject({
+      status: "failed",
+      tailoringRun: promptApi.tailoringRun,
+    });
     expect(api.startRun).toHaveBeenCalledTimes(1);
   });
 
@@ -96,6 +218,7 @@ describe("Hermes run registry", () => {
     await expect(getLocalAiRun({ requestId: payload.requestId })).resolves.toMatchObject({
       status: "failed",
       error: { code: "UNEXPECTED_APPROVAL_REQUIRED", retryable: false },
+      tailoringRun: promptApi.tailoringRun,
     });
     expect(api.stopRun).toHaveBeenCalledWith(runId);
   });
@@ -108,6 +231,26 @@ describe("Hermes run registry", () => {
     await expect(getLocalAiRun({ requestId: payload.requestId })).resolves.toMatchObject({
       status: "running",
       progressChars: 420,
+      tailoringRun: promptApi.tailoringRun,
+    });
+  });
+
+  it("returns the TailoringRun handle while stopping and after cancellation", async () => {
+    const { getLocalAiRun, startLocalAiRun, stopLocalAiRun } = await import("./hermesRuns");
+    await startLocalAiRun(payload);
+    await expect(stopLocalAiRun({ requestId: payload.requestId })).resolves.toMatchObject({
+      status: "stopping",
+      tailoringRun: promptApi.tailoringRun,
+    });
+
+    api.getRun.mockResolvedValue({
+      object: "hermes.run",
+      runId,
+      status: "cancelled",
+    });
+    await expect(getLocalAiRun({ requestId: payload.requestId })).resolves.toMatchObject({
+      status: "cancelled",
+      tailoringRun: promptApi.tailoringRun,
     });
   });
 
@@ -136,6 +279,7 @@ describe("Hermes run registry", () => {
       status: "succeeded",
       modelOutput: repairedOutput,
       promptMeta: { promptHash: "sha256:test" },
+      tailoringRun: promptApi.tailoringRun,
     });
     expect(api.sessionChat).toHaveBeenCalledTimes(1);
     expect(api.sessionChat.mock.calls[0][0]).toBe(`joblit:${payload.requestId}`);
@@ -166,10 +310,27 @@ describe("Hermes run registry", () => {
       target: "triage",
     });
     // The registry read on the next poll must not discard the triage entry.
-    await expect(getLocalAiRun({ requestId: payload.requestId })).resolves.toMatchObject({
+    const result = await getLocalAiRun({ requestId: payload.requestId });
+    expect(result).toMatchObject({
       status: "succeeded",
       target: "triage",
       modelOutput: expect.stringContaining("matchScore"),
+    });
+    expect(result).not.toHaveProperty("tailoringRun");
+  });
+
+  it("does not require a TailoringRun handle for match runs", async () => {
+    const matchPayload = { ...payload, target: "match" as const };
+    const { startLocalAiRun } = await import("./hermesRuns");
+
+    await expect(startLocalAiRun(matchPayload)).resolves.toEqual({
+      ...matchPayload,
+      status: "queued",
+    });
+    expect(promptApi.fetchApplication).toHaveBeenCalledWith({
+      jobId: matchPayload.jobId,
+      target: "match",
+      issueKey: matchPayload.requestId,
     });
   });
 
@@ -182,11 +343,59 @@ describe("Hermes run registry", () => {
     await expect(getLocalAiRun({ requestId: payload.requestId })).resolves.toMatchObject({
       status: "failed",
       error: { code: "RUN_LOST", retryable: false },
+      tailoringRun: promptApi.tailoringRun,
     });
     // Terminal result is sticky; no further Hermes calls needed.
     await expect(getLocalAiRun({ requestId: payload.requestId })).resolves.toMatchObject({
       status: "failed",
       error: { code: "RUN_LOST" },
+      tailoringRun: promptApi.tailoringRun,
+    });
+  });
+
+  it("recovers the TailoringRun handle after a service-worker restart", async () => {
+    api.getRun.mockResolvedValue({
+      object: "hermes.run",
+      runId,
+      status: "running",
+    });
+    const first = await import("./hermesRuns");
+    await first.startLocalAiRun(payload);
+
+    vi.resetModules();
+    const restarted = await import("./hermesRuns");
+    await expect(
+      restarted.getLocalAiRun({ requestId: payload.requestId }),
+    ).resolves.toMatchObject({
+      status: "running",
+      tailoringRun: promptApi.tailoringRun,
+    });
+  });
+
+  it("keeps a legacy active registry entry without a TailoringRun handle readable", async () => {
+    api.getRun.mockResolvedValue({
+      object: "hermes.run",
+      runId,
+      status: "running",
+    });
+    const first = await import("./hermesRuns");
+    await first.startLocalAiRun(payload);
+    const stored = await chrome.storage.local.get(STORAGE_KEYS.HERMES_RUN_REGISTRY);
+    const registry = structuredClone(
+      stored[STORAGE_KEYS.HERMES_RUN_REGISTRY],
+    ) as Record<string, Record<string, unknown>>;
+    delete registry[payload.requestId].tailoringRun;
+    await chrome.storage.local.set({
+      [STORAGE_KEYS.HERMES_RUN_REGISTRY]: registry,
+    });
+
+    vi.resetModules();
+    const restarted = await import("./hermesRuns");
+    await expect(
+      restarted.getLocalAiRun({ requestId: payload.requestId }),
+    ).resolves.toEqual({
+      ...payload,
+      status: "running",
     });
   });
 

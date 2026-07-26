@@ -8,7 +8,8 @@ import { BatchRunnerError, completeBatchTask } from "@/lib/server/applicationBat
 export const runtime = "nodejs";
 
 const BodySchema = z.object({
-  status: z.enum(["SUCCEEDED", "FAILED", "SKIPPED"]),
+  attemptId: z.string().uuid(),
+  status: z.enum(["FAILED", "SKIPPED"]),
   error: z.string().trim().max(500).optional().nullable(),
 });
 
@@ -28,6 +29,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string; t
           userId,
           batchId: params.id,
           taskId: params.taskId,
+          attemptId: parsedBody.data.attemptId,
           status: parsedBody.data.status,
           error: parsedBody.data.error,
         });

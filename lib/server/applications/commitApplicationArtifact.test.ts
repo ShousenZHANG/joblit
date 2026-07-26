@@ -6,10 +6,18 @@ const store = vi.hoisted(() => ({ findUnique: vi.fn(), upsert: vi.fn() }));
 const jobStore = vi.hoisted(() => ({ findFirst: vi.fn() }));
 const ledger = vi.hoisted(() => ({ persistReviewLedger: vi.fn() }));
 const lock = vi.hoisted(() => ({ acquireApplicationMutationLock: vi.fn() }));
+const tailoringAcceptance = vi.hoisted(() => ({
+  prepareTailoringRunAcceptance: vi.fn(),
+  completeTailoringRunAcceptance: vi.fn(),
+}));
 
 vi.mock("@vercel/blob", () => blob);
 vi.mock("@/lib/server/applications/persistReviewLedger", () => ledger);
 vi.mock("@/lib/server/applications/applicationMutationLock", () => lock);
+vi.mock(
+  "@/lib/server/tailoringRuns/tailoringRunAcceptance",
+  () => tailoringAcceptance,
+);
 vi.mock("@/lib/server/prisma", () => ({
   prisma: {
     application: store,
@@ -63,6 +71,20 @@ const resumeArtifact = {
   version: "v1",
 };
 
+const tailoringRequest = {
+  handle: {
+    id: "11111111-1111-4111-8111-111111111111",
+    attemptId: "22222222-2222-4222-8222-222222222222",
+  },
+  source: "LOCAL_AI" as const,
+  delivery: "FINAL" as const,
+  target: "RESUME" as const,
+  requestHash: "sha256:accept-resume-v1",
+  promptHash: "sha256:prompt-resume-v1",
+  resumeSnapshotHash: "sha256:resume-profile-v1",
+  jobSnapshotHash: "sha256:job-v1",
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.BLOB_READ_WRITE_TOKEN = "token";
@@ -70,6 +92,18 @@ beforeEach(() => {
   store.findUnique.mockResolvedValue(null);
   store.upsert.mockResolvedValue({ id: "application-1" });
   blob.put.mockResolvedValue({ url: "https://blob.example/new.pdf" });
+  tailoringAcceptance.prepareTailoringRunAcceptance.mockImplementation(
+    async (_tx, input) => ({
+      userId: input.userId,
+      pending: [...input.requests],
+      replayed: [],
+      runs: [],
+    }),
+  );
+  tailoringAcceptance.completeTailoringRunAcceptance.mockResolvedValue({
+    receipts: [],
+    completedRunIds: [],
+  });
 });
 
 describe("commitApplicationArtifact", () => {
@@ -363,5 +397,189 @@ describe("commitApplicationArtifact", () => {
         jobId: "job-1",
       }),
     );
+  });
+
+  it("accepts a Tailoring Run around the Application commit in one transaction", async () => {
+    const order: string[] = [];
+    const prepared = {
+      userId: "user-1",
+      pending: [tailoringRequest],
+      replayed: [],
+      runs: [],
+    };
+    tailoringAcceptance.prepareTailoringRunAcceptance.mockImplementationOnce(
+      async () => {
+        order.push("prepare");
+        return prepared;
+      },
+    );
+    lock.acquireApplicationMutationLock.mockImplementationOnce(() => {
+      order.push("joba-lock");
+    });
+    store.upsert.mockImplementationOnce(async () => {
+      order.push("application");
+      return { id: "application-1" };
+    });
+    ledger.persistReviewLedger.mockImplementationOnce(async () => {
+      order.push("review-ledger");
+    });
+    tailoringAcceptance.completeTailoringRunAcceptance.mockImplementationOnce(
+      async () => {
+        order.push("complete");
+        return { receipts: [], completedRunIds: [] };
+      },
+    );
+
+    const result = await commitApplicationArtifact({
+      ...BASE,
+      artifacts: [resumeArtifact],
+      tailoring: [tailoringRequest],
+    });
+
+    expect(result.kind).toBe("committed");
+    if (result.kind !== "committed") return;
+    expect(result.tailoringDisposition).toBe("APPLIED");
+    expect(order).toEqual([
+      "prepare",
+      "joba-lock",
+      "application",
+      "review-ledger",
+      "complete",
+    ]);
+
+    const transactionClient =
+      tailoringAcceptance.prepareTailoringRunAcceptance.mock.calls[0]?.[0];
+    expect(transactionClient).toBeDefined();
+    expect(lock.acquireApplicationMutationLock.mock.calls[0]?.[0]).toBe(
+      transactionClient,
+    );
+    expect(ledger.persistReviewLedger.mock.calls[0]?.[0]).toBe(
+      transactionClient,
+    );
+    expect(
+      tailoringAcceptance.completeTailoringRunAcceptance.mock.calls[0]?.[0],
+    ).toBe(transactionClient);
+    expect(
+      tailoringAcceptance.prepareTailoringRunAcceptance.mock.calls[0]?.[1],
+    ).toEqual({
+      userId: "user-1",
+      jobId: "job-1",
+      resumeProfileId: "profile-1",
+      requests: [tailoringRequest],
+    });
+    expect(
+      tailoringAcceptance.completeTailoringRunAcceptance.mock.calls[0]?.[1],
+    ).toEqual({
+      prepared,
+      applicationId: "application-1",
+      aiContentHash: result.aiContentHash,
+    });
+  });
+
+  it("replays a receipt-backed acceptance without rewriting the Application", async () => {
+    const replayed = {
+      runId: tailoringRequest.handle.id,
+      target: tailoringRequest.target,
+      executionAttemptId: tailoringRequest.handle.attemptId,
+      requestHash: tailoringRequest.requestHash,
+      applicationId: "application-existing",
+      aiContentHash: "sha256:persisted-ai-content",
+      delivery: tailoringRequest.delivery,
+    };
+    tailoringAcceptance.prepareTailoringRunAcceptance.mockResolvedValueOnce({
+      userId: "user-1",
+      pending: [],
+      replayed: [replayed],
+      runs: [],
+    });
+    store.findUnique.mockResolvedValueOnce({
+      id: "application-existing",
+      resumePdfUrl: "https://blob.example/current-resume.pdf",
+      coverPdfUrl: "https://blob.example/current-cover.pdf",
+      aiContent,
+      aiContentHash: "sha256:persisted-ai-content",
+      atsValidation: null,
+    });
+
+    const result = await commitApplicationArtifact({
+      ...BASE,
+      artifacts: [resumeArtifact],
+      tailoring: [tailoringRequest],
+    });
+
+    expect(result).toEqual({
+      kind: "committed",
+      applicationId: "application-existing",
+      aiContent,
+      aiContentHash: "sha256:persisted-ai-content",
+      urls: {
+        resume: "https://blob.example/current-resume.pdf",
+        cover: "https://blob.example/current-cover.pdf",
+      },
+      tailoringDisposition: "REPLAYED",
+    });
+    expect(store.upsert).not.toHaveBeenCalled();
+    expect(ledger.persistReviewLedger).not.toHaveBeenCalled();
+    expect(
+      tailoringAcceptance.completeTailoringRunAcceptance,
+    ).not.toHaveBeenCalled();
+    expect(blob.del).toHaveBeenCalledWith("https://blob.example/new.pdf", {
+      token: "token",
+    });
+    expect(blob.del).not.toHaveBeenCalledWith(
+      "https://blob.example/current-resume.pdf",
+      expect.anything(),
+    );
+  });
+
+  it("aborts an acceptance conflict before Application mutation and cleans the upload", async () => {
+    const conflict = new Error("TAILORING_RUN_RECEIPT_CONFLICT");
+    tailoringAcceptance.prepareTailoringRunAcceptance.mockRejectedValueOnce(
+      conflict,
+    );
+
+    await expect(
+      commitApplicationArtifact({
+        ...BASE,
+        artifacts: [resumeArtifact],
+        tailoring: [tailoringRequest],
+      }),
+    ).rejects.toBe(conflict);
+
+    expect(lock.acquireApplicationMutationLock).not.toHaveBeenCalled();
+    expect(store.upsert).not.toHaveBeenCalled();
+    expect(ledger.persistReviewLedger).not.toHaveBeenCalled();
+    expect(
+      tailoringAcceptance.completeTailoringRunAcceptance,
+    ).not.toHaveBeenCalled();
+    expect(blob.del).toHaveBeenCalledWith("https://blob.example/new.pdf", {
+      token: "token",
+    });
+  });
+
+  it("rejects the transaction when acceptance completion conflicts after the write", async () => {
+    const conflict = new Error("TAILORING_RUN_RECEIPT_CONFLICT");
+    tailoringAcceptance.completeTailoringRunAcceptance.mockRejectedValueOnce(
+      conflict,
+    );
+
+    await expect(
+      commitApplicationArtifact({
+        ...BASE,
+        artifacts: [resumeArtifact],
+        tailoring: [tailoringRequest],
+      }),
+    ).rejects.toBe(conflict);
+
+    // These calls are staged inside the rejected transaction. Letting the
+    // completion error escape is what makes Prisma roll them back together.
+    expect(store.upsert).toHaveBeenCalledOnce();
+    expect(ledger.persistReviewLedger).toHaveBeenCalledOnce();
+    expect(
+      tailoringAcceptance.completeTailoringRunAcceptance,
+    ).toHaveBeenCalledOnce();
+    expect(blob.del).toHaveBeenCalledWith("https://blob.example/new.pdf", {
+      token: "token",
+    });
   });
 });

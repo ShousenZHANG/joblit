@@ -240,6 +240,7 @@ export function JobsClient({
       target: run.target,
       modelOutput: run.modelOutput,
       promptMeta: run.promptMeta,
+      tailoringRun: run.tailoringRun,
       source: "local_ai",
     });
     setLocalAiDialogOpen(false);
@@ -637,10 +638,10 @@ export function JobsClient({
     }
   }, [localAi]);
 
-  const useManualGenerate = useCallback(() => {
+  const useManualGenerate = useCallback(async () => {
     if (!localAiJob) return;
+    if (!(await localAi.switchToManual())) return;
     setLocalAiDialogOpen(false);
-    localAi.reset();
     void ext.openExternalGenerateDialog(localAiJob.job, localAiJob.target);
   }, [ext, localAi, localAiJob]);
 

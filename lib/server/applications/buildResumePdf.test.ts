@@ -110,4 +110,31 @@ describe("buildResumePdfForJob", () => {
       ],
     });
   });
+
+  it("does not render the accepted resume half for a cover-only recovery", async () => {
+    const result = await buildResumePdfForJob({
+      userId: "user-1",
+      profile: {
+        id: "profile-1",
+        summary: "Master summary",
+      } as never,
+      job: {
+        title: "Platform Engineer",
+        company: "Example Co",
+        description: "Build reliable platforms.",
+      },
+      tailorOptions: {
+        targets: ["cover"],
+      },
+    });
+
+    expect(result.pdf).toBeNull();
+    expect(result.tex).toBeNull();
+    expect(dependencies.tailorApplicationContent).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ targets: ["cover"] }),
+    );
+    expect(dependencies.renderResumeTex).not.toHaveBeenCalled();
+    expect(dependencies.compileLatexToPdf).not.toHaveBeenCalled();
+  });
 });

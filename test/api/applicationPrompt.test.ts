@@ -4,6 +4,10 @@ const applicationPrompt = vi.hoisted(() => ({
   build: vi.fn(),
 }));
 
+const tailoringRuns = vi.hoisted(() => ({
+  issuePrompt: vi.fn(),
+}));
+
 vi.mock("@/auth", () => ({ authOptions: {} }));
 
 vi.mock("next-auth/next", () => ({
@@ -29,6 +33,10 @@ vi.mock("@/lib/server/applications/applicationPrompt", async () => {
   };
 });
 
+vi.mock("@/lib/server/tailoringRuns/issuePromptTailoringRun", () => ({
+  issuePromptTailoringRun: tailoringRuns.issuePrompt,
+}));
+
 import { getServerSession } from "next-auth/next";
 import {
   ApplicationPromptError,
@@ -38,6 +46,11 @@ import { buildPromptMeta } from "@/lib/server/ai/promptContract";
 import { POST } from "@/app/api/applications/prompt/route";
 
 const VALID_JOB_ID = "550e8400-e29b-41d4-a716-446655440000";
+const ISSUE_KEY = "6ba7b810-9dad-41d1-80b4-00c04fd430c8";
+const TAILORING_RUN = {
+  id: "8f8f8f8f-8f8f-4f8f-8f8f-8f8f8f8f8f8f",
+  attemptId: "9a9a9a9a-9a9a-4a9a-8a9a-9a9a9a9a9a9a",
+};
 
 const servicePayload: ApplicationPromptPayload = {
   requestId: "service-request-id",
@@ -59,6 +72,11 @@ const servicePayload: ApplicationPromptPayload = {
   expectedJsonShape: '{"cvSummary":"string"}',
   expectedJsonSchema: { type: "object" },
   promptVersion: "v4-application-proposal",
+  snapshotBinding: {
+    resumeProfileId: "profile-1",
+    resumeSnapshotHash: "resume-snapshot-hash",
+    jobSnapshotHash: "job-snapshot-hash",
+  },
 };
 
 function request(body: unknown) {
@@ -76,6 +94,7 @@ describe("applications prompt api", () => {
       user: { id: "user-1" },
     });
     applicationPrompt.build.mockResolvedValue(servicePayload);
+    tailoringRuns.issuePrompt.mockResolvedValue(TAILORING_RUN);
   });
 
   it("requires a session", async () => {
@@ -103,30 +122,69 @@ describe("applications prompt api", () => {
     expect(applicationPrompt.build).not.toHaveBeenCalled();
   });
 
-  it("delegates authenticated business orchestration and returns the v4 envelope", async () => {
-    const response = await POST(request({ jobId: VALID_JOB_ID, target: "resume" }));
+  it.each(["resume", "cover"] as const)(
+    "issues a durable %s run and returns its handle in the v4 envelope",
+    async (target) => {
+      const response = await POST(request({
+        jobId: VALID_JOB_ID,
+        target,
+        source: "manual_import",
+        delivery: "DRAFT",
+        issueKey: ISSUE_KEY,
+      }));
+      const json = await response.json();
+
+      expect(applicationPrompt.build).toHaveBeenCalledWith({
+        userId: "user-1",
+        jobId: VALID_JOB_ID,
+        target,
+      });
+      expect(tailoringRuns.issuePrompt).toHaveBeenCalledWith({
+        userId: "user-1",
+        jobId: VALID_JOB_ID,
+        target,
+        source: "MANUAL_IMPORT",
+        delivery: "DRAFT",
+        issueKey: ISSUE_KEY,
+        payload: servicePayload,
+      });
+      expect(response.status).toBe(200);
+      expect(json).toMatchObject({
+        prompt: {
+          ...servicePayload.prompt,
+          systemPrompt: servicePayload.prompt.instructions,
+          userPrompt: servicePayload.prompt.input,
+          shortUserPrompt: "",
+        },
+        promptMeta: servicePayload.promptMeta,
+        expectedJsonShape: servicePayload.expectedJsonShape,
+        expectedJsonSchema: servicePayload.expectedJsonSchema,
+        promptVersion: "v4-application-proposal",
+        tailoringRun: TAILORING_RUN,
+      });
+      expect(json.requestId).not.toBe(servicePayload.requestId);
+      expect(json.requestId).toMatch(/^[0-9a-f-]{36}$/i);
+    },
+  );
+
+  it("builds a match prompt without issuing a TailoringRun", async () => {
+    const response = await POST(request({
+      jobId: VALID_JOB_ID,
+      target: "match",
+      source: "manual_import",
+      delivery: "DRAFT",
+      issueKey: ISSUE_KEY,
+    }));
     const json = await response.json();
 
+    expect(response.status).toBe(200);
     expect(applicationPrompt.build).toHaveBeenCalledWith({
       userId: "user-1",
       jobId: VALID_JOB_ID,
-      target: "resume",
+      target: "match",
     });
-    expect(response.status).toBe(200);
-    expect(json).toMatchObject({
-      prompt: {
-        ...servicePayload.prompt,
-        systemPrompt: servicePayload.prompt.instructions,
-        userPrompt: servicePayload.prompt.input,
-        shortUserPrompt: "",
-      },
-      promptMeta: servicePayload.promptMeta,
-      expectedJsonShape: servicePayload.expectedJsonShape,
-      expectedJsonSchema: servicePayload.expectedJsonSchema,
-      promptVersion: "v4-application-proposal",
-    });
-    expect(json.requestId).not.toBe(servicePayload.requestId);
-    expect(json.requestId).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(tailoringRuns.issuePrompt).not.toHaveBeenCalled();
+    expect(json).not.toHaveProperty("tailoringRun");
   });
 
   it.each([

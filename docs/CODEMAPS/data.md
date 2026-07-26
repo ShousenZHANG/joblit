@@ -1,6 +1,6 @@
 # Data — `prisma/schema.prisma`
 
-29 models, 15 enums, 47 migrations. Client generates to `lib/generated/prisma`
+31 models, 19 enums, 48 migrations. Client generates to `lib/generated/prisma`
 and is reached through the singleton in `lib/server/prisma.ts:13` over
 `PrismaNeon`. Vocabulary is `CONTEXT.md`.
 
@@ -10,34 +10,36 @@ and is reached through the singleton in `lib/server/prisma.ts:13` over
 
 | Model (line) | Domain meaning | Status |
 |---|---|---|
-| `User` (`:130`) | Tenant root, OAuth identity | Live — adapter-owned |
-| `Account` (`:166`), `Session` (`:190`) | NextAuth records | Live — adapter-owned |
-| `Job` (`:203`) | A **Job** from the Fetch Pipeline | Live |
-| `ApplicationBatch` (`:280`) | A **Codex Batch** run header | Live |
-| `ApplicationBatchTask` (`:301`) | One Job's slot in a batch | Live |
-| `DeletedJobUrl` (`:324`) | Tombstone for a canonical `jobUrl` the user deleted | Live |
-| `DailyCheckin` (`:336`) | Per-local-date triage streak | Live |
-| `FetchRun` (`:348`) | A Fetch Pipeline task | Live |
-| `FetchRunCommitReceipt` (`:391`) | Durable idempotency receipt for one ordered FetchRun batch and applying attempt | Live, append-only |
-| `ResumeProfile` (`:412`) | A **Master Resume Profile**, per name per Resume Locale | Live |
-| `ActiveResumeProfile` (`:439`) | Pointer to the active profile per `(userId, locale)` | Live |
-| `Application` (`:452`) | The **Application** for one `(userId, jobId)` | Live |
-| `ApplicationEvent` (`:501`) | Immutable status ledger — the source of truth per ADR-0007 | Live, append-only |
-| `EvidenceSnapshot` (`:542`) | Content-addressed evidence backing AI claims | **Written, never read** |
-| `ClaimEvidence` (`:569`) | Claim → evidence edge | **Written, never read** |
-| `InterviewPlan` (`:592`) | Retired Career workspace | **ADR-0006 retained, no writers** |
-| `StarStory` (`:614`) | Retired Career workspace | **ADR-0006 retained, no writers** |
-| `Offer` (`:638`) | Retired Career workspace | **ADR-0006 retained, no writers** |
-| `FollowUpReminder` (`:668`) | Retired Career workspace | **ADR-0006 retained, no writers** |
-| `PromptRuleTemplate` (`:692`) | Per-user **Skill Pack** rule set | Live |
-| `ExtensionToken` (`:712`) | Extension bearer token, SHA-256 hash only | Live |
-| `FormSubmission` (`:728`) | Extension-captured ATS form submission | Live |
-| `FieldMappingRule` (`:751`) | Learned autofill selector → profile path | Live |
-| `OnboardingState` (`:776`) | Onboarding checklist and stage | Live |
-| `DiscoverVideoCache` (`:796`) | Global Discover cache + daily-refresh lease (ADR-0005) | Live |
-| `LocalAiSetting` (`:808`) | Non-secret local-AI endpoint per user (ADR-0004) | Live |
-| `SourceHealth` (`:818`) | Global per-source status/counters/timestamps | Live — upserted by `sourceHealthStore.ts`, read through `readSourceHealth.ts` |
-| `AtsBoardSource` (`:833`) | Global ATS board registry | Live — **no insert path in TypeScript**; DB rows require external provisioning, while `JOBLIT_ATS_BOARDS_JSON` remains runtime-only |
+| `User` (`:156`) | Tenant root, OAuth identity | Live — adapter-owned |
+| `Account` (`:193`), `Session` (`:217`) | NextAuth records | Live — adapter-owned |
+| `Job` (`:230`) | A **Job** from the Fetch Pipeline | Live |
+| `ApplicationBatch` (`:308`) | A **Codex Batch** run header | Live |
+| `ApplicationBatchTask` (`:329`) | One Job's slot in a batch | Live |
+| `TailoringRun` (`:358`) | Durable execution/fencing identity for one issued Application tailoring operation | Live |
+| `TailoringRunReceipt` (`:411`) | Immutable per-target acceptance receipt | Live, append-only |
+| `DeletedJobUrl` (`:431`) | Tombstone for a canonical `jobUrl` the user deleted | Live |
+| `DailyCheckin` (`:443`) | Per-local-date triage streak | Live |
+| `FetchRun` (`:455`) | A Fetch Pipeline task | Live |
+| `FetchRunCommitReceipt` (`:498`) | Durable idempotency receipt for one ordered FetchRun batch and applying attempt | Live, append-only |
+| `ResumeProfile` (`:519`) | A **Master Resume Profile**, per name per Resume Locale | Live |
+| `ActiveResumeProfile` (`:547`) | Pointer to the active profile per `(userId, locale)` | Live |
+| `Application` (`:560`) | The **Application** for one `(userId, jobId)` | Live |
+| `ApplicationEvent` (`:611`) | Immutable status ledger — the source of truth per ADR-0007 | Live, append-only |
+| `EvidenceSnapshot` (`:652`) | Content-addressed evidence backing AI claims | **Written, never read** |
+| `ClaimEvidence` (`:679`) | Claim → evidence edge | **Written, never read** |
+| `InterviewPlan` (`:702`) | Retired Career workspace | **ADR-0006 retained, no writers** |
+| `StarStory` (`:724`) | Retired Career workspace | **ADR-0006 retained, no writers** |
+| `Offer` (`:748`) | Retired Career workspace | **ADR-0006 retained, no writers** |
+| `FollowUpReminder` (`:778`) | Retired Career workspace | **ADR-0006 retained, no writers** |
+| `PromptRuleTemplate` (`:802`) | Per-user **Skill Pack** rule set | Live |
+| `ExtensionToken` (`:822`) | Extension bearer token, SHA-256 hash only | Live |
+| `FormSubmission` (`:838`) | Extension-captured ATS form submission | Live |
+| `FieldMappingRule` (`:861`) | Learned autofill selector → profile path | Live |
+| `OnboardingState` (`:886`) | Onboarding checklist and stage | Live |
+| `DiscoverVideoCache` (`:906`) | Global Discover cache + daily-refresh lease (ADR-0005) | Live |
+| `LocalAiSetting` (`:918`) | Non-secret local-AI endpoint per user (ADR-0004) | Live |
+| `SourceHealth` (`:928`) | Global per-source status/counters/timestamps | Live — upserted by `sourceHealthStore.ts`, read through `readSourceHealth.ts` |
+| `AtsBoardSource` (`:943`) | Global ATS board registry | Live — **no insert path in TypeScript**; DB rows require external provisioning, while `JOBLIT_ATS_BOARDS_JSON` remains runtime-only |
 
 The four retained-without-writers models carry a block comment at
 `schema.prisma:589-591`; the decision is ADR-0006 lines 21-23. `EvidenceSnapshot`
@@ -48,15 +50,15 @@ and `ClaimEvidence` are **not** in that group — they still receive writes from
 
 ## Ownership and tenancy
 
-24 models carry `userId String @db.Uuid` with a `Cascade` FK to `User`. Three use
+25 models carry `userId String @db.Uuid` with a `Cascade` FK to `User`. Three use
 it as the key rather than a column: `ActiveResumeProfile` (`@@id([userId, locale])`
 at `:448`),
 `OnboardingState` (`userId @unique`), `LocalAiSetting` (`userId @id`).
 
 `ApplicationBatchTask` and `ClaimEvidence` carry both a parent id and a
 denormalised `userId`, so a tenant filter never needs a join.
-`FetchRunCommitReceipt` deliberately scopes ownership through its required
-`FetchRun` parent; commit callers never supply a tenant id.
+`FetchRunCommitReceipt` and `TailoringRunReceipt` deliberately scope ownership
+through their required run parent; commit callers never supply a tenant id.
 
 Three models are global: `DiscoverVideoCache` (`key @id`), `SourceHealth`
 (`source @id`, deliberate per the comment at `:817`), `AtsBoardSource`.
@@ -65,6 +67,7 @@ Three models are global: `DiscoverVideoCache` (`key @id`), `SourceHealth`
 |---|---|
 | Jobs | `where: {userId, …}` — `jobListService.ts:122-127`; raw SQL injects `j."userId"` at `jobSearchService.ts:119` |
 | Applications | Composite `userId_jobId`, or `findFirst({where:{id, userId}})` |
+| Tailoring runs | `TailoringRun.userId`; receipts inherit ownership through their required run |
 | Resume profiles | `where: {userId, locale}`; active pointer via `userId_locale` |
 | Extension | `ExtensionToken.tokenHash` → `userId` at `requireExtensionToken.ts:40` |
 
@@ -86,6 +89,18 @@ claim/idempotency and the rolling fallback for RUNNING inline rows with no
 relational attempt. It is not an execution lease once `start` has populated
 the fields above.
 
+### TailoringRun acceptance projection
+
+| Field | Authority |
+|---|---|
+| `TailoringRun.executionAttemptId` + `executionLeaseExpiresAt` | Current executor fence and takeover deadline. A stale attempt cannot accept new output after takeover. |
+| `requiredTargetMask` + `acceptedTargetMask` | Required and durably accepted Resume/Cover projection. |
+| `issueKey` + `issueHash` | Idempotent issuance identity; same key with different issued inputs is rejected. |
+| `promptReceipts` + snapshot hashes | Bind accepted output to the issued prompt/profile/job without storing full prompts or model output. |
+| `TailoringRunReceipt` | Immutable evidence for one `(run, target)` acceptance. Exact replay returns the receipt; conflicting content is rejected. |
+| `ApplicationBatchTask.executionAttemptId` | Batch-side projection of the same active attempt. |
+| `tailoringProtocolVersion` + `completionAttemptId` | Historical rows remain v0. A v1 claim upgrades atomically and clears proof; v1 success is database-valid only when the final receipt writes `completionAttemptId = executionAttemptId`. |
+
 ---
 
 ## Cascade and deletion
@@ -96,6 +111,11 @@ Selected relations. `Cascade` from `User` is universal and omitted here.
 |---|---|---|---|
 | `ApplicationBatchTask.batch` | `ApplicationBatch` | Cascade | `304` |
 | `ApplicationBatchTask.job` | `Job` | Cascade | `308` |
+| `TailoringRun.applicationBatchTask` | `ApplicationBatchTask?` | SetNull | `369` |
+| `TailoringRun.resumeProfile` | `ResumeProfile?` | SetNull | `366` |
+| `TailoringRun.application` | `Application?` | SetNull | `372` |
+| `TailoringRunReceipt.run` | `TailoringRun` | Cascade | `414` |
+| `TailoringRunReceipt.application` | `Application?` | SetNull | `420` |
 | `FetchRunCommitReceipt.fetchRun` | `FetchRun` | Cascade | `394` |
 | `ActiveResumeProfile.resumeProfile` | `ResumeProfile` | Cascade | `444` |
 | `Application.job` | `Job?` | **SetNull** | `458` |
@@ -178,10 +198,11 @@ matching.
 
 ## Enums
 
-15 enums. Referenced by name in TypeScript: `JobStatus`, `FetchRunStatus`,
-`ApplicationBatchStatus`, `ApplicationBatchTaskStatus`. The other 11 are
+19 enums. Referenced by generated name in TypeScript: `JobStatus`,
+`FetchRunStatus`, `ApplicationBatchStatus`, `ApplicationBatchTaskStatus`. The
+other 15 are
 duplicated as inline string unions or literals — including `ApplicationStatus`
-(`DRAFT | FINAL`), which appears only as string literals.
+(`DRAFT | FINAL`) and the four Tailoring Run enums.
 
 Enums with no TypeScript reference at all: `InterviewPlanStatus`, `OfferStatus`,
 `FollowUpReminderType` (ADR-0006 retained), and `ApplicationBatchScope` (one
@@ -216,6 +237,7 @@ rest.
 | `Job.fitMatrix` | AI requirement matrix; score aggregated deterministically | `FitMatrixSchema` — `lib/shared/schemas/fitMatrix.ts:53` |
 | `Job.postingRiskFlags` | `string[]` advisory flags | **Nothing** — coerced by `normalizePostingRiskFlags` |
 | `FetchRun.queries` | Versioned market-specific execution config plus pre-start dispatch/idempotency metadata (`:375`) | Strict `FetchRunConfigV1Schema` for v1 rows; `normalizeFetchRunConfigV1` upgrades historical shapes—including GLOBAL source-only rows—at the execution boundary and fails closed for invalid versioned rows. Authoritative post-start lease fields are relational, not JSON |
+| `TailoringRun.promptReceipts` | Target-keyed prompt identity only; never full prompt bytes or raw model output | `normalizePromptReceipts` on issue and `readPromptReceipts` on lifecycle/acceptance reads |
 | `ResumeProfile.{basics,links,skills,experiences,projects,education}` | Master Resume Profile sections | `ResumeProfileSchema` — `lib/shared/schemas/resumeProfile.ts:72` |
 | `Application.aiContent` | **AI Content** — the ADR-0001 current-proposal snapshot with per-target provenance plus aggregate evidence/review | `aiContentSchema` — `lib/shared/schemas/aiContent.ts`, `.strict()`. Target provenance is optional for legacy v1 rows; a missing entry means unknown. The retired `skillsAdditions` key is stripped by a `z.preprocess` |
 | `Application.atsValidation` | Last ATS/PDF machine-readability result | **Nothing** — written as an object literal, read back through a `typeof` guard |
@@ -242,6 +264,9 @@ rest.
 | `EvidenceSnapshot @@unique([userId, contentHash, kind])` (`:560`) | Content-addressed reuse — identical evidence within one tenant is reused, not copied. |
 | `ClaimEvidence @@unique([applicationId, claimHash, evidenceSnapshotId])` (`:584`) | Claim edges are append-only and idempotent; a retry cannot duplicate the audit trail. |
 | `ApplicationBatchTask @@unique([batchId, jobId])` (`:319`) | A Job appears at most once per batch. |
+| `TailoringRun @@unique([userId, issueKey])` (`:403`) | Issuing the same operation is idempotent within a tenant; `issueHash` detects conflicting reuse. |
+| `TailoringRun.applicationBatchTaskId @unique` (`:368`) | A batch task has at most one Tailoring Run. |
+| `TailoringRunReceipt @@unique([runId, target])` (`:425`) | At most one immutable acceptance receipt per target; exact retries replay it. |
 | `FieldMappingRule @@unique([userId, fieldSelector, atsProvider, pageDomain])` (`:771`) | One learned mapping per selector per ATS and domain. `atsProvider` and `pageDomain` are `NOT NULL DEFAULT ''` **because** nullable columns made the upsert never match — see `20260405000000_fix_field_mapping_nullable_unique`. |
 | `ExtensionToken.tokenHash @unique` (`:717`) | Lookup by hash only; the raw token is never stored. |
 | `Job.companyRoleKey` — **index, deliberately not unique** (`:274`) | A soft "same opening" hint. Distinct openings can collide (`:240-242`), so it powers a possible-duplicate badge and never an automatic removal. |
@@ -255,7 +280,7 @@ rest.
 All use `pg_advisory_xact_lock` via `$executeRaw` — never `$queryRaw`, because
 the function returns `void`, which driver adapters cannot deserialize.
 
-Six of seven derive the key with an FNV-1a 32-bit `stableInt32`, **duplicated
+Eight of nine derive the key with an FNV-1a 32-bit `stableInt32`, **duplicated
 verbatim in each module**.
 
 | Namespace | Constant | Key | Taken by |
@@ -266,6 +291,8 @@ verbatim in each module**.
 | `JOBF` `0x4a4f4246` | `jobs/fitRunService.ts:23` | `stableInt32(userId)` | `nextFitBatch` — leases the next triage batch |
 | `JOBL`/`FTCH` | `fetchRuns/fetchRunQuota.ts:35` | **Fixed** global key | `checkFetchRunQuota`; stale active rows are excluded from capacity, while terminal projection happens separately through the commit module |
 | `FRUN` `0x4652554e` | `fetchRuns/fetchRunLifecycleLock.ts:3` | `stableInt32(runId)` | Attempt `start`/takeover, commit, fail, stale recovery, and cancel. It serializes changes to the relational attempt fence and is always acquired before `JOBJ` |
+| `ABAT` `0x41424154` | `tailoringRuns/tailoringRunLock.ts:3` | `stableInt32(batchId)` | Batch claim/completion/cancellation and batch-bound Tailoring Run acceptance; first lock in the global acceptance order |
+| `TLRN` `0x544c524e` | `tailoringRuns/tailoringRunLock.ts:4` | `stableInt32(runId)` | Tailoring Run issue/start/prompt binding/acceptance/fail/cancel; acquired after `ABAT` and before `JOBA` |
 | `SHRC` `0x53485243` | `sources/sourceHealthStore.ts:11` | per source, all acquired in one roundtrip via a `MATERIALIZED` CTE so the planner cannot hoist the lock ahead of the sort | `persistSourceHealthDiagnostics` |
 
 Two non-namespaced locks use the single-`bigint` form:
@@ -279,7 +306,8 @@ lease fenced by a random `ownerToken` (ADR-0005).
 
 ## Migration history
 
-47 migrations, `20260114042057_init_auth_jobs` → `20260724090000_fetch_run_commit_protocol`.
+48 migrations, `20260114042057_init_auth_jobs` →
+`20260726090000_tailoring_run_acceptance_protocol`.
 Most are a single additive `ALTER TABLE`. The ones that changed a domain rule:
 
 | Migration | Change |
@@ -296,6 +324,7 @@ Most are a single additive `ALTER TABLE`. The ones that changed a domain rule:
 | `20260720170000_extend_job_status` | Four `ADD VALUE`s, kept in their own migration so Postgres never consumes a new enum value in the same transaction. |
 | `20260720190000_collapse_job_status` | **Data-only, ADR-0007.** Projects retired statuses. No enum values dropped — that would rewrite `ApplicationEvent` history. |
 | `20260724090000_fetch_run_commit_protocol` | ADR-0008: adds `PARTIAL`, ordered-batch counters, UUID attempt + lease pair check, non-negative/range checks, and receipt attempt attribution; makes the legacy `userEmail` snapshot nullable without dropping it. |
+| `20260726090000_tailoring_run_acceptance_protocol` | ADR-0009: adds Tailoring Run/Receipt, per-target masks and receipt uniqueness, UUID attempt fences, explicit legacy/v1 batch protocol version, current-attempt completion proof, and additive nullable relations without fabricating historical run evidence. |
 | `20260330000000_search_optimization` | The only extension-installing migration: `pg_trgm` plus three GIN indexes. |
 
 After editing `prisma/schema.prisma`, run `npx prisma generate`.

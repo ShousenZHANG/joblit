@@ -21,8 +21,8 @@ type ResumeProfileRecord = NonNullable<
 >;
 
 type ResumePdfResult = {
-  pdf: Buffer;
-  tex: string;
+  pdf: Buffer | null;
+  tex: string | null;
   cvSource: "ai" | "base";
   coverSource: "ai" | "fallback";
   tailorReason: string;
@@ -70,13 +70,17 @@ export async function buildResumePdfForJob(input: {
     );
   }
   const cv: AiContent["cv"] = accepted.aiContent.cv;
-  const tex = renderResumeTex(
-    composeApplicationResumeRenderInput({
-      master: renderInput,
-      cv,
-    }),
-  );
-  const pdf = await compileLatexToPdf(tex);
+  const shouldRenderResume =
+    input.tailorOptions?.targets?.includes("resume") ?? true;
+  const tex = shouldRenderResume
+    ? renderResumeTex(
+        composeApplicationResumeRenderInput({
+          master: renderInput,
+          cv,
+        }),
+      )
+    : null;
+  const pdf = tex ? await compileLatexToPdf(tex) : null;
 
   return {
     pdf,
