@@ -1,0 +1,164 @@
+{
+  "version": 1,
+  "note": "Shared title-relevance conformance corpus. Read by lib/shared/jobRelevance.test.ts and tools/fetcher/test_run_jobspy.py. Both implementations must agree on every case; a divergence is a bug in whichever side moved. Add a case here before changing a rule on either side.",
+  "cases": [
+    {
+      "name": "seniority word must not become a required title signal",
+      "why": "Measured: the GLOBAL matcher kept 12/16 for base 'AI Engineer' and 1/16 for 'Senior AI Engineer'. 'senior' names a level, not a domain.",
+      "baseQueries": ["Senior AI Engineer"],
+      "queries": ["Senior AI Engineer"],
+      "titles": {
+        "AI Engineer": true,
+        "Senior AI Engineer": true,
+        "Machine Learning Engineer": true,
+        "Staff AI Engineer": true,
+        "Principal AI Engineer": true,
+        "Lead Machine Learning Engineer": true,
+        "GenAI Engineer": true,
+        "LLM Engineer": true,
+        "AI Agent Engineer": true,
+        "Graduate AI Engineer": true,
+        "Marketing Manager": false,
+        "Registered Nurse": false
+      }
+    },
+    {
+      "name": "every seniority prefix behaves the same",
+      "baseQueries": ["Principal Backend Engineer"],
+      "queries": ["Principal Backend Engineer"],
+      "titles": {
+        "Backend Engineer": true,
+        "Senior Backend Engineer": true,
+        "Junior Backend Developer": true,
+        "API Engineer": true,
+        "Platform Engineer": true,
+        "Marketing Manager": false
+      }
+    },
+    {
+      "name": "AI domain synonyms are one signal class",
+      "why": "AI roles rarely carry the literal token 'ai' in their titles.",
+      "baseQueries": ["AI Engineer"],
+      "queries": ["AI Engineer"],
+      "titles": {
+        "Machine Learning Engineer": true,
+        "Data Scientist": true,
+        "Computer Vision Engineer": true,
+        "NLP Engineer": true,
+        "Deep Learning Researcher": true,
+        "Agentic Systems Engineer": true,
+        "Frontend Engineer": false,
+        "Accountant": false
+      }
+    },
+    {
+      "name": "a concrete technology in the base query stays pinned",
+      "why": "'Java backend developer' claims a stack, unlike a domain-only query, so both of its signals ('java' and 'backend') stay required. 'Senior Java Engineer' is dropped for carrying no backend signal — the seniority word is ignored either way, which is the point.",
+      "baseQueries": ["Java backend developer"],
+      "queries": ["Java backend developer", "Backend Engineer"],
+      "titles": {
+        "Java Backend Developer": true,
+        "Senior Java Backend Developer": true,
+        "Senior Java Engineer": false,
+        "Python Backend Engineer": false,
+        "Golang Platform Engineer": false
+      }
+    },
+    {
+      "name": "a wholly generic query matches any titled engineering role",
+      "baseQueries": ["Software Engineer"],
+      "queries": ["Software Engineer"],
+      "titles": {
+        "Software Engineer": true,
+        "Backend Developer": true,
+        "Python Developer": true,
+        "Solutions Architect": true,
+        "Marketing Manager": false,
+        "Barista": false
+      }
+    },
+    {
+      "name": "the Power Platform family is keyed on a token combination",
+      "why": "Its roles are named by product, so a single-token class would hand a plain 'Platform Engineer' search the whole Microsoft catalogue.",
+      "baseQueries": ["Power Platform Developer"],
+      "queries": ["Power Platform Developer"],
+      "titles": {
+        "Power Platform Developer": true,
+        "Power Apps Developer": true,
+        "Copilot Studio Developer": true,
+        "Dynamics 365 Developer": true,
+        "Dataverse Engineer": true,
+        "Marketing Manager": false
+      }
+    },
+    {
+      "name": "a plain platform query does not inherit the Microsoft catalogue",
+      "baseQueries": ["Platform Engineer"],
+      "queries": ["Platform Engineer"],
+      "titles": {
+        "Platform Engineer": true,
+        "Backend Engineer": true,
+        "Dynamics 365 Developer": false,
+        "Power Apps Developer": false
+      }
+    },
+    {
+      "name": "separator and abbreviation variants fold together",
+      "baseQueries": ["Full Stack Engineer"],
+      "queries": ["Full Stack Engineer"],
+      "titles": {
+        "Full-Stack Engineer": true,
+        "Fullstack Developer": true,
+        "Full stack engineer": true,
+        "Marketing Manager": false
+      }
+    },
+    {
+      "name": "ML abbreviation resolves to the machine learning class",
+      "baseQueries": ["ML Engineer"],
+      "queries": ["ML Engineer"],
+      "titles": {
+        "Machine Learning Engineer": true,
+        "MLOps Engineer": true,
+        "AI Engineer": true,
+        "Frontend Engineer": false
+      }
+    },
+    {
+      "name": "CJK titles strip seniority the same way",
+      "baseQueries": ["高级后端开发工程师"],
+      "queries": ["高级后端开发工程师"],
+      "titles": {
+        "后端开发工程师": true,
+        "资深后端开发工程师": true,
+        "前端开发工程师": false,
+        "市场经理": false
+      }
+    }
+  ],
+  "unusableTitles": [
+    "Jobs",
+    "job search",
+    "Careers",
+    "Vacancies",
+    "Search Results",
+    "View all jobs",
+    "Sign in",
+    "X"
+  ],
+  "usableTitles": ["AI Engineer", "Senior Backend Developer", "QA"],
+  "unusableDescriptions": [
+    "Sign in to view this job",
+    "Join LinkedIn",
+    "Join LinkedIn to view this job",
+    "Page not found",
+    "Access denied",
+    "Enable JavaScript to continue",
+    "Verify you're human",
+    "captcha"
+  ],
+  "usableDescriptions": [
+    "Build secure TypeScript APIs and own AWS delivery pipelines.",
+    ""
+  ]
+}

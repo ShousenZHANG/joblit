@@ -119,6 +119,34 @@ def _experience_rule_thresholds() -> Dict[str, int]:
     return out
 
 
+def _relevance_manifest() -> Dict[str, Any]:
+    """The title-relevance vocabulary shared with lib/shared/jobRelevance.ts.
+
+    One table, two readers. The fallbacks below keep the worker runnable if the
+    manifest is ever unreadable, but `SharedRelevanceManifestTests` asserts the
+    manifest and these constants agree, so a silent fork fails the suite.
+    """
+    try:
+        manifest = json.loads(
+            FETCH_ROLE_PACKS_MANIFEST_PATH.read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError, TypeError):
+        return {}
+    value = manifest.get("relevance")
+    return value if isinstance(value, dict) else {}
+
+
+_RELEVANCE = _relevance_manifest()
+
+
+def _manifest_str_tuple(key: str, fallback: tuple[str, ...]) -> tuple[str, ...]:
+    raw = _RELEVANCE.get(key)
+    if not isinstance(raw, list):
+        return fallback
+    values = tuple(str(item).strip() for item in raw if str(item).strip())
+    return values or fallback
+
+
 def _role_generic_signal_tokens() -> set[str]:
     # "fullstack" is deliberately absent: `_normalize_role_text` collapses
     # "full stack" into it, so treating it as generic erased the only domain
@@ -195,8 +223,18 @@ AU_STATE_ALIASES = {
     "NT": ("nt", "northern territory"),
 }
 
-INVALID_DESCRIPTION_RE = re.compile(
-    r"(?i)^\s*(?:"
+def _manifest_pattern(key: str, fallback: str) -> "re.Pattern[str]":
+    raw = _RELEVANCE.get(key)
+    source = raw if isinstance(raw, str) and raw.strip() else fallback
+    try:
+        return re.compile(source, re.IGNORECASE)
+    except re.error:
+        return re.compile(fallback, re.IGNORECASE)
+
+
+INVALID_DESCRIPTION_RE = _manifest_pattern(
+    "invalidDescriptionPattern",
+    r"^\s*(?:"
     r"sign\s+in\s+to\s+view\s+this\s+job|"
     r"join\s+linkedin(?:\s+to\s+view\s+this\s+job)?|"
     r"page\s+not\s+found|"
@@ -204,63 +242,76 @@ INVALID_DESCRIPTION_RE = re.compile(
     r"enable\s+javascript(?:\s+to\s+continue)?|"
     r"verify\s+you(?:'re|\s+are)\s+human|"
     r"captcha"
-    r")[\s.!-]*$"
+    r")[\s.!-]*$",
 )
 
-INVALID_TITLE_RE = re.compile(
-    r"(?i)^\s*(?:jobs?|job\s+search|careers?|vacancies|"
-    r"search\s+results?|view\s+all\s+jobs?|sign\s+in)\s*$"
+INVALID_TITLE_RE = _manifest_pattern(
+    "invalidTitlePattern",
+    r"^\s*(?:jobs?|job\s+search|careers?|vacancies|"
+    r"search\s+results?|view\s+all\s+jobs?|sign\s+in)\s*$",
 )
 
-ROLE_TOKENS = {
-    "architect",
-    "developer",
-    "development",
-    "engineer",
-    "engineering",
-    "programmer",
-    # "Data Scientist" / "Research Scientist" / "AI Researcher" are engineering
-    # roles for our purposes. Without these markers the whole signal path is
-    # skipped for them and only a literal full-title match can keep them.
-    "researcher",
-    "scientist",
-}
-ROLE_NOISE_TOKENS = {
-    "entry",
-    "graduate",
-    "head",
-    "junior",
-    "lead",
-    "level",
-    "mid",
-    "principal",
-    "senior",
-    "staff",
-}
-CJK_ROLE_TERMS = (
-    "开发工程师",
-    "软件工程师",
-    "开发人员",
-    "技术专家",
-    "工程师",
-    "程序员",
-    "架构师",
-    "开发者",
-    "设计师",
-    "分析师",
-    "经理",
-    "顾问",
-    "专员",
-    "开发",
+# "Data Scientist" / "Research Scientist" / "AI Researcher" are engineering
+# roles for our purposes. Without these markers the whole signal path is
+# skipped for them and only a literal full-title match can keep them.
+ROLE_TOKENS = set(
+    _manifest_str_tuple(
+        "roleTokens",
+        (
+            "architect",
+            "developer",
+            "development",
+            "engineer",
+            "engineering",
+            "programmer",
+            "researcher",
+            "scientist",
+        ),
+    )
 )
-CJK_ROLE_NOISE_TERMS = (
-    "高级",
-    "资深",
-    "初级",
-    "中级",
-    "首席",
-    "应届",
-    "校招",
+# Seniority states a level, not a domain, so it is stripped from a query's
+# signals. Leaving "senior" in made it a term the title had to contain, which
+# rejected "AI Engineer", "Staff AI Engineer" and "Principal AI Engineer" for
+# the query "Senior AI Engineer".
+ROLE_NOISE_TOKENS = set(
+    _manifest_str_tuple(
+        "roleNoiseTokens",
+        (
+            "entry",
+            "graduate",
+            "head",
+            "junior",
+            "lead",
+            "level",
+            "mid",
+            "principal",
+            "senior",
+            "staff",
+        ),
+    )
+)
+CJK_ROLE_TERMS = _manifest_str_tuple(
+    "cjkRoleTerms",
+    (
+        "开发工程师",
+        "软件工程师",
+        "开发人员",
+        "技术专家",
+        "工程师",
+        "程序员",
+        "架构师",
+        "开发者",
+        "设计师",
+        "分析师",
+        "经理",
+        "顾问",
+        "专员",
+        "开发",
+    ),
+)
+CJK_ROLE_NOISE_TERMS = _manifest_str_tuple(
+    "cjkRoleNoiseTerms",
+    ("高级", "资深", "初级", "中级", "首席", "应届", "校招"),
 )
 
 
@@ -575,7 +626,18 @@ def _cjk_role_signals(value: str) -> List[str]:
 # Engineer", "Data Scientist". Treat these as one signal class so an
 # "AI Engineer" query keeps them instead of rejecting the whole result set
 # (which left the strict include filter fetching nothing for AI searches).
-AI_DOMAIN_SYNONYMS: tuple[str, ...] = (
+def _manifest_domain_class(name: str, fallback: tuple[str, ...]) -> tuple[str, ...]:
+    classes = _RELEVANCE.get("domainClasses")
+    if not isinstance(classes, dict):
+        return fallback
+    raw = classes.get(name)
+    if not isinstance(raw, list):
+        return fallback
+    values = tuple(str(item).strip() for item in raw if str(item).strip())
+    return values or fallback
+
+
+AI_DOMAIN_SYNONYMS: tuple[str, ...] = _manifest_domain_class("ai", (
     "ai",
     "artificial intelligence",
     "ml",
@@ -595,25 +657,25 @@ AI_DOMAIN_SYNONYMS: tuple[str, ...] = (
     "computer vision",
     "prompt",
     "rag",
-)
+))
 
-BACKEND_DOMAIN_SYNONYMS: tuple[str, ...] = (
+BACKEND_DOMAIN_SYNONYMS: tuple[str, ...] = _manifest_domain_class("backend", (
     "backend",
     "api",
     "platform",
     "server side",
     "serverside",
     "microservices",
-)
+))
 
-DATA_DOMAIN_SYNONYMS: tuple[str, ...] = (
+DATA_DOMAIN_SYNONYMS: tuple[str, ...] = _manifest_domain_class("data", (
     "data",
     "analytics",
     "etl",
     "elt",
     "warehouse",
     "business intelligence",
-)
+))
 
 ROLE_SIGNAL_SYNONYMS: Dict[str, tuple[str, ...]] = {
     "ai": AI_DOMAIN_SYNONYMS,

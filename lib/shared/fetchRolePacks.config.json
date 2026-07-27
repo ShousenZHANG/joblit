@@ -176,5 +176,145 @@
     "full",
     "dev",
     "role"
-  ]
+  ],
+  "relevance": {
+    "roleTokens": [
+      "architect",
+      "developer",
+      "development",
+      "engineer",
+      "engineering",
+      "programmer",
+      "researcher",
+      "scientist"
+    ],
+    "roleNoiseTokens": [
+      "entry",
+      "graduate",
+      "head",
+      "junior",
+      "lead",
+      "level",
+      "mid",
+      "principal",
+      "senior",
+      "staff"
+    ],
+    "cjkRoleTerms": [
+      "开发工程师",
+      "软件工程师",
+      "开发人员",
+      "技术专家",
+      "工程师",
+      "程序员",
+      "架构师",
+      "开发者",
+      "设计师",
+      "分析师",
+      "经理",
+      "顾问",
+      "专员",
+      "开发"
+    ],
+    "cjkRoleNoiseTerms": [
+      "高级",
+      "资深",
+      "初级",
+      "中级",
+      "首席",
+      "应届",
+      "校招"
+    ],
+    "domainClasses": {
+      "ai": [
+        "ai",
+        "artificial intelligence",
+        "ml",
+        "mlops",
+        "machine learning",
+        "genai",
+        "gen ai",
+        "generative ai",
+        "llm",
+        "llms",
+        "nlp",
+        "deep learning",
+        "neural",
+        "agentic",
+        "data science",
+        "data scientist",
+        "computer vision",
+        "prompt",
+        "rag"
+      ],
+      "backend": [
+        "backend",
+        "api",
+        "platform",
+        "server side",
+        "serverside",
+        "microservices"
+      ],
+      "data": [
+        "data",
+        "analytics",
+        "etl",
+        "elt",
+        "warehouse",
+        "business intelligence"
+      ],
+      "agent": [
+        "agent",
+        "agents",
+        "agentic"
+      ]
+    },
+    "signalClasses": {
+      "ai": "ai",
+      "ml": "ai",
+      "genai": "ai",
+      "llm": "ai",
+      "machine": "ai",
+      "learning": "ai",
+      "agent": "agent",
+      "agentic": "agent",
+      "backend": "backend",
+      "api": "backend",
+      "platform": "backend",
+      "data": "data",
+      "analytics": "data",
+      "etl": "data"
+    },
+    "domainOnlyClasses": [
+      "ai",
+      "backend",
+      "data"
+    ],
+    "compoundDomainFamilies": [
+      {
+        "triggers": [
+          "power",
+          "platform"
+        ],
+        "members": [
+          "power platform",
+          "power apps",
+          "powerapps",
+          "power automate",
+          "power bi",
+          "powerbi",
+          "copilot",
+          "copilot studio",
+          "dynamics",
+          "dynamics 365",
+          "d365",
+          "dataverse"
+        ]
+      }
+    ],
+    "invalidTitlePattern": "^\\s*(?:jobs?|job\\s+search|careers?|vacancies|search\\s+results?|view\\s+all\\s+jobs?|sign\\s+in)\\s*$",
+    "invalidDescriptionPattern": "^\\s*(?:sign\\s+in\\s+to\\s+view\\s+this\\s+job|join\\s+linkedin(?:\\s+to\\s+view\\s+this\\s+job)?|page\\s+not\\s+found|access\\s+denied|enable\\s+javascript(?:\\s+to\\s+continue)?|verify\\s+you(?:'re|\\s+are)\\s+human|captcha)[\\s.!-]*$",
+    "listingFutureGraceHours": 24,
+    "listingAgeGraceHours": 24
+  }
 }

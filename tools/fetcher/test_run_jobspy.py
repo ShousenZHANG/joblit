@@ -1157,5 +1157,102 @@ class RunJobspyDedupeTests(unittest.TestCase):
                 )
         self.assertEqual(request.call_count, 1)
 
+class SharedRelevanceCorpusTests(unittest.TestCase):
+    """Run the corpus that lib/shared/jobRelevance.test.ts also runs.
+
+    Title relevance used to be judged in three places — this worker for AU,
+    filterSourceJobs.ts for GLOBAL, cnFetch/normalize.ts for CN — and the three
+    drifted. The measured cost was real: the GLOBAL matcher kept 12 of 16 rows
+    for the base query "AI Engineer" and 1 of 16 for "Senior AI Engineer",
+    because it treated the seniority word as a required title signal.
+
+    Both suites now read test/fetchRelevance.corpus.json. A rule that moves on
+    one side without the other fails here or there, instead of quietly changing
+    how many roles a user sees.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import json
+
+        corpus_path = os.path.join(
+            os.path.dirname(__file__), "..", "..", "test", "fetchRelevance.corpus.json"
+        )
+        with open(corpus_path, encoding="utf-8") as handle:
+            cls.corpus = json.load(handle)
+
+    def test_corpus_is_not_empty(self):
+        self.assertGreater(len(self.corpus["cases"]), 0)
+
+    def test_title_relevance_matches_the_corpus(self):
+        for case in self.corpus["cases"]:
+            for title, expected in case["titles"].items():
+                with self.subTest(case=case["name"], title=title):
+                    actual = rj._is_title_relevant(
+                        title, list(case["queries"])
+                    ) and rj._matches_base_query_constraints(
+                        title, list(case["baseQueries"])
+                    )
+                    self.assertEqual(actual, expected)
+
+    def test_unusable_titles_match_the_corpus(self):
+        for title in self.corpus["unusableTitles"]:
+            with self.subTest(title=title):
+                unusable = len(title.strip()) < 2 or bool(
+                    rj.INVALID_TITLE_RE.match(title)
+                )
+                self.assertTrue(unusable)
+
+    def test_usable_titles_match_the_corpus(self):
+        for title in self.corpus["usableTitles"]:
+            with self.subTest(title=title):
+                unusable = len(title.strip()) < 2 or bool(
+                    rj.INVALID_TITLE_RE.match(title)
+                )
+                self.assertFalse(unusable)
+
+    def test_unusable_descriptions_match_the_corpus(self):
+        for description in self.corpus["unusableDescriptions"]:
+            with self.subTest(description=description):
+                self.assertTrue(bool(rj.INVALID_DESCRIPTION_RE.match(description)))
+
+    def test_usable_descriptions_match_the_corpus(self):
+        for description in self.corpus["usableDescriptions"]:
+            with self.subTest(description=description):
+                self.assertFalse(
+                    bool(description.strip())
+                    and bool(rj.INVALID_DESCRIPTION_RE.match(description))
+                )
+
+
+class SharedRelevanceManifestTests(unittest.TestCase):
+    """The vocabulary lives in one file; neither side may fork a private copy."""
+
+    def test_role_noise_tokens_come_from_the_manifest(self):
+        import json
+
+        manifest = json.loads(
+            rj.FETCH_ROLE_PACKS_MANIFEST_PATH.read_text(encoding="utf-8")
+        )
+        relevance = manifest["relevance"]
+        self.assertEqual(set(relevance["roleNoiseTokens"]), rj.ROLE_NOISE_TOKENS)
+        self.assertEqual(set(relevance["roleTokens"]), rj.ROLE_TOKENS)
+        self.assertEqual(tuple(relevance["cjkRoleTerms"]), rj.CJK_ROLE_TERMS)
+        self.assertEqual(
+            tuple(relevance["cjkRoleNoiseTerms"]), rj.CJK_ROLE_NOISE_TERMS
+        )
+
+    def test_domain_classes_come_from_the_manifest(self):
+        import json
+
+        manifest = json.loads(
+            rj.FETCH_ROLE_PACKS_MANIFEST_PATH.read_text(encoding="utf-8")
+        )
+        classes = manifest["relevance"]["domainClasses"]
+        self.assertEqual(tuple(classes["ai"]), rj.AI_DOMAIN_SYNONYMS)
+        self.assertEqual(tuple(classes["backend"]), rj.BACKEND_DOMAIN_SYNONYMS)
+        self.assertEqual(tuple(classes["data"]), rj.DATA_DOMAIN_SYNONYMS)
+
+
 if __name__ == "__main__":
     unittest.main()
