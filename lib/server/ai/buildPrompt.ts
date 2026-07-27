@@ -4,6 +4,7 @@ import {
   buildApplicationUserPrompt,
 } from "./applicationPromptBuilder";
 import { buildResumePromptSnapshot } from "./resumePromptSnapshot";
+import { computeTop3Coverage } from "./responsibilityCoverage";
 import { sanitizePromptText } from "./sanitize";
 import { truncate } from "@/lib/shared/utils/text";
 
@@ -64,7 +65,6 @@ export function buildTailorPrompts(
         ? sourceSnapshot.summary
         : input.baseSummary,
   });
-  const topResponsibilities = input.coverContext?.topResponsibilities ?? [];
   const resumeHighlights = input.coverContext?.resumeHighlights ?? [];
   const job = {
     title: input.jobTitle,
@@ -83,6 +83,13 @@ export function buildTailorPrompts(
     "</supplemental-evidence>",
   ].join("\n");
 
+  // Run the same analysis the manual and lean paths run, rather than asserting
+  // a result. This used to declare every top responsibility missing without
+  // comparing it to a single base bullet, and ask for "at least 0" additions —
+  // so the model was told to fill gaps that were already covered, and given a
+  // floor that demanded nothing. computeTop3Coverage answers both questions
+  // from the JD and the bullets the candidate actually has.
+  const coverage = computeTop3Coverage(input.description, baseLatestBullets);
   const resumeUserPrompt = [
     buildApplicationUserPrompt({
       target: "resume",
@@ -92,12 +99,13 @@ export function buildTailorPrompts(
       resume: {
         baseLatestBullets,
         coverage: {
-          topResponsibilities,
-          missingFromBase: topResponsibilities,
+          ...coverage,
+          // The cover context's highlights are a better fallback pool than the
+          // analyser's when it has one, since they are already evidence-matched.
           fallbackResponsibilities:
-            resumeHighlights.length > 0 ? resumeHighlights : topResponsibilities,
-          requiredNewBulletsMin: 0,
-          requiredNewBulletsMax: 3,
+            coverage.missingFromBase.length > 0 && resumeHighlights.length > 0
+              ? resumeHighlights
+              : coverage.fallbackResponsibilities,
         },
       },
     }),

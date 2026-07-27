@@ -1,21 +1,22 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const buildTailorPrompts = vi.hoisted(() =>
-  vi.fn((rules: unknown, input: unknown) => {
-    void rules;
-    void input;
-    return {
-      systemPrompt: "system",
-      userPrompt: "user",
-      resume: { systemPrompt: "system", userPrompt: "resume-user" },
-      cover: { systemPrompt: "system", userPrompt: "cover-user" },
-    };
-  }),
-);
+// Records the arguments while the real builder still runs, so the assertions
+// below keep working and the orchestrator exercises the prompt it actually
+// sends. Replacing the builder outright left buildPrompt.ts covered by nothing.
+const buildTailorPrompts = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/server/ai/buildPrompt", () => ({
-  buildTailorPrompts,
-}));
+vi.mock("@/lib/server/ai/buildPrompt", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/server/ai/buildPrompt")>();
+  return {
+    buildTailorPrompts: (
+      ...args: Parameters<typeof actual.buildTailorPrompts>
+    ) => {
+      buildTailorPrompts(...args);
+      return actual.buildTailorPrompts(...args);
+    },
+  };
+});
 
 vi.mock("@/lib/server/promptRuleTemplates", () => ({
   getActivePromptSkillRulesForUser: vi.fn(() => ({
@@ -28,6 +29,12 @@ vi.mock("@/lib/server/promptRuleTemplates", () => ({
 }));
 
 import { tailorApplicationContent } from "@/lib/server/ai/tailorApplication";
+
+// The resume prompt is told apart by its own instruction rather than by a
+// stub's placeholder string, so the orchestrator can run the real builder.
+const isResumePrompt = (prompt: string) =>
+  prompt.includes("produce cvSummary and latestExperience.addedBullets");
+
 import { buildPromptContentHash } from "@/lib/server/ai/promptContract";
 import * as providers from "@/lib/server/ai/providers";
 
@@ -109,7 +116,11 @@ describe("tailorApplicationContent", () => {
     expect(callProviderSpy).toHaveBeenCalledOnce();
     expect(callProviderSpy).toHaveBeenCalledWith(
       "gemini",
-      expect.objectContaining({ userPrompt: "cover-user" }),
+      expect.objectContaining({
+        userPrompt: expect.stringContaining(
+          "Generate a cover letter for this role",
+        ),
+      }),
     );
     expect(result.source.cv).toBe("base");
     expect(result.source.cover).toBe("ai");
@@ -128,7 +139,11 @@ describe("tailorApplicationContent", () => {
     expect(callProviderSpy).toHaveBeenCalledOnce();
     expect(callProviderSpy).toHaveBeenCalledWith(
       "gemini",
-      expect.objectContaining({ userPrompt: "resume-user" }),
+      expect.objectContaining({
+        userPrompt: expect.stringContaining(
+          "produce cvSummary and latestExperience.addedBullets",
+        ),
+      }),
     );
     expect(result.source.cv).toBe("ai");
     expect(result.source.cover).toBe("fallback");
@@ -158,7 +173,7 @@ describe("tailorApplicationContent", () => {
     expect(callProviderSpy).toHaveBeenCalledTimes(2);
     expect(
       callProviderSpy.mock.calls.some(
-        ([, request]) => request.userPrompt === "resume-user",
+        ([, request]) => isResumePrompt(request.userPrompt),
       ),
     ).toBe(false);
     expect(result.cover.paragraphTwo).toContain("TypeScript");
@@ -216,11 +231,11 @@ describe("tailorApplicationContent", () => {
       .mockImplementation(async (_provider, request) => {
         if (
           request.model === "gemini-2.5-pro" &&
-          request.userPrompt === "resume-user"
+          isResumePrompt(request.userPrompt)
         ) {
           throw new Error("OPENAI_400");
         }
-        return request.userPrompt === "resume-user"
+        return isResumePrompt(request.userPrompt)
           ? RESUME_OUTPUT
           : COVER_OUTPUT;
       });
@@ -237,7 +252,9 @@ describe("tailorApplicationContent", () => {
       "gemini",
       expect.objectContaining({
         model: "gemini-2.5-flash-lite",
-        userPrompt: "resume-user",
+        userPrompt: expect.stringContaining(
+          "produce cvSummary and latestExperience.addedBullets",
+        ),
       }),
     );
   });
@@ -292,8 +309,10 @@ describe("tailorApplicationContent", () => {
         locale: "en-AU",
         variant: "full",
         prompt: {
-          instructions: "system",
-          input: "cover-user",
+          instructions: expect.any(String),
+          input: expect.stringContaining(
+            "Generate a cover letter for this role",
+          ),
         },
       }),
     );
@@ -378,8 +397,10 @@ describe("tailorApplicationContent", () => {
         locale: "global",
         variant: "full",
         prompt: {
-          instructions: "system",
-          input: "resume-user",
+          instructions: expect.any(String),
+          input: expect.stringContaining(
+            "produce cvSummary and latestExperience.addedBullets",
+          ),
         },
       }),
     );
@@ -391,8 +412,10 @@ describe("tailorApplicationContent", () => {
         locale: "global",
         variant: "full",
         prompt: {
-          instructions: "system",
-          input: "cover-user",
+          instructions: expect.any(String),
+          input: expect.stringContaining(
+            "Generate a cover letter for this role",
+          ),
         },
       }),
     );
