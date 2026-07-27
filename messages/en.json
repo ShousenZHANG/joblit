@@ -367,8 +367,6 @@
     "hoursOld": "Hours old",
     "smartExpand": "Smart expand",
     "applyExclusions": "Apply exclusions",
-    "strictTitles": "Strict title match",
-    "strictTitlesHint": "Keep only roles whose title is in the same family as your search. Turn off to cast a wider net.",
     "globalFeeds": "Global remote feeds",
     "globalFeedsHint": "Also search Remote OK, Remotive, and Jobicy. Results still follow your role, location, and title exclusions.",
     "sourceHealth": {
@@ -407,7 +405,18 @@
     "historyStatusRUNNING": "running",
     "historyStatusFAILED": "failed",
     "historyRerun": "Re-run",
-    "historyRerunAria": "Re-run {title}"
+    "historyRerunAria": "Re-run {title}",
+    "titleMatchLabel": "Title match",
+    "titleMatch": {
+      "strict": "Strict",
+      "relaxed": "Relaxed",
+      "off": "Off"
+    },
+    "titleMatchHint": {
+      "strict": "Keep only roles whose title answers one of your search terms.",
+      "relaxed": "Also keep sibling roles in the same domain as your search.",
+      "off": "Keep every role the sources return. Public feeds have no search of their own, so this can import a lot."
+    }
   },
   "fetchProgress": {
     "title": "Fetch progress",
@@ -438,7 +447,7 @@
     "noNewHint": "Widen the location or remove some exclusions, then fetch again.",
     "dismiss": "Dismiss",
     "cancel": "Cancel fetch",
-    "cancelling": "Cancelling fetch\u2026",
+    "cancelling": "Cancelling fetch…",
     "cancelFailed": "Some sources could not be cancelled. They are still being monitored; try cancelling again.",
     "stepQueued": "Queued",
     "stepFetching": "Fetching",

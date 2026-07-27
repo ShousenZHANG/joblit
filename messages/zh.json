@@ -367,8 +367,6 @@
     "hoursOld": "发布时间（小时内）",
     "smartExpand": "智能扩展",
     "applyExclusions": "应用排除项",
-    "strictTitles": "严格标题匹配",
-    "strictTitlesHint": "仅保留标题与搜索同族的岗位。关闭以扩大范围。",
     "globalFeeds": "全球远程职位源",
     "globalFeedsHint": "同时搜索 Remote OK、Remotive 和 Jobicy，结果仍遵循职位、地点与标题排除条件。",
     "sourceHealth": {
@@ -407,7 +405,18 @@
     "historyStatusRUNNING": "进行中",
     "historyStatusFAILED": "失败",
     "historyRerun": "重新抓取",
-    "historyRerunAria": "重新抓取 {title}"
+    "historyRerunAria": "重新抓取 {title}",
+    "titleMatchLabel": "标题匹配",
+    "titleMatch": {
+      "strict": "严格",
+      "relaxed": "宽松",
+      "off": "关闭"
+    },
+    "titleMatchHint": {
+      "strict": "仅保留标题与搜索词直接对应的岗位。",
+      "relaxed": "同时保留与搜索同一领域的相邻岗位。",
+      "off": "保留来源返回的所有岗位。公共源自身没有搜索,可能导入大量结果。"
+    }
   },
   "fetchProgress": {
     "title": "抓取进度",
@@ -438,7 +447,7 @@
     "noNewHint": "放宽地点或减少排除项后重新抓取。",
     "dismiss": "关闭",
     "cancel": "取消抓取",
-    "cancelling": "正在取消抓取\u2026",
+    "cancelling": "正在取消抓取…",
     "cancelFailed": "部分来源未能取消，系统仍在监控；你可以再次尝试取消。",
     "stepQueued": "排队",
     "stepFetching": "抓取",

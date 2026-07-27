@@ -10,6 +10,7 @@ import { recoverAtsBoardsAfter404 } from "./atsRediscoveryService";
 import { persistSourceHealthDiagnostics } from "./sourceHealthStore";
 import { MAX_GLOBAL_SOURCES_PER_RUN } from "./limits";
 import { reconcileFetchedSourceJobLiveness } from "@/lib/server/jobs/sourceLivenessService";
+import { resolveTitleMatchMode } from "@/lib/shared/jobRelevance";
 import { filterSourceJobs, type SourceJobFilter } from "./filterSourceJobs";
 import { reportError } from "@/lib/server/observability/errorReporter";
 import type { RawSourceJob, SourceAdapter } from "./types";
@@ -326,12 +327,13 @@ function readFilter(queries: unknown): SourceJobFilter {
       ? candidate.filter((item): item is string => typeof item === "string")
       : [];
   const applyExcludes = value.applyExcludes !== false;
-  const hoursOld =
-    typeof value.hoursOld === "number" &&
-    Number.isInteger(value.hoursOld) &&
-    value.hoursOld > 0
-      ? value.hoursOld
+  const positiveInteger = (candidate: unknown) =>
+    typeof candidate === "number" &&
+    Number.isInteger(candidate) &&
+    candidate > 0
+      ? candidate
       : null;
+  const hoursOld = positiveInteger(value.hoursOld);
   return {
     queries: strings(value.queries),
     baseQueries: strings(value.baseQueries),
@@ -342,7 +344,11 @@ function readFilter(queries: unknown): SourceJobFilter {
     excludeDescriptionRules: applyExcludes
       ? strings(value.excludeDescriptionRules)
       : [],
-    strictTitles: value.includeFromQueries !== false,
+    titleMatch: resolveTitleMatchMode(value),
+    // Public feeds have no server-side search, so an "off" run would import a
+    // source's whole catalogue without this. resultsWanted was already in the
+    // config; this path simply never read it.
+    resultsWanted: positiveInteger(value.resultsWanted),
   };
 }
 

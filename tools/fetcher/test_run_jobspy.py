@@ -1225,6 +1225,80 @@ class SharedRelevanceCorpusTests(unittest.TestCase):
                 )
 
 
+class TitleMatchModeTests(unittest.TestCase):
+    """`titleMatch` replaces a boolean that meant two things.
+
+    `includeFromQueries=False` skipped the include filter here and merely
+    relaxed it in the GLOBAL processor, while one UI control sent the same
+    value to both. These assertions pin the mirror of resolveTitleMatchMode.
+    """
+
+    def test_explicit_mode_wins(self):
+        for mode in ("strict", "relaxed", "off"):
+            with self.subTest(mode=mode):
+                self.assertEqual(
+                    rj._resolve_title_match({"titleMatch": mode}, {}, True), mode
+                )
+
+    def test_mode_is_read_from_the_nested_config(self):
+        self.assertEqual(
+            rj._resolve_title_match({}, {"titleMatch": "relaxed"}, True), "relaxed"
+        )
+
+    def test_unknown_mode_falls_back_to_the_legacy_boolean(self):
+        self.assertEqual(
+            rj._resolve_title_match({"titleMatch": "nonsense"}, {}, True), "strict"
+        )
+        self.assertEqual(
+            rj._resolve_title_match({"titleMatch": "nonsense"}, {}, False), "off"
+        )
+
+    def test_legacy_boolean_maps_to_strict_and_off(self):
+        self.assertEqual(rj._resolve_title_match({}, {}, True), "strict")
+        self.assertEqual(rj._resolve_title_match({}, {}, False), "off")
+
+    def test_relaxed_keeps_a_sibling_role_the_base_query_covers(self):
+        df = pd.DataFrame(
+            {
+                "title": ["Machine Learning Engineer", "Commercial Accountant"],
+                "job_level": ["", ""],
+            }
+        )
+        relaxed = rj.filter_title(
+            df,
+            queries=["Prompt Engineer"],
+            enforce_include=True,
+            base_queries=["AI Engineer"],
+            relaxed_include=True,
+        )
+        self.assertEqual(list(relaxed["title"]), ["Machine Learning Engineer"])
+
+        strict = rj.filter_title(
+            df,
+            queries=["Prompt Engineer"],
+            enforce_include=True,
+            base_queries=["AI Engineer"],
+            relaxed_include=False,
+        )
+        self.assertEqual(list(strict["title"]), [])
+
+    def test_off_keeps_everything_but_still_excludes(self):
+        df = pd.DataFrame(
+            {
+                "title": ["Commercial Accountant", "Senior AI Engineer"],
+                "job_level": ["", ""],
+            }
+        )
+        kept = rj.filter_title(
+            df,
+            queries=["AI Engineer"],
+            enforce_include=False,
+            exclude_terms=["accountant"],
+            base_queries=["AI Engineer"],
+        )
+        self.assertEqual(list(kept["title"]), ["Senior AI Engineer"])
+
+
 class SharedRelevanceManifestTests(unittest.TestCase):
     """The vocabulary lives in one file; neither side may fork a private copy."""
 

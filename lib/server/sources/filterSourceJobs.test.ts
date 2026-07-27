@@ -49,7 +49,7 @@ describe("filterSourceJobs — seniority in the base query", () => {
   function keptTitles(base: string, strictTitles: boolean) {
     return filterSourceJobs(
       CORPUS.map((title) => job(title, null, "Remote")),
-      { queries: [base], baseQueries: [base], strictTitles },
+      { queries: [base], baseQueries: [base], titleMatch: strictTitles ? "strict" : "relaxed" },
     ).map((row) => row.title);
   }
 
@@ -73,6 +73,71 @@ describe("filterSourceJobs — seniority in the base query", () => {
 
   it("keeps a non-engineering title out regardless of strictness", () => {
     expect(keptTitles("Senior AI Engineer", false)).not.toContain("Marketing Manager");
+  });
+});
+
+describe("filterSourceJobs — title match modes", () => {
+  const rows = [
+    job("AI Engineer", null, "Remote"),
+    job("Machine Learning Engineer", null, "Remote"),
+    job("Commercial Accountant", null, "Remote"),
+  ];
+  const base = { queries: ["AI Engineer"], baseQueries: ["AI Engineer"] };
+
+  it("strict keeps the role family and drops everything else", () => {
+    expect(filterSourceJobs(rows, { ...base, titleMatch: "strict" })).toEqual([
+      rows[0],
+      rows[1],
+    ]);
+  });
+
+  it("off keeps every usable row, including unrelated roles", () => {
+    expect(filterSourceJobs(rows, { ...base, titleMatch: "off" })).toEqual(rows);
+  });
+
+  it("off still applies the quality gates", () => {
+    const withJunk = [...rows, job("Careers", null, "Remote")];
+    expect(filterSourceJobs(withJunk, { ...base, titleMatch: "off" })).toEqual(rows);
+  });
+
+  it("off still applies location and freshness", () => {
+    const now = new Date("2026-07-26T00:00:00.000Z");
+    const mixed = [
+      job("AI Engineer", "Sydney, NSW"),
+      job("AI Engineer", "Berlin, Germany"),
+    ];
+    expect(
+      filterSourceJobs(mixed, {
+        ...base,
+        titleMatch: "off",
+        location: "Sydney, New South Wales, Australia",
+        now,
+      }),
+    ).toEqual([mixed[0]]);
+  });
+
+  it("defaults to strict when no mode is given", () => {
+    expect(filterSourceJobs(rows, base)).toEqual(
+      filterSourceJobs(rows, { ...base, titleMatch: "strict" }),
+    );
+  });
+
+  // Public feeds have no server-side search, so "off" would otherwise import a
+  // source's entire catalogue. resultsWanted was in the config all along and
+  // the GLOBAL path never read it.
+  it("caps the result set at resultsWanted", () => {
+    expect(
+      filterSourceJobs(rows, { ...base, titleMatch: "off", resultsWanted: 2 }),
+    ).toEqual([rows[0], rows[1]]);
+  });
+
+  it("ignores a cap that is absent or not a positive number", () => {
+    expect(
+      filterSourceJobs(rows, { ...base, titleMatch: "off", resultsWanted: null }),
+    ).toEqual(rows);
+    expect(
+      filterSourceJobs(rows, { ...base, titleMatch: "off", resultsWanted: 0 }),
+    ).toEqual(rows);
   });
 });
 

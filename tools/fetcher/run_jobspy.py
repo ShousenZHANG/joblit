@@ -549,6 +549,29 @@ def _fetch_terms(
     return list(zip(queries, frames))
 
 
+TITLE_MATCH_MODES = ("strict", "relaxed", "off")
+
+
+def _resolve_title_match(
+    run: Dict[str, Any],
+    raw_queries: Any,
+    include_from_queries: bool,
+) -> str:
+    """Mirror of resolveTitleMatchMode in lib/shared/jobRelevance.ts.
+
+    `includeFromQueries` used to mean "skip the include filter" here and
+    "apply a looser include filter" in the GLOBAL processor, while one UI
+    checkbox sent the same value to both. `titleMatch` names all three states
+    so each market can honour the same intent; the boolean remains the
+    fallback for rows persisted before the field existed.
+    """
+    for source in (run, raw_queries if isinstance(raw_queries, dict) else {}):
+        value = source.get("titleMatch")
+        if isinstance(value, str) and value in TITLE_MATCH_MODES:
+            return value
+    return "strict" if include_from_queries else "off"
+
+
 def _normalize_text(text: str) -> str:
     if not text:
         return ""
@@ -999,7 +1022,14 @@ def filter_title(
     enforce_include: bool,
     exclude_terms: Optional[List[str]] = None,
     base_queries: Optional[List[str]] = None,
+    relaxed_include: bool = False,
 ) -> pd.DataFrame:
+    """Exclusion always applies; `enforce_include` gates the include filter.
+
+    `relaxed_include` keeps the base-query domain constraint but lets a title
+    answer the base query rather than one of the expanded terms, which is the
+    middle setting the GLOBAL processor has always had and AU never exposed.
+    """
     if df.empty:
         return df
     t = df["title"].fillna("")
@@ -1026,13 +1056,22 @@ def filter_title(
                 for q in (base_queries or [])
                 if q and q.strip()
             ]
-            include_mask = out["title"].fillna("").apply(
-                lambda value: _is_title_relevant(str(value), include_terms)
-                and (
-                    not constraints
-                    or _matches_base_query_constraints(str(value), constraints)
+
+            def _keeps(value: str) -> bool:
+                title = str(value)
+                if constraints and not _matches_base_query_constraints(
+                    title, constraints
+                ):
+                    return False
+                if _is_title_relevant(title, include_terms):
+                    return True
+                return bool(
+                    relaxed_include
+                    and constraints
+                    and _is_title_relevant(title, constraints)
                 )
-            )
+
+            include_mask = out["title"].fillna("").apply(_keeps)
             out = out[include_mask].copy()
     return out
 
@@ -2066,6 +2105,7 @@ def main():
     )
     if not include_from_queries and isinstance(raw_queries, dict):
         include_from_queries = bool(raw_queries.get("includeFromQueries") or False)
+    title_match = _resolve_title_match(run, raw_queries, include_from_queries)
     proxy_pool = _parse_csv_list(os.environ.get("FETCH_PROXY_POOL", ""))
 
     active_rights_rules = (
@@ -2109,7 +2149,8 @@ def main():
         df = filter_title(
             df,
             search_terms,
-            enforce_include=include_from_queries,
+            enforce_include=(title_match != "off"),
+            relaxed_include=(title_match == "relaxed"),
             exclude_terms=exclude_title_terms if apply_excludes else None,
             base_queries=base_queries,
         )

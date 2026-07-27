@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { TITLE_MATCH_MODES } from "@/lib/shared/jobRelevance";
 import { z } from "zod";
 import { withSessionRoute, parseJsonValue } from "@/lib/server/api/routeHandler";
 import { prisma } from "@/lib/server/prisma";
@@ -75,6 +76,7 @@ const AUSchema = z
     hoursOld: z.coerce.number().int().min(1).max(24 * 30).optional(),
     smartExpand: z.coerce.boolean().optional().default(true),
     includeFromQueries: z.coerce.boolean().optional().default(true),
+    titleMatch: z.enum(TITLE_MATCH_MODES).optional(),
     applyExcludes: z.coerce.boolean().optional().default(true),
     excludeTitleTerms: z.array(TitleExcludeSchema).max(24).optional().default([]),
     excludeDescriptionRules: z
@@ -136,6 +138,7 @@ const GlobalSchema = z.object({
   hoursOld: z.coerce.number().int().min(1).max(24 * 30).optional(),
   smartExpand: z.coerce.boolean().optional().default(true),
   includeFromQueries: z.coerce.boolean().optional().default(true),
+  titleMatch: z.enum(TITLE_MATCH_MODES).optional(),
   applyExcludes: z.coerce.boolean().optional().default(true),
   excludeTitleTerms: z.array(TitleExcludeSchema).max(24).optional().default([]),
   excludeDescriptionRules: z
@@ -371,6 +374,7 @@ export async function POST(req: Request) {
               resultsWanted: null,
               smartExpand: d.smartExpand,
               includeFromQueries: d.includeFromQueries,
+              titleMatch: d.titleMatch,
               applyExcludes: d.applyExcludes,
               excludeTitleTerms,
               excludeDescriptionRules,
@@ -432,6 +436,7 @@ export async function POST(req: Request) {
         resultsWanted: null,
         smartExpand: data.smartExpand,
         includeFromQueries: data.includeFromQueries,
+        titleMatch: data.titleMatch,
         applyExcludes: data.applyExcludes,
         excludeTitleTerms: data.excludeTitleTerms,
         excludeDescriptionRules: data.excludeDescriptionRules,

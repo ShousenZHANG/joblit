@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { SegmentedControl } from "@/components/app-shell/SegmentedControl";
+import {
+  TITLE_MATCH_MODES,
+  type TitleMatchMode,
+} from "@/lib/shared/jobRelevance";
 import { Briefcase, ChevronDown, Loader2, RotateCcw } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
@@ -558,7 +563,7 @@ export function FetchClient() {
   // Strict title matching keeps only roles whose title is in the same family as
   // the search. On by default — it is what makes a role search precise — but
   // surfaced so a deliberately wide net is one click away.
-  const [strictTitles, setStrictTitles] = useState(true);
+  const [titleMatch, setTitleMatch] = useState<TitleMatchMode>("strict");
   const [excludeTitleTerms, setExcludeTitleTerms] = useState<string[]>([
     "senior",
     "lead",
@@ -701,7 +706,9 @@ export function FetchClient() {
           location,
           hoursOld,
           smartExpand,
-          includeFromQueries: strictTitles,
+          titleMatch,
+          // Kept for FetchRun rows and the AU worker's legacy projection.
+          includeFromQueries: titleMatch !== "off",
           applyExcludes,
           excludeTitleTerms: applyExcludes ? excludeTitleTerms : [],
           excludeDescriptionRules: applyExcludes
@@ -732,7 +739,9 @@ export function FetchClient() {
           location,
           hoursOld,
           smartExpand,
-          includeFromQueries: strictTitles,
+          titleMatch,
+          // Kept for FetchRun rows and the AU worker's legacy projection.
+          includeFromQueries: titleMatch !== "off",
           applyExcludes,
           excludeTitleTerms,
           excludeDescriptionRules: [
@@ -996,16 +1005,28 @@ export function FetchClient() {
               <span className={`h-1.5 w-1.5 rounded-full ${applyExcludes ? "bg-brand-emerald-500" : "bg-muted-foreground/30"}`} />
               {t("applyExclusions")}
             </button>
-            <button
-              type="button"
-              data-testid="strict-titles-chip"
-              title={t("strictTitlesHint")}
-              className={`filter-chip ${strictTitles ? "filter-chip--active" : "filter-chip--inactive"}`}
-              onClick={() => setStrictTitles(!strictTitles)}
+            {/* Three named states, not a checkbox. The old boolean meant "skip
+                the include filter" on AU and "loosen it" on GLOBAL, so one
+                control produced different amounts from the two markets with
+                nothing on screen to explain the difference. */}
+            <span
+              data-testid="title-match-control"
+              title={t(`titleMatchHint.${titleMatch}`)}
+              className="inline-flex items-center gap-2"
             >
-              <span className={`h-1.5 w-1.5 rounded-full ${strictTitles ? "bg-brand-emerald-500" : "bg-muted-foreground/30"}`} />
-              {t("strictTitles")}
-            </button>
+              <span className="text-xs font-medium text-muted-foreground">
+                {t("titleMatchLabel")}
+              </span>
+              <SegmentedControl
+                options={TITLE_MATCH_MODES.map((mode) => ({
+                  value: mode,
+                  label: t(`titleMatch.${mode}`),
+                }))}
+                value={titleMatch}
+                onChange={setTitleMatch}
+                ariaLabel={t("titleMatchLabel")}
+              />
+            </span>
             <button
               type="button"
               data-testid="global-feeds-chip"

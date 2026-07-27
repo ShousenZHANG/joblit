@@ -8,6 +8,7 @@ import {
   isUsableJobUrl,
   matchesBaseQueryConstraints,
   normalizeRoleText,
+  type TitleMatchMode,
 } from "@/lib/shared/jobRelevance";
 
 export type SourceJobFilter = {
@@ -18,7 +19,12 @@ export type SourceJobFilter = {
   hoursOld?: number | null;
   excludeTitleTerms?: string[];
   excludeDescriptionRules?: string[];
-  strictTitles?: boolean;
+  titleMatch?: TitleMatchMode;
+  /**
+   * Hard ceiling on returned rows. Public feeds have no server-side search, so
+   * `titleMatch: "off"` would otherwise import a source's entire catalogue.
+   */
+  resultsWanted?: number | null;
   now?: Date;
 };
 
@@ -31,15 +37,16 @@ function matchesRole(
   title: string,
   queries: readonly string[],
   baseQueries: readonly string[],
-  strict: boolean,
+  mode: TitleMatchMode,
 ): boolean {
+  if (mode === "off") return true;
   if (queries.length === 0) return false;
   if (!matchesBaseQueryConstraints(title, baseQueries)) return false;
-  // Strict mode demands the title answer a requested query outright. Relaxed
-  // mode additionally accepts a sibling role the base query's domain covers,
-  // which the base constraint above has already verified.
+  // Strict demands the title answer a requested query outright. Relaxed also
+  // accepts a sibling role the base query's domain covers, which the base
+  // constraint above has already verified.
   if (isTitleRelevant(title, queries)) return true;
-  return !strict && baseQueries.length > 0 && isTitleRelevant(title, baseQueries);
+  return mode === "relaxed" && baseQueries.length > 0 && isTitleRelevant(title, baseQueries);
 }
 
 function normalize(value: string): string {
@@ -106,14 +113,15 @@ export function filterSourceJobs(
     .filter(Boolean);
   const descriptionRules = filter.excludeDescriptionRules ?? [];
   const now = filter.now ?? new Date();
+  const titleMatch = filter.titleMatch ?? "strict";
 
-  return jobs.filter((job) => {
+  const kept = jobs.filter((job) => {
     if (!isUsableRow(job)) return false;
     const normalizedTitle = normalizeRoleText(job.title);
     if (excluded.some((term) => normalizedTitle.includes(term))) return false;
     if (
       filter.queryMode !== "source-only" &&
-      !matchesRole(job.title, queries, baseQueries, filter.strictTitles !== false)
+      !matchesRole(job.title, queries, baseQueries, titleMatch)
     ) {
       return false;
     }
@@ -121,4 +129,9 @@ export function filterSourceJobs(
     if (!isListingDateAcceptable(job.listingDate, filter.hoursOld, now)) return false;
     return !violatesDescriptionExclusions(job.description, descriptionRules);
   });
+
+  const limit = filter.resultsWanted;
+  return typeof limit === "number" && Number.isFinite(limit) && limit > 0
+    ? kept.slice(0, Math.trunc(limit))
+    : kept;
 }

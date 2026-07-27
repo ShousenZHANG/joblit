@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  TITLE_MATCH_MODES,
+  resolveTitleMatchMode,
+} from "@/lib/shared/jobRelevance";
 
 export const FETCH_RUN_CONFIG_SCHEMA_VERSION = 1 as const;
 
@@ -40,6 +44,12 @@ export const AuFetchRunConfigV1Schema = z
     resultsWanted: OptionalResultsWantedSchema,
     smartExpand: z.boolean(),
     includeFromQueries: z.boolean(),
+    /**
+     * How hard the title filter presses. Optional so rows persisted before
+     * this field still parse; `resolveTitleMatchMode` derives it from the
+     * legacy boolean when absent.
+     */
+    titleMatch: z.enum(TITLE_MATCH_MODES).optional(),
     applyExcludes: z.boolean(),
     excludeTitleTerms: z.array(z.string().trim().min(1).max(40)).max(24),
     excludeDescriptionRules: z
@@ -82,6 +92,12 @@ export const GlobalFetchRunConfigV1Schema = z
     resultsWanted: OptionalResultsWantedSchema,
     smartExpand: z.boolean(),
     includeFromQueries: z.boolean(),
+    /**
+     * How hard the title filter presses. Optional so rows persisted before
+     * this field still parse; `resolveTitleMatchMode` derives it from the
+     * legacy boolean when absent.
+     */
+    titleMatch: z.enum(TITLE_MATCH_MODES).optional(),
     applyExcludes: z.boolean(),
     excludeTitleTerms: z.array(z.string().trim().min(1).max(40)).max(24),
     excludeDescriptionRules: z
@@ -401,6 +417,10 @@ function legacySearchConfigFields(
       input.resultsWanted,
     ),
     includeFromQueries,
+    titleMatch: resolveTitleMatchMode({
+      titleMatch: raw.titleMatch,
+      includeFromQueries,
+    }),
     applyExcludes,
     excludeTitleTerms: applyExcludes ? uniqueStrings(raw.excludeTitleTerms) : [],
     excludeDescriptionRules: applyExcludes

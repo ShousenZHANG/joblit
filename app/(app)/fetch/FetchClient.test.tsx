@@ -227,14 +227,17 @@ describe("FetchClient", () => {
     expect(body.sourceOptions).toBeUndefined();
   });
 
-  it("sends includeFromQueries=false once strict title match is switched off", async () => {
+  // The old control was a checkbox whose "off" state meant "skip the include
+  // filter" to the AU worker and "loosen the include filter" to the GLOBAL
+  // processor. One click produced different amounts from the two markets with
+  // nothing on screen to say why, so the states are now named.
+  async function submitWithTitleMatch(mode: "Strict" | "Relaxed" | "Off") {
     const user = userEvent.setup();
-
     renderFetch();
 
     const titleInput = screen.getAllByPlaceholderText(/e\.g\. software engineer/i)[0];
     fireEvent.change(titleInput, { target: { value: "AI Engineer" } });
-    await user.click(screen.getByTestId("strict-titles-chip"));
+    await user.click(screen.getByRole("radio", { name: mode }));
     await user.click(screen.getByRole("button", { name: /start fetch/i }));
 
     await waitFor(() => {
@@ -247,9 +250,30 @@ describe("FetchClient", () => {
     const createCall = fetchMock.mock.calls.find(
       ([url, init]) => url === "/api/fetch-runs" && init?.method === "POST",
     );
-    const body = JSON.parse(String(createCall?.[1]?.body ?? "{}"));
+    return JSON.parse(String(createCall?.[1]?.body ?? "{}"));
+  }
 
-    expect(body.includeFromQueries).toBe(false);
+  it("sends the selected title match mode", async () => {
+    expect(await submitWithTitleMatch("Off")).toMatchObject({
+      titleMatch: "off",
+      // The legacy boolean still ships for FetchRun rows and the AU worker's
+      // compatibility projection.
+      includeFromQueries: false,
+    });
+  });
+
+  it("sends relaxed without claiming the filter is off", async () => {
+    expect(await submitWithTitleMatch("Relaxed")).toMatchObject({
+      titleMatch: "relaxed",
+      includeFromQueries: true,
+    });
+  });
+
+  it("defaults to strict", async () => {
+    expect(await submitWithTitleMatch("Strict")).toMatchObject({
+      titleMatch: "strict",
+      includeFromQueries: true,
+    });
   });
 
   it("optionally adds a filtered GLOBAL run and tracks both source lanes", async () => {

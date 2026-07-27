@@ -156,6 +156,31 @@ batch receipt, counters, and terminal projection while holding `FRUN → JOBJ`
 locks. Cancellation competes for `FRUN`: it stops future commits but never
 pretends that receipt-backed Jobs were rolled back. See **ADR-0008**.
 
+### Title Match
+
+How hard the Fetch Pipeline's title filter presses. `strict | relaxed | off`.
+
+- **strict** — the title must answer one of the requested queries.
+- **relaxed** — also keeps a sibling role inside the base query's domain.
+- **off** — no title filter. Quality gates, location and freshness still apply.
+
+This replaces the `includeFromQueries` boolean, which the AU worker read as
+"skip the include filter" and the GLOBAL processor read as "apply a looser
+one", while a single UI control sent the same value to both. Both readings had
+a cause — AU searches through a job board that has already matched the terms
+upstream, GLOBAL reads feeds that return their whole catalogue — so the states
+are named rather than guessed. The boolean is still persisted for the AU
+worker's legacy projection; `resolveTitleMatchMode` derives the mode from it
+when the field is absent.
+
+The rules themselves live in `lib/shared/jobRelevance.ts` and
+`tools/fetcher/run_jobspy.py`, which read one vocabulary from the `relevance`
+block of `fetchRolePacks.config.json` and are held to one behaviour by
+`test/fetchRelevance.corpus.json`. Seniority words (`senior`, `lead`,
+`principal`, `staff`, …) are stripped before matching: they state a level, not
+a domain, and treating one as a required title signal made a search for
+"Senior AI Engineer" return strictly fewer roles than "AI Engineer".
+
 ### Skill Pack
 
 The downloadable V3 distribution of the user's active effective prompt rules,

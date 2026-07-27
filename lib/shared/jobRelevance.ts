@@ -22,6 +22,47 @@ import manifest from "@/lib/shared/fetchRolePacks.config.json";
  * shrinking somebody's job list.
  */
 
+/**
+ * How hard the title filter presses.
+ *
+ * This replaces a boolean that meant two different things. `includeFromQueries`
+ * was read by the AU worker as "skip the include filter entirely" and by the
+ * GLOBAL processor as "apply a looser include filter", and one checkbox sent
+ * the same value to both — so unticking it produced different amounts from the
+ * two markets with nothing in the UI to explain why.
+ *
+ * The two readings each had a cause. AU searches through a job board, which has
+ * already matched the search terms upstream, so dropping the include filter
+ * still returns term-relevant rows. GLOBAL reads public feeds that return their
+ * whole catalogue, so dropping it returns everything. Naming all three states
+ * lets each market implement the user's intent honestly instead of guessing.
+ */
+export const TITLE_MATCH_MODES = ["strict", "relaxed", "off"] as const;
+export type TitleMatchMode = (typeof TITLE_MATCH_MODES)[number];
+
+export function isTitleMatchMode(value: unknown): value is TitleMatchMode {
+  return (
+    typeof value === "string" &&
+    (TITLE_MATCH_MODES as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * Read the mode from a stored config, falling back to the legacy boolean.
+ *
+ * Legacy `false` maps to `off` because that is what the UI promised — the
+ * control read "Strict title match … turn off to cast a wider net" — and what
+ * AU already did. GLOBAL becomes wider on those rows, which is the direction
+ * the setting always claimed to move.
+ */
+export function resolveTitleMatchMode(input: {
+  titleMatch?: unknown;
+  includeFromQueries?: unknown;
+}): TitleMatchMode {
+  if (isTitleMatchMode(input.titleMatch)) return input.titleMatch;
+  return input.includeFromQueries === false ? "off" : "strict";
+}
+
 type CompoundFamily = { triggers: string[]; members: string[] };
 
 type RelevanceManifest = {
