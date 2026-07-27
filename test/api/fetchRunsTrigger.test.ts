@@ -443,7 +443,6 @@ describe("fetch run trigger api", () => {
       discovered: 3,
       imported: 2,
     });
-    expect(fetchRunStore.countInTx).toHaveBeenCalledTimes(4);
     expect(fetchRunStore.expireInTx).toHaveBeenCalledWith({
       where: {
         id: RUN_ID,
@@ -494,73 +493,6 @@ describe("fetch run trigger api", () => {
         attemptId: resumedAttemptId,
       },
     );
-  });
-
-  it("counts a stale RUNNING reactivation as new active capacity", async () => {
-    mockAuthedUser("inline-stale-quota-user");
-    mockLockAcquired(true);
-    fetchRunStore.findFirstInTx.mockResolvedValueOnce({
-      id: RUN_ID,
-      status: "RUNNING",
-      market: "GLOBAL",
-      updatedAt: new Date("2020-01-01T00:00:00.000Z"),
-      executionAttemptId: "11111111-1111-4111-8111-111111111111",
-      executionLeaseExpiresAt: new Date("2020-01-01T00:01:00.000Z"),
-      queries: {
-        queries: ["AI Engineer"],
-        sources: ["remoteok"],
-        dispatchMeta: { inFlightAt: "2020-01-01T00:00:00.000Z" },
-      },
-    });
-    fetchRunStore.countInTx.mockResolvedValueOnce(2);
-
-    const res = await POST(
-      new Request(`http://localhost/api/fetch-runs/${RUN_ID}/trigger`, {
-        method: "POST",
-      }),
-      { params: Promise.resolve({ id: RUN_ID }) },
-    );
-
-    expect(res.status).toBe(429);
-    await expect(res.json()).resolves.toMatchObject({
-      error: { code: "FETCH_RUN_QUOTA_EXCEEDED" },
-    });
-    expect(fetchRunStore.expireInTx).not.toHaveBeenCalled();
-    expect(commitHarness.commitFetchRun).not.toHaveBeenCalled();
-  });
-
-  it("returns 429 without claiming or dispatching when persistent active quota is exceeded", async () => {
-    mockAuthedUser();
-    mockLockAcquired(true);
-    fetchRunStore.findFirstInTx.mockResolvedValueOnce({
-      id: RUN_ID,
-      status: "QUEUED",
-      market: "AU",
-      queries: { title: "SWE", queries: ["SWE"] },
-    });
-    fetchRunStore.countInTx.mockResolvedValueOnce(3);
-
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-
-    const res = await POST(
-      new Request(`http://localhost/api/fetch-runs/${RUN_ID}/trigger`, { method: "POST" }),
-      { params: Promise.resolve({ id: RUN_ID }) },
-    );
-
-    expect(res.status).toBe(429);
-    expect(res.headers.get("Retry-After")).toBe("30");
-    await expect(res.json()).resolves.toEqual({
-      error: {
-        code: "FETCH_RUN_QUOTA_EXCEEDED",
-        message: "Free fetch capacity is busy right now. Try again shortly.",
-        reason: "USER_ACTIVE_LIMIT",
-        limit: 2,
-      },
-    });
-    expect(fetchRunStore.expireInTx).not.toHaveBeenCalled();
-    expect(fetchRunStore.updateMany).not.toHaveBeenCalled();
-    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("marks the run failed when GitHub rejects the dispatch", async () => {

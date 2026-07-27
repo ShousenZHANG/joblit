@@ -537,11 +537,17 @@ describe("fetch runs create api", () => {
     expect(payload.sourceOptions).toBeUndefined();
   });
 
-  it("returns a structured 429 without creating when persistent quota is exhausted", async () => {
+  // The quota is gone. It was sized for one FetchRun per fetch, but a submit
+  // with global feeds enabled creates two — so one click consumed the entire
+  // per-user active allowance of 2, and the hourly allowance of 6 permitted
+  // three fetches an hour. It also reported all four of its limits with one
+  // message, so a user could not tell whether to wait thirty seconds or an
+  // hour, or whether the limit was theirs or the platform's.
+  it("creates a run regardless of how many are already active", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "user-1", email: "user@example.com" },
     });
-    fetchRunStore.count.mockResolvedValueOnce(2);
+    fetchRunStore.count.mockResolvedValue(99);
 
     const res = await POST(
       new Request("http://localhost/api/fetch-runs", {
@@ -550,16 +556,7 @@ describe("fetch runs create api", () => {
       }),
     );
 
-    expect(res.status).toBe(429);
-    expect(res.headers.get("Retry-After")).toBe("30");
-    await expect(res.json()).resolves.toEqual({
-      error: {
-        code: "FETCH_RUN_QUOTA_EXCEEDED",
-        message: "Free fetch capacity is busy right now. Try again shortly.",
-        reason: "USER_ACTIVE_LIMIT",
-        limit: 2,
-      },
-    });
-    expect(fetchRunStore.create).not.toHaveBeenCalled();
+    expect(res.status).toBe(201);
+    expect(fetchRunStore.create).toHaveBeenCalled();
   });
 });

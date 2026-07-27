@@ -687,7 +687,6 @@ export function FetchClient() {
   }
 
   function getApiErrorMessage(res: Response, json: unknown, fallback: string) {
-    if (res.status === 429) return t("capacityLimited");
     if (!json || typeof json !== "object" || Array.isArray(json)) return fallback;
     const error = (json as { error?: unknown }).error;
     if (error && typeof error === "object" && !Array.isArray(error)) {

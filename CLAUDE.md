@@ -103,7 +103,21 @@ Path alias `@/*` maps to the project root. Import as `@/lib/...`, `@/app/...`, `
 
 Required: `DATABASE_URL`, `AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_ID`, `GITHUB_SECRET`, `FETCH_RUN_SECRET`, `APP_ENC_KEY` (base64), `LATEX_RENDER_URL`, `LATEX_RENDER_TOKEN`
 
-Optional: `GEMINI_API_KEY`, `GEMINI_MODEL`, `BLOB_READ_WRITE_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_TOKEN`, `GITHUB_WORKFLOW_FILE`, `JOBLIT_WEB_URL`, `YOUTUBE_API_KEY`, `CRON_SECRET`, `RSSHUB_URL`, `RSSHUB_JOB_ROUTES`, `GITHUB_CN_JOB_REPOS`
+Optional: `DIRECT_URL`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `BLOB_READ_WRITE_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_TOKEN`, `GITHUB_WORKFLOW_FILE`, `JOBLIT_WEB_URL`, `YOUTUBE_API_KEY`, `CRON_SECRET`, `RSSHUB_URL`, `RSSHUB_JOB_ROUTES`, `GITHUB_CN_JOB_REPOS`
+
+`DIRECT_URL` is the **unpooled** database endpoint, used only by
+`prisma migrate deploy`. Migrate serialises itself with a session-scoped
+advisory lock; a transaction-mode pooler hands each statement to a different
+backend, so migrate never sees its own lock and the deploy dies after ten
+seconds with `Timed out trying to acquire a postgres advisory lock (SELECT
+pg_advisory_lock(72707369))` — followed by a misleading "make sure your
+database server is running". On Neon this is the same URL as `DATABASE_URL`
+without the `-pooler` host suffix. `DATABASE_URL` stays pooled: that is what
+the serverless runtime wants, and the app's own locks are transaction-scoped.
+
+`tools/deploy/vercel-build.mjs` refuses to start a production migration when
+the resolved URL still looks pooled, so this fails with the cause named rather
+than as a lock timeout.
 
 `LATEX_RENDER_ALLOW_INSECURE_HTTP=true` lets `LATEX_RENDER_URL` be a plain-http
 endpoint. `LATEX_RENDER_TOKEN` is sent as a request header, so this puts a

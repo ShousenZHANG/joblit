@@ -6,7 +6,7 @@ import { prisma } from "@/lib/server/prisma";
 import {
   FETCH_RUN_STALE_ERROR,
   fetchRunStaleCutoff,
-} from "@/lib/server/fetchRuns/fetchRunQuota";
+} from "@/lib/server/fetchRuns/fetchRunStale";
 import {
   FETCH_RUN_COMMIT_PROTOCOL,
   FetchRunCommitError,

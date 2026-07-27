@@ -1,11 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@/lib/generated/prisma";
 import { tryAcquireFetchRunDispatchLock } from "./fetchRunLifecycleLock";
-import {
-  checkFetchRunQuota,
-  fetchRunStaleCutoff,
-} from "./fetchRunQuota";
-import type { FetchRunQuotaViolation } from "./fetchRunQuota";
 import { prisma } from "@/lib/server/prisma";
 import { INLINE_FETCH_RUN_EXECUTION_LEASE_MS } from "@/lib/shared/fetchRunProtocol";
 import {
@@ -37,11 +32,9 @@ interface TriggerClaimContext {
   request: TriggerClaimRequest;
   run: ClaimableFetchRun;
   meta: ReturnType<typeof readFetchRunDispatchMeta>;
-  now: Date;
   nowMs: number;
   claimedAt: string;
   attemptId: string;
-  quotaMode: "trigger" | "reactivate";
 }
 
 export interface LockedTriggerClaim {
@@ -63,7 +56,6 @@ export type TriggerClaimResult =
   | { kind: "already_dispatched" }
   | { kind: "state_changed" }
   | { kind: "invalid_state"; status: string }
-  | { kind: "quota"; quotaViolation: FetchRunQuotaViolation }
   | {
       kind: "idempotent_replay";
       alreadyDispatched: boolean;
@@ -106,12 +98,9 @@ function createTriggerClaimContext(
     request,
     run,
     meta: readFetchRunDispatchMeta(run.queries),
-    now,
     nowMs: now.getTime(),
     claimedAt: now.toISOString(),
     attemptId: randomUUID(),
-    quotaMode:
-      run.updatedAt < fetchRunStaleCutoff(now) ? "reactivate" : "trigger",
   };
 }
 
@@ -149,7 +138,7 @@ async function claimRunningInlineRun(
   tx: Prisma.TransactionClient,
   context: TriggerClaimContext,
 ): Promise<TriggerClaimResult> {
-  const { run, meta, now, nowMs } = context;
+  const { run, meta, nowMs } = context;
   const hasFreshProtocolLease =
     run.executionLeaseExpiresAt instanceof Date &&
     run.executionLeaseExpiresAt.getTime() > nowMs;
@@ -159,14 +148,6 @@ async function claimRunningInlineRun(
   if (hasFreshProtocolLease || hasRollingUpgradeLease) {
     return { kind: "already_dispatched" };
   }
-
-  const quotaViolation = await checkFetchRunQuota(
-    tx,
-    context.request.userId,
-    context.quotaMode,
-    now,
-  );
-  if (quotaViolation) return { kind: "quota", quotaViolation };
 
   const claimedQueries = withFetchRunDispatchMeta(run.queries, {
     inFlightAt: context.claimedAt,
@@ -213,7 +194,7 @@ async function claimQueuedRun(
   tx: Prisma.TransactionClient,
   context: TriggerClaimContext,
 ): Promise<TriggerClaimResult> {
-  const { run, meta, now, nowMs } = context;
+  const { run, meta, nowMs } = context;
   const hasDispatchClaim = Boolean(meta.dispatchedAt || meta.inFlightAt);
   const reclaimableInlineClaim =
     hasDispatchClaim &&
@@ -227,14 +208,6 @@ async function claimQueuedRun(
   if (hasDispatchClaim && !reclaimableInlineClaim) {
     return { kind: "already_dispatched" };
   }
-
-  const quotaViolation = await checkFetchRunQuota(
-    tx,
-    context.request.userId,
-    context.quotaMode,
-    now,
-  );
-  if (quotaViolation) return { kind: "quota", quotaViolation };
 
   const claimedQueries = withFetchRunDispatchMeta(run.queries, {
     inFlightAt: context.claimedAt,

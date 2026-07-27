@@ -2,6 +2,7 @@
 // npm install --save-dev prisma dotenv
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
+import { resolveMigrationUrl } from "./tools/deploy/migrationUrl.mjs";
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
@@ -9,6 +10,10 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    // Migrate serialises itself with a session-scoped advisory lock, which a
+    // transaction-mode pooler cannot hold across statements — every deploy then
+    // times out acquiring pg_advisory_lock(72707369). Point DIRECT_URL at the
+    // unpooled endpoint; without it this falls back to DATABASE_URL as before.
+    url: resolveMigrationUrl(process.env),
   },
 });

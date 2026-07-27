@@ -13,7 +13,6 @@ import {
   executeInlineFetchRun,
   type InlineFetchRunExecutionOutcome,
 } from "@/lib/server/fetchRuns/executeInlineFetchRun";
-import { fetchRunQuotaExceededResponse } from "@/lib/server/fetchRuns/fetchRunQuota";
 import {
   claimFetchRunDispatch,
   isInlineTriggerClaim,
@@ -56,8 +55,6 @@ function rejectedClaimResponse(
         409,
         { details: { status: result.status } },
       );
-    case "quota":
-      return fetchRunQuotaExceededResponse(result.quotaViolation);
   }
 }
 
