@@ -1,4 +1,5 @@
 import { canonicalizeJobUrl } from "@/lib/shared/canonicalizeJobUrl";
+import { isTitleRelevant } from "@/lib/shared/jobRelevance";
 import type { RawCnJob } from "./types";
 
 // Normalization layer: RawCnJob[] → insert-ready rows for prisma.job.createMany.
@@ -7,7 +8,10 @@ import type { RawCnJob } from "./types";
 //     across sources that link to the same posting with different tags.
 //   - Tightening location / jobType / jobLevel strings (trim, cap length).
 //   - Applying keyword include/exclude filters supplied by the user's
-//     FetchRun config.
+//     FetchRun config. Title relevance itself belongs to
+//     lib/shared/jobRelevance, which every market shares; this module kept a
+//     partial port of it that had no domain synonym classes, so a CN query
+//     matched only titles repeating its own literal tokens.
 //   - Running cross-source dedup by canonical URL.
 //
 // Pure TypeScript — no I/O. Safe to unit-test.
@@ -37,58 +41,6 @@ export interface NormalizedCnJob {
 
 const MAX_FIELD_LEN = 200;
 const MAX_DESC_LEN = 8000;
-const ROLE_TOKENS = new Set([
-  "architect",
-  "developer",
-  "development",
-  "engineer",
-  "engineering",
-  "programmer",
-]);
-const ROLE_NOISE_TOKENS = new Set([
-  "entry",
-  "graduate",
-  "head",
-  "junior",
-  "lead",
-  "level",
-  "mid",
-  "principal",
-  "senior",
-  "staff",
-]);
-const CJK_ROLE_TERMS = [
-  "开发工程师",
-  "软件工程师",
-  "开发人员",
-  "技术专家",
-  "工程师",
-  "程序员",
-  "架构师",
-  "开发者",
-  "设计师",
-  "分析师",
-  "经理",
-  "顾问",
-  "专员",
-  "开发",
-] as const;
-const CJK_ROLE_NOISE_TERMS = [
-  "高级",
-  "资深",
-  "初级",
-  "中级",
-  "首席",
-  "应届",
-  "校招",
-] as const;
-
-// Common Chinese job-title suffixes. Chinese recruitment posts almost
-// always use short-form titles ("前端", "后端", "全栈") inside bracket
-// tags like [Acme][前端][上海], but users type the long formal name
-// ("全栈开发工程师") into the keyword box. Without expansion the include
-// filter drops everything. We strip trailing suffixes so a query like
-// "全栈开发工程师" also matches "全栈" anywhere in title/description.
 const CN_TITLE_SUFFIXES = [
   "开发工程师",
   "高级工程师",
@@ -157,61 +109,6 @@ function containsAny(
 ): boolean {
   if (needles.length === 0) return false;
   return needles.some((needle) => containsTerm(haystack, needle));
-}
-
-function normalizeRoleText(value: string): string {
-  return value
-    .normalize("NFKC")
-    .toLowerCase()
-    .replace(/\bfront[\s-]*end\b/gu, "frontend")
-    .replace(/\bback[\s-]*end\b/gu, "backend")
-    .replace(/\bfull[\s-]*stack\b/gu, "fullstack")
-    .replace(/\bml\b/gu, "machine learning");
-}
-
-function roleTokens(value: string): string[] {
-  return normalizeRoleText(value).match(/[a-z][a-z0-9+#.]*/gu) ?? [];
-}
-
-function hasRoleMarker(value: string): boolean {
-  const normalized = normalizeRoleText(value);
-  return (
-    roleTokens(normalized).some((token) => ROLE_TOKENS.has(token)) ||
-    CJK_ROLE_TERMS.some((term) => normalized.includes(term))
-  );
-}
-
-function asciiRoleSignals(value: string): string[] {
-  return roleTokens(value).filter(
-    (token) => !ROLE_TOKENS.has(token) && !ROLE_NOISE_TOKENS.has(token),
-  );
-}
-
-function cjkRoleSignals(value: string): string[] {
-  let normalized = normalizeRoleText(value).replace(
-    /[a-z][a-z0-9+#.]*/gu,
-    " ",
-  );
-  for (const term of [...CJK_ROLE_TERMS, ...CJK_ROLE_NOISE_TERMS]) {
-    normalized = normalized.replaceAll(term, " ");
-  }
-  return normalized.match(/[\u3400-\u9fff]+/gu) ?? [];
-}
-
-function isTitleRelevant(title: string, queries: readonly string[]): boolean {
-  return queries.some((query) => {
-    if (containsTerm(title, query)) return true;
-    if (!hasRoleMarker(query) || !hasRoleMarker(title)) return false;
-
-    const asciiSignals = asciiRoleSignals(query);
-    const cjkSignals = cjkRoleSignals(query);
-    if (asciiSignals.length === 0 && cjkSignals.length === 0) return false;
-    if (!asciiSignals.every((signal) => containsTerm(title, signal))) {
-      return false;
-    }
-    const normalizedTitle = normalizeRoleText(title);
-    return cjkSignals.every((signal) => normalizedTitle.includes(signal));
-  });
 }
 
 function normalizeListingDate(value: string | null | undefined): string | null {
