@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ArrowLeft, ArrowRight, RotateCcw, X } from "lucide-react";
-import { fetchJson, ApiError } from "@/lib/api/fetchJson";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
 import { cn } from "@/lib/utils";
 import {
@@ -25,6 +24,13 @@ import { CoverParagraphsSection } from "./CoverParagraphsSection";
 import { PdfPreview } from "./PdfPreview";
 import { ConflictDialog } from "./ConflictDialog";
 import { ReviewGateCard } from "./ReviewGateCard";
+import {
+  discardDraft,
+  extractMessage,
+  finalizeApplication,
+  renderPreview,
+} from "./tailorActions";
+import { useUnsavedChangesGuard } from "./useUnsavedChangesGuard";
 
 type DocTab = "resume" | "cover";
 type ViewTab = "edit" | "preview";
@@ -85,19 +91,9 @@ export function TailorClient({
   const showConflictDialog =
     draft.saveStatus.kind === "error" && draft.saveStatus.conflict === true;
 
-  // Beforeunload guard: only warn if there are pending unsaved edits.
-  useEffect(() => {
-    function onBeforeUnload(e: BeforeUnloadEvent) {
-      if (
-        draft.saveStatus.kind === "dirty" ||
-        draft.saveStatus.kind === "saving"
-      ) {
-        e.preventDefault();
-      }
-    }
-    window.addEventListener("beforeunload", onBeforeUnload);
-    return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [draft.saveStatus]);
+  useUnsavedChangesGuard(
+    draft.saveStatus.kind === "dirty" || draft.saveStatus.kind === "saving",
+  );
 
   // Preview renders produce object URLs; release whichever is still held when
   // the page goes away. Committed artifacts are ordinary https URLs and are
@@ -129,18 +125,7 @@ export function TailorClient({
 
   async function callFinalize(target: DocTab) {
     const expectedHash = await draft.flushNow();
-    const json = await fetchJson<undefined>(
-      `/api/applications/${applicationId}/finalize?target=${target}`,
-      {
-        method: "POST",
-        body: JSON.stringify({ expectedHash }),
-      },
-    );
-    return json as {
-      status: "FINAL";
-      resumePdfUrl?: string;
-      coverPdfUrl?: string;
-    };
+    return finalizeApplication({ applicationId, target, expectedHash });
   }
 
   /**
@@ -156,21 +141,12 @@ export function TailorClient({
     setIsRefreshing(true);
     try {
       const expectedHash = await draft.flushNow();
-      const response = await fetch(
-        `/api/applications/${applicationId}/preview?target=${docTab}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ expectedHash }),
-        },
-      );
-      if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as
-          | { error?: { message?: string } }
-          | null;
-        throw new Error(body?.error?.message ?? t("refreshFailed"));
-      }
-      const objectUrl = URL.createObjectURL(await response.blob());
+      const objectUrl = await renderPreview({
+        applicationId,
+        target: docTab,
+        expectedHash,
+        fallbackMessage: t("refreshFailed"),
+      });
       if (docTab === "resume") {
         setResumePdf((previous) => {
           if (previous?.startsWith("blob:")) URL.revokeObjectURL(previous);
@@ -224,14 +200,7 @@ export function TailorClient({
     setIsDiscarding(true);
     try {
       const expectedHash = await draft.flushNow();
-      const json = await fetchJson<undefined>(
-        `/api/applications/${applicationId}/discard`,
-        {
-          method: "POST",
-          body: JSON.stringify({ expectedHash }),
-        },
-      );
-      const data = json as { aiContent: AiContent; aiContentHash: string };
+      const data = await discardDraft({ applicationId, expectedHash });
       draft.replaceFromServer(data.aiContent, data.aiContentHash);
       setStatus("DRAFT");
     } catch (err: unknown) {
@@ -550,8 +519,3 @@ function StatusPill({
   );
 }
 
-function extractMessage(err: unknown, fallback: string): string {
-  if (err instanceof ApiError) return err.message;
-  if (err instanceof Error) return err.message;
-  return fallback;
-}

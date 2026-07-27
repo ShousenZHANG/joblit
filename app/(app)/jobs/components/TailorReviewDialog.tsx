@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { fetchJson, ApiError } from "@/lib/api/fetchJson";
+import { ApiError } from "@/lib/api/fetchJson";
 import { buildPdfFilename } from "@/lib/shared/pdfFilename";
 import {
   applicationReviewSchema,
@@ -20,6 +20,14 @@ import {
 import { cn } from "@/lib/utils";
 import { BulletsSection } from "../[id]/tailor/BulletsSection";
 import { ConflictDialog } from "../[id]/tailor/ConflictDialog";
+import {
+  discardDraft,
+  extractMessage,
+  finalizeApplication,
+  isAbortError,
+  renderPreview as requestPreviewRender,
+} from "../[id]/tailor/tailorActions";
+import { useUnsavedChangesGuard } from "../[id]/tailor/useUnsavedChangesGuard";
 import { CoverParagraphsSection } from "../[id]/tailor/CoverParagraphsSection";
 import { PdfPreview } from "../[id]/tailor/PdfPreview";
 import { ReviewGateCard } from "../[id]/tailor/ReviewGateCard";
@@ -184,6 +192,13 @@ function TailorReviewDialogBody({
   const showConflictDialog =
     draft.saveStatus.kind === "error" && draft.saveStatus.conflict === true;
 
+  // This dialog autosaves on a debounce exactly like the route page, so it has
+  // the same window where closing the tab loses edits. Only the route page
+  // warned about it.
+  useUnsavedChangesGuard(
+    draft.saveStatus.kind === "dirty" || draft.saveStatus.kind === "saving",
+  );
+
   useEffect(() => {
     latestHashRef.current = draft.currentHash;
   }, [draft.currentHash]);
@@ -232,23 +247,12 @@ function TailorReviewDialogBody({
 
   const callFinalize = useCallback(async () => {
     const expectedHash = await flushDraftNow();
-    const json = await fetchJson<undefined>(
-      `/api/applications/${initialDraft.applicationId}/finalize?target=${target}`,
-      {
-        method: "POST",
-        body: JSON.stringify({ expectedHash }),
-      },
-    );
-    return {
+    const data = await finalizeApplication({
+      applicationId: initialDraft.applicationId,
+      target,
       expectedHash,
-      data: json as {
-        status: "FINAL";
-        resumePdfUrl?: string;
-        resumePdfName?: string;
-        coverPdfUrl?: string;
-        coverPdfName?: string;
-      },
-    };
+    });
+    return { expectedHash, data };
   }, [flushDraftNow, initialDraft.applicationId, target]);
 
   const callPreview = useCallback(async () => {
@@ -256,44 +260,13 @@ function TailorReviewDialogBody({
     const controller = new AbortController();
     previewAbortRef.current = controller;
     try {
-      const response = await fetch(
-        `/api/applications/${initialDraft.applicationId}/preview?target=${target}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ expectedHash }),
-          signal: controller.signal,
-        },
-      );
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null);
-        const baseMessage =
-          payload &&
-          typeof payload === "object" &&
-          "error" in payload &&
-          payload.error &&
-          typeof payload.error === "object" &&
-          "message" in payload.error &&
-          typeof payload.error.message === "string"
-            ? payload.error.message
-            : "Preview render failed";
-        const retryAfterSeconds = parseRetryAfterSeconds(
-          response.headers.get("Retry-After"),
-        );
-        const retryMessage =
-          response.status === 429 && retryAfterSeconds !== null
-            ? ` Try again in ${retryAfterSeconds} seconds.`
-            : "";
-        throw new Error(`${baseMessage}${retryMessage}`);
-      }
-      const blob = await response.blob();
-      if (blob.type !== "application/pdf") {
-        throw new Error("Preview service returned an invalid document");
-      }
-      return {
+      const objectUrl = await requestPreviewRender({
+        applicationId: initialDraft.applicationId,
+        target,
         expectedHash,
-        objectUrl: URL.createObjectURL(blob),
-      };
+        signal: controller.signal,
+      });
+      return { expectedHash, objectUrl };
     } finally {
       if (previewAbortRef.current === controller) {
         previewAbortRef.current = null;
@@ -508,14 +481,10 @@ function TailorReviewDialogBody({
     setIsDiscarding(true);
     try {
       const expectedHash = await flushDraftNow();
-      const json = await fetchJson<undefined>(
-        `/api/applications/${initialDraft.applicationId}/discard`,
-        {
-          method: "POST",
-          body: JSON.stringify({ expectedHash }),
-        },
-      );
-      const data = json as { aiContent: AiContent; aiContentHash: string };
+      const data = await discardDraft({
+        applicationId: initialDraft.applicationId,
+        expectedHash,
+      });
       draft.replaceFromServer(data.aiContent, data.aiContentHash);
       setStatus("DRAFT");
     } catch (err: unknown) {
@@ -708,11 +677,6 @@ function StatusPill({ status }: { status: "DRAFT" | "FINAL" }) {
   );
 }
 
-function extractMessage(err: unknown, fallback: string): string {
-  if (err instanceof ApiError) return err.message;
-  if (err instanceof Error) return err.message;
-  return fallback;
-}
 
 /**
  * A blocked finalize carries the whole review — which claims lack evidence,
@@ -728,14 +692,4 @@ function extractBlockedReview(err: unknown): AiApplicationReview | null {
   return parsed.success ? parsed.data : null;
 }
 
-function isAbortError(err: unknown): boolean {
-  return err instanceof DOMException
-    ? err.name === "AbortError"
-    : err instanceof Error && err.name === "AbortError";
-}
 
-function parseRetryAfterSeconds(value: string | null): number | null {
-  if (!value) return null;
-  const seconds = Number.parseInt(value, 10);
-  return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
-}
