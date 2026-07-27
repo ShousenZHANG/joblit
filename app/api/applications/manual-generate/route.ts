@@ -360,14 +360,12 @@ export async function POST(req: Request) {
     );
   }
 
-  if (finalize && artifact.aiContent.review?.verdict === "blocked") {
-    return errorJson(
-      "APPLICATION_REVIEW_BLOCKED",
-      "The draft contains claims that are not grounded in the master resume.",
-      422,
-      { details: artifact.aiContent.review, requestId },
-    );
-  }
+  // The grounding gate lives at the commit boundary, which reviews the merged
+  // CV + Cover snapshot. There used to be a pre-emptive check here, reading a
+  // review that acceptApplicationGeneration had built over ONE target with the
+  // other half still empty — a different snapshot answering the same question.
+  // commitApplicationArtifact returns review_blocked and the FINAL path already
+  // handles it.
   const reviewContext = {
     scopeKey: userId,
     resumeSnapshot: { profile, renderInput },

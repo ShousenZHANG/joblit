@@ -65,9 +65,15 @@ each target when known: `generatedAt`, `promptMetaHash`, and source. The legacy
 root `generatedAt`, `promptMetaHash`, and optional `source` describe the latest
 whole import only and must not be attributed to a preserved target.
 
-Evidence and review remain aggregate-wide. After a target replacement or an
-evidence-aware Edit/discard, the server rebuilds evidence and reviews the
-combined CV + Cover snapshot before persistence. The browser may change only
+Evidence and review remain aggregate-wide, and are built **exactly once** per
+request, at the merge. After a target replacement or an evidence-aware
+Edit/discard, the server rebuilds evidence and reviews the combined CV + Cover
+snapshot before persistence.
+
+The generation-acceptance seam deliberately produces no review. A proposal for
+one target, judged while the other target is still empty, is a different
+snapshot from the document that gets persisted, so gating on it asked the
+grounding question of the wrong content. The browser may change only
 `accepted` and `userEdit`.
 
 Captures:

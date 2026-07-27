@@ -1,4 +1,3 @@
-import { attachEvidenceAndReview } from "@/lib/server/ai/evidenceLedger";
 import { buildCoverEvidenceContext } from "@/lib/server/ai/coverContext";
 import { evaluateCoverQuality } from "@/lib/server/ai/coverQuality";
 import { buildResumePromptSnapshot } from "@/lib/server/ai/resumePromptSnapshot";
@@ -274,28 +273,13 @@ function buildGenerationMetadata(
   };
 }
 
-function attachGenerationEvidence(
-  input: AcceptApplicationGenerationInput,
-  aiContent: AiContent,
-): AiContent {
-  return attachEvidenceAndReview({
-    scopeKey: input.evidenceScopeKey,
-    resumeSnapshot: {
-      profile: input.profile,
-      renderInput: input.master,
-    },
-    jobDescription: input.job.description,
-    aiContent,
-  });
-}
-
 function buildResumeAiContent(
   input: AcceptApplicationGenerationInput,
   cvSummary: string,
   addedBullets: AiAddedBullet[],
 ): AiContent {
   const generatedAt = new Date().toISOString();
-  return attachGenerationEvidence(input, {
+  return {
     ...buildGenerationMetadata(input, "resume", generatedAt),
     cv: {
       summary: {
@@ -309,7 +293,7 @@ function buildResumeAiContent(
       },
     },
     cover: emptyCover(),
-  });
+  };
 }
 
 function tooManyAddedBullets(): RejectedApplicationGeneration {
@@ -396,7 +380,7 @@ function buildCoverAiContent(
   cover: DecodedCoverOutput["data"]["cover"],
 ): AiContent {
   const generatedAt = new Date().toISOString();
-  return attachGenerationEvidence(input, {
+  return {
     ...buildGenerationMetadata(input, "cover", generatedAt),
     cv: {
       summary: {
@@ -414,7 +398,7 @@ function buildCoverAiContent(
       paragraphTwo: { aiText: cover.paragraphTwo, accepted: true },
       paragraphThree: { aiText: cover.paragraphThree, accepted: true },
     },
-  });
+  };
 }
 
 function acceptCoverGeneration(

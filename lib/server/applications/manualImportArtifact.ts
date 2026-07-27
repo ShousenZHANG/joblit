@@ -46,8 +46,12 @@ function parseFilename(candidate: string, role: string, target: ManualImportTarg
 
 /**
  * Rendering adapter retained for the manual-generate route. Generation output
- * parsing, normalization, Quality Gates, provenance, evidence, and canonical
- * AI Content construction belong to acceptApplicationGeneration.
+ * parsing, normalization, Quality Gates, provenance and canonical AI Content
+ * construction belong to acceptApplicationGeneration.
+ *
+ * Evidence and review do not: they describe the merged CV + Cover document, so
+ * they are built once at the commit boundary. The AI Content returned here
+ * carries no review, and no caller should gate on one.
  *
  * The authoritative decode policy is derived from `source`; callers cannot
  * select a more permissive dialect.

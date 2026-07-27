@@ -544,6 +544,56 @@ describe("applications manual generate api", () => {
     expect(res.headers.get("x-tailor-cv-source")).toBe("manual_import");
   });
 
+  // The grounding gate on this route used to fire twice: pre-emptively on a
+  // review acceptApplicationGeneration had built over one target in isolation,
+  // and again at the commit boundary on the merged snapshot. The pre-emptive
+  // one is gone, and it turned out to have had no test at all — so this covers
+  // the gate that remains.
+  it("blocks a finalize whose claims are not grounded in the master resume", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    jobStore.findFirst.mockResolvedValueOnce({
+      id: VALID_JOB_ID,
+      title: "Software Engineer",
+      company: "Example Co",
+      description: "Build product features",
+    });
+    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "rp-1",
+      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
+    });
+    applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
+
+    const res = await POST(
+      new Request("http://localhost/api/applications/manual-generate", {
+        method: "POST",
+        body: JSON.stringify({
+          jobId: VALID_JOB_ID,
+          target: "resume",
+          modelOutput: JSON.stringify({
+            // A figure the master profile never states. The ledger blocks an
+            // unsupported numeric claim.
+            cvSummary: "Engineer who cut infrastructure spend by 9400%.",
+            latestExperience: { addedBullets: [] },
+          }),
+          promptMeta: {
+            ruleSetId: "rules-1",
+            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+            promptTemplateVersion: "2026.07.v2",
+            schemaVersion: "2026-07-24",
+            skillPackVersion: "b".repeat(64),
+            promptHash: "c".repeat(64),
+          },
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(422);
+    const json = await res.json();
+    expect(json.error.code).toBe("APPLICATION_REVIEW_BLOCKED");
+  });
+
   it("accepts resume JSON when model output includes commentary and trailing brace text", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "user-1" },
