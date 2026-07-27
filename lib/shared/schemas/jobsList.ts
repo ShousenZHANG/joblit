@@ -1,0 +1,68 @@
+import { z } from "zod";
+import { JOB_STATUS_VALUES } from "@/lib/shared/jobStatus";
+import { FitMatrixSchema } from "@/lib/shared/schemas/fitMatrix";
+
+/**
+ * The `GET /api/jobs` and `GET /api/jobs/[id]` response contracts.
+ *
+ * The Application half of the Jobs workspace was schema-derived and validated
+ * at the seam; the Job half was a hand-written type in `app/(app)/jobs/types.ts`
+ * with no runtime check, so `useJobPagination` filled gaps with `??` defaults
+ * and a malformed row reached the list as a half-rendered card.
+ *
+ * Objects are deliberately not `.strict()`: Zod strips unknown keys, so adding
+ * a field server-side stays backward compatible with a client that has not
+ * shipped yet.
+ */
+
+export const jobStatusValueSchema = z.enum(JOB_STATUS_VALUES);
+
+export const jobListItemSchema = z.object({
+  id: z.string(),
+  jobUrl: z.string(),
+  title: z.string(),
+  company: z.string().nullable(),
+  location: z.string().nullable(),
+  jobType: z.string().nullable(),
+  jobLevel: z.string().nullable(),
+  salary: z.string().nullable().optional(),
+  workArrangement: z.string().nullable().optional(),
+  listingDate: z.string().nullable().optional(),
+  status: jobStatusValueSchema,
+  market: z.string().nullable().optional(),
+  source: z.string().nullable().optional(),
+  postingRisk: z.number().nullable().optional(),
+  postingRiskFlags: z.array(z.string()).nullable().optional(),
+  resumePdfUrl: z.string().nullable().optional(),
+  resumePdfName: z.string().nullable().optional(),
+  coverPdfUrl: z.string().nullable().optional(),
+  fitScore: z.number().nullable().optional(),
+  fitVerdict: z.string().nullable().optional(),
+  fitEligibility: z.string().nullable().optional(),
+  livenessStatus: z.enum(["ACTIVE", "EXPIRED", "UNCERTAIN"]).optional(),
+  livenessReason: z.string().nullable().optional(),
+  possibleDuplicate: z.boolean().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const jobsListResponseSchema = z.object({
+  items: z.array(jobListItemSchema),
+  nextCursor: z.string().nullable(),
+  totalCount: z.number().optional(),
+  facets: z
+    .object({ jobLevels: z.array(z.string()).optional() })
+    .optional(),
+});
+
+export const jobDetailResponseSchema = z.object({
+  id: z.string(),
+  description: z.string().nullable(),
+  fitMatrix: FitMatrixSchema.nullable(),
+  /** Cache version for score/matrix coherence with the list row. */
+  updatedAt: z.string(),
+});
+
+export type JobListItem = z.infer<typeof jobListItemSchema>;
+export type JobsListResponse = z.infer<typeof jobsListResponseSchema>;
+export type JobDetailResponse = z.infer<typeof jobDetailResponseSchema>;

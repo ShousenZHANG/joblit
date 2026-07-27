@@ -1,4 +1,8 @@
-import type { FitMatrix } from "@/lib/shared/schemas/fitMatrix";
+import type {
+  JobDetailResponse,
+  JobListItem,
+  JobsListResponse,
+} from "@/lib/shared/schemas/jobsList";
 import type { JobStatusValue } from "@/lib/shared/jobStatus";
 
 export type JobStatus = JobStatusValue;
@@ -22,51 +26,11 @@ export const JOB_STATUS_LABEL_KEYS: Record<
   ACCEPTED: "statusAccepted",
 };
 
-export type JobItem = {
-  id: string;
-  jobUrl: string;
-  title: string;
-  company: string | null;
-  location: string | null;
-  jobType: string | null;
-  jobLevel: string | null;
-  salary?: string | null;
-  workArrangement?: string | null;
-  listingDate?: string | null;
-  status: JobStatus;
-  market?: string | null;
-  source?: string | null;
-  postingRisk?: number | null;
-  postingRiskFlags?: string[] | null;
-  resumePdfUrl?: string | null;
-  resumePdfName?: string | null;
-  coverPdfUrl?: string | null;
-  fitScore?: number | null;
-  fitVerdict?: string | null;
-  fitEligibility?: string | null;
-  livenessStatus?: "ACTIVE" | "EXPIRED" | "UNCERTAIN";
-  livenessReason?: string | null;
-  possibleDuplicate?: boolean;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type JobsResponse = {
-  items: JobItem[];
-  nextCursor: string | null;
-  totalCount?: number;
-  facets?: {
-    jobLevels?: string[];
-  };
-};
-
-export type JobDetailResponse = {
-  id: string;
-  description: string | null;
-  fitMatrix: FitMatrix | null;
-  /** Cache version for score/matrix coherence with the list row. */
-  updatedAt: string;
-};
+// Derived from the schema that validates these at the seam, so the type and
+// the runtime check cannot disagree. They used to be written out twice.
+export type JobItem = JobListItem;
+export type JobsResponse = JobsListResponse;
+export type { JobDetailResponse };
 
 export type CvSource = "ai" | "base" | "manual_import" | "local_ai";
 export type CoverSource = "ai" | "fallback" | "manual_import" | "local_ai";

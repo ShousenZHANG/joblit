@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { fetchJson } from "@/lib/api/fetchJson";
+import { jobsListResponseSchema } from "@/lib/shared/schemas/jobsList";
 import { keepPreviousData, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import type { JobItem, JobsResponse } from "../types";
 import {
@@ -51,16 +52,14 @@ export function useJobPagination({
     }): Promise<JobsResponse> => {
       const sp = new URLSearchParams(queryString);
       if (pageParam) sp.set("cursor", pageParam);
-      const json = (await fetchJson(`/api/jobs?${sp.toString()}`, {
+      // Parsed at the seam. The hand-rolled `??` defaults this replaces turned
+      // a malformed payload into an empty list, so a contract break looked
+      // exactly like "no jobs match your filters".
+      return await fetchJson(`/api/jobs?${sp.toString()}`, {
         signal,
         fallbackError: "Failed to load jobs",
-      })) as Partial<JobsResponse>;
-      return {
-        items: json.items ?? [],
-        nextCursor: json.nextCursor ?? null,
-        totalCount: typeof json.totalCount === "number" ? json.totalCount : undefined,
-        facets: json.facets ?? undefined,
-      };
+        schema: jobsListResponseSchema,
+      });
     },
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,

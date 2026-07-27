@@ -316,4 +316,35 @@ describe("useFitScan (database-backed pump)", () => {
     await act(async () => result.current.start());
     await waitFor(() => expect(result.current.state.status).toBe("failed"));
   });
+
+  // The fit endpoints used a private postJson that threw
+  // `new Error("/api/jobs/fit/run failed: 429")`, so the whole fit surface was
+  // invisible to the ApiError handling every other cluster relies on — and the
+  // user was shown a URL and a status code instead of what the server said.
+  it("surfaces the server's own message rather than a url and a status code", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              error: {
+                code: "FIT_SCAN_BUSY",
+                message: "Another scan is already running for this account.",
+              },
+            }),
+            { status: 409, headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
+
+    const { result } = renderHook(() => useFitScan({ onJobScored: vi.fn() }));
+    await act(async () => result.current.start());
+
+    await waitFor(() => expect(result.current.state.status).toBe("failed"));
+    expect(result.current.state.error).toBe(
+      "Another scan is already running for this account.",
+    );
+    expect(result.current.state.error).not.toContain("/api/jobs/fit/run");
+  });
 });

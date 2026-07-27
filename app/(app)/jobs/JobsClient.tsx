@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { fetchJson } from "@/lib/api/fetchJson";
+import { jobDetailResponseSchema } from "@/lib/shared/schemas/jobsList";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, CheckCircle2, CheckSquare, Loader2, MapPin, RefreshCw, SlidersHorizontal, Sparkles, Square, Trash2, X } from "lucide-react";
@@ -18,7 +19,6 @@ import { useFetchStatus, type FetchRunStatus } from "@/app/FetchStatusContext";
 
 import {
   JOB_STATUS_LABEL_KEYS,
-  type JobDetailResponse,
   type JobItem,
   type JobStatus,
 } from "./types";
@@ -578,9 +578,10 @@ export function JobsClient({
   const detailQuery = useQuery({
     queryKey: getJobDetailsQueryKey(effectiveSelectedId),
     queryFn: async () => {
-      return (await fetchJson(`/api/jobs/${effectiveSelectedId}`, {
+      return await fetchJson(`/api/jobs/${effectiveSelectedId}`, {
         fallbackError: t("errorLoadDetails"),
-      })) as JobDetailResponse;
+        schema: jobDetailResponseSchema,
+      });
     },
     enabled: Boolean(effectiveSelectedId),
     staleTime: 5 * 60 * 1000,

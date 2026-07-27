@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import { LocalAiBridgeError, sendLocalAiBridgeRequest } from "@/lib/client/localAiBridge";
+import { fetchJson } from "@/lib/api/fetchJson";
 
 const FIT_POLL_MS = 1_500;
 const DEFAULT_LEASE_POLL_MS = 5_000;
@@ -55,14 +56,18 @@ function waitForLeasePoll(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+/**
+ * Every fit call goes through the shared helper, so a failure arrives as an
+ * `ApiError` carrying the server's code and message. This module used to own a
+ * private copy that threw `new Error("<url> failed: <status>")`, which put a
+ * URL and a status code in front of the user and hid the fit surface from the
+ * error handling the rest of the workspace relies on.
+ */
 async function postJson<T>(url: string, body?: unknown): Promise<T> {
-  const response = await fetch(url, {
+  return (await fetchJson<undefined>(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
-  if (!response.ok) throw new Error(`${url} failed: ${response.status}`);
-  return (await response.json()) as T;
+  })) as T;
 }
 
 async function importTriageResult(
