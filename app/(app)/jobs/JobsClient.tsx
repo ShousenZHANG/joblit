@@ -27,7 +27,8 @@ import { SegmentedControl } from "@/components/app-shell/SegmentedControl";
 import { getErrorMessage } from "./types";
 import { useJobFilters } from "./hooks/useJobFilters";
 import { useJobPagination } from "./hooks/useJobPagination";
-import { sessionDeletedJobIds, useJobMutations } from "./hooks/useJobMutations";
+import { useSuppressedJobRows } from "./hooks/useSuppressedJobRows";
+import { useJobMutations } from "./hooks/useJobMutations";
 import { useKeyboardNavigation } from "./hooks/useKeyboardNavigation";
 import { persistGeneratedDraft, useExternalGenerate } from "./hooks/useExternalGenerate";
 import { useLocalAiRun } from "./hooks/useLocalAiRun";
@@ -107,17 +108,8 @@ export function JobsClient({
   const virtualJobListRef = useRef<VirtualJobListHandle>(null);
   const pendingWorkspaceUrlRef = useRef<string | null>(null);
   const workspaceUrlInitializedRef = useRef(false);
-  const pendingListViewportAnchorRef = useRef<{
-    jobId: string | null;
-    offsetTop: number;
-    scrollTop: number;
-  } | null>(null);
-  // Seed from the session tombstones so a remount (SPA nav away and back)
-  // keeps already-committed deletes hidden even while a flushed DELETE is
-  // still in flight — see sessionDeletedJobIds in useJobMutations.
-  const [suppressedDeletedIds, setSuppressedDeletedIds] = useState<Set<string>>(
-    () => new Set(sessionDeletedJobIds),
-  );
+  const { suppressedDeletedIds, hideJobs, revealJobs, restoreAnchor } =
+    useSuppressedJobRows({ scrollRef: resultsScrollRef });
   // Every workspace-URL write goes through the shallow (history) path — there
   // is deliberately no router.replace variant. Nothing the server renders
   // depends on the selected row or the mobile pane, but `/jobs` is
@@ -138,37 +130,6 @@ export function JobsClient({
     },
     [replaceUrlStateShallow],
   );
-  const captureListViewport = useCallback((excludedIds: ReadonlySet<string>) => {
-    const root = resultsScrollRef.current;
-    const viewport = root?.querySelector<HTMLElement>(
-      "[data-radix-scroll-area-viewport]",
-    );
-    if (!viewport) return;
-    // We compensate against a stable row identity below. Disable native
-    // overflow anchoring for this viewport so Chrome does not apply a second,
-    // competing correction for the same DOM change.
-    viewport.style.overflowAnchor = "none";
-
-    const viewportRect = viewport.getBoundingClientRect();
-    const viewportTop = viewportRect.top;
-    const rows = Array.from(
-      viewport.querySelectorAll<HTMLElement>("[data-job-id]"),
-    );
-    const anchor = rows.find((row) => {
-      const id = row.dataset.jobId;
-      if (!id || excludedIds.has(id)) return false;
-      const rowRect = row.getBoundingClientRect();
-      return rowRect.bottom > viewportTop && rowRect.top < viewportRect.bottom;
-    });
-
-    pendingListViewportAnchorRef.current = {
-      jobId: anchor?.dataset.jobId ?? null,
-      offsetTop: anchor
-        ? anchor.getBoundingClientRect().top - viewportTop
-        : 0,
-      scrollTop: viewport.scrollTop,
-    };
-  }, []);
   const setSelectedIdFromMutation = useCallback(
     (id: string | null) => {
       setSelectionExplicitlyCleared(false);
@@ -221,8 +182,8 @@ export function JobsClient({
     items: visibleItems,
     selectedId,
     setSelectedId: setSelectedIdFromMutation,
-    setSuppressedDeletedIds,
-    captureListViewport,
+    hideJobs,
+    revealJobs,
   });
 
   const ext = useExternalGenerate(setError);
@@ -272,30 +233,7 @@ export function JobsClient({
   // Restore the first surviving visible row to the same viewport offset. This
   // works for ordinary and virtual rows and avoids scroll/pointer displacement
   // when a row above the pointer disappears or reappears after rollback.
-  useLayoutEffect(() => {
-    const snapshot = pendingListViewportAnchorRef.current;
-    if (!snapshot) return;
-    pendingListViewportAnchorRef.current = null;
-
-    const root = resultsScrollRef.current;
-    const viewport = root?.querySelector<HTMLElement>(
-      "[data-radix-scroll-area-viewport]",
-    );
-    if (!viewport) return;
-
-    if (snapshot.jobId) {
-      const anchor = viewport.querySelector<HTMLElement>(
-        `[data-job-id="${CSS.escape(snapshot.jobId)}"]`,
-      );
-      if (anchor) {
-        const viewportTop = viewport.getBoundingClientRect().top;
-        const nextOffsetTop = anchor.getBoundingClientRect().top - viewportTop;
-        viewport.scrollTop += nextOffsetTop - snapshot.offsetTop;
-        return;
-      }
-    }
-    viewport.scrollTop = snapshot.scrollTop;
-  }, [visibleItemsIdKey]);
+  useLayoutEffect(restoreAnchor, [restoreAnchor, visibleItemsIdKey]);
 
   // Full-database sweep: preview the count, confirm, move NEW -> ignored
   // (REJECTED, reversible) server-side, then offer one-click undo.

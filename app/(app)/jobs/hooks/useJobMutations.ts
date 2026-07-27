@@ -44,14 +44,14 @@ export function useJobMutations({
   items,
   selectedId,
   setSelectedId,
-  setSuppressedDeletedIds,
-  captureListViewport,
+  hideJobs,
+  revealJobs,
 }: {
   items: JobItem[];
   selectedId: string | null;
   setSelectedId: (id: string | null) => void;
-  setSuppressedDeletedIds: React.Dispatch<React.SetStateAction<Set<string>>>;
-  captureListViewport: (excludedIds: ReadonlySet<string>) => void;
+  hideJobs: (ids: Iterable<string>) => void;
+  revealJobs: (ids: Iterable<string>) => void;
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -178,13 +178,7 @@ export function useJobMutations({
       } catch (e) {
         // Commit failed — un-hide so the row reappears. The cache was never
         // mutated during the window, so there is no snapshot to restore.
-        captureListViewport(new Set());
-        setSuppressedDeletedIds((prev) => {
-          if (!prev.has(id)) return prev;
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
+        revealJobs([id]);
         if (
           pending.restoreSelection &&
           (
@@ -211,7 +205,7 @@ export function useJobMutations({
         });
       }
     },
-    [captureListViewport, queryClient, setSelectedId, setSuppressedDeletedIds, toast],
+    [queryClient, revealJobs, setSelectedId, toast],
   );
 
   const undoDelete = useCallback(
@@ -223,13 +217,7 @@ export function useJobMutations({
       // Cache was never mutated (row only hidden via suppressedDeletedIds), so
       // undo just un-hides it. No snapshot restore => overlapping undos in any
       // order can't clobber each other.
-      captureListViewport(new Set());
-      setSuppressedDeletedIds((prev) => {
-        if (!prev.has(id)) return prev;
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
+      revealJobs([id]);
       if (
         pending.restoreSelection &&
         (
@@ -240,7 +228,7 @@ export function useJobMutations({
         setSelectedId(id);
       }
     },
-    [captureListViewport, setSelectedId, setSuppressedDeletedIds],
+    [revealJobs, setSelectedId],
   );
 
   const requestDelete = useCallback(
@@ -254,13 +242,7 @@ export function useJobMutations({
         items[currentIndex - 1] ??
         items.find((item) => item.id !== id) ??
         null;
-      captureListViewport(new Set([id]));
-      setSuppressedDeletedIds((prev) => {
-        if (prev.has(id)) return prev;
-        const next = new Set(prev);
-        next.add(id);
-        return next;
-      });
+      hideJobs([id]);
       if (selectedId === id) {
         setSelectedId(adjacent?.id ?? null);
       }
@@ -317,9 +299,8 @@ export function useJobMutations({
       deletingIds,
       items,
       selectedId,
-      captureListViewport,
+      hideJobs,
       setSelectedId,
-      setSuppressedDeletedIds,
       finalizeDelete,
       undoDelete,
       toast,
@@ -399,12 +380,7 @@ export function useJobMutations({
     onMutate: async (ids) => {
       setError(null);
       const idSet = new Set(ids);
-      captureListViewport(idSet);
-      setSuppressedDeletedIds((prev) => {
-        const next = new Set(prev);
-        for (const id of ids) next.add(id);
-        return next;
-      });
+      hideJobs(idSet);
       setDeletingIds((prev) => {
         const next = new Set(prev);
         for (const id of ids) next.add(id);
@@ -428,12 +404,7 @@ export function useJobMutations({
     },
     onError: (e, ids, context) => {
       setError(getErrorMessage(e, "Failed to batch delete"));
-      captureListViewport(new Set());
-      setSuppressedDeletedIds((prev) => {
-        const next = new Set(prev);
-        for (const id of ids) next.delete(id);
-        return next;
-      });
+      revealJobs(ids);
       restoreJobsByIdsFromSnapshots(
         queryClient,
         context?.rollbackSnapshots,
@@ -477,17 +448,12 @@ export function useJobMutations({
         // entirely — the optimistic removeJobsFromJobsCache() already removed
         // the rows + decremented totalCount, so invalidating would just dim
         // the list for no reason.
-        captureListViewport(new Set());
+        revealJobs(data.failedIds);
         restoreJobsByIdsFromSnapshots(
           queryClient,
           context?.rollbackSnapshots,
           new Set(data.failedIds),
         );
-        setSuppressedDeletedIds((prev) => {
-          const next = new Set(prev);
-          for (const id of data.failedIds) next.delete(id);
-          return next;
-        });
         toast({
           title: `${deleted} of ${ids.length} jobs deleted`,
           description: `${failed} could not be removed — try again.`,

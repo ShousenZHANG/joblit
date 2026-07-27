@@ -25,7 +25,7 @@ export function useJobPagination({
   queryString: string;
   initialItems: JobItem[];
   initialCursor: string | null;
-  suppressedDeletedIds: Set<string>;
+  suppressedDeletedIds: ReadonlySet<string>;
   scrollRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const queryClient = useQueryClient();
