@@ -105,7 +105,12 @@ Required: `DATABASE_URL`, `AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECR
 
 Optional: `DIRECT_URL`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `BLOB_READ_WRITE_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_TOKEN`, `GITHUB_WORKFLOW_FILE`, `JOBLIT_WEB_URL`, `YOUTUBE_API_KEY`, `CRON_SECRET`, `RSSHUB_URL`, `RSSHUB_JOB_ROUTES`, `GITHUB_CN_JOB_REPOS`
 
-`DIRECT_URL` is the **unpooled** database endpoint, used only by
+`DIRECT_URL` is only needed when the database is wired by hand: the Neon and
+Vercel Postgres integrations already inject an unpooled URL, and migrations
+read `DIRECT_URL`, then `DATABASE_URL_UNPOOLED`, then
+`POSTGRES_URL_NON_POOLING`, before falling back to `DATABASE_URL`.
+
+It is the **unpooled** database endpoint, used only by
 `prisma migrate deploy`. Migrate serialises itself with a session-scoped
 advisory lock; a transaction-mode pooler hands each statement to a different
 backend, so migrate never sees its own lock and the deploy dies after ten

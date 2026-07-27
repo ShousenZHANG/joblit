@@ -17,10 +17,26 @@
  * can load it without a build step or path alias.
  */
 
+/**
+ * Names that already hold an unpooled URL, most explicit first.
+ *
+ * The Neon and Vercel Postgres integrations inject their own, so a correctly
+ * integrated project needs no manual variable — `DIRECT_URL` is for setups
+ * that wire the database by hand.
+ */
+const DIRECT_URL_KEYS = [
+  "DIRECT_URL",
+  "DATABASE_URL_UNPOOLED",
+  "POSTGRES_URL_NON_POOLING",
+];
+
 /** @param {Record<string, string | undefined>} env */
 export function resolveMigrationUrl(env) {
-  const direct = env.DIRECT_URL?.trim();
-  return direct ? direct : env.DATABASE_URL;
+  for (const key of DIRECT_URL_KEYS) {
+    const value = env[key]?.trim();
+    if (value) return value;
+  }
+  return env.DATABASE_URL;
 }
 
 /**

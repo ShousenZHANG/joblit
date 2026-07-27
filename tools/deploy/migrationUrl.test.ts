@@ -24,6 +24,37 @@ describe("resolveMigrationUrl", () => {
     ).toBe("postgres://u@ep-x.eu-central-1.aws.neon.tech/db");
   });
 
+  // The Neon and Vercel Postgres integrations already inject an unpooled URL
+  // under their own names. Reading those means a correctly integrated project
+  // needs no manual variable at all.
+  it("accepts the name the Neon integration injects", () => {
+    expect(
+      resolveMigrationUrl({
+        DATABASE_URL_UNPOOLED: "postgres://u@ep-x.aws.neon.tech/db",
+        DATABASE_URL: "postgres://u@ep-x-pooler.aws.neon.tech/db",
+      }),
+    ).toBe("postgres://u@ep-x.aws.neon.tech/db");
+  });
+
+  it("accepts the name the Vercel Postgres integration injects", () => {
+    expect(
+      resolveMigrationUrl({
+        POSTGRES_URL_NON_POOLING: "postgres://u@ep-x.aws.neon.tech/db",
+        DATABASE_URL: "postgres://u@ep-x-pooler.aws.neon.tech/db",
+      }),
+    ).toBe("postgres://u@ep-x.aws.neon.tech/db");
+  });
+
+  it("prefers an explicit DIRECT_URL over an injected one", () => {
+    expect(
+      resolveMigrationUrl({
+        DIRECT_URL: "postgres://u@explicit/db",
+        DATABASE_URL_UNPOOLED: "postgres://u@injected/db",
+        DATABASE_URL: "postgres://u@pooled-pooler.aws.neon.tech/db",
+      }),
+    ).toBe("postgres://u@explicit/db");
+  });
+
   it("falls back to the runtime url when no direct url is set", () => {
     expect(
       resolveMigrationUrl({ DATABASE_URL: "postgres://u@host/db" }),
