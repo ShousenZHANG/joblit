@@ -1,17 +1,5 @@
 import type { Prisma } from "@/lib/generated/prisma";
-
-// Dedicated namespace for one user's mutations to one Job-backed Application.
-// A hash collision only serializes unrelated work; it cannot weaken isolation.
-const APPLICATION_MUTATION_LOCK_NAMESPACE = 0x4a4f4241; // "JOBA"
-
-function stableInt32(value: string): number {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return hash | 0;
-}
+import { acquireAdvisoryLock } from "@/lib/server/db/advisoryLock";
 
 /**
  * Serialize generated-content merges, autosaves, and destructive resets for
@@ -28,10 +16,5 @@ export async function acquireApplicationMutationLock(
   userId: string,
   jobId: string,
 ): Promise<void> {
-  await tx.$executeRaw`
-    SELECT pg_advisory_xact_lock(
-      ${APPLICATION_MUTATION_LOCK_NAMESPACE}::integer,
-      ${stableInt32(`${userId}:${jobId}`)}::integer
-    )
-  `;
+  await acquireAdvisoryLock(tx, "applicationMutation", `${userId}:${jobId}`);
 }
