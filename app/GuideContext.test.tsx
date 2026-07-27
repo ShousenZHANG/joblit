@@ -2,6 +2,8 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { GuideProvider, useGuide } from "./GuideContext";
+import { Toaster } from "@/components/ui/toaster";
+import { resetToasts } from "@/hooks/use-toast";
 import messages from "../messages/en.json";
 
 let mockPathname = "/resume";
@@ -317,5 +319,149 @@ describe("GuideContext", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("guide-coachmark")).not.toBeInTheDocument();
     });
+  });
+});
+
+/**
+ * The completion loop. Completing a task used to end in silence: the coachmark
+ * vanished and nothing pointed at the next step, so five tasks played as five
+ * disconnected hints. Now each completion acknowledges the progress and offers
+ * the next step in one gesture.
+ */
+describe("GuideContext — completion loop", () => {
+  beforeEach(() => {
+    window.sessionStorage.clear();
+    resetToasts();
+    vi.restoreAllMocks();
+    mockPathname = "/resume";
+    pushMock.mockReset();
+  });
+
+  afterEach(() => {
+    cleanup();
+    resetToasts();
+  });
+
+  function stubStateFetch(overrides?: Partial<GuideStatePayload>) {
+    const fetchMock = vi.fn(async (input: RequestInfo) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url === "/api/onboarding/state") {
+        return new Response(JSON.stringify({ state: createState(overrides) }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  function renderLoop(overrides?: Partial<GuideStatePayload>) {
+    stubStateFetch(overrides);
+    return renderWithIntl(
+      <GuideProvider>
+        <Harness />
+        <Toaster />
+      </GuideProvider>,
+    );
+  }
+
+  it("acknowledges a completion and offers the next step", async () => {
+    renderLoop();
+    await waitFor(() => {
+      expect(screen.getByTestId("guide-count")).toHaveTextContent("0/5");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "complete-first" }));
+
+    // Toast names the finished task and points at the next one (first_fetch).
+    await waitFor(() => {
+      expect(
+        screen.getByText(new RegExp(messages.guide.task_resume_setup_title)),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText(new RegExp(messages.guide.task_first_fetch_title)),
+    ).toBeInTheDocument();
+  });
+
+  it("jumps to the next task from the toast", async () => {
+    renderLoop();
+    await waitFor(() => {
+      expect(screen.getByTestId("guide-count")).toHaveTextContent("0/5");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "complete-first" }));
+    const cta = await screen.findByRole("button", {
+      name: messages.guide.takeMeThere,
+    });
+    fireEvent.click(cta);
+
+    expect(pushMock).toHaveBeenCalledWith("/fetch");
+  });
+
+  it("stays silent when the user dismissed the guide", async () => {
+    renderLoop({ dismissed: true, dismissedAt: "2026-07-01T00:00:00.000Z" });
+    await waitFor(() => {
+      expect(screen.getByTestId("guide-count")).toHaveTextContent("0/5");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "complete-first" }));
+
+    // The completion still records; the celebration does not appear.
+    await waitFor(() => {
+      expect(screen.getByTestId("guide-count")).toHaveTextContent("1/5");
+    });
+    expect(
+      screen.queryByText(new RegExp(messages.guide.task_resume_setup_title)),
+    ).not.toBeInTheDocument();
+  });
+
+  it("celebrates the final task without offering a next step", async () => {
+    renderLoop({
+      checklist: {
+        resume_setup: false,
+        first_fetch: true,
+        review_jobs: true,
+        generate_first_pdf: true,
+        mark_applied: true,
+      },
+      completedCount: 4,
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("guide-count")).toHaveTextContent("4/5");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "complete-first" }));
+
+    // The all-done copy appears in the toast and may also appear in the
+    // panel's completion view; either way it must exist and no next-step CTA
+    // may accompany it.
+    await waitFor(() => {
+      expect(screen.getAllByText(messages.guide.allDone).length).toBeGreaterThan(0);
+    });
+    expect(
+      screen.queryByRole("button", { name: messages.guide.takeMeThere }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("labels the floating launcher with the next step instead of a generic title", async () => {
+    renderLoop({
+      // RETURNING_USER: the welcome panel does not auto-open, so the launcher
+      // is visible immediately.
+      stage: "RETURNING_USER",
+      checklist: {
+        resume_setup: true,
+        first_fetch: false,
+        review_jobs: false,
+        generate_first_pdf: false,
+        mark_applied: false,
+      },
+      completedCount: 1,
+    });
+
+    const widget = await screen.findByTestId("guide-floating-widget");
+    expect(widget.textContent).toContain(messages.guide.task_first_fetch_title);
   });
 });

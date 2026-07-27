@@ -35,6 +35,8 @@ import { GuideWelcome } from "@/components/guide/GuideWelcome";
 import { GuideTaskList } from "@/components/guide/GuideTaskList";
 import { GuideComplete } from "@/components/guide/GuideComplete";
 import { minutesLeft } from "@/components/guide/guideMeta";
+import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 
 type GuideState = {
   stage: "NEW_USER" | "ACTIVATED_USER" | "RETURNING_USER";
@@ -156,9 +158,18 @@ export function GuideProvider({ children }: { children: ReactNode }) {
   // a Jobs/Fetch-centric flow, so it's disabled there entirely.
   const isCN = useMarket() === "CN";
   const tg = useTranslations("guide");
+  const { toast } = useToast();
 
   const [loading, setLoading] = useState(false);
   const [state, setState] = useState<GuideState | null>(null);
+  // Synchronous view of the latest state for event handlers. React only runs
+  // functional-setState updaters eagerly when the update queue is empty, so a
+  // handler cannot rely on values captured inside its own updater — the
+  // completion toast never fired under that assumption.
+  const stateRef = useRef<GuideState | null>(null);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
   const [panelOpen, setPanelOpen] = useState(false);
   // Which view the Quick Start panel shows. The branded welcome view is only
   // auto-shown on a brand-new user's first visit of the session; every
@@ -371,13 +382,39 @@ export function GuideProvider({ children }: { children: ReactNode }) {
     return nextTask?.id ?? null;
   }, [state]);
 
+  const navigateToTask = useCallback(
+    (task: OnboardingTask) => {
+      // Allow this task's coachmark to re-appear even if it was dismissed
+      // earlier in the session — the user explicitly asked to be guided.
+      const next = new Set(dismissedCoachmarksRef.current);
+      next.delete(task.id);
+      dismissedCoachmarksRef.current = next;
+      writeDismissedCoachmarks(next);
+
+      setCoachmarkTaskId(task.id);
+      setCoachmarkRect(null);
+      router.push(task.href);
+      setPanelOpen(false);
+    },
+    [router],
+  );
+
   const markTaskComplete = useCallback(
     (taskId: OnboardingTaskId) => {
-      let checklistForPatch: OnboardingChecklist | null = null;
+      // Derive the transition from the ref, not from inside the updater: the
+      // updater is not guaranteed to have run by the time this handler
+      // continues, so values captured in it are not readable here.
+      const current = stateRef.current;
+      const transitioned = current !== null && !current.checklist[taskId];
+      const checklistForPatch: OnboardingChecklist | null = transitioned
+        ? { ...current.checklist, [taskId]: true }
+        : null;
+      // Users who skipped the guide opted out of guidance; record their
+      // progress silently instead of celebrating at them.
+      const celebrationSuppressed = !transitioned || current.dismissed;
       setState((prev) => {
         if (!prev || prev.checklist[taskId]) return prev;
         const checklist = { ...prev.checklist, [taskId]: true };
-        checklistForPatch = checklist;
         const completedCount = ONBOARDING_TASKS.reduce(
           (count, task) => (checklist[task.id] ? count + 1 : count),
           0,
@@ -400,13 +437,47 @@ export function GuideProvider({ children }: { children: ReactNode }) {
         }
         return prev;
       });
+      // Close the loop: a completion used to end in silence — the coachmark
+      // vanished and the next step waited for the user to reopen the panel.
+      // Acknowledge the progress and offer the next step in the same breath.
+      if (checklistForPatch && !celebrationSuppressed) {
+        const done: OnboardingChecklist = checklistForPatch;
+        const nextTask = ONBOARDING_TASKS.find((task) => !done[task.id]) ?? null;
+        if (nextTask) {
+          toast({
+            title: tg("taskDoneToast", { title: tg(`task_${taskId}_title`) }),
+            description: tg("nextLabel", {
+              title: tg(`task_${nextTask.id}_title`),
+            }),
+            duration: 6000,
+            className:
+              "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-900 animate-in fade-in zoom-in-95",
+            action: (
+              <ToastAction
+                altText={tg("takeMeThere")}
+                onClick={() => navigateToTask(nextTask)}
+              >
+                {tg("takeMeThere")}
+              </ToastAction>
+            ),
+          });
+        } else {
+          toast({
+            title: tg("allDone"),
+            description: tg("allDoneDesc"),
+            duration: 6000,
+            className:
+              "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-900 animate-in fade-in zoom-in-95",
+          });
+        }
+      }
       void patchState(
         checklistForPatch
           ? { type: "complete_task", taskId, checklist: checklistForPatch }
           : { type: "complete_task", taskId },
       );
     },
-    [patchState],
+    [navigateToTask, patchState, tg, toast],
   );
 
   const openGuide = useCallback(() => {
@@ -423,23 +494,6 @@ export function GuideProvider({ children }: { children: ReactNode }) {
     setPanelOpen(false);
     void patchState({ type: "skip" });
   }, [patchState]);
-
-  const navigateToTask = useCallback(
-    (task: OnboardingTask) => {
-      // Allow this task's coachmark to re-appear even if it was dismissed
-      // earlier in the session — the user explicitly asked to be guided.
-      const next = new Set(dismissedCoachmarksRef.current);
-      next.delete(task.id);
-      dismissedCoachmarksRef.current = next;
-      writeDismissedCoachmarks(next);
-
-      setCoachmarkTaskId(task.id);
-      setCoachmarkRect(null);
-      router.push(task.href);
-      setPanelOpen(false);
-    },
-    [router],
-  );
 
   const dismissCoachmark = useCallback(() => {
     if (!coachmarkTaskId) return;
@@ -800,7 +854,13 @@ export function GuideProvider({ children }: { children: ReactNode }) {
                 <CircleHelp className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden />
               </span>
               <span className="flex items-center gap-1.5 text-xs font-semibold">
-                <span className="hidden sm:inline">{tg("panelTitle")}</span>
+                {/* Name the next step, not the feature: "Next: fetch roles" is
+                    a call to action where "Quick Start" was only a badge. */}
+                <span className="hidden sm:inline">
+                  {activeTaskId
+                    ? tg("nextLabel", { title: tg(`task_${activeTaskId}_title`) })
+                    : tg("panelTitle")}
+                </span>
                 <span className="rounded-full bg-emerald-500/12 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
                   {state.completedCount}/{state.totalCount}
                 </span>

@@ -490,7 +490,9 @@
     "task_first_fetch_how": "进入「抓取」页面，选择角色包，然后点击「开始抓取」。",
     "task_review_jobs_how": "进入「职位」页面，点击任意一行查看完整职位描述。",
     "task_generate_first_pdf_how": "在「职位」页面打开一个职位，然后点击「生成」渲染定制 PDF。",
-    "task_mark_applied_how": "打开一个职位，将其状态切换为「已投递」。"
+    "task_mark_applied_how": "打开一个职位，将其状态切换为「已投递」。",
+    "taskDoneToast": "已完成:{title}",
+    "nextLabel": "下一步:{title}"
   },
   "resumeForm": {
     "stepOf": "第 {current} 步，共 {total} 步",

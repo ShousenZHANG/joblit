@@ -56,6 +56,54 @@ function isMissingTableError(error: unknown): boolean {
   return code === "P2021" || code === "P2022";
 }
 
+/**
+ * ADR-0007 keeps the progressed statuses in the database; each of them means
+ * the user applied, so they all satisfy `mark_applied`.
+ */
+const APPLIED_FAMILY = ["APPLIED", "INTERVIEW", "OFFER", "ACCEPTED"] as const;
+
+/**
+ * What the database can prove the user has already done.
+ *
+ * Completion used to be purely client-reported, so a user who built their
+ * resume before the guide shipped — or on another device, or whose tab closed
+ * before the report landed — was told to do it again. A guide that points at a
+ * finished step once is a guide the user learns to ignore.
+ *
+ * Each task is inferred from the rows its action creates, and only the
+ * incomplete ones are queried. `review_jobs` has no row of its own; a job
+ * whose status left NEW, or any Application, can only be produced by working
+ * the list, so either proves it.
+ */
+async function inferChecklistFromData(
+  userId: string,
+  stored: ReturnType<typeof defaultOnboardingChecklist>,
+): Promise<ReturnType<typeof defaultOnboardingChecklist>> {
+  const needsApplications = !stored.generate_first_pdf || !stored.review_jobs;
+  const [profiles, fetchRuns, applications, actionedJobs, appliedJobs] =
+    await Promise.all([
+      stored.resume_setup ? 0 : prisma.resumeProfile.count({ where: { userId } }),
+      stored.first_fetch ? 0 : prisma.fetchRun.count({ where: { userId } }),
+      needsApplications ? prisma.application.count({ where: { userId } }) : 0,
+      stored.review_jobs
+        ? 0
+        : prisma.job.count({ where: { userId, status: { not: "NEW" } } }),
+      stored.mark_applied
+        ? 0
+        : prisma.job.count({
+            where: { userId, status: { in: [...APPLIED_FAMILY] } },
+          }),
+    ]);
+
+  return {
+    resume_setup: stored.resume_setup || profiles > 0,
+    first_fetch: stored.first_fetch || fetchRuns > 0,
+    review_jobs: stored.review_jobs || actionedJobs > 0 || applications > 0,
+    generate_first_pdf: stored.generate_first_pdf || applications > 0,
+    mark_applied: stored.mark_applied || appliedJobs > 0,
+  };
+}
+
 function deriveStage(
   previousStage: "NEW_USER" | "ACTIVATED_USER" | "RETURNING_USER",
   checklist: ReturnType<typeof defaultOnboardingChecklist>,
@@ -101,25 +149,51 @@ export async function GET() {
         },
       });
 
-      const checklist = normalizeOnboardingChecklist(existing?.checklist);
-      const stage = existing?.stage ?? "NEW_USER";
-      const state = buildStatePayload({
-        stage,
-        checklist,
-        dismissedAt: existing?.dismissedAt ?? null,
-        completedAt: existing?.completedAt ?? null,
-        persisted: true,
-      });
+      const stored = normalizeOnboardingChecklist(existing?.checklist);
+      // Already complete: nothing left to infer, and the activated majority
+      // pays zero extra queries.
+      const checklist = isOnboardingComplete(stored)
+        ? stored
+        : await inferChecklistFromData(userId, stored);
 
-      if (existing) {
-        return NextResponse.json({ tasks: ONBOARDING_TASKS, state });
+      const inferredSomething = ONBOARDING_TASKS.some(
+        (task) => checklist[task.id] !== stored[task.id],
+      );
+      const complete = isOnboardingComplete(checklist);
+      const stage = complete
+        ? ("ACTIVATED_USER" as const)
+        : (existing?.stage ?? ("NEW_USER" as const));
+      const completedAt = complete
+        ? (existing?.completedAt ?? new Date())
+        : (existing?.completedAt ?? null);
+
+      if (existing && !inferredSomething) {
+        return NextResponse.json({
+          tasks: ONBOARDING_TASKS,
+          state: buildStatePayload({
+            stage,
+            checklist,
+            dismissedAt: existing.dismissedAt,
+            completedAt,
+            persisted: true,
+          }),
+        });
       }
 
-      const created = await prisma.onboardingState.create({
-        data: {
+      // Persist the inferred truth so later GETs read it straight back and the
+      // client's own merge never regresses it.
+      const written = await prisma.onboardingState.upsert({
+        where: { userId },
+        create: {
           userId,
-          stage: "NEW_USER",
+          stage,
           checklist,
+          completedAt,
+        },
+        update: {
+          stage,
+          checklist,
+          completedAt,
         },
         select: {
           stage: true,
@@ -132,10 +206,10 @@ export async function GET() {
       return NextResponse.json({
         tasks: ONBOARDING_TASKS,
         state: buildStatePayload({
-          stage: created.stage,
-          checklist: normalizeOnboardingChecklist(created.checklist),
-          dismissedAt: created.dismissedAt,
-          completedAt: created.completedAt,
+          stage: written.stage,
+          checklist: normalizeOnboardingChecklist(written.checklist),
+          dismissedAt: written.dismissedAt,
+          completedAt: written.completedAt,
           persisted: true,
         }),
       });

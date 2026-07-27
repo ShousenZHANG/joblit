@@ -490,7 +490,9 @@
     "task_first_fetch_how": "Open the Fetch page, choose a role pack, then click Start fetch.",
     "task_review_jobs_how": "Open the Jobs page and click any row to read the full description.",
     "task_generate_first_pdf_how": "Open a job in the Jobs page, then click Generate to render a tailored PDF.",
-    "task_mark_applied_how": "Open a job and switch its status to Applied once you've sent the application."
+    "task_mark_applied_how": "Open a job and switch its status to Applied once you've sent the application.",
+    "taskDoneToast": "Done: {title}",
+    "nextLabel": "Next: {title}"
   },
   "resumeForm": {
     "stepOf": "Step {current} of {total}",
