@@ -1,5 +1,14 @@
 import type { RawSourceJob } from "./types";
 import { violatesDescriptionExclusions } from "./descriptionExclusions";
+import {
+  isListingDateAcceptable,
+  isTitleRelevant,
+  isUnusableDescription,
+  isUnusableTitle,
+  isUsableJobUrl,
+  matchesBaseQueryConstraints,
+  normalizeRoleText,
+} from "@/lib/shared/jobRelevance";
 
 export type SourceJobFilter = {
   queries: string[];
@@ -13,50 +22,25 @@ export type SourceJobFilter = {
   now?: Date;
 };
 
-const GENERIC_ROLE_TOKENS = new Set([
-  "application",
-  "dev",
-  "developer",
-  "development",
-  "engineer",
-  "engineering",
-  "full",
-  "role",
-  "software",
-  "stack",
-]);
-
-const ROLE_TOKENS = new Set([
-  "architect",
-  "consultant",
-  "developer",
-  "engineer",
-  "manager",
-  "scientist",
-  "specialist",
-]);
-
-const DOMAIN_FAMILIES: readonly ReadonlySet<string>[] = [
-  new Set(["ai", "agent", "agentic", "genai", "llm", "ml", "machine", "learning"]),
-  new Set(["api", "backend", "server"]),
-  new Set(["frontend", "react", "web"]),
-  new Set(["analytics", "data", "etl"]),
-  new Set(["copilot", "dataverse", "dynamics", "power", "powerapps"]),
-];
-
-const COMPOUND_DOMAIN_FAMILIES = [
-  {
-    triggers: new Set(["power", "platform"]),
-    members: new Set([
-      "copilot",
-      "d365",
-      "dataverse",
-      "dynamics",
-      "power",
-      "powerapps",
-    ]),
-  },
-] as const;
+/**
+ * Role matching is delegated to the shared matcher so GLOBAL, AU and CN answer
+ * the same question the same way. This module keeps only what is specific to a
+ * public feed: location, freshness and the description exclusion rules.
+ */
+function matchesRole(
+  title: string,
+  queries: readonly string[],
+  baseQueries: readonly string[],
+  strict: boolean,
+): boolean {
+  if (queries.length === 0) return false;
+  if (!matchesBaseQueryConstraints(title, baseQueries)) return false;
+  // Strict mode demands the title answer a requested query outright. Relaxed
+  // mode additionally accepts a sibling role the base query's domain covers,
+  // which the base constraint above has already verified.
+  if (isTitleRelevant(title, queries)) return true;
+  return !strict && baseQueries.length > 0 && isTitleRelevant(title, baseQueries);
+}
 
 function normalize(value: string): string {
   return value
@@ -66,73 +50,6 @@ function normalize(value: string): string {
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim()
     .replace(/\s+/g, " ");
-}
-
-function tokenize(value: string): string[] {
-  const normalized = normalize(value);
-  return normalized ? normalized.split(" ") : [];
-}
-
-function hasMatchingDomainFamily(signal: string, titleTokens: ReadonlySet<string>): boolean {
-  const family = DOMAIN_FAMILIES.find((entry) => entry.has(signal));
-  return family ? [...family].some((token) => titleTokens.has(token)) : false;
-}
-
-function satisfiesBaseConstraint(
-  titleTokens: ReadonlySet<string>,
-  baseQueries: readonly string[],
-): boolean {
-  if (baseQueries.length === 0) return true;
-  return baseQueries.some((query) => {
-    const signals = tokenize(query).filter((token) => !GENERIC_ROLE_TOKENS.has(token));
-    if (signals.length === 0) return true;
-    if (
-      COMPOUND_DOMAIN_FAMILIES.some(
-        ({ triggers, members }) =>
-          [...triggers].every((trigger) => signals.includes(trigger)) &&
-          [...members].some((member) => titleTokens.has(member)),
-      )
-    ) {
-      return true;
-    }
-    return signals.every(
-      (signal) => titleTokens.has(signal) || hasMatchingDomainFamily(signal, titleTokens),
-    );
-  });
-}
-
-function matchesRole(
-  title: string,
-  queries: readonly string[],
-  baseQueries: readonly string[],
-  strict: boolean,
-): boolean {
-  if (queries.length === 0) return false;
-  const titleTokens = new Set(tokenize(title));
-  if (titleTokens.size === 0 || !satisfiesBaseConstraint(titleTokens, baseQueries)) {
-    return false;
-  }
-
-  return queries.some((query) => {
-    const queryTokens = tokenize(query);
-    if (queryTokens.length === 0) return false;
-    if (queryTokens.every((token) => titleTokens.has(token))) return true;
-    if (strict) return false;
-
-    const queryRoleTokens = queryTokens.filter((token) => ROLE_TOKENS.has(token));
-    const sharesRole =
-      queryRoleTokens.length === 0 ||
-      queryRoleTokens.some((token) => titleTokens.has(token));
-    const signals = queryTokens.filter(
-      (token) => !GENERIC_ROLE_TOKENS.has(token) && !ROLE_TOKENS.has(token),
-    );
-    const sharesSignal =
-      signals.length === 0 ||
-      signals.some(
-        (signal) => titleTokens.has(signal) || hasMatchingDomainFamily(signal, titleTokens),
-      );
-    return sharesRole && sharesSignal;
-  });
 }
 
 function matchesLocation(job: RawSourceJob, requestedLocation: string | null | undefined): boolean {
@@ -155,15 +72,20 @@ function matchesLocation(job: RawSourceJob, requestedLocation: string | null | u
   return location.includes(requested) || Boolean(requestedPrimary && location.includes(requestedPrimary));
 }
 
-function isFreshEnough(
-  listingDate: string | null,
-  hoursOld: number | null | undefined,
-  now: Date,
-): boolean {
-  if (!hoursOld || hoursOld <= 0 || !listingDate) return true;
-  const publishedAt = Date.parse(listingDate);
-  if (Number.isNaN(publishedAt)) return true;
-  return publishedAt >= now.getTime() - hoursOld * 60 * 60 * 1000;
+/**
+ * Rows a public feed produces that are not roles at all: a scraped index page,
+ * a login wall captured in place of a description, a link that cannot be
+ * opened, a date that cannot be true.
+ *
+ * The AU worker has dropped these since it was written. GLOBAL did not, so the
+ * junk reached the Jobs list and the user had to delete it by hand — and a
+ * delete writes a permanent DeletedJobUrl tombstone, so the cost of importing
+ * a bad row is not reversible.
+ */
+function isUsableRow(job: RawSourceJob): boolean {
+  if (!isUsableJobUrl(job.jobUrl)) return false;
+  if (isUnusableTitle(job.title)) return false;
+  return !isUnusableDescription(job.description);
 }
 
 /**
@@ -176,7 +98,7 @@ export function filterSourceJobs(
   filter: SourceJobFilter,
 ): RawSourceJob[] {
   const excluded = (filter.excludeTitleTerms ?? [])
-    .map(normalize)
+    .map((term) => normalizeRoleText(term).trim())
     .filter(Boolean);
   const queries = filter.queries.map((query) => query.trim()).filter(Boolean);
   const baseQueries = (filter.baseQueries ?? queries)
@@ -186,7 +108,8 @@ export function filterSourceJobs(
   const now = filter.now ?? new Date();
 
   return jobs.filter((job) => {
-    const normalizedTitle = normalize(job.title);
+    if (!isUsableRow(job)) return false;
+    const normalizedTitle = normalizeRoleText(job.title);
     if (excluded.some((term) => normalizedTitle.includes(term))) return false;
     if (
       filter.queryMode !== "source-only" &&
@@ -195,7 +118,7 @@ export function filterSourceJobs(
       return false;
     }
     if (!matchesLocation(job, filter.location)) return false;
-    if (!isFreshEnough(job.listingDate, filter.hoursOld, now)) return false;
+    if (!isListingDateAcceptable(job.listingDate, filter.hoursOld, now)) return false;
     return !violatesDescriptionExclusions(job.description, descriptionRules);
   });
 }

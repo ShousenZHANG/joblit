@@ -25,6 +25,135 @@ function job(
   };
 }
 
+describe("filterSourceJobs — seniority in the base query", () => {
+  // Measured before the fix: this corpus kept 12/16 for base "AI Engineer" and
+  // 1/16 for "Senior AI Engineer". The matcher filtered the base query's tokens
+  // through GENERIC_ROLE_TOKENS, which does not contain "senior", so the
+  // seniority word survived as a signal the title had to literally contain.
+  // The AU worker has always stripped it — this is GLOBAL catching up.
+  const CORPUS = [
+    "AI Engineer",
+    "Senior AI Engineer",
+    "Machine Learning Engineer",
+    "AI Agent Engineer",
+    "LLM Engineer",
+    "Staff AI Engineer",
+    "Lead Machine Learning Engineer",
+    "Principal AI Engineer",
+    "GenAI Engineer",
+    "AI Platform Engineer",
+    "Graduate AI Engineer",
+    "Marketing Manager",
+  ];
+
+  function keptTitles(base: string, strictTitles: boolean) {
+    return filterSourceJobs(
+      CORPUS.map((title) => job(title, null, "Remote")),
+      { queries: [base], baseQueries: [base], strictTitles },
+    ).map((row) => row.title);
+  }
+
+  it("does not require the title to repeat the seniority word", () => {
+    const kept = keptTitles("Senior AI Engineer", true);
+
+    expect(kept).toContain("AI Engineer");
+    expect(kept).toContain("Machine Learning Engineer");
+    // Staff and Principal outrank Senior; rejecting them was the sharpest
+    // symptom of reading the level as a domain signal.
+    expect(kept).toContain("Staff AI Engineer");
+    expect(kept).toContain("Principal AI Engineer");
+    expect(kept).not.toContain("Marketing Manager");
+  });
+
+  it("returns the same set with or without the seniority word", () => {
+    expect(new Set(keptTitles("Senior AI Engineer", true))).toEqual(
+      new Set(keptTitles("AI Engineer", true)),
+    );
+  });
+
+  it("keeps a non-engineering title out regardless of strictness", () => {
+    expect(keptTitles("Senior AI Engineer", false)).not.toContain("Marketing Manager");
+  });
+});
+
+describe("filterSourceJobs — unusable rows", () => {
+  // Measured before these gates: of six junk rows, three survived the filter.
+  // AU has dropped all of them since it was written. A junk row that reaches
+  // the Jobs list has to be deleted by hand, and a delete writes a permanent
+  // DeletedJobUrl tombstone — so importing one is not a reversible mistake.
+  const base = { queries: ["AI Engineer"], baseQueries: ["AI Engineer"] };
+
+  it("drops a scraped index page masquerading as a title", () => {
+    const rows = [
+      job("AI Engineer", null, "Remote"),
+      job("Careers", null, "Remote"),
+      job("Search Results", null, "Remote"),
+      job("Jobs", null, "Remote"),
+    ];
+    expect(filterSourceJobs(rows, base)).toEqual([rows[0]]);
+  });
+
+  it("drops a login wall captured in place of a description", () => {
+    const rows = [
+      job("AI Engineer", null, "Remote", { description: "Build agents." }),
+      job("AI Engineer", null, "Remote", { description: "Sign in to view this job" }),
+      job("AI Engineer", null, "Remote", { description: "Verify you're human" }),
+    ];
+    expect(filterSourceJobs(rows, base)).toEqual([rows[0]]);
+  });
+
+  it("drops a row whose link cannot be opened", () => {
+    const rows = [
+      job("AI Engineer", null, "Remote"),
+      job("AI Engineer", null, "Remote", { jobUrl: "javascript:alert(1)" }),
+      job("AI Engineer", null, "Remote", { jobUrl: "not a url" }),
+      job("AI Engineer", null, "Remote", { jobUrl: "" }),
+    ];
+    expect(filterSourceJobs(rows, base)).toEqual([rows[0]]);
+  });
+
+  it("drops a listing dated in the future — that is a parse error, not a fresh role", () => {
+    const now = new Date("2026-07-26T00:00:00.000Z");
+    const at = (hours: number) =>
+      new Date(now.getTime() + hours * 3_600_000).toISOString();
+    const rows = [
+      job("AI Engineer", null, "Remote", { listingDate: at(-10) }),
+      job("AI Engineer", null, "Remote", { listingDate: at(24 * 30) }),
+    ];
+    expect(filterSourceJobs(rows, { ...base, hoursOld: 72, now })).toEqual([rows[0]]);
+  });
+
+  it("still drops a future listing when no age limit was requested", () => {
+    const now = new Date("2026-07-26T00:00:00.000Z");
+    const rows = [
+      job("AI Engineer", null, "Remote", {
+        listingDate: new Date(now.getTime() + 24 * 30 * 3_600_000).toISOString(),
+      }),
+    ];
+    expect(filterSourceJobs(rows, { ...base, now })).toEqual([]);
+  });
+
+  it("allows a grace window on the old side for day-precision feeds", () => {
+    const now = new Date("2026-07-26T00:00:00.000Z");
+    const rows = [
+      job("AI Engineer", null, "Remote", {
+        listingDate: new Date(now.getTime() - 80 * 3_600_000).toISOString(),
+      }),
+    ];
+    expect(filterSourceJobs(rows, { ...base, hoursOld: 72, now })).toEqual(rows);
+  });
+
+  it("applies the gates even in source-only mode, where no query filters", () => {
+    const rows = [
+      job("AI Engineer", null, "Remote"),
+      job("Careers", null, "Remote"),
+    ];
+    expect(
+      filterSourceJobs(rows, { queries: [], queryMode: "source-only" }),
+    ).toEqual([rows[0]]);
+  });
+});
+
 describe("filterSourceJobs", () => {
   it("keeps only role-family matches and fails closed without queries", () => {
     const rows = [job("Senior AI Engineer"), job("Finance Manager")];
