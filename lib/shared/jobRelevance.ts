@@ -315,11 +315,3 @@ export function isListingDateAcceptable(
     now.getTime() - (hoursOld + LISTING_AGE_GRACE_HOURS) * 3_600_000;
   return published >= oldCutoff;
 }
-
-export const jobRelevanceInternals = {
-  asciiRoleSignals,
-  requiredAsciiRoleSignals,
-  cjkRoleSignals,
-  hasRoleMarker,
-  matchesDomainFamily,
-};
