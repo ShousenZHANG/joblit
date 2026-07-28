@@ -17,6 +17,10 @@ import { useResumeContext } from "./ResumeContext";
 import type { SectionId } from "./constants";
 import { getSectionIds } from "./constants";
 import { cn } from "@/lib/utils";
+import {
+  COARSE_POINTER_MIN_HEIGHT,
+  COARSE_POINTER_TARGET,
+} from "@/components/ui/touchTarget";
 
 type SectionTranslationKey =
   | "personalInfo"
@@ -106,7 +110,10 @@ export function SectionNav({ className }: SectionNavProps) {
   const saveButtonLabel = saving ? t("saving") : t("saveSelectedResume");
 
   return (
-    <nav className={cn("flex [contain:layout_style]", className)} aria-label="Resume sections">
+    <nav
+      className={cn("flex [contain:layout_style]", className)}
+      aria-label={t("sectionsAria")}
+    >
       {/* Desktop: 64px icon rail */}
       <div className="hidden lg:flex lg:h-full lg:w-full lg:flex-col lg:items-center lg:bg-card/35 lg:px-2 lg:py-3">
         <div className="flex flex-1 flex-col items-center gap-1">
@@ -123,6 +130,7 @@ export function SectionNav({ className }: SectionNavProps) {
                 title={label}
                 className={cn(
                   "group relative grid h-10 w-10 place-items-center rounded-xl",
+                  COARSE_POINTER_TARGET,
                   "transition-colors duration-150 ease-out motion-reduce:transition-none",
                   "active:scale-[0.97] motion-reduce:active:scale-100",
                   isActive
@@ -155,6 +163,7 @@ export function SectionNav({ className }: SectionNavProps) {
             data-guide-highlight={guideHighlight ? "true" : "false"}
             className={cn(
               "relative grid h-10 w-10 place-items-center rounded-xl bg-emerald-600 text-white",
+              COARSE_POINTER_TARGET,
               "shadow-[0_10px_24px_-14px_rgba(5,150,105,0.7)] transition-[transform,box-shadow,filter] duration-150 ease-out motion-reduce:transition-none",
               "hover:brightness-105 hover:shadow-[0_14px_28px_-14px_rgba(5,150,105,0.8)]",
               "active:scale-[0.97] motion-reduce:active:scale-100",
@@ -208,6 +217,7 @@ export function SectionNav({ className }: SectionNavProps) {
         <div
           className="scrollbar-hide flex flex-1 gap-2 overflow-x-auto scroll-smooth"
           role="tablist"
+          aria-label={t("sectionsAria")}
         >
           {visibleSections.map(({ id, tKey, icon: Icon }) => {
             const isActive = activeSection === id;
@@ -224,6 +234,7 @@ export function SectionNav({ className }: SectionNavProps) {
                 aria-selected={isActive}
                 className={cn(
                   "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm",
+                  COARSE_POINTER_MIN_HEIGHT,
                   "transition-colors duration-150 ease-out active:scale-[0.97] motion-reduce:active:scale-100 motion-reduce:transition-none",
                   isActive
                     ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
@@ -247,7 +258,10 @@ export function SectionNav({ className }: SectionNavProps) {
             }}
             aria-label={t("preview")}
             title={t("preview")}
-            className="grid h-9 w-9 place-items-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:border-emerald-300 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            className={cn(
+              "grid h-9 w-9 place-items-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:border-emerald-300 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
+              COARSE_POINTER_TARGET,
+            )}
           >
             <Eye className="h-4 w-4" aria-hidden />
           </button>
@@ -261,6 +275,7 @@ export function SectionNav({ className }: SectionNavProps) {
             data-guide-highlight={guideHighlight ? "true" : "false"}
             className={cn(
               "grid h-9 w-9 place-items-center rounded-full bg-emerald-600 text-white shadow-sm",
+              COARSE_POINTER_TARGET,
               "transition-[transform,filter] duration-150 ease-out motion-reduce:transition-none",
               "hover:brightness-105 active:scale-[0.97] motion-reduce:active:scale-100",
               "disabled:cursor-not-allowed disabled:opacity-60",

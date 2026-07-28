@@ -177,15 +177,15 @@ function SectionContent({ sectionId }: { sectionId: SectionId }) {
   }
 }
 
-function MobilePreviewDialog() {
-  const { previewOpen, setPreviewOpen, pdfUrl, previewStatus, previewError, schedulePreview, basics, locale, t } =
+export function MobilePreviewDialog() {
+  const { previewOpen, setPreviewOpen, pdfUrl, previewStatus, previewError, schedulePreview, basics, t } =
     useResumeContext();
 
   const downloadFilename = buildPdfFilename(
     basics.fullName,
     basics.title,
     "cv",
-    locale === "zh-CN" ? "未命名简历" : "Resume",
+    t("unnamedResumeFilename"),
   );
 
   return (
@@ -200,19 +200,22 @@ function MobilePreviewDialog() {
           <DialogDescription>{t("pdfPreviewDesc")}</DialogDescription>
         </DialogHeader>
         <div className="flex h-full flex-col">
-          <div className="flex h-11 items-center justify-end border-b border-border bg-background/90 px-3 gap-2">
+          <div
+            data-testid="resume-mobile-preview-header"
+            className="flex min-h-[calc(2.75rem+env(safe-area-inset-top))] shrink-0 items-center justify-end gap-2 border-b border-border bg-background/90 pt-[env(safe-area-inset-top)] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] sm:min-h-11 sm:px-3 sm:pt-0"
+          >
             {pdfUrl && (
               <a
                 href={pdfUrl}
                 download={downloadFilename}
-                className="inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 text-xs font-medium text-emerald-700 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 disabled:pointer-events-none disabled:opacity-50"
+                className="inline-flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 text-xs font-medium text-emerald-700 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 disabled:pointer-events-none disabled:opacity-50"
               >
                 <Download className="h-3.5 w-3.5" />
                 {t("download")}
               </a>
             )}
             <DialogClose asChild>
-              <Button type="button" variant="ghost" size="sm">
+              <Button type="button" variant="ghost" size="touch">
                 {t("close")}
               </Button>
             </DialogClose>
@@ -229,7 +232,7 @@ function MobilePreviewDialog() {
             )}
             {previewStatus === "loading" && !pdfUrl && (
               <div className="absolute inset-0 flex items-center justify-center bg-background/70 text-xs text-muted-foreground">
-                Generating preview…
+                {t("generatingPreview")}
               </div>
             )}
             {previewStatus === "error" && (
@@ -237,11 +240,11 @@ function MobilePreviewDialog() {
                 <span>{previewError ?? t("previewFailed")}</span>
                 <Button
                   type="button"
-                  size="sm"
+                  size="touch"
                   variant="outline"
                   onClick={() => schedulePreview(0, false, { force: true })}
                 >
-                  Retry
+                  {t("retryPreview")}
                 </Button>
               </div>
             )}
@@ -311,7 +314,7 @@ export function ResumePageLayout() {
             displays without ever stealing more than 38% of the
             viewport. `shrink-0` plus the form column's `min-w-0`
             keep this width identical across every section. */}
-        <PreviewPanel className="hidden md:flex w-[clamp(440px,38vw,720px)] shrink-0 border-l border-border flex-col" />
+        <PreviewPanel className="hidden w-[clamp(440px,38vw,720px)] shrink-0 flex-col border-l border-border lg:flex" />
       </div>
     </div>
   );

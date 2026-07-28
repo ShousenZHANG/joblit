@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, type ComponentPropsWithoutRef } from "react";
 import dynamic from "next/dynamic";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import {
   BarChart3,
   Briefcase,
@@ -20,6 +20,7 @@ import {
 import { useMarket } from "@/hooks/useMarket";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { COARSE_POINTER_MIN_HEIGHT } from "@/components/ui/touchTarget";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -110,6 +111,20 @@ export function JobDetailPanel({
   onRetryDetail,
 }: JobDetailPanelProps) {
   const t = useTranslations("jobs");
+  const format = useFormatter();
+  const tailorSourceLabel = (source: CvSource | CoverSource) => {
+    switch (source) {
+      case "ai":
+      case "local_ai":
+        return t("tailorSourceAi");
+      case "manual_import":
+        return t("tailorSourceManual");
+      case "base":
+        return t("tailorSourceBase");
+      case "fallback":
+        return t("tailorSourceFallback");
+    }
+  };
   // CN market ships a single Chinese résumé end-to-end — no AI CV tailoring or
   // cover-letter generation — so those actions are hidden there.
   const isCN = useMarket() === "CN";
@@ -133,7 +148,10 @@ export function JobDetailPanel({
 
   const isAppliedSelected = selectedJob?.status === "APPLIED";
   const listOpacityClass = showLoadingOverlay ? "opacity-70" : "opacity-100";
-  const actionHeight = isAppliedSelected ? "h-9" : "h-10";
+  const actionHeight = cn(
+    isAppliedSelected ? "h-9" : "h-10",
+    COARSE_POINTER_MIN_HEIGHT,
+  );
 
   return (
     <div
@@ -199,10 +217,12 @@ export function JobDetailPanel({
                   icon={CalendarDays}
                   value={
                     selectedJob.listingDate
-                      ? `Posted ${new Date(selectedJob.listingDate).toLocaleDateString(undefined, {
-                          day: "numeric",
-                          month: "short",
-                        })}`
+                      ? t("postedDate", {
+                          date: format.dateTime(new Date(selectedJob.listingDate), {
+                            day: "numeric",
+                            month: "short",
+                          }),
+                        })
                       : null
                   }
                 />
@@ -219,9 +239,13 @@ export function JobDetailPanel({
                   disabled={updatingIds.has(selectedJob.id)}
                 >
                   <SelectTrigger
-                    className={`rounded-xl border-border bg-background shadow-sm ${
-                      isAppliedSelected ? "h-9 w-full px-3 text-sm sm:w-[118px]" : "h-10 w-full sm:w-[132px]"
-                    }`}
+                    className={cn(
+                      "rounded-xl border-border bg-background shadow-sm",
+                      COARSE_POINTER_MIN_HEIGHT,
+                      isAppliedSelected
+                        ? "h-9 w-full px-3 text-sm sm:w-[118px]"
+                        : "h-10 w-full sm:w-[132px]",
+                    )}
                   >
                     <span className="truncate">
                       {statusPresentation ? t(statusPresentation.labelKey) : null}
@@ -313,12 +337,16 @@ export function JobDetailPanel({
               <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                 {tailorSource.cv ? (
                   <span className="rounded-full border border-border/60 bg-muted/60 px-2 py-0.5">
-                    CV: {tailorSource.cv === "ai" || tailorSource.cv === "local_ai" ? "AI" : tailorSource.cv === "manual_import" ? "Manual" : "Base"}
+                    {t("tailorSourceCv", {
+                      source: tailorSourceLabel(tailorSource.cv),
+                    })}
                   </span>
                 ) : null}
                 {tailorSource.cover ? (
                   <span className="rounded-full border border-border/60 bg-muted/60 px-2 py-0.5">
-                    Cover: {tailorSource.cover === "ai" || tailorSource.cover === "local_ai" ? "AI" : tailorSource.cover === "manual_import" ? "Manual" : "Fallback"}
+                    {t("tailorSourceCover", {
+                      source: tailorSourceLabel(tailorSource.cover),
+                    })}
                   </span>
                 ) : null}
               </div>
@@ -344,7 +372,7 @@ export function JobDetailPanel({
                   <FileText className="h-3.5 w-3.5" aria-hidden />
                 </span>
                 <span className="text-xs font-semibold uppercase tracking-wider text-foreground/80">
-                  Job Description
+                  {t("jobDescriptionTitle")}
                 </span>
                 <span className="h-px flex-1 bg-gradient-to-r from-border to-transparent" aria-hidden />
               </div>
@@ -361,7 +389,10 @@ export function JobDetailPanel({
                   <button
                     type="button"
                     onClick={onRetryDetail}
-                    className="font-semibold underline underline-offset-2 hover:no-underline"
+                    className={cn(
+                      "font-semibold underline underline-offset-2 hover:no-underline",
+                      COARSE_POINTER_MIN_HEIGHT,
+                    )}
                   >
                     {t("retry")}
                   </button>
@@ -379,7 +410,7 @@ export function JobDetailPanel({
                     <JobDescriptionMarkdown description={selectedDescription} />
                   ) : (
                     <div className="text-sm text-muted-foreground">
-                      No description available for this job yet.
+                      {t("noJobDescription")}
                     </div>
                   )}
                 </div>

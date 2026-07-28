@@ -115,6 +115,23 @@ describe("Resume page", () => {
       .forEach((button) => expect(button).toBeDisabled());
   }, 10_000);
 
+  it("keeps the preview out of the constrained tablet layout", async () => {
+    mockEmptyProfileFetch();
+
+    const { container } = renderResumePage();
+
+    expect(
+      await screen.findByRole("heading", { name: "Personal info" }),
+    ).toBeInTheDocument();
+    const desktopPreview = container.querySelector(
+      '[data-slot="resume-desktop-preview"]',
+    );
+
+    expect(desktopPreview).not.toBeNull();
+    expect(desktopPreview).toHaveClass("hidden", "lg:flex");
+    expect(desktopPreview).not.toHaveClass("md:flex");
+  });
+
   it("uses the CN resume section order and CN-specific personal-info fields", async () => {
     mockEmptyProfileFetch();
 

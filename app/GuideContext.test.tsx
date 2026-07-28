@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
+import { useLayoutEffect } from "react";
 import { GuideProvider, useGuide } from "./GuideContext";
 import { Toaster } from "@/components/ui/toaster";
 import { resetToasts } from "@/hooks/use-toast";
@@ -95,6 +96,7 @@ function renderWithIntl(ui: React.ReactElement) {
 describe("GuideContext", () => {
   beforeEach(() => {
     window.sessionStorage.clear();
+    window.sessionStorage.setItem("joblit_guide_welcome_shown", "1");
     vi.restoreAllMocks();
     mockPathname = "/resume";
     pushMock.mockReset();
@@ -227,6 +229,7 @@ describe("GuideContext", () => {
       return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
     });
     vi.stubGlobal("fetch", fetchMock);
+    window.sessionStorage.setItem("joblit_guide_welcome_shown", "1");
 
     renderWithIntl(
       <GuideProvider>
@@ -238,15 +241,64 @@ describe("GuideContext", () => {
       expect(screen.getByTestId("guide-count")).toHaveTextContent("0/5");
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "open-guide" }));
+    const openGuideButton = screen.getByRole("button", { name: "open-guide" });
+    openGuideButton.focus();
+    fireEvent.click(openGuideButton);
 
     // The Quick Start panel renders with all five tasks listed in order.
     await waitFor(() => {
       expect(screen.getByTestId("guide-quickstart-panel")).toBeInTheDocument();
     });
+    const panel = screen.getByTestId("guide-quickstart-panel");
+    const backdrop = screen.getByTestId("guide-modal-backdrop");
+    expect(panel).toHaveAttribute("role", "dialog");
+    expect(panel).toHaveAttribute("aria-modal", "true");
+    expect(backdrop).toHaveAttribute("aria-hidden", "true");
+    expect(backdrop).not.toHaveClass("md:hidden");
+    expect(
+      screen
+        .getByRole("button", { name: "anchor-resume", hidden: true })
+        .closest('[aria-hidden="true"]'),
+    ).not.toBeNull();
+    expect(document.body).toHaveAttribute("data-scroll-locked");
+    const dismissButton = screen.getByRole("button", {
+      name: messages.guide.dismissPanel,
+    });
+    expect(dismissButton).toHaveClass(
+      "[@media(any-pointer:coarse)]:min-h-11",
+      "[@media(any-pointer:coarse)]:min-w-11",
+    );
     const list = screen.getByTestId("guide-quickstart-list");
     expect(list).toHaveTextContent(/Set up your master resume/i);
     expect(list).toHaveTextContent(/Run your first job fetch/i);
+
+    fireEvent.click(dismissButton);
+    await waitFor(() => {
+      expect(screen.queryByTestId("guide-quickstart-panel")).not.toBeInTheDocument();
+    });
+    expect(document.body).not.toHaveAttribute("data-scroll-locked");
+    await waitFor(() => {
+      expect(openGuideButton).toHaveFocus();
+    });
+
+    fireEvent.click(openGuideButton);
+    await waitFor(() => {
+      expect(screen.getByTestId("guide-quickstart-panel")).toBeInTheDocument();
+    });
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByTestId("guide-quickstart-panel")).not.toBeInTheDocument();
+    });
+    expect(document.body).not.toHaveAttribute("data-scroll-locked");
+    await waitFor(() => {
+      expect(openGuideButton).toHaveFocus();
+    });
+
+    fireEvent.click(openGuideButton);
+    await waitFor(() => {
+      expect(screen.getByTestId("guide-quickstart-panel")).toBeInTheDocument();
+    });
 
     // Clicking the primary "Take me there" CTA on the current task routes
     // to its href — for a fresh user that's /resume.
@@ -261,6 +313,7 @@ describe("GuideContext", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("guide-quickstart-panel")).not.toBeInTheDocument();
     });
+    expect(document.body).not.toHaveAttribute("data-scroll-locked");
   });
 
   it("renders an inline coachmark on the task page and auto-dismisses on completion", async () => {
@@ -313,6 +366,15 @@ describe("GuideContext", () => {
       { timeout: 1500 },
     );
     expect(setIntervalSpy.mock.calls.filter((call) => call[1] === 200)).toHaveLength(0);
+    const coachmark = screen.getByTestId("guide-coachmark");
+    expect(coachmark).toHaveAttribute("role", "dialog");
+    expect(coachmark).toHaveAttribute("aria-modal", "false");
+    expect(document.body).not.toHaveAttribute("data-scroll-locked");
+    expect(
+      screen
+        .getByRole("button", { name: "anchor-resume" })
+        .closest('[aria-hidden="true"]'),
+    ).toBeNull();
 
     // Completing the task auto-dismisses the coachmark.
     fireEvent.click(screen.getByRole("button", { name: "complete-first" }));
@@ -331,6 +393,7 @@ describe("GuideContext", () => {
 describe("GuideContext — completion loop", () => {
   beforeEach(() => {
     window.sessionStorage.clear();
+    window.sessionStorage.setItem("joblit_guide_welcome_shown", "1");
     resetToasts();
     vi.restoreAllMocks();
     mockPathname = "/resume";
@@ -343,7 +406,7 @@ describe("GuideContext — completion loop", () => {
   });
 
   function stubStateFetch(overrides?: Partial<GuideStatePayload>) {
-    const fetchMock = vi.fn(async (input: RequestInfo) => {
+    const fetchMock = vi.fn(async (input: RequestInfo, _init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.url;
       if (url === "/api/onboarding/state") {
         return new Response(JSON.stringify({ state: createState(overrides) }), {
@@ -367,6 +430,87 @@ describe("GuideContext — completion loop", () => {
     );
   }
 
+  function CompleteAsSoonAsStateAppears() {
+    const { markTaskComplete, state } = useGuide();
+
+    useLayoutEffect(() => {
+      if (state && !state.checklist.resume_setup) {
+        markTaskComplete("resume_setup");
+      }
+    }, [markTaskComplete, state]);
+
+    return <span data-testid="immediate-guide-count">{state?.completedCount ?? "none"}</span>;
+  }
+
+  function CompleteTwoTasksAsSoonAsStateAppears() {
+    const { markTaskComplete, state } = useGuide();
+
+    useLayoutEffect(() => {
+      if (state && !state.checklist.resume_setup && !state.checklist.first_fetch) {
+        markTaskComplete("resume_setup");
+        markTaskComplete("first_fetch");
+      }
+    }, [markTaskComplete, state]);
+
+    return <span data-testid="batched-guide-count">{state?.completedCount ?? "none"}</span>;
+  }
+
+  it("acknowledges a task completed immediately after onboarding state appears", async () => {
+    stubStateFetch();
+
+    renderWithIntl(
+      <GuideProvider>
+        <CompleteAsSoonAsStateAppears />
+        <Toaster />
+      </GuideProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("immediate-guide-count")).toHaveTextContent("1");
+    });
+
+    expect(
+      await screen.findByText(new RegExp(messages.guide.task_resume_setup_title)),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(new RegExp(messages.guide.task_first_fetch_title), {
+        selector: "[data-slot='toast-description']",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps consecutive layout-effect completions in state and persistence", async () => {
+    const fetchMock = stubStateFetch();
+
+    renderWithIntl(
+      <GuideProvider>
+        <CompleteTwoTasksAsSoonAsStateAppears />
+      </GuideProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("batched-guide-count")).toHaveTextContent("2");
+    });
+
+    await waitFor(() => {
+      const completionPayloads = fetchMock.mock.calls.flatMap(([, init]) => {
+        if (!init?.body) return [];
+        const payload = JSON.parse(String(init.body)) as {
+          type?: string;
+          taskId?: string;
+          checklist?: GuideStatePayload["checklist"];
+        };
+        return payload.type === "complete_task" ? [payload] : [];
+      });
+
+      expect(completionPayloads).toHaveLength(2);
+      expect(completionPayloads.at(-1)?.checklist).toMatchObject({
+        resume_setup: true,
+        first_fetch: true,
+      });
+    });
+  });
+
   it("acknowledges a completion and offers the next step", async () => {
     renderLoop();
     await waitFor(() => {
@@ -382,7 +526,9 @@ describe("GuideContext — completion loop", () => {
       ).toBeInTheDocument();
     });
     expect(
-      screen.getByText(new RegExp(messages.guide.task_first_fetch_title)),
+      screen.getByText(new RegExp(messages.guide.task_first_fetch_title), {
+        selector: "[data-slot='toast-description']",
+      }),
     ).toBeInTheDocument();
   });
 

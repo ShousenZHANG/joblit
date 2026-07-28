@@ -1,71 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, FileText, RotateCcw, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useEffect, useRef, type ReactElement } from "react";
+import { useTranslations } from "next-intl";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { TailorReviewDialogView } from "./TailorReviewDialogView";
+import type {
+  TailorReviewDraft,
+  TailorReviewFinalized,
+} from "./TailorReviewDialog.types";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { ApiError } from "@/lib/api/fetchJson";
-import { buildPdfFilename } from "@/lib/shared/pdfFilename";
-import {
-  applicationReviewSchema,
-  type AiApplicationReview,
-  type AiContent,
-} from "@/lib/shared/schemas/aiContent";
-import { cn } from "@/lib/utils";
-import { BulletsSection } from "../[id]/tailor/BulletsSection";
-import { ConflictDialog } from "../[id]/tailor/ConflictDialog";
-import {
-  discardDraft,
-  extractMessage,
-  finalizeApplication,
-  isAbortError,
-  renderPreview as requestPreviewRender,
-} from "../[id]/tailor/tailorActions";
-import { useUnsavedChangesGuard } from "../[id]/tailor/useUnsavedChangesGuard";
-import { CoverParagraphsSection } from "../[id]/tailor/CoverParagraphsSection";
-import { PdfPreview } from "../[id]/tailor/PdfPreview";
-import { ReviewGateCard } from "../[id]/tailor/ReviewGateCard";
-import { SaveIndicator } from "../[id]/tailor/SaveIndicator";
-import { SummarySection } from "../[id]/tailor/SummarySection";
-import { useTailorDraft } from "../[id]/tailor/useTailorDraft";
+  useTailoringEditSession,
+  type TailoringEditSession,
+} from "../[id]/tailor/useTailoringEditSession";
 
-type TailorTarget = "resume" | "cover";
-type PreviewSyncStatus = "synced" | "pending" | "rendering" | "error";
+export type {
+  TailorReviewDraft,
+  TailorReviewFinalized,
+} from "./TailorReviewDialog.types";
 
-const AUTO_PREVIEW_DEBOUNCE_MS = 1400;
-const QUEUED_PREVIEW_DEBOUNCE_MS = 500;
-
-export type TailorReviewDraft = {
-  applicationId: string;
-  target: TailorTarget;
-  initialStatus: "DRAFT" | "FINAL";
-  initialAiContent: AiContent;
-  initialAiContentHash: string | null;
-  resumePdfUrl: string | null;
-  coverPdfUrl: string | null;
-  /** Canonical download name from the server; null falls back to the shared builder. */
-  pdfName?: string | null;
-  source?: "manual_import" | "local_ai";
-  job: {
-    id: string | null;
-    title: string;
-    company: string | null;
-    location: string | null;
-  };
-};
-
-export type TailorReviewFinalized = {
-  target: TailorTarget;
-  resumePdfUrl?: string;
-  resumePdfName?: string;
-  coverPdfUrl?: string;
-  coverPdfName?: string;
+type CloseRequestRef = {
+  current: (() => void) | null;
 };
 
 type TailorReviewDialogProps = {
@@ -80,23 +34,19 @@ export function TailorReviewDialog({
   draft,
   onOpenChange,
   onFinalized,
-}: TailorReviewDialogProps) {
+}: TailorReviewDialogProps): ReactElement {
   const closeRequestRef = useRef<(() => void) | null>(null);
-
   return (
     <Dialog
       open={open && !!draft}
       onOpenChange={(nextOpen) => {
-        if (nextOpen) {
-          onOpenChange(true);
-          return;
-        }
-        closeRequestRef.current?.();
+        if (nextOpen) onOpenChange(true);
+        else closeRequestRef.current?.();
       }}
     >
       <DialogContent
         showCloseButton={false}
-        className="fixed left-2 top-2 flex h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-none translate-x-0 translate-y-0 grid-rows-none flex-col gap-0 overflow-hidden rounded-[1.65rem] border border-white/70 dark:border-border/60 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_44%,#edf7f2_100%)] dark:bg-none dark:bg-card p-0 shadow-[0_34px_110px_-44px_rgba(15,23,42,0.70),0_16px_42px_-34px_rgba(15,23,42,0.45)] ring-1 ring-slate-900/5 dark:ring-white/10 sm:left-4 sm:top-4 sm:h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)] sm:max-w-none sm:rounded-[2rem]"
+        className="fixed inset-0 left-0 top-0 flex h-[100dvh] w-[100vw] max-w-none translate-x-0 translate-y-0 grid-rows-none flex-col gap-0 overflow-hidden rounded-none border border-white/70 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_44%,#edf7f2_100%)] p-0 shadow-[0_34px_110px_-44px_rgba(15,23,42,0.70),0_16px_42px_-34px_rgba(15,23,42,0.45)] ring-1 ring-slate-900/5 dark:border-border/60 dark:bg-card dark:bg-none dark:ring-white/10 sm:left-4 sm:top-4 sm:h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)] sm:max-w-none sm:rounded-[2rem]"
       >
         {draft ? (
           <TailorReviewDialogBody
@@ -113,7 +63,7 @@ export function TailorReviewDialog({
 }
 
 function TailorReviewDialogBody({
-  draft: initialDraft,
+  draft,
   onClose,
   onFinalized,
   closeRequestRef,
@@ -121,575 +71,71 @@ function TailorReviewDialogBody({
   draft: TailorReviewDraft;
   onClose: () => void;
   onFinalized: (result: TailorReviewFinalized) => void;
-  closeRequestRef: { current: (() => void) | null };
-}) {
-  const draft = useTailorDraft({
-    applicationId: initialDraft.applicationId,
-    initialAiContent: initialDraft.initialAiContent,
-    initialAiContentHash: initialDraft.initialAiContentHash,
+  closeRequestRef: CloseRequestRef;
+}): ReactElement {
+  const session = useTailorReviewSession(draft);
+  useCloseRequestBridge(session, onClose, closeRequestRef);
+  return (
+    <TailorReviewDialogView
+      draft={draft}
+      session={session}
+      onClose={() => void session.saveAndExit(onClose)}
+      onFinalize={() => void finalizeReview(session, onFinalized)}
+    />
+  );
+}
+
+function useTailorReviewSession(
+  draft: TailorReviewDraft,
+): TailoringEditSession {
+  const t = useTranslations("tailor");
+  return useTailoringEditSession({
+    applicationId: draft.applicationId,
+    initialStatus: draft.initialStatus,
+    initialAiContent: draft.initialAiContent,
+    initialAiContentHash: draft.initialAiContentHash,
+    initialResumePdfUrl: draft.resumePdfUrl,
+    initialCoverPdfUrl: draft.coverPdfUrl,
+    initialTarget: draft.target,
+    autoPreview: true,
+    messages: {
+      conflict: t("save.conflict"),
+      saveFailed: t("save.failedRetry"),
+      previewFailed: t("dialog.errorPreview"),
+      finalizeFailed: t("dialog.errorFinalize"),
+      discardFailed: t("dialog.errorDiscard"),
+      exitFailed: t("dialog.errorSaveStillOpen"),
+    },
   });
-  const [status, setStatus] = useState<"DRAFT" | "FINAL">(
-    initialDraft.initialStatus,
-  );
-  const [resumePdf, setResumePdf] = useState<string | null>(
-    initialDraft.resumePdfUrl,
-  );
-  const [coverPdf, setCoverPdf] = useState<string | null>(
-    initialDraft.coverPdfUrl,
-  );
-  const [lastResumeRefreshAt, setLastResumeRefreshAt] = useState<number | null>(null);
-  const [lastCoverRefreshAt, setLastCoverRefreshAt] = useState<number | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [previewSyncStatus, setPreviewSyncStatus] =
-    useState<PreviewSyncStatus>("synced");
-  const [isFinalizing, setIsFinalizing] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
-  const [isDiscarding, setIsDiscarding] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [blockedReview, setBlockedReview] = useState<AiApplicationReview | null>(
-    null,
-  );
-  const initialPreviewUrl =
-    initialDraft.target === "resume"
-      ? initialDraft.resumePdfUrl
-      : initialDraft.coverPdfUrl;
-  const previewRenderedHashRef = useRef<string | null>(
-    initialPreviewUrl ? initialDraft.initialAiContentHash : null,
-  );
-  const autoRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const renderInFlightRef = useRef(false);
-  const renderQueuedRef = useRef(false);
-  const previewObjectUrlRef = useRef<string | null>(null);
-  const previewAbortRef = useRef<AbortController | null>(null);
-  const mountedRef = useRef(true);
-  const closeInFlightRef = useRef(false);
-  const latestHashRef = useRef<string | null>(draft.currentHash);
-  const saveKindRef = useRef(draft.saveStatus.kind);
-  const previewRenderRef = useRef<() => void>(() => {});
+}
 
-  const target = initialDraft.target;
-  const targetLabel = target === "resume" ? "CV" : "Cover Letter";
-  // Preview PDFs arrive as `blob:` object URLs, so the browser has nothing to
-  // name a download from. Prefer the server's canonical name; if an older
-  // response omitted it, the shared builder still yields the right shape from
-  // the job title alone rather than an opaque UUID.
-  const downloadFilename =
-    initialDraft.pdfName?.trim() ||
-    buildPdfFilename(null, initialDraft.job.title, target === "cover" ? "cl" : "cv");
-  const currentPdf = target === "resume" ? resumePdf : coverPdf;
-  const currentRefreshAt =
-    target === "resume" ? lastResumeRefreshAt : lastCoverRefreshAt;
-  const flushDraftNow = draft.flushNow;
-  const canClose = !isFinalizing && !isClosing && !isDiscarding;
-  const previewStatusLabel =
-    previewSyncStatus === "rendering"
-      ? "Rendering preview"
-      : previewSyncStatus === "pending"
-        ? "Queued after edit"
-        : previewSyncStatus === "error"
-          ? "Preview needs refresh"
-          : "Preview in sync";
-  const showConflictDialog =
-    draft.saveStatus.kind === "error" && draft.saveStatus.conflict === true;
-
-  // This dialog autosaves on a debounce exactly like the route page, so it has
-  // the same window where closing the tab loses edits. Only the route page
-  // warned about it.
-  useUnsavedChangesGuard(
-    draft.saveStatus.kind === "dirty" || draft.saveStatus.kind === "saving",
-  );
-
+function useCloseRequestBridge(
+  session: TailoringEditSession,
+  onClose: () => void,
+  closeRequestRef: CloseRequestRef,
+): void {
   useEffect(() => {
-    latestHashRef.current = draft.currentHash;
-  }, [draft.currentHash]);
-
-  useEffect(() => {
-    saveKindRef.current = draft.saveStatus.kind;
-  }, [draft.saveStatus.kind]);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      previewAbortRef.current?.abort();
-      if (autoRenderTimerRef.current) {
-        clearTimeout(autoRenderTimerRef.current);
-      }
-      if (
-        previewObjectUrlRef.current &&
-        typeof URL.revokeObjectURL === "function"
-      ) {
-        URL.revokeObjectURL(previewObjectUrlRef.current);
-      }
-    };
-  }, []);
-
-  function patchSummary(summary: AiContent["cv"]["summary"]) {
-    setStatus("DRAFT");
-    draft.setAiContent({
-      ...draft.aiContent,
-      cv: { ...draft.aiContent.cv, summary },
-    });
-  }
-
-  function patchLatestExperience(le: AiContent["cv"]["latestExperience"]) {
-    setStatus("DRAFT");
-    draft.setAiContent({
-      ...draft.aiContent,
-      cv: { ...draft.aiContent.cv, latestExperience: le },
-    });
-  }
-
-  function patchCover(cover: AiContent["cover"]) {
-    setStatus("DRAFT");
-    draft.setAiContent({ ...draft.aiContent, cover });
-  }
-
-  const callFinalize = useCallback(async () => {
-    const expectedHash = await flushDraftNow();
-    const data = await finalizeApplication({
-      applicationId: initialDraft.applicationId,
-      target,
-      expectedHash,
-    });
-    return { expectedHash, data };
-  }, [flushDraftNow, initialDraft.applicationId, target]);
-
-  const callPreview = useCallback(async () => {
-    const expectedHash = await flushDraftNow();
-    const controller = new AbortController();
-    previewAbortRef.current = controller;
-    try {
-      const objectUrl = await requestPreviewRender({
-        applicationId: initialDraft.applicationId,
-        target,
-        expectedHash,
-        signal: controller.signal,
-      });
-      return { expectedHash, objectUrl };
-    } finally {
-      if (previewAbortRef.current === controller) {
-        previewAbortRef.current = null;
-      }
-    }
-  }, [flushDraftNow, initialDraft.applicationId, target]);
-
-  const applyPreviewResult = useCallback(
-    (objectUrl: string) => {
-      if (
-        previewObjectUrlRef.current &&
-        typeof URL.revokeObjectURL === "function"
-      ) {
-        URL.revokeObjectURL(previewObjectUrlRef.current);
-      }
-      previewObjectUrlRef.current = objectUrl;
-      if (target === "resume") {
-        setResumePdf(objectUrl);
-        setLastResumeRefreshAt(Date.now());
-      } else {
-        setCoverPdf(objectUrl);
-        setLastCoverRefreshAt(Date.now());
-      }
-    },
-    [target],
-  );
-
-  const applyFinalizedResult = useCallback((data: {
-    status: "FINAL";
-    resumePdfUrl?: string;
-    resumePdfName?: string;
-    coverPdfUrl?: string;
-    coverPdfName?: string;
-  }) => {
-    if (
-      previewObjectUrlRef.current &&
-      typeof URL.revokeObjectURL === "function"
-    ) {
-      URL.revokeObjectURL(previewObjectUrlRef.current);
-      previewObjectUrlRef.current = null;
-    }
-    if (data.resumePdfUrl) {
-      setResumePdf(data.resumePdfUrl);
-      setLastResumeRefreshAt(Date.now());
-    }
-    if (data.coverPdfUrl) {
-      setCoverPdf(data.coverPdfUrl);
-      setLastCoverRefreshAt(Date.now());
-    }
-    setStatus("FINAL");
-    onFinalized({
-      target,
-      resumePdfUrl: data.resumePdfUrl,
-      resumePdfName: data.resumePdfName,
-      coverPdfUrl: data.coverPdfUrl,
-      coverPdfName: data.coverPdfName,
-    });
-  }, [onFinalized, target]);
-
-  const schedulePreviewRender = useCallback(
-    (delayMs = AUTO_PREVIEW_DEBOUNCE_MS) => {
-      if (!latestHashRef.current) return;
-      if (renderInFlightRef.current) {
-        renderQueuedRef.current = true;
-        setPreviewSyncStatus("pending");
-        return;
-      }
-      if (autoRenderTimerRef.current) {
-        clearTimeout(autoRenderTimerRef.current);
-      }
-      setPreviewSyncStatus("pending");
-      autoRenderTimerRef.current = setTimeout(() => {
-        autoRenderTimerRef.current = null;
-        previewRenderRef.current();
-      }, delayMs);
-    },
-    [],
-  );
-
-  const renderPreview = useCallback(async () => {
-    if (renderInFlightRef.current) {
-      renderQueuedRef.current = true;
-      setPreviewSyncStatus("pending");
-      return;
-    }
-    if (autoRenderTimerRef.current) {
-      clearTimeout(autoRenderTimerRef.current);
-      autoRenderTimerRef.current = null;
-    }
-
-    setActionError(null);
-    setBlockedReview(null);
-    renderInFlightRef.current = true;
-    setPreviewSyncStatus("rendering");
-    setIsRefreshing(true);
-    let renderSucceeded = false;
-    try {
-      const { objectUrl, expectedHash } = await callPreview();
-      if (!mountedRef.current) {
-        if (typeof URL.revokeObjectURL === "function") {
-          URL.revokeObjectURL(objectUrl);
-        }
-        return;
-      }
-      previewRenderedHashRef.current = expectedHash;
-      applyPreviewResult(objectUrl);
-      renderSucceeded = true;
-    } catch (err: unknown) {
-      if (mountedRef.current && !isAbortError(err)) {
-        setActionError(extractMessage(err, "Preview render failed"));
-      }
-    } finally {
-      renderInFlightRef.current = false;
-      if (!mountedRef.current) return;
-      setIsRefreshing(false);
-      const latestHash = latestHashRef.current;
-      const needsFollowUp =
-        renderSucceeded &&
-        saveKindRef.current === "saved" &&
-          !!latestHash &&
-          previewRenderedHashRef.current !== latestHash;
-      renderQueuedRef.current = false;
-
-      if (needsFollowUp && latestHash && saveKindRef.current === "saved") {
-        schedulePreviewRender(QUEUED_PREVIEW_DEBOUNCE_MS);
-      } else if (!renderSucceeded) {
-        // Persistent LaTeX/HTTP failures must not create a 500ms retry loop.
-        // A later edit or explicit Refresh starts the next attempt.
-        setPreviewSyncStatus("error");
-      } else {
-        setPreviewSyncStatus("synced");
-      }
-    }
-  }, [applyPreviewResult, callPreview, schedulePreviewRender]);
-
-  useEffect(() => {
-    previewRenderRef.current = () => {
-      void renderPreview();
-    };
-  }, [renderPreview]);
-
-  const handleRefresh = useCallback(async () => {
-    await renderPreview();
-  }, [renderPreview]);
-
-  useEffect(() => {
-    if (draft.saveStatus.kind !== "saved" || !draft.currentHash) return;
-    if (previewRenderedHashRef.current === draft.currentHash) {
-      if (!renderInFlightRef.current) setPreviewSyncStatus("synced");
-      return;
-    }
-    schedulePreviewRender();
-
-    return () => {
-      if (autoRenderTimerRef.current) {
-        clearTimeout(autoRenderTimerRef.current);
-        autoRenderTimerRef.current = null;
-      }
-    };
-  }, [draft.currentHash, draft.saveStatus.kind, schedulePreviewRender]);
-
-  async function handleFinalize() {
-    setActionError(null);
-    setBlockedReview(null);
-    setIsFinalizing(true);
-    try {
-      const { data, expectedHash } = await callFinalize();
-      previewRenderedHashRef.current = expectedHash;
-      applyFinalizedResult(data);
-    } catch (err: unknown) {
-      setActionError(extractMessage(err, "Finalize failed"));
-      setBlockedReview(extractBlockedReview(err));
-    } finally {
-      setIsFinalizing(false);
-    }
-  }
-
-  const handleClose = useCallback(async () => {
-    if (closeInFlightRef.current || isFinalizing || isDiscarding) return;
-    closeInFlightRef.current = true;
-    setActionError(null);
-    setBlockedReview(null);
-    setIsClosing(true);
-    try {
-      await flushDraftNow();
-      onClose();
-    } catch (err: unknown) {
-      if (mountedRef.current) {
-        setActionError(extractMessage(err, "Save failed. Review is still open."));
-      }
-    } finally {
-      closeInFlightRef.current = false;
-      if (mountedRef.current) setIsClosing(false);
-    }
-  }, [flushDraftNow, isDiscarding, isFinalizing, onClose]);
-
-  useEffect(() => {
-    const requestClose = () => {
-      void handleClose();
-    };
+    const requestClose = () => void session.saveAndExit(onClose);
     closeRequestRef.current = requestClose;
     return () => {
       if (closeRequestRef.current === requestClose) {
         closeRequestRef.current = null;
       }
     };
-  }, [closeRequestRef, handleClose]);
-
-  async function handleDiscard() {
-    setActionError(null);
-    setBlockedReview(null);
-    setIsDiscarding(true);
-    try {
-      const expectedHash = await flushDraftNow();
-      const data = await discardDraft({
-        applicationId: initialDraft.applicationId,
-        expectedHash,
-      });
-      draft.replaceFromServer(data.aiContent, data.aiContentHash);
-      setStatus("DRAFT");
-    } catch (err: unknown) {
-      setActionError(extractMessage(err, "Discard failed"));
-    } finally {
-      setIsDiscarding(false);
-    }
-  }
-
-  return (
-    <>
-      <DialogHeader className="relative shrink-0 border-b border-border/70 bg-card/90 px-5 py-4 text-left shadow-[0_12px_34px_-32px_rgba(15,23,42,0.55)] backdrop-blur-xl md:px-7">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-8 bottom-0 h-px bg-gradient-to-r from-transparent via-brand-emerald-300/70 to-transparent"
-        />
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0 space-y-1">
-            <DialogTitle className="flex flex-wrap items-center gap-2 text-base md:text-lg">
-              <span>Review tailored {targetLabel}</span>
-              <StatusPill status={status} />
-            </DialogTitle>
-            <DialogDescription className="truncate text-xs md:text-sm">
-              {initialDraft.job.title}
-              {initialDraft.job.company ? ` | ${initialDraft.job.company}` : ""}
-              {initialDraft.job.location ? ` | ${initialDraft.job.location}` : ""}
-            </DialogDescription>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <SaveIndicator status={draft.saveStatus} />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              disabled={!canClose}
-              onClick={() => void handleClose()}
-              className="rounded-full text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-95"
-              aria-label="Close review dialog"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </DialogHeader>
-
-      {/* A blocked finalize is not really an error message — the server has
-          already worked out which claims lack evidence and which requirements
-          are uncovered. Showing only "Resolve unsupported claims" left the user
-          stuck with no way to tell what to fix, while the full-page Tailor view
-          rendered the same data properly. Reuse that card here so the two
-          surfaces say the same thing. Everything else (network, conflict, rate
-          limit) has no structure to show and keeps the plain banner. */}
-      {actionError && blockedReview ? (
-        <div className="mx-5 mt-4 md:mx-7">
-          <ReviewGateCard review={blockedReview} />
-        </div>
-      ) : actionError ? (
-        <div
-          role="alert"
-          className="mx-5 mt-4 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-sm font-medium text-destructive shadow-sm md:mx-7"
-        >
-          {actionError}
-        </div>
-      ) : null}
-
-      <div
-        aria-busy={isClosing || isDiscarding || isFinalizing}
-        inert={isClosing || isDiscarding || isFinalizing ? true : undefined}
-        className="grid min-h-0 flex-1 gap-5 overflow-hidden bg-[radial-gradient(circle_at_6%_0%,rgba(16,185,129,0.09),transparent_28%),radial-gradient(circle_at_82%_8%,rgba(59,130,246,0.055),transparent_30%)] p-4 md:p-6 lg:grid-cols-2"
-      >
-        <div className="flex min-h-0 flex-col overflow-hidden rounded-[1.65rem] border border-border/60 bg-card/75 p-3 shadow-[0_24px_70px_-48px_rgba(15,23,42,0.55),0_8px_20px_-18px_rgba(15,23,42,0.20)] ring-1 ring-border/40 backdrop-blur">
-          <div className="mb-3 flex shrink-0 items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card/80 px-3 py-2.5 shadow-[0_10px_28px_-25px_rgba(15,23,42,0.42)]">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-foreground">AI proposals</p>
-              <p className="truncate text-xs text-muted-foreground">
-                Review edits, then the preview renders the accepted version.
-              </p>
-            </div>
-            <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground ring-1 ring-border">
-              {previewStatusLabel}
-            </span>
-          </div>
-          <div className="min-h-0 overflow-y-auto pr-1">
-            <div className="flex flex-col gap-4 pb-2">
-            {target === "resume" ? (
-              <>
-                <SummarySection
-                  summary={draft.aiContent.cv.summary}
-                  onChange={patchSummary}
-                />
-                <BulletsSection
-                  latestExperience={draft.aiContent.cv.latestExperience}
-                  onChange={patchLatestExperience}
-                />
-              </>
-            ) : (
-              <CoverParagraphsSection
-                cover={draft.aiContent.cover}
-                onChange={patchCover}
-              />
-            )}
-            </div>
-          </div>
-        </div>
-
-        <div className="hidden min-h-0 lg:block">
-          <PdfPreview
-            pdfUrl={currentPdf}
-            jobTitle={initialDraft.job.title}
-            downloadFilename={downloadFilename}
-            isRefreshing={isRefreshing}
-            isPending={previewSyncStatus === "pending"}
-            autoRefresh={false}
-            lastRefreshedAt={currentRefreshAt}
-            onRefresh={handleRefresh}
-          />
-        </div>
-      </div>
-
-      <div className="flex shrink-0 flex-col gap-3 border-t border-border/70 bg-card/90 px-5 py-4 shadow-[0_-18px_48px_-42px_rgba(15,23,42,0.55)] backdrop-blur-xl md:flex-row md:items-center md:justify-between md:px-7">
-        <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/80 px-3 py-2 text-xs text-muted-foreground shadow-sm">
-          <FileText className="h-4 w-4 text-brand-emerald-text" />
-          <span className="hidden sm:inline">
-            {previewSyncStatus === "pending"
-              ? "Preview will update after you stop editing."
-              : "Edit AI proposals here, then render the final PDF without leaving Jobs."}
-          </span>
-          <span className="sm:hidden">Edit here, then finalize.</span>
-        </div>
-        <div className="flex flex-wrap justify-end gap-2.5">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleDiscard}
-            disabled={isDiscarding || isFinalizing || isClosing}
-            className="h-10 rounded-full border-border bg-card px-4 text-sm font-semibold text-foreground/85 shadow-sm transition-all hover:-translate-y-px hover:bg-muted/60 hover:shadow-md active:translate-y-0"
-          >
-            <RotateCcw className="h-4 w-4" />
-            {isDiscarding ? "Discarding..." : "Discard"}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={canClose ? () => void handleClose() : undefined}
-            disabled={!canClose}
-            className="h-10 rounded-full border-border bg-card px-4 text-sm font-semibold text-foreground/85 shadow-sm transition-all hover:-translate-y-px hover:bg-muted/60 hover:shadow-md active:translate-y-0"
-          >
-            {isClosing ? "Saving..." : "Close"}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            onClick={handleFinalize}
-            disabled={isFinalizing || isDiscarding || isClosing || isRefreshing}
-            className={cn(
-              "h-10 rounded-full border border-brand-emerald-500 bg-brand-emerald-500 px-5 text-sm font-semibold text-white shadow-[0_14px_30px_-16px_rgba(16,185,129,0.85)] transition-all hover:-translate-y-px hover:border-brand-emerald-600 hover:bg-brand-emerald-600 hover:shadow-[0_18px_34px_-16px_rgba(16,185,129,0.95)] active:translate-y-0",
-              "disabled:border-border disabled:bg-muted disabled:text-muted-foreground",
-            )}
-          >
-            {isFinalizing ? "Finalizing..." : `Finalize ${targetLabel}`}
-            <ArrowRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      {showConflictDialog ? (
-        <ConflictDialog
-          onReload={() => window.location.reload()}
-          onOverwrite={() => window.location.reload()}
-        />
-      ) : null}
-    </>
-  );
+  });
 }
 
-function StatusPill({ status }: { status: "DRAFT" | "FINAL" }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex h-6 items-center rounded-full px-2.5 text-[11px] font-semibold uppercase tracking-wider",
-        status === "FINAL"
-          ? "bg-brand-emerald-100 text-brand-emerald-800"
-          : "bg-amber-100 text-amber-800",
-      )}
-    >
-      {status}
-    </span>
-  );
+async function finalizeReview(
+  session: TailoringEditSession,
+  onFinalized: (result: TailorReviewFinalized) => void,
+): Promise<void> {
+  const result = await session.finalize();
+  if (!result) return;
+  onFinalized({
+    target: session.document.target,
+    resumePdfUrl: result.resumePdfUrl,
+    resumePdfName: result.resumePdfName,
+    coverPdfUrl: result.coverPdfUrl,
+    coverPdfName: result.coverPdfName,
+  });
 }
-
-
-/**
- * A blocked finalize carries the whole review — which claims lack evidence,
- * which requirements are uncovered, the coverage figure — as `error.details`.
- * Parsed with the same schema the server serialises, so a payload that has
- * drifted falls back to the plain message rather than rendering a half-built
- * card.
- */
-function extractBlockedReview(err: unknown): AiApplicationReview | null {
-  if (!(err instanceof ApiError)) return null;
-  if (err.status !== 422 || err.code !== "APPLICATION_REVIEW_BLOCKED") return null;
-  const parsed = applicationReviewSchema.safeParse(err.details);
-  return parsed.success ? parsed.data : null;
-}
-
-

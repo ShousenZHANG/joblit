@@ -70,17 +70,31 @@ vi.mock("@/components/ui/alert-dialog", () => ({
   }: ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props}>{children}</button>
   ),
-  AlertDialogCancel: ({ children }: { children: ReactNode }) => <button>{children}</button>,
-  AlertDialogContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  AlertDialogDescription: ({ children }: { children: ReactNode }) => <p>{children}</p>,
-  AlertDialogFooter: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  AlertDialogHeader: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  AlertDialogTitle: ({ children }: { children: ReactNode }) => <h2>{children}</h2>,
+  AlertDialogCancel: ({ children }: { children: ReactNode }) => (
+    <button>{children}</button>
+  ),
+  AlertDialogContent: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
+  AlertDialogDescription: ({ children }: { children: ReactNode }) => (
+    <p>{children}</p>
+  ),
+  AlertDialogFooter: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
+  AlertDialogHeader: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
+  AlertDialogTitle: ({ children }: { children: ReactNode }) => (
+    <h2>{children}</h2>
+  ),
 }));
 
 vi.mock("./SummarySection", () => ({ SummarySection: () => null }));
 vi.mock("./BulletsSection", () => ({ BulletsSection: () => null }));
-vi.mock("./CoverParagraphsSection", () => ({ CoverParagraphsSection: () => null }));
+vi.mock("./CoverParagraphsSection", () => ({
+  CoverParagraphsSection: () => null,
+}));
 vi.mock("./PdfPreview", () => ({
   // Exposes the refresh affordance so a test can drive it; the real component
   // also fires it on a 30s idle timer.
@@ -156,6 +170,66 @@ describe("TailorClient React rules", () => {
     rerender(<TailorClient {...props} />);
 
     expect(screen.queryByTestId("conflict-dialog")).not.toBeInTheDocument();
+  });
+
+  it("exposes document selection as keyboard-operable tabs", () => {
+    mockDraft = makeDraft({ kind: "saved", at: 1 });
+    render(<TailorClient {...props} />);
+
+    const tablist = screen.getByRole("tablist", {
+      name: "docTablistLabel",
+    });
+    const resume = screen.getByRole("tab", { name: "docResume" });
+    const cover = screen.getByRole("tab", { name: "docCover" });
+    const resumePanel = screen.getByRole("tabpanel", {
+      name: "docResume",
+    });
+
+    expect(tablist).toContainElement(resume);
+    expect(resume).toHaveAttribute("aria-selected", "true");
+    expect(resume).toHaveAttribute("tabindex", "0");
+    expect(cover).toHaveAttribute("aria-selected", "false");
+    expect(cover).toHaveAttribute("tabindex", "-1");
+    expect(resume).toHaveAttribute("aria-controls", resumePanel.id);
+    expect(resumePanel).toHaveAttribute("aria-labelledby", resume.id);
+
+    resume.focus();
+    fireEvent.keyDown(resume, { key: "ArrowRight" });
+    expect(cover).toHaveFocus();
+    expect(cover).toHaveAttribute("aria-selected", "true");
+    expect(cover).toHaveAttribute("tabindex", "0");
+    expect(resume).toHaveAttribute("tabindex", "-1");
+    const coverPanel = screen.getByRole("tabpanel", {
+      name: "docCover",
+    });
+    expect(cover).toHaveAttribute("aria-controls", coverPanel.id);
+    expect(coverPanel).toHaveAttribute("aria-labelledby", cover.id);
+
+    fireEvent.keyDown(cover, { key: "Home" });
+    expect(resume).toHaveFocus();
+    expect(resume).toHaveAttribute("aria-selected", "true");
+
+    fireEvent.keyDown(resume, { key: "End" });
+    expect(cover).toHaveFocus();
+    expect(cover).toHaveAttribute("aria-selected", "true");
+
+    fireEvent.keyDown(cover, { key: "ArrowLeft" });
+    expect(resume).toHaveFocus();
+    expect(resume).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("makes the workbench inert while publication is pending", async () => {
+    mockDraft = makeDraft({ kind: "saved", at: 1 });
+    api.fetchJson.mockImplementation(() => new Promise(() => undefined));
+    render(<TailorClient {...props} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "finalizeDoc" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("tailoring-workbench-region")).toHaveAttribute(
+        "inert",
+      );
+    });
   });
 
   it("flushes pending edits before returning to jobs", async () => {

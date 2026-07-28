@@ -2,7 +2,8 @@
 
 import React from "react";
 import { Badge } from "@/components/ui/badge";
-import { CheckSquare, Square } from "lucide-react";
+import { COARSE_POINTER_MIN_HEIGHT } from "@/components/ui/touchTarget";
+import { Ban, CheckSquare, Square } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import { type JobItem } from "../types";
 import { jobStatusPresentation } from "../utils/jobStatusPresentation";
@@ -68,6 +69,14 @@ function JobListItemInner({
 
   const companyName = job.company || t("unknownCompany");
   const listLabel = t("listItemAria", { title: job.title, company: companyName });
+  const fitEligibilityConclusion =
+    job.fitEligibility === "PASS"
+      ? t("fitEligibilityPass")
+      : job.fitEligibility === "RISK"
+        ? t("fitEligibilityRisk")
+        : job.fitEligibility === "BLOCK"
+          ? t("fitEligibilityBlock")
+          : null;
 
   const createdAt = new Date(job.createdAt);
   const createdAtValid = !Number.isNaN(createdAt.getTime());
@@ -123,7 +132,7 @@ function JobListItemInner({
           data-perf="cv-auto"
           tabIndex={isActive ? 0 : -1}
           aria-current={isActive ? "true" : undefined}
-          className="min-w-0 flex-1 cursor-pointer px-3 py-3 text-left"
+          className={`min-w-0 flex-1 cursor-pointer px-3 py-3 text-left ${COARSE_POINTER_MIN_HEIGHT}`}
         >
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5">
@@ -131,9 +140,32 @@ function JobListItemInner({
                 {t(jobStatusPresentation(job.status).labelKey)}
               </Badge>
               {typeof job.fitScore === "number" ? (
-                <Badge className={fitBadgeClass(job.fitScore)} title={job.fitVerdict ?? undefined}>
-                  {job.fitEligibility === "BLOCK" ? "⛔ " : ""}
-                  {job.fitScore}
+                <Badge
+                  className={fitBadgeClass(job.fitScore)}
+                  title={job.fitVerdict ?? undefined}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex items-center gap-1"
+                  >
+                    {job.fitEligibility === "BLOCK" ? (
+                      <Ban aria-hidden="true" className="h-3 w-3" />
+                    ) : null}
+                    {job.fitScore}
+                  </span>
+                  <span className="sr-only">
+                    {fitEligibilityConclusion
+                      ? `${fitEligibilityConclusion} `
+                      : null}
+                    {job.fitVerdict
+                      ? t("fitScoreDetails", {
+                          score: job.fitScore,
+                          verdict: job.fitVerdict,
+                        })
+                      : t("fitScoreDetailsUnavailable", {
+                          score: job.fitScore,
+                        })}
+                  </span>
                 </Badge>
               ) : null}
               {typeof job.postingRisk === "number" && job.postingRisk >= 25 ? (

@@ -1,0 +1,195 @@
+"use client";
+
+import { useId, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { cn } from "@/lib/utils";
+import type { TailorTarget } from "./tailorActions";
+
+const TARGETS = ["resume", "cover"] as const;
+
+type DocumentTargetTabsProps = {
+  target: TailorTarget;
+  onSelect: (target: TailorTarget) => void;
+  label: string;
+  labels: Record<TailorTarget, string>;
+  disabled?: boolean;
+  children: ReactNode;
+};
+
+type TargetTabProps = {
+  item: TailorTarget;
+  target: TailorTarget;
+  baseId: string;
+  label: string;
+  disabled: boolean;
+  setRef: (node: HTMLButtonElement | null) => void;
+  onSelect: (target: TailorTarget) => void;
+  onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
+};
+
+type TargetTabListProps = Pick<
+  DocumentTargetTabsProps,
+  "target" | "onSelect" | "label" | "labels"
+> & {
+  baseId: string;
+  disabled: boolean;
+  setRef: (target: TailorTarget, node: HTMLButtonElement | null) => void;
+  onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
+};
+
+function targetForKey(key: string, current: TailorTarget): TailorTarget | null {
+  if (key === "Home") return TARGETS[0];
+  if (key === "End") return TARGETS.at(-1) ?? TARGETS[0];
+  if (key !== "ArrowLeft" && key !== "ArrowRight") return null;
+
+  const direction = key === "ArrowRight" ? 1 : -1;
+  const currentIndex = TARGETS.indexOf(current);
+  return TARGETS[(currentIndex + direction + TARGETS.length) % TARGETS.length];
+}
+
+function TargetTab({
+  item,
+  target,
+  baseId,
+  label,
+  disabled,
+  setRef,
+  onSelect,
+  onKeyDown,
+}: TargetTabProps) {
+  const active = item === target;
+  return (
+    <button
+      ref={setRef}
+      id={`${baseId}-${item}-tab`}
+      type="button"
+      role="tab"
+      aria-selected={active}
+      aria-controls={`${baseId}-${item}-panel`}
+      tabIndex={active ? 0 : -1}
+      disabled={disabled}
+      onClick={() => onSelect(item)}
+      onKeyDown={onKeyDown}
+      className={cn(
+        "inline-flex min-h-11 min-w-11 touch-manipulation items-center rounded-full px-4 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-60 motion-reduce:transition-none",
+        active
+          ? "bg-foreground text-background"
+          : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+function TargetTabList({
+  target,
+  onSelect,
+  label,
+  labels,
+  baseId,
+  disabled,
+  setRef,
+  onKeyDown,
+}: TargetTabListProps) {
+  return (
+    <div
+      role="tablist"
+      aria-label={label}
+      aria-orientation="horizontal"
+      className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-background p-1"
+    >
+      {TARGETS.map((item) => (
+        <TargetTab
+          key={item}
+          item={item}
+          target={target}
+          baseId={baseId}
+          label={labels[item]}
+          disabled={disabled}
+          setRef={(node) => setRef(item, node)}
+          onSelect={onSelect}
+          onKeyDown={onKeyDown}
+        />
+      ))}
+    </div>
+  );
+}
+
+function TargetPanel({
+  item,
+  target,
+  baseId,
+  children,
+}: {
+  item: TailorTarget;
+  target: TailorTarget;
+  baseId: string;
+  children: ReactNode;
+}) {
+  const active = item === target;
+  return (
+    <div
+      id={`${baseId}-${item}-panel`}
+      role="tabpanel"
+      aria-labelledby={`${baseId}-${item}-tab`}
+      tabIndex={0}
+      hidden={!active}
+      className={cn(
+        "min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        active && "flex flex-col gap-4",
+      )}
+    >
+      {active ? children : null}
+    </div>
+  );
+}
+
+export function DocumentTargetTabs({
+  target,
+  onSelect,
+  label,
+  labels,
+  disabled = false,
+  children,
+}: DocumentTargetTabsProps) {
+  const baseId = useId();
+  const tabRefs = useRef<Record<TailorTarget, HTMLButtonElement | null>>({
+    resume: null,
+    cover: null,
+  });
+
+  function selectAndFocus(nextTarget: TailorTarget) {
+    onSelect(nextTarget);
+    tabRefs.current[nextTarget]?.focus();
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    if (disabled) return;
+    const nextTarget = targetForKey(event.key, target);
+    if (!nextTarget) return;
+    event.preventDefault();
+    selectAndFocus(nextTarget);
+  }
+
+  return (
+    <>
+      <TargetTabList
+        target={target}
+        onSelect={onSelect}
+        label={label}
+        labels={labels}
+        baseId={baseId}
+        disabled={disabled}
+        setRef={(item, node) => {
+          tabRefs.current[item] = node;
+        }}
+        onKeyDown={handleKeyDown}
+      />
+      {TARGETS.map((item) => (
+        <TargetPanel key={item} item={item} target={target} baseId={baseId}>
+          {children}
+        </TargetPanel>
+      ))}
+    </>
+  );
+}

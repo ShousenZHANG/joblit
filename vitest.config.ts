@@ -22,6 +22,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text-summary", "html"],
+      processingConcurrency: 4,
       include: ["lib/**", "app/**", "components/**"],
       exclude: [
         "lib/generated/**",
@@ -39,16 +40,18 @@ export default defineConfig({
       // false gate (much app/ UI is still untested); locking the floor is the
       // honest move and still blocks any drop.
       thresholds: {
-        statements: 57.7,
-        branches: 46.5,
-        functions: 54.1,
-        lines: 60.3,
+        statements: 76.5,
+        branches: 66.5,
+        functions: 75,
+        lines: 79,
       },
     },
     // Vitest 4 default `forks` pool fails to register suites on Windows in this
     // project (suites resolve before the worker registers them). `vmThreads`
-    // is stable here and keeps memory bounded.
+    // is stable here. A fixed worker ceiling also prevents V8 coverage's
+    // per-worker temp artifacts from racing or exhausting Windows file I/O.
     pool: "vmThreads",
+    maxWorkers: 4,
     exclude: [
       "**/node_modules/**",
       "**/dist/**",

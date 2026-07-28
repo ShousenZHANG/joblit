@@ -18,7 +18,7 @@ interface GuideCompleteProps {
 export function GuideComplete({ onDismiss }: GuideCompleteProps) {
   const t = useTranslations("guide");
   return (
-    <div className="flex flex-1 flex-col items-center px-5 pb-6 pt-8 text-center">
+    <div className="flex flex-1 flex-col items-center overflow-y-auto px-5 pb-6 pt-8 text-center">
       <div className="relative flex h-20 w-20 items-center justify-center">
         <span
           aria-hidden
@@ -53,7 +53,7 @@ export function GuideComplete({ onDismiss }: GuideCompleteProps) {
       <Button
         type="button"
         onClick={onDismiss}
-        className="mt-5 h-10 w-full rounded-xl bg-emerald-600 text-sm font-semibold hover:bg-emerald-700"
+        className="mt-5 h-11 w-full rounded-xl bg-emerald-600 text-sm font-semibold hover:bg-emerald-700"
       >
         {t("dismissPanel")}
       </Button>

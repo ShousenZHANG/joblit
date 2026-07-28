@@ -83,7 +83,9 @@ vi.mock("@/components/ui/button", () => ({
 vi.mock("../[id]/tailor/SummarySection", () => ({ SummarySection: () => null }));
 vi.mock("../[id]/tailor/BulletsSection", () => ({ BulletsSection: () => null }));
 vi.mock("../[id]/tailor/CoverParagraphsSection", () => ({ CoverParagraphsSection: () => null }));
-vi.mock("../[id]/tailor/PdfPreview", () => ({ PdfPreview: () => null }));
+vi.mock("../[id]/tailor/PdfPreview", () => ({
+  PdfPreview: () => <div>pdf-preview-pane</div>,
+}));
 vi.mock("../[id]/tailor/SaveIndicator", () => ({ SaveIndicator: () => null }));
 vi.mock("../[id]/tailor/ConflictDialog", () => ({
   ConflictDialog: () => <div data-testid="conflict-dialog" />,
@@ -169,6 +171,28 @@ describe("TailorReviewDialog React rules", () => {
     );
 
     expect(screen.queryByTestId("conflict-dialog")).not.toBeInTheDocument();
+  });
+
+  it("exposes the preview through the shared compact workbench", () => {
+    mockDraft = makeDraft({ kind: "saved", at: 1 });
+    render(
+      <TailorReviewDialog
+        open
+        draft={draft}
+        onOpenChange={vi.fn()}
+        onFinalized={vi.fn()}
+      />,
+    );
+
+    const previewTab = screen.getByRole("tab", {
+      name: "workbench.preview",
+    });
+    expect(previewTab).toHaveAttribute("aria-selected", "false");
+
+    fireEvent.click(previewTab);
+
+    expect(previewTab).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("pdf-preview-pane")).toBeInTheDocument();
   });
 
   it("aborts an in-flight preview when the dialog unmounts", async () => {
@@ -260,7 +284,7 @@ describe("TailorReviewDialog React rules", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.click(screen.getByRole("button", { name: "dialog.close" }));
 
     await waitFor(() => {
       expect(mockDraft.flushNow).toHaveBeenCalledOnce();
@@ -281,7 +305,7 @@ describe("TailorReviewDialog React rules", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.click(screen.getByRole("button", { name: "dialog.close" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("network offline");
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
@@ -302,7 +326,9 @@ describe("TailorReviewDialog React rules", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "dialog.discard" }),
+    );
 
     await waitFor(() => {
       expect(api.fetchJson).toHaveBeenCalledOnce();

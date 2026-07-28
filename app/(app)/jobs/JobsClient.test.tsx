@@ -906,14 +906,14 @@ describe("JobsClient", () => {
     vi.stubGlobal("fetch", mockFetch);
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
-    await waitFor(() => {
-      expect(screen.getAllByText("Job Description").length).toBeGreaterThan(0);
-    });
     const heading = await screen.findByRole(
       "heading",
       { name: "Requirements" },
-      { timeout: 3000 },
+      { timeout: 5000 },
     );
+    expect(
+      screen.getAllByText(messages.jobs.jobDescriptionTitle).length,
+    ).toBeGreaterThan(0);
     // Heading now uses theme-token `text-foreground` for dark-mode parity
     // (migrated from literal text-foreground).
     expect(heading).toHaveClass("text-lg", "font-semibold", "text-foreground");

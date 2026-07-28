@@ -4,6 +4,10 @@ import dynamic from "next/dynamic";
 import { Download, ExternalLink, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OrbitSpinner } from "@/components/ui/orbit-spinner";
+import {
+  COARSE_POINTER_MIN_HEIGHT,
+  COARSE_POINTER_TARGET,
+} from "@/components/ui/touchTarget";
 import { cn } from "@/lib/utils";
 import { buildPdfFilename } from "@/lib/shared/pdfFilename";
 import { useResumeContext } from "./ResumeContext";
@@ -29,20 +33,23 @@ interface PreviewPanelProps {
 }
 
 export function PreviewPanel({ className }: PreviewPanelProps) {
-  const { pdfUrl, previewStatus, previewError, schedulePreview, basics, locale, t } =
+  const { pdfUrl, previewStatus, previewError, schedulePreview, basics, t } =
     useResumeContext();
 
   const downloadFilename = buildPdfFilename(
     basics.fullName,
     basics.title,
     "cv",
-    locale === "zh-CN" ? "未命名简历" : "Resume",
+    t("unnamedResumeFilename"),
   );
 
   const currentPdfUrl = pdfUrl ?? null;
 
   return (
-    <div className={cn("flex flex-col bg-muted/40 dark:bg-muted/20", className)}>
+    <div
+      data-slot="resume-desktop-preview"
+      className={cn("flex flex-col bg-muted/40 dark:bg-muted/20", className)}
+    >
       {/* Header — design spec ".preview-head" 44px tall */}
       <div className="flex h-11 shrink-0 items-center gap-1.5 border-b border-border bg-card px-3">
         <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
@@ -54,8 +61,11 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
             type="button"
             variant="ghost"
             size="icon"
-            className="h-7 w-7 rounded-md transition-transform active:scale-90 disabled:cursor-not-allowed disabled:opacity-100"
-            aria-label="Refresh preview"
+            className={cn(
+              "h-7 w-7 rounded-md transition-transform active:scale-90 disabled:cursor-not-allowed disabled:opacity-100",
+              COARSE_POINTER_TARGET,
+            )}
+            aria-label={t("refreshPreview")}
             aria-busy={previewStatus === "loading"}
             disabled={previewStatus === "loading"}
             onClick={() => schedulePreview(0, false, { force: true })}
@@ -74,8 +84,11 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
               href={currentPdfUrl}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Open in new tab"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label={t("openPreviewNewTab")}
+              className={cn(
+                "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                COARSE_POINTER_TARGET,
+              )}
             >
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
@@ -88,7 +101,10 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
             <a
               href={currentPdfUrl}
               download={downloadFilename}
-              className="inline-flex h-7 items-center gap-1.5 rounded-md bg-emerald-600 px-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.97]"
+              className={cn(
+                "inline-flex h-7 items-center gap-1.5 rounded-md bg-emerald-600 px-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.97]",
+                COARSE_POINTER_MIN_HEIGHT,
+              )}
             >
               <Download className="h-3.5 w-3.5" />
               <span>PDF</span>
@@ -151,15 +167,19 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
         */}
 
         {previewStatus === "error" && (
-          <div className="absolute inset-x-3 bottom-3 flex items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+          <div
+            role="alert"
+            className="absolute inset-x-3 bottom-3 flex items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700"
+          >
             <span>{previewError ?? t("previewFailed")}</span>
             <Button
               type="button"
               size="sm"
               variant="outline"
+              className={COARSE_POINTER_MIN_HEIGHT}
               onClick={() => schedulePreview(0, false, { force: true })}
             >
-              Retry
+              {t("retryPreview")}
             </Button>
           </div>
         )}

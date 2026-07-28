@@ -56,4 +56,26 @@ describe("PdfPreview download", () => {
       "Alex Morgan Software Engineer_CV.pdf",
     );
   });
+
+  it("expands compact preview controls for coarse pointers", () => {
+    renderPreview("blob:https://www.joblit.tech/9f2c-preview");
+
+    expect(
+      screen.getByRole("button", { name: messages.tailor.preview.refreshAria }),
+    ).toHaveClass(
+      "[@media(any-pointer:coarse)]:min-h-11",
+      "[@media(any-pointer:coarse)]:min-w-11",
+    );
+    expect(
+      screen.getByRole("link", {
+        name: messages.tailor.preview.openNewTabAria,
+      }),
+    ).toHaveClass(
+      "[@media(any-pointer:coarse)]:min-h-11",
+      "[@media(any-pointer:coarse)]:min-w-11",
+    );
+    expect(screen.getByText("PDF").closest("a")).toHaveClass(
+      "[@media(any-pointer:coarse)]:min-h-11",
+    );
+  });
 });

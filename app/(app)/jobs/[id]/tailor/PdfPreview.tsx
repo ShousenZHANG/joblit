@@ -5,6 +5,10 @@ import dynamic from "next/dynamic";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import { Download, ExternalLink, FileText, RefreshCcw } from "lucide-react";
 import { OrbitSpinner } from "@/components/ui/orbit-spinner";
+import {
+  COARSE_POINTER_MIN_HEIGHT,
+  COARSE_POINTER_TARGET,
+} from "@/components/ui/touchTarget";
 import { cn } from "@/lib/utils";
 
 // react-pdf + pdfjs (~120KB gzip) is the heaviest client dep. Lazy-load it so
@@ -136,6 +140,7 @@ export function PdfPreview({
             aria-busy={isRefreshing}
             className={cn(
               "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-transform hover:bg-muted hover:text-foreground active:scale-90",
+              COARSE_POINTER_TARGET,
               "disabled:pointer-events-none disabled:opacity-70",
             )}
           >
@@ -153,7 +158,10 @@ export function PdfPreview({
               target="_blank"
               rel="noopener noreferrer"
               aria-label={t("preview.openNewTabAria")}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className={cn(
+                "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                COARSE_POINTER_TARGET,
+              )}
             >
               <ExternalLink className="h-3.5 w-3.5" aria-hidden />
             </a>
@@ -163,7 +171,10 @@ export function PdfPreview({
             <a
               href={previewSrc}
               download={downloadFilename}
-              className="inline-flex h-7 items-center gap-1.5 rounded-md bg-emerald-600 px-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.97]"
+              className={cn(
+                "inline-flex h-7 items-center gap-1.5 rounded-md bg-emerald-600 px-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.97]",
+                COARSE_POINTER_MIN_HEIGHT,
+              )}
             >
               <Download className="h-3.5 w-3.5" aria-hidden />
               <span>PDF</span>

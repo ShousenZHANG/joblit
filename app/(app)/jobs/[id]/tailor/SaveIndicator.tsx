@@ -55,7 +55,7 @@ export function SaveIndicator({ status, onRetry }: SaveIndicatorProps) {
       <button
         type="button"
         onClick={onRetry}
-        className="inline-flex items-center gap-1.5 rounded-full text-xs font-medium text-destructive transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
+        className="inline-flex min-h-11 touch-manipulation items-center gap-1.5 rounded-full px-2 text-xs font-medium text-destructive transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
         title={status.message}
       >
         <AlertCircle className="h-3.5 w-3.5" aria-hidden />
