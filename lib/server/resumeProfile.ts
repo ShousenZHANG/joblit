@@ -1,8 +1,26 @@
 import { prisma } from "@/lib/server/prisma";
 import { Prisma } from "@/lib/generated/prisma";
+import {
+  applicationPublicationRecord,
+  buildApplicationPublicationRenderContext,
+  rebaseApplicationPublicationForRenderContext,
+  type ApplicationPublicationPersistence,
+} from "@/lib/server/applications/applicationPublication";
+import { aiContentSchema } from "@/lib/shared/schemas/aiContent";
 
 const DEFAULT_PROFILE_BASE_NAME = "Custom Blank";
 const MAX_PROFILE_NAME_LENGTH = 80;
+const PROFILE_MUTATION_TRANSACTION_OPTIONS = {
+  maxWait: 5_000,
+  timeout: 30_000,
+} as const;
+const CONSERVATIVE_APPLICATION_PUBLICATION_INVALIDATION = {
+  status: "DRAFT",
+  resumeContentHash: null,
+  resumePublishedHash: null,
+  coverContentHash: null,
+  coverPublishedHash: null,
+} satisfies ApplicationPublicationPersistence;
 const PROFILE_CLONE_SELECT = {
   summary: true,
   basics: true,
@@ -12,6 +30,33 @@ const PROFILE_CLONE_SELECT = {
   projects: true,
   education: true,
 } satisfies Prisma.ResumeProfileSelect;
+const LINKED_APPLICATION_PUBLICATION_SELECT = {
+  id: true,
+  status: true,
+  aiContent: true,
+  aiContentHash: true,
+  resumePdfUrl: true,
+  coverPdfUrl: true,
+  resumeContentHash: true,
+  resumePublishedHash: true,
+  coverContentHash: true,
+  coverPublishedHash: true,
+  job: {
+    select: {
+      title: true,
+      company: true,
+      market: true,
+    },
+  },
+} satisfies Prisma.ApplicationSelect;
+
+type ResumeProfileRecord = Prisma.ResumeProfileGetPayload<Record<string, never>>;
+type LinkedApplicationPublicationRecord = Prisma.ApplicationGetPayload<{
+  select: typeof LINKED_APPLICATION_PUBLICATION_SELECT;
+}>;
+type ApplicationPublicationPatch = ApplicationPublicationPersistence & {
+  id: string;
+};
 
 type ResumeProfileInput = {
   summary?: string | null;
@@ -37,7 +82,7 @@ type ResumeProfileInput = {
     items: string[];
   }[] | null;
   experiences?: {
-  location?: string | null;
+    location?: string | null;
     dates: string;
     title: string;
     company: string;
@@ -107,12 +152,145 @@ function cloneJsonValueForCreate(value: Prisma.JsonValue | null | undefined) {
   return value as Prisma.InputJsonValue;
 }
 
-async function ensureActivePointer(userId: string, locale: string, resumeProfileId: string) {
-  await prisma.activeResumeProfile.upsert({
+async function ensureActivePointer(
+  userId: string,
+  locale: string,
+  resumeProfileId: string,
+  client: Pick<Prisma.TransactionClient, "activeResumeProfile"> | typeof prisma = prisma,
+) {
+  await client.activeResumeProfile.upsert({
     where: { userId_locale: { userId, locale } },
     update: { resumeProfileId },
     create: { userId, locale, resumeProfileId },
   });
+}
+
+async function invalidateLinkedApplicationPublications(
+  client: Pick<Prisma.TransactionClient, "application">,
+  userId: string,
+  resumeProfileId: string,
+) {
+  await client.application.updateMany({
+    where: { userId, resumeProfileId },
+    data: CONSERVATIVE_APPLICATION_PUBLICATION_INVALIDATION,
+  });
+}
+
+async function lockOwnedResumeProfileForDelete(
+  client: Pick<Prisma.TransactionClient, "$queryRaw">,
+  userId: string,
+  locale: string,
+  resumeProfileId: string,
+) {
+  const [profile] = await client.$queryRaw<{ id: string }[]>`
+    SELECT profile."id"
+    FROM "ResumeProfile" AS profile
+    WHERE profile."id" = ${resumeProfileId}::uuid
+      AND profile."userId" = ${userId}::uuid
+      AND profile."locale" = ${locale}
+    FOR UPDATE OF profile
+  `;
+  return profile ?? null;
+}
+
+async function rebaseLinkedApplicationPublications(
+  client: Pick<Prisma.TransactionClient, "application" | "$executeRaw">,
+  input: {
+    userId: string;
+    resumeProfileId: string;
+    previousProfile: ResumeProfileRecord;
+    nextProfile: ResumeProfileRecord;
+  },
+) {
+  const applications = await client.application.findMany({
+    where: {
+      userId: input.userId,
+      resumeProfileId: input.resumeProfileId,
+    },
+    select: LINKED_APPLICATION_PUBLICATION_SELECT,
+  });
+
+  const patches: ApplicationPublicationPatch[] = [];
+  for (const application of applications) {
+    const persistence = rebaseLinkedApplicationPublication(
+      application,
+      input.previousProfile,
+      input.nextProfile,
+    );
+    if (!publicationPersistenceChanged(application, persistence)) continue;
+    patches.push({ id: application.id, ...persistence });
+  }
+  await persistApplicationPublicationPatches(client, input, patches);
+}
+
+async function persistApplicationPublicationPatches(
+  client: Pick<Prisma.TransactionClient, "$executeRaw">,
+  scope: { userId: string; resumeProfileId: string },
+  patches: readonly ApplicationPublicationPatch[],
+) {
+  if (patches.length === 0) return;
+  const updatedCount = await client.$executeRaw`
+    UPDATE "Application" AS application
+    SET
+      "status" = patch."status"::"ApplicationStatus",
+      "resumeContentHash" = patch."resumeContentHash",
+      "resumePublishedHash" = patch."resumePublishedHash",
+      "coverContentHash" = patch."coverContentHash",
+      "coverPublishedHash" = patch."coverPublishedHash",
+      "updatedAt" = CURRENT_TIMESTAMP
+    FROM jsonb_to_recordset(${JSON.stringify(patches)}::jsonb) AS patch(
+      "id" uuid,
+      "status" text,
+      "resumeContentHash" text,
+      "resumePublishedHash" text,
+      "coverContentHash" text,
+      "coverPublishedHash" text
+    )
+    WHERE application."id" = patch."id"
+      AND application."userId" = ${scope.userId}::uuid
+      AND application."resumeProfileId" = ${scope.resumeProfileId}::uuid
+  `;
+  if (updatedCount !== patches.length) {
+    throw new Error("APPLICATION_PUBLICATION_REBASE_CONFLICT");
+  }
+}
+
+function rebaseLinkedApplicationPublication(
+  application: LinkedApplicationPublicationRecord,
+  previousProfile: ResumeProfileRecord,
+  nextProfile: ResumeProfileRecord,
+): ApplicationPublicationPersistence {
+  const parsedAiContent = aiContentSchema.safeParse(application.aiContent);
+  if (!application.job || !parsedAiContent.success) {
+    return CONSERVATIVE_APPLICATION_PUBLICATION_INVALIDATION;
+  }
+  const previousRenderContext = buildApplicationPublicationRenderContext({
+    profile: previousProfile,
+    job: application.job,
+  });
+  const nextRenderContext = buildApplicationPublicationRenderContext({
+    profile: nextProfile,
+    job: application.job,
+  });
+  return rebaseApplicationPublicationForRenderContext({
+    aiContent: parsedAiContent.data,
+    record: applicationPublicationRecord(application),
+    previousRenderContext,
+    nextRenderContext,
+  }).persistence;
+}
+
+function publicationPersistenceChanged(
+  application: LinkedApplicationPublicationRecord,
+  persistence: ApplicationPublicationPersistence,
+) {
+  return (
+    application.status !== persistence.status ||
+    application.resumeContentHash !== persistence.resumeContentHash ||
+    application.resumePublishedHash !== persistence.resumePublishedHash ||
+    application.coverContentHash !== persistence.coverContentHash ||
+    application.coverPublishedHash !== persistence.coverPublishedHash
+  );
 }
 
 async function getFallbackLatestProfile(userId: string, locale: string) {
@@ -326,6 +504,16 @@ export async function deleteResumeProfile(
   profileId: string,
 ): Promise<DeleteResumeProfileResult> {
   return prisma.$transaction(async (tx) => {
+    const lockedProfile = await lockOwnedResumeProfileForDelete(
+      tx,
+      userId,
+      locale,
+      profileId,
+    );
+    if (!lockedProfile) {
+      return { status: "not_found" };
+    }
+
     const profiles = await tx.resumeProfile.findMany({
       where: { userId, locale },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
@@ -345,6 +533,8 @@ export async function deleteResumeProfile(
       where: { userId_locale: { userId, locale } },
       select: { resumeProfileId: true },
     });
+
+    await invalidateLinkedApplicationPublications(tx, userId, profileId);
 
     await tx.resumeProfile.delete({
       where: { id: profileId },
@@ -409,20 +599,32 @@ export async function upsertResumeProfile(
     return created;
   }
 
-  const updated = await prisma.resumeProfile.update({
-    where: { id: target.id },
-    data: {
-      ...normalized,
-      ...(options?.name === undefined ? {} : { name: normalizeProfileName(options.name) }),
-      revision: {
-        increment: 1,
-      },
+  return prisma.$transaction(
+    async (tx) => {
+      const updated = await tx.resumeProfile.update({
+        where: { id: target.id },
+        data: {
+          ...normalized,
+          ...(options?.name === undefined ? {} : { name: normalizeProfileName(options.name) }),
+          revision: {
+            increment: 1,
+          },
+        },
+      });
+
+      await rebaseLinkedApplicationPublications(tx, {
+        userId,
+        resumeProfileId: updated.id,
+        previousProfile: target,
+        nextProfile: updated,
+      });
+
+      if (options?.setActive !== false) {
+        await ensureActivePointer(userId, locale, updated.id, tx);
+      }
+
+      return updated;
     },
-  });
-
-  if (options?.setActive !== false) {
-    await ensureActivePointer(userId, locale, updated.id);
-  }
-
-  return updated;
+    PROFILE_MUTATION_TRANSACTION_OPTIONS,
+  );
 }

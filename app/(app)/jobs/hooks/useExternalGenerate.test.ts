@@ -70,6 +70,19 @@ const aiContent = {
     paragraphThree: { aiText: "", accepted: false },
   },
 };
+const publication = {
+  status: "DRAFT" as const,
+  resume: {
+    status: "DRAFT" as const,
+    contentHash: "resume-v2",
+    publishedHash: null,
+  },
+  cover: {
+    status: "MISSING" as const,
+    contentHash: null,
+    publishedHash: null,
+  },
+};
 
 describe("persistGeneratedDraft", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -78,6 +91,7 @@ describe("persistGeneratedDraft", () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       applicationId: "app-1",
       status: "DRAFT",
+      publication,
       aiContentHash: "content-hash",
       aiContent,
       job: {
@@ -120,6 +134,76 @@ describe("persistGeneratedDraft", () => {
       company: "Server Co",
       location: "Sydney",
     });
+  });
+
+  it.each([
+    [
+      "invalid AI Content",
+      {
+        applicationId: "app-1",
+        status: "DRAFT",
+        publication,
+        aiContentHash: "content-hash",
+        aiContent: { schemaVersion: 999 },
+        job: {
+          id: JOB_ID,
+          title: "Server Role",
+          company: "Server Co",
+          location: "Sydney",
+        },
+      },
+    ],
+    [
+      "a missing CAS hash",
+      {
+        applicationId: "app-1",
+        status: "DRAFT",
+        publication,
+        aiContentHash: null,
+        aiContent,
+        job: {
+          id: JOB_ID,
+          title: "Server Role",
+          company: "Server Co",
+          location: "Sydney",
+        },
+      },
+    ],
+    [
+      "a status that disagrees with publication",
+      {
+        applicationId: "app-1",
+        status: "FINAL",
+        publication,
+        aiContentHash: "content-hash",
+        aiContent,
+        job: {
+          id: JOB_ID,
+          title: "Server Role",
+          company: "Server Co",
+          location: "Sydney",
+        },
+      },
+    ],
+  ])("rejects a 2xx response with %s", async (_label, responseBody) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(responseBody), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+
+    await expect(
+      persistGeneratedDraft({
+        jobId: JOB_ID,
+        target: "resume",
+        modelOutput: "{\"canonicalOutput\":true}",
+        source: "local_ai",
+      }),
+    ).rejects.toThrow("Response shape invalid");
   });
 });
 
@@ -277,6 +361,7 @@ describe("useExternalGenerate stable issue recovery", () => {
             JSON.stringify({
               applicationId: "app-1",
               status: "DRAFT",
+              publication,
               aiContentHash: "content-hash",
               aiContent,
               pdfName: "Candidate Server Role_CV.pdf",

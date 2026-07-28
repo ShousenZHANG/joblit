@@ -19,6 +19,9 @@ const commit = vi.hoisted(() => ({
   },
   commitApplicationArtifact: vi.fn(),
 }));
+const publicationReplay = vi.hoisted(() => ({
+  confirmApplicationPublicationReplay: vi.fn(),
+}));
 const ats = vi.hoisted(() => ({ assertAtsPdf: vi.fn() }));
 const renderLimiter = vi.hoisted(() => ({
   enforce: vi.fn(),
@@ -37,6 +40,10 @@ vi.mock("@/lib/server/applications/finalizeApplication", () => renderer);
  * and mapping commit results onto responses.
  */
 vi.mock("@/lib/server/applications/commitApplicationArtifact", () => commit);
+vi.mock(
+  "@/lib/server/applications/applicationPublicationReplay",
+  () => publicationReplay,
+);
 vi.mock("@/lib/server/applications/atsPdfValidator", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/server/applications/atsPdfValidator")>()),
   assertAtsPdf: ats.assertAtsPdf,
@@ -56,7 +63,10 @@ import {
 } from "@/lib/shared/schemas/aiContent";
 import { attachEvidenceAndReview } from "@/lib/server/ai/evidenceLedger";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
-import { buildApplicationArtifactVersionPrefix } from "@/lib/server/artifacts/applicationArtifactLifecycle";
+import {
+  buildApplicationPublicationRenderContext,
+  hashApplicationDocumentContent,
+} from "@/lib/server/applications/applicationPublication";
 
 const APP_ID = "22222222-2222-4222-9222-222222222222";
 const USER_ID = "user-1";
@@ -78,6 +88,23 @@ const JOB = {
   company: "Acme",
   market: "AU",
   description: "Build reliable TypeScript APIs.",
+};
+const RENDER_CONTEXT = buildApplicationPublicationRenderContext({
+  profile: PROFILE,
+  job: JOB,
+});
+const COMMITTED_PUBLICATION = {
+  status: "FINAL" as const,
+  resume: {
+    status: "FINAL" as const,
+    contentHash: "resume-content-hash",
+    publishedHash: "resume-content-hash",
+  },
+  cover: {
+    status: "FINAL" as const,
+    contentHash: "cover-content-hash",
+    publishedHash: "cover-content-hash",
+  },
 };
 
 function ownedReviewSources() {
@@ -107,12 +134,16 @@ function makeAiContent(): AiContent {
   };
 }
 
-function makeRequest(body: unknown) {
-  return new Request(`http://localhost/api/applications/${APP_ID}/finalize`, {
-    method: "POST",
-    body: JSON.stringify(body),
-    headers: { "content-type": "application/json" },
-  });
+function makeRequest(body: unknown, target?: "resume" | "cover") {
+  const search = target ? `?target=${target}` : "";
+  return new Request(
+    `http://localhost/api/applications/${APP_ID}/finalize${search}`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "content-type": "application/json" },
+    },
+  );
 }
 
 const params = Promise.resolve({ id: APP_ID });
@@ -144,8 +175,12 @@ describe("POST /api/applications/[id]/finalize", () => {
       applicationId: APP_ID,
       aiContent: makeAiContent(),
       aiContentHash: "committed-hash",
+      publication: COMMITTED_PUBLICATION,
       urls: { resume: "https://blob.example/new-resume.pdf" },
     });
+    publicationReplay.confirmApplicationPublicationReplay
+      .mockReset()
+      .mockResolvedValue({ kind: "render_required" });
     renderLimiter.enforce.mockReset().mockReturnValue(null);
   });
 
@@ -170,6 +205,7 @@ describe("POST /api/applications/[id]/finalize", () => {
       applicationId: APP_ID,
       aiContent: ai,
       aiContentHash: "committed-hash",
+      publication: COMMITTED_PUBLICATION,
       urls: { resume: "https://blob/r.pdf" },
     });
 
@@ -208,14 +244,183 @@ describe("POST /api/applications/[id]/finalize", () => {
         artifacts: [
           expect.objectContaining({
             target: "resume",
-            // The lifecycle module combines this stable aggregate version
-            // with the actual PDF digest for immutable object identity.
-            version: expect.stringMatching(/^[0-9a-f]{8}$/),
           }),
         ],
       }),
     );
     expect(renderLimiter.enforce).toHaveBeenCalledWith(USER_ID, expect.any(String));
+  });
+
+  it.each(["resume", "cover"] as const)(
+    "renders %s from the same Profile and Job snapshot used for publication identity",
+    async (target) => {
+      (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+        user: { id: USER_ID },
+      });
+      const ai = makeAiContent();
+      const hash = hashAiContent(ai);
+      prisma.application.findFirst.mockResolvedValueOnce({
+        ...ownedReviewSources(),
+        id: APP_ID,
+        userId: USER_ID,
+        status: "DRAFT",
+        aiContent: ai,
+        aiContentHash: hash,
+        resumeProfileId: PROFILE.id,
+        resumePdfUrl: null,
+        coverPdfUrl: null,
+      });
+
+      const response = await POST(makeRequest({ expectedHash: hash }, target), {
+        params,
+      });
+
+      expect(response.status).toBe(200);
+      const render =
+        target === "resume"
+          ? renderer.renderApplicationPdf
+          : renderer.renderCoverLetterPdf;
+      expect(render).toHaveBeenCalledWith(
+        expect.objectContaining({
+          profileSnapshot: PROFILE,
+          job: {
+            id: JOB.id,
+            title: JOB.title,
+            company: JOB.company,
+            market: JOB.market,
+          },
+        }),
+      );
+      expect(commit.commitApplicationArtifact).toHaveBeenCalledWith(
+        expect.objectContaining({
+          publicationRenderContext: RENDER_CONTEXT,
+        }),
+      );
+    },
+  );
+
+  it("replays a current Resume while Cover remains Draft", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: USER_ID },
+    });
+    const ai = makeAiContent();
+    ai.cover.paragraphOne.aiText = "One";
+    ai.cover.paragraphTwo.aiText = "Two";
+    ai.cover.paragraphThree.aiText = "Three";
+    const hash = hashAiContent(ai);
+    const resumeHash = hashApplicationDocumentContent(
+      ai,
+      "resume",
+      RENDER_CONTEXT,
+    );
+    const coverHash = hashApplicationDocumentContent(
+      ai,
+      "cover",
+      RENDER_CONTEXT,
+    );
+    prisma.application.findFirst.mockResolvedValueOnce({
+      ...ownedReviewSources(),
+      id: APP_ID,
+      userId: USER_ID,
+      status: "DRAFT",
+      aiContent: ai,
+      aiContentHash: hash,
+      resumeProfileId: "profile-linked",
+      resumePdfUrl: "https://blob.example/current-resume.pdf",
+      coverPdfUrl: "https://blob.example/previous-cover.pdf",
+      resumeContentHash: resumeHash,
+      resumePublishedHash: resumeHash,
+      coverContentHash: coverHash,
+      coverPublishedHash: "previous-cover-hash",
+    });
+    publicationReplay.confirmApplicationPublicationReplay.mockResolvedValueOnce({
+      kind: "replayed",
+      aiContentHash: hash,
+      publication: {
+        status: "DRAFT",
+        resume: {
+          status: "FINAL",
+          contentHash: resumeHash,
+          publishedHash: resumeHash,
+        },
+        cover: {
+          status: "DRAFT",
+          contentHash: coverHash,
+          publishedHash: "previous-cover-hash",
+        },
+      },
+      resumePdfUrl: "https://blob.example/current-resume.pdf",
+      resumePdfName: null,
+      coverPdfUrl: "https://blob.example/previous-cover.pdf",
+    });
+
+    const res = await POST(makeRequest({ expectedHash: hash }), { params });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.status).toBe("DRAFT");
+    expect(json.publication.resume.status).toBe("FINAL");
+    expect(json.publication.cover.status).toBe("DRAFT");
+    expect(renderer.renderApplicationPdf).not.toHaveBeenCalled();
+    expect(commit.commitApplicationArtifact).not.toHaveBeenCalled();
+    expect(
+      publicationReplay.confirmApplicationPublicationReplay,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        applicationId: APP_ID,
+        expectedHash: hash,
+        target: "resume",
+      }),
+    );
+  });
+
+  it("re-renders instead of replaying when the Master Resume input changed", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: USER_ID },
+    });
+    const ai = makeAiContent();
+    const hash = hashAiContent(ai);
+    const previousRenderContext = buildApplicationPublicationRenderContext({
+      profile: {
+        ...PROFILE,
+        basics: { fullName: "Previous Candidate Name" },
+      },
+      job: JOB,
+    });
+    const previousResumeHash = hashApplicationDocumentContent(
+      ai,
+      "resume",
+      previousRenderContext,
+    );
+    prisma.application.findFirst.mockResolvedValueOnce({
+      ...ownedReviewSources(),
+      id: APP_ID,
+      userId: USER_ID,
+      status: "FINAL",
+      aiContent: ai,
+      aiContentHash: hash,
+      resumeProfileId: PROFILE.id,
+      resumePdfUrl: "https://blob.example/previous-resume.pdf",
+      coverPdfUrl: null,
+      resumeContentHash: previousResumeHash,
+      resumePublishedHash: previousResumeHash,
+      coverContentHash: null,
+      coverPublishedHash: null,
+    });
+    commit.commitApplicationArtifact.mockResolvedValueOnce({
+      kind: "committed",
+      applicationId: APP_ID,
+      aiContent: ai,
+      aiContentHash: hash,
+      publication: COMMITTED_PUBLICATION,
+      urls: { resume: "https://blob.example/current-resume.pdf" },
+    });
+
+    const response = await POST(makeRequest({ expectedHash: hash }), { params });
+
+    expect(response.status).toBe(200);
+    expect(renderer.renderApplicationPdf).toHaveBeenCalledOnce();
+    expect(commit.commitApplicationArtifact).toHaveBeenCalledOnce();
   });
 
   it("returns 409 on stale expectedHash before rendering anything", async () => {
@@ -260,6 +465,34 @@ describe("POST /api/applications/[id]/finalize", () => {
     expect(res.status).toBe(409);
     await expect(res.json()).resolves.toMatchObject({
       error: { code: "STALE_WRITE" },
+    });
+  });
+
+  it("returns 409 when Profile or Job render inputs change during PDF generation", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: USER_ID },
+    });
+    const ai = makeAiContent();
+    const hash = hashAiContent(ai);
+    prisma.application.findFirst.mockResolvedValueOnce({
+      ...ownedReviewSources(),
+      id: APP_ID,
+      userId: USER_ID,
+      aiContent: ai,
+      aiContentHash: hash,
+      resumeProfileId: PROFILE.id,
+      resumePdfUrl: null,
+      coverPdfUrl: null,
+    });
+    commit.commitApplicationArtifact.mockResolvedValueOnce({
+      kind: "stale_render_context",
+    });
+
+    const response = await POST(makeRequest({ expectedHash: hash }), { params });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "STALE_RENDER_CONTEXT" },
     });
   });
 
@@ -324,7 +557,7 @@ describe("POST /api/applications/[id]/finalize", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns an already-versioned artifact without compiling it again", async () => {
+  it("returns the current published artifact without compiling it again", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: USER_ID },
     });
@@ -338,11 +571,12 @@ describe("POST /api/applications/[id]/finalize", () => {
       scopeKey: USER_ID,
     });
     const hash = hashAiContent(ai);
-    const lifecycleVersionPrefix =
-      buildApplicationArtifactVersionPrefix(hash);
-    const resumePdfUrl =
-      `https://blob.vercel-storage.com/applications/${USER_ID}/job-1/` +
-      `resume.${lifecycleVersionPrefix}${"a".repeat(64)}.pdf`;
+    const resumeContentHash = hashApplicationDocumentContent(
+      ai,
+      "resume",
+      RENDER_CONTEXT,
+    );
+    const resumePdfUrl = "https://blob.example/current-resume.pdf";
     prisma.application.findFirst.mockResolvedValueOnce({
       ...ownedReviewSources(),
       id: APP_ID,
@@ -350,6 +584,30 @@ describe("POST /api/applications/[id]/finalize", () => {
       status: "FINAL",
       aiContent: ai,
       aiContentHash: hash,
+      resumePdfUrl,
+      resumePdfName: "resume.pdf",
+      coverPdfUrl: null,
+      resumeContentHash,
+      resumePublishedHash: resumeContentHash,
+      coverContentHash: null,
+      coverPublishedHash: null,
+    });
+    publicationReplay.confirmApplicationPublicationReplay.mockResolvedValueOnce({
+      kind: "replayed",
+      aiContentHash: hash,
+      publication: {
+        status: "FINAL",
+        resume: {
+          status: "FINAL",
+          contentHash: resumeContentHash,
+          publishedHash: resumeContentHash,
+        },
+        cover: {
+          status: "MISSING",
+          contentHash: null,
+          publishedHash: null,
+        },
+      },
       resumePdfUrl,
       resumePdfName: "resume.pdf",
       coverPdfUrl: null,
@@ -363,6 +621,46 @@ describe("POST /api/applications/[id]/finalize", () => {
     expect(renderer.renderApplicationPdf).not.toHaveBeenCalled();
     expect(commit.commitApplicationArtifact).not.toHaveBeenCalled();
     expect(renderLimiter.enforce).not.toHaveBeenCalled();
+  });
+
+  it("returns a retryable conflict when the locked Final replay sees changed sources", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: USER_ID },
+    });
+    const ai = makeAiContent();
+    const hash = hashAiContent(ai);
+    const resumeHash = hashApplicationDocumentContent(
+      ai,
+      "resume",
+      RENDER_CONTEXT,
+    );
+    prisma.application.findFirst.mockResolvedValueOnce({
+      ...ownedReviewSources(),
+      id: APP_ID,
+      userId: USER_ID,
+      status: "FINAL",
+      aiContent: ai,
+      aiContentHash: hash,
+      resumeProfileId: PROFILE.id,
+      resumePdfUrl: "https://blob.example/current-resume.pdf",
+      coverPdfUrl: null,
+      resumeContentHash: resumeHash,
+      resumePublishedHash: resumeHash,
+      coverContentHash: null,
+      coverPublishedHash: null,
+    });
+    publicationReplay.confirmApplicationPublicationReplay.mockResolvedValueOnce({
+      kind: "stale_render_context",
+    });
+
+    const response = await POST(makeRequest({ expectedHash: hash }), { params });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "STALE_RENDER_CONTEXT" },
+    });
+    expect(renderer.renderApplicationPdf).not.toHaveBeenCalled();
+    expect(commit.commitApplicationArtifact).not.toHaveBeenCalled();
   });
 
   it("returns the user-level render limit before compiling", async () => {

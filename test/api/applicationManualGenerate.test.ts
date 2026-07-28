@@ -33,6 +33,7 @@ const artifactLifecycle = vi.hoisted(() => ({
 const transactionStore = vi.hoisted(() => ({
   run: vi.fn(),
   executeRaw: vi.fn(),
+  queryRaw: vi.fn(),
 }));
 
 const rateLimitStore = vi.hoisted(() => ({
@@ -348,6 +349,24 @@ describe("applications manual generate api", () => {
       .mockResolvedValue({ queued: 1, awaitingUploadResolution: 0 });
     transactionStore.executeRaw.mockReset();
     transactionStore.executeRaw.mockResolvedValue(1);
+    transactionStore.queryRaw.mockReset();
+    transactionStore.queryRaw.mockImplementation(async () => {
+      const routeJob = await jobStore.findFirst.mock.results[0]?.value;
+      return [
+        {
+          profileSummary: null,
+          profileBasics: null,
+          profileLinks: null,
+          profileSkills: null,
+          profileExperiences: null,
+          profileProjects: null,
+          profileEducation: null,
+          jobTitle: routeJob?.title ?? "Untitled",
+          jobCompany: routeJob?.company ?? null,
+          jobMarket: routeJob?.market ?? "AU",
+        },
+      ];
+    });
     transactionStore.run.mockReset();
     transactionStore.run.mockImplementation(
       async (
@@ -357,6 +376,7 @@ describe("applications manual generate api", () => {
           evidenceSnapshot: { createMany: typeof evidenceStore.evidenceCreateMany };
           claimEvidence: { createMany: typeof evidenceStore.claimCreateMany };
           $executeRaw: typeof transactionStore.executeRaw;
+          $queryRaw: typeof transactionStore.queryRaw;
         }) => unknown,
       ) =>
         callback({
@@ -368,6 +388,7 @@ describe("applications manual generate api", () => {
           evidenceSnapshot: { createMany: evidenceStore.evidenceCreateMany },
           claimEvidence: { createMany: evidenceStore.claimCreateMany },
           $executeRaw: transactionStore.executeRaw,
+          $queryRaw: transactionStore.queryRaw,
         }),
     );
     delete process.env.BLOB_READ_WRITE_TOKEN;
@@ -1402,7 +1423,7 @@ describe("applications manual generate api", () => {
     expect(blobStore.put).toHaveBeenCalledWith(
       expect.stringMatching(
         new RegExp(
-          `^applications/user-1/${VALID_JOB_ID}/cover\\.[0-9a-f]{8}-[0-9a-f]{8}-[0-9a-f]{64}\\.pdf$`,
+          `^applications/user-1/${VALID_JOB_ID}/cover\\.[0-9a-f]{64}-[0-9a-f]{8}-[0-9a-f]{64}\\.pdf$`,
         ),
       ),
       expect.anything(),
@@ -1417,7 +1438,7 @@ describe("applications manual generate api", () => {
         userId: "user-1",
         jobId: VALID_JOB_ID,
         target: "COVER_PDF",
-        contentVersion: expect.stringMatching(/^[0-9a-f]{8}$/),
+        contentVersion: expect.stringMatching(/^[0-9a-f]{64}$/),
       }),
     );
     expect(
@@ -2143,7 +2164,68 @@ describe("applications manual generate api", () => {
     );
   });
 
-  it("replays an exact DRAFT before changed prompt rules or render adapters run", async () => {
+  it("returns a retryable 409 and retires the upload when render inputs change before commit", async () => {
+    process.env.BLOB_READ_WRITE_TOKEN = "blob-token";
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    jobStore.findFirst.mockResolvedValueOnce({
+      id: VALID_JOB_ID,
+      title: "Software Engineer",
+      company: "Example Co",
+      description: "Build product features",
+      market: "AU",
+    });
+    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "rp-1",
+      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
+    });
+    blobStore.put.mockResolvedValueOnce({
+      url: "https://blob.vercel-storage.com/stale-render.pdf",
+    });
+    transactionStore.queryRaw.mockResolvedValueOnce([
+      {
+        profileSummary: null,
+        profileBasics: null,
+        profileLinks: null,
+        profileSkills: null,
+        profileExperiences: null,
+        profileProjects: null,
+        profileEducation: null,
+        jobTitle: "Software Engineer",
+        jobCompany: "Example Co",
+        jobMarket: "CN",
+      },
+    ]);
+
+    const response = await POST(
+      new Request("http://localhost/api/applications/manual-generate", {
+        method: "POST",
+        body: JSON.stringify({
+          jobId: VALID_JOB_ID,
+          target: "resume",
+          modelOutput: VALID_OUTPUT,
+          promptMeta: {
+            ruleSetId: "rules-1",
+            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+          },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "STALE_RENDER_CONTEXT" },
+    });
+    expect(applicationStore.upsert).not.toHaveBeenCalled();
+    expect(artifactLifecycle.retireStagedArtifacts).toHaveBeenCalledWith({
+      userId: "user-1",
+      jobId: VALID_JOB_ID,
+      artifactIds: ["artifact-1"],
+    });
+  });
+
+  it("replays an exact DRAFT without a current Resume Profile or render adapters", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "user-1" },
     });
@@ -2181,7 +2263,9 @@ describe("applications manual generate api", () => {
           title: "Software Engineer",
           company: "Example Co",
           location: "Sydney",
+          market: "AU",
         },
+        resumeProfile: null,
       },
     });
 
@@ -2217,6 +2301,11 @@ describe("applications manual generate api", () => {
     await expect(response.json()).resolves.toMatchObject({
       applicationId: "app-replayed",
       status: "DRAFT",
+      publication: {
+        status: "DRAFT",
+        resume: { status: "DRAFT", publishedHash: null },
+        cover: { status: "DRAFT", publishedHash: null },
+      },
       aiContentHash: "current-content-hash",
       aiContent: makeExistingAiContent(),
       pdfName: "Jane Doe Software Engineer_CV.pdf",
@@ -2316,6 +2405,11 @@ describe("applications manual generate api", () => {
     (compileLatexToPdf as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error("renderer unavailable"),
     );
+    (mapResumeProfile as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      () => {
+        throw new Error("current Profile render adapter unavailable");
+      },
+    );
     blobStore.put.mockRejectedValue(new Error("blob unavailable"));
     tailoringAcceptance.probeTailoringRunAcceptanceReplay.mockResolvedValueOnce({
       receipt: {
@@ -2332,12 +2426,30 @@ describe("applications manual generate api", () => {
         status: "FINAL",
         aiContent: makeExistingAiContent(),
         aiContentHash: "current-final-hash",
+        resumePdfUrl:
+          "https://blob.example/applications/resume.current-final-hash.pdf",
         resumePdfName: "Jane Doe Software Engineer_CV.pdf",
+        coverPdfUrl:
+          "https://blob.example/applications/cover.current-final-hash.pdf",
+        resumeContentHash: null,
+        coverContentHash: null,
+        resumePublishedHash: null,
+        coverPublishedHash: null,
         job: {
           id: VALID_JOB_ID,
           title: "Software Engineer",
           company: "Example Co",
           location: "Sydney",
+          market: "AU",
+        },
+        resumeProfile: {
+          summary: "Base summary",
+          basics: null,
+          links: null,
+          skills: null,
+          experiences: null,
+          projects: null,
+          education: null,
         },
       },
     });
@@ -2372,7 +2484,12 @@ describe("applications manual generate api", () => {
     expect(response.headers.get("x-tailoring-delivery")).toBe("FINAL");
     await expect(response.json()).resolves.toMatchObject({
       applicationId: "app-final-replayed",
-      status: "FINAL",
+      status: "DRAFT",
+      publication: {
+        status: "DRAFT",
+        resume: { status: "DRAFT", publishedHash: null },
+        cover: { status: "DRAFT", publishedHash: null },
+      },
       aiContentHash: "current-final-hash",
       acceptedDelivery: "FINAL",
       target: "cover",

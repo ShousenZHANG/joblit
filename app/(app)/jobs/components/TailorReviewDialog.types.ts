@@ -1,10 +1,11 @@
+import type { ApplicationPublication } from "@/lib/shared/applicationPublication";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
 import type { TailorTarget } from "../[id]/tailor/tailorActions";
 
 export type TailorReviewDraft = {
   applicationId: string;
   target: TailorTarget;
-  initialStatus: "DRAFT" | "FINAL";
+  initialPublication: ApplicationPublication;
   initialAiContent: AiContent;
   initialAiContentHash: string | null;
   resumePdfUrl: string | null;

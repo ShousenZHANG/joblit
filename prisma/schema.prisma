@@ -437,11 +437,14 @@ model TailoringRunReceipt {
   executionAttemptId String             @db.Uuid
   requestHash        String
 
-  applicationId String?              @db.Uuid
-  application   Application?         @relation(fields: [applicationId], references: [id], onDelete: SetNull)
-  aiContentHash String
-  delivery      TailoringRunDelivery
-  createdAt     DateTime             @default(now())
+  applicationId       String?              @db.Uuid
+  application         Application?         @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  aiContentHash       String
+  /// Target-scoped content identity accepted by this receipt. Null only for
+  /// receipts created before document-level publication tracking.
+  documentContentHash String?
+  delivery            TailoringRunDelivery
+  createdAt           DateTime             @default(now())
 
   @@unique([runId, target])
   @@index([applicationId, createdAt])
@@ -597,19 +600,26 @@ model Application {
   coverTexUrl   String?
   coverPdfUrl   String?
 
-  // Tailor edit workflow (see ADR-0001 / ADR-0002).
-  // status:        DRAFT during user review, FINAL once PDF is rendered.
+  // Tailor edit workflow (see ADR-0002 / ADR-0011).
+  // status:        compatibility projection; FINAL only when every present
+  //                Resume/Cover document is independently current.
   // aiContent:     persisted AI proposals + user accept/reject/edit decisions.
-  // aiContentHash: stable fnv1a32 hash for stale-write detection across tabs.
+  // aiContentHash: stable whole-row hash for stale-write detection across tabs.
   // Existing rows are backfilled to FINAL with NULL aiContent — opening
   // them in the editor prompts re-generation since AI provenance is lost.
-  status        ApplicationStatus @default(FINAL)
-  aiContent     Json?
-  aiContentHash String?
+  status              ApplicationStatus @default(FINAL)
+  aiContent           Json?
+  aiContentHash       String?
+  /// Current target-scoped render-effective content and input identities.
+  resumeContentHash   String?
+  coverContentHash    String?
+  /// Content identities represented by the current target PDF pointers.
+  resumePublishedHash String?
+  coverPublishedHash  String?
   /// Last deterministic ATS/PDF machine-readability validation result.
-  atsValidation Json?
+  atsValidation       Json?
   /// Last structured reviewer report, including evidence coverage.
-  reviewReport  Json?
+  reviewReport        Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

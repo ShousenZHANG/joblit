@@ -7,12 +7,14 @@ import {
   useRef,
   type RefObject,
 } from "react";
+import type { ApplicationPublication } from "@/lib/shared/applicationPublication";
 import {
   isAbortError,
   renderPreview,
   type FinalizeResult,
   type TailorTarget,
 } from "./tailorActions";
+import type { TailorDraftCommit } from "./useTailorDraft";
 
 export type PreviewSyncStatus = "synced" | "pending" | "rendering" | "error";
 
@@ -32,8 +34,12 @@ type PreviewViewAction =
   | { type: "refreshing"; value: boolean }
   | { type: "preview"; target: TailorTarget; url: string; at: number }
   | { type: "finalized"; result: FinalizeResult; at: number }
-  | { type: "cancel" }
-  | { type: "invalidate" };
+  | {
+      type: "publication";
+      publication: ApplicationPublication;
+      pdfs: Record<TailorTarget, string | null>;
+    }
+  | { type: "cancel" };
 
 interface PreviewRuntime {
   mounted: boolean;
@@ -43,15 +49,17 @@ interface PreviewRuntime {
   inFlight: boolean;
   queuedTarget: TailorTarget | null;
   renderedHashes: Record<TailorTarget, string | null>;
+  publishedUrls: Record<TailorTarget, string | null>;
   objectUrls: Record<TailorTarget, string | null>;
 }
 
 interface PreviewContext {
   applicationId: string;
   currentHash: string | null;
+  publication: ApplicationPublication;
   saveKind: string;
   previewFailedMessage: string;
-  flushNow: () => Promise<string | null>;
+  flushNow: () => Promise<TailorDraftCommit>;
   isOperationActive: () => boolean;
   clearIssue: () => void;
   reportIssue: (error: unknown, fallback: string) => void;
@@ -71,8 +79,8 @@ type PreviewOutcome =
 
 export interface UseTailoringPreviewLifecycleOptions {
   applicationId: string;
-  initialStatus: "DRAFT" | "FINAL";
-  initialHash: string | null;
+  initialPublication: ApplicationPublication;
+  publication: ApplicationPublication;
   initialResumePdfUrl: string | null;
   initialCoverPdfUrl: string | null;
   target: TailorTarget;
@@ -80,7 +88,7 @@ export interface UseTailoringPreviewLifecycleOptions {
   currentHash: string | null;
   saveKind: string;
   previewFailedMessage: string;
-  flushNow: () => Promise<string | null>;
+  flushNow: () => Promise<TailorDraftCommit>;
   isOperationActive: () => boolean;
   clearIssue: () => void;
   reportIssue: (error: unknown, fallback: string) => void;
@@ -91,8 +99,8 @@ export interface TailoringPreviewLifecycle {
   refresh: (target: TailorTarget) => Promise<boolean>;
   markEdited: (target: TailorTarget) => void;
   cancelForOperation: () => void;
-  applyFinalized: (result: FinalizeResult, hash: string | null) => void;
-  invalidateAll: () => void;
+  applyFinalized: (result: FinalizeResult) => void;
+  applyPublication: (publication: ApplicationPublication) => void;
 }
 
 const AUTO_PREVIEW_DEBOUNCE_MS = 1_400;
@@ -150,19 +158,19 @@ function usePreviewMutations(
     }
   }, [dispatch, runtimeRef]);
   const applyFinalized = useCallback(
-    (result: FinalizeResult, hash: string | null) => {
+    (result: FinalizeResult) => {
       if (runtimeRef.current) {
-        applyFinalizedPreview(runtimeRef.current, dispatch, result, hash);
+        applyFinalizedPreview(runtimeRef.current, dispatch, result);
       }
     },
     [dispatch, runtimeRef],
   );
-  const invalidateAll = useCallback(() => {
+  const applyPublication = useCallback((publication: ApplicationPublication) => {
     if (runtimeRef.current) {
-      invalidateAllPreviews(runtimeRef.current, dispatch);
+      reconcilePreviewPublication(runtimeRef.current, dispatch, publication);
     }
   }, [dispatch, runtimeRef]);
-  return { markEdited, cancelForOperation, applyFinalized, invalidateAll };
+  return { markEdited, cancelForOperation, applyFinalized, applyPublication };
 }
 
 function usePreviewScheduler(
@@ -251,7 +259,9 @@ function useAutomaticPreview(
     if (!runtime) return;
     if (!options.autoPreview) return;
     if (options.saveKind !== "saved" || !options.currentHash) return;
-    if (runtime.renderedHashes[options.target] === options.currentHash) {
+    const currentTargetHash = options.publication[options.target].contentHash;
+    if (!currentTargetHash) return;
+    if (runtime.renderedHashes[options.target] === currentTargetHash) {
       if (!runtime.inFlight) {
         setPreviewStatus(dispatch, options.target, "synced");
       }
@@ -263,6 +273,7 @@ function useAutomaticPreview(
     dispatch,
     options.autoPreview,
     options.currentHash,
+    options.publication,
     options.saveKind,
     options.target,
     runtimeRef,
@@ -276,12 +287,12 @@ async function performPreview(
   request: PreviewRequest,
 ): Promise<PreviewOutcome> {
   try {
-    const hash = await context.flushNow();
+    const commit = await context.flushNow();
     if (!ownsPreview(runtime, context, request)) return { kind: "aborted" };
     const url = await renderPreview({
       applicationId: context.applicationId,
       target: request.target,
-      expectedHash: hash,
+      expectedHash: commit.aiContentHash,
       signal: request.controller.signal,
       fallbackMessage: context.previewFailedMessage,
     });
@@ -289,7 +300,11 @@ async function performPreview(
       revokeDetachedObjectUrl(url);
       return { kind: "aborted" };
     }
-    return { kind: "rendered", url, hash };
+    return {
+      kind: "rendered",
+      url,
+      hash: commit.publication[request.target].contentHash,
+    };
   } catch (error: unknown) {
     return isAbortError(error) ? { kind: "aborted" } : { kind: "error", error };
   }
@@ -352,7 +367,10 @@ function settleRenderedSyncStatus(
   target: TailorTarget,
   outcome: Extract<PreviewOutcome, { kind: "rendered" }>,
 ): boolean {
-  if (context.currentHash === outcome.hash && context.saveKind === "saved") {
+  if (
+    context.publication[target].contentHash === outcome.hash &&
+    context.saveKind === "saved"
+  ) {
     setPreviewStatus(context.dispatch, target, "synced");
     return false;
   }
@@ -437,25 +455,36 @@ function applyFinalizedPreview(
   runtime: PreviewRuntime,
   dispatch: React.Dispatch<PreviewViewAction>,
   result: FinalizeResult,
-  hash: string | null,
 ) {
   if (result.resumePdfUrl) {
-    runtime.renderedHashes.resume = hash;
+    runtime.renderedHashes.resume = result.publication.resume.publishedHash;
+    runtime.publishedUrls.resume = result.resumePdfUrl;
     releasePreviewObjectUrl(runtime, "resume");
   }
   if (result.coverPdfUrl) {
-    runtime.renderedHashes.cover = hash;
+    runtime.renderedHashes.cover = result.publication.cover.publishedHash;
+    runtime.publishedUrls.cover = result.coverPdfUrl;
     releasePreviewObjectUrl(runtime, "cover");
   }
   dispatch({ type: "finalized", result, at: Date.now() });
 }
 
-function invalidateAllPreviews(
+function reconcilePreviewPublication(
   runtime: PreviewRuntime,
   dispatch: React.Dispatch<PreviewViewAction>,
+  publication: ApplicationPublication,
 ) {
-  runtime.renderedHashes = { resume: null, cover: null };
-  dispatch({ type: "invalidate" });
+  runtime.renderedHashes = {
+    resume: publication.resume.publishedHash,
+    cover: publication.cover.publishedHash,
+  };
+  releasePreviewObjectUrl(runtime, "resume");
+  releasePreviewObjectUrl(runtime, "cover");
+  dispatch({
+    type: "publication",
+    publication,
+    pdfs: runtime.publishedUrls,
+  });
 }
 
 function disposePreviewRuntime(runtime: PreviewRuntime) {
@@ -515,6 +544,7 @@ function createContext(
   return {
     applicationId: options.applicationId,
     currentHash: options.currentHash,
+    publication: options.publication,
     saveKind: options.saveKind,
     previewFailedMessage: options.previewFailedMessage,
     flushNow: options.flushNow,
@@ -528,7 +558,6 @@ function createContext(
 function createRuntime(
   options: UseTailoringPreviewLifecycleOptions,
 ): PreviewRuntime {
-  const isFinal = options.initialStatus === "FINAL";
   return {
     mounted: true,
     epoch: 0,
@@ -537,8 +566,12 @@ function createRuntime(
     inFlight: false,
     queuedTarget: null,
     renderedHashes: {
-      resume: isFinal && options.initialResumePdfUrl ? options.initialHash : null,
-      cover: isFinal && options.initialCoverPdfUrl ? options.initialHash : null,
+      resume: initialRenderedHash(options, "resume"),
+      cover: initialRenderedHash(options, "cover"),
+    },
+    publishedUrls: {
+      resume: options.initialResumePdfUrl,
+      cover: options.initialCoverPdfUrl,
     },
     objectUrls: { resume: null, cover: null },
   };
@@ -569,9 +602,24 @@ function initialSyncStatus(
     target === "resume"
       ? options.initialResumePdfUrl
       : options.initialCoverPdfUrl;
-  return options.initialStatus === "FINAL" && !!url && !!options.initialHash
+  const document = options.initialPublication[target];
+  return document.status === "FINAL" &&
+    !!url &&
+    !!document.contentHash &&
+    document.publishedHash === document.contentHash
     ? "synced"
     : "pending";
+}
+
+function initialRenderedHash(
+  options: UseTailoringPreviewLifecycleOptions,
+  target: TailorTarget,
+): string | null {
+  const url =
+    target === "resume"
+      ? options.initialResumePdfUrl
+      : options.initialCoverPdfUrl;
+  return url ? options.initialPublication[target].publishedHash : null;
 }
 
 function previewViewReducer(
@@ -598,12 +646,40 @@ function previewViewReducer(
       return applyFinalizedViewState(state, action);
     case "cancel":
       return cancelPreviewViewState(state);
-    case "invalidate":
-      return {
-        ...state,
-        syncStatuses: { resume: "pending", cover: "pending" },
-      };
+    case "publication":
+      return applyPublicationViewState(
+        state,
+        action.publication,
+        action.pdfs,
+      );
   }
+}
+
+function applyPublicationViewState(
+  state: PreviewViewState,
+  publication: ApplicationPublication,
+  pdfs: Record<TailorTarget, string | null>,
+): PreviewViewState {
+  return {
+    ...state,
+    pdfs: { ...pdfs },
+    syncStatuses: {
+      resume: publicationSyncStatus(pdfs.resume, publication.resume),
+      cover: publicationSyncStatus(pdfs.cover, publication.cover),
+    },
+  };
+}
+
+function publicationSyncStatus(
+  url: string | null,
+  publication: ApplicationPublication["resume"],
+): PreviewSyncStatus {
+  return publication.status === "FINAL" &&
+    !!url &&
+    !!publication.contentHash &&
+    publication.publishedHash === publication.contentHash
+    ? "synced"
+    : "pending";
 }
 
 function applyPreviewViewState(

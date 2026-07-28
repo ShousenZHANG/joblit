@@ -3,7 +3,6 @@ import { ApiError, fetchJson } from "@/lib/api/fetchJson";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useGuide } from "@/app/GuideContext";
-import type { AiContent } from "@/lib/shared/schemas/aiContent";
 import type { JobItem, ExternalPromptMeta, CvSource, CoverSource } from "../types";
 import { getErrorMessage } from "../types";
 import type { DialogPhase } from "../components/StepIndicator";
@@ -19,6 +18,10 @@ import {
   patchGeneratedJobArtifactInJobsCache,
 } from "../utils/jobsQueryCache";
 import type { TailoringRunHandle } from "@/lib/shared/tailoringRunContract";
+import {
+  manualGenerateDraftResponseSchema,
+  type ManualGenerateDraftResponse,
+} from "./manualGenerateDraftResponse";
 
 export type GeneratedDraftSource = "manual_import" | "local_ai";
 
@@ -63,20 +66,7 @@ export class DraftImportError extends Error {
   }
 }
 
-export type PersistedGeneratedDraft = {
-  applicationId: string;
-  status: "DRAFT" | "FINAL";
-  aiContentHash: string | null;
-  aiContent: AiContent;
-  /** Canonical `{Full Name} {Title}_{CV|CL}.pdf` for the review dialog's download. */
-  pdfName: string | null;
-  job: {
-    id: string;
-    title: string;
-    company: string | null;
-    location: string | null;
-  };
-};
+export type PersistedGeneratedDraft = ManualGenerateDraftResponse;
 
 export async function persistGeneratedDraft(input: {
   jobId: string;
@@ -86,22 +76,13 @@ export async function persistGeneratedDraft(input: {
   tailoringRun?: TailoringRunHandle | null;
   source: GeneratedDraftSource;
 }): Promise<PersistedGeneratedDraft> {
-  type ManualGenerateResponse = {
-    applicationId?: string;
-    status?: string;
-    aiContentHash?: unknown;
-    aiContent?: unknown;
-    pdfName?: unknown;
-    job?: { id?: string; title?: unknown; company?: unknown; location?: unknown };
-  };
-
-  let json: ManualGenerateResponse | null;
   try {
-    json = (await fetchJson("/api/applications/manual-generate?finalize=false", {
+    return await fetchJson("/api/applications/manual-generate?finalize=false", {
       method: "POST",
       body: JSON.stringify(input),
       fallbackError: "Failed to import generated content",
-    })) as ManualGenerateResponse | null;
+      schema: manualGenerateDraftResponseSchema,
+    });
   } catch (err) {
     if (!(err instanceof ApiError)) throw err;
     // `details` is a string array for the import validators and a Zod flatten
@@ -112,27 +93,6 @@ export async function persistGeneratedDraft(input: {
     const detailText = details.length ? ` (${details.slice(0, 2).join(" | ")})` : "";
     throw new DraftImportError(`${err.message}${detailText}`, err.code, details);
   }
-  if (
-    !json?.applicationId ||
-    !json?.aiContent ||
-    !json?.job?.id ||
-    typeof json.job.title !== "string"
-  ) {
-    throw new Error("Unexpected response: missing editable draft metadata");
-  }
-  return {
-    applicationId: json.applicationId,
-    status: json.status === "FINAL" ? "FINAL" : "DRAFT",
-    aiContentHash: typeof json.aiContentHash === "string" ? json.aiContentHash : null,
-    aiContent: json.aiContent as AiContent,
-    pdfName: typeof json.pdfName === "string" ? json.pdfName : null,
-    job: {
-      id: json.job.id,
-      title: json.job.title,
-      company: typeof json.job.company === "string" ? json.job.company : null,
-      location: typeof json.job.location === "string" ? json.job.location : null,
-    },
-  };
 }
 
 export function useExternalGenerate(setError: (e: string | null) => void) {
@@ -185,7 +145,7 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
     setTailorReviewDraft({
       applicationId: draft.applicationId,
       target,
-      initialStatus: draft.status,
+      initialPublication: draft.publication,
       initialAiContent: draft.aiContent,
       initialAiContentHash: draft.aiContentHash,
       resumePdfUrl: input.resumePdfUrl ?? null,
@@ -455,8 +415,10 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
         draft,
         target,
         source: "manual_import",
-        resumePdfUrl: target === "resume" ? null : job.resumePdfUrl ?? null,
-        coverPdfUrl: target === "cover" ? null : job.coverPdfUrl ?? null,
+        // A new Draft does not retire the previous publication. Keep both
+        // current PDF pointers visible while the fresh preview is rendered.
+        resumePdfUrl: job.resumePdfUrl ?? null,
+        coverPdfUrl: job.coverPdfUrl ?? null,
       });
     } catch (e) {
       setDialogPhase(3);

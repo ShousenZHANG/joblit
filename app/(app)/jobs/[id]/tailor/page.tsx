@@ -3,7 +3,13 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth";
 import { prisma } from "@/lib/server/prisma";
 import { buildPdfFilename } from "@/lib/server/files/pdfFilename";
+import { getResumeProfile } from "@/lib/server/resumeProfile";
 import { aiContentSchema } from "@/lib/shared/schemas/aiContent";
+import {
+  buildApplicationPublicationRenderContext,
+  projectApplicationPublication,
+} from "@/lib/server/applications/applicationPublication";
+import { marketStringToResumeLocale } from "@/lib/shared/market";
 import { asRecord, toStringValue } from "@/lib/shared/utils/text";
 import { TailorClient } from "./TailorClient";
 import { LegacyApplicationBanner } from "./LegacyApplicationBanner";
@@ -33,9 +39,14 @@ export default async function TailorPage({ params }: TailorPageProps) {
       resumePdfUrl: true,
       resumePdfName: true,
       coverPdfUrl: true,
+      resumeContentHash: true,
+      coverContentHash: true,
+      resumePublishedHash: true,
+      coverPublishedHash: true,
       role: true,
       company: true,
       jobId: true,
+      resumeProfileId: true,
       job: {
         select: {
           id: true,
@@ -45,9 +56,17 @@ export default async function TailorPage({ params }: TailorPageProps) {
           market: true,
         },
       },
-      // Only for the download filename. The raw profile name, not the
-      // LaTeX-escaped one mapResumeProfile produces.
-      resumeProfile: { select: { basics: true } },
+      resumeProfile: {
+        select: {
+          summary: true,
+          basics: true,
+          links: true,
+          skills: true,
+          experiences: true,
+          projects: true,
+          education: true,
+        },
+      },
     },
   });
 
@@ -84,16 +103,56 @@ export default async function TailorPage({ params }: TailorPageProps) {
   }
 
   const jobTitle = application.job?.title ?? application.role ?? "Untitled";
+  const job = {
+    title: jobTitle,
+    company: application.job?.company ?? application.company ?? null,
+    market: application.job?.market ?? "AU",
+  };
+  const publicationProfile =
+    application.resumeProfile ??
+    (await getResumeProfile(userId, {
+      profileId: application.resumeProfileId ?? undefined,
+      locale: marketStringToResumeLocale(job.market),
+    }));
+  if (!publicationProfile) {
+    return (
+      <LegacyApplicationBanner
+        applicationId={application.id}
+        jobId={application.jobId}
+        jobTitle={jobTitle}
+        company={job.company ?? ""}
+        resumePdfUrl={application.resumePdfUrl}
+        invalidShape
+      />
+    );
+  }
   // Built here, from the same helper the finalize/preview routes use, so the
   // in-page Download button cannot drift from the server's Content-Disposition.
   const candidateName = toStringValue(
-    asRecord(application.resumeProfile?.basics).fullName,
+    asRecord(publicationProfile.basics).fullName,
   );
+  const publication = projectApplicationPublication({
+    aiContent: parsed.data,
+    record: {
+      status: application.status,
+      aiContentHash: application.aiContentHash,
+      resumePdfUrl: application.resumePdfUrl,
+      coverPdfUrl: application.coverPdfUrl,
+      resumeContentHash: application.resumeContentHash,
+      coverContentHash: application.coverContentHash,
+      resumePublishedHash: application.resumePublishedHash,
+      coverPublishedHash: application.coverPublishedHash,
+    },
+    renderContext: buildApplicationPublicationRenderContext({
+      profile: publicationProfile,
+      job,
+    }),
+  });
 
   return (
     <TailorClient
       applicationId={application.id}
-      initialStatus={application.status}
+      initialPublication={publication}
       initialAiContent={parsed.data}
       initialAiContentHash={application.aiContentHash}
       resumePdfUrl={application.resumePdfUrl}
@@ -103,9 +162,9 @@ export default async function TailorPage({ params }: TailorPageProps) {
       job={{
         id: application.job?.id ?? null,
         title: jobTitle,
-        company: application.job?.company ?? application.company ?? null,
+        company: job.company,
         location: application.job?.location ?? null,
-        market: application.job?.market ?? "AU",
+        market: job.market,
       }}
     />
   );

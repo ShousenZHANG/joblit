@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ApplicationPublication } from "@/lib/shared/applicationPublication";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
 import { ApiError } from "@/lib/api/fetchJson";
 import { TailorReviewDialog, type TailorReviewDraft } from "./TailorReviewDialog";
@@ -26,6 +27,19 @@ const aiContent: AiContent = {
     paragraphThree: { aiText: "Three", accepted: true },
   },
 };
+const publication: ApplicationPublication = {
+  status: "DRAFT",
+  resume: {
+    status: "DRAFT",
+    contentHash: "resume-v2",
+    publishedHash: "resume-v1",
+  },
+  cover: {
+    status: "FINAL",
+    contentHash: "cover-v1",
+    publishedHash: "cover-v1",
+  },
+};
 
 type MockDraft = {
   aiContent: AiContent;
@@ -36,6 +50,7 @@ type MockDraft = {
   flushNow: ReturnType<typeof vi.fn>;
   replaceFromServer: ReturnType<typeof vi.fn>;
   currentHash: string;
+  publication: ApplicationPublication;
 };
 
 let mockDraft: MockDraft;
@@ -96,16 +111,20 @@ function makeDraft(saveStatus: MockDraft["saveStatus"]): MockDraft {
     aiContent,
     setAiContent: vi.fn(),
     saveStatus,
-    flushNow: vi.fn().mockResolvedValue("hash"),
+    flushNow: vi.fn().mockResolvedValue({
+      aiContentHash: "hash",
+      publication,
+    }),
     replaceFromServer: vi.fn(),
     currentHash: "hash",
+    publication,
   };
 }
 
 const draft: TailorReviewDraft = {
   applicationId: "application-1",
   target: "resume",
-  initialStatus: "DRAFT",
+  initialPublication: publication,
   initialAiContent: aiContent,
   initialAiContentHash: "hash",
   resumePdfUrl: "/resume.pdf",
@@ -316,6 +335,7 @@ describe("TailorReviewDialog React rules", () => {
     api.fetchJson.mockResolvedValueOnce({
       aiContent,
       aiContentHash: "reset-hash",
+      publication,
     });
     render(
       <TailorReviewDialog
@@ -334,7 +354,10 @@ describe("TailorReviewDialog React rules", () => {
       expect(api.fetchJson).toHaveBeenCalledOnce();
       expect(mockDraft.replaceFromServer).toHaveBeenCalledWith(
         aiContent,
-        "reset-hash",
+        {
+          aiContentHash: "reset-hash",
+          publication,
+        },
       );
     });
     expect(api.fetchJson).toHaveBeenCalledWith(
@@ -342,6 +365,7 @@ describe("TailorReviewDialog React rules", () => {
       {
         method: "POST",
         body: JSON.stringify({ expectedHash: "hash" }),
+        schema: expect.anything(),
       },
     );
     expect(mockDraft.flushNow.mock.invocationCallOrder[0]).toBeLessThan(

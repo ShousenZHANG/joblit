@@ -1,6 +1,6 @@
 # PRD: Tailor Edit Step
 
-- **Status:** Approved
+- **Status:** Implemented
 - **Owner:** Joblit Engineering
 - **Created:** 2026-05-06
 - **Target ship:** 2 sprints across 3 phases
@@ -83,6 +83,10 @@ model Application {
   status         ApplicationStatus @default(FINAL)
   aiContent      Json?
   aiContentHash  String?
+  resumeContentHash   String?
+  resumePublishedHash String?
+  coverContentHash    String?
+  coverPublishedHash  String?
 }
 ```
 
@@ -100,8 +104,8 @@ Shape per [ADR-0001](../adr/0001-application-aicontent-provenance.md#decision).
 |---|---|---|
 | `POST` | `/api/applications/manual-generate?finalize=<bool>` | Existing route. New `finalize` flag. |
 | `PATCH` | `/api/applications/[id]/draft` | Auto-save target. Body: partial `aiContent`. Returns updated `aiContentHash`. |
-| `POST` | `/api/applications/[id]/finalize` | Renders PDF from current `aiContent`. Body: `{ aiContentHash }` (stale-write guard). Sets `status = FINAL`. |
-| `POST` | `/api/applications/[id]/discard` | Reverts `aiContent` to the original AI proposal. Status stays `DRAFT`. |
+| `POST` | `/api/applications/[id]/finalize` | Renders and publishes the selected document from current `aiContent`. Body: `{ expectedHash }` (stale-write guard). |
+| `POST` | `/api/applications/[id]/discard` | Reverts user edits to the original AI proposals and re-projects each document's publication status. |
 
 The interactive web UI explicitly uses `finalize=false` for manual import.
 Server auto-execute persists through `generateApplicationArtifactsForJob`;

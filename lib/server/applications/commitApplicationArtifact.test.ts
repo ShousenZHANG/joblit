@@ -1,10 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AiContent } from "@/lib/shared/schemas/aiContent";
+import {
+  hashAiContent,
+  type AiContent,
+} from "@/lib/shared/schemas/aiContent";
+import {
+  buildApplicationPublicationRenderContext,
+  hashApplicationDocumentContent,
+} from "@/lib/server/applications/applicationPublication";
 
 const blob = vi.hoisted(() => ({ put: vi.fn(), del: vi.fn() }));
 const store = vi.hoisted(() => ({ findUnique: vi.fn(), upsert: vi.fn() }));
 const jobStore = vi.hoisted(() => ({ findFirst: vi.fn() }));
-const database = vi.hoisted(() => ({ transaction: vi.fn() }));
+const database = vi.hoisted(() => ({
+  transaction: vi.fn(),
+  queryRaw: vi.fn(),
+}));
 const ledger = vi.hoisted(() => ({ persistReviewLedger: vi.fn() }));
 const lock = vi.hoisted(() => ({ acquireApplicationMutationLock: vi.fn() }));
 const lifecycle = vi.hoisted(() => ({
@@ -57,11 +67,61 @@ const aiContent: AiContent = {
   },
 };
 
+const PROFILE_RENDER_SOURCE = {
+  summary: "Profile summary",
+  basics: {
+    fullName: "Ada Lovelace",
+    title: "Engineer",
+    email: "ada@example.com",
+    phone: "+61 400 000 000",
+  },
+  links: null,
+  skills: [{ category: "Core", items: ["TypeScript"] }],
+  experiences: null,
+  projects: null,
+  education: null,
+};
+
+const JOB_RENDER_SOURCE = {
+  title: "Engineer",
+  company: "Joblit",
+  market: "AU",
+};
+
+function lockedRenderSource(
+  overrides: Partial<{
+    profileSummary: string | null;
+    profileBasics: unknown;
+    profileSkills: unknown;
+    jobTitle: string;
+    jobCompany: string | null;
+    jobMarket: string;
+  }> = {},
+) {
+  return {
+    profileSummary: PROFILE_RENDER_SOURCE.summary,
+    profileBasics: PROFILE_RENDER_SOURCE.basics,
+    profileLinks: PROFILE_RENDER_SOURCE.links,
+    profileSkills: PROFILE_RENDER_SOURCE.skills,
+    profileExperiences: PROFILE_RENDER_SOURCE.experiences,
+    profileProjects: PROFILE_RENDER_SOURCE.projects,
+    profileEducation: PROFILE_RENDER_SOURCE.education,
+    jobTitle: JOB_RENDER_SOURCE.title,
+    jobCompany: JOB_RENDER_SOURCE.company,
+    jobMarket: JOB_RENDER_SOURCE.market,
+    ...overrides,
+  };
+}
+
 const BASE = {
   userId: "user-1",
   job: { id: "job-1", title: "Engineer", company: "Joblit" },
   resumeProfileId: "profile-1",
   aiContent,
+  publicationRenderContext: buildApplicationPublicationRenderContext({
+    profile: PROFILE_RENDER_SOURCE,
+    job: JOB_RENDER_SOURCE,
+  }),
   status: "FINAL" as const,
 };
 
@@ -79,13 +139,11 @@ const resumeArtifact = {
   target: "resume" as const,
   pdf: Buffer.from("%PDF-1.7"),
   filename: "Ada Lovelace Engineer_CV.pdf",
-  version: "v1",
 };
 
 const coverArtifact = {
   target: "cover" as const,
   pdf: Buffer.from("%PDF-1.7 cover"),
-  version: "v1",
 };
 
 const tailoringRequest = {
@@ -108,8 +166,13 @@ beforeEach(() => {
   vi.stubEnv("NODE_ENV", "test");
   vi.stubEnv("BLOB_READ_WRITE_TOKEN", "token");
   database.transaction.mockImplementation((fn) =>
-    fn({ application: store, job: jobStore }),
+    fn({
+      application: store,
+      job: jobStore,
+      $queryRaw: database.queryRaw,
+    }),
   );
+  database.queryRaw.mockReset().mockResolvedValue([lockedRenderSource()]);
   jobStore.findFirst.mockResolvedValue({ id: "job-1" });
   store.findUnique.mockResolvedValue(null);
   store.upsert.mockResolvedValue({ id: "application-1" });
@@ -198,6 +261,18 @@ describe("commitApplicationArtifact", () => {
     },
   );
 
+  it("rejects an artifact outside a single-target proposal replacement", async () => {
+    const result = await commitApplicationArtifact({
+      ...BASE,
+      mergeTarget: "resume",
+      reviewContext: REVIEW_CONTEXT,
+      artifacts: [coverArtifact],
+    });
+
+    expect(result).toEqual({ kind: "invalid_ai_content" });
+    expect(lifecycle.stageApplicationArtifact).not.toHaveBeenCalled();
+  });
+
   it("preserves a valid resume and cover commit", async () => {
     const result = await commitApplicationArtifact({
       ...BASE,
@@ -223,12 +298,12 @@ describe("commitApplicationArtifact", () => {
         userId: "user-1",
         jobId: "job-1",
         target: "RESUME_PDF",
-        contentVersion: "v1",
+        contentVersion: expect.stringMatching(/^[a-f0-9]{64}$/),
       }),
     );
     expect(blob.put).toHaveBeenCalledWith(
       expect.stringMatching(
-        /^applications\/user-1\/job-1\/resume\.v1-[a-f0-9]{8}-[a-f0-9]{64}\.pdf$/,
+        /^applications\/user-1\/job-1\/resume\.[a-f0-9]{64}-[a-f0-9]{8}-[a-f0-9]{64}\.pdf$/,
       ),
       resumeArtifact.pdf,
       {
@@ -292,7 +367,6 @@ describe("commitApplicationArtifact", () => {
         {
           target: "cover",
           pdf: Buffer.from("%PDF-1.7"),
-          version: "v1",
         },
       ],
     });
@@ -332,6 +406,155 @@ describe("commitApplicationArtifact", () => {
     expect(
       lifecycle.markArtifactsReferencedAndRetireSuperseded,
     ).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      "Profile",
+      { profileBasics: { ...PROFILE_RENDER_SOURCE.basics, fullName: "Grace Hopper" } },
+      resumeArtifact,
+    ],
+    ["Job", { jobTitle: "Principal Engineer" }, coverArtifact],
+  ] as const)(
+    "fences a rendered artifact when the %s context changes before commit",
+    async (_source, override, artifact) => {
+      database.queryRaw.mockResolvedValueOnce([
+        lockedRenderSource(override),
+      ]);
+
+      const result = await commitApplicationArtifact({
+        ...BASE,
+        artifacts: [artifact],
+      });
+
+      expect(result).toEqual({ kind: "stale_render_context" });
+      expect(store.upsert).not.toHaveBeenCalled();
+      expect(lifecycle.retireStagedArtifacts).toHaveBeenCalledWith({
+        userId: "user-1",
+        jobId: "job-1",
+        artifactIds: ["artifact-1"],
+      });
+      expect(
+        lifecycle.markArtifactsReferencedAndRetireSuperseded,
+      ).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ["Resume", resumeArtifact, { jobTitle: "Principal Engineer" }],
+    [
+      "Cover",
+      coverArtifact,
+      { profileSkills: [{ category: "Core", items: ["Rust"] }] },
+    ],
+  ] as const)(
+    "ignores a %s-irrelevant render-context change",
+    async (_target, artifact, override) => {
+      database.queryRaw.mockResolvedValueOnce([
+        lockedRenderSource(override),
+      ]);
+
+      const result = await commitApplicationArtifact({
+        ...BASE,
+        artifacts: [artifact],
+      });
+
+      expect(result.kind).toBe("committed");
+      expect(store.upsert).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("reprojects the untouched target from the latest locked context", async () => {
+    const previousResumeHash = hashApplicationDocumentContent(
+      aiContent,
+      "resume",
+      BASE.publicationRenderContext,
+    );
+    const previousCoverHash = hashApplicationDocumentContent(
+      aiContent,
+      "cover",
+      BASE.publicationRenderContext,
+    );
+    store.findUnique.mockResolvedValueOnce({
+      id: "application-1",
+      resumePdfUrl: "https://blob.example/current-resume.pdf",
+      coverPdfUrl: "https://blob.example/current-cover.pdf",
+      aiContent,
+      aiContentHash: hashAiContent(aiContent),
+      atsValidation: null,
+      status: "FINAL",
+      resumeContentHash: previousResumeHash,
+      resumePublishedHash: previousResumeHash,
+      coverContentHash: previousCoverHash,
+      coverPublishedHash: previousCoverHash,
+    });
+    database.queryRaw.mockResolvedValueOnce([
+      lockedRenderSource({
+        profileSkills: [{ category: "Core", items: ["Rust"] }],
+      }),
+    ]);
+
+    const result = await commitApplicationArtifact({
+      ...BASE,
+      artifacts: [coverArtifact],
+    });
+
+    expect(result.kind).toBe("committed");
+    if (result.kind !== "committed") return;
+    expect(result.publication).toMatchObject({
+      status: "DRAFT",
+      resume: { status: "DRAFT" },
+      cover: { status: "FINAL" },
+    });
+    expect(store.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          resumeContentHash: expect.not.stringMatching(
+            new RegExp(`^${previousResumeHash}$`),
+          ),
+          resumePublishedHash: previousResumeHash,
+          coverContentHash: previousCoverHash,
+          coverPublishedHash: previousCoverHash,
+        }),
+      }),
+    );
+  });
+
+  it("fences a content-only DRAFT when a persisted publication input changes", async () => {
+    database.queryRaw.mockResolvedValueOnce([
+      lockedRenderSource({ jobTitle: "Principal Engineer" }),
+    ]);
+
+    const result = await commitApplicationArtifact({
+      ...BASE,
+      status: "DRAFT",
+      artifacts: [],
+    });
+
+    expect(result).toEqual({ kind: "stale_render_context" });
+    expect(store.upsert).not.toHaveBeenCalled();
+  });
+
+  it("holds shared Profile and Job row locks from context comparison through publication", async () => {
+    const order: string[] = [];
+    database.queryRaw.mockImplementationOnce((strings) => {
+      order.push("render-context-lock");
+      const sql = strings.join(" ");
+      expect(sql).toContain("FOR SHARE OF job, profile");
+      return Promise.resolve([lockedRenderSource()]);
+    });
+    store.upsert.mockImplementationOnce(async () => {
+      order.push("publish");
+      return { id: "application-1" };
+    });
+
+    const result = await commitApplicationArtifact({
+      ...BASE,
+      artifacts: [resumeArtifact],
+    });
+
+    expect(result.kind).toBe("committed");
+    expect(order).toEqual(["render-context-lock", "publish"]);
   });
 
   it("matches a row with no AI Content when expectedHash is null", async () => {
@@ -456,6 +679,30 @@ describe("commitApplicationArtifact", () => {
     expect(store.upsert).toHaveBeenCalledOnce();
     expect(blob.put).not.toHaveBeenCalled();
     expect(lifecycle.stageApplicationArtifact).not.toHaveBeenCalled();
+  });
+
+  it("publishes only the committed document and derives aggregate status", async () => {
+    const result = await commitApplicationArtifact({
+      ...BASE,
+      artifacts: [resumeArtifact],
+    });
+
+    expect(result.kind).toBe("committed");
+    if (result.kind !== "committed") return;
+    expect(result.publication.resume.status).toBe("FINAL");
+    expect(result.publication.cover.status).toBe("DRAFT");
+    expect(result.publication.status).toBe("DRAFT");
+    expect(store.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          status: "DRAFT",
+          resumeContentHash: expect.any(String),
+          resumePublishedHash: expect.any(String),
+          coverContentHash: expect.any(String),
+          coverPublishedHash: null,
+        }),
+      }),
+    );
   });
 
   it("merges a single-target commit against the row so the other half survives", async () => {
@@ -683,6 +930,10 @@ describe("commitApplicationArtifact", () => {
       prepared,
       applicationId: "application-1",
       aiContentHash: result.aiContentHash,
+      documentContentHashes: {
+        RESUME: expect.stringMatching(/^[a-f0-9]{64}$/),
+        COVER: expect.stringMatching(/^[a-f0-9]{64}$/),
+      },
     });
   });
 
@@ -722,6 +973,10 @@ describe("commitApplicationArtifact", () => {
       applicationId: "application-existing",
       aiContent,
       aiContentHash: "sha256:persisted-ai-content",
+      publication: expect.objectContaining({
+        resume: expect.objectContaining({ status: "DRAFT" }),
+        cover: expect.objectContaining({ status: "DRAFT" }),
+      }),
       urls: {
         resume: "https://blob.example/current-resume.pdf",
         cover: "https://blob.example/current-cover.pdf",
@@ -742,6 +997,59 @@ describe("commitApplicationArtifact", () => {
       lifecycle.markArtifactsReferencedAndRetireSuperseded,
     ).not.toHaveBeenCalled();
     expect(blob.del).not.toHaveBeenCalled();
+  });
+
+  it("acknowledges an exact receipt replay without current render adapters", async () => {
+    const replayed = {
+      runId: tailoringRequest.handle.id,
+      target: tailoringRequest.target,
+      executionAttemptId: tailoringRequest.handle.attemptId,
+      requestHash: tailoringRequest.requestHash,
+      applicationId: "application-existing",
+      aiContentHash: "sha256:persisted-ai-content",
+      delivery: tailoringRequest.delivery,
+    };
+    tailoringAcceptance.prepareTailoringRunAcceptance.mockResolvedValueOnce({
+      userId: "user-1",
+      pending: [],
+      replayed: [replayed],
+      runs: [],
+    });
+    store.findUnique.mockResolvedValueOnce({
+      id: "application-existing",
+      resumePdfUrl: "https://blob.example/current-resume.pdf",
+      coverPdfUrl: "https://blob.example/current-cover.pdf",
+      aiContent,
+      aiContentHash: "sha256:persisted-ai-content",
+      atsValidation: null,
+    });
+    database.queryRaw.mockRejectedValueOnce(
+      new Error("current render adapters unavailable"),
+    );
+
+    const result = await commitApplicationArtifact({
+      ...BASE,
+      artifacts: [resumeArtifact],
+      tailoring: [tailoringRequest],
+    });
+
+    expect(result).toMatchObject({
+      kind: "committed",
+      applicationId: "application-existing",
+      tailoringDisposition: "REPLAYED",
+      publication: {
+        status: "DRAFT",
+        resume: { status: "DRAFT" },
+        cover: { status: "DRAFT" },
+      },
+    });
+    expect(database.queryRaw).not.toHaveBeenCalled();
+    expect(store.upsert).not.toHaveBeenCalled();
+    expect(lifecycle.retireStagedArtifacts).toHaveBeenCalledWith({
+      userId: "user-1",
+      jobId: "job-1",
+      artifactIds: ["artifact-1"],
+    });
   });
 
   it("aborts an acceptance conflict before Application mutation and cleans the upload", async () => {

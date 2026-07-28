@@ -13,6 +13,14 @@ const activeResumeProfileStore = vi.hoisted(() => ({
   upsert: vi.fn(),
 }));
 
+const applicationStore = vi.hoisted(() => ({
+  findMany: vi.fn(),
+  updateMany: vi.fn(),
+}));
+
+const executeRawStore = vi.hoisted(() => vi.fn());
+const queryRawStore = vi.hoisted(() => vi.fn());
+
 const transactionStore = vi.hoisted(() => ({
   run: vi.fn(),
 }));
@@ -21,6 +29,9 @@ vi.mock("@/lib/server/prisma", () => ({
   prisma: {
     resumeProfile: resumeProfileStore,
     activeResumeProfile: activeResumeProfileStore,
+    application: applicationStore,
+    $executeRaw: executeRawStore,
+    $queryRaw: queryRawStore,
     $transaction: transactionStore.run,
   },
 }));
@@ -33,6 +44,111 @@ import {
   setActiveResumeProfile,
   upsertResumeProfile,
 } from "@/lib/server/resumeProfile";
+import {
+  buildApplicationPublicationRenderContext,
+  hashApplicationDocumentContent,
+} from "@/lib/server/applications/applicationPublication";
+import type { AiContent } from "@/lib/shared/schemas/aiContent";
+
+function aiContent(): AiContent {
+  return {
+    schemaVersion: 1,
+    generatedAt: "2026-07-28T00:00:00.000Z",
+    promptMetaHash: "profile-publication-test",
+    cv: {
+      summary: {
+        aiText: "Tailored summary",
+        originalText: "Original summary",
+        accepted: true,
+      },
+      latestExperience: {
+        experienceIndex: 0,
+        addedBullets: [{ text: "Tailored bullet", accepted: true }],
+      },
+    },
+    cover: {
+      paragraphOne: { aiText: "First paragraph", accepted: true },
+      paragraphTwo: { aiText: "Second paragraph", accepted: true },
+      paragraphThree: { aiText: "Third paragraph", accepted: true },
+    },
+  };
+}
+
+function storedProfile(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "rp-linked",
+    userId: "user-1",
+    name: "Primary CV",
+    revision: 1,
+    locale: "en-AU",
+    summary: "Platform engineer",
+    basics: {
+      fullName: "Jane Doe",
+      title: "Software Engineer",
+      email: "jane@example.com",
+      phone: "+61 400 000 000",
+      location: "Sydney",
+    },
+    links: [
+      { label: "LinkedIn", url: "https://linkedin.com/in/jane" },
+      { label: "GitHub", url: "https://github.com/jane" },
+    ],
+    skills: [{ category: "Languages", items: ["TypeScript"] }],
+    experiences: [
+      {
+        dates: "2022-present",
+        title: "Software Engineer",
+        company: "Example",
+        bullets: ["Built systems"],
+      },
+    ],
+    projects: [],
+    education: [],
+    ...overrides,
+  };
+}
+
+function finalApplication(input: {
+  id: string;
+  profile: ReturnType<typeof storedProfile>;
+  job: { title: string; company: string | null; market: string };
+}) {
+  const content = aiContent();
+  const context = buildApplicationPublicationRenderContext({
+    profile: input.profile,
+    job: input.job,
+  });
+  const resumeHash = hashApplicationDocumentContent(
+    content,
+    "resume",
+    context,
+  );
+  const coverHash = hashApplicationDocumentContent(content, "cover", context);
+  return {
+    id: input.id,
+    status: "FINAL" as const,
+    aiContent: content,
+    aiContentHash: "aggregate-hash",
+    resumePdfUrl: `https://blob.example/${input.id}/resume.pdf`,
+    coverPdfUrl: `https://blob.example/${input.id}/cover.pdf`,
+    resumeContentHash: resumeHash,
+    resumePublishedHash: resumeHash,
+    coverContentHash: coverHash,
+    coverPublishedHash: coverHash,
+    job: input.job,
+  };
+}
+
+function persistedPublicationPatches() {
+  expect(executeRawStore).toHaveBeenCalledOnce();
+  const serializedPatches = executeRawStore.mock.calls[0]?.[1];
+  expect(typeof serializedPatches).toBe("string");
+  return JSON.parse(serializedPatches as string) as Array<
+    {
+      id: string;
+    } & Record<string, string | null>
+  >;
+}
 
 describe("resumeProfile data access", () => {
   beforeEach(() => {
@@ -43,12 +159,26 @@ describe("resumeProfile data access", () => {
     resumeProfileStore.delete.mockReset();
     activeResumeProfileStore.findUnique.mockReset();
     activeResumeProfileStore.upsert.mockReset();
+    applicationStore.findMany.mockReset().mockResolvedValue([]);
+    applicationStore.updateMany.mockReset();
+    executeRawStore.mockReset();
+    executeRawStore.mockImplementation(
+      (_query: TemplateStringsArray, serializedPatches: string) =>
+        (JSON.parse(serializedPatches) as unknown[]).length,
+    );
+    queryRawStore.mockReset();
+    queryRawStore.mockImplementation(
+      (_query: TemplateStringsArray, profileId: string) => [{ id: profileId }],
+    );
     transactionStore.run.mockReset();
     transactionStore.run.mockImplementation(async (arg: unknown) => {
       if (typeof arg === "function") {
         return arg({
           resumeProfile: resumeProfileStore,
           activeResumeProfile: activeResumeProfileStore,
+          application: applicationStore,
+          $executeRaw: executeRawStore,
+          $queryRaw: queryRawStore,
         });
       }
       return Promise.all(arg as Promise<unknown>[]);
@@ -130,7 +260,258 @@ describe("resumeProfile data access", () => {
       },
     });
     expect(activeResumeProfileStore.upsert).toHaveBeenCalled();
+    expect(applicationStore.findMany).toHaveBeenCalled();
+    expect(applicationStore.updateMany).not.toHaveBeenCalled();
+    expect(executeRawStore).not.toHaveBeenCalled();
     expect(profile?.name).toBe("Graduate CV");
+  });
+
+  it("invalidates only Resume for Resume-only profile changes across distinct jobs", async () => {
+    const previousProfile = storedProfile();
+    const updatedProfile = storedProfile({
+      revision: 2,
+      skills: [{ category: "Languages", items: ["TypeScript", "Go"] }],
+    });
+    const auJob = {
+      title: "Platform Engineer",
+      company: "Acme AU",
+      market: "AU",
+    };
+    const cnJob = {
+      title: "Staff Engineer",
+      company: "Acme CN",
+      market: "CN",
+    };
+    const auApplication = finalApplication({
+      id: "app-au",
+      profile: previousProfile,
+      job: auJob,
+    });
+    const cnApplication = finalApplication({
+      id: "app-cn",
+      profile: previousProfile,
+      job: cnJob,
+    });
+    resumeProfileStore.findFirst.mockResolvedValueOnce(previousProfile);
+    resumeProfileStore.update.mockResolvedValueOnce(updatedProfile);
+    applicationStore.findMany.mockResolvedValueOnce([
+      auApplication,
+      cnApplication,
+    ]);
+
+    await upsertResumeProfile(
+      "user-1",
+      {
+        skills: [{ category: "Languages", items: ["TypeScript", "Go"] }],
+      },
+      { profileId: "rp-linked", setActive: false },
+    );
+
+    expect(transactionStore.run).toHaveBeenCalledWith(
+      expect.any(Function),
+      { maxWait: 5_000, timeout: 30_000 },
+    );
+    const patches = persistedPublicationPatches();
+    expect(patches).toHaveLength(2);
+
+    for (const application of [auApplication, cnApplication]) {
+      const nextContext = buildApplicationPublicationRenderContext({
+        profile: updatedProfile,
+        job: application.job,
+      });
+      const nextResumeHash = hashApplicationDocumentContent(
+        application.aiContent,
+        "resume",
+        nextContext,
+      );
+      expect(nextResumeHash).not.toBe(application.resumeContentHash);
+      expect(
+        hashApplicationDocumentContent(
+          application.aiContent,
+          "cover",
+          nextContext,
+        ),
+      ).toBe(application.coverContentHash);
+      expect(patches).toContainEqual({
+        id: application.id,
+        status: "DRAFT",
+        resumeContentHash: nextResumeHash,
+        resumePublishedHash: application.resumePublishedHash,
+        coverContentHash: application.coverContentHash,
+        coverPublishedHash: application.coverPublishedHash,
+      });
+    }
+    for (const patch of patches) {
+      expect(patch).not.toHaveProperty("resumePdfUrl");
+      expect(patch).not.toHaveProperty("coverPdfUrl");
+    }
+  });
+
+  it("passes ownership scope beside the parameterized publication patch set", async () => {
+    const previousProfile = storedProfile();
+    const updatedProfile = storedProfile({
+      revision: 2,
+      skills: [{ category: "Languages", items: ["TypeScript", "Go"] }],
+    });
+    const application = finalApplication({
+      id: "app-owned",
+      profile: previousProfile,
+      job: {
+        title: "Platform Engineer",
+        company: "Acme",
+        market: "AU",
+      },
+    });
+    resumeProfileStore.findFirst.mockResolvedValueOnce(previousProfile);
+    resumeProfileStore.update.mockResolvedValueOnce(updatedProfile);
+    applicationStore.findMany.mockResolvedValueOnce([application]);
+
+    await upsertResumeProfile(
+      "user-1",
+      {
+        skills: [{ category: "Languages", items: ["TypeScript", "Go"] }],
+      },
+      { profileId: "rp-linked", setActive: false },
+    );
+
+    expect(executeRawStore.mock.calls[0]?.slice(2)).toEqual([
+      "user-1",
+      "rp-linked",
+    ]);
+  });
+
+  it("invalidates Cover as well when candidate header render input changes", async () => {
+    const previousProfile = storedProfile();
+    const updatedProfile = storedProfile({
+      revision: 2,
+      basics: {
+        ...(previousProfile.basics as Record<string, unknown>),
+        fullName: "Jane Q. Doe",
+      },
+    });
+    const job = {
+      title: "Platform Engineer",
+      company: "Acme",
+      market: "AU",
+    };
+    const application = finalApplication({
+      id: "app-header",
+      profile: previousProfile,
+      job,
+    });
+    resumeProfileStore.findFirst.mockResolvedValueOnce(previousProfile);
+    resumeProfileStore.update.mockResolvedValueOnce(updatedProfile);
+    applicationStore.findMany.mockResolvedValueOnce([application]);
+
+    await upsertResumeProfile(
+      "user-1",
+      { basics: updatedProfile.basics },
+      { profileId: "rp-linked", setActive: false },
+    );
+
+    const nextContext = buildApplicationPublicationRenderContext({
+      profile: updatedProfile,
+      job,
+    });
+    const nextResumeHash = hashApplicationDocumentContent(
+      application.aiContent,
+      "resume",
+      nextContext,
+    );
+    const nextCoverHash = hashApplicationDocumentContent(
+      application.aiContent,
+      "cover",
+      nextContext,
+    );
+    expect(nextResumeHash).not.toBe(application.resumeContentHash);
+    expect(nextCoverHash).not.toBe(application.coverContentHash);
+    expect(persistedPublicationPatches()).toEqual([
+      {
+        id: "app-header",
+        status: "DRAFT",
+        resumeContentHash: nextResumeHash,
+        resumePublishedHash: application.resumePublishedHash,
+        coverContentHash: nextCoverHash,
+        coverPublishedHash: application.coverPublishedHash,
+      },
+    ]);
+  });
+
+  it("does not rewrite publication state for a non-rendered Profile field", async () => {
+    const previousProfile = storedProfile();
+    const updatedProfile = storedProfile({
+      revision: 2,
+      basics: {
+        ...(previousProfile.basics as Record<string, unknown>),
+        location: "Melbourne",
+      },
+    });
+    const job = {
+      title: "Platform Engineer",
+      company: "Acme",
+      market: "AU",
+    };
+    const application = finalApplication({
+      id: "app-location",
+      profile: previousProfile,
+      job,
+    });
+    resumeProfileStore.findFirst.mockResolvedValueOnce(previousProfile);
+    resumeProfileStore.update.mockResolvedValueOnce(updatedProfile);
+    applicationStore.findMany.mockResolvedValueOnce([application]);
+
+    await upsertResumeProfile(
+      "user-1",
+      { basics: updatedProfile.basics },
+      { profileId: "rp-linked", setActive: false },
+    );
+
+    expect(executeRawStore).not.toHaveBeenCalled();
+  });
+
+  it("falls back to conservative invalidation when Job render context is unavailable", async () => {
+    const previousProfile = storedProfile();
+    const updatedProfile = storedProfile({
+      revision: 2,
+      skills: [{ category: "Languages", items: ["TypeScript", "Go"] }],
+    });
+    const application = {
+      ...finalApplication({
+        id: "app-orphan",
+        profile: previousProfile,
+        job: {
+          title: "Platform Engineer",
+          company: "Acme",
+          market: "AU",
+        },
+      }),
+      job: null,
+    };
+    resumeProfileStore.findFirst.mockResolvedValueOnce(previousProfile);
+    resumeProfileStore.update.mockResolvedValueOnce(updatedProfile);
+    applicationStore.findMany.mockResolvedValueOnce([application]);
+
+    await upsertResumeProfile(
+      "user-1",
+      {
+        skills: [{ category: "Languages", items: ["TypeScript", "Go"] }],
+      },
+      { profileId: "rp-linked", setActive: false },
+    );
+
+    expect(persistedPublicationPatches()).toEqual([
+      {
+        id: "app-orphan",
+        status: "DRAFT",
+        resumeContentHash: null,
+        resumePublishedHash: null,
+        coverContentHash: null,
+        coverPublishedHash: null,
+      },
+    ]);
+    const persistence = persistedPublicationPatches()[0];
+    expect(persistence).not.toHaveProperty("resumePdfUrl");
+    expect(persistence).not.toHaveProperty("coverPdfUrl");
   });
 
   it("returns null when explicit profileId does not belong to user", async () => {
@@ -250,6 +631,79 @@ describe("resumeProfile data access", () => {
       update: { resumeProfileId: "rp-2" },
       create: { userId: "user-1", locale: "en-AU", resumeProfileId: "rp-2" },
     });
+    expect(applicationStore.updateMany).toHaveBeenCalledWith({
+      where: {
+        userId: "user-1",
+        resumeProfileId: "rp-1",
+      },
+      data: {
+        status: "DRAFT",
+        resumeContentHash: null,
+        resumePublishedHash: null,
+        coverContentHash: null,
+        coverPublishedHash: null,
+      },
+    });
+  });
+
+  it("locks the owned Profile row before invalidating Applications and deleting", async () => {
+    const order: string[] = [];
+    queryRawStore.mockImplementationOnce(
+      (
+        query: TemplateStringsArray,
+        profileId: string,
+        userId: string,
+        locale: string,
+      ) => {
+        order.push("profile-lock");
+        expect(query.join(" ")).toContain("FOR UPDATE OF profile");
+        expect([profileId, userId, locale]).toEqual([
+          "rp-1",
+          "user-1",
+          "en-AU",
+        ]);
+        return [{ id: "rp-1" }];
+      },
+    );
+    resumeProfileStore.findMany.mockResolvedValueOnce([
+      { id: "rp-1" },
+      { id: "rp-2" },
+    ]);
+    activeResumeProfileStore.findUnique.mockResolvedValueOnce({
+      resumeProfileId: "rp-1",
+    });
+    applicationStore.updateMany.mockImplementationOnce(async () => {
+      order.push("application-invalidation");
+      return { count: 1 };
+    });
+    resumeProfileStore.delete.mockImplementationOnce(async () => {
+      order.push("profile-delete");
+      return { id: "rp-1" };
+    });
+
+    const result = await deleteResumeProfile("user-1", "en-AU", "rp-1");
+
+    expect(result.status).toBe("deleted");
+    expect(order).toEqual([
+      "profile-lock",
+      "application-invalidation",
+      "profile-delete",
+    ]);
+  });
+
+  it("treats a missing or unowned Profile as not found before any mutation", async () => {
+    queryRawStore.mockResolvedValueOnce([]);
+
+    const result = await deleteResumeProfile(
+      "user-1",
+      "en-AU",
+      "profile-owned-by-someone-else",
+    );
+
+    expect(result).toEqual({ status: "not_found" });
+    expect(resumeProfileStore.findMany).not.toHaveBeenCalled();
+    expect(applicationStore.updateMany).not.toHaveBeenCalled();
+    expect(resumeProfileStore.delete).not.toHaveBeenCalled();
   });
 
   it("blocks deleting the last remaining profile", async () => {

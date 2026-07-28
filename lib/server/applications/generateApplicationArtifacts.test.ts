@@ -15,6 +15,7 @@ const stores = vi.hoisted(() => ({
     createMany: vi.fn(),
   },
   executeRaw: vi.fn(),
+  queryRaw: vi.fn(),
   transaction: vi.fn(),
   operations: [] as string[],
 }));
@@ -221,9 +222,27 @@ describe("generateApplicationArtifactsForJob", () => {
       stores.operations.push("application.lock");
       return 0;
     });
+    stores.queryRaw.mockImplementation(async () => {
+      stores.operations.push("render-context.lock");
+      return [
+        {
+          profileSummary: null,
+          profileBasics: null,
+          profileLinks: null,
+          profileSkills: null,
+          profileExperiences: null,
+          profileProjects: null,
+          profileEducation: null,
+          jobTitle: job.title,
+          jobCompany: job.company,
+          jobMarket: job.market,
+        },
+      ];
+    });
     stores.transaction.mockImplementation(async (callback) =>
       callback({
         $executeRaw: stores.executeRaw,
+        $queryRaw: stores.queryRaw,
         job: {
           findFirst: vi.fn(async () => {
             stores.operations.push("job.findFirst");
@@ -426,6 +445,7 @@ describe("generateApplicationArtifactsForJob", () => {
       "application.lock",
       "job.findFirst",
       "application.findUnique",
+      "render-context.lock",
       "application.upsert",
       "artifact.mark",
     ]);
@@ -433,7 +453,7 @@ describe("generateApplicationArtifactsForJob", () => {
     expect(blob.put).toHaveBeenNthCalledWith(
       1,
       expect.stringMatching(
-        /^applications\/user-1\/job-1\/resume\.[0-9a-f]{8}-[0-9a-f]{8}-[0-9a-f]{64}\.pdf$/,
+        /^applications\/user-1\/job-1\/resume\.[0-9a-f]{64}-[0-9a-f]{8}-[0-9a-f]{64}\.pdf$/,
       ),
       Buffer.from("resume"),
       expect.objectContaining({
@@ -557,6 +577,19 @@ describe("generateApplicationArtifactsForJob", () => {
       status: 503,
       publicMessage:
         "PDF storage is not configured. Please try again after deployment configuration is restored.",
+    });
+  });
+
+  it("maps a changed render context to a typed retryable conflict", async () => {
+    dependencies.commitApplicationArtifact.mockResolvedValueOnce({
+      kind: "stale_render_context",
+    });
+
+    await expect(
+      generateApplicationArtifactsForJob({ userId: "user-1", jobId: job.id }),
+    ).rejects.toMatchObject({
+      code: "STALE_RENDER_CONTEXT",
+      status: 409,
     });
   });
 

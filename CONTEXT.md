@@ -43,14 +43,36 @@ explicit artifact-erasure preparation hook before deleting the User; no
 supported account-deletion route is currently wired. Settled metadata may be
 purged only after proving the User is absent. See **ADR-0010**.
 
+### Application Document Publication
+
+The current publication truth for one independently rendered Application
+document: **Resume** or **Cover**. Each document has a target-scoped current
+content hash and published hash. The current hash covers both its resolved AI
+decisions and the Master Resume / Job inputs that can change that PDF. Its
+status is derived:
+
+| Value | Meaning |
+|---|---|
+| `MISSING` | This target has no publishable proposal content. |
+| `DRAFT` | Current target content is not represented by the current PDF. A previous Final PDF may remain downloadable. |
+| `FINAL` | The current PDF represents this target's current content hash. |
+
+Editing or publishing one document never changes the other document's
+publication truth. Profile changes rebase only targets whose real render inputs
+changed. A Finalize commit rechecks and locks its Profile/Job render context,
+so a PDF rendered from a stale snapshot cannot become Final. Preview is
+temporary and never publishes. See **ADR-0011**.
+
 ### Application Status
 
 | Value | Meaning |
 |---|---|
-| `DRAFT` | The user has un-finalized edits to AI proposals. PDF may still be the previous final's PDF or absent. |
-| `FINAL` | The currently rendered PDF reflects the committed `aiContent`. Re-editing flips back to `DRAFT`. |
+| `DRAFT` | At least one present Application Document is Draft. |
+| `FINAL` | Every present Application Document is Final. Missing optional documents are neutral. |
 
-The lifecycle is single-row, in-place. See **ADR-0002**.
+This is a compatibility projection for lists and legacy callers, not the source
+of truth for an individual document. The lifecycle remains single-row,
+in-place. See **ADR-0002** and **ADR-0011**.
 
 ### AI Content (`aiContent`)
 
@@ -107,7 +129,7 @@ The end-to-end process of converting a Master Resume Profile + a Job into a fini
 
 1. **Generate** — produce AI proposals (auto via Gemini, or manual via external LLM + JSON paste).
 2. **Edit** — user reviews AI proposals on `/jobs/[id]/tailor`, accepts/rejects/edits.
-3. **Finalize** — render LaTeX → PDF, commit `aiContent`, set status `FINAL`.
+3. **Finalize** — render one target's LaTeX → PDF and publish that document.
 
 The **Edit** phase is new in v1.x. Before that, generate→finalize was atomic. See **ADR-0002**.
 

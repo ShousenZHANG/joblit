@@ -28,10 +28,12 @@ import {
   ManualGenerateSchema,
 } from "@/lib/server/applications/manualImportParser";
 import { reportError } from "@/lib/server/observability/errorReporter";
+import { aiContentSchema } from "@/lib/shared/schemas/aiContent";
 import {
-  aiContentSchema,
-  hashAiContent,
-} from "@/lib/shared/schemas/aiContent";
+  buildApplicationPublicationRenderContext,
+  projectApplicationPublication,
+  UNAVAILABLE_APPLICATION_PUBLICATION_RENDER_CONTEXT,
+} from "@/lib/server/applications/applicationPublication";
 import {
   hashManualTailoringAcceptance,
   probeTailoringRunAcceptanceReplay,
@@ -216,11 +218,26 @@ export async function POST(req: Request) {
         "x-tailoring-replay": "exact",
         "x-tailoring-delivery": delivery,
       };
+      const publication = projectApplicationPublication({
+        aiContent: currentAiContent.data,
+        record: {
+          status: replay.application.status,
+          aiContentHash: replay.application.aiContentHash,
+          resumePdfUrl: replay.application.resumePdfUrl,
+          coverPdfUrl: replay.application.coverPdfUrl,
+          resumeContentHash: replay.application.resumeContentHash,
+          coverContentHash: replay.application.coverContentHash,
+          resumePublishedHash: replay.application.resumePublishedHash,
+          coverPublishedHash: replay.application.coverPublishedHash,
+        },
+        renderContext: UNAVAILABLE_APPLICATION_PUBLICATION_RENDER_CONTEXT,
+      });
       if (!finalize) {
         return NextResponse.json(
           {
             applicationId: replay.application.id,
-            status: replay.application.status,
+            status: publication.status,
+            publication,
             aiContentHash: replay.application.aiContentHash,
             aiContent: currentAiContent.data,
             pdfName: replay.application.resumePdfName,
@@ -234,7 +251,8 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           applicationId: replay.application.id,
-          status: replay.application.status,
+          status: publication.status,
+          publication,
           aiContentHash: replay.application.aiContentHash,
           acceptedDelivery: "FINAL",
           target: data.target,
@@ -330,6 +348,15 @@ export async function POST(req: Request) {
   }
 
   const renderInput = mapResumeProfile(profile);
+  const publicationRenderContext =
+    buildApplicationPublicationRenderContext({
+      profile,
+      job: {
+        title: job.title,
+        company: job.company,
+        market: job.market,
+      },
+    });
 
   // Build the artifact regardless of finalize mode — even DRAFT mode
   // needs the aiContent provenance extracted from the AI output JSON.
@@ -407,6 +434,7 @@ export async function POST(req: Request) {
         job,
         resumeProfileId: profile.id,
         aiContent: artifact.aiContent,
+        publicationRenderContext,
         // A DRAFT renders nothing, so there is no artifact to upload — but the
         // target still selects which half of the AI Content the merge preserves.
         artifacts: [],
@@ -437,7 +465,8 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         applicationId: committed.applicationId,
-        status: "DRAFT",
+        status: committed.publication.status,
+        publication: committed.publication,
         aiContentHash: committed.aiContentHash,
         aiContent: committed.aiContent,
         // DRAFT mode uploads nothing, so the review dialog's preview is an
@@ -496,6 +525,7 @@ export async function POST(req: Request) {
       job,
       resumeProfileId: profile.id,
       aiContent: artifact.aiContent,
+      publicationRenderContext,
       artifacts: [
         {
           target: data.target,
@@ -504,7 +534,6 @@ export async function POST(req: Request) {
           atsValidation,
           // The lifecycle module appends the PDF digest, keeping this
           // content-addressed without allowing different bytes to collide.
-          version: hashAiContent(artifact.aiContent),
         },
       ],
       status: "FINAL",
@@ -524,6 +553,14 @@ export async function POST(req: Request) {
       return errorJson(
         "AI_CONTENT_INVALID",
         "The stored application content cannot be safely merged. Re-generate both targets.",
+        409,
+        { requestId },
+      );
+    }
+    if (result.kind === "stale_render_context") {
+      return errorJson(
+        "STALE_RENDER_CONTEXT",
+        "Your resume profile or job changed while the PDF was rendering. Generate it again.",
         409,
         { requestId },
       );

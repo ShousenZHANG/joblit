@@ -138,6 +138,55 @@ describe("renderApplicationPdf", () => {
     });
   });
 
+  it("renders both documents from the supplied Profile snapshot without re-reading mutable state", async () => {
+    const profileSnapshot = {
+      summary: "Snapshot summary",
+      basics: { fullName: "Snapshot Candidate" },
+      links: null,
+      skills: null,
+      experiences: null,
+      projects: null,
+      education: null,
+    };
+
+    await renderApplicationPdf({
+      applicationId: "application-1",
+      userId: "user-1",
+      resumeProfileId: "profile-linked",
+      profileSnapshot,
+      aiContent,
+      job: {
+        id: "job-1",
+        title: "Engineer",
+        company: "Joblit",
+        market: "AU",
+      },
+    });
+    await renderCoverLetterPdf({
+      applicationId: "application-1",
+      userId: "user-1",
+      resumeProfileId: "profile-linked",
+      profileSnapshot,
+      aiContent,
+      job: {
+        id: "job-1",
+        title: "Engineer",
+        company: "Joblit",
+        market: "AU",
+      },
+    });
+
+    expect(dependencies.getResumeProfile).not.toHaveBeenCalled();
+    expect(dependencies.mapResumeProfile).toHaveBeenNthCalledWith(
+      1,
+      profileSnapshot,
+    );
+    expect(dependencies.mapResumeProfile).toHaveBeenNthCalledWith(
+      2,
+      profileSnapshot,
+    );
+  });
+
   /**
    * ADR-0001's composition rule: `userEdit ?? aiText` for the summary, and
    * accepted `addedBullets` appended to the target experience.

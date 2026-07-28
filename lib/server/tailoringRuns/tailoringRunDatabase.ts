@@ -26,6 +26,7 @@ export type TailoringReceiptRow = {
   requestHash: string;
   applicationId: string | null;
   aiContentHash: string;
+  documentContentHash: string | null;
   delivery: TailoringRunDelivery;
 };
 

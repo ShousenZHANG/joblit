@@ -7,7 +7,6 @@ import {
   APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE,
   commitApplicationArtifact,
 } from "@/lib/server/applications/commitApplicationArtifact";
-import { buildApplicationArtifactVersionPrefix } from "@/lib/server/artifacts/applicationArtifactLifecycle";
 import { errorJson, notFoundError } from "@/lib/server/api/errorResponse";
 import { enforceApplicationRenderRateLimit } from "@/lib/server/api/applicationRenderRateLimit";
 import {
@@ -17,10 +16,14 @@ import {
 } from "@/lib/server/applications/finalizeApplication";
 import {
   aiContentSchema,
-  hashAiContent,
 } from "@/lib/shared/schemas/aiContent";
 import { evolveApplicationAiContent } from "@/lib/server/applications/applicationAiContentAggregate";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
+import {
+  buildApplicationPublicationRenderContext,
+  projectApplicationPublication,
+} from "@/lib/server/applications/applicationPublication";
+import { confirmApplicationPublicationReplay } from "@/lib/server/applications/applicationPublicationReplay";
 import {
   assertAtsPdf,
   AtsPdfValidationError,
@@ -55,29 +58,18 @@ function staleFinalizeResponse(requestId: string) {
   );
 }
 
-function isCurrentVersionedArtifact(
-  url: string | null,
-  target: "resume" | "cover",
-  expectedHash: string | null,
-): boolean {
-  if (!url || !expectedHash) return false;
-  try {
-    const pathname = decodeURIComponent(new URL(url).pathname);
-    const lifecycleVersionPrefix =
-      buildApplicationArtifactVersionPrefix(expectedHash);
-    return (
-      pathname.includes(`/${target}.${expectedHash}-`) ||
-      pathname.includes(`/${target}.${lifecycleVersionPrefix}`) ||
-      pathname.endsWith(`/${target}.${expectedHash}.pdf`)
-    );
-  } catch {
-    return false;
-  }
+function staleRenderContextResponse(requestId: string) {
+  return errorJson(
+    "STALE_RENDER_CONTEXT",
+    "Your resume profile or job changed while the PDF was rendering. Finalize again.",
+    409,
+    { requestId },
+  );
 }
 
 /**
- * Render the current aiContent into a PDF and flip the Application
- * to FINAL. The Tailor edit page calls this from the Finalize button.
+ * Render and publish one current Application document. Aggregate status is a
+ * compatibility projection over both target publications.
  *
  * 400 if the row carries no aiContent (legacy migrated row that needs
  * re-generation rather than direct finalize).
@@ -106,6 +98,10 @@ export async function POST(
           resumePdfUrl: true,
           resumePdfName: true,
           coverPdfUrl: true,
+          resumeContentHash: true,
+          coverContentHash: true,
+          resumePublishedHash: true,
+          coverPublishedHash: true,
           atsValidation: true,
           jobId: true,
           resumeProfileId: true,
@@ -190,24 +186,31 @@ export async function POST(
           ? existing.resumeProfile
           : null;
       const jobOwned = existing.job?.userId === userId;
+      if (!profile || !jobOwned || !existing.job) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "CANONICAL_EVIDENCE_UNAVAILABLE",
+              message:
+                "The server source snapshot is unavailable. Re-generate this draft.",
+            },
+            requestId,
+          },
+          { status: 409 },
+        );
+      }
       const evolved = evolveApplicationAiContent({
         current: aiContentParsed.data,
         command: { kind: "refresh_review", preserveReviewedAt: true },
-        ...(profile
-          ? {
-              reviewContext: {
-                scopeKey: userId,
-                resumeSnapshot: {
-                  profile,
-                  renderInput: mapResumeProfile(profile),
-                },
-                jobDescription: jobOwned
-                  ? existing.job?.description
-                  : undefined,
-                jobSourceAvailable: jobOwned,
-              },
-            }
-          : {}),
+        reviewContext: {
+          scopeKey: userId,
+          resumeSnapshot: {
+            profile,
+            renderInput: mapResumeProfile(profile),
+          },
+          jobDescription: existing.job.description,
+          jobSourceAvailable: true,
+        },
       });
       if (evolved.kind !== "evolved") {
         return NextResponse.json(
@@ -223,8 +226,6 @@ export async function POST(
         );
       }
       const canonicalContent = evolved.aiContent;
-      const canonicalHash = hashAiContent(canonicalContent);
-
       if (canonicalContent.review?.verdict === "blocked") {
         return NextResponse.json(
           {
@@ -240,57 +241,89 @@ export async function POST(
         );
       }
 
-      const job = existing.job ?? {
-        id: null,
-        title: existing.role ?? "Untitled",
-        company: existing.company ?? null,
-        market: "AU",
+      const job = existing.job;
+      const renderSnapshot = {
+        profile,
+        job: {
+          id: job.id ?? null,
+          title: job.title ?? "Untitled",
+          company: job.company,
+          market: job.market ?? "AU",
+        },
       };
+      const publicationRenderContext =
+        buildApplicationPublicationRenderContext({
+          profile: renderSnapshot.profile,
+          job: renderSnapshot.job,
+        });
 
       const target = parseTarget(req);
+      const currentPublication = projectApplicationPublication({
+        aiContent: canonicalContent,
+        record: {
+          status: existing.status,
+          aiContentHash: existing.aiContentHash,
+          resumePdfUrl: existing.resumePdfUrl,
+          coverPdfUrl: existing.coverPdfUrl,
+          resumeContentHash: existing.resumeContentHash,
+          coverContentHash: existing.coverContentHash,
+          resumePublishedHash: existing.resumePublishedHash,
+          coverPublishedHash: existing.coverPublishedHash,
+        },
+        renderContext: publicationRenderContext,
+      });
       // Repeat clicks for an already-committed artifact are a read, not another
-      // LaTeX compile + Blob upload. The versioned path ties the target URL to
-      // this exact aiContent hash; global Application status alone is not enough
-      // because CV and cover letter finalize independently.
+      // LaTeX compile + Blob upload. Publication identity is target-scoped:
+      // aggregate review or the other target cannot make this PDF stale.
       if (
-        existing.status === "FINAL" &&
-        (target === "resume"
-          ? isCurrentVersionedArtifact(
-              existing.resumePdfUrl,
-              "resume",
-              canonicalHash,
-            )
-          : isCurrentVersionedArtifact(
-              existing.coverPdfUrl,
-              "cover",
-              canonicalHash,
-            ))
+        currentPublication[target].status === "FINAL"
       ) {
-        return NextResponse.json({
-          status: "FINAL",
-          ...(target === "resume"
-            ? {
-                resumePdfUrl: existing.resumePdfUrl,
-                resumePdfName: existing.resumePdfName,
-              }
-            : { coverPdfUrl: existing.coverPdfUrl }),
-          requestId,
+        const replay = await confirmApplicationPublicationReplay({
+          userId,
+          applicationId: existing.id,
+          jobId: existing.jobId ?? job.id,
+          resumeProfileId: existing.resumeProfileId ?? "",
+          expectedHash,
+          target,
+          renderContext: publicationRenderContext,
         });
+        if (replay.kind === "stale_write") {
+          return staleFinalizeResponse(requestId);
+        }
+        if (replay.kind === "stale_render_context") {
+          return staleRenderContextResponse(requestId);
+        }
+        if (replay.kind === "not_found") {
+          return notFoundError("application", requestId);
+        }
+        if (replay.kind === "invalid_ai_content") {
+          return errorJson(
+            "AI_CONTENT_INVALID",
+            "Stored aiContent failed schema validation",
+            500,
+            { requestId },
+          );
+        }
+        if (replay.kind === "replayed") {
+          return NextResponse.json({
+            status: replay.publication.status,
+            publication: replay.publication,
+            aiContentHash: replay.aiContentHash,
+            ...(target === "resume"
+              ? {
+                  resumePdfUrl: replay.resumePdfUrl,
+                  resumePdfName: replay.resumePdfName,
+                }
+              : { coverPdfUrl: replay.coverPdfUrl }),
+            requestId,
+          });
+        }
       }
 
       const limited = enforceApplicationRenderRateLimit(userId, requestId);
       if (limited) return limited;
 
-      // The lifecycle module combines this canonical content version with the
-      // rendered PDF digest. Exact retries therefore reuse one pathname while
-      // different bytes can never overwrite a currently referenced artifact.
-      const artifactVersion = canonicalHash;
-      const renderJob = {
-        id: job.id ?? null,
-        title: job.title ?? "Untitled",
-        company: job.company,
-        market: job.market ?? "AU",
-      };
+      const renderJob = renderSnapshot.job;
 
       let pdf: Buffer;
       let filename: string;
@@ -302,6 +335,7 @@ export async function POST(
                 applicationId: existing.id,
                 userId,
                 resumeProfileId: existing.resumeProfileId ?? null,
+                profileSnapshot: renderSnapshot.profile,
                 aiContent: canonicalContent,
                 job: renderJob,
               })
@@ -309,6 +343,7 @@ export async function POST(
                 applicationId: existing.id,
                 userId,
                 resumeProfileId: existing.resumeProfileId ?? null,
+                profileSnapshot: renderSnapshot.profile,
                 aiContent: canonicalContent,
                 job: renderJob,
               });
@@ -330,13 +365,17 @@ export async function POST(
         job: { id: existing.jobId ?? existing.id, title: renderJob.title, company: renderJob.company },
         resumeProfileId: existing.resumeProfileId ?? "",
         aiContent: canonicalContent,
-        artifacts: [{ target, pdf, filename, atsValidation, version: artifactVersion }],
+        publicationRenderContext,
+        artifacts: [{ target, pdf, filename, atsValidation }],
         status: "FINAL",
         // The canonical rebuild above already carries both halves.
         expectedHash,
       });
 
       if (commit.kind === "stale_write") return staleFinalizeResponse(requestId);
+      if (commit.kind === "stale_render_context") {
+        return staleRenderContextResponse(requestId);
+      }
       if (commit.kind === "job_missing") return notFoundError("job", requestId);
       if (commit.kind === "review_blocked") {
         return errorJson(
@@ -364,7 +403,8 @@ export async function POST(
       }
 
       return NextResponse.json({
-        status: "FINAL",
+        status: commit.publication.status,
+        publication: commit.publication,
         ...(target === "cover"
           ? { coverPdfUrl: commit.urls.cover ?? null }
           : {

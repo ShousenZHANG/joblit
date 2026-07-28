@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
+import type { ApplicationPublication } from "@/lib/shared/applicationPublication";
 import { useTailoringEditSession } from "./useTailoringEditSession";
 
 const aiContent: AiContent = {
@@ -24,7 +25,9 @@ const draft = vi.hoisted(() => ({
   saveStatus: { kind: "saved" as const, at: 1 },
   flushNow: vi.fn(),
   replaceFromServer: vi.fn(),
+  acceptServerCommit: vi.fn(),
   currentHash: "hash-1" as string | null,
+  publication: null as ApplicationPublication | null,
 }));
 
 const actions = vi.hoisted(() => ({
@@ -49,7 +52,19 @@ vi.mock("./tailorActions", async (importOriginal) => ({
 
 const options = {
   applicationId: "application-1",
-  initialStatus: "FINAL" as const,
+  initialPublication: {
+    status: "FINAL",
+    resume: {
+      status: "FINAL",
+      contentHash: "resume-v1",
+      publishedHash: "resume-v1",
+    },
+    cover: {
+      status: "FINAL",
+      contentHash: "cover-v1",
+      publishedHash: "cover-v1",
+    },
+  } satisfies ApplicationPublication,
   initialAiContent: aiContent,
   initialAiContentHash: "hash-1",
   initialResumePdfUrl: "/resume.pdf",
@@ -65,23 +80,49 @@ const options = {
   },
 };
 
+const draftPublication: ApplicationPublication = {
+  status: "DRAFT",
+  resume: {
+    status: "DRAFT",
+    contentHash: "resume-v2",
+    publishedHash: "resume-v1",
+  },
+  cover: {
+    status: "DRAFT",
+    contentHash: "cover-v2",
+    publishedHash: "cover-v1",
+  },
+};
+
+function commit(
+  publication: ApplicationPublication = options.initialPublication,
+  aiContentHash = "hash-1",
+) {
+  return { aiContentHash, publication };
+}
+
 describe("useTailoringEditSession", () => {
   beforeEach(() => {
     draft.aiContent = aiContent;
     draft.setAiContent.mockReset();
     draft.saveStatus = { kind: "saved", at: 1 };
-    draft.flushNow.mockReset().mockResolvedValue("hash-1");
+    draft.flushNow.mockReset().mockResolvedValue(commit());
     draft.replaceFromServer.mockReset();
+    draft.acceptServerCommit.mockReset();
     draft.currentHash = "hash-1";
+    draft.publication = options.initialPublication;
     actions.renderPreview.mockReset().mockResolvedValue("blob:preview");
     actions.finalizeApplication.mockReset().mockResolvedValue({
       status: "FINAL",
+      publication: options.initialPublication,
+      aiContentHash: "hash-finalized",
       resumePdfUrl: "/final-resume.pdf",
       resumePdfName: "Engineer_CV.pdf",
     });
     actions.discardDraft.mockReset().mockResolvedValue({
       aiContent,
       aiContentHash: "hash-reset",
+      publication: draftPublication,
     });
     vi.stubGlobal("URL", {
       ...URL,
@@ -111,6 +152,33 @@ describe("useTailoringEditSession", () => {
     expect(draft.setAiContent).toHaveBeenCalledWith(nextContent);
     expect(result.current.document.status).toBe("DRAFT");
     expect(result.current.preview.syncStatus).toBe("pending");
+  });
+
+  it("keeps the other document final when only the active target is edited", () => {
+    const { result } = renderHook(() => useTailoringEditSession(options));
+
+    act(() => {
+      result.current.document.select("cover");
+      result.current.content.update((current) => ({
+        ...current,
+        cover: {
+          ...current.cover,
+          paragraphOne: {
+            ...current.cover?.paragraphOne,
+            aiText: "Updated cover",
+            accepted: true,
+          },
+        },
+      }));
+    });
+
+    expect(result.current.document.status).toBe("DRAFT");
+
+    act(() => {
+      result.current.document.select("resume");
+    });
+
+    expect(result.current.document.status).toBe("FINAL");
   });
 
   it("applies sequential functional edits to the latest in-session content", () => {
@@ -163,10 +231,12 @@ describe("useTailoringEditSession", () => {
 
   it("treats a PDF retained by a draft as stale and renders it automatically", async () => {
     vi.useFakeTimers();
+    draft.publication = draftPublication;
+    draft.flushNow.mockResolvedValue(commit(draftPublication));
     const { result } = renderHook(() =>
       useTailoringEditSession({
         ...options,
-        initialStatus: "DRAFT",
+        initialPublication: draftPublication,
         autoPreview: true,
       }),
     );
@@ -180,6 +250,26 @@ describe("useTailoringEditSession", () => {
 
     expect(actions.renderPreview).toHaveBeenCalledOnce();
     expect(result.current.preview.url).toBe("blob:preview");
+    expect(result.current.preview.syncStatus).toBe("synced");
+  });
+
+  it("keeps a Resume preview synced when only the aggregate CAS hash changes", async () => {
+    vi.useFakeTimers();
+    const { result, rerender } = renderHook(() =>
+      useTailoringEditSession({
+        ...options,
+        autoPreview: true,
+      }),
+    );
+
+    draft.currentHash = "hash-after-cover-edit";
+    rerender();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_400);
+    });
+
+    expect(actions.renderPreview).not.toHaveBeenCalled();
+    expect(result.current.preview.url).toBe("/resume.pdf");
     expect(result.current.preview.syncStatus).toBe("synced");
   });
 
@@ -274,6 +364,10 @@ describe("useTailoringEditSession", () => {
     expect(draft.flushNow.mock.invocationCallOrder[0]).toBeLessThan(
       actions.finalizeApplication.mock.invocationCallOrder[0],
     );
+    expect(draft.acceptServerCommit).toHaveBeenCalledWith({
+      aiContentHash: "hash-finalized",
+      publication: options.initialPublication,
+    });
     expect(finalized?.resumePdfName).toBe("Engineer_CV.pdf");
     expect(result.current.document.status).toBe("FINAL");
     expect(result.current.preview.url).toBe("/final-resume.pdf");
@@ -324,7 +418,12 @@ describe("useTailoringEditSession", () => {
         }),
     );
     actions.finalizeApplication.mockResolvedValueOnce({
-      status: "FINAL",
+      status: "DRAFT",
+      publication: {
+        ...draftPublication,
+        cover: options.initialPublication.cover,
+      },
+      aiContentHash: "hash-cover-finalized",
       coverPdfUrl: "/final-cover.pdf",
       coverPdfName: "Engineer_CL.pdf",
     });
@@ -353,6 +452,7 @@ describe("useTailoringEditSession", () => {
     act(() => {
       result.current.document.select("resume");
     });
+    expect(result.current.document.status).toBe("DRAFT");
     expect(result.current.preview.url).toBe("/resume.pdf");
     expect(result.current.preview.syncStatus).toBe("pending");
     expect(URL.revokeObjectURL).toHaveBeenCalledWith(
@@ -364,15 +464,25 @@ describe("useTailoringEditSession", () => {
     const { result } = renderHook(() => useTailoringEditSession(options));
 
     await act(async () => {
+      await result.current.preview.refresh();
+    });
+    expect(result.current.preview.url).toBe("blob:preview");
+
+    await act(async () => {
       await result.current.discard();
     });
 
     expect(draft.replaceFromServer).toHaveBeenCalledWith(
       aiContent,
-      "hash-reset",
+      {
+        aiContentHash: "hash-reset",
+        publication: draftPublication,
+      },
     );
     expect(result.current.document.status).toBe("DRAFT");
+    expect(result.current.preview.url).toBe("/resume.pdf");
     expect(result.current.preview.syncStatus).toBe("pending");
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:preview");
   });
 
   it("keeps both documents pending when a discarded preview settles late", async () => {
@@ -420,6 +530,8 @@ describe("useTailoringEditSession", () => {
     let resolveFinalize:
       | ((value: {
           status: "FINAL";
+          publication: ApplicationPublication;
+          aiContentHash: string;
           resumePdfUrl: string;
         }) => void)
       | undefined;
@@ -453,6 +565,8 @@ describe("useTailoringEditSession", () => {
     await act(async () => {
       resolveFinalize?.({
         status: "FINAL",
+        publication: options.initialPublication,
+        aiContentHash: "hash-serialized",
         resumePdfUrl: "/serialized.pdf",
       });
       await finalizePromise!;
@@ -462,7 +576,7 @@ describe("useTailoringEditSession", () => {
   it("exposes a working save retry through the shared session", async () => {
     draft.flushNow
       .mockRejectedValueOnce(new Error("offline"))
-      .mockResolvedValueOnce("hash-2");
+      .mockResolvedValueOnce(commit(options.initialPublication, "hash-2"));
     const { result } = renderHook(() => useTailoringEditSession(options));
 
     let firstAttempt = true;

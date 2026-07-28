@@ -112,6 +112,7 @@ export type TailoringAcceptanceReceipt = {
   requestHash: string;
   applicationId: string | null;
   aiContentHash: string;
+  documentContentHash: string | null;
   delivery: TailoringRunDelivery;
 };
 
@@ -135,13 +136,29 @@ export type TailoringAcceptanceReplayApplication = {
   status: "DRAFT" | "FINAL";
   aiContent: unknown;
   aiContentHash: string | null;
+  resumePdfUrl: string | null;
   resumePdfName: string | null;
+  coverPdfUrl: string | null;
+  resumeContentHash: string | null;
+  coverContentHash: string | null;
+  resumePublishedHash: string | null;
+  coverPublishedHash: string | null;
   job: {
     id: string;
     title: string;
     company: string | null;
     location: string | null;
+    market: string;
   };
+  resumeProfile: {
+    summary: string | null;
+    basics: unknown;
+    links: unknown;
+    skills: unknown;
+    experiences: unknown;
+    projects: unknown;
+    education: unknown;
+  } | null;
 };
 
 export type TailoringAcceptanceReplay = {
@@ -182,6 +199,7 @@ export type CompleteTailoringAcceptanceInput = {
   prepared: PreparedTailoringAcceptance;
   applicationId: string;
   aiContentHash: string;
+  documentContentHashes: Partial<Record<TailoringRunTarget, string>>;
 };
 
 export type CompletedTailoringAcceptance = {

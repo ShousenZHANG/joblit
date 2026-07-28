@@ -31,19 +31,36 @@ type RenderApplicationInput = {
   applicationId: string;
   userId: string;
   resumeProfileId?: string | null;
+  /**
+   * Immutable Profile snapshot already loaded with the Application. Finalize
+   * supplies this so publication hashing and PDF rendering cannot observe two
+   * different profile revisions.
+   */
+  profileSnapshot?: Parameters<typeof mapResumeProfile>[0];
   aiContent: AiContent;
   artifactVersion?: string | null;
   job: { id: string | null; title: string; company: string | null; market: string };
 };
 
+async function resolveRenderProfile(input: {
+  userId: string;
+  resumeProfileId?: string | null;
+  profileSnapshot?: Parameters<typeof mapResumeProfile>[0];
+  job: { market: string };
+}) {
+  if (input.profileSnapshot) return input.profileSnapshot;
+  const profileLocale = marketStringToResumeLocale(input.job.market);
+  return getResumeProfile(input.userId, {
+    profileId: input.resumeProfileId ?? undefined,
+    locale: profileLocale,
+  });
+}
+
 export async function renderApplicationPdf(
   input: RenderApplicationInput,
 ): Promise<{ pdf: Buffer; filename: string }> {
   const profileLocale = marketStringToResumeLocale(input.job.market);
-  const profile = await getResumeProfile(input.userId, {
-    profileId: input.resumeProfileId ?? undefined,
-    locale: profileLocale,
-  });
+  const profile = await resolveRenderProfile(input);
   if (!profile) {
     throw new AppError({
       code: "NO_PROFILE",
@@ -73,15 +90,18 @@ export async function renderCoverLetterPdf(input: {
   applicationId: string;
   userId: string;
   resumeProfileId?: string | null;
+  /**
+   * Immutable Profile snapshot already loaded with the Application. Finalize
+   * supplies this so publication hashing and PDF rendering cannot observe two
+   * different profile revisions.
+   */
+  profileSnapshot?: Parameters<typeof mapResumeProfile>[0];
   aiContent: AiContent;
   artifactVersion?: string | null;
   job: { id: string | null; title: string; company: string | null; market: string };
 }): Promise<{ pdf: Buffer; filename: string }> {
   const profileLocale = marketStringToResumeLocale(input.job.market);
-  const profile = await getResumeProfile(input.userId, {
-    profileId: input.resumeProfileId ?? undefined,
-    locale: profileLocale,
-  });
+  const profile = await resolveRenderProfile(input);
   if (!profile) {
     throw new AppError({
       code: "NO_PROFILE",

@@ -91,7 +91,7 @@ function useTailorReviewSession(
   const t = useTranslations("tailor");
   return useTailoringEditSession({
     applicationId: draft.applicationId,
-    initialStatus: draft.initialStatus,
+    initialPublication: draft.initialPublication,
     initialAiContent: draft.initialAiContent,
     initialAiContentHash: draft.initialAiContentHash,
     initialResumePdfUrl: draft.resumePdfUrl,

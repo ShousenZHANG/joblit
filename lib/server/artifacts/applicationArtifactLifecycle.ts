@@ -5,6 +5,10 @@ import { acquireApplicationMutationLock } from "@/lib/server/applications/applic
 import { prisma } from "@/lib/server/prisma";
 import { buildApplicationArtifactBlobPath } from "@/lib/server/files/applicationArtifactBlob";
 import type { ArtifactBlobBody } from "./artifactBlobPort";
+import {
+  ApplicationArtifactVersionError,
+  buildApplicationArtifactVersionPrefix as buildVersionPrefix,
+} from "./applicationArtifactVersion";
 
 export const APPLICATION_ARTIFACT_TARGETS = [
   "RESUME_PDF",
@@ -81,6 +85,19 @@ export class ApplicationArtifactConflictError extends Error {
   }
 }
 
+export function buildApplicationArtifactVersionPrefix(
+  contentVersion: string,
+): string {
+  try {
+    return buildVersionPrefix(contentVersion);
+  } catch (error) {
+    if (error instanceof ApplicationArtifactVersionError) {
+      throw new ApplicationArtifactConflictError(error.message);
+    }
+    throw error;
+  }
+}
+
 const DEFAULT_DATABASE = prisma as unknown as ApplicationArtifactDatabase;
 const CONTENT_HASH_RE = /^[a-f0-9]{64}$/;
 const UUID_RE =
@@ -146,32 +163,6 @@ function hasCanonicalWriterPathPresentation(
 
 function legacyStorageIdentity(value: string): string {
   return `legacy:${value.trim()}`;
-}
-
-function sanitizeContentVersion(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed || trimmed.length > 256) {
-    throw new ApplicationArtifactConflictError("Invalid artifact content version");
-  }
-  return (
-    trimmed.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 45) || "artifact"
-  );
-}
-
-/**
- * Stable prefix shared by immutable-path construction and callers that need
- * to recognize whether an already-current artifact belongs to one aggregate
- * content version. The trailing dash separates it from the rendered-byte hash.
- */
-export function buildApplicationArtifactVersionPrefix(
-  contentVersion: string,
-): string {
-  const sanitizedVersion = sanitizeContentVersion(contentVersion);
-  const versionIdentity = createHash("sha256")
-    .update(contentVersion)
-    .digest("hex")
-    .slice(0, 8);
-  return `${sanitizedVersion}-${versionIdentity}-`;
 }
 
 async function hashArtifactBody(body: ArtifactBlobBody): Promise<string> {

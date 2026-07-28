@@ -119,6 +119,7 @@ function existingReceipt(
     requestHash: "request-hash",
     applicationId: "77777777-7777-4777-8777-777777777777",
     aiContentHash: "content-hash",
+    documentContentHash: null,
     delivery: "DRAFT",
     ...patch,
   };
@@ -155,7 +156,11 @@ describe("probeTailoringRunAcceptanceReplay", () => {
     );
 
     expect(replay).toMatchObject({
-      receipt: { applicationId, requestHash: "request-hash" },
+      receipt: {
+        applicationId,
+        requestHash: "request-hash",
+        documentContentHash: null,
+      },
       application: {
         id: applicationId,
         status: "DRAFT",
@@ -402,15 +407,25 @@ describe("completeTailoringRunAcceptance", () => {
       prepared,
       applicationId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
       aiContentHash: "aggregate-content-hash",
+      documentContentHashes: {
+        COVER: "cover-document-content-hash",
+      },
     });
 
     expect(completed.completedRunIds).toEqual([RUN_ID]);
+    expect(completed.receipts).toEqual([
+      expect.objectContaining({
+        target: "COVER",
+        documentContentHash: "cover-document-content-hash",
+      }),
+    ]);
     expect(tx.tailoringRunReceipt.create).toHaveBeenCalledOnce();
     expect(tx.tailoringRunReceipt.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           target: "COVER",
           executionAttemptId: ATTEMPT_A,
+          documentContentHash: "cover-document-content-hash",
         }),
       }),
     );
@@ -440,6 +455,25 @@ describe("completeTailoringRunAcceptance", () => {
     expect(lockCalls[1]?.[1]).toBe(0x544c524e);
   });
 
+  it("rejects a new receipt without the accepted target content hash", async () => {
+    const tx = transaction(runRow());
+    const prepared = await prepareTailoringRunAcceptance(tx, {
+      userId: USER_ID,
+      jobId: JOB_ID,
+      requests: [request()],
+    });
+
+    await expect(
+      completeTailoringRunAcceptance(tx, {
+        prepared,
+        applicationId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        aiContentHash: "aggregate-content-hash",
+        documentContentHashes: {},
+      }),
+    ).rejects.toMatchObject({ code: "RECEIPT_CONFLICT", status: 409 });
+    expect(tx.tailoringRunReceipt.create).not.toHaveBeenCalled();
+  });
+
   it("never persists a private executor id as an AI content hash", async () => {
     const tx = transaction(runRow());
     await expect(
@@ -452,6 +486,7 @@ describe("completeTailoringRunAcceptance", () => {
         },
         applicationId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
         aiContentHash: "hermes:run_private-executor",
+        documentContentHashes: {},
       }),
     ).rejects.toMatchObject({ code: "RECEIPT_CONFLICT" });
     expect(tx.tailoringRunReceipt.create).not.toHaveBeenCalled();

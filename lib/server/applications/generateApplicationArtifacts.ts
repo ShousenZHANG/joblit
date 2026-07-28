@@ -16,6 +16,7 @@ import {
   commitApplicationArtifact,
   type CommitArtifact,
 } from "@/lib/server/applications/commitApplicationArtifact";
+import { buildApplicationPublicationRenderContext } from "@/lib/server/applications/applicationPublication";
 import { AppError } from "@/lib/server/api/appError";
 import { acceptApplicationGeneration } from "./applicationGeneration";
 import { evolveApplicationAiContent } from "./applicationAiContentAggregate";
@@ -30,7 +31,6 @@ import {
 import { hashTailoringRunValue } from "@/lib/server/tailoringRuns/tailoringRunHash";
 import type { TailoringAcceptanceRequest } from "@/lib/server/tailoringRuns/tailoringRunTypes";
 import type { TailoringRunHandle } from "@/lib/shared/tailoringRunContract";
-import { hashAiContent } from "@/lib/shared/schemas/aiContent";
 import {
   applicationBatchTargetProgress,
 } from "@/lib/server/applicationBatches/tailoringTaskContract";
@@ -288,7 +288,6 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
   // Blob path identity also includes the rendered PDF digest inside the
   // lifecycle module. This stable aggregate version makes exact retries reuse
   // the same object without letting different bytes overwrite one another.
-  const artifactVersion = hashAiContent(aiContent);
   let tailoringAcceptance: readonly TailoringAcceptanceRequest[] | undefined;
   if (input.batch && tailoringHandle) {
     for (const target of remainingTargets) {
@@ -337,7 +336,6 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
       pdf: resumeResult.pdf,
       filename: resumePdfName,
       atsValidation: resumeAtsValidation,
-      version: artifactVersion,
     });
   }
   if (remainingTargets.includes("COVER") && coverPdf) {
@@ -345,7 +343,6 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
       target: "cover",
       pdf: coverPdf,
       atsValidation: coverAtsValidation,
-      version: artifactVersion,
     });
   }
   const commitBase = {
@@ -353,6 +350,14 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
     job: { id: job.id, title: job.title, company: job.company },
     resumeProfileId: profile.id,
     aiContent,
+    publicationRenderContext: buildApplicationPublicationRenderContext({
+      profile,
+      job: {
+        title: job.title,
+        company: job.company,
+        market: job.market,
+      },
+    }),
     artifacts: commitArtifacts,
     status: "FINAL" as const,
     extraData: {
@@ -385,6 +390,14 @@ export async function generateApplicationArtifactsForJob(input: GenerateArtifact
     // The Job was deleted while the render was in flight. The Codex Batch
     // runner records this message on the task, so keep the code stable.
     throw new Error("JOB_NOT_FOUND");
+  }
+  if (commit.kind === "stale_render_context") {
+    throw new AppError({
+      code: "STALE_RENDER_CONTEXT",
+      status: 409,
+      publicMessage:
+        "The resume profile or job changed while the PDF was rendering. Generate it again.",
+    });
   }
   if (commit.kind === "review_blocked") {
     throw new AppError({

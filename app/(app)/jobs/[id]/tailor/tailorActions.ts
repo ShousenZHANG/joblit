@@ -1,5 +1,10 @@
 import { fetchJson } from "@/lib/api/fetchJson";
-import type { AiContent } from "@/lib/shared/schemas/aiContent";
+import {
+  discardResultSchema,
+  finalizeResultSchema,
+  type DiscardResponse,
+  type FinalizeResponse,
+} from "./tailorResponseSchemas";
 
 /**
  * The Edit phase's three server actions, owned once.
@@ -43,13 +48,7 @@ async function readErrorMessage(
   return typeof message === "string" && message ? message : fallback;
 }
 
-export interface FinalizeResult {
-  status: "FINAL";
-  resumePdfUrl?: string;
-  resumePdfName?: string;
-  coverPdfUrl?: string;
-  coverPdfName?: string;
-}
+export type FinalizeResult = FinalizeResponse;
 
 /** Commit the draft and publish its PDF. */
 export async function finalizeApplication(input: {
@@ -57,10 +56,14 @@ export async function finalizeApplication(input: {
   target: TailorTarget;
   expectedHash: string | null;
 }): Promise<FinalizeResult> {
-  return (await fetchJson<undefined>(
+  return fetchJson(
     `/api/applications/${input.applicationId}/finalize?target=${input.target}`,
-    { method: "POST", body: JSON.stringify({ expectedHash: input.expectedHash }) },
-  )) as unknown as FinalizeResult;
+    {
+      method: "POST",
+      body: JSON.stringify({ expectedHash: input.expectedHash }),
+      schema: finalizeResultSchema,
+    },
+  );
 }
 
 /**
@@ -112,20 +115,21 @@ export async function renderPreview(input: {
   return URL.createObjectURL(blob);
 }
 
-export interface DiscardResult {
-  aiContent: AiContent;
-  aiContentHash: string;
-}
+export type DiscardResult = DiscardResponse;
 
 /** Throw away the user's edits and return the server's canonical content. */
 export async function discardDraft(input: {
   applicationId: string;
   expectedHash: string | null;
 }): Promise<DiscardResult> {
-  return (await fetchJson<undefined>(
+  return fetchJson(
     `/api/applications/${input.applicationId}/discard`,
-    { method: "POST", body: JSON.stringify({ expectedHash: input.expectedHash }) },
-  )) as unknown as DiscardResult;
+    {
+      method: "POST",
+      body: JSON.stringify({ expectedHash: input.expectedHash }),
+      schema: discardResultSchema,
+    },
+  );
 }
 
 export function isAbortError(err: unknown): boolean {

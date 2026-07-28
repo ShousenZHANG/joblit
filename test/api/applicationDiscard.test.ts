@@ -11,12 +11,24 @@ const prisma = vi.hoisted(() => ({
   executeRaw: vi.fn(),
 }));
 
+const renderContextFence = vi.hoisted(() => ({
+  matches: vi.fn(),
+}));
+
 vi.mock("@/lib/server/prisma", () => ({
   prisma: {
     application: prisma.application,
     $transaction: prisma.transaction,
   },
 }));
+vi.mock(
+  "@/lib/server/applications/applicationRenderContextFence",
+  () => ({
+    applicationRenderContextMatchesCurrentSources:
+      renderContextFence.matches,
+    applicationPublicationTargets: vi.fn(() => ["resume", "cover"]),
+  }),
+);
 vi.mock("@/auth", () => ({ authOptions: {} }));
 vi.mock("next-auth/next", () => ({ getServerSession: vi.fn() }));
 
@@ -27,9 +39,35 @@ import {
   hashAiContent,
   type AiContent,
 } from "@/lib/shared/schemas/aiContent";
+import {
+  buildApplicationPublicationRenderContext,
+  hashApplicationDocumentContent,
+} from "@/lib/server/applications/applicationPublication";
 
 const APP_ID = "33333333-3333-4333-9333-333333333333";
 const USER_ID = "user-1";
+const PROFILE = {
+  id: "profile-1",
+  userId: USER_ID,
+  summary: "Base summary",
+  basics: null,
+  links: null,
+  skills: null,
+  experiences: null,
+  projects: null,
+  education: null,
+};
+const JOB = {
+  userId: USER_ID,
+  title: "Engineer",
+  company: "Acme",
+  description: "Build reliable TypeScript APIs.",
+  market: "AU",
+};
+const RENDER_CONTEXT = buildApplicationPublicationRenderContext({
+  profile: PROFILE,
+  job: JOB,
+});
 
 function makeEditedAiContent(): AiContent {
   return {
@@ -84,6 +122,7 @@ describe("POST /api/applications/[id]/discard", () => {
     prisma.evidenceSnapshot.createMany.mockReset().mockResolvedValue({ count: 1 });
     prisma.claimEvidence.createMany.mockReset().mockResolvedValue({ count: 1 });
     prisma.executeRaw.mockReset().mockResolvedValue(1);
+    renderContextFence.matches.mockReset().mockResolvedValue(true);
     prisma.transaction.mockReset().mockImplementation(
       async (
         action: (tx: {
@@ -118,7 +157,7 @@ describe("POST /api/applications/[id]/discard", () => {
       projects: null,
       education: null,
     };
-    prisma.application.findFirst.mockResolvedValueOnce({
+    prisma.application.findFirst.mockResolvedValue({
       id: APP_ID,
       userId: USER_ID,
       jobId: "job-1",
@@ -126,7 +165,7 @@ describe("POST /api/applications/[id]/discard", () => {
       aiContentHash: expectedHash,
       resumeProfile: profile,
       job: {
-        userId: USER_ID,
+        ...JOB,
         description: "Build reliable TypeScript APIs.",
       },
     });
@@ -158,6 +197,156 @@ describe("POST /api/applications/[id]/discard", () => {
     expect(updateCall.data.status).toBe("DRAFT");
     expect(persisted.review).toBeDefined();
     expect(prisma.evidenceSnapshot.createMany).toHaveBeenCalled();
+  });
+
+  it("keeps a published resume FINAL when discarding only cover edits", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: USER_ID },
+    });
+    const edited = makeEditedAiContent();
+    edited.cv.summary = {
+      aiText: "ai",
+      originalText: "orig",
+      accepted: true,
+    };
+    edited.cv.latestExperience.addedBullets = [];
+    edited.cover.paragraphOne = {
+      aiText: "p1",
+      userEdit: "cover-only edit",
+      accepted: true,
+    };
+    const expectedHash = hashAiContent(edited);
+    const resumeHash = hashApplicationDocumentContent(
+      edited,
+      "resume",
+      RENDER_CONTEXT,
+    );
+    prisma.application.findFirst.mockResolvedValue({
+      id: APP_ID,
+      userId: USER_ID,
+      jobId: "job-1",
+      aiContent: edited,
+      aiContentHash: expectedHash,
+      status: "DRAFT",
+      resumePdfUrl: "https://blob.example/applications/resume.pdf",
+      coverPdfUrl: null,
+      resumeContentHash: resumeHash,
+      coverContentHash: hashApplicationDocumentContent(
+        edited,
+        "cover",
+        RENDER_CONTEXT,
+      ),
+      resumePublishedHash: resumeHash,
+      coverPublishedHash: null,
+      resumeProfile: PROFILE,
+      job: JOB,
+    });
+
+    const response = await POST(request(expectedHash), { params });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.publication).toMatchObject({
+      status: "DRAFT",
+      resume: {
+        status: "FINAL",
+        contentHash: resumeHash,
+        publishedHash: resumeHash,
+      },
+      cover: { status: "DRAFT", publishedHash: null },
+    });
+    expect(prisma.application.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "DRAFT",
+          resumeContentHash: resumeHash,
+          resumePublishedHash: resumeHash,
+          coverContentHash: json.publication.cover.contentHash,
+          coverPublishedHash: null,
+        }),
+      }),
+    );
+  });
+
+  it("rejects discard when its locked Profile or Job context is stale", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: USER_ID },
+    });
+    const edited = makeEditedAiContent();
+    const expectedHash = hashAiContent(edited);
+    prisma.application.findFirst.mockResolvedValue({
+      id: APP_ID,
+      userId: USER_ID,
+      jobId: "job-1",
+      aiContent: edited,
+      aiContentHash: expectedHash,
+      status: "DRAFT",
+      resumePdfUrl: null,
+      coverPdfUrl: null,
+      resumeContentHash: null,
+      coverContentHash: null,
+      resumePublishedHash: null,
+      coverPublishedHash: null,
+      resumeProfile: PROFILE,
+      job: JOB,
+    });
+    renderContextFence.matches.mockResolvedValueOnce(false);
+
+    const response = await POST(request(expectedHash), { params });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "STALE_RENDER_CONTEXT" },
+    });
+    expect(renderContextFence.matches).toHaveBeenCalledOnce();
+    expect(prisma.application.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects discard when the Application rebinds to another Profile with the same AI hash", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: USER_ID },
+    });
+    const edited = makeEditedAiContent();
+    const expectedHash = hashAiContent(edited);
+    prisma.application.findFirst
+      .mockResolvedValueOnce({
+        id: APP_ID,
+        userId: USER_ID,
+        jobId: "job-1",
+        resumeProfileId: PROFILE.id,
+        aiContent: edited,
+        aiContentHash: expectedHash,
+        status: "DRAFT",
+        resumePdfUrl: null,
+        coverPdfUrl: null,
+        resumeContentHash: null,
+        coverContentHash: null,
+        resumePublishedHash: null,
+        coverPublishedHash: null,
+        resumeProfile: PROFILE,
+        job: JOB,
+      })
+      .mockResolvedValueOnce({
+        jobId: "job-1",
+        resumeProfileId: "profile-2",
+        aiContentHash: expectedHash,
+        status: "DRAFT",
+        resumePdfUrl: null,
+        coverPdfUrl: null,
+        resumeContentHash: null,
+        coverContentHash: null,
+        resumePublishedHash: null,
+        coverPublishedHash: null,
+      });
+
+    const response = await POST(request(expectedHash), { params });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "STALE_RENDER_CONTEXT" },
+    });
+    expect(renderContextFence.matches).not.toHaveBeenCalled();
+    expect(prisma.application.updateMany).not.toHaveBeenCalled();
   });
 
   it("returns 400 when there is no aiContent to discard", async () => {
@@ -198,7 +387,7 @@ describe("POST /api/applications/[id]/discard", () => {
     });
     const edited = makeEditedAiContent();
     const expectedHash = hashAiContent(edited);
-    prisma.application.findFirst.mockResolvedValueOnce({
+    prisma.application.findFirst.mockResolvedValue({
       id: APP_ID,
       userId: USER_ID,
       jobId: "job-1",

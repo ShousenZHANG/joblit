@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AiContent } from "@/lib/shared/schemas/aiContent";
+import type { ApplicationPublication } from "@/lib/shared/applicationPublication";
 import {
   discardDraft,
   extractMessage,
@@ -8,6 +10,35 @@ import {
 } from "./tailorActions";
 
 const APPLICATION_ID = "app-1";
+
+const publication: ApplicationPublication = {
+  status: "FINAL",
+  resume: {
+    status: "FINAL",
+    contentHash: "resume-v1",
+    publishedHash: "resume-v1",
+  },
+  cover: {
+    status: "FINAL",
+    contentHash: "cover-v1",
+    publishedHash: "cover-v1",
+  },
+};
+
+const aiContent: AiContent = {
+  schemaVersion: 1,
+  generatedAt: "2026-07-20T00:00:00.000Z",
+  promptMetaHash: "prompt",
+  cv: {
+    summary: { aiText: "Summary", originalText: "Base", accepted: true },
+    latestExperience: { experienceIndex: 0, addedBullets: [] },
+  },
+  cover: {
+    paragraphOne: { aiText: "One", accepted: true },
+    paragraphTwo: { aiText: "Two", accepted: true },
+    paragraphThree: { aiText: "Three", accepted: true },
+  },
+};
 
 function pdfResponse() {
   return new Response(new Blob(["%PDF-1.7"], { type: "application/pdf" }), {
@@ -179,7 +210,12 @@ describe("finalizeApplication and discardDraft", () => {
   it("sends the expected hash so a stale edit cannot commit", async () => {
     const fetchMock = stubFetch(
       () =>
-        new Response(JSON.stringify({ status: "FINAL" }), {
+        new Response(JSON.stringify({
+          status: "FINAL",
+          publication,
+          aiContentHash: "hash-1",
+          resumePdfUrl: "https://example.test/resume.pdf",
+        }), {
           status: 200,
           headers: { "content-type": "application/json" },
         }),
@@ -203,7 +239,11 @@ describe("finalizeApplication and discardDraft", () => {
   it("discards against the expected hash", async () => {
     const fetchMock = stubFetch(
       () =>
-        new Response(JSON.stringify({ aiContent: {}, aiContentHash: "h2" }), {
+        new Response(JSON.stringify({
+          aiContent,
+          aiContentHash: "h2",
+          publication,
+        }), {
           status: 200,
           headers: { "content-type": "application/json" },
         }),
@@ -216,5 +256,69 @@ describe("finalizeApplication and discardDraft", () => {
     expect(JSON.parse(String(init?.body))).toEqual({
       expectedHash: "hash-1",
     });
+  });
+
+  it("rejects a finalize response with invalid publication metadata", async () => {
+    stubFetch(
+      () =>
+        new Response(JSON.stringify({
+          status: "FINAL",
+          aiContentHash: "hash-1",
+          publication: { status: "FINAL" },
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+
+    await expect(
+      finalizeApplication({
+        applicationId: APPLICATION_ID,
+        target: "resume",
+        expectedHash: "hash-1",
+      }),
+    ).rejects.toThrow("Response shape invalid");
+  });
+
+  it("rejects a discard response with invalid publication metadata", async () => {
+    stubFetch(
+      () =>
+        new Response(JSON.stringify({
+          aiContent,
+          aiContentHash: "hash-2",
+          publication: { status: "DRAFT" },
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+
+    await expect(
+      discardDraft({
+        applicationId: APPLICATION_ID,
+        expectedHash: "hash-1",
+      }),
+    ).rejects.toThrow("Response shape invalid");
+  });
+
+  it("rejects a successful discard response without a CAS hash", async () => {
+    stubFetch(
+      () =>
+        new Response(JSON.stringify({
+          aiContent,
+          aiContentHash: null,
+          publication,
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+
+    await expect(
+      discardDraft({
+        applicationId: APPLICATION_ID,
+        expectedHash: "hash-1",
+      }),
+    ).rejects.toThrow("Response shape invalid");
   });
 });

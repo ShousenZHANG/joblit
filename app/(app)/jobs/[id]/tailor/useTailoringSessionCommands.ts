@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
+import type { ApplicationPublication } from "@/lib/shared/applicationPublication";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
 import {
   discardDraft,
@@ -13,6 +14,7 @@ import type {
   TailoringOperationState,
 } from "./tailoringSessionOperation";
 import type { TailoringPreviewLifecycle } from "./useTailoringPreviewLifecycle";
+import type { TailorDraftCommit } from "./useTailorDraft";
 
 interface CommandMessages {
   finalizeFailed: string;
@@ -23,12 +25,13 @@ interface CommandMessages {
 interface CommandDocument {
   getActiveTarget: () => TailorTarget;
   replaceContent: (content: AiContent) => void;
-  setStatus: (status: "DRAFT" | "FINAL") => void;
+  applyPublication: (publication: ApplicationPublication) => void;
 }
 
 interface CommandDraft {
-  flushNow: () => Promise<string | null>;
-  replaceFromServer: (content: AiContent, hash: string | null) => void;
+  flushNow: () => Promise<TailorDraftCommit>;
+  replaceFromServer: (content: AiContent, commit: TailorDraftCommit) => void;
+  acceptServerCommit: (commit: TailorDraftCommit) => void;
 }
 
 interface CommandIssue {
@@ -71,15 +74,19 @@ async function runFinalize(
 ): Promise<FinalizeResult | null> {
   if (!beginOwningOperation(context, "finalizing")) return null;
   try {
-    const hash = await context.draft.flushNow();
+    const commit = await context.draft.flushNow();
     const result = await finalizeApplication({
       applicationId: context.applicationId,
       target: context.document.getActiveTarget(),
-      expectedHash: hash,
+      expectedHash: commit.aiContentHash,
     });
     if (context.isMounted()) {
-      context.preview.applyFinalized(result, hash);
-      context.document.setStatus("FINAL");
+      context.draft.acceptServerCommit({
+        aiContentHash: result.aiContentHash,
+        publication: result.publication,
+      });
+      context.preview.applyFinalized(result);
+      context.document.applyPublication(result.publication);
     }
     return result;
   } catch (error: unknown) {
@@ -95,10 +102,10 @@ async function runDiscard(
 ): Promise<boolean> {
   if (!beginOwningOperation(context, "discarding")) return false;
   try {
-    const hash = await context.draft.flushNow();
+    const commit = await context.draft.flushNow();
     const result = await discardDraft({
       applicationId: context.applicationId,
-      expectedHash: hash,
+      expectedHash: commit.aiContentHash,
     });
     if (context.isMounted()) applyDiscardResult(context, result);
     return true;
@@ -139,10 +146,17 @@ function beginOwningOperation(
 
 function applyDiscardResult(
   context: TailoringCommandContext,
-  result: { aiContent: AiContent; aiContentHash: string | null },
+  result: {
+    aiContent: AiContent;
+    aiContentHash: string | null;
+    publication: ApplicationPublication;
+  },
 ) {
   context.document.replaceContent(result.aiContent);
-  context.draft.replaceFromServer(result.aiContent, result.aiContentHash);
-  context.preview.invalidateAll();
-  context.document.setStatus("DRAFT");
+  context.draft.replaceFromServer(result.aiContent, {
+    aiContentHash: result.aiContentHash,
+    publication: result.publication,
+  });
+  context.preview.applyPublication(result.publication);
+  context.document.applyPublication(result.publication);
 }

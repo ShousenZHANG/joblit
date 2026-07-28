@@ -7,6 +7,10 @@ import {
   useState,
 } from "react";
 import { ApiError } from "@/lib/api/fetchJson";
+import type {
+  ApplicationDocumentPublicationStatus,
+  ApplicationPublication,
+} from "@/lib/shared/applicationPublication";
 import {
   applicationReviewSchema,
   type AiApplicationReview,
@@ -22,7 +26,11 @@ import {
   type SessionBusyState,
   type TailoringOperationState,
 } from "./tailoringSessionOperation";
-import { useTailorDraft, type SaveStatus } from "./useTailorDraft";
+import {
+  useTailorDraft,
+  type SaveStatus,
+  type TailorDraftCommit,
+} from "./useTailorDraft";
 import {
   useTailoringPreviewLifecycle,
   type PreviewSyncStatus,
@@ -44,7 +52,7 @@ export interface TailoringEditSessionMessages {
 
 interface UseTailoringEditSessionOptions {
   applicationId: string;
-  initialStatus: "DRAFT" | "FINAL";
+  initialPublication: ApplicationPublication;
   initialAiContent: AiContent;
   initialAiContentHash: string | null;
   initialResumePdfUrl: string | null;
@@ -91,8 +99,9 @@ export interface TailoringEditSession {
 interface DocumentState {
   target: TailorTarget;
   status: "DRAFT" | "FINAL";
+  publication: ApplicationPublication;
   select: (target: TailorTarget) => void;
-  setStatus: (status: "DRAFT" | "FINAL") => void;
+  applyPublication: (publication: ApplicationPublication) => void;
   getActiveTarget: () => TailorTarget;
   replaceContent: (content: AiContent) => void;
   updateContent: (
@@ -104,6 +113,13 @@ interface DocumentState {
 
 interface IssueState extends SessionIssue {
   report: (error: unknown, fallback: string) => void;
+}
+
+interface PublicationState {
+  value: ApplicationPublication;
+  apply: (publication: ApplicationPublication) => void;
+  applyCommit: (commit: TailorDraftCommit) => void;
+  markDraft: (target: TailorTarget) => void;
 }
 
 export function useTailoringEditSession(
@@ -118,8 +134,8 @@ function useTailoringEditSessionModel(
   const core = useTailoringSessionCore(options);
   const preview = useTailoringPreviewLifecycle({
     applicationId: options.applicationId,
-    initialStatus: options.initialStatus,
-    initialHash: options.initialAiContentHash,
+    initialPublication: options.initialPublication,
+    publication: core.document.publication,
     initialResumePdfUrl: options.initialResumePdfUrl,
     initialCoverPdfUrl: options.initialCoverPdfUrl,
     target: core.document.target,
@@ -144,10 +160,13 @@ function useTailoringEditSessionModel(
 }
 
 function useTailoringSessionCore(options: UseTailoringEditSessionOptions) {
+  const publication = usePublicationState(options.initialPublication);
   const draft = useTailorDraft({
     applicationId: options.applicationId,
     initialAiContent: options.initialAiContent,
     initialAiContentHash: options.initialAiContentHash,
+    initialPublication: options.initialPublication,
+    onCommitted: publication.applyCommit,
     conflictMessage: options.messages.conflict,
     saveFailedMessage: options.messages.saveFailed,
   });
@@ -156,7 +175,7 @@ function useTailoringSessionCore(options: UseTailoringEditSessionOptions) {
   const issue = useSessionIssue(isMounted);
   const document = useDocumentState(
     options.initialTarget ?? "resume",
-    options.initialStatus,
+    publication,
     draft.aiContent,
     operations,
   );
@@ -165,19 +184,17 @@ function useTailoringSessionCore(options: UseTailoringEditSessionOptions) {
 
 function useDocumentState(
   initialTarget: TailorTarget,
-  initialStatus: "DRAFT" | "FINAL",
+  publication: PublicationState,
   aiContent: AiContent,
   operations: TailoringOperationState,
 ): DocumentState {
   const [target, setTarget] = useState<TailorTarget>(initialTarget);
-  const [status, setStatus] = useState<"DRAFT" | "FINAL">(initialStatus);
   const activeTargetRef = useRef(initialTarget);
   const latestContentRef = useRef(aiContent);
 
   useEffect(() => {
     latestContentRef.current = aiContent;
   }, [aiContent]);
-
   const select = useCallback(
     (nextTarget: TailorTarget) => {
       if (operations.isActive()) return;
@@ -199,16 +216,65 @@ function useDocumentState(
       if (operations.isActive()) return;
       const activeTarget = activeTargetRef.current;
       onEdited(activeTarget);
-      setStatus("DRAFT");
+      publication.markDraft(activeTarget);
       const nextContent = updater(latestContentRef.current);
       latestContentRef.current = nextContent;
       setContent(nextContent);
     },
-    [operations],
+    [operations, publication],
   );
   return {
-    target, status, select, setStatus, getActiveTarget, replaceContent,
+    target,
+    status: editableStatus(publication.value[target].status),
+    publication: publication.value,
+    select,
+    applyPublication: publication.apply,
+    getActiveTarget,
+    replaceContent,
     updateContent,
+  };
+}
+
+function usePublicationState(
+  initialPublication: ApplicationPublication,
+): PublicationState {
+  const [value, setValue] =
+    useState<ApplicationPublication>(initialPublication);
+  const apply = useCallback((publication: ApplicationPublication) => {
+    setValue(publication);
+  }, []);
+  const applyCommit = useCallback(
+    (commit: TailorDraftCommit) => {
+      apply(commit.publication);
+    },
+    [apply],
+  );
+  const markDraft = useCallback((target: TailorTarget) => {
+    setValue((current) => markTargetDraft(current, target));
+  }, []);
+  return { value, apply, applyCommit, markDraft };
+}
+
+function editableStatus(
+  status: ApplicationDocumentPublicationStatus,
+): "DRAFT" | "FINAL" {
+  return status === "FINAL" ? "FINAL" : "DRAFT";
+}
+
+function markTargetDraft(
+  publication: ApplicationPublication,
+  target: TailorTarget,
+): ApplicationPublication {
+  if (publication[target].status === "DRAFT" && publication.status === "DRAFT") {
+    return publication;
+  }
+  return {
+    ...publication,
+    status: "DRAFT",
+    [target]: {
+      ...publication[target],
+      status: "DRAFT",
+    },
   };
 }
 

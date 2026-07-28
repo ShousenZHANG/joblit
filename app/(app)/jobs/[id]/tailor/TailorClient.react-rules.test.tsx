@@ -7,6 +7,7 @@ import {
 } from "@testing-library/react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ApplicationPublication } from "@/lib/shared/applicationPublication";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
 import { TailorClient } from "./TailorClient";
 
@@ -34,6 +35,7 @@ type MockDraft = {
   flushNow: ReturnType<typeof vi.fn>;
   replaceFromServer: ReturnType<typeof vi.fn>;
   currentHash: string;
+  publication: ApplicationPublication;
 };
 
 let mockDraft: MockDraft;
@@ -109,20 +111,38 @@ vi.mock("./ConflictDialog", () => ({
   ConflictDialog: () => <div data-testid="conflict-dialog" />,
 }));
 
+const publication: ApplicationPublication = {
+  status: "DRAFT",
+  resume: {
+    status: "DRAFT",
+    contentHash: "resume-v2",
+    publishedHash: "resume-v1",
+  },
+  cover: {
+    status: "FINAL",
+    contentHash: "cover-v1",
+    publishedHash: "cover-v1",
+  },
+};
+
 function makeDraft(saveStatus: MockDraft["saveStatus"]): MockDraft {
   return {
     aiContent,
     setAiContent: vi.fn(),
     saveStatus,
-    flushNow: vi.fn().mockResolvedValue("hash"),
+    flushNow: vi.fn().mockResolvedValue({
+      aiContentHash: "hash",
+      publication,
+    }),
     replaceFromServer: vi.fn(),
     currentHash: "hash",
+    publication,
   };
 }
 
 const props = {
   applicationId: "application-1",
-  initialStatus: "DRAFT" as const,
+  initialPublication: publication,
   initialAiContent: aiContent,
   initialAiContentHash: "hash",
   resumePdfUrl: "/resume.pdf",
@@ -260,10 +280,14 @@ describe("TailorClient React rules", () => {
 
   it("flushes and sends the current hash before discarding edits", async () => {
     mockDraft = makeDraft({ kind: "saved", at: 1 });
-    mockDraft.flushNow.mockResolvedValueOnce("latest-hash");
+    mockDraft.flushNow.mockResolvedValueOnce({
+      aiContentHash: "latest-hash",
+      publication,
+    });
     api.fetchJson.mockResolvedValueOnce({
       aiContent,
       aiContentHash: "reset-hash",
+      publication,
     });
     render(<TailorClient {...props} />);
 
@@ -278,6 +302,7 @@ describe("TailorClient React rules", () => {
         {
           method: "POST",
           body: JSON.stringify({ expectedHash: "latest-hash" }),
+          schema: expect.anything(),
         },
       );
     });
@@ -286,7 +311,10 @@ describe("TailorClient React rules", () => {
     );
     expect(mockDraft.replaceFromServer).toHaveBeenCalledWith(
       aiContent,
-      "reset-hash",
+      {
+        aiContentHash: "reset-hash",
+        publication,
+      },
     );
   });
 

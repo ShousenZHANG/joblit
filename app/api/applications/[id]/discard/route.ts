@@ -10,7 +10,16 @@ import {
 import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
 import { persistReviewLedger } from "@/lib/server/applications/persistReviewLedger";
 import { evolveApplicationAiContent } from "@/lib/server/applications/applicationAiContentAggregate";
+import {
+  buildApplicationPublicationRenderContext,
+  transitionApplicationPublication,
+  UNAVAILABLE_APPLICATION_PUBLICATION_RENDER_CONTEXT,
+} from "@/lib/server/applications/applicationPublication";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
+import {
+  applicationPublicationTargets,
+  applicationRenderContextMatchesCurrentSources,
+} from "@/lib/server/applications/applicationRenderContextFence";
 
 export const runtime = "nodejs";
 
@@ -26,8 +35,8 @@ const BodySchema = z.object({ expectedHash: z.string().nullable() });
  *     gate verdict was recorded).
  *   - Reset cover paragraphs accepted = true.
  *
- * Status stays DRAFT. The caller's UI then re-renders from the reset
- * snapshot.
+ * Only documents whose render-relevant content changes become DRAFT. The
+ * caller's UI then re-renders from the reset snapshot.
  */
 export async function POST(
   req: Request,
@@ -44,10 +53,19 @@ export async function POST(
         select: {
           id: true,
           jobId: true,
+          resumeProfileId: true,
           aiContent: true,
           aiContentHash: true,
+          status: true,
+          resumePdfUrl: true,
+          coverPdfUrl: true,
+          resumeContentHash: true,
+          coverContentHash: true,
+          resumePublishedHash: true,
+          coverPublishedHash: true,
           resumeProfile: {
             select: {
+              id: true,
               userId: true,
               name: true,
               locale: true,
@@ -61,7 +79,13 @@ export async function POST(
             },
           },
           job: {
-            select: { userId: true, description: true },
+            select: {
+              userId: true,
+              title: true,
+              company: true,
+              description: true,
+              market: true,
+            },
           },
         },
       });
@@ -142,6 +166,17 @@ export async function POST(
       }
       const reset = evolved.aiContent;
       const newHash = hashAiContent(reset);
+      const publicationRenderContext =
+        profile && jobOwned && existing.job
+          ? buildApplicationPublicationRenderContext({
+              profile,
+              job: {
+                title: existing.job.title,
+                company: existing.job.company,
+                market: existing.job.market,
+              },
+            })
+          : UNAVAILABLE_APPLICATION_PUBLICATION_RENDER_CONTEXT;
 
       const updated = await prisma.$transaction(
         async (tx) => {
@@ -150,14 +185,78 @@ export async function POST(
             userId,
             existing.jobId ?? existing.id,
           );
+          const current = await tx.application.findFirst({
+            where: { id: existing.id, userId },
+            select: {
+              jobId: true,
+              resumeProfileId: true,
+              aiContentHash: true,
+              status: true,
+              resumePdfUrl: true,
+              coverPdfUrl: true,
+              resumeContentHash: true,
+              coverContentHash: true,
+              resumePublishedHash: true,
+              coverPublishedHash: true,
+            },
+          });
+          if (!current || current.aiContentHash !== expectedHash) {
+            return {
+              kind: "stale" as const,
+              ...(current ? { currentHash: current.aiContentHash } : {}),
+            };
+          }
+          if (
+            current.jobId !== existing.jobId ||
+            current.resumeProfileId !== existing.resumeProfileId
+          ) {
+            return { kind: "stale_render_context" as const };
+          }
+          if (
+            publicationRenderContext.available &&
+            (!existing.jobId ||
+              !(await applicationRenderContextMatchesCurrentSources(
+                tx,
+                {
+                  userId,
+                  job: { id: existing.jobId },
+                  resumeProfileId: profile!.id,
+                  publicationRenderContext,
+                },
+                applicationPublicationTargets(
+                  reset,
+                  publicationRenderContext,
+                ),
+              )))
+          ) {
+            return { kind: "stale_render_context" as const };
+          }
+          const publicationTransition = transitionApplicationPublication({
+            previousAiContent: parsed.data,
+            previous: {
+              status: current.status,
+              aiContentHash: current.aiContentHash,
+              resumePdfUrl: current.resumePdfUrl,
+              coverPdfUrl: current.coverPdfUrl,
+              resumeContentHash: current.resumeContentHash,
+              coverContentHash: current.coverContentHash,
+              resumePublishedHash: current.resumePublishedHash,
+              coverPublishedHash: current.coverPublishedHash,
+            },
+            nextAiContent: reset,
+            renderContext: publicationRenderContext,
+            publishedTargets: [],
+          });
           const result = await tx.application.updateMany({
             where: {
               id: existing.id,
               userId,
+              jobId: existing.jobId,
+              resumeProfileId: existing.resumeProfileId,
               aiContentHash: expectedHash,
             },
             data: {
-              status: "DRAFT",
+              ...publicationTransition.persistence,
               aiContent: reset,
               aiContentHash: newHash,
               reviewReport: reset.review ?? undefined,
@@ -171,16 +270,38 @@ export async function POST(
               aiContent: reset,
             });
           }
-          return result;
+          return result.count === 1
+            ? {
+                kind: "committed" as const,
+                publication: publicationTransition.publication,
+              }
+            : { kind: "stale" as const };
         },
         { timeout: 30_000 },
       );
-      if (updated.count !== 1) {
-        return staleDiscardResponse(requestId);
+      if (updated.kind === "stale") {
+        return staleDiscardResponse(
+          requestId,
+          "currentHash" in updated ? updated.currentHash : undefined,
+        );
+      }
+      if (updated.kind === "stale_render_context") {
+        return NextResponse.json(
+          {
+            error: {
+              code: "STALE_RENDER_CONTEXT",
+              message:
+                "Your resume profile or job changed while edits were being discarded. Try again.",
+            },
+            requestId,
+          },
+          { status: 409 },
+        );
       }
 
       return NextResponse.json({
-        status: "DRAFT",
+        status: updated.publication.status,
+        publication: updated.publication,
         aiContent: reset,
         aiContentHash: newHash,
         requestId,

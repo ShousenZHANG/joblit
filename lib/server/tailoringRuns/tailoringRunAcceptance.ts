@@ -49,12 +49,28 @@ type ReplayProbeDatabase = TailoringRunTransaction & {
       status: string;
       aiContent: unknown;
       aiContentHash: string | null;
+      resumePdfUrl: string | null;
       resumePdfName: string | null;
+      coverPdfUrl: string | null;
+      resumeContentHash: string | null;
+      coverContentHash: string | null;
+      resumePublishedHash: string | null;
+      coverPublishedHash: string | null;
       job: {
         id: string;
         title: string;
         company: string | null;
         location: string | null;
+        market: string;
+      } | null;
+      resumeProfile: {
+        summary: string | null;
+        basics: unknown;
+        links: unknown;
+        skills: unknown;
+        experiences: unknown;
+        projects: unknown;
+        education: unknown;
       } | null;
     } | null>;
   };
@@ -91,6 +107,7 @@ function receiptOf(row: TailoringReceiptRow): TailoringAcceptanceReceipt {
     requestHash: row.requestHash,
     applicationId: row.applicationId,
     aiContentHash: row.aiContentHash,
+    documentContentHash: row.documentContentHash,
     delivery: row.delivery,
   };
 }
@@ -336,13 +353,31 @@ export async function probeTailoringRunAcceptanceReplay(
       status: true,
       aiContent: true,
       aiContentHash: true,
+      resumePdfUrl: true,
       resumePdfName: true,
+      coverPdfUrl: true,
+      resumeContentHash: true,
+      coverContentHash: true,
+      resumePublishedHash: true,
+      coverPublishedHash: true,
       job: {
         select: {
           id: true,
           title: true,
           company: true,
           location: true,
+          market: true,
+        },
+      },
+      resumeProfile: {
+        select: {
+          summary: true,
+          basics: true,
+          links: true,
+          skills: true,
+          experiences: true,
+          projects: true,
+          education: true,
         },
       },
     },
@@ -369,8 +404,15 @@ export async function probeTailoringRunAcceptanceReplay(
       status: application.status,
       aiContent: application.aiContent,
       aiContentHash: application.aiContentHash,
+      resumePdfUrl: application.resumePdfUrl,
       resumePdfName: application.resumePdfName,
+      coverPdfUrl: application.coverPdfUrl,
+      resumeContentHash: application.resumeContentHash,
+      coverContentHash: application.coverContentHash,
+      resumePublishedHash: application.resumePublishedHash,
+      coverPublishedHash: application.coverPublishedHash,
       job: application.job,
+      resumeProfile: application.resumeProfile,
     },
   };
 }
@@ -563,9 +605,17 @@ async function insertRunReceipts(
   requests: readonly TailoringAcceptanceRequest[],
   applicationId: string,
   aiContentHash: string,
+  documentContentHashes: CompleteTailoringAcceptanceInput["documentContentHashes"],
 ): Promise<TailoringAcceptanceReceipt[]> {
   const receipts: TailoringAcceptanceReceipt[] = [];
   for (const request of requests) {
+    const documentContentHash = documentContentHashes[request.target];
+    if (!documentContentHash) {
+      throw new TailoringRunError(
+        "RECEIPT_CONFLICT",
+        `Missing ${request.target} documentContentHash`,
+      );
+    }
     const created = await tx.tailoringRunReceipt.create({
       data: {
         runId: run.id,
@@ -574,6 +624,7 @@ async function insertRunReceipts(
         requestHash: request.requestHash,
         applicationId,
         aiContentHash,
+        documentContentHash,
         delivery: run.delivery,
       },
     });
@@ -637,6 +688,16 @@ export async function completeTailoringRunAcceptance(
   input: CompleteTailoringAcceptanceInput,
 ): Promise<CompletedTailoringAcceptance> {
   validateAcceptanceHash(input.aiContentHash, "aiContentHash");
+  for (const request of input.prepared.pending) {
+    const documentContentHash = input.documentContentHashes[request.target];
+    if (!documentContentHash) {
+      throw new TailoringRunError(
+        "RECEIPT_CONFLICT",
+        `Missing ${request.target} documentContentHash`,
+      );
+    }
+    validateAcceptanceHash(documentContentHash, "documentContentHash");
+  }
   const created: TailoringAcceptanceReceipt[] = [];
   const completedRunIds: string[] = [];
   for (const run of input.prepared.runs) {
@@ -648,6 +709,7 @@ export async function completeTailoringRunAcceptance(
         requests,
         input.applicationId,
         input.aiContentHash,
+        input.documentContentHashes,
       )),
     );
     if (

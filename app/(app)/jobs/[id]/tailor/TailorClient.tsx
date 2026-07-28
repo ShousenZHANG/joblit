@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import type { ReactElement } from "react";
 import { useTranslations } from "next-intl";
+import type { ApplicationPublication } from "@/lib/shared/applicationPublication";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
 import { TailorClientView, type TailorJob } from "./TailorClientView";
 import {
@@ -12,7 +13,7 @@ import {
 
 interface TailorClientProps {
   applicationId: string;
-  initialStatus: "DRAFT" | "FINAL";
+  initialPublication: ApplicationPublication;
   initialAiContent: AiContent;
   initialAiContentHash: string | null;
   resumePdfUrl: string | null;
@@ -26,7 +27,7 @@ export function TailorClient(props: TailorClientProps): ReactElement {
   const t = useTranslations("tailor");
   const session = useTailoringEditSession({
     applicationId: props.applicationId,
-    initialStatus: props.initialStatus,
+    initialPublication: props.initialPublication,
     initialAiContent: props.initialAiContent,
     initialAiContentHash: props.initialAiContentHash,
     initialResumePdfUrl: props.resumePdfUrl,

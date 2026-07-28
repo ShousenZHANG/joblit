@@ -44,6 +44,12 @@
 > `execute` workflow. Preview and Editor Finalize read the same persisted
 > Application aggregate.
 
+> **Accepted amendment (2026-07-28, document publication):** Resume and Cover
+> publish independently. `Application.status` is now a compatibility projection
+> of the present document publications; routes do not set the entire aggregate
+> Final merely because one target rendered. Target content and published hashes
+> are defined by ADR-0011.
+
 ## Context
 
 Joblit has two ways to produce AI proposals for an Application:
@@ -67,13 +73,18 @@ aggregate and Edit phase.** Manual import may opt out of Edit with
 
 Concretely:
 
-- `POST /api/applications/manual-generate?finalize=false` → writes `aiContent`, sets `status = DRAFT`, **does not render PDF**, returns `{ applicationId }`. UI then routes to `/jobs/[id]/tailor`.
-- `POST /api/applications/manual-generate?finalize=true` → renders the requested
-  artifact immediately and persists the Application as `FINAL`.
+- `POST /api/applications/manual-generate?finalize=false` → writes `aiContent`,
+  re-projects document publication status, **does not render PDF**, and returns
+  `{ applicationId }`. UI then routes to `/jobs/[id]/tailor`.
+- `POST /api/applications/manual-generate?finalize=true` → renders and publishes
+  the requested artifact immediately. Aggregate status is derived from all
+  present documents.
 - `generateApplicationArtifactsForJob` is the durable server-side generation
   path used by feature-gated Application Batch auto-execute; it persists the
   aggregate and artifacts as one service operation.
-- New endpoint `POST /api/applications/[id]/finalize` → reads `aiContent` from row, renders PDF, sets `status = FINAL`. Called from the Edit page's Finalize button.
+- `POST /api/applications/[id]/finalize` → reads `aiContent` from the row,
+  renders and publishes the selected document. Called from the Edit page's
+  Finalize button.
 - `PATCH /api/applications/[id]/draft` → autosave hook for incremental `aiContent` updates from the Edit page.
 
 The default for interactive manual callers is `finalize=false`. External Codex
@@ -119,7 +130,8 @@ Make every generation route only ever produce a draft, and require a second call
   service. External Codex persists through the same manual import boundary used
   by the interactive workflow.
 - **Easy to introduce new AI providers** — they all flow through the same Edit phase.
-- **Per-application revisits are cheap** — re-edit a `FINAL` application by flipping `status` back to `DRAFT` without re-generating.
+- **Per-document revisits are cheap** — editing one Final document makes only
+  that document Draft and keeps the other publication current.
 - **Failed generations are well-defined** — a generation that fails the Zod schema parse never writes a row, leaving the app's previous state intact.
 
 ### Negative
@@ -150,4 +162,5 @@ Make every generation route only ever produce a draft, and require a second call
 - `lib/server/applications/applicationGeneration.ts`
 - `AGENTS.md` — Codex Batch protocol
 - ADR-0001 — Application AI provenance
+- ADR-0011 — document-level Application publication
 - CONTEXT.md — `Tailoring`, `Codex Batch`, `Application Status`
