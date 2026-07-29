@@ -47,10 +47,13 @@ POST /api/fetch-runs/[id]/trigger
 ```
 
 The AU branch is asynchronous and reaches the commit module through the
-`FETCH_RUN_SECRET`-guarded HTTP adapter. CN and GLOBAL call the same module
-directly. `start`, ordered `commit`, and `fail` commands form
-`fetch-run-commit/v1`; adapters finish network discovery before entering it.
-The module derives the owner and market from the stored run.
+`FETCH_RUN_SECRET`-guarded HTTP adapter. Inline CN and GLOBAL execution enters
+through `executeInlineFetchRun`: the coordinator owns `start`, running
+metadata, one terminal `commit`/`fail`, stop-reason mapping, and exception
+recovery. Market adapters receive no run or attempt identity; they perform
+network discovery only after `start` and return a terminal plan. Commands form
+`fetch-run-commit/v1`, and the commit module derives the owner and market from
+the stored run.
 
 Every executor carries a UUID attempt. `start` records
 `executionAttemptId` + `executionLeaseExpiresAt` under `FRUN` (90 seconds for
@@ -85,7 +88,10 @@ retries that run ID once. Lease loss is a supersession/handoff, not a user
 cancellation. GLOBAL source-health and Job-liveness projections run only after
 the fenced terminal command, only for its canonical result attempt. Both stores
 reject equal or older discovery timestamps, so neither a superseded executor nor
-an older cross-run snapshot can overwrite newer observations.
+an older cross-run snapshot can overwrite newer observations. Projection hooks
+are best effort: failures are reported but cannot rewrite a durable terminal
+result. Any exception after inline `start` and before terminal commit enters the
+same fail recovery so an owned run is not stranded in `RUNNING`.
 
 Import dedupes in three layers — an in-payload `Set`, the `DeletedJobUrl`
 tombstone table, and the `@@unique([userId, jobUrl])` constraint. All three key
@@ -120,7 +126,7 @@ and Edit model (ADR-0002).
 
 ```
 Path A (server auto-execute)     Path B (manual / Local AI)
-  generateApplicationArtifacts     buildApplicationPromptForUser
+  executeServerBatchTailoringTask  buildApplicationPromptForUser
   callProvider("gemini")            [external LLM runs the prompt]
   acceptApplicationGeneration      parse*Output + Quality Gate
         │                                 │
@@ -170,7 +176,9 @@ immutable `TailoringRunReceipt`, terminal `TailoringRun`, and
 `ApplicationBatchTask = SUCCEEDED` together. Task `PATCH` and `run-once`
 completion input therefore accept only `FAILED`/`SKIPPED` with the claimed
 `attemptId`. The separate, feature-gated `/execute` route invokes
-`generateApplicationArtifactsForJob` through the same acceptance boundary.
+`executeServerBatchTailoringTask` through the same acceptance boundary. The
+service derives missing targets from the locked Tailoring Run and compares the
+pre-generation Application hash before committing.
 For protocol-v1 tasks, the same transaction also writes
 `completionAttemptId = executionAttemptId`; a database constraint rejects an
 old worker's unreceipted success after a new claim.
@@ -184,7 +192,7 @@ Joblit's domain model. Protocol in `AGENTS.md`; durability details in ADR-0009.
 | Boundary | Mechanism | Where |
 |---|---|---|
 | Browser → API | NextAuth database session | `lib/server/auth/requireSession.ts:17` |
-| Extension → API | Bearer token, SHA-256 hash stored | `lib/server/auth/requireExtensionToken.ts:34` |
+| Extension → API | `withExtensionRoute`: opaque IP budget → Session/Bearer auth → opaque user budget; token hashes remain SHA-256 at rest | `lib/server/extensionIngress/withExtensionRoute.ts` |
 | Fetch worker → API | `FETCH_RUN_SECRET` header, constant-time compare | `app/api/fetch-runs/[id]/{config,commit}` |
 | Cron → API | `Authorization: Bearer CRON_SECRET` | `app/api/discover/refresh-daily` |
 | Server → internet | `safeOutboundFetch` | `lib/server/net/safeFetch.ts:396` |

@@ -42,4 +42,17 @@ describe("validateServerEnv", () => {
     const { validateServerEnv } = await loadFresh();
     expect(() => validateServerEnv()).toThrow(/LATEX_RENDER_URL/);
   });
+
+  it("rejects an unknown insecure LaTeX transport flag", async () => {
+    process.env = {
+      ...original,
+      ...REQUIRED,
+      LATEX_RENDER_ALLOW_INSECURE_HTTP: "1",
+    };
+    const { validateServerEnv } = await loadFresh();
+
+    expect(() => validateServerEnv()).toThrow(
+      /LATEX_RENDER_ALLOW_INSECURE_HTTP/,
+    );
+  });
 });

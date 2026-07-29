@@ -18,8 +18,14 @@ const prismaStore = vi.hoisted(() => ({
   executeRaw: vi.fn(),
   $transaction: vi.fn(),
 }));
+const extensionIngress = vi.hoisted(() => ({
+  withRoute: vi.fn(),
+}));
 
 vi.mock("@/lib/server/prisma", () => ({ prisma: prismaStore }));
+vi.mock("@/lib/server/extensionIngress/withExtensionRoute", () => ({
+  withExtensionRoute: extensionIngress.withRoute,
+}));
 
 import { POST } from "@/app/api/ext/jobs/import/route";
 
@@ -36,6 +42,17 @@ function req(body: unknown, withToken = true) {
 
 describe("ext jobs import api", () => {
   beforeEach(() => {
+    extensionIngress.withRoute.mockReset();
+    extensionIngress.withRoute.mockImplementation(
+      async (
+        _request: Request,
+        _operation: string,
+        handler: (context: {
+          userId: string;
+          requestId: string;
+        }) => Promise<Response>,
+      ) => handler({ userId: "user-1", requestId: "req-1" }),
+    );
     prismaStore.extensionToken.findFirst.mockReset();
     prismaStore.extensionToken.updateMany.mockReset();
     prismaStore.deletedJobUrl.findMany.mockReset();
@@ -80,12 +97,11 @@ describe("ext jobs import api", () => {
     expect(created?.userId).toBe("user-1");
     expect(created?.jobUrl).toBe("https://au.seek.com/job/92319306");
     expect(created?.status).toBe("NEW");
-  });
-
-  it("rejects a request with no extension token (401)", async () => {
-    const res = await POST(req({ items: [] }, false));
-    expect(res.status).toBe(401);
-    expect(prismaStore.job.createMany).not.toHaveBeenCalled();
+    expect(extensionIngress.withRoute).toHaveBeenCalledWith(
+      expect.any(Request),
+      "jobs.import",
+      expect.any(Function),
+    );
   });
 
   it("never resurrects a tombstoned (deleted) job", async () => {
@@ -109,5 +125,34 @@ describe("ext jobs import api", () => {
     const res = await POST(req({ items }));
     expect(res.status).toBe(400);
     expect(prismaStore.job.createMany).not.toHaveBeenCalled();
+  });
+
+  it("throws a public IMPORT_FAILED AppError with the private cause attached", async () => {
+    const failure = new Error("database details");
+    prismaStore.$transaction.mockRejectedValueOnce(failure);
+
+    let thrown: unknown;
+    try {
+      await POST(
+        req({
+          items: [
+            {
+              jobUrl: "https://au.seek.com/job/92319306",
+              title: "Software engineer",
+            },
+          ],
+        }),
+      );
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toMatchObject({
+      code: "IMPORT_FAILED",
+      status: 500,
+      publicMessage: "Could not import jobs",
+      privateDetails: failure,
+      cause: failure,
+    });
   });
 });

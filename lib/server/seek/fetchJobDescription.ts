@@ -1,4 +1,5 @@
 import { safeOutboundFetch } from "@/lib/server/net/safeFetch";
+import { getRuntimeCapabilities } from "@/lib/server/runtimeCapabilities";
 
 /**
  * On-demand full-JD fetch for Seek jobs.
@@ -28,15 +29,6 @@ const MAX_DESCRIPTION = 50_000;
 // Below this many chars a stored Seek description is treated as a teaser worth
 // upgrading to the full JD.
 export const SEEK_THIN_DESCRIPTION = 600;
-
-function userAgent(): string {
-  return process.env.SEEK_USER_AGENT?.trim() || "Joblit-Fetcher/1.0 (+https://www.joblit.tech)";
-}
-
-function seekFetchEnabled(): boolean {
-  const v = (process.env.SEEK_FETCH_ENABLED || "").trim().toLowerCase();
-  return v === "1" || v === "true" || v === "yes";
-}
 
 export function extractSeekJobId(url: string | null | undefined): string | null {
   if (!url) return null;
@@ -84,7 +76,8 @@ function stripHtml(html: string): string {
  * unavailable. Never throws.
  */
 export async function fetchSeekJobDescription(jobUrl: string): Promise<string | null> {
-  if (!seekFetchEnabled()) return null;
+  const capability = getRuntimeCapabilities().seekEnrichment;
+  if (capability.kind !== "enabled") return null;
   const id = extractSeekJobId(jobUrl); // numeric-id SSRF guard
   if (!id) return null;
   try {
@@ -93,7 +86,7 @@ export async function fetchSeekJobDescription(jobUrl: string): Promise<string | 
       {
         method: "POST",
         headers: {
-          "User-Agent": userAgent(),
+          "User-Agent": capability.config.userAgent,
           "Content-Type": "application/json",
           Accept: "application/json",
           Origin: SEEK_ORIGIN,

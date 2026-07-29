@@ -69,16 +69,6 @@ export function checkRateLimit(
 }
 
 /**
- * Extract a rate-limit key from a request.
- * Uses X-Forwarded-For (Vercel sets this), falls back to a generic key.
- */
-export function rateLimitKeyFromRequest(req: Request, prefix: string): string {
-  const forwarded = req.headers.get("x-forwarded-for");
-  const ip = forwarded?.split(",")[0]?.trim() ?? "unknown";
-  return `${prefix}:${ip}`;
-}
-
-/**
  * Build standard rate-limit headers for the response.
  */
 export function rateLimitHeaders(result: RateLimitResult): Record<string, string> {

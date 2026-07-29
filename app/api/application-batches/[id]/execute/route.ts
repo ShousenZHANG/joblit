@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { errorJson } from "@/lib/server/api/errorResponse";
+import { AppError } from "@/lib/server/api/appError";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { UuidParamSchema } from "@/lib/shared/schemas/common";
 import { z } from "zod";
@@ -10,17 +11,19 @@ import {
   completeBatchTask,
   getBatchProgress,
 } from "@/lib/server/applicationBatches/runner";
-import { generateApplicationArtifactsForJob } from "@/lib/server/applications/generateApplicationArtifacts";
+import { executeServerBatchTailoringTask } from "@/lib/server/applications/executeServerBatchTailoringTask";
 import {
   deriveBatchStatusFromRun,
   type BatchRunStopReason,
 } from "@/lib/server/applicationBatches/codexRunContext";
 import type { ApplicationBatchStatus } from "@/lib/generated/prisma";
+import { reportError } from "@/lib/server/observability/errorReporter";
+import { getRuntimeCapabilities } from "@/lib/server/runtimeCapabilities";
 
 export const runtime = "nodejs";
 
 function isAutoExecuteEnabled() {
-  return process.env.ENABLE_BATCH_EXECUTE_AUTOGEN === "1";
+  return getRuntimeCapabilities().batchAutogeneration.kind === "enabled";
 }
 
 const BodySchema = z.object({
@@ -30,8 +33,9 @@ const BodySchema = z.object({
 const TERMINAL_BATCH_STATUSES = new Set(["SUCCEEDED", "FAILED", "CANCELLED"]);
 
 function toTaskErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message.slice(0, 500);
+  if (error instanceof AppError) {
+    const publicMessage = error.publicMessage.trim() || error.code;
+    return publicMessage.slice(0, 500);
   }
   return "TASK_FAILED";
 }
@@ -119,17 +123,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           };
 
           try {
-            const artifactResult = await generateApplicationArtifactsForJob({
+            const artifactResult = await executeServerBatchTailoringTask({
               userId,
               jobId: claimed.task.jobId,
-              batch: {
-                batchId: batch.id,
-                taskId: claimed.task.id,
-                executionAttemptId: claimed.task.attemptId,
-                issueKey: claimed.task.issueKey,
-                acceptedTargets: claimed.task.acceptedTargets,
-                remainingTargets: claimed.task.remainingTargets,
-              },
+              batchId: batch.id,
+              taskId: claimed.task.id,
+              executionAttemptId: claimed.task.attemptId,
+              issueKey: claimed.task.issueKey,
             });
             tasks.push({
               ...taskBase,
@@ -142,6 +142,19 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
             });
           } catch (error) {
             const failureMessage = toTaskErrorMessage(error);
+            reportError(error, {
+              scope: "application-batches.execute.task",
+              userId,
+              tags: {
+                batchId: batch.id,
+                taskId: claimed.task.id,
+                jobId: claimed.task.jobId,
+                code: error instanceof AppError ? error.code : "TASK_FAILED",
+              },
+              ...(error instanceof AppError && error.privateDetails !== undefined
+                ? { extra: { details: error.privateDetails } }
+                : {}),
+            });
             try {
               await completeBatchTask({
                 userId,

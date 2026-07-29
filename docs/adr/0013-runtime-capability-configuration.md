@@ -1,0 +1,78 @@
+# ADR-0013: Resolve optional runtime integrations as typed capabilities
+
+- Status: Accepted
+- Date: 2026-07-29
+
+## Context
+
+Server modules previously read related environment variables independently.
+That made one integration appear enabled in one code path and unavailable in
+another, allowed half-configured credential pairs to fail late, and gave
+boolean feature flags inconsistent parsing rules. Tests also had to mutate
+global `process.env` to exercise configuration decisions.
+
+This was most risky at execution boundaries: Extension abuse budgets, server
+Batch generation, artifact reconciliation, FetchRun worker authentication and
+GitHub dispatch, ATS source construction, Seek enrichment, Blob persistence,
+LaTeX rendering, and Gemini tailoring.
+
+## Decision
+
+`lib/server/runtimeCapabilities/index.ts` is the single interpretation seam for
+those integrations.
+
+- `resolveRuntimeCapabilities(environment)` is pure and accepts an injected
+  environment for tests.
+- `getRuntimeCapabilities()` is the production adapter over `process.env`.
+- Each capability is a discriminated `enabled`, `disabled`, or `invalid`
+  result where those states are meaningful.
+- Consumers branch on the capability state and receive a complete typed config
+  only from the `enabled` branch. They no longer assemble credential pairs or
+  parse flags themselves.
+
+The resolver owns cross-variable invariants:
+
+- Upstash and Vercel KV compatibility credentials are provider-specific pairs;
+  values are never mixed between providers. An incomplete selected pair is
+  invalid. No configured pair deliberately selects the isolate-local Extension
+  abuse budget.
+- Artifact reconciliation requires both an explicit enable flag and at least
+  one accepted bearer secret.
+- GitHub FetchRun dispatch requires owner, repository, and token together;
+  workflow and ref have stable defaults.
+- `FETCH_RUN_SECRET`, `AUTH_SECRET`, LaTeX URL/token, ATS board JSON, Blob
+  token, Seek flag/user agent, and Gemini key/model are interpreted in one
+  place.
+- Feature flags accept only their documented values. Unknown values never
+  enable a capability.
+- LaTeX requires HTTPS unless the dedicated insecure-HTTP flag is explicitly
+  enabled; URLs containing credentials are rejected.
+
+Secrets may appear only in the enabled configuration consumed by the adapter
+that needs them. Capability reasons, thrown configuration errors, API
+responses, and observability metadata contain stable reason codes rather than
+secret values.
+
+The Extension ingress has one deliberate availability policy: if a configured
+distributed abuse-budget store is unavailable or invalid, it reports the
+typed infrastructure failure and uses the isolate-local fixed-window budget.
+Missing `AUTH_SECRET` has no development constant fallback and fails the
+request closed.
+
+`lib/server/env.ts` remains the boot-time validation layer for required
+deployment variables. Runtime capabilities are the finer-grained behavioral
+contract used at request and service boundaries; they do not make a required
+core variable optional.
+
+## Consequences
+
+- Half-configured integrations fail predictably instead of producing late,
+  provider-specific errors.
+- Tests can cover configuration matrices without mutating global process state.
+- Adding a new consumer to an existing integration reuses one capability
+  contract rather than duplicating environment parsing.
+- Optional integrations have explicit safe defaults, while required secrets
+  still fail closed.
+- The resolver returns sensitive adapter configuration, so callers must never
+  serialize or log the capability object. Only stable state and reason codes
+  are suitable for diagnostics.

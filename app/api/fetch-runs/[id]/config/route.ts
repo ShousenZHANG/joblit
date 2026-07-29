@@ -9,6 +9,7 @@ import {
   toLegacyFetchRunConfigFields,
 } from "@/lib/shared/schemas/fetchRunConfig";
 import type { Prisma } from "@/lib/generated/prisma";
+import { getRuntimeCapabilities } from "@/lib/server/runtimeCapabilities";
 
 export const runtime = "nodejs";
 
@@ -30,11 +31,13 @@ type StoredFetchRunConfig = Prisma.FetchRunGetPayload<{
   select: typeof FETCH_RUN_CONFIG_SELECT;
 }>;
 
-function requireSecret(req: Request) {
-  const expected = process.env.FETCH_RUN_SECRET;
-  if (!expected) throw new Error("FETCH_RUN_SECRET is not set");
+function requireSecret(req: Request): "ok" | "missing" | "invalid" {
+  const capability = getRuntimeCapabilities().fetchRunAuthentication;
+  if (capability.kind === "invalid") return "missing";
   const got = req.headers.get("x-fetch-run-secret");
-  return constantTimeEqual(got, expected);
+  return constantTimeEqual(got, capability.config.secret)
+    ? "ok"
+    : "invalid";
 }
 
 function configResponse(run: StoredFetchRunConfig): NextResponse {
@@ -58,7 +61,15 @@ function configResponse(run: StoredFetchRunConfig): NextResponse {
 }
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  if (!requireSecret(_req)) {
+  const auth = requireSecret(_req);
+  if (auth === "missing") {
+    return errorJson(
+      "FETCH_RUN_CONFIG_NOT_CONFIGURED",
+      "Fetch run configuration service is unavailable",
+      503,
+    );
+  }
+  if (auth === "invalid") {
     return errorJson("UNAUTHORIZED", "Unauthorized", 401);
   }
 

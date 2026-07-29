@@ -1,10 +1,5 @@
 import { NextResponse } from "next/server";
-import {
-  requireExtensionToken,
-  ExtensionTokenError,
-} from "@/lib/server/auth/requireExtensionToken";
-import { errorJson, unauthorizedError } from "@/lib/server/api/errorResponse";
-import { checkRateLimit, rateLimitKeyFromRequest, rateLimitHeaders } from "@/lib/server/api/rateLimit";
+import { withExtensionRoute } from "@/lib/server/extensionIngress/withExtensionRoute";
 import { prisma } from "@/lib/server/prisma";
 
 export const runtime = "nodejs";
@@ -19,12 +14,7 @@ function parseLocale(raw: string | null): SupportedLocale {
 
 /** GET — Return the active ResumeProfile for the authenticated extension user. */
 export async function GET(req: Request) {
-  const rl = checkRateLimit(rateLimitKeyFromRequest(req, "ext:profile"), { limit: 30, windowSeconds: 60 });
-  if (!rl.allowed) return errorJson("RATE_LIMITED", "Too many requests", 429, { headers: rateLimitHeaders(rl) });
-
-  try {
-    const { userId } = await requireExtensionToken(req);
-
+  return withExtensionRoute(req, "profile.read", async ({ userId }) => {
     const locale = parseLocale(new URL(req.url).searchParams.get("locale"));
 
     // Find active profile for the locale
@@ -77,8 +67,5 @@ export async function GET(req: Request) {
         updatedAt: rp.updatedAt,
       },
     });
-  } catch (err) {
-    if (err instanceof ExtensionTokenError) return unauthorizedError();
-    throw err;
-  }
+  });
 }

@@ -40,9 +40,11 @@
 > `/api/applications/generate-cover-letter`, are retired. Interactive external
 > generation persists through `POST /api/applications/manual-generate`; durable
 > server-side generation persists through
-> `generateApplicationArtifactsForJob`, including the Application Batch
-> `execute` workflow. Preview and Editor Finalize read the same persisted
-> Application aggregate.
+> `executeServerBatchTailoringTask`, exclusively from the Application Batch
+> `execute` workflow. Its Batch/task/issue/attempt identity is mandatory,
+> missing targets come from the authoritative Tailoring Run, and the final
+> commit compares the Application content hash captured before generation.
+> Preview and Editor Finalize read the same persisted Application aggregate.
 
 > **Accepted amendment (2026-07-28, document publication):** Resume and Cover
 > publish independently. `Application.status` is now a compatibility projection
@@ -57,7 +59,7 @@ Joblit has two ways to produce AI proposals for an Application:
 | Path | Endpoint | When used |
 |---|---|---|
 | **Manual** | `POST /api/applications/manual-generate` | User pastes JSON from an external LLM (Claude, ChatGPT, Gemini web). Today's primary path. |
-| **Server auto-execute** | `POST /api/application-batches/:id/execute` | When enabled, claims work and persists generation through `generateApplicationArtifactsForJob`. |
+| **Server auto-execute** | `POST /api/application-batches/:id/execute` | When enabled, claims work and persists generation through `executeServerBatchTailoringTask`. |
 | **External Codex** | `POST /api/application-batches/:id/run-once` + `manual-generate` | Claims/completes work externally, then persists returned model output through the manual import boundary. |
 
 Manual and internal paths historically rendered the PDF and finalized the
@@ -79,9 +81,10 @@ Concretely:
 - `POST /api/applications/manual-generate?finalize=true` → renders and publishes
   the requested artifact immediately. Aggregate status is derived from all
   present documents.
-- `generateApplicationArtifactsForJob` is the durable server-side generation
-  path used by feature-gated Application Batch auto-execute; it persists the
-  aggregate and artifacts as one service operation.
+- `executeServerBatchTailoringTask` is the durable server-side generation path
+  used by feature-gated Application Batch auto-execute. It cannot run without
+  a Tailoring Run identity and target receipts, and persists the aggregate and
+  artifacts as one CAS-protected service operation.
 - `POST /api/applications/[id]/finalize` → reads `aiContent` from the row,
   renders and publishes the selected document. Called from the Edit page's
   Finalize button.
@@ -153,13 +156,15 @@ Make every generation route only ever produce a draft, and require a second call
    defaults to `false`.
 2. **Phase 1**: Implement `/draft` (PATCH) and `/finalize` (POST) endpoints.
 3. **Phase 1**: Web UI navigates to `/jobs/[id]/tailor` after generation when `finalize=false`.
-4. **Superseded:** retire the two non-persisting session generation routes and
-   route server generation through `generateApplicationArtifactsForJob`.
+4. **Completed:** retire the two non-persisting session generation routes and
+   route server generation through the receipt-backed
+   `executeServerBatchTailoringTask` interface.
 
 ## References
 
 - `app/api/applications/manual-generate/route.ts`
 - `lib/server/applications/applicationGeneration.ts`
+- `lib/server/applications/executeServerBatchTailoringTask.ts`
 - `AGENTS.md` — Codex Batch protocol
 - ADR-0001 — Application AI provenance
 - ADR-0011 — document-level Application publication

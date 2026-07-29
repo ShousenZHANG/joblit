@@ -1,16 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const stores = vi.hoisted(() => ({
-  requireToken: vi.fn(),
   findFirst: vi.fn(),
   appendApplicationEvent: vi.fn(),
+  withRoute: vi.fn(),
 }));
 
-vi.mock("@/lib/server/auth/requireExtensionToken", () => {
-  class ExtensionTokenError extends Error {}
+vi.mock("@/lib/server/extensionIngress/withExtensionRoute", () => {
   return {
-    ExtensionTokenError,
-    requireExtensionToken: stores.requireToken,
+    withExtensionRoute: stores.withRoute,
   };
 });
 
@@ -41,7 +39,16 @@ function request(body: unknown) {
 describe("POST /api/ext/jobs/applied", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    stores.requireToken.mockResolvedValue({ userId: "user-1" });
+    stores.withRoute.mockImplementation(
+      async (
+        _request: Request,
+        _operation: string,
+        handler: (context: {
+          userId: string;
+          requestId: string;
+        }) => Promise<Response>,
+      ) => handler({ userId: "user-1", requestId: "req-1" }),
+    );
     stores.findFirst.mockResolvedValue({
       id: JOB_ID,
       status: "NEW",
@@ -73,6 +80,11 @@ describe("POST /api/ext/jobs/applied", () => {
       expectedFromStatus: "NEW",
       note: "Application submitted from Chrome extension",
     });
+    expect(stores.withRoute).toHaveBeenCalledWith(
+      expect.any(Request),
+      "jobs.markApplied",
+      expect.any(Function),
+    );
   });
 
   it("keeps repeated calls idempotent when the projection is already APPLIED", async () => {

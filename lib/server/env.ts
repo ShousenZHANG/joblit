@@ -33,14 +33,33 @@ const serverEnvSchema = z.object({
   GITHUB_REPO: z.string().optional(),
   GITHUB_TOKEN: z.string().optional(),
   GITHUB_WORKFLOW_FILE: z.string().optional(),
+  GITHUB_REF: z.string().optional(),
   JOBLIT_WEB_URL: z.string().optional(),
   NEXTAUTH_URL: z.string().optional(),
+  ENABLE_BATCH_EXECUTE_AUTOGEN: z
+    .enum(["", "0", "1", "false", "true"])
+    .optional(),
+  ARTIFACT_RECONCILE_ENABLED: z
+    .enum(["", "0", "1", "false", "true"])
+    .optional(),
+  ARTIFACT_RECONCILE_SECRET: z.string().optional(),
+  UPSTASH_REDIS_REST_URL: z.string().optional(),
+  UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
+  KV_REST_API_URL: z.string().optional(),
+  KV_REST_API_TOKEN: z.string().optional(),
+  JOBLIT_ATS_BOARDS_JSON: z.string().optional(),
+  SEEK_FETCH_ENABLED: z
+    .enum(["", "0", "1", "false", "true", "no", "yes"])
+    .optional(),
+  SEEK_USER_AGENT: z.string().optional(),
 
   // Set to "true" only when the LaTeX renderer is reachable over plain HTTP.
   // The render token travels in a request header, so this puts a credential on
   // the wire in cleartext; it exists for a self-hosted renderer that has not
   // been fronted with TLS yet. Absent or anything else, HTTPS stays mandatory.
-  LATEX_RENDER_ALLOW_INSECURE_HTTP: z.string().optional(),
+  LATEX_RENDER_ALLOW_INSECURE_HTTP: z
+    .enum(["", "false", "true"])
+    .optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

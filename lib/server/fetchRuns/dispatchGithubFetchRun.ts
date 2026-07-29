@@ -9,6 +9,7 @@ import {
 } from "@/lib/server/net/safeFetch";
 import { reportError } from "@/lib/server/observability/errorReporter";
 import { prisma } from "@/lib/server/prisma";
+import { getRuntimeCapabilities } from "@/lib/server/runtimeCapabilities";
 import { withFetchRunDispatchMeta } from "@/lib/shared/schemas/fetchRunConfig";
 import { acquireFetchRunLifecycleLock } from "./fetchRunLifecycleLock";
 
@@ -26,32 +27,30 @@ export type GithubFetchRunDispatchOutcome =
 
 class MissingDispatchConfigError extends Error {}
 
-function envOrThrow(key: string) {
-  const value = process.env[key];
-  if (!value) throw new MissingDispatchConfigError(`${key} is not set`);
-  return value;
-}
-
-function githubDispatchUrl() {
-  const owner = envOrThrow("GITHUB_OWNER");
-  const repo = envOrThrow("GITHUB_REPO");
-  const workflow = process.env.GITHUB_WORKFLOW_FILE || "jobspy-fetch.yml";
-  return `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflow}/dispatches`;
+function githubDispatchConfig() {
+  const capability = getRuntimeCapabilities().githubFetchRunDispatch;
+  if (capability.kind !== "enabled") {
+    throw new MissingDispatchConfigError(capability.reason);
+  }
+  return capability.config;
 }
 
 async function sendGithubDispatch(runId: string): Promise<Response> {
-  const token = envOrThrow("GITHUB_TOKEN");
-  const ref = process.env.GITHUB_REF || "master";
+  const config = githubDispatchConfig();
+  const url =
+    `https://api.github.com/repos/${encodeURIComponent(config.owner)}` +
+    `/${encodeURIComponent(config.repo)}/actions/workflows/` +
+    `${encodeURIComponent(config.workflow)}/dispatches`;
   return safeOutboundFetch(
-    githubDispatchUrl(),
+    url,
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${config.token}`,
         Accept: "application/vnd.github+json",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ ref, inputs: { runId } }),
+      body: JSON.stringify({ ref: config.ref, inputs: { runId } }),
     },
     {
       allowedHosts: ["api.github.com"],

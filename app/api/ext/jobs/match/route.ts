@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireExtensionToken, ExtensionTokenError } from "@/lib/server/auth/requireExtensionToken";
-import { unauthorizedError, errorJson } from "@/lib/server/api/errorResponse";
-import { checkRateLimit, rateLimitKeyFromRequest, rateLimitHeaders } from "@/lib/server/api/rateLimit";
+import { errorJson } from "@/lib/server/api/errorResponse";
+import { withExtensionRoute } from "@/lib/server/extensionIngress/withExtensionRoute";
 import { prisma } from "@/lib/server/prisma";
 import { canonicalizeJobUrl } from "@/lib/shared/canonicalizeJobUrl";
 
@@ -12,16 +11,17 @@ export const runtime = "nodejs";
  * Match a job URL to an existing Job record for the authenticated user.
  */
 export async function GET(req: Request) {
-  const rl = checkRateLimit(rateLimitKeyFromRequest(req, "ext:jobs:match"), { limit: 60, windowSeconds: 60 });
-  if (!rl.allowed) return errorJson("RATE_LIMITED", "Too many requests", 429, { headers: rateLimitHeaders(rl) });
-
-  try {
-    const { userId } = await requireExtensionToken(req);
+  return withExtensionRoute(req, "jobs.match", async ({ userId, requestId }) => {
     const url = new URL(req.url);
     const jobUrl = canonicalizeJobUrl(url.searchParams.get("url") ?? "");
 
     if (!jobUrl || jobUrl.length > 2000) {
-      return errorJson("MISSING_PARAM", "Missing or invalid 'url' parameter", 400);
+      return errorJson(
+        "MISSING_PARAM",
+        "Missing or invalid 'url' parameter",
+        400,
+        { requestId },
+      );
     }
 
     const job = await prisma.job.findFirst({
@@ -40,8 +40,5 @@ export async function GET(req: Request) {
     }
 
     return NextResponse.json({ data: job });
-  } catch (err) {
-    if (err instanceof ExtensionTokenError) return unauthorizedError();
-    throw err;
-  }
+  });
 }

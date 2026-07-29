@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { Prisma } from "@/lib/generated/prisma";
 import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
+import { getRuntimeCapabilities } from "@/lib/server/runtimeCapabilities";
 import {
   canonicalizeApplicationArtifactStorageIdentity,
   defaultApplicationArtifactDatabase,
@@ -240,8 +241,7 @@ function disabledInventory(): Extract<
 function reconcileEnabled(explicit: boolean | undefined): boolean {
   if (explicit !== undefined) return explicit;
   return (
-    process.env.ARTIFACT_RECONCILE_ENABLED === "true" ||
-    process.env.ARTIFACT_RECONCILE_ENABLED === "1"
+    getRuntimeCapabilities().artifactReconciliation.kind === "enabled"
   );
 }
 

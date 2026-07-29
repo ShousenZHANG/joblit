@@ -15,11 +15,10 @@ import { filterSourceJobs, type SourceJobFilter } from "./filterSourceJobs";
 import { reportError } from "@/lib/server/observability/errorReporter";
 import type { RawSourceJob, SourceAdapter } from "./types";
 import type { AtsBoardConfig } from "./atsBoards";
-import {
-  FETCH_RUN_COMMIT_PROTOCOL,
-  commitFetchRun,
-  fetchRunExecutionStopReason,
-} from "@/lib/server/fetchRuns/fetchRunCommit";
+import type {
+  InlineFetchRunAdapter,
+  InlineFetchRunTerminalPlan,
+} from "@/lib/server/fetchRuns/inlineFetchRunAdapter";
 import {
   normalizeFetchRunConfigV1,
   type GlobalFetchRunConfigV1,
@@ -32,20 +31,6 @@ import {
 // plain HTTP JSON, so the whole run completes in-process, the same way the CN
 // adapters already do. Fetches are user-triggered, so there is deliberately no
 // queue-sweeping variant — a sweep would only duplicate the trigger path.
-
-export interface GlobalFetchRunResult {
-  discovered: number;
-  imported: number;
-  error?: string;
-  cancelled?: boolean;
-  superseded?: boolean;
-}
-
-interface GlobalFetchRunInput {
-  id: string;
-  queries: unknown;
-  attemptId: string;
-}
 
 interface RuntimeSourceRegistry {
   adapters?: SourceAdapter[];
@@ -297,24 +282,17 @@ async function persistCanonicalSourceObservations({
   });
 }
 
-async function publishGlobalProjectionsIfCanonical({
-  userId,
-  run,
-  snapshot,
-  executionAttemptId,
-}: {
-  userId: string;
-  run: GlobalFetchRunInput;
-  snapshot: GlobalDiscoverySnapshot;
-  executionAttemptId: string | null | undefined;
-}): Promise<void> {
-  if (executionAttemptId !== run.attemptId) return;
-  await persistCanonicalSourceObservations({
-    userId,
-    diagnostics: snapshot.diagnostics,
-    jobs: snapshot.jobs,
-    observedAt: snapshot.observedAt,
-  });
+function globalProjectionHook(
+  userId: string,
+  snapshot: GlobalDiscoverySnapshot,
+): () => Promise<void> {
+  return () =>
+    persistCanonicalSourceObservations({
+      userId,
+      diagnostics: snapshot.diagnostics,
+      jobs: snapshot.jobs,
+      observedAt: snapshot.observedAt,
+    });
 }
 
 function readFilter(queries: unknown): SourceJobFilter {
@@ -352,68 +330,44 @@ function readFilter(queries: unknown): SourceJobFilter {
   };
 }
 
-async function failGlobalDiscovery(
+function planFailedGlobalDiscovery(
   userId: string,
-  run: GlobalFetchRunInput,
   snapshot: GlobalDiscoverySnapshot,
   detail: string,
-): Promise<GlobalFetchRunResult> {
-  const error = `all sources failed: ${detail}`;
-  const receipt = await commitFetchRun({
-    protocol: FETCH_RUN_COMMIT_PROTOCOL,
-    command: "fail",
-    runId: run.id,
-    attemptId: run.attemptId,
-    error,
-  });
-  await publishGlobalProjectionsIfCanonical({
-    userId,
-    run,
-    snapshot,
-    executionAttemptId: receipt.executionAttemptId,
-  });
-  return { discovered: 0, imported: 0, error };
+): InlineFetchRunTerminalPlan {
+  return {
+    kind: "fail",
+    error: `all sources failed: ${detail}`,
+    postTerminal: globalProjectionHook(userId, snapshot),
+  };
 }
 
-async function commitGlobalDiscovery(
+function planGlobalDiscovery(
   userId: string,
-  run: GlobalFetchRunInput,
   config: GlobalFetchRunConfigV1,
   snapshot: GlobalDiscoverySnapshot,
   summary: GlobalDiagnosticSummary,
-): Promise<GlobalFetchRunResult> {
+): InlineFetchRunTerminalPlan {
   const jobs = filterSourceJobs(snapshot.jobs, readFilter(config));
-  const receipt = await commitFetchRun({
-    protocol: FETCH_RUN_COMMIT_PROTOCOL,
-    command: "commit",
-    runId: run.id,
-    attemptId: run.attemptId,
+  return {
+    kind: "commit",
     batchKey: "global-result-v1",
-    batchIndex: 0,
-    batchCount: 1,
     items: jobs.map((job) => ({ ...job, market: "GLOBAL" as const })),
-    terminal: true,
-    discoveredCount: jobs.length,
+    discovered: jobs.length,
     terminalOutcome: summary.failed.length > 0 ? "PARTIAL" : "SUCCEEDED",
     ...(summary.detail ? { error: summary.detail } : {}),
-  });
-  await publishGlobalProjectionsIfCanonical({
-    userId,
-    run,
-    snapshot,
-    executionAttemptId: receipt.executionAttemptId,
-  });
-  return { discovered: jobs.length, imported: receipt.totalImported };
+    postTerminal: globalProjectionHook(userId, snapshot),
+  };
 }
 
-async function executeGlobalFetchRun(
-  userId: string,
-  run: GlobalFetchRunInput,
-): Promise<GlobalFetchRunResult> {
-  const config = readGlobalRunConfig(run.queries);
+export const discoverGlobalFetchRun: InlineFetchRunAdapter = async ({
+  userId,
+  queries,
+}) => {
+  const config = readGlobalRunConfig(queries);
   const rawConfig =
-    run.queries && typeof run.queries === "object" && !Array.isArray(run.queries)
-      ? (run.queries as Record<string, unknown>)
+    queries && typeof queries === "object" && !Array.isArray(queries)
+      ? (queries as Record<string, unknown>)
       : null;
   const hasPersistedSourceSnapshot =
     rawConfig?.schemaVersion === 1 && config.sources.length > 0;
@@ -428,67 +382,11 @@ async function executeGlobalFetchRun(
   // Reporting success with zero rows when every attempted source failed would
   // turn an outage into an ordinary empty result.
   if (summary.allFailed) {
-    return failGlobalDiscovery(
+    return planFailedGlobalDiscovery(
       userId,
-      run,
       snapshot,
       summary.detail ?? "unknown error",
     );
   }
-  return commitGlobalDiscovery(userId, run, config, snapshot, summary);
-}
-
-function stoppedGlobalRunResult(
-  stopReason: NonNullable<ReturnType<typeof fetchRunExecutionStopReason>>,
-): GlobalFetchRunResult {
-  return {
-    discovered: 0,
-    imported: 0,
-    ...(stopReason === "cancelled"
-      ? { cancelled: true }
-      : { superseded: true }),
-  };
-}
-
-async function reportGlobalRunFailure(
-  run: GlobalFetchRunInput,
-  message: string,
-): Promise<ReturnType<typeof fetchRunExecutionStopReason>> {
-  try {
-    await commitFetchRun({
-      protocol: FETCH_RUN_COMMIT_PROTOCOL,
-      command: "fail",
-      runId: run.id,
-      attemptId: run.attemptId,
-      error: message,
-    });
-    return null;
-  } catch (error) {
-    return fetchRunExecutionStopReason(error);
-  }
-}
-
-async function recoverGlobalRunFailure(
-  run: GlobalFetchRunInput,
-  error: unknown,
-): Promise<GlobalFetchRunResult> {
-  const stopReason = fetchRunExecutionStopReason(error);
-  if (stopReason) return stoppedGlobalRunResult(stopReason);
-  const message =
-    error instanceof Error ? error.message : "global_fetch_failed";
-  const failureStopReason = await reportGlobalRunFailure(run, message);
-  if (failureStopReason) return stoppedGlobalRunResult(failureStopReason);
-  return { discovered: 0, imported: 0, error: message };
-}
-
-/** Execute one queued GLOBAL run and write its terminal status. */
-export async function processGlobalFetchRun(
-  userId: string,
-  run: GlobalFetchRunInput,
-): Promise<GlobalFetchRunResult> {
-  try {
-    return await executeGlobalFetchRun(userId, run);
-  } catch (error) {
-    return recoverGlobalRunFailure(run, error);
-  }
-}
+  return planGlobalDiscovery(userId, config, snapshot, summary);
+};

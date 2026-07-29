@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireExtensionToken, ExtensionTokenError } from "@/lib/server/auth/requireExtensionToken";
-import { unauthorizedError, errorJson } from "@/lib/server/api/errorResponse";
-import { checkRateLimit, rateLimitKeyFromRequest, rateLimitHeaders } from "@/lib/server/api/rateLimit";
+import { errorJson } from "@/lib/server/api/errorResponse";
+import { withExtensionRoute } from "@/lib/server/extensionIngress/withExtensionRoute";
 import {
   createFormSubmission,
   listFormSubmissions,
@@ -23,51 +22,60 @@ function clampInt(raw: string | null, def: number, min: number, max: number): nu
 }
 
 export async function POST(req: Request) {
-  const rl = checkRateLimit(rateLimitKeyFromRequest(req, "ext:sub:post"), { limit: 30, windowSeconds: 60 });
-  if (!rl.allowed) return errorJson("RATE_LIMITED", "Too many requests", 429, { headers: rateLimitHeaders(rl) });
+  return withExtensionRoute(
+    req,
+    "submissions.create",
+    async ({ userId, requestId }) => {
+      const body = await req.json().catch(() => ({}));
+      const parsed = CreateSubmissionSchema.safeParse(body);
 
-  try {
-    const { userId } = await requireExtensionToken(req);
-    const body = await req.json().catch(() => ({}));
-    const parsed = CreateSubmissionSchema.safeParse(body);
+      if (!parsed.success) {
+        return errorJson("INVALID_BODY", "Invalid request body", 400, {
+          details: parsed.error.flatten(),
+          requestId,
+        });
+      }
 
-    if (!parsed.success) {
-      return errorJson("INVALID_BODY", "Invalid request body", 400, {
-        details: parsed.error.flatten(),
-      });
-    }
-
-    const result = await createFormSubmission({ userId, ...parsed.data });
-    return NextResponse.json({ data: { id: result.id } }, { status: 201 });
-  } catch (err) {
-    if (err instanceof ExtensionTokenError) return unauthorizedError();
-    if (err instanceof SubmissionJobAccessError) {
-      return errorJson("INVALID_JOB", "The referenced job is not available.", 400);
-    }
-    throw err;
-  }
+      try {
+        const result = await createFormSubmission({ userId, ...parsed.data });
+        return NextResponse.json({ data: { id: result.id } }, { status: 201 });
+      } catch (error) {
+        if (error instanceof SubmissionJobAccessError) {
+          return errorJson(
+            "INVALID_JOB",
+            "The referenced job is not available.",
+            400,
+            { requestId },
+          );
+        }
+        throw error;
+      }
+    },
+  );
 }
 
 export async function GET(req: Request) {
-  const rl = checkRateLimit(rateLimitKeyFromRequest(req, "ext:sub:get"), { limit: 60, windowSeconds: 60 });
-  if (!rl.allowed) return errorJson("RATE_LIMITED", "Too many requests", 429, { headers: rateLimitHeaders(rl) });
+  return withExtensionRoute(
+    req,
+    "submissions.list",
+    async ({ userId }) => {
+      const url = new URL(req.url);
 
-  try {
-    const { userId } = await requireExtensionToken(req);
-    const url = new URL(req.url);
+      const result = await listFormSubmissions({
+        userId,
+        pageDomain: url.searchParams.get("pageDomain") ?? undefined,
+        atsProvider: url.searchParams.get("atsProvider") ?? undefined,
+        formSignature: url.searchParams.get("formSignature") ?? undefined,
+        limit: clampInt(url.searchParams.get("limit"), 50, 1, 100),
+        offset: clampInt(
+          url.searchParams.get("offset"),
+          0,
+          0,
+          Number.MAX_SAFE_INTEGER,
+        ),
+      });
 
-    const result = await listFormSubmissions({
-      userId,
-      pageDomain: url.searchParams.get("pageDomain") ?? undefined,
-      atsProvider: url.searchParams.get("atsProvider") ?? undefined,
-      formSignature: url.searchParams.get("formSignature") ?? undefined,
-      limit: clampInt(url.searchParams.get("limit"), 50, 1, 100),
-      offset: clampInt(url.searchParams.get("offset"), 0, 0, Number.MAX_SAFE_INTEGER),
-    });
-
-    return NextResponse.json({ data: result });
-  } catch (err) {
-    if (err instanceof ExtensionTokenError) return unauthorizedError();
-    throw err;
-  }
+      return NextResponse.json({ data: result });
+    },
+  );
 }

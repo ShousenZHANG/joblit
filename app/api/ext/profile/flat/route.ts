@@ -1,10 +1,5 @@
 import { NextResponse } from "next/server";
-import {
-  requireExtensionToken,
-  ExtensionTokenError,
-} from "@/lib/server/auth/requireExtensionToken";
-import { errorJson, unauthorizedError } from "@/lib/server/api/errorResponse";
-import { checkRateLimit, rateLimitKeyFromRequest, rateLimitHeaders } from "@/lib/server/api/rateLimit";
+import { withExtensionRoute } from "@/lib/server/extensionIngress/withExtensionRoute";
 import { prisma } from "@/lib/server/prisma";
 import { flattenProfile } from "@/lib/server/extensionProfile";
 import type { ResumeProfile } from "@/lib/shared/schemas/resumeProfile";
@@ -21,12 +16,7 @@ function parseLocale(raw: string | null): SupportedLocale {
 
 /** GET — Return a flattened key-value map of the user's profile for form filling. */
 export async function GET(req: Request) {
-  const rl = checkRateLimit(rateLimitKeyFromRequest(req, "ext:profile:flat"), { limit: 60, windowSeconds: 60 });
-  if (!rl.allowed) return errorJson("RATE_LIMITED", "Too many requests", 429, { headers: rateLimitHeaders(rl) });
-
-  try {
-    const { userId } = await requireExtensionToken(req);
-
+  return withExtensionRoute(req, "profile.flat.read", async ({ userId }) => {
     const locale = parseLocale(new URL(req.url).searchParams.get("locale"));
 
     const active = await prisma.activeResumeProfile.findUnique({
@@ -64,8 +54,5 @@ export async function GET(req: Request) {
         updatedAt: rp.updatedAt,
       },
     });
-  } catch (err) {
-    if (err instanceof ExtensionTokenError) return unauthorizedError();
-    throw err;
-  }
+  });
 }

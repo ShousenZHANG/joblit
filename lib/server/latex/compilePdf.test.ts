@@ -162,7 +162,7 @@ describe("compileLatexToPdf integrity check", () => {
     expect(out.subarray(0, 5).toString("latin1")).toBe("%PDF-");
   });
 
-  it("treats any value other than \"true\" as opted out", async () => {
+  it("fails closed when the insecure transport flag is invalid", async () => {
     process.env.LATEX_RENDER_URL = "http://render.example/compile";
     process.env.LATEX_RENDER_ALLOW_INSECURE_HTTP = "1";
 
@@ -171,7 +171,7 @@ describe("compileLatexToPdf integrity check", () => {
     );
 
     expect((err as LatexRenderError).details).toEqual({
-      reason: "HTTPS_REQUIRED",
+      reason: "LATEX_RENDER_INSECURE_HTTP_FLAG_INVALID",
     });
   });
 

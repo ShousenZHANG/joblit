@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const extensionAuth = vi.hoisted(() => ({
-  requireToken: vi.fn(),
+const extensionIngress = vi.hoisted(() => ({
+  withRoute: vi.fn(),
 }));
 
 const applicationPrompt = vi.hoisted(() => ({
@@ -10,11 +10,6 @@ const applicationPrompt = vi.hoisted(() => ({
 
 const tailoringRuns = vi.hoisted(() => ({
   issuePrompt: vi.fn(),
-}));
-
-const promptRateLimit = vi.hoisted(() => ({
-  check: vi.fn(),
-  headers: vi.fn(),
 }));
 
 vi.mock("@/auth", () => ({ authOptions: {} }));
@@ -32,23 +27,8 @@ vi.mock("@/lib/server/prisma", () => ({
   },
 }));
 
-vi.mock("@/lib/server/auth/requireExtensionToken", () => {
-  class ExtensionTokenError extends Error {
-    constructor(message: string) {
-      super(message);
-      this.name = "ExtensionTokenError";
-    }
-  }
-
-  return {
-    ExtensionTokenError,
-    requireExtensionToken: extensionAuth.requireToken,
-  };
-});
-
-vi.mock("@/lib/server/api/rateLimit", () => ({
-  checkRateLimit: promptRateLimit.check,
-  rateLimitHeaders: promptRateLimit.headers,
+vi.mock("@/lib/server/extensionIngress/withExtensionRoute", () => ({
+  withExtensionRoute: extensionIngress.withRoute,
 }));
 
 vi.mock("@/lib/server/applications/applicationPrompt", async () => {
@@ -73,7 +53,6 @@ import {
   type ApplicationPromptPayload,
 } from "@/lib/server/applications/applicationPrompt";
 import { buildPromptMeta } from "@/lib/server/ai/promptContract";
-import { ExtensionTokenError } from "@/lib/server/auth/requireExtensionToken";
 
 const VALID_JOB_ID = "550e8400-e29b-41d4-a716-446655440000";
 const ISSUE_KEY = "6ba7b810-9dad-41d1-80b4-00c04fd430c8";
@@ -81,13 +60,6 @@ const TAILORING_RUN = {
   id: "8f8f8f8f-8f8f-4f8f-8f8f-8f8f8f8f8f8f",
   attemptId: "9a9a9a9a-9a9a-4a9a-8a9a-9a9a9a9a9a9a",
 };
-const RATE_LIMIT_RESULT = {
-  allowed: true,
-  limit: 10,
-  remaining: 9,
-  resetAt: 1_800_000_000_000,
-};
-
 const servicePayload: ApplicationPromptPayload = {
   requestId: "service-request-id",
   prompt: {
@@ -137,46 +109,25 @@ function sessionRequest(body: unknown) {
 describe("extension application prompt api", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    extensionAuth.requireToken.mockResolvedValue({
-      userId: "user-1",
-      tokenId: "token-1",
-      requestId: "extension-request-id",
-    });
+    extensionIngress.withRoute.mockImplementation(
+      async (
+        _request: Request,
+        _operation: string,
+        handler: (context: {
+          userId: string;
+          requestId: string;
+        }) => Promise<Response>,
+      ) =>
+        handler({
+          userId: "user-1",
+          requestId: "extension-request-id",
+        }),
+    );
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "user-1" },
     });
-    promptRateLimit.check.mockReturnValue(RATE_LIMIT_RESULT);
-    promptRateLimit.headers.mockReturnValue({
-      "X-RateLimit-Limit": "10",
-      "X-RateLimit-Remaining": "9",
-      "X-RateLimit-Reset": "1800000000",
-    });
     applicationPrompt.build.mockResolvedValue(servicePayload);
     tailoringRuns.issuePrompt.mockResolvedValue(TAILORING_RUN);
-  });
-
-  it.each([
-    ["missing", "Missing or invalid Authorization header"],
-    ["invalid", "Invalid or expired token"],
-  ])("rejects a %s extension token", async (_label, message) => {
-    extensionAuth.requireToken.mockRejectedValueOnce(new ExtensionTokenError(message));
-
-    const response = await extensionPOST(
-      extensionRequest(
-        { jobId: VALID_JOB_ID, target: "resume", issueKey: ISSUE_KEY },
-        _label === "missing" ? "" : "jfext_invalid",
-      ),
-    );
-    const json = await response.json();
-
-    expect(response.status).toBe(401);
-    expect(json.error.code).toBe("UNAUTHORIZED");
-    expect(applicationPrompt.build).not.toHaveBeenCalled();
-    expect(promptRateLimit.check).not.toHaveBeenCalled();
-    const authenticatedRequest = extensionAuth.requireToken.mock.calls[0]?.[0] as Request;
-    expect(authenticatedRequest.headers.get("Authorization")).toBe(
-      _label === "missing" ? null : "Bearer jfext_invalid",
-    );
   });
 
   it.each([
@@ -192,15 +143,25 @@ describe("extension application prompt api", () => {
     expect(response.status).toBe(400);
     expect(json.error.code).toBe("INVALID_BODY");
     expect(json.error.message).toBe("Invalid request body");
+    expect(json.requestId).toBe("extension-request-id");
     expect(applicationPrompt.build).not.toHaveBeenCalled();
   });
 
   it("isolates ownership by passing only token userId to the canonical service", async () => {
-    extensionAuth.requireToken.mockResolvedValueOnce({
-      userId: "user-2",
-      tokenId: "token-2",
-      requestId: "extension-request-id",
-    });
+    extensionIngress.withRoute.mockImplementationOnce(
+      async (
+        _request: Request,
+        _operation: string,
+        handler: (context: {
+          userId: string;
+          requestId: string;
+        }) => Promise<Response>,
+      ) =>
+        handler({
+          userId: "user-2",
+          requestId: "extension-request-id",
+        }),
+    );
     applicationPrompt.build.mockRejectedValueOnce(
       new ApplicationPromptError("JOB_NOT_FOUND", "Job not found", 404),
     );
@@ -222,6 +183,7 @@ describe("extension application prompt api", () => {
     });
     expect(response.status).toBe(404);
     expect(json.error.code).toBe("JOB_NOT_FOUND");
+    expect(json.requestId).toBe("extension-request-id");
   });
 
   it("returns the canonical missing-profile error", async () => {
@@ -275,11 +237,15 @@ describe("extension application prompt api", () => {
         payload: servicePayload,
       });
       expect(response.status).toBe(200);
-      expect(response.headers.get("Cache-Control")).toBe("no-store");
       expect(json).toEqual({
         ...servicePayload,
         tailoringRun: TAILORING_RUN,
       });
+      expect(extensionIngress.withRoute).toHaveBeenCalledWith(
+        expect.any(Request),
+        "applications.prompt",
+        expect.any(Function),
+      );
       expect(json.prompt).not.toHaveProperty("systemPrompt");
       expect(json.prompt).not.toHaveProperty("userPrompt");
       expect(json.prompt).not.toHaveProperty("shortUserPrompt");
@@ -325,40 +291,6 @@ describe("extension application prompt api", () => {
     expect(tailoringRuns.issuePrompt).not.toHaveBeenCalled();
     expect(json).toEqual(servicePayload);
     expect(json).not.toHaveProperty("tailoringRun");
-  });
-
-  it("rate-limits prompts per authenticated user", async () => {
-    const limited = {
-      allowed: false,
-      limit: 10,
-      remaining: 0,
-      resetAt: 1_800_000_000_000,
-    };
-    promptRateLimit.check.mockReturnValueOnce(limited);
-    promptRateLimit.headers.mockReturnValueOnce({
-      "X-RateLimit-Limit": "10",
-      "X-RateLimit-Remaining": "0",
-      "X-RateLimit-Reset": "1800000000",
-    });
-
-    const response = await extensionPOST(
-      extensionRequest({
-        jobId: VALID_JOB_ID,
-        target: "resume",
-        issueKey: ISSUE_KEY,
-      }),
-    );
-    const json = await response.json();
-
-    expect(promptRateLimit.check).toHaveBeenCalledWith(
-      "ext:applications:prompt:user-1",
-      expect.objectContaining({ limit: expect.any(Number), windowSeconds: expect.any(Number) }),
-    );
-    expect(response.status).toBe(429);
-    expect(json).toMatchObject({ error: { code: "RATE_LIMITED" } });
-    expect(response.headers.get("X-RateLimit-Remaining")).toBe("0");
-    expect(response.headers.get("Cache-Control")).toBe("no-store");
-    expect(applicationPrompt.build).not.toHaveBeenCalled();
   });
 
   it("keeps session and extension prompt version, schema, and metadata equivalent", async () => {

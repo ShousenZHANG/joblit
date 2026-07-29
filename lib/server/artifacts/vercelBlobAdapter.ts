@@ -10,15 +10,23 @@ import {
   ArtifactBlobPortUnavailableError,
   type ArtifactBlobPort,
 } from "./artifactBlobPort";
+import { getRuntimeCapabilities } from "@/lib/server/runtimeCapabilities";
 
 type VercelArtifactBlobAdapterOptions = {
   token?: string | null;
 };
 
 function configuredToken(explicit: string | null | undefined): string {
-  const token = (explicit ?? process.env.BLOB_READ_WRITE_TOKEN ?? "").trim();
-  if (!token) throw new ArtifactBlobPortUnavailableError();
-  return token;
+  if (explicit !== undefined && explicit !== null) {
+    const explicitToken = explicit.trim();
+    if (!explicitToken) throw new ArtifactBlobPortUnavailableError();
+    return explicitToken;
+  }
+  const capability = getRuntimeCapabilities().blobStorage;
+  if (capability.kind !== "enabled") {
+    throw new ArtifactBlobPortUnavailableError();
+  }
+  return capability.config.token;
 }
 
 /**

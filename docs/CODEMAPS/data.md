@@ -360,7 +360,7 @@ verbatim in each module**.
 | Namespace | Constant | Key | Taken by |
 |---|---|---|---|
 | `JOBJ` `0x4a4f424a` | `jobs/jobMutationLock.ts:5` | `stableInt32(userId)` | `deleteJob`, `batchDeleteJobs`, `persistPreparedJobImport` — serializes generic and FetchRun imports against permanent delete |
-| `JOBA` `0x4a4f4241` | `applications/applicationMutationLock.ts:5` | `stableInt32("${userId}:${jobId}")` | Both delete paths, `generateApplicationArtifacts`, `manual-generate`, `draft`, `finalize` (×2), `discard` |
+| `JOBA` `0x4a4f4241` | `applications/applicationMutationLock.ts:5` | `stableInt32("${userId}:${jobId}")` | Both delete paths, `executeServerBatchTailoringTask`, `manual-generate`, `draft`, `finalize` (×2), `discard` |
 | `JOBC` `0x4a4f4243` | `applications/applicationEvents.ts:31` | same | `appendApplicationEvent`, in a `Serializable` transaction. `bulkAppendStatusEvents` takes **no** advisory lock — its boundary is `updateManyAndReturn` |
 | `JOBF` `0x4a4f4246` | `jobs/fitRunService.ts:23` | `stableInt32(userId)` | `nextFitBatch` — leases the next triage batch |
 | `JOBL`/`FTCH` | `fetchRuns/fetchRunQuota.ts:35` | **Fixed** global key | `checkFetchRunQuota`; stale active rows are excluded from capacity, while terminal projection happens separately through the commit module |

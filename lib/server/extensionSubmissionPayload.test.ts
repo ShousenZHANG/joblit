@@ -7,22 +7,31 @@ type CreateSubmissionInput = z.input<typeof CreateSubmissionSchema>;
 
 const routeMocks = vi.hoisted(() => ({
   createFormSubmission: vi.fn().mockResolvedValue({ id: "submission-1" }),
+  SubmissionJobAccessError: class SubmissionJobAccessError extends Error {},
+  withExtensionRoute: vi.fn(
+    async (
+      _request: Request,
+      _operation: string,
+      handler: (context: {
+        userId: string;
+        requestId: string;
+      }) => Promise<Response>,
+    ) =>
+      handler({
+        userId: "user-1",
+        requestId: "request-1",
+      }),
+  ),
 }));
 
-vi.mock("@/lib/server/auth/requireExtensionToken", () => ({
-  ExtensionTokenError: class ExtensionTokenError extends Error {},
-  requireExtensionToken: vi.fn().mockResolvedValue({ userId: "user-1" }),
+vi.mock("@/lib/server/extensionIngress/withExtensionRoute", () => ({
+  withExtensionRoute: routeMocks.withExtensionRoute,
 }));
 
 vi.mock("@/lib/server/extensionSubmission", () => ({
   createFormSubmission: routeMocks.createFormSubmission,
   listFormSubmissions: vi.fn(),
-}));
-
-vi.mock("@/lib/server/api/rateLimit", () => ({
-  checkRateLimit: vi.fn().mockReturnValue({ allowed: true }),
-  rateLimitHeaders: vi.fn().mockReturnValue({}),
-  rateLimitKeyFromRequest: vi.fn().mockReturnValue("test-key"),
+  SubmissionJobAccessError: routeMocks.SubmissionJobAccessError,
 }));
 
 function validPayload(): CreateSubmissionInput {
@@ -378,6 +387,7 @@ describe("submission route validation", () => {
           message: "Invalid request body",
           details: expect.any(Object),
         }),
+        requestId: "request-1",
       }),
     );
     expect(routeMocks.createFormSubmission).not.toHaveBeenCalled();
@@ -403,6 +413,32 @@ describe("submission route validation", () => {
         message: "Invalid request body",
       }),
     );
+    expect(body.requestId).toBe("request-1");
     expect(routeMocks.createFormSubmission).not.toHaveBeenCalled();
+  });
+
+  it("returns request-scoped INVALID_JOB for an inaccessible job", async () => {
+    routeMocks.createFormSubmission.mockRejectedValueOnce(
+      new routeMocks.SubmissionJobAccessError(),
+    );
+    const request = new Request(
+      "https://www.joblit.tech/api/ext/submissions",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validPayload()),
+      },
+    );
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "INVALID_JOB",
+        message: "The referenced job is not available.",
+      },
+      requestId: "request-1",
+    });
   });
 });

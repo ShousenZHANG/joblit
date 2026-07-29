@@ -8,13 +8,17 @@ import {
 } from "@/lib/server/fetchRuns/fetchRunCommit";
 import { reportError } from "@/lib/server/observability/errorReporter";
 import { FetchRunCommitWireCommandSchema } from "@/lib/shared/schemas/fetchRunCommit";
+import { getRuntimeCapabilities } from "@/lib/server/runtimeCapabilities";
 
 export const runtime = "nodejs";
 
 function hasValidSecret(req: Request): "ok" | "missing" | "invalid" {
-  const expected = process.env.FETCH_RUN_SECRET;
-  if (!expected) return "missing";
-  return constantTimeEqual(req.headers.get("x-fetch-run-secret"), expected)
+  const capability = getRuntimeCapabilities().fetchRunAuthentication;
+  if (capability.kind === "invalid") return "missing";
+  return constantTimeEqual(
+    req.headers.get("x-fetch-run-secret"),
+    capability.config.secret,
+  )
     ? "ok"
     : "invalid";
 }

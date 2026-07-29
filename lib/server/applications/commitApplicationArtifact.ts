@@ -15,6 +15,7 @@ import {
 } from "@/lib/server/artifacts/applicationArtifactLifecycle";
 import { isArtifactBlobPortUnavailable } from "@/lib/server/artifacts/artifactBlobPort";
 import { vercelArtifactBlobPort } from "@/lib/server/artifacts/vercelBlobAdapter";
+import { getRuntimeCapabilities } from "@/lib/server/runtimeCapabilities";
 import {
   aiContentSchema,
   hashAiContent,
@@ -191,7 +192,7 @@ function lifecycleTarget(target: CommitTarget): ApplicationArtifactTarget {
 }
 
 function blobConfigured(): boolean {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim());
+  return getRuntimeCapabilities().blobStorage.kind === "enabled";
 }
 
 function findDuplicateArtifactTarget(

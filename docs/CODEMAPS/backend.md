@@ -11,22 +11,24 @@ Vocabulary is `CONTEXT.md`. Route-layer facts live in
 | Directory | Owns | Entry points |
 |---|---|---|
 | `ai/` | Prompt construction, provider calls, the Gemini Tailoring path, evidence/review ledger, cover quality, fit scoring, Skill Pack V3 | `tailorApplication.ts` `tailorApplicationContent`, `buildPrompt.ts`, `providers.ts` `callProvider`, `evidenceLedger.ts` `attachEvidenceAndReview`, `promptContract.ts`, `skillPack.ts` `buildSkillPackV3Files` |
-| `applications/` | Application lifecycle: generation acceptance, target-aware AI Content evolution, canonical resume composition, finalize render, artifact commit, ATS validation, advisory lock, review ledger, `ApplicationEvent` append | `applicationGeneration.ts` `acceptApplicationGeneration`, `applicationAiContentAggregate.ts` `evolveApplicationAiContent`, `applicationResumeComposition.ts` `composeApplicationResumeRenderInput`, `commitApplicationArtifact.ts` `commitApplicationArtifact`, `generateApplicationArtifacts.ts`, `manualImportArtifact.ts`, `finalizeApplication.ts`, `persistReviewLedger.ts`, `applicationMutationLock.ts`, `atsPdfValidator.ts` |
+| `applications/` | Application lifecycle: generation acceptance, target-aware AI Content evolution, canonical resume composition, finalize render, artifact commit, ATS validation, advisory lock, review ledger, `ApplicationEvent` append | `applicationGeneration.ts` `acceptApplicationGeneration`, `applicationAiContentAggregate.ts` `evolveApplicationAiContent`, `applicationResumeComposition.ts` `composeApplicationResumeRenderInput`, `commitApplicationArtifact.ts` `commitApplicationArtifact`, `executeServerBatchTailoringTask.ts`, `manualImportArtifact.ts`, `finalizeApplication.ts`, `persistReviewLedger.ts`, `applicationMutationLock.ts`, `atsPdfValidator.ts` |
 | `artifacts/` | ADR-0010 Application Blob lifecycle, account-erasure hooks, Vercel adapter, inventory, claim/call/fenced settle | `applicationArtifactLifecycle.ts` `prepareApplicationArtifactsForAccountErasure` / `purgeDeletedApplicationArtifactsForErasedUser`, `artifactReconciler.ts`, `artifactBlobPort.ts`, `vercelBlobAdapter.ts` |
 | `applicationBatches/` | Codex Batch state machine: claim, complete, cancel, retry | `runner.ts:169` `claimNextBatchTask`, `:282` `completeBatchTask`, `:334`, `:385`; `codexRunContext.ts:81`/`:189`/`:245`; `batchProgress.ts:9` |
 | `jobs/` | Job import/list/search/delete/status, fit leasing, cooldown, SimHash dedup, posting risk, liveness, market scoping | `jobImportService.ts:95`, `jobListService.ts:142`, `jobSearchService.ts:11`, `jobDeleteService.ts:69`/`:135`, `fitRunService.ts:262`, `jobMutationLock.ts:23`, `postingRisk.ts:121` |
 | `latex/` | Template rendering from `latexTemp/` + the remote render-service client | `compilePdf.ts:68` `compileLatexToPdf`, `renderResume.ts:203`, `renderResumeCN.ts:190`, `renderCoverLetter.ts:69`, `mapResumeProfile.ts:30` |
 | `files/` | Blob path construction, PDF filenames | `applicationArtifactBlob.ts:3`, `pdfFilename.ts:24` |
 | `discover/` | GitHub trending scrape, YouTube pipeline, durable cache + daily refresh lease (ADR-0005) | `refreshDiscover.ts:107`, `githubTrending.ts:167`, `videoPipeline.ts:431`, `discoverCache.ts:83` |
-| `cnFetch/` | CN market Fetch Pipeline: Nowcoder adapter, normalize, per-run processor | `processFetchRun.ts:88`, `adapters/nowcoder.ts:166`, `normalize.ts:223` |
-| `sources/` | GLOBAL market Fetch Pipeline: adapter registry, ATS boards, source health, rediscovery, filtering | `processGlobalFetchRun.ts:167`, `registry.ts:45`, `http.ts:48`, `atsRediscoveryService.ts:145`, `sourceHealthStore.ts:62` |
-| `fetchRuns/` | FetchRun quota and lifecycle lock, shared by all three market paths | `fetchRunQuota.ts:43`, `fetchRunLifecycleLock.ts:19` |
+| `cnFetch/` | CN market discovery adapter: Nowcoder fetch, normalization, diagnostics, terminal-plan construction | `processFetchRun.ts`, `adapters/nowcoder.ts`, `normalize.ts` |
+| `sources/` | GLOBAL market discovery adapter: registry, ATS boards, source health, rediscovery, filtering, terminal-plan construction | `processGlobalFetchRun.ts`, `registry.ts`, `http.ts`, `atsRediscoveryService.ts`, `sourceHealthStore.ts` |
+| `fetchRuns/` | FetchRun quota, inline lifecycle coordinator, attempt/lock fencing, and the shared `fetch-run-commit/v1` transaction boundary | `executeInlineFetchRun.ts`, `inlineFetchRunAdapter.ts`, `fetchRunCommit.ts`, `fetchRunQuota.ts`, `fetchRunLifecycleLock.ts` |
 | `net/` | The single SSRF-hardened outbound gateway | `safeFetch.ts:396` `safeOutboundFetch`, `:272`, `:228` |
 | `security/` | Sanitizers for anything persisted or exported | `untrustedOutput.ts:36`/`:58`/`:76` |
 | `seek/` | On-demand full-JD enrichment (extension imports carry only a teaser) | `fetchJobDescription.ts:86` |
 | `archive/` | Pure ZIP32 writer. Sole consumer: the Skill Pack download | `zip.ts:155` |
 | `observability/` | The single error/event reporting seam | `errorReporter.ts:52` `reportError` |
 | `auth/` | Session and extension-token primitives | `requireSession.ts:17`, `requireExtensionToken.ts:34`, `constantTimeEqual.ts:12` |
+| `extensionIngress/` | Extension request identity, operation policy, Session/Bearer auth, atomic distributed abuse budgets with local fallback, cache/error/observability envelope | `withExtensionRoute.ts`, `extensionRoutePolicy.ts`, `abuseBudget.ts`, `abuseBudgetUpstash.ts` |
+| `runtimeCapabilities/` | Typed interpretation of optional integrations, paired credentials, feature flags, and safe fallback states | `index.ts` `resolveRuntimeCapabilities` / `getRuntimeCapabilities` |
 | `api/` | HTTP envelope, session route wrapper, rate limits, LaTeX error mapping | `routeHandler.ts:17` `withSessionRoute`, `errorResponse.ts:9` `errorJson`, `handleLatexError.ts:5` |
 | loose files | Master Resume Profile CRUD, Prisma singleton, env validation, extension token/profile/submission, prompt-rule templates | `resumeProfile.ts:170`, `prisma.ts:13`, `env.ts:55`, `promptRuleTemplates.ts:117` |
 
@@ -40,8 +42,9 @@ client.
 
 ### Path A — durable server auto-execute
 
-Entry: `generateApplicationArtifactsForJob` from the Application Batch execute
-route when `ENABLE_BATCH_EXECUTE_AUTOGEN=1`. The retired session generate
+Entry: `executeServerBatchTailoringTask` from the Application Batch execute
+route when the server-batch capability is enabled. The interface requires the
+claimed Batch, task, issue, and attempt identity; the retired session generate
 routes are not part of this call chain.
 
 1. `getResumeProfile(userId, {locale})` — `resumeProfile.ts:170`
@@ -143,7 +146,7 @@ same transaction marks the linked task `SUCCEEDED`. Neither task `PATCH` nor
 
 | Caller | Owns | `mergeTarget` | CAS |
 |---|---|---:|---:|
-| `generateApplicationArtifacts.ts` | CV + Cover | no | no |
+| `executeServerBatchTailoringTask.ts` | authoritative missing Batch targets | only for partial recovery | baseline `expectedHash` |
 | `manual-generate/route.ts` | one target | yes, with required `reviewContext` | no |
 | `finalize/route.ts` | already-canonical full aggregate, one rendered artifact | no | `expectedHash` |
 
@@ -286,8 +289,8 @@ README; `cnFetch/adapters/nowcoder.ts:8` says so explicitly.
 
 | Class | Location | Reaches HTTP via |
 |---|---|---|
-| `UnauthorizedError` | `auth/requireSession.ts:10` | `withSessionRoute` (`routeHandler.ts:23`), or a hand-rolled `instanceof` in ~10 routes |
-| `ExtensionTokenError` | `auth/requireExtensionToken.ts:15` | per-route `instanceof` → 401 |
+| `UnauthorizedError` | `auth/requireSession.ts:10` | `withSessionRoute`, or `withExtensionRoute` for Extension token-management operations |
+| `ExtensionTokenError` | `auth/requireExtensionToken.ts:15` | `withExtensionRoute` → canonical 401 before the user abuse budget |
 | `LatexRenderError` | `latex/compilePdf.ts:13` | `handleLatexError` (`api/handleLatexError.ts:5`), which redacts `details`. Re-implemented **without** the redaction at `manual-generate/route.ts:346` |
 | `AtsPdfValidationError` | `applications/atsPdfValidator.ts:14` | 422 with the report |
 | `SafeOutboundError` | `net/safeFetch.ts:29` | never surfaced directly; translated per caller |
@@ -297,10 +300,10 @@ README; `cnFetch/adapters/nowcoder.ts:8` says so explicitly.
 
 ### The `throw new Error("SCREAMING_CODE")` convention
 
-A bare `Error` whose message *is* the code. Used at
-`generateApplicationArtifacts.ts:95`, `:101`, `:138`; `finalizeApplication.ts:59`,
-`:184`, `:194`; `tailorApplication.ts:305`, `:353`, `:476`, `:500`;
-`evidenceLedger.ts:358`.
+A bare `Error` whose message *is* the code remains in internal provider,
+composition, and evidence paths. Public server-batch ownership, profile,
+concurrency, and persistence failures are translated to `AppError` by
+`executeServerBatchTailoringTask`; provider details never become task output.
 
 Two of these do not reach the client as a typed error:
 `MASTER_PROFILE_MISSING` and `COVER_PARAGRAPHS_INCOMPLETE` escape the finalize
@@ -309,15 +312,15 @@ route (which rescues only `AtsPdfValidationError`) and become an untyped Next
 
 ### Wire shapes
 
-`api/errorResponse.ts:9` `errorJson(code, message, status, {details, requestId})`
-is the intended envelope, with helpers `unauthorizedError`, `notFoundError`,
-`validationError`. It is not universal: 32 route files emit only a flat
-`{error: "CODE"}`, 14 only the envelope, and 15 emit both. `unauthorizedError()`
-is called 59 times and passed a `requestId` zero times.
+`api/errorResponse.ts` `errorJson(code, message, status, {details, requestId})`
+is the required envelope, with helpers `unauthorizedError`, `notFoundError`,
+and `validationError`; the route architecture guard rejects flat wire errors.
 
-Every unexpected error reaching `withSessionRoute` is passed to `reportError`
-before rethrowing (`routeHandler.ts:26`). The 44 hand-copied session preambles
-do not do this.
+Every unexpected error reaching `withSessionRoute` is passed to `reportError`.
+Extension routes use `withExtensionRoute`, which additionally owns request IDs,
+pre-auth IP and post-auth user budgets, canonical 401/429/500 responses,
+private no-store caching, and reporting. Route modules do not duplicate those
+cross-cutting concerns.
 
 ---
 

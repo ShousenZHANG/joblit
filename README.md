@@ -506,20 +506,26 @@ A complete template lives in [`.env.example`](./.env.example).
 | `FETCH_RUN_SECRET` | Auth for AU worker config reads and FetchRun v1 commits |
 | `APP_ENC_KEY` | Extension token encryption key (base64) |
 | `LATEX_RENDER_URL` / `LATEX_RENDER_TOKEN` | External LaTeX render service |
-| `BLOB_READ_WRITE_TOKEN` | FINAL PDF persistence and artifact reconciliation; DRAFT edits do not require Blob |
 
 ### Optional
 
 | Variable | Purpose |
 |---|---|
 | `SEEK_FETCH_ENABLED` | Kill-switch for **server-side** Seek fetching (`1` / `true` to enable). **Off by default** — Seek is unreachable from datacenter / CI IPs (Cloudflare blocks every endpoint); the supported path is the browser extension. See [ADR-0003](docs/adr/0003-seek-fetch-via-browser-extension.md). |
+| `BLOB_READ_WRITE_TOKEN` | Enables FINAL PDF/photo persistence and artifact reconciliation; DRAFT edits do not require Blob |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Distributed Extension abuse budget; both values are required together |
+| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | Vercel KV-compatible alternative for the distributed Extension abuse budget; both values are required together |
+| `SEEK_USER_AGENT` | Honest outbound identifier used when server-side Seek enrichment is enabled |
 | `GEMINI_API_KEY` / `GEMINI_MODEL` | AI provider |
-| `GITHUB_OWNER` / `GITHUB_REPO` / `GITHUB_TOKEN` / `GITHUB_WORKFLOW_FILE` | Fetch workflow dispatch |
+| `GITHUB_OWNER` / `GITHUB_REPO` / `GITHUB_TOKEN` / `GITHUB_WORKFLOW_FILE` / `GITHUB_REF` | Fetch workflow dispatch; owner, repository, and token are required together |
+| `ENABLE_BATCH_EXECUTE_AUTOGEN` | Default-off server-side Application Batch execution; only `1` / `true` enables it |
+| `JOBLIT_ATS_BOARDS_JSON` | Credential-free deployment-owned ATS board registry |
 | `JOBLIT_WEB_URL` | Public URL for the extension callback |
 | `YOUTUBE_API_KEY` | Discover-page video pipeline |
 | `CRON_SECRET` | Bearer secret Vercel attaches to scheduled daily refresh and artifact-reconciliation calls |
 | `ARTIFACT_RECONCILE_SECRET` | Optional additional bearer for manual artifact-reconciliation calls; it does not replace `CRON_SECRET` for Vercel Cron |
 | `ARTIFACT_RECONCILE_ENABLED` | Default-off kill switch; only `true` / `1` permits Application artifact inventory, claim, and deletion |
+| `LATEX_RENDER_ALLOW_INSECURE_HTTP` | Explicit `true` opt-in for a self-hosted HTTP renderer; HTTPS remains the safe default |
 | `RSSHUB_URL` / `RSSHUB_JOB_ROUTES` / `GITHUB_CN_JOB_REPOS` | China job sources |
 | `SENTRY_DSN` | Error reporting (when SDK is installed) |
 

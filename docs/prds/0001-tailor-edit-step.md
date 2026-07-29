@@ -60,9 +60,10 @@ A user revisits a previous job (status `APPLIED`), hits **Edit Tailored Resume**
 ### S4 — Application Batch
 
 Feature-gated server auto-execute calls the durable
-`generateApplicationArtifactsForJob` service and bypasses the interactive Edit
-page. External Codex orchestration claims work through `run-once` and persists
-returned model output through `manual-generate?finalize=true`.
+`executeServerBatchTailoringTask` service and bypasses the interactive Edit
+page. Its Batch/task/issue/attempt identity is mandatory and its final write is
+CAS-protected. External Codex orchestration claims work through `run-once` and
+persists returned model output through `manual-generate?finalize=true`.
 
 ### S5 — Migration of existing Applications
 
@@ -108,7 +109,7 @@ Shape per [ADR-0001](../adr/0001-application-aicontent-provenance.md#decision).
 | `POST` | `/api/applications/[id]/discard` | Reverts user edits to the original AI proposals and re-projects each document's publication status. |
 
 The interactive web UI explicitly uses `finalize=false` for manual import.
-Server auto-execute persists through `generateApplicationArtifactsForJob`;
+Server auto-execute persists through `executeServerBatchTailoringTask`;
 external Codex persists through `manual-generate`. The retired
 `/api/applications/generate` and
 `/api/applications/generate-cover-letter` routes are not part of the current
@@ -152,7 +153,7 @@ Bullets that fail a quality gate (`isGroundedAddedBullet`, `isNonRedundantAddedB
 
 ### Application Batch contract
 
-- Server auto-execute calls `generateApplicationArtifactsForJob` through its
+- Server auto-execute calls `executeServerBatchTailoringTask` through its
   authenticated, feature-gated execute route.
 - External Codex claims/completes tasks through `run-once` and imports through
   `manual-generate?finalize=true`.

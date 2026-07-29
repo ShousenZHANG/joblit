@@ -1,10 +1,9 @@
 import { runCnFetch } from "./runCnFetch";
 import type { CnSource } from "./types";
-import {
-  FETCH_RUN_COMMIT_PROTOCOL,
-  commitFetchRun,
-  fetchRunExecutionStopReason,
-} from "@/lib/server/fetchRuns/fetchRunCommit";
+import type {
+  InlineFetchRunAdapter,
+  InlineFetchRunTerminalPlan,
+} from "@/lib/server/fetchRuns/inlineFetchRunAdapter";
 import { normalizeFetchRunConfigV1 } from "@/lib/shared/schemas/fetchRunConfig";
 
 // CN fetch pipeline for one FetchRun. Called from
@@ -39,22 +38,6 @@ function readCnRunConfig(raw: unknown): CnRunConfig {
     excludeKeywords: config.excludeKeywords,
     locations: config.locations,
   };
-}
-
-interface ProcessResult {
-  userId: string;
-  runId: string;
-  discovered: number;
-  imported: number;
-  error?: string;
-  cancelled?: boolean;
-  superseded?: boolean;
-}
-
-interface CnFetchRunInput {
-  id: string;
-  queries: unknown;
-  attemptId: string;
 }
 
 type CnDiscovery = Awaited<ReturnType<typeof runCnFetch>>;
@@ -95,122 +78,32 @@ function summarizeCnDiagnostics(
   };
 }
 
-async function failCnRun(
-  base: Pick<ProcessResult, "userId" | "runId">,
-  run: CnFetchRunInput,
-  error: string,
-): Promise<ProcessResult> {
-  await commitFetchRun({
-    protocol: FETCH_RUN_COMMIT_PROTOCOL,
-    command: "fail",
-    runId: run.id,
-    attemptId: run.attemptId,
-    error,
-  });
-  return { ...base, discovered: 0, imported: 0, error };
-}
-
-async function commitCnDiscovery(
-  base: Pick<ProcessResult, "userId" | "runId">,
-  run: CnFetchRunInput,
+function planCnDiscovery(
   discovery: CnDiscovery,
   diagnostics: CnDiagnosticSummary,
-): Promise<ProcessResult> {
+): InlineFetchRunTerminalPlan {
   const discovered = discovery.jobs.length;
-  const completed = await commitFetchRun({
-    protocol: FETCH_RUN_COMMIT_PROTOCOL,
-    command: "commit",
-    runId: run.id,
-    attemptId: run.attemptId,
+  return {
+    kind: "commit",
     batchKey: "cn-result-v1",
-    batchIndex: 0,
-    batchCount: 1,
     items: discovery.jobs,
-    terminal: true,
-    discoveredCount: discovered,
+    discovered,
     terminalOutcome: diagnostics.failed.length > 0 ? "PARTIAL" : "SUCCEEDED",
     ...(diagnostics.detail ? { error: diagnostics.detail } : {}),
-  });
-  return { ...base, discovered, imported: completed.totalImported };
-}
-
-async function executeCnFetchRun(
-  userId: string,
-  run: CnFetchRunInput,
-): Promise<ProcessResult> {
-  const base = { userId, runId: run.id };
-  const config = readCnRunConfig(run.queries);
-  const discovery = await discoverCnRun(config);
-  const diagnostics = summarizeCnDiagnostics(discovery.diagnostics);
-  if (diagnostics.allFailed) {
-    return failCnRun(
-      base,
-      run,
-      `all sources failed: ${diagnostics.detail ?? "unknown error"}`,
-    );
-  }
-  return commitCnDiscovery(base, run, discovery, diagnostics);
-}
-
-function stoppedCnRunResult(
-  base: Pick<ProcessResult, "userId" | "runId">,
-  stopReason: NonNullable<ReturnType<typeof fetchRunExecutionStopReason>>,
-): ProcessResult {
-  return {
-    ...base,
-    discovered: 0,
-    imported: 0,
-    ...(stopReason === "cancelled"
-      ? { cancelled: true }
-      : { superseded: true }),
   };
 }
 
-async function reportCnRunFailure(
-  run: CnFetchRunInput,
-  message: string,
-): Promise<ReturnType<typeof fetchRunExecutionStopReason>> {
-  try {
-    await commitFetchRun({
-      protocol: FETCH_RUN_COMMIT_PROTOCOL,
-      command: "fail",
-      runId: run.id,
-      attemptId: run.attemptId,
-      error: message,
-    });
-    return null;
-  } catch (error) {
-    return fetchRunExecutionStopReason(error);
+export const discoverCnFetchRun: InlineFetchRunAdapter = async ({
+  queries,
+}) => {
+  const config = readCnRunConfig(queries);
+  const discovery = await discoverCnRun(config);
+  const diagnostics = summarizeCnDiagnostics(discovery.diagnostics);
+  if (diagnostics.allFailed) {
+    return {
+      kind: "fail",
+      error: `all sources failed: ${diagnostics.detail ?? "unknown error"}`,
+    };
   }
-}
-
-async function recoverCnRunFailure(
-  base: Pick<ProcessResult, "userId" | "runId">,
-  run: CnFetchRunInput,
-  error: unknown,
-): Promise<ProcessResult> {
-  const stopReason = fetchRunExecutionStopReason(error);
-  if (stopReason) return stoppedCnRunResult(base, stopReason);
-  const message = error instanceof Error ? error.message : "unknown";
-  const failureStopReason = await reportCnRunFailure(run, message);
-  if (failureStopReason) return stoppedCnRunResult(base, failureStopReason);
-  return { ...base, discovered: 0, imported: 0, error: message };
-}
-
-/**
- * Run a single CN FetchRun end-to-end: aggregate sources, filter
- * tombstones, insert with skipDuplicates, score fresh rows, update the
- * FetchRun status to SUCCEEDED (or FAILED on exception). Never throws —
- * errors are recorded on the FetchRun and returned on the ProcessResult.
- */
-export async function processCnFetchRun(
-  userId: string,
-  run: CnFetchRunInput,
-): Promise<ProcessResult> {
-  const base = { userId, runId: run.id };
-  try {
-    return await executeCnFetchRun(userId, run);
-  } catch (err) {
-    return recoverCnRunFailure(base, run, err);
-  }
-}
+  return planCnDiscovery(discovery, diagnostics);
+};

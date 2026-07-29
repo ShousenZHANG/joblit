@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireExtensionToken, ExtensionTokenError } from "@/lib/server/auth/requireExtensionToken";
-import { unauthorizedError, errorJson } from "@/lib/server/api/errorResponse";
-import { checkRateLimit, rateLimitKeyFromRequest, rateLimitHeaders } from "@/lib/server/api/rateLimit";
+import { errorJson } from "@/lib/server/api/errorResponse";
+import { withExtensionRoute } from "@/lib/server/extensionIngress/withExtensionRoute";
 import { z } from "zod";
 import { upsertFieldMappingRule, listFieldMappingRules } from "@/lib/server/extensionSubmission";
 
@@ -18,45 +17,40 @@ const UpsertMappingSchema = z.object({
 });
 
 export async function GET(req: Request) {
-  const rl = checkRateLimit(rateLimitKeyFromRequest(req, "ext:map:get"), { limit: 60, windowSeconds: 60 });
-  if (!rl.allowed) return errorJson("RATE_LIMITED", "Too many requests", 429, { headers: rateLimitHeaders(rl) });
+  return withExtensionRoute(
+    req,
+    "fieldMappings.list",
+    async ({ userId }) => {
+      const url = new URL(req.url);
 
-  try {
-    const { userId } = await requireExtensionToken(req);
-    const url = new URL(req.url);
+      const rules = await listFieldMappingRules({
+        userId,
+        atsProvider: url.searchParams.get("atsProvider") ?? undefined,
+        pageDomain: url.searchParams.get("pageDomain") ?? undefined,
+      });
 
-    const rules = await listFieldMappingRules({
-      userId,
-      atsProvider: url.searchParams.get("atsProvider") ?? undefined,
-      pageDomain: url.searchParams.get("pageDomain") ?? undefined,
-    });
-
-    return NextResponse.json({ data: rules });
-  } catch (err) {
-    if (err instanceof ExtensionTokenError) return unauthorizedError();
-    throw err;
-  }
+      return NextResponse.json({ data: rules });
+    },
+  );
 }
 
 export async function PUT(req: Request) {
-  const rl = checkRateLimit(rateLimitKeyFromRequest(req, "ext:map:put"), { limit: 30, windowSeconds: 60 });
-  if (!rl.allowed) return errorJson("RATE_LIMITED", "Too many requests", 429, { headers: rateLimitHeaders(rl) });
+  return withExtensionRoute(
+    req,
+    "fieldMappings.upsert",
+    async ({ userId, requestId }) => {
+      const body = await req.json().catch(() => ({}));
+      const parsed = UpsertMappingSchema.safeParse(body);
 
-  try {
-    const { userId } = await requireExtensionToken(req);
-    const body = await req.json().catch(() => ({}));
-    const parsed = UpsertMappingSchema.safeParse(body);
+      if (!parsed.success) {
+        return errorJson("INVALID_BODY", "Invalid request body", 400, {
+          details: parsed.error.flatten(),
+          requestId,
+        });
+      }
 
-    if (!parsed.success) {
-      return errorJson("INVALID_BODY", "Invalid request body", 400, {
-        details: parsed.error.flatten(),
-      });
-    }
-
-    const rule = await upsertFieldMappingRule({ userId, ...parsed.data });
-    return NextResponse.json({ data: rule });
-  } catch (err) {
-    if (err instanceof ExtensionTokenError) return unauthorizedError();
-    throw err;
-  }
+      const rule = await upsertFieldMappingRule({ userId, ...parsed.data });
+      return NextResponse.json({ data: rule });
+    },
+  );
 }

@@ -1,206 +1,21 @@
+import {
+  artifactLifecycle,
+  batch,
+  blob,
+  combinedAiContent,
+  dependencies,
+  job,
+  resumeAiContent,
+  stores,
+  tailoringAcceptance,
+  tailoringHandle,
+  tailoringRunId,
+} from "./executeServerBatchTailoringTask.testHarness";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const stores = vi.hoisted(() => ({
-  job: {
-    findFirst: vi.fn(),
-  },
-  application: {
-    findUnique: vi.fn(),
-    upsert: vi.fn(),
-  },
-  evidenceSnapshot: {
-    createMany: vi.fn(),
-  },
-  claimEvidence: {
-    createMany: vi.fn(),
-  },
-  executeRaw: vi.fn(),
-  queryRaw: vi.fn(),
-  transaction: vi.fn(),
-  operations: [] as string[],
-}));
-const dependencies = vi.hoisted(() => ({
-  buildResumePdfForJob: vi.fn(),
-  compileLatexToPdf: vi.fn(),
-  getResumeProfile: vi.fn(),
-  renderCoverLetterTex: vi.fn(),
-  tailorApplicationContent: vi.fn(),
-  assertAtsPdf: vi.fn(),
-  acceptApplicationGeneration: vi.fn(),
-  evolveApplicationAiContent: vi.fn(),
-  commitApplicationArtifact: vi.fn(),
-  issueTailoringRun: vi.fn(),
-  startTailoringRun: vi.fn(),
-  bindTailoringRunPrompt: vi.fn(),
-  failTailoringRun: vi.fn(),
-  completeBatchTask: vi.fn(),
-}));
-const blob = vi.hoisted(() => ({
-  del: vi.fn(),
-  put: vi.fn(),
-}));
-const artifactLifecycle = vi.hoisted(() => ({
-  stageApplicationArtifact: vi.fn(),
-  recordUploadedArtifact: vi.fn(),
-  markArtifactsReferencedAndRetireSuperseded: vi.fn(),
-  retireStagedArtifacts: vi.fn(),
-}));
+import { executeServerBatchTailoringTask } from "./executeServerBatchTailoringTask";
 
-vi.mock("@/lib/server/prisma", () => ({
-  prisma: {
-    job: stores.job,
-    application: stores.application,
-    $transaction: stores.transaction,
-  },
-}));
-vi.mock("@/lib/server/applications/buildResumePdf", () => ({
-  buildResumePdfForJob: dependencies.buildResumePdfForJob,
-}));
-vi.mock("@/lib/server/latex/compilePdf", () => ({
-  compileLatexToPdf: dependencies.compileLatexToPdf,
-}));
-vi.mock("@/lib/server/resumeProfile", () => ({
-  getResumeProfile: dependencies.getResumeProfile,
-}));
-vi.mock("@/lib/server/latex/renderCoverLetter", () => ({
-  renderCoverLetterTex: dependencies.renderCoverLetterTex,
-}));
-vi.mock("@/lib/server/ai/tailorApplication", () => ({
-  tailorApplicationContent: dependencies.tailorApplicationContent,
-}));
-vi.mock("@/lib/server/applications/applicationGeneration", () => ({
-  acceptApplicationGeneration: dependencies.acceptApplicationGeneration,
-}));
-vi.mock("@/lib/server/applications/applicationAiContentAggregate", () => ({
-  evolveApplicationAiContent: dependencies.evolveApplicationAiContent,
-}));
-vi.mock(
-  "@/lib/server/applications/commitApplicationArtifact",
-  async (importOriginal) => {
-    const actual =
-      await importOriginal<
-        typeof import("@/lib/server/applications/commitApplicationArtifact")
-      >();
-    dependencies.commitApplicationArtifact.mockImplementation(
-      actual.commitApplicationArtifact,
-    );
-    return {
-      ...actual,
-      commitApplicationArtifact: dependencies.commitApplicationArtifact,
-    };
-  },
-);
-vi.mock("@/lib/server/tailoringRuns/tailoringRunService", () => ({
-  issueTailoringRun: dependencies.issueTailoringRun,
-  startTailoringRun: dependencies.startTailoringRun,
-  bindTailoringRunPrompt: dependencies.bindTailoringRunPrompt,
-  failTailoringRun: dependencies.failTailoringRun,
-}));
-vi.mock("@/lib/server/applicationBatches/runner", () => ({
-  completeBatchTask: dependencies.completeBatchTask,
-}));
-/**
- * `assertAtsPdf` *throws* on failure — it does not resolve a report with
- * `passed: false`. A stub that only ever resolved could not tell a working gate
- * from one whose `if (!report.passed) throw` had been deleted, so the double
- * keeps the real contract: hand it a report and it throws when the report
- * fails, exactly as the module does.
- */
-vi.mock("@/lib/server/applications/atsPdfValidator", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("@/lib/server/applications/atsPdfValidator")>();
-  return {
-    ...actual,
-    assertAtsPdf: async (...args: unknown[]) => {
-      const report = await dependencies.assertAtsPdf(...args);
-      if (report && report.passed === false) {
-        throw new actual.AtsPdfValidationError(report);
-      }
-      return report;
-    },
-  };
-});
-vi.mock("@vercel/blob", () => blob);
-vi.mock(
-  "@/lib/server/artifacts/applicationArtifactLifecycle",
-  () => artifactLifecycle,
-);
-
-import { generateApplicationArtifactsForJob } from "./generateApplicationArtifacts";
-
-const job = {
-  id: "job-1",
-  title: "Engineer",
-  company: "Joblit",
-  description: "Build reliable systems",
-  market: "AU",
-};
-const batch = {
-  batchId: "batch-1",
-  taskId: "task-1",
-  executionAttemptId: "00000000-0000-4000-8000-000000000001",
-  issueKey: "00000000-0000-5000-8000-000000000003",
-  acceptedTargets: [],
-  remainingTargets: ["RESUME", "COVER"],
-} as const;
-const tailoringRunId = "00000000-0000-4000-8000-000000000002";
-const tailoringHandle = {
-  id: tailoringRunId,
-  attemptId: batch.executionAttemptId,
-} as const;
-
-const generatedAt = "2026-07-24T00:00:00.000Z";
-const resumeAiContent = {
-  schemaVersion: 1,
-  generatedAt,
-  promptMetaHash: "resume-hash",
-  provenance: {
-    resume: {
-      generatedAt,
-      promptMetaHash: "resume-hash",
-      source: "server_batch",
-    },
-  },
-  cv: {
-    summary: {
-      aiText: "Engineer",
-      originalText: "Engineer",
-      accepted: true,
-    },
-    latestExperience: {
-      experienceIndex: 0,
-      addedBullets: [],
-    },
-  },
-  cover: {
-    paragraphOne: { aiText: "", accepted: false },
-    paragraphTwo: { aiText: "", accepted: false },
-    paragraphThree: { aiText: "", accepted: false },
-  },
-} as const;
-const combinedAiContent = {
-  ...resumeAiContent,
-  promptMetaHash: "cover-hash",
-  provenance: {
-    ...resumeAiContent.provenance,
-    cover: {
-      generatedAt,
-      promptMetaHash: "cover-hash",
-      source: "server_batch",
-    },
-  },
-  cover: {
-    paragraphOne: { aiText: "Canonical one", accepted: true },
-    paragraphTwo: {
-      aiText: "Canonical two",
-      userEdit: "Canonical edited two",
-      accepted: true,
-    },
-    paragraphThree: { aiText: "Canonical three", accepted: true },
-  },
-} as const;
-
-describe("generateApplicationArtifactsForJob", () => {
+describe("executeServerBatchTailoringTask", () => {
   beforeEach(() => {
     vi.unstubAllEnvs();
     vi.clearAllMocks();
@@ -210,6 +25,7 @@ describe("generateApplicationArtifactsForJob", () => {
     stores.application.findUnique.mockImplementation(async () => {
       stores.operations.push("application.findUnique");
       return {
+        aiContentHash: "baseline-ai-content-hash",
         resumePdfUrl: "https://blob/old-resume.pdf",
         coverPdfUrl: "https://blob/old-cover.pdf",
       };
@@ -347,6 +163,18 @@ describe("generateApplicationArtifactsForJob", () => {
       disposition: "APPLIED",
       run: { id: tailoringRunId },
     });
+    tailoringAcceptance.prepareTailoringRunAcceptance.mockImplementation(
+      async (_tx, input) => ({
+        userId: input.userId,
+        pending: [...input.requests],
+        replayed: [],
+        runs: [],
+      }),
+    );
+    tailoringAcceptance.completeTailoringRunAcceptance.mockResolvedValue({
+      receipts: [],
+      completedRunIds: [],
+    });
     dependencies.compileLatexToPdf.mockResolvedValue(Buffer.from("cover"));
     blob.put
       .mockResolvedValueOnce({ url: "https://blob/new-resume.pdf" })
@@ -405,9 +233,10 @@ describe("generateApplicationArtifactsForJob", () => {
   });
 
   it("locks, rechecks ownership, and commits reference plus retirements atomically", async () => {
-    const result = await generateApplicationArtifactsForJob({
+    const result = await executeServerBatchTailoringTask({
       userId: "user-1",
       jobId: job.id,
+      ...batch,
     });
 
     expect(result.applicationId).toBe("application-1");
@@ -442,6 +271,7 @@ describe("generateApplicationArtifactsForJob", () => {
       }),
     );
     expect(stores.operations).toEqual([
+      "application.findUnique",
       "application.lock",
       "job.findFirst",
       "application.findUnique",
@@ -510,11 +340,12 @@ describe("generateApplicationArtifactsForJob", () => {
     );
 
     await expect(
-      generateApplicationArtifactsForJob({
+      executeServerBatchTailoringTask({
         userId: "user-1",
         jobId: job.id,
+        ...batch,
       }),
-    ).rejects.toThrow("JOB_NOT_FOUND");
+    ).rejects.toMatchObject({ code: "JOB_NOT_FOUND", status: 404 });
 
     expect(stores.application.upsert).not.toHaveBeenCalled();
     expect(artifactLifecycle.retireStagedArtifacts).toHaveBeenCalledWith({
@@ -529,9 +360,10 @@ describe("generateApplicationArtifactsForJob", () => {
     stores.application.upsert.mockRejectedValueOnce(new Error("DB_DOWN"));
 
     await expect(
-      generateApplicationArtifactsForJob({
+      executeServerBatchTailoringTask({
         userId: "user-1",
         jobId: job.id,
+        ...batch,
       }),
     ).rejects.toThrow("DB_DOWN");
 
@@ -558,7 +390,11 @@ describe("generateApplicationArtifactsForJob", () => {
     });
 
     await expect(
-      generateApplicationArtifactsForJob({ userId: "user-1", jobId: job.id }),
+      executeServerBatchTailoringTask({
+        userId: "user-1",
+        jobId: job.id,
+        ...batch,
+      }),
     ).rejects.toMatchObject({ code: "ATS_PDF_VALIDATION_FAILED", status: 422 });
 
     expect(blob.put).not.toHaveBeenCalled();
@@ -571,7 +407,11 @@ describe("generateApplicationArtifactsForJob", () => {
     });
 
     await expect(
-      generateApplicationArtifactsForJob({ userId: "user-1", jobId: job.id }),
+      executeServerBatchTailoringTask({
+        userId: "user-1",
+        jobId: job.id,
+        ...batch,
+      }),
     ).rejects.toMatchObject({
       code: "ARTIFACT_STORAGE_UNAVAILABLE",
       status: 503,
@@ -586,10 +426,41 @@ describe("generateApplicationArtifactsForJob", () => {
     });
 
     await expect(
-      generateApplicationArtifactsForJob({ userId: "user-1", jobId: job.id }),
+      executeServerBatchTailoringTask({
+        userId: "user-1",
+        jobId: job.id,
+        ...batch,
+      }),
     ).rejects.toMatchObject({
       code: "STALE_RENDER_CONTEXT",
       status: 409,
+    });
+  });
+
+  it("maps a concurrent Application edit to a stable CAS conflict", async () => {
+    dependencies.commitApplicationArtifact.mockResolvedValueOnce({
+      kind: "stale_write",
+    });
+
+    await expect(
+      executeServerBatchTailoringTask({
+        userId: "user-1",
+        jobId: job.id,
+        ...batch,
+      }),
+    ).rejects.toMatchObject({
+      code: "APPLICATION_CONTENT_CHANGED",
+      status: 409,
+      publicMessage:
+        "The application changed while the documents were generating. Generate them again.",
+    });
+
+    expect(dependencies.failTailoringRun).toHaveBeenCalledWith({
+      userId: "user-1",
+      handle: tailoringHandle,
+      errorCode: "SERVER_BATCH_FAILED",
+      errorMessage: "Server batch generation failed",
+      batchExecutionAttemptId: batch.executionAttemptId,
     });
   });
 
@@ -605,10 +476,10 @@ describe("generateApplicationArtifactsForJob", () => {
       },
     });
 
-    const result = await generateApplicationArtifactsForJob({
+    const result = await executeServerBatchTailoringTask({
       userId: "user-1",
       jobId: job.id,
-      batch,
+      ...batch,
     });
 
     expect(result).toMatchObject({
@@ -669,6 +540,7 @@ describe("generateApplicationArtifactsForJob", () => {
     });
 
     const commit = dependencies.commitApplicationArtifact.mock.calls.at(-1)?.[0];
+    expect(commit.expectedHash).toBe("baseline-ai-content-hash");
     expect(commit.tailoring).toHaveLength(2);
     expect(commit.tailoring).toEqual([
       expect.objectContaining({
@@ -710,11 +582,6 @@ describe("generateApplicationArtifactsForJob", () => {
   });
 
   it("reclaims a partial run by accepting and merging only the missing target", async () => {
-    const partialBatch = {
-      ...batch,
-      acceptedTargets: ["RESUME"],
-      remainingTargets: ["COVER"],
-    } as const;
     dependencies.issueTailoringRun.mockResolvedValueOnce({
       disposition: "REPLAYED",
       run: {
@@ -734,10 +601,10 @@ describe("generateApplicationArtifactsForJob", () => {
       },
     });
 
-    const result = await generateApplicationArtifactsForJob({
+    const result = await executeServerBatchTailoringTask({
       userId: "user-1",
       jobId: job.id,
-      batch: partialBatch,
+      ...batch,
     });
 
     expect(result).toMatchObject({
@@ -766,11 +633,6 @@ describe("generateApplicationArtifactsForJob", () => {
   });
 
   it("recovers resume-only without evaluating or replacing the accepted cover", async () => {
-    const partialBatch = {
-      ...batch,
-      acceptedTargets: ["COVER"],
-      remainingTargets: ["RESUME"],
-    } as const;
     dependencies.issueTailoringRun.mockResolvedValueOnce({
       disposition: "REPLAYED",
       run: {
@@ -793,10 +655,10 @@ describe("generateApplicationArtifactsForJob", () => {
       },
     });
 
-    const result = await generateApplicationArtifactsForJob({
+    const result = await executeServerBatchTailoringTask({
       userId: "user-1",
       jobId: job.id,
-      batch: partialBatch,
+      ...batch,
     });
 
     expect(result).toMatchObject({
@@ -829,10 +691,10 @@ describe("generateApplicationArtifactsForJob", () => {
     dependencies.buildResumePdfForJob.mockRejectedValueOnce(generationError);
 
     await expect(
-      generateApplicationArtifactsForJob({
+      executeServerBatchTailoringTask({
         userId: "user-1",
         jobId: job.id,
-        batch,
+        ...batch,
       }),
     ).rejects.toBe(generationError);
 
@@ -854,10 +716,10 @@ describe("generateApplicationArtifactsForJob", () => {
     );
 
     await expect(
-      generateApplicationArtifactsForJob({
+      executeServerBatchTailoringTask({
         userId: "user-1",
         jobId: job.id,
-        batch,
+        ...batch,
       }),
     ).rejects.toBe(commitError);
 

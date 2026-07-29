@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireExtensionToken, ExtensionTokenError } from "@/lib/server/auth/requireExtensionToken";
-import { unauthorizedError, errorJson } from "@/lib/server/api/errorResponse";
-import { checkRateLimit, rateLimitKeyFromRequest, rateLimitHeaders } from "@/lib/server/api/rateLimit";
-import { reportError } from "@/lib/server/observability/errorReporter";
+import { AppError } from "@/lib/server/api/appError";
+import { errorJson } from "@/lib/server/api/errorResponse";
+import { withExtensionRoute } from "@/lib/server/extensionIngress/withExtensionRoute";
 import { ImportJobItemSchema, importJobsForUser } from "@/lib/server/jobs/jobImportService";
 
 export const runtime = "nodejs";
@@ -21,34 +20,30 @@ const BodySchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const rl = checkRateLimit(rateLimitKeyFromRequest(req, "ext:jobs:import"), {
-    limit: 30,
-    windowSeconds: 60,
-  });
-  if (!rl.allowed) {
-    return errorJson("RATE_LIMITED", "Too many requests", 429, {
-      headers: rateLimitHeaders(rl),
-    });
-  }
-
-  try {
-    const { userId } = await requireExtensionToken(req);
+  return withExtensionRoute(req, "jobs.import", async ({ userId, requestId }) => {
     const body = await req.json().catch(() => null);
     const parsed = BodySchema.safeParse(body);
     if (!parsed.success) {
       return errorJson("INVALID_BODY", "Invalid request body", 400, {
         details: parsed.error.flatten(),
+        requestId,
       });
     }
 
-    const { imported, invalid } = await importJobsForUser({
-      userId,
-      items: parsed.data.items,
-    });
-    return NextResponse.json({ data: { imported, invalid } });
-  } catch (err) {
-    if (err instanceof ExtensionTokenError) return unauthorizedError();
-    reportError(err, { scope: "ext.jobs.import" });
-    return errorJson("IMPORT_FAILED", "Could not import jobs", 500);
-  }
+    try {
+      const { imported, invalid } = await importJobsForUser({
+        userId,
+        items: parsed.data.items,
+      });
+      return NextResponse.json({ data: { imported, invalid } });
+    } catch (error) {
+      throw new AppError({
+        code: "IMPORT_FAILED",
+        status: 500,
+        publicMessage: "Could not import jobs",
+        privateDetails: error,
+        cause: error,
+      });
+    }
+  });
 }

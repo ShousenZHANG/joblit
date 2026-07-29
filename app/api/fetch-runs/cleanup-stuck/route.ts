@@ -12,16 +12,17 @@ import {
   FetchRunCommitError,
   commitFetchRun,
 } from "@/lib/server/fetchRuns/fetchRunCommit";
+import { getRuntimeCapabilities } from "@/lib/server/runtimeCapabilities";
 
 export const runtime = "nodejs";
 
 function authorizeCleanup(req: Request): NextResponse | null {
-  const secret = process.env.FETCH_RUN_SECRET;
-  if (!secret) {
+  const capability = getRuntimeCapabilities().fetchRunAuthentication;
+  if (capability.kind === "invalid") {
     return errorJson("NOT_CONFIGURED", "This endpoint is not configured", 503);
   }
   const provided = req.headers.get("x-fetch-run-secret") ?? "";
-  return constantTimeEqual(provided, secret)
+  return constantTimeEqual(provided, capability.config.secret)
     ? null
     : errorJson("UNAUTHORIZED", "Unauthorized", 401);
 }

@@ -3,6 +3,7 @@ import {
   parseSafeOutboundUrl,
   safeOutboundFetch,
 } from "@/lib/server/net/safeFetch";
+import { getRuntimeCapabilities } from "@/lib/server/runtimeCapabilities";
 
 type LatexRenderErrorCode =
   | "LATEX_RENDER_CONFIG_MISSING"
@@ -67,20 +68,25 @@ function recordBreakerFailure(): void {
 
 export async function compileLatexToPdf(tex: string, options?: { files?: CompileFile[]; timeoutMs?: number; engine?: "pdflatex" | "xelatex" }) {
   const timeoutMs = options?.timeoutMs ?? 20000;
-  const url = process.env.LATEX_RENDER_URL;
-  const token = process.env.LATEX_RENDER_TOKEN;
-  if (!url || !token) {
-    // Changed error code and message as per instruction, keeping original constructor argument order
-    throw new LatexRenderError("LATEX_RENDER_CONFIG_MISSING", 503, "No render service configuration");
+  const capability = getRuntimeCapabilities().latexRenderer;
+  if (capability.kind === "invalid") {
+    // Configuration failures are dependency-unavailable errors. They never
+    // reach the outbound adapter or expose the configured URL/token.
+    throw new LatexRenderError(
+      "LATEX_RENDER_CONFIG_MISSING",
+      503,
+      capability.reason === "LATEX_RENDER_URL_INVALID"
+        ? "Render service URL is invalid"
+        : "No render service configuration",
+      capability.details ?? { reason: capability.reason },
+    );
   }
+  const { url, token, allowInsecureHttp } = capability.config;
   // A self-hosted renderer may not have TLS yet. Allowing that is a deployment
   // decision with a real cost — the render token rides in a header, so plain
   // HTTP puts a credential on the wire — so it is opt-in rather than the
   // default. Host, DNS, redirect, timeout and response-size checks stay on
   // either way; only transport encryption is relaxed.
-  const allowInsecureHttp =
-    process.env.LATEX_RENDER_ALLOW_INSECURE_HTTP === "true";
-
   let renderHost: string;
   try {
     renderHost = parseSafeOutboundUrl(url, { allowInsecureHttp }).hostname;

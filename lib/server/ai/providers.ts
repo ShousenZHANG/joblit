@@ -1,4 +1,5 @@
 import { safeOutboundFetch } from "@/lib/server/net/safeFetch";
+import { DEFAULT_GEMINI_MODEL } from "@/lib/server/ai/providerDefaults";
 
 export type AiProviderName = "openai" | "gemini" | "claude";
 
@@ -19,7 +20,7 @@ export type ProviderRequest = {
 
 export const DEFAULT_MODELS: Record<AiProviderName, string> = {
   openai: "gpt-4o-mini",
-  gemini: "gemini-2.5-flash-lite",
+  gemini: DEFAULT_GEMINI_MODEL,
   claude: "claude-3-5-sonnet",
 };
 

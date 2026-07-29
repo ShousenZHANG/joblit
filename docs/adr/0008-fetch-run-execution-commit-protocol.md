@@ -107,6 +107,15 @@ The AU adapter reaches it through
 the owner and market from the stored `FetchRun`; adapters cannot select a
 different tenant by supplying an email or user ID.
 
+Inline execution has one additional orchestration seam:
+`executeInlineFetchRun`. It owns `start`, running-metadata projection, adapter
+selection, the single terminal `commit` or `fail`, stop-reason mapping, and
+exception recovery for both CN and GLOBAL. Market adapters receive only the
+owning user and immutable query snapshot, then return a terminal plan; they do
+not receive a run ID or attempt ID and cannot call `commitFetchRun` directly.
+Discovery therefore begins only after the durable `start`, while every
+terminal transition still crosses the same fenced commit boundary.
+
 Every committed batch writes a `FetchRunCommitReceipt`. Within a run,
 `batchKey` and `batchIndex` are unique. The receipt stores the canonical
 request hash, import counts, and the `executionAttemptId` that applied it:
@@ -167,6 +176,13 @@ newer observation. A same-attempt receipt replay may safely repair projections
 after a lost response; a cancelled or superseded attempt cannot publish them.
 ATS registry rediscovery remains a separate global compare-and-set module with
 its own cooldown; it is not a user FetchRun projection.
+
+Those projections are explicitly best-effort post-terminal hooks. A projection
+failure is reported as a warning but cannot issue a second `fail` or rewrite an
+already durable terminal result. Conversely, an exception after `start` but
+before terminal commit—including failure to persist running dispatch
+metadata—enters the coordinator's canonical `fail` recovery so an owned run is
+not stranded in `RUNNING`.
 
 ### Make partial completion explicit
 

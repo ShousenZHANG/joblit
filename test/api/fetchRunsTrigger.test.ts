@@ -73,11 +73,11 @@ vi.mock("next-auth/next", () => ({
 }));
 
 vi.mock("@/lib/server/cnFetch/processFetchRun", () => ({
-  processCnFetchRun: inlineProcessors.cn,
+  discoverCnFetchRun: inlineProcessors.cn,
 }));
 
 vi.mock("@/lib/server/sources/processGlobalFetchRun", () => ({
-  processGlobalFetchRun: inlineProcessors.global,
+  discoverGlobalFetchRun: inlineProcessors.global,
 }));
 
 vi.mock("@/lib/server/fetchRuns/fetchRunCommit", async (importOriginal) => {
@@ -88,6 +88,7 @@ vi.mock("@/lib/server/fetchRuns/fetchRunCommit", async (importOriginal) => {
 
 import { getServerSession } from "next-auth/next";
 import { POST } from "@/app/api/fetch-runs/[id]/trigger/route";
+import { FetchRunCommitError } from "@/lib/server/fetchRuns/fetchRunCommit";
 import { SafeOutboundError } from "@/lib/server/net/safeFetch";
 
 const RUN_ID = "550e8400-e29b-41d4-a716-446655440000";
@@ -118,13 +119,23 @@ describe("fetch run trigger api", () => {
     fetchRunStore.countInTx.mockResolvedValue(0);
     inlineProcessors.cn.mockReset();
     inlineProcessors.global.mockReset();
-    commitHarness.commitFetchRun.mockReset().mockResolvedValue({
-      disposition: "APPLIED",
-      batchImported: 0,
-      batchInvalid: 0,
-      totalImported: 0,
-      status: "RUNNING",
-    });
+    commitHarness.commitFetchRun
+      .mockReset()
+      .mockImplementation(
+        async (command: { command: string; attemptId?: string; items?: unknown[] }) => ({
+          disposition: "APPLIED",
+          executionAttemptId: command.attemptId ?? null,
+          batchImported: command.command === "commit" ? (command.items?.length ?? 0) : 0,
+          batchInvalid: 0,
+          totalImported: command.command === "commit" ? (command.items?.length ?? 0) : 0,
+          status:
+            command.command === "start"
+              ? "RUNNING"
+              : command.command === "fail"
+                ? "FAILED"
+                : "SUCCEEDED",
+        }),
+      );
     safeFetchHarness.fetch
       .mockReset()
       .mockImplementation((url: string | URL, init?: RequestInit) =>
@@ -344,8 +355,11 @@ describe("fetch run trigger api", () => {
       queries: originalQueries,
     });
     inlineProcessors.cn.mockResolvedValueOnce({
+      kind: "commit",
+      batchKey: "cn-result-v1",
+      items: [{ jobUrl: "https://example.com/1", title: "Java Engineer", market: "CN" }],
       discovered: 1,
-      imported: 1,
+      terminalOutcome: "SUCCEEDED",
     });
 
     const res = await POST(
@@ -367,13 +381,10 @@ describe("fetch run trigger api", () => {
     expect(attemptId).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     );
-    expect(inlineProcessors.cn).toHaveBeenCalledWith(
-      "inline-prestart-user",
-      expect.objectContaining({
-        id: RUN_ID,
-        attemptId,
-      }),
-    );
+    expect(inlineProcessors.cn).toHaveBeenCalledWith({
+      userId: "inline-prestart-user",
+      queries: originalQueries,
+    });
   });
 
   it("reports executor supersession as a healthy handoff, not user cancellation", async () => {
@@ -392,10 +403,27 @@ describe("fetch run trigger api", () => {
       },
     });
     inlineProcessors.cn.mockResolvedValueOnce({
+      kind: "commit",
+      batchKey: "cn-result-v1",
+      items: [],
       discovered: 0,
-      imported: 0,
-      superseded: true,
+      terminalOutcome: "SUCCEEDED",
     });
+    commitHarness.commitFetchRun
+      .mockResolvedValueOnce({
+        disposition: "APPLIED",
+        executionAttemptId: null,
+        batchImported: 0,
+        batchInvalid: 0,
+        totalImported: 0,
+        status: "RUNNING",
+      })
+      .mockRejectedValueOnce(
+        new FetchRunCommitError(
+          "EXECUTION_LEASE_LOST",
+          "Another executor owns the run",
+        ),
+      );
 
     const res = await POST(
       new Request(`http://localhost/api/fetch-runs/${RUN_ID}/trigger`, {
@@ -426,8 +454,14 @@ describe("fetch run trigger api", () => {
       queries: originalQueries,
     });
     inlineProcessors.global.mockResolvedValueOnce({
+      kind: "commit",
+      batchKey: "global-result-v1",
+      items: [
+        { jobUrl: "https://example.com/1", title: "AI Engineer", market: "GLOBAL" },
+        { jobUrl: "https://example.com/2", title: "AI Engineer", market: "GLOBAL" },
+      ],
       discovered: 3,
-      imported: 2,
+      terminalOutcome: "SUCCEEDED",
     });
 
     const res = await POST(
@@ -485,14 +519,10 @@ describe("fetch run trigger api", () => {
         }),
       },
     });
-    expect(inlineProcessors.global).toHaveBeenCalledWith(
-      "inline-resume-user",
-      {
-        id: RUN_ID,
-        queries: originalQueries,
-        attemptId: resumedAttemptId,
-      },
-    );
+    expect(inlineProcessors.global).toHaveBeenCalledWith({
+      userId: "inline-resume-user",
+      queries: originalQueries,
+    });
   });
 
   it("marks the run failed when GitHub rejects the dispatch", async () => {
@@ -660,8 +690,7 @@ describe("fetch run trigger api", () => {
       fetchRunStore.updateInTx.mockResolvedValueOnce({});
       fetchRunStore.updateMany.mockResolvedValue({ count: 1 });
       processor.mockResolvedValueOnce({
-        discovered: 0,
-        imported: 0,
+        kind: "fail",
         error: "upstream detail",
       });
 

@@ -20,6 +20,7 @@ import {
   normalizeProviderModel,
 } from "@/lib/server/ai/providers";
 import { sanitizePromptText } from "@/lib/server/ai/sanitize";
+import { getRuntimeCapabilities } from "@/lib/server/runtimeCapabilities";
 import {
   buildGenerationLineageHash,
   buildPromptContentHash,
@@ -327,10 +328,14 @@ export async function tailorApplicationContent(
     const skillRules = input.userId
       ? await getActivePromptSkillRulesForUser(input.userId)
       : getPromptSkillRules();
+    const gemini = getRuntimeCapabilities().gemini;
     const defaultProviderConfig = {
       provider: DEFAULT_PROVIDER,
-      apiKey: process.env.GEMINI_API_KEY,
-      model: process.env.GEMINI_MODEL || getDefaultModel(DEFAULT_PROVIDER),
+      apiKey: gemini.kind === "enabled" ? gemini.config.apiKey : undefined,
+      model:
+        gemini.kind === "enabled"
+          ? gemini.config.model
+          : getDefaultModel(DEFAULT_PROVIDER),
     };
     const providerConfig = defaultProviderConfig;
 

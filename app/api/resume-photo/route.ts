@@ -7,18 +7,20 @@ import {
   parseTrustedResumePhotoUrl,
   toResumePhotoContentType,
 } from "@/lib/server/resumePhotoBlob";
+import { getRuntimeCapabilities } from "@/lib/server/runtimeCapabilities";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   return withSessionRoute(async ({ userId, requestId }) => {
-    const token = process.env.BLOB_READ_WRITE_TOKEN;
-    if (!token) {
+    const capability = getRuntimeCapabilities().blobStorage;
+    if (capability.kind !== "enabled") {
       return NextResponse.json(
         { error: { code: "BLOB_NOT_CONFIGURED", message: "Blob storage not configured" }, requestId },
         { status: 503 },
       );
     }
+    const token = capability.config.token;
 
     const contentType = toResumePhotoContentType(req.headers.get("content-type"));
     if (!contentType) {
@@ -52,13 +54,14 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
   return withSessionRoute(async ({ userId, requestId }) => {
-    const token = process.env.BLOB_READ_WRITE_TOKEN;
-    if (!token) {
+    const capability = getRuntimeCapabilities().blobStorage;
+    if (capability.kind !== "enabled") {
       return NextResponse.json(
         { error: { code: "BLOB_NOT_CONFIGURED", message: "Blob storage not configured" }, requestId },
         { status: 503 },
       );
     }
+    const token = capability.config.token;
 
     const { searchParams } = new URL(req.url);
     const photoUrl = searchParams.get("url");

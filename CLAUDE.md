@@ -29,10 +29,10 @@ npm run deps:policy       # Check dependency policy
 
 ### Key Data Flow
 
-1. **Job Intake**: `FetchRun` tasks persist a strict market-specific config, then dispatch the AU GitHub Actions worker or run CN/GLOBAL adapters in-process. Every adapter enters `commitFetchRun`; ordered receipts, Jobs, counters, and terminal state commit atomically with dedupe on `userId + jobUrl` and tombstone filtering (`DeletedJobUrl`)
-2. **Tailoring**: `Job` + `ResumeProfile` → AI prompt (via versioned `PromptRuleTemplate`) → external model imported through `/api/applications/manual-generate`, or durable server generation through `generateApplicationArtifactsForJob` → persisted Application aggregate → PDF render via LaTeX external service
-3. **Batch**: External Codex atomically completes/claims tasks through `/api/application-batches/[id]/run-once` and persists output through `manual-generate`; feature-gated server auto-execute uses `/execute` → `generateApplicationArtifactsForJob`
-4. **Extension**: Chrome extension authenticates via `/api/ext/auth/token` → reads flat profile → logs field mappings and form submissions for learning auto-fill rules
+1. **Job Intake**: `FetchRun` tasks persist a strict market-specific config, then dispatch the AU GitHub Actions worker or run CN/GLOBAL adapters in-process. `executeInlineFetchRun` owns the lifecycle for both inline markets; discovery adapters only return a terminal plan. All results enter `commitFetchRun`, where ordered receipts, Jobs, counters, and terminal state commit atomically with dedupe on `userId + jobUrl` and tombstone filtering (`DeletedJobUrl`)
+2. **Tailoring**: `Job` + `ResumeProfile` → AI prompt (via versioned `PromptRuleTemplate`) → external model imported through `/api/applications/manual-generate`, or receipt-backed server batch generation through `executeServerBatchTailoringTask` → persisted Application aggregate → PDF render via LaTeX external service
+3. **Batch**: External Codex atomically completes/claims tasks through `/api/application-batches/[id]/run-once` and persists output through `manual-generate`; feature-gated server auto-execute uses `/execute` → `executeServerBatchTailoringTask`. That interface requires Batch, task, issue, and attempt identity and commits with an Application content-hash CAS.
+4. **Extension**: Chrome extension traffic enters through `withExtensionRoute`, which owns request identity, pre-auth IP and post-auth user abuse budgets, Session/Bearer auth, no-store responses, canonical errors, and reporting before handlers read profiles or persist mappings/submissions.
 
 Current tailoring output is delta-only: Resume returns `cvSummary` plus zero to
 three `latestExperience.addedBullets`; Cover returns only its three body
@@ -56,7 +56,7 @@ reintroduced.
 - `applications/` — Resume/cover artifact generation and storage
 - `applicationBatches/` — Batch task orchestration (Codex protocol, progress tracking)
 - `jobs/` — Job CRUD, filtering, deletion cascade (jobListService, jobDeleteService, jobSearchService)
-- `fetchRuns/` — FetchRun quota, lifecycle lock, and the shared `fetch-run-commit/v1` transaction boundary
+- `fetchRuns/` — FetchRun quota, unified inline executor, lifecycle lock, and the shared `fetch-run-commit/v1` transaction boundary
 - `files/` — Vercel Blob operations and PDF filename utilities
 - `discover/` — YouTube video pipeline: fetch, cache, refresh
 - `cnFetch/` — China Fetch Pipeline and the Nowcoder adapter
@@ -103,7 +103,13 @@ Path alias `@/*` maps to the project root. Import as `@/lib/...`, `@/app/...`, `
 
 Required: `DATABASE_URL`, `AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_ID`, `GITHUB_SECRET`, `FETCH_RUN_SECRET`, `APP_ENC_KEY` (base64), `LATEX_RENDER_URL`, `LATEX_RENDER_TOKEN`
 
-Optional: `DIRECT_URL`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `BLOB_READ_WRITE_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_TOKEN`, `GITHUB_WORKFLOW_FILE`, `JOBLIT_WEB_URL`, `YOUTUBE_API_KEY`, `CRON_SECRET`, `RSSHUB_URL`, `RSSHUB_JOB_ROUTES`, `GITHUB_CN_JOB_REPOS`
+Optional: `DIRECT_URL`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `BLOB_READ_WRITE_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_TOKEN`, `GITHUB_WORKFLOW_FILE`, `GITHUB_REF`, `ENABLE_BATCH_EXECUTE_AUTOGEN`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `JOBLIT_ATS_BOARDS_JSON`, `SEEK_FETCH_ENABLED`, `SEEK_USER_AGENT`, `JOBLIT_WEB_URL`, `YOUTUBE_API_KEY`, `CRON_SECRET`, `ARTIFACT_RECONCILE_SECRET`, `ARTIFACT_RECONCILE_ENABLED`, `RSSHUB_URL`, `RSSHUB_JOB_ROUTES`, `GITHUB_CN_JOB_REPOS`
+
+Application modules consume optional integrations through
+`lib/server/runtimeCapabilities`, not by assembling environment-variable
+pairs or parsing feature flags themselves. Keep paired credentials and
+enabled/disabled/invalid semantics centralized there; never serialize the
+returned secret-bearing configuration.
 
 `DIRECT_URL` is only needed when the database is wired by hand: the Neon and
 Vercel Postgres integrations already inject an unpooled URL, and migrations

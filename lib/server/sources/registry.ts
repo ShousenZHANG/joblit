@@ -4,15 +4,13 @@ import remotive from "./adapters/remotive";
 import jobicy from "./adapters/jobicy";
 import { createAtsAdapters } from "./adapters/ats";
 import {
-  parseAtsBoardRegistryJson,
   type AtsBoardConfig,
   type AtsBoardRegistryIssue,
 } from "./atsBoards";
+import { getRuntimeCapabilities } from "@/lib/server/runtimeCapabilities";
 
 const CORE_ADAPTERS: readonly SourceAdapter[] = [remoteok, remotive, jobicy];
-const atsConfig = parseAtsBoardRegistryJson(
-  process.env.JOBLIT_ATS_BOARDS_JSON,
-);
+const atsConfig = getRuntimeCapabilities().atsBoards;
 
 const atsIssues: AtsBoardRegistryIssue[] = [...atsConfig.issues];
 const ids = new Set(CORE_ADAPTERS.map((adapter) => adapter.id));
