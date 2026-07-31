@@ -52,7 +52,70 @@
     "paletteSearchJobs": "在岗位中搜索“{query}”",
     "paletteThemeLight": "浅色主题",
     "paletteThemeDark": "深色主题",
-    "paletteThemeSystem": "跟随系统"
+    "paletteThemeSystem": "跟随系统",
+    "agent": "智能体"
+  },
+  "agent": {
+    "title": "智能体",
+    "subtitle": "运行本地 Runner，让定制在你自己的机器和模型上完成。",
+    "runner": {
+      "title": "配置 Runner",
+      "description": "Runner 在你自己的机器上消化生成批次：从 Joblit 取提示词，交给本地 Hermes 网关运行，再把结果作为草稿导入等你审阅。",
+      "step1": "启动本地 Hermes 网关（默认监听 127.0.0.1:8642）。",
+      "step2": "在下方生成 Agent 令牌并复制——它只显示一次。",
+      "step3": "在准备运行 Runner 的终端里设置这些环境变量。",
+      "step4": "启动 Runner，然后在职位页排入一个批次。",
+      "envLabel": "环境变量",
+      "runLabel": "运行",
+      "copy": "复制",
+      "copiedShort": "已复制！",
+      "copied": "已复制到剪贴板",
+      "keyNotice": "Hermes 密钥只留在你的机器上。Joblit 不会收到它，Runner 也拒绝把它发往回环地址以外的任何地方。"
+    },
+    "tokens": {
+      "generateTitle": "生成新令牌",
+      "namePlaceholder": "例如：我的笔记本",
+      "generate": "生成",
+      "creating": "创建中...",
+      "revealWarning": "请立即复制该令牌——它不会再次显示。",
+      "copy": "复制",
+      "copiedShort": "已复制！",
+      "expiresOn": "{date} 过期",
+      "activeTitle": "有效令牌",
+      "loadErrorTitle": "无法加载令牌",
+      "loadErrorDescription": "请检查网络后重试。",
+      "retry": "重试",
+      "emptyTitle": "暂无有效令牌",
+      "emptyDescription": "在上方生成一个，Runner 才能登录。",
+      "unnamed": "未命名令牌",
+      "createdAt": "创建于{when}",
+      "usedAt": "使用于{when}",
+      "neverUsed": "从未使用",
+      "revoke": "吊销",
+      "revokeDialogTitle": "吊销令牌",
+      "revokeDialogDescription": "这将永久吊销 <strong>“{name}”</strong>。正在使用该令牌的 Runner 会立即停止。",
+      "relative": {
+        "today": "今天",
+        "yesterday": "昨天",
+        "daysAgo": "{days} 天前",
+        "weeksAgo": "{weeks} 周前"
+      },
+      "expiry": {
+        "expired": "已过期",
+        "expiresToday": "今天过期",
+        "daysLeft": "剩余 {days} 天"
+      },
+      "toast": {
+        "createdTitle": "令牌已创建",
+        "createdDescription": "启动 Runner 前把它设为 JOBLIT_TOKEN。",
+        "createFailedTitle": "创建令牌失败",
+        "revokedTitle": "令牌已吊销",
+        "revokedDescription": "“{name}”已被永久吊销。",
+        "revokeFailedTitle": "吊销令牌失败",
+        "copied": "已复制到剪贴板",
+        "tryAgain": "请重试。"
+      }
+    }
   },
   "marketing": {
     "badge": "95 分 AI 技能包驱动",

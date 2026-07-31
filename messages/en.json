@@ -52,7 +52,70 @@
     "paletteSearchJobs": "Search jobs for “{query}”",
     "paletteThemeLight": "Light theme",
     "paletteThemeDark": "Dark theme",
-    "paletteThemeSystem": "System theme"
+    "paletteThemeSystem": "System theme",
+    "agent": "Agent"
+  },
+  "agent": {
+    "title": "Agent",
+    "subtitle": "Run the local Runner so tailoring happens on your machine, with your model.",
+    "runner": {
+      "title": "Set up the Runner",
+      "description": "The Runner drains your generation batches on your own machine. It reads prompts from Joblit, runs them through your local Hermes gateway, and imports the results as drafts for you to review.",
+      "step1": "Start your local Hermes gateway (it listens on 127.0.0.1:8642 by default).",
+      "step2": "Generate an agent token below and copy it — it is shown only once.",
+      "step3": "Set these variables in the shell you will run the Runner from.",
+      "step4": "Start the Runner, then queue a batch from the Jobs page.",
+      "envLabel": "Environment",
+      "runLabel": "Run",
+      "copy": "Copy",
+      "copiedShort": "Copied!",
+      "copied": "Copied to clipboard",
+      "keyNotice": "Your Hermes key stays on your machine. Joblit never receives it, and the Runner refuses to send it anywhere but loopback."
+    },
+    "tokens": {
+      "generateTitle": "Generate New Token",
+      "namePlaceholder": "e.g. My Laptop",
+      "generate": "Generate",
+      "creating": "Creating...",
+      "revealWarning": "Copy this token now — it won't be shown again.",
+      "copy": "Copy",
+      "copiedShort": "Copied!",
+      "expiresOn": "Expires {date}",
+      "activeTitle": "Active Tokens",
+      "loadErrorTitle": "Couldn't load tokens",
+      "loadErrorDescription": "Check your connection and try again.",
+      "retry": "Retry",
+      "emptyTitle": "No active tokens",
+      "emptyDescription": "Generate one above so the Runner can sign in.",
+      "unnamed": "Unnamed token",
+      "createdAt": "Created {when}",
+      "usedAt": "Used {when}",
+      "neverUsed": "Never used",
+      "revoke": "Revoke",
+      "revokeDialogTitle": "Revoke Token",
+      "revokeDialogDescription": "This will permanently revoke <strong>\"{name}\"</strong>. Any Runner using this token stops immediately.",
+      "relative": {
+        "today": "today",
+        "yesterday": "yesterday",
+        "daysAgo": "{days, plural, one {# day ago} other {# days ago}}",
+        "weeksAgo": "{weeks, plural, one {# week ago} other {# weeks ago}}"
+      },
+      "expiry": {
+        "expired": "Expired",
+        "expiresToday": "Expires today",
+        "daysLeft": "{days, plural, one {# day left} other {# days left}}"
+      },
+      "toast": {
+        "createdTitle": "Token created",
+        "createdDescription": "Set it as JOBLIT_TOKEN before starting the Runner.",
+        "createFailedTitle": "Failed to create token",
+        "revokedTitle": "Token revoked",
+        "revokedDescription": "\"{name}\" has been permanently revoked.",
+        "revokeFailedTitle": "Failed to revoke token",
+        "copied": "Copied to clipboard",
+        "tryAgain": "Please try again."
+      }
+    }
   },
   "marketing": {
     "badge": "Powered by 95-score AI Skill Pack",

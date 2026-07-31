@@ -222,7 +222,7 @@ describe("AppNav", () => {
     expect(scope.getByRole("link", { name: /resume/i })).toBeInTheDocument();
     expect(scope.getByRole("link", { name: /discover/i })).toBeInTheDocument();
     expect(
-      scope.getByRole("link", { name: /extension/i }),
+      scope.getByRole("link", { name: /agent/i }),
     ).toBeInTheDocument();
     expect(scope.queryByRole("link", { name: /admin/i })).not.toBeInTheDocument();
   });
@@ -237,7 +237,7 @@ describe("AppNav", () => {
     expect(scope.getByRole("link", { name: /resume/i })).toBeInTheDocument();
     expect(scope.getByRole("link", { name: /discover/i })).toBeInTheDocument();
     expect(
-      scope.queryByRole("link", { name: /extension/i }),
+      scope.queryByRole("link", { name: /agent/i }),
     ).not.toBeInTheDocument();
   });
 

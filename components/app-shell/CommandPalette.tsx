@@ -10,7 +10,7 @@ import {
   FileText,
   Laptop,
   Moon,
-  Puzzle,
+  Bot,
   Search,
   Sun,
   Telescope,
@@ -76,7 +76,7 @@ export function CommandPalette() {
             { key: "fetch", href: "/fetch", icon: Telescope },
             { key: "resume", href: "/resume", icon: FileText },
             { key: "discover", href: "/discover", icon: Compass },
-            { key: "extension", href: "/extension", icon: Puzzle },
+            { key: "agent", href: "/agent", icon: Bot },
           ] as const),
     [isCN],
   );

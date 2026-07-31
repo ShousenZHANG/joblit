@@ -54,7 +54,7 @@ export function AppNav() {
   // the shrink never fired. Removed as dead code (static resting style kept).
 
   // CN market support is temporarily limited to Resume + Discover. Jobs/Fetch
-  // (and the autofill Extension) are hidden there until CN-market search ships.
+  // (and the Agent workspace) are hidden there until CN-market search ships.
   const isCN = useMarket() === "CN";
   const links: NavLink[] = isCN
     ? [
@@ -66,7 +66,7 @@ export function AppNav() {
         { href: "/fetch", label: t("fetch") },
         { href: "/resume", label: t("resume") },
         { href: "/discover", label: t("discover") },
-        { href: "/extension", label: t("extension") },
+        { href: "/agent", label: t("agent") },
       ];
   const email = data?.user?.email ?? "";
 
