@@ -172,7 +172,6 @@ async function deleteUnreferencedEvidence(
       userId,
       OR: identities,
       claims: { none: {} },
-      starStories: { none: {} },
     },
   });
 }

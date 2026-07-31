@@ -279,7 +279,6 @@ describe("jobDeleteService", () => {
             { id: { in: ["star-evidence"] } },
           ],
           claims: { none: {} },
-          starStories: { none: {} },
         },
       });
     });
@@ -392,7 +391,6 @@ describe("jobDeleteService", () => {
             { id: { in: ["shared-evidence"] } },
           ],
           claims: { none: {} },
-          starStories: { none: {} },
         },
       });
     });

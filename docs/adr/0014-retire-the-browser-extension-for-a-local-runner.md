@@ -72,8 +72,14 @@ gateway directly over loopback.
   a Runner started later still picks it up.
 - `ExtensionToken` keeps its name in the schema while serving agent tokens.
   Renaming it is a migration this ADR does not spend.
-- `FieldMappingRule` and `LocalAiSetting` lose their writers and keep their
-  tables, following ADR-0006.
+- `FieldMappingRule`, `LocalAiSetting` and `FormSubmission` were dropped
+  outright in `20260731120000_drop_extension_and_career_tables`, together with
+  the Career-workspace tables ADR-0006 had deferred. The decision was taken
+  against measured row counts: `InterviewPlan`, `StarStory` and `Offer` were
+  empty, so the user content that deferral protected had never been written.
+  `FormSubmission` held 500 rows of ATS form values — personal data with no
+  reader, which is a liability rather than an asset. A future submission ledger
+  should be modelled for the agent path, not revived from the autofill shape.
 - Seek-sourced jobs already in users' databases keep working: `seek.com.au`
   stays in the posting-risk neutral-host list and the `seek` fetch-lane label
   survives for stored receipts.

@@ -29,33 +29,26 @@ and is reached through the singleton in `lib/server/prisma.ts:13` over
 | `ApplicationEvent` (`:692`) | Immutable status ledger — the source of truth per ADR-0007 | Live, append-only |
 | `EvidenceSnapshot` (`:734`) | Content-addressed evidence backing AI claims | **Written, never read** |
 | `ClaimEvidence` (`:761`) | Claim → evidence edge | **Written, never read** |
-| `InterviewPlan` (`:784`) | Retired Career workspace | **ADR-0006 retained, no writers** |
-| `StarStory` (`:806`) | Retired Career workspace | **ADR-0006 retained, no writers** |
-| `Offer` (`:830`) | Retired Career workspace | **ADR-0006 retained, no writers** |
-| `FollowUpReminder` (`:860`) | Retired Career workspace | **ADR-0006 retained, no writers** |
 | `PromptRuleTemplate` (`:884`) | Per-user **Skill Pack** rule set | Live |
-| `ExtensionToken` (`:904`) | Agent bearer token, SHA-256 hash only. Named for the retired extension; still the Runner's credential (ADR-0014) | Live |
-| `FormSubmission` (`:920`) | ATS form submission ledger. No writers since the extension was removed; retained for the agent submission path (ADR-0014) | Retained |
-| `FieldMappingRule` (`:943`) | Learned autofill selector → profile path | Live |
+| `ExtensionToken` | Agent bearer token, SHA-256 hash only. Named for the retired extension; still the Runner's credential (ADR-0014) | Live |
 | `OnboardingState` (`:968`) | Onboarding checklist and stage | Live |
 | `DiscoverVideoCache` (`:988`) | Global Discover cache + daily-refresh lease (ADR-0005) | Live |
-| `LocalAiSetting` (`:1000`) | Non-secret local-AI endpoint per user (ADR-0004) | Live |
 | `SourceHealth` (`:1010`) | Global per-source status/counters/timestamps | Live — upserted by `sourceHealthStore.ts`, read through `readSourceHealth.ts` |
 | `AtsBoardSource` (`:1025`) | Global ATS board registry | Live — **no insert path in TypeScript**; DB rows require external provisioning, while `JOBLIT_ATS_BOARDS_JSON` remains runtime-only |
 
-The four retained-without-writers models carry a block comment at
-`schema.prisma:589-591`; the decision is ADR-0006 lines 21-23. `EvidenceSnapshot`
-and `ClaimEvidence` are **not** in that group — they still receive writes from
-`persistReviewLedger.ts:72` and `:118`.
+The Career-workspace tables ADR-0006 kept without writers, and the extension's
+own three, were dropped in `20260731120000_drop_extension_and_career_tables`
+against measured row counts. `EvidenceSnapshot` and `ClaimEvidence` are written
+but never read — they are **not** in that group and still receive writes from
+`persistReviewLedger.ts`.
 
 ---
 
 ## Ownership and tenancy
 
-25 models carry `userId String @db.Uuid` with a `Cascade` FK to `User`. Three use
-it as the key rather than a column: `ActiveResumeProfile` (`@@id([userId, locale])`
-at `:448`),
-`OnboardingState` (`userId @unique`), `LocalAiSetting` (`userId @id`).
+Most models carry `userId String @db.Uuid` with a `Cascade` FK to `User`. Two
+use it as the key rather than a column: `ActiveResumeProfile`
+(`@@id([userId, locale])`) and `OnboardingState` (`userId @unique`).
 
 `ApplicationBatchTask` and `ClaimEvidence` carry both a parent id and a
 denormalised `userId`, so a tenant filter never needs a join.
@@ -164,8 +157,6 @@ Selected relations. `Cascade` from `User` is universal and omitted here.
 | `EvidenceSnapshot.job` | `Job?` | **SetNull** | `549` |
 | `ClaimEvidence.application` | `Application` | Cascade | `574` |
 | `ClaimEvidence.evidenceSnapshot` | `EvidenceSnapshot` | **Restrict** | `576` |
-| `StarStory.sourceEvidence` | `EvidenceSnapshot?` | SetNull | `629` |
-| `FormSubmission.job` | `Job?` | SetNull | `734` |
 
 `ClaimEvidence.evidenceSnapshot` is the only `Restrict` in the schema.
 `ApplicationArtifact` is intentionally absent from the relation table: its
@@ -222,17 +213,14 @@ order**, deduplicating artifact URLs, and using one
 
 ### Rows that survive with every non-user FK null
 
-Two are reachable from an ordinary delete:
+One is reachable from an ordinary delete: **`ApplicationEvent`**, which is
+designed for it. `companySnapshot` and `titleSnapshot` exist so the row stays
+meaningful after the Job is gone, and `applicationCooldownService.ts` reads
+them.
 
-1. **`ApplicationEvent`** — designed for it. `companySnapshot` and `titleSnapshot`
-   (`:510-513`) exist so the row stays meaningful after the Job is gone, and
-   `applicationCooldownService.ts:103` reads them.
-2. **`FormSubmission`** — `pageUrl` / `pageDomain` / `formSignature` remain as
-   the only identity.
-
-`EvidenceSnapshot` no longer joins this set by default: after
-Application-owned claim edges cascade, the delete service removes snapshots
-with neither a surviving claim nor a retained STAR-story provenance reference.
+`EvidenceSnapshot` no longer joins this set by default: after Application-owned
+claim edges cascade, the delete service removes snapshots with no surviving
+claim.
 `ApplicationArtifact` can retain all three scalar snapshot identifiers, by
 design, until external retirement and privacy cleanup settle.
 
@@ -277,9 +265,8 @@ duplicated as inline string unions or literals — including `ApplicationStatus`
 stage/reference/retirement vocabulary used by the artifact lifecycle module
 and reconciler.
 
-Enums with no TypeScript reference at all: `InterviewPlanStatus`, `OfferStatus`,
-`FollowUpReminderType` (ADR-0006 retained), and `ApplicationBatchScope` (one
-member, `NEW`, used only as a schema default).
+The only enum with no TypeScript reference is `ApplicationBatchScope` (one
+member, `NEW`, used solely as a schema default).
 
 `EvidenceKind` declares seven members; only `RESUME_PROFILE` and
 `JOB_DESCRIPTION` are ever written.
@@ -319,7 +306,6 @@ rest.
 | `EvidenceSnapshot.payload` | `{path, excerpt}` | **Nothing** — and nothing reads it back |
 | `PromptRuleTemplate.{cvRules,coverRules,hardConstraints}` | Skill Pack rule lists | **Nothing** — typed `unknown`, coerced by `normalizeRuleList` |
 | `OnboardingState.checklist` | Five boolean flags | The **patch** is validated, not the stored column |
-| `FormSubmission.{fieldValues,fieldMappings}` | Captured ATS form data. No writer today; a future agent path must re-establish entry-count and byte-size caps before writing |
 | `DiscoverVideoCache.payload` | Namespaced cache blob or the daily-claim lease | **Nothing** — cast on write and read |
 
 ---
@@ -341,8 +327,7 @@ rest.
 | `TailoringRun.applicationBatchTaskId @unique` (`:388`) | A batch task has at most one Tailoring Run. |
 | `TailoringRunReceipt @@unique([runId, target])` (`:446`) | At most one immutable acceptance receipt per target; exact retries replay it. |
 | `ApplicationArtifact.storageIdentity @unique` / `provisionalIdentity @unique` | One canonical physical identity per recorded object and one upload reservation per immutable pathname. Pathname and URL presentation aliases are deliberately non-unique. SQL checks also enforce non-negative retries, paired claims/leases, and state-compatible nullable fields. |
-| `FieldMappingRule @@unique([userId, fieldSelector, atsProvider, pageDomain])` (`:963`) | One learned mapping per selector per ATS and domain. `atsProvider` and `pageDomain` are `NOT NULL DEFAULT ''` **because** nullable columns made the upsert never match — see `20260405000000_fix_field_mapping_nullable_unique`. |
-| `ExtensionToken.tokenHash @unique` (`:909`) | Lookup by hash only; the raw token is never stored. |
+| `ExtensionToken.tokenHash @unique` | Lookup by hash only; the raw token is never stored. |
 | `Job.companyRoleKey` — **index, deliberately not unique** (`:317`) | A soft "same opening" hint. Distinct openings can collide, so it powers a possible-duplicate badge and never an automatic removal. |
 | `Job.descriptionSimHash` — **index only** (`:318`) | Advisory 64-bit SimHash near-duplicate detection. It is never used as a unique key. |
 | Trigram GIN on `Job.title/company/location` | Created by raw SQL in `20260330000000_search_optimization`, not by Prisma. Exists in the database but not in the model — flagged at `:307`. Powers the ILIKE relevance path. |

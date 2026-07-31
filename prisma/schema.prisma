@@ -54,27 +54,6 @@ enum EvidenceKind {
   OFFER
 }
 
-enum InterviewPlanStatus {
-  DRAFT
-  READY
-  COMPLETED
-  ARCHIVED
-}
-
-enum OfferStatus {
-  ACTIVE
-  ACCEPTED
-  DECLINED
-  WITHDRAWN
-}
-
-enum FollowUpReminderType {
-  APPLICATION_FOLLOW_UP
-  INTERVIEW_THANK_YOU
-  OFFER_DEADLINE
-  CUSTOM
-}
-
 enum JobLivenessStatus {
   ACTIVE
   EXPIRED
@@ -189,20 +168,13 @@ model User {
   applications          Application[]
   promptRuleTemplates   PromptRuleTemplate[]
   onboardingState       OnboardingState?
-  localAiSetting        LocalAiSetting?
   applicationBatches    ApplicationBatch[]
   applicationBatchTasks ApplicationBatchTask[]
   tailoringRuns         TailoringRun[]
   extensionTokens       ExtensionToken[]
-  formSubmissions       FormSubmission[]
-  fieldMappingRules     FieldMappingRule[]
   applicationEvents     ApplicationEvent[]
   evidenceSnapshots     EvidenceSnapshot[]
   claimEvidence         ClaimEvidence[]
-  interviewPlans        InterviewPlan[]
-  starStories           StarStory[]
-  offers                Offer[]
-  followUpReminders     FollowUpReminder[]
 }
 
 model Account {
@@ -298,12 +270,8 @@ model Job {
   applications          Application[]
   applicationBatchTasks ApplicationBatchTask[]
   tailoringRuns         TailoringRun[]
-  formSubmissions       FormSubmission[]
   applicationEvents     ApplicationEvent[]
   evidenceSnapshots     EvidenceSnapshot[]
-  interviewPlans        InterviewPlan[]
-  offers                Offer[]
-  followUpReminders     FollowUpReminder[]
   // GIN trigram indexes (title, company, location) created via raw SQL migration
 
   @@unique([userId, jobUrl])
@@ -627,7 +595,6 @@ model Application {
   applicationEvents ApplicationEvent[]
   evidenceSnapshots EvidenceSnapshot[]
   claimEvidence     ClaimEvidence[]
-  followUpReminders FollowUpReminder[]
   tailoringRuns     TailoringRun[]
   tailoringReceipts TailoringRunReceipt[]
 
@@ -756,8 +723,7 @@ model EvidenceSnapshot {
   sourceLabel String?
   createdAt   DateTime     @default(now())
 
-  claims      ClaimEvidence[]
-  starStories StarStory[]     @relation("StarStoryEvidence")
+  claims ClaimEvidence[]
 
   @@unique([userId, contentHash, kind])
   @@index([userId, createdAt])
@@ -791,106 +757,6 @@ model ClaimEvidence {
 // Legacy Career-workspace records are retained to avoid destructive data loss.
 // No active UI or public API writes these tables. Remove them only through an
 // explicit, separately approved retention migration.
-model InterviewPlan {
-  id     String @id @default(uuid()) @db.Uuid
-  userId String @db.Uuid
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  jobId  String @db.Uuid
-  job    Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
-
-  round        Int                 @default(1)
-  title        String
-  status       InterviewPlanStatus @default(DRAFT)
-  scheduledAt  DateTime?
-  questions    Json
-  starMappings Json
-  notes        String?
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
-
-  @@unique([userId, jobId, round])
-  @@index([userId, status, scheduledAt])
-  @@index([userId, updatedAt])
-}
-
-model StarStory {
-  id     String @id @default(uuid()) @db.Uuid
-  userId String @db.Uuid
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  title            String
-  situation        String
-  task             String
-  action           String
-  result           String
-  reflection       String?
-  skills           Json
-  tags             Json
-  storyHash        String
-  sourceEvidenceId String?
-  sourceEvidence   EvidenceSnapshot? @relation("StarStoryEvidence", fields: [sourceEvidenceId], references: [id], onDelete: SetNull)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-
-  @@unique([userId, storyHash])
-  @@index([userId, updatedAt])
-  @@index([sourceEvidenceId])
-}
-
-model Offer {
-  id     String  @id @default(uuid()) @db.Uuid
-  userId String  @db.Uuid
-  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  jobId  String? @db.Uuid
-  job    Job?    @relation(fields: [jobId], references: [id], onDelete: SetNull)
-
-  company            String
-  role               String
-  currency           String      @default("AUD")
-  /// Annual compensation components in whole currency units (not cents).
-  baseSalaryAnnual   Int?
-  bonusAnnual        Int?
-  equityAnnual       Int?
-  otherAnnual        Int?
-  targetSalaryAnnual Int?
-  benefits           Json
-  location           String?
-  status             OfferStatus @default(ACTIVE)
-  receivedAt         DateTime    @default(now())
-  deadlineAt         DateTime?
-  notes              String?
-  createdAt          DateTime    @default(now())
-  updatedAt          DateTime    @updatedAt
-
-  @@index([userId, status, receivedAt])
-  @@index([userId, deadlineAt])
-  @@index([jobId])
-}
-
-model FollowUpReminder {
-  id            String       @id @default(uuid()) @db.Uuid
-  userId        String       @db.Uuid
-  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  jobId         String?      @db.Uuid
-  job           Job?         @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  applicationId String?      @db.Uuid
-  application   Application? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-
-  type        FollowUpReminderType
-  title       String
-  dueAt       DateTime
-  note        String?
-  completedAt DateTime?
-  dismissedAt DateTime?
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
-
-  @@index([userId, dueAt])
-  @@index([userId, completedAt, dismissedAt, dueAt])
-  @@index([jobId])
-  @@index([applicationId])
-}
-
 model PromptRuleTemplate {
   id     String @id @default(uuid()) @db.Uuid
   userId String @db.Uuid
@@ -917,7 +783,7 @@ model ExtensionToken {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   tokenHash  String    @unique // SHA-256 hash of the actual token
-  name       String    @default("Chrome Extension")
+  name       String    @default("Joblit Runner")
   lastUsedAt DateTime?
   expiresAt  DateTime
   revokedAt  DateTime?
@@ -925,54 +791,6 @@ model ExtensionToken {
   createdAt DateTime @default(now())
 
   @@index([userId, revokedAt])
-}
-
-model FormSubmission {
-  id     String @id @default(uuid()) @db.Uuid
-  userId String @db.Uuid
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  jobId String? @db.Uuid
-  job   Job?    @relation(fields: [jobId], references: [id], onDelete: SetNull)
-
-  pageUrl       String
-  pageDomain    String
-  atsProvider   String?
-  formSignature String
-  fieldValues   Json
-  fieldMappings Json
-  submittedAt   DateTime @default(now())
-
-  createdAt DateTime @default(now())
-
-  @@index([userId, pageDomain, formSignature])
-  @@index([userId, submittedAt])
-  @@index([userId, atsProvider])
-}
-
-model FieldMappingRule {
-  id     String @id @default(uuid()) @db.Uuid
-  userId String @db.Uuid
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  fieldSelector String
-  fieldLabel    String?
-  atsProvider   String  @default("")
-  pageDomain    String  @default("")
-
-  profilePath String
-  staticValue String?
-
-  source     String @default("user")
-  confidence Float  @default(1.0)
-  useCount   Int    @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([userId, fieldSelector, atsProvider, pageDomain])
-  @@index([userId, atsProvider, fieldLabel])
-  @@index([userId, pageDomain])
 }
 
 model OnboardingState {
@@ -1007,15 +825,6 @@ model DiscoverVideoCache {
 // Non-secret local AI connection defaults, synced from the extension so a
 // reinstalled extension can prefill endpoint + profile. The Hermes API key is
 // NEVER stored here or anywhere server-side.
-model LocalAiSetting {
-  userId         String   @id @db.Uuid
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  hermesEndpoint String
-  hermesProfile  String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-}
-
 /// Provider-level health is global operational data, never user-specific.
 model SourceHealth {
   source              String             @id

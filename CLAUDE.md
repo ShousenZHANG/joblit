@@ -74,7 +74,7 @@ reintroduced.
 - `fetchRolePacks.config.json` — Role category definitions
 - `canonicalizeJobUrl`, `parseCnSalary`, `fetchExclusionCriteria` — Job normalization helpers
 
-### Prisma Models (33)
+### Prisma Models (26)
 
 Core workflow: `Job`, `FetchRun`, `ApplicationBatch`, `ApplicationBatchTask`, `Application`, `ResumeProfile`, `ActiveResumeProfile`, `PromptRuleTemplate`  
 Provenance: `ApplicationEvent` (immutable ledger, carries company/title snapshots so it outlives the Job), `EvidenceSnapshot`, `ClaimEvidence`  
@@ -82,9 +82,14 @@ Tailoring acceptance (ADR-0009): `TailoringRun`, `TailoringRunReceipt`
 Artifact lifecycle (ADR-0010): `ApplicationArtifact`, `ApplicationArtifactInventoryCheckpoint`  
 Auth: `User`, `Account`, `Session`, `ExtensionToken`  
 Fetch execution and sources: `FetchRunCommitReceipt`, `SourceHealth`, `AtsBoardSource`
-Supporting: `DeletedJobUrl` (dedup tombstone), `DailyCheckin`, `FormSubmission` (the ledger a future agent submission path writes to), `OnboardingState`, `DiscoverVideoCache`  
-Retained without writers after the extension was removed (ADR-0014): `FieldMappingRule`, `LocalAiSetting`  
-Retained without writers pending a retention migration (ADR-0006): `InterviewPlan`, `StarStory`, `Offer`, `FollowUpReminder`
+Supporting: `DeletedJobUrl` (dedup tombstone), `DailyCheckin`, `OnboardingState`, `DiscoverVideoCache`
+
+The writer-less tables ADR-0006 deferred (`InterviewPlan`, `StarStory`, `Offer`,
+`FollowUpReminder`) and the extension's own (`FieldMappingRule`,
+`LocalAiSetting`, `FormSubmission`) were dropped in
+`20260731120000_drop_extension_and_career_tables`. Do not reintroduce them; a
+future submission ledger should be modelled for the agent path, not revived
+from the autofill shape.
 
 ### Internationalization
 
