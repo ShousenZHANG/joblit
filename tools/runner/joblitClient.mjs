@@ -7,6 +7,8 @@
  * failure reads as what the server said, not as a status code.
  */
 
+import { createRequestDeadline } from "./requestDeadline.mjs";
+
 export class JoblitClientError extends Error {
   constructor(code, message, status, { cause } = {}) {
     super(message);
@@ -75,10 +77,10 @@ export function createJoblitClient({
 
   async function execute(path, init = {}, parseJson = false) {
     const upstreamSignal = init.signal;
-    const timeoutSignal = AbortSignal.timeout(requestTimeoutMs);
+    const deadline = createRequestDeadline(requestTimeoutMs);
     const signal = upstreamSignal
-      ? AbortSignal.any([upstreamSignal, timeoutSignal])
-      : timeoutSignal;
+      ? AbortSignal.any([upstreamSignal, deadline.signal])
+      : deadline.signal;
     try {
       const response = await fetchImpl(`${base}${path}`, {
         ...init,
@@ -103,7 +105,7 @@ export function createJoblitClient({
           { cause: error },
         );
       }
-      if (timeoutSignal.aborted) {
+      if (deadline.expired()) {
         throw new JoblitClientError(
           "JOBLIT_REQUEST_TIMEOUT",
           `Joblit request timed out after ${requestTimeoutMs}ms`,
@@ -118,6 +120,8 @@ export function createJoblitClient({
         undefined,
         { cause: error },
       );
+    } finally {
+      deadline.dispose();
     }
   }
 

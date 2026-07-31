@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 
+import { createRequestDeadline } from "./requestDeadline.mjs";
+
 /**
  * Minimal Hermes gateway client for the Runner.
  *
@@ -248,10 +250,10 @@ export function createHermesClient({
 
   async function request(path, init = {}, timeoutOverrideMs = requestTimeoutMs) {
     const upstreamSignal = init.signal;
-    const timeoutSignal = AbortSignal.timeout(timeoutOverrideMs);
+    const deadline = createRequestDeadline(timeoutOverrideMs);
     const signal = upstreamSignal
-      ? AbortSignal.any([upstreamSignal, timeoutSignal])
-      : timeoutSignal;
+      ? AbortSignal.any([upstreamSignal, deadline.signal])
+      : deadline.signal;
     try {
       const response = await fetchImpl(`${base}${path}`, {
         ...init,
@@ -275,7 +277,7 @@ export function createHermesClient({
       return body;
     } catch (error) {
       if (upstreamSignal?.aborted) throw error;
-      if (timeoutSignal.aborted) {
+      if (deadline.expired()) {
         throw new HermesClientError(
           "HERMES_REQUEST_TIMEOUT",
           `Hermes request timed out after ${timeoutOverrideMs}ms`,
@@ -283,6 +285,8 @@ export function createHermesClient({
         );
       }
       throw error;
+    } finally {
+      deadline.dispose();
     }
   }
 
