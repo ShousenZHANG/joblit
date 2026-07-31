@@ -38,6 +38,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:runner": "node --test tools/runner/config.test.mjs tools/runner/clients.test.mjs tools/runner/runner.test.mjs",
     "deadcode": "knip --include files,dependencies,exports,types,duplicates",
     "deps:policy": "node tools/ci/check-dependency-policy.mjs",
     "deps:audit": "npm audit --omit=dev --audit-level=high",
