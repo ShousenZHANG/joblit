@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { fetchJson } from "@/lib/api/fetchJson";
+import { ApiError, fetchJson } from "@/lib/api/fetchJson";
 import { jobDetailResponseSchema } from "@/lib/shared/schemas/jobsList";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
@@ -429,6 +429,41 @@ export function JobsClient({
   function exitBatchMode() {
     setBatchSelectMode(false);
     setBatchSelectedIds(new Set());
+  }
+
+  const [batchGeneratePending, setBatchGeneratePending] = useState(false);
+  async function confirmBatchGenerate() {
+    const ids = [...batchSelectedIds];
+    if (ids.length === 0 || batchGeneratePending) return;
+    setBatchGeneratePending(true);
+    try {
+      await fetchJson("/api/application-batches", {
+        method: "POST",
+        body: JSON.stringify({ scope: "NEW", selectedJobIds: ids }),
+      });
+      toast({
+        title: t("batchQueuedTitle"),
+        description: t("batchQueuedDesc", { count: ids.length }),
+        duration: 6000,
+        className:
+          "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-900 animate-in fade-in zoom-in-95",
+      });
+      exitBatchMode();
+    } catch (err) {
+      // The one expected refusal: the protocol allows a single active batch.
+      // Selection survives so the retry is one click, not a re-pick.
+      const alreadyRunning =
+        err instanceof ApiError && err.code === "ACTIVE_BATCH_EXISTS";
+      toast({
+        title: alreadyRunning
+          ? t("batchAlreadyRunning")
+          : getErrorMessage(err, t("errorLoadJobs")),
+        variant: "destructive",
+        duration: 5000,
+      });
+    } finally {
+      setBatchGeneratePending(false);
+    }
   }
 
   function confirmBatchDelete() {
@@ -942,6 +977,20 @@ export function JobsClient({
                 </button>
               </div>
               <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={batchSelectedIds.size === 0 || batchGeneratePending || batchDeleteMutation.isPending}
+                  onClick={confirmBatchGenerate}
+                  aria-busy={batchGeneratePending}
+                  className="flex items-center gap-1 rounded-lg bg-brand-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-all duration-150 hover:bg-brand-emerald-700 active:translate-y-px disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
+                >
+                  {batchGeneratePending ? (
+                    <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin" aria-hidden />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                  )}
+                  {batchGeneratePending ? t("generatingSelected") : t("generateSelected")}
+                </button>
                 <button
                   type="button"
                   disabled={batchSelectedIds.size === 0 || batchDeleteMutation.isPending}

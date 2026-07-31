@@ -373,7 +373,12 @@
     "unknownTime": "unknown",
     "deselectJob": "Deselect {title}",
     "selectJob": "Select {title}",
-    "retry": "Retry"
+    "retry": "Retry",
+    "generateSelected": "Generate CV & CL",
+    "generatingSelected": "Queuing…",
+    "batchQueuedTitle": "Generation batch queued",
+    "batchQueuedDesc": "{count} jobs queued. Your local Runner will pick them up.",
+    "batchAlreadyRunning": "A generation batch is already running. Wait for it to finish, then try again."
   },
   "fetch": {
     "searchRoles": "Search roles",

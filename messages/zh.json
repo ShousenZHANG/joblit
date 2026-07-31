@@ -373,7 +373,12 @@
     "unknownTime": "未知",
     "deselectJob": "取消选择 {title}",
     "selectJob": "选择 {title}",
-    "retry": "重试"
+    "retry": "重试",
+    "generateSelected": "生成简历和求职信",
+    "generatingSelected": "排队中…",
+    "batchQueuedTitle": "生成批次已排队",
+    "batchQueuedDesc": "已排队 {count} 个岗位,本地 Runner 会自动处理。",
+    "batchAlreadyRunning": "已有一个生成批次在运行,等它完成后再试。"
   },
   "fetch": {
     "searchRoles": "搜索职位",

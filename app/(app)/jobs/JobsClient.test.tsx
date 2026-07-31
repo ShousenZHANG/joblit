@@ -2521,6 +2521,91 @@ describe("JobsClient", () => {
       expect(within(screen.getByTestId("jobs-details-panel")).getByRole("heading", { name: "Alpha Engineer" })).toBeInTheDocument();
     });
 
+    it("creates a generation batch for the selected jobs", async () => {
+      // Selection mode used to end in exactly one verb: delete. The Runner
+      // pipeline starts here instead — pick jobs, one click, and the batch
+      // protocol takes over.
+      const user = userEvent.setup();
+      const { mockFetch } = setupMultiJobFetch();
+      const base = mockFetch.getMockImplementation()!;
+      mockFetch.mockImplementation(async (input: RequestInfo, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url === "/api/application-batches" && init?.method === "POST") {
+          return new Response(
+            JSON.stringify({ id: "batch-1", taskCount: 2 }),
+            { status: 201, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return base(input, init);
+      });
+
+      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
+      await waitForJobsRendered();
+
+      await user.click(screen.getByRole("button", { name: /enter selection mode/i }));
+      await user.click(screen.getByRole("button", { name: /select alpha engineer/i }));
+      await user.click(screen.getByRole("button", { name: /select beta developer/i }));
+      await user.click(
+        screen.getByRole("button", { name: messages.jobs.generateSelected }),
+      );
+
+      await waitFor(() => {
+        const createCall = mockFetch.mock.calls.find(
+          ([url, init]) =>
+            String(url) === "/api/application-batches" && init?.method === "POST",
+        );
+        expect(createCall).toBeTruthy();
+        const body = JSON.parse(String(createCall?.[1]?.body ?? "{}"));
+        expect(new Set(body.selectedJobIds)).toEqual(
+          new Set([jobA.id, jobB.id]),
+        );
+      });
+
+      // Confirmation names the batch size and selection mode closes.
+      await screen.findByText(
+        messages.jobs.batchQueuedTitle,
+      );
+      expect(
+        screen.queryByRole("button", { name: /select alpha engineer/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("explains an already-running batch instead of failing silently", async () => {
+      const user = userEvent.setup();
+      const { mockFetch } = setupMultiJobFetch();
+      const base = mockFetch.getMockImplementation()!;
+      mockFetch.mockImplementation(async (input: RequestInfo, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url === "/api/application-batches" && init?.method === "POST") {
+          return new Response(
+            JSON.stringify({
+              error: {
+                code: "ACTIVE_BATCH_EXISTS",
+                message: "An active batch already exists",
+              },
+            }),
+            { status: 409, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return base(input, init);
+      });
+
+      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
+      await waitForJobsRendered();
+
+      await user.click(screen.getByRole("button", { name: /enter selection mode/i }));
+      await user.click(screen.getByRole("button", { name: /select alpha engineer/i }));
+      await user.click(
+        screen.getByRole("button", { name: messages.jobs.generateSelected }),
+      );
+
+      await screen.findByText(messages.jobs.batchAlreadyRunning);
+      // Selection survives so the user can retry once the batch finishes.
+      expect(
+        screen.getByRole("button", { name: /select alpha engineer/i }),
+      ).toBeInTheDocument();
+    });
+
     it("enters batch mode and shows checkboxes when selection icon is clicked", async () => {
       const user = userEvent.setup();
       setupMultiJobFetch();
