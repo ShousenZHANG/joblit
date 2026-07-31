@@ -13,6 +13,7 @@
 import { parseArgs } from "node:util";
 
 import { loadConfig } from "./config.mjs";
+import { processFitQueue } from "./fitQueue.mjs";
 import { createHermesClient } from "./hermesClient.mjs";
 import { createJoblitClient } from "./joblitClient.mjs";
 import { processActiveBatch } from "./runner.mjs";
@@ -41,6 +42,13 @@ async function main() {
   });
 
   for (;;) {
+    // Fit scanning first: triage is cheap and narrows what is worth tailoring.
+    const fit = await processFitQueue({ joblit, hermes });
+    if (fit.scored > 0 || fit.failed > 0) {
+      console.log(`Fit scan: ${fit.scored} scored, ${fit.failed} failed.`);
+    }
+    if (fit.stopped) console.log(`Fit scan stopped: ${fit.stopped}`);
+
     const summary = await processActiveBatch({ joblit, hermes });
     if (summary.batchId) {
       console.log(

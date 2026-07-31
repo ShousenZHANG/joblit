@@ -77,5 +77,41 @@ export function createJoblitClient({ baseUrl, token, fetchImpl = fetch }) {
       });
       return { ok: true };
     },
+
+    // ── Fit queue ──────────────────────────────────────────────────────────
+    // The database is the queue; these lease, score and settle one batch of
+    // coarse triage at a time.
+
+    async nextFitBatch() {
+      return requestJson("/api/jobs/fit/next-batch", { method: "POST" });
+    },
+
+    async fitPrompt(requestBody) {
+      return requestJson("/api/jobs/fit/prompt", {
+        method: "POST",
+        body: JSON.stringify(requestBody),
+      });
+    },
+
+    async importFitBatch(requestBody) {
+      return requestJson("/api/jobs/fit/batch-import", {
+        method: "POST",
+        body: JSON.stringify(requestBody),
+      });
+    },
+
+    async markFitFailed(requestBody) {
+      return requestJson("/api/jobs/fit/mark-failed", {
+        method: "POST",
+        body: JSON.stringify(requestBody),
+      });
+    },
+
+    async releaseFitBatch(requestBody) {
+      return requestJson("/api/jobs/fit/release-batch", {
+        method: "POST",
+        body: JSON.stringify(requestBody),
+      });
+    },
   };
 }

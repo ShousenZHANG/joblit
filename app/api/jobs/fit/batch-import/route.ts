@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { withSessionRoute } from "@/lib/server/api/routeHandler";
+import { withAgentRoute } from "@/lib/server/api/routeHandler";
 import { z } from "zod";
 
 import { errorJson } from "@/lib/server/api/errorResponse";
@@ -44,7 +44,7 @@ function extractJsonArray(text: string): unknown {
 }
 
 export async function POST(req: Request) {
-  return withSessionRoute(async ({ userId }) => {
+  return withAgentRoute(req, async ({ userId }) => {
     const rateLimit = checkRateLimit(`jobs:fit:batch:${userId}`, BATCH_RATE_LIMIT);
     if (!rateLimit.allowed) {
       return errorJson("RATE_LIMITED", "Too many requests", 429, {

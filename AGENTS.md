@@ -31,8 +31,11 @@ signed in. An expired or revoked token returns `401`.
 
 Routes on this seam: `GET /api/application-batches/active`,
 `POST /api/application-batches/:id/run-once`, `POST /api/applications/prompt`,
-`POST /api/applications/manual-generate`, and the `/api/tailoring-runs/:id`
-route, cancel, and fail endpoints.
+`POST /api/applications/manual-generate`, the `/api/tailoring-runs/:id` route,
+cancel, and fail endpoints, and the fit queue —
+`POST /api/jobs/fit/{next-batch,prompt,batch-import,mark-failed,release-batch}`.
+`/api/jobs/fit/run` and `/api/jobs/fit/prescreen` stay session-only: enqueuing
+work is the user's action, draining it is the agent's.
 
 The first-party implementation of this protocol is the Joblit Runner
 (`tools/runner`, see its [README](tools/runner/README.md)) — a dependency-free

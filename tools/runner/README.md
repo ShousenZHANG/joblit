@@ -10,6 +10,16 @@ agent token. It imports no repository code: the API is the contract.
 
 ## What it does
 
+Each cycle it drains two queues. Fit scanning runs first — coarse triage is
+cheap and narrows what is worth tailoring.
+
+**Fit scan.** `POST /api/jobs/fit/next-batch` leases a batch of unscored jobs,
+`/api/jobs/fit/prompt` returns the triage prompt, Hermes scores it, and
+`/api/jobs/fit/batch-import` records the verdicts. A batch is never left
+leased: it imports, or it is marked failed, or its claim is released.
+
+**Tailoring batch.**
+
 1. `GET /api/application-batches/active` — find the batch you queued from the
    Jobs page.
 2. `POST /api/application-batches/:id/run-once` — claim one task, and report
@@ -60,9 +70,9 @@ Keep polling for new batches every 30 seconds:
 node tools/runner/cli.mjs --watch
 ```
 
-Typical loop: select jobs in the Jobs page, click **Generate CV & CL**, then
-leave the Runner running. Materials land as drafts — nothing is submitted
-anywhere, and nothing is sent without your review.
+Typical loop: start a fit scan or select jobs and click **Generate CV & CL** in
+the Jobs page, then leave the Runner running. Materials land as drafts —
+nothing is submitted anywhere, and nothing is sent without your review.
 
 ## Failure handling
 

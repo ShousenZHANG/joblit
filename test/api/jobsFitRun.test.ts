@@ -117,7 +117,7 @@ describe("fit scoring center apis", () => {
       .mockResolvedValueOnce(7)
       .mockResolvedValueOnce(3);
 
-    const response = await nextBatchPOST();
+    const response = await nextBatchPOST(new Request("http://localhost/api/jobs/fit/next-batch", { method: "POST" }));
     const json = await response.json();
 
     expect(json).toEqual({
@@ -155,7 +155,7 @@ describe("fit scoring center apis", () => {
     jobStore.updateManyAndReturn.mockResolvedValueOnce([{ id: JOB_A }]);
     jobStore.count.mockResolvedValueOnce(2).mockResolvedValueOnce(1);
 
-    const response = await nextBatchPOST();
+    const response = await nextBatchPOST(new Request("http://localhost/api/jobs/fit/next-batch", { method: "POST" }));
 
     expect(await response.json()).toMatchObject({ jobIds: [JOB_A] });
     expect(jobStore.updateManyAndReturn).toHaveBeenCalledWith(
@@ -171,7 +171,7 @@ describe("fit scoring center apis", () => {
       .mockResolvedValueOnce(2)
       .mockResolvedValueOnce(2);
 
-    const response = await nextBatchPOST();
+    const response = await nextBatchPOST(new Request("http://localhost/api/jobs/fit/next-batch", { method: "POST" }));
     const json = await response.json();
 
     expect(response.status).toBe(200);
@@ -207,7 +207,7 @@ describe("fit scoring center apis", () => {
       .mockResolvedValueOnce(0)
       .mockResolvedValueOnce(0);
 
-    const response = await nextBatchPOST();
+    const response = await nextBatchPOST(new Request("http://localhost/api/jobs/fit/next-batch", { method: "POST" }));
 
     expect(await response.json()).toEqual({
       jobIds: [],

@@ -169,6 +169,42 @@ test("joblit: every call carries the bearer token and the error envelope surface
   );
 });
 
+test("joblit: fit queue calls hit the fit endpoints with the bearer token", async () => {
+  const calls = [];
+  const fetchImpl = async (url, init = {}) => {
+    calls.push({ url: String(url), init });
+    return jsonResponse({ ok: true });
+  };
+
+  const joblit = createJoblitClient({
+    baseUrl: "https://joblit.example.com",
+    token: "agent-token",
+    fetchImpl,
+  });
+
+  await joblit.nextFitBatch();
+  await joblit.fitPrompt({ jobIds: ["job-1"] });
+  await joblit.importFitBatch({ jobIds: ["job-1"], claimToken: "c", modelOutput: "[]" });
+  await joblit.markFitFailed({ jobIds: ["job-1"], claimToken: "c" });
+  await joblit.releaseFitBatch({ jobIds: ["job-1"], claimToken: "c" });
+
+  assert.deepEqual(
+    calls.map((c) => c.url.replace("https://joblit.example.com", "")),
+    [
+      "/api/jobs/fit/next-batch",
+      "/api/jobs/fit/prompt",
+      "/api/jobs/fit/batch-import",
+      "/api/jobs/fit/mark-failed",
+      "/api/jobs/fit/release-batch",
+    ],
+  );
+  for (const call of calls) {
+    assert.equal(call.init.method, "POST");
+    assert.equal(call.init.headers.Authorization, "Bearer agent-token");
+  }
+  assert.deepEqual(JSON.parse(calls[1].init.body), { jobIds: ["job-1"] });
+});
+
 test("joblit: import treats any 2xx as settled, including a PDF body", async () => {
   const fetchImpl = async (url, init = {}) => {
     if (String(url).includes("/api/applications/manual-generate")) {
