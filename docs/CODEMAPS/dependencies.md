@@ -1,7 +1,9 @@
 # Dependencies and tooling
 
-Two npm projects: the root Next.js app, and `chrome-extension/` with its own
-lockfile, Vite build and Vitest config. Node `>=20.10`, npm `>=10`.
+One npm project: the root Next.js app. Node `>=20.10`, npm `>=10`.
+
+`tools/runner/` is dependency-free Node with no package of its own — see
+ADR-0014 and `tools/runner/README.md`.
 
 ---
 
@@ -46,25 +48,6 @@ version but not a dead pin.
 
 ---
 
-## Chrome extension — a separate project
-
-`chrome-extension/package.json`: 2 dependencies (`react`, `react-dom`), 10 dev.
-Built with Vite + `@crxjs`. Its tsconfig `include` is `["src/**/*"]` and its only
-path alias is `@ext/* → src/*`.
-
-**Consequence, and the reason it is worth stating here:** the extension cannot
-import `lib/shared/**`. So `lib/shared/localAiBridgeContract.ts` (Zod) and
-`chrome-extension/src/shared/hermesTypes.ts` (hand-rolled) are two independent
-parsers for the same `joblit.hermes.v1` wire format, with the 17 error codes
-written out three times. Nothing links them at compile time.
-
-Fixing that means either publishing the contract as a workspace package, or
-adding a `@shared/*` alias to both the extension's tsconfig and its vite config —
-which would make Zod an extension dependency, where today there is none beyond
-React.
-
----
-
 ## Dependency policy
 
 `npm run deps:policy` → `tools/ci/check-dependency-policy.mjs`.
@@ -72,8 +55,7 @@ React.
 It enforces a **bidirectional** allowlist against `tools/ci/dependency-allowlist.json`:
 every declared dependency must be listed, and every listed dependency must still
 be declared — so a removed package leaves a failing stale entry rather than a
-silently stale allowlist. It also enforces a `banned` set, and runs against the
-`chrome-extension` workspace through the same parameterised `checkManifest`.
+silently stale allowlist. It also enforces a `banned` set.
 
 Adding any package therefore requires an allowlist edit in the same commit.
 
@@ -88,25 +70,23 @@ Adding any package therefore requires an allowlist edit in the same commit.
 3. `npm run deps:policy`
 4. `npm run deadcode` — knip over files, dependencies, exports, types, duplicates
 5. `npm run test` — root Vitest
-6. `tsc --noEmit` (extension)
-7. `npm run test` (extension)
+6. `npm run test:runner` — Runner suites, Node's built-in test runner
+7. `npm run hermes:package:test` — Hermes packaging and signatures
 
 It prints a pass/fail summary and exits non-zero if any step failed.
 `CONTRIBUTING.md` names this one command rather than a checklist, so the
 contributor loop cannot drift from CI.
 
 Deliberately **not** in `verify`, because they need credentials or network:
-`next build`, `npm run deps:audit`, the extension build, and the release
-packaging. CI runs those on top.
+`next build` and `npm run deps:audit`. CI runs those on top.
 
 ### CI
 
-`.github/workflows/ci.yml`, one `verify` job plus a `python-worker` job. It
-installs both projects, then: dependency policy → security policy → release
-tooling tests → `npm audit --omit=dev --audit-level=high` → knip → lint →
-`test:coverage` → Hermes packaging tests → extension audit → extension coverage →
-extension build → release file-tree verification → `next build`. The Python
-fetcher is tested separately with pytest.
+`.github/workflows/ci.yml`, one `verify` job plus a `python-worker` job:
+dependency policy → security policy → deployment-order policy → `npm audit
+--omit=dev --audit-level=high` → knip → lint → `test:coverage` → Hermes
+packaging tests → Runner tests → `next build`. The Python fetcher is tested
+separately with pytest.
 
 CI supplies dummy env values that satisfy module-load guards like
 `prisma.ts`'s `DATABASE_URL` check. No service is contacted.
@@ -126,9 +106,8 @@ not an aspirational gate: statements 57.7, branches 46.5, functions 54.1, lines
 hard 80% today would be a false gate because much of `app/` UI is untested, so
 locking the floor is the honest move and still blocks any drop.
 
-Excluded from the root run: `chrome-extension/**` (own config),
-`tools/hermes/**/*.test.mjs` and three other `tools/` suites (Node's built-in
-test runner).
+Excluded from the root run: the `tools/` suites that use Node's built-in test
+runner — `tools/hermes/**`, `tools/runner/**`, and `tools/deploy/`.
 
 ---
 

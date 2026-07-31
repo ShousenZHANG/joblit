@@ -34,8 +34,8 @@ and is reached through the singleton in `lib/server/prisma.ts:13` over
 | `Offer` (`:830`) | Retired Career workspace | **ADR-0006 retained, no writers** |
 | `FollowUpReminder` (`:860`) | Retired Career workspace | **ADR-0006 retained, no writers** |
 | `PromptRuleTemplate` (`:884`) | Per-user **Skill Pack** rule set | Live |
-| `ExtensionToken` (`:904`) | Extension bearer token, SHA-256 hash only | Live |
-| `FormSubmission` (`:920`) | Extension-captured ATS form submission | Live |
+| `ExtensionToken` (`:904`) | Agent bearer token, SHA-256 hash only. Named for the retired extension; still the Runner's credential (ADR-0014) | Live |
+| `FormSubmission` (`:920`) | ATS form submission ledger. No writers since the extension was removed; retained for the agent submission path (ADR-0014) | Retained |
 | `FieldMappingRule` (`:943`) | Learned autofill selector → profile path | Live |
 | `OnboardingState` (`:968`) | Onboarding checklist and stage | Live |
 | `DiscoverVideoCache` (`:988`) | Global Discover cache + daily-refresh lease (ADR-0005) | Live |
@@ -75,7 +75,7 @@ the schema comment), and `AtsBoardSource`.
 | Applications | Composite `userId_jobId`, or `findFirst({where:{id, userId}})` |
 | Tailoring runs | `TailoringRun.userId`; receipts inherit ownership through their required run |
 | Resume profiles | `where: {userId, locale}`; active pointer via `userId_locale` |
-| Extension | `ExtensionToken.tokenHash` → `userId` at `requireExtensionToken.ts:40` |
+| Agent | `ExtensionToken.tokenHash` → `userId` at `requireExtensionToken.ts` |
 
 Ownership sits in the **write predicate**, not only the read:
 `jobDeleteService.ts:107` and `:188` keep `userId` inside the `deleteMany`.
@@ -319,7 +319,7 @@ rest.
 | `EvidenceSnapshot.payload` | `{path, excerpt}` | **Nothing** — and nothing reads it back |
 | `PromptRuleTemplate.{cvRules,coverRules,hardConstraints}` | Skill Pack rule lists | **Nothing** — typed `unknown`, coerced by `normalizeRuleList` |
 | `OnboardingState.checklist` | Five boolean flags | The **patch** is validated, not the stored column |
-| `FormSubmission.{fieldValues,fieldMappings}` | Captured ATS form data | `lib/server/extensionSubmissionPayload.ts:134`, `:139`, with entry-count and byte-size caps |
+| `FormSubmission.{fieldValues,fieldMappings}` | Captured ATS form data. No writer today; a future agent path must re-establish entry-count and byte-size caps before writing |
 | `DiscoverVideoCache.payload` | Namespaced cache blob or the daily-claim lease | **Nothing** — cast on write and read |
 
 ---
@@ -400,6 +400,6 @@ Most are a single additive `ALTER TABLE`. The ones that changed a domain rule:
 | `20260724090000_fetch_run_commit_protocol` | ADR-0008: adds `PARTIAL`, ordered-batch counters, UUID attempt + lease pair check, non-negative/range checks, and receipt attempt attribution; makes the legacy `userEmail` snapshot nullable without dropping it. |
 | `20260726090000_tailoring_run_acceptance_protocol` | ADR-0009: adds Tailoring Run/Receipt, per-target masks and receipt uniqueness, UUID attempt fences, explicit legacy/v1 batch protocol version, current-attempt completion proof, and additive nullable relations without fabricating historical run evidence. |
 | `20260726120000_application_artifact_lifecycle` | ADR-0010: adds the durable Application PDF/TeX lifecycle ledger, state/claim projection checks, indexes, and conflict-tolerant backfill of the four current Application URL columns. |
-| `20260330000000_search_optimization` | The only extension-installing migration: `pg_trgm` plus three GIN indexes. |
+| `20260330000000_search_optimization` | The only Postgres-extension-installing migration: `pg_trgm` plus three GIN indexes. |
 
 After editing `prisma/schema.prisma`, run `npx prisma generate`.

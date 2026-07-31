@@ -1,6 +1,6 @@
 # ADR-0004: Use the stock Hermes local API runtime for Joblit
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-0014 (the local runtime is now driven by the Runner, not the extension)
 - **Date:** 2026-07-15
 - **Context owner:** Joblit Engineering
 

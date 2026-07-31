@@ -5,20 +5,18 @@
  *
  * CONTRIBUTING.md names this script rather than a checklist of commands, so
  * the contributor loop cannot drift from CI the way a hand-maintained list
- * does. The extension is a separate npm project with its own Vitest config,
- * excluded from the root run — before this script existed, its suites were
- * absent from every documented local command.
+ * does. The Runner suites use Node's built-in test runner and are excluded
+ * from the root Vitest project, so they need their own step here.
  *
  * Deliberately excluded, because they need credentials or network:
- * `next build`, `npm run deps:audit`, and the extension release packaging.
- * CI (.github/workflows/ci.yml) runs those on top of this set.
+ * `next build` and `npm run deps:audit`. CI (.github/workflows/ci.yml) runs
+ * those on top of this set.
  */
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const extensionRoot = join(repoRoot, "chrome-extension");
 
 /** @type {{ name: string, command: string, args: string[], cwd: string }[]} */
 const STEPS = [
@@ -27,8 +25,8 @@ const STEPS = [
   { name: "dependency policy", command: "npm", args: ["run", "deps:policy"], cwd: repoRoot },
   { name: "dead code", command: "npm", args: ["run", "deadcode"], cwd: repoRoot },
   { name: "tests", command: "npm", args: ["run", "test"], cwd: repoRoot },
-  { name: "extension typecheck", command: "npx", args: ["tsc", "--noEmit"], cwd: extensionRoot },
-  { name: "extension tests", command: "npm", args: ["run", "test"], cwd: extensionRoot },
+  { name: "runner tests", command: "npm", args: ["run", "test:runner"], cwd: repoRoot },
+  { name: "hermes packaging tests", command: "npm", args: ["run", "hermes:package:test"], cwd: repoRoot },
 ];
 
 function run(step) {

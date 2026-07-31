@@ -39,14 +39,14 @@ There is **no** root `middleware.ts`. Auth gating is per-page
 | `/resume` | session | The Resume Studio. The page is a 15-line shell; all logic is in `components/resume/**`. |
 | `/resume/rules` | — | `redirect("/resume")`. |
 | `/discover` | session | Both markets. |
-| `/extension` | session | Stacks `LocalAiSetupCard`, `ExtensionTokenManager`, `KnowledgeBase`. |
+| `/agent` | session | Stacks `RunnerSetupCard` and `AgentTokenManager` — Runner setup and agent tokens (ADR-0014). |
 | `/career` | — | **Compatibility redirect to `/jobs`** per ADR-0006. The whole file is 6 lines. No Career client, nav entry, or translations remain. |
 
 There is no `/automation` route.
 
-`AppNav.tsx:59-70` computes the link set from `useMarket()`: CN gets
-`[/resume, /discover]`; AU gets `[/jobs, /fetch, /resume, /discover, /extension]`.
-`CommandPalette.tsx:65-80` duplicates the same conditional list.
+`AppNav.tsx` computes the link set from `useMarket()`: CN gets
+`[/resume, /discover]`; AU gets `[/jobs, /fetch, /resume, /discover, /agent]`.
+`CommandPalette.tsx` duplicates the same conditional list.
 
 `app/global-error.tsx` renders **outside** `NextIntlClientProvider`, so it reads
 the locale cookie directly and uses an inlined EN/ZH table.
@@ -218,18 +218,18 @@ understands three envelope shapes, because the server emits three.
 
 **Importers: 3.** `useTailorDraft.ts`, `TailorClient.tsx`, `TailorReviewDialog.tsx`.
 
-**Hand-rolled `fetch`: 36 call sites across 17 files** — `useJobMutations.ts` (4),
-`useResumeProfiles.ts` (4), `FetchClient.tsx` (4), `ExtensionTokenManager.tsx` (3),
-`KnowledgeBase.tsx` (3), `useExternalGenerate.ts` (3), `useDiscoverData.ts` (2),
+**Hand-rolled `fetch`: about 20 call sites** — `useJobMutations.ts` (4),
+`useResumeProfiles.ts` (4), `FetchClient.tsx` (4), `AgentTokenManager.tsx` (3),
+`useExternalGenerate.ts` (3), `useDiscoverData.ts` (2),
 `PersonalInfoSection.tsx` (2), `FetchStatusContext.tsx` (2), `GuideContext.tsx` (2),
 and one each in `JobsClient.tsx`, `useJobPagination.ts`, `useFitScan.ts`,
 `TailorReviewDialog.tsx`, `SourceHealthPanel.tsx`, `useResumePreview.ts`,
 `ResumeContext.tsx`. Three of those return a blob or a zip and could not use
 `fetchJson` as written.
 
-Non-HTTP transport: `lib/client/localAiBridge.ts` (171) is `postMessage`-based,
-speaking six actions over `LOCAL_AI_BRIDGE_CHANNEL` with a nonce and TTL,
-validating both directions against `lib/shared/localAiBridgeContract`.
+There is no non-HTTP transport left in the client. The `postMessage` bridge to
+the browser extension was removed with the extension (ADR-0014); the local model
+is now reached by the Runner, not the page.
 
 React Query key spaces: `["jobs", queryString]`, `["job-details", jobId]`,
 `["discover-trending", period, clean]`.
@@ -255,8 +255,8 @@ is no middleware and no server-side write.
 `ResumeContext.tsx:56` separately derives the Resume Locale from the same UI
 Locale.
 
-**18 namespaces**, identical key sets in both files. Largest: `jobs` 221,
-`resumeForm` 141, `landing` 92, `extension` 77, `tailor` 68.
+**17 namespaces**, identical key sets in both files. Largest: `jobs` 178,
+`resumeForm` 147, `tailor` 92, `landing` 79, `privacy` 58, `agent` 50.
 
 **The gate.** `test/messagesContract.test.ts` asserts (a) en and zh key
 structures are identical, and (b) every key is referenced from source, with an

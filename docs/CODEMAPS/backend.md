@@ -23,14 +23,12 @@ Vocabulary is `CONTEXT.md`. Route-layer facts live in
 | `fetchRuns/` | FetchRun quota, inline lifecycle coordinator, attempt/lock fencing, and the shared `fetch-run-commit/v1` transaction boundary | `executeInlineFetchRun.ts`, `inlineFetchRunAdapter.ts`, `fetchRunCommit.ts`, `fetchRunQuota.ts`, `fetchRunLifecycleLock.ts` |
 | `net/` | The single SSRF-hardened outbound gateway | `safeFetch.ts:396` `safeOutboundFetch`, `:272`, `:228` |
 | `security/` | Sanitizers for anything persisted or exported | `untrustedOutput.ts:36`/`:58`/`:76` |
-| `seek/` | On-demand full-JD enrichment (extension imports carry only a teaser) | `fetchJobDescription.ts:86` |
 | `archive/` | Pure ZIP32 writer. Sole consumer: the Skill Pack download | `zip.ts:155` |
 | `observability/` | The single error/event reporting seam | `errorReporter.ts:52` `reportError` |
-| `auth/` | Session and extension-token primitives | `requireSession.ts:17`, `requireExtensionToken.ts:34`, `constantTimeEqual.ts:12` |
-| `extensionIngress/` | Extension request identity, operation policy, Session/Bearer auth, atomic distributed abuse budgets with local fallback, cache/error/observability envelope | `withExtensionRoute.ts`, `extensionRoutePolicy.ts`, `abuseBudget.ts`, `abuseBudgetUpstash.ts` |
+| `auth/` | Session and agent-token primitives | `requireSession.ts`, `requireExtensionToken.ts`, `constantTimeEqual.ts` |
 | `runtimeCapabilities/` | Typed interpretation of optional integrations, paired credentials, feature flags, and safe fallback states | `index.ts` `resolveRuntimeCapabilities` / `getRuntimeCapabilities` |
 | `api/` | HTTP envelope, session route wrapper, rate limits, LaTeX error mapping | `routeHandler.ts:17` `withSessionRoute`, `errorResponse.ts:9` `errorJson`, `handleLatexError.ts:5` |
-| loose files | Master Resume Profile CRUD, Prisma singleton, env validation, extension token/profile/submission, prompt-rule templates | `resumeProfile.ts:170`, `prisma.ts:13`, `env.ts:55`, `promptRuleTemplates.ts:117` |
+| loose files | Master Resume Profile CRUD, Prisma singleton, env validation, agent tokens, prompt-rule templates | `resumeProfile.ts`, `prisma.ts`, `env.ts`, `extensionToken.ts`, `promptRuleTemplates.ts` |
 
 `prisma.ts:8` throws at module load if `DATABASE_URL` is unset. The client is a
 `globalThis` singleton using `PrismaNeon`. Do not construct a standard Prisma
@@ -61,17 +59,17 @@ routes are not part of this call chain.
 12. `composeApplicationResumeRenderInput` composes the accepted Resume delta onto the Master Resume Profile
 13. `renderResumeTex` / `renderCoverLetterTex`, then `compileLatexToPdf`
 
-### Path B — manual import / Local AI
+### Path B — manual import / Runner
 
 Entry: `POST /api/applications/manual-generate`.
 
-1. Prompt built separately by `buildApplicationPromptForUser` — `applicationPrompt.ts:191`. Seek JDs enriched at `:245`
+1. Prompt built separately by `buildApplicationPromptForUser` — `applicationPrompt.ts`
 2. Current Resume/Cover prompt responses include a public Tailoring Run
    `{ id, attemptId }` handle. Codex Batch must return it unchanged. During the
-   Phase A/B rolling window, an extension talking to an old service may label a
-   Local AI response as legacy and import without manufacturing a run; Phase C
-   makes the handle mandatory after legacy telemetry reaches zero. A private
-   Hermes `run_*` identifier never crosses into Joblit
+   Phase A/B rolling window a client talking to an old service may label a
+   response as legacy and import without manufacturing a run; Phase C makes the
+   handle mandatory after legacy telemetry reaches zero. A private Hermes
+   `run_*` identifier never crosses into Joblit
 3. External LLM runs the prompt; the route validates the request envelope with
    `ManualGenerateSchema`
 4. The route rebuilds the exact Full or Lean prompt and validates its generation
@@ -275,7 +273,6 @@ module-level in-memory. Documented at their definitions.
 | ATS boards (Greenhouse, Lever, Ashby, Workable) | `sources/adapters/ats.ts:52` via `sources/http.ts:48` | Yes — adapters get no other network access |
 | RemoteOK / Remotive / Jobicy | injected `SourceContext.fetchJson` | Yes |
 | ATS careers-page HTML | `atsRediscoveryService.ts:74` | Yes |
-| Seek GraphQL | `seek/fetchJobDescription.ts:86` | Yes — job id restricted to `\d+` |
 | **Nowcoder (CN)** | `cnFetch/adapters/nowcoder.ts:169` | **No** — bare platform `fetch`. The only edge in `lib/server` that bypasses the gateway |
 
 RSSHub is not implemented. `RSSHUB_URL` / `RSSHUB_JOB_ROUTES` appear only in the
@@ -289,8 +286,8 @@ README; `cnFetch/adapters/nowcoder.ts:8` says so explicitly.
 
 | Class | Location | Reaches HTTP via |
 |---|---|---|
-| `UnauthorizedError` | `auth/requireSession.ts:10` | `withSessionRoute`, or `withExtensionRoute` for Extension token-management operations |
-| `ExtensionTokenError` | `auth/requireExtensionToken.ts:15` | `withExtensionRoute` → canonical 401 before the user abuse budget |
+| `UnauthorizedError` | `auth/requireSession.ts` | `withSessionRoute` and `withAgentRoute` |
+| `ExtensionTokenError` | `auth/requireExtensionToken.ts` | `withAgentRoute` → canonical 401 |
 | `LatexRenderError` | `latex/compilePdf.ts:13` | `handleLatexError` (`api/handleLatexError.ts:5`), which redacts `details`. Re-implemented **without** the redaction at `manual-generate/route.ts:346` |
 | `AtsPdfValidationError` | `applications/atsPdfValidator.ts:14` | 422 with the report |
 | `SafeOutboundError` | `net/safeFetch.ts:29` | never surfaced directly; translated per caller |
@@ -316,11 +313,9 @@ route (which rescues only `AtsPdfValidationError`) and become an untyped Next
 is the required envelope, with helpers `unauthorizedError`, `notFoundError`,
 and `validationError`; the route architecture guard rejects flat wire errors.
 
-Every unexpected error reaching `withSessionRoute` is passed to `reportError`.
-Extension routes use `withExtensionRoute`, which additionally owns request IDs,
-pre-auth IP and post-auth user budgets, canonical 401/429/500 responses,
-private no-store caching, and reporting. Route modules do not duplicate those
-cross-cutting concerns.
+Every unexpected error reaching `withSessionRoute` or `withAgentRoute` is
+passed to `reportError`. Route modules do not duplicate that cross-cutting
+concern.
 
 ---
 

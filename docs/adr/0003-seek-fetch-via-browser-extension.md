@@ -1,6 +1,6 @@
 # ADR-0003: Retire server-side Seek fetching in favour of a browser-extension path
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-0014 (the extension, and Seek with it, was removed)
 - **Date:** 2026-06-14
 - **Context owner:** Joblit Engineering
 

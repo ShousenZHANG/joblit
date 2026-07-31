@@ -69,26 +69,5 @@
       "vitest-axe"
     ]
   },
-  "workspaces": {
-    "chrome-extension": {
-      "allowlist": {
-        "dependencies": [
-          "react",
-          "react-dom"
-        ],
-        "devDependencies": [
-          "@crxjs/vite-plugin",
-          "@types/chrome",
-          "@types/react",
-          "@types/react-dom",
-          "@vitejs/plugin-react",
-          "@vitest/coverage-v8",
-          "jsdom",
-          "typescript",
-          "vite",
-          "vitest"
-        ]
-      }
-    }
-  }
+  "workspaces": {}
 }

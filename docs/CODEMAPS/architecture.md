@@ -105,10 +105,11 @@ failed run after the first commit is terminal `PARTIAL`, not `FAILED`.
 
 ### 2. Triage — which roles are worth applying to
 
-Fit scoring runs through the browser extension's local AI. The server leases
-batches (`lib/server/jobs/fitRunService.ts:262`), the client pumps them through
-the bridge (`app/(app)/jobs/hooks/useFitScan.ts`), and results come back via
-`/api/jobs/fit/batch-import`.
+Fit scoring runs in the local Runner. The server leases batches
+(`lib/server/jobs/fitRunService.ts`), the Runner scores them against the user's
+Hermes gateway (`tools/runner/fitQueue.mjs`), and results come back via
+`/api/jobs/fit/batch-import`. The browser only enqueues the scan and polls
+`/api/jobs/fit/status` (`app/(app)/jobs/hooks/useFitScan.ts`).
 
 **The model emits per-requirement judgements only.** `aggregateFitMatrix`
 computes the score deterministically from them
@@ -182,7 +183,7 @@ pre-generation Application hash before committing.
 For protocol-v1 tasks, the same transaction also writes
 `completionAttemptId = executionAttemptId`; a database constraint rejects an
 old worker's unreceipted success after a new claim.
-Private Hermes `run_*` identifiers stay in the extension and never enter
+Private Hermes `run_*` identifiers stay in the Runner and never enter
 Joblit's domain model. Protocol in `AGENTS.md`; durability details in ADR-0009.
 
 ---
@@ -192,7 +193,7 @@ Joblit's domain model. Protocol in `AGENTS.md`; durability details in ADR-0009.
 | Boundary | Mechanism | Where |
 |---|---|---|
 | Browser → API | NextAuth database session | `lib/server/auth/requireSession.ts:17` |
-| Extension → API | `withExtensionRoute`: opaque IP budget → Session/Bearer auth → opaque user budget; token hashes remain SHA-256 at rest | `lib/server/extensionIngress/withExtensionRoute.ts` |
+| Agent → API | `withAgentRoute`: Bearer agent token, or the session cookie when no header is presented; a presented token never falls back to the cookie. Token hashes are SHA-256 at rest | `lib/server/api/routeHandler.ts`, `lib/server/auth/requireExtensionToken.ts` |
 | Fetch worker → API | `FETCH_RUN_SECRET` header, constant-time compare | `app/api/fetch-runs/[id]/{config,commit}` |
 | Cron → API | `Authorization: Bearer CRON_SECRET` | `app/api/discover/refresh-daily` |
 | Server → internet | `safeOutboundFetch` | `lib/server/net/safeFetch.ts:396` |
@@ -242,10 +243,9 @@ canonicalization, the Local AI bridge contract.
   remain a separate lifecycle.
 - `lib/api/fetchJson.ts` is the intended client seam and has three importers
   against 36 hand-rolled `fetch` call sites.
-- The Chrome extension cannot import `lib/shared/**` — its tsconfig cannot
-  resolve the path — so `localAiBridgeContract.ts` and
-  `chrome-extension/src/shared/hermesTypes.ts` are two hand-written parsers for
-  one wire format.
+- `tools/runner/` deliberately imports nothing from the repository. The HTTP
+  API is its contract, exactly as for any external agent, so the shapes it
+  depends on are pinned by its own tests rather than by shared types.
 
 These are recorded because a reader will meet them, not as a plan.
 
@@ -280,15 +280,15 @@ per-target hashes, per-target CAS, or independent target lifecycle state.
 ## Testing
 
 Vitest, jsdom, `pool: "vmThreads"` (the forks pool does not register suites on
-Windows in this project — `vitest.config.ts:56-58`). 227 root test files, plus
-42 in the extension under its own config.
+Windows in this project — `vitest.config.ts`). 265 root test files. The Runner
+suites use Node's built-in test runner (`npm run test:runner`).
 
 Coverage thresholds are a **ratchet floor** set just under measured coverage,
 not an aspirational gate (`vitest.config.ts:41-46`).
 
 `npm run verify` is the single pre-push command: typecheck, lint, dependency
-policy, dead-code gate, root tests, extension typecheck, extension tests. CI
-runs that set plus the builds and dependency audits.
+policy, dead-code gate, and tests. CI runs that set plus the Runner suites, the
+build, and dependency audits.
 
 ---
 
@@ -307,4 +307,4 @@ runs that set plus the builds and dependency audits.
 | The jobs list UI | `app/(app)/jobs/JobsClient.tsx` and `app/(app)/jobs/hooks/` |
 | The Master Resume Profile editor | `components/resume/ResumeContext.tsx` |
 | A user-facing string | `messages/en.json` **and** `messages/zh.json` — parity is gated by `test/messagesContract.test.ts` |
-| The extension ↔ web contract | `lib/shared/localAiBridgeContract.ts` **and** `chrome-extension/src/shared/hermesTypes.ts` |
+| How the Runner drives a queue | `tools/runner/` and its README, then AGENTS.md |

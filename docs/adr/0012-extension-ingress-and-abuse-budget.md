@@ -1,6 +1,6 @@
 # ADR-0012: Central Extension ingress and atomic abuse budgets
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-0014 (the ingress was removed with the extension)
 - **Date:** 2026-07-29
 - **Context owner:** Joblit Engineering
 

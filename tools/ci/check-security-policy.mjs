@@ -9,35 +9,6 @@ const policy = JSON.parse(
   fs.readFileSync(path.join(cwd, "tools", "ci", "security-policy.json"), "utf8"),
 );
 
-function sameJson(actual, expected) {
-  return JSON.stringify(actual) === JSON.stringify(expected);
-}
-
-function checkExtensionManifest() {
-  const manifestPath = path.join(cwd, "chrome-extension", "manifest.json");
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-  const expected = policy.extensionManifest;
-  for (const field of [
-    "permissions",
-    "host_permissions",
-    "optional_host_permissions",
-    "content_security_policy",
-    "content_scripts",
-  ]) {
-    if (!sameJson(manifest[field], expected[field])) {
-      violations.push(`chrome-extension/manifest.json ${field} differs from reviewed allowlist`);
-    }
-  }
-  if ("externally_connectable" in manifest) {
-    violations.push("chrome-extension/manifest.json must not expose externally_connectable");
-  }
-  for (const script of manifest.content_scripts ?? []) {
-    if (script.all_frames === true) {
-      violations.push("chrome-extension content scripts must not use all_frames");
-    }
-  }
-}
-
 function repositoryFiles() {
   const output = execFileSync(
     "git",
@@ -58,7 +29,6 @@ function checkSensitiveFiles(files) {
     /(^|\/)releases\//i,
     /(^|\/)\.tmp\/hermes-/i,
     /hermes-receipt.*\.json$/i,
-    /chrome-extension\/joblit-extension-/i,
     /\.zip$/i,
   ];
   const secretTextPatterns = [
@@ -148,7 +118,6 @@ function checkServerOutboundFetch(files) {
   }
 }
 
-checkExtensionManifest();
 checkGitignore();
 const files = repositoryFiles();
 checkSensitiveFiles(files);

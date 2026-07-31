@@ -16,7 +16,6 @@ node_modules
 
 # testing
 /coverage
-/chrome-extension/coverage/
 /.pytest_cache/
 /.ruff_cache/
 /.mypy_cache/
@@ -31,7 +30,6 @@ node_modules
 
 # production
 /build
-/chrome-extension/dist/
 
 # misc
 .DS_Store
@@ -122,6 +120,7 @@ design-system/
 *.key
 *hermes-receipt*.json
 
-# Packaged/unpacked extension artifacts (built from chrome-extension/dist)
-chrome-extension/joblit-extension-*.zip
-chrome-extension/joblit-extension-*/
+# Leftover build output from the removed Chrome extension (ADR-0014). The
+# source is gone; this directory holds only node_modules, dist, coverage and a
+# packaged zip, and can be deleted.
+/chrome-extension/

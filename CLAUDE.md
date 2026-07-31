@@ -32,7 +32,7 @@ npm run deps:policy       # Check dependency policy
 1. **Job Intake**: `FetchRun` tasks persist a strict market-specific config, then dispatch the AU GitHub Actions worker or run CN/GLOBAL adapters in-process. `executeInlineFetchRun` owns the lifecycle for both inline markets; discovery adapters only return a terminal plan. All results enter `commitFetchRun`, where ordered receipts, Jobs, counters, and terminal state commit atomically with dedupe on `userId + jobUrl` and tombstone filtering (`DeletedJobUrl`)
 2. **Tailoring**: `Job` + `ResumeProfile` → AI prompt (via versioned `PromptRuleTemplate`) → external model imported through `/api/applications/manual-generate`, or receipt-backed server batch generation through `executeServerBatchTailoringTask` → persisted Application aggregate → PDF render via LaTeX external service
 3. **Batch**: External Codex atomically completes/claims tasks through `/api/application-batches/[id]/run-once` and persists output through `manual-generate`; feature-gated server auto-execute uses `/execute` → `executeServerBatchTailoringTask`. That interface requires Batch, task, issue, and attempt identity and commits with an Application content-hash CAS.
-4. **Extension**: Chrome extension traffic enters through `withExtensionRoute`, which owns request identity, pre-auth IP and post-auth user abuse budgets, Session/Bearer auth, no-store responses, canonical errors, and reporting before handlers read profiles or persist mappings/submissions.
+4. **Runner**: The local Runner (`tools/runner/`) authenticates with an agent token, drains the fit queue and the active tailoring batch, and calls the user's Hermes gateway over loopback. It imports no repository code — the HTTP API is the contract, same as for Codex. See ADR-0014.
 
 Current tailoring output is delta-only: Resume returns `cvSummary` plus zero to
 three `latestExperience.addedBullets`; Cover returns only its three body
@@ -46,7 +46,7 @@ reintroduced.
 
 - `app/(marketing)/` — Public landing pages, no auth
 - `app/(auth)/login/` — Authentication pages
-- `app/(app)/` — Protected workspace: `jobs/`, `fetch/`, `resume/`, `discover/`, `extension/`, plus `career/` (a redirect to `/jobs`, ADR-0006)
+- `app/(app)/` — Protected workspace: `jobs/`, `fetch/`, `resume/`, `discover/`, `agent/`, plus `career/` (a redirect to `/jobs`, ADR-0006)
 - `app/api/` — All API routes
 
 ### Backend (`lib/server/`)
@@ -61,7 +61,7 @@ reintroduced.
 - `discover/` — YouTube video pipeline: fetch, cache, refresh
 - `cnFetch/` — China Fetch Pipeline and the Nowcoder adapter
 - `api/` — Shared route utilities: `errorResponse`, `rateLimit`, `routeHandler`
-- `auth/` — Session middleware: `requireSession`, `requireExtensionToken`
+- `auth/` — Session middleware: `requireSession`, `requireExtensionToken` (the agent-token validator; the model keeps its original name)
 - `prisma.ts` — Prisma singleton with Neon serverless adapter
 
 ### Shared (`lib/shared/`)
@@ -80,7 +80,8 @@ Core workflow: `Job`, `FetchRun`, `ApplicationBatch`, `ApplicationBatchTask`, `A
 Provenance: `ApplicationEvent` (immutable ledger, carries company/title snapshots so it outlives the Job), `EvidenceSnapshot`, `ClaimEvidence`  
 Auth: `User`, `Account`, `Session`, `ExtensionToken`  
 Fetch execution and sources: `FetchRunCommitReceipt`, `SourceHealth`, `AtsBoardSource`
-Supporting: `DeletedJobUrl` (dedup tombstone), `DailyCheckin`, `FormSubmission`, `FieldMappingRule`, `OnboardingState`, `DiscoverVideoCache`, `LocalAiSetting`  
+Supporting: `DeletedJobUrl` (dedup tombstone), `DailyCheckin`, `FormSubmission` (the ledger a future agent submission path writes to), `OnboardingState`, `DiscoverVideoCache`  
+Retained without writers after the extension was removed (ADR-0014): `FieldMappingRule`, `LocalAiSetting`  
 Retained without writers pending a retention migration (ADR-0006): `InterviewPlan`, `StarStory`, `Offer`, `FollowUpReminder`
 
 ### Internationalization
@@ -89,7 +90,7 @@ Two locales: `en-AU` and `zh-CN` via next-intl. Locale is cookie-based. Resume p
 
 ### Authentication
 
-NextAuth v4 with GitHub + Google OAuth, Prisma adapter (database sessions). Sign-in is free, open, and self-service: no invitation or manual approval is required. Session includes `user.id`. The AU worker uses `FETCH_RUN_SECRET` for `/api/fetch-runs/[id]/config` and `/api/fetch-runs/[id]/commit`; the commit module derives tenant identity from the stored run. The retired `/api/admin/import` and `/api/fetch-runs/[id]/update` routes must not be reintroduced.
+NextAuth v4 with GitHub + Google OAuth, Prisma adapter (database sessions). Sign-in is free, open, and self-service: no invitation or manual approval is required. Session includes `user.id`. Agent tokens (`ExtensionToken`, issued at `/agent`) authenticate the Runner and any external agent through `withAgentRoute`, which accepts a Bearer token or a session cookie; a presented token never falls back to the cookie, so revocation is immediate. See AGENTS.md. The AU worker uses `FETCH_RUN_SECRET` for `/api/fetch-runs/[id]/config` and `/api/fetch-runs/[id]/commit`; the commit module derives tenant identity from the stored run. The retired `/api/admin/import`, `/api/fetch-runs/[id]/update`, and `/api/ext/**` routes must not be reintroduced.
 
 ### Testing
 
@@ -103,7 +104,7 @@ Path alias `@/*` maps to the project root. Import as `@/lib/...`, `@/app/...`, `
 
 Required: `DATABASE_URL`, `AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_ID`, `GITHUB_SECRET`, `FETCH_RUN_SECRET`, `APP_ENC_KEY` (base64), `LATEX_RENDER_URL`, `LATEX_RENDER_TOKEN`
 
-Optional: `DIRECT_URL`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `BLOB_READ_WRITE_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_TOKEN`, `GITHUB_WORKFLOW_FILE`, `GITHUB_REF`, `ENABLE_BATCH_EXECUTE_AUTOGEN`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `JOBLIT_ATS_BOARDS_JSON`, `SEEK_FETCH_ENABLED`, `SEEK_USER_AGENT`, `JOBLIT_WEB_URL`, `YOUTUBE_API_KEY`, `CRON_SECRET`, `ARTIFACT_RECONCILE_SECRET`, `ARTIFACT_RECONCILE_ENABLED`, `RSSHUB_URL`, `RSSHUB_JOB_ROUTES`, `GITHUB_CN_JOB_REPOS`
+Optional: `DIRECT_URL`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `BLOB_READ_WRITE_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_TOKEN`, `GITHUB_WORKFLOW_FILE`, `GITHUB_REF`, `ENABLE_BATCH_EXECUTE_AUTOGEN`, `JOBLIT_ATS_BOARDS_JSON`, `JOBLIT_WEB_URL`, `YOUTUBE_API_KEY`, `CRON_SECRET`, `ARTIFACT_RECONCILE_SECRET`, `ARTIFACT_RECONCILE_ENABLED`, `RSSHUB_URL`, `RSSHUB_JOB_ROUTES`, `GITHUB_CN_JOB_REPOS`
 
 Application modules consume optional integrations through
 `lib/server/runtimeCapabilities`, not by assembling environment-variable

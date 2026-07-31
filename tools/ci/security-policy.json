@@ -1,55 +1,4 @@
 {
-  "extensionManifest": {
-    "permissions": ["storage", "activeTab", "scripting"],
-    "host_permissions": ["https://www.joblit.tech/*"],
-    "optional_host_permissions": [
-      "https://*/*",
-      "http://localhost/*",
-      "http://127.0.0.1/*",
-      "http://[::1]/*"
-    ],
-    "content_security_policy": {
-      "extension_pages": "script-src 'self'; object-src 'self'"
-    },
-    "content_scripts": [
-      {
-        "matches": [
-          "https://*.greenhouse.io/*",
-          "https://*.lever.co/*",
-          "https://*.myworkdayjobs.com/*",
-          "https://*.workday.com/job/*",
-          "https://*.workday.com/*/job/*",
-          "https://*.icims.com/*",
-          "https://*.successfactors.com/*",
-          "https://*.taleo.net/*",
-          "https://*.smartrecruiters.com/*",
-          "https://*.bamboohr.com/careers/*",
-          "https://*.bamboohr.com/jobs/*",
-          "https://*.jobvite.com/*",
-          "https://*.ashbyhq.com/*",
-          "https://*.rippling.com/job/*",
-          "https://*.rippling.com/jobs/*",
-          "https://*.rippling.com/*/job/*",
-          "https://*.rippling.com/*/jobs/*",
-          "https://au.seek.com/*"
-        ],
-        "js": ["src/content/index.ts"],
-        "css": [],
-        "run_at": "document_idle"
-      },
-      {
-        "matches": ["https://au.seek.com/*"],
-        "js": ["src/content/seek/seekInterceptMain.ts"],
-        "run_at": "document_start",
-        "world": "MAIN"
-      },
-      {
-        "matches": ["https://www.joblit.tech/*"],
-        "js": ["src/content/joblitBridge.ts"],
-        "run_at": "document_start"
-      }
-    ]
-  },
   "requiredGitignoreRules": [
     ".env*",
     "!.env.example",
@@ -59,12 +8,15 @@
     "*.sig",
     "*hermes-receipt*.json",
     "/.tmp/",
-    "/.tmp/hermes-*/",
-    "chrome-extension/joblit-extension-*.zip",
-    "chrome-extension/joblit-extension-*/"
+    "/.tmp/hermes-*/"
   ],
   "serverOutboundFetch": {
-    "roots": ["app/api/", "lib/server/"],
-    "allowedDirectFetchFiles": ["lib/server/net/safeFetch.ts"]
+    "roots": [
+      "app/api/",
+      "lib/server/"
+    ],
+    "allowedDirectFetchFiles": [
+      "lib/server/net/safeFetch.ts"
+    ]
   }
 }
