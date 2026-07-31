@@ -4,15 +4,15 @@ const applicationBatchStore = vi.hoisted(() => ({
   findFirst: vi.fn(),
 }));
 
-const extensionTokenStore = vi.hoisted(() => ({
-  findFirst: vi.fn(),
+const agentCredentialStore = vi.hoisted(() => ({
+  findUnique: vi.fn(),
   updateMany: vi.fn(),
 }));
 
 vi.mock("@/lib/server/prisma", () => ({
   prisma: {
     applicationBatch: applicationBatchStore,
-    extensionToken: extensionTokenStore,
+    agentCredential: agentCredentialStore,
   },
 }));
 
@@ -31,24 +31,27 @@ describe("application batch active api", () => {
   beforeEach(() => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockReset();
     applicationBatchStore.findFirst.mockReset();
-    extensionTokenStore.findFirst.mockReset();
-    extensionTokenStore.updateMany.mockReset();
+    agentCredentialStore.findUnique.mockReset();
+    agentCredentialStore.updateMany.mockReset();
   });
 
   it("authenticates the Runner's bearer token end to end", async () => {
-    // No cookie session at all — the local Runner presents an ExtensionToken
+    // No cookie session at all — the local Runner presents an AgentCredential
     // and must reach the same handler the browser does.
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
       null,
     );
-    extensionTokenStore.findFirst.mockResolvedValue({
+    agentCredentialStore.findUnique.mockResolvedValue({
       id: "token-1",
       userId: "runner-user",
+      audience: "joblit-agent",
+      version: 1,
+      capabilities: ["tailoring:execute"],
       revokedAt: null,
       expiresAt: new Date(Date.now() + 60_000),
       lastUsedAt: null,
     });
-    extensionTokenStore.updateMany.mockResolvedValue({ count: 1 });
+    agentCredentialStore.updateMany.mockResolvedValue({ count: 1 });
     applicationBatchStore.findFirst.mockResolvedValueOnce({
       id: "550e8400-e29b-41d4-a716-446655440000",
       status: "QUEUED",
@@ -57,7 +60,9 @@ describe("application batch active api", () => {
 
     const res = await GET(
       new Request("http://localhost/api/application-batches/active", {
-        headers: { Authorization: "Bearer runner-token" },
+        headers: {
+          Authorization: `Bearer jfagent_v1_${"a".repeat(64)}`,
+        },
       }),
     );
     const json = await res.json();

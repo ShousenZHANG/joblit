@@ -23,7 +23,7 @@ import {
   type ManualGenerateDraftResponse,
 } from "./manualGenerateDraftResponse";
 
-export type GeneratedDraftSource = "manual_import" | "local_ai";
+export type GeneratedDraftSource = "manual_import";
 
 const MANUAL_TAILORING_ISSUE_PREFIX = "joblit.tailoring.manual.v1";
 const UUID_RE =

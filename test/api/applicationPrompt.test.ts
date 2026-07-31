@@ -8,6 +8,10 @@ const tailoringRuns = vi.hoisted(() => ({
   issuePrompt: vi.fn(),
 }));
 
+const agentAuth = vi.hoisted(() => ({
+  requireAgentCredential: vi.fn(),
+}));
+
 vi.mock("@/auth", () => ({ authOptions: {} }));
 
 vi.mock("next-auth/next", () => ({
@@ -35,6 +39,10 @@ vi.mock("@/lib/server/applications/applicationPrompt", async () => {
 
 vi.mock("@/lib/server/tailoringRuns/issuePromptTailoringRun", () => ({
   issuePromptTailoringRun: tailoringRuns.issuePrompt,
+}));
+
+vi.mock("@/lib/server/auth/requireAgentCredential", () => ({
+  requireAgentCredential: agentAuth.requireAgentCredential,
 }));
 
 import { getServerSession } from "next-auth/next";
@@ -79,10 +87,13 @@ const servicePayload: ApplicationPromptPayload = {
   },
 };
 
-function request(body: unknown) {
+function request(body: unknown, bearer = false) {
   return new Request("http://localhost/api/applications/prompt", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(bearer ? { Authorization: "Bearer agent-token" } : {}),
+    },
     body: JSON.stringify(body),
   });
 }
@@ -95,6 +106,12 @@ describe("applications prompt api", () => {
     });
     applicationPrompt.build.mockResolvedValue(servicePayload);
     tailoringRuns.issuePrompt.mockResolvedValue(TAILORING_RUN);
+    agentAuth.requireAgentCredential.mockResolvedValue({
+      userId: "user-1",
+      credentialId: "credential-1",
+      capabilities: ["tailoring:execute"],
+      requestId: "agent-request-id",
+    });
   });
 
   it("requires a session", async () => {
@@ -185,6 +202,28 @@ describe("applications prompt api", () => {
     });
     expect(tailoringRuns.issuePrompt).not.toHaveBeenCalled();
     expect(json).not.toHaveProperty("tailoringRun");
+  });
+
+  it("does not let an AgentCredential enter the manual compatibility lane", async () => {
+    const response = await POST(
+      request(
+        {
+          jobId: VALID_JOB_ID,
+          target: "resume",
+          source: "manual_import",
+          delivery: "DRAFT",
+          issueKey: ISSUE_KEY,
+        },
+        true,
+      ),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "AGENT_PROTOCOL_REQUIRED" },
+    });
+    expect(applicationPrompt.build).not.toHaveBeenCalled();
+    expect(tailoringRuns.issuePrompt).not.toHaveBeenCalled();
   });
 
   it.each([

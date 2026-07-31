@@ -13,7 +13,6 @@ const serverEnvSchema = z.object({
   // Core — required for the app to function at all.
   DATABASE_URL: nonEmpty,
   AUTH_SECRET: nonEmpty,
-  APP_ENC_KEY: nonEmpty,
   FETCH_RUN_SECRET: nonEmpty,
   LATEX_RENDER_URL: z.string().url(),
   LATEX_RENDER_TOKEN: nonEmpty,
@@ -43,10 +42,6 @@ const serverEnvSchema = z.object({
     .enum(["", "0", "1", "false", "true"])
     .optional(),
   ARTIFACT_RECONCILE_SECRET: z.string().optional(),
-  UPSTASH_REDIS_REST_URL: z.string().optional(),
-  UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
-  KV_REST_API_URL: z.string().optional(),
-  KV_REST_API_TOKEN: z.string().optional(),
   JOBLIT_ATS_BOARDS_JSON: z.string().optional(),
 
   // Set to "true" only when the LaTeX renderer is reachable over plain HTTP.

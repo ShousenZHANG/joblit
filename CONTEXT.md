@@ -156,9 +156,9 @@ Receipt**.
 The set of post-generation filters that grade AI-added bullets.
 `acceptApplicationGeneration` is the single generation-acceptance seam and
 applies the grounding/non-redundancy checks from `manualImportParser.ts` for
-manual, Local AI, and server-batch output. Bullets that fail a gate are **shown
-but disabled** in the Edit panel; the user may override by editing the bullet
-text.
+manual import, Agent Runner/Codex, and server-batch output. Bullets that fail a
+gate are **shown but disabled** in the Edit panel; the user may override by
+editing the bullet text.
 
 Gates today:
 - **Grounded** — the bullet must reference at least one term from the JD or master profile.

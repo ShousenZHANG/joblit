@@ -1,4 +1,4 @@
-# Joblit Local AI
+# Joblit Agent Runner
 
 You process one self-contained Joblit application prompt at a time.
 

@@ -1,6 +1,6 @@
 # Data — `prisma/schema.prisma`
 
-33 models, 21 enums, 49 migrations. Client generates to `lib/generated/prisma`
+28 models, 18 enums, 53 migrations. Client generates to `lib/generated/prisma`
 and is reached through the singleton in `lib/server/prisma.ts:13` over
 `PrismaNeon`. Vocabulary is `CONTEXT.md`.
 
@@ -8,33 +8,34 @@ and is reached through the singleton in `lib/server/prisma.ts:13` over
 
 ## Model inventory
 
-| Model (line) | Domain meaning | Status |
+| Model | Domain meaning | Status |
 |---|---|---|
-| `User` (`:171`) | Tenant root, OAuth identity | Live — adapter-owned |
-| `Account` (`:208`), `Session` (`:232`) | NextAuth records | Live — adapter-owned |
-| `Job` (`:245`) | A **Job** from the Fetch Pipeline | Live |
-| `ApplicationBatch` (`:323`) | A **Codex Batch** run header | Live |
-| `ApplicationBatchTask` (`:344`) | One Job's slot in a batch | Live |
-| `TailoringRun` (`:378`) | Durable execution/fencing identity for one issued Application tailoring operation | Live |
-| `TailoringRunReceipt` (`:431`) | Immutable per-target acceptance receipt | Live, append-only |
-| `DeletedJobUrl` (`:451`) | Tombstone for a canonical `jobUrl` the user deleted | Live |
-| `DailyCheckin` (`:463`) | Per-local-date triage streak | Live |
-| `FetchRun` (`:475`) | A Fetch Pipeline task | Live |
-| `FetchRunCommitReceipt` (`:518`) | Durable idempotency receipt for one ordered FetchRun batch and applying attempt | Live, append-only |
-| `ResumeProfile` (`:539`) | A **Master Resume Profile**, per name per Resume Locale | Live |
-| `ActiveResumeProfile` (`:567`) | Pointer to the active profile per `(userId, locale)` | Live |
-| `Application` (`:580`) | The **Application** for one `(userId, jobId)` | Live |
-| `ApplicationArtifact` (`:630`) | Durable PDF/TeX Blob lifecycle ledger (ADR-0010); scalar identity snapshots, no source foreign keys | Live |
-| `ApplicationArtifactInventoryCheckpoint` (`:678`) | Singleton lease/cursor for bounded, resumable Blob inventory | Live |
-| `ApplicationEvent` (`:692`) | Immutable status ledger — the source of truth per ADR-0007 | Live, append-only |
-| `EvidenceSnapshot` (`:734`) | Content-addressed evidence backing AI claims | **Written, never read** |
-| `ClaimEvidence` (`:761`) | Claim → evidence edge | **Written, never read** |
-| `PromptRuleTemplate` (`:884`) | Per-user **Skill Pack** rule set | Live |
-| `ExtensionToken` | Agent bearer token, SHA-256 hash only. Named for the retired extension; still the Runner's credential (ADR-0014) | Live |
-| `OnboardingState` (`:968`) | Onboarding checklist and stage | Live |
-| `DiscoverVideoCache` (`:988`) | Global Discover cache + daily-refresh lease (ADR-0005) | Live |
-| `SourceHealth` (`:1010`) | Global per-source status/counters/timestamps | Live — upserted by `sourceHealthStore.ts`, read through `readSourceHealth.ts` |
-| `AtsBoardSource` (`:1025`) | Global ATS board registry | Live — **no insert path in TypeScript**; DB rows require external provisioning, while `JOBLIT_ATS_BOARDS_JSON` remains runtime-only |
+| `User` | Tenant root, OAuth identity | Live — adapter-owned |
+| `Account`, `Session` | NextAuth records | Live — adapter-owned |
+| `Job` | A **Job** from the Fetch Pipeline | Live |
+| `FitBatchImportReceipt` | Durable exact-replay settlement for one content-addressed Fit issue | Live, append-only |
+| `ApplicationBatch` | A **Codex Batch** run header | Live |
+| `ApplicationBatchTask` | One Job's slot in a batch | Live |
+| `TailoringRun` | Durable execution/fencing identity for one issued Application tailoring operation | Live |
+| `TailoringRunReceipt` | Immutable per-target acceptance receipt | Live, append-only |
+| `DeletedJobUrl` | Tombstone for a canonical `jobUrl` the user deleted | Live |
+| `DailyCheckin` | Per-local-date triage streak | Live |
+| `FetchRun` | A Fetch Pipeline task | Live |
+| `FetchRunCommitReceipt` | Durable idempotency receipt for one ordered FetchRun batch and applying attempt | Live, append-only |
+| `ResumeProfile` | A **Master Resume Profile**, per name per Resume Locale | Live |
+| `ActiveResumeProfile` | Pointer to the active profile per `(userId, locale)` | Live |
+| `Application` | The **Application** for one `(userId, jobId)` | Live |
+| `ApplicationArtifact` | Durable PDF/TeX Blob lifecycle ledger (ADR-0010); scalar identity snapshots, no source foreign keys | Live |
+| `ApplicationArtifactInventoryCheckpoint` | Singleton lease/cursor for bounded, resumable Blob inventory | Live |
+| `ApplicationEvent` | Immutable status ledger — the source of truth per ADR-0007 | Live, append-only |
+| `EvidenceSnapshot` | Content-addressed evidence backing AI claims | **Written, never read** |
+| `ClaimEvidence` | Claim → evidence edge | **Written, never read** |
+| `PromptRuleTemplate` | Per-user **Skill Pack** rule set | Live |
+| `AgentCredential` | Versioned, audience-bound and capability-scoped Runner credential; SHA-256 hash only | Live |
+| `OnboardingState` | Onboarding checklist and stage | Live |
+| `DiscoverVideoCache` | Global Discover cache + daily-refresh lease (ADR-0005) | Live |
+| `SourceHealth` | Global per-source status/counters/timestamps | Live — upserted by `sourceHealthStore.ts`, read through `readSourceHealth.ts` |
+| `AtsBoardSource` | Global ATS board registry | Live — **no insert path in TypeScript**; DB rows require external provisioning, while `JOBLIT_ATS_BOARDS_JSON` remains runtime-only |
 
 The Career-workspace tables ADR-0006 kept without writers, and the extension's
 own three, were dropped in `20260731120000_drop_extension_and_career_tables`
@@ -54,6 +55,8 @@ use it as the key rather than a column: `ActiveResumeProfile`
 denormalised `userId`, so a tenant filter never needs a join.
 `FetchRunCommitReceipt` and `TailoringRunReceipt` deliberately scope ownership
 through their required run parent; commit callers never supply a tenant id.
+`FitBatchImportReceipt` carries `userId` directly because its stable issue key
+is tenant-scoped and has no separate run parent.
 `ApplicationArtifact.userId`, `jobId`, and `applicationId` are deliberately
 denormalised identity snapshots with no relations. Lifecycle rows survive
 source deletion and must be retired explicitly rather than by cascade.
@@ -67,8 +70,9 @@ the schema comment), and `AtsBoardSource`.
 | Jobs | `where: {userId, …}` — `jobListService.ts:122-127`; raw SQL injects `j."userId"` at `jobSearchService.ts:119` |
 | Applications | Composite `userId_jobId`, or `findFirst({where:{id, userId}})` |
 | Tailoring runs | `TailoringRun.userId`; receipts inherit ownership through their required run |
+| Fit settlements | `FitBatchImportReceipt @@unique([userId, issueKey])`; the import module derives the same user from AgentCredential/session auth |
 | Resume profiles | `where: {userId, locale}`; active pointer via `userId_locale` |
-| Agent | `ExtensionToken.tokenHash` → `userId` at `requireExtensionToken.ts` |
+| Agent | `AgentCredential.tokenHash` → `userId` at `requireAgentCredential.ts`; version, audience, capability, expiry, and revocation are checked together |
 
 Ownership sits in the **write predicate**, not only the read:
 `jobDeleteService.ts:107` and `:188` keep `userId` inside the `deleteMany`.
@@ -87,6 +91,15 @@ Ownership sits in the **write predicate**, not only the read:
 claim/idempotency and the rolling fallback for RUNNING inline rows with no
 relational attempt. It is not an execution lease once `start` has populated
 the fields above.
+
+### Fit settlement projection
+
+| Field | Authority |
+|---|---|
+| `FitBatchImportReceipt.issueKey` | Stable 64-hex identity derived from sorted Job ids and the server-owned prompt snapshot; unique per user. |
+| `requestHash` | Hash of protocol, issue, sorted Job ids, exact model output, and prompt receipt. Same issue with different content conflicts. |
+| `settlement` | Strict v1 JSON projection of the accepted scores. Exact replay validates and returns it before rebuilding the current prompt. |
+| `Job.fitSource = claim:<uuid>` | Five-minute lease fence for first settlement. The receipt and winning Job score updates commit in one transaction. |
 
 ### TailoringRun acceptance projection
 
@@ -198,10 +211,9 @@ no account-erasure request/status model currently monitors that tail.
 5. In the same transaction, convert the four current artifact pointers into
    durable `ApplicationArtifact.DELETE_PENDING` work.
 6. Capture the Application's content-addressed EvidenceSnapshot ids, delete the
-   Application, then remove only candidate snapshots with no surviving claims
-   and no retained STAR story using them as provenance. Captured ids let the
-   final shared reference be reclaimed even when an older Job deletion already
-   set the snapshot's `jobId` to null.
+   Application, then remove only candidate snapshots with no surviving claims.
+   Captured ids let the final shared reference be reclaimed even when an older
+   Job deletion already set the snapshot's `jobId` to null.
 7. Delete the owned Job row.
 8. Return `artifactRetirement.queued`; the protected reconciler owns the later
    Blob call and fenced settlement. The deprecated `blobCleanup` projection is
@@ -256,14 +268,13 @@ matching.
 
 ## Enums
 
-21 enums. Referenced by generated name in TypeScript: `JobStatus`,
-`FetchRunStatus`, `ApplicationBatchStatus`, `ApplicationBatchTaskStatus`. The
-15 pre-ADR-0010 enums are
-duplicated as inline string unions or literals — including `ApplicationStatus`
-(`DRAFT | FINAL`) and the four Tailoring Run enums.
+18 enums. Workflow state is grouped across Job/Application events, FetchRun,
+Application Batch, Tailoring Run, and Application Artifact lifecycles.
 `ApplicationArtifactTarget` and `ApplicationArtifactState` establish the
 stage/reference/retirement vocabulary used by the artifact lifecycle module
-and reconciler.
+and reconciler. Historical enum members such as `ApplicationEventSource =
+EXTENSION` remain readable audit values; they do not imply an active browser
+extension writer.
 
 The only enum with no TypeScript reference is `ApplicationBatchScope` (one
 member, `NEW`, used solely as a schema default).
@@ -297,6 +308,7 @@ rest.
 | `Job.fitMatrix` | AI requirement matrix; score aggregated deterministically | `FitMatrixSchema` — `lib/shared/schemas/fitMatrix.ts:53` |
 | `Job.postingRiskFlags` | `string[]` advisory flags | **Nothing** — coerced by `normalizePostingRiskFlags` |
 | `FetchRun.queries` | Versioned market-specific execution config plus pre-start dispatch/idempotency metadata (`:375`) | Strict `FetchRunConfigV1Schema` for v1 rows; `normalizeFetchRunConfigV1` upgrades historical shapes—including GLOBAL source-only rows—at the execution boundary and fails closed for invalid versioned rows. Authoritative post-start lease fields are relational, not JSON |
+| `FitBatchImportReceipt.settlement` | Strict v1 Fit settlement (`protocolVersion`, issue/request hashes, accepted scores) | `FitBatchSettlementSchema` on write and replay in `lib/server/jobs/fitBatchImport.ts` |
 | `TailoringRun.promptReceipts` | Target-keyed prompt identity only; never full prompt bytes or raw model output | `normalizePromptReceipts` on issue and `readPromptReceipts` on lifecycle/acceptance reads |
 | `ResumeProfile.{basics,links,skills,experiences,projects,education}` | Master Resume Profile sections | `ResumeProfileSchema` — `lib/shared/schemas/resumeProfile.ts:72` |
 | `Application.aiContent` | **AI Content** — the ADR-0001 current-proposal snapshot with per-target provenance plus aggregate evidence/review | `aiContentSchema` — `lib/shared/schemas/aiContent.ts`, `.strict()`. Target provenance is optional for legacy v1 rows; a missing entry means unknown. The retired `skillsAdditions` key is stripped by a `z.preprocess` |
@@ -323,11 +335,12 @@ rest.
 | `EvidenceSnapshot @@unique([userId, contentHash, kind])` (`:752`) | Content-addressed reuse — identical evidence within one tenant is reused, not copied. |
 | `ClaimEvidence @@unique([applicationId, claimHash, evidenceSnapshotId])` (`:776`) | Claim edges are append-only and idempotent; a retry cannot duplicate the audit trail. |
 | `ApplicationBatchTask @@unique([batchId, jobId])` (`:371`) | A Job appears at most once per batch. |
+| `FitBatchImportReceipt @@unique([userId, issueKey])` | One canonical settlement per tenant-scoped Fit issue; identical request hashes replay, conflicting content fails closed. |
 | `TailoringRun @@unique([userId, issueKey])` (`:423`) | Issuing the same operation is idempotent within a tenant; `issueHash` detects conflicting reuse. |
 | `TailoringRun.applicationBatchTaskId @unique` (`:388`) | A batch task has at most one Tailoring Run. |
 | `TailoringRunReceipt @@unique([runId, target])` (`:446`) | At most one immutable acceptance receipt per target; exact retries replay it. |
 | `ApplicationArtifact.storageIdentity @unique` / `provisionalIdentity @unique` | One canonical physical identity per recorded object and one upload reservation per immutable pathname. Pathname and URL presentation aliases are deliberately non-unique. SQL checks also enforce non-negative retries, paired claims/leases, and state-compatible nullable fields. |
-| `ExtensionToken.tokenHash @unique` | Lookup by hash only; the raw token is never stored. |
+| `AgentCredential.tokenHash @unique` | Lookup by hash only; the raw `jfagent_v1_` credential is shown once and never stored. |
 | `Job.companyRoleKey` — **index, deliberately not unique** (`:317`) | A soft "same opening" hint. Distinct openings can collide, so it powers a possible-duplicate badge and never an automatic removal. |
 | `Job.descriptionSimHash` — **index only** (`:318`) | Advisory 64-bit SimHash near-duplicate detection. It is never used as a unique key. |
 | Trigram GIN on `Job.title/company/location` | Created by raw SQL in `20260330000000_search_optimization`, not by Prisma. Exists in the database but not in the model — flagged at `:307`. Powers the ILIKE relevance path. |
@@ -336,25 +349,30 @@ rest.
 
 ## Advisory locks
 
-All use `pg_advisory_xact_lock` via `$executeRaw` — never `$queryRaw`, because
-the function returns `void`, which driver adapters cannot deserialize.
+The named critical sections use `pg_advisory_xact_lock` via `$executeRaw`; that
+function returns `void`, which driver adapters cannot deserialize through
+`$queryRaw`. The FetchRun dispatch guard is intentionally different: it uses
+`pg_try_advisory_xact_lock` through `$queryRaw` because its boolean result is
+the interface.
 
-Eight of nine derive the key with an FNV-1a 32-bit `stableInt32`, **duplicated
-verbatim in each module**.
+`lib/server/db/advisoryLock.ts` centralizes the `FRUN`, `JOBJ`, and `JOBA`
+namespaces, their shared FNV-1a key, and the required broad-to-narrow order.
+Older specialized namespaces remain local to their owning module; changing any
+key derivation is a rolling-deployment compatibility change, not a refactor.
 
 | Namespace | Constant | Key | Taken by |
 |---|---|---|---|
-| `JOBJ` `0x4a4f424a` | `jobs/jobMutationLock.ts:5` | `stableInt32(userId)` | `deleteJob`, `batchDeleteJobs`, `persistPreparedJobImport` — serializes generic and FetchRun imports against permanent delete |
-| `JOBA` `0x4a4f4241` | `applications/applicationMutationLock.ts:5` | `stableInt32("${userId}:${jobId}")` | Both delete paths, `executeServerBatchTailoringTask`, `manual-generate`, `draft`, `finalize` (×2), `discard` |
+| `JOBJ` `0x4a4f424a` | `db/advisoryLock.ts`, adapter `jobs/jobMutationLock.ts` | `stableInt32(userId)` | `deleteJob`, `batchDeleteJobs`, `persistPreparedJobImport` — serializes generic and FetchRun imports against permanent delete |
+| `JOBA` `0x4a4f4241` | `db/advisoryLock.ts`, adapter `applications/applicationMutationLock.ts` | `stableInt32("${userId}:${jobId}")` | Both delete paths, `executeServerBatchTailoringTask`, `manual-generate`, `draft`, `finalize`, `discard` |
 | `JOBC` `0x4a4f4243` | `applications/applicationEvents.ts:31` | same | `appendApplicationEvent`, in a `Serializable` transaction. `bulkAppendStatusEvents` takes **no** advisory lock — its boundary is `updateManyAndReturn` |
 | `JOBF` `0x4a4f4246` | `jobs/fitRunService.ts:23` | `stableInt32(userId)` | `nextFitBatch` — leases the next triage batch |
-| `JOBL`/`FTCH` | `fetchRuns/fetchRunQuota.ts:35` | **Fixed** global key | `checkFetchRunQuota`; stale active rows are excluded from capacity, while terminal projection happens separately through the commit module |
-| `FRUN` `0x4652554e` | `fetchRuns/fetchRunLifecycleLock.ts:3` | `stableInt32(runId)` | Attempt `start`/takeover, commit, fail, stale recovery, and cancel. It serializes changes to the relational attempt fence and is always acquired before `JOBJ` |
+| `FITB` `0x46495442` | `jobs/fitBatchImport.ts` | `stableInt32(issueKey)` | Serializes first write/exact replay for one Fit settlement before Job scores and receipt commit together |
+| `FRUN` `0x4652554e` | `db/advisoryLock.ts`, adapter `fetchRuns/fetchRunLifecycleLock.ts` | `stableInt32(runId)` | Attempt `start`/takeover, commit, fail, stale recovery, and cancel. It serializes changes to the relational attempt fence and is always acquired before `JOBJ` |
 | `ABAT` `0x41424154` | `tailoringRuns/tailoringRunLock.ts:3` | `stableInt32(batchId)` | Batch claim/completion/cancellation and batch-bound Tailoring Run acceptance; first lock in the global acceptance order |
 | `TLRN` `0x544c524e` | `tailoringRuns/tailoringRunLock.ts:4` | `stableInt32(runId)` | Tailoring Run issue/start/prompt binding/acceptance/fail/cancel; acquired after `ABAT` and before `JOBA` |
 | `SHRC` `0x53485243` | `sources/sourceHealthStore.ts:11` | per source, all acquired in one roundtrip via a `MATERIALIZED` CTE so the planner cannot hoist the lock ahead of the sort | `persistSourceHealthDiagnostics` |
 
-Two non-namespaced locks use the single-`bigint` form:
+One non-namespaced lock uses the single-`bigint` form:
 `fetchRunLifecycleLock.ts` also exposes the trigger's
 `pg_try_advisory_xact_lock` with a djb2 hash masked to 31 bits (collisions
 documented as acceptable), and
@@ -365,8 +383,8 @@ lease fenced by a random `ownerToken` (ADR-0005).
 
 ## Migration history
 
-49 migrations, `20260114042057_init_auth_jobs` →
-`20260726120000_application_artifact_lifecycle`.
+53 migrations, `20260114042057_init_auth_jobs` →
+`20260731135000_schema_convergence_expand`.
 Most are a single additive `ALTER TABLE`. The ones that changed a domain rule:
 
 | Migration | Change |
@@ -385,6 +403,10 @@ Most are a single additive `ALTER TABLE`. The ones that changed a domain rule:
 | `20260724090000_fetch_run_commit_protocol` | ADR-0008: adds `PARTIAL`, ordered-batch counters, UUID attempt + lease pair check, non-negative/range checks, and receipt attempt attribution; makes the legacy `userEmail` snapshot nullable without dropping it. |
 | `20260726090000_tailoring_run_acceptance_protocol` | ADR-0009: adds Tailoring Run/Receipt, per-target masks and receipt uniqueness, UUID attempt fences, explicit legacy/v1 batch protocol version, current-attempt completion proof, and additive nullable relations without fabricating historical run evidence. |
 | `20260726120000_application_artifact_lifecycle` | ADR-0010: adds the durable Application PDF/TeX lifecycle ledger, state/claim projection checks, indexes, and conflict-tolerant backfill of the four current Application URL columns. |
+| `20260728120000_application_document_publication` | Adds independent Resume/Cover content and publication hashes plus the accepted document hash on Tailoring Run receipts. |
+| `20260731120000_drop_extension_and_career_tables` | Drops writer-less Career and browser-extension tables/enums after measured-data review; historical migrations and enum audit values remain immutable. |
+| `20260731130000_agent_runtime_expand_and_artifact_reconciliation` | Adds constrained `AgentCredential`, exact-replay `FitBatchImportReceipt`, and completes artifact physical-identity/checkpoint constraints without editing the already-applied ADR-0010 migration. |
+| `20260731135000_schema_convergence_expand` | Restores `Application.locale` with PostgreSQL's metadata-only constant default plus a validated check before `NOT NULL`, and restores the `ActiveResumeProfile.updatedAt` default so long-lived production and fresh history converge without a table rewrite. |
 | `20260330000000_search_optimization` | The only Postgres-extension-installing migration: `pg_trgm` plus three GIN indexes. |
 
 After editing `prisma/schema.prisma`, run `npx prisma generate`.

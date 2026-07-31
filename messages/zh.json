@@ -412,10 +412,10 @@
   "guide": {
     "badge": "快速入门",
     "welcomeTitle": "欢迎使用 Joblit",
-    "welcomeDesc": "你的 AI 求职工作台。让我们带你了解如何抓取职位、定制简历和自动填写申请。",
-    "welcomeFeature1": "从 LinkedIn、Seek 等平台抓取职位信息",
-    "welcomeFeature2": "生成 AI 定制的简历和求职信",
-    "welcomeFeature3": "使用 Chrome 插件自动填写求职申请",
+    "welcomeDesc": "你的 AI 求职工作台。让我们带你了解如何发现岗位、定制简历并有序管理申请。",
+    "welcomeFeature1": "从 LinkedIn、公开职位源和公司招聘网站获取岗位",
+    "welcomeFeature2": "生成基于真实经历证据的简历和求职信",
+    "welcomeFeature3": "审阅每份草稿并追踪申请进度",
     "maybeLater": "我自己探索",
     "startTour": "带我看看",
     "stepOf": "第 {current} 步，共 {total} 步",
@@ -602,7 +602,7 @@
     "s1_1Title": "1.1 账户信息",
     "s1_1": "当您通过 Google 或 GitHub OAuth 登录时，我们会从身份提供商处获取您的姓名、电子邮件地址和头像。我们不会接收、存储或访问您的密码。",
     "s1_2Title": "1.2 职位数据",
-    "s1_2": "本服务代您从第三方平台（LinkedIn、Seek 及其他平台）抓取公开的职位信息。这些职位信息——包括职位名称、公司名称、地点、职位类型和职位描述——存储在您的账户中，仅供您个人使用。",
+    "s1_2": "本服务代您从受支持的第三方来源（包括 LinkedIn、公开职位源和公司招聘网站）获取公开的职位信息。这些职位信息——包括职位名称、公司名称、地点、职位类型和职位描述——存储在您的账户中，仅供您个人使用。",
     "s1_3Title": "1.3 简历与申请内容",
     "s1_3": "您可以在本服务中创建、上传或编辑简历、求职信及其他申请材料。这包括您的职业概述、工作经历、技能、教育背景以及您选择提供的任何其他信息。此类内容会被安全存储并与您的账户关联。",
     "s1_4Title": "1.4 使用与分析数据",
@@ -736,10 +736,10 @@
     },
     "hero": {
       "eyebrowNew": "新",
-      "eyebrowTagline": "自学习扩展 · v0.1",
+      "eyebrowTagline": "Agent Runner · v1",
       "titleLine1": "求职流程，",
       "titleItalic": "重新定义。",
-      "subtitle": "Joblit 将 Seek 和 LinkedIn 岗位汇集到一个工作台，按目标 JD 辅助定制简历与求职信、导出清晰的 LaTeX PDF，并支持申请表自动填写。",
+      "subtitle": "Joblit 将 LinkedIn、公开职位源和公司招聘网站的岗位汇集到一个工作台，按目标 JD 辅助定制简历与求职信，并导出清晰的 LaTeX PDF。",
       "startFree": "免费开始",
       "watchDemo": "查看工作原理",
       "metaFree": "所有人免费开放 · 无需信用卡 · Google 或 GitHub 登录"
@@ -762,7 +762,7 @@
       "steps": {
         "fetch": {
           "title": "抓取",
-          "blurb": "从 Seek、LinkedIn 等平台拉取最新岗位。按 URL 去重，最新优先。"
+          "blurb": "从 LinkedIn、公开职位源和公司招聘网站获取最新岗位。按 URL 去重，最新优先。"
         },
         "tailor": {
           "title": "定制",
@@ -770,7 +770,7 @@
         },
         "apply": {
           "title": "申请",
-          "blurb": "一键导出 LaTeX PDF，或让 Chrome 扩展直接自动填写 ATS 表单。"
+          "blurb": "审阅每份草稿、导出 LaTeX PDF，并在一个工作台中追踪申请进度。"
         }
       }
     },
@@ -816,8 +816,8 @@
           "a": "是的，Joblit 所有功能均向每位登录用户免费开放，无需邀请、审批、订阅或信用卡。"
         },
         {
-          "q": "Chrome 扩展支持 Workday / Greenhouse / Lever 吗?",
-          "a": "是的,还支持 iCIMS 和 SuccessFactors。我们为每个 ATS 提供专用适配器,这样 Workday 的多步表单、日期选择器等怪异字段都能正常工作。"
+          "q": "Joblit 会代我提交申请吗?",
+          "a": "不会。Joblit 会准备基于证据、兼顾 ATS 的申请材料，并帮助你整理申请状态。最终材料由你审阅，每份申请也由你亲自提交。"
         },
         {
           "q": "可以使用哪些 AI 服务?",

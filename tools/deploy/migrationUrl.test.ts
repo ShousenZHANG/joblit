@@ -55,10 +55,29 @@ describe("resolveMigrationUrl", () => {
     ).toBe("postgres://u@explicit/db");
   });
 
-  it("falls back to the runtime url when no direct url is set", () => {
+  it("falls back to a direct runtime url when no dedicated url is set", () => {
     expect(
       resolveMigrationUrl({ DATABASE_URL: "postgres://u@host/db" }),
     ).toBe("postgres://u@host/db");
+  });
+
+  it("derives the documented Neon direct host from its pooled runtime url", () => {
+    expect(
+      resolveMigrationUrl({
+        DATABASE_URL:
+          "postgresql://user:p%40ss@ep-calm-hill-pooler.ap-southeast-2.aws.neon.tech:5432/joblit?sslmode=require&channel_binding=require",
+      }),
+    ).toBe(
+      "postgresql://user:p%40ss@ep-calm-hill.ap-southeast-2.aws.neon.tech:5432/joblit?sslmode=require&channel_binding=require",
+    );
+  });
+
+  it("does not guess a direct endpoint for an unknown pooler", () => {
+    expect(
+      resolveMigrationUrl({
+        DATABASE_URL: "postgres://u@db.internal/joblit?pgbouncer=true",
+      }),
+    ).toBe("postgres://u@db.internal/joblit?pgbouncer=true");
   });
 
   it("ignores a blank direct url rather than migrating against an empty string", () => {
@@ -92,6 +111,15 @@ describe("isPooledConnectionUrl", () => {
     expect(
       isPooledConnectionUrl("postgres://u@host/db?pgbouncer=true"),
     ).toBe(true);
+  });
+
+  it.each([
+    "postgres://u@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres",
+    "postgres://u@db.internal:6543/joblit",
+    "postgres://u@pgbouncer.internal:5432/joblit",
+    "postgres://u@db.internal/joblit?pgbouncer=1",
+  ])("fails closed for an unknown provider pooler %j", (url) => {
+    expect(isPooledConnectionUrl(url)).toBe(true);
   });
 
   it("treats an unparseable or missing url as not pooled", () => {

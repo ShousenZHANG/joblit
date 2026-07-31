@@ -95,4 +95,40 @@ describe("landing message contract", () => {
       expect(copy).not.toContain(phrase);
     }
   });
+
+  it.each([
+    [
+      "en",
+      {
+        guide: en.guide,
+        landing: en.landing,
+        privacyJobSources: en.privacy.s1_2,
+      },
+    ],
+    [
+      "zh",
+      {
+        guide: zh.guide,
+        landing: zh.landing,
+        privacyJobSources: zh.privacy.s1_2,
+      },
+    ],
+  ] as const)(
+    "does not advertise the retired Extension, Seek fetch, or autofill in %s",
+    (_locale, messages) => {
+      const copy = JSON.stringify(messages).toLowerCase();
+      for (const pattern of [
+        /\bchrome extension\b/,
+        /\bbrowser extension\b/,
+        /\bauto-?fill\b/,
+        /\bseek\b/,
+        /chrome 插件/,
+        /浏览器插件/,
+        /浏览器扩展/,
+        /自动填写/,
+      ]) {
+        expect(copy).not.toMatch(pattern);
+      }
+    },
+  );
 });

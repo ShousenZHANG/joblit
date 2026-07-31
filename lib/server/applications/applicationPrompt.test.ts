@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const dependencies = vi.hoisted(() => ({
   jobFindFirst: vi.fn(),
+  jobFindMany: vi.fn(),
   jobUpdateMany: vi.fn(),
   getResumeProfile: vi.fn(),
   getRules: vi.fn(),
@@ -11,6 +12,7 @@ vi.mock("@/lib/server/prisma", () => ({
   prisma: {
     job: {
       findFirst: dependencies.jobFindFirst,
+      findMany: dependencies.jobFindMany,
       updateMany: dependencies.jobUpdateMany,
     },
   },
@@ -30,10 +32,12 @@ import {
   ApplicationPromptRequestSchema,
   MAX_APPLICATION_PROMPT_CHARS,
   buildApplicationPromptForUser,
+  buildTriagePromptForUser,
 } from "@/lib/server/applications/applicationPrompt";
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 const JOB_ID = "550e8400-e29b-41d4-a716-446655440000";
+const OTHER_JOB_ID = "660e8400-e29b-41d4-a716-446655440000";
 
 const profile = {
   id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -180,6 +184,44 @@ describe("application prompt service", () => {
     expect(full.promptMeta.promptHash).not.toBe(lean.promptMeta.promptHash);
     expect(full.expectedJsonSchema).toEqual(lean.expectedJsonSchema);
     expect(full.prompt.input).not.toBe(lean.prompt.input);
+  });
+
+  it("issues one stable, non-secret Fit identity from authoritative prompt content", async () => {
+    dependencies.jobFindMany.mockResolvedValue([
+      {
+        id: OTHER_JOB_ID,
+        title: "Platform Engineer",
+        company: "Beta",
+        description: "Operate reliable Kubernetes platforms.",
+        market: "AU",
+      },
+      {
+        id: JOB_ID,
+        title: "Backend Engineer",
+        company: "Acme",
+        description: "Build reliable distributed APIs.",
+        market: "AU",
+      },
+    ]);
+    dependencies.getResumeProfile.mockResolvedValue(profile);
+    dependencies.getRules.mockResolvedValue(rules);
+
+    const first = await buildTriagePromptForUser({
+      userId: USER_ID,
+      jobIds: [JOB_ID, OTHER_JOB_ID],
+    });
+    const afterRestart = await buildTriagePromptForUser({
+      userId: USER_ID,
+      jobIds: [OTHER_JOB_ID, JOB_ID],
+    });
+
+    expect(first.issueKey).toMatch(/^[a-f0-9]{64}$/);
+    expect(first.prompt.sessionId).toBe(first.issueKey);
+    expect(afterRestart.issueKey).toBe(first.issueKey);
+    expect(afterRestart.prompt.sessionId).toBe(first.issueKey);
+    expect(first.promptMeta.promptHash).toBe(afterRestart.promptMeta.promptHash);
+    expect(first.issueKey).not.toContain(USER_ID);
+    expect(first.issueKey).not.toContain(JOB_ID);
   });
 
   it("rejects invalid service input before database access", async () => {

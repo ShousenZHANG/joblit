@@ -16,8 +16,8 @@ import { useToast } from "@/hooks/use-toast";
 
 const ENV_SNIPPET = [
   'export JOBLIT_URL="{origin}"',
-  'export JOBLIT_TOKEN="jfext_…"',
-  'export HERMES_KEY="…"',
+  'export JOBLIT_TOKEN="jfagent_v1_..."',
+  'export HERMES_KEY="..."',
 ].join("\n");
 
 const RUN_COMMAND = "node tools/runner/cli.mjs --watch";

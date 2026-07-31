@@ -197,7 +197,7 @@ export function isJobImportEnrichmentMigrationRace(error: unknown): boolean {
  * skipDuplicates makes the createMany idempotent under concurrent imports
  * (no find-then-create race), and DeletedJobUrl tombstones keep a job the user
  * deleted from resurrecting on a re-fetch — the same guarantees whether the
- * rows came from the server-side fetcher or the user's browser extension.
+ * rows came from a current server-side fetcher or a retained legacy source.
  */
 /**
  * Preparation intentionally stops before tombstone reads and writes. Those

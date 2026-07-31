@@ -10,8 +10,3 @@ export const TailoringRunHandleSchema = z
   .strict();
 
 export type TailoringRunHandle = z.infer<typeof TailoringRunHandleSchema>;
-
-export const TailoringRunPromptSourceSchema = z.enum([
-  "manual_import",
-  "codex_batch",
-]);

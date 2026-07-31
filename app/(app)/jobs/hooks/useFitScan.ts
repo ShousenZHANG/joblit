@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { z } from "zod";
 
 import { fetchJson } from "@/lib/api/fetchJson";
 import {
@@ -24,6 +25,13 @@ import {
 const DEFAULT_POLL_MS = 3_000;
 /** Polls without progress before the UI says it is waiting on a Runner. */
 const STALL_POLLS = 3;
+
+const fitRunCancellationSchema = fitRunStatsSchema
+  .extend({
+    cancelled: z.number().int().min(0),
+    pending: z.literal(0),
+  })
+  .strict();
 
 export type FitScanState = {
   status: "idle" | "scanning" | "done" | "failed";
@@ -52,8 +60,16 @@ const IDLE: FitScanState = {
   waiting: false,
 };
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const finish = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, ms);
+    signal.addEventListener("abort", finish, { once: true });
+  });
 }
 
 export function useFitScan(options: {
@@ -65,23 +81,39 @@ export function useFitScan(options: {
   const [state, setState] = useState<FitScanState>(IDLE);
   const cancelRef = useRef(false);
   const runningRef = useRef(false);
+  const pollAbortRef = useRef<AbortController | null>(null);
+  const runRequestRef = useRef<Promise<unknown> | null>(null);
   const onJobScoredRef = useRef(options.onJobScored);
 
   useEffect(() => {
     onJobScoredRef.current = options.onJobScored;
   }, [options.onJobScored]);
 
+  useEffect(
+    () => () => {
+      cancelRef.current = true;
+      pollAbortRef.current?.abort();
+    },
+    [],
+  );
+
   const start = useCallback(async () => {
     if (runningRef.current) return;
     runningRef.current = true;
     cancelRef.current = false;
+    const pollAbort = new AbortController();
+    pollAbortRef.current = pollAbort;
     setState({ ...IDLE, status: "scanning" });
 
     try {
-      const run = await fetchJson("/api/jobs/fit/run", {
+      const runRequest = fetchJson("/api/jobs/fit/run", {
         method: "POST",
         schema: fitRunStartSchema,
       });
+      runRequestRef.current = runRequest;
+      const run = await runRequest;
+      if (runRequestRef.current === runRequest) runRequestRef.current = null;
+      if (cancelRef.current) return;
 
       // Everything still pending after prescreen is this scan's workload.
       const workload = run.pending;
@@ -99,12 +131,13 @@ export function useFitScan(options: {
       let stalledPolls = 0;
 
       while (!cancelRef.current && workload > 0) {
-        await sleep(pollMs);
+        await sleep(pollMs, pollAbort.signal);
         if (cancelRef.current) break;
 
         const stats = await fetchJson("/api/jobs/fit/status", {
           schema: fitRunStatsSchema,
         });
+        if (cancelRef.current) break;
         const progressed = stats.pending < lastPending;
         stalledPolls = progressed ? 0 : stalledPolls + 1;
         lastPending = stats.pending;
@@ -121,25 +154,78 @@ export function useFitScan(options: {
         if (stats.pending === 0) break;
       }
 
+      if (!cancelRef.current) {
+        setState((current) => ({
+          ...current,
+          status: "done",
+          waiting: false,
+        }));
+      }
+    } catch (error) {
+      if (!cancelRef.current) {
+        setState((current) => ({
+          ...current,
+          status: "failed",
+          waiting: false,
+          error: error instanceof Error ? error.message : "scan failed",
+        }));
+      }
+    } finally {
+      runRequestRef.current = null;
+      if (pollAbortRef.current === pollAbort) pollAbortRef.current = null;
+      runningRef.current = false;
+    }
+  }, [pollMs]);
+
+  const stop = useCallback(async () => {
+    if (!runningRef.current || cancelRef.current) return;
+    cancelRef.current = true;
+    pollAbortRef.current?.abort();
+
+    const runRequest = runRequestRef.current;
+    if (runRequest) {
+      try {
+        // A very fast Stop can race the initial Run request. Let Run finish
+        // creating/resetting its queue before issuing the terminal cancel.
+        await runRequest;
+      } catch (error) {
+        // `start` suppresses its own error after Stop sets the cancellation
+        // flag, so Stop must surface a failed initial Run instead of leaving
+        // the UI indefinitely in "scanning".
+        setState((current) => ({
+          ...current,
+          status: "failed",
+          waiting: false,
+          error: error instanceof Error ? error.message : "scan failed",
+        }));
+        return;
+      }
+    }
+
+    try {
+      const result = await fetchJson("/api/jobs/fit/cancel", {
+        method: "POST",
+        schema: fitRunCancellationSchema,
+        fallbackError: "Could not cancel Fit scan",
+      });
       setState((current) => ({
         ...current,
-        status: cancelRef.current ? "idle" : "done",
+        status: "idle",
+        total: result.total,
+        scored: result.scored,
+        remaining: result.pending,
         waiting: false,
+        error: undefined,
       }));
     } catch (error) {
       setState((current) => ({
         ...current,
         status: "failed",
         waiting: false,
-        error: error instanceof Error ? error.message : "scan failed",
+        error:
+          error instanceof Error ? error.message : "Could not cancel Fit scan",
       }));
-    } finally {
-      runningRef.current = false;
     }
-  }, [pollMs]);
-
-  const stop = useCallback(() => {
-    cancelRef.current = true;
   }, []);
 
   const reset = useCallback(() => {

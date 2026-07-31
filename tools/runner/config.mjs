@@ -21,7 +21,7 @@ export function loadConfig(env) {
   if (missing.length > 0) {
     throw new Error(
       `Missing required environment variables: ${missing.join(", ")}. ` +
-        "Issue JOBLIT_TOKEN from the Joblit extension page; HERMES_KEY comes from your local Hermes gateway.",
+        "Issue JOBLIT_TOKEN from the Joblit Agent page; HERMES_KEY comes from your local Hermes gateway.",
     );
   }
 

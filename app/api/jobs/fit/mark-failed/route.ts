@@ -19,7 +19,7 @@ const BodySchema = z
 
 /** Dequeue a failed AI batch so the pump never loops on the same jobs. */
 export async function POST(req: Request) {
-  return withAgentRoute(req, async ({ userId }) => {
+  return withAgentRoute(req, "fit:drain", async ({ userId }) => {
     const rateLimit = checkRateLimit(`jobs:fit:mark-failed:${userId}`, FAILED_RATE_LIMIT);
     if (!rateLimit.allowed) {
       return errorJson("RATE_LIMITED", "Too many requests", 429, {

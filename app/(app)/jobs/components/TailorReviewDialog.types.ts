@@ -12,7 +12,7 @@ export type TailorReviewDraft = {
   coverPdfUrl: string | null;
   /** Canonical download name from the server; null uses the shared builder. */
   pdfName?: string | null;
-  source?: "manual_import" | "local_ai";
+  source?: "manual_import";
   job: {
     id: string | null;
     title: string;

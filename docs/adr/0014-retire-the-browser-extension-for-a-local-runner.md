@@ -36,29 +36,39 @@ the browser's session cookie.
 ## Decision
 
 Replace the extension with a local Runner: a dependency-free Node process that
-speaks the public HTTP API with an agent token and calls the user's Hermes
+speaks the public HTTP API with an `AgentCredential` and calls the user's Hermes
 gateway directly over loopback.
 
-1. **Authentication becomes first-class.** `withAgentRoute` accepts either a
-   Bearer agent token or a session cookie and produces the same
-   `SessionContext`. A presented token is never rescued by a cookie, so
-   revocation is immediate. Tokens are issued from `/agent`; the API that mints
-   them is session-only, because minting a token from a token would let a leaked
-   credential outlive its revocation.
+1. **Authentication becomes first-class and capability-scoped.**
+   `withAgentRoute` accepts either a versioned `AgentCredential` or a session
+   cookie and produces the same `SessionContext`. A route declares one of
+   `fit:drain`, `tailoring:execute`, or `tailoring:control`; a credential
+   without that capability is rejected. Version 1 credentials use prefix
+   `jfagent_v1_` and audience `joblit-agent`. They are deliberately
+   incompatible with the retired `jfext_` credentials. A presented Bearer
+   credential is never rescued by a cookie, so revocation is immediate.
+   Credentials are issued from `/agent`; the API that mints them is
+   session-only, because minting a credential from a credential would let a
+   leaked secret outlive its revocation.
 
 2. **The Runner drains queues; the browser enqueues them.** Both fit scanning
    and tailoring already had server-side queues — the database leases fit
    batches, and the batch protocol claims tasks. The browser's only real job was
    the model call, and that moves to the Runner. The Jobs page now enqueues and
-   watches counts.
+   watches counts. Fit prompts publish a content-addressed issue and settle
+   through `FitBatchImportReceipt`; tailoring prompts publish a
+   `{ TailoringRun.id, attemptId }` fence and settle through
+   `TailoringRunReceipt`. Unknown network outcomes replay the same receipt and
+   never become synthetic failures.
 
 3. **The Hermes key never reaches Joblit.** The Runner reads it from local
    environment and refuses to construct against a non-loopback base URL, so a
    typo in `HERMES_URL` fails loudly instead of exfiltrating the key.
 
 4. **Submission is deferred, not reimplemented.** Autofill is deleted rather
-   than ported. The `FormSubmission` model stays as the ledger a future
-   agent-driven submission path will write to.
+   than ported. `FormSubmission`, `FieldMappingRule`, and `LocalAiSetting` are
+   also removed: their schemas described the retired browser client and are not
+   a valid contract for a future agent-driven submission ledger.
 
 ## Consequences
 
@@ -70,8 +80,21 @@ gateway directly over loopback.
 - A queue with no Runner running now sits still. The Jobs page reports that as
   waiting, with a link to setup — not as failure, because the work is queued and
   a Runner started later still picks it up.
-- `ExtensionToken` keeps its name in the schema while serving agent tokens.
-  Renaming it is a migration this ADR does not spend.
+- A claimed tailoring task whose lease is still live returns a bounded retry
+  hint. The Runner waits instead of interpreting an empty claim as completion,
+  and aborts local work if Tailoring Run polling shows a different attempt.
+- Hermes state is machine-local, contains no prompt/output/credential bytes,
+  and remains until Joblit proves the receipt was accepted or the server run is
+  terminal without that target. `stopping` is non-terminal; interrupted repair
+  turns are recovered from one unambiguous transcript response rather than
+  repeated.
+- `AgentCredential` is a separate model and trust domain, not a rename-only
+  reuse of `ExtensionToken`. It records credential version, audience,
+  capabilities, expiry, revocation, and last use; only a SHA-256 hash is stored.
+  Existing `jfext_` tokens are not accepted by agent routes. The
+  migration-first compatibility deployment intentionally retains the retired
+  table while old instances drain; a separate contract deployment then drops
+  `ExtensionToken`, which is not part of the target model.
 - `FieldMappingRule`, `LocalAiSetting` and `FormSubmission` were dropped
   outright in `20260731120000_drop_extension_and_career_tables`, together with
   the Career-workspace tables ADR-0006 had deferred. The decision was taken

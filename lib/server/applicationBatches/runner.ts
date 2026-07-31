@@ -27,6 +27,7 @@ const TERMINAL_BATCH_STATUSES: ApplicationBatchStatus[] = ["SUCCEEDED", "FAILED"
 const TERMINAL_TASK_STATUSES: ApplicationBatchTaskStatus[] = ["SUCCEEDED", "FAILED", "SKIPPED"];
 const STALE_TASK_TIMEOUT_MS = APPLICATION_BATCH_TASK_LEASE_MS;
 const TASK_LEASE_MS = APPLICATION_BATCH_TASK_LEASE_MS;
+const MAX_LEASE_RETRY_HINT_MS = 30_000;
 
 function safeTaskError(error: string | null | undefined): string {
   return (error?.trim() || "TASK_FAILED")
@@ -112,6 +113,58 @@ export async function getBatchProgress(input: { userId: string; batchId: string 
     },
   });
   return toProgress(grouped);
+}
+
+/**
+ * Tell an external Runner when the earliest live task can be reclaimed.
+ *
+ * The returned delay is deliberately capped: callers poll the authoritative
+ * batch state at least every 30 seconds instead of sleeping for the full
+ * twenty-minute task lease. The absolute deadline remains available for
+ * diagnostics and scheduling.
+ */
+export async function getBatchLeaseRetryHint(input: {
+  userId: string;
+  batchId: string;
+  now?: Date;
+}): Promise<{
+  retryAfterMs: number;
+  earliestLeaseExpiresAt: string;
+} | null> {
+  const now = input.now ?? new Date();
+  const runningTasks = await prisma.applicationBatchTask.findMany({
+    where: {
+      batchId: input.batchId,
+      userId: input.userId,
+      status: "RUNNING",
+      completedAt: null,
+    },
+    select: {
+      executionLeaseExpiresAt: true,
+      startedAt: true,
+    },
+  });
+
+  let earliestDeadline: Date | null = null;
+  for (const task of runningTasks) {
+    const deadline =
+      task.executionLeaseExpiresAt ??
+      (task.startedAt
+        ? new Date(task.startedAt.getTime() + STALE_TASK_TIMEOUT_MS)
+        : now);
+    if (!earliestDeadline || deadline < earliestDeadline) {
+      earliestDeadline = deadline;
+    }
+  }
+  if (!earliestDeadline) return null;
+
+  return {
+    retryAfterMs: Math.min(
+      MAX_LEASE_RETRY_HINT_MS,
+      Math.max(1, earliestDeadline.getTime() - now.getTime()),
+    ),
+    earliestLeaseExpiresAt: earliestDeadline.toISOString(),
+  };
 }
 
 async function reconcileBatchStatus(input: { userId: string; batchId: string }) {

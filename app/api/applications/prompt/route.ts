@@ -1,53 +1,36 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { z } from "zod";
 
 import { errorJson, validationError } from "@/lib/server/api/errorResponse";
 import { withAgentRoute } from "@/lib/server/api/routeHandler";
 import {
   ApplicationPromptError,
-  ApplicationPromptRequestSchema,
   buildApplicationPromptForUser,
 } from "@/lib/server/applications/applicationPrompt";
 import { issuePromptTailoringRun } from "@/lib/server/tailoringRuns/issuePromptTailoringRun";
 import { TailoringRunError } from "@/lib/server/tailoringRuns/tailoringRunProtocol";
-import { TailoringRunPromptSourceSchema } from "@/lib/shared/tailoringRunContract";
+import { AgentApplicationPromptRequestSchema } from "@/lib/shared/agentExecutionContract";
 
 export const runtime = "nodejs";
 
-const PromptRequestSchema = ApplicationPromptRequestSchema.extend({
-  source: TailoringRunPromptSourceSchema.optional().default("manual_import"),
-  delivery: z.enum(["DRAFT", "FINAL"]).optional().default("DRAFT"),
-  issueKey: z.string().uuid().optional(),
-  batchId: z.string().uuid().optional(),
-  batchTaskId: z.string().uuid().optional(),
-  batchAttemptId: z.string().uuid().optional(),
-}).superRefine((value, ctx) => {
-  if (value.source !== "codex_batch") return;
-  if (value.delivery !== "FINAL") {
-    ctx.addIssue({
-      code: "custom",
-      path: ["delivery"],
-      message: "Codex Batch delivery must be FINAL",
-    });
-  }
-  for (const field of ["issueKey", "batchId", "batchTaskId", "batchAttemptId"] as const) {
-    if (!value[field]) {
-      ctx.addIssue({
-        code: "custom",
-        path: [field],
-        message: `${field} is required for Codex Batch`,
-      });
-    }
-  }
-});
-
 export async function POST(req: Request) {
-  return withAgentRoute(req, async ({ userId, requestId }) => {
+  return withAgentRoute(req, "tailoring:execute", async ({
+    userId,
+    requestId,
+    authKind,
+  }) => {
     const json = await req.json().catch(() => null);
-    const parsed = PromptRequestSchema.safeParse(json);
+    const parsed = AgentApplicationPromptRequestSchema.safeParse(json);
     if (!parsed.success) {
       return validationError(parsed.error, requestId);
+    }
+    if (authKind === "agent" && parsed.data.source !== "codex_batch") {
+      return errorJson(
+        "AGENT_PROTOCOL_REQUIRED",
+        "Agent credentials must use the versioned Codex Batch protocol.",
+        403,
+        { requestId },
+      );
     }
 
     try {

@@ -72,6 +72,17 @@ export interface ApplicationPromptPayload {
   };
 }
 
+export interface FitPromptPayload extends ApplicationPromptPayload {
+  /**
+   * Content-addressed execution identity for one exact Fit prompt.
+   *
+   * This is deliberately safe to persist in the local Runner: it contains no
+   * bearer credential or raw user/job identifier, while the server can
+   * deterministically recompute it from its authoritative snapshots.
+   */
+  issueKey: string;
+}
+
 export type ApplicationPromptErrorCode =
   | "INVALID_REQUEST"
   | "JOB_NOT_FOUND"
@@ -121,7 +132,7 @@ export const TriagePromptRequestSchema = z
 export async function buildTriagePromptForUser(input: {
   userId: string;
   jobIds: string[];
-}): Promise<ApplicationPromptPayload> {
+}): Promise<FitPromptPayload> {
   const parsed = TriagePromptRequestSchema.safeParse({ jobIds: input.jobIds });
   if (!parsed.success) {
     throw new ApplicationPromptError(
@@ -132,15 +143,18 @@ export async function buildTriagePromptForUser(input: {
     );
   }
 
+  const canonicalJobIds = [...new Set(parsed.data.jobIds)].sort();
   const jobs = await prisma.job.findMany({
-    where: { id: { in: parsed.data.jobIds }, userId: input.userId },
+    where: { id: { in: canonicalJobIds }, userId: input.userId },
     select: { id: true, title: true, company: true, description: true, market: true },
   });
-  if (jobs.length === 0) {
+  if (jobs.length !== canonicalJobIds.length) {
     throw new ApplicationPromptError("JOB_NOT_FOUND", "Jobs not found", 404);
   }
+  const jobsById = new Map(jobs.map((job) => [job.id, job]));
+  const orderedJobs = canonicalJobIds.map((jobId) => jobsById.get(jobId)!);
 
-  const locale = marketStringToResumeLocale(jobs[0].market);
+  const locale = marketStringToResumeLocale(orderedJobs[0].market);
   const profile = await getResumeProfile(input.userId, { locale });
   if (!profile) {
     throw new ApplicationPromptError(
@@ -156,7 +170,7 @@ export async function buildTriagePromptForUser(input: {
   const promptInput = buildLeanTriageUserPrompt({
     rules,
     candidate,
-    jobs: jobs.map((job) => ({
+    jobs: orderedJobs.map((job) => ({
       jobId: job.id,
       title: job.title,
       company: job.company,
@@ -180,15 +194,22 @@ export async function buildTriagePromptForUser(input: {
     prompt: { instructions, input: promptInput },
     effectiveRules: rules,
     resumeSnapshot: candidate,
-    jobSnapshot: jobs,
+    jobSnapshot: orderedJobs,
+  });
+  const issueKey = buildPromptSnapshotHash({
+    protocol: "fit-batch/v1",
+    userId: input.userId,
+    jobIds: canonicalJobIds,
+    promptHash: promptMeta.promptHash,
   });
 
   return {
     requestId: createRequestId(),
+    issueKey,
     prompt: {
       input: promptInput,
       instructions,
-      sessionId: createRequestId(),
+      sessionId: issueKey,
     },
     promptMeta,
     expectedJsonShape: JSON.stringify(

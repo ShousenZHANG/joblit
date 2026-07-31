@@ -155,8 +155,8 @@ export const aiContentSchema = z
     /**
      * Hash of the authoritative generation receipt for the latest import.
      * Empty string is reserved for compatibility-only manual imports that
-     * arrived without a complete receipt. Current Local AI, Codex Batch, and
-     * internal generation paths always populate target-aware provenance.
+     * arrived without a complete receipt. Current Agent Runner, Codex Batch,
+     * and internal generation paths always populate target-aware provenance.
      */
     promptMetaHash: z.string(),
     source: aiImportSourceSchema.optional(),

@@ -7,6 +7,7 @@ const runner = vi.hoisted(() => ({
   claimNextBatchTask: vi.fn(),
   completeBatchTask: vi.fn(),
   getBatchProgress: vi.fn(),
+  getBatchLeaseRetryHint: vi.fn(),
   BatchRunnerError: class BatchRunnerError extends Error {
     code: "NOT_FOUND" | "INVALID_STATE";
 
@@ -69,6 +70,7 @@ describe("application batch run-once api", () => {
     runner.claimNextBatchTask.mockReset();
     runner.completeBatchTask.mockReset();
     runner.getBatchProgress.mockReset();
+    runner.getBatchLeaseRetryHint.mockReset();
     promptRules.getActivePromptSkillRulesForUser.mockReset();
     resumeProfile.getResumeProfile.mockReset();
   });
@@ -213,5 +215,106 @@ describe("application batch run-once api", () => {
     expect(json.error.code).toBe("INVALID_BODY");
     expect(applicationBatchStore.findFirst).not.toHaveBeenCalled();
     expect(runner.completeBatchTask).not.toHaveBeenCalled();
+  });
+
+  it("returns a bounded retry hint while another fresh task lease is running", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    applicationBatchStore.findFirst.mockResolvedValueOnce({
+      id: BATCH_ID,
+      status: "RUNNING",
+      scope: "NEW",
+      totalCount: 1,
+      error: null,
+    });
+    resumeProfile.getResumeProfile.mockResolvedValueOnce({
+      id: "profile-1",
+      updatedAt: new Date("2026-02-22T10:00:00.000Z"),
+    });
+    promptRules.getActivePromptSkillRulesForUser.mockResolvedValueOnce({
+      id: "rules-1",
+      locale: "en-AU",
+      cvRules: [],
+      coverRules: [],
+      hardConstraints: [],
+    });
+    runner.claimNextBatchTask.mockResolvedValueOnce({
+      kind: "done",
+      batchStatus: "RUNNING",
+      progress: {
+        pending: 0,
+        running: 1,
+        succeeded: 0,
+        failed: 0,
+        skipped: 0,
+      },
+    });
+    runner.getBatchProgress.mockResolvedValueOnce({
+      pending: 0,
+      running: 1,
+      succeeded: 0,
+      failed: 0,
+      skipped: 0,
+    });
+    runner.getBatchLeaseRetryHint.mockResolvedValueOnce({
+      retryAfterMs: 30_000,
+      earliestLeaseExpiresAt: "2026-02-22T10:20:00.000Z",
+    });
+
+    const res = await POST(
+      new Request(`http://localhost/api/application-batches/${BATCH_ID}/run-once`, {
+        method: "POST",
+        body: JSON.stringify({ maxSteps: 1 }),
+      }),
+      { params: Promise.resolve({ id: BATCH_ID }) },
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.batch.status).toBe("RUNNING");
+    expect(json.tasks).toEqual([]);
+    expect(json.execution).toMatchObject({
+      stopReason: "LEASE_ACTIVE",
+      retryAfterMs: 30_000,
+      earliestLeaseExpiresAt: "2026-02-22T10:20:00.000Z",
+    });
+    expect(runner.getBatchLeaseRetryHint).toHaveBeenCalledWith({
+      userId: "user-1",
+      batchId: BATCH_ID,
+    });
+  });
+
+  it.each([
+    [{ maxSteps: "1" }, "string maxSteps"],
+    [{ maxSteps: 1, extra: true }, "unknown body field"],
+    [
+      {
+        completedTasks: [
+          {
+            taskId: TASK_ID,
+            attemptId: COMPLETED_ATTEMPT_ID,
+            status: "FAILED",
+            unexpected: true,
+          },
+        ],
+      },
+      "unknown completion field",
+    ],
+  ])("rejects %s before touching the batch", async (body, _label) => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+
+    const res = await POST(
+      new Request(`http://localhost/api/application-batches/${BATCH_ID}/run-once`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+      { params: Promise.resolve({ id: BATCH_ID }) },
+    );
+
+    expect(res.status).toBe(400);
+    expect(applicationBatchStore.findFirst).not.toHaveBeenCalled();
   });
 });

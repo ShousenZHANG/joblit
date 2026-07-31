@@ -9,9 +9,10 @@ import { useFitScan } from "./useFitScan";
  * scan and watches the server's counts until the queue is empty.
  */
 
-type FetchLog = { url: string; body: unknown };
+type FetchLog = { url: string; method: string; body: unknown };
 
 type Stats = { total: number; scored: number; pending: number };
+type CancelStats = Stats & { cancelled: number };
 
 function mockServer(config: {
   run: Stats & { prescreened: number };
@@ -19,6 +20,9 @@ function mockServer(config: {
   polls: Stats[];
   runStatus?: number;
   runError?: unknown;
+  cancel?: CancelStats;
+  cancelStatus?: number;
+  cancelError?: unknown;
 }) {
   const log: FetchLog[] = [];
   let pollIndex = 0;
@@ -26,7 +30,11 @@ function mockServer(config: {
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      log.push({ url, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      log.push({
+        url,
+        method: init?.method ?? "GET",
+        body: init?.body ? JSON.parse(String(init.body)) : undefined,
+      });
       const json = (data: unknown, status = 200) =>
         new Response(JSON.stringify(data), {
           status,
@@ -40,6 +48,19 @@ function mockServer(config: {
         const stats = config.polls[Math.min(pollIndex, config.polls.length - 1)];
         pollIndex += 1;
         return json(stats);
+      }
+      if (url.includes("/api/jobs/fit/cancel")) {
+        if (config.cancelError) {
+          return json(config.cancelError, config.cancelStatus ?? 500);
+        }
+        return json(
+          config.cancel ?? {
+            cancelled: config.run.pending,
+            total: config.run.total,
+            scored: config.run.total,
+            pending: 0,
+          },
+        );
       }
       throw new Error(`unexpected fetch ${url}`);
     }),
@@ -128,12 +149,14 @@ describe("useFitScan (Runner-drained queue)", () => {
     expect(result.current.state.status).toBe("scanning");
     expect(result.current.state.remaining).toBe(10);
 
-    act(() => result.current.stop());
+    await act(async () => {
+      await result.current.stop();
+    });
     await waitFor(() => expect(result.current.state.status).toBe("idle"));
   });
 
-  it("stops polling when the user stops the scan", async () => {
-    mockServer({
+  it("cancels server work and stops polling when the user stops the scan", async () => {
+    const log = mockServer({
       run: { total: 10, scored: 0, pending: 10, prescreened: 0 },
       polls: [{ total: 10, scored: 2, pending: 8 }],
     });
@@ -144,15 +167,91 @@ describe("useFitScan (Runner-drained queue)", () => {
     });
     await waitFor(() => expect(result.current.state.scored).toBeGreaterThan(0));
 
-    act(() => result.current.stop());
+    await act(async () => {
+      await result.current.stop();
+    });
 
     await waitFor(() => expect(result.current.state.status).toBe("idle"));
+    expect(result.current.state.remaining).toBe(0);
+    expect(result.current.state.scored).toBe(10);
+    expect(log).toContainEqual({
+      url: "/api/jobs/fit/cancel",
+      method: "POST",
+      body: undefined,
+    });
     const callsAfterStop = (fetch as unknown as { mock: { calls: unknown[] } }).mock.calls
       .length;
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(
       (fetch as unknown as { mock: { calls: unknown[] } }).mock.calls.length,
     ).toBe(callsAfterStop);
+  });
+
+  it("surfaces cancellation failures instead of pretending the scan stopped", async () => {
+    mockServer({
+      run: { total: 10, scored: 0, pending: 10, prescreened: 0 },
+      polls: [{ total: 10, scored: 0, pending: 10 }],
+      cancelStatus: 503,
+      cancelError: {
+        error: { code: "CANCEL_FAILED", message: "Could not cancel Fit scan" },
+      },
+    });
+    const { result } = renderFitScan();
+
+    act(() => {
+      void result.current.start();
+    });
+    await waitFor(() => expect(result.current.state.status).toBe("scanning"));
+
+    await act(async () => {
+      await result.current.stop();
+    });
+
+    await waitFor(() => expect(result.current.state.status).toBe("failed"));
+    expect(result.current.state.error).toBe("Could not cancel Fit scan");
+  });
+
+  it("surfaces an initial Run failure when Stop races that request", async () => {
+    mockServer({
+      run: { total: 0, scored: 0, pending: 0, prescreened: 0 },
+      polls: [],
+      runStatus: 503,
+      runError: {
+        error: { code: "RUN_FAILED", message: "Could not start Fit scan" },
+      },
+    });
+    const { result } = renderFitScan();
+
+    act(() => {
+      void result.current.start();
+    });
+    await act(async () => {
+      await result.current.stop();
+    });
+
+    await waitFor(() => expect(result.current.state.status).toBe("failed"));
+    expect(result.current.state.error).toBe("Could not start Fit scan");
+  });
+
+  it("rejects a cancellation response that leaves server work pending", async () => {
+    mockServer({
+      run: { total: 10, scored: 0, pending: 10, prescreened: 0 },
+      polls: [{ total: 10, scored: 0, pending: 10 }],
+      cancel: { cancelled: 9, total: 10, scored: 9, pending: 1 },
+    });
+    const { result } = renderFitScan();
+
+    act(() => {
+      void result.current.start();
+    });
+    await waitFor(() => expect(result.current.state.status).toBe("scanning"));
+
+    await act(async () => {
+      await result.current.stop();
+    });
+
+    await waitFor(() => expect(result.current.state.status).toBe("failed"));
+    expect(result.current.state.error).toBe("Response shape invalid");
   });
 
   it("surfaces the server's own message rather than a url and a status code", async () => {

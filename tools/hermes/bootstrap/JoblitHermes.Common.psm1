@@ -2,14 +2,6 @@ Set-StrictMode -Version Latest
 
 $script:MinimumHermesVersion = '0.18.2'
 $script:ManagedProfileVersion = '0.2.0'
-$script:ManagedEnvironmentKeys = @(
-    'API_SERVER_ENABLED',
-    'API_SERVER_HOST',
-    'API_SERVER_PORT',
-    'API_SERVER_KEY',
-    'API_SERVER_MODEL_NAME',
-    'API_SERVER_CORS_ORIGINS'
-)
 $script:VerifierScript = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\verify-package.mjs'))
 
 function New-JoblitFailure {
@@ -890,7 +882,9 @@ function Invoke-JoblitHermesInstall {
         $environmentValues['API_SERVER_PORT'] = [string] $Port
         $environmentValues['API_SERVER_KEY'] = $apiKey
         $environmentValues['API_SERVER_MODEL_NAME'] = $ProfileName
-        $environmentValues['API_SERVER_CORS_ORIGINS'] = '*'
+        # The local Runner is a Node process, not a browser origin. Strip the
+        # permissive value written for the retired browser client.
+        [void] $environmentValues.Remove('API_SERVER_CORS_ORIGINS')
         Write-JoblitEnvFileAtomic -Path $envPath -Values $environmentValues
         $fingerprint = Get-JoblitKeyFingerprint -ApiKey $apiKey
         Write-JoblitStatus -State 'WriteLocalEnv' -Status 'Passed' -Message "Private environment written; key fingerprint $fingerprint." -Secrets @($apiKey)
@@ -989,7 +983,7 @@ function Test-JoblitHermesReadiness {
             $values['API_SERVER_HOST'] -ne '127.0.0.1' -or
             $values['API_SERVER_ENABLED'] -ne 'true' -or
             $values['API_SERVER_MODEL_NAME'] -ne $ProfileName -or
-            $values['API_SERVER_CORS_ORIGINS'] -ne '*' -or
+            $values.Contains('API_SERVER_CORS_ORIGINS') -or
             -not (Test-JoblitApiKeyStrength $values['API_SERVER_KEY'])
         ) { throw 'Unsafe API environment.' }
         $port = [int] $values['API_SERVER_PORT']

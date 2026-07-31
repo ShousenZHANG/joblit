@@ -18,9 +18,13 @@ function makeJob(id) {
   return { title: `Role ${id}`, company: "Acme" };
 }
 
+const RESUME_RUN_ID = "55555555-5555-4555-8555-555555555555";
+const COVER_RUN_ID = "66666666-6666-4666-8666-666666666666";
+
 function fakeJoblit(script) {
-  const calls = { runOnce: [], prompt: [], imports: [] };
+  const calls = { runOnce: [], prompt: [], imports: [], statuses: [] };
   let step = 0;
+  const tailoringStatuses = [...(script.tailoringStatuses ?? [])];
   return {
     calls,
     client: {
@@ -34,7 +38,11 @@ function fakeJoblit(script) {
         return {
           batch: { id: batchId, status: frame.batchStatus ?? "RUNNING" },
           tasks: frame.tasks ?? [],
-          execution: { stopReason: frame.stopReason ?? null },
+          execution: {
+            stopReason: frame.stopReason ?? null,
+            retryAfterMs: frame.retryAfterMs ?? null,
+            earliestLeaseExpiresAt: frame.earliestLeaseExpiresAt ?? null,
+          },
         };
       },
       async prompt(request) {
@@ -45,12 +53,42 @@ function fakeJoblit(script) {
             systemPrompt: `system for ${request.jobId}`,
             userPrompt: `user for ${request.jobId} ${request.target}`,
           },
-          promptMeta: { promptHash: `hash-${request.target}`, ruleSetId: "rules-1" },
-          tailoringRun: { handle: `run-${request.jobId}-${request.target}` },
+          promptMeta: {
+            promptHash:
+              request.target === "resume" ? "a".repeat(64) : "b".repeat(64),
+            ruleSetId: "rules-1",
+          },
+          tailoringRun: {
+            id: request.target === "resume" ? RESUME_RUN_ID : COVER_RUN_ID,
+            attemptId: request.batchAttemptId,
+          },
         };
+      },
+      async tailoringRunStatus(runId, options = {}) {
+        calls.statuses.push(runId);
+        if (script.tailoringStatusImpl) {
+          return script.tailoringStatusImpl(
+            runId,
+            options,
+            calls.statuses.length,
+          );
+        }
+        return (
+          tailoringStatuses.shift() ?? {
+            run: {
+              id: runId,
+              status: "RUNNING",
+              handle: {
+                id: runId,
+                attemptId: TASK.attemptId,
+              },
+            },
+          }
+        );
       },
       async importGeneration(request) {
         calls.imports.push(request);
+        if (script.importErrors?.length) throw script.importErrors.shift();
         if (script.importError) throw script.importError;
         return { ok: true };
       },
@@ -59,16 +97,48 @@ function fakeJoblit(script) {
 }
 
 function fakeHermes(script = {}) {
-  const calls = { runs: [] };
+  const calls = {
+    runs: [],
+    repairs: [],
+    acknowledgements: [],
+    discards: [],
+    recoveries: 0,
+  };
   return {
     calls,
     client: {
-      async generate({ instructions, input, sessionId }) {
-        calls.runs.push({ instructions, input, sessionId });
+      async generate({ instructions, input, sessionId, signal, operation }) {
+        calls.runs.push({ instructions, input, sessionId, signal, operation });
+        if (script.generate) {
+          return script.generate(
+            { instructions, input, sessionId, signal, operation },
+            calls,
+          );
+        }
         if (script.failure) throw script.failure;
         const output = `{"generated":"#${calls.runs.length}"}`;
         calls.runs[calls.runs.length - 1].output = output;
         return output;
+      },
+      async repair(request) {
+        calls.repairs.push(request);
+        if (script.repairFailure) throw script.repairFailure;
+        return '{"generated":"repaired"}';
+      },
+      async acknowledge(request) {
+        calls.acknowledgements.push(request);
+        if (script.acknowledge) {
+          return script.acknowledge(request, calls);
+        }
+        if (script.acknowledgeFailure) throw script.acknowledgeFailure;
+      },
+      async discard(request) {
+        calls.discards.push(request);
+        if (script.discard) return script.discard(request, calls);
+      },
+      async recoverableOperations() {
+        calls.recoveries += 1;
+        return script.recoverableOperations ?? [];
       },
     },
   };
@@ -77,6 +147,8 @@ function fakeHermes(script = {}) {
 const TASK = {
   taskId: "11111111-1111-4111-8111-111111111111",
   attemptId: "22222222-2222-4222-8222-222222222222",
+  issueKey: "44444444-4444-4444-8444-444444444444",
+  protocolVersion: 1,
   jobId: "33333333-3333-4333-8333-333333333333",
   remainingTargets: ["RESUME", "COVER"],
   job: makeJob("a"),
@@ -106,6 +178,8 @@ test("generates every remaining target and settles the task by importing", async
     target: "resume",
     source: "codex_batch",
     delivery: "FINAL",
+    protocolVersion: TASK.protocolVersion,
+    issueKey: TASK.issueKey,
     batchId: "batch-1",
     batchTaskId: TASK.taskId,
     batchAttemptId: TASK.attemptId,
@@ -113,6 +187,13 @@ test("generates every remaining target and settles the task by importing", async
 
   assert.equal(hermes.calls.runs.length, 2);
   assert.equal(hermes.calls.runs[0].instructions, `system for ${TASK.jobId}`);
+  assert.deepEqual(
+    hermes.calls.runs.map((run) => run.sessionId),
+    [
+      `joblit:${TASK.taskId}:resume`,
+      `joblit:${TASK.taskId}:cover`,
+    ],
+  );
 
   // The import forwards Hermes's output, the receipt and the handle exactly
   // as issued.
@@ -122,14 +203,21 @@ test("generates every remaining target and settles the task by importing", async
     target: "resume",
     source: "codex_batch",
     modelOutput: hermes.calls.runs[0].output,
-    promptMeta: { promptHash: "hash-resume", ruleSetId: "rules-1" },
-    tailoringRun: { handle: `run-${TASK.jobId}-resume` },
+    promptMeta: { promptHash: "a".repeat(64), ruleSetId: "rules-1" },
+    tailoringRun: {
+      id: RESUME_RUN_ID,
+      attemptId: TASK.attemptId,
+    },
   });
 
   // Success is implicit: the follow-up claim reports no completions.
   assert.equal(joblit.calls.runOnce.length, 2);
   assert.deepEqual(joblit.calls.runOnce[0].completedTasks, []);
   assert.deepEqual(joblit.calls.runOnce[1].completedTasks, []);
+  assert.deepEqual(hermes.calls.acknowledgements, [
+    { sessionId: `joblit:${TASK.taskId}:resume` },
+    { sessionId: `joblit:${TASK.taskId}:cover` },
+  ]);
 
   assert.equal(summary.succeeded, 1);
   assert.equal(summary.failed, 0);
@@ -157,6 +245,50 @@ test("reports a Hermes failure as FAILED with the reason", async () => {
   assert.equal(summary.failed, 1);
 });
 
+test("defers an unknown Hermes start without reporting the task FAILED", async () => {
+  const unknown = Object.assign(new Error("start response lost"), {
+    code: "RUN_START_UNKNOWN",
+  });
+  const joblit = fakeJoblit({
+    steps: [{ tasks: [{ ...TASK, remainingTargets: ["RESUME"] }] }],
+  });
+  const hermes = fakeHermes({ failure: unknown });
+
+  const summary = await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    log: () => {},
+  });
+
+  assert.equal(joblit.calls.runOnce.length, 1);
+  assert.deepEqual(joblit.calls.runOnce[0].completedTasks, []);
+  assert.equal(summary.failed, 0);
+  assert.equal(summary.deferred, 1);
+});
+
+test("fails closed before prompt issuance for an unsupported protocol version", async () => {
+  const joblit = fakeJoblit({
+    steps: [
+      { tasks: [{ ...TASK, protocolVersion: 2 }] },
+      { tasks: [], batchStatus: "COMPLETED" },
+    ],
+  });
+  const hermes = fakeHermes();
+
+  await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    log: () => {},
+  });
+
+  assert.equal(joblit.calls.prompt.length, 0);
+  assert.equal(hermes.calls.runs.length, 0);
+  assert.match(
+    joblit.calls.runOnce[1].completedTasks[0].error,
+    /Unsupported Agent execution protocol 2/,
+  );
+});
+
 test("reports an import rejection as FAILED and keeps going", async () => {
   const joblit = fakeJoblit({
     steps: [{ tasks: [TASK] }, { tasks: [], batchStatus: "COMPLETED" }],
@@ -174,6 +306,505 @@ test("reports an import rejection as FAILED and keeps going", async () => {
   assert.equal(reported[0].status, "FAILED");
   assert.match(reported[0].error, /APPLICATION_REVIEW_BLOCKED/);
   assert.equal(summary.failed, 1);
+});
+
+test("repairs one invalid model output in the same session before importing again", async () => {
+  const invalidOutput = Object.assign(new Error("AI output is not valid JSON"), {
+    code: "INVALID_AI_RESULT",
+  });
+  const joblit = fakeJoblit({
+    steps: [
+      { tasks: [{ ...TASK, remainingTargets: ["RESUME"] }] },
+      { tasks: [], batchStatus: "COMPLETED" },
+    ],
+    importErrors: [invalidOutput],
+  });
+  const hermes = fakeHermes();
+
+  const summary = await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    log: () => {},
+  });
+
+  assert.equal(hermes.calls.repairs.length, 1);
+  assert.equal(
+    hermes.calls.repairs[0].sessionId,
+    `joblit:${TASK.taskId}:resume`,
+  );
+  assert.match(hermes.calls.repairs[0].feedback, /AI output is not valid JSON/);
+  assert.equal(joblit.calls.imports.length, 2);
+  assert.equal(joblit.calls.imports[1].modelOutput, '{"generated":"repaired"}');
+  assert.deepEqual(hermes.calls.acknowledgements, [
+    { sessionId: `joblit:${TASK.taskId}:resume` },
+  ]);
+  assert.equal(summary.succeeded, 1);
+  assert.equal(summary.failed, 0);
+});
+
+test("replays the exact import after an unknown settlement outcome", async () => {
+  const timeout = Object.assign(new Error("request timed out"), {
+    code: "JOBLIT_REQUEST_TIMEOUT",
+  });
+  const joblit = fakeJoblit({
+    steps: [
+      { tasks: [{ ...TASK, remainingTargets: ["RESUME"] }] },
+      { tasks: [], batchStatus: "COMPLETED" },
+    ],
+    importErrors: [timeout],
+  });
+  const hermes = fakeHermes();
+
+  const summary = await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    settlementRetryMs: 1,
+    log: () => {},
+  });
+
+  assert.equal(joblit.calls.imports.length, 2);
+  assert.deepEqual(joblit.calls.imports[1], joblit.calls.imports[0]);
+  assert.equal(hermes.calls.repairs.length, 0);
+  assert.deepEqual(joblit.calls.runOnce[1].completedTasks, []);
+  assert.equal(summary.succeeded, 1);
+  assert.equal(summary.failed, 0);
+  assert.equal(summary.deferred, 0);
+});
+
+test("defers an import whose settlement stays unknown instead of reporting FAILED", async () => {
+  const unknown = () =>
+    Object.assign(new Error("connection reset after upload"), {
+      code: "JOBLIT_TRANSPORT_ERROR",
+    });
+  const joblit = fakeJoblit({
+    steps: [{ tasks: [{ ...TASK, remainingTargets: ["RESUME"] }] }],
+    importErrors: [unknown(), unknown(), unknown()],
+  });
+  const hermes = fakeHermes();
+
+  const summary = await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    settlementRetryMs: 1,
+    log: () => {},
+  });
+
+  assert.equal(joblit.calls.imports.length, 3);
+  assert.equal(joblit.calls.runOnce.length, 1);
+  assert.deepEqual(hermes.calls.acknowledgements, []);
+  assert.equal(summary.succeeded, 0);
+  assert.equal(summary.failed, 0);
+  assert.equal(summary.deferred, 1);
+});
+
+test("treats local acknowledgement cleanup as non-authoritative", async () => {
+  const joblit = fakeJoblit({
+    steps: [{ tasks: [TASK] }, { tasks: [], batchStatus: "COMPLETED" }],
+  });
+  const resumeSession = `joblit:${TASK.taskId}:resume`;
+  const hermes = fakeHermes({
+    acknowledge(request) {
+      if (request.sessionId === resumeSession) {
+        throw new Error("state file is temporarily locked");
+      }
+    },
+  });
+
+  const summary = await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    settlementRetryMs: 1,
+    log: () => {},
+  });
+
+  assert.deepEqual(
+    joblit.calls.imports.map((request) => request.target),
+    ["resume", "cover"],
+  );
+  assert.equal(summary.succeeded, 1);
+  assert.equal(summary.failed, 0);
+  assert.deepEqual(joblit.calls.runOnce[1].completedTasks, []);
+});
+
+test("reconciles an imported result after acknowledgement crashed without repeating Hermes or import", async () => {
+  const operation = {
+    tailoringRunId: RESUME_RUN_ID,
+    attemptId: TASK.attemptId,
+    target: "resume",
+    promptHash: "a".repeat(64),
+  };
+  let pending = null;
+  let acknowledgementCrashes = true;
+  const hermes = fakeHermes({
+    generate(request) {
+      pending = {
+        sessionId: request.sessionId,
+        phase: "completed",
+        operation: request.operation,
+      };
+      return '{"generated":"once"}';
+    },
+    acknowledge({ sessionId }) {
+      if (acknowledgementCrashes) throw new Error("simulated process crash");
+      assert.equal(sessionId, pending.sessionId);
+      pending = null;
+    },
+  });
+  hermes.client.recoverableOperations = async () => (pending ? [pending] : []);
+
+  const firstJoblit = fakeJoblit({
+    steps: [
+      { tasks: [{ ...TASK, remainingTargets: ["RESUME"] }] },
+      { tasks: [], batchStatus: "COMPLETED" },
+    ],
+  });
+  const firstSummary = await processActiveBatch({
+    joblit: firstJoblit.client,
+    hermes: hermes.client,
+    settlementRetryMs: 1,
+    log: () => {},
+  });
+
+  assert.equal(firstSummary.succeeded, 1);
+  assert.deepEqual(pending?.operation, operation);
+  assert.equal(firstJoblit.calls.imports.length, 1);
+  assert.equal(hermes.calls.runs.length, 1);
+
+  acknowledgementCrashes = false;
+  const restartedJoblit = fakeJoblit({
+    activeBatch: { batchId: null },
+    steps: [],
+    tailoringStatuses: [
+      {
+        run: {
+          id: RESUME_RUN_ID,
+          status: "RUNNING",
+          acceptedTargetMask: 1,
+          handle: { id: RESUME_RUN_ID, attemptId: TASK.attemptId },
+        },
+      },
+    ],
+  });
+  await processActiveBatch({
+    joblit: restartedJoblit.client,
+    hermes: hermes.client,
+    log: () => {},
+  });
+
+  assert.equal(pending, null);
+  assert.deepEqual(restartedJoblit.calls.statuses, [RESUME_RUN_ID]);
+  assert.equal(restartedJoblit.calls.imports.length, 0);
+  assert.equal(hermes.calls.runs.length, 1);
+});
+
+test("preserves accepted recovery state when local cleanup is still unavailable", async () => {
+  const sessionId = `joblit:${TASK.taskId}:resume`;
+  const logs = [];
+  const hermes = fakeHermes({
+    acknowledgeFailure: new Error("state file is still locked"),
+    recoverableOperations: [
+      {
+        sessionId,
+        phase: "completed",
+        operation: {
+          tailoringRunId: RESUME_RUN_ID,
+          attemptId: TASK.attemptId,
+          target: "resume",
+          promptHash: "a".repeat(64),
+        },
+      },
+    ],
+  });
+  const joblit = fakeJoblit({
+    activeBatch: { batchId: null },
+    tailoringStatuses: [
+      {
+        run: {
+          id: RESUME_RUN_ID,
+          status: "RUNNING",
+          acceptedTargetMask: 1,
+          handle: { id: RESUME_RUN_ID, attemptId: TASK.attemptId },
+        },
+      },
+    ],
+  });
+
+  await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    settlementRetryMs: 1,
+    log: (message) => logs.push(message),
+  });
+
+  assert.equal(hermes.calls.acknowledgements.length, 3);
+  assert.match(logs.join("\n"), /cleanup deferred/);
+  assert.doesNotMatch(logs.join("\n"), /import already accepted/);
+  assert.deepEqual(hermes.calls.discards, []);
+});
+
+test("preserves a recoverable result while its exact TailoringRun attempt is still running", async () => {
+  const sessionId = `joblit:${TASK.taskId}:resume`;
+  const hermes = fakeHermes({
+    recoverableOperations: [
+      {
+        sessionId,
+        phase: "completed",
+        operation: {
+          tailoringRunId: RESUME_RUN_ID,
+          attemptId: TASK.attemptId,
+          target: "resume",
+          promptHash: "a".repeat(64),
+        },
+      },
+    ],
+  });
+  const joblit = fakeJoblit({
+    activeBatch: { batchId: null },
+    steps: [],
+    tailoringStatuses: [
+      {
+        run: {
+          id: RESUME_RUN_ID,
+          status: "RUNNING",
+          acceptedTargetMask: 0,
+          handle: { id: RESUME_RUN_ID, attemptId: TASK.attemptId },
+        },
+      },
+    ],
+  });
+
+  await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    log: () => {},
+  });
+
+  assert.deepEqual(hermes.calls.acknowledgements, []);
+  assert.deepEqual(hermes.calls.discards, []);
+  assert.deepEqual(joblit.calls.statuses, [RESUME_RUN_ID]);
+});
+
+test("fails closed and preserves recovery state when the TailoringRun attempt changed", async () => {
+  const sessionId = `joblit:${TASK.taskId}:resume`;
+  const warnings = [];
+  const hermes = fakeHermes({
+    recoverableOperations: [
+      {
+        sessionId,
+        phase: "repairing",
+        operation: {
+          tailoringRunId: RESUME_RUN_ID,
+          attemptId: TASK.attemptId,
+          target: "resume",
+          promptHash: "a".repeat(64),
+        },
+      },
+    ],
+  });
+  const joblit = fakeJoblit({
+    activeBatch: { batchId: null },
+    steps: [],
+    tailoringStatuses: [
+      {
+        run: {
+          id: RESUME_RUN_ID,
+          status: "RUNNING",
+          acceptedTargetMask: 0,
+          handle: {
+            id: RESUME_RUN_ID,
+            attemptId: "77777777-7777-4777-8777-777777777777",
+          },
+        },
+      },
+    ],
+  });
+
+  await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    log: (message) => warnings.push(message),
+  });
+
+  assert.deepEqual(hermes.calls.acknowledgements, []);
+  assert.deepEqual(hermes.calls.discards, []);
+  assert.match(warnings.join("\n"), /another execution attempt/);
+});
+
+test("discards a recoverable result when its TailoringRun ended without accepting the target", async () => {
+  const sessionId = `joblit:${TASK.taskId}:cover`;
+  const hermes = fakeHermes({
+    recoverableOperations: [
+      {
+        sessionId,
+        phase: "completed",
+        operation: {
+          tailoringRunId: COVER_RUN_ID,
+          attemptId: TASK.attemptId,
+          target: "cover",
+          promptHash: "b".repeat(64),
+        },
+      },
+    ],
+  });
+  const joblit = fakeJoblit({
+    activeBatch: { batchId: null },
+    steps: [],
+    tailoringStatuses: [
+      {
+        run: {
+          id: COVER_RUN_ID,
+          status: "FAILED",
+          acceptedTargetMask: 0,
+          handle: null,
+        },
+      },
+    ],
+  });
+
+  await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    log: () => {},
+  });
+
+  assert.deepEqual(hermes.calls.acknowledgements, []);
+  assert.deepEqual(hermes.calls.discards, [{ sessionId }]);
+});
+
+test("propagates caller cancellation through the controlled Hermes signal", async () => {
+  const controller = new AbortController();
+  const joblit = fakeJoblit({
+    steps: [
+      { tasks: [{ ...TASK, remainingTargets: ["RESUME"] }] },
+      { tasks: [], batchStatus: "COMPLETED" },
+    ],
+  });
+  const hermes = fakeHermes();
+
+  await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    signal: controller.signal,
+    log: () => {},
+  });
+
+  const controlledSignal = hermes.calls.runs[0].signal;
+  assert.notEqual(controlledSignal, controller.signal);
+  assert.equal(controlledSignal.aborted, false);
+
+  controller.abort();
+
+  assert.equal(controlledSignal.aborted, true);
+});
+
+test("honours a server-side TailoringRun cancellation before starting Hermes", async () => {
+  const joblit = fakeJoblit({
+    steps: [
+      { tasks: [{ ...TASK, remainingTargets: ["RESUME"] }] },
+      { tasks: [], batchStatus: "CANCELLED" },
+    ],
+    tailoringStatuses: [
+      {
+        run: {
+          id: RESUME_RUN_ID,
+          status: "CANCELLED",
+          errorCode: "TAILORING_CANCELLED",
+        },
+      },
+    ],
+  });
+  const hermes = fakeHermes();
+
+  const summary = await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    cancelPollMs: 1,
+    log: () => {},
+  });
+
+  assert.deepEqual(joblit.calls.statuses, [RESUME_RUN_ID]);
+  assert.equal(hermes.calls.runs.length, 0);
+  assert.deepEqual(joblit.calls.runOnce[1].completedTasks, []);
+  assert.equal(summary.failed, 0);
+});
+
+test("defers a superseded TailoringRun attempt without reporting task failure", async () => {
+  const joblit = fakeJoblit({
+    steps: [{ tasks: [{ ...TASK, remainingTargets: ["RESUME"] }] }],
+    tailoringStatuses: [
+      {
+        run: {
+          id: RESUME_RUN_ID,
+          status: "RUNNING",
+          handle: {
+            id: RESUME_RUN_ID,
+            attemptId: "77777777-7777-4777-8777-777777777777",
+          },
+        },
+      },
+    ],
+  });
+  const hermes = fakeHermes();
+
+  const summary = await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    log: () => {},
+  });
+
+  assert.equal(hermes.calls.runs.length, 0);
+  assert.equal(joblit.calls.runOnce.length, 1);
+  assert.equal(summary.failed, 0);
+  assert.equal(summary.deferred, 1);
+});
+
+test("aborts an in-flight TailoringRun status poll after Hermes settles", async () => {
+  let signalMonitorStarted;
+  const monitorStarted = new Promise((resolve) => {
+    signalMonitorStarted = resolve;
+  });
+  const joblit = fakeJoblit({
+    steps: [
+      { tasks: [{ ...TASK, remainingTargets: ["RESUME"] }] },
+      { tasks: [], batchStatus: "COMPLETED" },
+    ],
+    tailoringStatusImpl(runId, { signal }, callNumber) {
+      if (callNumber === 1) {
+        return {
+          run: {
+            id: runId,
+            status: "RUNNING",
+            handle: { id: runId, attemptId: TASK.attemptId },
+          },
+        };
+      }
+      return new Promise((_resolve, reject) => {
+        signalMonitorStarted();
+        signal.addEventListener(
+          "abort",
+          () => reject(new DOMException("aborted", "AbortError")),
+          { once: true },
+        );
+      });
+    },
+  });
+  const hermes = fakeHermes({
+    async generate() {
+      await monitorStarted;
+      return '{"generated":"done"}';
+    },
+  });
+
+  const summary = await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    cancelPollMs: 1,
+    log: () => {},
+  });
+
+  assert.equal(joblit.calls.statuses.length, 2);
+  assert.equal(summary.succeeded, 1);
+  assert.equal(summary.failed, 0);
 });
 
 test("does nothing when no batch is active", async () => {
@@ -207,4 +838,61 @@ test("stops when the batch reports a terminal status", async () => {
 
   // Exactly two round-trips: claim, then settle+observe-completion.
   assert.equal(joblit.calls.runOnce.length, 2);
+});
+
+test("waits on a fresh running lease and retries until the batch is terminal", async () => {
+  const joblit = fakeJoblit({
+    steps: [
+      {
+        tasks: [],
+        batchStatus: "RUNNING",
+        retryAfterMs: 20_000,
+        earliestLeaseExpiresAt: "2026-02-22T10:20:00.000Z",
+      },
+      { tasks: [], batchStatus: "SUCCEEDED" },
+    ],
+  });
+  const hermes = fakeHermes();
+  const waits = [];
+
+  await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    leaseWaitMaxMs: 5,
+    wait: async (ms) => {
+      waits.push(ms);
+    },
+    log: () => {},
+  });
+
+  assert.deepEqual(waits, [5]);
+  assert.equal(joblit.calls.runOnce.length, 2);
+});
+
+test("cancels promptly while waiting on another task lease", async () => {
+  const controller = new AbortController();
+  const joblit = fakeJoblit({
+    steps: [
+      {
+        tasks: [],
+        batchStatus: "RUNNING",
+        retryAfterMs: 20_000,
+      },
+    ],
+  });
+  const hermes = fakeHermes();
+
+  await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    signal: controller.signal,
+    leaseWaitMaxMs: 5,
+    wait: async (_ms, signal) => {
+      controller.abort();
+      assert.equal(signal.aborted, true);
+    },
+    log: () => {},
+  });
+
+  assert.equal(joblit.calls.runOnce.length, 1);
 });

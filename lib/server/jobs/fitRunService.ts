@@ -99,6 +99,11 @@ export type FitRunStats = {
   pending: number;
 };
 
+export type FitRunCancellation = FitRunStats & {
+  /** Pending and claimed jobs terminally cancelled by this command. */
+  cancelled: number;
+};
+
 export async function getFitRunStats(userId: string): Promise<FitRunStats> {
   const [total, pending] = await Promise.all([
     prisma.job.count({ where: { userId, status: "NEW" } }),
@@ -107,10 +112,62 @@ export async function getFitRunStats(userId: string): Promise<FitRunStats> {
   return { total, scored: total - pending, pending };
 }
 
-/** Explicitly starting a new scan retries only terminally failed AI batches. */
+/**
+ * Cancel the user's current Fit scan at the database queue boundary.
+ *
+ * The same per-user lock used by `nextFitBatch` linearizes cancellation with
+ * leasing. Marking every unscored row terminal makes the status projection
+ * immediately report no pending work; a later explicit run resets these rows
+ * and can score them again.
+ */
+export async function cancelFitRun(
+  userId: string,
+): Promise<FitRunCancellation> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      SELECT pg_advisory_xact_lock(
+        ${FIT_CLAIM_LOCK_NAMESPACE}::integer,
+        ${stableInt32(userId)}::integer
+      )
+    `;
+
+    const now = new Date();
+    const result = await tx.job.updateMany({
+      where: pendingFitWhere(userId),
+      data: {
+        fitScore: null,
+        fitVerdict: null,
+        fitEligibility: null,
+        fitMatrix: Prisma.DbNull,
+        fitSource: "cancelled",
+        fitScoredAt: now,
+        fitSnapshotHash: null,
+      },
+    });
+    const total = await tx.job.count({
+      where: { userId, status: "NEW" },
+    });
+    const pending = await tx.job.count({
+      where: pendingFitWhere(userId),
+    });
+
+    return {
+      cancelled: result.count,
+      total,
+      scored: total - pending,
+      pending,
+    };
+  });
+}
+
+/** Explicitly starting a new scan retries terminally failed or cancelled work. */
 export async function resetFailedFitBatches(userId: string): Promise<number> {
   const result = await prisma.job.updateMany({
-    where: { userId, status: "NEW", fitSource: "failed" },
+    where: {
+      userId,
+      status: "NEW",
+      fitSource: { in: ["failed", "cancelled"] },
+    },
     data: {
       fitScore: null,
       fitVerdict: null,

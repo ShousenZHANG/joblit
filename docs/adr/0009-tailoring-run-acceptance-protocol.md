@@ -3,6 +3,11 @@
 - Status: Accepted
 - Date: 2026-07-26
 
+> **Implementation note — 2026-07-31:** ADR-0014 retired the browser Local AI
+> writer. References to Local AI below describe the historical rollout and
+> retained rows; current unattended imports come from the Agent Runner with an
+> `AgentCredential` and a public Tailoring Run handle.
+
 ## Context
 
 Manual import, Local AI, external Codex Batch, and the server batch runner all
@@ -28,9 +33,8 @@ standalone manual and Local AI runs have no batch task.
 
 The database deliberately does **not** persist full prompts, raw model output,
 or Hermes-private `run_*` identifiers. Prompt receipts and snapshot hashes are
-enough to bind accepted output to the issued inputs. The browser extension
-retains any private Hermes request-to-run mapping outside the Joblit domain
-model.
+enough to bind accepted output to the issued inputs. The local Runner retains
+any private Hermes request-to-run mapping outside the Joblit domain model.
 
 Historical Applications are not backfilled with synthetic runs. A
 `TailoringRun` is evidence of the new acceptance protocol, so inventing one for
@@ -143,11 +147,10 @@ Prompt responses first gain run identity as an additive field. Manual, Local
 AI, Codex Batch, and server-batch adapters then move to run-bound acceptance.
 **Phase A (expand/compatibility)** deploys schema and mixed-version readers.
 Prompt-driven manual imports issue a single-target run, while legacy plain
-manual submissions remain accepted without manufacturing evidence. The
-extension may retry an old prompt service without `issueKey` and labels that
-response as a legacy envelope. Local AI legacy imports without a handle remain
-temporarily readable. Codex Batch uses handles whenever it enters the new
-protocol.
+manual submissions remain accepted without manufacturing evidence. Legacy
+Local AI imports without a handle remain readable as historical data; new
+Runner imports always carry a run handle. Codex Batch uses handles whenever it
+enters the new protocol.
 
 **Phase B (drain/writer switch)** pauses batch dispatch and drains old
 deployments and in-flight claims before enabling v1 claiming. Each new claim
@@ -158,10 +161,11 @@ a fresh canary and a partial-target stale-reclaim canary both satisfy the task,
 run, receipt, and Application invariants.
 
 **Phase C (contract)** begins only after legacy Local AI envelope telemetry is
-zero and old clients have drained. The fallback is then removed and Local AI
-imports require their public TailoringRun handle. Historical tasks and
-Applications stay legacy; the cutover never manufactures attempts, receipts,
-or successful Tailoring Runs. Once every writer is v1, independent
+zero and old clients have drained. The fallback is then removed; the retired
+Local AI writer is not revived, while current Runner imports require their
+public TailoringRun handle. Historical tasks and Applications stay legacy; the
+cutover never manufactures attempts, receipts, or successful Tailoring Runs.
+Once every writer is v1, independent
 `SUCCEEDED` task writes and integer-attempt authorization are retired.
 
 ## Consequences

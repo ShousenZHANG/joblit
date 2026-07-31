@@ -1,6 +1,6 @@
 /**
  * JoblitMark — the canonical Joblit "J" monogram. Source of truth for every
- * in-product brand mark (nav rails, login, OG renders, extension icon).
+ * in-product brand mark (nav rails, login, and OG renders).
  *
  * Design: a geometric "J" — top bar + stem curving into a rounded hook — drawn
  * as round-capped strokes on a 64×64 grid. The old mark was a single thin

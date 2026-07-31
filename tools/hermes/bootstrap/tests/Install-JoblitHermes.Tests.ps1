@@ -139,6 +139,7 @@ installed_at: '2026-07-16T00:00:00+00:00'
         $first = Invoke-JoblitHermesInstall -PackagePath $script:PackageRoot -ProfileName $profile -Production
         $envPath = Join-Path (Get-JoblitProfileRoot $profile) '.env'
         $firstValues = Read-JoblitEnvFile $envPath
+        $firstValues['API_SERVER_CORS_ORIGINS'] = '*'
         $firstValues['SAFE_USER_SETTING'] = 'keep-me'
         Write-JoblitEnvFileAtomic -Path $envPath -Values $firstValues
 
@@ -148,6 +149,7 @@ installed_at: '2026-07-16T00:00:00+00:00'
         $second.keyFingerprint | Should -Be $first.keyFingerprint
         $secondValues['API_SERVER_HOST'] | Should -Be '127.0.0.1'
         $secondValues['API_SERVER_MODEL_NAME'] | Should -Be $profile
+        $secondValues.Contains('API_SERVER_CORS_ORIGINS') | Should -BeFalse
         Test-JoblitApiKeyStrength $secondValues['API_SERVER_KEY'] | Should -BeTrue
         $secondValues['SAFE_USER_SETTING'] | Should -Be 'keep-me'
         ($global:JoblitTestCommands | Where-Object { $_ -like 'profile update*' }) | Should -Contain "profile update $profile --yes"

@@ -13,12 +13,11 @@ export const runtime = "nodejs";
 /**
  * Coarse-triage prompt for one leased fit batch.
  *
- * Replaces `/api/ext/jobs/triage-prompt`, which sat behind the extension
- * ingress. On the agent seam so the Runner can request it with its token; the
- * browser can still reach it with a session cookie.
+ * Lives on the Agent seam so the Runner can request it with a capability-
+ * scoped credential; the browser can still reach it with a session cookie.
  */
 export async function POST(req: Request) {
-  return withAgentRoute(req, async ({ userId, requestId }) => {
+  return withAgentRoute(req, "fit:drain", async ({ userId, requestId }) => {
     const json = await req.json().catch(() => null);
     const parsed = TriagePromptRequestSchema.safeParse(json);
     if (!parsed.success) {

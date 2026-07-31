@@ -11,6 +11,7 @@ const prismaStore = vi.hoisted(() => {
     },
     applicationBatchTask: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       updateMany: vi.fn(),
       update: vi.fn(),
       groupBy: vi.fn(),
@@ -37,6 +38,7 @@ import {
   cancelBatch,
   claimNextBatchTask,
   completeBatchTask,
+  getBatchLeaseRetryHint,
 } from "@/lib/server/applicationBatches/runner";
 
 const BATCH_ID = "550e8400-e29b-41d4-a716-446655440000";
@@ -52,6 +54,7 @@ describe("application batch runner", () => {
     prismaStore.applicationBatch.updateMany.mockReset();
     prismaStore.applicationBatch.update.mockReset();
     prismaStore.applicationBatchTask.findFirst.mockReset();
+    prismaStore.applicationBatchTask.findMany.mockReset();
     prismaStore.applicationBatchTask.updateMany.mockReset();
     prismaStore.applicationBatchTask.update.mockReset();
     prismaStore.applicationBatchTask.groupBy.mockReset();
@@ -144,6 +147,43 @@ describe("application batch runner", () => {
     expect(claimed.task.issueKey).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     );
+  });
+
+  it("caps the retry poll while preserving the earliest lease deadline", async () => {
+    const now = new Date("2026-02-22T10:00:00.000Z");
+    prismaStore.applicationBatchTask.findMany.mockResolvedValueOnce([
+      {
+        executionLeaseExpiresAt: new Date("2026-02-22T10:20:00.000Z"),
+        startedAt: now,
+      },
+      {
+        executionLeaseExpiresAt: new Date("2026-02-22T10:02:00.000Z"),
+        startedAt: now,
+      },
+    ]);
+
+    await expect(
+      getBatchLeaseRetryHint({
+        userId: "user-1",
+        batchId: BATCH_ID,
+        now,
+      }),
+    ).resolves.toEqual({
+      retryAfterMs: 30_000,
+      earliestLeaseExpiresAt: "2026-02-22T10:02:00.000Z",
+    });
+    expect(prismaStore.applicationBatchTask.findMany).toHaveBeenCalledWith({
+      where: {
+        batchId: BATCH_ID,
+        userId: "user-1",
+        status: "RUNNING",
+        completedAt: null,
+      },
+      select: {
+        executionLeaseExpiresAt: true,
+        startedAt: true,
+      },
+    });
   });
 
   it("reclaims only the missing target from a partially accepted run", async () => {

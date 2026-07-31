@@ -3,7 +3,6 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 const REQUIRED = {
   DATABASE_URL: "postgresql://u:p@localhost:5432/db",
   AUTH_SECRET: "x".repeat(32),
-  APP_ENC_KEY: "dGVzdHRlc3R0ZXN0dGVzdA==",
   FETCH_RUN_SECRET: "fetch-secret",
   LATEX_RENDER_URL: "https://render.example.com",
   LATEX_RENDER_TOKEN: "latex-token",
@@ -25,9 +24,33 @@ describe("validateServerEnv", () => {
   });
 
   it("passes with all required vars present (optional ones absent)", async () => {
-    process.env = { ...original, ...REQUIRED };
+    process.env = { ...original, ...REQUIRED, APP_ENC_KEY: "" };
     const { validateServerEnv } = await loadFresh();
     expect(() => validateServerEnv()).not.toThrow();
+  });
+
+  it("does not expose retired Extension ingress environment variables", async () => {
+    process.env = {
+      ...original,
+      ...REQUIRED,
+      APP_ENC_KEY: "legacy",
+      UPSTASH_REDIS_REST_URL: "https://legacy.example.com",
+      UPSTASH_REDIS_REST_TOKEN: "legacy",
+      KV_REST_API_URL: "https://legacy-kv.example.com",
+      KV_REST_API_TOKEN: "legacy",
+    };
+    const { validateServerEnv } = await loadFresh();
+
+    const parsed = validateServerEnv();
+    for (const retiredKey of [
+      "APP_ENC_KEY",
+      "UPSTASH_REDIS_REST_URL",
+      "UPSTASH_REDIS_REST_TOKEN",
+      "KV_REST_API_URL",
+      "KV_REST_API_TOKEN",
+    ]) {
+      expect(parsed).not.toHaveProperty(retiredKey);
+    }
   });
 
   it("throws listing the missing required key", async () => {

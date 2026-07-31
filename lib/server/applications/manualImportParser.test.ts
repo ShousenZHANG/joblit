@@ -93,7 +93,7 @@ describe("manual import parser modes", () => {
     expect(parseCoverStrictOutput(JSON.stringify(cover)).data).toEqual(cover);
   });
 
-  it("defaults request source to manual_import and rejects over-posting", () => {
+  it("accepts only current import sources and rejects retired Local AI writes", () => {
     const base = {
       jobId: "550e8400-e29b-41d4-a716-446655440000",
       target: "resume",
@@ -103,6 +103,9 @@ describe("manual import parser modes", () => {
     expect(
       ManualGenerateSchema.parse({ ...base, source: "codex_batch" }).source,
     ).toBe("codex_batch");
+    expect(
+      ManualGenerateSchema.safeParse({ ...base, source: "local_ai" }).success,
+    ).toBe(false);
     expect(ManualGenerateSchema.safeParse({ ...base, userId: "attacker" }).success).toBe(false);
   });
 

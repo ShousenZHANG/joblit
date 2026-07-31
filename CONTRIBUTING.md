@@ -6,11 +6,14 @@ Thanks for considering a contribution. This document covers the development work
 
 1. Fork and clone the repository.
 2. Install dependencies: `npm install`.
-3. Install the Chrome extension's dependencies: `npm install --prefix chrome-extension`. It is a separate npm project with its own lockfile and Vitest config.
-4. Copy `.env.example` to `.env` and fill in credentials (see [README — Environment Variables](./README.md#environment-variables)).
-5. Run database migrations: `npx prisma migrate deploy`.
-6. Start the dev server: `npm run dev`.
-7. Run every gate: `npm run verify`.
+3. Copy `.env.example` to `.env` and fill in credentials (see [README — Environment Variables](./README.md#environment-variables)).
+4. Run database migrations: `npx prisma migrate deploy`. Keep the app's
+   `DATABASE_URL` pooled, but give Prisma an unpooled endpoint through
+   `DIRECT_URL` (or the integration-provided `DATABASE_URL_UNPOOLED` /
+   `POSTGRES_URL_NON_POOLING`). A standard Neon `-pooler` URL is mapped to its
+   documented direct host automatically; other poolers are never guessed.
+5. Start the dev server: `npm run dev`.
+6. Run every gate: `npm run verify`.
 
 ## Branching
 
@@ -32,17 +35,16 @@ Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `polish`, `ci
 
 Examples:
 - `feat(jobs): add bulk-status update`
-- `fix(extension): debounce form-fill events on Workday`
+- `fix(runner): recover a leased tailoring task after restart`
 - `refactor(market): consolidate locale conversions into single seam`
 
 ## Pull Request Checklist
 
 Before requesting review:
 
-- [ ] `npm run verify` passes — typecheck, lint, dependency policy, dead-code
-      gate, root tests, and the Chrome extension's own typecheck and tests.
-      CI runs this set plus the builds and dependency audits, which need
-      credentials or network.
+- [ ] `npm run verify` passes — typecheck, lint, dependency policy, dead-code,
+      root tests, Runner tests, and Hermes package tests. CI runs this set plus
+      builds and dependency audits, which need credentials or network.
 - [ ] New behaviour has tests (target 80%+ coverage on new code)
 - [ ] No secrets committed (check `git diff`)
 - [ ] If you added an env var, update `.env.example` and the README table

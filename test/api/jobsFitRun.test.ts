@@ -35,10 +35,12 @@ vi.mock("@/lib/server/ai/resumePromptSnapshot", () => ({
 }));
 
 import { POST as runPOST } from "@/app/api/jobs/fit/run/route";
+import { POST as cancelFitPOST } from "@/app/api/jobs/fit/cancel/route";
 import { POST as nextBatchPOST } from "@/app/api/jobs/fit/next-batch/route";
 import { POST as markFailedPOST } from "@/app/api/jobs/fit/mark-failed/route";
 import { POST as releaseBatchPOST } from "@/app/api/jobs/fit/release-batch/route";
 import { POST as bulkIgnorePOST } from "@/app/api/jobs/bulk-ignore/route";
+import { UnauthorizedError } from "@/lib/server/auth/requireSession";
 
 const JOB_A = "11111111-1111-4111-8111-111111111111";
 const JOB_B = "22222222-2222-4222-8222-222222222222";
@@ -86,7 +88,7 @@ describe("fit scoring center apis", () => {
     jobStore.updateMany
       .mockResolvedValueOnce({ count: 2 })
       .mockResolvedValueOnce({ count: 0 })
-      .mockResolvedValueOnce({ count: 0 })
+      .mockResolvedValueOnce({ count: 3 })
       .mockResolvedValueOnce({ count: 1 });
     txMock.transaction.mockImplementation(async (ops: unknown[]) =>
       Promise.all(ops as Promise<unknown>[]),
@@ -104,7 +106,56 @@ describe("fit scoring center apis", () => {
       scored: 9,
       prescreened: 1,
       invalidated: 2,
+      retried: 3,
     });
+    expect(jobStore.updateMany).toHaveBeenNthCalledWith(3, {
+      where: {
+        userId: "user-1",
+        status: "NEW",
+        fitSource: { in: ["failed", "cancelled"] },
+      },
+      data: expect.objectContaining({ fitSource: null, fitScoredAt: null }),
+    });
+  });
+
+  it("cancels every pending or claimed fit job and returns terminal no-store stats", async () => {
+    jobStore.updateMany.mockResolvedValueOnce({ count: 3 });
+    jobStore.count.mockResolvedValueOnce(10).mockResolvedValueOnce(0);
+
+    const response = await cancelFitPOST();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe(
+      "private, no-store, max-age=0",
+    );
+    await expect(response.json()).resolves.toEqual({
+      cancelled: 3,
+      total: 10,
+      scored: 10,
+      pending: 0,
+    });
+    expect(txMock.executeRaw).toHaveBeenCalledTimes(1);
+    expect(jobStore.updateMany).toHaveBeenCalledWith({
+      where: {
+        userId: "user-1",
+        status: "NEW",
+        fitScoredAt: null,
+      },
+      data: expect.objectContaining({
+        fitSource: "cancelled",
+        fitScoredAt: expect.any(Date),
+      }),
+    });
+  });
+
+  it("keeps fit cancellation session-only", async () => {
+    sessionMock.require.mockRejectedValueOnce(new UnauthorizedError());
+
+    const response = await cancelFitPOST();
+
+    expect(response.status).toBe(401);
+    expect(jobStore.updateMany).not.toHaveBeenCalled();
+    expect(txMock.transaction).not.toHaveBeenCalled();
   });
 
   it("next-batch serves unscored ids from the database, not from the page", async () => {

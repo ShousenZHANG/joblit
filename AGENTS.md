@@ -17,25 +17,31 @@ Given a filtered set of `NEW` jobs, run a deterministic loop:
 
 ## Authentication
 
-Batch protocol routes accept either identity, and both resolve to the same
-user-scoped session context:
+Agent-facing protocol routes accept either identity, and both resolve to the
+same user-scoped context:
 
-- **Agent token** — `Authorization: Bearer <token>`, issued from the Joblit
-  `/extension` page and stored hashed. This is how an unattended agent runs.
+- **AgentCredential** — `Authorization: Bearer <token>`, issued from the
+  session-only Joblit `/agent` page and stored as a SHA-256 hash. Version 1
+  credentials use prefix `jfagent_v1_`, audience `joblit-agent`, and explicit
+  `fit:drain`, `tailoring:execute`, or `tailoring:control` capabilities. This is
+  how an unattended agent runs.
 - **Session cookie** — an interactive browser session, for a human driving the
   same endpoints.
 
-A presented Bearer token is authoritative: it never falls back to the cookie,
-so revoking a token immediately stops the agent even in a browser that is still
-signed in. An expired or revoked token returns `401`.
+A presented Bearer credential is authoritative: it never falls back to the
+cookie, so revoking a credential immediately stops the agent even in a browser
+that is still signed in. An expired or revoked credential returns `401`.
 
-Routes on this seam: `GET /api/application-batches/active`,
+Routes on the AgentCredential seam: `GET /api/application-batches/active`,
 `POST /api/application-batches/:id/run-once`, `POST /api/applications/prompt`,
 `POST /api/applications/manual-generate`, the `/api/tailoring-runs/:id` route,
 cancel, and fail endpoints, and the fit queue —
 `POST /api/jobs/fit/{next-batch,prompt,batch-import,mark-failed,release-batch}`.
 `/api/jobs/fit/run` and `/api/jobs/fit/prescreen` stay session-only: enqueuing
 work is the user's action, draining it is the agent's.
+Batch creation, `/codex-run`, and the task `PATCH` route also stay session-only;
+an unattended Runner claims work and reports exceptional outcomes through
+`run-once`.
 
 The first-party implementation of this protocol is the Joblit Runner
 (`tools/runner`, see its [README](tools/runner/README.md)) — a dependency-free
@@ -44,22 +50,73 @@ local worker that generates through a loopback Hermes gateway.
 ## Canonical APIs
 
 - Create batch: `POST /api/application-batches`
-- Claim run context: `POST /api/application-batches/:id/codex-run`
+- Claim run context (interactive session): `POST /api/application-batches/:id/codex-run`
 - Orchestrated run step (report failure/skip + claim): `POST /api/application-batches/:id/run-once`
-- Report task failure/skip: `PATCH /api/application-batches/:id/tasks/:taskId`
-- Batch summary: `GET /api/application-batches/:id/summary`
+- Report task failure/skip (interactive session): `PATCH /api/application-batches/:id/tasks/:taskId`
+- Batch summary (interactive session): `GET /api/application-batches/:id/summary`
 - Prompt for external generation: `POST /api/applications/prompt`
 - Persist generated artifact: `POST /api/applications/manual-generate`
+
+## Versioned Agent Request
+
+An unattended Runner uses an `AgentCredential`, not a retired Extension token:
+
+```http
+Authorization: Bearer jfagent_v1_<64-lowercase-hex-characters>
+Content-Type: application/json
+```
+
+After `run-once` returns a claimed task, the prompt request must echo the
+complete v1 execution identity exactly:
+
+```json
+{
+  "jobId": "<tasks[].jobId UUID>",
+  "target": "resume",
+  "source": "codex_batch",
+  "delivery": "FINAL",
+  "protocolVersion": 1,
+  "issueKey": "<tasks[].issueKey UUID>",
+  "batchId": "<batch.id UUID>",
+  "batchTaskId": "<tasks[].id UUID>",
+  "batchAttemptId": "<tasks[].attemptId UUID>"
+}
+```
+
+Do not add these claim fields to the later `manual-generate` body: that strict
+request echoes the prompt response's complete `tailoringRun` handle and
+`promptMeta`, which carry the server-bound run and receipt identities.
+
+## Fit Settlement Contract
+
+`POST /api/jobs/fit/prompt` returns a 64-hex, content-addressed `issueKey`
+derived from the sorted claimed Job ids and the server-owned prompt snapshot.
+Send that key, the unchanged `promptMeta`, the same claimed Job ids, and the model
+output to `batch-import`. `FitBatchImportReceipt` is unique by
+`(userId, issueKey)` and is written in the same transaction as the Job scores.
+An identical retry replays the stored settlement; different content for an
+already-settled issue conflicts.
+
+Treat a timeout, connection loss, or 5xx during import as an **unknown
+settlement**, not a failure. Replay the exact request. If the result remains
+unknown, preserve the claim and local Hermes state for a later reconciliation;
+do not mark those Jobs failed or generate a replacement result.
+On startup, query `POST /api/jobs/fit/settlement-status` for completed Fit
+issues and clear local state only when the validated receipt exists. Browser
+`POST /api/jobs/fit/cancel` is session-only: it terminally cancels pending and
+claimed rows, so a late Runner import is rejected and a later explicit Run may
+retry them.
 
 ## Rules
 
 - Do not use `/trigger` for execution. It is intentionally disabled.
 - Every claimed task includes `attemptId`, the stable Joblit-derived
-  `issueKey`, `acceptedTargets`, and `remainingTargets`. Request and import only
-  `remainingTargets`; never regenerate an accepted target after stale reclaim.
-  Send `source: "codex_batch"`, `delivery: "FINAL"`, the current batch ID as
-  `batchId`, the claimed `taskId` as `batchTaskId`, its `attemptId` as
-  `batchAttemptId`, and its exact `issueKey`.
+  `issueKey`, `protocolVersion`, `acceptedTargets`, and `remainingTargets`.
+  Request and import only `remainingTargets`; never regenerate an accepted
+  target after stale reclaim. Send `source: "codex_batch"`,
+  `delivery: "FINAL"`, the claim's exact `protocolVersion` (currently `1`), the
+  current batch ID as `batchId`, the claimed `taskId` as `batchTaskId`, its
+  `attemptId` as `batchAttemptId`, and its exact `issueKey`.
 - For every claimed task and remaining target, call
   `/api/applications/prompt`; always
   send that exact response's complete, unmodified `promptMeta` and returned
@@ -79,11 +136,40 @@ local worker that generates through a loopback Hermes gateway.
   target import atomically commits the Application, Tailoring Run receipt, and
   task success. Failure and skip reports accept only `FAILED` or `SKIPPED` and
   must echo the claimed task's `attemptId`.
-- Mark task `FAILED` with a concise error when any step cannot recover.
+- Fence every in-flight model call against the prompt response's exact
+  Tailoring Run `{ id, attemptId }`. Polling a non-terminal run must return that
+  same active handle. A changed attempt means the lease was superseded: stop
+  local work and preserve any recoverable state; never import it or report the
+  newer attempt failed.
+- If `run-once` returns no task while the batch is still `RUNNING`, honor its
+  `execution.retryAfterMs` lease hint and poll again. An empty claim is not a
+  terminal batch result.
+- Mark a task `FAILED` with a concise error only for a deterministic,
+  unrecoverable generation or validation failure. An ambiguous import outcome,
+  stale attempt, cancellation, or local cleanup failure is not such a failure.
 - Keep idempotent behavior: same job/task should not produce inconsistent state.
 - Prefer schema-valid JSON only; no markdown wrapper around payload JSON.
 - Never expose a private Hermes `run_*` identifier to Joblit. Only the public
   `{ id, attemptId }` Tailoring Run handle crosses the Joblit boundary.
+
+## Runner Recovery
+
+The first-party Runner persists only opaque Hermes session/run ids, hashes, a
+repair transcript cursor, and non-secret Tailoring Run operation identity in
+`~/.joblit/runner-state-v1.json`. It never stores prompts, model output,
+feedback text, `AgentCredential` values, or the Hermes key. Local file updates
+are atomic, serialized by a machine-local lock, and reserve starts/repairs with
+compare-and-set so two local Runner processes cannot submit the same turn.
+
+On restart, reconcile each starting/running/completed/repairing local operation
+against the server-owned Tailoring Run before claiming new work: acknowledge
+and clear it
+when the target receipt is accepted, discard it only when the server run is
+terminal without that target, and otherwise retain it for the exact active
+attempt. Hermes `stopping` is only acknowledgement of a stop request, not a
+terminal state; keep polling the same private run id after restart. Cleanup
+after an accepted import is best effort and can be retried without reversing
+the authoritative Joblit settlement.
 
 ## Deletion Contract
 

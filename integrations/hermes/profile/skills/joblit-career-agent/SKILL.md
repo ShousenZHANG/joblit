@@ -1,6 +1,6 @@
 ---
 name: joblit-career-agent
-description: Human-readable grounding and output notes for Joblit Local AI profile maintainers.
+description: Human-readable grounding and output notes for Joblit Agent Runner profile maintainers.
 ---
 
 # Joblit Career Agent
@@ -12,6 +12,6 @@ Every Joblit API prompt must remain self-contained: it supplies candidate eviden
 Read:
 
 - `references/grounding-policy.md` for evidence boundaries.
-- `references/output-contracts.md` for current Local AI field names.
+- `references/output-contracts.md` for current Agent output field names.
 
 Never use a Skill file as a substitute for request authentication, job ownership checks, prompt construction, output validation, or server-side quality gates.

@@ -19,9 +19,7 @@ export const ManualGenerateSchema = z
     modelOutput: z.string().min(1).max(80_000),
     promptMeta: z.record(z.string(), z.unknown()).optional(),
     tailoringRun: TailoringRunHandleSchema.optional(),
-    source: z
-      .enum(["manual_import", "local_ai", "codex_batch"])
-      .default("manual_import"),
+    source: z.enum(["manual_import", "codex_batch"]).default("manual_import"),
   })
   .strict();
 

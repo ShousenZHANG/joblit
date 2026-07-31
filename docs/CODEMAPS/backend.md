@@ -14,21 +14,21 @@ Vocabulary is `CONTEXT.md`. Route-layer facts live in
 | `applications/` | Application lifecycle: generation acceptance, target-aware AI Content evolution, canonical resume composition, finalize render, artifact commit, ATS validation, advisory lock, review ledger, `ApplicationEvent` append | `applicationGeneration.ts` `acceptApplicationGeneration`, `applicationAiContentAggregate.ts` `evolveApplicationAiContent`, `applicationResumeComposition.ts` `composeApplicationResumeRenderInput`, `commitApplicationArtifact.ts` `commitApplicationArtifact`, `executeServerBatchTailoringTask.ts`, `manualImportArtifact.ts`, `finalizeApplication.ts`, `persistReviewLedger.ts`, `applicationMutationLock.ts`, `atsPdfValidator.ts` |
 | `artifacts/` | ADR-0010 Application Blob lifecycle, account-erasure hooks, Vercel adapter, inventory, claim/call/fenced settle | `applicationArtifactLifecycle.ts` `prepareApplicationArtifactsForAccountErasure` / `purgeDeletedApplicationArtifactsForErasedUser`, `artifactReconciler.ts`, `artifactBlobPort.ts`, `vercelBlobAdapter.ts` |
 | `applicationBatches/` | Codex Batch state machine: claim, complete, cancel, retry | `runner.ts:169` `claimNextBatchTask`, `:282` `completeBatchTask`, `:334`, `:385`; `codexRunContext.ts:81`/`:189`/`:245`; `batchProgress.ts:9` |
-| `jobs/` | Job import/list/search/delete/status, fit leasing, cooldown, SimHash dedup, posting risk, liveness, market scoping | `jobImportService.ts:95`, `jobListService.ts:142`, `jobSearchService.ts:11`, `jobDeleteService.ts:69`/`:135`, `fitRunService.ts:262`, `jobMutationLock.ts:23`, `postingRisk.ts:121` |
+| `jobs/` | Job import/list/search/delete/status, fit leasing and receipt-backed settlement, cooldown, SimHash dedup, posting risk, liveness, market scoping | `jobImportService.ts`, `jobListService.ts`, `jobSearchService.ts`, `jobDeleteService.ts`, `fitRunService.ts`, `fitBatchImport.ts`, `jobMutationLock.ts`, `postingRisk.ts` |
 | `latex/` | Template rendering from `latexTemp/` + the remote render-service client | `compilePdf.ts:68` `compileLatexToPdf`, `renderResume.ts:203`, `renderResumeCN.ts:190`, `renderCoverLetter.ts:69`, `mapResumeProfile.ts:30` |
 | `files/` | Blob path construction, PDF filenames | `applicationArtifactBlob.ts:3`, `pdfFilename.ts:24` |
 | `discover/` | GitHub trending scrape, YouTube pipeline, durable cache + daily refresh lease (ADR-0005) | `refreshDiscover.ts:107`, `githubTrending.ts:167`, `videoPipeline.ts:431`, `discoverCache.ts:83` |
 | `cnFetch/` | CN market discovery adapter: Nowcoder fetch, normalization, diagnostics, terminal-plan construction | `processFetchRun.ts`, `adapters/nowcoder.ts`, `normalize.ts` |
 | `sources/` | GLOBAL market discovery adapter: registry, ATS boards, source health, rediscovery, filtering, terminal-plan construction | `processGlobalFetchRun.ts`, `registry.ts`, `http.ts`, `atsRediscoveryService.ts`, `sourceHealthStore.ts` |
-| `fetchRuns/` | FetchRun quota, inline lifecycle coordinator, attempt/lock fencing, and the shared `fetch-run-commit/v1` transaction boundary | `executeInlineFetchRun.ts`, `inlineFetchRunAdapter.ts`, `fetchRunCommit.ts`, `fetchRunQuota.ts`, `fetchRunLifecycleLock.ts` |
+| `fetchRuns/` | Inline lifecycle coordinator, stale-run policy, attempt/dispatch locks, and the shared `fetch-run-commit/v1` transaction boundary | `executeInlineFetchRun.ts`, `inlineFetchRunAdapter.ts`, `fetchRunCommit.ts`, `fetchRunStale.ts`, `fetchRunLifecycleLock.ts`, `triggerClaim.ts` |
 | `net/` | The single SSRF-hardened outbound gateway | `safeFetch.ts:396` `safeOutboundFetch`, `:272`, `:228` |
 | `security/` | Sanitizers for anything persisted or exported | `untrustedOutput.ts:36`/`:58`/`:76` |
 | `archive/` | Pure ZIP32 writer. Sole consumer: the Skill Pack download | `zip.ts:155` |
 | `observability/` | The single error/event reporting seam | `errorReporter.ts:52` `reportError` |
-| `auth/` | Session and agent-token primitives | `requireSession.ts`, `requireExtensionToken.ts`, `constantTimeEqual.ts` |
+| `auth/` | Session and capability-scoped agent-credential primitives | `requireSession.ts`, `requireAgentCredential.ts`, `constantTimeEqual.ts` |
 | `runtimeCapabilities/` | Typed interpretation of optional integrations, paired credentials, feature flags, and safe fallback states | `index.ts` `resolveRuntimeCapabilities` / `getRuntimeCapabilities` |
-| `api/` | HTTP envelope, session route wrapper, rate limits, LaTeX error mapping | `routeHandler.ts:17` `withSessionRoute`, `errorResponse.ts:9` `errorJson`, `handleLatexError.ts:5` |
-| loose files | Master Resume Profile CRUD, Prisma singleton, env validation, agent tokens, prompt-rule templates | `resumeProfile.ts`, `prisma.ts`, `env.ts`, `extensionToken.ts`, `promptRuleTemplates.ts` |
+| `api/` | HTTP envelope, session/AgentCredential route wrappers, rate limits, LaTeX error mapping | `routeHandler.ts` `withSessionRoute` / `withAgentRoute`, `errorResponse.ts` `errorJson`, `handleLatexError.ts` |
+| loose files | Master Resume Profile CRUD, Prisma singleton, env validation, agent credentials, prompt-rule templates | `resumeProfile.ts`, `prisma.ts`, `env.ts`, `agentCredential.ts`, `promptRuleTemplates.ts` |
 
 `prisma.ts:8` throws at module load if `DATABASE_URL` is unset. The client is a
 `globalThis` singleton using `PrismaNeon`. Do not construct a standard Prisma
@@ -75,9 +75,10 @@ Entry: `POST /api/applications/manual-generate`.
 4. The route rebuilds the exact Full or Lean prompt and validates its generation
    receipt with `validatePromptMetaForImport`; stale receipts return
    `PROMPT_META_MISMATCH` 409
-5. `acceptApplicationGeneration` selects the decode policy from source: Local AI
-   is strict-current; manual import also accepts the bounded v1 compatibility
-   dialect
+5. `acceptApplicationGeneration` selects the decode policy from source:
+   `codex_batch`/Runner is strict-current; `manual_import` also accepts the
+   bounded v1 compatibility dialect. The retired `local_ai` writer is not an
+   active source
 6. The same accept seam owns normalization, Resume bullet
    grounding/non-redundancy gates, Cover quality, provenance, evidence, and
    canonical `AiContent`
@@ -95,6 +96,23 @@ The current external output contract is intentionally small: Resume returns
 `cvSummary` and zero to three `latestExperience.addedBullets`; Cover returns
 only its three body paragraphs. Existing bullets and skills remain owned by the
 Master Resume Profile.
+
+The first-party adapter for this path is `tools/runner/`. It polls the
+server-owned Tailoring Run while Hermes executes and requires the exact active
+`{ id, attemptId }` on every non-terminal response. Unknown import settlements
+replay the same immutable prompt/run receipt; a superseded attempt, cancellation
+or exhausted unknown settlement is deferred rather than reported as a failure
+against a newer executor. `run-once` exposes a bounded lease retry hint when a
+batch is still running but no task is claimable.
+
+The Fit path uses a parallel but separate receipt seam in
+`jobs/fitBatchImport.ts`. Its content-addressed 64-hex issue binds sorted Job
+ids to the prompt snapshot; `FitBatchImportReceipt` and Job score updates commit
+atomically, so a lost response can replay before prompt reconstruction even if
+the active profile or rules later change. The Agent-only
+`fit/settlement-status` read validates that receipt for startup cleanup, while
+the session-only `fit/cancel` command linearizes with leasing on the same
+per-user advisory lock and terminally fences late imports.
 
 `GET /api/prompt-rules/skill-pack` converts the user's active effective
 `PromptRuleTemplate` into the Skill Pack V3 structured representation. The
@@ -115,7 +133,7 @@ UI marks it fresh. See ADR-0002.
   and reordered base bullets cannot bypass persisted Application state.
 - `compileLatexToPdf` — the single renderer
 - `commitApplicationArtifact` — the artifact persistence sequence shared by
-  server generation, manual/Local AI generation, and Editor Finalize; generated
+  server generation, manual/Agent Runner generation, and Editor Finalize; generated
   writers also use it as the Tailoring Run acceptance boundary
 - `persistReviewLedger` — reached through the commit module plus non-artifact draft and discard transactions
 
@@ -287,7 +305,7 @@ README; `cnFetch/adapters/nowcoder.ts:8` says so explicitly.
 | Class | Location | Reaches HTTP via |
 |---|---|---|
 | `UnauthorizedError` | `auth/requireSession.ts` | `withSessionRoute` and `withAgentRoute` |
-| `ExtensionTokenError` | `auth/requireExtensionToken.ts` | `withAgentRoute` → canonical 401 |
+| `AgentCredentialError` | `auth/requireAgentCredential.ts` | `withAgentRoute` → canonical 401 |
 | `LatexRenderError` | `latex/compilePdf.ts:13` | `handleLatexError` (`api/handleLatexError.ts:5`), which redacts `details`. Re-implemented **without** the redaction at `manual-generate/route.ts:346` |
 | `AtsPdfValidationError` | `applications/atsPdfValidator.ts:14` | 422 with the report |
 | `SafeOutboundError` | `net/safeFetch.ts:29` | never surfaced directly; translated per caller |

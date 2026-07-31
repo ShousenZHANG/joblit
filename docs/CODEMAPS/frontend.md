@@ -55,24 +55,18 @@ the locale cookie directly and uses an inlined EN/ZH table.
 
 ## The Jobs workspace
 
-### `JobsClient.tsx` — 1394 lines
+### `JobsClient.tsx` — 1313 lines
 
-Five state machines share one closure. By responsibility:
+Several state machines share one closure. By responsibility:
 
-| Lines | Owns |
+| Area | Owns |
 |---|---|
-| 95–140 | Selection: `selectedId`, `selectionExplicitlyCleared`, `pendingWorkspaceUrlRef`, and `persistWorkspaceUrl` — the only workspace URL writer. It uses `history.replaceState`, not `router.replace`, because `/jobs` is `force-dynamic` and a replace would re-run the server component and discard every scrolled page (comment at `:122-131`). |
-| 141–171 | `captureListViewport` — records a stable row + offset before a mutation and disables native `overflow-anchor`. Reaches into a Radix internal. |
-| 181–200 | URL→state sync, skipping the write it just made. |
-| 202–226 | `useJobPagination`, then `useJobMutations` — which receives `captureListViewport`, so a mutation hook drives scroll compensation. |
-| 238–266 | `useExternalGenerate`, Local AI dialog state, `useLocalAiRun`, `useFitScan`. |
-| 267–307 | Virtualization latch (flips at >80 rows, never back) and the layout-effect scroll restore. |
-| 314–363 | Batch selection, with two render-phase adjustments: reset on filter change, prune on item-set change. |
-| 425–475 | Fetch-import auto-refresh, throttled to 5 s. |
-| 523–533 | `effectiveSelectedId` — re-derives selection, falling back to the first visible row unless explicitly cleared. |
-| 584–638 | Job-detail query plus a version-coherence refetch. |
-| 655–716 | Four dialogs. |
-| 718–1391 | ~660 lines of markup. |
+| Selection and URL | `selectedId`, explicit-clear state, the sole workspace URL writer, and scroll-anchor capture/restore around mutations. |
+| List data | `useJobPagination`, `useJobMutations`, suppressed-delete rows, keyboard navigation, and the >80-row virtualization latch. |
+| Generation | `useExternalGenerate` owns the interactive manual JSON-import flow; local unattended generation is not mounted in the page and belongs to the Agent Runner. |
+| Fit scan | `useFitScan` enqueues/prescreens through the session API, polls counts while the Runner drains the database queue, and Stop waits for the server to terminally cancel all pending/claimed work. |
+| Batch | Selection, create-batch mutation, active-batch conflict handling, and batch delete. |
+| Surfaces | `ExternalGenerateDialog`, `TailorReviewDialog`, mobile detail overlay, and `JobBatchDeleteDialog`. |
 
 Per ADR-0007, status controls read `ACTIVE_JOB_STATUS_VALUES` (`:821`, `:1082`),
 while the label map in `types.ts:6-23` and the badge maps in `JobListItem.tsx`
@@ -85,12 +79,10 @@ on the colour for `APPLIED`.
 |---|---|---|
 | `useJobFilters.ts` (213) | Filter state ↔ URL, debounced. Two writers: `router.replace` for filters, `history.replaceState` for workspace state. | 16 members. `sortByFit` is never set, so the `sort=fit` branch at `:176` is unreachable. |
 | `useJobPagination.ts` (221) | The list `useInfiniteQuery`, page merge/de-dup, the suppressed-delete filter, the scroll listener. | 13 members. `pageResponses` has no consumer. |
-| `useJobMutations.ts` (534) | All list writes: optimistic status patch with rollback, the 5 s undo window, a serial commit runner, session tombstones, a `pagehide` flush with `keepalive`, chunked batch delete with partial-success semantics. | `{updateStatus, requestDelete, batchDeleteMutation, updatingIds, deletingIds, error, setError}` |
+| `useJobMutations.ts` (499) | All list writes: optimistic status patch with rollback, the 5 s undo window, a serial commit runner, session tombstones, a `pagehide` flush with `keepalive`, chunked batch delete with partial-success semantics. | `{updateStatus, requestDelete, batchDeleteMutation, updatingIds, deletingIds, error, setError}` |
 | `useKeyboardNavigation.ts` (210) | j/k/Arrow/Escape row navigation with cancellable rAF focus retries for virtualized rows. | void |
-| `useExternalGenerate.ts` (435) | The manual-import Generate path and the shared entry into the Edit phase. | 23 members, including 12 raw `useState` setters. |
-| `useLocalAiRun.ts` (434) | The Local AI run state machine: session-storage resume, 750 ms polling under a 180 s budget, one automatic repair on `INVALID_AI_RESULT`. | `{availability, runState, start, stop, retry, reset, checkAvailability}` |
-| `useFitScan.ts` (315) | The full-database fit-scan pump; the database is the queue. Lease-recovery polling, per-batch budget. | `{state, start, stop, reset}` — **the narrowest interface in the directory, and the only one with an explicit test seam and a real unit test.** Copy this shape. |
-| `useSearchHistory.ts` (44) | A localStorage ring of recent queries. | **No importer anywhere in `app/`.** |
+| `useExternalGenerate.ts` (504) | The interactive manual-import Generate path, stable single-target issue recovery, and the shared entry into the Edit phase. | 23 members, including raw dialog/form setters. |
+| `useFitScan.ts` | Browser control for the Runner-drained database queue: enqueue/prescreen, poll authoritative counts, cancel through the session-only server command, and show a waiting state when no Runner makes progress. It performs no model call. | `{state, start, stop, reset}` with polling/cancellation test seams. |
 | `serialRunner.ts` (30) | Chains async tasks so a burst of expiring undo timers cannot fire parallel DELETEs. | — |
 | `runChunkedBatchDelete.ts` (88) | Sequential 25-id chunks; one failing chunk does not abort the rest. | — |
 
@@ -211,25 +203,19 @@ Two cross-component channels bypass context: the `joblit:command-palette` and
 
 ## Client-side data access
 
-`lib/api/fetchJson.ts` (92) is the intended seam. It sets `Content-Type`, parses
+`lib/api/fetchJson.ts` is the intended seam. It sets `Content-Type`, parses
 JSON with a null fallback, throws `ApiError(status, message, payload)` on non-2xx,
 and optionally validates against a Zod schema. `extractErrorMessage` (`:78-91`)
 understands three envelope shapes, because the server emits three.
 
-**Importers: 3.** `useTailorDraft.ts`, `TailorClient.tsx`, `TailorReviewDialog.tsx`.
+Production importers now span the Jobs hooks, Tailoring Edit actions, Discover,
+Guide, and Fetch-status modules. Some binary download/preview, `keepalive`, and
+stream-specific calls still use platform `fetch` because `fetchJson` is a JSON
+adapter rather than a universal transport wrapper.
 
-**Hand-rolled `fetch`: about 20 call sites** — `useJobMutations.ts` (4),
-`useResumeProfiles.ts` (4), `FetchClient.tsx` (4), `AgentTokenManager.tsx` (3),
-`useExternalGenerate.ts` (3), `useDiscoverData.ts` (2),
-`PersonalInfoSection.tsx` (2), `FetchStatusContext.tsx` (2), `GuideContext.tsx` (2),
-and one each in `JobsClient.tsx`, `useJobPagination.ts`, `useFitScan.ts`,
-`TailorReviewDialog.tsx`, `SourceHealthPanel.tsx`, `useResumePreview.ts`,
-`ResumeContext.tsx`. Three of those return a blob or a zip and could not use
-`fetchJson` as written.
-
-There is no non-HTTP transport left in the client. The `postMessage` bridge to
-the browser extension was removed with the extension (ADR-0014); the local model
-is now reached by the Runner, not the page.
+There is no non-HTTP transport left in the client. The retired `postMessage`
+bridge is historical (ADR-0014); the local model is now reached by the Runner,
+not the page.
 
 React Query key spaces: `["jobs", queryString]`, `["job-details", jobId]`,
 `["discover-trending", period, clean]`.
@@ -264,8 +250,8 @@ allowlist for the seven template-literal-built prefixes, each naming its call
 site. Adding a key to one file and not the other now fails the build.
 
 **Surfaces with hardcoded English**, so a reader does not assume coverage:
-`TailorReviewDialog.tsx`, `JobBatchDeleteDialog.tsx`, `PdfPreviewDialog.tsx`,
-`app/not-found.tsx`, and the toast copy in `useJobMutations.ts` and
+`TailorReviewDialog.tsx`, `JobBatchDeleteDialog.tsx`, `app/not-found.tsx`, and
+the toast copy in `useJobMutations.ts` and
 `useExternalGenerate.ts`.
 
 ---

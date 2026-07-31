@@ -64,22 +64,20 @@ function parseFinalizeFlag(req: Request): boolean {
 }
 
 function requiresAuthoritativeReceipt(source: string): boolean {
-  return source !== "manual_import";
+  return source === "codex_batch";
 }
 
 function requiresTailoringRun(source: string): boolean {
   // Codex Batch is a coordinated server contract and has no legacy client
-  // population. Local AI keeps an additive compatibility reader for extension
-  // versions that predate TailoringRun handles.
+  // population. Manual imports retain their documented copy/paste fallback.
   return source === "codex_batch";
 }
 
-function generationSourceLabel(source: string): string {
-  return source === "local_ai" ? "Local AI" : "Codex Batch";
+function generationSourceLabel(): string {
+  return "Codex Batch";
 }
 
 function protocolSource(source: string): TailoringRunSource {
-  if (source === "local_ai") return "LOCAL_AI";
   if (source === "codex_batch") return "CODEX_BATCH";
   return "MANUAL_IMPORT";
 }
@@ -90,7 +88,11 @@ function protocolTarget(target: "resume" | "cover"): TailoringRunTarget {
 
 export async function POST(req: Request) {
   const finalize = parseFinalizeFlag(req);
-  return withAgentRoute(req, async ({ userId, requestId }) => {
+  return withAgentRoute(req, "tailoring:execute", async ({
+    userId,
+    requestId,
+    authKind,
+  }) => {
     const body = await req.json().catch(() => null);
     const parsed = ManualGenerateSchema.safeParse(body);
     if (!parsed.success) {
@@ -104,12 +106,9 @@ export async function POST(req: Request) {
           (issue) => issue.path.join(".") === "modelOutput" && issue.code === "too_big",
         );
       if (strictOutputTooLarge) {
-        const source = String(
-          (body as { source?: unknown }).source ?? "manual_import",
-        );
         return errorJson(
           "INVALID_AI_RESULT",
-          `${generationSourceLabel(source)} output exceeds the 80,000 character limit.`,
+          `${generationSourceLabel()} output exceeds the 80,000 character limit.`,
           400,
           { requestId },
         );
@@ -117,11 +116,19 @@ export async function POST(req: Request) {
       return validationError(parsed.error, requestId);
     }
     const data = parsed.data;
+    if (authKind === "agent" && data.source !== "codex_batch") {
+      return errorJson(
+        "AGENT_PROTOCOL_REQUIRED",
+        "Agent credentials must use the versioned Codex Batch protocol.",
+        403,
+        { requestId },
+      );
+    }
 
   if (requiresAuthoritativeReceipt(data.source) && !data.promptMeta) {
     return errorJson(
       "PROMPT_META_REQUIRED",
-      `${generationSourceLabel(data.source)} output must include the generation receipt. Run the current prompt again.`,
+      `${generationSourceLabel()} output must include the generation receipt. Run the current prompt again.`,
       400,
       { requestId },
     );
@@ -150,7 +157,7 @@ export async function POST(req: Request) {
   ) {
     return errorJson(
       "PROMPT_META_REQUIRED",
-      `${generationSourceLabel(data.source)} output must include the complete generation receipt. Run the current prompt again.`,
+      `${generationSourceLabel()} output must include the complete generation receipt. Run the current prompt again.`,
       400,
       { requestId },
     );
@@ -313,7 +320,7 @@ export async function POST(req: Request) {
         userId,
         jobId: data.jobId,
         target: data.target,
-        variant: data.source === "local_ai" ? "lean" : "full",
+        variant: "full",
       });
       expectedPromptMeta = prepared.promptMeta;
       promptSnapshotBinding = prepared.snapshotBinding;
@@ -381,7 +388,7 @@ export async function POST(req: Request) {
   if (requiresTailoringRun(data.source) && !data.tailoringRun) {
     return errorJson(
       "TAILORING_RUN_REQUIRED",
-      `${generationSourceLabel(data.source)} output must include its TailoringRun handle. Run the current prompt again.`,
+      `${generationSourceLabel()} output must include its TailoringRun handle. Run the current prompt again.`,
       400,
       { requestId },
     );

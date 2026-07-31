@@ -11,9 +11,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 const tokens = vi.hoisted(() => ({
-  createExtensionToken: vi.fn(),
-  revokeExtensionToken: vi.fn(),
-  listExtensionTokens: vi.fn(),
+  createAgentCredential: vi.fn(),
+  revokeAgentCredential: vi.fn(),
+  listAgentCredentials: vi.fn(),
 }));
 
 // Only auth is mocked: the real `withSessionRoute` runs, so these tests prove
@@ -29,19 +29,28 @@ const auth = vi.hoisted(() => {
   return {
     requireSession: vi.fn(),
     requireSessionWithEmail: vi.fn(),
-    requireExtensionToken: vi.fn(),
+    requireAgentCredential: vi.fn(),
     UnauthorizedError,
   };
 });
 
-vi.mock("@/lib/server/extensionToken", () => tokens);
+vi.mock("@/lib/server/agentCredential", () => ({
+  DEFAULT_AGENT_CAPABILITIES: [
+    "fit:drain",
+    "tailoring:execute",
+    "tailoring:control",
+  ],
+  createAgentCredential: tokens.createAgentCredential,
+  revokeAgentCredential: tokens.revokeAgentCredential,
+  listAgentCredentials: tokens.listAgentCredentials,
+}));
 vi.mock("@/lib/server/auth/requireSession", () => ({
   requireSession: auth.requireSession,
   requireSessionWithEmail: auth.requireSessionWithEmail,
   UnauthorizedError: auth.UnauthorizedError,
 }));
-vi.mock("@/lib/server/auth/requireExtensionToken", () => ({
-  requireExtensionToken: auth.requireExtensionToken,
+vi.mock("@/lib/server/auth/requireAgentCredential", () => ({
+  requireAgentCredential: auth.requireAgentCredential,
 }));
 
 import { DELETE, GET, POST } from "@/app/api/agent-tokens/route";
@@ -67,26 +76,45 @@ beforeEach(() => {
 
 describe("GET /api/agent-tokens", () => {
   it("lists the caller's active tokens", async () => {
-    tokens.listExtensionTokens.mockResolvedValue([
-      { id: TOKEN_ID, name: "Runner", lastUsedAt: null },
+    tokens.listAgentCredentials.mockResolvedValue([
+      {
+        id: TOKEN_ID,
+        name: "Runner",
+        audience: "joblit-agent",
+        version: 1,
+        capabilities: ["fit:drain"],
+        lastUsedAt: null,
+      },
     ]);
 
     const res = await GET();
 
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
-      data: [{ id: TOKEN_ID, name: "Runner", lastUsedAt: null }],
+      data: [
+        {
+          id: TOKEN_ID,
+          name: "Runner",
+          audience: "joblit-agent",
+          version: 1,
+          capabilities: ["fit:drain"],
+          lastUsedAt: null,
+        },
+      ],
     });
-    expect(tokens.listExtensionTokens).toHaveBeenCalledWith(USER_ID);
+    expect(tokens.listAgentCredentials).toHaveBeenCalledWith(USER_ID);
+    expect(res.headers.get("Cache-Control")).toBe(
+      "private, no-store, max-age=0",
+    );
   });
 
   it("identifies the caller by session, never by a bearer token", async () => {
-    tokens.listExtensionTokens.mockResolvedValue([]);
+    tokens.listAgentCredentials.mockResolvedValue([]);
 
     await GET();
 
     expect(auth.requireSession).toHaveBeenCalledTimes(1);
-    expect(auth.requireExtensionToken).not.toHaveBeenCalled();
+    expect(auth.requireAgentCredential).not.toHaveBeenCalled();
   });
 
   it("returns 401 when there is no session", async () => {
@@ -95,65 +123,109 @@ describe("GET /api/agent-tokens", () => {
     const res = await GET();
 
     expect(res.status).toBe(401);
-    expect(tokens.listExtensionTokens).not.toHaveBeenCalled();
+    expect(tokens.listAgentCredentials).not.toHaveBeenCalled();
   });
 });
 
 describe("POST /api/agent-tokens", () => {
   it("creates a token with the caller's name and expiry", async () => {
-    tokens.createExtensionToken.mockResolvedValue({
+    tokens.createAgentCredential.mockResolvedValue({
       id: TOKEN_ID,
-      rawToken: "jfext_secret",
+      rawToken: `jfagent_v1_${"a".repeat(64)}`,
       expiresAt: new Date("2026-01-01T00:00:00.000Z"),
     });
 
     const res = await POST(req("POST", { name: "Laptop", expiryDays: 30 }));
 
     expect(res.status).toBe(201);
-    expect(tokens.createExtensionToken).toHaveBeenCalledWith(USER_ID, "Laptop", 30);
+    expect(tokens.createAgentCredential).toHaveBeenCalledWith(
+      USER_ID,
+      "Laptop",
+      30,
+      ["fit:drain", "tailoring:execute", "tailoring:control"],
+    );
+    expect(res.headers.get("Cache-Control")).toBe(
+      "private, no-store, max-age=0",
+    );
   });
 
   it("names an unnamed token for the Runner, not the retired extension", async () => {
-    tokens.createExtensionToken.mockResolvedValue({
+    tokens.createAgentCredential.mockResolvedValue({
       id: TOKEN_ID,
-      rawToken: "jfext_secret",
+      rawToken: `jfagent_v1_${"b".repeat(64)}`,
       expiresAt: new Date(),
     });
 
     await POST(req("POST", {}));
 
-    expect(tokens.createExtensionToken).toHaveBeenCalledWith(
+    expect(tokens.createAgentCredential).toHaveBeenCalledWith(
       USER_ID,
       "Joblit Runner",
       90,
+      ["fit:drain", "tailoring:execute", "tailoring:control"],
+    );
+  });
+
+  it("can issue a least-privilege credential from the supported capability set", async () => {
+    tokens.createAgentCredential.mockResolvedValue({
+      id: TOKEN_ID,
+      rawToken: `jfagent_v1_${"c".repeat(64)}`,
+      expiresAt: new Date(),
+    });
+
+    const res = await POST(
+      req("POST", {
+        name: "Fit-only Runner",
+        capabilities: ["fit:drain"],
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    expect(tokens.createAgentCredential).toHaveBeenCalledWith(
+      USER_ID,
+      "Fit-only Runner",
+      90,
+      ["fit:drain"],
     );
   });
 
   it("rejects an invalid body without minting anything", async () => {
-    const res = await POST(req("POST", { expiryDays: 9999 }));
+    const res = await POST(
+      req("POST", {
+        expiryDays: 9999,
+        capabilities: ["extension:all"],
+      }),
+    );
 
     expect(res.status).toBe(400);
     await expect(res.json()).resolves.toMatchObject({
       error: { code: "INVALID_BODY" },
       requestId: REQUEST_ID,
     });
-    expect(tokens.createExtensionToken).not.toHaveBeenCalled();
+    expect(tokens.createAgentCredential).not.toHaveBeenCalled();
+  });
+
+  it("rejects unknown contract fields instead of silently discarding them", async () => {
+    const res = await POST(req("POST", { legacyExtensionMode: true }));
+
+    expect(res.status).toBe(400);
+    expect(tokens.createAgentCredential).not.toHaveBeenCalled();
   });
 });
 
 describe("DELETE /api/agent-tokens", () => {
   it("revokes a token the caller owns", async () => {
-    tokens.revokeExtensionToken.mockResolvedValue(true);
+    tokens.revokeAgentCredential.mockResolvedValue(true);
 
     const res = await DELETE(req("DELETE", { tokenId: TOKEN_ID }));
 
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ data: { revoked: true } });
-    expect(tokens.revokeExtensionToken).toHaveBeenCalledWith(USER_ID, TOKEN_ID);
+    expect(tokens.revokeAgentCredential).toHaveBeenCalledWith(USER_ID, TOKEN_ID);
   });
 
   it("reports a token that is already gone as 404, not as success", async () => {
-    tokens.revokeExtensionToken.mockResolvedValue(false);
+    tokens.revokeAgentCredential.mockResolvedValue(false);
 
     const res = await DELETE(req("DELETE", { tokenId: TOKEN_ID }));
 
@@ -167,6 +239,15 @@ describe("DELETE /api/agent-tokens", () => {
     const res = await DELETE(req("DELETE", {}));
 
     expect(res.status).toBe(400);
-    expect(tokens.revokeExtensionToken).not.toHaveBeenCalled();
+    expect(tokens.revokeAgentCredential).not.toHaveBeenCalled();
+  });
+
+  it("rejects unknown revocation fields", async () => {
+    const res = await DELETE(
+      req("DELETE", { tokenId: TOKEN_ID, revokeEveryToken: true }),
+    );
+
+    expect(res.status).toBe(400);
+    expect(tokens.revokeAgentCredential).not.toHaveBeenCalled();
   });
 });

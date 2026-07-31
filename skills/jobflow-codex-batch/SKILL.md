@@ -1,6 +1,6 @@
 ---
 name: joblit-codex-batch
-description: Execute Joblit NEW-job batch tailoring in a deterministic Codex loop and persist CV/Cover PDFs with task-level status updates.
+description: Execute Joblit NEW-job batch tailoring through the versioned AgentCredential protocol in a deterministic, resumable loop. Use for claiming batch tasks, requesting bound CV/Cover prompts, importing strict outputs, and reporting failed or skipped attempts.
 ---
 
 # Joblit Codex Batch Skill
@@ -9,10 +9,24 @@ description: Execute Joblit NEW-job batch tailoring in a deterministic Codex loo
 
 Run a deterministic, resumable batch loop that generates resume and cover outputs for filtered `NEW` jobs.
 
+## Authentication
+
+Use an `AgentCredential` issued from Joblit `/agent` for unattended requests:
+
+```http
+Authorization: Bearer jfagent_v1_<64-lowercase-hex-characters>
+Content-Type: application/json
+```
+
+The credential must include `tailoring:execute`. Never send a retired `jfext_`
+token or call session-only batch administration routes with an
+`AgentCredential`.
+
 ## Required Inputs
 
 - `batchId` (UUID)
 - `maxSteps` (default 1, recommended 3-5 per loop)
+- Claimed task `protocolVersion` (currently literal `1`)
 - Claimed task `attemptId` (UUID)
 - Claimed task `issueKey` (stable UUID derived by Joblit, reused across retries)
 - Claimed `acceptedTargets` and `remainingTargets`
@@ -21,7 +35,11 @@ Run a deterministic, resumable batch loop that generates resume and cover output
 ## API Sequence
 
 1. Claim tasks
-- `POST /api/application-batches/:id/codex-run`
+- For an unattended `AgentCredential` client, call
+  `POST /api/application-batches/:id/run-once` with
+  `{ "maxSteps": 1, "completedTasks": [] }`.
+- An interactive browser session may instead call
+  `POST /api/application-batches/:id/codex-run`.
 - Read `tasks[]`, including each task's `attemptId`, `issueKey`,
   `protocolVersion`, `acceptedTargets`, and `remainingTargets`, plus
   `context.generationContract`.
@@ -39,10 +57,27 @@ Run a deterministic, resumable batch loop that generates resume and cover output
   - `target`
   - `source: "codex_batch"`
   - `delivery: "FINAL"`
+  - `protocolVersion: 1` (echo the claim's exact value)
   - the claimed task's exact `issueKey`
   - `batchId`
   - `batchTaskId: taskId`
   - `batchAttemptId: attemptId`
+- Canonical request shape:
+
+```json
+{
+  "jobId": "<tasks[].jobId UUID>",
+  "target": "resume",
+  "source": "codex_batch",
+  "delivery": "FINAL",
+  "protocolVersion": 1,
+  "issueKey": "<tasks[].issueKey UUID>",
+  "batchId": "<batch.id UUID>",
+  "batchTaskId": "<tasks[].id UUID>",
+  "batchAttemptId": "<tasks[].attemptId UUID>"
+}
+```
+
 - Use returned `prompt` and `expectedJsonSchema`.
 - Keep this exact response's `promptMeta`; it is bound to the target, prompt
   bytes, effective rules, resume snapshot, and job snapshot.
@@ -65,6 +100,10 @@ Run a deterministic, resumable batch loop that generates resume and cover output
     including `ruleSetId`, `resumeSnapshotUpdatedAt`,
     `promptTemplateVersion`, `schemaVersion`, `skillPackVersion`, and
     `promptHash`)
+- Do not add `protocolVersion`, `issueKey`, or batch/task/attempt fields to this
+  strict import body. Echo the complete `tailoringRun` handle and `promptMeta`
+  returned by the bound prompt request; the server has already bound those
+  values to the claim identity.
 - Treat either the initial PDF response or an exact-replay JSON
   acknowledgement (`replayed: true`, `acceptedDelivery: "FINAL"`,
   `x-tailoring-replay: exact`) as a successful import. The latter means the
@@ -72,25 +111,27 @@ Run a deterministic, resumable batch loop that generates resume and cover output
   earlier HTTP response was lost; do not render or import the target again.
 
 4. Report only exceptional task completion
-- `PATCH /api/application-batches/:id/tasks/:taskId`
-- Send the claimed task's `attemptId`.
-- Status is only `FAILED` with a concise `error`, or `SKIPPED`.
+- On the next `AgentCredential`
+  `POST /api/application-batches/:id/run-once`, include each exceptional result
+  in `completedTasks` with the claimed `taskId`, exact `attemptId`, and status
+  `FAILED` (plus a concise `error`) or `SKIPPED`.
+- The task `PATCH` route is an interactive session-only alternative; do not
+  call it with an `AgentCredential`.
 - Never send `SUCCEEDED`. Importing the final required target atomically commits
   the Application, target receipt, Tailoring Run success, and batch task
   success.
 
-`POST /api/application-batches/:id/run-once` follows the same rule:
-`completedTasks` accepts only `FAILED` or `SKIPPED`, and each entry requires
-`attemptId`.
-
 5. Check summary
-- `GET /api/application-batches/:id/summary`
+- Use the latest `run-once` response's `batch.status` and `progress`.
+- An interactive browser session may additionally call
+  `GET /api/application-batches/:id/summary`.
 
 ## Hard Rules
 
 - Always set `source: "codex_batch"` on Batch imports.
 - Always request prompts with `source: "codex_batch"`, `delivery: "FINAL"`,
-  the batch/task/attempt binding, and the claimed task `issueKey`.
+  `protocolVersion: 1`, the batch/task/attempt binding, and the claimed task
+  `issueKey`.
 - Treat `acceptedTargets` as immutable durable work. Only
   `remainingTargets` may be requested, generated, accepted, rendered, or
   merged during a reclaimed attempt.

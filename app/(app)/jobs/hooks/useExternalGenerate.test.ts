@@ -113,7 +113,7 @@ describe("persistGeneratedDraft", () => {
         promptHash: "canonical-hash",
       },
       tailoringRun,
-      source: "local_ai",
+      source: "manual_import",
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -122,7 +122,7 @@ describe("persistGeneratedDraft", () => {
       expect.objectContaining({ method: "POST" }),
     );
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
-      source: "local_ai",
+      source: "manual_import",
       jobId: "550e8400-e29b-41d4-a716-446655440000",
       target: "resume",
       modelOutput: "{\"canonicalOutput\":true}",
@@ -201,7 +201,7 @@ describe("persistGeneratedDraft", () => {
         jobId: JOB_ID,
         target: "resume",
         modelOutput: "{\"canonicalOutput\":true}",
-        source: "local_ai",
+        source: "manual_import",
       }),
     ).rejects.toThrow("Response shape invalid");
   });

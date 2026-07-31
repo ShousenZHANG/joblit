@@ -17,6 +17,7 @@ export async function GET(
 ) {
   return withAgentRoute(
     req,
+    "tailoring:control",
     async ({ userId, params, requestId }) => {
       try {
         const run = await getTailoringRunStatus(userId, params.id);

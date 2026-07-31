@@ -30,11 +30,18 @@ function checkSensitiveFiles(files) {
     /(^|\/)\.tmp\/hermes-/i,
     /hermes-receipt.*\.json$/i,
     /\.zip$/i,
+    /^chrome-extension(?:\/|$)/i,
+    /^app\/api\/ext(?:\/|$)/i,
+    /^app\/api\/jobs\/\[id\]\/fit(?:\/|$)/i,
+    /^lib\/server\/extensionToken(?:\.test)?\.ts$/i,
+    /^lib\/server\/auth\/requireExtensionToken(?:\.test)?\.ts$/i,
   ];
   const secretTextPatterns = [
     /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
     /(?:^|[^A-Za-z0-9])ghp_[A-Za-z0-9]{20,}/,
     /(?:^|[^A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}/,
+    /(?:^|[^A-Za-z0-9])jfagent_v1_[a-f0-9]{64}(?![A-Za-z0-9])/,
+    /(?:^|[^A-Za-z0-9])jfext_[a-f0-9]{64}(?![A-Za-z0-9])/,
     /C:\\Users\\[^\\\s]+/i,
     /\/Users\/[^/\s]+/,
     /\/home\/(?!runner(?:\/|\b))[^/\s]+/,
@@ -42,11 +49,6 @@ function checkSensitiveFiles(files) {
 
   for (const relative of files) {
     const normalized = relative.replaceAll("\\", "/");
-    if (forbiddenPaths.some((pattern) => pattern.test(normalized))) {
-      violations.push(`sensitive or generated file is a commit candidate: ${normalized}`);
-      continue;
-    }
-
     const absolute = path.join(cwd, relative);
     let status;
     try {
@@ -56,6 +58,10 @@ function checkSensitiveFiles(files) {
       // it, so there is no file content to inspect.
       if (error?.code === "ENOENT") continue;
       violations.push(`repository file is unreadable: ${normalized}`);
+      continue;
+    }
+    if (forbiddenPaths.some((pattern) => pattern.test(normalized))) {
+      violations.push(`sensitive or generated file is a commit candidate: ${normalized}`);
       continue;
     }
     if (status.isSymbolicLink()) {

@@ -90,7 +90,7 @@ describe("Joblit Hermes profile source", () => {
     expect((await BunlessRead(path.join(sourceRoot, ".no-bundled-skills"))).trim()).toBe("");
   });
 
-  it("documents the exact Local AI resume and cover output names", async () => {
+  it("documents the exact Agent resume and cover output names", async () => {
     const outputContracts = await BunlessRead(
       path.join(
         sourceRoot,

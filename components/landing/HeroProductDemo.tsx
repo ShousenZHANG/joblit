@@ -154,7 +154,7 @@ export function HeroProductDemo({
               { label: "Fetch", badge: 3 },
               { label: "Resume", badge: 2 },
               { label: "Discover", badge: null },
-              { label: "Extension", badge: null },
+              { label: "Agent", badge: null },
             ].map((item) => (
               <li
                 key={item.label}

@@ -110,7 +110,7 @@ docs/design-references/
 DESIGN.md
 design-system/
 
-# Packaged extension build artifacts
+# Generated local archives
 *.zip
 
 # Generated Hermes profile packages, secrets, and local receipts
@@ -119,8 +119,3 @@ design-system/
 *.sig
 *.key
 *hermes-receipt*.json
-
-# Leftover build output from the removed Chrome extension (ADR-0014). The
-# source is gone; this directory holds only node_modules, dist, coverage and a
-# packaged zip, and can be deleted.
-/chrome-extension/

@@ -21,7 +21,6 @@ concurrency:
 env:
   DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
   AUTH_SECRET: ci-dummy-auth-secret-not-real
-  APP_ENC_KEY: dGVzdHRlc3R0ZXN0dGVzdHRlc3R0ZXN0dGVzdDEyMw==
   FETCH_RUN_SECRET: ci-dummy
   LATEX_RENDER_URL: https://example.com/render
   LATEX_RENDER_TOKEN: ci-dummy
@@ -35,6 +34,20 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - uses: actions/checkout@v5
 
@@ -57,6 +70,27 @@ jobs:
 
       - name: Test deployment-order policy
         run: node --test tools/deploy/vercel-build.test.mjs
+
+      - name: Apply the complete migration history and prove schema convergence
+        run: |
+          npx prisma migrate deploy
+          npx prisma migrate diff --from-schema=prisma/schema.prisma --to-config-datasource --exit-code
+
+      - name: Prove the observed production drift converges through 130000 and 135000
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_legacy
+        run: |
+          psql postgresql://ci:ci@localhost:5432/postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE ci_legacy'
+          for migration in prisma/migrations/*/migration.sql; do
+            case "$migration" in
+              *20260731130000*|*20260731135000*) break ;;
+            esac
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
+          done
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'ALTER TABLE "Application" DROP COLUMN "locale"; ALTER TABLE "ActiveResumeProfile" ALTER COLUMN "updatedAt" DROP DEFAULT'
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260731130000_agent_runtime_expand_and_artifact_reconciliation/migration.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260731135000_schema_convergence_expand/migration.sql
+          npx prisma migrate diff --from-schema=prisma/schema.prisma --to-config-datasource --exit-code
 
       - name: Audit production dependencies
         run: npm run deps:audit

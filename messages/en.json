@@ -412,10 +412,10 @@
   "guide": {
     "badge": "Quick start",
     "welcomeTitle": "Welcome to Joblit",
-    "welcomeDesc": "Your AI-powered job search command center. Let us show you how to fetch roles, tailor your CV, and auto-fill applications.",
-    "welcomeFeature1": "Fetch job listings from LinkedIn, Seek, and more",
-    "welcomeFeature2": "Generate AI-tailored resumes and cover letters",
-    "welcomeFeature3": "Auto-fill applications with the Chrome Extension",
+    "welcomeDesc": "Your AI-powered job search command center. Let us show you how to find roles, tailor your CV, and keep applications organized.",
+    "welcomeFeature1": "Fetch roles from LinkedIn, public feeds, and company career sites",
+    "welcomeFeature2": "Generate evidence-grounded resumes and cover letters",
+    "welcomeFeature3": "Review every draft and track each application",
     "maybeLater": "I'll explore on my own",
     "startTour": "Show me around",
     "stepOf": "Step {current} of {total}",
@@ -602,7 +602,7 @@
     "s1_1Title": "1.1 Account Information",
     "s1_1": "When you sign in via Google or GitHub OAuth, we receive your name, email address, and profile avatar from the identity provider. We do not receive, store, or have access to your passwords.",
     "s1_2Title": "1.2 Job Data",
-    "s1_2": "The Service fetches publicly available job listings from third-party platforms (LinkedIn, Seek, and others) on your behalf. These listings — including job title, company name, location, job type, and description — are stored in your account for your personal use only.",
+    "s1_2": "The Service fetches publicly available job listings from supported third-party sources, including LinkedIn, public feeds, and company career sites, on your behalf. These listings — including job title, company name, location, job type, and description — are stored in your account for your personal use only.",
     "s1_3Title": "1.3 Resume & Application Content",
     "s1_3": "You may create, upload, or edit resumes, cover letters, and application materials within the Service. This includes your professional summary, work experience, skills, education, and any other information you choose to provide. This content is stored securely and associated with your account.",
     "s1_4Title": "1.4 Usage & Analytics Data",
@@ -736,10 +736,10 @@
     },
     "hero": {
       "eyebrowNew": "New",
-      "eyebrowTagline": "Self-learning extension · v0.1",
+      "eyebrowTagline": "Agent Runner · v1",
       "titleLine1": "The job search,",
       "titleItalic": "re-engineered.",
-      "subtitle": "Joblit brings roles from Seek and LinkedIn into one workspace, helps tailor your CV and cover letter to each JD, exports clean LaTeX PDFs, and supports application autofill.",
+      "subtitle": "Joblit brings roles from LinkedIn, public feeds, and company career sites into one workspace, helps tailor your CV and cover letter to each JD, and exports clean LaTeX PDFs.",
       "startFree": "Start free",
       "watchDemo": "See how it works",
       "metaFree": "Free for everyone · No credit card · Google or GitHub sign-in"
@@ -762,7 +762,7 @@
       "steps": {
         "fetch": {
           "title": "Fetch",
-          "blurb": "Pull fresh roles from Seek, LinkedIn, and more. Deduped by URL, newest first."
+          "blurb": "Pull fresh roles from LinkedIn, public feeds, and company career sites. Deduped by URL, newest first."
         },
         "tailor": {
           "title": "Tailor",
@@ -770,7 +770,7 @@
         },
         "apply": {
           "title": "Apply",
-          "blurb": "One-click export to LaTeX PDF or let the Chrome extension auto-fill the ATS form directly."
+          "blurb": "Review every draft, export a LaTeX PDF, then track the application in one workspace."
         }
       }
     },
@@ -816,8 +816,8 @@
           "a": "Yes — every Joblit feature is free for every signed-in user. No invitation, approval, subscription, or credit card is required."
         },
         {
-          "q": "Does the Chrome extension work on Workday / Greenhouse / Lever?",
-          "a": "Yes, plus iCIMS and SuccessFactors. We ship dedicated adapters per ATS so quirky fields (like Workday's multi-step forms and date pickers) behave correctly."
+          "q": "Does Joblit submit applications for me?",
+          "a": "No. Joblit prepares evidence-grounded, ATS-conscious documents and keeps your application status organized. You review the final materials and submit each application yourself."
         },
         {
           "q": "Which AI providers can I use?",

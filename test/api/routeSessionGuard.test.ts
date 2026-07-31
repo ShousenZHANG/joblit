@@ -32,7 +32,7 @@ const ROUTES = routeFiles(API_ROOT).map((file) => ({
 
 /**
  * Routes authenticated by something other than a NextAuth session: a service
- * secret, an extension bearer token, the NextAuth handler itself, or a
+ * secret, an agent credential, the NextAuth handler itself, or a
  * deliberately public endpoint. None of them may use the session wrapper.
  */
 const NON_SESSION_ROUTES = new Set([
@@ -67,7 +67,7 @@ describe("route session seam", () => {
   it("routes every session-authenticated handler through the wrapper", () => {
     const offenders = ROUTES.filter(({ path, source }) => {
       if (NON_SESSION_ROUTES.has(path)) return false;
-      if (source.includes("requireExtensionToken")) return false;
+      if (source.includes("requireAgentCredential")) return false;
       // withAgentRoute is the dual-identity wrapper (session or bearer) used
       // by the batch-protocol routes the local Runner drives.
       return !/with(Email)?SessionRoute|withAgentRoute/.test(source);

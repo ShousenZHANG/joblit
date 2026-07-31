@@ -17,7 +17,7 @@ const BodySchema = z
   .strict();
 
 export async function POST(req: Request) {
-  return withAgentRoute(req, async ({ userId }) => {
+  return withAgentRoute(req, "fit:drain", async ({ userId }) => {
     const rateLimit = checkRateLimit(`jobs:fit:release:${userId}`, RELEASE_RATE_LIMIT);
     if (!rateLimit.allowed) {
       return errorJson("RATE_LIMITED", "Too many requests", 429, {

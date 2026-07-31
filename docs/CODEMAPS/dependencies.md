@@ -115,11 +115,11 @@ runner — `tools/hermes/**`, `tools/runner/**`, and `tools/deploy/`.
 
 | Service | Required env | Used by |
 |---|---|---|
-| Neon Postgres | `DATABASE_URL` | everything |
+| Neon Postgres runtime | `DATABASE_URL` (pooled) | running serverless application through `PrismaNeon` |
+| Prisma migrations | `DIRECT_URL`, else `DATABASE_URL_UNPOOLED`, else `POSTGRES_URL_NON_POOLING`, else verified Neon host mapping | unpooled connection for `prisma migrate deploy`; production build rejects an unknown pooled fallback |
 | NextAuth | `AUTH_SECRET`, `GOOGLE_CLIENT_ID/SECRET`, `GITHUB_ID/SECRET` | sign-in |
 | LaTeX render service | `LATEX_RENDER_URL`, `LATEX_RENDER_TOKEN` | every PDF |
 | Fetch worker config + commits | `FETCH_RUN_SECRET` | `/api/fetch-runs/[id]/{config,commit}` |
-| Encryption | `APP_ENC_KEY` (base64) | — |
 | Gemini | `GEMINI_API_KEY`, `GEMINI_MODEL` | optional — absent, Tailoring falls back deterministically |
 | Vercel Blob | `BLOB_READ_WRITE_TOKEN` | required for FINAL artifact persistence outside tests and for reconciliation; DRAFT does not upload |
 | GitHub Actions | `GITHUB_OWNER/REPO/TOKEN/WORKFLOW_FILE` | optional — AU fetch dispatch |
@@ -131,6 +131,17 @@ runner — `tools/hermes/**`, `tools/runner/**`, and `tools/deploy/`.
 `lib/server/env.ts:55` `validateServerEnv` owns baseline boot requirements.
 `BLOB_READ_WRITE_TOKEN` is enforced at the FINAL/reconciler boundary
 instead of global boot because DRAFT edits do not touch Blob storage.
+
+`prisma.config.ts` resolves the migration endpoint through
+`tools/deploy/migrationUrl.mjs`. Neon/Vercel database integrations normally
+inject one of the unpooled names; manually wired deployments set `DIRECT_URL`.
+When only a standard `*.neon.tech` `-pooler` hostname exists, the resolver
+derives the documented direct hostname while preserving credentials and TLS
+parameters. It never guesses for another provider. Keep `DATABASE_URL` pooled
+for the app. Prisma migrate uses a session-scoped advisory lock, which a
+transaction pooler cannot retain across statements, so
+`tools/deploy/vercel-build.mjs` refuses any still-pooled production
+configuration before the migration starts.
 
 `IMPORT_SECRET` and the split `/api/admin/import` +
 `/api/fetch-runs/[id]/update` callback flow were retired by ADR-0008. The AU

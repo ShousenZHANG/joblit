@@ -14,6 +14,28 @@ const migration = readFileSync(
   "utf8",
 );
 
+const reconciliationMigration = readFileSync(
+  join(
+    process.cwd(),
+    "prisma",
+    "migrations",
+    "20260731130000_agent_runtime_expand_and_artifact_reconciliation",
+    "migration.sql",
+  ),
+  "utf8",
+);
+
+const schemaConvergenceMigration = readFileSync(
+  join(
+    process.cwd(),
+    "prisma",
+    "migrations",
+    "20260731135000_schema_convergence_expand",
+    "migration.sql",
+  ),
+  "utf8",
+);
+
 type LegacyIdentityCase = {
   name: string;
   url: string;
@@ -235,6 +257,120 @@ describe("application artifact lifecycle migration contract", () => {
     );
     expect(migration).not.toContain(
       'CREATE UNIQUE INDEX "ApplicationArtifact_url_key"',
+    );
+  });
+});
+
+describe("agent runtime and artifact reconciliation migration", () => {
+  it("is an atomic, bounded migration with artifact writers fenced", () => {
+    expect(reconciliationMigration.trimStart()).toMatch(
+      /^--[\s\S]*?\nBEGIN;/,
+    );
+    expect(reconciliationMigration.trimEnd()).toMatch(/COMMIT;$/);
+    expect(reconciliationMigration).toContain(
+      "SET LOCAL lock_timeout = '15s'",
+    );
+    expect(reconciliationMigration).toContain(
+      "SET LOCAL statement_timeout = '5min'",
+    );
+    expect(reconciliationMigration).toContain(
+      'LOCK TABLE "ApplicationArtifact" IN SHARE ROW EXCLUSIVE MODE',
+    );
+  });
+
+  it("adds replacement identity uniqueness without contracting legacy writers", () => {
+    const storageIdentity = reconciliationMigration.indexOf(
+      'CREATE UNIQUE INDEX IF NOT EXISTS "ApplicationArtifact_storageIdentity_key"',
+    );
+    const provisionalIdentity = reconciliationMigration.indexOf(
+      'CREATE UNIQUE INDEX IF NOT EXISTS "ApplicationArtifact_provisionalIdentity_key"',
+    );
+
+    expect(storageIdentity).toBeGreaterThan(-1);
+    expect(provisionalIdentity).toBeGreaterThan(storageIdentity);
+    expect(reconciliationMigration).not.toContain(
+      'DROP INDEX IF EXISTS "ApplicationArtifact_pathname_key"',
+    );
+    expect(reconciliationMigration).not.toContain(
+      'DROP INDEX IF EXISTS "ApplicationArtifact_url_key"',
+    );
+  });
+
+  it("refuses pre-existing credential and receipt lookalike tables", () => {
+    expect(reconciliationMigration).toContain(
+      'CREATE TABLE "AgentCredential"',
+    );
+    expect(reconciliationMigration).toContain(
+      'CREATE TABLE "FitBatchImportReceipt"',
+    );
+    expect(reconciliationMigration).not.toContain(
+      'CREATE TABLE IF NOT EXISTS "AgentCredential"',
+    );
+    expect(reconciliationMigration).not.toContain(
+      'CREATE TABLE IF NOT EXISTS "FitBatchImportReceipt"',
+    );
+  });
+
+  it("fails closed when an idempotent object has the wrong shape", () => {
+    expect(reconciliationMigration).toContain(
+      "AgentCredential constraints do not match v1 contract",
+    );
+    expect(reconciliationMigration).toContain(
+      "ApplicationArtifact identity unique indexes are invalid",
+    );
+    expect(reconciliationMigration).toContain(
+      "Artifact inventory checkpoint contract is incomplete",
+    );
+    expect(reconciliationMigration).toContain(
+      "Artifact inventory checkpoint columns are invalid",
+    );
+    expect(reconciliationMigration).toContain(
+      "Artifact inventory checkpoint defaults are invalid",
+    );
+    expect(reconciliationMigration).toContain(
+      "Artifact inventory checkpoint seed is missing",
+    );
+    for (const indexedColumn of [
+      "tokenHash",
+      "userId",
+      "issueKey",
+      "storageIdentity",
+      "provisionalIdentity",
+    ]) {
+      expect(reconciliationMigration).toContain(
+        `pg_get_indexdef(indexrelid, ${
+          indexedColumn === "issueKey" ? 2 : 1
+        }, TRUE) = '"${indexedColumn}"'`,
+      );
+    }
+    expect(reconciliationMigration).toContain("indpred IS NULL");
+    expect(reconciliationMigration).toContain("indexprs IS NULL");
+  });
+});
+
+describe("historical schema convergence migration", () => {
+  it("is expand-only and verifies both repaired defaults", () => {
+    expect(schemaConvergenceMigration.trimStart()).toMatch(
+      /^--[\s\S]*?\nBEGIN;/,
+    );
+    expect(schemaConvergenceMigration.trimEnd()).toMatch(/COMMIT;$/);
+    expect(schemaConvergenceMigration).toContain(
+      'ADD COLUMN IF NOT EXISTS "locale" TEXT',
+    );
+    expect(schemaConvergenceMigration).toContain(
+      'ALTER COLUMN "locale" SET NOT NULL',
+    );
+    expect(schemaConvergenceMigration).toContain(
+      'ALTER COLUMN "updatedAt" SET DEFAULT CURRENT_TIMESTAMP',
+    );
+    expect(schemaConvergenceMigration).toContain(
+      "Application.locale did not converge",
+    );
+    expect(schemaConvergenceMigration).toContain(
+      "ActiveResumeProfile.updatedAt default did not converge",
+    );
+    expect(schemaConvergenceMigration).not.toMatch(
+      /\bDROP\s+(?:TABLE|COLUMN|INDEX|TYPE)\b/i,
     );
   });
 });

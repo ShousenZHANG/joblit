@@ -1,4 +1,4 @@
-# Joblit outbound and extension release security
+# Joblit outbound and local-runtime release security
 
 ## Server outbound requests
 
@@ -33,10 +33,10 @@ against DNS rebinding. Eliminating the residual window requires a verified-IP
 connection mechanism or controlled egress proxy that preserves TLS hostname
 verification.
 
-Current protected integrations include global job feeds, SEEK JD enrichment,
-GitHub Actions dispatch, GitHub Trending, YouTube Data API, AI providers, the
-LaTeX render service, and trusted resume photos. The Python JobSpy detail
-enricher applies equivalent HTTPS, DNS-preflight, redirect, and body limits.
+Current protected integrations include global job feeds, GitHub Actions
+dispatch, GitHub Trending, YouTube Data API, AI providers, the LaTeX render
+service, and trusted resume photos. The Python JobSpy detail enricher applies
+equivalent HTTPS, DNS-preflight, redirect, and body limits.
 
 ## Untrusted content
 
@@ -50,30 +50,29 @@ LLM prompts must place candidate and JD data inside explicitly untrusted,
 JSON-encoded evidence blocks. Raw JD or candidate text must not be appended
 after the guarded blocks.
 
-## Chrome extension permissions
+## Repository security policy
 
-`tools/ci/security-policy.json` is the reviewed permission allowlist.
-`tools/ci/check-security-policy.mjs` fails CI if required permissions, optional
-host capabilities, content-script matches, or CSP drift. It also rejects
-tracked secrets, local home paths, release archives, local environment files,
-and symlinks.
+`tools/ci/security-policy.json` and
+`tools/ci/check-security-policy.mjs` reject tracked secrets, local home paths,
+release archives, local environment files, and symlinks. They also enforce that
+server-side network calls use the reviewed `safeFetch` seam instead of direct
+platform `fetch`. Exact raw `jfagent_v1_` credentials (and retired `jfext_`
+credentials) are treated as secrets, while retired extension source paths are
+forbidden from re-entering the active repository.
 
-The broad HTTPS optional host pattern does not grant access at installation.
-The extension requests only the exact validated origin at runtime. Required
-host access remains limited to `https://www.joblit.tech/*`.
+## Hermes profile release integrity
 
-## Extension release integrity
+The Hermes profile workflow validates the minimal profile source, runs package
+and Windows bootstrap tests, builds twice and compares the exact staged trees,
+and rejects runtime state, links, or credential material. Production release
+requires a reviewed Ed25519 key, verifies the signed manifest before archiving,
+strips archive metadata, publishes a SHA-256 checksum, and refuses to replace
+an existing release asset.
 
-`tools/ci/package-extension.mjs` walks the built tree with `lstat`, rejects
-symlinks and special files, enforces size limits and case-unique paths, and
-generates a sorted per-file SHA-256 manifest plus a tree digest.
-
-The release workflow:
-
-1. Builds and tests the extension.
-2. Verifies tag version equals built manifest version.
-3. Generates the reviewed file list and integrity manifest.
-4. Archives exactly that sorted list with metadata stripped.
-5. Publishes the ZIP, ZIP SHA-256, and file-tree manifest together.
+The bootstrap accepts only a verified package, installs it into an isolated
+profile, writes its loopback secret with a current-user ACL, and binds the
+Hermes gateway to `127.0.0.1`. The Node Runner does not require browser CORS;
+the bootstrap removes the retired wildcard setting and readiness checks reject
+profiles that still contain it.
 
 All product fetches are explicitly user initiated; no scheduler is installed.

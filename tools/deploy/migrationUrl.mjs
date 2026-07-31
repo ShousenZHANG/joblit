@@ -20,9 +20,9 @@
 /**
  * Names that already hold an unpooled URL, most explicit first.
  *
- * The Neon and Vercel Postgres integrations inject their own, so a correctly
- * integrated project needs no manual variable — `DIRECT_URL` is for setups
- * that wire the database by hand.
+ * The Neon and Vercel Postgres integrations inject their own. If only a
+ * standard Neon pooled URL exists, resolveMigrationUrl uses Neon's documented
+ * `-pooler` host mapping; `DIRECT_URL` covers other manually wired providers.
  */
 const DIRECT_URL_KEYS = [
   "DIRECT_URL",
@@ -36,7 +36,27 @@ export function resolveMigrationUrl(env) {
     const value = env[key]?.trim();
     if (value) return value;
   }
-  return env.DATABASE_URL;
+  const runtimeUrl = env.DATABASE_URL?.trim();
+  if (!runtimeUrl) return runtimeUrl;
+
+  // Neon documents pooled hosts as the same endpoint name with a `-pooler`
+  // suffix. This is the only provider mapping we can derive without guessing.
+  // Preserve credentials, port, database, TLS and channel-binding parameters.
+  try {
+    const parsed = new URL(runtimeUrl);
+    if (
+      (parsed.protocol === "postgres:" ||
+        parsed.protocol === "postgresql:") &&
+      parsed.hostname.includes("-pooler.") &&
+      parsed.hostname.endsWith(".neon.tech")
+    ) {
+      parsed.hostname = parsed.hostname.replace("-pooler.", ".");
+      return parsed.toString();
+    }
+  } catch {
+    // Prisma will provide the actionable malformed-URL error.
+  }
+  return runtimeUrl;
 }
 
 /**
@@ -55,7 +75,13 @@ export function isPooledConnectionUrl(url) {
   } catch {
     return false;
   }
-  // Neon names its pooled endpoint `<endpoint>-pooler.<region>...`.
-  if (parsed.hostname.includes("-pooler.")) return true;
-  return parsed.searchParams.get("pgbouncer") === "true";
+  const hostname = parsed.hostname.toLowerCase();
+  // Neon uses `-pooler`; Supabase and several managed Postgres providers use
+  // a `pooler` or `pgbouncer` DNS label. These unknown-provider shapes must
+  // fail closed and require an explicit direct URL instead of being mistaken
+  // for a safe migration endpoint.
+  if (/(^|[.-])(pooler|pgbouncer)([.-]|$)/.test(hostname)) return true;
+  if (parsed.port === "6432" || parsed.port === "6543") return true;
+  const pgbouncer = parsed.searchParams.get("pgbouncer")?.toLowerCase();
+  return pgbouncer === "true" || pgbouncer === "1";
 }

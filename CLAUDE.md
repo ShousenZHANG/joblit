@@ -32,7 +32,7 @@ npm run deps:policy       # Check dependency policy
 1. **Job Intake**: `FetchRun` tasks persist a strict market-specific config, then dispatch the AU GitHub Actions worker or run CN/GLOBAL adapters in-process. `executeInlineFetchRun` owns the lifecycle for both inline markets; discovery adapters only return a terminal plan. All results enter `commitFetchRun`, where ordered receipts, Jobs, counters, and terminal state commit atomically with dedupe on `userId + jobUrl` and tombstone filtering (`DeletedJobUrl`)
 2. **Tailoring**: `Job` + `ResumeProfile` → AI prompt (via versioned `PromptRuleTemplate`) → external model imported through `/api/applications/manual-generate`, or receipt-backed server batch generation through `executeServerBatchTailoringTask` → persisted Application aggregate → PDF render via LaTeX external service
 3. **Batch**: External Codex atomically completes/claims tasks through `/api/application-batches/[id]/run-once` and persists output through `manual-generate`; feature-gated server auto-execute uses `/execute` → `executeServerBatchTailoringTask`. That interface requires Batch, task, issue, and attempt identity and commits with an Application content-hash CAS.
-4. **Runner**: The local Runner (`tools/runner/`) authenticates with an agent token, drains the fit queue and the active tailoring batch, and calls the user's Hermes gateway over loopback. It imports no repository code — the HTTP API is the contract, same as for Codex. See ADR-0014.
+4. **Runner**: The local Runner (`tools/runner/`) authenticates with an `AgentCredential`, drains the fit queue and the active tailoring batch, and calls the user's Hermes gateway over loopback. Fit results settle behind `FitBatchImportReceipt`; tailoring imports settle behind `TailoringRunReceipt` and the exact attempt fence. Unknown network outcomes replay the same receipt instead of becoming false failures. It imports no repository code — the HTTP API is the contract, same as for Codex. See ADR-0014.
 
 Current tailoring output is delta-only: Resume returns `cvSummary` plus zero to
 three `latestExperience.addedBullets`; Cover returns only its three body
@@ -56,12 +56,13 @@ reintroduced.
 - `applications/` — Resume/cover artifact generation and storage
 - `applicationBatches/` — Batch task orchestration (Codex protocol, progress tracking)
 - `jobs/` — Job CRUD, filtering, deletion cascade (jobListService, jobDeleteService, jobSearchService)
-- `fetchRuns/` — FetchRun quota, unified inline executor, lifecycle lock, and the shared `fetch-run-commit/v1` transaction boundary
+- `fetchRuns/` — Unified inline executor, stale-run policy, lifecycle/dispatch locks, and the shared `fetch-run-commit/v1` transaction boundary
 - `files/` — Vercel Blob operations and PDF filename utilities
 - `discover/` — YouTube video pipeline: fetch, cache, refresh
 - `cnFetch/` — China Fetch Pipeline and the Nowcoder adapter
 - `api/` — Shared route utilities: `errorResponse`, `rateLimit`, `routeHandler`
-- `auth/` — Session middleware: `requireSession`, `requireExtensionToken` (the agent-token validator; the model keeps its original name)
+- `auth/` — Session and agent-credential middleware: `requireSession`,
+  `requireAgentCredential`
 - `prisma.ts` — Prisma singleton with Neon serverless adapter
 
 ### Shared (`lib/shared/`)
@@ -74,22 +75,22 @@ reintroduced.
 - `fetchRolePacks.config.json` — Role category definitions
 - `canonicalizeJobUrl`, `parseCnSalary`, `fetchExclusionCriteria` — Job normalization helpers
 
-### Prisma Models (26)
+### Prisma Models (27)
 
-Core workflow: `Job`, `FetchRun`, `ApplicationBatch`, `ApplicationBatchTask`, `Application`, `ResumeProfile`, `ActiveResumeProfile`, `PromptRuleTemplate`  
-Provenance: `ApplicationEvent` (immutable ledger, carries company/title snapshots so it outlives the Job), `EvidenceSnapshot`, `ClaimEvidence`  
-Tailoring acceptance (ADR-0009): `TailoringRun`, `TailoringRunReceipt`  
-Artifact lifecycle (ADR-0010): `ApplicationArtifact`, `ApplicationArtifactInventoryCheckpoint`  
-Auth: `User`, `Account`, `Session`, `ExtensionToken`  
-Fetch execution and sources: `FetchRunCommitReceipt`, `SourceHealth`, `AtsBoardSource`
-Supporting: `DeletedJobUrl` (dedup tombstone), `DailyCheckin`, `OnboardingState`, `DiscoverVideoCache`
+- Core workflow: `Job`, `FetchRun`, `FitBatchImportReceipt`, `ApplicationBatch`, `ApplicationBatchTask`, `Application`, `ResumeProfile`, `ActiveResumeProfile`, `PromptRuleTemplate`
+- Provenance: `ApplicationEvent` (immutable ledger, carries company/title snapshots so it outlives the Job), `EvidenceSnapshot`, `ClaimEvidence`
+- Tailoring acceptance (ADR-0009): `TailoringRun`, `TailoringRunReceipt`
+- Artifact lifecycle (ADR-0010): `ApplicationArtifact`, `ApplicationArtifactInventoryCheckpoint`
+- Auth: `User`, `Account`, `Session`, `AgentCredential`
+- Fetch execution and sources: `FetchRunCommitReceipt`, `SourceHealth`, `AtsBoardSource`
+- Supporting: `DeletedJobUrl` (dedup tombstone), `DailyCheckin`, `OnboardingState`, `DiscoverVideoCache`
 
 The writer-less tables ADR-0006 deferred (`InterviewPlan`, `StarStory`, `Offer`,
 `FollowUpReminder`) and the extension's own (`FieldMappingRule`,
 `LocalAiSetting`, `FormSubmission`) were dropped in
 `20260731120000_drop_extension_and_career_tables`. Do not reintroduce them; a
 future submission ledger should be modelled for the agent path, not revived
-from the autofill shape.
+from the retired form-filling design.
 
 ### Internationalization
 
@@ -97,7 +98,7 @@ Two locales: `en-AU` and `zh-CN` via next-intl. Locale is cookie-based. Resume p
 
 ### Authentication
 
-NextAuth v4 with GitHub + Google OAuth, Prisma adapter (database sessions). Sign-in is free, open, and self-service: no invitation or manual approval is required. Session includes `user.id`. Agent tokens (`ExtensionToken`, issued at `/agent`) authenticate the Runner and any external agent through `withAgentRoute`, which accepts a Bearer token or a session cookie; a presented token never falls back to the cookie, so revocation is immediate. See AGENTS.md. The AU worker uses `FETCH_RUN_SECRET` for `/api/fetch-runs/[id]/config` and `/api/fetch-runs/[id]/commit`; the commit module derives tenant identity from the stored run. The retired `/api/admin/import`, `/api/fetch-runs/[id]/update`, and `/api/ext/**` routes must not be reintroduced.
+NextAuth v4 with GitHub + Google OAuth, Prisma adapter (database sessions). Sign-in is free, open, and self-service: no invitation or manual approval is required. Session includes `user.id`. Versioned `AgentCredential` records issued at `/agent` authenticate the Runner and external agents through `withAgentRoute`; each protected route declares a required capability, and a presented Bearer credential never falls back to the cookie. Credentials use the `jfagent_v1_` prefix, `joblit-agent` audience, and SHA-256 hashes at rest. See AGENTS.md. The AU worker uses `FETCH_RUN_SECRET` for `/api/fetch-runs/[id]/config` and `/api/fetch-runs/[id]/commit`; the commit module derives tenant identity from the stored run. The retired `/api/admin/import`, `/api/fetch-runs/[id]/update`, and `/api/ext/**` routes must not be reintroduced.
 
 ### Testing
 
@@ -109,9 +110,11 @@ Path alias `@/*` maps to the project root. Import as `@/lib/...`, `@/app/...`, `
 
 ## Environment Variables
 
-Required: `DATABASE_URL`, `AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_ID`, `GITHUB_SECRET`, `FETCH_RUN_SECRET`, `APP_ENC_KEY` (base64), `LATEX_RENDER_URL`, `LATEX_RENDER_TOKEN`
+Required for the running app: `DATABASE_URL`, `AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_ID`, `GITHUB_SECRET`, `FETCH_RUN_SECRET`, `LATEX_RENDER_URL`, `LATEX_RENDER_TOKEN`
 
-Optional: `DIRECT_URL`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `BLOB_READ_WRITE_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_TOKEN`, `GITHUB_WORKFLOW_FILE`, `GITHUB_REF`, `ENABLE_BATCH_EXECUTE_AUTOGEN`, `JOBLIT_ATS_BOARDS_JSON`, `JOBLIT_WEB_URL`, `YOUTUBE_API_KEY`, `CRON_SECRET`, `ARTIFACT_RECONCILE_SECRET`, `ARTIFACT_RECONCILE_ENABLED`, `RSSHUB_URL`, `RSSHUB_JOB_ROUTES`, `GITHUB_CN_JOB_REPOS`
+Migration connection: production must resolve an unpooled endpoint from `DIRECT_URL`, `DATABASE_URL_UNPOOLED`, `POSTGRES_URL_NON_POOLING`, or the verified Neon `-pooler` host mapping. `DATABASE_URL` remains pooled for the serverless runtime.
+
+Optional integrations: `GEMINI_API_KEY`, `GEMINI_MODEL`, `BLOB_READ_WRITE_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_TOKEN`, `GITHUB_WORKFLOW_FILE`, `GITHUB_REF`, `ENABLE_BATCH_EXECUTE_AUTOGEN`, `JOBLIT_ATS_BOARDS_JSON`, `JOBLIT_WEB_URL`, `YOUTUBE_API_KEY`, `CRON_SECRET`, `ARTIFACT_RECONCILE_SECRET`, `ARTIFACT_RECONCILE_ENABLED`, `RSSHUB_URL`, `RSSHUB_JOB_ROUTES`, `GITHUB_CN_JOB_REPOS`
 
 Application modules consume optional integrations through
 `lib/server/runtimeCapabilities`, not by assembling environment-variable
@@ -119,10 +122,12 @@ pairs or parsing feature flags themselves. Keep paired credentials and
 enabled/disabled/invalid semantics centralized there; never serialize the
 returned secret-bearing configuration.
 
-`DIRECT_URL` is only needed when the database is wired by hand: the Neon and
-Vercel Postgres integrations already inject an unpooled URL, and migrations
-read `DIRECT_URL`, then `DATABASE_URL_UNPOOLED`, then
-`POSTGRES_URL_NON_POOLING`, before falling back to `DATABASE_URL`.
+`DIRECT_URL` is only needed when the integration does not provide an unpooled
+URL and the pooled provider has no verified mapping. Migrations read
+`DIRECT_URL`, then `DATABASE_URL_UNPOOLED`, then
+`POSTGRES_URL_NON_POOLING`. If only a standard `*.neon.tech` `-pooler` URL is
+present, Joblit derives the documented matching direct hostname; it does not
+guess for other providers.
 
 It is the **unpooled** database endpoint, used only by
 `prisma migrate deploy`. Migrate serialises itself with a session-scoped
@@ -135,8 +140,8 @@ without the `-pooler` host suffix. `DATABASE_URL` stays pooled: that is what
 the serverless runtime wants, and the app's own locks are transaction-scoped.
 
 `tools/deploy/vercel-build.mjs` refuses to start a production migration when
-the resolved URL still looks pooled, so this fails with the cause named rather
-than as a lock timeout.
+the resolved URL still looks pooled after that verified mapping, so unknown
+providers fail with the cause named rather than as a lock timeout.
 
 `LATEX_RENDER_ALLOW_INSECURE_HTTP=true` lets `LATEX_RENDER_URL` be a plain-http
 endpoint. `LATEX_RENDER_TOKEN` is sent as a request header, so this puts a

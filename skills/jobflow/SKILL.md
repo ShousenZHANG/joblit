@@ -1,6 +1,6 @@
 ---
 name: joblit
-description: Use when working in the Joblit repo (joblit) or when discussing job fetch (JobSpy/LinkedIn/Seek/CN platforms), resume/cover tailoring, prompt rules/skill pack, or PDF export.
+description: Use when working in the Joblit repo (joblit) or when discussing job fetch (JobSpy/LinkedIn/public feeds/company ATS/CN platforms), resume/cover tailoring, prompt rules/skill pack, or PDF export.
 ---
 
 # Joblit (joblit)
@@ -10,7 +10,9 @@ Job-search command center: fetch → triage → tailor CV/CL → export PDFs.
 ## When to Use
 
 - You are in the `ShousenZHANG/joblit` repo, or the user mentions Joblit/joblit.
-- The task involves job intake (JobSpy/LinkedIn, Seek fetch, CN platforms), prompt rules/skill pack, CV/CL generation, batch workflows, or PDF export.
+- The task involves job intake (JobSpy/LinkedIn, public feeds, company ATS
+  boards, or CN platforms), prompt rules/skill pack, CV/CL generation, batch
+  workflows, or PDF export.
 
 ## When NOT to Use
 

@@ -40,6 +40,10 @@ const rateLimitStore = vi.hoisted(() => ({
   enforce: vi.fn(() => null),
 }));
 
+const agentAuth = vi.hoisted(() => ({
+  requireAgentCredential: vi.fn(),
+}));
+
 const applicationPrompt = vi.hoisted(() => ({
   buildApplicationPromptForUser: vi.fn(async () => ({
     promptMeta: {
@@ -110,6 +114,10 @@ vi.mock("@/auth", () => ({
 
 vi.mock("next-auth/next", () => ({
   getServerSession: vi.fn(),
+}));
+
+vi.mock("@/lib/server/auth/requireAgentCredential", () => ({
+  requireAgentCredential: agentAuth.requireAgentCredential,
 }));
 
 vi.mock("@/lib/server/api/aiRateLimit", () => ({
@@ -268,6 +276,12 @@ describe("applications manual generate api", () => {
     tailoringAcceptance.prepareTailoringRunAcceptance.mockClear();
     tailoringAcceptance.completeTailoringRunAcceptance.mockClear();
     rateLimitStore.enforce.mockReset().mockReturnValue(null);
+    agentAuth.requireAgentCredential.mockReset().mockResolvedValue({
+      userId: "user-1",
+      credentialId: "credential-1",
+      capabilities: ["tailoring:execute"],
+      requestId: "agent-request-id",
+    });
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockReset();
     (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockReset();
     (mapResumeProfile as unknown as ReturnType<typeof vi.fn>).mockReset();
@@ -409,6 +423,27 @@ describe("applications manual generate api", () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
+  });
+
+  it("does not let an AgentCredential import through manual compatibility", async () => {
+    const res = await POST(
+      new Request("http://localhost/api/applications/manual-generate", {
+        method: "POST",
+        headers: { Authorization: "Bearer agent-token" },
+        body: JSON.stringify({
+          jobId: VALID_JOB_ID,
+          target: "resume",
+          modelOutput: VALID_OUTPUT,
+          source: "manual_import",
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({
+      error: { code: "AGENT_PROTOCOL_REQUIRED" },
+    });
+    expect(jobStore.findFirst).not.toHaveBeenCalled();
   });
 
   it("returns parse error for invalid model output", async () => {
@@ -1701,53 +1736,7 @@ describe("applications manual generate api", () => {
     expect(applicationStore.upsert).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ["fenced JSON", `\`\`\`json\n${JSON.stringify({ cvSummary: "Strict", latestExperience: { bullets: ["Built APIs."] }, skillsFinal: [{ label: "Backend", items: ["TypeScript"] }] })}\n\`\`\``],
-    ["snake_case alias", JSON.stringify({ cv_summary: "Strict", latest_experience: { bullets: ["Built APIs."] } })],
-    ["trailing comma", '{"cvSummary":"Strict","latestExperience":{"bullets":["Built APIs."]},}'],
-    ["unknown key", JSON.stringify({ cvSummary: "Strict", latestExperience: { bullets: ["Built APIs."] }, unknown: true })],
-  ])("returns stable INVALID_AI_RESULT for local AI %s", async (_label, modelOutput) => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: "user-1" } });
-    jobStore.findFirst.mockResolvedValueOnce({
-      id: VALID_JOB_ID,
-      title: "Software Engineer",
-      company: "Example Co",
-      location: "Sydney",
-      description: "Build product features",
-      market: "AU",
-    });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
-
-    const res = await POST(new Request(
-      "http://localhost/api/applications/manual-generate?finalize=false",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          jobId: VALID_JOB_ID,
-          target: "resume",
-          modelOutput,
-          source: "local_ai",
-          promptMeta: {
-            ruleSetId: "rules-1",
-            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
-            promptTemplateVersion: "2026.07.v2",
-            schemaVersion: "2026-07-24",
-            skillPackVersion: "b".repeat(64),
-            promptHash: "c".repeat(64),
-          },
-        }),
-      },
-    ));
-    expect(res.status).toBe(400);
-    expect((await res.json()).error.code).toBe("INVALID_AI_RESULT");
-  });
-
-  it.each(["local_ai", "codex_batch"] as const)(
-    "requires a current prompt receipt for %s output",
-    async (source) => {
+  it("requires a current prompt receipt for Codex Batch output", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "user-1" },
     });
@@ -1776,7 +1765,7 @@ describe("applications manual generate api", () => {
               cvSummary: "Strict",
               latestExperience: { addedBullets: [] },
             }),
-            source,
+            source: "codex_batch",
           }),
         },
       ),
@@ -1785,8 +1774,7 @@ describe("applications manual generate api", () => {
     expect(res.status).toBe(400);
     expect((await res.json()).error.code).toBe("PROMPT_META_REQUIRED");
     expect(applicationPrompt.buildApplicationPromptForUser).not.toHaveBeenCalled();
-    },
-  );
+  });
 
   it("rejects legacy Resume JSON from Codex Batch even with a complete receipt", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -1883,7 +1871,7 @@ describe("applications manual generate api", () => {
     expect(applicationStore.upsert).not.toHaveBeenCalled();
   });
 
-  it("rejects oversized local AI output with INVALID_AI_RESULT before persistence", async () => {
+  it("rejects oversized Codex Batch output before persistence", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: "user-1" } });
     const res = await POST(new Request("http://localhost/api/applications/manual-generate", {
       method: "POST",
@@ -1891,7 +1879,7 @@ describe("applications manual generate api", () => {
         jobId: VALID_JOB_ID,
         target: "resume",
         modelOutput: "x".repeat(80_001),
-        source: "local_ai",
+        source: "codex_batch",
       }),
     }));
     expect(res.status).toBe(400);
@@ -1904,11 +1892,6 @@ describe("applications manual generate api", () => {
       source: "manual_import" as const,
       variant: "full" as const,
       protocolSource: "MANUAL_IMPORT" as const,
-    },
-    {
-      source: "local_ai" as const,
-      variant: "lean" as const,
-      protocolSource: "LOCAL_AI" as const,
     },
     {
       source: "codex_batch" as const,
@@ -2278,7 +2261,7 @@ describe("applications manual generate api", () => {
             jobId: VALID_JOB_ID,
             target: "resume",
             modelOutput: VALID_OUTPUT,
-            source: "local_ai",
+            source: "manual_import",
             promptMeta: {
               ruleSetId: "rules-1",
               resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
@@ -2358,7 +2341,7 @@ describe("applications manual generate api", () => {
               "Tailored summary",
               "Changed summary",
             ),
-            source: "local_ai",
+            source: "manual_import",
             promptMeta: {
               ruleSetId: "rules-1",
               resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",

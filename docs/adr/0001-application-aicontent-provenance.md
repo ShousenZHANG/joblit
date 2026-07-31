@@ -13,11 +13,12 @@
 > unknown and must never be inferred from the latest root metadata.
 >
 > Generation output is a separate, versioned contract. The current contract is
-> prompt template `2026.07.v2` / output schema `2026-07-24`. `local_ai`,
-> `codex_batch`, and `server_batch` must use that contract and an authoritative
-> target receipt. `manual_import` alone retains a compatibility reader for
-> legacy user-supplied JSON; compatibility inputs do not expand the current
-> generation contract.
+> prompt template `2026.07.v2` / output schema `2026-07-24`. `codex_batch` and
+> `server_batch` must use that contract and an authoritative target receipt;
+> the `local_ai` value remains historical provenance only after ADR-0014 retired
+> its writer. `manual_import` alone retains a compatibility reader for legacy
+> user-supplied JSON; compatibility inputs do not expand the current generation
+> contract.
 
 ## Context
 

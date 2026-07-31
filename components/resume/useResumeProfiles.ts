@@ -63,8 +63,8 @@ export function useResumeProfiles({
     [applyProfileToDraft],
   );
 
-  // Initial load — mirrors ExtensionTokenManager.fetchTokens: a failed fetch
-  // must surface as an explicit error + retry, not a silent blank form that
+  // Initial load: a failed fetch must surface as an explicit error + retry,
+  // not a silent blank form that
   // reads as "no saved resume". `loadError` drives that UI; `retryLoad` lets
   // the surface re-attempt. The per-load AbortSignal prevents a stale locale's
   // response from winning, while `aliveRef` also protects event-triggered

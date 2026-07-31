@@ -183,7 +183,7 @@ export function JobsClient({
     revealJobs,
   });
 
-  const ext = useExternalGenerate(setError);
+  const externalGenerate = useExternalGenerate(setError);
   const fitScan = useFitScan({ onJobScored: refetch });
   // Keep renderer identity stable after virtualization first becomes useful.
   // In particular, deleting row 81 must not swap the entire virtual subtree
@@ -263,8 +263,8 @@ export function JobsClient({
   // state of .app-shell when the dialog unmounts.
   const anyDialogOpen =
     batchDeleteConfirmOpen ||
-    ext.externalDialogOpen ||
-    !!ext.tailorReviewDraft;
+    externalGenerate.externalDialogOpen ||
+    !!externalGenerate.tailorReviewDraft;
   useEffect(() => {
     if (typeof document === "undefined") return;
     const appShell = document.querySelector<HTMLElement>(".app-shell");
@@ -511,7 +511,9 @@ export function JobsClient({
 
   const selectedJob =
     visibleItems.find((item) => item.id === effectiveSelectedId) ?? null;
-  const selectedTailorSource = selectedJob ? ext.tailorSourceByJob[selectedJob.id] : undefined;
+  const selectedTailorSource = selectedJob
+    ? externalGenerate.tailorSourceByJob[selectedJob.id]
+    : undefined;
   const highlightGenerate = isTaskHighlighted("generate_first_pdf");
 
   const detailQuery = useQuery({
@@ -574,38 +576,38 @@ export function JobsClient({
   return (
     <>
       <ExternalGenerateDialog
-        open={ext.externalDialogOpen}
-        onOpenChange={ext.setExternalDialogOpen}
-        dialogPhase={ext.dialogPhase}
-        setDialogPhase={ext.setDialogPhase}
-        externalTarget={ext.externalTarget}
-        externalStep={ext.externalStep}
-        setExternalStep={ext.setExternalStep}
-        externalSkillPackFresh={ext.externalSkillPackFresh}
-        setExternalSkillPackFresh={ext.setExternalSkillPackFresh}
-        externalSkillPackLoading={ext.externalSkillPackLoading}
-        externalPromptLoading={ext.externalPromptLoading}
-        externalPromptMeta={ext.externalPromptMeta}
-        externalPromptText={ext.externalPromptText}
-        externalShortPromptText={ext.externalShortPromptText}
-        promptCopied={ext.promptCopied}
-        externalModelOutput={ext.externalModelOutput}
-        setExternalModelOutput={ext.setExternalModelOutput}
-        externalGenerating={ext.externalGenerating}
-        parsedExternalOutput={ext.parsedExternalOutput}
+        open={externalGenerate.externalDialogOpen}
+        onOpenChange={externalGenerate.setExternalDialogOpen}
+        dialogPhase={externalGenerate.dialogPhase}
+        setDialogPhase={externalGenerate.setDialogPhase}
+        externalTarget={externalGenerate.externalTarget}
+        externalStep={externalGenerate.externalStep}
+        setExternalStep={externalGenerate.setExternalStep}
+        externalSkillPackFresh={externalGenerate.externalSkillPackFresh}
+        setExternalSkillPackFresh={externalGenerate.setExternalSkillPackFresh}
+        externalSkillPackLoading={externalGenerate.externalSkillPackLoading}
+        externalPromptLoading={externalGenerate.externalPromptLoading}
+        externalPromptMeta={externalGenerate.externalPromptMeta}
+        externalPromptText={externalGenerate.externalPromptText}
+        externalShortPromptText={externalGenerate.externalShortPromptText}
+        promptCopied={externalGenerate.promptCopied}
+        externalModelOutput={externalGenerate.externalModelOutput}
+        setExternalModelOutput={externalGenerate.setExternalModelOutput}
+        externalGenerating={externalGenerate.externalGenerating}
+        parsedExternalOutput={externalGenerate.parsedExternalOutput}
         selectedJob={selectedJob}
-        onCopySmartPrompt={ext.copySmartPrompt}
-        onDownloadSkillPack={ext.downloadSkillPack}
-        onGenerate={ext.generateFromImportedJson}
+        onCopySmartPrompt={externalGenerate.copySmartPrompt}
+        onDownloadSkillPack={externalGenerate.downloadSkillPack}
+        onGenerate={externalGenerate.generateFromImportedJson}
       />
 
       <TailorReviewDialog
-        open={!!ext.tailorReviewDraft}
-        draft={ext.tailorReviewDraft}
+        open={!!externalGenerate.tailorReviewDraft}
+        draft={externalGenerate.tailorReviewDraft}
         onOpenChange={(open) => {
-          if (!open) ext.closeTailorReview();
+          if (!open) externalGenerate.closeTailorReview();
         }}
-        onFinalized={ext.handleTailorReviewFinalized}
+        onFinalized={externalGenerate.handleTailorReviewFinalized}
       />
 
       <div
@@ -1284,12 +1286,16 @@ export function JobsClient({
           deletingIds={deletingIds}
           highlightGenerate={highlightGenerate}
           guideHighlightClass={guideHighlightClass}
-          externalPromptLoading={ext.externalGenerating}
+          externalPromptLoading={externalGenerate.externalGenerating}
           mobileTab={mobileTab}
           onUpdateStatus={updateStatus}
           onDelete={requestDelete}
-          onGenerateResume={(job) => ext.openExternalGenerateDialog(job, "resume")}
-          onGenerateCover={(job) => ext.openExternalGenerateDialog(job, "cover")}
+          onGenerateResume={(job) =>
+            externalGenerate.openExternalGenerateDialog(job, "resume")
+          }
+          onGenerateCover={(job) =>
+            externalGenerate.openExternalGenerateDialog(job, "cover")
+          }
           onRetryDetail={() => void refetchDetail()}
         />
         </section>

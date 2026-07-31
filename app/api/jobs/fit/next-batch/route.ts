@@ -14,7 +14,7 @@ const BATCH_RATE_LIMIT = { limit: 60, windowSeconds: 60 } as const;
  * pendingTotal is zero; fresh leases return a retryAfterMs polling hint.
  */
 export async function POST(req: Request) {
-  return withAgentRoute(req, async ({ userId }) => {
+  return withAgentRoute(req, "fit:drain", async ({ userId }) => {
     const rateLimit = checkRateLimit(`jobs:fit:next-batch:${userId}`, BATCH_RATE_LIMIT);
     if (!rateLimit.allowed) {
       return errorJson("RATE_LIMITED", "Too many requests", 429, {

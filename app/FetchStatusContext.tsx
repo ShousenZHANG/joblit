@@ -21,7 +21,8 @@ export type FetchRunStatus =
 export type FetchSource = "jobspy" | "seek" | "nowcoder" | "global";
 
 // One tracked run (a single source). A fetch action starts one of these per
-// selected source — picking "Both" tracks two lanes (jobspy + seek) at once.
+// The legacy `seek` member is read-only compatibility for stored FetchRun
+// receipts; current fetch controls no longer create that lane.
 export type FetchRunLane = {
   id: string;
   source: FetchSource;

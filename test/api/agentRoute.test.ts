@@ -9,9 +9,9 @@ import { z } from "zod";
  * session only, so the documented external worker — Codex, and now the local
  * Runner — had no first-class way in; AGENTS.md never even had an auth
  * section. withAgentRoute accepts either identity for the same handler:
- * a Bearer ExtensionToken when the header is present, the session cookie
- * otherwise. Both produce the same SessionContext, so handlers cannot tell
- * the difference and need no changes.
+ * a capability-scoped AgentCredential when the header is present, the session
+ * cookie otherwise. Handlers receive the authentication kind so strict Agent
+ * protocol routes cannot be downgraded to a browser-only compatibility lane.
  */
 
 // Fully mocked: importing the real modules drags in auth.ts and prisma, which
@@ -23,18 +23,18 @@ const auth = vi.hoisted(() => {
       this.name = "UnauthorizedError";
     }
   }
-  class ExtensionTokenError extends Error {
+  class AgentCredentialError extends Error {
     constructor(message: string) {
       super(message);
-      this.name = "ExtensionTokenError";
+      this.name = "AgentCredentialError";
     }
   }
   return {
     requireSession: vi.fn(),
     requireSessionWithEmail: vi.fn(),
-    requireExtensionToken: vi.fn(),
+    requireAgentCredential: vi.fn(),
     UnauthorizedError,
-    ExtensionTokenError,
+    AgentCredentialError,
   };
 });
 
@@ -44,14 +44,14 @@ vi.mock("@/lib/server/auth/requireSession", () => ({
   UnauthorizedError: auth.UnauthorizedError,
 }));
 
-vi.mock("@/lib/server/auth/requireExtensionToken", () => ({
-  requireExtensionToken: auth.requireExtensionToken,
-  ExtensionTokenError: auth.ExtensionTokenError,
+vi.mock("@/lib/server/auth/requireAgentCredential", () => ({
+  requireAgentCredential: auth.requireAgentCredential,
+  AgentCredentialError: auth.AgentCredentialError,
 }));
 
 import { withAgentRoute } from "@/lib/server/api/routeHandler";
 
-const { UnauthorizedError, ExtensionTokenError } = auth;
+const { UnauthorizedError, AgentCredentialError } = auth;
 
 function request(headers: Record<string, string> = {}) {
   return new Request("http://localhost/api/test", { headers });
@@ -59,28 +59,34 @@ function request(headers: Record<string, string> = {}) {
 
 beforeEach(() => {
   auth.requireSession.mockReset();
-  auth.requireExtensionToken.mockReset();
+  auth.requireAgentCredential.mockReset();
 });
 
 describe("withAgentRoute", () => {
-  it("authenticates a bearer token without touching the session", async () => {
-    auth.requireExtensionToken.mockResolvedValue({
+  it("authenticates a bearer credential with the route capability", async () => {
+    auth.requireAgentCredential.mockResolvedValue({
       userId: "user-1",
-      tokenId: "token-1",
+      credentialId: "credential-1",
+      capabilities: ["fit:drain"],
       requestId: "req-1",
     });
 
+    const req = request({ Authorization: "Bearer tok" });
     const res = await withAgentRoute(
-      request({ Authorization: "Bearer tok" }),
-      async ({ userId, requestId }) =>
-        NextResponse.json({ userId, requestId }),
+      req,
+      "fit:drain",
+      async ({ userId, requestId, authKind, credentialId }) =>
+        NextResponse.json({ userId, requestId, authKind, credentialId }),
     );
 
     await expect(res.json()).resolves.toEqual({
       userId: "user-1",
       requestId: "req-1",
+      authKind: "agent",
+      credentialId: "credential-1",
     });
     expect(auth.requireSession).not.toHaveBeenCalled();
+    expect(auth.requireAgentCredential).toHaveBeenCalledWith(req, "fit:drain");
   });
 
   it("falls back to the session when no Authorization header is present", async () => {
@@ -89,24 +95,30 @@ describe("withAgentRoute", () => {
       requestId: "req-2",
     });
 
-    const res = await withAgentRoute(request(), async ({ userId }) =>
-      NextResponse.json({ userId }),
+    const res = await withAgentRoute(
+      request(),
+      "tailoring:execute",
+      async ({ userId, authKind }) => NextResponse.json({ userId, authKind }),
     );
 
-    await expect(res.json()).resolves.toEqual({ userId: "user-2" });
-    expect(auth.requireExtensionToken).not.toHaveBeenCalled();
+    await expect(res.json()).resolves.toEqual({
+      userId: "user-2",
+      authKind: "session",
+    });
+    expect(auth.requireAgentCredential).not.toHaveBeenCalled();
   });
 
-  it("rejects an invalid bearer token as 401 without a session fallback", async () => {
+  it("rejects an invalid or under-scoped bearer credential without a session fallback", async () => {
     // A caller that presented a token asked to be judged as a token holder.
     // Falling back to a cookie would let a revoked token keep working from a
     // browser, which defeats revocation.
-    auth.requireExtensionToken.mockRejectedValue(
-      new ExtensionTokenError("Invalid or expired token"),
+    auth.requireAgentCredential.mockRejectedValue(
+      new AgentCredentialError("Invalid credential or missing capability"),
     );
 
     const res = await withAgentRoute(
       request({ Authorization: "Bearer bad" }),
+      "tailoring:control",
       async () => NextResponse.json({ ok: true }),
     );
 
@@ -114,11 +126,33 @@ describe("withAgentRoute", () => {
     expect(auth.requireSession).not.toHaveBeenCalled();
   });
 
+  it("never treats an explicitly empty Authorization header as session auth", async () => {
+    auth.requireAgentCredential.mockRejectedValue(
+      new AgentCredentialError("Missing bearer credential"),
+    );
+    auth.requireSession.mockResolvedValue({
+      userId: "signed-in-user",
+      requestId: "req-session",
+    });
+
+    const res = await withAgentRoute(
+      request({ Authorization: "" }),
+      "fit:drain",
+      async () => NextResponse.json({ ok: true }),
+    );
+
+    expect(res.status).toBe(401);
+    expect(auth.requireAgentCredential).toHaveBeenCalledTimes(1);
+    expect(auth.requireSession).not.toHaveBeenCalled();
+  });
+
   it("rejects a missing session as 401", async () => {
     auth.requireSession.mockRejectedValue(new UnauthorizedError());
 
-    const res = await withAgentRoute(request(), async () =>
-      NextResponse.json({ ok: true }),
+    const res = await withAgentRoute(
+      request(),
+      "fit:drain",
+      async () => NextResponse.json({ ok: true }),
     );
 
     expect(res.status).toBe(401);
@@ -127,9 +161,10 @@ describe("withAgentRoute", () => {
   it("keeps the two identities from cross-contaminating", async () => {
     // Bearer first, then a plain-session call: neither leaks state into the
     // other, and each consults only its own authenticator.
-    auth.requireExtensionToken.mockResolvedValue({
+    auth.requireAgentCredential.mockResolvedValue({
       userId: "runner-user",
-      tokenId: "token-1",
+      credentialId: "credential-1",
+      capabilities: ["tailoring:execute"],
       requestId: "req-a",
     });
     auth.requireSession.mockResolvedValue({
@@ -139,15 +174,18 @@ describe("withAgentRoute", () => {
 
     const asRunner = await withAgentRoute(
       request({ Authorization: "Bearer tok" }),
+      "tailoring:execute",
       async ({ userId }) => NextResponse.json({ userId }),
     );
-    const asBrowser = await withAgentRoute(request(), async ({ userId }) =>
-      NextResponse.json({ userId }),
+    const asBrowser = await withAgentRoute(
+      request(),
+      "tailoring:execute",
+      async ({ userId }) => NextResponse.json({ userId }),
     );
 
     await expect(asRunner.json()).resolves.toEqual({ userId: "runner-user" });
     await expect(asBrowser.json()).resolves.toEqual({ userId: "browser-user" });
-    expect(auth.requireExtensionToken).toHaveBeenCalledTimes(1);
+    expect(auth.requireAgentCredential).toHaveBeenCalledTimes(1);
     expect(auth.requireSession).toHaveBeenCalledTimes(1);
   });
 
@@ -159,6 +197,7 @@ describe("withAgentRoute", () => {
 
     const good = await withAgentRoute(
       request(),
+      "tailoring:control",
       async ({ params }) => NextResponse.json({ id: params.id }),
       {
         params: Promise.resolve({ id: "550e8400-e29b-41d4-a716-446655440000" }),
@@ -171,6 +210,7 @@ describe("withAgentRoute", () => {
 
     const bad = await withAgentRoute(
       request(),
+      "tailoring:control",
       async () => NextResponse.json({ ok: true }),
       {
         params: Promise.resolve({ id: "not-a-uuid" }),

@@ -1,6 +1,7 @@
-# Local AI output contracts
+# Agent Runner output contracts
 
-The request's `expectedJsonSchema` is authoritative. These names mirror Joblit's strict Local AI parser and help maintainers detect drift.
+The request's `expectedJsonSchema` is authoritative. These names mirror
+Joblit's strict current Agent parser and help maintainers detect drift.
 
 ## Resume
 

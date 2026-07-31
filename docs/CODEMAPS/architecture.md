@@ -108,8 +108,20 @@ failed run after the first commit is terminal `PARTIAL`, not `FAILED`.
 Fit scoring runs in the local Runner. The server leases batches
 (`lib/server/jobs/fitRunService.ts`), the Runner scores them against the user's
 Hermes gateway (`tools/runner/fitQueue.mjs`), and results come back via
-`/api/jobs/fit/batch-import`. The browser only enqueues the scan and polls
-`/api/jobs/fit/status` (`app/(app)/jobs/hooks/useFitScan.ts`).
+`/api/jobs/fit/batch-import`. The browser enqueues, polls `/api/jobs/fit/status`,
+and cancels pending/claimed queue work through `/api/jobs/fit/cancel`
+(`app/(app)/jobs/hooks/useFitScan.ts`).
+
+Each prompt exposes a stable 64-hex issue derived from the sorted Job ids and
+the server-owned prompt snapshot. `lib/server/jobs/fitBatchImport.ts` validates
+that identity and writes Job scores plus `FitBatchImportReceipt` atomically.
+An exact retry returns the stored settlement before rebuilding the prompt, so a
+lost response remains recoverable even after profile/rule changes. The Runner
+waits on fresh leases and preserves Hermes state when settlement is unknown.
+On restart, `/api/jobs/fit/settlement-status` authorizes cleanup only after the
+server proves that exact issue committed. Same-session Hermes starts and repair
+reservations use file-backed compare-and-set, so multiple local Runner processes
+remain single-flight.
 
 **The model emits per-requirement judgements only.** `aggregateFitMatrix`
 computes the score deterministically from them
@@ -126,7 +138,7 @@ Two durable generation paths converge on one persisted Application aggregate
 and Edit model (ADR-0002).
 
 ```
-Path A (server auto-execute)     Path B (manual / Local AI)
+Path A (server auto-execute)     Path B (manual / Agent Runner)
   executeServerBatchTailoringTask  buildApplicationPromptForUser
   callProvider("gemini")            [external LLM runs the prompt]
   acceptApplicationGeneration      parse*Output + Quality Gate
@@ -186,6 +198,19 @@ old worker's unreceipted success after a new claim.
 Private Hermes `run_*` identifiers stay in the Runner and never enter
 Joblit's domain model. Protocol in `AGENTS.md`; durability details in ADR-0009.
 
+While Hermes executes, the Runner polls the Tailoring Run and accepts a
+non-terminal response only when its active `{ id, attemptId }` matches the
+issued handle. Takeover aborts stale local work. Unknown import outcomes replay
+the byte-identical receipt and remain deferred if still unconfirmed; they are
+never converted into a false task failure. When no task is claimable but a live
+lease remains, `run-once` returns a bounded retry hint and the Runner waits.
+
+Machine-local Hermes state contains only opaque ids, hashes, a repair cursor,
+and non-secret operation identity. Startup reconciles it against accepted
+target masks before new work. A Hermes `stopping` response is non-terminal, and
+an interrupted repair is recovered from one unambiguous session-transcript
+response rather than submitted twice.
+
 ---
 
 ## Trust boundaries
@@ -193,8 +218,8 @@ Joblit's domain model. Protocol in `AGENTS.md`; durability details in ADR-0009.
 | Boundary | Mechanism | Where |
 |---|---|---|
 | Browser → API | NextAuth database session | `lib/server/auth/requireSession.ts:17` |
-| Agent → API | `withAgentRoute`: Bearer agent token, or the session cookie when no header is presented; a presented token never falls back to the cookie. Token hashes are SHA-256 at rest | `lib/server/api/routeHandler.ts`, `lib/server/auth/requireExtensionToken.ts` |
-| Fetch worker → API | `FETCH_RUN_SECRET` header, constant-time compare | `app/api/fetch-runs/[id]/{config,commit}` |
+| Agent → API | `withAgentRoute`: capability-scoped `jfagent_v1_` Bearer credential, or the session cookie when no header is presented; a presented credential never falls back to the cookie. Token hashes are SHA-256 at rest | `lib/server/api/routeHandler.ts`, `lib/server/auth/requireAgentCredential.ts` |
+| Fetch worker → API | `FETCH_RUN_SECRET` header, constant-time compare | `app/api/fetch-runs/[id]/config/route.ts`, `app/api/fetch-runs/[id]/commit/route.ts` |
 | Cron → API | `Authorization: Bearer CRON_SECRET` | `app/api/discover/refresh-daily` |
 | Server → internet | `safeOutboundFetch` | `lib/server/net/safeFetch.ts:396` |
 
@@ -220,12 +245,13 @@ app/(marketing)  app/(auth)  app/(app)        ← React, next-intl, React Query
                                   │
                             lib/server/**      ← business logic
                                   │
-                    prisma (Neon serverless)   ← 33 models
+                    prisma (Neon serverless)   ← 28 models
 ```
 
 `lib/shared/**` is imported by both sides and is the only place a contract may
 live: Zod schemas, the job-status projection, market conversion, URL
-canonicalization, the Local AI bridge contract.
+canonicalization, and the versioned Agent execution contract. The Runner stays
+repo-import-free and pins the same HTTP shapes in its own Node tests.
 
 **Known deviations from this shape**, as of this snapshot:
 
@@ -241,8 +267,9 @@ canonicalization, the Local AI bridge contract.
   restricted to `applications/`. It is side-effect free unless the default-off
   `ARTIFACT_RECONCILE_ENABLED` kill switch is explicitly enabled. Resume Photos
   remain a separate lifecycle.
-- `lib/api/fetchJson.ts` is the intended client seam and has three importers
-  against 36 hand-rolled `fetch` call sites.
+- `lib/api/fetchJson.ts` is the intended JSON client seam across Jobs, Guide,
+  Fetch status, Discover and Tailoring Edit. Binary, streaming and `keepalive`
+  requests still use platform `fetch` where that interface does not fit.
 - `tools/runner/` deliberately imports nothing from the repository. The HTTP
   API is its contract, exactly as for any external agent, so the shapes it
   depends on are pinned by its own tests rather than by shared types.
@@ -253,8 +280,12 @@ These are recorded because a reader will meet them, not as a plan.
 
 ## Concurrency
 
-Postgres transaction-scoped advisory locks use seven namespaces. A lock is the
-module's first database effect; composed modules follow an explicit order.
+Postgres transaction-scoped advisory locks use named namespaces. The shared
+`lib/server/db/advisoryLock.ts` owns the cross-module `FRUN`, `JOBJ`, and
+`JOBA` identities and their explicit order; specialized Fit, Tailoring Run,
+Application Event, and source-health locks remain local to their modules. A
+lock is the module's first database effect; composed modules follow the
+documented order.
 Fetch commits always acquire `FRUN` before `JOBJ`, then persist Jobs, the
 receipt, counters, and status in that transaction. Application mutation locks
 remain sorted by job ID

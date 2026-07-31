@@ -6,7 +6,7 @@ Runner does unattended against your own Hermes gateway on loopback.
 
 The Runner is not privileged. It talks to the same public HTTP API any
 external agent uses (see [AGENTS.md](../../AGENTS.md)), authenticated with an
-agent token. It imports no repository code: the API is the contract.
+`AgentCredential`. It imports no repository code: the API is the contract.
 
 ## What it does
 
@@ -15,8 +15,16 @@ cheap and narrows what is worth tailoring.
 
 **Fit scan.** `POST /api/jobs/fit/next-batch` leases a batch of unscored jobs,
 `/api/jobs/fit/prompt` returns the triage prompt, Hermes scores it, and
-`/api/jobs/fit/batch-import` records the verdicts. A batch is never left
-leased: it imports, or it is marked failed, or its claim is released.
+`/api/jobs/fit/batch-import` records the verdicts. The prompt's stable 64-hex
+`issueKey` is content-addressed from the sorted Job ids and prompt snapshot.
+The server writes a unique `FitBatchImportReceipt` in the same transaction as
+the scores, so an exact retry returns the original validated settlement. A
+definite failure is marked or released; an unknown import outcome deliberately
+keeps completed Hermes state for replay. On restart, the Runner asks
+`/api/jobs/fit/settlement-status` whether each completed issue committed before
+forgetting it. The browser's Stop action calls `/api/jobs/fit/cancel`; claimed
+work can finish locally, but its stale claim cannot import after cancellation,
+and the next explicit scan can re-queue it.
 
 **Tailoring batch.**
 
@@ -25,7 +33,8 @@ leased: it imports, or it is marked failed, or its claim is released.
 2. `POST /api/application-batches/:id/run-once` — claim one task, and report
    any failure from the previous round in the same call.
 3. For each of the claimed task's `remainingTargets`, ask
-   `POST /api/applications/prompt` for the prompt and its receipt.
+   `POST /api/applications/prompt` for the prompt and its receipt, echoing the
+   task's `protocolVersion`, `issueKey`, and batch/task/attempt identity.
 4. Run the prompt through Hermes and wait for the output.
 5. `POST /api/applications/manual-generate?finalize=true` — import the output
    with the receipt and Tailoring Run handle exactly as issued.
@@ -34,14 +43,23 @@ leased: it imports, or it is marked failed, or its claim is released.
 Success is never reported. The final import settles the task; only `FAILED`
 and `SKIPPED` travel back through `run-once`.
 
+While Hermes is running, the Runner polls Joblit's Tailoring Run. Every
+non-terminal response must carry the exact issued `{ id, attemptId }`; a changed
+attempt means another executor took over, so the Runner aborts local work and
+does not import or fail the new attempt. If another task owns a live lease,
+`run-once` returns `retryAfterMs` and the Runner waits and retries rather than
+treating an empty claim as completion.
+
 ## Setup
 
 Two credentials, both local.
 
-**Agent token** — on the Joblit `/extension` page, generate a token and copy
-it once. It is stored hashed; Joblit cannot show it again. Revoke it from the
-same page. (The issuing UI moves off the extension page when the extension is
-removed; the token itself and its API are unaffected.)
+**AgentCredential** — on the Joblit `/agent` page, issue a version 1
+credential and copy it once. Joblit stores only its SHA-256 hash and cannot
+show the raw value again. The `jfagent_v1_` prefix, `joblit-agent` audience,
+and explicit capabilities keep this trust domain separate from browser
+sessions. Revoke the credential from the same page to stop the Runner
+immediately.
 
 **Hermes key** — from your local Hermes gateway configuration. It never
 touches Joblit: the Runner reads it from your environment and sends it only to
@@ -51,7 +69,7 @@ mailing your key to a stranger.
 
 ```bash
 export JOBLIT_URL="https://your-joblit-deployment"
-export JOBLIT_TOKEN="jfext_…"      # from /extension
+export JOBLIT_TOKEN="jfagent_v1_…" # from /agent
 export HERMES_KEY="…"              # from your local gateway
 export HERMES_URL="http://127.0.0.1:8642"   # optional, this is the default
 ```
@@ -71,22 +89,62 @@ node tools/runner/cli.mjs --watch
 ```
 
 Typical loop: start a fit scan or select jobs and click **Generate CV & CL** in
-the Jobs page, then leave the Runner running. Materials land as drafts —
-nothing is submitted anywhere, and nothing is sent without your review.
+the Jobs page, then leave the Runner running. Generated materials and their
+PDFs land in Joblit for review; the Runner never submits an application.
+
+Hermes recovery metadata is stored at
+`~/.joblit/runner-state-v1.json`. It is deliberately **machine-local**:
+multiple Runner processes on that machine serialize updates through an atomic
+compare-and-set guarded by a `.lock` sidecar, with bounded waiting and
+owner-checked recovery of locks left by crashed processes. Do not place the
+state file on a network share or reuse it across
+hosts. The file contains only opaque run/session ids, hashes, a repair
+transcript cursor, and strict non-secret operation identity (Tailoring Run id,
+attempt id, target, and prompt hash); prompts, feedback text, model output,
+resume content, `JOBLIT_TOKEN`, and `HERMES_KEY` are never persisted.
+
+At startup the Runner reconciles starting/running/completed/repairing local
+operations with Joblit before claiming new work. An accepted target receipt
+authorizes local acknowledgement and cleanup; a terminal server run without
+that target authorizes discarding a terminal obsolete result; an exact active
+attempt keeps the state for recovery; and malformed, unavailable, or mismatched
+server state is preserved and fails closed. A separate Fit receipt scan clears
+only completed content-addressed issues that Joblit proves were committed.
+
+Hermes `stopping` means only that `/stop` accepted the request. It is not a
+terminal state, so the private `run_*` id remains recoverable and a restart
+polls that same run instead of starting duplicate work. If a one-turn repair is
+interrupted after submission, the Runner reads the Hermes session transcript
+and accepts only one unambiguous assistant response; it never repeats an
+uncertain repair turn. Local cleanup is best effort after Joblit has accepted a
+receipt and cannot reverse that authoritative settlement.
 
 ## Failure handling
 
-A task fails when Hermes cannot produce output, or when Joblit rejects the
-import (schema violation, receipt mismatch, stale attempt). The Runner reports
-it as `FAILED` with the server's own message on the next `run-once` and moves
-to the next task; the batch finishes with the rest intact. Re-queue failed
-jobs from the Jobs page.
+A task fails when Hermes deterministically cannot produce output, or when
+Joblit definitively rejects the content (for example a schema or receipt
+mismatch that one permitted repair cannot fix). The Runner reports it as
+`FAILED` with the server's own message on the next `run-once` and moves to the
+next task; the batch finishes with the rest intact. Re-queue failed jobs from
+the Jobs page.
+
+Timeouts, transport loss, 408/425/429, and 5xx import responses have an unknown
+settlement. An unknown Hermes start or status outcome is also deferred because
+the model may still be running. A Tailoring import makes up to three total
+attempts with the exact same receipt. A Fit import makes one exact replay (two
+total attempts) with its stable issue and durable `FitBatchImportReceipt`. If
+the outcome is still unknown, the Runner leaves Hermes state recoverable and
+does **not** report `FAILED`. A later startup reconciles the server receipt
+before doing more model work.
 
 Common causes:
 
 - `Missing required environment variables` — see Setup above.
 - `Hermes gateway must be loopback` — `HERMES_URL` points off-machine.
-- `fetch failed` against `127.0.0.1:8642` — the gateway is not running.
+- `HERMES_REQUEST_TIMEOUT` or a connection error against `127.0.0.1:8642` —
+  the gateway is unavailable or did not answer within the request budget.
+- `IMPORT_SETTLEMENT_UNKNOWN` — keep the Runner state file and retry later; do
+  not regenerate or mark the task failed.
 - `Create your resume first` — no active `ResumeProfile` for the locale.
 
 ## Tests

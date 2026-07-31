@@ -135,4 +135,11 @@ describe("HeroProductDemo interval lifecycle", () => {
     unmount();
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  it("shows the current Agent workspace instead of the retired Extension", () => {
+    render(<HeroProductDemo mounted reduced />);
+
+    expect(screen.getByText("Agent")).toBeInTheDocument();
+    expect(screen.queryByText("Extension")).not.toBeInTheDocument();
+  });
 });

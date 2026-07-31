@@ -22,7 +22,6 @@ import {
 export type ApplicationGenerationTarget = "resume" | "cover";
 export type ApplicationGenerationSource =
   | "manual_import"
-  | "local_ai"
   | "codex_batch"
   | "server_batch";
 type ResumeRenderInput = ReturnType<typeof mapResumeProfile>;
@@ -97,7 +96,6 @@ function emptyCover(): AiContent["cover"] {
 }
 
 function generationSourceLabel(source: ApplicationGenerationSource): string {
-  if (source === "local_ai") return "Local AI";
   if (source === "codex_batch") return "Codex Batch";
   return "Internal AI";
 }

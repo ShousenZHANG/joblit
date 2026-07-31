@@ -47,7 +47,7 @@ test("runs the application build after a successful migration", () => {
   assert.equal(calls[0].options.stdio, "inherit");
 });
 
-test("refuses to migrate through a connection pooler", () => {
+test("refuses to guess a direct endpoint for an unknown connection pooler", () => {
   // prisma migrate takes a session-scoped advisory lock. Through a
   // transaction-mode pooler it never sees its own lock and dies after 10s with
   // "Timed out trying to acquire a postgres advisory lock". Failing here names
@@ -61,11 +61,24 @@ test("refuses to migrate through a connection pooler", () => {
           calls.push(args);
           return { status: 0 };
         },
-        { DATABASE_URL: "postgres://u@ep-x-pooler.aws.neon.tech/db" },
+        { DATABASE_URL: "postgres://u@db.internal/joblit?pgbouncer=true" },
       ),
     /DIRECT_URL/,
   );
   assert.deepEqual(calls, [], "must not start a migration it cannot finish");
+});
+
+test("uses Neon's documented direct-host mapping when only its pooled url exists", () => {
+  const calls = [];
+  runBuildPlan(
+    "production",
+    (_command, args) => {
+      calls.push(args);
+      return { status: 0 };
+    },
+    { DATABASE_URL: "postgres://u@ep-x-pooler.aws.neon.tech/db" },
+  );
+  assert.deepEqual(calls, [["run", "db:migrate:deploy"], ["run", "build"]]);
 });
 
 test("migrates when a direct url is configured alongside the pooled one", () => {

@@ -26,6 +26,7 @@ export async function POST(
 ) {
   return withAgentRoute(
     req,
+    "tailoring:control",
     async ({ userId, params, requestId }) => {
       const parsed = BodySchema.safeParse(await req.json().catch(() => null));
       if (!parsed.success) return validationError(parsed.error, requestId);

@@ -4,7 +4,10 @@ import { withAgentRoute } from "@/lib/server/api/routeHandler";
 import { UuidParamSchema } from "@/lib/shared/schemas/common";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
-import { getBatchProgress } from "@/lib/server/applicationBatches/runner";
+import {
+  getBatchLeaseRetryHint,
+  getBatchProgress,
+} from "@/lib/server/applicationBatches/runner";
 import { getResumeProfile } from "@/lib/server/resumeProfile";
 import {
   buildBatchRunContext,
@@ -20,16 +23,17 @@ const CompletedTaskSchema = z.object({
   attemptId: z.string().uuid(),
   status: z.enum(["FAILED", "SKIPPED"]),
   error: z.string().trim().max(500).optional().nullable(),
-});
+}).strict();
 
 const BodySchema = z.object({
-  maxSteps: z.coerce.number().int().min(1).max(20).optional().default(1),
+  maxSteps: z.number().int().min(1).max(20).optional().default(1),
   completedTasks: z.array(CompletedTaskSchema).max(20).optional().default([]),
-});
+}).strict();
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   return withAgentRoute(
     req,
+    "tailoring:execute",
     async ({ userId, params }) => {
       const json = await req.json().catch(() => ({}));
       const parsedBody = BodySchema.safeParse(json ?? {});
@@ -91,6 +95,18 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         claimedDoneStatus: claimed.doneStatus,
         terminalStatus: claimed.terminalStatus,
       });
+      const leaseRetryHint =
+        claimed.tasks.length === 0 &&
+        batchStatus === "RUNNING" &&
+        progress.running > 0
+          ? await getBatchLeaseRetryHint({
+              userId,
+              batchId: batch.id,
+            })
+          : null;
+      const executionStopReason = leaseRetryHint
+        ? "LEASE_ACTIVE"
+        : claimed.stopReason;
 
       return NextResponse.json({
         batch: {
@@ -108,7 +124,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           claimedCount: claimed.tasks.length,
           completedCount: completionResults.filter((result) => result.accepted).length,
           completionResults,
-          stopReason: claimed.stopReason,
+          stopReason: executionStopReason,
+          retryAfterMs: leaseRetryHint?.retryAfterMs ?? null,
+          earliestLeaseExpiresAt:
+            leaseRetryHint?.earliestLeaseExpiresAt ?? null,
         },
       });
     },

@@ -41,7 +41,6 @@ agent:
             API_SERVER_PORT = '8642'
             API_SERVER_KEY = $script:ApiKey
             API_SERVER_MODEL_NAME = $script:ProfileName
-            API_SERVER_CORS_ORIGINS = '*'
         }
         Write-JoblitEnvFileAtomic -Path (Join-Path $script:ProfileRoot '.env') -Values $values
 
@@ -82,6 +81,18 @@ agent:
         $result = Test-JoblitHermesReadiness -ProfileName $script:ProfileName
         $result.state | Should -Be 'MissingHermes'
         $result.exitCode | Should -Be 10
+    }
+
+    It 'rejects the retired browser wildcard CORS setting' {
+        $envPath = Join-Path $script:ProfileRoot '.env'
+        $values = Read-JoblitEnvFile -Path $envPath
+        $values['API_SERVER_CORS_ORIGINS'] = '*'
+        Write-JoblitEnvFileAtomic -Path $envPath -Values $values
+
+        $result = Test-JoblitHermesReadiness -ProfileName $script:ProfileName
+
+        $result.state | Should -Be 'ProfileDrift'
+        $result.exitCode | Should -Be 30
     }
 
     It 'distinguishes untrusted package from profile drift' {

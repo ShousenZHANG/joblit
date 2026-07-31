@@ -61,7 +61,7 @@ jobs:
       - name: Reject secrets, links, and runtime state in source
         shell: bash
         run: |
-          if git grep -n -E 'BEGIN ([A-Z0-9 ]+ )?PRIVATE KEY|jfext_[A-Za-z0-9_-]+|sk-[A-Za-z0-9_-]{20,}' -- integrations/hermes tools/hermes test/hermesProfileSource.test.ts; then
+          if git grep -n -E 'BEGIN ([A-Z0-9 ]+ )?PRIVATE KEY|jfagent_v1_[A-Za-z0-9_-]+|jfext_[A-Za-z0-9_-]+|sk-[A-Za-z0-9_-]{20,}' -- integrations/hermes tools/hermes test/hermesProfileSource.test.ts; then
             echo "Potential committed secret found"
             exit 1
           fi

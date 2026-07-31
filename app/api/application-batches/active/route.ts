@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 const ACTIVE_BATCH_STATUSES = ["QUEUED", "RUNNING"] as const;
 
 export async function GET(req: Request) {
-  return withAgentRoute(req, async ({ userId }) => {
+  return withAgentRoute(req, "tailoring:execute", async ({ userId }) => {
     const batch = await prisma.applicationBatch.findFirst({
       where: {
         userId,

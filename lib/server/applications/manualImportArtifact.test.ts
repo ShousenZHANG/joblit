@@ -307,20 +307,4 @@ describe("manual import artifact builder", () => {
     expect(JSON.stringify(result.aiContent)).not.toContain("Injected");
   });
 
-  it("returns stable INVALID_AI_RESULT for non-canonical local AI output", () => {
-    const result = buildManualImportArtifact({
-    evidenceScopeKey: "user-1",
-      target: "resume",
-      modelOutput: `\`\`\`json\n{}\n\`\`\``,
-      source: "local_ai",
-      promptMetaHash: "canonical-hash",
-      renderInput,
-      profile,
-      job,
-    });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.code).toBe("INVALID_AI_RESULT");
-  });
 });
