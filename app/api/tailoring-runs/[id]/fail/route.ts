@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { errorJson, validationError } from "@/lib/server/api/errorResponse";
-import { withSessionRoute } from "@/lib/server/api/routeHandler";
+import { withAgentRoute } from "@/lib/server/api/routeHandler";
 import {
   TAILORING_RUN_PROTOCOL,
   TailoringRunError,
@@ -24,7 +24,8 @@ export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  return withSessionRoute(
+  return withAgentRoute(
+    req,
     async ({ userId, params, requestId }) => {
       const parsed = BodySchema.safeParse(await req.json().catch(() => null));
       if (!parsed.success) return validationError(parsed.error, requestId);

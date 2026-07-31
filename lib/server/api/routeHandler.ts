@@ -77,6 +77,78 @@ export async function withSessionRoute(
   }
 }
 
+/**
+ * The agent seam: one handler, two identities.
+ *
+ * The batch protocol — create, claim, prompt, import — sat behind the browser
+ * session only, so its documented external worker (Codex, and now the local
+ * Runner) had no first-class way in; AGENTS.md never even had an auth section.
+ * A request carrying `Authorization: Bearer` is judged as an ExtensionToken
+ * holder; one without falls back to the session cookie. Both produce the same
+ * `SessionContext`, so handlers cannot tell the difference and need no
+ * changes.
+ *
+ * A presented token is judged as a token, never rescued by a cookie: falling
+ * back would let a revoked token keep working from a signed-in browser, which
+ * defeats revocation.
+ */
+export async function withAgentRoute<TParams>(
+  req: Request,
+  handler: SessionRouteHandler<SessionContext & { params: TParams }>,
+  options: SessionRouteParams<TParams>,
+): Promise<NextResponse>;
+export async function withAgentRoute(
+  req: Request,
+  handler: SessionRouteHandler<SessionContext>,
+): Promise<NextResponse>;
+export async function withAgentRoute(
+  req: Request,
+  handler: (context: never) => Promise<NextResponse>,
+  options?: SessionRouteParams<unknown>,
+): Promise<NextResponse> {
+  const run = handler as (
+    context: SessionContext & { params?: unknown },
+  ) => Promise<NextResponse>;
+  const hasBearer = Boolean(req.headers.get("Authorization"));
+
+  let session: SessionContext;
+  try {
+    if (hasBearer) {
+      // Lazily loaded: the token validator imports prisma at module scope, and
+      // a static import here would drag the database into every route's module
+      // graph — including session-only routes and their tests.
+      const { requireExtensionToken } = await import(
+        "@/lib/server/auth/requireExtensionToken"
+      );
+      const token = await requireExtensionToken(req);
+      session = { userId: token.userId, requestId: token.requestId };
+    } else {
+      session = await requireSession();
+    }
+  } catch (err) {
+    if (
+      err instanceof UnauthorizedError ||
+      (err instanceof Error && err.name === "ExtensionTokenError")
+    ) {
+      return unauthorizedError();
+    }
+    reportError(err, { scope: "route.agent" });
+    throw err;
+  }
+
+  try {
+    if (!options) return await run(session);
+    const parsed = options.schema.safeParse(await options.params);
+    if (!parsed.success) return invalidParamsError(session.requestId);
+    return await run({ ...session, params: parsed.data });
+  } catch (err) {
+    const typed = toErrorResponse(err, session.requestId);
+    if (typed) return typed;
+    reportError(err, { scope: "route.agent", requestId: session.requestId });
+    throw err;
+  }
+}
+
 export async function withEmailSessionRoute(
   handler: SessionRouteHandler<SessionContextWithEmail>,
 ): Promise<NextResponse> {

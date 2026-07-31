@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { errorJson } from "@/lib/server/api/errorResponse";
-import { withSessionRoute } from "@/lib/server/api/routeHandler";
+import { withAgentRoute } from "@/lib/server/api/routeHandler";
 import { UuidParamSchema } from "@/lib/shared/schemas/common";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
@@ -28,7 +28,8 @@ const BodySchema = z.object({
 });
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  return withSessionRoute(
+  return withAgentRoute(
+    req,
     async ({ userId, params }) => {
       const json = await req.json().catch(() => ({}));
       const parsedBody = BodySchema.safeParse(json ?? {});

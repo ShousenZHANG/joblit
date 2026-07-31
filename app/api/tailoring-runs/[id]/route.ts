@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { errorJson } from "@/lib/server/api/errorResponse";
-import { withSessionRoute } from "@/lib/server/api/routeHandler";
+import { withAgentRoute } from "@/lib/server/api/routeHandler";
 import {
   TAILORING_RUN_PROTOCOL,
   TailoringRunError,
@@ -12,10 +12,11 @@ import { UuidParamSchema } from "@/lib/shared/schemas/common";
 export const runtime = "nodejs";
 
 export async function GET(
-  _req: Request,
+  req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  return withSessionRoute(
+  return withAgentRoute(
+    req,
     async ({ userId, params, requestId }) => {
       try {
         const run = await getTailoringRunStatus(userId, params.id);

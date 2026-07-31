@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
-import { withSessionRoute } from "@/lib/server/api/routeHandler";
+import { withAgentRoute } from "@/lib/server/api/routeHandler";
 
 export const runtime = "nodejs";
 
 const ACTIVE_BATCH_STATUSES = ["QUEUED", "RUNNING"] as const;
 
-export async function GET() {
-  return withSessionRoute(async ({ userId }) => {
+export async function GET(req: Request) {
+  return withAgentRoute(req, async ({ userId }) => {
     const batch = await prisma.applicationBatch.findFirst({
       where: {
         userId,

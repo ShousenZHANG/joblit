@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { errorJson, notFoundError, validationError } from "@/lib/server/api/errorResponse";
-import { withSessionRoute } from "@/lib/server/api/routeHandler";
+import { withAgentRoute } from "@/lib/server/api/routeHandler";
 import {
   APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE,
   commitApplicationArtifact,
@@ -90,7 +90,7 @@ function protocolTarget(target: "resume" | "cover"): TailoringRunTarget {
 
 export async function POST(req: Request) {
   const finalize = parseFinalizeFlag(req);
-  return withSessionRoute(async ({ userId, requestId }) => {
+  return withAgentRoute(req, async ({ userId, requestId }) => {
     const body = await req.json().catch(() => null);
     const parsed = ManualGenerateSchema.safeParse(body);
     if (!parsed.success) {

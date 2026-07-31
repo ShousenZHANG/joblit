@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { errorJson, validationError } from "@/lib/server/api/errorResponse";
-import { withSessionRoute } from "@/lib/server/api/routeHandler";
+import { withAgentRoute } from "@/lib/server/api/routeHandler";
 import {
   ApplicationPromptError,
   ApplicationPromptRequestSchema,
@@ -43,7 +43,7 @@ const PromptRequestSchema = ApplicationPromptRequestSchema.extend({
 });
 
 export async function POST(req: Request) {
-  return withSessionRoute(async ({ userId, requestId }) => {
+  return withAgentRoute(req, async ({ userId, requestId }) => {
     const json = await req.json().catch(() => null);
     const parsed = PromptRequestSchema.safeParse(json);
     if (!parsed.success) {

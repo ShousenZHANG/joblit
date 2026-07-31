@@ -4,9 +4,15 @@ const applicationBatchStore = vi.hoisted(() => ({
   findFirst: vi.fn(),
 }));
 
+const extensionTokenStore = vi.hoisted(() => ({
+  findFirst: vi.fn(),
+  updateMany: vi.fn(),
+}));
+
 vi.mock("@/lib/server/prisma", () => ({
   prisma: {
     applicationBatch: applicationBatchStore,
+    extensionToken: extensionTokenStore,
   },
 }));
 
@@ -25,6 +31,43 @@ describe("application batch active api", () => {
   beforeEach(() => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockReset();
     applicationBatchStore.findFirst.mockReset();
+    extensionTokenStore.findFirst.mockReset();
+    extensionTokenStore.updateMany.mockReset();
+  });
+
+  it("authenticates the Runner's bearer token end to end", async () => {
+    // No cookie session at all — the local Runner presents an ExtensionToken
+    // and must reach the same handler the browser does.
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      null,
+    );
+    extensionTokenStore.findFirst.mockResolvedValue({
+      id: "token-1",
+      userId: "runner-user",
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      lastUsedAt: null,
+    });
+    extensionTokenStore.updateMany.mockResolvedValue({ count: 1 });
+    applicationBatchStore.findFirst.mockResolvedValueOnce({
+      id: "550e8400-e29b-41d4-a716-446655440000",
+      status: "QUEUED",
+      updatedAt: new Date("2026-02-22T10:10:00.000Z"),
+    });
+
+    const res = await GET(
+      new Request("http://localhost/api/application-batches/active", {
+        headers: { Authorization: "Bearer runner-token" },
+      }),
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.batchId).toBe("550e8400-e29b-41d4-a716-446655440000");
+    // The query was scoped to the token's user, not to any session.
+    expect(
+      applicationBatchStore.findFirst.mock.calls[0]?.[0]?.where?.userId,
+    ).toBe("runner-user");
   });
 
   it("returns active batch id for current user", async () => {
@@ -37,7 +80,7 @@ describe("application batch active api", () => {
       updatedAt: new Date("2026-02-22T10:10:00.000Z"),
     });
 
-    const res = await GET();
+    const res = await GET(new Request("http://localhost/api/application-batches/active"));
     const json = await res.json();
 
     expect(res.status).toBe(200);
@@ -60,7 +103,7 @@ describe("application batch active api", () => {
     });
     applicationBatchStore.findFirst.mockResolvedValueOnce(null);
 
-    const res = await GET();
+    const res = await GET(new Request("http://localhost/api/application-batches/active"));
     const json = await res.json();
 
     expect(res.status).toBe(200);

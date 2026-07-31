@@ -71,7 +71,9 @@ describe("route session seam", () => {
         return !source.includes("withExtensionRoute");
       }
       if (source.includes("requireExtensionToken")) return false;
-      return !/with(Email)?SessionRoute/.test(source);
+      // withAgentRoute is the dual-identity wrapper (session or bearer) used
+      // by the batch-protocol routes the local Runner drives.
+      return !/with(Email)?SessionRoute|withAgentRoute/.test(source);
     }).map(({ path }) => path);
     expect(offenders).toEqual([]);
   });
