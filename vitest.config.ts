@@ -5,7 +5,7 @@ const rootDir = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig({
   // Vitest transforms dependencies on demand. Disabling Vite's HTML crawling
-  // prevents the root suite from scanning the extension popup and its aliases.
+  // keeps the root suite from scanning stray HTML entry points.
   optimizeDeps: {
     noDiscovery: true,
     include: [],
@@ -56,16 +56,11 @@ export default defineConfig({
       "**/node_modules/**",
       "**/dist/**",
       "**/.next/**",
-      // Chrome extension has its own Vitest config; do not pull it into the
-      // root run.
-      "chrome-extension/**",
       // Local tooling / vendored skill packs ship their own ad-hoc test
       // harnesses that call `process.exit` and are not product code.
       "everything-claude-code/**",
       // Hermes package policy suites use Node's built-in test runner.
       "tools/hermes/**/*.test.mjs",
-      // Extension release tooling also uses Node's built-in test runner.
-      "tools/ci/package-extension.test.mjs",
       // Deployment-order policy uses Node's built-in test runner.
       "tools/deploy/vercel-build.test.mjs",
       // The Joblit Runner is dependency-free Node and uses the built-in

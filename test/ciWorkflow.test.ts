@@ -8,19 +8,14 @@ const workflow = readFileSync(
 );
 
 describe("CI workflow dependency order", () => {
-  it("installs both dependency trees before Knip loads workspace configs", () => {
+  it("installs dependencies before Knip loads workspace configs", () => {
     const rootInstall = workflow.indexOf("- name: Install dependencies");
-    const extensionInstall = workflow.indexOf(
-      "- name: Install extension dependencies",
-    );
     const deadCodeGate = workflow.indexOf(
       "- name: Dead-code and dependency gate",
     );
 
     expect(rootInstall).toBeGreaterThan(-1);
-    expect(extensionInstall).toBeGreaterThan(-1);
     expect(deadCodeGate).toBeGreaterThan(-1);
     expect(rootInstall).toBeLessThan(deadCodeGate);
-    expect(extensionInstall).toBeLessThan(deadCodeGate);
   });
 });

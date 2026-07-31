@@ -45,14 +45,9 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            chrome-extension/package-lock.json
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Install extension dependencies
-        run: npm ci
-        working-directory: chrome-extension
 
       - name: Enforce dependency policy
         run: npm run deps:policy
@@ -60,8 +55,8 @@ jobs:
       - name: Enforce manifest and repository security policy
         run: node tools/ci/check-security-policy.mjs
 
-      - name: Test extension release integrity tooling
-        run: node --test tools/ci/package-extension.test.mjs tools/deploy/vercel-build.test.mjs
+      - name: Test deployment-order policy
+        run: node --test tools/deploy/vercel-build.test.mjs
 
       - name: Audit production dependencies
         run: npm run deps:audit
@@ -80,21 +75,6 @@ jobs:
 
       - name: Test Joblit Runner
         run: npm run test:runner
-
-      - name: Audit extension production dependencies
-        run: npm run deps:audit
-        working-directory: chrome-extension
-
-      - name: Test extension (with coverage ratchet)
-        run: npm run test:coverage
-        working-directory: chrome-extension
-
-      - name: Build extension
-        run: npm run build
-        working-directory: chrome-extension
-
-      - name: Verify extension release file tree
-        run: node tools/ci/package-extension.mjs --root chrome-extension/dist --manifest .tmp/extension-files.json --source-commit "$GITHUB_SHA"
 
       - name: Build
         run: npm run build

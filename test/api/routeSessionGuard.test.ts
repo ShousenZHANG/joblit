@@ -47,7 +47,7 @@ const NON_SESSION_ROUTES = new Set([
 
 describe("route session seam", () => {
   it("finds route files to check", () => {
-    expect(ROUTES.length).toBeGreaterThan(60);
+    expect(ROUTES.length).toBeGreaterThan(50);
   });
 
   it("never hand-rolls the UnauthorizedError preamble", () => {

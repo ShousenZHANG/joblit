@@ -40,16 +40,16 @@ function CommandBlock({ label, command }: { label: string; command: string }) {
         {label}
       </div>
       <div className="flex items-start gap-2">
-        <pre className="ext-token-code flex-1 overflow-x-auto whitespace-pre py-2 text-left">
+        <pre className="agent-token-code flex-1 overflow-x-auto whitespace-pre py-2 text-left">
           {command}
         </pre>
         <button
           type="button"
           onClick={copy}
           aria-label={t("copy")}
-          className={`ext-btn-copy ${copied ? "ext-btn-copy--done" : ""}`}
+          className={`agent-btn-copy ${copied ? "agent-btn-copy--done" : ""}`}
         >
-          <span className="ext-btn-copy-inner">
+          <span className="agent-btn-copy-inner">
             {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
             <span>{copied ? t("copiedShort") : t("copy")}</span>
           </span>
@@ -63,7 +63,7 @@ export function RunnerSetupCard({ origin }: { origin: string }) {
   const t = useTranslations("agent.runner");
 
   return (
-    <div className="ext-card mb-6">
+    <div className="agent-card mb-6">
       <div className="mb-3 flex items-center gap-2">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-emerald-50">
           <Terminal className="h-4 w-4 text-brand-emerald-600" />
@@ -73,21 +73,21 @@ export function RunnerSetupCard({ origin }: { origin: string }) {
 
       <p className="text-xs text-muted-foreground">{t("description")}</p>
 
-      <ol className="ext-instructions mt-3">
+      <ol className="agent-instructions mt-3">
         <li>
-          <span className="ext-step-num">1</span>
+          <span className="agent-step-num">1</span>
           <span>{t("step1")}</span>
         </li>
         <li>
-          <span className="ext-step-num">2</span>
+          <span className="agent-step-num">2</span>
           <span>{t("step2")}</span>
         </li>
         <li>
-          <span className="ext-step-num">3</span>
+          <span className="agent-step-num">3</span>
           <span>{t("step3")}</span>
         </li>
         <li>
-          <span className="ext-step-num">4</span>
+          <span className="agent-step-num">4</span>
           <span>{t("step4")}</span>
         </li>
       </ol>

@@ -9,16 +9,6 @@ export type RuntimeEnvironment = Readonly<
   Record<string, string | undefined>
 >;
 
-export class RuntimeCapabilityConfigurationError extends Error {
-  constructor(
-    readonly capability: string,
-    readonly reason: string,
-  ) {
-    super(`Invalid runtime capability configuration: ${capability}`);
-    this.name = "RuntimeCapabilityConfigurationError";
-  }
-}
-
 type DistributedAbuseBudgetCapability =
   | {
       kind: "enabled";

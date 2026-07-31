@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
 import { JobsClient } from "./JobsClient";
 import { sessionDeletedJobIds } from "./hooks/useJobMutations";
-import { LOCAL_AI_ACTIVE_REQUEST_KEY } from "./hooks/useLocalAiRun";
 import { resetToasts } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Toaster } from "@/components/ui/toaster";
@@ -18,11 +17,6 @@ const fetchStatusMock = vi.hoisted(() => ({
 const navigationMock = vi.hoisted(() => ({
   search: "",
   replace: vi.fn(),
-}));
-
-const localAiBridgeMock = vi.hoisted(() => ({
-  detect: vi.fn(),
-  send: vi.fn(),
 }));
 
 vi.mock("@/app/FetchStatusContext", () => ({
@@ -42,17 +36,6 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(navigationMock.search),
 }));
 
-vi.mock("@/lib/client/localAiBridge", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/client/localAiBridge")>(
-    "@/lib/client/localAiBridge",
-  );
-  return {
-    ...actual,
-    detectLocalAiAvailability: localAiBridgeMock.detect,
-    sendLocalAiBridgeRequest: localAiBridgeMock.send,
-  };
-});
-
 afterEach(() => {
   cleanup();
 });
@@ -70,30 +53,7 @@ const baseJob = {
   updatedAt: new Date().toISOString(),
 };
 
-const localTailoringRun = {
-  id: "8f8f8f8f-8f8f-4f8f-8f8f-8f8f8f8f8f8f",
-  attemptId: "9a9a9a9a-9a9a-4a9a-8a9a-9a9a9a9a9a9a",
-};
 
-const localAiContent = {
-  schemaVersion: 1,
-  generatedAt: "2026-07-26T00:00:00.000Z",
-  promptMetaHash: "local-prompt-hash",
-  source: "local_ai",
-  cv: {
-    summary: {
-      aiText: "Tailored frontend engineer summary",
-      originalText: "Original summary",
-      accepted: true,
-    },
-    latestExperience: { experienceIndex: 0, addedBullets: [] },
-  },
-  cover: {
-    paragraphOne: { aiText: "", accepted: false },
-    paragraphTwo: { aiText: "", accepted: false },
-    paragraphThree: { aiText: "", accepted: false },
-  },
-};
 
 function renderWithClient(ui: React.ReactElement) {
   const client = new QueryClient({
@@ -123,9 +83,6 @@ beforeEach(() => {
   fetchStatusMock.state = { runId: null, status: null, importedCount: 0 };
   navigationMock.search = "";
   navigationMock.replace.mockReset();
-  localAiBridgeMock.detect.mockReset();
-  localAiBridgeMock.detect.mockResolvedValue("not_configured");
-  localAiBridgeMock.send.mockReset();
   Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
   if (!HTMLElement.prototype.hasPointerCapture) {
     Object.defineProperty(HTMLElement.prototype, "hasPointerCapture", {
@@ -1548,343 +1505,6 @@ describe("JobsClient", () => {
     expect(detailsPanel.className).toContain("flex");
   });
 
-  it("uses the allowlisted Local AI START_RUN as the primary CV action", async () => {
-    const user = userEvent.setup();
-    localAiBridgeMock.detect.mockResolvedValue("ready");
-    localAiBridgeMock.send.mockImplementation(async (action: string, payload: unknown) => {
-      if (action === "START_RUN" || action === "GET_RUN") {
-        const request = payload as { requestId: string; jobId?: string; target?: string };
-        return {
-          requestId: request.requestId,
-          jobId: request.jobId ?? baseJob.id,
-          target: request.target ?? "resume",
-          status: "queued",
-          tailoringRun: localTailoringRun,
-        };
-      }
-      throw new Error(`unexpected ${action}`);
-    });
-    renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
-    await waitFor(() => {
-      expect(localAiBridgeMock.detect).toHaveBeenCalledWith(
-        expect.objectContaining({ signal: expect.any(AbortSignal) }),
-      );
-    });
-
-    await user.click((await screen.findAllByRole("button", { name: /generate cv/i }))[0]);
-
-    await waitFor(() => {
-      expect(localAiBridgeMock.send).toHaveBeenCalledWith(
-        "START_RUN",
-        expect.objectContaining({ jobId: baseJob.id, target: "resume" }),
-        expect.objectContaining({ timeoutMs: 20_000 }),
-      );
-    });
-    const startPayload = localAiBridgeMock.send.mock.calls.find(([action]) => action === "START_RUN")?.[1];
-    expect(JSON.stringify(startPayload)).not.toMatch(/token|prompt|url|run_id/i);
-    expect(startPayload).not.toHaveProperty("tailoringRun");
-  });
-
-  it("imports Local AI success with the durable TailoringRun handle", async () => {
-    const user = userEvent.setup();
-    const baselineFetch = global.fetch;
-    const fetchMock = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
-      const url = typeof input === "string" ? input : input.url;
-      if (url.startsWith("/api/applications/manual-generate")) {
-        return new Response(JSON.stringify({
-          applicationId: "application-1",
-          status: "DRAFT",
-          aiContentHash: "content-hash",
-          aiContent: localAiContent,
-          pdfName: null,
-          job: {
-            id: baseJob.id,
-            title: baseJob.title,
-            company: baseJob.company,
-            location: baseJob.location,
-          },
-        }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      return baselineFetch(input, init);
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    localAiBridgeMock.detect.mockResolvedValue("ready");
-    localAiBridgeMock.send.mockImplementation(async (action: string, payload: unknown) => {
-      const request = payload as {
-        requestId: string;
-        jobId?: string;
-        target?: "resume" | "cover";
-      };
-      if (action === "START_RUN") {
-        return {
-          requestId: request.requestId,
-          jobId: request.jobId ?? baseJob.id,
-          target: request.target ?? "resume",
-          status: "queued",
-          tailoringRun: localTailoringRun,
-        };
-      }
-      if (action === "GET_RUN") {
-        return {
-          requestId: request.requestId,
-          jobId: baseJob.id,
-          target: "resume",
-          status: "succeeded",
-          modelOutput: JSON.stringify({
-            cvSummary: "Tailored frontend engineer summary",
-            latestExperience: { addedBullets: [] },
-          }),
-          promptMeta: {
-            ruleSetId: "rules-1",
-            resumeSnapshotUpdatedAt: "2026-07-26T00:00:00.000Z",
-            promptTemplateVersion: "2026.07.v2",
-            schemaVersion: "2026-07-24",
-            skillPackVersion: "skill-pack-1",
-            promptHash: "local-prompt-hash",
-          },
-          tailoringRun: localTailoringRun,
-        };
-      }
-      throw new Error(`unexpected ${action}`);
-    });
-
-    renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
-    await waitFor(() => expect(localAiBridgeMock.detect).toHaveBeenCalled());
-    await user.click((await screen.findAllByRole("button", { name: /generate cv/i }))[0]);
-
-    await waitFor(() => {
-      expect(fetchMock.mock.calls.some(([request]) => {
-        const url = typeof request === "string" ? request : request.url;
-        return url.startsWith("/api/applications/manual-generate");
-      })).toBe(true);
-    });
-    const importCall = fetchMock.mock.calls.find(([request]) => {
-      const url = typeof request === "string" ? request : request.url;
-      return url.startsWith("/api/applications/manual-generate");
-    });
-    expect(importCall?.[0]).toBe("/api/applications/manual-generate?finalize=false");
-    expect(JSON.parse(importCall?.[1]?.body as string)).toMatchObject({
-      jobId: baseJob.id,
-      target: "resume",
-      source: "local_ai",
-      tailoringRun: localTailoringRun,
-    });
-  });
-
-  it("opens the manual flow only after durable cancellation and Hermes stop succeed", async () => {
-    const user = userEvent.setup();
-    const baselineFetch = global.fetch;
-    let releaseCancel!: (response: Response) => void;
-    const cancelResponse = new Promise<Response>((resolve) => {
-      releaseCancel = resolve;
-    });
-    const fetchMock = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
-      const url = typeof input === "string" ? input : input.url;
-      if (url === `/api/tailoring-runs/${localTailoringRun.id}/cancel`) {
-        return cancelResponse;
-      }
-      if (url === "/api/applications/prompt") {
-        return new Response(
-          JSON.stringify({
-            prompt: { systemPrompt: "system", userPrompt: "user" },
-            expectedJsonShape: { cvSummary: "string" },
-            promptMeta: {
-              ruleSetId: "rules-1",
-              resumeSnapshotUpdatedAt: "2026-07-26T00:00:00.000Z",
-              promptTemplateVersion: "2026.07.v2",
-              schemaVersion: "2026-07-24",
-              skillPackVersion: "skill-pack-1",
-              promptHash: "a".repeat(64),
-            },
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
-      }
-      return baselineFetch(input, init);
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    localAiBridgeMock.detect.mockResolvedValue("ready");
-    localAiBridgeMock.send.mockImplementation(
-      async (action: string, payload: unknown) => {
-        const request = payload as {
-          requestId: string;
-          jobId?: string;
-          target?: "resume" | "cover";
-        };
-        if (action === "START_RUN" || action === "GET_RUN") {
-          return {
-            requestId: request.requestId,
-            jobId: request.jobId ?? baseJob.id,
-            target: request.target ?? "resume",
-            status: "queued",
-            tailoringRun: localTailoringRun,
-          };
-        }
-        if (action === "STOP_RUN") {
-          return {
-            requestId: request.requestId,
-            jobId: baseJob.id,
-            target: "resume",
-            status: "cancelled",
-            tailoringRun: localTailoringRun,
-          };
-        }
-        throw new Error(`unexpected ${action}`);
-      },
-    );
-
-    renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
-    await waitFor(() => expect(localAiBridgeMock.detect).toHaveBeenCalled());
-    await user.click(
-      (await screen.findAllByRole("button", { name: /generate cv/i }))[0],
-    );
-    const manualButton = await screen.findByRole("button", {
-      name: /use manual method/i,
-    });
-    await waitFor(() => expect(manualButton).toBeEnabled());
-    await user.click(manualButton);
-
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        `/api/tailoring-runs/${localTailoringRun.id}/cancel`,
-        expect.objectContaining({ method: "POST" }),
-      ),
-    );
-    expect(
-      screen.queryByRole("heading", { name: "Generate CV with AI" }),
-    ).not.toBeInTheDocument();
-    expect(
-      localAiBridgeMock.send.mock.calls.filter(
-        ([action]) => action === "STOP_RUN",
-      ),
-    ).toHaveLength(0);
-
-    await act(async () => {
-      releaseCancel(
-        new Response(
-          JSON.stringify({
-            disposition: "REPLAYED",
-            run: { status: "CANCELLED" },
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        ),
-      );
-      await cancelResponse;
-    });
-
-    expect(
-      await screen.findByRole("heading", { name: "Generate CV with AI" }),
-    ).toBeInTheDocument();
-    const stopCallIndex = localAiBridgeMock.send.mock.calls.findIndex(
-      ([action]) => action === "STOP_RUN",
-    );
-    expect(stopCallIndex).toBeGreaterThanOrEqual(0);
-    expect(fetchMock.mock.invocationCallOrder[0]).toBeLessThan(
-      localAiBridgeMock.send.mock.invocationCallOrder[stopCallIndex],
-    );
-    expect(sessionStorage.getItem(LOCAL_AI_ACTIVE_REQUEST_KEY)).toBeNull();
-  });
-
-  it.each(["cancel", "stop"] as const)(
-    "keeps the Local AI recovery flow open when %s fails during manual fallback",
-    async (failureAt) => {
-      const user = userEvent.setup();
-      const baselineFetch = global.fetch;
-      const fetchMock = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
-        const url = typeof input === "string" ? input : input.url;
-        if (url === `/api/tailoring-runs/${localTailoringRun.id}/cancel`) {
-          if (failureAt === "cancel") {
-            return new Response(
-              JSON.stringify({
-                error: {
-                  code: "ATTEMPT_FENCED",
-                  message: "Attempt is stale",
-                },
-              }),
-              {
-                status: 409,
-                headers: { "Content-Type": "application/json" },
-              },
-            );
-          }
-          return new Response(
-            JSON.stringify({
-              disposition: "REPLAYED",
-              run: { status: "CANCELLED" },
-            }),
-            {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            },
-          );
-        }
-        return baselineFetch(input, init);
-      });
-      vi.stubGlobal("fetch", fetchMock);
-      localAiBridgeMock.detect.mockResolvedValue("ready");
-      localAiBridgeMock.send.mockImplementation(
-        async (action: string, payload: unknown) => {
-          const request = payload as {
-            requestId: string;
-            jobId?: string;
-            target?: "resume" | "cover";
-          };
-          if (action === "START_RUN" || action === "GET_RUN") {
-            return {
-              requestId: request.requestId,
-              jobId: request.jobId ?? baseJob.id,
-              target: request.target ?? "resume",
-              status: "queued",
-              tailoringRun: localTailoringRun,
-            };
-          }
-          if (action === "STOP_RUN") throw new Error("Hermes stop failed");
-          throw new Error(`unexpected ${action}`);
-        },
-      );
-
-      renderWithClient(
-        <JobsClient initialItems={[baseJob]} initialCursor={null} />,
-      );
-      await waitFor(() => expect(localAiBridgeMock.detect).toHaveBeenCalled());
-      await user.click(
-        (await screen.findAllByRole("button", { name: /generate cv/i }))[0],
-      );
-      const manualButton = await screen.findByRole("button", {
-        name: /use manual method/i,
-      });
-      await waitFor(() => expect(manualButton).toBeEnabled());
-      await user.click(manualButton);
-
-      await screen.findByRole("alert");
-      expect(
-        screen.queryByRole("heading", { name: "Generate CV with AI" }),
-      ).not.toBeInTheDocument();
-      expect(
-        screen.getByRole("heading", {
-          name: "Create a tailored CV locally",
-        }),
-      ).toBeInTheDocument();
-      expect(sessionStorage.getItem(LOCAL_AI_ACTIVE_REQUEST_KEY)).toMatch(
-        /^[0-9a-f-]{36}$/i,
-      );
-      expect(
-        localAiBridgeMock.send.mock.calls.filter(
-          ([action]) => action === "STOP_RUN",
-        ),
-      ).toHaveLength(failureAt === "stop" ? 1 : 0);
-    },
-  );
-
   it("disables skill pack download until prompt meta is ready, then advances to Copy Prompt with one click", async () => {
     const user = userEvent.setup();
     const anchorClickSpy = vi
@@ -1937,7 +1557,6 @@ describe("JobsClient", () => {
 
     const generateCvButton = (await screen.findAllByRole("button", { name: /generate cv/i }))[0];
     await user.click(generateCvButton);
-    await user.click(await screen.findByRole("button", { name: /use manual method/i }));
 
     const downloadButton = await screen.findByRole("button", {
       name: /preparing|download zip/i,
@@ -2045,7 +1664,6 @@ describe("JobsClient", () => {
 
     const generateCvButton = (await screen.findAllByRole("button", { name: /generate cv/i }))[0];
     await user.click(generateCvButton);
-    await user.click(await screen.findByRole("button", { name: /use manual method/i }));
 
     const downloadButton = await screen.findByRole("button", { name: /download zip/i });
     await waitFor(() => {
@@ -2058,7 +1676,6 @@ describe("JobsClient", () => {
 
     const generateCoverButton = (await screen.findAllByRole("button", { name: /generate cl/i }))[0];
     await user.click(generateCoverButton);
-    await user.click(await screen.findByRole("button", { name: /use manual method/i }));
     expect(await screen.findByRole("button", { name: /copy prompt to clipboard/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /download skill pack/i })).not.toBeInTheDocument();
 

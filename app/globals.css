@@ -1571,7 +1571,7 @@ body {
 /* ── Extension token manager ──
    Token-driven so cards, inputs, and token rows adapt to .dark via the
    oklch palette defined in :root / .dark at the top of this file.   */
-.ext-card {
+.agent-card {
   border-radius: 16px;
   border: 1.5px solid var(--border);
   background: var(--card);
@@ -1580,16 +1580,16 @@ body {
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
   transition: box-shadow 200ms ease, border-color 200ms ease;
 }
-.dark .ext-card {
+.dark .agent-card {
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
 }
-.ext-card:hover {
+.agent-card:hover {
   box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.06);
 }
-.dark .ext-card:hover {
+.dark .agent-card:hover {
   box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.5);
 }
-.ext-input {
+.agent-input {
   width: 100%;
   height: 40px;
   border-radius: 10px;
@@ -1600,15 +1600,15 @@ body {
   background: var(--background);
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
-.ext-input:focus {
+.agent-input:focus {
   outline: none;
   border-color: var(--brand-emerald-500);
   box-shadow: 0 0 0 3px oklch(0.65 0.2 160 / 0.18);
 }
-.ext-input::placeholder {
+.agent-input::placeholder {
   color: var(--muted-foreground);
 }
-.ext-btn-primary {
+.agent-btn-primary {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1624,21 +1624,21 @@ body {
   white-space: nowrap;
   transition: background 150ms ease, transform 100ms ease, box-shadow 150ms ease;
 }
-.ext-btn-primary:hover:not(:disabled) {
+.agent-btn-primary:hover:not(:disabled) {
   background: var(--brand-emerald-700);
   box-shadow: 0 2px 8px -2px oklch(0.55 0.16 160 / 0.45);
 }
-.ext-btn-primary:active:not(:disabled) {
+.agent-btn-primary:active:not(:disabled) {
   transform: scale(0.97);
 }
-.ext-btn-primary:disabled {
+.agent-btn-primary:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
 /* Token reveal card — amber accent. Dark variant uses translucent amber
    so the warning hue reads on dark surfaces without glare. */
-.ext-token-reveal {
+.agent-token-reveal {
   margin-top: 14px;
   border-radius: 12px;
   border: 1.5px solid oklch(0.85 0.1 85);
@@ -1646,7 +1646,7 @@ body {
   padding: 14px;
   animation: ext-reveal 350ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.dark .ext-token-reveal {
+.dark .agent-token-reveal {
   border-color: rgba(245, 158, 11, 0.38);
   background: linear-gradient(135deg, rgba(245, 158, 11, 0.14), rgba(245, 158, 11, 0.06));
 }
@@ -1654,7 +1654,7 @@ body {
   from { opacity: 0; transform: translateY(-8px) scale(0.97); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
-.ext-token-code {
+.agent-token-code {
   flex: 1;
   min-width: 0;
   overflow-wrap: break-word;
@@ -1668,14 +1668,14 @@ body {
   color: oklch(0.35 0.04 85);
   line-height: 1.5;
 }
-.dark .ext-token-code {
+.dark .agent-token-code {
   border-color: rgba(245, 158, 11, 0.32);
   background: rgba(15, 23, 42, 0.6);
   color: #fde68a;
 }
 
 /* Copy button with success morph */
-.ext-btn-copy {
+.agent-btn-copy {
   display: inline-flex;
   align-items: center;
   height: 32px;
@@ -1694,36 +1694,36 @@ body {
     color 150ms ease,
     transform 150ms ease;
 }
-.dark .ext-btn-copy {
+.dark .agent-btn-copy {
   border-color: rgba(245, 158, 11, 0.32);
   background: rgba(245, 158, 11, 0.14);
   color: #fbbf24;
 }
-.ext-btn-copy:hover {
+.agent-btn-copy:hover {
   background: oklch(0.90 0.08 85);
   border-color: oklch(0.78 0.1 85);
 }
-.dark .ext-btn-copy:hover {
+.dark .agent-btn-copy:hover {
   background: rgba(245, 158, 11, 0.22);
   border-color: rgba(245, 158, 11, 0.45);
 }
-.ext-btn-copy:active {
+.agent-btn-copy:active {
   transform: scale(0.95);
 }
-.ext-btn-copy--done,
-.dark .ext-btn-copy--done {
+.agent-btn-copy--done,
+.dark .agent-btn-copy--done {
   background: var(--brand-emerald-600);
   border-color: var(--brand-emerald-600);
   color: white;
 }
-.ext-btn-copy-inner {
+.agent-btn-copy-inner {
   display: inline-flex;
   align-items: center;
   gap: 5px;
 }
 
 /* Count badge */
-.ext-count-badge {
+.agent-count-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1738,7 +1738,7 @@ body {
 }
 
 /* Empty state */
-.ext-empty-state {
+.agent-empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1748,7 +1748,7 @@ body {
 }
 
 /* Token row with entrance/exit animations */
-.ext-token-row {
+.agent-token-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1759,38 +1759,38 @@ body {
   padding: 12px 14px;
   transition: border-color 150ms ease, background 150ms ease, transform 300ms ease, opacity 300ms ease;
 }
-.ext-token-row:hover {
+.agent-token-row:hover {
   border-color: var(--input);
   background: color-mix(in oklab, var(--muted) 80%, var(--background) 20%);
 }
-.ext-token-row--enter {
+.agent-token-row--enter {
   animation: ext-row-enter 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 @keyframes ext-row-enter {
   from { opacity: 0; transform: translateY(-6px) scale(0.98); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
-.ext-token-row--exit {
+.agent-token-row--exit {
   opacity: 0;
   transform: translateX(20px) scale(0.97);
   pointer-events: none;
 }
 
 /* Token activity dot */
-.ext-token-dot {
+.agent-token-dot {
   width: 7px;
   height: 7px;
   border-radius: 999px;
   background: var(--border);
   flex-shrink: 0;
 }
-.ext-token-dot--active {
+.agent-token-dot--active {
   background: var(--brand-emerald-500);
   box-shadow: 0 0 0 3px oklch(0.65 0.2 160 / 0.22);
 }
 
 /* Revoke button — destructive. Dark variant uses translucent rose. */
-.ext-btn-revoke {
+.agent-btn-revoke {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -1810,31 +1810,31 @@ body {
     color 150ms ease,
     transform 150ms ease;
 }
-.dark .ext-btn-revoke {
+.dark .agent-btn-revoke {
   border-color: rgba(239, 68, 68, 0.32);
   background: rgba(239, 68, 68, 0.12);
   color: #fca5a5;
 }
-.ext-btn-revoke:hover:not(:disabled) {
+.agent-btn-revoke:hover:not(:disabled) {
   background: oklch(0.95 0.04 20);
   border-color: oklch(0.85 0.06 20);
   color: oklch(0.45 0.22 25);
 }
-.dark .ext-btn-revoke:hover:not(:disabled) {
+.dark .agent-btn-revoke:hover:not(:disabled) {
   background: rgba(239, 68, 68, 0.22);
   border-color: rgba(239, 68, 68, 0.48);
   color: #fecaca;
 }
-.ext-btn-revoke:active:not(:disabled) {
+.agent-btn-revoke:active:not(:disabled) {
   transform: scale(0.95);
 }
-.ext-btn-revoke:disabled {
+.agent-btn-revoke:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
 /* Setup instructions */
-.ext-instructions {
+.agent-instructions {
   list-style: none;
   padding: 0;
   margin: 0;
@@ -1842,7 +1842,7 @@ body {
   flex-direction: column;
   gap: 10px;
 }
-.ext-instructions li {
+.agent-instructions li {
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -1850,7 +1850,7 @@ body {
   color: var(--foreground);
   line-height: 1.5;
 }
-.ext-step-num {
+.agent-step-num {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1866,31 +1866,31 @@ body {
 }
 
 /* Dialog buttons */
-.ext-dialog-cancel {
+.agent-dialog-cancel {
   border-radius: 10px !important;
   font-weight: 600 !important;
 }
-.ext-dialog-destructive {
+.agent-dialog-destructive {
   border-radius: 10px !important;
   font-weight: 600 !important;
   background: oklch(0.55 0.22 25) !important;
   color: white !important;
   transition: background 150ms ease, transform 100ms ease !important;
 }
-.ext-dialog-destructive:hover {
+.agent-dialog-destructive:hover {
   background: oklch(0.48 0.22 25) !important;
 }
-.ext-dialog-destructive:active {
+.agent-dialog-destructive:active {
   transform: scale(0.97);
 }
 
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  .ext-token-reveal,
-  .ext-token-row--enter {
+  .agent-token-reveal,
+  .agent-token-row--enter {
     animation: none;
   }
-  .ext-token-row--exit {
+  .agent-token-row--exit {
     transition: none;
   }
 }
@@ -3028,4 +3028,4 @@ body::-webkit-scrollbar-thumb:hover {
 html[lang="zh"] {
   --font-geist-sans: system-ui, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
   --font-edu-body: system-ui, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
-}
+}

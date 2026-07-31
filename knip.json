@@ -15,17 +15,9 @@
       "entry": [
         "tools/**/*.mjs"
       ],
-      "project": ["**/*.{ts,tsx}", "!chrome-extension/**"]
-    },
-    "chrome-extension": {
-      "entry": [
-        "src/background/service-worker.ts",
-        "src/content/index.ts",
-        "src/content/seek/seekInterceptMain.ts",
-        "src/popup/main.tsx",
-        "src/popup/index.html"
-      ],
-      "project": "src/**/*.{ts,tsx}"
+      "project": [
+        "**/*.{ts,tsx}"
+      ]
     }
   }
 }

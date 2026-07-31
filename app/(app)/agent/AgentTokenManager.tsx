@@ -240,7 +240,7 @@ export function AgentTokenManager() {
   return (
     <div className="space-y-6">
       {/* ── Generate Token ── */}
-      <div className="ext-card">
+      <div className="agent-card">
         <div className="flex items-center gap-2 mb-4">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-emerald-100">
             <Plus className="h-4 w-4 text-brand-emerald-text" />
@@ -262,13 +262,13 @@ export function AgentTokenManager() {
                 if (e.key === "Enter" && !creating) handleCreate();
               }}
               placeholder={t("namePlaceholder")}
-              className="ext-input pl-9"
+              className="agent-input pl-9"
             />
           </div>
           <button
             onClick={handleCreate}
             disabled={creating}
-            className="ext-btn-primary"
+            className="agent-btn-primary"
           >
             {creating ? (
               <>
@@ -286,7 +286,7 @@ export function AgentTokenManager() {
 
         {/* ── New token reveal ── */}
         {newToken && (
-          <div ref={newTokenRef} className="ext-token-reveal">
+          <div ref={newTokenRef} className="agent-token-reveal">
             <div className="flex items-start gap-2.5">
               <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-200">
                 <AlertTriangle className="h-3 w-3 text-amber-800" />
@@ -296,14 +296,14 @@ export function AgentTokenManager() {
                   {t("revealWarning")}
                 </p>
                 <div className="mt-2 flex items-center gap-2">
-                  <code className="ext-token-code">
+                  <code className="agent-token-code">
                     {newToken.rawToken}
                   </code>
                   <button
                     onClick={() => handleCopy(newToken.rawToken)}
-                    className={`ext-btn-copy ${copied ? "ext-btn-copy--done" : ""}`}
+                    className={`agent-btn-copy ${copied ? "agent-btn-copy--done" : ""}`}
                   >
-                    <span className="ext-btn-copy-inner">
+                    <span className="agent-btn-copy-inner">
                       {copied ? (
                         <Check className="h-3.5 w-3.5" />
                       ) : (
@@ -327,7 +327,7 @@ export function AgentTokenManager() {
       </div>
 
       {/* ── Token List ── */}
-      <div className="ext-card">
+      <div className="agent-card">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
@@ -337,7 +337,7 @@ export function AgentTokenManager() {
               {t("activeTitle")}
             </h2>
             {!loading && tokens.length > 0 && (
-              <span className="ext-count-badge">{tokens.length}</span>
+              <span className="agent-count-badge">{tokens.length}</span>
             )}
           </div>
         </div>
@@ -345,7 +345,7 @@ export function AgentTokenManager() {
         {loading ? (
           <TokenSkeleton />
         ) : loadError ? (
-          <div className="ext-empty-state">
+          <div className="agent-empty-state">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-destructive/10">
               <Key className="h-5 w-5 text-destructive/70" />
             </div>
@@ -366,7 +366,7 @@ export function AgentTokenManager() {
             </Button>
           </div>
         ) : tokens.length === 0 ? (
-          <div className="ext-empty-state">
+          <div className="agent-empty-state">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted">
               <Key className="h-5 w-5 text-muted-foreground/70" />
             </div>
@@ -384,10 +384,10 @@ export function AgentTokenManager() {
               return (
                 <div
                   key={token.id}
-                  className={`ext-token-row ${isRemoving ? "ext-token-row--exit" : ""} ${isNew ? "ext-token-row--enter" : ""}`}
+                  className={`agent-token-row ${isRemoving ? "agent-token-row--exit" : ""} ${isNew ? "agent-token-row--enter" : ""}`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className={`ext-token-dot ${token.lastUsedAt ? "ext-token-dot--active" : ""}`} />
+                    <div className={`agent-token-dot ${token.lastUsedAt ? "agent-token-dot--active" : ""}`} />
                     <div className="min-w-0">
                       <div className="text-sm font-medium text-foreground/90 truncate">
                         {token.name || t("unnamed")}
@@ -417,7 +417,7 @@ export function AgentTokenManager() {
                   <button
                     onClick={() => setRevokeTarget(token)}
                     disabled={revoking === token.id}
-                    className="ext-btn-revoke"
+                    className="agent-btn-revoke"
                   >
                     {revoking === token.id ? (
                       <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" />
@@ -453,11 +453,11 @@ export function AgentTokenManager() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 sm:gap-2">
-            <AlertDialogCancel className="ext-dialog-cancel">
+            <AlertDialogCancel className="agent-dialog-cancel">
               {tCommon("cancel")}
             </AlertDialogCancel>
             <AlertDialogAction
-              className="ext-dialog-destructive"
+              className="agent-dialog-destructive"
               onClick={() => revokeTarget && handleRevoke(revokeTarget)}
             >
               {revoking ? (
