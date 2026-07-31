@@ -9,36 +9,6 @@ export type RuntimeEnvironment = Readonly<
   Record<string, string | undefined>
 >;
 
-type DistributedAbuseBudgetCapability =
-  | {
-      kind: "enabled";
-      config: {
-        provider: "upstash" | "vercel-kv";
-        url: string;
-        token: string;
-      };
-    }
-  | {
-      kind: "disabled";
-      reason: "EXTENSION_ABUSE_BUDGET_NOT_CONFIGURED";
-    }
-  | {
-      kind: "invalid";
-      reason: "EXTENSION_ABUSE_BUDGET_CONFIG_INCOMPLETE";
-      missing: readonly string[];
-    };
-
-type IdentityFingerprintCapability =
-  | {
-      kind: "enabled";
-      config: { secret: string };
-    }
-  | {
-      kind: "invalid";
-      reason: "EXTENSION_IDENTITY_SECRET_MISSING";
-      missing: readonly ["AUTH_SECRET"];
-    };
-
 type BatchAutogenerationCapability =
   | { kind: "enabled"; config: Record<string, never> }
   | {
@@ -178,10 +148,6 @@ export type RuntimeCapabilities = {
   atsBoards: AtsBoardsCapability;
   batchAutogeneration: BatchAutogenerationCapability;
   blobStorage: BlobStorageCapability;
-  extensionIngress: {
-    distributedAbuseBudget: DistributedAbuseBudgetCapability;
-    identityFingerprint: IdentityFingerprintCapability;
-  };
   fetchRunAuthentication: FetchRunAuthenticationCapability;
   gemini: GeminiCapability;
   githubFetchRunDispatch: GithubFetchRunDispatchCapability;
@@ -194,55 +160,6 @@ function trimmed(
 ): string | undefined {
   const value = environment[key]?.trim();
   return value || undefined;
-}
-
-function distributedAbuseBudgetPair(
-  environment: RuntimeEnvironment,
-  provider: "upstash" | "vercel-kv",
-  urlKey: string,
-  tokenKey: string,
-): DistributedAbuseBudgetCapability | null {
-  const url = trimmed(environment, urlKey);
-  const token = trimmed(environment, tokenKey);
-  if (!url && !token) return null;
-  const missing = [
-    ...(url ? [] : [urlKey]),
-    ...(token ? [] : [tokenKey]),
-  ];
-  if (!url || !token) {
-    return {
-      kind: "invalid",
-      reason: "EXTENSION_ABUSE_BUDGET_CONFIG_INCOMPLETE",
-      missing,
-    };
-  }
-  return {
-    kind: "enabled",
-    config: { provider, url, token },
-  };
-}
-
-function distributedAbuseBudget(
-  environment: RuntimeEnvironment,
-): DistributedAbuseBudgetCapability {
-  const upstash = distributedAbuseBudgetPair(
-    environment,
-    "upstash",
-    "UPSTASH_REDIS_REST_URL",
-    "UPSTASH_REDIS_REST_TOKEN",
-  );
-  if (upstash) return upstash;
-  return (
-    distributedAbuseBudgetPair(
-      environment,
-      "vercel-kv",
-      "KV_REST_API_URL",
-      "KV_REST_API_TOKEN",
-    ) ?? {
-      kind: "disabled",
-      reason: "EXTENSION_ABUSE_BUDGET_NOT_CONFIGURED",
-    }
-  );
 }
 
 function githubFetchRunDispatch(
@@ -490,19 +407,6 @@ function blobStorage(environment: RuntimeEnvironment): BlobStorageCapability {
     : { kind: "disabled", reason: "BLOB_STORAGE_NOT_CONFIGURED" };
 }
 
-function identityFingerprint(
-  environment: RuntimeEnvironment,
-): IdentityFingerprintCapability {
-  const secret = trimmed(environment, "AUTH_SECRET");
-  return secret
-    ? { kind: "enabled", config: { secret } }
-    : {
-        kind: "invalid",
-        reason: "EXTENSION_IDENTITY_SECRET_MISSING",
-        missing: ["AUTH_SECRET"],
-      };
-}
-
 function fetchRunAuthentication(
   environment: RuntimeEnvironment,
 ): FetchRunAuthenticationCapability {
@@ -544,10 +448,6 @@ export function resolveRuntimeCapabilities(
     atsBoards: atsBoards(environment),
     batchAutogeneration: batchAutogeneration(environment),
     blobStorage: blobStorage(environment),
-    extensionIngress: {
-      distributedAbuseBudget: distributedAbuseBudget(environment),
-      identityFingerprint: identityFingerprint(environment),
-    },
     fetchRunAuthentication: fetchRunAuthentication(environment),
     gemini: gemini(environment),
     githubFetchRunDispatch: githubFetchRunDispatch(environment),

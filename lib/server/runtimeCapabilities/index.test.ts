@@ -3,35 +3,6 @@ import { describe, expect, it } from "vitest";
 import { resolveRuntimeCapabilities } from "./index";
 
 describe("resolveRuntimeCapabilities", () => {
-  it("fails closed when the distributed extension budget pair is incomplete", () => {
-    const capabilities = resolveRuntimeCapabilities({
-      UPSTASH_REDIS_REST_URL: "https://redis.example.com",
-    });
-
-    expect(capabilities.extensionIngress.distributedAbuseBudget).toEqual({
-      kind: "invalid",
-      reason: "EXTENSION_ABUSE_BUDGET_CONFIG_INCOMPLETE",
-      missing: ["UPSTASH_REDIS_REST_TOKEN"],
-    });
-  });
-
-  it("requires the auth secret for extension identity fingerprints", () => {
-    const missing = resolveRuntimeCapabilities({});
-    const configured = resolveRuntimeCapabilities({
-      AUTH_SECRET: "  extension-fingerprint-secret  ",
-    });
-
-    expect(missing.extensionIngress.identityFingerprint).toEqual({
-      kind: "invalid",
-      reason: "EXTENSION_IDENTITY_SECRET_MISSING",
-      missing: ["AUTH_SECRET"],
-    });
-    expect(configured.extensionIngress.identityFingerprint).toEqual({
-      kind: "enabled",
-      config: { secret: "extension-fingerprint-secret" },
-    });
-  });
-
   it("keeps server batch autogeneration off unless the flag is explicit", () => {
     expect(resolveRuntimeCapabilities({}).batchAutogeneration).toEqual({
       kind: "disabled",
