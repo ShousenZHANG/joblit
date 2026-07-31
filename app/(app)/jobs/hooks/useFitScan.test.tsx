@@ -1,350 +1,190 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-const bridge = vi.hoisted(() => ({ send: vi.fn() }));
-vi.mock("@/lib/client/localAiBridge", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/client/localAiBridge")>(
-    "@/lib/client/localAiBridge",
-  );
-  return { ...actual, sendLocalAiBridgeRequest: bridge.send };
-});
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useFitScan } from "./useFitScan";
-import { LocalAiBridgeError } from "@/lib/client/localAiBridge";
 
-const JOB_A = "11111111-1111-4111-8111-111111111111";
-const JOB_B = "22222222-2222-4222-8222-222222222222";
-const CLAIM_TOKEN = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-const promptMeta = { resumeSnapshotUpdatedAt: "2026-07-15T00:00:00.000Z" };
+/**
+ * Scoring moved out of the browser: the Runner drains the fit queue against
+ * the user's local model. This hook no longer runs anything — it enqueues the
+ * scan and watches the server's counts until the queue is empty.
+ */
 
 type FetchLog = { url: string; body: unknown };
 
+type Stats = { total: number; scored: number; pending: number };
+
 function mockServer(config: {
-  run: { total: number; scored: number; pending: number; prescreened: number };
-  batches: string[][];
-  scoredPerImport?: string[][];
+  run: Stats & { prescreened: number };
+  /** One entry per status poll, in order; the last repeats. */
+  polls: Stats[];
+  runStatus?: number;
+  runError?: unknown;
 }) {
   const log: FetchLog[] = [];
-  let batchIndex = 0;
-  let importIndex = 0;
+  let pollIndex = 0;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
-      log.push({ url, body });
-      const json = (data: unknown) =>
+      log.push({ url, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      const json = (data: unknown, status = 200) =>
         new Response(JSON.stringify(data), {
-          status: 200,
+          status,
           headers: { "content-type": "application/json" },
         });
-      if (url.includes("/api/jobs/fit/run")) return json(config.run);
-      if (url.includes("/api/jobs/fit/next-batch")) {
-        const jobIds = config.batches[batchIndex] ?? [];
-        batchIndex += 1;
-        const remaining = config.batches
-          .slice(batchIndex)
-          .reduce((sum, batch) => sum + batch.length, 0);
-        return json({
-          jobIds,
-          remaining,
-          claimToken: jobIds.length > 0 ? CLAIM_TOKEN : null,
-        });
+      if (url.includes("/api/jobs/fit/run")) {
+        if (config.runError) return json(config.runError, config.runStatus ?? 500);
+        return json(config.run);
       }
-      if (url.includes("/api/jobs/fit/batch-import")) {
-        const scored = (config.scoredPerImport?.[importIndex] ?? body?.jobIds ?? []) as string[];
-        importIndex += 1;
-        return json({ scored: scored.map((jobId: string) => ({ jobId })) });
+      if (url.includes("/api/jobs/fit/status")) {
+        const stats = config.polls[Math.min(pollIndex, config.polls.length - 1)];
+        pollIndex += 1;
+        return json(stats);
       }
-      if (url.includes("/api/jobs/fit/mark-failed")) return json({ count: body?.jobIds?.length ?? 0 });
       throw new Error(`unexpected fetch ${url}`);
     }),
   );
   return log;
 }
 
-function succeededRun(jobIds: string[]) {
-  return {
-    requestId: crypto.randomUUID(),
-    jobId: jobIds[0],
-    target: "triage" as const,
-    status: "succeeded" as const,
-    modelOutput: JSON.stringify(jobIds.map((jobId) => ({ jobId, matchScore: 70 }))),
-    promptMeta,
-  };
+function renderFitScan(onJobScored = vi.fn()) {
+  return renderHook(() => useFitScan({ onJobScored, pollMs: 1 }));
 }
 
-function runningRun(jobIds: string[]) {
-  return {
-    requestId: crypto.randomUUID(),
-    jobId: jobIds[0],
-    target: "triage" as const,
-    status: "running" as const,
-  };
-}
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
-describe("useFitScan (database-backed pump)", () => {
-  beforeEach(() => {
-    bridge.send.mockReset();
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
-  });
-
-  it("prescreens server-side then pumps batches until the database queue is empty", async () => {
+describe("useFitScan (Runner-drained queue)", () => {
+  it("enqueues the scan, then follows the server's counts to done", async () => {
     const log = mockServer({
-      run: { total: 40, scored: 12, pending: 4, prescreened: 8 },
-      batches: [[JOB_A, JOB_B], [JOB_B], []],
-    });
-    bridge.send.mockImplementation(async (action: string, payload: { jobIds?: string[] }) => {
-      if (action === "START_RUN") return succeededRun(payload.jobIds ?? []);
-      throw new Error(`unexpected ${action}`);
+      run: { total: 10, scored: 4, pending: 6, prescreened: 4 },
+      polls: [
+        { total: 10, scored: 7, pending: 3 },
+        { total: 10, scored: 10, pending: 0 },
+      ],
     });
     const onJobScored = vi.fn();
-    const { result } = renderHook(() => useFitScan({ onJobScored }));
-    await act(async () => result.current.start());
-    await waitFor(() =>
-      expect(result.current.state).toMatchObject({
-        status: "done",
-        total: 40,
-        prescreened: 8,
-        scored: 3,
-        failed: 0,
-        remaining: 0,
-      }),
-    );
-    // The pump asked the server for batches instead of using loaded page items.
-    expect(log.filter((entry) => entry.url.includes("next-batch"))).toHaveLength(3);
+    const { result } = renderFitScan(onJobScored);
+
+    await act(async () => {
+      await result.current.start();
+    });
+
+    await waitFor(() => expect(result.current.state.status).toBe("done"));
+
+    // The browser never claims a batch, never calls a model, never imports.
+    expect(log.some((entry) => entry.url.includes("next-batch"))).toBe(false);
+    expect(log.some((entry) => entry.url.includes("batch-import"))).toBe(false);
+    expect(log[0].url).toContain("/api/jobs/fit/run");
+
+    expect(result.current.state.total).toBe(10);
+    expect(result.current.state.prescreened).toBe(4);
+    expect(result.current.state.remaining).toBe(0);
+    // Six were pending when the scan started and all six landed.
+    expect(result.current.state.scored).toBe(6);
     expect(onJobScored).toHaveBeenCalled();
   });
 
-  it("marks a failed batch server-side so the queue never loops on it", async () => {
-    const log = mockServer({
-      run: { total: 2, scored: 0, pending: 2, prescreened: 0 },
-      batches: [[JOB_A, JOB_B], []],
+  it("finishes immediately when prescreening cleared the whole queue", async () => {
+    mockServer({
+      run: { total: 5, scored: 5, pending: 0, prescreened: 5 },
+      polls: [{ total: 5, scored: 5, pending: 0 }],
     });
-    bridge.send.mockRejectedValue(new LocalAiBridgeError("HERMES_AUTH_FAILED", "bad key", false));
-    const { result } = renderHook(() => useFitScan({ onJobScored: vi.fn() }));
-    await act(async () => result.current.start());
-    await waitFor(() =>
-      expect(result.current.state).toMatchObject({ status: "done", failed: 2, scored: 0 }),
-    );
-    const markFailed = log.find((entry) => entry.url.includes("mark-failed"));
-    expect(markFailed?.body).toEqual({
-      jobIds: [JOB_A, JOB_B],
-      claimToken: CLAIM_TOKEN,
-    });
-  });
-
-  it("counts partially imported batches as scored plus failed and dequeues the rest", async () => {
-    const log = mockServer({
-      run: { total: 2, scored: 0, pending: 2, prescreened: 0 },
-      batches: [[JOB_A, JOB_B], []],
-      scoredPerImport: [[JOB_A]],
-    });
-    bridge.send.mockImplementation(async (action: string, payload: { jobIds?: string[] }) => {
-      if (action === "START_RUN") return succeededRun(payload.jobIds ?? []);
-      throw new Error(`unexpected ${action}`);
-    });
-    const { result } = renderHook(() => useFitScan({ onJobScored: vi.fn() }));
-    await act(async () => result.current.start());
-    await waitFor(() =>
-      expect(result.current.state).toMatchObject({ status: "done", scored: 1, failed: 1 }),
-    );
-    expect(log.some((entry) => entry.url.includes("mark-failed"))).toBe(true);
-  });
-
-  it("waits for a fresh lease and resumes instead of reporting a false done state", async () => {
-    let nextBatchCalls = 0;
-    let releaseRecoveredBatch = () => {};
-    const recoveredBatchReady = new Promise<void>((resolve) => {
-      releaseRecoveredBatch = resolve;
-    });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = String(input);
-        const json = (data: unknown) =>
-          new Response(JSON.stringify(data), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          });
-        if (url.includes("/api/jobs/fit/run")) {
-          return json({
-            total: 1,
-            scored: 0,
-            pending: 1,
-            prescreened: 0,
-          });
-        }
-        if (url.includes("/api/jobs/fit/next-batch")) {
-          nextBatchCalls += 1;
-          if (nextBatchCalls === 1) {
-            return json({
-              jobIds: [],
-              remaining: 1,
-              pendingTotal: 1,
-              leased: 1,
-              retryAfterMs: 1,
-              claimToken: null,
-            });
-          }
-          if (nextBatchCalls === 2) {
-            await recoveredBatchReady;
-            return json({
-              jobIds: [JOB_A],
-              remaining: 0,
-              pendingTotal: 1,
-              leased: 1,
-              retryAfterMs: null,
-              claimToken: CLAIM_TOKEN,
-            });
-          }
-          return json({
-            jobIds: [],
-            remaining: 0,
-            pendingTotal: 0,
-            leased: 0,
-            retryAfterMs: null,
-            claimToken: null,
-          });
-        }
-        if (url.includes("/api/jobs/fit/batch-import")) {
-          const body = init?.body ? JSON.parse(String(init.body)) : {};
-          return json({
-            scored: (body.jobIds ?? []).map((jobId: string) => ({ jobId })),
-          });
-        }
-        throw new Error(`unexpected fetch ${url}`);
-      }),
-    );
-    bridge.send.mockImplementation(
-      async (action: string, payload: { jobIds?: string[] }) => {
-        if (action === "START_RUN") return succeededRun(payload.jobIds ?? []);
-        throw new Error(`unexpected ${action}`);
-      },
-    );
-
-    const { result } = renderHook(() =>
-      useFitScan({ onJobScored: vi.fn(), leasePollMinMs: 1 }),
-    );
-    let scanPromise: Promise<void> | undefined;
-    act(() => {
-      scanPromise = result.current.start();
-    });
-
-    await waitFor(() => expect(nextBatchCalls).toBe(2));
-    expect(result.current.state).toMatchObject({
-      status: "scanning",
-      remaining: 1,
-      leased: 1,
-    });
-    expect(bridge.send).not.toHaveBeenCalled();
+    const onJobScored = vi.fn();
+    const { result } = renderFitScan(onJobScored);
 
     await act(async () => {
-      releaseRecoveredBatch();
-      await scanPromise;
+      await result.current.start();
     });
 
-    expect(nextBatchCalls).toBe(3);
-    expect(bridge.send).toHaveBeenCalledTimes(1);
-    expect(result.current.state).toMatchObject({
-      status: "done",
-      scored: 1,
-      remaining: 0,
-      leased: 0,
-    });
+    await waitFor(() => expect(result.current.state.status).toBe("done"));
+    expect(result.current.state.scored).toBe(0);
+    expect(result.current.state.prescreened).toBe(5);
+    expect(onJobScored).toHaveBeenCalled();
   });
 
-  it("starts a fresh run when the service worker forgets the one it is polling", async () => {
-    // A service-worker restart drops the run registry, so GET_RUN on the old
-    // requestId can never succeed. The extension raises HERMES_RUN_NOT_FOUND
-    // internally, but apiErrors.toPublicLocalAiError rewrites it to RUN_LOST
-    // before it crosses the bridge — RUN_LOST is what the web side actually
-    // sees, and it arrives retryable. Polling cannot recover; only a new
-    // requestId can.
+  it("reports that it is waiting when no Runner is picking the queue up", async () => {
     mockServer({
-      run: { total: 1, scored: 0, pending: 1, prescreened: 0 },
-      batches: [[JOB_A], []],
+      run: { total: 10, scored: 0, pending: 10, prescreened: 0 },
+      // The count never moves: nothing is draining the queue.
+      polls: [
+        { total: 10, scored: 0, pending: 10 },
+        { total: 10, scored: 0, pending: 10 },
+        { total: 10, scored: 0, pending: 10 },
+        { total: 10, scored: 0, pending: 10 },
+      ],
     });
-    let startCalls = 0;
-    let getRunCalls = 0;
-    bridge.send.mockImplementation(
-      async (action: string, payload: { jobIds?: string[] }) => {
-        if (action === "START_RUN") {
-          startCalls += 1;
-          // The first attempt is accepted and then forgotten; the second
-          // attempt runs to completion.
-          return startCalls === 1
-            ? runningRun(payload.jobIds ?? [])
-            : succeededRun(payload.jobIds ?? []);
-        }
-        if (action === "GET_RUN") {
-          getRunCalls += 1;
-          throw new LocalAiBridgeError("RUN_LOST", "run is gone", true);
-        }
-        if (action === "STOP_RUN") return undefined;
-        throw new Error(`unexpected ${action}`);
-      },
-    );
+    const { result } = renderFitScan();
 
-    const { result } = renderHook(() =>
-      useFitScan({ onJobScored: vi.fn(), retryBackoffMs: 1, pollMs: 1 }),
-    );
-    await act(async () => result.current.start());
+    // A stalled scan never returns from start(); awaiting it would hang.
+    act(() => {
+      void result.current.start();
+    });
 
-    await waitFor(() =>
-      expect(result.current.state).toMatchObject({
-        status: "done",
-        scored: 1,
-        failed: 0,
-      }),
-    );
-    // Restarted once rather than polling a dead run until the 240s budget ran out.
-    expect(startCalls).toBe(2);
-    expect(getRunCalls).toBe(3);
+    await waitFor(() => expect(result.current.state.waiting).toBe(true));
+    // Waiting is not failure — the scan stays live so a Runner can still start.
+    expect(result.current.state.status).toBe("scanning");
+    expect(result.current.state.remaining).toBe(10);
+
+    act(() => result.current.stop());
+    await waitFor(() => expect(result.current.state.status).toBe("idle"));
   });
 
-  it("reports failed when the server run endpoint rejects", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response("nope", { status: 500 })),
-    );
-    const { result } = renderHook(() => useFitScan({ onJobScored: vi.fn() }));
-    await act(async () => result.current.start());
-    await waitFor(() => expect(result.current.state.status).toBe("failed"));
+  it("stops polling when the user stops the scan", async () => {
+    mockServer({
+      run: { total: 10, scored: 0, pending: 10, prescreened: 0 },
+      polls: [{ total: 10, scored: 2, pending: 8 }],
+    });
+    const { result } = renderFitScan();
+
+    act(() => {
+      void result.current.start();
+    });
+    await waitFor(() => expect(result.current.state.scored).toBeGreaterThan(0));
+
+    act(() => result.current.stop());
+
+    await waitFor(() => expect(result.current.state.status).toBe("idle"));
+    const callsAfterStop = (fetch as unknown as { mock: { calls: unknown[] } }).mock.calls
+      .length;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(
+      (fetch as unknown as { mock: { calls: unknown[] } }).mock.calls.length,
+    ).toBe(callsAfterStop);
   });
 
-  // The fit endpoints used a private postJson that threw
-  // `new Error("/api/jobs/fit/run failed: 429")`, so the whole fit surface was
-  // invisible to the ApiError handling every other cluster relies on — and the
-  // user was shown a URL and a status code instead of what the server said.
   it("surfaces the server's own message rather than a url and a status code", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              error: {
-                code: "FIT_SCAN_BUSY",
-                message: "Another scan is already running for this account.",
-              },
-            }),
-            { status: 409, headers: { "content-type": "application/json" } },
-          ),
-      ),
-    );
+    mockServer({
+      run: { total: 0, scored: 0, pending: 0, prescreened: 0 },
+      polls: [],
+      runStatus: 404,
+      runError: { error: { code: "NO_PROFILE", message: "Create your resume first" } },
+    });
+    const { result } = renderFitScan();
 
-    const { result } = renderHook(() => useFitScan({ onJobScored: vi.fn() }));
-    await act(async () => result.current.start());
+    await act(async () => {
+      await result.current.start();
+    });
 
     await waitFor(() => expect(result.current.state.status).toBe("failed"));
-    expect(result.current.state.error).toBe(
-      "Another scan is already running for this account.",
-    );
-    expect(result.current.state.error).not.toContain("/api/jobs/fit/run");
+    expect(result.current.state.error).toBe("Create your resume first");
+  });
+
+  it("reset clears a finished scan", async () => {
+    mockServer({
+      run: { total: 2, scored: 2, pending: 0, prescreened: 2 },
+      polls: [{ total: 2, scored: 2, pending: 0 }],
+    });
+    const { result } = renderFitScan();
+
+    await act(async () => {
+      await result.current.start();
+    });
+    await waitFor(() => expect(result.current.state.status).toBe("done"));
+
+    act(() => result.current.reset());
+    expect(result.current.state.status).toBe("idle");
   });
 });

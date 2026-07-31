@@ -1083,9 +1083,8 @@ export function JobsClient({
               <span className="flex min-w-0 items-center gap-2 text-sm text-foreground">
                 <Loader2 className="h-4 w-4 shrink-0 text-brand-emerald-600 motion-safe:animate-spin" aria-hidden />
                 <span className="truncate">
-                  {fitScan.state.leased > 0
-                    ? t("fitScan.bannerRecovering", {
-                        leased: fitScan.state.leased,
+                  {fitScan.state.waiting
+                    ? t("fitScan.bannerWaitingRunner", {
                         remaining: fitScan.state.remaining,
                       })
                     : t("fitScan.bannerScanning", {
@@ -1094,6 +1093,14 @@ export function JobsClient({
                       })}
                 </span>
               </span>
+              {fitScan.state.waiting ? (
+                <Link
+                  href="/agent"
+                  className="shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-brand-emerald-text underline-offset-2 transition-colors hover:underline"
+                >
+                  {t("fitScan.setUpRunner")}
+                </Link>
+              ) : null}
               <button
                 type="button"
                 onClick={fitScan.stop}
@@ -1121,9 +1128,8 @@ export function JobsClient({
                     ? t("fitScan.bannerDone", {
                         scored: fitScan.state.scored,
                         prescreened: fitScan.state.prescreened,
-                        failed: fitScan.state.failed,
                       })
-                    : t("fitScan.failed")}
+                    : (fitScan.state.error ?? t("fitScan.failed"))}
                 </span>
               </span>
               <button

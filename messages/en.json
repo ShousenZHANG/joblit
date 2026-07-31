@@ -213,13 +213,14 @@
     "fitScan": {
       "button": "Score all jobs",
       "scoreShort": "Score",
-      "bannerScanning": "Scoring on your computer — {scored} done, {remaining} to go. Keep this page open.",
-      "bannerRecovering": "Recovering {leased} in-progress role(s) · {remaining} remaining.",
-      "bannerDone": "Scan finished: {scored} AI-scored, {prescreened} filtered instantly, {failed} failed.",
+      "bannerScanning": "Scoring on your machine — {scored} done, {remaining} to go.",
+      "bannerDone": "Scan finished: {scored} AI-scored, {prescreened} filtered instantly.",
       "stop": "Stop scan",
       "undo": "Undo",
-      "failed": "Scan failed. Reload the Joblit extension, then try again.",
-      "dismiss": "Dismiss scan result"
+      "failed": "Scan failed.",
+      "dismiss": "Dismiss scan result",
+      "bannerWaitingRunner": "{remaining} queued, waiting for a Runner to pick them up.",
+      "setUpRunner": "Set up Runner"
     },
     "fitAssessment": {
       "title": "Fit evidence",

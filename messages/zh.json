@@ -213,13 +213,14 @@
     "fitScan": {
       "button": "评分全部岗位",
       "scoreShort": "评分",
-      "bannerScanning": "本机评分中——已完成 {scored} 个，剩余 {remaining} 个。请保持页面打开。",
-      "bannerRecovering": "正在恢复 {leased} 个进行中的岗位 · 剩余 {remaining} 个。",
-      "bannerDone": "扫描完成：AI 评分 {scored} 个，预筛过滤 {prescreened} 个，失败 {failed} 个。",
+      "bannerScanning": "本机评分中——已完成 {scored} 个，剩余 {remaining} 个。",
+      "bannerDone": "扫描完成：AI 评分 {scored} 个，预筛过滤 {prescreened} 个。",
       "stop": "停止扫描",
       "undo": "撤销",
-      "failed": "扫描失败。请重新加载 Joblit 扩展后重试。",
-      "dismiss": "关闭扫描结果"
+      "failed": "扫描失败。",
+      "dismiss": "关闭扫描结果",
+      "bannerWaitingRunner": "{remaining} 个已排队，等待 Runner 接手。",
+      "setUpRunner": "配置 Runner"
     },
     "fitAssessment": {
       "title": "匹配证据",
