@@ -1,6 +1,6 @@
 # ADR-0006: Retire the standalone Career workspace
 
-- Status: Accepted
+- Status: Accepted. The deferred retention decision was taken on 2026-07-31 — the retained tables were dropped in `20260731120000_drop_extension_and_career_tables`; see ADR-0014.
 - Date: 2026-07-20
 
 ## Context
@@ -21,6 +21,9 @@ API surface without strengthening the primary workflow.
 - Retain existing interview, STAR-story, offer, and reminder database tables
   without active writers. Dropping stored user data requires a separate,
   explicitly approved retention migration.
+  **Resolved 2026-07-31:** that approval was given against measured row counts —
+  `InterviewPlan`, `StarStory` and `Offer` were empty and `FollowUpReminder`
+  held one row — and the tables were dropped. See ADR-0014.
 - Future interview or offer capabilities must live inside the relevant Jobs or
   Resume workflow instead of restoring another top-level workspace.
 
