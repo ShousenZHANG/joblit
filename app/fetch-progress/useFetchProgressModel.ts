@@ -8,6 +8,8 @@ import type {
 
 const SOURCE_LABEL: Record<string, string> = {
   jobspy: "LinkedIn",
+  // Nothing produces a `seek` lane any more, but stored receipts from before
+  // Seek was retired still do; without this they would render the raw key.
   seek: "Seek",
   nowcoder: "Nowcoder",
   global: "Global feeds",

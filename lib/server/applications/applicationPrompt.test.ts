@@ -5,7 +5,6 @@ const dependencies = vi.hoisted(() => ({
   jobUpdateMany: vi.fn(),
   getResumeProfile: vi.fn(),
   getRules: vi.fn(),
-  fetchSeekDescription: vi.fn(),
 }));
 
 vi.mock("@/lib/server/prisma", () => ({
@@ -25,11 +24,6 @@ vi.mock("@/lib/server/promptRuleTemplates", () => ({
   getActivePromptSkillRulesForUser: dependencies.getRules,
 }));
 
-vi.mock("@/lib/server/seek/fetchJobDescription", () => ({
-  SEEK_THIN_DESCRIPTION: 800,
-  isSeekJobUrl: (url: unknown) => typeof url === "string" && url.includes("seek.com"),
-  fetchSeekJobDescription: dependencies.fetchSeekDescription,
-}));
 
 import {
   ApplicationPromptError,
@@ -95,7 +89,6 @@ function arrangeSuccess(overrides?: Partial<{
   dependencies.getResumeProfile.mockResolvedValue(profile);
   dependencies.getRules.mockResolvedValue(rules);
   dependencies.jobUpdateMany.mockResolvedValue({ count: 1 });
-  dependencies.fetchSeekDescription.mockResolvedValue(null);
 }
 
 describe("application prompt service", () => {
@@ -168,30 +161,6 @@ describe("application prompt service", () => {
       expect(payload.promptVersion).toBe("v4-application-proposal");
     },
   );
-
-  it("upgrades and persists a thin Seek description before coverage and prompt construction", async () => {
-    arrangeSuccess({
-      description: "Thin teaser",
-      jobUrl: "https://www.seek.com.au/job/123",
-    });
-    dependencies.fetchSeekDescription.mockResolvedValue(
-      "Full Seek description with distributed systems ownership.",
-    );
-
-    const payload = await buildApplicationPromptForUser({
-      userId: USER_ID,
-      jobId: JOB_ID,
-      target: "resume",
-    });
-
-    expect(payload.prompt.input).toContain(
-      "Full Seek description with distributed systems ownership.",
-    );
-    expect(dependencies.jobUpdateMany).toHaveBeenCalledWith({
-      where: { id: JOB_ID, userId: USER_ID },
-      data: { description: "Full Seek description with distributed systems ownership." },
-    });
-  });
 
   it("binds prompt metadata to the full or lean prompt bytes", async () => {
     arrangeSuccess();

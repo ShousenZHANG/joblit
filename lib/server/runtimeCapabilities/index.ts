@@ -134,15 +134,6 @@ type AtsBoardsCapability =
       issues: readonly AtsBoardRegistryIssue[];
     };
 
-type SeekEnrichmentCapability =
-  | { kind: "enabled"; config: { userAgent: string } }
-  | { kind: "disabled"; reason: "SEEK_ENRICHMENT_DISABLED" }
-  | {
-      kind: "invalid";
-      reason: "SEEK_ENRICHMENT_FLAG_INVALID";
-      invalid: readonly ["SEEK_FETCH_ENABLED"];
-    };
-
 type BlobStorageCapability =
   | { kind: "enabled"; config: { token: string } }
   | { kind: "disabled"; reason: "BLOB_STORAGE_NOT_CONFIGURED" };
@@ -195,7 +186,6 @@ export type RuntimeCapabilities = {
   gemini: GeminiCapability;
   githubFetchRunDispatch: GithubFetchRunDispatchCapability;
   latexRenderer: LatexRendererCapability;
-  seekEnrichment: SeekEnrichmentCapability;
 };
 
 function trimmed(
@@ -319,33 +309,6 @@ function atsBoards(environment: RuntimeEnvironment): AtsBoardsCapability {
     reason: "ATS_BOARDS_NOT_CONFIGURED",
     boards: [],
     issues: [],
-  };
-}
-
-function seekEnrichment(
-  environment: RuntimeEnvironment,
-): SeekEnrichmentCapability {
-  const flag = trimmed(environment, "SEEK_FETCH_ENABLED")?.toLowerCase();
-  if (!flag || flag === "0" || flag === "false" || flag === "no") {
-    return {
-      kind: "disabled",
-      reason: "SEEK_ENRICHMENT_DISABLED",
-    };
-  }
-  if (flag !== "1" && flag !== "true" && flag !== "yes") {
-    return {
-      kind: "invalid",
-      reason: "SEEK_ENRICHMENT_FLAG_INVALID",
-      invalid: ["SEEK_FETCH_ENABLED"],
-    };
-  }
-  return {
-    kind: "enabled",
-    config: {
-      userAgent:
-        trimmed(environment, "SEEK_USER_AGENT") ??
-        "Joblit-Fetcher/1.0 (+https://www.joblit.tech)",
-    },
   };
 }
 
@@ -589,7 +552,6 @@ export function resolveRuntimeCapabilities(
     gemini: gemini(environment),
     githubFetchRunDispatch: githubFetchRunDispatch(environment),
     latexRenderer: latexRenderer(environment),
-    seekEnrichment: seekEnrichment(environment),
   };
 }
 

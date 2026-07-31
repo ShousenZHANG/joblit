@@ -24,11 +24,6 @@ import { createRequestId } from "@/lib/server/api/errorResponse";
 import { prisma } from "@/lib/server/prisma";
 import { getActivePromptSkillRulesForUser } from "@/lib/server/promptRuleTemplates";
 import { getResumeProfile } from "@/lib/server/resumeProfile";
-import {
-  fetchSeekJobDescription,
-  isSeekJobUrl,
-  SEEK_THIN_DESCRIPTION,
-} from "@/lib/server/seek/fetchJobDescription";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
 
 export const ApplicationPromptRequestSchema = z
@@ -258,19 +253,7 @@ export async function buildApplicationPromptForUser(input: {
   const candidate = buildResumePromptSnapshot(profile);
   const baseLatestBullets = candidate.experiences?.[0]?.bullets ?? [];
 
-  let description = job.description || "";
-  if (isSeekJobUrl(job.jobUrl) && description.trim().length < SEEK_THIN_DESCRIPTION) {
-    const fullDescription = await fetchSeekJobDescription(job.jobUrl);
-    if (fullDescription && fullDescription.length > description.length) {
-      description = fullDescription;
-      await prisma.job
-        .updateMany({
-          where: { id: parsed.data.jobId, userId: input.userId },
-          data: { description: fullDescription },
-        })
-        .catch(() => {});
-    }
-  }
+  const description = job.description || "";
 
   const coverage = computeTop3Coverage(description, baseLatestBullets);
   const jobInput = {

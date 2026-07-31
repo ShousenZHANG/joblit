@@ -48,10 +48,6 @@ const serverEnvSchema = z.object({
   KV_REST_API_URL: z.string().optional(),
   KV_REST_API_TOKEN: z.string().optional(),
   JOBLIT_ATS_BOARDS_JSON: z.string().optional(),
-  SEEK_FETCH_ENABLED: z
-    .enum(["", "0", "1", "false", "true", "no", "yes"])
-    .optional(),
-  SEEK_USER_AGENT: z.string().optional(),
 
   // Set to "true" only when the LaTeX renderer is reachable over plain HTTP.
   // The render token travels in a request header, so this puts a credential on

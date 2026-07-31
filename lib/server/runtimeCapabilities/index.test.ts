@@ -174,22 +174,6 @@ describe("resolveRuntimeCapabilities", () => {
     ]);
   });
 
-  it("keeps Seek enrichment off by default and owns its user agent", () => {
-    expect(resolveRuntimeCapabilities({}).seekEnrichment).toEqual({
-      kind: "disabled",
-      reason: "SEEK_ENRICHMENT_DISABLED",
-    });
-    expect(
-      resolveRuntimeCapabilities({
-        SEEK_FETCH_ENABLED: "yes",
-        SEEK_USER_AGENT: "  Joblit-Test/2.0  ",
-      }).seekEnrichment,
-    ).toEqual({
-      kind: "enabled",
-      config: { userAgent: "Joblit-Test/2.0" },
-    });
-  });
-
   it("reports Blob storage availability without exposing an implicit fallback", () => {
     expect(resolveRuntimeCapabilities({}).blobStorage).toEqual({
       kind: "disabled",

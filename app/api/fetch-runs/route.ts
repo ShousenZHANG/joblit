@@ -80,9 +80,8 @@ const AUSchema = z
       .optional()
       .default([])
       .transform(filterDescriptionExclusionRules),
-    // Only the JobSpy (LinkedIn) pipeline is server-side now; Seek search moved
-    // to the browser extension. Kept as a fixed field so run status lanes and
-    // the trigger dispatch keep reading source === "jobspy".
+    // JobSpy (LinkedIn) is the only AU pipeline. Kept as a fixed field so run
+    // status lanes and the trigger dispatch keep reading source === "jobspy".
     source: z.literal("jobspy").optional().default("jobspy"),
   })
   .refine((data) => (data.title ?? data.queries?.[0])?.trim(), {

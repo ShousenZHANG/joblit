@@ -446,9 +446,6 @@ function userFacingFetchError(
   if (/(challenge|cloudflare|status=403|status=429)/i.test(error)) {
     return "The job source is rate-limiting us right now \u2014 wait a moment and try again, or switch source.";
   }
-  if (/seek_disabled/i.test(error)) {
-    return "Seek fetching is currently turned off. Use LinkedIn, or try again later.";
-  }
   if (/(request failed|timeout|connectionpool|unreachable)/i.test(error)) {
     return "Couldn't reach the job source. Please retry shortly.";
   }
