@@ -15,6 +15,29 @@ Given a filtered set of `NEW` jobs, run a deterministic loop:
 5. Report only unrecoverable `FAILED` or intentional `SKIPPED` outcomes.
 6. Repeat until batch is complete.
 
+## Authentication
+
+Batch protocol routes accept either identity, and both resolve to the same
+user-scoped session context:
+
+- **Agent token** — `Authorization: Bearer <token>`, issued from the Joblit
+  `/extension` page and stored hashed. This is how an unattended agent runs.
+- **Session cookie** — an interactive browser session, for a human driving the
+  same endpoints.
+
+A presented Bearer token is authoritative: it never falls back to the cookie,
+so revoking a token immediately stops the agent even in a browser that is still
+signed in. An expired or revoked token returns `401`.
+
+Routes on this seam: `GET /api/application-batches/active`,
+`POST /api/application-batches/:id/run-once`, `POST /api/applications/prompt`,
+`POST /api/applications/manual-generate`, and the `/api/tailoring-runs/:id`
+route, cancel, and fail endpoints.
+
+The first-party implementation of this protocol is the Joblit Runner
+(`tools/runner`, see its [README](tools/runner/README.md)) — a dependency-free
+local worker that generates through a loopback Hermes gateway.
+
 ## Canonical APIs
 
 - Create batch: `POST /api/application-batches`
