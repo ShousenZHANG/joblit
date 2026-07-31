@@ -1,6 +1,6 @@
 # Data — `prisma/schema.prisma`
 
-28 models, 18 enums, 53 migrations. Client generates to `lib/generated/prisma`
+27 models, 18 enums, 54 migrations. Client generates to `lib/generated/prisma`
 and is reached through the singleton in `lib/server/prisma.ts:13` over
 `PrismaNeon`. Vocabulary is `CONTEXT.md`.
 
@@ -383,8 +383,8 @@ lease fenced by a random `ownerToken` (ADR-0005).
 
 ## Migration history
 
-53 migrations, `20260114042057_init_auth_jobs` →
-`20260731135000_schema_convergence_expand`.
+54 migrations, `20260114042057_init_auth_jobs` →
+`20260731140000_drop_extension_token_and_legacy_artifact_uniques`.
 Most are a single additive `ALTER TABLE`. The ones that changed a domain rule:
 
 | Migration | Change |
@@ -393,7 +393,7 @@ Most are a single additive `ALTER TABLE`. The ones that changed a domain rule:
 | `20260218170000_resume_profile_user_unique` | **Data-destructive.** Deleted all but the newest profile per user, then enforced one Master Resume Profile per user. |
 | `20260221124000_add_multi_resume_profiles` | Reversed that rule: added `name` + `revision` and `ActiveResumeProfile`. |
 | `20260719093000_drop_legacy_resume_profile_user_unique` | Four lines. Prisma's `DROP CONSTRAINT` had left the standalone index, so multi-profile was still blocked at the database level. |
-| `20260308120000_add_market_and_locale_fields` | Added Market and Resume Locale. Also added `Application.locale`, a column no longer in the schema and never dropped. |
+| `20260308120000_add_market_and_locale_fields` | Added Market and Resume Locale, including `Application.locale`; `20260731135000` later restored that column on production databases that had drifted. |
 | `20260308223201_add_locale_to_active_resume_profile` | Moved the active-profile key to `(userId, locale)`. |
 | `20260509000000_add_application_edit_workflow` | ADR-0001 / ADR-0002: the `ApplicationStatus` enum, `aiContent`, `aiContentHash`. Pre-existing rows are treated as finalized with NULL `aiContent`. |
 | `20260405000000_fix_field_mapping_nullable_unique` | Backfilled NULL → `''` because `NULL != NULL` made the upsert never match. |
@@ -407,6 +407,7 @@ Most are a single additive `ALTER TABLE`. The ones that changed a domain rule:
 | `20260731120000_drop_extension_and_career_tables` | Drops writer-less Career and browser-extension tables/enums after measured-data review; historical migrations and enum audit values remain immutable. |
 | `20260731130000_agent_runtime_expand_and_artifact_reconciliation` | Adds constrained `AgentCredential`, exact-replay `FitBatchImportReceipt`, and completes artifact physical-identity/checkpoint constraints without editing the already-applied ADR-0010 migration. |
 | `20260731135000_schema_convergence_expand` | Restores `Application.locale` with PostgreSQL's metadata-only constant default plus a validated check before `NOT NULL`, and restores the `ActiveResumeProfile.updatedAt` default so long-lived production and fresh history converge without a table rewrite. |
+| `20260731140000_drop_extension_token_and_legacy_artifact_uniques` | After the Agent Runtime deployment drained old browser-extension writers, drops `ExtensionToken` without `CASCADE` and removes legacy pathname/URL uniqueness only after validating the replacement physical-identity unique indexes and non-unique lookup indexes. |
 | `20260330000000_search_optimization` | The only Postgres-extension-installing migration: `pg_trgm` plus three GIN indexes. |
 
 After editing `prisma/schema.prisma`, run `npx prisma generate`.

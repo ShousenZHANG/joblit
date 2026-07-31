@@ -76,20 +76,54 @@ jobs:
           npx prisma migrate deploy
           npx prisma migrate diff --from-schema=prisma/schema.prisma --to-config-datasource --exit-code
 
-      - name: Prove the observed production drift converges through 130000 and 135000
+      - name: Prove production drift converges through expand and contract migrations
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_legacy
         run: |
           psql postgresql://ci:ci@localhost:5432/postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE ci_legacy'
           for migration in prisma/migrations/*/migration.sql; do
             case "$migration" in
-              *20260731130000*|*20260731135000*) break ;;
+              *20260731130000*|*20260731135000*|*20260731140000*) break ;;
             esac
             psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
           done
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'ALTER TABLE "Application" DROP COLUMN "locale"; ALTER TABLE "ActiveResumeProfile" ALTER COLUMN "updatedAt" DROP DEFAULT'
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'ALTER TABLE "Application" DROP COLUMN "locale"; ALTER TABLE "ActiveResumeProfile" ALTER COLUMN "updatedAt" DROP DEFAULT; CREATE UNIQUE INDEX "ApplicationArtifact_pathname_key" ON "ApplicationArtifact"("pathname"); CREATE UNIQUE INDEX "ApplicationArtifact_url_key" ON "ApplicationArtifact"("url")'
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260731130000_agent_runtime_expand_and_artifact_reconciliation/migration.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260731135000_schema_convergence_expand/migration.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF to_regclass('"ApplicationArtifact_pathname_key"') IS NULL
+              OR to_regclass('"ApplicationArtifact_url_key"') IS NULL
+            THEN
+              RAISE EXCEPTION 'expand deployment removed a legacy writer index';
+            END IF;
+          END
+          $$;
+          SQL
+          psql postgresql://ci:ci@localhost:5432/postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE ci_bad WITH TEMPLATE ci_legacy'
+          psql postgresql://ci:ci@localhost:5432/ci_bad -v ON_ERROR_STOP=1 -c 'DROP INDEX "ApplicationArtifact_pathname_key"; CREATE INDEX "ApplicationArtifact_pathname_key" ON "ApplicationArtifact"("pathname")'
+          if psql postgresql://ci:ci@localhost:5432/ci_bad -v ON_ERROR_STOP=1 -f prisma/migrations/20260731140000_drop_extension_token_and_legacy_artifact_uniques/migration.sql; then
+            echo 'contract migration accepted a malformed legacy index' >&2
+            exit 1
+          fi
+          psql postgresql://ci:ci@localhost:5432/ci_bad -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF to_regclass('"ExtensionToken"') IS NULL
+              OR NOT EXISTS (
+                SELECT 1
+                FROM pg_index
+                WHERE indexrelid = to_regclass('"ApplicationArtifact_pathname_key"')
+                  AND NOT indisunique
+              )
+            THEN
+              RAISE EXCEPTION 'failed contract migration did not roll back';
+            END IF;
+          END
+          $$;
+          SQL
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260731140000_drop_extension_token_and_legacy_artifact_uniques/migration.sql
           npx prisma migrate diff --from-schema=prisma/schema.prisma --to-config-datasource --exit-code
 
       - name: Audit production dependencies

@@ -36,6 +36,17 @@ const schemaConvergenceMigration = readFileSync(
   "utf8",
 );
 
+const agentContractMigration = readFileSync(
+  join(
+    process.cwd(),
+    "prisma",
+    "migrations",
+    "20260731140000_drop_extension_token_and_legacy_artifact_uniques",
+    "migration.sql",
+  ),
+  "utf8",
+);
+
 type LegacyIdentityCase = {
   name: string;
   url: string;
@@ -345,6 +356,64 @@ describe("agent runtime and artifact reconciliation migration", () => {
     }
     expect(reconciliationMigration).toContain("indpred IS NULL");
     expect(reconciliationMigration).toContain("indexprs IS NULL");
+  });
+});
+
+describe("agent runtime contract migration", () => {
+  it("is atomic and refuses to wait indefinitely for old writers", () => {
+    expect(agentContractMigration.trimStart()).toMatch(/^--[\s\S]*?\nBEGIN;/);
+    expect(agentContractMigration.trimEnd()).toMatch(/COMMIT;$/);
+    expect(agentContractMigration).toContain(
+      "SET LOCAL lock_timeout = '15s'",
+    );
+    expect(agentContractMigration).toContain(
+      "SET LOCAL statement_timeout = '5min'",
+    );
+    expect(agentContractMigration).toContain(
+      'LOCK TABLE "ExtensionToken" IN ACCESS EXCLUSIVE MODE',
+    );
+    expect(agentContractMigration).toContain(
+      'LOCK TABLE "AgentCredential" IN ACCESS SHARE MODE',
+    );
+  });
+
+  it("proves replacement artifact identities before removing legacy uniqueness", () => {
+    for (const index of [
+      "ApplicationArtifact_storageIdentity_key",
+      "ApplicationArtifact_provisionalIdentity_key",
+      "ApplicationArtifact_pathname_idx",
+      "ApplicationArtifact_url_idx",
+    ]) {
+      expect(agentContractMigration).toContain(`to_regclass('"${index}"')`);
+    }
+    expect(agentContractMigration).toContain(
+      "ApplicationArtifact replacement indexes are invalid",
+    );
+    expect(agentContractMigration).toContain(
+      "ApplicationArtifact identity checks are invalid",
+    );
+    expect(agentContractMigration).toContain(
+      "ApplicationArtifact legacy pathname index has an unexpected shape",
+    );
+    expect(agentContractMigration).toContain(
+      "ApplicationArtifact legacy URL index has an unexpected shape",
+    );
+  });
+
+  it("drops only the retired credential table and validated legacy indexes", () => {
+    expect(agentContractMigration).toContain('DROP TABLE "ExtensionToken";');
+    expect(agentContractMigration).not.toContain(
+      'DROP TABLE "ExtensionToken" CASCADE',
+    );
+    expect(agentContractMigration).toContain(
+      'DROP INDEX IF EXISTS "ApplicationArtifact_pathname_key"',
+    );
+    expect(agentContractMigration).toContain(
+      'DROP INDEX IF EXISTS "ApplicationArtifact_url_key"',
+    );
+    expect(agentContractMigration).toContain(
+      "Agent runtime contract migration did not converge",
+    );
   });
 });
 

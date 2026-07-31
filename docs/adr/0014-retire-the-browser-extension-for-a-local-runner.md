@@ -91,10 +91,12 @@ gateway directly over loopback.
 - `AgentCredential` is a separate model and trust domain, not a rename-only
   reuse of `ExtensionToken`. It records credential version, audience,
   capabilities, expiry, revocation, and last use; only a SHA-256 hash is stored.
-  Existing `jfext_` tokens are not accepted by agent routes. The
-  migration-first compatibility deployment intentionally retains the retired
-  table while old instances drain; a separate contract deployment then drops
-  `ExtensionToken`, which is not part of the target model.
+  Existing `jfext_` tokens are not accepted by agent routes. The expand
+  deployment retained the retired table while old instances drained; the
+  separately released
+  `20260731140000_drop_extension_token_and_legacy_artifact_uniques` contract
+  migration then dropped `ExtensionToken`, which is not part of the target
+  model.
 - `FieldMappingRule`, `LocalAiSetting` and `FormSubmission` were dropped
   outright in `20260731120000_drop_extension_and_career_tables`, together with
   the Career-workspace tables ADR-0006 had deferred. The decision was taken

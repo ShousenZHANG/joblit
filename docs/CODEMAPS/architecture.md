@@ -241,11 +241,11 @@ in the clear — treat TLS in front of the renderer as the actual fix.
 ```
 app/(marketing)  app/(auth)  app/(app)        ← React, next-intl, React Query
                                   │
-                             app/api/**        ← 69 route handlers
+                             app/api/**        ← 71 route handlers
                                   │
                             lib/server/**      ← business logic
                                   │
-                    prisma (Neon serverless)   ← 28 models
+                    prisma (Neon serverless)   ← 27 models
 ```
 
 `lib/shared/**` is imported by both sides and is the only place a contract may

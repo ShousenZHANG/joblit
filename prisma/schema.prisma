@@ -171,7 +171,6 @@ model User {
   applicationBatches     ApplicationBatch[]
   applicationBatchTasks  ApplicationBatchTask[]
   tailoringRuns          TailoringRun[]
-  extensionTokens        ExtensionToken[]
   agentCredentials       AgentCredential[]
   fitBatchImportReceipts FitBatchImportReceipt[]
   applicationEvents      ApplicationEvent[]
@@ -797,22 +796,6 @@ model PromptRuleTemplate {
 
   @@unique([userId, version])
   @@index([userId, isActive, updatedAt])
-}
-
-model ExtensionToken {
-  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId String @db.Uuid
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  tokenHash  String    @unique // SHA-256 hash of the actual token
-  name       String    @default("Joblit Runner")
-  lastUsedAt DateTime?
-  expiresAt  DateTime
-  revokedAt  DateTime?
-
-  createdAt DateTime @default(now())
-
-  @@index([userId, revokedAt])
 }
 
 model AgentCredential {
