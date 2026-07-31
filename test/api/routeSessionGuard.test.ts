@@ -67,9 +67,6 @@ describe("route session seam", () => {
   it("routes every session-authenticated handler through the wrapper", () => {
     const offenders = ROUTES.filter(({ path, source }) => {
       if (NON_SESSION_ROUTES.has(path)) return false;
-      if (path.startsWith("app/api/ext/")) {
-        return !source.includes("withExtensionRoute");
-      }
       if (source.includes("requireExtensionToken")) return false;
       // withAgentRoute is the dual-identity wrapper (session or bearer) used
       // by the batch-protocol routes the local Runner drives.

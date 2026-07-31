@@ -74,10 +74,12 @@ reintroduced.
 - `fetchRolePacks.config.json` — Role category definitions
 - `canonicalizeJobUrl`, `parseCnSalary`, `fetchExclusionCriteria` — Job normalization helpers
 
-### Prisma Models (29)
+### Prisma Models (33)
 
 Core workflow: `Job`, `FetchRun`, `ApplicationBatch`, `ApplicationBatchTask`, `Application`, `ResumeProfile`, `ActiveResumeProfile`, `PromptRuleTemplate`  
 Provenance: `ApplicationEvent` (immutable ledger, carries company/title snapshots so it outlives the Job), `EvidenceSnapshot`, `ClaimEvidence`  
+Tailoring acceptance (ADR-0009): `TailoringRun`, `TailoringRunReceipt`  
+Artifact lifecycle (ADR-0010): `ApplicationArtifact`, `ApplicationArtifactInventoryCheckpoint`  
 Auth: `User`, `Account`, `Session`, `ExtensionToken`  
 Fetch execution and sources: `FetchRunCommitReceipt`, `SourceHealth`, `AtsBoardSource`
 Supporting: `DeletedJobUrl` (dedup tombstone), `DailyCheckin`, `FormSubmission` (the ledger a future agent submission path writes to), `OnboardingState`, `DiscoverVideoCache`  

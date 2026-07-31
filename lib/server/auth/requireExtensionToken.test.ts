@@ -24,7 +24,7 @@ function makeRequest(token?: string): Request {
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
-  return new Request("https://example.com/api/ext/profile", { headers });
+  return new Request("https://example.com/api/applications/prompt", { headers });
 }
 
 function makeValidToken() {

@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * The agent token API is the Runner's front door. It replaces
- * `/api/ext/auth/token`, which lived inside the extension ingress and is being
- * removed with it.
+ * The agent token API is the Runner's front door. It replaced
+ * `/api/ext/auth/token`, which lived inside the extension ingress and was
+ * removed with it (ADR-0014).
  *
  * Session-only by construction: minting a token from a token would let a
  * leaked credential renew itself past revocation, so `withSessionRoute` — not
