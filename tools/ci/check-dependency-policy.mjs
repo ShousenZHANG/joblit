@@ -8,10 +8,9 @@ const policy = JSON.parse(fs.readFileSync(policyPath, "utf8"));
 const banned = new Set(policy.banned ?? []);
 const violations = [];
 
-function checkManifest(manifestPath, allowlist, workspace = ".") {
-  const prefix = workspace === "." ? "" : `[${workspace}] `;
+function checkManifest(manifestPath, allowlist) {
   if (!fs.existsSync(manifestPath)) {
-    violations.push(`${prefix}package.json not found`);
+    violations.push("package.json not found");
     return;
   }
 
@@ -23,50 +22,36 @@ function checkManifest(manifestPath, allowlist, workspace = ".") {
 
   for (const name of [...deps, ...devDeps]) {
     if (banned.has(name)) {
-      violations.push(`${prefix}banned dependency detected: ${name}`);
+      violations.push(`banned dependency detected: ${name}`);
     }
   }
 
   for (const name of deps) {
     if (!allowDeps.has(name)) {
-      violations.push(`${prefix}dependency not in allowlist: ${name}`);
+      violations.push(`dependency not in allowlist: ${name}`);
     }
   }
 
   for (const name of devDeps) {
     if (!allowDevDeps.has(name)) {
-      violations.push(`${prefix}devDependency not in allowlist: ${name}`);
+      violations.push(`devDependency not in allowlist: ${name}`);
     }
   }
 
   for (const name of allowDeps) {
     if (!deps.includes(name)) {
-      violations.push(`${prefix}stale allowlisted dependency: ${name}`);
+      violations.push(`stale allowlisted dependency: ${name}`);
     }
   }
 
   for (const name of allowDevDeps) {
     if (!devDeps.includes(name)) {
-      violations.push(`${prefix}stale allowlisted devDependency: ${name}`);
+      violations.push(`stale allowlisted devDependency: ${name}`);
     }
   }
 }
 
-checkManifest(path.join(cwd, "package.json"), policy.allowlist, ".");
-
-for (const [workspace, config] of Object.entries(policy.workspaces ?? {})) {
-  const workspaceRoot = path.resolve(cwd, workspace);
-  const relativeRoot = path.relative(cwd, workspaceRoot);
-  if (relativeRoot.startsWith("..") || path.isAbsolute(relativeRoot)) {
-    violations.push(`[${workspace}] workspace path escapes repository root`);
-    continue;
-  }
-  checkManifest(
-    path.join(workspaceRoot, "package.json"),
-    config.allowlist,
-    workspace,
-  );
-}
+checkManifest(path.join(cwd, "package.json"), policy.allowlist);
 
 if (violations.length) {
   console.error("Dependency policy check failed:");

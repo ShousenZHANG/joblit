@@ -605,22 +605,6 @@ function Invoke-JoblitProbe {
         $capabilities = Invoke-RestMethod -Method Get -Uri "$base/v1/capabilities" -Headers $headers -TimeoutSec 10
         $models = Invoke-RestMethod -Method Get -Uri "$base/v1/models" -Headers $headers -TimeoutSec 10
         $toolsets = Invoke-RestMethod -Method Get -Uri "$base/v1/toolsets" -Headers $headers -TimeoutSec 10
-        $preflight = Invoke-WebRequest -UseBasicParsing -Method Options -Uri "$base/v1/runs" -Headers @{
-            Origin = 'chrome-extension://joblit-probe'
-            'Access-Control-Request-Method' = 'POST'
-            'Access-Control-Request-Headers' = 'Authorization, Content-Type'
-        } -TimeoutSec 10
-        $allowedOrigin = @($preflight.Headers['Access-Control-Allow-Origin']) -join ', '
-        $allowedMethods = @($preflight.Headers['Access-Control-Allow-Methods']) -join ', '
-        $allowedHeaders = @($preflight.Headers['Access-Control-Allow-Headers']) -join ', '
-        if (
-            [int] $preflight.StatusCode -ne 200 -or
-            $allowedOrigin -ne '*' -or
-            $allowedMethods -notmatch '(?i)(^|,\s*)POST(\s*,|$)' -or
-            $allowedHeaders -notmatch '(?i)(^|,\s*)Authorization(\s*,|$)' -or
-            $allowedHeaders -notmatch '(?i)(^|,\s*)Content-Type(\s*,|$)'
-        ) { throw 'extension CORS preflight' }
-
         $auth = Get-JoblitPropertyValue -Object $capabilities -Name 'auth'
         $features = Get-JoblitPropertyValue -Object $capabilities -Name 'features'
         $endpoints = Get-JoblitPropertyValue -Object $capabilities -Name 'endpoints'

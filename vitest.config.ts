@@ -56,9 +56,6 @@ export default defineConfig({
       "**/node_modules/**",
       "**/dist/**",
       "**/.next/**",
-      // Local tooling / vendored skill packs ship their own ad-hoc test
-      // harnesses that call `process.exit` and are not product code.
-      "everything-claude-code/**",
       // Hermes package policy suites use Node's built-in test runner.
       "tools/hermes/**/*.test.mjs",
       // Deployment-order policy uses Node's built-in test runner.
