@@ -10,8 +10,8 @@ Vocabulary is `CONTEXT.md`. Route-layer facts live in
 
 | Directory | Owns | Entry points |
 |---|---|---|
-| `ai/` | Prompt construction, provider calls, the Gemini Tailoring path, evidence/review ledger, cover quality, fit scoring, Skill Pack V3 | `tailorApplication.ts` `tailorApplicationContent`, `buildPrompt.ts`, `providers.ts` `callProvider`, `evidenceLedger.ts` `attachEvidenceAndReview`, `promptContract.ts`, `skillPack.ts` `buildSkillPackV3Files` |
-| `applications/` | Application lifecycle: generation acceptance, target-aware AI Content evolution, canonical resume composition, finalize render, artifact commit, ATS validation, advisory lock, review ledger, `ApplicationEvent` append | `applicationGeneration.ts` `acceptApplicationGeneration`, `applicationAiContentAggregate.ts` `evolveApplicationAiContent`, `applicationResumeComposition.ts` `composeApplicationResumeRenderInput`, `commitApplicationArtifact.ts` `commitApplicationArtifact`, `executeServerBatchTailoringTask.ts`, `manualImportArtifact.ts`, `finalizeApplication.ts`, `persistReviewLedger.ts`, `applicationMutationLock.ts`, `atsPdfValidator.ts` |
+| `ai/` | Prompt construction, evidence/review ledger, cover quality, fit scoring, Skill Pack V3. No provider client — generation is local-first (ADR-0015) | `buildPrompt.ts`, `evidenceLedger.ts` `attachEvidenceAndReview`, `promptContract.ts`, `skillPack.ts` `buildSkillPackV3Files` |
+| `applications/` | Application lifecycle: generation acceptance, target-aware AI Content evolution, canonical resume composition, finalize render, artifact commit, ATS validation, advisory lock, review ledger, `ApplicationEvent` append | `applicationGeneration.ts` `acceptApplicationGeneration`, `applicationAiContentAggregate.ts` `evolveApplicationAiContent`, `applicationResumeComposition.ts` `composeApplicationResumeRenderInput`, `commitApplicationArtifact.ts` `commitApplicationArtifact`, `manualImportArtifact.ts`, `finalizeApplication.ts`, `persistReviewLedger.ts`, `applicationMutationLock.ts`, `atsPdfValidator.ts` |
 | `artifacts/` | ADR-0010 Application Blob lifecycle, account-erasure hooks, Vercel adapter, inventory, claim/call/fenced settle | `applicationArtifactLifecycle.ts` `prepareApplicationArtifactsForAccountErasure` / `purgeDeletedApplicationArtifactsForErasedUser`, `artifactReconciler.ts`, `artifactBlobPort.ts`, `vercelBlobAdapter.ts` |
 | `applicationBatches/` | Codex Batch state machine: claim, complete, cancel, retry | `runner.ts:169` `claimNextBatchTask`, `:282` `completeBatchTask`, `:334`, `:385`; `codexRunContext.ts:81`/`:189`/`:245`; `batchProgress.ts:9` |
 | `jobs/` | Job import/list/search/delete/status, fit leasing and receipt-backed settlement, cooldown, SimHash dedup, posting risk, liveness, market scoping | `jobImportService.ts`, `jobListService.ts`, `jobSearchService.ts`, `jobDeleteService.ts`, `fitRunService.ts`, `fitBatchImport.ts`, `jobMutationLock.ts`, `postingRisk.ts` |
@@ -38,26 +38,11 @@ client.
 
 ## The Tailoring call chain
 
-### Path A — durable server auto-execute
+### Path A — retired (server auto-execute)
 
-Entry: `executeServerBatchTailoringTask` from the Application Batch execute
-route when the server-batch capability is enabled. The interface requires the
-claimed Batch, task, issue, and attempt identity; the retired session generate
-routes are not part of this call chain.
-
-1. `getResumeProfile(userId, {locale})` — `resumeProfile.ts:170`
-2. `buildResumePdfForJob` — `buildResumePdf.ts:42`
-3. `mapResumeProfile` → LaTeX-escaped render input — `mapResumeProfile.ts:30`
-4. `tailorApplicationContent` — `tailorApplication.ts:282`
-5. Skill rules: `getActivePromptSkillRulesForUser` — `promptRuleTemplates.ts:117`
-6. No `GEMINI_API_KEY` → deterministic fallback (`tailorApplication.ts:100`), unless `requireIndependentReview` → throws `INDEPENDENT_REVIEW_UNAVAILABLE`
-7. `buildCoverEvidenceContext` — `coverContext.ts:27`
-8. `buildTailorPrompts` builds independent Resume and Cover prompts from the canonical builders; every untrusted field passes `sanitizePromptText`
-9. Two target-specific `callProviderWithFallback` calls run concurrently, then strict `parseResumeProviderOutput` / `parseCoverProviderOutput` decode the current contracts
-10. Optional Cover gate, rewrite pass, and combined independent-review pass
-11. `acceptApplicationGeneration(source = "server_batch")` owns strict contract acceptance, Quality Gates, provenance, evidence, and canonical `AiContent`
-12. `composeApplicationResumeRenderInput` composes the accepted Resume delta onto the Master Resume Profile
-13. `renderResumeTex` / `renderCoverLetterTex`, then `compileLatexToPdf`
+Removed with the Gemini provider chain (ADR-0015). The server never runs a
+model; `test/architecture/legacyApplicationGenerateRoute.test.ts` keeps every
+server-side generation surface from returning.
 
 ### Path B — manual import / Runner
 
@@ -162,7 +147,6 @@ same transaction marks the linked task `SUCCEEDED`. Neither task `PATCH` nor
 
 | Caller | Owns | `mergeTarget` | CAS |
 |---|---|---:|---:|
-| `executeServerBatchTailoringTask.ts` | authoritative missing Batch targets | only for partial recovery | baseline `expectedHash` |
 | `manual-generate/route.ts` | one target | yes, with required `reviewContext` | no |
 | `finalize/route.ts` | already-canonical full aggregate, one rendered artifact | no | `expectedHash` |
 
@@ -279,7 +263,6 @@ module-level in-memory. Documented at their definitions.
 
 | Destination | Module | Through `safeFetch`? |
 |---|---|---|
-| Gemini | `providers.ts:143` | Yes — host pinned, no redirects, 2 MiB, 30 s |
 | OpenAI | `providers.ts:112` | Yes — reachable only from tests |
 | Anthropic | `providers.ts:182` | Yes — reachable only from tests |
 | LaTeX render service | `compilePdf.ts:68` | Yes — host pre-parsed, 12 MiB, 20 s. Plain HTTP only under `LATEX_RENDER_ALLOW_INSECURE_HTTP` |
@@ -318,7 +301,7 @@ README; `cnFetch/adapters/nowcoder.ts:8` says so explicitly.
 A bare `Error` whose message *is* the code remains in internal provider,
 composition, and evidence paths. Public server-batch ownership, profile,
 concurrency, and persistence failures are translated to `AppError` by
-`executeServerBatchTailoringTask`; provider details never become task output.
+the retired server auto-execute path; provider details never became task output.
 
 Two of these do not reach the client as a typed error:
 `MASTER_PROFILE_MISSING` and `COVER_PARAGRAPHS_INCOMPLETE` escape the finalize

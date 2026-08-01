@@ -6,7 +6,7 @@
  * describe the same document. Before this module the rule was written eleven
  * times and three of those copies disagreed:
  *
- *   - `executeServerBatchTailoringTask` returned "" for an unaccepted cover
+ *   - the retired server batch generator returned "" for an unaccepted cover
  *     paragraph, while `finalizeApplication` rendered it. The same Application
  *     could produce two different cover letters depending on which path built
  *     the PDF.

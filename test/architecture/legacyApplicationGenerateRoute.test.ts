@@ -1,78 +1,30 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-describe("legacy application generation routes", () => {
-  it("does not expose the non-durable resume generation endpoint", () => {
-    expect(
-      existsSync(
-        join(
-          process.cwd(),
-          "app",
-          "api",
-          "applications",
-          "generate",
-          "route.ts",
-        ),
-      ),
-    ).toBe(false);
-  });
+/**
+ * Generation is local-first: the Runner drives the user's own model through
+ * a loopback Hermes gateway, and the manual external-model import is the
+ * zero-install path. The server holds no model key and exposes no generation
+ * endpoint — these guards keep every retired server-side generation surface
+ * from coming back (see ADR-0015).
+ */
 
-  it("does not expose the non-durable cover generation endpoint", () => {
-    expect(
-      existsSync(
-        join(
-          process.cwd(),
-          "app",
-          "api",
-          "applications",
-          "generate-cover-letter",
-          "route.ts",
-        ),
-      ),
-    ).toBe(false);
-  });
+const RETIRED = [
+  ["app", "api", "applications", "generate", "route.ts"],
+  ["app", "api", "applications", "generate-cover-letter", "route.ts"],
+  ["app", "api", "application-batches", "[id]", "execute", "route.ts"],
+  ["lib", "server", "applications", "generateApplicationArtifacts.ts"],
+  ["lib", "server", "applications", "executeServerBatchTailoringTask.ts"],
+  ["lib", "server", "ai", "tailorApplication.ts"],
+  ["lib", "server", "ai", "providers.ts"],
+] as const;
 
-  it("keeps server generation behind the receipt-backed batch interface", () => {
-    const legacyService = join(
-      process.cwd(),
-      "lib",
-      "server",
-      "applications",
-      "generateApplicationArtifacts.ts",
-    );
-    const batchService = join(
-      process.cwd(),
-      "lib",
-      "server",
-      "applications",
-      "executeServerBatchTailoringTask.ts",
-    );
-    const executeRoute = join(
-      process.cwd(),
-      "app",
-      "api",
-      "application-batches",
-      "[id]",
-      "execute",
-      "route.ts",
-    );
-
-    expect(existsSync(legacyService)).toBe(false);
-    expect(existsSync(batchService)).toBe(true);
-
-    const serviceSource = readFileSync(batchService, "utf8");
-    const inputInterface = serviceSource.match(
-      /export type ExecuteServerBatchTailoringTaskInput = \{([\s\S]*?)\n\};/,
-    )?.[1];
-    expect(inputInterface).toBeDefined();
-    expect(inputInterface).not.toContain("batch?:");
-    expect(inputInterface).not.toContain("acceptedTargets:");
-    expect(inputInterface).not.toContain("remainingTargets:");
-    expect(serviceSource).toContain("expectedHash");
-
-    const routeSource = readFileSync(executeRoute, "utf8");
-    expect(routeSource).toContain("executeServerBatchTailoringTask");
-    expect(routeSource).not.toContain("generateApplicationArtifactsForJob");
-  });
+describe("server-side generation stays retired", () => {
+  it.each(RETIRED.map((segments) => [segments.join("/"), segments] as const))(
+    "does not expose %s",
+    (_label, segments) => {
+      expect(existsSync(join(process.cwd(), ...segments))).toBe(false);
+    },
+  );
 });

@@ -134,16 +134,16 @@ the reversible path is `NEW → REJECTED`.
 
 ### 3. Tailoring — Job + Master Resume Profile → Application
 
-Two durable generation paths converge on one persisted Application aggregate
-and Edit model (ADR-0002).
+Generation is local-first (ADR-0015): the server issues the prompt and
+accepts the output, but never runs a model. One durable path feeds the
+persisted Application aggregate and Edit model (ADR-0002).
 
 ```
-Path A (server auto-execute)     Path B (manual / Agent Runner)
-  executeServerBatchTailoringTask  buildApplicationPromptForUser
-  callProvider("gemini")            [external LLM runs the prompt]
-  acceptApplicationGeneration      parse*Output + Quality Gate
-        │                                 │
-        └────────► attachEvidenceAndReview ◄────────┘
+  buildApplicationPromptForUser
+  [the user's model runs the prompt — Runner via loopback Hermes, or manual]
+  parse*Output + Quality Gate
+                          │
+                 attachEvidenceAndReview
                           │
                    DRAFT Application
                           │
@@ -166,7 +166,7 @@ ordering (`lib/server/applications/applicationAiContentAggregate.ts`).
 CV and Cover have independent generation provenance, but evidence, review, and
 `aiContentHash` still cover the complete aggregate.
 
-Both paths share the current strict output contract: Resume emits a summary
+The path enforces the current strict output contract: Resume emits a summary
 plus zero to three added latest-experience bullets, while Cover emits only its
 three body paragraphs. Existing bullets and skills are composed from the Master
 Resume Profile rather than copied through model output. Skill Pack V3
@@ -188,10 +188,8 @@ point of no return: its transaction commits the Application mutation,
 immutable `TailoringRunReceipt`, terminal `TailoringRun`, and
 `ApplicationBatchTask = SUCCEEDED` together. Task `PATCH` and `run-once`
 completion input therefore accept only `FAILED`/`SKIPPED` with the claimed
-`attemptId`. The separate, feature-gated `/execute` route invokes
-`executeServerBatchTailoringTask` through the same acceptance boundary. The
-service derives missing targets from the locked Tailoring Run and compares the
-pre-generation Application hash before committing.
+`attemptId`. The retired `/execute` server auto-generation route was removed with the
+Gemini provider chain (ADR-0015).
 For protocol-v1 tasks, the same transaction also writes
 `completionAttemptId = executionAttemptId`; a database constraint rejects an
 old worker's unreceipted success after a new claim.

@@ -442,7 +442,7 @@ test/                 API + server test suites
 - npm **>= 10**
 - PostgreSQL database (Neon recommended; any Postgres 14+ works)
 - Vercel Blob token for FINAL export and artifact reconciliation
-- Optional: Gemini API key; a local Hermes gateway for the Runner
+- Optional: a local Hermes gateway for the Runner
 
 ### Setup
 
@@ -527,9 +527,7 @@ A complete template lives in [`.env.example`](./.env.example).
 |---|---|
 | `DIRECT_URL` / `DATABASE_URL_UNPOOLED` / `POSTGRES_URL_NON_POOLING` | Optional explicit unpooled PostgreSQL endpoint for Prisma migrations, resolved in that order. If only a standard Neon `-pooler` URL exists, Joblit derives its documented direct host; other pooled providers must configure one |
 | `BLOB_READ_WRITE_TOKEN` | Enables FINAL PDF/photo persistence and artifact reconciliation; DRAFT edits do not require Blob |
-| `GEMINI_API_KEY` / `GEMINI_MODEL` | AI provider |
 | `GITHUB_OWNER` / `GITHUB_REPO` / `GITHUB_TOKEN` / `GITHUB_WORKFLOW_FILE` / `GITHUB_REF` | Fetch workflow dispatch; owner, repository, and token are required together |
-| `ENABLE_BATCH_EXECUTE_AUTOGEN` | Default-off server-side Application Batch execution; only `1` / `true` enables it |
 | `JOBLIT_ATS_BOARDS_JSON` | Credential-free deployment-owned ATS board registry |
 | `JOBLIT_WEB_URL` | Public URL of this deployment |
 | `YOUTUBE_API_KEY` | Discover-page video pipeline |

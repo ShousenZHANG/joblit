@@ -363,7 +363,7 @@ key derivation is a rolling-deployment compatibility change, not a refactor.
 | Namespace | Constant | Key | Taken by |
 |---|---|---|---|
 | `JOBJ` `0x4a4f424a` | `db/advisoryLock.ts`, adapter `jobs/jobMutationLock.ts` | `stableInt32(userId)` | `deleteJob`, `batchDeleteJobs`, `persistPreparedJobImport` — serializes generic and FetchRun imports against permanent delete |
-| `JOBA` `0x4a4f4241` | `db/advisoryLock.ts`, adapter `applications/applicationMutationLock.ts` | `stableInt32("${userId}:${jobId}")` | Both delete paths, `executeServerBatchTailoringTask`, `manual-generate`, `draft`, `finalize`, `discard` |
+| `JOBA` `0x4a4f4241` | `db/advisoryLock.ts`, adapter `applications/applicationMutationLock.ts` | `stableInt32("${userId}:${jobId}")` | Both delete paths, `manual-generate`, `draft`, `finalize`, `discard` |
 | `JOBC` `0x4a4f4243` | `applications/applicationEvents.ts:31` | same | `appendApplicationEvent`, in a `Serializable` transaction. `bulkAppendStatusEvents` takes **no** advisory lock — its boundary is `updateManyAndReturn` |
 | `JOBF` `0x4a4f4246` | `jobs/fitRunService.ts:23` | `stableInt32(userId)` | `nextFitBatch` — leases the next triage batch |
 | `FITB` `0x46495442` | `jobs/fitBatchImport.ts` | `stableInt32(issueKey)` | Serializes first write/exact replay for one Fit settlement before Job scores and receipt commit together |

@@ -224,11 +224,4 @@ export function evaluateCoverQuality(input: EvaluateCoverQualityInput): CoverQua
   };
 }
 
-export function buildCoverQualityRewriteBrief(report: CoverQualityReport) {
-  if (report.passed) return "";
-  return [
-    "Quality gate failed. Rewrite once and fix every item below before returning final JSON:",
-    ...report.issues.map((issue, index) => `${index + 1}. [${issue.code}] ${issue.message}`),
-  ].join("\n");
-}
 

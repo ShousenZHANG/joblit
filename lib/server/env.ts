@@ -23,8 +23,6 @@ const serverEnvSchema = z.object({
   GITHUB_SECRET: nonEmpty,
   // Optional integrations — present in some deploys only. Declared optional so
   // their absence is never a boot failure.
-  GEMINI_API_KEY: z.string().optional(),
-  GEMINI_MODEL: z.string().optional(),
   BLOB_READ_WRITE_TOKEN: z.string().optional(),
   YOUTUBE_API_KEY: z.string().optional(),
   CRON_SECRET: z.string().optional(),
@@ -35,9 +33,6 @@ const serverEnvSchema = z.object({
   GITHUB_REF: z.string().optional(),
   JOBLIT_WEB_URL: z.string().optional(),
   NEXTAUTH_URL: z.string().optional(),
-  ENABLE_BATCH_EXECUTE_AUTOGEN: z
-    .enum(["", "0", "1", "false", "true"])
-    .optional(),
   ARTIFACT_RECONCILE_ENABLED: z
     .enum(["", "0", "1", "false", "true"])
     .optional(),

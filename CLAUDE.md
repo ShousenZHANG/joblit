@@ -30,8 +30,8 @@ npm run deps:policy       # Check dependency policy
 ### Key Data Flow
 
 1. **Job Intake**: `FetchRun` tasks persist a strict market-specific config, then dispatch the AU GitHub Actions worker or run CN/GLOBAL adapters in-process. `executeInlineFetchRun` owns the lifecycle for both inline markets; discovery adapters only return a terminal plan. All results enter `commitFetchRun`, where ordered receipts, Jobs, counters, and terminal state commit atomically with dedupe on `userId + jobUrl` and tombstone filtering (`DeletedJobUrl`)
-2. **Tailoring**: `Job` + `ResumeProfile` → AI prompt (via versioned `PromptRuleTemplate`) → external model imported through `/api/applications/manual-generate`, or receipt-backed server batch generation through `executeServerBatchTailoringTask` → persisted Application aggregate → PDF render via LaTeX external service
-3. **Batch**: External Codex atomically completes/claims tasks through `/api/application-batches/[id]/run-once` and persists output through `manual-generate`; feature-gated server auto-execute uses `/execute` → `executeServerBatchTailoringTask`. That interface requires Batch, task, issue, and attempt identity and commits with an Application content-hash CAS.
+2. **Tailoring**: `Job` + `ResumeProfile` → AI prompt (via versioned `PromptRuleTemplate`) → the user's model runs it — the Runner through the loopback Hermes gateway, or any external model pasted back by hand — and the output is imported through `/api/applications/manual-generate` → persisted Application aggregate → PDF render via LaTeX external service. The server holds no model key and runs no generation (ADR-0015)
+3. **Batch**: External Codex and the Runner atomically complete/claim tasks through `/api/application-batches/[id]/run-once` and persist output through `manual-generate`. That interface requires Batch, task, issue, and attempt identity and commits with an Application content-hash CAS. The retired `/execute` server auto-generation route must not be reintroduced (ADR-0015).
 4. **Runner**: The local Runner (`tools/runner/`) authenticates with an `AgentCredential`, drains the fit queue and the active tailoring batch, and calls the user's Hermes gateway over loopback. Fit results settle behind `FitBatchImportReceipt`; tailoring imports settle behind `TailoringRunReceipt` and the exact attempt fence. Unknown network outcomes replay the same receipt instead of becoming false failures. It imports no repository code — the HTTP API is the contract, same as for Codex. See ADR-0014.
 
 Current tailoring output is delta-only: Resume returns `cvSummary` plus zero to
@@ -51,7 +51,7 @@ reintroduced.
 
 ### Backend (`lib/server/`)
 
-- `ai/` — Prompt building, Gemini API client, skill pack management, CV/CL quality gates
+- `ai/` — Prompt building, skill pack management, CV/CL quality gates. No provider client: generation is local-first (ADR-0015)
 - `latex/` — LaTeX template rendering (`renderResume.ts` for EN, `renderResumeCN.ts` for CN)
 - `applications/` — Resume/cover artifact generation and storage
 - `applicationBatches/` — Batch task orchestration (Codex protocol, progress tracking)
@@ -114,7 +114,7 @@ Required for the running app: `DATABASE_URL`, `AUTH_SECRET`, `GOOGLE_CLIENT_ID`,
 
 Migration connection: production must resolve an unpooled endpoint from `DIRECT_URL`, `DATABASE_URL_UNPOOLED`, `POSTGRES_URL_NON_POOLING`, or the verified Neon `-pooler` host mapping. `DATABASE_URL` remains pooled for the serverless runtime.
 
-Optional integrations: `GEMINI_API_KEY`, `GEMINI_MODEL`, `BLOB_READ_WRITE_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_TOKEN`, `GITHUB_WORKFLOW_FILE`, `GITHUB_REF`, `ENABLE_BATCH_EXECUTE_AUTOGEN`, `JOBLIT_ATS_BOARDS_JSON`, `JOBLIT_WEB_URL`, `YOUTUBE_API_KEY`, `CRON_SECRET`, `ARTIFACT_RECONCILE_SECRET`, `ARTIFACT_RECONCILE_ENABLED`, `RSSHUB_URL`, `RSSHUB_JOB_ROUTES`, `GITHUB_CN_JOB_REPOS`
+Optional integrations: `BLOB_READ_WRITE_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_TOKEN`, `GITHUB_WORKFLOW_FILE`, `GITHUB_REF`, `JOBLIT_ATS_BOARDS_JSON`, `JOBLIT_WEB_URL`, `YOUTUBE_API_KEY`, `CRON_SECRET`, `ARTIFACT_RECONCILE_SECRET`, `ARTIFACT_RECONCILE_ENABLED`, `RSSHUB_URL`, `RSSHUB_JOB_ROUTES`, `GITHUB_CN_JOB_REPOS`
 
 Application modules consume optional integrations through
 `lib/server/runtimeCapabilities`, not by assembling environment-variable

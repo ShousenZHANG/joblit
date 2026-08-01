@@ -3,23 +3,10 @@ import {
   type AtsBoardConfig,
   type AtsBoardRegistryIssue,
 } from "@/lib/server/sources/atsBoards";
-import { DEFAULT_GEMINI_MODEL } from "@/lib/server/ai/providerDefaults";
 
 export type RuntimeEnvironment = Readonly<
   Record<string, string | undefined>
 >;
-
-type BatchAutogenerationCapability =
-  | { kind: "enabled"; config: Record<string, never> }
-  | {
-      kind: "disabled";
-      reason: "BATCH_AUTOGENERATION_DISABLED";
-    }
-  | {
-      kind: "invalid";
-      reason: "BATCH_AUTOGENERATION_FLAG_INVALID";
-      invalid: readonly ["ENABLE_BATCH_EXECUTE_AUTOGEN"];
-    };
 
 type ArtifactReconciliationCapability =
   | {
@@ -129,13 +116,6 @@ type LatexRendererCapability =
       details?: { reason: string };
     };
 
-type GeminiCapability =
-  | {
-      kind: "enabled";
-      config: { apiKey: string; model: string };
-    }
-  | { kind: "disabled"; reason: "GEMINI_NOT_CONFIGURED" };
-
 type InvalidLatexRendererCapability = Extract<
   LatexRendererCapability,
   { kind: "invalid" }
@@ -146,10 +126,8 @@ export type RuntimeCapabilities = {
   artifactReconciliationAuthentication:
     ArtifactReconciliationAuthenticationCapability;
   atsBoards: AtsBoardsCapability;
-  batchAutogeneration: BatchAutogenerationCapability;
   blobStorage: BlobStorageCapability;
   fetchRunAuthentication: FetchRunAuthenticationCapability;
-  gemini: GeminiCapability;
   githubFetchRunDispatch: GithubFetchRunDispatchCapability;
   latexRenderer: LatexRendererCapability;
 };
@@ -323,29 +301,6 @@ function latexRenderer(
   };
 }
 
-function batchAutogeneration(
-  environment: RuntimeEnvironment,
-): BatchAutogenerationCapability {
-  const flag = trimmed(
-    environment,
-    "ENABLE_BATCH_EXECUTE_AUTOGEN",
-  )?.toLowerCase();
-  if (flag === "1" || flag === "true") {
-    return { kind: "enabled", config: {} };
-  }
-  if (!flag || flag === "0" || flag === "false") {
-    return {
-      kind: "disabled",
-      reason: "BATCH_AUTOGENERATION_DISABLED",
-    };
-  }
-  return {
-    kind: "invalid",
-    reason: "BATCH_AUTOGENERATION_FLAG_INVALID",
-    invalid: ["ENABLE_BATCH_EXECUTE_AUTOGEN"],
-  };
-}
-
 function artifactAuthSecrets(
   environment: RuntimeEnvironment,
 ): readonly string[] {
@@ -420,20 +375,6 @@ function fetchRunAuthentication(
       };
 }
 
-function gemini(environment: RuntimeEnvironment): GeminiCapability {
-  const apiKey = trimmed(environment, "GEMINI_API_KEY");
-  return apiKey
-    ? {
-        kind: "enabled",
-        config: {
-          apiKey,
-          model:
-            trimmed(environment, "GEMINI_MODEL") ?? DEFAULT_GEMINI_MODEL,
-        },
-      }
-    : { kind: "disabled", reason: "GEMINI_NOT_CONFIGURED" };
-}
-
 export function resolveRuntimeCapabilities(
   environment: RuntimeEnvironment,
 ): RuntimeCapabilities {
@@ -446,10 +387,8 @@ export function resolveRuntimeCapabilities(
     ),
     artifactReconciliationAuthentication: reconciliationAuthentication,
     atsBoards: atsBoards(environment),
-    batchAutogeneration: batchAutogeneration(environment),
     blobStorage: blobStorage(environment),
     fetchRunAuthentication: fetchRunAuthentication(environment),
-    gemini: gemini(environment),
     githubFetchRunDispatch: githubFetchRunDispatch(environment),
     latexRenderer: latexRenderer(environment),
   };

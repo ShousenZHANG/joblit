@@ -95,18 +95,6 @@ function parseProviderOutput<T>(raw: string, schema: z.ZodType<T>): T | null {
   return null;
 }
 
-export function parseResumeProviderOutput(
-  raw: string,
-): ResumeGenerationOutput | null {
-  return parseProviderOutput(raw, ResumeGenerationOutputSchema);
-}
-
-export function parseCoverProviderOutput(
-  raw: string,
-): CoverGenerationOutput | null {
-  return parseProviderOutput(raw, CoverGenerationOutputSchema);
-}
-
 export function parseTailorModelOutput(raw: string): TailorModelOutput | null {
   return parseProviderOutput(raw, TailorModelOutputSchema);
 }

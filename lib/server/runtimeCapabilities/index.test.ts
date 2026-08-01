@@ -3,30 +3,6 @@ import { describe, expect, it } from "vitest";
 import { resolveRuntimeCapabilities } from "./index";
 
 describe("resolveRuntimeCapabilities", () => {
-  it("keeps server batch autogeneration off unless the flag is explicit", () => {
-    expect(resolveRuntimeCapabilities({}).batchAutogeneration).toEqual({
-      kind: "disabled",
-      reason: "BATCH_AUTOGENERATION_DISABLED",
-    });
-    expect(
-      resolveRuntimeCapabilities({
-        ENABLE_BATCH_EXECUTE_AUTOGEN: "1",
-      }).batchAutogeneration,
-    ).toEqual({
-      kind: "enabled",
-      config: {},
-    });
-    expect(
-      resolveRuntimeCapabilities({
-        ENABLE_BATCH_EXECUTE_AUTOGEN: "sometimes",
-      }).batchAutogeneration,
-    ).toEqual({
-      kind: "invalid",
-      reason: "BATCH_AUTOGENERATION_FLAG_INVALID",
-      invalid: ["ENABLE_BATCH_EXECUTE_AUTOGEN"],
-    });
-  });
-
   it("refuses to enable artifact reconciliation without an auth secret", () => {
     const capabilities = resolveRuntimeCapabilities({
       ARTIFACT_RECONCILE_ENABLED: "true",
@@ -183,24 +159,6 @@ describe("resolveRuntimeCapabilities", () => {
       kind: "invalid",
       reason: "LATEX_RENDER_INSECURE_HTTP_FLAG_INVALID",
       invalid: ["LATEX_RENDER_ALLOW_INSECURE_HTTP"],
-    });
-  });
-
-  it("makes Gemini an explicit optional capability with a safe model default", () => {
-    expect(resolveRuntimeCapabilities({}).gemini).toEqual({
-      kind: "disabled",
-      reason: "GEMINI_NOT_CONFIGURED",
-    });
-    expect(
-      resolveRuntimeCapabilities({
-        GEMINI_API_KEY: "gemini-key",
-      }).gemini,
-    ).toEqual({
-      kind: "enabled",
-      config: {
-        apiKey: "gemini-key",
-        model: "gemini-2.5-flash-lite",
-      },
     });
   });
 });
