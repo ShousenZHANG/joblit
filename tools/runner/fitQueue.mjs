@@ -6,10 +6,12 @@
  * that used to run in the browser through the extension bridge — calling the
  * model — and hands the output straight back to `batch-import`.
  *
- * A batch is normally imported, failed, or released. The sole deliberate
- * exception is an uncertain import response: its lease and completed Hermes
- * state are preserved so a retry cannot turn "committed but response lost"
- * into a second model run or a false failure.
+ * A batch is normally imported, failed, or released. Two deliberate
+ * exceptions preserve the lease and the tracked Hermes state instead: an
+ * uncertain import response ("committed but response lost" must not become a
+ * second model run or a false failure), and an uncertain Hermes outcome (the
+ * run may still be running; the same composition re-leased later resumes it
+ * under the same issueKey rather than paying for a second model call).
  */
 
 const DEFAULT_LEASE_WAIT_MS = 5_000;
@@ -308,10 +310,17 @@ export async function processFitQueue({
 
     } catch (error) {
       if (signal?.aborted || isAmbiguousHermesError(error)) {
-        await joblit.releaseFitBatch(claim).catch(() => undefined);
+        // The lease is deliberately NOT released, mirroring the unknown-import
+        // branch below. The run may still be running (or already completed)
+        // under this issueKey's session: the same jobs re-leased in the same
+        // composition produce the same issueKey, and generate() resumes the
+        // tracked run instead of paying for a second model call. Releasing
+        // would invite a different batch composition, whose new issueKey can
+        // never collect the stranded completed state. The server lease
+        // expires on its own either way.
         summary.stopped = signal?.aborted
-          ? "Runner cancelled"
-          : "Hermes result is unknown; retry later";
+          ? "Runner cancelled; lease left to expire so the run can be resumed"
+          : "Hermes result is unknown; lease preserved for exact resume";
         log(`Fit scan stopped: ${summary.stopped}`);
         return summary;
       }

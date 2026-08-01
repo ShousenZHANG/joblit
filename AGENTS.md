@@ -36,7 +36,7 @@ Routes on the AgentCredential seam: `GET /api/application-batches/active`,
 `POST /api/application-batches/:id/run-once`, `POST /api/applications/prompt`,
 `POST /api/applications/manual-generate`, the `/api/tailoring-runs/:id` route,
 cancel, and fail endpoints, and the fit queue —
-`POST /api/jobs/fit/{next-batch,prompt,batch-import,mark-failed,release-batch}`.
+`POST /api/jobs/fit/{next-batch,prompt,batch-import,mark-failed,release-batch,settlement-status}`.
 `/api/jobs/fit/run` and `/api/jobs/fit/prescreen` stay session-only: enqueuing
 work is the user's action, draining it is the agent's.
 Batch creation, `/codex-run`, and the task `PATCH` route also stay session-only;

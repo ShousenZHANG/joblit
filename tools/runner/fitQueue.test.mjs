@@ -367,7 +367,7 @@ test("preserves Fit recovery state when the receipt response is mismatched", asy
   assert.equal(hermes.calls.acknowledgements.length, 0);
 });
 
-test("defers an ambiguous Hermes start without marking Fit jobs failed", async () => {
+test("defers an ambiguous Hermes start and keeps the lease for an exact resume", async () => {
   const unknown = Object.assign(new Error("start response lost"), {
     code: "RUN_START_UNKNOWN",
   });
@@ -380,9 +380,12 @@ test("defers an ambiguous Hermes start without marking Fit jobs failed", async (
     log: () => {},
   });
 
-  assert.deepEqual(joblit.calls.released, [
-    { jobIds: JOB_IDS, claimToken: CLAIM },
-  ]);
+  // The lease is deliberately NOT released. The same jobs re-leased in the
+  // same composition produce the same issueKey, and generate() resumes the
+  // tracked run instead of paying for a second model call; releasing invites
+  // a different batch composition, which strands the completed Hermes state
+  // with no receipt to reconcile against.
+  assert.equal(joblit.calls.released.length, 0);
   assert.equal(joblit.calls.markFailed.length, 0);
   assert.equal(summary.failed, 0);
   assert.match(summary.stopped, /unknown/i);
