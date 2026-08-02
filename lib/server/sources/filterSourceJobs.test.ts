@@ -283,6 +283,26 @@ describe("filterSourceJobs", () => {
     ).toEqual([rows[1]]);
   });
 
+  it("uses whole-title terms and keeps ambiguous seniority wording", () => {
+    const rows = [
+      job("Headless CMS Developer"),
+      job("Staffing Platform Engineer"),
+      job("Lead Generation Specialist"),
+      job("Software Engineer (Junior to Senior)"),
+      job("Senior Software Engineer"),
+      job("Technical Lead"),
+      job("Principal Software Engineer"),
+    ];
+
+    expect(
+      filterSourceJobs(rows, {
+        queries: [],
+        queryMode: "source-only",
+        excludeTitleTerms: ["senior", "lead", "principal", "staff", "head"],
+      }),
+    ).toEqual(rows.slice(0, 4));
+  });
+
   it("uses domain synonyms for a constrained AI role family", () => {
     const rows = [job("Machine Learning Engineer"), job("Software Engineer")];
 
@@ -344,7 +364,7 @@ describe("filterSourceJobs", () => {
     ).toEqual([rows[0], rows[2], rows[3]]);
   });
 
-  it("applies hard rights and minimum-experience exclusions without soft-match false positives", () => {
+  it("executes every persisted legacy v1 description rule", () => {
     const rows = [
       job("Software Engineer", null, "Remote", {
         description: "Applicants must be Australian citizens.",
@@ -361,6 +381,9 @@ describe("filterSourceJobs", () => {
       job("Software Engineer", null, "Remote", {
         description: "3+ years of professional experience.",
       }),
+      job("Software Engineer", null, "Remote", {
+        description: "Visa sponsorship is not available for this role.",
+      }),
     ];
 
     expect(
@@ -369,9 +392,50 @@ describe("filterSourceJobs", () => {
         excludeDescriptionRules: [
           "identity_requirement",
           "clearance_requirement",
+          "sponsorship_unavailable",
           "experience_requirement_4_plus",
         ],
       }),
     ).toEqual([rows[1], rows[2], rows[4]]);
+  });
+
+  it("keeps the historical v1 matcher isolated from AU v2 recall-safe semantics", () => {
+    // GLOBAL v1 deliberately retains its creation-time rule semantics. Those
+    // semantics predate AU v2 and treat work-right/sponsorship wording plus
+    // any unsoftened clearance mention as hard when their persisted rule is
+    // active. Security+ is a professional certificate, not a clearance token.
+    const rows = [
+      job("Software Engineer", null, "Remote", {
+        description: "Applicants must be Australian citizens or permanent residents.",
+      }),
+      job("Software Engineer", null, "Remote", {
+        description: "Applicants must have the right to work in Australia.",
+      }),
+      job("Software Engineer", null, "Remote", {
+        description: "Sponsorship is not available for this role.",
+      }),
+      job("Software Engineer", null, "Remote", {
+        description: "Our projects operate within a security clearance environment.",
+      }),
+      job("Software Engineer", null, "Remote", {
+        description: "The company will sponsor the successful candidate for security clearance.",
+      }),
+      job("Software Engineer", null, "Remote", {
+        description: "Must be eligible to obtain an NV1 clearance.",
+      }),
+      job("Software Engineer", null, "Remote", {
+        description: "Security+ certification is required.",
+      }),
+    ];
+
+    expect(
+      filterSourceJobs(rows, {
+        queries: ["Software Engineer"],
+        excludeDescriptionRules: [
+          "identity_requirement",
+          "clearance_requirement",
+        ],
+      }),
+    ).toEqual([rows[6]]);
   });
 });

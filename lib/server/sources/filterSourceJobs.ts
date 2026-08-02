@@ -7,9 +7,9 @@ import {
   isUnusableTitle,
   isUsableJobUrl,
   matchesBaseQueryConstraints,
-  normalizeRoleText,
   type TitleMatchMode,
 } from "@/lib/shared/jobRelevance";
+import { evaluateLegacyTitleExclusions } from "@/lib/shared/titleSeniorityPolicy";
 
 export type SourceJobFilter = {
   queries: string[];
@@ -105,7 +105,7 @@ export function filterSourceJobs(
   filter: SourceJobFilter,
 ): RawSourceJob[] {
   const excluded = (filter.excludeTitleTerms ?? [])
-    .map((term) => normalizeRoleText(term).trim())
+    .map((term) => term.trim())
     .filter(Boolean);
   const queries = filter.queries.map((query) => query.trim()).filter(Boolean);
   const baseQueries = (filter.baseQueries ?? queries)
@@ -117,8 +117,8 @@ export function filterSourceJobs(
 
   const kept = jobs.filter((job) => {
     if (!isUsableRow(job)) return false;
-    const normalizedTitle = normalizeRoleText(job.title);
-    if (excluded.some((term) => normalizedTitle.includes(term))) return false;
+    const titleDecision = evaluateLegacyTitleExclusions(job.title, excluded);
+    if (titleDecision.outcome === "EXCLUDE") return false;
     if (
       filter.queryMode !== "source-only" &&
       !matchesRole(job.title, queries, baseQueries, titleMatch)

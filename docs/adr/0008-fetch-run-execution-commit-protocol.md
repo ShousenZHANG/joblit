@@ -26,8 +26,8 @@ on the reader version that happened to execute it.
 
 ### Version the execution configuration
 
-New runs persist `FetchRunConfig` v1 in `FetchRun.queries`. It is a strict,
-market-discriminated contract:
+The initial cutover persisted `FetchRunConfig` v1 in `FetchRun.queries`. It is
+a strict, market-discriminated contract:
 
 - `{ schemaVersion: 1, market: "AU", ... }`
 - `{ schemaVersion: 1, market: "CN", ... }`
@@ -41,11 +41,49 @@ knobs are a creation-time snapshot; the trigger may patch only the typed
 includes the Python worker's historical scalar projection while exposing the
 authoritative value as `run.config`.
 
+AU creation subsequently advances to a strict v2 contract while CN and GLOBAL
+remain on v1:
+
+- `{ schemaVersion: 2, market: "AU", ... }`
+- `{ schemaVersion: 1, market: "CN", ... }`
+- `{ schemaVersion: 1, market: "GLOBAL", ... }`
+
+AU v2 separates user search intent from server-owned filtering policy. It
+persists `smartExpand: true`, `titleMatch: "relaxed"`, and
+`includeFromQueries: true` as literals and embeds the immutable
+`au-recall-safe-v1` policy. That policy caps seniority at mid-level using only
+the visible job title; excludes only explicit Australian citizenship or
+permanent-residency requirements and government-clearance requirements,
+including an explicit requirement to be eligible to obtain clearance; and
+never excludes a role because of years of experience. It contains no
+`applyExcludes`, free-form title terms, or description/experience-rule arrays.
+
+Policy identifiers are append-only execution contracts. Changing a rule
+requires a new registry entry and a new active policy id; the meaning of an id
+must never be edited in place. The active id controls creation only. Readers
+resolve the policy id persisted in each row, require its snapshot to exactly
+match that registry entry, and continue accepting every registered policy with
+an implemented evaluator after the active id advances. A registered but
+unsupported evaluator fails closed instead of borrowing the active policy's
+meaning. The generic reader accepts strict v1 and AU v2 payloads. The v1-only
+reader remains available during rollout and deliberately rejects v2, while
+historical unversioned rows still normalize to v1. The compatibility scalar
+projection for AU v2 remains
+`includeFromQueries = true` and `filterDescription = true`. As with v1, only
+typed `dispatchMeta` may be patched after creation; its patch operation must
+preserve the schema version and policy byte-for-byte.
+
 For GLOBAL runs, a non-empty v1 `sources` list is the exact creation-time
 source snapshot even when `sourceSelection` is `all`. Execution neither drops
 a source disabled later nor appends a source enabled later. Only an
 unversioned legacy all-source row with no persisted IDs expands against the
 current registry.
+
+The rest of the v1 execution snapshot is equally immutable. Persisted title,
+identity, clearance, sponsorship, and experience exclusion rule ids retain
+their original v1 meaning. AU v2's recall-safe semantics apply only at its
+explicit policy boundary and never reinterpret a historical AU or GLOBAL v1
+row.
 
 One legacy GLOBAL shape is intentionally preserved: a row containing only
 `{ sources: [...] }` and no title or queries normalizes to
@@ -195,18 +233,20 @@ the API and UI.
 
 ### Retire the split legacy callbacks
 
-The AU worker moves to the v1 config and commit endpoints in the same cutover
-as the server:
+The original AU worker/server cutover moved both sides to the versioned v1
+config and commit endpoints:
 
 - `/api/admin/import` is retired;
 - `/api/fetch-runs/[id]/update` is retired;
 - `IMPORT_SECRET` is removed;
 - `FETCH_RUN_SECRET` protects both config reads and v1 commit commands.
 
-Historical unversioned config rows remain readable during rollout. The
-compatibility projection on the config response is reader-only and may be
-removed after the Python worker reads every field from `run.config`; the
-retired write routes are not kept as dual-write fallbacks.
+Historical unversioned config rows remain readable. AU creation has since
+advanced to strict v2 policy-bearing configs, while CN and GLOBAL remain v1;
+the generic reader accepts both versions and the v1-only reader deliberately
+rejects v2. The compatibility projection on the config response is reader-only
+and may be removed after the Python worker reads every field from `run.config`;
+the retired write routes are not kept as dual-write fallbacks.
 
 The cutover requires a short dispatch drain: pause new AU dispatches, wait for
 all already-dispatched legacy GitHub Actions runs to become terminal, apply the
@@ -220,12 +260,13 @@ returns, or trusts it; tenant ownership comes exclusively from
 `FetchRun.userId`. Keeping the nullable column makes the database structurally
 compatible with the old binary while its workers drain.
 
-That rollback window is deliberately narrow. Rolling application code back is
-safe only while the old JobSpy workflow is disabled and drained and no active
-AU row created by the new binary depends on null `userEmail`, v1-only config,
-or attempt fencing. Terminal canaries do not execute again, but every
-`QUEUED`/`RUNNING` row must be inspected before rollback. The additive receipt
-table and attempt columns can remain during a binary rollback.
+That rollback window is deliberately narrow. Rolling application code back to
+a binary whose config reader accepts only v1 is safe only after AU dispatch is
+paused and every AU v2 `QUEUED`/`RUNNING` row is terminalized, drained, or kept
+behind a compatible v2 reader. The old JobSpy workflow must also be disabled
+and drained, and no active AU row may depend on null `userEmail` or attempt
+fencing. Terminal canaries do not execute again. The additive receipt table and
+attempt columns can remain during a binary rollback.
 
 Dropping `userEmail` requires a later, separately approved contract migration,
 and only after all of these gates hold:

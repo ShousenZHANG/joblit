@@ -5,6 +5,7 @@ import os
 import sys
 import threading
 import time
+from types import SimpleNamespace
 
 import pandas as pd
 
@@ -256,7 +257,7 @@ class RunJobspyDedupeTests(unittest.TestCase):
         )
         self.assertEqual(len(out), 2)
 
-    def test_filter_title_excludes_seniority_from_job_level(self):
+    def test_filter_title_exclusions_only_inspect_the_visible_title(self):
         df = pd.DataFrame(
             [
                 {
@@ -269,6 +270,11 @@ class RunJobspyDedupeTests(unittest.TestCase):
                     "job_level": "Entry level",
                     "description": "Build web applications",
                 },
+                {
+                    "title": "Senior Software Engineer",
+                    "job_level": "Entry level",
+                    "description": "Build developer tooling",
+                },
             ]
         )
 
@@ -279,7 +285,40 @@ class RunJobspyDedupeTests(unittest.TestCase):
             exclude_terms=["senior"],
         )
 
-        self.assertEqual(out["job_level"].tolist(), ["Entry level"])
+        self.assertEqual(
+            out["title"].tolist(),
+            ["Software Engineer", "Software Engineer"],
+        )
+
+    def test_filter_title_exclusions_are_fail_open_for_ambiguous_substrings(self):
+        df = pd.DataFrame(
+            [
+                {"title": "Headless CMS Developer"},
+                {"title": "Staffing Platform Engineer"},
+                {"title": "Lead Generation Specialist"},
+                {"title": "Software Engineer (Junior to Senior)"},
+                {"title": "Senior Software Engineer"},
+                {"title": "Technical Lead"},
+                {"title": "Principal Software Engineer"},
+            ]
+        )
+
+        out = rj.filter_title(
+            df,
+            queries=[],
+            enforce_include=False,
+            exclude_terms=["senior", "lead", "principal", "staff", "head"],
+        )
+
+        self.assertEqual(
+            out["title"].tolist(),
+            [
+                "Headless CMS Developer",
+                "Staffing Platform Engineer",
+                "Lead Generation Specialist",
+                "Software Engineer (Junior to Senior)",
+            ],
+        )
 
     def test_filter_title_matches_role_tokens_without_short_word_false_positives(self):
         df = pd.DataFrame(
@@ -831,7 +870,7 @@ class RunJobspyDedupeTests(unittest.TestCase):
         self.assertEqual(out["title"].tolist(), ["Fresh", "Unknown"])
         self.assertEqual(audit.iloc[0]["rule"], "listing_too_old")
 
-    def test_filter_job_quality_blocks_access_walls_and_unverifiable_empty_jd(self):
+    def test_filter_job_quality_blocks_access_walls_but_keeps_missing_jd(self):
         df = pd.DataFrame(
             [
                 {
@@ -854,11 +893,11 @@ class RunJobspyDedupeTests(unittest.TestCase):
 
         out, audit = rj.filter_job_quality(df, require_description=True)
 
-        self.assertEqual(out["title"].tolist(), ["Software Engineer"])
         self.assertEqual(
-            audit["rule"].tolist(),
-            ["invalid_description", "missing_description"],
+            out["title"].tolist(),
+            ["Software Engineer", "Frontend Engineer"],
         )
+        self.assertEqual(audit["rule"].tolist(), ["invalid_description"])
 
     def test_filter_description_only_drops_hard_rights_requirement(self):
         from rights_filter import filter_description_v2
@@ -917,7 +956,7 @@ class RunJobspyDedupeTests(unittest.TestCase):
         self.assertEqual(len(out), 1)
         self.assertEqual(out.iloc[0]["title"], "Frontend Engineer")
 
-    def test_filter_description_only_drops_hard_sponsorship_requirement(self):
+    def test_legacy_filter_description_drops_hard_sponsorship_requirement(self):
         from rights_filter import filter_description_v2
 
         df = pd.DataFrame(
@@ -1297,6 +1336,123 @@ class TitleMatchModeTests(unittest.TestCase):
             base_queries=["AI Engineer"],
         )
         self.assertEqual(list(kept["title"]), ["Senior AI Engineer"])
+
+
+class AuRecallPolicyConfigTests(unittest.TestCase):
+    def _config(self):
+        policy = rj.AU_FETCH_POLICY_REGISTRY[rj.AU_RECALL_SAFE_V1_POLICY_ID]
+        return {
+            "schemaVersion": 2,
+            "market": "AU",
+            "smartExpand": True,
+            "includeFromQueries": True,
+            "titleMatch": "relaxed",
+            "policy": policy.as_config(),
+        }
+
+    def test_v2_enables_fixed_title_and_eligibility_rules(self):
+        self.assertTrue(rj._uses_au_recall_policy(self._config()))
+        rights, experience = rj._resolve_active_description_rules(
+            True,
+            False,
+            ["sponsorship_unavailable", "experience_requirement_2_plus"],
+        )
+        self.assertEqual(rights, ["identity_requirement", "clearance_requirement"])
+        self.assertEqual(experience, [])
+
+    def test_v2_policy_drift_fails_closed_at_the_worker_boundary(self):
+        config = self._config()
+        config["policy"] = {**config["policy"], "experienceYears": "exclude-4-plus"}
+        with self.assertRaisesRegex(RuntimeError, "Unsupported AU fetch recall policy"):
+            rj._uses_au_recall_policy(config)
+
+    def test_old_registered_v1_policy_survives_a_newer_registry_entry(self):
+        config = self._config()
+        future = {**config["policy"], "id": "au-recall-safe-v2"}
+        with patch.object(
+            rj,
+            "AU_FETCH_POLICY_REGISTRY",
+            {
+                **rj.AU_FETCH_POLICY_REGISTRY,
+                future["id"]: future,
+            },
+        ):
+            self.assertEqual(
+                rj._resolve_au_recall_policy_id(config),
+                rj.AU_RECALL_SAFE_V1_POLICY_ID,
+            )
+
+    def test_registered_but_unimplemented_policy_fails_closed(self):
+        config = self._config()
+        future = {**config["policy"], "id": "au-recall-safe-v2"}
+        config["policy"] = future
+        with patch.object(
+            rj,
+            "AU_FETCH_POLICY_REGISTRY",
+            {
+                **rj.AU_FETCH_POLICY_REGISTRY,
+                future["id"]: future,
+            },
+        ):
+            with self.assertRaisesRegex(RuntimeError, "not implemented"):
+                rj._resolve_au_recall_policy_id(config)
+
+    def test_v1_uses_only_its_persisted_rules(self):
+        self.assertFalse(rj._uses_au_recall_policy({"schemaVersion": 1}))
+        rights, experience = rj._resolve_active_description_rules(
+            False,
+            True,
+            ["identity_requirement", "experience_requirement_4_plus"],
+        )
+        self.assertEqual(rights, ["identity_requirement"])
+        self.assertEqual(experience, ["experience_requirement_4_plus"])
+
+    def test_description_filter_routes_v2_to_recall_safe_policy(self):
+        frame = pd.DataFrame([{"description": "example"}])
+        recall = Mock(return_value=(frame, pd.DataFrame()))
+        module = SimpleNamespace(filter_au_eligibility_policy=recall)
+
+        with patch.dict(sys.modules, {"au_eligibility_policy": module}):
+            kept, _audit = rj._filter_description_by_policy(
+                frame,
+                recall_policy_id=rj.AU_RECALL_SAFE_V1_POLICY_ID,
+                active_rights_rules=[
+                    "identity_requirement",
+                    "clearance_requirement",
+                ],
+                identity_region="GLOBAL",
+                identity_strictness="balanced",
+            )
+
+        self.assertIs(kept, frame)
+        recall.assert_called_once_with(
+            frame,
+            identity_requirement=True,
+            clearance_requirement=True,
+        )
+
+    def test_description_filter_keeps_v1_on_legacy_rights_facade(self):
+        frame = pd.DataFrame([{"description": "example"}])
+        legacy = Mock(return_value=(frame, pd.DataFrame()))
+        module = SimpleNamespace(filter_description_v2=legacy)
+        rules = ["identity_requirement", "sponsorship_unavailable"]
+
+        with patch.dict(sys.modules, {"rights_filter": module}):
+            kept, _audit = rj._filter_description_by_policy(
+                frame,
+                recall_policy_id=None,
+                active_rights_rules=rules,
+                identity_region="GLOBAL",
+                identity_strictness="balanced",
+            )
+
+        self.assertIs(kept, frame)
+        legacy.assert_called_once_with(
+            frame,
+            rules=rules,
+            region="GLOBAL",
+            strictness="balanced",
+        )
 
 
 class SharedRelevanceManifestTests(unittest.TestCase):

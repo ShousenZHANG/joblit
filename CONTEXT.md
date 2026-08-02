@@ -179,6 +179,15 @@ configuration, performs network discovery through the AU worker or an
 in-process CN/GLOBAL adapter, then commits ordered result batches through the
 `fetch-run-commit/v1` protocol.
 
+New AU runs persist `FetchRunConfig` v2 with the immutable
+`au-recall-safe-v1` policy. Historical AU plus current CN/GLOBAL runs retain
+their strict v1 contract; neither queued rows nor legacy rows are rewritten.
+The active AU policy id affects new creation only: readers validate each
+persisted policy snapshot against its registry entry, and old registered
+policies remain executable after a newer policy becomes active. Historical v1
+description-rule ids likewise keep their original identity, clearance,
+sponsorship, and experience semantics; AU v2 never reinterprets them.
+
 The **FetchRun commit boundary** is the transaction that persists Jobs, the
 batch receipt, counters, and terminal projection while holding `FRUN → JOBJ`
 locks. Cancellation competes for `FRUN`: it stops future commits but never
@@ -186,20 +195,21 @@ pretends that receipt-backed Jobs were rolled back. See **ADR-0008**.
 
 ### Title Match
 
-How hard the Fetch Pipeline's title filter presses. `strict | relaxed | off`.
+How hard a legacy Fetch Pipeline title filter presses. `strict | relaxed | off`.
 
 - **strict** — the title must answer one of the requested queries.
 - **relaxed** — also keeps a sibling role inside the base query's domain.
 - **off** — no title filter. Quality gates, location and freshness still apply.
 
-This replaces the `includeFromQueries` boolean, which the AU worker read as
+This replaced the `includeFromQueries` boolean, which the AU worker read as
 "skip the include filter" and the GLOBAL processor read as "apply a looser
 one", while a single UI control sent the same value to both. Both readings had
 a cause — AU searches through a job board that has already matched the terms
 upstream, GLOBAL reads feeds that return their whole catalogue — so the states
-are named rather than guessed. The boolean is still persisted for the AU
-worker's legacy projection; `resolveTitleMatchMode` derives the mode from it
-when the field is absent.
+are named rather than guessed. AU v2 now fixes this mode to `relaxed` at the
+server boundary; the browser no longer chooses it. The boolean remains in the
+worker compatibility projection, and `resolveTitleMatchMode` still derives the
+mode for historical v1 rows when the field is absent.
 
 The rules themselves live in `lib/shared/jobRelevance.ts` and
 `tools/fetcher/run_jobspy.py`, which read one vocabulary from the `relevance`
@@ -208,6 +218,31 @@ block of `fetchRolePacks.config.json` and are held to one behaviour by
 `principal`, `staff`, …) are stripped before matching: they state a level, not
 a domain, and treating one as a required title signal made a search for
 "Senior AI Engineer" return strictly fewer roles than "AI Engineer".
+
+### AU Recall-safe Exclusion Policy
+
+The browser describes search intent only: title, location, and listing age.
+The server persists one append-only policy identifier and owns every hard
+exclusion. `au-recall-safe-v1` follows four fail-open rules:
+
+- seniority is evaluated from the visible title only; source `job_level` and
+  `seniority_level` metadata never delete a role;
+- only explicit Australian citizen or permanent-resident applicant gates are
+  excluded;
+- only explicit Australian government Baseline, NV1, or NV2 requirements (or
+  a hard requirement to be eligible or able to obtain one) are excluded;
+- experience years, ordinary work rights, unavailable visa sponsorship,
+  professional certifications, preferences, and background mentions never
+  delete a role.
+
+Every exclusion decision carries a stable rule id and evidence. Title behavior
+lives in `lib/shared/titleSeniorityPolicy.ts` and
+`tools/fetcher/title_seniority_policy.py`, held to one contract by
+`test/titleSeniorityPolicy.corpus.json`. JD eligibility behavior lives in
+`lib/shared/auEligibilityPolicy.ts` and
+`tools/fetcher/au_eligibility_policy.py`, held to one contract by
+`test/auEligibilityPolicy.corpus.json`. Missing or ambiguous evidence is always
+kept.
 
 ### Skill Pack
 

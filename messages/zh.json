@@ -313,29 +313,17 @@
   },
   "fetch": {
     "searchRoles": "搜索职位",
+    "searchRolesDescription": "搜索最新职位。Joblit 会扩展相关职称，并应用谨慎的自动筛选规则。",
     "jobTitle": "职位名称",
     "locationLabel": "城市",
     "hoursOld": "发布时间（小时内）",
-    "smartExpand": "智能扩展",
-    "applyExclusions": "应用排除项",
-    "globalFeeds": "全球远程职位源",
-    "globalFeedsHint": "同时搜索 Remote OK、Remotive 和 Jobicy，结果仍遵循职位、地点与标题排除条件。",
-    "sourceHealth": {
-      "title": "职位源健康状态",
-      "checking": "正在检查公开职位源与 ATS 看板…",
-      "unavailable": "暂时无法读取健康详情",
-      "ready": "{total} 个职位源中 {healthy} 个可用",
-      "attention": "{count} 个职位源需要关注",
-      "errorHint": "仍可继续抓取。Joblit 会隔离不可用来源，并保留其他有效结果。",
-      "retry": "重新检查",
-      "updatedAfterFetch": "每次由你发起抓取后，健康状态都会更新。",
-      "moreSources": "另有 {count} 个 ATS 看板正在跟踪",
-      "status": {
-        "healthy": "可用",
-        "degraded": "不稳定",
-        "down": "离线",
-        "unknown": "未检查"
-      }
+    "policy": {
+      "title": "自动抓取规则",
+      "summary": "Joblit 对每次澳洲抓取使用同一套高召回策略，旧浏览器设置不会再静默隐藏岗位。",
+      "seniority": "仅根据岗位公开标题排除明确的高级职位；含义模糊的标题会保留。",
+      "identity": "仅排除明确要求澳洲公民或永久居民身份的岗位；普通工作权利与不提供担保的说明会保留。",
+      "clearance": "仅排除要求 Baseline、NV1、NV2 或明确要求具备取得澳洲政府安全许可资格的岗位；专业安全认证不会被误删。",
+      "experience": "工作年限不会用于删除岗位。"
     },
     "startFetch": "开始抓取",
     "fetching": "抓取中…",
@@ -344,29 +332,7 @@
     "popular": "热门",
     "cnSources": "数据来源",
     "cnExcludeKeywords": "排除关键词",
-    "cnLocation": "地点",
-    "recentFetches": "最近的抓取",
-    "recentFetchesEmpty": "你发起的抓取会显示在这里，方便一键重跑。",
-    "historyUntitled": "未命名抓取",
-    "historyRoleCount": "{count} 个职位",
-    "historyImported": "已导入 {count} 个",
-    "historyPartial": "已导入 {count} 个 · 部分完成",
-    "historyStatusQUEUED": "排队中",
-    "historyStatusRUNNING": "进行中",
-    "historyStatusFAILED": "失败",
-    "historyRerun": "重新抓取",
-    "historyRerunAria": "重新抓取 {title}",
-    "titleMatchLabel": "标题匹配",
-    "titleMatch": {
-      "strict": "严格",
-      "relaxed": "宽松",
-      "off": "关闭"
-    },
-    "titleMatchHint": {
-      "strict": "仅保留标题与搜索词直接对应的岗位。",
-      "relaxed": "同时保留与搜索同一领域的相邻岗位。",
-      "off": "保留来源返回的所有岗位。公共源自身没有搜索,可能导入大量结果。"
-    }
+    "cnLocation": "地点"
   },
   "fetchProgress": {
     "title": "抓取进度",
@@ -394,7 +360,7 @@
     "importedNew": "导入了 {n} 个新职位",
     "viewJobs": "查看职位",
     "noNew": "未发现新职位",
-    "noNewHint": "放宽地点或减少排除项后重新抓取。",
+    "noNewHint": "放宽地点或搜索相关职位名称后重新抓取。",
     "dismiss": "关闭",
     "cancel": "取消抓取",
     "cancelling": "正在取消抓取…",

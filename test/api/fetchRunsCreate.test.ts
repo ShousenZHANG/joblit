@@ -78,6 +78,47 @@ describe("fetch runs create api", () => {
     expect(data).not.toHaveProperty("userEmail");
   });
 
+  it("stores the server-owned AU recall policy even when a stale client tries to disable it", async () => {
+    signIn();
+
+    const res = await postRun({
+      market: "AU",
+      title: "Software Engineer",
+      smartExpand: false,
+      includeFromQueries: false,
+      titleMatch: "off",
+      applyExcludes: false,
+      excludeTitleTerms: ["intern"],
+      excludeDescriptionRules: [
+        "sponsorship_unavailable",
+        "experience_requirement_2_plus",
+      ],
+    });
+
+    expect(res.status).toBe(201);
+    const data = fetchRunStore.create.mock.calls[0]?.[0]?.data;
+    expect(data.queries).toMatchObject({
+      schemaVersion: 2,
+      market: "AU",
+      smartExpand: true,
+      includeFromQueries: true,
+      titleMatch: "relaxed",
+      policy: {
+        id: "au-recall-safe-v1",
+        seniorityEvidence: "visible-title-only",
+        citizenshipOrPr: "exclude-explicit-required",
+        governmentSecurityClearance:
+          "exclude-required-or-explicitly-eligible-to-obtain",
+        experienceYears: "never-exclude",
+      },
+    });
+    expect(data.queries).not.toHaveProperty("applyExcludes");
+    expect(data.queries).not.toHaveProperty("excludeTitleTerms");
+    expect(data.queries).not.toHaveProperty("excludeDescriptionRules");
+    expect(data.includeFromQueries).toBe(true);
+    expect(data.filterDescription).toBe(true);
+  });
+
   it("creates a GLOBAL run with the requested sources", async () => {
     signIn();
 
@@ -267,34 +308,15 @@ describe("fetch runs create api", () => {
 
     expect(res.status).toBe(201);
     const payload = fetchRunStore.create.mock.calls[0]?.[0]?.data?.queries;
-    expect(payload.schemaVersion).toBe(1);
+    expect(payload.schemaVersion).toBe(2);
     expect(payload.market).toBe("AU");
     expect(payload.title).toBe("Software Engineer");
     expect(payload.baseQueries).toEqual(["Software Engineer"]);
     expect(payload.queries).toContain("Forward Deployed Engineer");
     expect(payload.queries).toContain("Full Stack Engineer");
     expect(payload.includeFromQueries).toBe(true);
-  });
-
-  it("can disable smart expand to keep only original query", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1", email: "user@example.com" },
-    });
-
-    await POST(
-      new Request("http://localhost/api/fetch-runs", {
-        method: "POST",
-        body: JSON.stringify({
-          title: "Software Engineer",
-          smartExpand: false,
-        }),
-      }),
-    );
-
-    const payload = fetchRunStore.create.mock.calls[0]?.[0]?.data?.queries;
-    expect(payload.baseQueries).toEqual(["Software Engineer"]);
-    expect(payload.queries).toEqual(["Software Engineer"]);
-    expect(payload.smartExpand).toBe(false);
+    expect(payload.smartExpand).toBe(true);
+    expect(payload.titleMatch).toBe("relaxed");
   });
 
   it("trims and deduplicates bounded AU queries", async () => {
@@ -317,7 +339,8 @@ describe("fetch runs create api", () => {
     expect(res.status).toBe(201);
     const data = fetchRunStore.create.mock.calls[0]?.[0]?.data;
     expect(data.queries.title).toBe("Software Engineer");
-    expect(data.queries.queries).toEqual(["Java Developer"]);
+    expect(data.queries.baseQueries).toEqual(["Java Developer"]);
+    expect(data.queries.queries).toContain("Java Developer");
     expect(data.location).toBe("Sydney");
   });
 
@@ -422,80 +445,6 @@ describe("fetch runs create api", () => {
 
     expect(res.status).toBe(400);
     expect(fetchRunStore.create).not.toHaveBeenCalled();
-  });
-
-  it("keeps supported experience-based description exclusions from payload", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1", email: "user@example.com" },
-    });
-
-    await POST(
-      new Request("http://localhost/api/fetch-runs", {
-        method: "POST",
-          body: JSON.stringify({
-            title: "Software Engineer",
-          excludeDescriptionRules: ["identity_requirement", "experience_requirement_4_plus"],
-        }),
-      }),
-    );
-
-    const payload = fetchRunStore.create.mock.calls[0]?.[0]?.data?.queries;
-    expect(payload.excludeDescriptionRules).toEqual([
-      "identity_requirement",
-      "experience_requirement_4_plus",
-    ]);
-  });
-
-  it("strips deprecated 5+ years rule from payload", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1", email: "user@example.com" },
-    });
-
-    await POST(
-      new Request("http://localhost/api/fetch-runs", {
-        method: "POST",
-        body: JSON.stringify({
-          title: "Software Engineer",
-          excludeDescriptionRules: [
-            "identity_requirement",
-            "experience_requirement_5_plus",
-          ],
-        }),
-      }),
-    );
-
-    const payload = fetchRunStore.create.mock.calls[0]?.[0]?.data?.queries;
-    expect(payload.excludeDescriptionRules).toEqual(["identity_requirement"]);
-  });
-
-  it("keeps only supported description exclusion rules", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1", email: "user@example.com" },
-    });
-
-    await POST(
-      new Request("http://localhost/api/fetch-runs", {
-        method: "POST",
-        body: JSON.stringify({
-          title: "Software Engineer",
-          excludeDescriptionRules: [
-            "identity_requirement",
-            "clearance_requirement",
-            "sponsorship_unavailable",
-            "experience_requirement_4_plus",
-            "exp_7",
-          ],
-        }),
-      }),
-    );
-
-    const payload = fetchRunStore.create.mock.calls[0]?.[0]?.data?.queries;
-    expect(payload.excludeDescriptionRules).toEqual([
-      "identity_requirement",
-      "clearance_requirement",
-      "sponsorship_unavailable",
-      "experience_requirement_4_plus",
-    ]);
   });
 
   it("ignores resultsWanted input and stores null for full-fetch mode", async () => {

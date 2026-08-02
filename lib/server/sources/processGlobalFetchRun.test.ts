@@ -414,7 +414,7 @@ describe("discoverGlobalFetchRun", () => {
     );
   });
 
-  it("enforces persisted freshness and description exclusions before commit", async () => {
+  it("executes the complete versioned v1 description-rule snapshot", async () => {
     const recent = sourceJob("https://remoteok.com/remote-jobs/recent");
     recent.listingDate = "2026-07-20T00:00:00.000Z";
     const old = sourceJob("https://remoteok.com/remote-jobs/old");
@@ -422,19 +422,37 @@ describe("discoverGlobalFetchRun", () => {
     const gated = sourceJob("https://remoteok.com/remote-jobs/gated");
     gated.description =
       "Candidates must have 6+ years of professional experience.";
+    const sponsorshipGated = sourceJob(
+      "https://remoteok.com/remote-jobs/no-sponsorship",
+    );
+    sponsorshipGated.description =
+      "Visa sponsorship is not available for this role.";
     store.runSourceFetch.mockResolvedValue({
-      jobs: [recent, old, gated],
-      diagnostics: [{ source: "remoteok", ok: true, raw: 3 }],
+      jobs: [recent, old, gated, sponsorshipGated],
+      diagnostics: [{ source: "remoteok", ok: true, raw: 4 }],
     });
 
     const result = await discoverGlobalFetchRun(
-      input({
-        sources: ["remoteok"],
-        queries: ["AI Engineer"],
-        hoursOld: 24 * 30,
-        applyExcludes: true,
-        excludeDescriptionRules: ["experience_requirement_4_plus"],
-      }),
+      input(
+        buildGlobalFetchRunConfigV1({
+          title: "AI Engineer",
+          baseQueries: ["AI Engineer"],
+          queries: ["AI Engineer"],
+          location: null,
+          hoursOld: 24 * 30,
+          resultsWanted: null,
+          smartExpand: false,
+          includeFromQueries: true,
+          applyExcludes: true,
+          excludeTitleTerms: [],
+          excludeDescriptionRules: [
+            "experience_requirement_4_plus",
+            "sponsorship_unavailable",
+          ],
+          sources: ["remoteok"],
+          sourceSelection: "explicit",
+        }),
+      ),
     );
 
     expect(result).toMatchObject({

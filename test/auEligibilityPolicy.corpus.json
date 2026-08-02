@@ -1,0 +1,645 @@
+{
+  "policyVersion": "au-recall-safe-v1",
+  "cases": [
+    {
+      "name": "explicit Australian citizen or PR gate",
+      "description": "Must be an Australian citizen or permanent resident.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "Must be an Australian citizen or permanent resident"
+      }
+    },
+    {
+      "name": "citizenship is essential",
+      "description": "Australian citizenship is essential for this role.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "Australian citizenship is essential for this role"
+      }
+    },
+    {
+      "name": "only Australian citizens may apply",
+      "description": "Only Australian citizens may apply.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "Only Australian citizens may apply"
+      }
+    },
+    {
+      "name": "eligibility heading is an explicit gate",
+      "description": "Eligibility: Australian citizen or permanent resident.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "Eligibility: Australian citizen or permanent resident"
+      }
+    },
+    {
+      "name": "explicit Australian permanent residency gate",
+      "description": "Applicants are required to hold Australian permanent residency.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_PR_REQUIRED",
+        "evidence": "Applicants are required to hold Australian permanent residency"
+      }
+    },
+    {
+      "name": "Australian permanent residents only",
+      "description": "Australian permanent residents only.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_PR_REQUIRED",
+        "evidence": "Australian permanent residents only"
+      }
+    },
+    {
+      "name": "role requires Australian PR status",
+      "description": "This role requires Australian PR status.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_PR_REQUIRED",
+        "evidence": "This role requires Australian PR status"
+      }
+    },
+    {
+      "name": "ordinary Australian work rights stay eligible",
+      "description": "Applicants must have the right to work in Australia.",
+      "rules": ["identity_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "no sponsorship stays eligible",
+      "description": "Sponsorship is not available for this role.",
+      "rules": ["identity_requirement", "sponsorship_unavailable"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "sponsorship rule alone is fail open",
+      "description": "We will not sponsor visas now or in the future.",
+      "rules": ["sponsorship_unavailable"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "PR friendly is public relations context",
+      "description": "PR-friendly public relations culture and modern media stack.",
+      "rules": ["identity_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "citizens are service users not candidates",
+      "description": "We build services for Australian citizens and permanent residents.",
+      "rules": ["identity_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "citizenship is preferred",
+      "description": "Australian citizenship is preferred but not essential.",
+      "rules": ["identity_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "citizenship gate before contrast comma",
+      "description": "Australian citizenship is mandatory, but sponsorship is available.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "Australian citizenship is mandatory,"
+      }
+    },
+    {
+      "name": "NZ identity is outside policy A",
+      "description": "NZ citizen or SCV holder required.",
+      "rules": ["identity_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "US identity is outside policy A",
+      "description": "Only US citizens may apply.",
+      "rules": ["identity_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "citizenship policy experience is not candidate identity",
+      "description": "Experience supporting Australian citizenship policy is required.",
+      "rules": ["identity_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "missing description fails open",
+      "description": null,
+      "rules": ["identity_requirement", "clearance_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "AGSVA Baseline must be held",
+      "description": "Must hold an AGSVA Baseline clearance.",
+      "rules": ["clearance_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_BASELINE_REQUIRED",
+        "evidence": "Must hold an AGSVA Baseline clearance"
+      }
+    },
+    {
+      "name": "NV1 is required",
+      "description": "NV1 clearance is required for this role.",
+      "rules": ["clearance_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_NV1_REQUIRED",
+        "evidence": "NV1 clearance is required for this role"
+      }
+    },
+    {
+      "name": "Negative Vetting 2 must be held",
+      "description": "Applicants must have Negative Vetting 2 clearance.",
+      "rules": ["clearance_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_NV2_REQUIRED",
+        "evidence": "Applicants must have Negative Vetting 2 clearance"
+      }
+    },
+    {
+      "name": "must be able to obtain NV2",
+      "description": "Candidates must be able to obtain NV2 clearance.",
+      "rules": ["clearance_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CLEARANCE_OBTAIN_REQUIRED",
+        "evidence": "Candidates must be able to obtain NV2 clearance"
+      }
+    },
+    {
+      "name": "ability to obtain Australian Government clearance",
+      "description": "Ability to obtain an Australian Government security clearance is required.",
+      "rules": ["clearance_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CLEARANCE_OBTAIN_REQUIRED",
+        "evidence": "Ability to obtain an Australian Government security clearance is required"
+      }
+    },
+    {
+      "name": "generic security clearance eligibility is ambiguous",
+      "description": "You are required to be eligible to obtain a security clearance.",
+      "rules": ["clearance_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "generic security clearance requirement is ambiguous",
+      "description": "Applicants must hold a security clearance.",
+      "rules": ["clearance_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "compact requires NV1 phrasing",
+      "description": "Requires NV1 clearance.",
+      "rules": ["clearance_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_NV1_REQUIRED",
+        "evidence": "Requires NV1 clearance"
+      }
+    },
+    {
+      "name": "Security Plus is a professional certificate",
+      "description": "Security+ certification is required.",
+      "rules": ["clearance_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "CISSP is a professional certificate",
+      "description": "CISSP certification is mandatory.",
+      "rules": ["clearance_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "Baseline environment is background context",
+      "description": "The project operates in an AGSVA Baseline-cleared environment.",
+      "rules": ["clearance_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "Top Secret data is background context",
+      "description": "The system processes TOP SECRET data; no candidate clearance is required.",
+      "rules": ["clearance_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "clearance is preferred",
+      "description": "NV1 clearance is preferred but not essential.",
+      "rules": ["clearance_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "NV1 gate before contrast comma",
+      "description": "NV1 clearance is mandatory, but sponsorship is available.",
+      "rules": ["clearance_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_NV1_REQUIRED",
+        "evidence": "NV1 clearance is mandatory,"
+      }
+    },
+    {
+      "name": "clearance is not required",
+      "description": "Applicants without NV1 clearance may still apply.",
+      "rules": ["clearance_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "employer handles clearance",
+      "description": "The company will sponsor the successful candidate through the NV1 clearance process.",
+      "rules": ["clearance_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "Five Eyes is background context",
+      "description": "Experience supporting Five Eyes intelligence partners is desirable.",
+      "rules": ["identity_requirement", "clearance_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "unrelated negation cannot hide citizenship gate",
+      "description": "A degree is not required. Applicants must be Australian citizens.",
+      "rules": ["identity_requirement", "clearance_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "Applicants must be Australian citizens"
+      }
+    },
+    {
+      "name": "sponsorship in another sentence cannot hide citizenship gate",
+      "description": "Must be an Australian citizen. Sponsorship is available for other roles.",
+      "rules": ["identity_requirement", "clearance_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "Must be an Australian citizen"
+      }
+    },
+    {
+      "name": "clearance negation cannot hide citizenship gate",
+      "description": "Security clearance is not required. Australian citizenship is mandatory.",
+      "rules": ["identity_requirement", "clearance_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "Australian citizenship is mandatory"
+      }
+    },
+    {
+      "name": "citizenship negation cannot hide NV1 gate",
+      "description": "No citizenship is required. Active NV1 clearance is mandatory.",
+      "rules": ["identity_requirement", "clearance_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_NV1_REQUIRED",
+        "evidence": "Active NV1 clearance is mandatory"
+      }
+    },
+    {
+      "name": "employer help does not rescue explicit obtain gate",
+      "description": "Candidates must be able to obtain NV1 clearance; the company will sponsor the process.",
+      "rules": ["clearance_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CLEARANCE_OBTAIN_REQUIRED",
+        "evidence": "Candidates must be able to obtain NV1 clearance"
+      }
+    },
+    {
+      "name": "bare baseline understanding is not clearance",
+      "description": "This role requires a baseline understanding of JavaScript.",
+      "rules": ["clearance_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "bare baseline knowledge is not clearance",
+      "description": "Applicants must have baseline knowledge of cloud security.",
+      "rules": ["clearance_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "bare baseline skills are not clearance",
+      "description": "Candidates must possess baseline technical skills.",
+      "rules": ["clearance_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "citizenship policy background is not candidate identity",
+      "description": "This role requires an Australian citizenship policy background.",
+      "rules": ["identity_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "clearance administration experience is not candidate clearance",
+      "description": "This role requires security clearance administration experience.",
+      "rules": ["clearance_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "clearance knowledge is not candidate clearance",
+      "description": "Applicants must have security clearance knowledge.",
+      "rules": ["clearance_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "NV1 project experience is not candidate clearance",
+      "description": "Candidates must possess NV1 project experience.",
+      "rules": ["clearance_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "Australian PR experience is not residency status",
+      "description": "This communications role requires Australian PR experience.",
+      "rules": ["identity_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "citizenship data expertise is domain experience",
+      "description": "This role requires Australian citizenship data expertise.",
+      "rules": ["identity_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "citizenship application processing is domain experience",
+      "description": "Applicants must have Australian citizenship application processing experience.",
+      "rules": ["identity_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "Australian PR campaigns are public relations work",
+      "description": "This role requires Australian PR media campaigns experience.",
+      "rules": ["identity_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "NV1 implementation experience is project context",
+      "description": "Applicants must possess NV1 implementation experience.",
+      "rules": ["clearance_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "citizenship consulting capability is domain experience",
+      "description": "This role requires Australian citizenship consulting capability.",
+      "rules": ["identity_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "NV1 delivery expertise is project context",
+      "description": "Applicants must have NV1 delivery expertise.",
+      "rules": ["clearance_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "Australian PR stakeholder engagement is public relations work",
+      "description": "Applicants must have Australian PR stakeholder engagement experience.",
+      "rules": ["identity_requirement"],
+      "expected": { "verdict": "KEEP", "reasonCode": null, "evidence": null }
+    },
+    {
+      "name": "open only to Australian citizens",
+      "description": "Open only to Australian citizens.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "Open only to Australian citizens"
+      }
+    },
+    {
+      "name": "applications from Australian citizens only",
+      "description": "Applications from Australian citizens only.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "Applications from Australian citizens only"
+      }
+    },
+    {
+      "name": "only Australian citizens are eligible",
+      "description": "Only Australian citizens are eligible to apply.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "Only Australian citizens are eligible to apply"
+      }
+    },
+    {
+      "name": "successful applicant will need citizenship",
+      "description": "The successful applicant will need to be an Australian citizen.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "The successful applicant will need to be an Australian citizen"
+      }
+    },
+    {
+      "name": "candidates need citizenship",
+      "description": "Candidates need Australian citizenship.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "Candidates need Australian citizenship"
+      }
+    },
+    {
+      "name": "citizenship is a role requirement",
+      "description": "Australian citizenship is a requirement of this role.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "Australian citizenship is a requirement of this role"
+      }
+    },
+    {
+      "name": "citizenship is a mandatory requirement",
+      "description": "Australian citizenship is a mandatory requirement for this role.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "Australian citizenship is a mandatory requirement for this role"
+      }
+    },
+    {
+      "name": "citizenship status is explicitly required",
+      "description": "Australian citizenship status is required.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "Australian citizenship status is required"
+      }
+    },
+    {
+      "name": "either citizen or resident is explicit",
+      "description": "Applicants must be either Australian citizens or permanent residents.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "Applicants must be either Australian citizens or permanent residents"
+      }
+    },
+    {
+      "name": "only candidates who are citizens may apply",
+      "description": "Only candidates who are Australian citizens may apply.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "Only candidates who are Australian citizens may apply"
+      }
+    },
+    {
+      "name": "open to citizens only",
+      "description": "Open to Australian citizens only.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "Open to Australian citizens only"
+      }
+    },
+    {
+      "name": "slash separated citizen or resident only",
+      "description": "Australian citizens/permanent residents only.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "Australian citizens/permanent residents only"
+      }
+    },
+    {
+      "name": "role requires citizenship and named clearance",
+      "description": "This role requires Australian citizenship and NV1 clearance.",
+      "rules": ["identity_requirement", "clearance_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "This role requires Australian citizenship and NV1 clearance"
+      }
+    },
+    {
+      "name": "inverse citizenship requirement heading",
+      "description": "Citizenship requirement: Australian.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "Citizenship requirement: Australian"
+      }
+    },
+    {
+      "name": "must obtain and maintain NV1",
+      "description": "Must obtain and maintain NV1 clearance.",
+      "rules": ["clearance_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CLEARANCE_OBTAIN_REQUIRED",
+        "evidence": "Must obtain and maintain NV1 clearance"
+      }
+    },
+    {
+      "name": "will be required to obtain NV1",
+      "description": "You will be required to obtain NV1 clearance.",
+      "rules": ["clearance_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CLEARANCE_OBTAIN_REQUIRED",
+        "evidence": "You will be required to obtain NV1 clearance"
+      }
+    },
+    {
+      "name": "hold or be eligible to obtain NV2",
+      "description": "Must hold or be eligible to obtain NV2 clearance.",
+      "rules": ["clearance_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CLEARANCE_OBTAIN_REQUIRED",
+        "evidence": "Must hold or be eligible to obtain NV2 clearance"
+      }
+    },
+    {
+      "name": "eligibility heading requires ability to obtain Baseline",
+      "description": "Eligibility: ability to obtain Baseline clearance.",
+      "rules": ["clearance_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CLEARANCE_OBTAIN_REQUIRED",
+        "evidence": "Eligibility: ability to obtain Baseline clearance"
+      }
+    },
+    {
+      "name": "eligible for NV1 is explicit",
+      "description": "Must be eligible for NV1 clearance.",
+      "rules": ["clearance_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CLEARANCE_OBTAIN_REQUIRED",
+        "evidence": "Must be eligible for NV1 clearance"
+      }
+    },
+    {
+      "name": "able to obtain and maintain NV1 is explicit",
+      "description": "Candidates must be able to obtain and maintain NV1 clearance.",
+      "rules": ["clearance_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CLEARANCE_OBTAIN_REQUIRED",
+        "evidence": "Candidates must be able to obtain and maintain NV1 clearance"
+      }
+    },
+    {
+      "name": "full width NV1 gate normalizes consistently",
+      "description": "Ｍｕｓｔ hold ＮＶ１ clearance.",
+      "rules": ["clearance_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_NV1_REQUIRED",
+        "evidence": "Ｍｕｓｔ hold ＮＶ１ clearance"
+      }
+    },
+    {
+      "name": "full width must normalizes consistently",
+      "description": "Ｍｕｓｔ be an Australian citizen.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "Ｍｕｓｔ be an Australian citizen"
+      }
+    },
+    {
+      "name": "astral prefix preserves evidence text",
+      "description": "About 🚀. Must be an Australian citizen.",
+      "rules": ["identity_requirement"],
+      "expected": {
+        "verdict": "EXCLUDE",
+        "reasonCode": "AU_CITIZEN_REQUIRED",
+        "evidence": "Must be an Australian citizen"
+      }
+    }
+  ]
+}

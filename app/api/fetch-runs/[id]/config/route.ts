@@ -5,7 +5,7 @@ import { prisma } from "@/lib/server/prisma";
 import { constantTimeEqual } from "@/lib/server/auth/constantTimeEqual";
 import { reportError } from "@/lib/server/observability/errorReporter";
 import {
-  normalizeFetchRunConfigV1,
+  normalizeFetchRunConfig,
   toLegacyFetchRunConfigFields,
 } from "@/lib/shared/schemas/fetchRunConfig";
 import type { Prisma } from "@/lib/generated/prisma";
@@ -42,7 +42,7 @@ function requireSecret(req: Request): "ok" | "missing" | "invalid" {
 
 function configResponse(run: StoredFetchRunConfig): NextResponse {
   try {
-    const config = normalizeFetchRunConfigV1(run);
+    const config = normalizeFetchRunConfig(run);
     return NextResponse.json({
       run: { ...run, ...toLegacyFetchRunConfigFields(config), config },
     });

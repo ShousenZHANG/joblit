@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "activePolicyId": "au-recall-safe-v1",
+  "policies": {
+    "au-recall-safe-v1": {
+      "id": "au-recall-safe-v1",
+      "seniorityCeiling": "mid",
+      "seniorityEvidence": "visible-title-only",
+      "citizenshipOrPr": "exclude-explicit-required",
+      "governmentSecurityClearance": "exclude-required-or-explicitly-eligible-to-obtain",
+      "experienceYears": "never-exclude"
+    }
+  }
+}

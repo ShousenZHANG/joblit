@@ -218,173 +218,38 @@ describe("FetchClient", () => {
       "Frontend Engineer",
       "Backend Engineer",
     ]);
-    expect(body.smartExpand).toBe(true);
-    expect(body.includeFromQueries).toBe(true);
-    expect(body.excludeDescriptionRules).toEqual([
-      "identity_requirement",
-      "experience_requirement_4_plus",
-    ]);
+    expect(body).toEqual({
+      market: "AU",
+      title: "Software Engineer",
+      queries: [
+        "Software Engineer",
+        "Frontend Engineer",
+        "Backend Engineer",
+      ],
+      location: "Sydney, New South Wales, Australia",
+      hoursOld: 48,
+    });
     expect(body.sourceOptions).toBeUndefined();
   });
 
-  // The old control was a checkbox whose "off" state meant "skip the include
-  // filter" to the AU worker and "loosen the include filter" to the GLOBAL
-  // processor. One click produced different amounts from the two markets with
-  // nothing on screen to say why, so the states are now named.
-  async function submitWithTitleMatch(mode: "Strict" | "Relaxed" | "Off") {
-    const user = userEvent.setup();
-    renderFetch();
+  it.each([
+    ["en", "Automatic fetch rules", "Years of experience never remove a role."],
+    ["zh", "自动抓取规则", "工作年限不会用于删除岗位。"],
+  ] as const)(
+    "shows the fixed recall-safe policy and no mutable exclusion controls in %s",
+    (locale, heading, experiencePromise) => {
+      renderFetch(locale);
 
-    const titleInput = screen.getAllByPlaceholderText(/e\.g\. software engineer/i)[0];
-    fireEvent.change(titleInput, { target: { value: "AI Engineer" } });
-    await user.click(screen.getByRole("radio", { name: mode }));
-    await user.click(screen.getByRole("button", { name: /start fetch/i }));
-
-    await waitFor(() => {
-      expect(startRunMock).toHaveBeenCalledWith([{ id: "run-1", source: "jobspy" }]);
-    });
-
-    const fetchMock = global.fetch as unknown as {
-      mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> };
-    };
-    const createCall = fetchMock.mock.calls.find(
-      ([url, init]) => url === "/api/fetch-runs" && init?.method === "POST",
-    );
-    return JSON.parse(String(createCall?.[1]?.body ?? "{}"));
-  }
-
-  it("sends the selected title match mode", async () => {
-    expect(await submitWithTitleMatch("Off")).toMatchObject({
-      titleMatch: "off",
-      // The legacy boolean still ships for FetchRun rows and the AU worker's
-      // compatibility projection.
-      includeFromQueries: false,
-    });
-  });
-
-  it("sends relaxed without claiming the filter is off", async () => {
-    expect(await submitWithTitleMatch("Relaxed")).toMatchObject({
-      titleMatch: "relaxed",
-      includeFromQueries: true,
-    });
-  });
-
-  it("defaults to strict", async () => {
-    expect(await submitWithTitleMatch("Strict")).toMatchObject({
-      titleMatch: "strict",
-      includeFromQueries: true,
-    });
-  });
-
-  it("optionally adds a filtered GLOBAL run and tracks both source lanes", async () => {
-    const user = userEvent.setup();
-    let createCount = 0;
-    const fetchMock = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
-      const url = typeof input === "string" ? input : input.url;
-      if (url === "/api/fetch-runs" && init?.method === "POST") {
-        createCount += 1;
-        return new Response(JSON.stringify({ id: `run-${createCount}` }), {
-          status: 201,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      if (/^\/api\/fetch-runs\/run-\d+\/trigger$/.test(url) && init?.method === "POST") {
-        return new Response(JSON.stringify({ ok: true }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      if (url === "/api/fetch-runs") {
-        return new Response(JSON.stringify({ runs: [] }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    renderFetch();
-    await user.click(screen.getByTestId("global-feeds-chip"));
-    await user.click(screen.getByRole("button", { name: /start fetch/i }));
-
-    await waitFor(() => {
-      expect(startRunMock).toHaveBeenCalledWith([
-        { id: "run-1", source: "jobspy" },
-        { id: "run-2", source: "global" },
-      ]);
-    });
-
-    const createBodies = fetchMock.mock.calls
-      .filter(([url, init]) => url === "/api/fetch-runs" && init?.method === "POST")
-      .map(([, init]) => JSON.parse(String(init?.body ?? "{}")));
-    expect(createBodies[1]).toMatchObject({
-      market: "GLOBAL",
-      queries: ["Software Engineer"],
-      baseQueries: ["Software Engineer"],
-      location: "Sydney, New South Wales, Australia",
-      hoursOld: 48,
-      smartExpand: true,
-      includeFromQueries: true,
-      applyExcludes: true,
-      excludeTitleTerms: expect.arrayContaining(["senior", "lead"]),
-      excludeDescriptionRules: [
-        "identity_requirement",
-        "experience_requirement_4_plus",
-      ],
-    });
-  });
-
-  it("keeps a created lane visible when multi-source rollback cannot cancel it", async () => {
-    const user = userEvent.setup();
-    let createCount = 0;
-    const fetchMock = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
-      const url = typeof input === "string" ? input : input.url;
-      if (url === "/api/fetch-runs" && init?.method === "POST") {
-        createCount += 1;
-        if (createCount === 1) {
-          return new Response(JSON.stringify({ id: "run-visible" }), {
-            status: 201,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-        return new Response(
-          JSON.stringify({ error: { message: "Global create failed" } }),
-          {
-            status: 503,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
-      }
-      if (
-        url === "/api/fetch-runs/run-visible/cancel" &&
-        init?.method === "POST"
-      ) {
-        return new Response(
-          JSON.stringify({ error: { message: "Cancel unavailable" } }),
-          {
-            status: 500,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
-      }
-      return new Response(JSON.stringify({ runs: [] }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    renderFetch();
-    await user.click(screen.getByTestId("global-feeds-chip"));
-    await user.click(screen.getByRole("button", { name: /start fetch/i }));
-
-    await waitFor(() => {
-      expect(startRunMock).toHaveBeenCalledWith([
-        { id: "run-visible", source: "jobspy" },
-      ]);
-    });
-  });
+      expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
+      expect(screen.getByText(experiencePromise)).toBeInTheDocument();
+      expect(screen.queryByTestId("title-match-control")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("title-exclusions-trigger")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("description-exclusions-trigger")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/minimum experience/i)).not.toBeInTheDocument();
+      expect(screen.queryByTestId("global-feeds-chip")).not.toBeInTheDocument();
+      expect(screen.queryByText(/recent fetches|最近的抓取/i)).not.toBeInTheDocument();
+    },
+  );
 
   it("localizes Retry and keeps the error recovery target touch-sized", async () => {
     const user = userEvent.setup();
@@ -424,175 +289,6 @@ describe("FetchClient", () => {
     expect(actions).toBeInTheDocument();
 
     expect(screen.getByRole("button", { name: /start fetch/i })).toBeInTheDocument();
-  });
-
-  it("opens title exclusions dropdown with bounded menu sizing and animation", async () => {
-    const user = userEvent.setup();
-    renderFetch();
-
-    const trigger = screen.getByTestId("title-exclusions-trigger");
-    await user.click(trigger);
-
-    const menu = await screen.findByTestId("title-exclusions-menu");
-    expect(trigger).toHaveAttribute("aria-expanded", "true");
-    expect(trigger).toHaveClass("h-11", "rounded-2xl");
-    expect(menu.className).toContain("w-[var(--radix-dropdown-menu-trigger-width)]");
-    expect(menu.className).toContain("data-[state=open]:animate-in");
-    expect(menu.className).toContain("data-[state=open]:zoom-in-95");
-  });
-
-  it("defaults the minimum-experience filter to 4+ and lists rights rules separately", async () => {
-    const user = userEvent.setup();
-    renderFetch();
-
-    // Experience is now its own select, defaulted to 4+ years.
-    expect(screen.getByText("Requires 4+ years experience")).toBeInTheDocument();
-
-    // The description-rules dropdown now holds rights rules only.
-    await user.click(screen.getByTestId("description-exclusions-trigger"));
-    expect(await screen.findByText("No visa sponsorship")).toBeInTheDocument();
-  });
-
-  it("lists recent fetches and re-runs one back into the form", async () => {
-    const user = userEvent.setup();
-    const fetchMock = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
-      const url = typeof input === "string" ? input : input.url;
-      if (url === "/api/fetch-runs" && init?.method !== "POST") {
-        return new Response(
-          JSON.stringify({
-            runs: [
-              {
-                id: "r1",
-                status: "SUCCEEDED",
-                market: "AU",
-                importedCount: 7,
-                title: "Platform Engineer",
-                queryCount: 3,
-                location: "Melbourne, Victoria, Australia",
-                hoursOld: 24,
-                smartExpand: true,
-                sources: null,
-                excludeKeywords: null,
-                createdAt: new Date().toISOString(),
-              },
-            ],
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
-      }
-      return new Response(JSON.stringify({ ok: true }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    renderFetch();
-
-    expect(await screen.findByText("Platform Engineer")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: /re-run platform engineer/i }));
-
-    await waitFor(() => {
-      const titleInput = screen.getAllByPlaceholderText(
-        /e\.g\. software engineer/i,
-      )[0] as HTMLInputElement;
-      expect(titleInput.value).toBe("Platform Engineer");
-    });
-  });
-
-  it.each([
-    [
-      "en",
-      "3 imported · partially completed",
-      "Re-run",
-      "Re-run Reliability Engineer",
-    ],
-    [
-      "zh",
-      "已导入 3 个 · 部分完成",
-      "重新抓取",
-      "重新抓取 Reliability Engineer",
-    ],
-  ] as const)(
-    "renders localized PARTIAL fetch history as an amber terminal outcome in %s",
-    async (locale, statusText, rerunText, rerunName) => {
-      const fetchMock = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
-        const url = typeof input === "string" ? input : input.url;
-        if (url === "/api/fetch-runs" && init?.method !== "POST") {
-          return new Response(
-            JSON.stringify({
-              runs: [
-                {
-                  id: "partial-run",
-                  status: "PARTIAL",
-                  market: "GLOBAL",
-                  importedCount: 3,
-                  title: "Reliability Engineer",
-                  queryCount: 1,
-                  location: null,
-                  hoursOld: 24,
-                  smartExpand: true,
-                  sources: ["remoteok"],
-                  excludeKeywords: null,
-                  createdAt: new Date().toISOString(),
-                },
-              ],
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        return new Response(JSON.stringify({ ok: true }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      });
-      vi.stubGlobal("fetch", fetchMock);
-
-      renderFetch(locale);
-
-      const title = await screen.findByText("Reliability Engineer");
-      const row = title.closest("li");
-      expect(row).not.toBeNull();
-      expect(row).toHaveTextContent(statusText);
-      expect(row?.querySelector("span[aria-hidden]")).toHaveClass("bg-amber-500");
-      expect(screen.getByRole("button", { name: rerunName })).toHaveTextContent(
-        rerunText,
-      );
-      if (locale === "zh") {
-        expect(row).not.toHaveTextContent(/imported|partially completed|re-run/i);
-      }
-    },
-  );
-
-  it("sends a custom title term and the default experience exclusion in the run body", async () => {
-    const user = userEvent.setup();
-    renderFetch();
-
-    const customInput = screen.getByLabelText(/add custom title exclusion term/i);
-    await user.type(customInput, "intern");
-    await user.click(screen.getByRole("button", { name: /^add$/i }));
-
-    await user.click(screen.getByRole("button", { name: /start fetch/i }));
-    await waitFor(() => {
-      expect(startRunMock).toHaveBeenCalledWith([{ id: "run-1", source: "jobspy" }]);
-    });
-
-    const fetchMock = global.fetch as unknown as {
-      mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> };
-    };
-    const createCall = fetchMock.mock.calls.find(
-      ([url, init]) => url === "/api/fetch-runs" && init?.method === "POST",
-    );
-    const body = JSON.parse(String(createCall?.[1]?.body ?? "{}"));
-
-    expect(body.excludeTitleTerms).toContain("intern");
-    expect(body.excludeDescriptionRules).toContain("experience_requirement_4_plus");
-    // Removed filters must no longer be sent.
-    expect(body.remoteOnly).toBeUndefined();
-    expect(body.minSalary).toBeUndefined();
-    expect(body.strictness).toBeUndefined();
-    expect(body.excludeJobTypes).toBeUndefined();
   });
 
 });

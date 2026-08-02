@@ -19,6 +19,16 @@ from typing import Any, Dict, List, Optional
 import requests
 import pandas as pd
 from jobspy import scrape_jobs
+from title_seniority_policy import (
+    evaluate_legacy_title_exclusions,
+    evaluate_title_seniority_for_policy,
+)
+from fetch_policy import (
+    AU_FETCH_POLICY_REGISTRY,
+    AU_RECALL_SAFE_V1_POLICY_ID,
+    FetchPolicyManifestError,
+    resolve_registered_au_fetch_policy,
+)
 
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s %(name)s: %(message)s')
 logger = logging.getLogger("jobspy_runner")
@@ -70,9 +80,9 @@ class FetchRunSuperseded(SystemExit):
         super().__init__(0)
 
 
-# Title exclusion regex is built per-run from the user's selected terms in
-# `_build_exclude_title_re` — there is no hardcoded title pattern, so the UI
-# selection is the single source of truth.
+# Historical v1 description rules share this manifest with the TypeScript
+# normalizer. AU v2 title policy is versioned separately and never comes from
+# browser-selected terms.
 FETCH_EXCLUSION_MANIFEST_PATH = (
     Path(__file__).resolve().parents[2]
     / "lib"
@@ -550,6 +560,86 @@ def _fetch_terms(
 
 
 TITLE_MATCH_MODES = ("strict", "relaxed", "off")
+IMPLEMENTED_AU_RECALL_POLICY_IDS = frozenset({AU_RECALL_SAFE_V1_POLICY_ID})
+
+
+def _resolve_au_recall_policy_id(raw_queries: Any) -> Optional[str]:
+    """Validate AU config v2 and return its immutable execution policy id."""
+    if not isinstance(raw_queries, dict) or raw_queries.get("schemaVersion") != 2:
+        return None
+    if (
+        raw_queries.get("market") != "AU"
+        or raw_queries.get("smartExpand") is not True
+        or raw_queries.get("includeFromQueries") is not True
+        or raw_queries.get("titleMatch") != "relaxed"
+    ):
+        raise RuntimeError("Unsupported AU fetch recall policy")
+    try:
+        policy = resolve_registered_au_fetch_policy(
+            raw_queries.get("policy"),
+            AU_FETCH_POLICY_REGISTRY,
+        )
+    except (FetchPolicyManifestError, TypeError, ValueError) as error:
+        raise RuntimeError("Unsupported AU fetch recall policy") from error
+    if policy.id not in IMPLEMENTED_AU_RECALL_POLICY_IDS:
+        raise RuntimeError(
+            f"AU fetch recall policy is not implemented: {policy.id}"
+        )
+    return policy.id
+
+
+def _uses_au_recall_policy(raw_queries: Any) -> bool:
+    """Compatibility probe retained for legacy worker tests and callers."""
+
+    return _resolve_au_recall_policy_id(raw_queries) is not None
+
+
+def _resolve_active_description_rules(
+    apply_recall_policy: bool,
+    apply_excludes: bool,
+    configured_rules: List[str],
+) -> tuple[List[str], List[str]]:
+    if apply_recall_policy:
+        return ["identity_requirement", "clearance_requirement"], []
+    if not apply_excludes:
+        return [], []
+    return (
+        [rule for rule in configured_rules if rule in DESCRIPTION_RIGHTS_RULES],
+        [rule for rule in configured_rules if rule in EXPERIENCE_RULE_THRESHOLDS],
+    )
+
+
+def _filter_description_by_policy(
+    df: pd.DataFrame,
+    *,
+    recall_policy_id: Optional[str],
+    active_rights_rules: List[str],
+    identity_region: str,
+    identity_strictness: str,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Route v2 to its immutable evaluator and v1 to its legacy facade."""
+
+    if recall_policy_id is not None:
+        if recall_policy_id != AU_RECALL_SAFE_V1_POLICY_ID:
+            raise RuntimeError(
+                f"AU fetch recall policy is not implemented: {recall_policy_id}"
+            )
+        from au_eligibility_policy import filter_au_eligibility_policy  # type: ignore
+
+        return filter_au_eligibility_policy(
+            df,
+            identity_requirement="identity_requirement" in active_rights_rules,
+            clearance_requirement="clearance_requirement" in active_rights_rules,
+        )
+
+    from rights_filter import filter_description_v2  # type: ignore
+
+    return filter_description_v2(
+        df,
+        rules=active_rights_rules,
+        region=identity_region,
+        strictness=identity_strictness,
+    )
 
 
 def _resolve_title_match(
@@ -1009,13 +1099,6 @@ def dedupe_jobs(df: pd.DataFrame) -> pd.DataFrame:
     return out.drop(columns=["_canonical_job_url"], errors="ignore")
 
 
-def _build_exclude_title_re(terms: List[str]) -> Optional[re.Pattern]:
-    cleaned = [re.escape(t.strip().lower()) for t in terms if t and t.strip()]
-    if not cleaned:
-        return None
-    return re.compile(r'(?i)\b(?:' + "|".join(cleaned) + r')\b')
-
-
 def filter_title(
     df: pd.DataFrame,
     queries: List[str],
@@ -1023,6 +1106,7 @@ def filter_title(
     exclude_terms: Optional[List[str]] = None,
     base_queries: Optional[List[str]] = None,
     relaxed_include: bool = False,
+    seniority_policy_id: Optional[str] = None,
 ) -> pd.DataFrame:
     """Exclusion always applies; `enforce_include` gates the include filter.
 
@@ -1033,19 +1117,58 @@ def filter_title(
     if df.empty:
         return df
     t = df["title"].fillna("")
-    if "job_level" in df.columns:
-        level = df["job_level"].fillna("")
-    elif "seniority_level" in df.columns:
-        level = df["seniority_level"].fillna("")
-    else:
-        level = pd.Series("", index=df.index)
-    exclude_re = _build_exclude_title_re(exclude_terms or [])
-    if exclude_re:
-        exc = (t.astype(str) + " " + level.astype(str)).apply(
-            lambda value: bool(exclude_re.search(value))
+    configured_terms = [
+        str(term) for term in (exclude_terms or []) if str(term).strip()
+    ]
+    if seniority_policy_id is not None:
+        if seniority_policy_id not in IMPLEMENTED_AU_RECALL_POLICY_IDS:
+            raise RuntimeError(
+                f"AU fetch recall policy is not implemented: {seniority_policy_id}"
+            )
+        try:
+            decisions = t.astype(str).apply(
+                lambda title: evaluate_title_seniority_for_policy(
+                    title,
+                    seniority_policy_id,
+                )
+            )
+        except ValueError as error:
+            raise RuntimeError(
+                f"AU fetch recall policy is not implemented: {seniority_policy_id}"
+            ) from error
+    elif configured_terms:
+        decisions = t.astype(str).apply(
+            lambda title: evaluate_legacy_title_exclusions(
+                title,
+                configured_terms,
+            )
         )
     else:
-        exc = t.apply(lambda s: False)
+        decisions = t.apply(
+            lambda _title: {
+                "outcome": "KEEP",
+                "ruleId": "TITLE_ALLOWED",
+                "evidence": None,
+            }
+        )
+    exc = decisions.apply(lambda decision: decision["outcome"] == "EXCLUDE")
+    if bool(exc.any()):
+        excluded_decisions = decisions[exc]
+        logger.info(
+            "Title seniority exclusions dropped=%s by_rule=%s samples=%s",
+            int(exc.sum()),
+            excluded_decisions.apply(lambda decision: decision["ruleId"])
+            .value_counts()
+            .to_dict(),
+            [
+                {
+                    "title": str(t.loc[index]),
+                    "rule": decision["ruleId"],
+                    "evidence": decision["evidence"],
+                }
+                for index, decision in excluded_decisions.head(5).items()
+            ],
+        )
     out = df[~exc].copy()
     # Optional strict include mode for parity with includeFromQueries config.
     if enforce_include:
@@ -1259,7 +1382,13 @@ def filter_job_quality(
     df: pd.DataFrame,
     require_description: bool,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Drop provable non-job rows and descriptions unusable for active gates."""
+    """Drop only provable non-job rows; missing JD evidence is fail-open.
+
+    ``require_description`` remains in the compatibility signature for older
+    callers. Eligibility rules can exclude only from affirmative evidence, so
+    an unavailable description must never become a deletion signal itself.
+    """
+    _ = require_description
     if df.empty:
         return df.copy(), _filter_audit_frame(df, [])
 
@@ -1278,9 +1407,6 @@ def filter_job_quality(
             rule, evidence = "invalid_job_title", title[:120]
         elif description and INVALID_DESCRIPTION_RE.match(description):
             rule, evidence = "invalid_description", description[:160]
-        elif require_description and not description:
-            rule, evidence = "missing_description", "active JD exclusions require evidence"
-
         if not rule:
             keep_idx.append(idx)
             continue
@@ -2088,10 +2214,11 @@ def main():
     else:
         raise RuntimeError("run.queries must be a list or object")
     base_queries = _resolve_base_queries(raw_queries, title_query, queries)
+    recall_policy_id = _resolve_au_recall_policy_id(raw_queries)
+    apply_recall_policy = recall_policy_id is not None
 
-    # v2 matcher: GLOBAL region (unions all country packs) maximizes recall,
-    # balanced strictness is the calibrated default. Both fixed — the
-    # user-facing strictness knob was removed as a confusing power-user control.
+    # Historical v1 rows retain the legacy GLOBAL vocabulary and balanced
+    # strictness. AU v2 bypasses that matcher and uses its versioned evaluator.
     identity_region = "GLOBAL"
     identity_strictness = "balanced"
 
@@ -2108,15 +2235,12 @@ def main():
     title_match = _resolve_title_match(run, raw_queries, include_from_queries)
     proxy_pool = _parse_csv_list(os.environ.get("FETCH_PROXY_POOL", ""))
 
-    active_rights_rules = (
-        [rule for rule in exclude_desc_rules if rule in DESCRIPTION_RIGHTS_RULES]
-        if apply_excludes
-        else []
-    )
-    active_experience_rules = (
-        [rule for rule in exclude_desc_rules if rule in EXPERIENCE_RULE_THRESHOLDS]
-        if apply_excludes
-        else []
+    active_rights_rules, active_experience_rules = (
+        _resolve_active_description_rules(
+            apply_recall_policy,
+            apply_excludes,
+            exclude_desc_rules,
+        )
     )
     filter_desc = bool(active_rights_rules or active_experience_rules)
 
@@ -2153,6 +2277,7 @@ def main():
             relaxed_include=(title_match == "relaxed"),
             exclude_terms=exclude_title_terms if apply_excludes else None,
             base_queries=base_queries,
+            seniority_policy_id=recall_policy_id,
         )
         logger.info("Rows after title filter: %s", len(df))
         df = keep_columns(df)
@@ -2194,13 +2319,12 @@ def main():
             # Import errors surface loudly; a silent fallback to the retired
             # legacy regex would downgrade filter quality without warning.
             if active_rights_rules:
-                from rights_filter import filter_description_v2  # type: ignore
-
-                df, audit_df = filter_description_v2(
+                df, audit_df = _filter_description_by_policy(
                     df,
-                    rules=active_rights_rules,
-                    region=identity_region,
-                    strictness=identity_strictness,
+                    recall_policy_id=recall_policy_id,
+                    active_rights_rules=active_rights_rules,
+                    identity_region=identity_region,
+                    identity_strictness=identity_strictness,
                 )
                 if not audit_df.empty:
                     audit_summary = (
@@ -2209,8 +2333,9 @@ def main():
                         else {}
                     )
                     logger.info(
-                        "filter_description_v2 dropped=%s region=%s strictness=%s by_rule=%s",
+                        "filter_description_policy dropped=%s policy=%s region=%s strictness=%s by_rule=%s",
                         len(audit_df),
+                        recall_policy_id or "legacy-v1",
                         identity_region,
                         identity_strictness,
                         audit_summary,

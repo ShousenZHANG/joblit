@@ -313,29 +313,17 @@
   },
   "fetch": {
     "searchRoles": "Search roles",
+    "searchRolesDescription": "Search current roles. Joblit expands related titles and applies careful automatic filtering.",
     "jobTitle": "Job title",
     "locationLabel": "Location",
     "hoursOld": "Hours old",
-    "smartExpand": "Smart expand",
-    "applyExclusions": "Apply exclusions",
-    "globalFeeds": "Global remote feeds",
-    "globalFeedsHint": "Also search Remote OK, Remotive, and Jobicy. Results still follow your role, location, and title exclusions.",
-    "sourceHealth": {
-      "title": "Source health",
-      "checking": "Checking public feeds and ATS boards…",
-      "unavailable": "Health details are temporarily unavailable",
-      "ready": "{healthy} of {total} sources ready",
-      "attention": "{count, plural, one {# source needs attention} other {# sources need attention}}",
-      "errorHint": "You can still fetch. Joblit will isolate an unavailable source and keep valid results.",
-      "retry": "Check again",
-      "updatedAfterFetch": "Health updates after each fetch you start.",
-      "moreSources": "{count, plural, one {# additional ATS board is tracked} other {# additional ATS boards are tracked}}",
-      "status": {
-        "healthy": "Ready",
-        "degraded": "Degraded",
-        "down": "Offline",
-        "unknown": "Not checked"
-      }
+    "policy": {
+      "title": "Automatic fetch rules",
+      "summary": "Joblit applies one recall-safe policy to every Australian fetch, so stale browser settings cannot silently hide roles.",
+      "seniority": "Senior-level roles are excluded using the visible job title only; ambiguous titles are kept.",
+      "identity": "Only roles explicitly requiring Australian citizenship or permanent residency are excluded; ordinary work-right and no-sponsorship wording is kept.",
+      "clearance": "Only roles requiring Baseline, NV1, NV2 or explicit eligibility to obtain an Australian government clearance are excluded; professional security certifications are kept.",
+      "experience": "Years of experience never remove a role."
     },
     "startFetch": "Start fetch",
     "fetching": "Fetching…",
@@ -344,29 +332,7 @@
     "popular": "Popular",
     "cnSources": "Sources",
     "cnExcludeKeywords": "Exclude keywords",
-    "cnLocation": "Location",
-    "recentFetches": "Recent fetches",
-    "recentFetchesEmpty": "Runs you start will show up here for one-click re-run.",
-    "historyUntitled": "Untitled search",
-    "historyRoleCount": "{count, plural, one {# role} other {# roles}}",
-    "historyImported": "{count, plural, one {# imported} other {# imported}}",
-    "historyPartial": "{count, plural, one {# imported · partially completed} other {# imported · partially completed}}",
-    "historyStatusQUEUED": "queued",
-    "historyStatusRUNNING": "running",
-    "historyStatusFAILED": "failed",
-    "historyRerun": "Re-run",
-    "historyRerunAria": "Re-run {title}",
-    "titleMatchLabel": "Title match",
-    "titleMatch": {
-      "strict": "Strict",
-      "relaxed": "Relaxed",
-      "off": "Off"
-    },
-    "titleMatchHint": {
-      "strict": "Keep only roles whose title answers one of your search terms.",
-      "relaxed": "Also keep sibling roles in the same domain as your search.",
-      "off": "Keep every role the sources return. Public feeds have no search of their own, so this can import a lot."
-    }
+    "cnLocation": "Location"
   },
   "fetchProgress": {
     "title": "Fetch progress",
@@ -394,7 +360,7 @@
     "importedNew": "Imported {n} new jobs",
     "viewJobs": "View Jobs",
     "noNew": "No new roles found",
-    "noNewHint": "Widen the location or remove some exclusions, then fetch again.",
+    "noNewHint": "Widen the location or search a related title, then fetch again.",
     "dismiss": "Dismiss",
     "cancel": "Cancel fetch",
     "cancelling": "Cancelling fetch…",

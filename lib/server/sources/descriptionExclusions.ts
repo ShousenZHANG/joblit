@@ -3,7 +3,13 @@ import { DESCRIPTION_EXCLUSION_OPTIONS } from "@/lib/shared/fetchExclusionCriter
 
 type Span = { start: number; end: number };
 
-const RIGHTS_RULES = new Set([
+/**
+ * GLOBAL and historical AU v1 rows persist the rule ids selected at creation.
+ * This matcher deliberately preserves that complete v1 contract. The AU v2
+ * recall-safe policy has its own worker boundary and must not be evaluated or
+ * inferred here.
+ */
+const LEGACY_V1_RIGHTS_RULES = new Set([
   "identity_requirement",
   "clearance_requirement",
   "sponsorship_unavailable",
@@ -35,10 +41,11 @@ const EXPERIENCE_SOFT_GUARD_RE =
   /\b(?:up\s+to|less\s+than|fewer\s+than|under|within|no\s+more\s+than|maximum|max\.?|preferred|nice\s+to\s+have)\b/iu;
 const EXPERIENCE_RANGE_PREFIX_RE = /\d+\s*(?:-|–|—|to)\s*$/iu;
 
-const EXPERIENCE_THRESHOLDS = DESCRIPTION_EXCLUSION_OPTIONS.flatMap((option) =>
-  option.category === "experience" && typeof option.minYears === "number"
-    ? [{ rule: option.value, minYears: option.minYears }]
-    : [],
+const LEGACY_V1_EXPERIENCE_THRESHOLDS = DESCRIPTION_EXCLUSION_OPTIONS.flatMap(
+  (option) =>
+    option.category === "experience" && typeof option.minYears === "number"
+      ? [{ rule: option.value, minYears: option.minYears }]
+      : [],
 );
 
 function compileUnion(patterns: readonly string[]): RegExp | null {
@@ -73,7 +80,10 @@ function isSoftened(text: string, span: Span): boolean {
   if (hasMatch(NEGATION_RE, nearby)) return true;
 
   const trailingWindow = rightsRules.proximity.soft_qualifier_window_chars;
-  const trailing = text.slice(span.end, Math.min(text.length, span.end + trailingWindow));
+  const trailing = text.slice(
+    span.end,
+    Math.min(text.length, span.end + trailingWindow),
+  );
   const boundary = trailing.search(/[.;!?\n]/u);
   return hasMatch(
     SOFT_QUALIFIER_RE,
@@ -158,12 +168,20 @@ function parseChineseNumber(raw: string): number | null {
   const tenIndex = raw.indexOf("十");
   if (tenIndex < 0) return digit[raw] ?? null;
   const tens = tenIndex === 0 ? 1 : digit[raw.slice(0, tenIndex)] ?? 0;
-  const ones = tenIndex === raw.length - 1 ? 0 : digit[raw.slice(tenIndex + 1)] ?? 0;
+  const ones =
+    tenIndex === raw.length - 1
+      ? 0
+      : digit[raw.slice(tenIndex + 1)] ?? 0;
   return tens * 10 + ones;
 }
 
-function violatesExperienceRules(text: string, rules: ReadonlySet<string>): boolean {
-  const thresholds = EXPERIENCE_THRESHOLDS.filter(({ rule }) => rules.has(rule));
+function violatesExperienceRules(
+  text: string,
+  rules: ReadonlySet<string>,
+): boolean {
+  const thresholds = LEGACY_V1_EXPERIENCE_THRESHOLDS.filter(({ rule }) =>
+    rules.has(rule),
+  );
   if (thresholds.length === 0) return false;
 
   for (const pattern of EXPERIENCE_PATTERNS) {
@@ -187,7 +205,7 @@ function violatesExperienceRules(text: string, rules: ReadonlySet<string>): bool
 }
 
 /**
- * Returns true only for deterministic hard exclusions. Missing descriptions
+ * Returns true only for deterministic v1 hard exclusions. Missing descriptions
  * stay eligible so a thin public feed does not silently become an empty feed.
  */
 export function violatesDescriptionExclusions(
@@ -197,7 +215,7 @@ export function violatesDescriptionExclusions(
   if (!description?.trim() || activeRules.length === 0) return false;
   const rules = new Set(activeRules);
   const rightsRulesEnabled = new Set(
-    [...rules].filter((rule) => RIGHTS_RULES.has(rule)),
+    [...rules].filter((rule) => LEGACY_V1_RIGHTS_RULES.has(rule)),
   );
   return (
     violatesRightsRules(description, rightsRulesEnabled) ||

@@ -1,0 +1,581 @@
+{
+  "version": 1,
+  "policyId": "au-recall-safe-v1",
+  "note": "Shared fail-open title-seniority contract. TypeScript and Python must return the same outcome and ruleId for every visible title. Source job-level metadata is deliberately outside this interface.",
+  "cases": [
+    {
+      "name": "plain role stays eligible",
+      "title": "Software Engineer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_ALLOWED"
+    },
+    {
+      "name": "senior word is explicit",
+      "title": "Senior Software Engineer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_SENIOR"
+    },
+    {
+      "name": "sr abbreviation is explicit",
+      "title": "Sr. Software Engineer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_SENIOR"
+    },
+    {
+      "name": "snr abbreviation is explicit",
+      "title": "Snr Backend Developer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_SENIOR"
+    },
+    {
+      "name": "sre is not the sr abbreviation",
+      "title": "SRE Engineer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_ALLOWED"
+    },
+    {
+      "name": "mixed junior to senior listing remains applyable",
+      "title": "Software Engineer (Junior to Senior)",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "slash separated junior and senior listing remains applyable",
+      "title": "Junior/Senior Software Engineer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "senior living names an industry",
+      "title": "Senior Living Systems Analyst",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "senior school names an institution segment",
+      "title": "Senior School IT Support",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "lead role prefix is explicit",
+      "title": "Lead Software Engineer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_LEAD"
+    },
+    {
+      "name": "lead developer is an explicit role prefix",
+      "title": "Lead Developer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_LEAD"
+    },
+    {
+      "name": "lead role suffix is explicit",
+      "title": "Software Engineering Lead",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_LEAD"
+    },
+    {
+      "name": "technical lead is explicit",
+      "title": "Technical Lead",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_LEAD"
+    },
+    {
+      "name": "lead generation is a business activity",
+      "title": "Lead Generation Specialist",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "lead qualification is a business activity",
+      "title": "Lead Qualification Analyst",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "lead poisoning names a material",
+      "title": "Lead Poisoning Prevention Specialist",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "principal role is explicit",
+      "title": "Principal Software Engineer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_PRINCIPAL"
+    },
+    {
+      "name": "principal investigator is an explicit role title",
+      "title": "Principal Investigator",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_PRINCIPAL"
+    },
+    {
+      "name": "principal possessive is not a role level",
+      "title": "Principal's Office Administrator",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "staff technical role is explicit",
+      "title": "Staff Software Engineer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_STAFF"
+    },
+    {
+      "name": "staff role suffix is explicit",
+      "title": "Software Engineer, Staff",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_STAFF"
+    },
+    {
+      "name": "staffing is not staff",
+      "title": "Staffing Platform Engineer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_ALLOWED"
+    },
+    {
+      "name": "staff accountant is not a tech staff level",
+      "title": "Staff Accountant",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "engineering manager is explicit",
+      "title": "Engineering Manager",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_MANAGER"
+    },
+    {
+      "name": "manager prefix is explicit",
+      "title": "Manager, Software Engineering",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_MANAGER"
+    },
+    {
+      "name": "systems manager is an AWS product",
+      "title": "AWS Systems Manager Engineer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "tag manager is a Google product",
+      "title": "Google Tag Manager Specialist",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "director role is explicit",
+      "title": "Director of Engineering",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_DIRECTOR"
+    },
+    {
+      "name": "director suffix is explicit",
+      "title": "Engineering Director",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_DIRECTOR"
+    },
+    {
+      "name": "directory is not director",
+      "title": "Active Directory Engineer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_ALLOWED"
+    },
+    {
+      "name": "directorate is not director",
+      "title": "Directorate Systems Analyst",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_ALLOWED"
+    },
+    {
+      "name": "head of function is explicit",
+      "title": "Head of Engineering",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_HEAD"
+    },
+    {
+      "name": "head role suffix is explicit",
+      "title": "Engineering Head",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_HEAD"
+    },
+    {
+      "name": "headless is not head",
+      "title": "Headless CMS Developer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_ALLOWED"
+    },
+    {
+      "name": "head office names a location",
+      "title": "Head Office Systems Coordinator",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "print head names hardware",
+      "title": "Print Head Engineer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "solutions architect is explicit",
+      "title": "Solutions Architect",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_ARCHITECT"
+    },
+    {
+      "name": "software architect is explicit",
+      "title": "Software Architect",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_ARCHITECT"
+    },
+    {
+      "name": "junior architect remains applyable",
+      "title": "Junior Solutions Architect",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "graduate architect remains applyable",
+      "title": "Graduate Cloud Architect",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "associate architect remains applyable",
+      "title": "Associate Solutions Architect",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "architectural adjective is not architect",
+      "title": "Architectural Software Developer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_ALLOWED"
+    },
+    {
+      "name": "chief title is executive",
+      "title": "Chief Technology Officer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_EXECUTIVE"
+    },
+    {
+      "name": "vp title is executive",
+      "title": "VP of Engineering",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_EXECUTIVE"
+    },
+    {
+      "name": "vice president title is executive",
+      "title": "Vice President, Engineering",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_EXECUTIVE"
+    },
+    {
+      "name": "distinguished engineer is executive-level IC",
+      "title": "Distinguished Engineer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_EXECUTIVE"
+    },
+    {
+      "name": "managerial adjective is not manager",
+      "title": "Managerial Reporting Analyst",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_ALLOWED"
+    },
+    {
+      "name": "roman numeral level is ambiguous",
+      "title": "Software Engineer III",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_ALLOWED"
+    },
+    {
+      "name": "mid level is eligible",
+      "title": "Mid-Level Software Engineer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_ALLOWED"
+    },
+    {
+      "name": "configuration manager with SCCM is a product role",
+      "title": "Configuration Manager / SCCM Engineer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "staff augmentation is a delivery model",
+      "title": "Staff Augmentation Software Engineer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "junior technical lead is a conflicting early-career title",
+      "title": "Junior Technical Lead",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "head start is a named programme",
+      "title": "Head Start Software Developer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "staff scheduling is an operating function",
+      "title": "Staff Scheduling Software Engineer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "lead data enrichment refers to prospect data",
+      "title": "Lead Data Enrichment Specialist",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "lead scoring refers to a sales process",
+      "title": "Lead Scoring Data Analyst",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "head count refers to workforce reporting",
+      "title": "Head Count Reporting Analyst",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "manager self service is a product domain",
+      "title": "Manager Self Service Portal Developer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "security manager platform is a product domain",
+      "title": "Security Manager Platform Engineer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "senior associate is still explicitly senior",
+      "title": "Senior Associate Software Engineer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_SENIOR"
+    },
+    {
+      "name": "chapter lead is an explicit leadership title",
+      "title": "Chapter Lead",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_LEAD"
+    },
+    {
+      "name": "practice lead is an explicit leadership title",
+      "title": "Practice Lead",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_LEAD"
+    },
+    {
+      "name": "design lead is an explicit leadership title",
+      "title": "Design Lead",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_LEAD"
+    },
+    {
+      "name": "capability lead is an explicit leadership title",
+      "title": "Capability Lead",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_LEAD"
+    },
+    {
+      "name": "discipline lead is an explicit leadership title",
+      "title": "Discipline Lead",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_LEAD"
+    },
+    {
+      "name": "sr iov is a networking technology prefix",
+      "title": "SR-IOV Software Engineer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "sr iov suffix is a networking technology",
+      "title": "Software Engineer - SR-IOV",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "sr 22 is a product domain rather than seniority",
+      "title": "SR-22 Integration Engineer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "senior care is an industry domain",
+      "title": "Senior Care Platform Software Engineer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "senior citizens names service users",
+      "title": "Senior Citizens Digital Services Developer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "principal component analysis is a technical method",
+      "title": "Principal Component Analysis Engineer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "senior software role is explicit under positive grammar",
+      "title": "Senior Software Engineer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_SENIOR"
+    },
+    {
+      "name": "senior ai role is explicit under positive grammar",
+      "title": "Senior AI Engineer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_SENIOR"
+    },
+    {
+      "name": "sr backend role is explicit under positive grammar",
+      "title": "Sr. Backend Developer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_SENIOR"
+    },
+    {
+      "name": "senior suffix after a role is explicit",
+      "title": "Software Engineer, Senior",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_SENIOR"
+    },
+    {
+      "name": "principal software role is explicit under positive grammar",
+      "title": "Principal Software Engineer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_PRINCIPAL"
+    },
+    {
+      "name": "principal investigator remains a complete senior role",
+      "title": "Principal Investigator",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_PRINCIPAL"
+    },
+    {
+      "name": "senior java developer is an explicit levelled role",
+      "title": "Senior Java Developer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_SENIOR"
+    },
+    {
+      "name": "senior dot net developer is an explicit levelled role",
+      "title": "Senior .NET Developer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_SENIOR"
+    },
+    {
+      "name": "senior react engineer is an explicit levelled role",
+      "title": "Senior React Engineer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_SENIOR"
+    },
+    {
+      "name": "senior python engineer is an explicit levelled role",
+      "title": "Senior Python Engineer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_SENIOR"
+    },
+    {
+      "name": "senior c sharp developer is an explicit levelled role",
+      "title": "Senior C# Developer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_SENIOR"
+    },
+    {
+      "name": "senior ios engineer is an explicit levelled role",
+      "title": "Senior iOS Engineer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_SENIOR"
+    },
+    {
+      "name": "senior android developer is an explicit levelled role",
+      "title": "Senior Android Developer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_SENIOR"
+    },
+    {
+      "name": "senior devsecops engineer is an explicit levelled role",
+      "title": "Senior DevSecOps Engineer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_SENIOR"
+    },
+    {
+      "name": "principal java engineer is an explicit levelled role",
+      "title": "Principal Java Engineer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_PRINCIPAL"
+    }
+  ],
+  "legacyCases": [
+    {
+      "name": "stored senior does not enable sr",
+      "configuredTerms": ["senior"],
+      "title": "Sr. Software Engineer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_ALLOWED"
+    },
+    {
+      "name": "stored senior does not enable snr",
+      "configuredTerms": ["senior"],
+      "title": "Snr Backend Developer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_ALLOWED"
+    },
+    {
+      "name": "stored sr does not enable senior",
+      "configuredTerms": ["sr"],
+      "title": "Senior Software Engineer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_ALLOWED"
+    },
+    {
+      "name": "stored chief does not enable vp",
+      "configuredTerms": ["chief"],
+      "title": "VP of Engineering",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_ALLOWED"
+    },
+    {
+      "name": "stored vp does not enable chief",
+      "configuredTerms": ["vp"],
+      "title": "Chief Technology Officer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_ALLOWED"
+    },
+    {
+      "name": "stored senior still excludes literal senior",
+      "configuredTerms": ["senior"],
+      "title": "Senior Software Engineer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_SENIOR"
+    },
+    {
+      "name": "stored lead keeps lead generation ambiguity",
+      "configuredTerms": ["lead"],
+      "title": "Lead Generation Specialist",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "stored custom term remains whole-term",
+      "configuredTerms": ["intern"],
+      "title": "Software Engineer Intern",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_CUSTOM"
+    }
+  ]
+}

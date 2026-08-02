@@ -1,0 +1,84 @@
+import json
+import os
+import sys
+import unittest
+
+import pandas as pd
+
+from tools.fetcher.title_seniority_policy import (
+    evaluate_legacy_title_exclusions,
+    evaluate_title_seniority_for_policy,
+)
+from tools.fetcher.fetch_policy import ACTIVE_AU_FETCH_POLICY
+
+
+class SharedTitleSeniorityPolicyTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        corpus_path = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "test",
+            "titleSeniorityPolicy.corpus.json",
+        )
+        with open(corpus_path, encoding="utf-8") as handle:
+            cls.corpus = json.load(handle)
+
+    def test_corpus_contains_high_confidence_and_fail_open_examples(self):
+        self.assertGreater(len(self.corpus["cases"]), 20)
+
+    def test_python_matches_the_shared_contract(self):
+        for case in self.corpus["cases"]:
+            with self.subTest(case=case["name"]):
+                decision = evaluate_title_seniority_for_policy(
+                    case["title"],
+                    self.corpus["policyId"],
+                )
+                self.assertEqual(decision["outcome"], case["expectedOutcome"])
+                self.assertEqual(decision["ruleId"], case["expectedRuleId"])
+                if decision["outcome"] == "EXCLUDE":
+                    self.assertTrue(decision["evidence"])
+
+    def test_python_matches_the_shared_v1_compatibility_contract(self):
+        for case in self.corpus["legacyCases"]:
+            with self.subTest(case=case["name"]):
+                decision = evaluate_legacy_title_exclusions(
+                    case["title"],
+                    case["configuredTerms"],
+                )
+                self.assertEqual(decision["outcome"], case["expectedOutcome"])
+                self.assertEqual(decision["ruleId"], case["expectedRuleId"])
+
+    def test_v2_config_policy_id_drives_the_worker_title_filter(self):
+        sys.path.append(os.path.dirname(__file__))
+        import run_jobspy as worker
+
+        config = {
+            "schemaVersion": 2,
+            "market": "AU",
+            "smartExpand": True,
+            "includeFromQueries": True,
+            "titleMatch": "relaxed",
+            "policy": dict(ACTIVE_AU_FETCH_POLICY),
+        }
+        policy_id = worker._resolve_au_recall_policy_id(config)
+        rows = pd.DataFrame(
+            [
+                {"title": "Software Engineer", "job_level": "Mid-Senior level"},
+                {"title": "Senior Software Engineer", "job_level": "Entry level"},
+            ]
+        )
+
+        kept = worker.filter_title(
+            rows,
+            queries=[],
+            enforce_include=False,
+            seniority_policy_id=policy_id,
+        )
+
+        self.assertEqual(kept["title"].tolist(), ["Software Engineer"])
+
+
+if __name__ == "__main__":
+    unittest.main()

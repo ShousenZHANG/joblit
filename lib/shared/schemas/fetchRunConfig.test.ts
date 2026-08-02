@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
+import { AU_FETCH_POLICY } from "@/lib/shared/fetchPolicy";
 import {
+  AU_FETCH_RUN_CONFIG_SCHEMA_VERSION,
   FETCH_RUN_CONFIG_SCHEMA_VERSION,
+  AuFetchRunConfigV2Schema,
   FetchRunConfigV1Schema,
   buildAuFetchRunConfigV1,
+  buildAuFetchRunConfigV2,
   buildCnFetchRunConfigV1,
   buildGlobalFetchRunConfigV1,
+  normalizeFetchRunConfig,
   normalizeFetchRunConfigV1,
   readFetchRunDispatchMeta,
   toLegacyFetchRunConfigFields,
@@ -272,5 +277,109 @@ describe("FetchRunConfig v1", () => {
         sourceSelection: "explicit",
       }),
     ).toThrow();
+  });
+});
+
+describe("AU FetchRunConfig v2", () => {
+  function auV2Config() {
+    return buildAuFetchRunConfigV2({
+      title: "Software Engineer",
+      baseQueries: ["Software Engineer"],
+      queries: ["Software Engineer", "Backend Engineer"],
+      location: "Sydney",
+      hoursOld: 48,
+      resultsWanted: null,
+    });
+  }
+
+  it("builds the server-owned recall-safe policy without free-form exclusions", () => {
+    const config = auV2Config();
+
+    expect(config).toMatchObject({
+      schemaVersion: AU_FETCH_RUN_CONFIG_SCHEMA_VERSION,
+      market: "AU",
+      smartExpand: true,
+      includeFromQueries: true,
+      titleMatch: "relaxed",
+      policy: AU_FETCH_POLICY,
+      source: "jobspy",
+    });
+    expect(config).not.toHaveProperty("applyExcludes");
+    expect(config).not.toHaveProperty("excludeTitleTerms");
+    expect(config).not.toHaveProperty("excludeDescriptionRules");
+    expect(AuFetchRunConfigV2Schema.parse(config)).toEqual(config);
+    expect(() =>
+      AuFetchRunConfigV2Schema.parse({
+        ...config,
+        excludeTitleTerms: ["intern"],
+      }),
+    ).toThrow();
+    expect(() =>
+      AuFetchRunConfigV2Schema.parse({
+        ...config,
+        policy: { ...config.policy, experienceYears: "exclude-4-plus" },
+      }),
+    ).toThrow();
+  });
+
+  it("recognizes v2 while keeping the v1-only normalizer strict", () => {
+    const config = auV2Config();
+    const versionedV1 = auConfig();
+
+    expect(
+      normalizeFetchRunConfig({ market: "AU", queries: config }),
+    ).toEqual(config);
+    expect(
+      normalizeFetchRunConfig({ market: "AU", queries: versionedV1 }),
+    ).toEqual(versionedV1);
+    expect(() =>
+      normalizeFetchRunConfigV1({ market: "AU", queries: config }),
+    ).toThrow();
+    expect(
+      normalizeFetchRunConfig({
+        market: "AU",
+        queries: ["Software Engineer"],
+      }),
+    ).toMatchObject({
+      schemaVersion: FETCH_RUN_CONFIG_SCHEMA_VERSION,
+      market: "AU",
+    });
+    expect(() =>
+      normalizeFetchRunConfig({
+        market: "AU",
+        queries: { ...config, schemaVersion: 3 },
+      }),
+    ).toThrow();
+  });
+
+  it("preserves policy and schema identity when dispatch metadata is patched", () => {
+    const config = auV2Config();
+    const dispatched = withFetchRunDispatchMeta(config, {
+      dispatchedAt: "2026-08-02T01:02:03.000Z",
+      idempotencyKey: "request-v2",
+    });
+
+    expect(AuFetchRunConfigV2Schema.parse(dispatched)).toMatchObject({
+      schemaVersion: AU_FETCH_RUN_CONFIG_SCHEMA_VERSION,
+      policy: AU_FETCH_POLICY,
+      dispatchMeta: {
+        dispatchedAt: "2026-08-02T01:02:03.000Z",
+        idempotencyKey: "request-v2",
+      },
+    });
+    expect(dispatched.policy).toEqual(config.policy);
+  });
+
+  it("projects v2 into the legacy worker columns without restoring old knobs", () => {
+    const config = auV2Config();
+
+    expect(toLegacyFetchRunConfigFields(config)).toEqual({
+      queries: config,
+      location: "Sydney",
+      hoursOld: 48,
+      resultsWanted: null,
+      includeFromQueries: true,
+      filterDescription: true,
+    });
   });
 });

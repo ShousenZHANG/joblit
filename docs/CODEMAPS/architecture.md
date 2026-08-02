@@ -32,7 +32,7 @@ selector; it is not a third UI or Resume Market.
 
 ```
 POST /api/fetch-runs            → FetchRun row (QUEUED)
-                                  + versioned FetchRunConfig v1
+                                  + versioned FetchRunConfig (AU v2; CN/GLOBAL v1)
 POST /api/fetch-runs/[id]/trigger
   ├─ market AU     → GitHub Actions workflow_dispatch → Python JobSpy
   │                  → GET  /api/fetch-runs/[id]/config

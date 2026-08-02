@@ -3,8 +3,13 @@ import {
   TITLE_MATCH_MODES,
   resolveTitleMatchMode,
 } from "@/lib/shared/jobRelevance";
+import {
+  AU_FETCH_POLICY,
+  RegisteredAuFetchPolicySchema,
+} from "@/lib/shared/fetchPolicy";
 
 export const FETCH_RUN_CONFIG_SCHEMA_VERSION = 1 as const;
+export const AU_FETCH_RUN_CONFIG_SCHEMA_VERSION = 2 as const;
 
 const ConfigStringSchema = z.string().trim().min(1).max(160);
 const QuerySchema = z.string().trim().min(1).max(120);
@@ -55,6 +60,30 @@ export const AuFetchRunConfigV1Schema = z
     excludeDescriptionRules: z
       .array(z.string().trim().min(1).max(80))
       .max(24),
+    source: z.literal("jobspy"),
+    ...DispatchMetaField,
+  })
+  .strict();
+
+/**
+ * Recall-safe AU contract. Search and exclusion behaviour is server-owned:
+ * clients provide search intent, while literals here prevent a stale or custom
+ * client from weakening the persisted execution policy.
+ */
+export const AuFetchRunConfigV2Schema = z
+  .object({
+    schemaVersion: z.literal(AU_FETCH_RUN_CONFIG_SCHEMA_VERSION),
+    market: z.literal("AU"),
+    title: z.string().trim().min(1).max(120),
+    baseQueries: z.array(QuerySchema).min(1).max(12),
+    queries: QueryListSchema.max(24),
+    location: OptionalLocationSchema,
+    hoursOld: OptionalHoursOldSchema,
+    resultsWanted: OptionalResultsWantedSchema,
+    smartExpand: z.literal(true),
+    includeFromQueries: z.literal(true),
+    titleMatch: z.literal("relaxed"),
+    policy: RegisteredAuFetchPolicySchema,
     source: z.literal("jobspy"),
     ...DispatchMetaField,
   })
@@ -152,16 +181,23 @@ export const FetchRunConfigV1Schema = z.discriminatedUnion("market", [
   GlobalFetchRunConfigV1Schema,
 ]);
 
+export const FetchRunConfigSchema = z.union([
+  AuFetchRunConfigV2Schema,
+  FetchRunConfigV1Schema,
+]);
+
 export type FetchRunDispatchMeta = z.infer<
   typeof FetchRunDispatchMetaSchema
 >;
 export type AuFetchRunConfigV1 = z.infer<typeof AuFetchRunConfigV1Schema>;
+export type AuFetchRunConfigV2 = z.infer<typeof AuFetchRunConfigV2Schema>;
 export type CnFetchRunConfigV1 = z.infer<typeof CnFetchRunConfigV1Schema>;
 export type GlobalFetchRunConfigV1 = z.infer<
   typeof GlobalFetchRunConfigV1Schema
 >;
 export type FetchRunConfigV1 = z.infer<typeof FetchRunConfigV1Schema>;
-export type FetchRunMarket = FetchRunConfigV1["market"];
+export type FetchRunConfig = z.infer<typeof FetchRunConfigSchema>;
+export type FetchRunMarket = FetchRunConfig["market"];
 
 type ConfigInput<T extends FetchRunConfigV1> = Omit<
   T,
@@ -175,6 +211,32 @@ export function buildAuFetchRunConfigV1(
     schemaVersion: FETCH_RUN_CONFIG_SCHEMA_VERSION,
     market: "AU",
     ...input,
+  });
+}
+
+type AuFetchRunConfigV2Input = Omit<
+  AuFetchRunConfigV2,
+  | "schemaVersion"
+  | "market"
+  | "smartExpand"
+  | "includeFromQueries"
+  | "titleMatch"
+  | "policy"
+  | "source"
+>;
+
+export function buildAuFetchRunConfigV2(
+  input: AuFetchRunConfigV2Input,
+): AuFetchRunConfigV2 {
+  return AuFetchRunConfigV2Schema.parse({
+    ...input,
+    schemaVersion: AU_FETCH_RUN_CONFIG_SCHEMA_VERSION,
+    market: "AU",
+    smartExpand: true,
+    includeFromQueries: true,
+    titleMatch: "relaxed",
+    policy: AU_FETCH_POLICY,
+    source: "jobspy",
   });
 }
 
@@ -515,8 +577,30 @@ export function normalizeFetchRunConfigV1(
     : normalizeLegacyAuConfig(fields);
 }
 
+/**
+ * Read the current strict versioned contracts while retaining the v1 legacy
+ * normalizer for rows written before schemaVersion existed.
+ */
+export function normalizeFetchRunConfig(
+  input: StoredFetchRunConfigInput,
+): FetchRunConfig {
+  const rawRecord = recordOf(input.queries);
+  if (!("schemaVersion" in rawRecord)) {
+    return normalizeFetchRunConfigV1(input);
+  }
+
+  const parsed = FetchRunConfigSchema.parse(rawRecord);
+  const rowMarket = marketOf(input);
+  if (parsed.market !== rowMarket) {
+    throw new Error(
+      `FetchRun market mismatch: row=${rowMarket}, config=${parsed.market}`,
+    );
+  }
+  return parsed;
+}
+
 export interface LegacyFetchRunConfigFields {
-  queries: FetchRunConfigV1;
+  queries: FetchRunConfig;
   location: string | null;
   hoursOld: number | null;
   resultsWanted: number | null;
@@ -529,7 +613,7 @@ export interface LegacyFetchRunConfigFields {
  * should read `run.config`; this projection can be retired with that adapter.
  */
 export function toLegacyFetchRunConfigFields(
-  config: FetchRunConfigV1,
+  config: FetchRunConfig,
 ): LegacyFetchRunConfigFields {
   if (config.market === "CN") {
     return {
@@ -547,6 +631,9 @@ export function toLegacyFetchRunConfigFields(
     hoursOld: config.hoursOld,
     resultsWanted: config.resultsWanted,
     includeFromQueries: config.includeFromQueries,
-    filterDescription: config.applyExcludes,
+    filterDescription:
+      config.schemaVersion === AU_FETCH_RUN_CONFIG_SCHEMA_VERSION
+        ? true
+        : config.applyExcludes,
   };
 }

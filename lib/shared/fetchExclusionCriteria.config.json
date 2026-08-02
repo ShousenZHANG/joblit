@@ -1,14 +1,4 @@
 {
-  "titleTerms": [
-    { "value": "senior", "label": "Senior" },
-    { "value": "lead", "label": "Lead" },
-    { "value": "principal", "label": "Principal" },
-    { "value": "staff", "label": "Staff" },
-    { "value": "manager", "label": "Manager" },
-    { "value": "director", "label": "Director" },
-    { "value": "head", "label": "Head" },
-    { "value": "architect", "label": "Architect" }
-  ],
   "descriptionRules": [
     {
       "value": "identity_requirement",

@@ -10,16 +10,15 @@ import { loadEnabledAtsBoardAdapters } from "@/lib/server/sources/atsBoardStore"
 import { MAX_GLOBAL_SOURCES_PER_RUN } from "@/lib/server/sources/limits";
 import { reportError } from "@/lib/server/observability/errorReporter";
 import {
-  buildAuFetchRunConfigV1,
+  buildAuFetchRunConfigV2,
   buildCnFetchRunConfigV1,
   buildGlobalFetchRunConfigV1,
 } from "@/lib/shared/schemas/fetchRunConfig";
 
 export const runtime = "nodejs";
 
-// Title exclusions allow any user term (presets + custom). Lower-cased and
-// length-bounded; the worker escapes each term before building its regex, so
-// arbitrary input is injection-safe.
+// GLOBAL remains a v1 compatibility surface and accepts bounded legacy title
+// terms. New AU runs never accept client-owned exclusion fields.
 const TitleExcludeSchema = z.string().trim().toLowerCase().min(1).max(40);
 const MAX_AU_QUERIES = 12;
 const MAX_AU_QUERY_LENGTH = 120;
@@ -70,19 +69,6 @@ const AUSchema = z
     queries: queriesField,
     location: z.string().trim().min(1).max(160).optional(),
     hoursOld: z.coerce.number().int().min(1).max(24 * 30).optional(),
-    smartExpand: z.coerce.boolean().optional().default(true),
-    includeFromQueries: z.coerce.boolean().optional().default(true),
-    titleMatch: z.enum(TITLE_MATCH_MODES).optional(),
-    applyExcludes: z.coerce.boolean().optional().default(true),
-    excludeTitleTerms: z.array(TitleExcludeSchema).max(24).optional().default([]),
-    excludeDescriptionRules: z
-      .array(z.string())
-      .optional()
-      .default([])
-      .transform(filterDescriptionExclusionRules),
-    // JobSpy (LinkedIn) is the only AU pipeline. Kept as a fixed field so run
-    // status lanes and the trigger dispatch keep reading source === "jobspy".
-    source: z.literal("jobspy").optional().default("jobspy"),
   })
   .refine((data) => (data.title ?? data.queries?.[0])?.trim(), {
     message: "title is required",
@@ -214,54 +200,6 @@ async function resolveGlobalSources(
     : { ok: true, sources: [...requested], selection: "explicit" };
 }
 
-export async function GET() {
-  return withSessionRoute(async ({ userId }) => {
-    const runs = await prisma.fetchRun.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-      take: 8,
-      select: {
-        id: true,
-        status: true,
-        market: true,
-        importedCount: true,
-        queries: true,
-        location: true,
-        hoursOld: true,
-        createdAt: true,
-      },
-    });
-
-    return NextResponse.json({
-      runs: runs.map((r) => {
-        const q = (r.queries ?? {}) as Record<string, unknown>;
-        const queryList = Array.isArray(q.queries) ? (q.queries as string[]) : [];
-        return {
-          id: r.id,
-          status: r.status,
-          market: r.market ?? "AU",
-          importedCount: r.importedCount,
-          title: typeof q.title === "string" ? q.title : queryList[0] ?? null,
-          queryCount: queryList.length,
-          location: r.location,
-          hoursOld: r.hoursOld,
-          smartExpand: typeof q.smartExpand === "boolean" ? q.smartExpand : null,
-          sources: Array.isArray(q.sources) ? (q.sources as string[]) : null,
-          source: typeof q.source === "string" ? (q.source as string) : null,
-          classification: typeof q.classification === "string" ? (q.classification as string) : null,
-          subClassification:
-            typeof q.subClassification === "string" ? (q.subClassification as string) : null,
-          workType: typeof q.workType === "string" ? (q.workType as string) : null,
-          excludeKeywords: Array.isArray(q.excludeKeywords)
-            ? (q.excludeKeywords as string[])
-            : null,
-          createdAt: r.createdAt.toISOString(),
-        };
-      }),
-    });
-  });
-}
-
 export async function POST(req: Request) {
   return withSessionRoute(async ({ userId, requestId }) => {
     const json = await req.json().catch(() => null);
@@ -391,9 +329,7 @@ export async function POST(req: Request) {
       : fallbackTitle
         ? [fallbackTitle]
         : [];
-    const expandedQueries = data.smartExpand
-      ? expandRoleQueries(baseQueries)
-      : baseQueries;
+    const expandedQueries = expandRoleQueries(baseQueries);
     const baseKeys = new Set(
       baseQueries.map((query) => query.toLocaleLowerCase()),
     );
@@ -410,26 +346,19 @@ export async function POST(req: Request) {
       userId,
       status: "QUEUED" as const,
       importedCount: 0,
-      queries: buildAuFetchRunConfigV1({
+      queries: buildAuFetchRunConfigV2({
         title,
         baseQueries,
         queries,
         location: data.location ?? null,
         hoursOld: data.hoursOld ?? null,
         resultsWanted: null,
-        smartExpand: data.smartExpand,
-        includeFromQueries: data.includeFromQueries,
-        titleMatch: data.titleMatch,
-        applyExcludes: data.applyExcludes,
-        excludeTitleTerms: data.excludeTitleTerms,
-        excludeDescriptionRules: data.excludeDescriptionRules,
-        source: data.source,
       }),
       location: data.location ?? null,
       hoursOld: data.hoursOld ?? null,
       resultsWanted: null,
-      includeFromQueries: data.includeFromQueries,
-      filterDescription: data.applyExcludes,
+      includeFromQueries: true,
+      filterDescription: true,
     };
 
     const txResult = await prisma.$transaction(async (tx) => {

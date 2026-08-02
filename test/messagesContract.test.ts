@@ -46,7 +46,6 @@ function leafPaths(value: unknown, prefix = "", acc: string[] = []): string[] {
 const DYNAMIC_KEY_PREFIXES: readonly { pattern: RegExp; callSite: string }[] = [
   { pattern: /^guide\.task_/, callSite: "components/guide/GuideTaskList.tsx — t(`task_${task.id}_title`)" },
   { pattern: /^jobs\.fitAssessment\.(category|tier)/, callSite: "app/(app)/jobs/components/FitAssessmentCard.tsx — t(`category${category}`)" },
-  { pattern: /^fetch\.sourceHealth\.status\./, callSite: "app/(app)/fetch/SourceHealthPanel.tsx — t(`status.${source.status}`)" },
   { pattern: /^tailor\.review\.verdict\./, callSite: "app/(app)/jobs/[id]/tailor/ReviewGateCard.tsx — t(`verdict.${review.verdict}`)" },
   { pattern: /^landing\.logoBar\.items\./, callSite: "components/landing/LogoBar.tsx — t(`items.${key}`)" },
 ];
