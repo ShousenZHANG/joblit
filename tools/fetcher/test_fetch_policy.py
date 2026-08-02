@@ -8,6 +8,7 @@ from tools.fetcher.fetch_policy import (
     ACTIVE_AU_FETCH_POLICY_ID,
     AU_FETCH_POLICY_MANIFEST,
     AU_RECALL_SAFE_V1_POLICY_ID,
+    AU_RECALL_SAFE_V2_POLICY_ID,
     FETCH_POLICY_MANIFEST_PATH,
     FetchPolicyManifestError,
     load_fetch_policy_manifest,
@@ -37,22 +38,31 @@ class FetchPolicyManifestTests(unittest.TestCase):
             self.raw["policies"][self.raw["activePolicyId"]],
         )
         self.assertEqual(AU_RECALL_SAFE_V1_POLICY_ID, "au-recall-safe-v1")
+        self.assertEqual(AU_RECALL_SAFE_V2_POLICY_ID, "au-recall-safe-v2")
+        self.assertEqual(ACTIVE_AU_FETCH_POLICY_ID, AU_RECALL_SAFE_V2_POLICY_ID)
+        self.assertEqual(
+            self.raw["policies"][AU_RECALL_SAFE_V1_POLICY_ID]["seniorityCeiling"],
+            "mid",
+        )
+        self.assertEqual(ACTIVE_AU_FETCH_POLICY["seniorityCeiling"], "senior")
 
     def test_old_registered_snapshot_survives_an_active_pointer_upgrade(self):
         v1 = self.raw["policies"][AU_RECALL_SAFE_V1_POLICY_ID]
-        v2 = {**v1, "id": "au-recall-safe-v2"}
+        v2 = self.raw["policies"][AU_RECALL_SAFE_V2_POLICY_ID]
+        v3 = {**v2, "id": "au-recall-safe-v3"}
         upgraded = self._load(
             {
                 **self.raw,
-                "activePolicyId": v2["id"],
+                "activePolicyId": v3["id"],
                 "policies": {
                     AU_RECALL_SAFE_V1_POLICY_ID: v1,
-                    v2["id"]: v2,
+                    AU_RECALL_SAFE_V2_POLICY_ID: v2,
+                    v3["id"]: v3,
                 },
             }
         )
 
-        self.assertEqual(upgraded.active_policy_id, v2["id"])
+        self.assertEqual(upgraded.active_policy_id, v3["id"])
         self.assertEqual(
             resolve_registered_au_fetch_policy(v1, upgraded.policies).as_config(),
             v1,
@@ -66,6 +76,10 @@ class FetchPolicyManifestTests(unittest.TestCase):
             )
         with self.assertRaises(FetchPolicyManifestError):
             resolve_registered_au_fetch_policy({**v1, "id": "unknown-policy"})
+        with self.assertRaises(FetchPolicyManifestError):
+            resolve_registered_au_fetch_policy(
+                {**v1, "seniorityCeiling": "senior"}
+            )
 
     def test_loaded_registry_is_immutable(self):
         with self.assertRaises(TypeError):
@@ -96,7 +110,7 @@ class FetchPolicyManifestTests(unittest.TestCase):
     def test_loader_rejects_policy_semantics_not_supported_by_typescript(self):
         active_id = self.raw["activePolicyId"]
         invalid_values = {
-            "seniorityCeiling": "senior",
+            "seniorityCeiling": "staff",
             "seniorityEvidence": "source-metadata",
             "citizenshipOrPr": "exclude-work-rights",
             "governmentSecurityClearance": "exclude-any-security-word",
@@ -111,6 +125,14 @@ class FetchPolicyManifestTests(unittest.TestCase):
                     rf"Unsupported .*\.{field}",
                 ):
                     self._load(value)
+
+    def test_loader_rejects_known_policy_semantic_drift(self):
+        value = json.loads(json.dumps(self.raw))
+        value["policies"][AU_RECALL_SAFE_V1_POLICY_ID][
+            "seniorityCeiling"
+        ] = "senior"
+        with self.assertRaisesRegex(FetchPolicyManifestError, "must retain"):
+            self._load(value)
 
     def test_loader_rejects_registry_and_active_id_drift(self):
         value = json.loads(json.dumps(self.raw))

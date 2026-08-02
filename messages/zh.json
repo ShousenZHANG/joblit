@@ -336,7 +336,7 @@
     "policy": {
       "title": "自动抓取规则",
       "summary": "Joblit 对每次澳洲抓取使用同一套高召回策略，旧浏览器设置不会再静默隐藏岗位。",
-      "seniority": "仅根据岗位公开标题排除明确的高级职位；含义模糊的标题会保留。",
+      "seniority": "保留 Junior、Mid 和 Senior 岗位。仅根据公开标题排除明确的 Staff、Principal、Lead、Leader、Manager、Architect、Director、Head、VP、Chief 和 Distinguished 职位；含义模糊的标题仍会保留。",
       "identity": "仅排除明确要求澳洲公民或永久居民身份的岗位；普通工作权利与不提供担保的说明会保留。",
       "clearance": "仅排除要求 Baseline、NV1、NV2 或明确要求具备取得澳洲政府安全许可资格的岗位；专业安全认证不会被误删。",
       "experience": "工作年限不会用于删除岗位。"

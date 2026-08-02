@@ -2,6 +2,113 @@
   "version": 1,
   "policyId": "au-recall-safe-v1",
   "note": "Shared fail-open title-seniority contract. TypeScript and Python must return the same outcome and ruleId for every visible title. Source job-level metadata is deliberately outside this interface.",
+  "policyCases": [
+    {
+      "name": "v1 keeps its immutable Senior exclusion",
+      "policyId": "au-recall-safe-v1",
+      "title": "Senior Software Engineer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_SENIOR"
+    },
+    {
+      "name": "v1 keeps its historical Leader behaviour",
+      "policyId": "au-recall-safe-v1",
+      "title": "Team Leader",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_ALLOWED"
+    },
+    {
+      "name": "v2 keeps a Senior role",
+      "policyId": "au-recall-safe-v2",
+      "title": "Senior Software Engineer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_ALLOWED"
+    },
+    {
+      "name": "v2 keeps an Sr abbreviation",
+      "policyId": "au-recall-safe-v2",
+      "title": "Sr. Backend Developer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_ALLOWED"
+    },
+    {
+      "name": "v2 keeps an Snr abbreviation",
+      "policyId": "au-recall-safe-v2",
+      "title": "Snr Platform Engineer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_ALLOWED"
+    },
+    {
+      "name": "v2 keeps a Senior suffix",
+      "policyId": "au-recall-safe-v2",
+      "title": "Software Engineer, Senior",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_ALLOWED"
+    },
+    {
+      "name": "v2 still excludes a Staff role",
+      "policyId": "au-recall-safe-v2",
+      "title": "Staff Software Engineer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_STAFF"
+    },
+    {
+      "name": "v2 still excludes a technical Lead",
+      "policyId": "au-recall-safe-v2",
+      "title": "Senior Technical Lead",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_LEAD"
+    },
+    {
+      "name": "v2 excludes a contextual Leader title",
+      "policyId": "au-recall-safe-v2",
+      "title": "Senior Engineering Leader",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_LEAD"
+    },
+    {
+      "name": "v2 excludes an agile Squad Leader title",
+      "policyId": "au-recall-safe-v2",
+      "title": "Squad Leader",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_LEAD"
+    },
+    {
+      "name": "v2 excludes an agile Tribe Leader title",
+      "policyId": "au-recall-safe-v2",
+      "title": "Tribe Leader",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_LEAD"
+    },
+    {
+      "name": "v2 excludes a People Leader title",
+      "policyId": "au-recall-safe-v2",
+      "title": "People Leader",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_LEAD"
+    },
+    {
+      "name": "v2 excludes a Development Leader title",
+      "policyId": "au-recall-safe-v2",
+      "title": "Development Leader",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_LEAD"
+    },
+    {
+      "name": "v2 keeps ambiguous Leader language",
+      "policyId": "au-recall-safe-v2",
+      "title": "Leader Election Systems Engineer",
+      "expectedOutcome": "KEEP",
+      "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "v2 still excludes an Engineering Manager",
+      "policyId": "au-recall-safe-v2",
+      "title": "Senior Engineering Manager",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_MANAGER"
+    }
+  ],
   "cases": [
     {
       "name": "plain role stays eligible",
@@ -569,6 +676,13 @@
       "title": "Lead Generation Specialist",
       "expectedOutcome": "KEEP",
       "expectedRuleId": "TITLE_AMBIGUOUS_FAIL_OPEN"
+    },
+    {
+      "name": "stored custom leader keeps its historical whole-term meaning",
+      "configuredTerms": ["leader"],
+      "title": "Leader Election Systems Engineer",
+      "expectedOutcome": "EXCLUDE",
+      "expectedRuleId": "TITLE_CUSTOM"
     },
     {
       "name": "stored custom term remains whole-term",

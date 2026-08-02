@@ -9,7 +9,12 @@ from tools.fetcher.title_seniority_policy import (
     evaluate_legacy_title_exclusions,
     evaluate_title_seniority_for_policy,
 )
-from tools.fetcher.fetch_policy import ACTIVE_AU_FETCH_POLICY
+from tools.fetcher.fetch_policy import (
+    ACTIVE_AU_FETCH_POLICY,
+    AU_FETCH_POLICY_REGISTRY,
+    AU_RECALL_SAFE_V1_POLICY_ID,
+    AU_RECALL_SAFE_V2_POLICY_ID,
+)
 
 
 class SharedTitleSeniorityPolicyTests(unittest.TestCase):
@@ -40,6 +45,30 @@ class SharedTitleSeniorityPolicyTests(unittest.TestCase):
                 if decision["outcome"] == "EXCLUDE":
                     self.assertTrue(decision["evidence"])
 
+    def test_python_matches_the_shared_versioned_policy_cases(self):
+        for case in self.corpus["policyCases"]:
+            with self.subTest(case=case["name"]):
+                decision = evaluate_title_seniority_for_policy(
+                    case["title"], case["policyId"]
+                )
+                self.assertEqual(decision["outcome"], case["expectedOutcome"])
+                self.assertEqual(decision["ruleId"], case["expectedRuleId"])
+
+    def test_v2_keeps_senior_and_preserves_every_other_hard_exclusion(self):
+        for case in self.corpus["cases"]:
+            with self.subTest(case=case["name"]):
+                decision = evaluate_title_seniority_for_policy(
+                    case["title"],
+                    AU_RECALL_SAFE_V2_POLICY_ID,
+                )
+                if case["expectedRuleId"] == "TITLE_SENIOR":
+                    self.assertEqual(decision["outcome"], "KEEP")
+                elif case["expectedOutcome"] == "EXCLUDE":
+                    self.assertEqual(decision["outcome"], "EXCLUDE")
+                    self.assertEqual(decision["ruleId"], case["expectedRuleId"])
+                else:
+                    self.assertEqual(decision["outcome"], "KEEP")
+
     def test_python_matches_the_shared_v1_compatibility_contract(self):
         for case in self.corpus["legacyCases"]:
             with self.subTest(case=case["name"]):
@@ -50,7 +79,7 @@ class SharedTitleSeniorityPolicyTests(unittest.TestCase):
                 self.assertEqual(decision["outcome"], case["expectedOutcome"])
                 self.assertEqual(decision["ruleId"], case["expectedRuleId"])
 
-    def test_v2_config_policy_id_drives_the_worker_title_filter(self):
+    def test_active_policy_id_drives_the_worker_title_filter(self):
         sys.path.append(os.path.dirname(__file__))
         import run_jobspy as worker
 
@@ -67,6 +96,42 @@ class SharedTitleSeniorityPolicyTests(unittest.TestCase):
             [
                 {"title": "Software Engineer", "job_level": "Mid-Senior level"},
                 {"title": "Senior Software Engineer", "job_level": "Entry level"},
+                {"title": "Staff Software Engineer", "job_level": "Entry level"},
+            ]
+        )
+
+        kept = worker.filter_title(
+            rows,
+            queries=[],
+            enforce_include=False,
+            seniority_policy_id=policy_id,
+        )
+
+        self.assertEqual(
+            kept["title"].tolist(),
+            ["Software Engineer", "Senior Software Engineer"],
+        )
+
+    def test_persisted_v1_config_still_excludes_senior(self):
+        sys.path.append(os.path.dirname(__file__))
+        import run_jobspy as worker
+
+        config = {
+            "schemaVersion": 2,
+            "market": "AU",
+            "smartExpand": True,
+            "includeFromQueries": True,
+            "titleMatch": "relaxed",
+            "policy": AU_FETCH_POLICY_REGISTRY[
+                AU_RECALL_SAFE_V1_POLICY_ID
+            ].as_config(),
+        }
+        policy_id = worker._resolve_au_recall_policy_id(config)
+        rows = pd.DataFrame(
+            [
+                {"title": "Software Engineer"},
+                {"title": "Senior Software Engineer"},
+                {"title": "Staff Software Engineer"},
             ]
         )
 

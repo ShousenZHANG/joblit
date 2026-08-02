@@ -2,6 +2,11 @@ import { z } from "zod";
 import rawManifest from "./fetchPolicy.config.json";
 
 export const AU_RECALL_SAFE_V1_POLICY_ID = "au-recall-safe-v1" as const;
+export const AU_RECALL_SAFE_V2_POLICY_ID = "au-recall-safe-v2" as const;
+const IMMUTABLE_POLICY_CEILINGS: Readonly<Record<string, "mid" | "senior">> = {
+  [AU_RECALL_SAFE_V1_POLICY_ID]: "mid",
+  [AU_RECALL_SAFE_V2_POLICY_ID]: "senior",
+};
 
 /**
  * Immutable AU fetch policies.
@@ -17,7 +22,7 @@ export const AU_RECALL_SAFE_V1_POLICY_ID = "au-recall-safe-v1" as const;
 const AuFetchPolicySnapshotSchema = z
   .object({
     id: z.string().trim().min(1).max(80),
-    seniorityCeiling: z.literal("mid"),
+    seniorityCeiling: z.enum(["mid", "senior"]),
     seniorityEvidence: z.literal("visible-title-only"),
     citizenshipOrPr: z.literal("exclude-explicit-required"),
     governmentSecurityClearance: z.literal(
@@ -25,7 +30,17 @@ const AuFetchPolicySnapshotSchema = z
     ),
     experienceYears: z.literal("never-exclude"),
   })
-  .strict();
+  .strict()
+  .superRefine((policy, context) => {
+    const expectedCeiling = IMMUTABLE_POLICY_CEILINGS[policy.id];
+    if (expectedCeiling && policy.seniorityCeiling !== expectedCeiling) {
+      context.addIssue({
+        code: "custom",
+        message: `${policy.id} must retain its ${expectedCeiling}-level ceiling`,
+        path: ["seniorityCeiling"],
+      });
+    }
+  });
 
 const AuFetchPolicyManifestSchema = z
   .object({
@@ -96,6 +111,11 @@ const recallSafeV1Policy =
   AU_FETCH_POLICY_REGISTRY[AU_RECALL_SAFE_V1_POLICY_ID];
 if (!recallSafeV1Policy) {
   throw new Error("AU recall-safe v1 policy is not registered");
+}
+const recallSafeV2Policy =
+  AU_FETCH_POLICY_REGISTRY[AU_RECALL_SAFE_V2_POLICY_ID];
+if (!recallSafeV2Policy) {
+  throw new Error("AU recall-safe v2 policy is not registered");
 }
 
 const POLICY_SNAPSHOT_FIELDS = [

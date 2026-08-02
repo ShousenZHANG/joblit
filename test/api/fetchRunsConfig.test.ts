@@ -18,6 +18,7 @@ vi.mock("@/lib/server/observability/errorReporter", () => ({
 }));
 
 import { GET } from "@/app/api/fetch-runs/[id]/config/route";
+import { AU_FETCH_POLICY } from "@/lib/shared/fetchPolicy";
 
 const RUN_ID = "550e8400-e29b-41d4-a716-446655440000";
 
@@ -79,7 +80,7 @@ describe("fetch run config api", () => {
     expect(body.run.filterDescription).toBe(true);
   });
 
-  it("returns the strict AU v2 policy and its worker compatibility projection", async () => {
+  it("returns a persisted AU config v2 with its historical v1 policy", async () => {
     harness.findUnique.mockResolvedValue({
       id: RUN_ID,
       status: "QUEUED",
@@ -125,6 +126,52 @@ describe("fetch run config api", () => {
       market: "AU",
       titleMatch: "relaxed",
       policy: { id: "au-recall-safe-v1" },
+    });
+    expect(body.run.queries).toEqual(body.run.config);
+    expect(body.run.includeFromQueries).toBe(true);
+    expect(body.run.filterDescription).toBe(true);
+  });
+
+  it("returns the active v2 policy snapshot through the real worker config route", async () => {
+    harness.findUnique.mockResolvedValue({
+      id: RUN_ID,
+      status: "QUEUED",
+      market: "AU",
+      error: null,
+      importedCount: 0,
+      queries: {
+        schemaVersion: 2,
+        market: "AU",
+        title: "Software Engineer",
+        baseQueries: ["Software Engineer"],
+        queries: ["Software Engineer", "Backend Engineer"],
+        location: "Sydney",
+        hoursOld: 48,
+        resultsWanted: null,
+        smartExpand: true,
+        includeFromQueries: true,
+        titleMatch: "relaxed",
+        policy: AU_FETCH_POLICY,
+        source: "jobspy",
+      },
+      location: "Sydney",
+      hoursOld: 48,
+      resultsWanted: null,
+      includeFromQueries: true,
+      filterDescription: true,
+    });
+
+    const response = await getConfig();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.run.config).toMatchObject({
+      schemaVersion: 2,
+      market: "AU",
+      policy: {
+        id: "au-recall-safe-v2",
+        seniorityCeiling: "senior",
+      },
     });
     expect(body.run.queries).toEqual(body.run.config);
     expect(body.run.includeFromQueries).toBe(true);

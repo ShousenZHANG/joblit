@@ -15,6 +15,11 @@ from typing import Any, Mapping, Optional
 
 
 AU_RECALL_SAFE_V1_POLICY_ID = "au-recall-safe-v1"
+AU_RECALL_SAFE_V2_POLICY_ID = "au-recall-safe-v2"
+_IMMUTABLE_POLICY_CEILINGS = {
+    AU_RECALL_SAFE_V1_POLICY_ID: "mid",
+    AU_RECALL_SAFE_V2_POLICY_ID: "senior",
+}
 
 FETCH_POLICY_MANIFEST_PATH = (
     Path(__file__).resolve().parents[2]
@@ -33,7 +38,7 @@ _POLICY_FIELDS = {
     "experienceYears",
 }
 _SUPPORTED_POLICY_VALUES = {
-    "seniorityCeiling": {"mid"},
+    "seniorityCeiling": {"mid", "senior"},
     "seniorityEvidence": {"visible-title-only"},
     "citizenshipOrPr": {"exclude-explicit-required"},
     "governmentSecurityClearance": {
@@ -92,6 +97,11 @@ def _policy_from_mapping(
             raise FetchPolicyManifestError(
                 f"Unsupported {location}.{field}: {fields[field]}"
             )
+    expected_ceiling = _IMMUTABLE_POLICY_CEILINGS.get(fields["id"])
+    if expected_ceiling and fields["seniorityCeiling"] != expected_ceiling:
+        raise FetchPolicyManifestError(
+            f"{fields['id']} must retain its {expected_ceiling}-level ceiling"
+        )
     return AuFetchPolicy(
         id=fields["id"],
         seniority_ceiling=fields["seniorityCeiling"],
@@ -219,6 +229,11 @@ AU_RECALL_SAFE_V1_POLICY = AU_FETCH_POLICY_REGISTRY.get(
 )
 if AU_RECALL_SAFE_V1_POLICY is None:
     raise FetchPolicyManifestError("AU recall-safe v1 policy is not registered")
+AU_RECALL_SAFE_V2_POLICY = AU_FETCH_POLICY_REGISTRY.get(
+    AU_RECALL_SAFE_V2_POLICY_ID
+)
+if AU_RECALL_SAFE_V2_POLICY is None:
+    raise FetchPolicyManifestError("AU recall-safe v2 policy is not registered")
 ACTIVE_AU_FETCH_POLICY_ID = AU_FETCH_POLICY_MANIFEST.active_policy_id
 ACTIVE_AU_FETCH_POLICY = MappingProxyType(
     AU_FETCH_POLICY_MANIFEST.active_policy.as_config()

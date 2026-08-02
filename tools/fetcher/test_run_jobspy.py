@@ -1339,8 +1339,8 @@ class TitleMatchModeTests(unittest.TestCase):
 
 
 class AuRecallPolicyConfigTests(unittest.TestCase):
-    def _config(self):
-        policy = rj.AU_FETCH_POLICY_REGISTRY[rj.AU_RECALL_SAFE_V1_POLICY_ID]
+    def _config(self, policy_id=rj.AU_RECALL_SAFE_V2_POLICY_ID):
+        policy = rj.AU_FETCH_POLICY_REGISTRY[policy_id]
         return {
             "schemaVersion": 2,
             "market": "AU",
@@ -1366,25 +1366,16 @@ class AuRecallPolicyConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "Unsupported AU fetch recall policy"):
             rj._uses_au_recall_policy(config)
 
-    def test_old_registered_v1_policy_survives_a_newer_registry_entry(self):
-        config = self._config()
-        future = {**config["policy"], "id": "au-recall-safe-v2"}
-        with patch.object(
-            rj,
-            "AU_FETCH_POLICY_REGISTRY",
-            {
-                **rj.AU_FETCH_POLICY_REGISTRY,
-                future["id"]: future,
-            },
-        ):
-            self.assertEqual(
-                rj._resolve_au_recall_policy_id(config),
-                rj.AU_RECALL_SAFE_V1_POLICY_ID,
-            )
+    def test_old_registered_v1_policy_remains_executable(self):
+        config = self._config(rj.AU_RECALL_SAFE_V1_POLICY_ID)
+        self.assertEqual(
+            rj._resolve_au_recall_policy_id(config),
+            rj.AU_RECALL_SAFE_V1_POLICY_ID,
+        )
 
     def test_registered_but_unimplemented_policy_fails_closed(self):
         config = self._config()
-        future = {**config["policy"], "id": "au-recall-safe-v2"}
+        future = {**config["policy"], "id": "au-recall-safe-v3"}
         config["policy"] = future
         with patch.object(
             rj,
@@ -1407,29 +1398,33 @@ class AuRecallPolicyConfigTests(unittest.TestCase):
         self.assertEqual(rights, ["identity_requirement"])
         self.assertEqual(experience, ["experience_requirement_4_plus"])
 
-    def test_description_filter_routes_v2_to_recall_safe_policy(self):
+    def test_description_filter_routes_both_registered_policies_to_recall_safe_policy(self):
         frame = pd.DataFrame([{"description": "example"}])
-        recall = Mock(return_value=(frame, pd.DataFrame()))
-        module = SimpleNamespace(filter_au_eligibility_policy=recall)
+        for policy_id in (
+            rj.AU_RECALL_SAFE_V1_POLICY_ID,
+            rj.AU_RECALL_SAFE_V2_POLICY_ID,
+        ):
+            with self.subTest(policy_id=policy_id):
+                recall = Mock(return_value=(frame, pd.DataFrame()))
+                module = SimpleNamespace(filter_au_eligibility_policy=recall)
+                with patch.dict(sys.modules, {"au_eligibility_policy": module}):
+                    kept, _audit = rj._filter_description_by_policy(
+                        frame,
+                        recall_policy_id=policy_id,
+                        active_rights_rules=[
+                            "identity_requirement",
+                            "clearance_requirement",
+                        ],
+                        identity_region="GLOBAL",
+                        identity_strictness="balanced",
+                    )
 
-        with patch.dict(sys.modules, {"au_eligibility_policy": module}):
-            kept, _audit = rj._filter_description_by_policy(
-                frame,
-                recall_policy_id=rj.AU_RECALL_SAFE_V1_POLICY_ID,
-                active_rights_rules=[
-                    "identity_requirement",
-                    "clearance_requirement",
-                ],
-                identity_region="GLOBAL",
-                identity_strictness="balanced",
-            )
-
-        self.assertIs(kept, frame)
-        recall.assert_called_once_with(
-            frame,
-            identity_requirement=True,
-            clearance_requirement=True,
-        )
+                self.assertIs(kept, frame)
+                recall.assert_called_once_with(
+                    frame,
+                    identity_requirement=True,
+                    clearance_requirement=True,
+                )
 
     def test_description_filter_keeps_v1_on_legacy_rights_facade(self):
         frame = pd.DataFrame([{"description": "example"}])

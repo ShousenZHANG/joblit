@@ -6,6 +6,11 @@
  * role the user could otherwise see. Ambiguous language fails open.
  */
 
+import {
+  AU_RECALL_SAFE_V1_POLICY_ID,
+  AU_RECALL_SAFE_V2_POLICY_ID,
+} from "./fetchPolicy";
+
 export type TitleSeniorityRuleId =
   | "TITLE_ALLOWED"
   | "TITLE_AMBIGUOUS_FAIL_OPEN"
@@ -44,6 +49,9 @@ const ALL_EXCLUSION_RULES: ReadonlySet<ExclusionRuleId> = new Set([
   "TITLE_ARCHITECT",
   "TITLE_EXECUTIVE",
 ]);
+const SENIOR_ELIGIBLE_EXCLUSION_RULES: ReadonlySet<ExclusionRuleId> = new Set(
+  [...ALL_EXCLUSION_RULES].filter((ruleId) => ruleId !== "TITLE_SENIOR"),
+);
 
 const LEGACY_TERM_RULE = new Map<string, ExclusionRuleId>([
   ["senior", "TITLE_SENIOR"],
@@ -63,6 +71,11 @@ const LEGACY_TERM_RULE = new Map<string, ExclusionRuleId>([
 ]);
 
 const SENIOR_ALIASES = new Set(["senior", "sr", "snr"]);
+const LEAD_ALIASES = new Set(["lead", "leader"]);
+const V1_POLICY_ENABLED_ALIASES: ReadonlyMap<
+  ExclusionRuleId,
+  ReadonlySet<string>
+> = new Map([["TITLE_LEAD", new Set(["lead"])]]);
 
 const EXPLICIT_ROLE_PHRASES = [
   ["analyst"],
@@ -111,19 +124,23 @@ const LEAD_FUNCTION_SUFFIXES = new Set([
   "data",
   "delivery",
   "design",
+  "development",
   "discipline",
   "engineering",
   "platform",
+  "people",
   "practice",
   "product",
   "program",
   "project",
   "security",
   "software",
+  "squad",
   "team",
   "tech",
   "technical",
   "technology",
+  "tribe",
 ]);
 
 const MANAGER_FUNCTIONS = new Set([
@@ -634,7 +651,8 @@ function evaluateLeadRule(context: RuleContext): TitleSeniorityDecision | null {
   for (let index = 0; index < context.tokens.length; index += 1) {
     const token = context.tokens[index];
     if (
-      token?.value !== "lead" ||
+      !token ||
+      !LEAD_ALIASES.has(token.value) ||
       !aliasEnabled("TITLE_LEAD", token.value, context.enabledAliases)
     ) {
       continue;
@@ -728,16 +746,26 @@ function evaluateTitleSeniorityWithRules(
 }
 
 function evaluateAuRecallSafeV1Title(title: string): TitleSeniorityDecision {
-  return evaluateTitleSeniorityWithRules(title, ALL_EXCLUSION_RULES);
+  return evaluateTitleSeniorityWithRules(
+    title,
+    ALL_EXCLUSION_RULES,
+    V1_POLICY_ENABLED_ALIASES,
+  );
 }
 
-const AU_RECALL_SAFE_V1_TITLE_POLICY_ID = "au-recall-safe-v1";
+function evaluateAuRecallSafeV2Title(title: string): TitleSeniorityDecision {
+  return evaluateTitleSeniorityWithRules(
+    title,
+    SENIOR_ELIGIBLE_EXCLUSION_RULES,
+  );
+}
 
 const TITLE_POLICY_EVALUATORS: ReadonlyMap<
   string,
   (title: string) => TitleSeniorityDecision
 > = new Map([
-  [AU_RECALL_SAFE_V1_TITLE_POLICY_ID, evaluateAuRecallSafeV1Title],
+  [AU_RECALL_SAFE_V1_POLICY_ID, evaluateAuRecallSafeV1Title],
+  [AU_RECALL_SAFE_V2_POLICY_ID, evaluateAuRecallSafeV2Title],
 ]);
 
 export function evaluateTitleSeniorityForPolicy(

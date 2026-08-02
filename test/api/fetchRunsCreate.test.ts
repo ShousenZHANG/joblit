@@ -104,7 +104,8 @@ describe("fetch runs create api", () => {
       includeFromQueries: true,
       titleMatch: "relaxed",
       policy: {
-        id: "au-recall-safe-v1",
+        id: "au-recall-safe-v2",
+        seniorityCeiling: "senior",
         seniorityEvidence: "visible-title-only",
         citizenshipOrPr: "exclude-explicit-required",
         governmentSecurityClearance:

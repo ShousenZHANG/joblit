@@ -242,6 +242,13 @@ describe("FetchClient", () => {
 
       expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
       expect(screen.getByText(experiencePromise)).toBeInTheDocument();
+      expect(
+        screen.getByText((content) =>
+          ["junior", "mid", "senior"].every((term) =>
+            content.toLowerCase().includes(term),
+          ),
+        ),
+      ).toBeInTheDocument();
       expect(screen.queryByTestId("title-match-control")).not.toBeInTheDocument();
       expect(screen.queryByTestId("title-exclusions-trigger")).not.toBeInTheDocument();
       expect(screen.queryByTestId("description-exclusions-trigger")).not.toBeInTheDocument();

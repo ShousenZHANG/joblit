@@ -26,6 +26,7 @@ from title_seniority_policy import (
 from fetch_policy import (
     AU_FETCH_POLICY_REGISTRY,
     AU_RECALL_SAFE_V1_POLICY_ID,
+    AU_RECALL_SAFE_V2_POLICY_ID,
     FetchPolicyManifestError,
     resolve_registered_au_fetch_policy,
 )
@@ -560,7 +561,9 @@ def _fetch_terms(
 
 
 TITLE_MATCH_MODES = ("strict", "relaxed", "off")
-IMPLEMENTED_AU_RECALL_POLICY_IDS = frozenset({AU_RECALL_SAFE_V1_POLICY_ID})
+IMPLEMENTED_AU_RECALL_POLICY_IDS = frozenset(
+    {AU_RECALL_SAFE_V1_POLICY_ID, AU_RECALL_SAFE_V2_POLICY_ID}
+)
 
 
 def _resolve_au_recall_policy_id(raw_queries: Any) -> Optional[str]:
@@ -617,10 +620,10 @@ def _filter_description_by_policy(
     identity_region: str,
     identity_strictness: str,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Route v2 to its immutable evaluator and v1 to its legacy facade."""
+    """Route policy-bearing AU configs to recall-safe eligibility rules."""
 
     if recall_policy_id is not None:
-        if recall_policy_id != AU_RECALL_SAFE_V1_POLICY_ID:
+        if recall_policy_id not in IMPLEMENTED_AU_RECALL_POLICY_IDS:
             raise RuntimeError(
                 f"AU fetch recall policy is not implemented: {recall_policy_id}"
             )

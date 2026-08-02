@@ -1,10 +1,18 @@
 {
   "schemaVersion": 1,
-  "activePolicyId": "au-recall-safe-v1",
+  "activePolicyId": "au-recall-safe-v2",
   "policies": {
     "au-recall-safe-v1": {
       "id": "au-recall-safe-v1",
       "seniorityCeiling": "mid",
+      "seniorityEvidence": "visible-title-only",
+      "citizenshipOrPr": "exclude-explicit-required",
+      "governmentSecurityClearance": "exclude-required-or-explicitly-eligible-to-obtain",
+      "experienceYears": "never-exclude"
+    },
+    "au-recall-safe-v2": {
+      "id": "au-recall-safe-v2",
+      "seniorityCeiling": "senior",
       "seniorityEvidence": "visible-title-only",
       "citizenshipOrPr": "exclude-explicit-required",
       "governmentSecurityClearance": "exclude-required-or-explicitly-eligible-to-obtain",

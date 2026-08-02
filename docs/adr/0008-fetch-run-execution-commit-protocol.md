@@ -48,9 +48,9 @@ remain on v1:
 - `{ schemaVersion: 1, market: "CN", ... }`
 - `{ schemaVersion: 1, market: "GLOBAL", ... }`
 
-AU v2 separates user search intent from server-owned filtering policy. It
-persists `smartExpand: true`, `titleMatch: "relaxed"`, and
-`includeFromQueries: true` as literals and embeds the immutable
+AU v2 separates user search intent from server-owned filtering policy. The
+initial writer persisted `smartExpand: true`, `titleMatch: "relaxed"`, and
+`includeFromQueries: true` as literals and embedded the immutable
 `au-recall-safe-v1` policy. That policy caps seniority at mid-level using only
 the visible job title; excludes only explicit Australian citizenship or
 permanent-residency requirements and government-clearance requirements,
@@ -72,6 +72,16 @@ projection for AU v2 remains
 `includeFromQueries = true` and `filterDescription = true`. As with v1, only
 typed `dispatchMeta` may be patched after creation; its patch operation must
 preserve the schema version and policy byte-for-byte.
+
+The first policy evolution activates `au-recall-safe-v2` for newly created AU
+runs. It raises the visible-title ceiling from Mid to Senior: Junior, Mid, and
+Senior roles remain eligible, while explicit Staff, Principal, Lead/Leader,
+Manager, Architect, Director, Head, VP, Chief, and Distinguished titles remain
+excluded. Citizenship/PR, government-clearance, and experience-year semantics
+are unchanged. `au-recall-safe-v1` stays registered and executable with its
+original Mid ceiling so queued and historical runs remain reproducible. This
+policy change does not advance `FetchRunConfig.schemaVersion`; the config shape
+is still AU v2 and snapshots the selected append-only policy in `policy`.
 
 For GLOBAL runs, a non-empty v1 `sources` list is the exact creation-time
 source snapshot even when `sourceSelection` is `all`. Execution neither drops

@@ -180,8 +180,11 @@ in-process CN/GLOBAL adapter, then commits ordered result batches through the
 `fetch-run-commit/v1` protocol.
 
 New AU runs persist `FetchRunConfig` v2 with the immutable
-`au-recall-safe-v1` policy. Historical AU plus current CN/GLOBAL runs retain
-their strict v1 contract; neither queued rows nor legacy rows are rewritten.
+`au-recall-safe-v2` policy. That policy keeps Junior, Mid, and Senior roles
+while excluding only explicit higher-level or leadership titles. Historical AU
+runs may carry `au-recall-safe-v1`, which retains its original Mid ceiling;
+current CN/GLOBAL runs retain their strict v1 config contract. Neither queued
+rows nor legacy rows are rewritten.
 The active AU policy id affects new creation only: readers validate each
 persisted policy snapshot against its registry entry, and old registered
 policies remain executable after a newer policy becomes active. Historical v1
@@ -219,14 +222,19 @@ block of `fetchRolePacks.config.json` and are held to one behaviour by
 a domain, and treating one as a required title signal made a search for
 "Senior AI Engineer" return strictly fewer roles than "AI Engineer".
 
-### AU Recall-safe Exclusion Policy
+### AU Recall-safe Exclusion Policies
 
 The browser describes search intent only: title, location, and listing age.
 The server persists one append-only policy identifier and owns every hard
-exclusion. `au-recall-safe-v1` follows four fail-open rules:
+exclusion. Historical `au-recall-safe-v1` caps visible-title seniority at Mid.
+Active `au-recall-safe-v2` keeps Junior, Mid, and Senior roles while excluding
+explicit Staff, Principal, Lead/Leader, Manager, Architect, Director, Head,
+VP, Chief, and Distinguished titles. Both policies follow the same remaining
+fail-open rules:
 
 - seniority is evaluated from the visible title only; source `job_level` and
-  `seniority_level` metadata never delete a role;
+  `seniority_level` metadata never delete a role, and ambiguous title language
+  is kept;
 - only explicit Australian citizen or permanent-resident applicant gates are
   excluded;
 - only explicit Australian government Baseline, NV1, or NV2 requirements (or

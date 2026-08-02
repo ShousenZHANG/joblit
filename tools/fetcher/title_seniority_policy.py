@@ -12,6 +12,17 @@ import re
 import unicodedata
 from typing import Callable, Literal, Optional, TypedDict
 
+try:  # Package-mode tests/imports.
+    from .fetch_policy import (
+        AU_RECALL_SAFE_V1_POLICY_ID,
+        AU_RECALL_SAFE_V2_POLICY_ID,
+    )
+except ImportError:  # Direct worker script execution from tools/fetcher.
+    from fetch_policy import (
+        AU_RECALL_SAFE_V1_POLICY_ID,
+        AU_RECALL_SAFE_V2_POLICY_ID,
+    )
+
 
 class TitleSeniorityDecision(TypedDict):
     outcome: Literal["KEEP", "EXCLUDE"]
@@ -66,19 +77,23 @@ LEAD_FUNCTION_SUFFIXES = {
     "data",
     "delivery",
     "design",
+    "development",
     "discipline",
     "engineering",
     "platform",
+    "people",
     "practice",
     "product",
     "program",
     "project",
     "security",
     "software",
+    "squad",
     "team",
     "tech",
     "technical",
     "technology",
+    "tribe",
 }
 
 MANAGER_FUNCTIONS = {
@@ -247,6 +262,7 @@ ALL_EXCLUSION_RULES = {
     "TITLE_ARCHITECT",
     "TITLE_EXECUTIVE",
 }
+SENIOR_ELIGIBLE_EXCLUSION_RULES = ALL_EXCLUSION_RULES - {"TITLE_SENIOR"}
 
 LEGACY_TERM_RULE = {
     "senior": "TITLE_SENIOR",
@@ -266,6 +282,8 @@ LEGACY_TERM_RULE = {
 }
 
 SENIOR_ALIASES = {"senior", "sr", "snr"}
+LEAD_ALIASES = {"lead", "leader"}
+V1_POLICY_ENABLED_ALIASES = {"TITLE_LEAD": {"lead"}}
 
 
 class _Token(TypedDict):
@@ -584,7 +602,7 @@ def _evaluate_lead_rule(context: _RuleContext) -> Optional[TitleSeniorityDecisio
     ambiguous_evidence: Optional[str] = None
     tokens = context["tokens"]
     for index, token in enumerate(tokens):
-        if token["value"] != "lead" or not _alias_enabled(
+        if token["value"] not in LEAD_ALIASES or not _alias_enabled(
             "TITLE_LEAD", token["value"], context["enabled_aliases"]
         ):
             continue
@@ -666,17 +684,28 @@ def _evaluate_title_seniority_with_rules(
     return {"outcome": "KEEP", "ruleId": "TITLE_ALLOWED", "evidence": None}
 
 
-AU_RECALL_SAFE_V1_TITLE_POLICY_ID = "au-recall-safe-v1"
-
-
 def _evaluate_au_recall_safe_v1_title(title: str) -> TitleSeniorityDecision:
     """Immutable evaluator for the persisted AU recall-safe v1 contract."""
 
-    return _evaluate_title_seniority_with_rules(title, ALL_EXCLUSION_RULES)
+    return _evaluate_title_seniority_with_rules(
+        title,
+        ALL_EXCLUSION_RULES,
+        V1_POLICY_ENABLED_ALIASES,
+    )
+
+
+def _evaluate_au_recall_safe_v2_title(title: str) -> TitleSeniorityDecision:
+    """Keep Senior roles while excluding explicit higher/leadership titles."""
+
+    return _evaluate_title_seniority_with_rules(
+        title,
+        SENIOR_ELIGIBLE_EXCLUSION_RULES,
+    )
 
 
 _TITLE_POLICY_EVALUATORS = {
-    AU_RECALL_SAFE_V1_TITLE_POLICY_ID: _evaluate_au_recall_safe_v1_title,
+    AU_RECALL_SAFE_V1_POLICY_ID: _evaluate_au_recall_safe_v1_title,
+    AU_RECALL_SAFE_V2_POLICY_ID: _evaluate_au_recall_safe_v2_title,
 }
 
 

@@ -5,24 +5,35 @@ import {
   AU_FETCH_POLICY,
   AU_FETCH_POLICY_MANIFEST,
   AU_RECALL_SAFE_V1_POLICY_ID,
+  AU_RECALL_SAFE_V2_POLICY_ID,
   parseAuFetchPolicyManifest,
   parseRegisteredAuFetchPolicy,
 } from "./fetchPolicy";
 
 describe("AU fetch policy manifest", () => {
-  it("exports the shared manifest and a stable v1 policy identity", () => {
+  it("exports the active v2 policy while retaining the immutable v1 snapshot", () => {
     expect(AU_FETCH_POLICY_MANIFEST).toEqual(rawManifest);
-    expect(ACTIVE_AU_FETCH_POLICY_ID).toBe("au-recall-safe-v1");
+    expect(ACTIVE_AU_FETCH_POLICY_ID).toBe("au-recall-safe-v2");
     expect(AU_RECALL_SAFE_V1_POLICY_ID).toBe("au-recall-safe-v1");
+    expect(AU_RECALL_SAFE_V2_POLICY_ID).toBe("au-recall-safe-v2");
     expect(AU_FETCH_POLICY).toEqual(
-      rawManifest.policies[AU_RECALL_SAFE_V1_POLICY_ID],
+      rawManifest.policies[AU_RECALL_SAFE_V2_POLICY_ID],
     );
+    expect(
+      rawManifest.policies[AU_RECALL_SAFE_V1_POLICY_ID].seniorityCeiling,
+    ).toBe("mid");
+    expect(AU_FETCH_POLICY.seniorityCeiling).toBe("senior");
 
     expectTypeOf(AU_RECALL_SAFE_V1_POLICY_ID).toEqualTypeOf<
       "au-recall-safe-v1"
     >();
+    expectTypeOf(AU_RECALL_SAFE_V2_POLICY_ID).toEqualTypeOf<
+      "au-recall-safe-v2"
+    >();
     expectTypeOf(AU_FETCH_POLICY.id).toEqualTypeOf<string>();
-    expectTypeOf(AU_FETCH_POLICY.seniorityCeiling).toEqualTypeOf<"mid">();
+    expectTypeOf(AU_FETCH_POLICY.seniorityCeiling).toEqualTypeOf<
+      "mid" | "senior"
+    >();
     expectTypeOf(AU_FETCH_POLICY.experienceYears).toEqualTypeOf<
       "never-exclude"
     >();
@@ -34,8 +45,9 @@ describe("AU fetch policy manifest", () => {
       {
         ...rawManifest,
         policies: {
-          "au-recall-safe-v1": {
-            ...rawManifest.policies["au-recall-safe-v1"],
+          ...rawManifest.policies,
+          "au-recall-safe-v2": {
+            ...rawManifest.policies["au-recall-safe-v2"],
             experienceYears: undefined,
           },
         },
@@ -46,8 +58,9 @@ describe("AU fetch policy manifest", () => {
       {
         ...rawManifest,
         policies: {
-          "au-recall-safe-v1": {
-            ...rawManifest.policies["au-recall-safe-v1"],
+          ...rawManifest.policies,
+          "au-recall-safe-v2": {
+            ...rawManifest.policies["au-recall-safe-v2"],
             futureRule: true,
           },
         },
@@ -58,9 +71,23 @@ describe("AU fetch policy manifest", () => {
       {
         ...rawManifest,
         policies: {
+          ...rawManifest.policies,
+          "au-recall-safe-v2": {
+            ...rawManifest.policies["au-recall-safe-v2"],
+            experienceYears: "exclude-4-plus",
+          },
+        },
+      },
+    ],
+    [
+      "known policy semantic drift",
+      {
+        ...rawManifest,
+        policies: {
+          ...rawManifest.policies,
           "au-recall-safe-v1": {
             ...rawManifest.policies["au-recall-safe-v1"],
-            experienceYears: "exclude-4-plus",
+            seniorityCeiling: "senior",
           },
         },
       },
@@ -71,6 +98,7 @@ describe("AU fetch policy manifest", () => {
       {
         ...rawManifest,
         policies: {
+          ...rawManifest.policies,
           alias: rawManifest.policies["au-recall-safe-v1"],
         },
       },
@@ -82,17 +110,19 @@ describe("AU fetch policy manifest", () => {
 
   it("resolves an old registered snapshot after the active pointer advances", () => {
     const v1 = rawManifest.policies[AU_RECALL_SAFE_V1_POLICY_ID];
-    const v2 = { ...v1, id: "au-recall-safe-v2" };
+    const v2 = rawManifest.policies[AU_RECALL_SAFE_V2_POLICY_ID];
+    const v3 = { ...v2, id: "au-recall-safe-v3" };
     const upgraded = parseAuFetchPolicyManifest({
       ...rawManifest,
-      activePolicyId: v2.id,
+      activePolicyId: v3.id,
       policies: {
         [AU_RECALL_SAFE_V1_POLICY_ID]: v1,
-        [v2.id]: v2,
+        [AU_RECALL_SAFE_V2_POLICY_ID]: v2,
+        [v3.id]: v3,
       },
     });
 
-    expect(upgraded.activePolicyId).toBe(v2.id);
+    expect(upgraded.activePolicyId).toBe(v3.id);
     expect(
       parseRegisteredAuFetchPolicy(v1, upgraded.policies),
     ).toEqual(v1);
@@ -110,5 +140,11 @@ describe("AU fetch policy manifest", () => {
         experienceYears: "exclude-4-plus",
       }),
     ).toThrow();
+    expect(() =>
+      parseRegisteredAuFetchPolicy({
+        ...v1,
+        seniorityCeiling: "senior",
+      }),
+    ).toThrow(/must retain/i);
   });
 });
