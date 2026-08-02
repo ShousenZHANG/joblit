@@ -6,6 +6,7 @@ vi.mock("@/hooks/useMarket", () => ({ useMarket: () => "AU" }));
 
 import { JobDetailPanel } from "./JobDetailPanel";
 import type { JobItem, JobStatus } from "../types";
+import type { JobExperienceAnalysis } from "@/lib/shared/jobExperienceAnalysis";
 import messages from "@/messages/en.json";
 import zhMessages from "@/messages/zh.json";
 
@@ -23,12 +24,19 @@ function job(overrides: Partial<JobItem> = {}): JobItem {
   } as JobItem;
 }
 
-function renderPanel(selectedJob: JobItem) {
+function renderPanel(
+  selectedJob: JobItem,
+  options: {
+    selectedDescription?: string;
+    experienceAnalysis?: JobExperienceAnalysis | null;
+  } = {},
+) {
   return render(
     <NextIntlClientProvider locale="en" messages={messages}>
       <JobDetailPanel
         selectedJob={selectedJob}
-        selectedDescription=""
+        selectedDescription={options.selectedDescription ?? ""}
+        experienceAnalysis={options.experienceAnalysis}
         selectedFitMatrix={null}
         detailError={null}
         detailLoading={false}
@@ -135,4 +143,63 @@ describe("JobDetailPanel touch contract", () => {
       "[@media(any-pointer:coarse)]:min-h-11",
     );
   });
+});
+
+describe("JobDetailPanel experience summary", () => {
+  it(
+    "places the JD-derived requirement before fit evidence and passes it to the description",
+    async () => {
+      const description =
+        "Requirements: At least 4 years of platform engineering experience.";
+      const yearsText = "At least 4 years";
+      const yearsStart = description.indexOf(yearsText);
+      const experienceAnalysis: JobExperienceAnalysis = {
+        schemaVersion: 1,
+        status: "FOUND",
+        requirements: [
+          {
+            id: "platform-years",
+            classification: "REQUIRED",
+            years: {
+              operator: "MINIMUM",
+              min: 4,
+              max: null,
+              text: yearsText,
+            },
+            scope: "platform engineering",
+            evidence: {
+              text: description,
+              start: 0,
+              end: description.length,
+              yearsStart,
+              yearsEnd: yearsStart + yearsText.length,
+            },
+          },
+        ],
+      };
+
+      const view = renderPanel(job({ fitScore: 72, fitVerdict: "GOOD" }), {
+        selectedDescription: description,
+        experienceAnalysis,
+      });
+
+      const summary = screen.getByTestId("experience-requirement-summary");
+      const fitEvidence = screen.getByRole("heading", { name: "Fit evidence" });
+      expect(
+        summary.compareDocumentPosition(fitEvidence) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+
+      const highlighted = await within(view.container).findByLabelText(
+        "Required: At least 4 years",
+        {},
+        { timeout: 5_000 },
+      );
+      expect(highlighted).toHaveAttribute(
+        "data-experience-highlight",
+        "REQUIRED",
+      );
+    },
+    10_000,
+  );
 });

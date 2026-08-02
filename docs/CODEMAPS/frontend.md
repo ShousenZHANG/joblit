@@ -98,7 +98,9 @@ The deferred-delete tombstone set lives in **three** places: module-level
 exports. `jobsUrlState.ts` resolves retired statuses through `toActiveJobStatus`
 (`:38-41`) per ADR-0007; `serializeJobListItem.ts:21` does **not** and casts the
 stored status raw. Also: `visibleTotalCount.ts`, `tailorParser.ts`,
-`experienceParser.ts`, `skillPackMeta.ts`.
+`structuralRequirementParser.ts`, while the shared
+`jobExperienceAnalysis.ts` module owns evidence-preserving JD year analysis;
+`skillPackMeta.ts` owns skill-pack freshness.
 
 ---
 

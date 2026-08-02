@@ -9,6 +9,7 @@ import { updateJobStatus } from "@/lib/server/jobs/jobStatusService";
 import { FitMatrixSchema } from "@/lib/shared/schemas/fitMatrix";
 import { ACTIVE_JOB_STATUS_VALUES } from "@/lib/shared/jobStatus";
 import { applicationEventErrorResponse } from "@/lib/server/applications/applicationEventErrors";
+import { analyzeJobExperience } from "@/lib/shared/jobExperienceAnalysis";
 
 export const runtime = "nodejs";
 
@@ -74,6 +75,11 @@ export async function GET(
         id: job.id,
         description: job.description ?? null,
         fitMatrix: matrix.success ? matrix.data : null,
+        // This is deliberately derived from the authoritative description on
+        // read. Experience years are not filter/sort data, so persisting a
+        // second copy would create a stale-cache and production-backfill
+        // problem without improving the user-visible result.
+        experienceAnalysis: analyzeJobExperience(job.description),
         updatedAt: job.updatedAt.toISOString(),
       });
     },

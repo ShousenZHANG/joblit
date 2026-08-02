@@ -4,6 +4,7 @@ import {
   jobListItemSchema,
   jobsListResponseSchema,
 } from "./jobsList";
+import { analyzeJobExperience } from "../jobExperienceAnalysis";
 
 function row(overrides: Record<string, unknown> = {}) {
   return {
@@ -86,14 +87,53 @@ describe("jobsListResponseSchema", () => {
 
 describe("jobDetailResponseSchema", () => {
   it("accepts a detail with no fit matrix yet", () => {
+    const parsed = jobDetailResponseSchema.safeParse({
+      id: "job-1",
+      description: "Build things.",
+      fitMatrix: null,
+      updatedAt: "2026-07-01T00:00:00.000Z",
+    });
+
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.experienceAnalysis).toEqual({
+      schemaVersion: 1,
+      status: "NONE",
+      requirements: [],
+    });
+  });
+
+  it("rejects malformed experience evidence at the detail seam", () => {
     expect(
       jobDetailResponseSchema.safeParse({
         id: "job-1",
-        description: "Build things.",
+        description: "Minimum 3 years of experience.",
         fitMatrix: null,
+        experienceAnalysis: {
+          schemaVersion: 1,
+          status: "FOUND",
+          requirements: [{ id: "missing-required-fields" }],
+        },
         updatedAt: "2026-07-01T00:00:00.000Z",
       }).success,
-    ).toBe(true);
+    ).toBe(false);
+  });
+
+  it("rejects well-shaped evidence that does not match the JD source", () => {
+    const description = "Minimum 3 years of backend experience is required.";
+    const experienceAnalysis = analyzeJobExperience(description);
+    const requirement = experienceAnalysis.requirements[0];
+    expect(requirement).toBeDefined();
+
+    expect(
+      jobDetailResponseSchema.safeParse({
+        id: "job-1",
+        description: description.replace("backend", "systems"),
+        fitMatrix: null,
+        experienceAnalysis,
+        updatedAt: "2026-07-01T00:00:00.000Z",
+      }).success,
+    ).toBe(false);
   });
 
   it("requires updatedAt — the list and detail use it to stay coherent", () => {

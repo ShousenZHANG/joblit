@@ -1,4 +1,5 @@
 import { extractSkillMentions } from "./skillsGazetteer";
+import { analyzeJobExperience } from "./jobExperienceAnalysis";
 
 export const TECH_REQUIREMENT_PRIORITIES = [
   "REQUIRED",
@@ -72,11 +73,6 @@ const LOCATION_RE =
   /\b(?:on[- ]site|in[- ]office|office[- ]based|based in|located in|relocat(?:e|ion)|commut(?:e|ing))\b/i;
 const LOCATION_INTRINSIC_RE =
   /\b(?:(?:fully|100%)\s+on[- ]site|on[- ]site role|\d+\s+days?\s+(?:per|a)\s+week\s+(?:on[- ]site|in[- ]office))\b/i;
-const YEARS_RE =
-  /\b(\d{1,2})(?:\s*(?:-|to)\s*\d{1,2})?\s*\+?\s*(?:years?|yrs?)\b/i;
-const EXPERIENCE_CONTEXT_RE =
-  /\b(?:experience|background|track record|professional|industry|role|position|field|hands-on)\b/i;
-
 const HEADING_PATTERNS: Array<{
   kind: SectionKind;
   pattern: RegExp;
@@ -313,18 +309,39 @@ export function analyzeJobStructuralGates(
       ) {
         emit("LOCATION", "Mandatory work location", evidence);
       }
-
-      const years = evidence.match(YEARS_RE);
-      if (
-        years &&
-        (EXPERIENCE_CONTEXT_RE.test(evidence) || explicitHard) &&
-        (hard ||
-          /\b(?:you(?:'ve| have| bring)|proven|demonstrated)\b/i.test(evidence))
-      ) {
-        emit("EXPERIENCE", `${years[0]} experience`, evidence);
-      }
     }
   }
 
-  return signals.slice(0, 10);
+  // Experience parsing has richer semantics than the other structural gates
+  // (minimum/range/maximum, section inheritance, alternatives and exact source
+  // spans). Reuse the dedicated deep module so prompt construction and the
+  // Jobs UI cannot disagree about the same JD sentence.
+  for (const experience of analyzeJobExperience(description).requirements) {
+    if (experience.classification !== "REQUIRED") continue;
+    const { operator, min, max } = experience.years;
+    const duration =
+      operator === "MINIMUM"
+        ? `${min}+ years`
+        : operator === "RANGE"
+          ? `${min}-${max} years`
+          : operator === "MAXIMUM"
+            ? `Up to ${max ?? min} years`
+            : `${min} years`;
+    emit(
+      "EXPERIENCE",
+      `${duration}${experience.scope ? ` ${experience.scope}` : " experience"}`,
+      experience.evidence.text,
+    );
+  }
+
+  // The specialised experience pass runs after the structural scan; restore
+  // source order so callers keep a stable evidence-first presentation.
+  return signals
+    .sort((a, b) => {
+      const aIndex = description.indexOf(a.evidence);
+      const bIndex = description.indexOf(b.evidence);
+      return (aIndex < 0 ? Number.MAX_SAFE_INTEGER : aIndex) -
+        (bIndex < 0 ? Number.MAX_SAFE_INTEGER : bIndex);
+    })
+    .slice(0, 10);
 }

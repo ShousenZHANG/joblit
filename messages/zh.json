@@ -182,6 +182,22 @@
       "categoryPLATFORM": "平台",
       "categoryPRACTICE": "实践"
     },
+    "experienceRequirement": {
+      "title": "职位经验要求",
+      "subtitle": "根据 JD 自动识别，请结合引用的原文核对后再判断。",
+      "classificationREQUIRED": "必须",
+      "classificationPREFERRED": "加分项",
+      "classificationREVIEW": "需要确认",
+      "reviewWording": "可能涉及经验年限",
+      "scope": "范围：{scope}",
+      "source": "JD 原文",
+      "viewEvidence": "查看 JD 原文证据",
+      "relationAnyOf": "或",
+      "relationAllOf": "且",
+      "relationAnyOfLabel": "满足其中任意一项",
+      "relationAllOfLabel": "需要同时满足以下要求",
+      "truncated": "这份 JD 的经验表述较多，当前未全部展示；决定前请核对完整职位描述。"
+    },
     "noJobs": "暂无职位。",
     "emptyHeadline": "还没有职位",
     "emptyHeadlineFiltered": "没有匹配的职位",

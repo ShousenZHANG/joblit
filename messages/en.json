@@ -182,6 +182,22 @@
       "categoryPLATFORM": "Platform",
       "categoryPRACTICE": "Practice"
     },
+    "experienceRequirement": {
+      "title": "Experience requirement",
+      "subtitle": "Automatically identified from the JD. Check the quoted wording before deciding.",
+      "classificationREQUIRED": "Required",
+      "classificationPREFERRED": "Preferred",
+      "classificationREVIEW": "Needs review",
+      "reviewWording": "Possible experience wording",
+      "scope": "Scope: {scope}",
+      "source": "From JD",
+      "viewEvidence": "View JD evidence",
+      "relationAnyOf": "OR",
+      "relationAllOf": "AND",
+      "relationAnyOfLabel": "Any one of these requirements",
+      "relationAllOfLabel": "All of these requirements",
+      "truncated": "This JD contains more experience wording than can be shown here. Review the full description before deciding."
+    },
     "noJobs": "No jobs found.",
     "emptyHeadline": "No jobs yet",
     "emptyHeadlineFiltered": "No matching jobs",

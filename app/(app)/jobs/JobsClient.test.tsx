@@ -8,6 +8,7 @@ import { sessionDeletedJobIds } from "./hooks/useJobMutations";
 import { resetToasts } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Toaster } from "@/components/ui/toaster";
+import { analyzeJobExperience } from "@/lib/shared/jobExperienceAnalysis";
 import messages from "../../../messages/en.json";
 
 const fetchStatusMock = vi.hoisted(() => ({
@@ -883,7 +884,7 @@ describe("JobsClient", () => {
     expect(quote.closest("blockquote")).toHaveClass("border-l-2");
   });
 
-  it("shows screening-gate chips for year-limit requirements in JD", async () => {
+  it("shows JD experience as evidence without turning it into a pre-scan gate", async () => {
     const jd =
       "Requirements: Minimum of 2 years of experience in software engineering required. " +
       "A Bachelor's degree is preferred.";
@@ -904,7 +905,13 @@ describe("JobsClient", () => {
       }
       if (url.startsWith("/api/jobs/") && (!init || !init.method || init.method === "GET")) {
         return new Response(
-          JSON.stringify({ id: baseJob.id, description: jd, fitMatrix: null, updatedAt: baseJob.updatedAt }),
+          JSON.stringify({
+            id: baseJob.id,
+            description: jd,
+            fitMatrix: null,
+            experienceAnalysis: analyzeJobExperience(jd),
+            updatedAt: baseJob.updatedAt,
+          }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }
@@ -914,17 +921,17 @@ describe("JobsClient", () => {
     vi.stubGlobal("fetch", mockFetch);
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
-    // A preference cannot gate an application, so it must not appear under
-    // "Screening gates". The grouping carries the qualifier, which is why the
-    // chips read as the bare constraint.
-    expect(await screen.findByText("Screening gates")).toBeInTheDocument();
-    expect(await screen.findByText("Nice to have")).toBeInTheDocument();
-    expect(await screen.findByText("2+ years")).toBeInTheDocument();
-    expect(await screen.findByText("Bachelor's degree")).toBeInTheDocument();
-    expect(screen.queryByText("Required: 2+ years")).not.toBeInTheDocument();
+    const summary = await screen.findByTestId("experience-requirement-summary");
+    expect(within(summary).getByText("Required")).toBeInTheDocument();
     expect(
-      screen.queryByText("Preferred: Bachelor's degree"),
-    ).not.toBeInTheDocument();
+      within(summary).getByText("Minimum of 2 years"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Screening gates")).not.toBeInTheDocument();
+    expect(await screen.findByText("Nice to have")).toBeInTheDocument();
+    expect(await screen.findByText("Bachelor's degree")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Required: Minimum of 2 years"),
+    ).toHaveAttribute("data-experience-highlight", "REQUIRED");
   });
 
   it("keeps Saved CV/CL in the primary actions row and keeps Remove as a trailing secondary action", async () => {

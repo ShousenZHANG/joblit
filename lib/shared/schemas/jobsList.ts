@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { JOB_STATUS_VALUES } from "@/lib/shared/jobStatus";
 import { FitMatrixSchema } from "@/lib/shared/schemas/fitMatrix";
+import {
+  EMPTY_JOB_EXPERIENCE_ANALYSIS,
+  JobExperienceAnalysisSchema,
+} from "@/lib/shared/jobExperienceAnalysis";
 
 /**
  * The `GET /api/jobs` and `GET /api/jobs/[id]` response contracts.
@@ -55,13 +59,38 @@ export const jobsListResponseSchema = z.object({
     .optional(),
 });
 
-export const jobDetailResponseSchema = z.object({
-  id: z.string(),
-  description: z.string().nullable(),
-  fitMatrix: FitMatrixSchema.nullable(),
-  /** Cache version for score/matrix coherence with the list row. */
-  updatedAt: z.string(),
-});
+export const jobDetailResponseSchema = z
+  .object({
+    id: z.string(),
+    description: z.string().nullable(),
+    fitMatrix: FitMatrixSchema.nullable(),
+    // Defaulting keeps the expand rollout compatible with an older application
+    // revision while the new detail response crosses the deployment seam.
+    experienceAnalysis: JobExperienceAnalysisSchema.optional().default(
+      EMPTY_JOB_EXPERIENCE_ANALYSIS,
+    ),
+    /** Cache version for score/matrix coherence with the list row. */
+    updatedAt: z.string(),
+  })
+  .superRefine((detail, context) => {
+    const requirements = detail.experienceAnalysis.requirements;
+    for (const [index, requirement] of requirements.entries()) {
+      const evidence = requirement.evidence;
+      const evidenceMatches =
+        detail.description?.slice(evidence.start, evidence.end) ===
+        evidence.text;
+      const yearsMatch =
+        detail.description?.slice(evidence.yearsStart, evidence.yearsEnd) ===
+        requirement.years.text;
+      if (!evidenceMatches || !yearsMatch) {
+        context.addIssue({
+          code: "custom",
+          path: ["experienceAnalysis", "requirements", index, "evidence"],
+          message: "experience evidence must match the job description source",
+        });
+      }
+    }
+  });
 
 export type JobListItem = z.infer<typeof jobListItemSchema>;
 export type JobsListResponse = z.infer<typeof jobsListResponseSchema>;

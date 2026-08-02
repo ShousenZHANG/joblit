@@ -26,6 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/u
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { FitMatrix } from "@/lib/shared/schemas/fitMatrix";
+import type { JobExperienceAnalysis } from "@/lib/shared/jobExperienceAnalysis";
 import {
   JOB_STATUS_LABEL_KEYS,
   type JobItem,
@@ -36,6 +37,7 @@ import {
 import { selectableJobStatuses } from "@/lib/shared/jobStatus";
 import { jobStatusPresentation } from "../utils/jobStatusPresentation";
 import { FitAssessmentCard } from "./FitAssessmentCard";
+import { ExperienceRequirementSummary } from "./ExperienceRequirementSummary";
 
 // Markdown body (react-markdown + rehype-highlight + highlight.js CSS) is the
 // jobs-list's heaviest dep cluster — load it as a dynamic chunk only when a
@@ -58,6 +60,7 @@ interface JobDetailPanelProps {
   panelProps?: Omit<ComponentPropsWithoutRef<"div">, "className">;
   selectedJob: JobItem | null;
   selectedDescription: string;
+  experienceAnalysis?: JobExperienceAnalysis | null;
   selectedFitMatrix: FitMatrix | null;
   detailError: string | null;
   detailLoading: boolean;
@@ -93,6 +96,7 @@ export function JobDetailPanel({
   panelProps,
   selectedJob,
   selectedDescription,
+  experienceAnalysis,
   selectedFitMatrix,
   detailError,
   detailLoading,
@@ -376,6 +380,7 @@ export function JobDetailPanel({
                 </span>
                 <span className="h-px flex-1 bg-gradient-to-r from-border to-transparent" aria-hidden />
               </div>
+              <ExperienceRequirementSummary analysis={experienceAnalysis} />
               <FitAssessmentCard
                 description={selectedDescription}
                 score={selectedJob.fitScore}
@@ -407,7 +412,10 @@ export function JobDetailPanel({
               ) : (
                 <div className="p-1">
                   {selectedDescription ? (
-                    <JobDescriptionMarkdown description={selectedDescription} />
+                    <JobDescriptionMarkdown
+                      description={selectedDescription}
+                      experienceAnalysis={experienceAnalysis}
+                    />
                   ) : (
                     <div className="text-sm text-muted-foreground">
                       {t("noJobDescription")}

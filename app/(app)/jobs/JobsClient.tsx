@@ -534,8 +534,13 @@ export function JobsClient({
     isFetching: detailIsFetching,
     refetch: refetchDetail,
   } = detailQuery;
+  // Never pair a cached/placeholder detail payload with a different selected
+  // row. Experience offsets are source-specific, so even a brief cross-job
+  // render would show the wrong summary and disable trustworthy highlighting.
+  const selectedDetailData =
+    detailData?.id === selectedJob?.id ? detailData : undefined;
   const fitDetailRefetchKeyRef = useRef<string | null>(null);
-  const selectedDescription = selectedJob ? detailData?.description ?? "" : "";
+  const selectedDescription = selectedDetailData?.description ?? "";
   const selectedJobId = selectedJob?.id;
   const selectedJobVersion = selectedJob?.updatedAt;
   const selectedJobEligibility = selectedJob?.fitEligibility;
@@ -544,10 +549,10 @@ export function JobsClient({
   // new score with a stale GATE matrix for up to five minutes.
   useEffect(() => {
     const versionChanged =
-      Boolean(detailData?.updatedAt) &&
-      detailData?.updatedAt !== selectedJobVersion;
+      Boolean(selectedDetailData?.updatedAt) &&
+      selectedDetailData?.updatedAt !== selectedJobVersion;
     const missingCompletedMatrix =
-      Boolean(selectedJobEligibility) && !detailData?.fitMatrix;
+      Boolean(selectedJobEligibility) && !selectedDetailData?.fitMatrix;
     if (
       selectedJobId &&
       (versionChanged || missingCompletedMatrix) &&
@@ -559,8 +564,8 @@ export function JobsClient({
       void refetchDetail();
     }
   }, [
-    detailData?.fitMatrix,
-    detailData?.updatedAt,
+    selectedDetailData?.fitMatrix,
+    selectedDetailData?.updatedAt,
     detailIsFetching,
     refetchDetail,
     selectedJobEligibility,
@@ -570,9 +575,7 @@ export function JobsClient({
   const detailError = detailQueryError
     ? getErrorMessage(detailQueryError, t("errorLoadDetails"))
     : null;
-  const detailLoading = detailIsFetching && !detailData;
-
-
+  const detailLoading = detailIsFetching && !selectedDetailData;
   return (
     <>
       <ExternalGenerateDialog
@@ -1277,7 +1280,8 @@ export function JobsClient({
           }}
           selectedJob={selectedJob}
           selectedDescription={selectedDescription}
-          selectedFitMatrix={detailData?.fitMatrix ?? null}
+          experienceAnalysis={selectedDetailData?.experienceAnalysis ?? null}
+          selectedFitMatrix={selectedDetailData?.fitMatrix ?? null}
           detailError={detailError}
           detailLoading={detailLoading}
           showLoadingOverlay={showLoadingOverlay}

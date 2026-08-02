@@ -4,7 +4,12 @@ import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
+import { useTranslations } from "next-intl";
 import "highlight.js/styles/github.css";
+import type {
+  ExperienceClassification,
+  JobExperienceAnalysis,
+} from "@/lib/shared/jobExperienceAnalysis";
 import { HIGHLIGHT_KEYWORDS, escapeRegExp } from "../utils/constants";
 
 // Markdown body for the job description. Split into its own module so
@@ -30,7 +35,228 @@ const markdownStyles = {
   td: "border border-border/60 px-3 py-2 text-foreground/85",
 };
 
-export function JobDescriptionMarkdown({ description }: { description: string }) {
+type ExperienceHighlight = {
+  start: number;
+  end: number;
+  classification: ExperienceClassification;
+};
+
+type HastPoint = {
+  offset?: number;
+};
+
+type HastNode = {
+  type: string;
+  value?: string;
+  tagName?: string;
+  properties?: Record<string, unknown>;
+  children?: HastNode[];
+  position?: {
+    start: HastPoint;
+    end: HastPoint;
+  };
+};
+
+const CLASSIFICATION_PRIORITY: Record<ExperienceClassification, number> = {
+  REQUIRED: 3,
+  PREFERRED: 2,
+  REVIEW: 1,
+};
+
+const EXPERIENCE_HIGHLIGHT_TONE: Record<ExperienceClassification, string> = {
+  REQUIRED:
+    "bg-amber-100 text-amber-950 ring-1 ring-amber-300/80 dark:bg-amber-300/20 dark:text-amber-50 dark:ring-amber-300/40",
+  PREFERRED:
+    "bg-sky-100 text-sky-950 ring-1 ring-sky-300/80 dark:bg-sky-300/20 dark:text-sky-50 dark:ring-sky-300/40",
+  REVIEW:
+    "bg-slate-200 text-slate-950 ring-1 ring-slate-300/80 dark:bg-slate-300/20 dark:text-slate-50 dark:ring-slate-300/35",
+};
+
+function collectExperienceHighlights(
+  description: string,
+  analysis?: JobExperienceAnalysis | null,
+): ExperienceHighlight[] {
+  const candidates = (analysis?.requirements ?? [])
+    .map((requirement) => ({
+      start: requirement.evidence.yearsStart,
+      end: requirement.evidence.yearsEnd,
+      classification: requirement.classification,
+      expectedText: requirement.years.text,
+    }))
+    .filter(
+      ({ start, end, expectedText }) =>
+        Number.isInteger(start) &&
+        Number.isInteger(end) &&
+        start >= 0 &&
+        end > start &&
+        end <= description.length &&
+        description.slice(start, end) === expectedText,
+    )
+    .sort(
+      (a, b) =>
+        a.start - b.start ||
+        b.end - a.end ||
+        CLASSIFICATION_PRIORITY[b.classification] -
+          CLASSIFICATION_PRIORITY[a.classification],
+    );
+
+  const accepted: ExperienceHighlight[] = [];
+  for (const candidate of candidates) {
+    const previous = accepted.at(-1);
+    // Duplicate or overlapping evidence is rendered once. Candidates are
+    // priority-sorted, so REQUIRED wins over PREFERRED/REVIEW at one span.
+    if (previous && candidate.start < previous.end) continue;
+    accepted.push({
+      start: candidate.start,
+      end: candidate.end,
+      classification: candidate.classification,
+    });
+  }
+  return accepted;
+}
+
+/**
+ * HAST text nodes retain source positions from the Markdown parser. A direct
+ * source/value match is ideal. Inline code includes its backtick delimiters in
+ * the source range, so a single, exact occurrence of the displayed value is
+ * also safe to map. Entities, escapes and ambiguous repeated values fail
+ * closed: the JD remains readable and no guessed highlight is rendered.
+ */
+function sourceStartForTextNode(
+  node: HastNode,
+  description: string,
+): number | null {
+  if (node.type !== "text" || typeof node.value !== "string") return null;
+  const start = node.position?.start.offset;
+  const end = node.position?.end.offset;
+  if (
+    !Number.isInteger(start) ||
+    !Number.isInteger(end) ||
+    start === undefined ||
+    end === undefined ||
+    start < 0 ||
+    end < start ||
+    end > description.length
+  ) {
+    return null;
+  }
+
+  const source = description.slice(start, end);
+  if (source === node.value) return start;
+
+  const occurrence = source.indexOf(node.value);
+  if (
+    occurrence < 0 ||
+    source.indexOf(node.value, occurrence + node.value.length) >= 0
+  ) {
+    return null;
+  }
+  return start + occurrence;
+}
+
+function experienceMark(
+  value: string,
+  highlight: ExperienceHighlight,
+  labels: Record<ExperienceClassification, string>,
+): HastNode {
+  return {
+    type: "element",
+    tagName: "mark",
+    properties: {
+      className: [
+        "rounded-sm",
+        "px-1",
+        "py-0.5",
+        "font-bold",
+        "tabular-nums",
+        ...EXPERIENCE_HIGHLIGHT_TONE[highlight.classification].split(" "),
+      ],
+      "data-experience-highlight": highlight.classification,
+      "aria-label": `${labels[highlight.classification]}: ${value}`,
+    },
+    children: [{ type: "text", value }],
+  };
+}
+
+function splitTextNodeAtExperienceOffsets(
+  node: HastNode,
+  description: string,
+  highlights: ExperienceHighlight[],
+  labels: Record<ExperienceClassification, string>,
+): HastNode[] {
+  const value = node.value;
+  if (typeof value !== "string") return [node];
+  const sourceStart = sourceStartForTextNode(node, description);
+  if (sourceStart === null) return [node];
+  const sourceEnd = sourceStart + value.length;
+  const contained = highlights.filter(
+    (highlight) =>
+      highlight.start >= sourceStart && highlight.end <= sourceEnd,
+  );
+  if (!contained.length) return [node];
+
+  const output: HastNode[] = [];
+  let cursor = 0;
+  for (const highlight of contained) {
+    const localStart = highlight.start - sourceStart;
+    const localEnd = highlight.end - sourceStart;
+    if (localStart < cursor || localEnd > value.length) return [node];
+    if (localStart > cursor) {
+      output.push({ type: "text", value: value.slice(cursor, localStart) });
+    }
+    output.push(
+      experienceMark(value.slice(localStart, localEnd), highlight, labels),
+    );
+    cursor = localEnd;
+  }
+  if (cursor < value.length) {
+    output.push({ type: "text", value: value.slice(cursor) });
+  }
+  return output;
+}
+
+function createExperienceHighlightPlugin(
+  description: string,
+  analysis: JobExperienceAnalysis | null | undefined,
+  labels: Record<ExperienceClassification, string>,
+) {
+  const highlights = collectExperienceHighlights(description, analysis);
+
+  return function rehypeExperienceHighlights() {
+    return (tree: HastNode) => {
+      const visit = (parent: HastNode) => {
+        if (!parent.children?.length) return;
+        const nextChildren: HastNode[] = [];
+        for (const child of parent.children) {
+          if (child.type === "text") {
+            nextChildren.push(
+              ...splitTextNodeAtExperienceOffsets(
+                child,
+                description,
+                highlights,
+                labels,
+              ),
+            );
+          } else {
+            visit(child);
+            nextChildren.push(child);
+          }
+        }
+        parent.children = nextChildren;
+      };
+      visit(tree);
+    };
+  };
+}
+
+export function JobDescriptionMarkdown({
+  description,
+  experienceAnalysis,
+}: {
+  description: string;
+  experienceAnalysis?: JobExperienceAnalysis | null;
+}) {
+  const t = useTranslations("jobs.experienceRequirement");
   const highlightRegex = useMemo(() => {
     const patterns = HIGHLIGHT_KEYWORDS.map((keyword) => {
       const escaped = escapeRegExp(keyword);
@@ -39,22 +265,35 @@ export function JobDescriptionMarkdown({ description }: { description: string })
     });
     return new RegExp(`(${patterns.join("|")})`, "i");
   }, []);
+  const experienceHighlightPlugin = useMemo(
+    () =>
+      createExperienceHighlightPlugin(description, experienceAnalysis, {
+        REQUIRED: t("classificationREQUIRED"),
+        PREFERRED: t("classificationPREFERRED"),
+        REVIEW: t("classificationREVIEW"),
+      }),
+    [description, experienceAnalysis, t],
+  );
 
-  function highlightText(text: string) {
+  function highlightKeywords(text: string, keyPrefix: string) {
     const parts = text.split(highlightRegex);
     return parts.map((part, index) => {
       if (highlightRegex.test(part)) {
         return (
           <mark
-            key={`${part}-${index}`}
+            key={`${keyPrefix}-keyword-${index}`}
             className="rounded-sm bg-brand-emerald-50 px-1 py-0.5 font-medium text-brand-emerald-800 ring-1 ring-brand-emerald-200/60"
           >
             {part}
           </mark>
         );
       }
-      return <span key={`${part}-${index}`}>{part}</span>;
+      return <span key={`${keyPrefix}-text-${index}`}>{part}</span>;
     });
+  }
+
+  function highlightText(text: string) {
+    return highlightKeywords(text, "jd-text");
   }
 
   function renderHighlighted(children: React.ReactNode): React.ReactNode {
@@ -71,7 +310,7 @@ export function JobDescriptionMarkdown({ description }: { description: string })
     <div className="space-y-4">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeHighlight]}
+        rehypePlugins={[rehypeHighlight, experienceHighlightPlugin]}
         components={{
           h2: ({ children }) => (
             <h2 className={markdownStyles.heading}>{renderHighlighted(children)}</h2>

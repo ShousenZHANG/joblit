@@ -25,7 +25,7 @@ import {
   type SkillCategory,
 } from "@/lib/shared/skillsGazetteer";
 import { cn } from "@/lib/utils";
-import { parseExperienceGate } from "../utils/experienceParser";
+import { parseStructuralRequirements } from "../utils/structuralRequirementParser";
 
 type DisplayTier = "GATE" | "CORE" | "PREFERRED";
 
@@ -174,7 +174,7 @@ export function FitAssessmentCard({
     [description, matrix],
   );
   const structuralGates = useMemo(
-    () => parseExperienceGate(description),
+    () => parseStructuralRequirements(description),
     [description],
   );
   const requiredGates = structuralGates.filter((signal) => signal.isRequired);
