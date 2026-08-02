@@ -364,7 +364,7 @@ model FitBatchClaim {
   items   FitBatchClaimItem[]
   receipt FitBatchImportReceipt?
 
-  @@index([userId, status, executionLeaseExpiresAt])
+  @@index([userId, status, executionLeaseExpiresAt], map: "FitBatchClaim_userId_status_lease_idx")
   @@index([userId, issueKey, updatedAt])
   @@index([executionAttemptId])
 }

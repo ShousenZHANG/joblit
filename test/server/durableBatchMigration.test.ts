@@ -10,6 +10,10 @@ const migration = readFileSync(
   ),
   "utf8",
 );
+const schema = readFileSync(
+  resolve(process.cwd(), "prisma/schema.prisma"),
+  "utf8",
+);
 
 describe("durable Agent batch integrity migration", () => {
   it("creates durable Fit ownership and one-active database guards", () => {
@@ -52,5 +56,14 @@ describe("durable Agent batch integrity migration", () => {
 
   it("keeps legacy Job claim projections intact for exact-group adoption", () => {
     expect(migration).not.toMatch(/(?:UPDATE|DELETE FROM)\s+"Job"/);
+  });
+
+  it("maps the Fit lease index to the physical migration name", () => {
+    const physicalIndexName = "FitBatchClaim_userId_status_lease_idx";
+
+    expect(migration).toContain(`CREATE INDEX "${physicalIndexName}"`);
+    expect(schema).toContain(
+      `@@index([userId, status, executionLeaseExpiresAt], map: "${physicalIndexName}")`,
+    );
   });
 });
