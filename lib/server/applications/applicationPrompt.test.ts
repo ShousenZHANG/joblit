@@ -26,11 +26,11 @@ vi.mock("@/lib/server/promptRuleTemplates", () => ({
   getActivePromptSkillRulesForUser: dependencies.getRules,
 }));
 
-
 import {
   ApplicationPromptError,
   ApplicationPromptRequestSchema,
   MAX_APPLICATION_PROMPT_CHARS,
+  TriagePromptRequestSchema,
   buildApplicationPromptForUser,
   buildTriagePromptForUser,
 } from "@/lib/server/applications/applicationPrompt";
@@ -64,7 +64,9 @@ const profile = {
       links: [{ label: "Private", url: "https://private.example/work" }],
     },
   ],
-  projects: [{ name: "Joblit", dates: "2025", bullets: ["Built job matching"] }],
+  projects: [
+    { name: "Joblit", dates: "2025", bullets: ["Built job matching"] },
+  ],
   education: [{ school: "Example University", degree: "BSc", dates: "2022" }],
   createdAt: new Date("2026-01-01T00:00:00.000Z"),
   updatedAt: new Date("2026-07-15T00:00:00.000Z"),
@@ -78,11 +80,13 @@ const rules = {
   hardConstraints: ["Return strict JSON only."],
 };
 
-function arrangeSuccess(overrides?: Partial<{
-  description: string;
-  jobUrl: string | null;
-  market: "AU" | "CN";
-}>) {
+function arrangeSuccess(
+  overrides?: Partial<{
+    description: string;
+    jobUrl: string | null;
+    market: "AU" | "CN";
+  }>,
+) {
   dependencies.jobFindFirst.mockResolvedValue({
     title: "Senior Backend Engineer",
     company: "Acme",
@@ -101,9 +105,12 @@ describe("application prompt service", () => {
   });
 
   it("uses a strict public request schema", () => {
-    expect(ApplicationPromptRequestSchema.safeParse({ jobId: JOB_ID, target: "resume" }).success).toBe(
-      true,
-    );
+    expect(
+      ApplicationPromptRequestSchema.safeParse({
+        jobId: JOB_ID,
+        target: "resume",
+      }).success,
+    ).toBe(true);
     expect(
       ApplicationPromptRequestSchema.safeParse({
         jobId: JOB_ID,
@@ -140,7 +147,9 @@ describe("application prompt service", () => {
       expect(payload.prompt.input).toContain("<candidate-evidence>");
       expect(payload.prompt.input).toContain("<job-evidence>");
       expect(payload.prompt.input).toContain("Alex Chen");
-      expect(payload.prompt.input).toContain("Build reliable distributed APIs.");
+      expect(payload.prompt.input).toContain(
+        "Build reliable distributed APIs.",
+      );
       expect(payload.prompt.input).toContain("C++ & APIs_100%");
       expect(payload.prompt.input).not.toContain("candidate@example.com");
       expect(payload.prompt.input).not.toContain("+61 400 000 000");
@@ -186,6 +195,48 @@ describe("application prompt service", () => {
     expect(full.prompt.input).not.toBe(lean.prompt.input);
   });
 
+  it("accepts complete durable and claimToken-only v1 Fit handles", () => {
+    const claimId = "77777777-7777-4777-8777-777777777777";
+    const attemptId = "88888888-8888-4888-8888-888888888888";
+
+    expect(
+      TriagePromptRequestSchema.safeParse({ jobIds: [JOB_ID] }).success,
+    ).toBe(true);
+    expect(
+      TriagePromptRequestSchema.safeParse({
+        jobIds: [JOB_ID],
+        claimToken: attemptId,
+      }).success,
+    ).toBe(true);
+    expect(
+      TriagePromptRequestSchema.safeParse({
+        jobIds: [JOB_ID],
+        claimId,
+        claimToken: attemptId,
+      }).success,
+    ).toBe(true);
+    expect(
+      TriagePromptRequestSchema.safeParse({
+        jobIds: [JOB_ID],
+        attemptId,
+      }).success,
+    ).toBe(false);
+    expect(
+      TriagePromptRequestSchema.safeParse({
+        jobIds: [JOB_ID],
+        claimId,
+      }).success,
+    ).toBe(false);
+    expect(
+      TriagePromptRequestSchema.safeParse({
+        jobIds: [JOB_ID],
+        claimId,
+        claimToken: attemptId,
+        attemptId: "99999999-9999-4999-8999-999999999999",
+      }).success,
+    ).toBe(false);
+  });
+
   it("issues one stable, non-secret Fit identity from authoritative prompt content", async () => {
     dependencies.jobFindMany.mockResolvedValue([
       {
@@ -219,7 +270,9 @@ describe("application prompt service", () => {
     expect(first.prompt.sessionId).toBe(first.issueKey);
     expect(afterRestart.issueKey).toBe(first.issueKey);
     expect(afterRestart.prompt.sessionId).toBe(first.issueKey);
-    expect(first.promptMeta.promptHash).toBe(afterRestart.promptMeta.promptHash);
+    expect(first.promptMeta.promptHash).toBe(
+      afterRestart.promptMeta.promptHash,
+    );
     expect(first.issueKey).not.toContain(USER_ID);
     expect(first.issueKey).not.toContain(JOB_ID);
   });
@@ -239,14 +292,22 @@ describe("application prompt service", () => {
     dependencies.jobFindFirst.mockResolvedValueOnce(null);
 
     await expect(
-      buildApplicationPromptForUser({ userId: USER_ID, jobId: JOB_ID, target: "resume" }),
+      buildApplicationPromptForUser({
+        userId: USER_ID,
+        jobId: JOB_ID,
+        target: "resume",
+      }),
     ).rejects.toMatchObject({ code: "JOB_NOT_FOUND", status: 404 });
 
     arrangeSuccess();
     dependencies.getResumeProfile.mockResolvedValueOnce(null);
 
     await expect(
-      buildApplicationPromptForUser({ userId: USER_ID, jobId: JOB_ID, target: "cover" }),
+      buildApplicationPromptForUser({
+        userId: USER_ID,
+        jobId: JOB_ID,
+        target: "cover",
+      }),
     ).rejects.toMatchObject({ code: "NO_PROFILE", status: 404 });
   });
 
@@ -256,24 +317,24 @@ describe("application prompt service", () => {
   ] as const)(
     "returns a stable localized PROMPT_TOO_LARGE contract for %s jobs",
     async (market, expectedMessage) => {
-    arrangeSuccess({ market });
-    dependencies.getRules.mockResolvedValueOnce({
-      ...rules,
-      hardConstraints: ["x".repeat(MAX_APPLICATION_PROMPT_CHARS + 1)],
-    });
+      arrangeSuccess({ market });
+      dependencies.getRules.mockResolvedValueOnce({
+        ...rules,
+        hardConstraints: ["x".repeat(MAX_APPLICATION_PROMPT_CHARS + 1)],
+      });
 
-    const error = await buildApplicationPromptForUser({
-      userId: USER_ID,
-      jobId: JOB_ID,
-      target: "resume",
-    }).catch((caught) => caught);
+      const error = await buildApplicationPromptForUser({
+        userId: USER_ID,
+        jobId: JOB_ID,
+        target: "resume",
+      }).catch((caught) => caught);
 
-    expect(error).toBeInstanceOf(ApplicationPromptError);
-    expect(error).toMatchObject({
-      code: "PROMPT_TOO_LARGE",
-      status: 413,
-      message: expectedMessage,
-    });
+      expect(error).toBeInstanceOf(ApplicationPromptError);
+      expect(error).toMatchObject({
+        code: "PROMPT_TOO_LARGE",
+        status: 413,
+        message: expectedMessage,
+      });
     },
   );
 });

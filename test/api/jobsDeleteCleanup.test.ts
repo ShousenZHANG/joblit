@@ -22,8 +22,13 @@ const claimEvidenceStore = vi.hoisted(() => ({
   findMany: vi.fn(),
 }));
 
+const applicationBatchTaskStore = vi.hoisted(() => ({
+  findMany: vi.fn(),
+}));
+
 const prismaStore = vi.hoisted(() => ({
   executeRaw: vi.fn(),
+  queryRaw: vi.fn(),
   $transaction: vi.fn(),
 }));
 
@@ -75,25 +80,31 @@ describe("jobs delete api cleanup", () => {
     applicationStore.findUnique.mockReset();
     applicationStore.deleteMany.mockReset();
     claimEvidenceStore.findMany.mockReset().mockResolvedValue([]);
+    applicationBatchTaskStore.findMany.mockReset().mockResolvedValue([]);
     prismaStore.executeRaw.mockReset().mockResolvedValue(0);
+    prismaStore.queryRaw.mockReset().mockResolvedValue([{ id: JOB_ID }]);
     prismaStore.$transaction.mockReset();
     artifactStore.enqueue.mockReset().mockResolvedValue({ queued: 2 });
     prismaStore.$transaction.mockImplementation(async (callback) =>
       callback({
         $executeRaw: prismaStore.executeRaw,
+        $queryRaw: prismaStore.queryRaw,
         job: jobStore,
         deletedJobUrl: deletedJobUrlStore,
         application: applicationStore,
         evidenceSnapshot: evidenceSnapshotStore,
         claimEvidence: claimEvidenceStore,
+        applicationBatchTask: applicationBatchTaskStore,
       }),
     );
   });
 
   it("deletes the job after durably queuing linked Blob artifacts", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: JOB_ID,
       jobUrl: "https://www.linkedin.com/jobs/view/1/?tracking=abc",
@@ -118,27 +129,25 @@ describe("jobs delete api cleanup", () => {
 
     expect(res.status).toBe(200);
     expect(json.ok).toBe(true);
+    expect(prismaStore.queryRaw).toHaveBeenCalledTimes(1);
     expect(applicationStore.deleteMany).toHaveBeenCalledWith({
       where: { userId: "user-1", jobId: JOB_ID },
     });
-    expect(artifactStore.enqueue).toHaveBeenCalledWith(
-      expect.anything(),
-      {
-        userId: "user-1",
-        jobId: JOB_ID,
-        applicationId: "application-1",
-        artifacts: [
-          {
-            target: "RESUME_PDF",
-            url: "https://blob.vercel-storage.com/r1.pdf",
-          },
-          {
-            target: "COVER_PDF",
-            url: "https://blob.vercel-storage.com/c1.pdf",
-          },
-        ],
-      },
-    );
+    expect(artifactStore.enqueue).toHaveBeenCalledWith(expect.anything(), {
+      userId: "user-1",
+      jobId: JOB_ID,
+      applicationId: "application-1",
+      artifacts: [
+        {
+          target: "RESUME_PDF",
+          url: "https://blob.vercel-storage.com/r1.pdf",
+        },
+        {
+          target: "COVER_PDF",
+          url: "https://blob.vercel-storage.com/c1.pdf",
+        },
+      ],
+    });
     expect(json.blobCleanup).toEqual({
       attempted: 2,
       deleted: 0,

@@ -5,7 +5,7 @@ import { withAgentRoute } from "@/lib/server/api/routeHandler";
 import { errorJson } from "@/lib/server/api/errorResponse";
 import {
   FitBatchImportError,
-  readFitBatchSettlement,
+  readFitBatchSettlementState,
 } from "@/lib/server/jobs/fitBatchImport";
 
 export const runtime = "nodejs";
@@ -26,12 +26,27 @@ export async function POST(req: Request) {
     }
 
     try {
-      const settlement = await readFitBatchSettlement(
+      const view = await readFitBatchSettlementState(
         userId,
         body.data.issueKey,
       );
+      const status =
+        view.state === "UNSETTLED"
+          ? "ACTIVE"
+          : view.state === "SETTLED"
+            ? "SETTLED"
+            : "TERMINAL_WITHOUT_RECEIPT";
       return NextResponse.json(
-        { settlement },
+        {
+          settlement: view.settlement,
+          status,
+          ...(view.state === "UNSETTLED" && view.claim
+            ? { claim: view.claim }
+            : {}),
+          ...(view.state === "TERMINAL_UNSETTLED"
+            ? { terminalReason: view.claim.reason, claimId: view.claim.id }
+            : {}),
+        },
         { headers: { "Cache-Control": "no-store" } },
       );
     } catch (error) {

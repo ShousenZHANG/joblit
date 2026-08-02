@@ -8,6 +8,7 @@ const txMock = vi.hoisted(() => ({
   updateMany: vi.fn(),
   receiptFindUnique: vi.fn(),
   receiptCreate: vi.fn(),
+  claimFindFirst: vi.fn(),
 }));
 
 vi.mock("@/lib/server/auth/requireSession", () => {
@@ -19,17 +20,21 @@ vi.mock("@/lib/server/prisma", () => ({
   prisma: {
     $transaction: txMock.transaction,
     fitBatchImportReceipt: { findUnique: txMock.receiptFindUnique },
+    fitBatchClaim: { findFirst: txMock.claimFindFirst },
     job: { updateMany: txMock.updateMany },
   },
 }));
 
-vi.mock("@/lib/server/applications/applicationPrompt", async (importOriginal) => {
-  const actual =
-    await importOriginal<
-      typeof import("@/lib/server/applications/applicationPrompt")
-    >();
-  return { ...actual, buildTriagePromptForUser: promptMock.build };
-});
+vi.mock(
+  "@/lib/server/applications/applicationPrompt",
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import("@/lib/server/applications/applicationPrompt")
+      >();
+    return { ...actual, buildTriagePromptForUser: promptMock.build };
+  },
+);
 
 import { POST } from "@/app/api/jobs/fit/batch-import/route";
 import { POST as settlementStatusPOST } from "@/app/api/jobs/fit/settlement-status/route";
@@ -62,7 +67,7 @@ function batchRequest(body: unknown) {
 
 describe("batch fit import api", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     sessionMock.require.mockResolvedValue({ userId: "user-1" });
     promptMock.build.mockResolvedValue({
       issueKey: ISSUE_KEY,
@@ -70,16 +75,19 @@ describe("batch fit import api", () => {
     });
     txMock.receiptFindUnique.mockResolvedValue(null);
     txMock.receiptCreate.mockImplementation(async ({ data }) => data);
+    txMock.claimFindFirst.mockResolvedValue(null);
     txMock.executeRaw.mockResolvedValue(0);
-    txMock.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) =>
-      callback({
-        $executeRaw: txMock.executeRaw,
-        job: { updateMany: txMock.updateMany },
-        fitBatchImportReceipt: {
-          findUnique: txMock.receiptFindUnique,
-          create: txMock.receiptCreate,
-        },
-      }),
+    txMock.transaction.mockImplementation(
+      async (callback: (tx: unknown) => unknown) =>
+        callback({
+          $executeRaw: txMock.executeRaw,
+          job: { updateMany: txMock.updateMany },
+          fitBatchImportReceipt: {
+            findUnique: txMock.receiptFindUnique,
+            create: txMock.receiptCreate,
+          },
+          fitBatchClaim: { findFirst: txMock.claimFindFirst },
+        }),
     );
     txMock.updateMany.mockResolvedValue({ count: 1 });
   });
@@ -88,13 +96,14 @@ describe("batch fit import api", () => {
     const output = JSON.stringify([
       { jobId: JOB_A, matchScore: 12, reason: "different profession" },
       { jobId: JOB_B, matchScore: 82, reason: "core stack matches" },
-      { jobId: OTHER, matchScore: 99, reason: "not in this batch" },
     ]);
-    const response = await POST(batchRequest({
-      jobIds: [JOB_A, JOB_B],
-      claimToken: CLAIM_TOKEN,
-      modelOutput: output,
-    }));
+    const response = await POST(
+      batchRequest({
+        jobIds: [JOB_A, JOB_B],
+        claimToken: CLAIM_TOKEN,
+        modelOutput: output,
+      }),
+    );
     const json = await response.json();
 
     expect(response.status).toBe(200);
@@ -103,11 +112,10 @@ describe("batch fit import api", () => {
       issueKey: ISSUE_KEY,
       requestHash: expect.stringMatching(/^[a-f0-9]{64}$/),
       scored: [
-      { jobId: JOB_A, fitScore: 12, fitVerdict: "POOR" },
-      { jobId: JOB_B, fitScore: 82, fitVerdict: "STRONG" },
+        { jobId: JOB_A, fitScore: 12, fitVerdict: "POOR" },
+        { jobId: JOB_B, fitScore: 82, fitVerdict: "STRONG" },
       ],
     });
-    // The out-of-batch job was dropped, not written.
     expect(txMock.updateMany).toHaveBeenCalledTimes(2);
     expect(txMock.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -118,21 +126,25 @@ describe("batch fit import api", () => {
 
   it("tolerates prose around the JSON array", async () => {
     const output = `Sure:\n[{"jobId":"${JOB_A}","matchScore":40}]\nDone.`;
-    const response = await POST(batchRequest({
-      jobIds: [JOB_A],
-      claimToken: CLAIM_TOKEN,
-      modelOutput: output,
-    }));
+    const response = await POST(
+      batchRequest({
+        jobIds: [JOB_A],
+        claimToken: CLAIM_TOKEN,
+        modelOutput: output,
+      }),
+    );
     expect(response.status).toBe(200);
   });
 
   it("rejects an out-of-range score with INVALID_AI_RESULT", async () => {
     const output = JSON.stringify([{ jobId: JOB_A, matchScore: 250 }]);
-    const response = await POST(batchRequest({
-      jobIds: [JOB_A],
-      claimToken: CLAIM_TOKEN,
-      modelOutput: output,
-    }));
+    const response = await POST(
+      batchRequest({
+        jobIds: [JOB_A],
+        claimToken: CLAIM_TOKEN,
+        modelOutput: output,
+      }),
+    );
     const json = await response.json();
     expect(response.status).toBe(400);
     expect(json.error.code).toBe("INVALID_AI_RESULT");
@@ -141,35 +153,42 @@ describe("batch fit import api", () => {
 
   it("rejects when no returned entry belongs to the batch", async () => {
     const output = JSON.stringify([{ jobId: OTHER, matchScore: 50 }]);
-    const response = await POST(batchRequest({
-      jobIds: [JOB_A],
-      claimToken: CLAIM_TOKEN,
-      modelOutput: output,
-    }));
+    const response = await POST(
+      batchRequest({
+        jobIds: [JOB_A],
+        claimToken: CLAIM_TOKEN,
+        modelOutput: output,
+      }),
+    );
     const json = await response.json();
     expect(response.status).toBe(400);
     expect(json.error.code).toBe("INVALID_AI_RESULT");
   });
 
-  it("rejects a result after its database claim has expired", async () => {
+  it("fails closed when a v1 token no longer owns any requested Job", async () => {
     txMock.updateMany.mockResolvedValueOnce({ count: 0 });
     const output = JSON.stringify([{ jobId: JOB_A, matchScore: 70 }]);
 
-    const response = await POST(batchRequest({
-      jobIds: [JOB_A],
-      claimToken: CLAIM_TOKEN,
-      modelOutput: output,
-    }));
+    const response = await POST(
+      batchRequest({
+        jobIds: [JOB_A],
+        claimToken: CLAIM_TOKEN,
+        modelOutput: output,
+      }),
+    );
 
     expect(response.status).toBe(409);
     expect((await response.json()).error.code).toBe("FIT_CLAIM_EXPIRED");
+    expect(txMock.receiptCreate).not.toHaveBeenCalled();
   });
 });
 
 describe("fit settlement recovery api", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     sessionMock.require.mockResolvedValue({ userId: "user-1" });
+    txMock.receiptFindUnique.mockResolvedValue(null);
+    txMock.claimFindFirst.mockResolvedValue(null);
   });
 
   it("returns only the validated receipt owned by the authenticated user", async () => {
@@ -180,10 +199,10 @@ describe("fit settlement recovery api", () => {
         protocolVersion: 1,
         issueKey: ISSUE_KEY,
         requestHash,
-        scored: [
-          { jobId: JOB_A, fitScore: 82, fitVerdict: "STRONG" },
-        ],
+        scored: [{ jobId: JOB_A, fitScore: 82, fitVerdict: "STRONG" }],
+        failed: [],
       },
+      status: "SETTLED",
     });
 
     const response = await settlementStatusPOST(
@@ -201,10 +220,10 @@ describe("fit settlement recovery api", () => {
         protocolVersion: 1,
         issueKey: ISSUE_KEY,
         requestHash,
-        scored: [
-          { jobId: JOB_A, fitScore: 82, fitVerdict: "STRONG" },
-        ],
+        scored: [{ jobId: JOB_A, fitScore: 82, fitVerdict: "STRONG" }],
+        failed: [],
       },
+      status: "SETTLED",
     });
     expect(txMock.receiptFindUnique).toHaveBeenCalledWith({
       where: {
@@ -225,6 +244,42 @@ describe("fit settlement recovery api", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ settlement: null });
+    expect(await response.json()).toEqual({
+      settlement: null,
+      status: "ACTIVE",
+    });
+  });
+
+  it("re-reads the receipt when settlement commits between status reads", async () => {
+    const requestHash = "f".repeat(64);
+    txMock.receiptFindUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      requestHash,
+      settlement: {
+        protocolVersion: 1,
+        issueKey: ISSUE_KEY,
+        requestHash,
+        scored: [{ jobId: JOB_A, fitScore: 82, fitVerdict: "STRONG" }],
+      },
+    });
+    txMock.claimFindFirst.mockResolvedValueOnce({
+      id: "99999999-9999-4999-8999-999999999999",
+      status: "SETTLED",
+      executionAttemptId: CLAIM_TOKEN,
+      executionLeaseExpiresAt: null,
+    });
+
+    const response = await settlementStatusPOST(
+      new Request("http://localhost/api/jobs/fit/settlement-status", {
+        method: "POST",
+        body: JSON.stringify({ issueKey: ISSUE_KEY }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      status: "SETTLED",
+      settlement: { issueKey: ISSUE_KEY, requestHash },
+    });
+    expect(txMock.receiptFindUnique).toHaveBeenCalledTimes(2);
   });
 });

@@ -31,7 +31,9 @@ const MAX_MODEL_OUTPUT_CHARS = 80_000;
 const DEFAULT_TIMEOUT_MS = 240_000;
 const DEFAULT_POLL_MS = 1_500;
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+const MAX_RECONCILIATION_WAIT_MS = 30_000;
 const FEEDBACK_HASH_RE = /^[0-9a-f]{64}$/;
+const CONTENT_HASH_RE = /^[0-9a-f]{64}$/;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PROMPT_HASH_RE = /^[0-9a-f]{64}$/;
@@ -45,6 +47,26 @@ export class HermesClientError extends Error {
     this.status = status;
     if (cause !== undefined) this.cause = cause;
   }
+}
+
+function readRunSnapshot(run, runId) {
+  if (
+    !run ||
+    run.object !== "hermes.run" ||
+    run.run_id !== runId ||
+    typeof run.status !== "string" ||
+    !RUN_STATUSES.has(run.status) ||
+    (run.output !== undefined &&
+      (typeof run.output !== "string" ||
+        run.output.length > MAX_MODEL_OUTPUT_CHARS)) ||
+    (run.error !== undefined && typeof run.error !== "string")
+  ) {
+    throw new HermesClientError(
+      "HERMES_PROTOCOL_ERROR",
+      "Hermes run response is invalid",
+    );
+  }
+  return run;
 }
 
 function sleep(ms, signal) {
@@ -95,6 +117,33 @@ function withOperation(state, operation) {
   return operation ? { ...state, operation } : state;
 }
 
+function hashText(value) {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+function hashRequest(instructions, input) {
+  return hashText(JSON.stringify([instructions, input]));
+}
+
+function hasStartRecoveryMetadata(state) {
+  return (
+    Number.isSafeInteger(state?.baselineMessageId) &&
+    state.baselineMessageId >= 0 &&
+    typeof state.requestHash === "string" &&
+    CONTENT_HASH_RE.test(state.requestHash) &&
+    typeof state.inputHash === "string" &&
+    CONTENT_HASH_RE.test(state.inputHash)
+  );
+}
+
+function hasAnyStartRecoveryMetadata(state) {
+  return (
+    "baselineMessageId" in state ||
+    "requestHash" in state ||
+    "inputHash" in state
+  );
+}
+
 function assertValidRunState(state) {
   if (state === null) return;
   const isObject = state !== null && typeof state === "object";
@@ -106,15 +155,31 @@ function assertValidRunState(state) {
       state.phase === "running" ||
       state.phase === "completed" ||
       state.phase === "repairing");
-  const phaseOwnsRunId =
-    state?.phase === "running" ||
-    state?.phase === "completed" ||
-    state?.phase === "repairing";
-  const validRunId =
+  const ownsValidRunId =
+    typeof state?.runId === "string" && RUN_ID_RE.test(state.runId);
+  const ownsStartRecoveryMetadata = isObject && hasStartRecoveryMetadata(state);
+  const ownsAnyStartRecoveryMetadata =
+    isObject && hasAnyStartRecoveryMetadata(state);
+  const validExecutionIdentity =
     isObject &&
-    (phaseOwnsRunId
-      ? typeof state.runId === "string" && RUN_ID_RE.test(state.runId)
-      : !("runId" in state));
+    (state.phase === "running"
+      ? ownsValidRunId && !ownsAnyStartRecoveryMetadata
+      : state.phase === "completed"
+        ? (ownsValidRunId && !ownsAnyStartRecoveryMetadata) ||
+          (!("runId" in state) && ownsStartRecoveryMetadata)
+        : state.phase === "repairing"
+          ? (ownsValidRunId &&
+              !("requestHash" in state) &&
+              !("inputHash" in state)) ||
+            (!("runId" in state) &&
+              typeof state.requestHash === "string" &&
+              CONTENT_HASH_RE.test(state.requestHash) &&
+              typeof state.inputHash === "string" &&
+              CONTENT_HASH_RE.test(state.inputHash))
+          : state.phase === "starting"
+            ? !("runId" in state) &&
+              (!ownsAnyStartRecoveryMetadata || ownsStartRecoveryMetadata)
+            : !("runId" in state) && !ownsAnyStartRecoveryMetadata);
   const validRepairMetadata =
     isObject &&
     (state.phase === "repairing"
@@ -123,18 +188,22 @@ function assertValidRunState(state) {
         FEEDBACK_HASH_RE.test(state.feedbackHash) &&
         Number.isSafeInteger(state.baselineMessageId) &&
         state.baselineMessageId > 0
-      : !("feedbackHash" in state) && !("baselineMessageId" in state));
+      : !("feedbackHash" in state));
   const allowedKeys = new Set(["phase", "repairUsed"]);
+  if (state?.phase === "running" || ownsValidRunId) {
+    allowedKeys.add("runId");
+  }
   if (
-    state?.phase === "running" ||
+    state?.phase === "starting" ||
     state?.phase === "completed" ||
     state?.phase === "repairing"
   ) {
-    allowedKeys.add("runId");
+    allowedKeys.add("baselineMessageId");
+    allowedKeys.add("requestHash");
+    allowedKeys.add("inputHash");
   }
   if (state?.phase === "repairing") {
     allowedKeys.add("feedbackHash");
-    allowedKeys.add("baselineMessageId");
   }
   const mayOwnOperation =
     state?.phase === "starting" ||
@@ -158,7 +227,7 @@ function assertValidRunState(state) {
     isObject && Object.keys(state).every((key) => allowedKeys.has(key));
   if (
     !validBase ||
-    !validRunId ||
+    !validExecutionIdentity ||
     !validRepairMetadata ||
     !validOperation ||
     !hasOnlyAllowedKeys
@@ -225,11 +294,7 @@ export function createHermesClient({
 
   async function compareAndSetRunState(sessionId, expectedValue, nextValue) {
     if (typeof runStateStore.compareAndSet === "function") {
-      return runStateStore.compareAndSet(
-        sessionId,
-        expectedValue,
-        nextValue,
-      );
+      return runStateStore.compareAndSet(sessionId, expectedValue, nextValue);
     }
     // Compatibility for injected test/first-release stores. The production
     // file store and the default memory store provide an atomic CAS.
@@ -248,7 +313,11 @@ export function createHermesClient({
     return true;
   }
 
-  async function request(path, init = {}, timeoutOverrideMs = requestTimeoutMs) {
+  async function request(
+    path,
+    init = {},
+    timeoutOverrideMs = requestTimeoutMs,
+  ) {
     const upstreamSignal = init.signal;
     const deadline = createRequestDeadline(timeoutOverrideMs);
     const signal = upstreamSignal
@@ -266,10 +335,18 @@ export function createHermesClient({
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) {
-        const message =
-          body && typeof body === "object" && typeof body.error === "string"
-            ? body.error
-            : `Hermes HTTP ${response.status}`;
+        let message = `Hermes HTTP ${response.status}`;
+        if (body && typeof body === "object") {
+          if (typeof body.error === "string") {
+            message = body.error;
+          } else if (
+            body.error &&
+            typeof body.error === "object" &&
+            typeof body.error.message === "string"
+          ) {
+            message = body.error.message;
+          }
+        }
         throw new HermesClientError("HERMES_HTTP_ERROR", message, {
           status: response.status,
         });
@@ -315,23 +392,44 @@ export function createHermesClient({
   }
 
   function hashFeedback(feedback) {
-    return createHash("sha256").update(feedback, "utf8").digest("hex");
+    return hashText(feedback);
   }
 
-  async function readSessionMessages(sessionId, signal) {
-    const transcript = await request(
-      `/api/sessions/${encodeURIComponent(sessionId)}/messages`,
-      { signal },
-    );
+  async function readSessionMessages(
+    sessionId,
+    signal,
+    {
+      allowMissing = false,
+      allowEmpty = false,
+      invalidCode = "REPAIR_TRANSCRIPT_INVALID",
+    } = {},
+  ) {
+    let transcript;
+    try {
+      transcript = await request(
+        `/api/sessions/${encodeURIComponent(sessionId)}/messages`,
+        { signal },
+      );
+    } catch (error) {
+      if (
+        allowMissing &&
+        error instanceof HermesClientError &&
+        error.code === "HERMES_HTTP_ERROR" &&
+        error.status === 404
+      ) {
+        return [];
+      }
+      throw error;
+    }
     if (
       !transcript ||
       transcript.object !== "list" ||
       transcript.session_id !== sessionId ||
       !Array.isArray(transcript.data) ||
-      transcript.data.length === 0
+      (!allowEmpty && transcript.data.length === 0)
     ) {
       throw new HermesClientError(
-        "REPAIR_TRANSCRIPT_INVALID",
+        invalidCode,
         "Hermes session transcript response is invalid",
       );
     }
@@ -348,13 +446,185 @@ export function createHermesClient({
           typeof message.content !== "string")
       ) {
         throw new HermesClientError(
-          "REPAIR_TRANSCRIPT_INVALID",
+          invalidCode,
           "Hermes session transcript response is invalid",
         );
       }
       previousId = message.id;
     }
     return transcript.data;
+  }
+
+  function assertSameReservedRequest(state, instructions, input) {
+    if (
+      state.requestHash !== hashRequest(instructions, input) ||
+      state.inputHash !== hashText(input)
+    ) {
+      throw new HermesClientError(
+        "RUN_REQUEST_MISMATCH",
+        "The recoverable Hermes start belongs to a different prompt request",
+      );
+    }
+  }
+
+  function isDefinitiveStartRejection(error) {
+    return (
+      error instanceof HermesClientError &&
+      error.code === "HERMES_HTTP_ERROR" &&
+      Number.isInteger(error.status) &&
+      error.status >= 400 &&
+      error.status < 500 &&
+      error.status !== 408
+    );
+  }
+
+  function isProvableTerminalAssistantOutput(message) {
+    if (
+      message.role !== "assistant" ||
+      typeof message.content !== "string" ||
+      message.content.length === 0 ||
+      message.content.length > MAX_MODEL_OUTPUT_CHARS
+    ) {
+      return false;
+    }
+
+    // Stock Hermes persists assistant tool-call turns before executing their
+    // side effects. That makes a non-empty interim assistant row observable
+    // while the run is still live. It is never safe to treat such a snapshot as
+    // the terminal model result merely because no later row has landed yet.
+    if (
+      Object.prototype.hasOwnProperty.call(message, "tool_calls") &&
+      message.tool_calls !== null &&
+      message.tool_calls !== undefined &&
+      (!Array.isArray(message.tool_calls) || message.tool_calls.length > 0)
+    ) {
+      return false;
+    }
+
+    // Hermes' persisted terminal assistant shape uses finish_reason="stop".
+    // Older transcript rows may omit the additive field, but every observable
+    // non-terminal/truncated/refused reason must fail closed.
+    if (
+      Object.prototype.hasOwnProperty.call(message, "finish_reason") &&
+      message.finish_reason !== undefined &&
+      message.finish_reason !== "stop"
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  async function proveStartedRunTerminal(sessionId, state, signal) {
+    if (!hasStartRecoveryMetadata(state)) {
+      throw new HermesClientError(
+        "RUN_START_UNKNOWN",
+        "The legacy Hermes start has no transcript baseline; refusing to guess its outcome",
+      );
+    }
+    const messages = await readSessionMessages(sessionId, signal, {
+      allowMissing: true,
+      allowEmpty: true,
+      invalidCode: "HERMES_PROTOCOL_ERROR",
+    });
+    const afterBaseline = messages.filter(
+      (message) => message.id > state.baselineMessageId,
+    );
+    const userMessages = afterBaseline.filter(
+      (message) => message.role === "user",
+    );
+    const matchingInputs = userMessages.filter(
+      (message) =>
+        typeof message.content === "string" &&
+        hashText(message.content) === state.inputHash,
+    );
+    if (userMessages.length !== 1 || matchingInputs.length !== 1) {
+      throw new HermesClientError(
+        "RUN_START_UNKNOWN",
+        "Hermes start transcript does not prove one matching model turn",
+      );
+    }
+    const inputMessage = matchingInputs[0];
+    if (
+      afterBaseline.some(
+        (message) =>
+          message.id < inputMessage.id &&
+          (message.role === "assistant" || message.role === "tool"),
+      ) ||
+      afterBaseline.some(
+        (message) => message.id > inputMessage.id && message.role === "system",
+      )
+    ) {
+      throw new HermesClientError(
+        "RUN_START_UNKNOWN",
+        "Hermes start transcript contains an ambiguous turn boundary",
+      );
+    }
+    const assistantOutputs = afterBaseline.filter(
+      (message) =>
+        message.id > inputMessage.id &&
+        isProvableTerminalAssistantOutput(message),
+    );
+    const output = assistantOutputs[0];
+    const trailingTurnMessages = output
+      ? afterBaseline.filter(
+          (message) =>
+            message.id > output.id &&
+            (message.role === "assistant" || message.role === "tool"),
+        )
+      : [];
+    if (assistantOutputs.length !== 1 || trailingTurnMessages.length !== 0) {
+      throw new HermesClientError(
+        "RUN_START_UNKNOWN",
+        "Hermes start has no uniquely provable assistant output",
+      );
+    }
+    return output.content;
+  }
+
+  async function recoverStartedRun(
+    sessionId,
+    state,
+    instructions,
+    input,
+    signal,
+  ) {
+    assertSameReservedRequest(state, instructions, input);
+    const output = await proveStartedRunTerminal(sessionId, state, signal);
+
+    if (state.phase === "completed") return output;
+    if (state.phase !== "starting") {
+      throw new HermesClientError(
+        "RUN_STATE_CONFLICT",
+        "Hermes transcript recovery state changed unexpectedly",
+      );
+    }
+    const completedState = withOperation(
+      {
+        phase: "completed",
+        repairUsed: state.repairUsed,
+        baselineMessageId: state.baselineMessageId,
+        requestHash: state.requestHash,
+        inputHash: state.inputHash,
+      },
+      state.operation,
+    );
+    const recorded = await compareAndSetRunState(
+      sessionId,
+      state,
+      completedState,
+    );
+    if (!recorded) {
+      const concurrentState = await runStateStore.get(sessionId);
+      assertValidRunState(concurrentState);
+      if (!isDeepStrictEqual(concurrentState, completedState)) {
+        throw new HermesClientError(
+          "RUN_STATE_CONFLICT",
+          "Hermes transcript was recovered, but its durable state changed unexpectedly",
+        );
+      }
+    }
+    return output;
   }
 
   async function recoverRepair(sessionId, state, signal) {
@@ -392,20 +662,23 @@ export function createHermesClient({
     const assistantOutputs = afterBaseline.filter(
       (message) =>
         message.id > feedbackMessage.id &&
-        message.role === "assistant" &&
-        typeof message.content === "string" &&
-        message.content.length > 0,
+        isProvableTerminalAssistantOutput(message),
     );
-    if (
-      assistantOutputs.length !== 1 ||
-      assistantOutputs[0].content.length > MAX_MODEL_OUTPUT_CHARS
-    ) {
+    const output = assistantOutputs[0];
+    const trailingTurnMessages = output
+      ? afterBaseline.filter(
+          (message) =>
+            message.id > output.id &&
+            (message.role === "assistant" || message.role === "tool"),
+        )
+      : [];
+    if (assistantOutputs.length !== 1 || trailingTurnMessages.length !== 0) {
       throw new HermesClientError(
         "REPAIR_OUTCOME_UNKNOWN",
         "Hermes repair has no uniquely recoverable assistant output; refusing to repeat the model turn",
       );
     }
-    return assistantOutputs[0].content;
+    return output.content;
   }
 
   async function waitForReservedStart(sessionId, signal) {
@@ -430,10 +703,17 @@ export function createHermesClient({
   return {
     /** Run one generation to completion and return the model output. */
     async generate({ instructions, input, sessionId, operation, signal }) {
-      if (typeof sessionId !== "string" || !SESSION_ID_RE.test(sessionId)) {
+      if (
+        typeof sessionId !== "string" ||
+        !SESSION_ID_RE.test(sessionId) ||
+        typeof instructions !== "string" ||
+        instructions.length === 0 ||
+        typeof input !== "string" ||
+        input.length === 0
+      ) {
         throw new HermesClientError(
           "RUN_REQUEST_INVALID",
-          "Hermes session id is invalid",
+          "Hermes generation request is invalid",
         );
       }
       let previousState = await runStateStore.get(sessionId);
@@ -499,7 +779,50 @@ export function createHermesClient({
         }
       }
       if (previousState?.phase === "starting") {
-        const concurrentState = await waitForReservedStart(sessionId, signal);
+        if (hasStartRecoveryMetadata(previousState)) {
+          try {
+            return await recoverStartedRun(
+              sessionId,
+              previousState,
+              instructions,
+              input,
+              signal,
+            );
+          } catch (error) {
+            if (
+              !(error instanceof HermesClientError) ||
+              error.code !== "RUN_START_UNKNOWN"
+            ) {
+              throw error;
+            }
+          }
+        }
+        let concurrentState;
+        try {
+          concurrentState = await waitForReservedStart(sessionId, signal);
+        } catch (error) {
+          if (
+            !(error instanceof HermesClientError) ||
+            error.code !== "RUN_START_UNKNOWN"
+          ) {
+            throw error;
+          }
+          const latestState = await runStateStore.get(sessionId);
+          assertValidRunState(latestState);
+          if (
+            latestState?.phase === "starting" &&
+            hasStartRecoveryMetadata(latestState)
+          ) {
+            return recoverStartedRun(
+              sessionId,
+              latestState,
+              instructions,
+              input,
+              signal,
+            );
+          }
+          throw error;
+        }
         if (
           concurrentState?.operation &&
           (!activeOperation ||
@@ -516,8 +839,24 @@ export function createHermesClient({
       const repairUsed = previousState?.repairUsed === true;
       let runId;
 
+      if (
+        previousState &&
+        typeof previousState.requestHash === "string" &&
+        typeof previousState.inputHash === "string"
+      ) {
+        assertSameReservedRequest(previousState, instructions, input);
+      }
       if (previousState?.phase === "repairing") {
         return recoverRepair(sessionId, previousState, signal);
+      }
+      if (previousState?.phase === "completed" && !("runId" in previousState)) {
+        return recoverStartedRun(
+          sessionId,
+          previousState,
+          instructions,
+          input,
+          signal,
+        );
       }
       if (
         (previousState?.phase === "running" ||
@@ -530,8 +869,19 @@ export function createHermesClient({
         if (signal?.aborted) {
           throw new HermesClientError("RUN_CANCELLED", "Hermes run cancelled");
         }
+        const baselineMessages = await readSessionMessages(sessionId, signal, {
+          allowMissing: true,
+          allowEmpty: true,
+          invalidCode: "HERMES_PROTOCOL_ERROR",
+        });
         const startingState = withOperation(
-          { phase: "starting", repairUsed },
+          {
+            phase: "starting",
+            repairUsed,
+            baselineMessageId: baselineMessages.at(-1)?.id ?? 0,
+            requestHash: hashRequest(instructions, input),
+            inputHash: hashText(input),
+          },
           activeOperation,
         );
         const reserved = await compareAndSetRunState(
@@ -540,17 +890,36 @@ export function createHermesClient({
           startingState,
         );
         if (!reserved) {
-          const concurrentState = await waitForReservedStart(
-            sessionId,
-            signal,
-          );
+          let concurrentState;
+          try {
+            concurrentState = await waitForReservedStart(sessionId, signal);
+          } catch (error) {
+            if (
+              !(error instanceof HermesClientError) ||
+              error.code !== "RUN_START_UNKNOWN"
+            ) {
+              throw error;
+            }
+            const latestState = await runStateStore.get(sessionId);
+            assertValidRunState(latestState);
+            if (
+              latestState?.phase === "starting" &&
+              hasStartRecoveryMetadata(latestState)
+            ) {
+              return recoverStartedRun(
+                sessionId,
+                latestState,
+                instructions,
+                input,
+                signal,
+              );
+            }
+            throw error;
+          }
           if (
             concurrentState?.operation &&
             (!activeOperation ||
-              !sameOperationWork(
-                concurrentState.operation,
-                activeOperation,
-              ))
+              !sameOperationWork(concurrentState.operation, activeOperation))
           ) {
             throw new HermesClientError(
               "RUN_OPERATION_MISMATCH",
@@ -567,6 +936,17 @@ export function createHermesClient({
             previousState = concurrentState;
           } else if (concurrentState?.phase === "repairing") {
             return recoverRepair(sessionId, concurrentState, signal);
+          } else if (
+            concurrentState?.phase === "completed" &&
+            !("runId" in concurrentState)
+          ) {
+            return recoverStartedRun(
+              sessionId,
+              concurrentState,
+              instructions,
+              input,
+              signal,
+            );
           } else {
             throw new HermesClientError(
               "RUN_START_UNKNOWN",
@@ -587,12 +967,25 @@ export function createHermesClient({
               signal,
             });
           } catch (error) {
-            if (
-              error instanceof HermesClientError &&
-              error.code === "HERMES_HTTP_ERROR"
-            ) {
+            if (isDefinitiveStartRejection(error)) {
               await clearRunState(sessionId, repairUsed, startingState);
               throw error;
+            }
+            try {
+              return await recoverStartedRun(
+                sessionId,
+                startingState,
+                instructions,
+                input,
+                signal,
+              );
+            } catch (recoveryError) {
+              if (
+                !(recoveryError instanceof HermesClientError) ||
+                recoveryError.code !== "RUN_START_UNKNOWN"
+              ) {
+                throw recoveryError;
+              }
             }
             throw new HermesClientError(
               "RUN_START_UNKNOWN",
@@ -606,6 +999,22 @@ export function createHermesClient({
             typeof started.run_id !== "string" ||
             !RUN_ID_RE.test(started.run_id)
           ) {
+            try {
+              return await recoverStartedRun(
+                sessionId,
+                startingState,
+                instructions,
+                input,
+                signal,
+              );
+            } catch (recoveryError) {
+              if (
+                !(recoveryError instanceof HermesClientError) ||
+                recoveryError.code !== "RUN_START_UNKNOWN"
+              ) {
+                throw recoveryError;
+              }
+            }
             throw new HermesClientError(
               "RUN_START_UNKNOWN",
               "Hermes start response is invalid; refusing to retry automatically",
@@ -691,22 +1100,7 @@ export function createHermesClient({
           );
         }
         if (signal?.aborted) await cancelKnownRun();
-        if (
-          !run ||
-          run.object !== "hermes.run" ||
-          run.run_id !== runId ||
-          typeof run.status !== "string" ||
-          !RUN_STATUSES.has(run.status) ||
-          (run.output !== undefined &&
-            (typeof run.output !== "string" ||
-              run.output.length > MAX_MODEL_OUTPUT_CHARS)) ||
-          (run.error !== undefined && typeof run.error !== "string")
-        ) {
-          throw new HermesClientError(
-            "HERMES_PROTOCOL_ERROR",
-            "Hermes run response is invalid",
-          );
-        }
+        run = readRunSnapshot(run, runId);
         if (run.status === "completed") {
           if (typeof run.output !== "string" || run.output.length === 0) {
             throw new Error("Hermes completed without output");
@@ -742,7 +1136,8 @@ export function createHermesClient({
         }
         if (run.status === "failed" || run.status === "cancelled") {
           await clearRunState(sessionId, repairUsed, previousState);
-          throw new Error(
+          throw new HermesClientError(
+            run.status === "cancelled" ? "RUN_CANCELLED" : "RUN_FAILED",
             typeof run.error === "string" && run.error
               ? run.error
               : `Hermes run ${run.status}`,
@@ -798,10 +1193,14 @@ export function createHermesClient({
       }
       const messages = await readSessionMessages(sessionId, signal);
       const baselineMessageId = messages.at(-1).id;
+      const repairIdentity =
+        typeof state.runId === "string"
+          ? { runId: state.runId }
+          : { requestHash: state.requestHash, inputHash: state.inputHash };
       const repairingState = withOperation(
         {
           phase: "repairing",
-          runId: state.runId,
+          ...repairIdentity,
           repairUsed: true,
           feedbackHash,
           baselineMessageId,
@@ -867,6 +1266,90 @@ export function createHermesClient({
     },
 
     /**
+     * Retire local work only after Joblit proves its operation is already
+     * accepted or terminal. A known live run is stopped and observed terminal
+     * before its private id is cleared; an ambiguous start is cleared only
+     * when the transcript independently proves its terminal assistant turn.
+     */
+    async reconcileObsolete({ sessionId, signal }) {
+      if (typeof sessionId !== "string" || !SESSION_ID_RE.test(sessionId)) {
+        throw new HermesClientError(
+          "RUN_REQUEST_INVALID",
+          "Hermes session id is invalid",
+        );
+      }
+      const state = await runStateStore.get(sessionId);
+      assertValidRunState(state);
+      if (!state || state.phase === "idle") return { cleared: true };
+
+      if (state.phase === "completed" || state.phase === "repairing") {
+        await clearRunState(sessionId, state.repairUsed, state);
+        return { cleared: true };
+      }
+
+      if (state.phase === "starting") {
+        await proveStartedRunTerminal(sessionId, state, signal);
+        await clearRunState(sessionId, state.repairUsed, state);
+        return { cleared: true };
+      }
+
+      if (state.phase !== "running") {
+        throw new HermesClientError(
+          "RUN_STATE_CONFLICT",
+          "Hermes recovery state cannot be reconciled",
+        );
+      }
+
+      const runId = state.runId;
+      let run = readRunSnapshot(
+        await request(`/v1/runs/${runId}`, { signal }),
+        runId,
+      );
+      const terminal = new Set(["completed", "failed", "cancelled"]);
+      if (!terminal.has(run.status) && run.status !== "stopping") {
+        const stopped = await request(`/v1/runs/${runId}/stop`, {
+          method: "POST",
+          signal,
+        });
+        if (
+          !stopped ||
+          stopped.run_id !== runId ||
+          stopped.status !== "stopping"
+        ) {
+          throw new HermesClientError(
+            "HERMES_PROTOCOL_ERROR",
+            "Hermes stop response is invalid",
+          );
+        }
+      }
+
+      const deadline =
+        Date.now() + Math.min(timeoutMs, MAX_RECONCILIATION_WAIT_MS);
+      while (!terminal.has(run.status)) {
+        if (signal?.aborted) {
+          throw new HermesClientError(
+            "RUN_CANCELLED",
+            "Hermes reconciliation cancelled",
+          );
+        }
+        if (Date.now() >= deadline) {
+          throw new HermesClientError(
+            "RUN_RECONCILIATION_DEFERRED",
+            "Hermes run did not become terminal before the reconciliation deadline",
+          );
+        }
+        await sleep(Math.max(1, pollMs), signal);
+        run = readRunSnapshot(
+          await request(`/v1/runs/${runId}`, { signal }),
+          runId,
+        );
+      }
+
+      await clearRunState(sessionId, state.repairUsed, state);
+      return { cleared: true };
+    },
+
+    /**
      * Forget a terminal Hermes run only after Joblit has durably accepted the
      * corresponding result. Until this acknowledgement, generate() recovers
      * the same run id and replays its terminal output.
@@ -928,9 +1411,9 @@ export function createHermesClient({
     },
 
     /**
-     * List only completed Fit issue identities whose server receipt can be
-     * checked after a crash. Prompts, model output and job data never leave
-     * the in-memory Hermes response or enter this recovery list.
+     * List non-secret Fit issue identities whose server receipt can be checked
+     * after a crash. Live phases are included so authoritative server
+     * settlement can trigger proof-based stop/transcript cleanup.
      */
     async recoverableFitIssues() {
       if (typeof runStateStore.list !== "function") return [];
@@ -958,12 +1441,15 @@ export function createHermesClient({
         const match = /^joblit:fit:([a-f0-9]{64})$/.exec(entry.sessionId);
         if (
           match &&
-          entry.state.phase === "completed" &&
+          (entry.state.phase === "starting" ||
+            entry.state.phase === "running" ||
+            entry.state.phase === "completed") &&
           !entry.state.operation
         ) {
           recoverable.push({
             sessionId: entry.sessionId,
             issueKey: match[1],
+            phase: entry.state.phase,
           });
         }
       }

@@ -147,6 +147,19 @@ enum TailoringRunTarget {
   COVER
 }
 
+enum FitBatchClaimStatus {
+  ACTIVE
+  SETTLED
+  FAILED
+  CANCELLED
+  SUPERSEDED
+}
+
+enum FitBatchClaimItemOutcome {
+  SCORED
+  FAILED
+}
+
 model User {
   id            String    @id @default(uuid()) @db.Uuid
   email         String?   @unique
@@ -172,6 +185,7 @@ model User {
   applicationBatchTasks  ApplicationBatchTask[]
   tailoringRuns          TailoringRun[]
   agentCredentials       AgentCredential[]
+  fitBatchClaims         FitBatchClaim[]
   fitBatchImportReceipts FitBatchImportReceipt[]
   applicationEvents      ApplicationEvent[]
   evidenceSnapshots      EvidenceSnapshot[]
@@ -298,15 +312,83 @@ model FitBatchImportReceipt {
   userId String @db.Uuid
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  issueKey    String   @db.Char(64)
-  requestHash String   @db.Char(64)
-  settlement  Json
-  createdAt   DateTime @default(now())
+  issueKey           String         @db.Char(64)
+  requestHash        String         @db.Char(64)
+  settlement         Json
+  protocolVersion    Int            @default(1)
+  claimId            String?        @unique @db.Uuid
+  claim              FitBatchClaim? @relation(fields: [claimId], references: [id], onDelete: SetNull)
+  executionAttemptId String?        @db.Uuid
+  createdAt          DateTime       @default(now())
 
   @@unique([userId, issueKey])
   @@index([userId, createdAt])
 }
 
+/// Durable, content-addressed ownership of one exact ordered Fit job set.
+/// Prompt text and model output remain outside PostgreSQL; receipt hashes are
+/// enough to fence settlement and replay without retaining those payloads.
+/// Raw SQL enforces at most one ACTIVE Claim per user; Prisma cannot express
+/// that partial unique index, so every writer must still handle P2002 safely.
+model FitBatchClaim {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  status          FitBatchClaimStatus @default(ACTIVE)
+  protocolVersion Int                 @default(2)
+
+  /// Bound once `/fit/prompt` issues the immutable prompt receipt.
+  issueKey           String? @db.Char(64)
+  issueHash          String? @db.Char(64)
+  promptHash         String? @db.Char(64)
+  promptMetaHash     String? @db.Char(64)
+  promptMeta         Json?
+  resumeProfileId    String? @db.Uuid
+  resumeSnapshotHash String? @db.Char(64)
+  jobSetHash         String? @db.Char(64)
+
+  executionAttemptId      String    @db.Uuid
+  executionLeaseExpiresAt DateTime?
+  lastHeartbeatAt         DateTime?
+  attempt                 Int       @default(1)
+
+  errorCode    String?
+  errorMessage String?
+  issuedAt     DateTime  @default(now())
+  settledAt    DateTime?
+  terminalAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  items   FitBatchClaimItem[]
+  receipt FitBatchImportReceipt?
+
+  @@index([userId, status, executionLeaseExpiresAt])
+  @@index([userId, issueKey, updatedAt])
+  @@index([executionAttemptId])
+}
+
+/// Immutable ordered membership. `jobId` is intentionally an identity
+/// snapshot rather than a foreign key so settlement can record a deterministic
+/// failed outcome when a Job is deleted while an Agent is working.
+model FitBatchClaimItem {
+  claimId String        @db.Uuid
+  claim   FitBatchClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  ordinal Int
+  jobId   String        @db.Uuid
+
+  outcome     FitBatchClaimItemOutcome?
+  failureCode String?
+  releasedAt  DateTime?
+
+  @@id([claimId, jobId])
+  @@unique([claimId, ordinal])
+  @@index([jobId])
+}
+
+/// Raw SQL enforces at most one QUEUED/RUNNING batch per user. The partial
+/// unique index is intentionally absent from Prisma's declarative index list.
 model ApplicationBatch {
   id     String @id @default(uuid()) @db.Uuid
   userId String @db.Uuid
@@ -356,6 +438,7 @@ model ApplicationBatchTask {
   tailoringRun TailoringRun?
 
   @@unique([batchId, jobId])
+  @@index([jobId, batchId])
   @@index([batchId, status, createdAt])
   @@index([userId, status, createdAt])
   @@index([executionAttemptId])
@@ -581,7 +664,7 @@ model Application {
   company String?
   role    String?
   /// Historical document locale retained for schema/data compatibility.
-  locale  String @default("en-AU")
+  locale  String  @default("en-AU")
 
   resumeTexUrl  String?
   resumePdfUrl  String?

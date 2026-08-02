@@ -105,23 +105,31 @@ failed run after the first commit is terminal `PARTIAL`, not `FAILED`.
 
 ### 2. Triage — which roles are worth applying to
 
-Fit scoring runs in the local Runner. The server leases batches
-(`lib/server/jobs/fitRunService.ts`), the Runner scores them against the user's
-Hermes gateway (`tools/runner/fitQueue.mjs`), and results come back via
+Fit scoring runs in the local Runner. The server creates or re-leases one
+durable, immutable `FitBatchClaim` (`lib/server/jobs/fitRunService.ts`), the
+Runner heartbeats its attempt while scoring through the user's Hermes gateway
+(`tools/runner/fitQueue.mjs`), and results come back through
 `/api/jobs/fit/batch-import`. The browser enqueues, polls `/api/jobs/fit/status`,
-and cancels pending/claimed queue work through `/api/jobs/fit/cancel`
-(`app/(app)/jobs/hooks/useFitScan.ts`).
+and terminally cancels pending/claimed queue work through
+`/api/jobs/fit/cancel` (`app/(app)/jobs/hooks/useFitScan.ts`).
 
-Each prompt exposes a stable 64-hex issue derived from the sorted Job ids and
-the server-owned prompt snapshot. `lib/server/jobs/fitBatchImport.ts` validates
-that identity and writes Job scores plus `FitBatchImportReceipt` atomically.
-An exact retry returns the stored settlement before rebuilding the prompt, so a
-lost response remains recoverable even after profile/rule changes. The Runner
-waits on fresh leases and preserves Hermes state when settlement is unknown.
-On restart, `/api/jobs/fit/settlement-status` authorizes cleanup only after the
-server proves that exact issue committed. Same-session Hermes starts and repair
-reservations use file-backed compare-and-set, so multiple local Runner processes
-remain single-flight.
+Each prompt exposes a stable 64-hex issue bound once to the Claim's exact Job
+set, Resume snapshot, and prompt receipt. `lib/server/jobs/fitBatchImport.ts`
+validates the current attempt and accounts for every Claim item while writing
+Job projections, item outcomes, `FitBatchImportReceipt`, and the terminal Claim
+atomically. An exact retry reads the receipt first, so a lost response remains
+recoverable after lease takeover. `/api/jobs/fit/settlement-status` distinguishes
+active, settled, and terminal-without-receipt work before the Runner clears any
+local result.
+
+Same-session Hermes starts and repairs use file-backed compare-and-set. A start
+reservation also records a transcript cursor plus request hashes; after an
+ambiguous start response, output is recovered only from one provable matching
+terminal turn. An incomplete tool-call snapshot stays deferred; a completed
+tool sequence qualifies only through a later unique terminal `stop` output.
+Retryable gateway responses are not submitted twice or projected as model failure.
+This is a conservative adapter over unmodified Hermes, not a claim of remote
+exactly-once execution (ADR-0016).
 
 **The model emits per-requirement judgements only.** `aggregateFitMatrix`
 computes the score deterministically from them
@@ -183,6 +191,16 @@ claimed `issueKey`, and the batch/task/attempt binding, then echoes each
 response's `promptMeta` and public `tailoringRun` handle through
 `manual-generate`. Reclaim preserves the accepted Application half.
 
+Fresh and failed-task retry batches enter through one
+`queueApplicationBatch` transaction. It takes the per-user Job mutation lock
+before checking active work, selecting Jobs, and creating the exact header/task
+set; a partial unique PostgreSQL index independently enforces one `QUEUED` or
+`RUNNING` batch per user. Permanent Job deletion first row-locks target Jobs in
+stable order, then takes affected ABAT locks, lets task rows cascade, and
+reconciles each surviving batch in the same transaction. The row fence closes
+the expand-window race with a legacy in-flight task FK insert. A now-empty
+active batch becomes `CANCELLED`, not falsely `SUCCEEDED` or `FAILED`.
+
 There is no independent success callback. The final required target is the
 point of no return: its transaction commits the Application mutation,
 immutable `TailoringRunReceipt`, terminal `TailoringRun`, and
@@ -213,13 +231,13 @@ response rather than submitted twice.
 
 ## Trust boundaries
 
-| Boundary | Mechanism | Where |
-|---|---|---|
-| Browser → API | NextAuth database session | `lib/server/auth/requireSession.ts:17` |
-| Agent → API | `withAgentRoute`: capability-scoped `jfagent_v1_` Bearer credential, or the session cookie when no header is presented; a presented credential never falls back to the cookie. Token hashes are SHA-256 at rest | `lib/server/api/routeHandler.ts`, `lib/server/auth/requireAgentCredential.ts` |
-| Fetch worker → API | `FETCH_RUN_SECRET` header, constant-time compare | `app/api/fetch-runs/[id]/config/route.ts`, `app/api/fetch-runs/[id]/commit/route.ts` |
-| Cron → API | `Authorization: Bearer CRON_SECRET` | `app/api/discover/refresh-daily` |
-| Server → internet | `safeOutboundFetch` | `lib/server/net/safeFetch.ts:396` |
+| Boundary           | Mechanism                                                                                                                                                                                                       | Where                                                                                |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Browser → API      | NextAuth database session                                                                                                                                                                                       | `lib/server/auth/requireSession.ts:17`                                               |
+| Agent → API        | `withAgentRoute`: capability-scoped `jfagent_v1_` Bearer credential, or the session cookie when no header is presented; a presented credential never falls back to the cookie. Token hashes are SHA-256 at rest | `lib/server/api/routeHandler.ts`, `lib/server/auth/requireAgentCredential.ts`        |
+| Fetch worker → API | `FETCH_RUN_SECRET` header, constant-time compare                                                                                                                                                                | `app/api/fetch-runs/[id]/config/route.ts`, `app/api/fetch-runs/[id]/commit/route.ts` |
+| Cron → API         | `Authorization: Bearer CRON_SECRET`                                                                                                                                                                             | `app/api/discover/refresh-daily`                                                     |
+| Server → internet  | `safeOutboundFetch`                                                                                                                                                                                             | `lib/server/net/safeFetch.ts:396`                                                    |
 
 Every route is guarded. `safeOutboundFetch` enforces HTTPS, a
 host allowlist, DNS re-checking on every hop, private-address rejection,
@@ -243,7 +261,7 @@ app/(marketing)  app/(auth)  app/(app)        ← React, next-intl, React Query
                                   │
                             lib/server/**      ← business logic
                                   │
-                    prisma (Neon serverless)   ← 27 models
+                    prisma (Neon serverless)   ← 29 models
 ```
 
 `lib/shared/**` is imported by both sides and is the only place a contract may
@@ -323,17 +341,17 @@ build, and dependency audits.
 
 ## Where things are
 
-| I want to change… | Start at |
-|---|---|
-| How a Job is imported or deduped | `lib/server/jobs/jobImportService.ts` |
-| How a FetchRun starts, commits, fails, or races cancellation | `lib/server/fetchRuns/fetchRunCommit.ts`, then ADR-0008 |
-| The persisted FetchRun execution contract | `lib/shared/schemas/fetchRunConfig.ts` |
-| What the AI is asked | `lib/server/ai/applicationPromptBuilder.ts`, `lib/server/applications/applicationPrompt.ts` |
-| Which AI proposals are allowed through | The Quality Gate — `lib/server/applications/manualImportParser.ts:419`, `:450` |
-| How a PDF is produced | `lib/server/latex/`, then `lib/server/latex/compilePdf.ts:68` |
-| What "finalized" means | `app/api/applications/[id]/finalize/route.ts`, `lib/server/applications/applicationAiContentAggregate.ts`, `lib/server/applications/commitApplicationArtifact.ts`, `lib/server/applications/finalizeApplication.ts` |
-| How Application Blobs are staged, referenced, retired, or reconciled | `lib/server/artifacts/`, `app/api/artifacts/reconcile/route.ts`, then ADR-0010 |
-| The jobs list UI | `app/(app)/jobs/JobsClient.tsx` and `app/(app)/jobs/hooks/` |
-| The Master Resume Profile editor | `components/resume/ResumeContext.tsx` |
-| A user-facing string | `messages/en.json` **and** `messages/zh.json` — parity is gated by `test/messagesContract.test.ts` |
-| How the Runner drives a queue | `tools/runner/` and its README, then AGENTS.md |
+| I want to change…                                                    | Start at                                                                                                                                                                                                            |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| How a Job is imported or deduped                                     | `lib/server/jobs/jobImportService.ts`                                                                                                                                                                               |
+| How a FetchRun starts, commits, fails, or races cancellation         | `lib/server/fetchRuns/fetchRunCommit.ts`, then ADR-0008                                                                                                                                                             |
+| The persisted FetchRun execution contract                            | `lib/shared/schemas/fetchRunConfig.ts`                                                                                                                                                                              |
+| What the AI is asked                                                 | `lib/server/ai/applicationPromptBuilder.ts`, `lib/server/applications/applicationPrompt.ts`                                                                                                                         |
+| Which AI proposals are allowed through                               | The Quality Gate — `lib/server/applications/manualImportParser.ts:419`, `:450`                                                                                                                                      |
+| How a PDF is produced                                                | `lib/server/latex/`, then `lib/server/latex/compilePdf.ts:68`                                                                                                                                                       |
+| What "finalized" means                                               | `app/api/applications/[id]/finalize/route.ts`, `lib/server/applications/applicationAiContentAggregate.ts`, `lib/server/applications/commitApplicationArtifact.ts`, `lib/server/applications/finalizeApplication.ts` |
+| How Application Blobs are staged, referenced, retired, or reconciled | `lib/server/artifacts/`, `app/api/artifacts/reconcile/route.ts`, then ADR-0010                                                                                                                                      |
+| The jobs list UI                                                     | `app/(app)/jobs/JobsClient.tsx` and `app/(app)/jobs/hooks/`                                                                                                                                                         |
+| The Master Resume Profile editor                                     | `components/resume/ResumeContext.tsx`                                                                                                                                                                               |
+| A user-facing string                                                 | `messages/en.json` **and** `messages/zh.json` — parity is gated by `test/messagesContract.test.ts`                                                                                                                  |
+| How the Runner drives a queue                                        | `tools/runner/` and its README, then AGENTS.md                                                                                                                                                                      |

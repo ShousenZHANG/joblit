@@ -2,11 +2,9 @@ import { NextResponse } from "next/server";
 import { errorJson } from "@/lib/server/api/errorResponse";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { z } from "zod";
-import { prisma } from "@/lib/server/prisma";
+import { queueApplicationBatch } from "@/lib/server/applicationBatches/queueApplicationBatch";
 
 export const runtime = "nodejs";
-
-const ACTIVE_BATCH_STATUSES = ["QUEUED", "RUNNING"] as const;
 
 const CreateBatchSchema = z.object({
   scope: z.enum(["NEW"]).default("NEW"),
@@ -24,87 +22,35 @@ export async function POST(req: Request) {
       });
     }
 
-    const activeBatch = await prisma.applicationBatch.findFirst({
-      where: {
-        userId,
-        status: {
-          in: [...ACTIVE_BATCH_STATUSES],
+    const outcome = await queueApplicationBatch({
+      userId,
+      seed: {
+        kind: "new",
+        selectedJobIds: parsed.data.selectedJobIds,
+        limit: parsed.data.limit,
+      },
+    });
+
+    if (outcome.kind === "active_exists") {
+      return errorJson(
+        "ACTIVE_BATCH_EXISTS",
+        "An active batch already exists",
+        409,
+        {
+          details: {
+            batchId: outcome.activeBatch.id,
+            status: outcome.activeBatch.status,
+          },
         },
-      },
-      select: {
-        id: true,
-        status: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-
-    if (activeBatch) {
-      return errorJson("ACTIVE_BATCH_EXISTS", "An active batch already exists", 409, {
-        details: { batchId: activeBatch.id, status: activeBatch.status },
-      });
+      );
     }
-
-    const selectedJobIds = parsed.data.selectedJobIds
-      ? Array.from(new Set(parsed.data.selectedJobIds))
-      : [];
-    const jobs = await prisma.job.findMany({
-      where: {
-        userId,
-        status: "NEW",
-        ...(selectedJobIds.length > 0
-          ? {
-              id: {
-                in: selectedJobIds,
-              },
-            }
-          : {}),
-      },
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-      ...(selectedJobIds.length === 0 ? { take: parsed.data.limit } : {}),
-      select: {
-        id: true,
-        title: true,
-        company: true,
-        jobUrl: true,
-      },
-    });
-
-    if (jobs.length === 0) {
+    if (outcome.kind === "empty") {
       return errorJson("NO_ELIGIBLE_JOBS", "No eligible jobs", 400);
     }
+    if (outcome.kind !== "queued") {
+      throw new Error("Unexpected Application Batch queue outcome");
+    }
 
-    const batch = await prisma.$transaction(async (tx) => {
-      const createdBatch = await tx.applicationBatch.create({
-        data: {
-          userId,
-          scope: parsed.data.scope,
-          status: "QUEUED",
-          totalCount: jobs.length,
-        },
-        select: {
-          id: true,
-          scope: true,
-          status: true,
-          totalCount: true,
-          createdAt: true,
-        },
-      });
-
-      await tx.applicationBatchTask.createMany({
-        data: jobs.map((job) => ({
-          batchId: createdBatch.id,
-          userId,
-          jobId: job.id,
-          status: "PENDING",
-        })),
-        skipDuplicates: true,
-      });
-
-      return createdBatch;
-    });
-
-    return NextResponse.json({ batch }, { status: 201 });
+    return NextResponse.json({ batch: outcome.batch }, { status: 201 });
   });
 }

@@ -24,19 +24,41 @@ function jsonResponse(body, status = 200) {
   });
 }
 
+function withMissingSession(fetchImpl) {
+  return async (url, init = {}) => {
+    if (
+      String(url).includes("/api/sessions/") &&
+      String(url).endsWith("/messages")
+    ) {
+      return jsonResponse(
+        { error: { code: "session_not_found", message: "not found" } },
+        404,
+      );
+    }
+    return fetchImpl(url, init);
+  };
+}
+
 test("hermes: starts a run, polls to completion, returns the output", async () => {
   const calls = [];
   const fetchImpl = async (url, init = {}) => {
     calls.push({ url: String(url), init });
     if (String(url).endsWith("/v1/runs") && init.method === "POST") {
-      return jsonResponse({ status: "started", run_id: "run_" + "a".repeat(32) });
+      return jsonResponse({
+        status: "started",
+        run_id: "run_" + "a".repeat(32),
+      });
     }
     if (String(url).includes("/v1/runs/run_")) {
       // First poll still running, second completed.
       const polls = calls.filter((c) => c.init.method !== "POST").length;
       return jsonResponse(
         polls < 2
-          ? { object: "hermes.run", run_id: "run_" + "a".repeat(32), status: "running" }
+          ? {
+              object: "hermes.run",
+              run_id: "run_" + "a".repeat(32),
+              status: "running",
+            }
           : {
               object: "hermes.run",
               run_id: "run_" + "a".repeat(32),
@@ -51,7 +73,7 @@ test("hermes: starts a run, polls to completion, returns the output", async () =
   const hermes = createHermesClient({
     baseUrl: "http://127.0.0.1:8790",
     apiKey: "local-key",
-    fetchImpl,
+    fetchImpl: withMissingSession(fetchImpl),
     pollMs: 1,
   });
 
@@ -92,7 +114,7 @@ test("hermes: keeps a completed run recoverable until Joblit import is acknowled
     apiKey: "k",
     pollMs: 1,
     runStateStore,
-    fetchImpl: async (_url, init = {}) =>
+    fetchImpl: withMissingSession(async (_url, init = {}) =>
       init.method === "POST"
         ? jsonResponse({ status: "started", run_id: runId })
         : jsonResponse({
@@ -101,6 +123,7 @@ test("hermes: keeps a completed run recoverable until Joblit import is acknowled
             status: "completed",
             output: '{"cvSummary":"durable"}',
           }),
+    ),
   });
 
   await hermes.generate({ instructions: "s", input: "u", sessionId });
@@ -140,7 +163,7 @@ test("hermes: exposes only safe completed operation metadata for startup reconci
     apiKey: "k",
     pollMs: 1,
     runStateStore,
-    fetchImpl: async (_url, init = {}) =>
+    fetchImpl: withMissingSession(async (_url, init = {}) =>
       init.method === "POST"
         ? jsonResponse({ status: "started", run_id: runId })
         : jsonResponse({
@@ -149,6 +172,7 @@ test("hermes: exposes only safe completed operation metadata for startup reconci
             status: "completed",
             output: '{"privateResume":"must stay in memory only"}',
           }),
+    ),
   });
 
   await hermes.generate({
@@ -176,7 +200,7 @@ test("hermes: exposes only safe completed operation metadata for startup reconci
   assert.deepEqual(await hermes.recoverableOperations(), []);
 });
 
-test("hermes: exposes only completed content-addressed Fit issues", async () => {
+test("hermes: exposes content-addressed Fit issues across recoverable phases", async () => {
   const issueKey = "d".repeat(64);
   const state = new Map([
     [
@@ -230,6 +254,12 @@ test("hermes: exposes only completed content-addressed Fit issues", async () => 
     {
       sessionId: `joblit:fit:${issueKey}`,
       issueKey,
+      phase: "completed",
+    },
+    {
+      sessionId: `joblit:fit:${"e".repeat(64)}`,
+      issueKey: "e".repeat(64),
+      phase: "running",
     },
   ]);
 });
@@ -311,7 +341,7 @@ test("hermes: safely rebinds the same prompt operation to a renewed lease attemp
         state.delete(key);
       },
     },
-    fetchImpl: async (url, init = {}) => {
+    fetchImpl: withMissingSession(async (url, init = {}) => {
       calls.push({ url: String(url), init });
       assert.notEqual(init.method, "POST");
       return jsonResponse({
@@ -320,7 +350,7 @@ test("hermes: safely rebinds the same prompt operation to a renewed lease attemp
         status: "completed",
         output: '{"cvSummary":"reused safely"}',
       });
-    },
+    }),
   });
 
   assert.equal(
@@ -339,7 +369,10 @@ test("hermes: safely rebinds the same prompt operation to a renewed lease attemp
 test("hermes: a failed run surfaces the gateway's error", async () => {
   const fetchImpl = async (url, init = {}) => {
     if (init.method === "POST") {
-      return jsonResponse({ status: "started", run_id: "run_" + "b".repeat(32) });
+      return jsonResponse({
+        status: "started",
+        run_id: "run_" + "b".repeat(32),
+      });
     }
     return jsonResponse({
       object: "hermes.run",
@@ -352,14 +385,55 @@ test("hermes: a failed run surfaces the gateway's error", async () => {
   const hermes = createHermesClient({
     baseUrl: "http://127.0.0.1:8790",
     apiKey: "k",
-    fetchImpl,
+    fetchImpl: withMissingSession(fetchImpl),
     pollMs: 1,
   });
 
   await assert.rejects(
     hermes.generate({ instructions: "s", input: "u", sessionId: "joblit:x" }),
-    /model exploded/,
+    (error) =>
+      error?.code === "RUN_FAILED" && /model exploded/.test(error.message),
   );
+});
+
+test("hermes: a terminal cancelled status is typed and clears its durable run", async () => {
+  const sessionId = "joblit:remote-cancelled";
+  const runId = "run_" + "4".repeat(32);
+  const state = new Map();
+  const hermes = createHermesClient({
+    baseUrl: "http://127.0.0.1:8790",
+    apiKey: "k",
+    pollMs: 1,
+    runStateStore: {
+      async get(key) {
+        return state.get(key) ?? null;
+      },
+      async set(key, value) {
+        state.set(key, structuredClone(value));
+      },
+      async delete(key) {
+        state.delete(key);
+      },
+    },
+    fetchImpl: withMissingSession(async (_url, init = {}) =>
+      init.method === "POST"
+        ? jsonResponse({ status: "started", run_id: runId })
+        : jsonResponse({
+            object: "hermes.run",
+            run_id: runId,
+            status: "cancelled",
+            error: "cancelled by Hermes",
+          }),
+    ),
+  });
+
+  await assert.rejects(
+    hermes.generate({ instructions: "s", input: "u", sessionId }),
+    (error) =>
+      error?.code === "RUN_CANCELLED" &&
+      /cancelled by Hermes/.test(error.message),
+  );
+  assert.equal(state.has(sessionId), false);
 });
 
 test("hermes: rejects an unknown run status as a protocol error", async () => {
@@ -369,7 +443,7 @@ test("hermes: rejects an unknown run status as a protocol error", async () => {
     apiKey: "k",
     pollMs: 1,
     timeoutMs: 20,
-    fetchImpl: async (url, init = {}) => {
+    fetchImpl: withMissingSession(async (url, init = {}) => {
       if (init.method === "POST") {
         return jsonResponse({ status: "started", run_id: runId });
       }
@@ -378,7 +452,7 @@ test("hermes: rejects an unknown run status as a protocol error", async () => {
         run_id: runId,
         status: "invented",
       });
-    },
+    }),
   });
 
   await assert.rejects(
@@ -404,7 +478,10 @@ test("hermes: refuses a non-loopback gateway", () => {
 test("hermes: times out a run that never finishes", async () => {
   const fetchImpl = async (url, init = {}) => {
     if (init.method === "POST") {
-      return jsonResponse({ status: "started", run_id: "run_" + "c".repeat(32) });
+      return jsonResponse({
+        status: "started",
+        run_id: "run_" + "c".repeat(32),
+      });
     }
     return jsonResponse({
       object: "hermes.run",
@@ -416,7 +493,7 @@ test("hermes: times out a run that never finishes", async () => {
   const hermes = createHermesClient({
     baseUrl: "http://localhost:8790",
     apiKey: "k",
-    fetchImpl,
+    fetchImpl: withMissingSession(fetchImpl),
     pollMs: 1,
     timeoutMs: 20,
   });
@@ -455,7 +532,7 @@ test("hermes: aborting a known run posts stop before reporting cancellation", as
   const hermes = createHermesClient({
     baseUrl: "http://127.0.0.1:8790",
     apiKey: "k",
-    fetchImpl,
+    fetchImpl: withMissingSession(fetchImpl),
     pollMs: 1,
   });
 
@@ -497,7 +574,7 @@ test("hermes: stopping remains recoverable across restart without a duplicate ru
     apiKey: "k",
     runStateStore,
     pollMs: 1,
-    fetchImpl: async (url, init = {}) => {
+    fetchImpl: withMissingSession(async (url, init = {}) => {
       if (String(url).endsWith("/v1/runs") && init.method === "POST") {
         starts += 1;
         controller.abort();
@@ -507,7 +584,7 @@ test("hermes: stopping remains recoverable across restart without a duplicate ru
         return jsonResponse({ status: "stopping", run_id: runId });
       }
       return jsonResponse({ error: "unexpected" }, 500);
-    },
+    }),
   });
 
   await assert.rejects(
@@ -531,10 +608,13 @@ test("hermes: stopping remains recoverable across restart without a duplicate ru
     apiKey: "k",
     runStateStore,
     pollMs: 1,
-    fetchImpl: async (url, init = {}) => {
+    fetchImpl: withMissingSession(async (url, init = {}) => {
       if (String(url).endsWith("/v1/runs") && init.method === "POST") {
         starts += 1;
-        return jsonResponse({ status: "started", run_id: "run_" + "0".repeat(32) });
+        return jsonResponse({
+          status: "started",
+          run_id: "run_" + "0".repeat(32),
+        });
       }
       assert.equal(String(url).endsWith(`/v1/runs/${runId}`), true);
       polls += 1;
@@ -548,11 +628,15 @@ test("hermes: stopping remains recoverable across restart without a duplicate ru
               output: '{"cvSummary":"settled"}',
             },
       );
-    },
+    }),
   });
 
   assert.equal(
-    await restarted.generate({ instructions: "ignored", input: "ignored", sessionId }),
+    await restarted.generate({
+      instructions: "ignored",
+      input: "ignored",
+      sessionId,
+    }),
     '{"cvSummary":"settled"}',
   );
   assert.equal(starts, 1);
@@ -561,6 +645,119 @@ test("hermes: stopping remains recoverable across restart without a duplicate ru
     runId,
     repairUsed: false,
   });
+});
+
+test("hermes: reconciles an obsolete running operation only after the run is terminal", async () => {
+  const runId = "run_" + "3".repeat(32);
+  const sessionId = "joblit:obsolete-running";
+  const state = new Map([
+    [
+      sessionId,
+      {
+        phase: "running",
+        runId,
+        repairUsed: false,
+        operation: TAILORING_OPERATION,
+      },
+    ],
+  ]);
+  let polls = 0;
+  let stops = 0;
+  const hermes = createHermesClient({
+    baseUrl: "http://127.0.0.1:8790",
+    apiKey: "k",
+    timeoutMs: 50,
+    pollMs: 1,
+    runStateStore: {
+      async get(key) {
+        return state.get(key) ?? null;
+      },
+      async set(key, value) {
+        state.set(key, structuredClone(value));
+      },
+      async delete(key) {
+        state.delete(key);
+      },
+    },
+    fetchImpl: async (url, init = {}) => {
+      if (String(url).endsWith(`/v1/runs/${runId}/stop`)) {
+        stops += 1;
+        return jsonResponse({ status: "stopping", run_id: runId });
+      }
+      assert.equal(String(url).endsWith(`/v1/runs/${runId}`), true);
+      assert.equal(init.method, undefined);
+      polls += 1;
+      return jsonResponse({
+        object: "hermes.run",
+        run_id: runId,
+        status: polls === 1 ? "running" : "cancelled",
+      });
+    },
+  });
+
+  assert.deepEqual(await hermes.reconcileObsolete({ sessionId }), {
+    cleared: true,
+  });
+  assert.equal(stops, 1);
+  assert.equal(polls, 2);
+  assert.equal(state.has(sessionId), false);
+});
+
+test("hermes: clears an ambiguous start only after its transcript proves a terminal turn", async () => {
+  const sessionId = "joblit:obsolete-starting";
+  const input = "generate the accepted resume";
+  const starting = {
+    phase: "starting",
+    repairUsed: false,
+    baselineMessageId: 0,
+    requestHash: "a".repeat(64),
+    inputHash: createHash("sha256").update(input, "utf8").digest("hex"),
+    operation: TAILORING_OPERATION,
+  };
+  const state = new Map([[sessionId, starting]]);
+  let transcript = [
+    { id: 1, role: "user", content: input },
+    {
+      id: 2,
+      role: "assistant",
+      content: '{"cvSummary":"already accepted"}',
+      finish_reason: "stop",
+    },
+  ];
+  const hermes = createHermesClient({
+    baseUrl: "http://127.0.0.1:8790",
+    apiKey: "k",
+    runStateStore: {
+      async get(key) {
+        return state.get(key) ?? null;
+      },
+      async set(key, value) {
+        state.set(key, structuredClone(value));
+      },
+      async delete(key) {
+        state.delete(key);
+      },
+    },
+    fetchImpl: async () =>
+      jsonResponse({
+        object: "list",
+        session_id: sessionId,
+        data: transcript,
+      }),
+  });
+
+  assert.deepEqual(await hermes.reconcileObsolete({ sessionId }), {
+    cleared: true,
+  });
+  assert.equal(state.has(sessionId), false);
+
+  state.set(sessionId, structuredClone(starting));
+  transcript = [{ id: 1, role: "user", content: input }];
+  await assert.rejects(
+    hermes.reconcileObsolete({ sessionId }),
+    (error) => error?.code === "RUN_START_UNKNOWN",
+  );
+  assert.deepEqual(state.get(sessionId), starting);
 });
 
 test("hermes: a failed stop keeps the known run recoverable", async () => {
@@ -581,7 +778,7 @@ test("hermes: a failed stop keeps the known run recoverable", async () => {
     apiKey: "k",
     runStateStore,
     pollMs: 1,
-    fetchImpl: async (url, init = {}) => {
+    fetchImpl: withMissingSession(async (url, init = {}) => {
       if (String(url).endsWith("/v1/runs") && init.method === "POST") {
         controller.abort();
         return jsonResponse({ status: "started", run_id: runId });
@@ -590,7 +787,7 @@ test("hermes: a failed stop keeps the known run recoverable", async () => {
         return jsonResponse({ error: "gateway unavailable" }, 503);
       }
       return jsonResponse({ error: "unexpected" }, 500);
-    },
+    }),
   });
 
   await assert.rejects(
@@ -627,7 +824,7 @@ test("hermes: an invalid successful stop response keeps the run recoverable", as
     apiKey: "k",
     runStateStore,
     pollMs: 1,
-    fetchImpl: async (url, init = {}) => {
+    fetchImpl: withMissingSession(async (url, init = {}) => {
       if (String(url).endsWith("/v1/runs") && init.method === "POST") {
         controller.abort();
         return jsonResponse({ status: "started", run_id: runId });
@@ -636,7 +833,7 @@ test("hermes: an invalid successful stop response keeps the run recoverable", as
         return jsonResponse({ status: "ok", run_id: runId });
       }
       return jsonResponse({ error: "unexpected" }, 500);
-    },
+    }),
   });
 
   await assert.rejects(
@@ -659,10 +856,7 @@ test("hermes: resumes a persisted run id without starting a duplicate run", asyn
   const runId = "run_" + "e".repeat(32);
   const calls = [];
   const state = new Map([
-    [
-      "joblit:resume",
-      { phase: "running", runId, repairUsed: false },
-    ],
+    ["joblit:resume", { phase: "running", runId, repairUsed: false }],
   ]);
   const runStateStore = {
     async get(sessionId) {
@@ -698,7 +892,10 @@ test("hermes: resumes a persisted run id without starting a duplicate run", asyn
   });
 
   assert.equal(output, '{"cvSummary":"recovered"}');
-  assert.equal(calls.some((call) => call.init.method === "POST"), false);
+  assert.equal(
+    calls.some((call) => call.init.method === "POST"),
+    false,
+  );
   assert.deepEqual(state.get("joblit:resume"), {
     phase: "completed",
     runId,
@@ -821,7 +1018,9 @@ test("hermes: a definitive start rejection clears the starting marker", async ()
   const hermes = createHermesClient({
     baseUrl: "http://127.0.0.1:8790",
     apiKey: "bad-key",
-    fetchImpl: async () => jsonResponse({ error: "invalid key" }, 401),
+    fetchImpl: withMissingSession(async () =>
+      jsonResponse({ error: "invalid key" }, 401),
+    ),
     runStateStore,
   });
 
@@ -850,10 +1049,10 @@ test("hermes: a transport-ambiguous start is recorded and never retried blindly"
   const hermes = createHermesClient({
     baseUrl: "http://127.0.0.1:8790",
     apiKey: "k",
-    fetchImpl: async () => {
+    fetchImpl: withMissingSession(async () => {
       fetchCalls += 1;
       throw new TypeError("socket closed after upload");
-    },
+    }),
     requestTimeoutMs: 5,
     runStateStore,
   });
@@ -870,7 +1069,391 @@ test("hermes: a transport-ambiguous start is recorded and never retried blindly"
   assert.deepEqual(state.get(sessionId), {
     phase: "starting",
     repairUsed: false,
+    baselineMessageId: 0,
+    requestHash: createHash("sha256")
+      .update(JSON.stringify(["s", "u"]), "utf8")
+      .digest("hex"),
+    inputHash: createHash("sha256").update("u", "utf8").digest("hex"),
   });
+});
+
+test("hermes: recovers an ambiguous start only from one transcript turn after the saved baseline", async () => {
+  const sessionId = "joblit:recover-start";
+  const state = new Map();
+  const requestHash = createHash("sha256")
+    .update(JSON.stringify(["system", "user"]), "utf8")
+    .digest("hex");
+  const inputHash = createHash("sha256").update("user", "utf8").digest("hex");
+  let transcript = [
+    { id: 4, role: "user", content: "older input" },
+    { id: 5, role: "assistant", content: "older output" },
+  ];
+  let startCalls = 0;
+  const runStateStore = {
+    async get(key) {
+      return state.get(key) ?? null;
+    },
+    async set(key, value) {
+      state.set(key, structuredClone(value));
+    },
+    async delete(key) {
+      state.delete(key);
+    },
+  };
+  const hermes = createHermesClient({
+    baseUrl: "http://127.0.0.1:8790",
+    apiKey: "k",
+    requestTimeoutMs: 5,
+    pollMs: 1,
+    runStateStore,
+    fetchImpl: async (url, init = {}) => {
+      if (String(url).includes("/api/sessions/")) {
+        return jsonResponse({
+          object: "list",
+          session_id: sessionId,
+          data: transcript,
+        });
+      }
+      if (String(url).endsWith("/v1/runs") && init.method === "POST") {
+        startCalls += 1;
+        throw new TypeError("connection closed after upload");
+      }
+      return jsonResponse({ error: "unexpected" }, 500);
+    },
+  });
+
+  await assert.rejects(
+    hermes.generate({ instructions: "system", input: "user", sessionId }),
+    (error) => error?.code === "RUN_START_UNKNOWN",
+  );
+  assert.deepEqual(state.get(sessionId), {
+    phase: "starting",
+    repairUsed: false,
+    baselineMessageId: 5,
+    requestHash,
+    inputHash,
+  });
+
+  transcript = [
+    ...transcript,
+    { id: 6, role: "user", content: "user" },
+    {
+      id: 7,
+      role: "assistant",
+      content: "I will inspect the bounded evidence first.",
+      finish_reason: "tool_calls",
+      tool_calls: [
+        {
+          id: "call_1",
+          type: "function",
+          function: { name: "inspect", arguments: "{}" },
+        },
+      ],
+    },
+    { id: 8, role: "tool", content: "bounded tool result" },
+    {
+      id: 9,
+      role: "assistant",
+      content: '{"cvSummary":"recovered"}',
+      finish_reason: "stop",
+    },
+  ];
+  assert.equal(
+    await hermes.generate({ instructions: "system", input: "user", sessionId }),
+    '{"cvSummary":"recovered"}',
+  );
+  assert.equal(startCalls, 1);
+  assert.deepEqual(state.get(sessionId), {
+    phase: "completed",
+    repairUsed: false,
+    baselineMessageId: 5,
+    requestHash,
+    inputHash,
+  });
+
+  await hermes.acknowledge({ sessionId });
+  assert.equal(state.has(sessionId), false);
+});
+
+test("hermes: transcript recovery rejects observable non-terminal assistant shapes", async () => {
+  const input = "user";
+  const instructions = "system";
+  const requestHash = createHash("sha256")
+    .update(JSON.stringify([instructions, input]), "utf8")
+    .digest("hex");
+  const inputHash = createHash("sha256").update(input, "utf8").digest("hex");
+  const candidates = [
+    {
+      content: "I will call a tool before returning the result.",
+      finish_reason: "tool_calls",
+      tool_calls: [
+        {
+          id: "call_pending",
+          type: "function",
+          function: { name: "inspect", arguments: "{}" },
+        },
+      ],
+    },
+    {
+      content: '{"cvSummary":"truncated"}',
+      finish_reason: "incomplete",
+    },
+  ];
+
+  for (const [index, candidate] of candidates.entries()) {
+    const sessionId = `joblit:non-terminal-${index}`;
+    const starting = {
+      phase: "starting",
+      repairUsed: false,
+      baselineMessageId: 0,
+      requestHash,
+      inputHash,
+    };
+    const state = new Map([[sessionId, starting]]);
+    let postCalls = 0;
+    const hermes = createHermesClient({
+      baseUrl: "http://127.0.0.1:8790",
+      apiKey: "k",
+      pollMs: 1,
+      requestTimeoutMs: 5,
+      runStateStore: {
+        async get(key) {
+          return state.get(key) ?? null;
+        },
+        async set(key, value) {
+          state.set(key, structuredClone(value));
+        },
+      },
+      fetchImpl: async (_url, init = {}) => {
+        if (init.method === "POST") postCalls += 1;
+        return jsonResponse({
+          object: "list",
+          session_id: sessionId,
+          data: [
+            { id: 1, role: "user", content: input },
+            { id: 2, role: "assistant", ...candidate },
+          ],
+        });
+      },
+    });
+
+    await assert.rejects(
+      hermes.generate({ instructions, input, sessionId }),
+      (error) => error?.code === "RUN_START_UNKNOWN",
+    );
+    assert.equal(postCalls, 0);
+    assert.deepEqual(state.get(sessionId), starting);
+  }
+});
+
+test("hermes: a 5xx start response remains ambiguous and preserves recovery metadata", async () => {
+  const sessionId = "joblit:start-gateway-error";
+  const state = new Map();
+  let startCalls = 0;
+  const hermes = createHermesClient({
+    baseUrl: "http://127.0.0.1:8790",
+    apiKey: "k",
+    runStateStore: {
+      async get(key) {
+        return state.get(key) ?? null;
+      },
+      async set(key, value) {
+        state.set(key, structuredClone(value));
+      },
+      async delete(key) {
+        state.delete(key);
+      },
+    },
+    fetchImpl: withMissingSession(async () => {
+      startCalls += 1;
+      return jsonResponse(
+        { error: { code: "gateway_error", message: "upstream lost reply" } },
+        502,
+      );
+    }),
+  });
+
+  await assert.rejects(
+    hermes.generate({ instructions: "s", input: "u", sessionId }),
+    (error) =>
+      error?.code === "RUN_START_UNKNOWN" &&
+      error.cause?.code === "HERMES_HTTP_ERROR" &&
+      error.cause?.status === 502,
+  );
+  assert.equal(startCalls, 1);
+  assert.equal(state.get(sessionId)?.phase, "starting");
+  assert.equal(state.get(sessionId)?.baselineMessageId, 0);
+});
+
+test("hermes: a transient transcript preflight error happens before any run starts", async () => {
+  const sessionId = "joblit:transcript-preflight-unavailable";
+  let startCalls = 0;
+  const hermes = createHermesClient({
+    baseUrl: "http://127.0.0.1:8790",
+    apiKey: "k",
+    fetchImpl: async (url, init = {}) => {
+      if (String(url).includes("/api/sessions/")) {
+        return jsonResponse(
+          {
+            error: {
+              code: "session_db_unavailable",
+              message: "Session database unavailable",
+            },
+          },
+          503,
+        );
+      }
+      if (String(url).endsWith("/v1/runs") && init.method === "POST") {
+        startCalls += 1;
+      }
+      return jsonResponse({ error: "unexpected" }, 500);
+    },
+  });
+
+  await assert.rejects(
+    hermes.generate({ instructions: "s", input: "u", sessionId }),
+    (error) => error?.code === "HERMES_HTTP_ERROR" && error?.status === 503,
+  );
+  assert.equal(startCalls, 0);
+});
+
+test("hermes: a concurrency-limit rejection clears the reservation for a later retry", async () => {
+  const sessionId = "joblit:concurrency-limited";
+  const state = new Map();
+  let startCalls = 0;
+  const hermes = createHermesClient({
+    baseUrl: "http://127.0.0.1:8790",
+    apiKey: "k",
+    runStateStore: {
+      async get(key) {
+        return state.get(key) ?? null;
+      },
+      async set(key, value) {
+        state.set(key, structuredClone(value));
+      },
+      async delete(key) {
+        state.delete(key);
+      },
+    },
+    fetchImpl: withMissingSession(async (url, init = {}) => {
+      if (String(url).endsWith("/v1/runs") && init.method === "POST") {
+        startCalls += 1;
+        return jsonResponse(
+          {
+            error: {
+              code: "concurrency_limit",
+              message: "Too many concurrent runs",
+            },
+          },
+          429,
+        );
+      }
+      return jsonResponse({ error: "unexpected" }, 500);
+    }),
+  });
+
+  await assert.rejects(
+    hermes.generate({ instructions: "s", input: "u", sessionId }),
+    (error) => error?.code === "HERMES_HTTP_ERROR" && error?.status === 429,
+  );
+  assert.equal(startCalls, 1);
+  assert.equal(state.has(sessionId), false);
+});
+
+test("hermes: records baseline zero for an explicitly missing first session", async () => {
+  const sessionId = "joblit:first-session";
+  const state = new Map();
+  let transcriptReads = 0;
+  const hermes = createHermesClient({
+    baseUrl: "http://127.0.0.1:8790",
+    apiKey: "k",
+    runStateStore: {
+      async get(key) {
+        return state.get(key) ?? null;
+      },
+      async set(key, value) {
+        state.set(key, structuredClone(value));
+      },
+    },
+    fetchImpl: async (url, init = {}) => {
+      if (String(url).includes("/api/sessions/")) {
+        transcriptReads += 1;
+        return jsonResponse(
+          { error: { code: "session_not_found", message: "not found" } },
+          404,
+        );
+      }
+      if (String(url).endsWith("/v1/runs") && init.method === "POST") {
+        throw new TypeError("connection closed after upload");
+      }
+      return jsonResponse({ error: "unexpected" }, 500);
+    },
+  });
+
+  await assert.rejects(
+    hermes.generate({ instructions: "s", input: "u", sessionId }),
+    (error) => error?.code === "RUN_START_UNKNOWN",
+  );
+  // One read captures the baseline; the second is the fail-closed recovery
+  // attempt after the start transport becomes ambiguous.
+  assert.equal(transcriptReads, 2);
+  assert.equal(state.get(sessionId)?.baselineMessageId, 0);
+});
+
+test("hermes: keeps RUN_START_UNKNOWN when the post-baseline transcript has two assistant outputs", async () => {
+  const sessionId = "joblit:ambiguous-start-transcript";
+  const requestHash = createHash("sha256")
+    .update(JSON.stringify(["system", "user"]), "utf8")
+    .digest("hex");
+  const inputHash = createHash("sha256").update("user", "utf8").digest("hex");
+  const state = new Map([
+    [
+      sessionId,
+      {
+        phase: "starting",
+        repairUsed: false,
+        baselineMessageId: 2,
+        requestHash,
+        inputHash,
+      },
+    ],
+  ]);
+  let postCalls = 0;
+  const hermes = createHermesClient({
+    baseUrl: "http://127.0.0.1:8790",
+    apiKey: "k",
+    pollMs: 1,
+    requestTimeoutMs: 5,
+    runStateStore: {
+      async get(key) {
+        return state.get(key) ?? null;
+      },
+      async set(key, value) {
+        state.set(key, structuredClone(value));
+      },
+    },
+    fetchImpl: async (_url, init = {}) => {
+      if (init.method === "POST") postCalls += 1;
+      return jsonResponse({
+        object: "list",
+        session_id: sessionId,
+        data: [
+          { id: 1, role: "user", content: "old" },
+          { id: 2, role: "assistant", content: "old" },
+          { id: 3, role: "user", content: "user" },
+          { id: 4, role: "assistant", content: "candidate one" },
+          { id: 5, role: "assistant", content: "candidate two" },
+        ],
+      });
+    },
+  });
+
+  await assert.rejects(
+    hermes.generate({ instructions: "system", input: "user", sessionId }),
+    (error) => error?.code === "RUN_START_UNKNOWN",
+  );
+  assert.equal(postCalls, 0);
+  assert.equal(state.get(sessionId)?.phase, "starting");
 });
 
 test("hermes: two file-backed clients single-flight the same session start", async (t) => {
@@ -900,7 +1483,7 @@ test("hermes: two file-backed clients single-flight the same session start", asy
   const first = createHermesClient({
     baseUrl: "http://127.0.0.1:8790",
     apiKey: "k",
-    fetchImpl,
+    fetchImpl: withMissingSession(fetchImpl),
     pollMs: 1,
     requestTimeoutMs: 500,
     runStateStore: createFileRunStateStore({ filePath }),
@@ -908,7 +1491,7 @@ test("hermes: two file-backed clients single-flight the same session start", asy
   const second = createHermesClient({
     baseUrl: "http://127.0.0.1:8790",
     apiKey: "k",
-    fetchImpl,
+    fetchImpl: withMissingSession(fetchImpl),
     pollMs: 1,
     requestTimeoutMs: 500,
     runStateStore: createFileRunStateStore({ filePath }),
@@ -1206,7 +1789,12 @@ test("hermes: restart recovers a completed repair from the transcript without an
           { id: 51, role: "user", content: "original prompt" },
           { id: 52, role: "assistant", content: '{"cvSummary":"invalid"}' },
           { id: 53, role: "user", content: feedback },
-          { id: 54, role: "assistant", content: '{"cvSummary":"recovered repair"}' },
+          {
+            id: 54,
+            role: "assistant",
+            content: '{"cvSummary":"recovered repair"}',
+            finish_reason: "stop",
+          },
         ],
       });
     },
@@ -1220,7 +1808,10 @@ test("hermes: restart recovers a completed repair from the transcript without an
 
   assert.equal(output, '{"cvSummary":"recovered repair"}');
   assert.equal(calls.length, 1);
-  assert.match(calls[0].url, /\/api\/sessions\/joblit%3Arepair-restart\/messages$/);
+  assert.match(
+    calls[0].url,
+    /\/api\/sessions\/joblit%3Arepair-restart\/messages$/,
+  );
   assert.equal(calls[0].init.method, undefined);
   assert.deepEqual(state.get(sessionId), {
     phase: "repairing",
@@ -1232,6 +1823,66 @@ test("hermes: restart recovers a completed repair from the transcript without an
 
   await hermes.acknowledge({ sessionId });
   assert.equal(state.has(sessionId), false);
+});
+
+test("hermes: repair recovery rejects an in-flight stock Hermes tool-call turn", async () => {
+  const sessionId = "joblit:repair-tool-in-flight";
+  const feedback = "Return corrected JSON only.";
+  const repairing = {
+    phase: "repairing",
+    runId: "run_" + "6".repeat(32),
+    repairUsed: true,
+    feedbackHash: createHash("sha256").update(feedback).digest("hex"),
+    baselineMessageId: 12,
+  };
+  let postCalls = 0;
+  const hermes = createHermesClient({
+    baseUrl: "http://127.0.0.1:8790",
+    apiKey: "k",
+    runStateStore: {
+      async get() {
+        return repairing;
+      },
+      async set() {
+        throw new Error("in-flight repair state must remain unchanged");
+      },
+    },
+    fetchImpl: async (_url, init = {}) => {
+      if (init.method === "POST") postCalls += 1;
+      return jsonResponse({
+        object: "list",
+        session_id: sessionId,
+        data: [
+          { id: 11, role: "user", content: "original prompt" },
+          { id: 12, role: "assistant", content: "invalid" },
+          { id: 13, role: "user", content: feedback },
+          {
+            id: 14,
+            role: "assistant",
+            content: "I will inspect before returning corrected JSON.",
+            finish_reason: "tool_calls",
+            tool_calls: [
+              {
+                id: "call_repair",
+                type: "function",
+                function: { name: "inspect", arguments: "{}" },
+              },
+            ],
+          },
+        ],
+      });
+    },
+  });
+
+  await assert.rejects(
+    hermes.generate({
+      instructions: "must not restart",
+      input: "must not restart",
+      sessionId,
+    }),
+    (error) => error?.code === "REPAIR_OUTCOME_UNKNOWN",
+  );
+  assert.equal(postCalls, 0);
 });
 
 test("hermes: ambiguous repair recovery fails closed without repeating chat", async () => {
@@ -1264,8 +1915,16 @@ test("hermes: ambiguous repair recovery fails closed without repeating chat", as
           { id: 11, role: "user", content: "original prompt" },
           { id: 12, role: "assistant", content: '{"cvSummary":"invalid"}' },
           { id: 13, role: "user", content: feedback },
-          { id: 14, role: "assistant", content: '{"cvSummary":"candidate one"}' },
-          { id: 15, role: "assistant", content: '{"cvSummary":"candidate two"}' },
+          {
+            id: 14,
+            role: "assistant",
+            content: '{"cvSummary":"candidate one"}',
+          },
+          {
+            id: 15,
+            role: "assistant",
+            content: '{"cvSummary":"candidate two"}',
+          },
         ],
       });
     },
@@ -1302,6 +1961,39 @@ test("run state store survives a new client instance without exposing secrets", 
   });
   const persisted = await readFile(filePath, "utf8");
   assert.doesNotMatch(persisted, /apiKey|instructions|input|modelOutput/i);
+});
+
+test("run state store reads v1 state and migrates it in place on write", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "joblit-runner-state-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const filePath = join(directory, "state.json");
+  const legacy = {
+    phase: "running",
+    runId: "run_" + "e".repeat(32),
+    repairUsed: false,
+  };
+  await writeFile(
+    filePath,
+    `${JSON.stringify({
+      version: 1,
+      sessions: { "joblit:legacy": legacy },
+    })}\n`,
+    "utf8",
+  );
+  const store = createFileRunStateStore({ filePath });
+
+  assert.deepEqual(await store.get("joblit:legacy"), legacy);
+  await store.set("joblit:new", {
+    phase: "starting",
+    repairUsed: false,
+    baselineMessageId: 0,
+    requestHash: "a".repeat(64),
+    inputHash: "b".repeat(64),
+  });
+
+  const migrated = JSON.parse(await readFile(filePath, "utf8"));
+  assert.equal(migrated.version, 2);
+  assert.deepEqual(migrated.sessions["joblit:legacy"], legacy);
 });
 
 test("run state store persists only opaque repair metadata and rejects model content", async (t) => {
@@ -1517,7 +2209,11 @@ test("joblit: every call carries the bearer token and the error envelope surface
       return jsonResponse({ batchId: "batch-1", status: "QUEUED" });
     }
     if (u.endsWith("/run-once")) {
-      return jsonResponse({ batch: { id: "batch-1", status: "RUNNING" }, tasks: [], execution: { stopReason: null } });
+      return jsonResponse({
+        batch: { id: "batch-1", status: "RUNNING" },
+        tasks: [],
+        execution: { stopReason: null },
+      });
     }
     if (u.endsWith("/api/applications/prompt")) {
       return jsonResponse(
@@ -1569,7 +2265,15 @@ test("joblit: fit queue calls hit the fit endpoints with the bearer token", asyn
 
   await joblit.nextFitBatch();
   await joblit.fitPrompt({ jobIds: ["job-1"] });
-  await joblit.importFitBatch({ jobIds: ["job-1"], claimToken: "c", modelOutput: "[]" });
+  await joblit.heartbeatFitClaim({
+    claimId: "55555555-5555-4555-8555-555555555555",
+    attemptId: "44444444-4444-4444-8444-444444444444",
+  });
+  await joblit.importFitBatch({
+    jobIds: ["job-1"],
+    claimToken: "c",
+    modelOutput: "[]",
+  });
   await joblit.fitSettlement("d".repeat(64));
   await joblit.markFitFailed({ jobIds: ["job-1"], claimToken: "c" });
   await joblit.releaseFitBatch({ jobIds: ["job-1"], claimToken: "c" });
@@ -1579,6 +2283,7 @@ test("joblit: fit queue calls hit the fit endpoints with the bearer token", asyn
     [
       "/api/jobs/fit/next-batch",
       "/api/jobs/fit/prompt",
+      "/api/jobs/fit/heartbeat",
       "/api/jobs/fit/batch-import",
       "/api/jobs/fit/settlement-status",
       "/api/jobs/fit/mark-failed",
@@ -1590,7 +2295,11 @@ test("joblit: fit queue calls hit the fit endpoints with the bearer token", asyn
     assert.equal(call.init.headers.Authorization, `Bearer ${AGENT_TOKEN}`);
   }
   assert.deepEqual(JSON.parse(calls[1].init.body), { jobIds: ["job-1"] });
-  assert.deepEqual(JSON.parse(calls[3].init.body), {
+  assert.deepEqual(JSON.parse(calls[2].init.body), {
+    claimId: "55555555-5555-4555-8555-555555555555",
+    attemptId: "44444444-4444-4444-8444-444444444444",
+  });
+  assert.deepEqual(JSON.parse(calls[4].init.body), {
     issueKey: "d".repeat(64),
   });
 });
@@ -1674,14 +2383,16 @@ test("joblit: aborts a request that exceeds its network deadline", async () => {
     baseUrl: "https://joblit.example.com",
     token: AGENT_TOKEN,
     requestTimeoutMs: 10,
-    fetchImpl: async (_url, init = {}) =>
-      new Promise((_resolve, reject) => {
-        init.signal.addEventListener(
-          "abort",
-          () => reject(new DOMException("aborted", "AbortError")),
-          { once: true },
-        );
-      }),
+    fetchImpl: withMissingSession(
+      async (_url, init = {}) =>
+        new Promise((_resolve, reject) => {
+          init.signal.addEventListener(
+            "abort",
+            () => reject(new DOMException("aborted", "AbortError")),
+            { once: true },
+          );
+        }),
+    ),
   });
 
   await assert.rejects(
@@ -1724,14 +2435,16 @@ test("hermes: a start request timeout stays fail-closed as an unknown start", as
         state.set(key, value);
       },
     },
-    fetchImpl: async (_url, init = {}) =>
-      new Promise((_resolve, reject) => {
-        init.signal.addEventListener(
-          "abort",
-          () => reject(new DOMException("aborted", "AbortError")),
-          { once: true },
-        );
-      }),
+    fetchImpl: withMissingSession(
+      async (_url, init = {}) =>
+        new Promise((_resolve, reject) => {
+          init.signal.addEventListener(
+            "abort",
+            () => reject(new DOMException("aborted", "AbortError")),
+            { once: true },
+          );
+        }),
+    ),
   });
 
   await assert.rejects(
@@ -1743,5 +2456,10 @@ test("hermes: a start request timeout stays fail-closed as an unknown start", as
   assert.deepEqual(state.get(sessionId), {
     phase: "starting",
     repairUsed: false,
+    baselineMessageId: 0,
+    requestHash: createHash("sha256")
+      .update(JSON.stringify(["s", "u"]), "utf8")
+      .digest("hex"),
+    inputHash: createHash("sha256").update("u", "utf8").digest("hex"),
   });
 });

@@ -15,9 +15,7 @@ const TailorModelOutputSchema = ResumeGenerationOutputSchema.extend({
   cover: CoverGenerationOutputSchema.shape.cover,
 }).strict();
 
-export type TailorModelOutput = ReturnType<
-  typeof TailorModelOutputSchema.parse
->;
+export type TailorModelOutput = ResumeGenerationOutput & CoverGenerationOutput;
 
 function repairJsonText(input: string) {
   let text = input

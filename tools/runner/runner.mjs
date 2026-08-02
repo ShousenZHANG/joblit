@@ -144,6 +144,19 @@ async function reconcileSettledHermesOperations({
 
       const targetMask = OPERATION_TARGET_MASKS[item.operation.target];
       if ((snapshot.run.acceptedTargetMask & targetMask) !== 0) {
+        if (item.phase === "starting" || item.phase === "running") {
+          if (typeof hermes.reconcileObsolete !== "function") {
+            throw new Error(
+              "Hermes cannot reconcile a live obsolete recovery state",
+            );
+          }
+          await hermes.reconcileObsolete({
+            sessionId: item.sessionId,
+            signal,
+          });
+          log(`Recovered ${item.operation.target}: import already accepted`);
+          continue;
+        }
         const acknowledged = await acknowledgeImport({
           hermes,
           sessionId: item.sessionId,
@@ -158,6 +171,19 @@ async function reconcileSettledHermesOperations({
       }
 
       if (TAILORING_RUN_TERMINAL_STATUSES.has(snapshot.run.status)) {
+        if (item.phase === "starting" || item.phase === "running") {
+          if (typeof hermes.reconcileObsolete !== "function") {
+            throw new Error(
+              "Hermes cannot reconcile a live obsolete recovery state",
+            );
+          }
+          await hermes.reconcileObsolete({
+            sessionId: item.sessionId,
+            signal,
+          });
+          log(`Discarded ${item.operation.target}: TailoringRun is terminal`);
+          continue;
+        }
         if (typeof hermes.discard !== "function") {
           throw new Error("Hermes cannot discard an obsolete recovery state");
         }
@@ -213,6 +239,18 @@ function isAmbiguousJoblitError(error) {
 
 function isAmbiguousHermesError(error) {
   if (error instanceof TypeError) return true;
+  if (
+    error &&
+    typeof error === "object" &&
+    error.code === "HERMES_HTTP_ERROR" &&
+    Number.isInteger(error.status) &&
+    (error.status === 408 ||
+      error.status === 425 ||
+      error.status === 429 ||
+      error.status >= 500)
+  ) {
+    return true;
+  }
   return (
     error &&
     typeof error === "object" &&
@@ -230,13 +268,7 @@ function importSettlementUnknown(cause) {
   return error;
 }
 
-async function settleImport({
-  joblit,
-  request,
-  signal,
-  retryMs,
-  log,
-}) {
+async function settleImport({ joblit, request, signal, retryMs, log }) {
   for (let attempt = 1; attempt <= SETTLEMENT_ATTEMPTS; attempt += 1) {
     try {
       await joblit.importGeneration(request);
@@ -255,22 +287,14 @@ async function settleImport({
   }
 }
 
-async function acknowledgeImport({
-  hermes,
-  sessionId,
-  signal,
-  retryMs,
-  log,
-}) {
+async function acknowledgeImport({ hermes, sessionId, signal, retryMs, log }) {
   for (let attempt = 1; attempt <= ACKNOWLEDGEMENT_ATTEMPTS; attempt += 1) {
     try {
       await hermes.acknowledge({ sessionId });
       return true;
     } catch (error) {
       if (attempt === ACKNOWLEDGEMENT_ATTEMPTS || signal?.aborted) {
-        log(
-          `  local Hermes cleanup deferred: ${errorMessage(error)}`,
-        );
+        log(`  local Hermes cleanup deferred: ${errorMessage(error)}`);
         return false;
       }
       await sleep(retryMs * attempt, signal);
@@ -354,9 +378,7 @@ function terminalTailoringError(run) {
       ? "Tailoring run was cancelled"
       : `Tailoring run became ${run.status.toLowerCase()}`,
   );
-  error.code = cancelled
-    ? "TAILORING_CANCELLED"
-    : "TAILORING_RUN_TERMINAL";
+  error.code = cancelled ? "TAILORING_CANCELLED" : "TAILORING_RUN_TERMINAL";
   error.status = run.status;
   return error;
 }
@@ -524,7 +546,9 @@ export async function processActiveBatch({
         round.batch.status === "CANCELLED" ||
         round.batch.status === "COMPLETED"
       ) {
-        log(`Batch ${round.batch.status.toLowerCase()}; nothing left to claim.`);
+        log(
+          `Batch ${round.batch.status.toLowerCase()}; nothing left to claim.`,
+        );
         return summary;
       }
       const retryAfterMs =
@@ -615,7 +639,10 @@ export async function processActiveBatch({
             log,
           });
         } catch (error) {
-          if (!isRepairableImportError(error) || typeof hermes.repair !== "function") {
+          if (
+            !isRepairableImportError(error) ||
+            typeof hermes.repair !== "function"
+          ) {
             throw error;
           }
           modelOutput = await withTailoringControl({
@@ -657,8 +684,16 @@ export async function processActiveBatch({
         error &&
         typeof error === "object" &&
         "code" in error &&
-        (error.code === "TAILORING_CANCELLED" ||
-          error.code === "TAILORING_RUN_TERMINAL")
+        (error.code === "TAILORING_CANCELLED" || error.code === "RUN_CANCELLED")
+      ) {
+        log(`  stopped: ${errorMessage(error)}`);
+        return summary;
+      }
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === "TAILORING_RUN_TERMINAL"
       ) {
         log(`  stopped: ${errorMessage(error)}`);
         continue;

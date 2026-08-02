@@ -21,7 +21,17 @@ const prismaStore = vi.hoisted(() => ({
   claimEvidence: {
     findMany: vi.fn(),
   },
+  applicationBatch: {
+    findFirst: vi.fn(),
+    update: vi.fn(),
+  },
+  applicationBatchTask: {
+    findMany: vi.fn(),
+    findFirst: vi.fn(),
+    groupBy: vi.fn(),
+  },
   executeRaw: vi.fn(),
+  queryRaw: vi.fn(),
   transaction: vi.fn(),
   operations: [] as string[],
 }));
@@ -51,36 +61,40 @@ vi.mock("@/lib/server/applications/applicationMutationLock", () => ({
   acquireApplicationMutationLock: applicationLock,
 }));
 
-import {
-  batchDeleteJobs,
-  deleteJob,
-} from "@/lib/server/jobs/jobDeleteService";
+import { batchDeleteJobs, deleteJob } from "@/lib/server/jobs/jobDeleteService";
 
 describe("jobDeleteService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     blobDelete.mockReset().mockRejectedValue(new Error("Blob unavailable"));
     prismaStore.operations.length = 0;
-    artifactStore.enqueue.mockReset().mockImplementation(
-      async (
-        _tx,
-        input: { artifacts: Array<{ target: string; url: string }> },
-      ) => {
-        prismaStore.operations.push("artifact.enqueue");
-        return {
-          queued: new Set(input.artifacts.map((artifact) => artifact.url)).size,
-        };
-      },
-    );
-    applicationLock.mockReset().mockImplementation(
-      async (_tx, _userId, jobId: string) => {
+    artifactStore.enqueue
+      .mockReset()
+      .mockImplementation(
+        async (
+          _tx,
+          input: { artifacts: Array<{ target: string; url: string }> },
+        ) => {
+          prismaStore.operations.push("artifact.enqueue");
+          return {
+            queued: new Set(input.artifacts.map((artifact) => artifact.url))
+              .size,
+          };
+        },
+      );
+    applicationLock
+      .mockReset()
+      .mockImplementation(async (_tx, _userId, jobId: string) => {
         prismaStore.operations.push(`application.lock:${jobId}`);
-      },
-    );
+      });
 
     prismaStore.executeRaw.mockImplementation(async () => {
       prismaStore.operations.push("lock");
       return 0;
+    });
+    prismaStore.queryRaw.mockImplementation(async () => {
+      prismaStore.operations.push("job.lockRows");
+      return [];
     });
     prismaStore.job.findFirst.mockImplementation(async () => {
       prismaStore.operations.push("job.findFirst");
@@ -122,14 +136,37 @@ describe("jobDeleteService", () => {
       prismaStore.operations.push("claimEvidence.findMany");
       return [];
     });
+    prismaStore.applicationBatch.findFirst.mockImplementation(async () => {
+      prismaStore.operations.push("applicationBatch.findFirst");
+      return null;
+    });
+    prismaStore.applicationBatch.update.mockImplementation(async () => {
+      prismaStore.operations.push("applicationBatch.update");
+      return {};
+    });
+    prismaStore.applicationBatchTask.findMany.mockImplementation(async () => {
+      prismaStore.operations.push("applicationBatchTask.findMany");
+      return [];
+    });
+    prismaStore.applicationBatchTask.findFirst.mockImplementation(async () => {
+      prismaStore.operations.push("applicationBatchTask.findFirst");
+      return null;
+    });
+    prismaStore.applicationBatchTask.groupBy.mockImplementation(async () => {
+      prismaStore.operations.push("applicationBatchTask.groupBy");
+      return [];
+    });
     prismaStore.transaction.mockImplementation(async (callback) =>
       callback({
         $executeRaw: prismaStore.executeRaw,
+        $queryRaw: prismaStore.queryRaw,
         job: prismaStore.job,
         application: prismaStore.application,
         deletedJobUrl: prismaStore.deletedJobUrl,
         evidenceSnapshot: prismaStore.evidenceSnapshot,
         claimEvidence: prismaStore.claimEvidence,
+        applicationBatch: prismaStore.applicationBatch,
+        applicationBatchTask: prismaStore.applicationBatchTask,
       }),
     );
   });
@@ -157,6 +194,8 @@ describe("jobDeleteService", () => {
       expect(prismaStore.operations).toEqual([
         "lock",
         "job.findFirst",
+        "job.lockRows",
+        "applicationBatchTask.findMany",
         "application.lock:job-1",
         "application.findUnique",
         "deletedJobUrl.upsert",
@@ -223,17 +262,12 @@ describe("jobDeleteService", () => {
       });
       const result = await deleteJob("user-1", "job-1");
 
-      expect(artifactStore.enqueue).toHaveBeenCalledWith(
-        expect.anything(),
-        {
-          userId: "user-1",
-          jobId: "job-1",
-          applicationId: "application-1",
-          artifacts: [
-            { target: "RESUME_PDF", url: "https://blob/cv.pdf" },
-          ],
-        },
-      );
+      expect(artifactStore.enqueue).toHaveBeenCalledWith(expect.anything(), {
+        userId: "user-1",
+        jobId: "job-1",
+        applicationId: "application-1",
+        artifacts: [{ target: "RESUME_PDF", url: "https://blob/cv.pdf" }],
+      });
       expect(prismaStore.operations).toEqual(
         expect.arrayContaining([
           "artifact.enqueue",
@@ -274,10 +308,7 @@ describe("jobDeleteService", () => {
       expect(prismaStore.evidenceSnapshot.deleteMany).toHaveBeenCalledWith({
         where: {
           userId: "user-1",
-          OR: [
-            { jobId: { in: ["job-1"] } },
-            { id: { in: ["star-evidence"] } },
-          ],
+          OR: [{ jobId: { in: ["job-1"] } }, { id: { in: ["star-evidence"] } }],
           claims: { none: {} },
         },
       });
@@ -310,15 +341,13 @@ describe("jobDeleteService", () => {
         return { count: 2 };
       });
 
-      const result = await batchDeleteJobs("user-1", [
-        "a",
-        "b",
-        "missing",
-      ]);
+      const result = await batchDeleteJobs("user-1", ["a", "b", "missing"]);
 
       expect(prismaStore.operations).toEqual([
         "lock",
         "job.findMany",
+        "job.lockRows",
+        "applicationBatchTask.findMany",
         "application.lock:a",
         "application.lock:b",
         "application.findMany",
@@ -407,13 +436,75 @@ describe("jobDeleteService", () => {
 
       await batchDeleteJobs("user-1", ["z-job", "a-job"]);
 
-      expect(prismaStore.operations.slice(0, 5)).toEqual([
+      expect(prismaStore.operations.slice(0, 7)).toEqual([
         "lock",
         "job.findMany",
+        "job.lockRows",
+        "applicationBatchTask.findMany",
         "application.lock:a-job",
         "application.lock:z-job",
         "application.findMany",
       ]);
+    });
+
+    it("reconciles affected batches after the Job cascade and cancels zero-task batches", async () => {
+      prismaStore.job.findMany.mockImplementationOnce(async () => {
+        prismaStore.operations.push("job.findMany");
+        return [{ id: "a", jobUrl: "https://e.com/a" }];
+      });
+      prismaStore.applicationBatchTask.findMany.mockImplementationOnce(
+        async () => {
+          prismaStore.operations.push("applicationBatchTask.findMany");
+          return [{ batchId: "batch-b" }, { batchId: "batch-a" }];
+        },
+      );
+      prismaStore.applicationBatch.findFirst.mockImplementation(
+        async ({ where }: { where: { id: string } }) => {
+          prismaStore.operations.push(`applicationBatch.findFirst:${where.id}`);
+          return {
+            id: where.id,
+            status: "RUNNING",
+            totalCount: 1,
+            startedAt: new Date("2026-08-02T00:00:00.000Z"),
+            completedAt: null,
+          };
+        },
+      );
+      prismaStore.applicationBatchTask.groupBy.mockImplementation(async () => {
+        prismaStore.operations.push("applicationBatchTask.groupBy");
+        return [];
+      });
+
+      await batchDeleteJobs("user-1", ["a"]);
+
+      expect(prismaStore.applicationBatch.update).toHaveBeenCalledTimes(2);
+      expect(prismaStore.applicationBatch.update.mock.calls).toEqual([
+        [
+          expect.objectContaining({
+            where: { id: "batch-a" },
+            data: expect.objectContaining({
+              status: "CANCELLED",
+              totalCount: 0,
+              completedAt: expect.any(Date),
+              error: "All jobs in this batch were deleted.",
+            }),
+          }),
+        ],
+        [
+          expect.objectContaining({
+            where: { id: "batch-b" },
+            data: expect.objectContaining({
+              status: "CANCELLED",
+              totalCount: 0,
+              completedAt: expect.any(Date),
+              error: "All jobs in this batch were deleted.",
+            }),
+          }),
+        ],
+      ]);
+      expect(prismaStore.operations.indexOf("job.deleteMany")).toBeLessThan(
+        prismaStore.operations.indexOf("applicationBatch.findFirst:batch-a"),
+      );
     });
 
     it("deduplicates repeated ids before counting and deleting", async () => {
@@ -447,20 +538,17 @@ describe("jobDeleteService", () => {
       ]);
       const result = await batchDeleteJobs("user-1", ["a"]);
 
-      expect(artifactStore.enqueue).toHaveBeenCalledWith(
-        expect.anything(),
-        {
-          userId: "user-1",
-          jobId: "a",
-          applicationId: "application-a",
-          artifacts: [
-            { target: "RESUME_PDF", url: "https://blob/cv.pdf" },
-            { target: "COVER_PDF", url: "https://blob/cover.pdf" },
-            { target: "RESUME_TEX", url: "https://blob/cv.tex" },
-            { target: "COVER_TEX", url: "https://blob/cover.tex" },
-          ],
-        },
-      );
+      expect(artifactStore.enqueue).toHaveBeenCalledWith(expect.anything(), {
+        userId: "user-1",
+        jobId: "a",
+        applicationId: "application-a",
+        artifacts: [
+          { target: "RESUME_PDF", url: "https://blob/cv.pdf" },
+          { target: "COVER_PDF", url: "https://blob/cover.pdf" },
+          { target: "RESUME_TEX", url: "https://blob/cv.tex" },
+          { target: "COVER_TEX", url: "https://blob/cover.tex" },
+        ],
+      });
       expect(prismaStore.operations.indexOf("artifact.enqueue")).toBeLessThan(
         prismaStore.operations.indexOf("application.deleteMany"),
       );

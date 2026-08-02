@@ -4,11 +4,7 @@ import { z } from "zod";
 
 import { errorJson } from "@/lib/server/api/errorResponse";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/server/api/rateLimit";
-import { prescreenJobFit } from "@/lib/server/ai/fitPrescreen";
-import { buildResumePromptSnapshot } from "@/lib/server/ai/resumePromptSnapshot";
-import { prisma } from "@/lib/server/prisma";
-import { getResumeProfile } from "@/lib/server/resumeProfile";
-import { marketStringToResumeLocale } from "@/lib/shared/market";
+import { prescreenSelectedFitJobs } from "@/lib/server/jobs/fitRunService";
 
 export const runtime = "nodejs";
 
@@ -26,7 +22,10 @@ const BodySchema = z
  */
 export async function POST(req: Request) {
   return withSessionRoute(async ({ userId }) => {
-    const rateLimit = checkRateLimit(`jobs:fit:prescreen:${userId}`, PRESCREEN_RATE_LIMIT);
+    const rateLimit = checkRateLimit(
+      `jobs:fit:prescreen:${userId}`,
+      PRESCREEN_RATE_LIMIT,
+    );
     if (!rateLimit.allowed) {
       return errorJson("RATE_LIMITED", "Too many requests", 429, {
         headers: rateLimitHeaders(rateLimit),
@@ -40,68 +39,8 @@ export async function POST(req: Request) {
       });
     }
 
-    const jobs = await prisma.job.findMany({
-      where: { id: { in: body.data.jobIds }, userId },
-      select: { id: true, description: true, market: true },
-    });
-    if (jobs.length === 0) {
-      return NextResponse.json({ poor: [], needAi: [] });
-    }
-
-    // Resolve one resume snapshot text per locale in the batch.
-    const resumeTextByLocale = new Map<string, string | null>();
-    async function resumeTextFor(market: string): Promise<string | null> {
-      const locale = marketStringToResumeLocale(market);
-      if (!resumeTextByLocale.has(locale)) {
-        const profile = await getResumeProfile(userId, { locale });
-        resumeTextByLocale.set(
-          locale,
-          profile ? JSON.stringify(buildResumePromptSnapshot(profile)) : null,
-        );
-      }
-      return resumeTextByLocale.get(locale) ?? null;
-    }
-
-    const poor: Array<{ jobId: string; score: number; verdict: string }> = [];
-    const needAi: string[] = [];
-    const now = new Date();
-
-    for (const job of jobs) {
-      const resumeText = await resumeTextFor(job.market);
-      if (!resumeText) {
-        // No resume for this locale: nothing to judge against; skip AI too.
-        continue;
-      }
-      const outcome = prescreenJobFit({
-        jobDescription: job.description,
-        resumeText,
-      });
-      if (outcome.decision === "poor") {
-        poor.push({ jobId: job.id, score: outcome.result.score, verdict: outcome.result.verdict });
-      } else {
-        needAi.push(job.id);
-      }
-    }
-
-    if (poor.length > 0) {
-      await prisma.$transaction(
-        poor.map((entry) =>
-          prisma.job.updateMany({
-            where: { id: entry.jobId, userId },
-            data: {
-              fitScore: entry.score,
-              fitVerdict: entry.verdict,
-              fitEligibility: null,
-              fitMatrix: undefined,
-              fitSource: "prescreen",
-              fitScoredAt: now,
-              fitSnapshotHash: null,
-            },
-          }),
-        ),
-      );
-    }
-
-    return NextResponse.json({ poor, needAi });
+    return NextResponse.json(
+      await prescreenSelectedFitJobs(userId, body.data.jobIds),
+    );
   });
 }

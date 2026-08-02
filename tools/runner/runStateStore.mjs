@@ -13,9 +13,11 @@ import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 
-const STATE_FORMAT_VERSION = 1;
+const STATE_FORMAT_VERSION = 2;
+const READABLE_STATE_FORMAT_VERSIONS = new Set([1, STATE_FORMAT_VERSION]);
 const RUN_ID_RE = /^run_[0-9a-f]{32}$/;
 const FEEDBACK_HASH_RE = /^[0-9a-f]{64}$/;
+const CONTENT_HASH_RE = /^[0-9a-f]{64}$/;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PROMPT_HASH_RE = /^[0-9a-f]{64}$/;
@@ -49,6 +51,25 @@ function isValidOperation(value) {
   );
 }
 
+function hasStartRecoveryMetadata(value) {
+  return (
+    Number.isSafeInteger(value.baselineMessageId) &&
+    value.baselineMessageId >= 0 &&
+    typeof value.requestHash === "string" &&
+    CONTENT_HASH_RE.test(value.requestHash) &&
+    typeof value.inputHash === "string" &&
+    CONTENT_HASH_RE.test(value.inputHash)
+  );
+}
+
+function hasAnyStartRecoveryMetadata(value) {
+  return (
+    "baselineMessageId" in value ||
+    "requestHash" in value ||
+    "inputHash" in value
+  );
+}
+
 function validateRunState(value) {
   if (
     !isRecord(value) ||
@@ -58,17 +79,23 @@ function validateRunState(value) {
     throw new Error("Runner state is invalid; refusing unsafe recovery");
   }
   const allowedKeys = new Set(["phase", "repairUsed"]);
+  const ownsValidRunId =
+    typeof value.runId === "string" && RUN_ID_RE.test(value.runId);
+  const ownsStartRecoveryMetadata = hasStartRecoveryMetadata(value);
+  const ownsAnyStartRecoveryMetadata = hasAnyStartRecoveryMetadata(value);
+  if (value.phase === "running" || ownsValidRunId) {
+    allowedKeys.add("runId");
+  }
   if (
-    value.phase === "running" ||
+    value.phase === "starting" ||
     value.phase === "completed" ||
     value.phase === "repairing"
   ) {
-    allowedKeys.add("runId");
-  }
-  if (value.phase === "repairing") {
-    allowedKeys.add("feedbackHash");
     allowedKeys.add("baselineMessageId");
+    allowedKeys.add("requestHash");
+    allowedKeys.add("inputHash");
   }
+  if (value.phase === "repairing") allowedKeys.add("feedbackHash");
   const mayOwnOperation =
     value.phase === "starting" ||
     value.phase === "running" ||
@@ -83,16 +110,27 @@ function validateRunState(value) {
       `Runner state contains unsupported fields: ${unsupportedFields.join(", ")}`,
     );
   }
-  if (
-    value.phase === "running" ||
-    value.phase === "completed" ||
-    value.phase === "repairing"
-  ) {
-    if (typeof value.runId !== "string" || !RUN_ID_RE.test(value.runId)) {
-      throw new Error("Runner state has an invalid Hermes run id");
-    }
-  } else if ("runId" in value) {
-    throw new Error("Runner state carries a run id in an invalid phase");
+  const validExecutionIdentity =
+    value.phase === "running"
+      ? ownsValidRunId && !ownsAnyStartRecoveryMetadata
+      : value.phase === "completed"
+        ? (ownsValidRunId && !ownsAnyStartRecoveryMetadata) ||
+          (!("runId" in value) && ownsStartRecoveryMetadata)
+        : value.phase === "repairing"
+          ? (ownsValidRunId &&
+              !("requestHash" in value) &&
+              !("inputHash" in value)) ||
+            (!("runId" in value) &&
+              typeof value.requestHash === "string" &&
+              CONTENT_HASH_RE.test(value.requestHash) &&
+              typeof value.inputHash === "string" &&
+              CONTENT_HASH_RE.test(value.inputHash))
+          : value.phase === "starting"
+            ? !("runId" in value) &&
+              (!ownsAnyStartRecoveryMetadata || ownsStartRecoveryMetadata)
+            : !("runId" in value) && !ownsAnyStartRecoveryMetadata;
+  if (!validExecutionIdentity) {
+    throw new Error("Runner state has an invalid Hermes execution identity");
   }
   if (
     value.phase === "repairing" &&
@@ -119,11 +157,13 @@ function parseDocument(text) {
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw new Error("Runner state file is not valid JSON; refusing unsafe recovery");
+    throw new Error(
+      "Runner state file is not valid JSON; refusing unsafe recovery",
+    );
   }
   if (
     !isRecord(parsed) ||
-    parsed.version !== STATE_FORMAT_VERSION ||
+    !READABLE_STATE_FORMAT_VERSIONS.has(parsed.version) ||
     !isRecord(parsed.sessions)
   ) {
     throw new Error("Runner state file has an unsupported format");
@@ -139,6 +179,8 @@ function parseDocument(text) {
 }
 
 export function defaultRunStatePath() {
+  // Keep the established path so a v2 Runner can migrate v1 state in place on
+  // its next successful write instead of silently stranding recoverable runs.
   return join(homedir(), ".joblit", "runner-state-v1.json");
 }
 

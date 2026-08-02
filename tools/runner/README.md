@@ -13,14 +13,16 @@ external agent uses (see [AGENTS.md](../../AGENTS.md)), authenticated with an
 Each cycle it drains two queues. Fit scanning runs first — coarse triage is
 cheap and narrows what is worth tailoring.
 
-**Fit scan.** `POST /api/jobs/fit/next-batch` leases a batch of unscored jobs,
-`/api/jobs/fit/prompt` returns the triage prompt, Hermes scores it, and
-`/api/jobs/fit/batch-import` records the verdicts. The prompt's stable 64-hex
-`issueKey` is content-addressed from the sorted Job ids and prompt snapshot.
-The server writes a unique `FitBatchImportReceipt` in the same transaction as
-the scores, so an exact retry returns the original validated settlement. A
-definite failure is marked or released; an unknown import outcome deliberately
-keeps completed Hermes state for replay. On restart, the Runner asks
+**Fit scan.** `POST /api/jobs/fit/next-batch` leases one durable, exact
+`FitBatchClaim`; `/api/jobs/fit/prompt` binds its prompt receipt, the Runner
+heartbeats the current attempt while Hermes scores it, and
+`/api/jobs/fit/batch-import` records every Job as scored or failed. The prompt's
+stable 64-hex `issueKey` is content-addressed from the Claim Job set and prompt
+snapshot. The server writes a unique `FitBatchImportReceipt`, item outcomes,
+Job projections, and terminal Claim in one transaction, so an exact retry
+returns the original validated settlement. A definite failure is marked or
+released; an unknown import outcome deliberately keeps completed Hermes state
+for replay. On restart, the Runner asks
 `/api/jobs/fit/settlement-status` whether each completed issue committed before
 forgetting it. The browser's Stop action calls `/api/jobs/fit/cancel`; claimed
 work can finish locally, but its stale claim cannot import after cancellation,
@@ -108,16 +110,22 @@ operations with Joblit before claiming new work. An accepted target receipt
 authorizes local acknowledgement and cleanup; a terminal server run without
 that target authorizes discarding a terminal obsolete result; an exact active
 attempt keeps the state for recovery; and malformed, unavailable, or mismatched
-server state is preserved and fails closed. A separate Fit receipt scan clears
-only completed content-addressed issues that Joblit proves were committed.
+server state is preserved and fails closed. A known live private run is stopped
+and observed terminal before cleanup; a `starting` reservation is cleared only
+when its transcript proves one unique terminal turn. A separate Fit receipt
+scan applies the same proof boundary to starting, running, and completed
+content-addressed issues after Joblit proves settlement or terminality.
 
 Hermes `stopping` means only that `/stop` accepted the request. It is not a
 terminal state, so the private `run_*` id remains recoverable and a restart
 polls that same run instead of starting duplicate work. If a one-turn repair is
 interrupted after submission, the Runner reads the Hermes session transcript
-and accepts only one unambiguous assistant response; it never repeats an
-uncertain repair turn. Local cleanup is best effort after Joblit has accepted a
-receipt and cannot reverse that authoritative settlement.
+and accepts only one unambiguous terminal assistant response. A tool-call or
+non-terminal assistant row cannot qualify by itself; a completed tool sequence
+is recoverable only through one later unique terminal `finish_reason: "stop"`
+response with no trailing assistant/tool row. The Runner never repeats an
+uncertain turn. Local cleanup is best effort after Joblit has
+accepted a receipt and cannot reverse that authoritative settlement.
 
 ## Failure handling
 
@@ -128,9 +136,9 @@ mismatch that one permitted repair cannot fix). The Runner reports it as
 next task; the batch finishes with the rest intact. Re-queue failed jobs from
 the Jobs page.
 
-Timeouts, transport loss, 408/425/429, and 5xx import responses have an unknown
-settlement. An unknown Hermes start or status outcome is also deferred because
-the model may still be running. A Tailoring import makes up to three total
+Timeouts, transport loss, and retryable 408/425/429/5xx responses from Joblit
+or Hermes are deferred. An unknown Hermes start or status outcome is also
+deferred because the model may still be running. A Tailoring import makes up to three total
 attempts with the exact same receipt. A Fit import makes one exact replay (two
 total attempts) with its stable issue and durable `FitBatchImportReceipt`. If
 the outcome is still unknown, the Runner leaves Hermes state recoverable and

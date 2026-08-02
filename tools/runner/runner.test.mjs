@@ -33,7 +33,10 @@ function fakeJoblit(script) {
       },
       async runOnce(batchId, { completedTasks }) {
         calls.runOnce.push({ batchId, completedTasks });
-        const frame = script.steps[step] ?? { tasks: [], batchStatus: "COMPLETED" };
+        const frame = script.steps[step] ?? {
+          tasks: [],
+          batchStatus: "COMPLETED",
+        };
         step += 1;
         return {
           batch: { id: batchId, status: frame.batchStatus ?? "RUNNING" },
@@ -102,6 +105,7 @@ function fakeHermes(script = {}) {
     repairs: [],
     acknowledgements: [],
     discards: [],
+    reconciliations: [],
     recoveries: 0,
   };
   return {
@@ -135,6 +139,13 @@ function fakeHermes(script = {}) {
       async discard(request) {
         calls.discards.push(request);
         if (script.discard) return script.discard(request, calls);
+      },
+      async reconcileObsolete(request) {
+        calls.reconciliations.push(request);
+        if (script.reconcileObsolete) {
+          return script.reconcileObsolete(request, calls);
+        }
+        return { cleared: true };
       },
       async recoverableOperations() {
         calls.recoveries += 1;
@@ -189,10 +200,7 @@ test("generates every remaining target and settles the task by importing", async
   assert.equal(hermes.calls.runs[0].instructions, `system for ${TASK.jobId}`);
   assert.deepEqual(
     hermes.calls.runs.map((run) => run.sessionId),
-    [
-      `joblit:${TASK.taskId}:resume`,
-      `joblit:${TASK.taskId}:cover`,
-    ],
+    [`joblit:${TASK.taskId}:resume`, `joblit:${TASK.taskId}:cover`],
   );
 
   // The import forwards Hermes's output, the receipt and the handle exactly
@@ -266,6 +274,59 @@ test("defers an unknown Hermes start without reporting the task FAILED", async (
   assert.equal(summary.deferred, 1);
 });
 
+test("defers retryable Hermes HTTP failures instead of reporting task failure", async () => {
+  for (const status of [408, 425, 429, 503]) {
+    const joblit = fakeJoblit({
+      steps: [{ tasks: [{ ...TASK, remainingTargets: ["RESUME"] }] }],
+    });
+    const hermes = fakeHermes({
+      failure: Object.assign(new Error(`Hermes HTTP ${status}`), {
+        code: "HERMES_HTTP_ERROR",
+        status,
+      }),
+    });
+
+    const summary = await processActiveBatch({
+      joblit: joblit.client,
+      hermes: hermes.client,
+      log: () => {},
+    });
+
+    assert.equal(joblit.calls.runOnce.length, 1, `status ${status}`);
+    assert.deepEqual(
+      joblit.calls.runOnce[0].completedTasks,
+      [],
+      `status ${status}`,
+    );
+    assert.equal(summary.failed, 0, `status ${status}`);
+    assert.equal(summary.deferred, 1, `status ${status}`);
+  }
+});
+
+test("stops on an authoritative Hermes cancellation without reporting FAILED", async () => {
+  const cancelled = Object.assign(new Error("Hermes run cancelled"), {
+    code: "RUN_CANCELLED",
+  });
+  const joblit = fakeJoblit({
+    steps: [
+      { tasks: [{ ...TASK, remainingTargets: ["RESUME"] }] },
+      { tasks: [], batchStatus: "COMPLETED" },
+    ],
+  });
+  const hermes = fakeHermes({ failure: cancelled });
+
+  const summary = await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    log: () => {},
+  });
+
+  assert.equal(joblit.calls.runOnce.length, 1);
+  assert.deepEqual(joblit.calls.runOnce[0].completedTasks, []);
+  assert.equal(summary.failed, 0);
+  assert.equal(summary.deferred, 0);
+});
+
 test("fails closed before prompt issuance for an unsupported protocol version", async () => {
   const joblit = fakeJoblit({
     steps: [
@@ -309,9 +370,12 @@ test("reports an import rejection as FAILED and keeps going", async () => {
 });
 
 test("repairs one invalid model output in the same session before importing again", async () => {
-  const invalidOutput = Object.assign(new Error("AI output is not valid JSON"), {
-    code: "INVALID_AI_RESULT",
-  });
+  const invalidOutput = Object.assign(
+    new Error("AI output is not valid JSON"),
+    {
+      code: "INVALID_AI_RESULT",
+    },
+  );
   const joblit = fakeJoblit({
     steps: [
       { tasks: [{ ...TASK, remainingTargets: ["RESUME"] }] },
@@ -584,6 +648,95 @@ test("preserves a recoverable result while its exact TailoringRun attempt is sti
   assert.deepEqual(joblit.calls.statuses, [RESUME_RUN_ID]);
 });
 
+test("retires starting and running Hermes state after Joblit proves the import was accepted", async () => {
+  for (const phase of ["starting", "running"]) {
+    const sessionId = `joblit:${TASK.taskId}:resume`;
+    const hermes = fakeHermes({
+      recoverableOperations: [
+        {
+          sessionId,
+          phase,
+          operation: {
+            tailoringRunId: RESUME_RUN_ID,
+            attemptId: TASK.attemptId,
+            target: "resume",
+            promptHash: "a".repeat(64),
+          },
+        },
+      ],
+    });
+    const joblit = fakeJoblit({
+      activeBatch: { batchId: null },
+      tailoringStatuses: [
+        {
+          run: {
+            id: RESUME_RUN_ID,
+            status: "RUNNING",
+            acceptedTargetMask: 1,
+            handle: { id: RESUME_RUN_ID, attemptId: TASK.attemptId },
+          },
+        },
+      ],
+    });
+
+    await processActiveBatch({
+      joblit: joblit.client,
+      hermes: hermes.client,
+      log: () => {},
+    });
+
+    assert.deepEqual(
+      hermes.calls.reconciliations,
+      [{ sessionId, signal: undefined }],
+      phase,
+    );
+    assert.deepEqual(hermes.calls.acknowledgements, [], phase);
+    assert.deepEqual(hermes.calls.discards, [], phase);
+  }
+});
+
+test("retires a live Hermes run after its TailoringRun becomes terminal", async () => {
+  const sessionId = `joblit:${TASK.taskId}:cover`;
+  const hermes = fakeHermes({
+    recoverableOperations: [
+      {
+        sessionId,
+        phase: "running",
+        operation: {
+          tailoringRunId: COVER_RUN_ID,
+          attemptId: TASK.attemptId,
+          target: "cover",
+          promptHash: "b".repeat(64),
+        },
+      },
+    ],
+  });
+  const joblit = fakeJoblit({
+    activeBatch: { batchId: null },
+    tailoringStatuses: [
+      {
+        run: {
+          id: COVER_RUN_ID,
+          status: "FAILED",
+          acceptedTargetMask: 0,
+          handle: null,
+        },
+      },
+    ],
+  });
+
+  await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    log: () => {},
+  });
+
+  assert.deepEqual(hermes.calls.reconciliations, [
+    { sessionId, signal: undefined },
+  ]);
+  assert.deepEqual(hermes.calls.discards, []);
+});
+
 test("fails closed and preserves recovery state when the TailoringRun attempt changed", async () => {
   const sessionId = `joblit:${TASK.taskId}:resume`;
   const warnings = [];
@@ -724,7 +877,7 @@ test("honours a server-side TailoringRun cancellation before starting Hermes", a
 
   assert.deepEqual(joblit.calls.statuses, [RESUME_RUN_ID]);
   assert.equal(hermes.calls.runs.length, 0);
-  assert.deepEqual(joblit.calls.runOnce[1].completedTasks, []);
+  assert.equal(joblit.calls.runOnce.length, 1);
   assert.equal(summary.failed, 0);
 });
 

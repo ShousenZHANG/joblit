@@ -25,8 +25,7 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 
 async function readError(response) {
   const body = await response.json().catch(() => null);
-  const error =
-    body && typeof body === "object" ? body.error : undefined;
+  const error = body && typeof body === "object" ? body.error : undefined;
   if (error && typeof error === "object" && typeof error.message === "string") {
     return {
       code:
@@ -55,10 +54,7 @@ export function createJoblitClient({
       "JOBLIT_TOKEN must be a version 1 AgentCredential (jfagent_v1_...)",
     );
   }
-  if (
-    !Number.isSafeInteger(requestTimeoutMs) ||
-    requestTimeoutMs <= 0
-  ) {
+  if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs <= 0) {
     throw new Error("Joblit request timeout must be a positive integer");
   }
   const parsed = new URL(baseUrl);
@@ -156,10 +152,9 @@ export function createJoblitClient({
     },
 
     async tailoringRunStatus(runId, { signal } = {}) {
-      return requestJson(
-        `/api/tailoring-runs/${encodeURIComponent(runId)}`,
-        { signal },
-      );
+      return requestJson(`/api/tailoring-runs/${encodeURIComponent(runId)}`, {
+        signal,
+      });
     },
 
     /**
@@ -187,6 +182,14 @@ export function createJoblitClient({
       return requestJson("/api/jobs/fit/prompt", {
         method: "POST",
         body: JSON.stringify(requestBody),
+      });
+    },
+
+    async heartbeatFitClaim(requestBody, { signal } = {}) {
+      return requestJson("/api/jobs/fit/heartbeat", {
+        method: "POST",
+        body: JSON.stringify(requestBody),
+        signal,
       });
     },
 

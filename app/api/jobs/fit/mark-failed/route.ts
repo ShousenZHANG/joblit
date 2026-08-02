@@ -4,7 +4,10 @@ import { z } from "zod";
 
 import { errorJson } from "@/lib/server/api/errorResponse";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/server/api/rateLimit";
-import { markFitBatchFailed } from "@/lib/server/jobs/fitRunService";
+import {
+  FitBatchClaimError,
+  markFitBatchFailed,
+} from "@/lib/server/jobs/fitRunService";
 
 export const runtime = "nodejs";
 
@@ -20,7 +23,10 @@ const BodySchema = z
 /** Dequeue a failed AI batch so the pump never loops on the same jobs. */
 export async function POST(req: Request) {
   return withAgentRoute(req, "fit:drain", async ({ userId }) => {
-    const rateLimit = checkRateLimit(`jobs:fit:mark-failed:${userId}`, FAILED_RATE_LIMIT);
+    const rateLimit = checkRateLimit(
+      `jobs:fit:mark-failed:${userId}`,
+      FAILED_RATE_LIMIT,
+    );
     if (!rateLimit.allowed) {
       return errorJson("RATE_LIMITED", "Too many requests", 429, {
         headers: rateLimitHeaders(rateLimit),
@@ -34,11 +40,18 @@ export async function POST(req: Request) {
       });
     }
 
-    const count = await markFitBatchFailed(
-      userId,
-      body.data.jobIds,
-      body.data.claimToken,
-    );
-    return NextResponse.json({ count });
+    try {
+      const count = await markFitBatchFailed(
+        userId,
+        body.data.jobIds,
+        body.data.claimToken,
+      );
+      return NextResponse.json({ count });
+    } catch (error) {
+      if (error instanceof FitBatchClaimError) {
+        return errorJson(error.code, error.message, error.status);
+      }
+      throw error;
+    }
   });
 }

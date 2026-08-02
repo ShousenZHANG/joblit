@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const store = vi.hoisted(() => ({
   locks: [] as { namespace: number; key: number }[],
+  jobRowLocks: [] as string[][],
   transaction: vi.fn(),
   jobFindMany: vi.fn(),
   jobDeleteMany: vi.fn(),
@@ -21,6 +22,11 @@ const store = vi.hoisted(() => ({
   deletedJobUrlCreateMany: vi.fn(),
   evidenceSnapshotDeleteMany: vi.fn(),
   claimEvidenceFindMany: vi.fn(),
+  applicationBatchFindFirst: vi.fn(),
+  applicationBatchUpdate: vi.fn(),
+  applicationBatchTaskFindMany: vi.fn(),
+  applicationBatchTaskFindFirst: vi.fn(),
+  applicationBatchTaskGroupBy: vi.fn(),
   enqueue: vi.fn(),
 }));
 
@@ -62,6 +68,13 @@ function recordingTx() {
       });
       return 1;
     },
+    $queryRaw: async (_s: TemplateStringsArray, ...values: unknown[]) => {
+      const joined = values[1] as { values?: unknown[] } | undefined;
+      store.jobRowLocks.push(
+        (joined?.values ?? []).map((value) => String(value)),
+      );
+      return [];
+    },
     job: { findMany: store.jobFindMany, deleteMany: store.jobDeleteMany },
     application: {
       findMany: store.applicationFindMany,
@@ -70,17 +83,28 @@ function recordingTx() {
     deletedJobUrl: { createMany: store.deletedJobUrlCreateMany },
     evidenceSnapshot: { deleteMany: store.evidenceSnapshotDeleteMany },
     claimEvidence: { findMany: store.claimEvidenceFindMany },
+    applicationBatch: {
+      findFirst: store.applicationBatchFindFirst,
+      update: store.applicationBatchUpdate,
+    },
+    applicationBatchTask: {
+      findMany: store.applicationBatchTaskFindMany,
+      findFirst: store.applicationBatchTaskFindFirst,
+      groupBy: store.applicationBatchTaskGroupBy,
+    },
   };
 }
 
 describe("job delete cascade lock order", () => {
   beforeEach(() => {
     store.locks.length = 0;
+    store.jobRowLocks.length = 0;
     vi.clearAllMocks();
 
     store.transaction.mockImplementation(
-      async (callback: (tx: ReturnType<typeof recordingTx>) => Promise<unknown>) =>
-        callback(recordingTx()),
+      async (
+        callback: (tx: ReturnType<typeof recordingTx>) => Promise<unknown>,
+      ) => callback(recordingTx()),
     );
     store.jobFindMany.mockResolvedValue(
       JOB_IDS.map((id) => ({ id, jobUrl: `https://example.com/${id}` })),
@@ -91,6 +115,11 @@ describe("job delete cascade lock order", () => {
     store.applicationDeleteMany.mockResolvedValue({ count: 0 });
     store.deletedJobUrlCreateMany.mockResolvedValue({ count: JOB_IDS.length });
     store.evidenceSnapshotDeleteMany.mockResolvedValue({ count: 0 });
+    store.applicationBatchFindFirst.mockResolvedValue(null);
+    store.applicationBatchUpdate.mockResolvedValue({});
+    store.applicationBatchTaskFindMany.mockResolvedValue([]);
+    store.applicationBatchTaskFindFirst.mockResolvedValue(null);
+    store.applicationBatchTaskGroupBy.mockResolvedValue([]);
     store.enqueue.mockResolvedValue({ artifacts: [] });
   });
 
@@ -122,6 +151,13 @@ describe("job delete cascade lock order", () => {
     expect(applicationKeys).toEqual(expected);
   });
 
+  it("row-locks Jobs in stable order before reading affected batch tasks", async () => {
+    await batchDeleteJobs(USER_ID, JOB_IDS);
+
+    expect(store.jobRowLocks).toEqual([["job-a", "job-b", "job-c"]]);
+    expect(store.applicationBatchTaskFindMany).toHaveBeenCalledTimes(1);
+  });
+
   it("never steps backwards through the declared global order", async () => {
     await batchDeleteJobs(USER_ID, JOB_IDS);
 
@@ -143,5 +179,31 @@ describe("job delete cascade lock order", () => {
     );
     expect(jobLocks).toHaveLength(1);
     expect(jobLocks[0].key).toBe(stableInt32(USER_ID));
+  });
+
+  it("takes affected Application Batch locks in stable order before application locks", async () => {
+    store.applicationBatchTaskFindMany.mockResolvedValueOnce([
+      { batchId: "batch-z" },
+      { batchId: "batch-a" },
+      { batchId: "batch-z" },
+    ]);
+
+    await batchDeleteJobs(USER_ID, JOB_IDS);
+
+    const applicationBatchNamespace = 0x41424154; // "ABAT"
+    const batchKeys = store.locks
+      .filter((lock) => lock.namespace === applicationBatchNamespace)
+      .map((lock) => lock.key);
+    expect(batchKeys).toEqual(
+      ["batch-a", "batch-z"].map((batchId) => stableInt32(batchId)),
+    );
+
+    const lastBatchLock = store.locks
+      .map((lock) => lock.namespace)
+      .lastIndexOf(applicationBatchNamespace);
+    const firstApplicationLock = store.locks.findIndex(
+      (lock) => lock.namespace === LOCK_NAMESPACES.applicationMutation,
+    );
+    expect(lastBatchLock).toBeLessThan(firstApplicationLock);
   });
 });

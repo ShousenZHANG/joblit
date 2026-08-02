@@ -7,6 +7,10 @@ import {
   buildTriagePromptForUser,
   TriagePromptRequestSchema,
 } from "@/lib/server/applications/applicationPrompt";
+import {
+  bindFitBatchPrompt,
+  FitBatchClaimError,
+} from "@/lib/server/jobs/fitRunService";
 
 export const runtime = "nodejs";
 
@@ -29,8 +33,18 @@ export async function POST(req: Request) {
         userId,
         jobIds: parsed.data.jobIds,
       });
-      return NextResponse.json(payload);
+      return NextResponse.json(
+        await bindFitBatchPrompt(userId, parsed.data.jobIds, payload, {
+          claimId: parsed.data.claimId,
+          attemptId: parsed.data.attemptId ?? parsed.data.claimToken,
+        }),
+      );
     } catch (error) {
+      if (error instanceof FitBatchClaimError) {
+        return errorJson(error.code, error.message, error.status, {
+          requestId,
+        });
+      }
       if (error instanceof ApplicationPromptError) {
         return errorJson(
           error.code === "INVALID_REQUEST" ? "INVALID_BODY" : error.code,

@@ -84,10 +84,7 @@ export interface FitPromptPayload extends ApplicationPromptPayload {
 }
 
 export type ApplicationPromptErrorCode =
-  | "INVALID_REQUEST"
-  | "JOB_NOT_FOUND"
-  | "NO_PROFILE"
-  | "PROMPT_TOO_LARGE";
+  "INVALID_REQUEST" | "JOB_NOT_FOUND" | "NO_PROFILE" | "PROMPT_TOO_LARGE";
 
 export class ApplicationPromptError extends Error {
   constructor(
@@ -111,7 +108,9 @@ type ApplicationPromptMessages = {
   };
 };
 
-async function getPromptTooLargeMessage(locale: "en-AU" | "zh-CN"): Promise<string> {
+async function getPromptTooLargeMessage(
+  locale: "en-AU" | "zh-CN",
+): Promise<string> {
   const language = locale === "zh-CN" ? "zh" : "en";
   const messages = (await import(`../../../messages/${language}.json`))
     .default as ApplicationPromptMessages;
@@ -121,6 +120,39 @@ async function getPromptTooLargeMessage(locale: "en-AU" | "zh-CN"): Promise<stri
 export const TriagePromptRequestSchema = z
   .object({
     jobIds: z.array(z.string().uuid()).min(1).max(TRIAGE_MAX_JOBS),
+    /** Durable v2 Claim handle. Omitted together for rolling v1 clients. */
+    claimId: z.string().uuid().optional(),
+    attemptId: z.string().uuid().optional(),
+    /** v1 attempt alias; old Runners may send it without a Claim id. */
+    claimToken: z.string().uuid().optional(),
+  })
+  .superRefine((value, context) => {
+    const attemptId = value.attemptId ?? value.claimToken;
+    if (
+      value.attemptId &&
+      value.claimToken &&
+      value.attemptId !== value.claimToken
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["attemptId"],
+        message: "attemptId and claimToken must identify the same attempt",
+      });
+    }
+    if (value.claimId && !attemptId) {
+      context.addIssue({
+        code: "custom",
+        path: ["attemptId"],
+        message: "claimId and attemptId must be provided together",
+      });
+    }
+    if (value.attemptId && !value.claimId) {
+      context.addIssue({
+        code: "custom",
+        path: ["claimId"],
+        message: "claimId and attemptId must be provided together",
+      });
+    }
   })
   .strict();
 
@@ -146,7 +178,13 @@ export async function buildTriagePromptForUser(input: {
   const canonicalJobIds = [...new Set(parsed.data.jobIds)].sort();
   const jobs = await prisma.job.findMany({
     where: { id: { in: canonicalJobIds }, userId: input.userId },
-    select: { id: true, title: true, company: true, description: true, market: true },
+    select: {
+      id: true,
+      title: true,
+      company: true,
+      description: true,
+      market: true,
+    },
   });
   if (jobs.length !== canonicalJobIds.length) {
     throw new ApplicationPromptError("JOB_NOT_FOUND", "Jobs not found", 404);
@@ -219,6 +257,11 @@ export async function buildTriagePromptForUser(input: {
     ),
     expectedJsonSchema: { type: "array" },
     promptVersion: "v4-application-proposal",
+    snapshotBinding: {
+      resumeProfileId: profile.id,
+      resumeSnapshotHash: buildPromptSnapshotHash(candidate),
+      jobSnapshotHash: buildPromptSnapshotHash(orderedJobs),
+    },
   };
 }
 
@@ -270,7 +313,9 @@ export async function buildApplicationPromptForUser(input: {
     );
   }
 
-  const [rules] = await Promise.all([getActivePromptSkillRulesForUser(input.userId)]);
+  const [rules] = await Promise.all([
+    getActivePromptSkillRulesForUser(input.userId),
+  ]);
   const candidate = buildResumePromptSnapshot(profile);
   const baseLatestBullets = candidate.experiences?.[0]?.bullets ?? [];
 
@@ -294,34 +339,34 @@ export async function buildApplicationPromptForUser(input: {
     parsed.data.target === "match"
       ? buildLeanMatchUserPrompt({ rules, candidate, job: jobInput })
       : parsed.data.target === "resume"
-      ? lean
-        ? buildLeanResumeUserPrompt({
-            target: "resume",
-            rules,
-            candidate,
-            job: jobInput,
-            resume: resumeInput,
-          })
-        : buildV2ResumeUserPrompt({
-            target: "resume",
-            rules,
-            candidate,
-            job: jobInput,
-            resume: resumeInput,
-          })
-      : lean
-        ? buildLeanCoverUserPrompt({
-            target: "cover",
-            rules,
-            candidate,
-            job: jobInput,
-          })
-        : buildV2CoverUserPrompt({
-            target: "cover",
-            rules,
-            candidate,
-            job: jobInput,
-          });
+        ? lean
+          ? buildLeanResumeUserPrompt({
+              target: "resume",
+              rules,
+              candidate,
+              job: jobInput,
+              resume: resumeInput,
+            })
+          : buildV2ResumeUserPrompt({
+              target: "resume",
+              rules,
+              candidate,
+              job: jobInput,
+              resume: resumeInput,
+            })
+        : lean
+          ? buildLeanCoverUserPrompt({
+              target: "cover",
+              rules,
+              candidate,
+              job: jobInput,
+            })
+          : buildV2CoverUserPrompt({
+              target: "cover",
+              rules,
+              candidate,
+              job: jobInput,
+            });
 
   if (instructions.length + promptInput.length > MAX_APPLICATION_PROMPT_CHARS) {
     throw new ApplicationPromptError(

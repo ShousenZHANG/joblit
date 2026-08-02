@@ -6,7 +6,11 @@ import {
   canonicalizeApplicationArtifactStorageIdentity,
   enqueueApplicationArtifactRetirements,
 } from "@/lib/server/artifacts/applicationArtifactLifecycle";
-import type { Prisma } from "@/lib/generated/prisma";
+import { Prisma } from "@/lib/generated/prisma";
+import {
+  lockApplicationBatchesForJobDeletion,
+  reconcileApplicationBatchesAfterJobDeletion,
+} from "@/lib/server/applicationBatches/batchReconciliation";
 
 type ArtifactRetirementResult = { queued: number };
 type LegacyBlobCleanupResult = {
@@ -34,6 +38,29 @@ type BatchDeleteResult = {
 
 const JOB_MUTATION_TRANSACTION_TIMEOUT_MS = 30_000;
 
+/**
+ * Fence even pre-JOBJ ApplicationBatch writers during an expand cutover.
+ * PostgreSQL's FK check takes a key-share lock on each Job; this ordered
+ * FOR UPDATE either waits for that task insert to commit (so the subsequent
+ * batch-task read sees it) or makes the insert wait and fail after deletion.
+ */
+async function lockOwnedJobRowsForDeletion(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  jobIds: readonly string[],
+): Promise<void> {
+  const orderedJobIds = [...new Set(jobIds)].sort();
+  if (orderedJobIds.length === 0) return;
+  await tx.$queryRaw`
+    SELECT "id"
+    FROM "Job"
+    WHERE "userId" = ${userId}
+      AND "id" IN (${Prisma.join(orderedJobIds)})
+    ORDER BY "id" ASC
+    FOR UPDATE
+  `;
+}
+
 type ApplicationArtifactProjection = {
   id: string;
   jobId: string | null;
@@ -50,8 +77,7 @@ type RetirementArtifact = {
 
 function retirementIdentity(url: string): string {
   return (
-    canonicalizeApplicationArtifactStorageIdentity(url)?.key ??
-    `legacy:${url}`
+    canonicalizeApplicationArtifactStorageIdentity(url)?.key ?? `legacy:${url}`
   );
 }
 
@@ -65,8 +91,7 @@ function retirementArtifacts(
     { target: "RESUME_TEX" as const, url: application.resumeTexUrl },
     { target: "COVER_TEX" as const, url: application.coverTexUrl },
   ].flatMap((artifact) => {
-    const url =
-      typeof artifact.url === "string" ? artifact.url.trim() : "";
+    const url = typeof artifact.url === "string" ? artifact.url.trim() : "";
     if (!url) return [];
     const identity = retirementIdentity(url);
     if (seen.has(identity)) return [];
@@ -192,6 +217,13 @@ export async function deleteJob(
       });
       if (!job) return null;
 
+      await lockOwnedJobRowsForDeletion(tx, userId, [job.id]);
+
+      const affectedBatchIds = await lockApplicationBatchesForJobDeletion(tx, {
+        userId,
+        jobIds: [job.id],
+      });
+
       // Generation/autosave/finalize use this same lock. Take it before reading
       // artifact URLs so no committed Blob can appear between read and delete.
       await acquireApplicationMutationLock(tx, userId, job.id);
@@ -233,6 +265,10 @@ export async function deleteJob(
       // if another code path removed the row.
       const deletedJob = await tx.job.deleteMany({
         where: { id: job.id, userId },
+      });
+      await reconcileApplicationBatchesAfterJobDeletion(tx, {
+        userId,
+        batchIds: affectedBatchIds,
       });
       return {
         deleted: deletedJob.count > 0,
@@ -278,6 +314,11 @@ export async function batchDeleteJobs(
       }
 
       const foundIds = jobs.map((job) => job.id).sort();
+      await lockOwnedJobRowsForDeletion(tx, userId, foundIds);
+      const affectedBatchIds = await lockApplicationBatchesForJobDeletion(tx, {
+        userId,
+        jobIds: foundIds,
+      });
       // Fixed order prevents two overlapping batch deletes from waiting on
       // the same application locks in opposite order.
       for (const foundId of foundIds) {
@@ -294,9 +335,7 @@ export async function batchDeleteJobs(
           coverPdfUrl: true,
         },
       });
-      const canonicalUrls = jobs.map((job) =>
-        canonicalizeJobUrl(job.jobUrl),
-      );
+      const canonicalUrls = jobs.map((job) => canonicalizeJobUrl(job.jobUrl));
 
       // One tombstone write keeps query count bounded for large selections.
       await tx.deletedJobUrl.createMany({
@@ -324,6 +363,10 @@ export async function batchDeleteJobs(
       );
       const deletedJobs = await tx.job.deleteMany({
         where: { id: { in: foundIds }, userId },
+      });
+      await reconcileApplicationBatchesAfterJobDeletion(tx, {
+        userId,
+        batchIds: affectedBatchIds,
       });
       return {
         deleted: deletedJobs.count,

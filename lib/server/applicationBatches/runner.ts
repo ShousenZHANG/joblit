@@ -21,10 +21,23 @@ import {
   applicationBatchTailoringIssueKey,
   applicationBatchTargetProgress,
 } from "./tailoringTaskContract";
+import { reconcileApplicationBatchTx } from "./batchReconciliation";
+import { queueApplicationBatch } from "./queueApplicationBatch";
+import { taskProgressFromGroupBy, type BatchProgress } from "./batchProgress";
 
-const TERMINAL_BATCH_STATUSES: ApplicationBatchStatus[] = ["SUCCEEDED", "FAILED", "CANCELLED"];
+export type { BatchProgress } from "./batchProgress";
 
-const TERMINAL_TASK_STATUSES: ApplicationBatchTaskStatus[] = ["SUCCEEDED", "FAILED", "SKIPPED"];
+const TERMINAL_BATCH_STATUSES: ApplicationBatchStatus[] = [
+  "SUCCEEDED",
+  "FAILED",
+  "CANCELLED",
+];
+
+const TERMINAL_TASK_STATUSES: ApplicationBatchTaskStatus[] = [
+  "SUCCEEDED",
+  "FAILED",
+  "SKIPPED",
+];
 const STALE_TASK_TIMEOUT_MS = APPLICATION_BATCH_TASK_LEASE_MS;
 const TASK_LEASE_MS = APPLICATION_BATCH_TASK_LEASE_MS;
 const MAX_LEASE_RETRY_HINT_MS = 30_000;
@@ -44,14 +57,6 @@ export class BatchRunnerError extends Error {
   }
 }
 
-export type BatchProgress = {
-  pending: number;
-  running: number;
-  succeeded: number;
-  failed: number;
-  skipped: number;
-};
-
 type ClaimResult =
   | {
       kind: "claimed";
@@ -68,7 +73,11 @@ type ClaimResult =
         jobUrl: string;
       };
     }
-  | { kind: "done"; batchStatus: ApplicationBatchStatus; progress: BatchProgress }
+  | {
+      kind: "done";
+      batchStatus: ApplicationBatchStatus;
+      progress: BatchProgress;
+    }
   | { kind: "terminal"; batchStatus: ApplicationBatchStatus }
   | { kind: "not_found" };
 
@@ -83,25 +92,10 @@ type RetryBatchResult = {
   sourceBatchId: string;
 };
 
-function toProgress(rows: Array<{ status: ApplicationBatchTaskStatus; _count: { _all: number } }>) {
-  const progress: BatchProgress = {
-    pending: 0,
-    running: 0,
-    succeeded: 0,
-    failed: 0,
-    skipped: 0,
-  };
-  for (const row of rows) {
-    if (row.status === "PENDING") progress.pending = row._count._all;
-    if (row.status === "RUNNING") progress.running = row._count._all;
-    if (row.status === "SUCCEEDED") progress.succeeded = row._count._all;
-    if (row.status === "FAILED") progress.failed = row._count._all;
-    if (row.status === "SKIPPED") progress.skipped = row._count._all;
-  }
-  return progress;
-}
-
-export async function getBatchProgress(input: { userId: string; batchId: string }) {
+export async function getBatchProgress(input: {
+  userId: string;
+  batchId: string;
+}) {
   const grouped = await prisma.applicationBatchTask.groupBy({
     by: ["status"],
     where: {
@@ -112,7 +106,7 @@ export async function getBatchProgress(input: { userId: string; batchId: string 
       _all: true,
     },
   });
-  return toProgress(grouped);
+  return taskProgressFromGroupBy(grouped);
 }
 
 /**
@@ -167,82 +161,17 @@ export async function getBatchLeaseRetryHint(input: {
   };
 }
 
-async function reconcileBatchStatus(input: { userId: string; batchId: string }) {
+async function reconcileBatchStatus(input: {
+  userId: string;
+  batchId: string;
+}) {
   return prisma.$transaction(async (tx) => {
     await acquireApplicationBatchLock(tx, input.batchId);
-    const batch = await tx.applicationBatch.findFirst({
-      where: {
-        id: input.batchId,
-        userId: input.userId,
-      },
-      select: {
-        id: true,
-        status: true,
-        startedAt: true,
-        completedAt: true,
-      },
-    });
-    const grouped = await tx.applicationBatchTask.groupBy({
-      by: ["status"],
-      where: {
-        batchId: input.batchId,
-        userId: input.userId,
-      },
-      _count: {
-        _all: true,
-      },
-    });
-
-    if (!batch) throw new BatchRunnerError("NOT_FOUND", "Batch not found");
-
-    const progress = toProgress(grouped);
-
-    let nextStatus: ApplicationBatchStatus = batch.status;
-    if (progress.pending > 0 || progress.running > 0) {
-      nextStatus = "RUNNING";
-    } else if (progress.failed > 0) {
-      nextStatus = "FAILED";
-    } else if (progress.succeeded > 0 || progress.skipped > 0) {
-      nextStatus = "SUCCEEDED";
+    const reconciled = await reconcileApplicationBatchTx(tx, input);
+    if (!reconciled) {
+      throw new BatchRunnerError("NOT_FOUND", "Batch not found");
     }
-
-    if (TERMINAL_BATCH_STATUSES.includes(batch.status)) {
-      return { batchStatus: batch.status, progress };
-    }
-
-    const shouldComplete = nextStatus === "SUCCEEDED" || nextStatus === "FAILED";
-    const batchError =
-      nextStatus === "FAILED"
-        ? (
-            await tx.applicationBatchTask.findFirst({
-            where: {
-              batchId: input.batchId,
-              userId: input.userId,
-              status: "FAILED",
-            },
-            orderBy: {
-              updatedAt: "desc",
-            },
-            select: {
-              error: true,
-            },
-            })
-          )?.error ?? "One or more tasks failed."
-        : null;
-
-    await tx.applicationBatch.update({
-      where: {
-        id: batch.id,
-      },
-      data: {
-        status: nextStatus,
-        startedAt: batch.startedAt ?? new Date(),
-        completedAt: shouldComplete ? batch.completedAt ?? new Date() : null,
-        error: nextStatus === "FAILED" ? batchError : null,
-      },
-    });
-
-    return { batchStatus: nextStatus, progress };
+    return reconciled;
   });
 }
 
@@ -384,8 +313,7 @@ export async function claimNextBatchTask(input: {
         startedAt: new Date(),
         executionAttemptId,
         executionLeaseExpiresAt: new Date(Date.now() + TASK_LEASE_MS),
-        tailoringProtocolVersion:
-          APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION,
+        tailoringProtocolVersion: APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION,
         completionAttemptId: null,
         error: null,
       },
@@ -427,7 +355,10 @@ export async function completeBatchTask(input: {
   batchId: string;
   taskId: string;
   attemptId: string;
-  status: Extract<ApplicationBatchTaskStatus, "SUCCEEDED" | "FAILED" | "SKIPPED">;
+  status: Extract<
+    ApplicationBatchTaskStatus,
+    "SUCCEEDED" | "FAILED" | "SKIPPED"
+  >;
   error?: string | null;
 }) {
   return prisma.$transaction(async (tx) => {
@@ -447,7 +378,10 @@ export async function completeBatchTask(input: {
     if (!task) throw new BatchRunnerError("NOT_FOUND", "Task not found");
 
     if (task.executionAttemptId !== input.attemptId) {
-      throw new BatchRunnerError("INVALID_STATE", "Task execution attempt is stale");
+      throw new BatchRunnerError(
+        "INVALID_STATE",
+        "Task execution attempt is stale",
+      );
     }
 
     if (task.status !== "RUNNING") {
@@ -478,16 +412,13 @@ export async function completeBatchTask(input: {
     const taskError =
       input.status === "FAILED" ? safeTaskError(input.error) : null;
     try {
-      await settleBoundRunFromTask(
-        tx as unknown as TailoringRunTransaction,
-        {
-          userId: input.userId,
-          taskId: task.id,
-          executionAttemptId: input.attemptId,
-          status: input.status,
-          error: taskError,
-        },
-      );
+      await settleBoundRunFromTask(tx as unknown as TailoringRunTransaction, {
+        userId: input.userId,
+        taskId: task.id,
+        executionAttemptId: input.attemptId,
+        status: input.status,
+        error: taskError,
+      });
     } catch (error) {
       if (error instanceof TailoringRunError) {
         throw new BatchRunnerError("INVALID_STATE", error.message);
@@ -634,83 +565,25 @@ export async function createRetryBatchFromFailed(input: {
   sourceBatchId: string;
   limit?: number;
 }): Promise<RetryBatchResult> {
-  const limit = Math.min(Math.max(input.limit ?? 100, 1), 200);
-
-  const source = await prisma.applicationBatch.findFirst({
-    where: {
-      id: input.sourceBatchId,
-      userId: input.userId,
-    },
-    select: {
-      id: true,
+  const outcome = await queueApplicationBatch({
+    userId: input.userId,
+    seed: {
+      kind: "retry_failed",
+      sourceBatchId: input.sourceBatchId,
+      limit: input.limit,
     },
   });
-  if (!source) throw new BatchRunnerError("NOT_FOUND", "Batch not found");
-
-  const active = await prisma.applicationBatch.findFirst({
-    where: {
-      userId: input.userId,
-      status: {
-        in: ["QUEUED", "RUNNING"],
-      },
-    },
-    select: {
-      id: true,
-    },
-  });
-  if (active) throw new BatchRunnerError("INVALID_STATE", "Active batch already exists");
-
-  const failedTasks = await prisma.applicationBatchTask.findMany({
-    where: {
-      batchId: source.id,
-      userId: input.userId,
-      status: "FAILED",
-    },
-    orderBy: {
-      updatedAt: "desc",
-    },
-    distinct: ["jobId"],
-    take: limit,
-    select: {
-      jobId: true,
-    },
-  });
-  if (failedTasks.length === 0) {
+  if (outcome.kind === "source_not_found") {
+    throw new BatchRunnerError("NOT_FOUND", "Batch not found");
+  }
+  if (outcome.kind === "active_exists") {
+    throw new BatchRunnerError("INVALID_STATE", "Active batch already exists");
+  }
+  if (outcome.kind === "empty") {
     throw new BatchRunnerError("INVALID_STATE", "No failed tasks to retry");
   }
-
-  const batch = await prisma.$transaction(async (tx) => {
-    const created = await tx.applicationBatch.create({
-      data: {
-        userId: input.userId,
-        scope: "NEW",
-        status: "QUEUED",
-        totalCount: failedTasks.length,
-      },
-      select: {
-        id: true,
-        scope: true,
-        status: true,
-        totalCount: true,
-        createdAt: true,
-      },
-    });
-
-    await tx.applicationBatchTask.createMany({
-      data: failedTasks.map((task) => ({
-        batchId: created.id,
-        userId: input.userId,
-        jobId: task.jobId,
-        status: "PENDING",
-      })),
-      skipDuplicates: true,
-    });
-
-    return created;
-  });
-
   return {
-    batch,
-    sourceBatchId: source.id,
+    batch: outcome.batch,
+    sourceBatchId: outcome.sourceBatchId ?? input.sourceBatchId,
   };
 }

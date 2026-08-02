@@ -36,9 +36,11 @@ Routes on the AgentCredential seam: `GET /api/application-batches/active`,
 `POST /api/application-batches/:id/run-once`, `POST /api/applications/prompt`,
 `POST /api/applications/manual-generate`, the `/api/tailoring-runs/:id` route,
 cancel, and fail endpoints, and the fit queue —
-`POST /api/jobs/fit/{next-batch,prompt,batch-import,mark-failed,release-batch,settlement-status}`.
+`POST /api/jobs/fit/{next-batch,prompt,heartbeat,batch-import,mark-failed,release-batch,settlement-status}`.
 `/api/jobs/fit/run` and `/api/jobs/fit/prescreen` stay session-only: enqueuing
-work is the user's action, draining it is the agent's.
+work is the user's action, draining it is the agent's. Both prescreen entry
+points use the Fit service's `JOBJ` then `JOBF` write boundary; routes never
+write Fit projections directly.
 Batch creation, `/codex-run`, and the task `PATCH` route also stay session-only;
 an unattended Runner claims work and reports exceptional outcomes through
 `run-once`.
@@ -90,22 +92,42 @@ request echoes the prompt response's complete `tailoringRun` handle and
 ## Fit Settlement Contract
 
 `POST /api/jobs/fit/prompt` returns a 64-hex, content-addressed `issueKey`
-derived from the sorted claimed Job ids and the server-owned prompt snapshot.
-Send that key, the unchanged `promptMeta`, the same claimed Job ids, and the model
-output to `batch-import`. `FitBatchImportReceipt` is unique by
-`(userId, issueKey)` and is written in the same transaction as the Job scores.
-An identical retry replays the stored settlement; different content for an
-already-settled issue conflicts.
+derived from the exact ordered Claim Job set and the server-owned prompt
+snapshot. New `next-batch` responses also carry `claimId` and `attemptId`
+(`claimToken` remains the compatibility alias). Echo that handle to `prompt`,
+verify the returned `fitClaim`, and renew it through `/api/jobs/fit/heartbeat`
+while Hermes runs. Older servers/runners may omit the new fields during the
+expand rollout.
 
-Treat a timeout, connection loss, or 5xx during import as an **unknown
-settlement**, not a failure. Replay the exact request. If the result remains
+Deploy this expansion migration-before-build and switch the application alias
+atomically. Old app revisions may drain work already in flight, but must not
+keep receiving requests beyond the five-minute legacy Fit lease window; old
+Runner envelopes remain supported against the new application revision.
+
+Hermes transcript recovery accepts only one matching terminal assistant row:
+non-empty content, no tool calls, and either `finish_reason: "stop"` or a
+legacy row with no finish reason. Earlier tool-call/tool rows are allowed only
+when that later unique terminal row completes the sequence and no
+assistant/tool row follows it. Treat HTTP 408/425/429/5xx as deferred work, not
+a definite model failure.
+
+Send the returned key, unchanged `promptMeta`, same claimed Job ids, current
+attempt, and model output to `batch-import`. `FitBatchImportReceipt` is unique
+by `(userId, issueKey)` and is written in the same transaction as every claimed
+Job outcome and the terminal Claim. An identical retry replays the stored
+settlement; different content for an already-settled issue conflicts.
+
+Treat a timeout, connection loss, or HTTP 408/425/429/5xx during import as an
+**unknown settlement**, not a failure. Replay the exact request. If the result remains
 unknown, preserve the claim and local Hermes state for a later reconciliation;
 do not mark those Jobs failed or generate a replacement result.
-On startup, query `POST /api/jobs/fit/settlement-status` for completed Fit
-issues and clear local state only when the validated receipt exists. Browser
-`POST /api/jobs/fit/cancel` is session-only: it terminally cancels pending and
-claimed rows, so a late Runner import is rejected and a later explicit Run may
-retry them.
+On startup, query `POST /api/jobs/fit/settlement-status` for every recoverable
+Fit phase. Preserve Hermes state for `ACTIVE`; for `SETTLED` or
+`TERMINAL_WITHOUT_RECEIPT`, retire live local phases through the same
+stop/transcript proof boundary before cleanup. The legacy `settlement` member
+remains present during rollout. Browser `POST /api/jobs/fit/cancel` is
+session-only: it terminally cancels pending and claimed rows, so a late Runner
+import is rejected and a later explicit Run may retry them.
 
 ## Rules
 
@@ -163,13 +185,14 @@ compare-and-set so two local Runner processes cannot submit the same turn.
 
 On restart, reconcile each starting/running/completed/repairing local operation
 against the server-owned Tailoring Run before claiming new work: acknowledge
-and clear it
-when the target receipt is accepted, discard it only when the server run is
-terminal without that target, and otherwise retain it for the exact active
-attempt. Hermes `stopping` is only acknowledgement of a stop request, not a
-terminal state; keep polling the same private run id after restart. Cleanup
-after an accepted import is best effort and can be retried without reversing
-the authoritative Joblit settlement.
+and clear it when the target receipt is accepted, discard it only when the
+server run is terminal without that target, and otherwise retain it for the
+exact active attempt. Before clearing a local `running` phase, stop its private
+Hermes run and observe a terminal status; clear `starting` only when the saved
+transcript cursor proves one unique terminal turn. Hermes `stopping` is only
+acknowledgement of a stop request, not a terminal state; keep polling the same
+private run id after restart. Cleanup after an accepted import is best effort
+and can be retried without reversing the authoritative Joblit settlement.
 
 ## Deletion Contract
 
@@ -178,4 +201,6 @@ the same transaction that durably queues all current artifact pointers as
 `ApplicationArtifact.DELETE_PENDING`. The protected reconciler owns the later
 Blob deletion and claim-fenced settlement; do not perform network deletion
 inside the Job mutation transaction or report a queued object as synchronously
-deleted.
+deleted. After `JOBJ`, lock target Job rows in stable id order before reading
+affected ApplicationBatch tasks; this fences pre-JOBJ writers whose FK insert
+is still in flight during an expand deployment.

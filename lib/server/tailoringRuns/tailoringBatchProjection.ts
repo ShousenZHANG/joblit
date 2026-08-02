@@ -1,6 +1,4 @@
-import {
-  TailoringRunError,
-} from "./tailoringRunProtocol";
+import { TailoringRunError } from "./tailoringRunProtocol";
 import type { Prisma } from "@/lib/generated/prisma";
 import { acquireTailoringRunLock } from "./tailoringRunLock";
 import type {
@@ -8,6 +6,8 @@ import type {
   TailoringRunTransaction,
 } from "./tailoringRunDatabase";
 import { APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION } from "../applicationBatches/tailoringTaskContract";
+import { reconcileApplicationBatchTx } from "../applicationBatches/batchReconciliation";
+import type { BatchProgress } from "../applicationBatches/batchProgress";
 
 type TerminalTaskStatus = "SUCCEEDED" | "FAILED" | "SKIPPED";
 
@@ -89,9 +89,7 @@ export async function settleBoundRunFromTask(
       executionLeaseExpiresAt: null,
       attempt: sameAttempt ? run.attempt : { increment: 1 },
       errorCode:
-        input.status === "FAILED"
-          ? "BATCH_TASK_FAILED"
-          : "BATCH_TASK_SKIPPED",
+        input.status === "FAILED" ? "BATCH_TASK_FAILED" : "BATCH_TASK_SKIPPED",
       errorMessage: safeTaskFailureMessage(input.status, input.error),
       terminalAt: new Date(),
     },
@@ -113,16 +111,14 @@ export async function completeBoundBatchTask(
       userId: task.userId,
       status: "RUNNING",
       executionAttemptId,
-      tailoringProtocolVersion:
-        APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION,
+      tailoringProtocolVersion: APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION,
     },
     data: {
       status,
       error,
       completedAt: new Date(),
       executionLeaseExpiresAt: null,
-      completionAttemptId:
-        status === "SUCCEEDED" ? executionAttemptId : null,
+      completionAttemptId: status === "SUCCEEDED" ? executionAttemptId : null,
     },
   });
   if (updated.count !== 1) {
@@ -134,80 +130,29 @@ export async function completeBoundBatchTask(
   await reconcileBoundApplicationBatch(tx, task.userId, task.batchId);
 }
 
-export type TailoringBatchProgress = {
-  pending: number;
-  running: number;
-  succeeded: number;
-  failed: number;
-  skipped: number;
-};
-
-function progressFrom(
-  rows: Array<{ status: string; _count: { _all: number } }>,
-): TailoringBatchProgress {
-  const progress: TailoringBatchProgress = {
-    pending: 0,
-    running: 0,
-    succeeded: 0,
-    failed: 0,
-    skipped: 0,
-  };
-  for (const row of rows) {
-    const count = row._count._all;
-    if (row.status === "PENDING") progress.pending = count;
-    if (row.status === "RUNNING") progress.running = count;
-    if (row.status === "SUCCEEDED") progress.succeeded = count;
-    if (row.status === "FAILED") progress.failed = count;
-    if (row.status === "SKIPPED") progress.skipped = count;
-  }
-  return progress;
-}
-
-function projectedBatchStatus(progress: TailoringBatchProgress): string {
-  if (progress.pending > 0 || progress.running > 0) return "RUNNING";
-  if (progress.failed > 0) return "FAILED";
-  return "SUCCEEDED";
-}
-
 export async function reconcileBoundApplicationBatch(
   tx: TailoringRunTransaction,
   userId: string,
   batchId: string,
 ): Promise<{
   batchStatus: string;
-  progress: TailoringBatchProgress;
+  progress: BatchProgress;
 }> {
-  const [batch, grouped] = await Promise.all([
-    tx.applicationBatch.findFirst({
-      where: { id: batchId, userId },
-      select: { id: true, status: true, startedAt: true, completedAt: true },
-    }),
-    tx.applicationBatchTask.groupBy({
-      by: ["status"],
-      where: { batchId, userId },
-      _count: { _all: true },
-    }),
-  ]);
-  if (!batch) {
+  // Every caller reaches this helper after taking ABAT. The shared reconciler
+  // therefore owns only projection and writes; it must not acquire the lock a
+  // second time or open a nested transaction.
+  const reconciled = await reconcileApplicationBatchTx(
+    tx as unknown as Prisma.TransactionClient,
+    { userId, batchId },
+  );
+  if (!reconciled) {
     throw new TailoringRunError(
       "BATCH_TASK_NOT_FOUND",
       "Application batch not found",
     );
   }
-  const progress = progressFrom(grouped);
-  if (["SUCCEEDED", "FAILED", "CANCELLED"].includes(batch.status)) {
-    return { batchStatus: batch.status, progress };
-  }
-  const nextStatus = projectedBatchStatus(progress);
-  const terminal = nextStatus === "SUCCEEDED" || nextStatus === "FAILED";
-  await tx.applicationBatch.update({
-    where: { id: batch.id },
-    data: {
-      status: nextStatus,
-      startedAt: batch.startedAt ?? new Date(),
-      completedAt: terminal ? batch.completedAt ?? new Date() : null,
-      error: nextStatus === "FAILED" ? "One or more tasks failed." : null,
-    },
-  });
-  return { batchStatus: nextStatus, progress };
+  return {
+    batchStatus: reconciled.batchStatus,
+    progress: reconciled.progress,
+  };
 }
