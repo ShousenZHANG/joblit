@@ -124,6 +124,22 @@ jobs:
           $$;
           SQL
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260731140000_drop_extension_token_and_legacy_artifact_uniques/migration.sql
+          replay_post_contract_migrations=false
+          for migration in prisma/migrations/*/migration.sql; do
+            case "$migration" in
+              *20260731140000_drop_extension_token_and_legacy_artifact_uniques*)
+                replay_post_contract_migrations=true
+                continue
+                ;;
+            esac
+            if [ "$replay_post_contract_migrations" = true ]; then
+              psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
+            fi
+          done
+          if [ "$replay_post_contract_migrations" != true ]; then
+            echo 'post-contract migration anchor was not found' >&2
+            exit 1
+          fi
           npx prisma migrate diff --from-schema=prisma/schema.prisma --to-config-datasource --exit-code
 
       - name: Audit production dependencies

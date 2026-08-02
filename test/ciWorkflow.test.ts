@@ -18,4 +18,30 @@ describe("CI workflow dependency order", () => {
     expect(deadCodeGate).toBeGreaterThan(-1);
     expect(rootInstall).toBeLessThan(deadCodeGate);
   });
+
+  it("replays every post-contract migration before checking legacy drift", () => {
+    const contractMigration = workflow.indexOf(
+      'psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260731140000_drop_extension_token_and_legacy_artifact_uniques/migration.sql',
+    );
+    const replayLoop = workflow.indexOf(
+      "replay_post_contract_migrations=false",
+      contractMigration,
+    );
+    const finalDriftCheck = workflow.indexOf(
+      "npx prisma migrate diff --from-schema=prisma/schema.prisma --to-config-datasource --exit-code",
+      replayLoop,
+    );
+
+    expect(contractMigration).toBeGreaterThan(-1);
+    expect(replayLoop).toBeGreaterThan(contractMigration);
+    expect(finalDriftCheck).toBeGreaterThan(replayLoop);
+
+    const replayStep = workflow.slice(replayLoop, finalDriftCheck);
+    expect(replayStep).toContain(
+      'if [ "$replay_post_contract_migrations" = true ]; then',
+    );
+    expect(replayStep).toContain(
+      'psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"',
+    );
+  });
 });
