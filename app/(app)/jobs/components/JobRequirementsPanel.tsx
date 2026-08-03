@@ -33,6 +33,8 @@ import { cn } from "@/lib/utils";
  *   product decision — the JD text below carries them.
  * - A job with no detectable asks renders nothing. Prominence comes from
  *   appearing only when there is something to say.
+ * - Two requirement families, two hues: experience wears amber, technology
+ *   wears sky, so one glance separates them without reading a label.
  */
 
 type TechnicalSignal = TechnicalRequirement & {
@@ -100,7 +102,7 @@ export function buildTechnicalSignals(
     }));
 }
 
-/** Fill carries the scan judgement; unscored chips stay neutral. */
+/** Fill carries the scan judgement; unscored chips wear the sky identity. */
 function signalTone(judgement?: FitJudgement): string {
   switch (judgement) {
     case "MATCH":
@@ -111,7 +113,10 @@ function signalTone(judgement?: FitJudgement): string {
     case "UNKNOWN":
       return "border-amber-300/70 bg-amber-50 text-amber-800 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-300";
     default:
-      return "border-border/70 bg-background/80 text-foreground/75";
+      // Pre-scan identity colour: technology owns the sky channel so the two
+      // requirement families read as two hues at a glance. Judgement colours
+      // above take over once a scan lands.
+      return "border-sky-300/60 bg-sky-50 text-sky-800 dark:border-sky-400/30 dark:bg-sky-500/10 dark:text-sky-300";
   }
 }
 
@@ -162,7 +167,7 @@ function ExperienceLine({
   return (
     <div data-classification={requirement.classification}>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <strong className="text-base font-bold leading-tight tabular-nums text-foreground">
+        <strong className="text-base font-bold leading-tight tabular-nums text-amber-900 dark:text-amber-100">
           {requirement.years.text}
         </strong>
         {requirement.scope ? (
@@ -233,9 +238,12 @@ export function JobRequirementsPanel({
       </h3>
 
       {blocks.length ? (
-        <div className="flex items-start gap-2.5">
+        <div
+          data-testid="jd-experience-row"
+          className="flex items-start gap-2.5 rounded-xl border-l-4 border-amber-400 bg-amber-50/80 py-2.5 pl-3 pr-3 dark:border-amber-400/60 dark:bg-amber-400/[0.09]"
+        >
           <CalendarClock
-            className="mt-1 h-4 w-4 shrink-0 text-muted-foreground"
+            className="mt-1 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
             aria-hidden
           />
           <div className="min-w-0 flex-1 space-y-2">

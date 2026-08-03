@@ -86,6 +86,10 @@ describe("JobRequirementsPanel", () => {
     expect(screen.getByText("5+ years")).toBeInTheDocument();
     expect(screen.getByText("· software QA")).toBeInTheDocument();
     expect(screen.getByText("Required")).toBeInTheDocument();
+    // Experience owns the amber channel — one glance, one hue.
+    expect(
+      screen.getByTestId("jd-experience-row").className,
+    ).toMatch(/amber/);
     // The JD quote stays reachable behind the inline disclosure.
     expect(
       screen.getByText("5+ years of experience in software QA"),
@@ -139,6 +143,15 @@ describe("JobRequirementsPanel", () => {
       .getAllByTestId("jd-skill-chip")
       .map((chip) => chip.textContent);
     expect(chips.indexOf("SRE")).toBeLessThan(chips.indexOf("Airflow"));
+  });
+
+  it("gives unscored technology chips the sky channel, distinct from experience", () => {
+    renderPanel({ analysis: null, description: DESCRIPTION, matrix: null });
+
+    for (const chip of screen.getAllByTestId("jd-skill-chip")) {
+      expect(chip.className).toMatch(/sky/);
+      expect(chip.className).not.toMatch(/amber/);
+    }
   });
 
   it("keeps judgement fill on chips once a scan lands", () => {
