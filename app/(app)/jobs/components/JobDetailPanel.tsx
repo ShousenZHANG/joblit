@@ -36,8 +36,7 @@ import {
 } from "../types";
 import { selectableJobStatuses } from "@/lib/shared/jobStatus";
 import { jobStatusPresentation } from "../utils/jobStatusPresentation";
-import { FitAssessmentCard } from "./FitAssessmentCard";
-import { ExperienceRequirementSummary } from "./ExperienceRequirementSummary";
+import { JobRequirementsPanel } from "./JobRequirementsPanel";
 
 // Markdown body (react-markdown + rehype-highlight + highlight.js CSS) is the
 // jobs-list's heaviest dep cluster — load it as a dynamic chunk only when a
@@ -380,12 +379,9 @@ export function JobDetailPanel({
                 </span>
                 <span className="h-px flex-1 bg-gradient-to-r from-border to-transparent" aria-hidden />
               </div>
-              <ExperienceRequirementSummary analysis={experienceAnalysis} />
-              <FitAssessmentCard
+              <JobRequirementsPanel
+                analysis={experienceAnalysis}
                 description={selectedDescription}
-                score={selectedJob.fitScore}
-                verdict={selectedJob.fitVerdict}
-                eligibility={selectedJob.fitEligibility}
                 matrix={selectedFitMatrix}
               />
               {detailError ? (

@@ -921,14 +921,16 @@ describe("JobsClient", () => {
     vi.stubGlobal("fetch", mockFetch);
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
-    const summary = await screen.findByTestId("experience-requirement-summary");
+    const summary = await screen.findByTestId("jd-requirements-panel");
     expect(within(summary).getByText("Required")).toBeInTheDocument();
     expect(
       within(summary).getByText("Minimum of 2 years"),
     ).toBeInTheDocument();
+    // The structural sections are gone by design: requirements live in the
+    // quiet panel, everything else stays in the JD text below.
     expect(screen.queryByText("Screening gates")).not.toBeInTheDocument();
-    expect(await screen.findByText("Nice to have")).toBeInTheDocument();
-    expect(await screen.findByText("Bachelor's degree")).toBeInTheDocument();
+    expect(screen.queryByText("Nice to have")).not.toBeInTheDocument();
+    expect(screen.queryByText("Bachelor's degree")).not.toBeInTheDocument();
     expect(
       screen.getByLabelText("Required: Minimum of 2 years"),
     ).toHaveAttribute("data-experience-highlight", "REQUIRED");

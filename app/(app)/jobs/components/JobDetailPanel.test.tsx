@@ -147,7 +147,7 @@ describe("JobDetailPanel touch contract", () => {
 
 describe("JobDetailPanel experience summary", () => {
   it(
-    "places the JD-derived requirement before fit evidence and passes it to the description",
+    "renders the JD-derived requirement in the merged panel and passes it to the description",
     async () => {
       const description =
         "Requirements: At least 4 years of platform engineering experience.";
@@ -183,12 +183,8 @@ describe("JobDetailPanel experience summary", () => {
         experienceAnalysis,
       });
 
-      const summary = screen.getByTestId("experience-requirement-summary");
-      const fitEvidence = screen.getByRole("heading", { name: "Fit evidence" });
-      expect(
-        summary.compareDocumentPosition(fitEvidence) &
-          Node.DOCUMENT_POSITION_FOLLOWING,
-      ).toBeTruthy();
+      const panel = screen.getByTestId("jd-requirements-panel");
+      expect(panel).toHaveTextContent("At least 4 years");
 
       const highlighted = await within(view.container).findByLabelText(
         "Required: At least 4 years",
