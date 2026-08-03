@@ -1049,6 +1049,131 @@ class RunJobspyDedupeTests(unittest.TestCase):
         self.assertIn("Must-have: Python.", cleaned)
         self.assertNotIn("<p>", cleaned)
 
+    def test_clean_description_preserves_blocks_lists_tables_and_plain_text_lines(self):
+        frame = pd.DataFrame(
+            {
+                "description": [
+                    """
+                    <section>
+                      <h2>Required Skills &amp; Experience</h2>
+                      <p>Build reliable systems.<br>Ship safely.</p>
+                      <ul>
+                        <li>5+ years in Java&nbsp;&amp;&nbsp;Spring</li>
+                        <li>3 years in AWS</li>
+                      </ul>
+                      <table>
+                        <tr><th>Skill</th><th>Years</th></tr>
+                        <tr><td>Python</td><td>4</td></tr>
+                      </table>
+                    </section>
+                    """,
+                    "Requirements：\r\n５＋ years’ experience\r\nPreferred： ２ years",
+                ]
+            }
+        )
+
+        cleaned = rj.clean_description(frame)
+
+        self.assertEqual(
+            cleaned.iloc[0]["description"],
+            "\n".join(
+                [
+                    "Required Skills & Experience",
+                    "",
+                    "Build reliable systems.",
+                    "Ship safely.",
+                    "",
+                    "- 5+ years in Java & Spring",
+                    "- 3 years in AWS",
+                    "",
+                    "Skill | Years",
+                    "Python | 4",
+                ]
+            ),
+        )
+        self.assertEqual(
+            cleaned.iloc[1]["description"],
+            "Requirements:\n5+ years’ experience\nPreferred: 2 years",
+        )
+        self.assertTrue(rj.clean_description(cleaned).equals(cleaned))
+
+    def test_clean_description_keeps_nested_blocks_in_list_and_table_units(self):
+        frame = pd.DataFrame(
+            {
+                "description": [
+                    "".join(
+                        [
+                            "<ul>",
+                            "<li><p>&ge; 5 years in Java</p></li>",
+                            "<li><div>&geq; 3 years in AWS</div></li>",
+                            "</ul>",
+                            "<table>",
+                            "<tr><th><p>Minimum</p></th><th><div>Maximum</div></th></tr>",
+                            "<tr><td><p>&plus; 2 years</p></td><td><div>&leq; 5 years</div></td></tr>",
+                            "</table>",
+                            "<p>&ge 4 years and &le 8 years; &plus 1 bonus year.</p>",
+                        ]
+                    )
+                ]
+            }
+        )
+
+        self.assertEqual(
+            rj.clean_description(frame).iloc[0]["description"],
+            "\n".join(
+                [
+                    "- ≥ 5 years in Java",
+                    "- ≥ 3 years in AWS",
+                    "",
+                    "Minimum | Maximum",
+                    "+ 2 years | ≤ 5 years",
+                    "",
+                    "≥ 4 years and ≤ 8 years; + 1 bonus year.",
+                ]
+            ),
+        )
+
+    def test_extract_description_from_html_keeps_the_complete_linkedin_container(self):
+        page = """
+        <html><body>
+          <nav>Unrelated navigation</nav>
+          <div class="show-more-less-html__markup">
+            <h2>Required Skills &amp; Experience</h2>
+            <div><ul><li>5+ years in Java</li><li>2 years in AWS</li></ul></div>
+            <p>Preferred: 1 year in Kotlin.</p>
+          </div>
+          <footer>Unrelated footer</footer>
+        </body></html>
+        """
+
+        self.assertEqual(
+            rj._extract_description_from_html(page),
+            "\n".join(
+                [
+                    "Required Skills & Experience",
+                    "",
+                    "- 5+ years in Java",
+                    "- 2 years in AWS",
+                    "",
+                    "Preferred: 1 year in Kotlin.",
+                ]
+            ),
+        )
+
+    def test_extract_description_from_json_ld_preserves_embedded_html_structure(self):
+        page = """
+        <html><head>
+          <script type="application/ld+json">
+            {"@type":"JobPosting","description":"<h2>Requirements</h2><p>5+ years in R&amp;D.</p><ul><li>2 years in AWS</li></ul>"}
+          </script>
+        </head><body>Unrelated page content</body></html>
+        """
+
+        self.assertEqual(
+            rj._extract_description_from_html(page),
+            "Requirements\n\n5+ years in R&D.\n\n- 2 years in AWS",
+        )
+
     def test_keep_columns_preserves_normalized_listing_date(self):
         df = pd.DataFrame(
             [

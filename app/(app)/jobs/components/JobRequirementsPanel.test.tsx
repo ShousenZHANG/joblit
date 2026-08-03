@@ -1,10 +1,21 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import { afterEach, describe, expect, it } from "vitest";
+import { axe } from "vitest-axe";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/messages/en.json";
-import type { JobExperienceAnalysis } from "@/lib/shared/jobExperienceAnalysis";
+import {
+  JobExperienceAnalysisSchema,
+  type JobExperienceAnalysis,
+} from "@/lib/shared/jobExperienceAnalysis";
 import type { FitMatrix } from "@/lib/shared/schemas/fitMatrix";
+import { JobDescriptionMarkdown } from "./JobDescriptionMarkdown";
 import { JobRequirementsPanel } from "./JobRequirementsPanel";
 
 /**
@@ -19,7 +30,11 @@ import { JobRequirementsPanel } from "./JobRequirementsPanel";
  * - When a job asks for nothing detectable, the panel takes zero pixels.
  */
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
 
 function renderPanel(props: Parameters<typeof JobRequirementsPanel>[0]) {
   return render(
@@ -33,7 +48,11 @@ function analysisWith(
   requirements: JobExperienceAnalysis["requirements"],
   status: JobExperienceAnalysis["status"] = "FOUND",
 ): JobExperienceAnalysis {
-  return { schemaVersion: 1, status, requirements };
+  return JobExperienceAnalysisSchema.parse({
+    schemaVersion: 2,
+    status,
+    requirements,
+  });
 }
 
 const QA_EVIDENCE_TEXT = "5+ years of experience in software QA";
@@ -76,24 +95,39 @@ const DESCRIPTION = [
 ].join("\n");
 
 describe("JobRequirementsPanel", () => {
-  it("renders a confident requirement as the headline with its JD quote", () => {
+  it("renders one neutral role-requirements surface with a compact experience row", () => {
     renderPanel({
       analysis: analysisWith([REQUIRED_QA]),
       description: "",
       matrix: null,
     });
 
-    expect(screen.getByText("5+ years")).toBeInTheDocument();
-    expect(screen.getByText("· software QA")).toBeInTheDocument();
-    expect(screen.getByText("Required")).toBeInTheDocument();
-    // Experience owns the amber channel — one glance, one hue.
     expect(
-      screen.getByTestId("jd-experience-row").className,
-    ).toMatch(/amber/);
-    // The JD quote stays reachable behind the inline disclosure.
-    expect(
-      screen.getByText("5+ years of experience in software QA"),
+      screen.getByRole("heading", { name: "Role requirements" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("5+ years")).toBeInTheDocument();
+    expect(screen.getByText("software QA")).toBeInTheDocument();
+    expect(screen.getByText("Required")).toBeInTheDocument();
+    expect(screen.getByText("5+ years")).toHaveClass("text-foreground");
+    expect(screen.getByText("Required")).toHaveClass("text-foreground");
+    expect(screen.getByTestId("jd-requirements-panel").className).not.toMatch(
+      /amber/,
+    );
+    expect(screen.getByTestId("jd-experience-row")).toHaveAttribute(
+      "data-requirement-family",
+      "experience",
+    );
+    expect(screen.getByTestId("jd-experience-row").className).toMatch(
+      /brand-blue/,
+    );
+    expect(
+      screen.getByRole("button", {
+        name: /view 5\+ years in job description/i,
+      }),
+    ).toHaveClass("min-h-11");
+    expect(
+      screen.queryByText("5+ years of experience in software QA"),
+    ).not.toBeInTheDocument();
   });
 
   it("never renders a REVIEW candidate — no hedge card, no wording", () => {
@@ -145,16 +179,17 @@ describe("JobRequirementsPanel", () => {
     expect(chips.indexOf("SRE")).toBeLessThan(chips.indexOf("Airflow"));
   });
 
-  it("gives unscored technology chips the sky channel, distinct from experience", () => {
+  it("gives technology one consistent emerald identity", () => {
     renderPanel({ analysis: null, description: DESCRIPTION, matrix: null });
 
     for (const chip of screen.getAllByTestId("jd-skill-chip")) {
-      expect(chip.className).toMatch(/sky/);
+      expect(chip.className).toMatch(/emerald/);
       expect(chip.className).not.toMatch(/amber/);
+      expect(chip.className).not.toMatch(/sky/);
     }
   });
 
-  it("keeps judgement fill on chips once a scan lands", () => {
+  it("does not recolour technology away from emerald after a scan", () => {
     const matrix = {
       requirements: [
         {
@@ -175,6 +210,34 @@ describe("JobRequirementsPanel", () => {
       .getAllByTestId("jd-skill-chip")
       .find((chip) => chip.textContent?.includes("Kubernetes"));
     expect(matched?.className).toMatch(/emerald/);
+    expect(matched).toHaveAttribute("data-judgement", "MATCH");
+    expect(matched).toHaveAccessibleName("Kubernetes: Match");
+    expect(screen.getByText("Match")).toBeVisible();
+  });
+
+  it("keeps the technology family emerald while making a gap unmistakable", () => {
+    const matrix = {
+      requirements: [
+        {
+          id: "m-gap",
+          requirement: "Kubernetes",
+          type: "REQUIRED",
+          criticality: "CORE",
+          judgement: "GAP",
+          evidence: "No Kubernetes evidence",
+        },
+      ],
+      eligibility: { status: "CLEAR", reasons: [] },
+    } as unknown as FitMatrix;
+
+    renderPanel({ analysis: null, description: DESCRIPTION, matrix });
+
+    const gap = screen
+      .getAllByTestId("jd-skill-chip")
+      .find((chip) => chip.textContent?.includes("Kubernetes"));
+    expect(gap?.className).toMatch(/emerald/);
+    expect(gap).toHaveAccessibleName("Kubernetes: Gap");
+    expect(screen.getByText("Gap")).toHaveClass("text-rose-700");
   });
 
   it("renders nothing at all for a job with no detectable asks", () => {
@@ -219,5 +282,268 @@ describe("JobRequirementsPanel", () => {
     expect(screen.getByText("5+ years")).toBeInTheDocument();
     expect(screen.getByText("3+ years")).toBeInTheDocument();
     expect(screen.getByText(/^or$/i)).toBeInTheDocument();
+  });
+
+  it("renders stated, preferred and alternative strength without relying on colour", () => {
+    const variants = [
+      { ...REQUIRED_QA, id: "stated", classification: "STATED" },
+      {
+        ...REQUIRED_QA,
+        id: "preferred",
+        classification: "PREFERRED",
+        evidence: {
+          ...REQUIRED_QA.evidence,
+          start: 60,
+          end: 60 + QA_EVIDENCE_TEXT.length,
+          yearsStart: 60,
+          yearsEnd: 68,
+        },
+      },
+      {
+        ...REQUIRED_QA,
+        id: "alternative",
+        classification: "ALTERNATIVE",
+        evidence: {
+          ...REQUIRED_QA.evidence,
+          start: 110,
+          end: 110 + QA_EVIDENCE_TEXT.length,
+          yearsStart: 110,
+          yearsEnd: 118,
+        },
+      },
+    ] satisfies JobExperienceAnalysis["requirements"];
+
+    renderPanel({
+      analysis: analysisWith(variants),
+      description: "",
+      matrix: null,
+    });
+
+    expect(screen.getByText("Stated")).toBeInTheDocument();
+    expect(screen.getByText("Preferred")).toBeInTheDocument();
+    expect(screen.getByText("Alternative")).toBeInTheDocument();
+    expect(
+      screen.getByText("Alternative").closest("[data-classification]"),
+    ).toHaveAttribute("data-classification", "ALTERNATIVE");
+  });
+
+  it("indents a nested subset and labels it as included", () => {
+    const nested = [
+      {
+        ...REQUIRED_QA,
+        id: "total",
+        relation: { groupId: "nested", kind: "ALL_OF", role: "TOTAL" },
+      },
+      {
+        ...REQUIRED_QA,
+        id: "subset",
+        years: { operator: "EXACT", min: 2, max: 2, text: "2 years" },
+        scope: "cloud architecture",
+        relation: { groupId: "nested", kind: "ALL_OF", role: "SUBSET" },
+        evidence: {
+          text: "2 years of cloud architecture experience",
+          start: 60,
+          end: 100,
+          yearsStart: 60,
+          yearsEnd: 67,
+        },
+      },
+    ] satisfies JobExperienceAnalysis["requirements"];
+
+    renderPanel({
+      analysis: analysisWith(nested),
+      description: "",
+      matrix: null,
+    });
+
+    const subset = screen.getByText("2 years").closest("[data-relation-role]");
+    expect(subset).toHaveAttribute("data-relation-role", "SUBSET");
+    expect(subset?.className).toMatch(/ml-/);
+    expect(screen.getByText("Includes")).toBeInTheDocument();
+  });
+
+  it("moves focus to the exact JD mark with reduced-motion-safe scrolling", () => {
+    const description = `Context. ${QA_EVIDENCE_TEXT}.`;
+    const requirement = {
+      ...REQUIRED_QA,
+      evidence: {
+        text: QA_EVIDENCE_TEXT,
+        start: description.indexOf(QA_EVIDENCE_TEXT),
+        end: description.indexOf(QA_EVIDENCE_TEXT) + QA_EVIDENCE_TEXT.length,
+        yearsStart: description.indexOf("5+ years"),
+        yearsEnd: description.indexOf("5+ years") + "5+ years".length,
+      },
+    };
+    const analysis = analysisWith([requirement]);
+    vi.useFakeTimers();
+    const scrollIntoView = vi.fn();
+    vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(
+      scrollIntoView,
+    );
+    vi.spyOn(window, "matchMedia").mockReturnValue({
+      matches: true,
+    } as MediaQueryList);
+
+    render(
+      <NextIntlClientProvider locale="en" messages={en}>
+        <JobRequirementsPanel
+          analysis={analysis}
+          description={description}
+          matrix={null}
+        />
+        <JobDescriptionMarkdown
+          description={description}
+          experienceAnalysis={analysis}
+        />
+      </NextIntlClientProvider>,
+    );
+
+    const button = screen.getByRole("button", {
+      name: /view 5\+ years in job description/i,
+    });
+    const targetId = button.getAttribute("aria-controls");
+    expect(targetId).toBeTruthy();
+    const target = document.getElementById(targetId ?? "");
+    expect(target).toHaveAttribute("tabindex", "-1");
+
+    fireEvent.click(button);
+
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      behavior: "auto",
+      block: "center",
+    });
+    expect(target).toHaveFocus();
+    expect(target).toHaveAttribute("data-evidence-active", "true");
+    vi.advanceTimersByTime(1_600);
+    expect(target).not.toHaveAttribute("data-evidence-active");
+  });
+
+  it("retries a View in JD request until the dynamic Markdown target mounts", () => {
+    const description = `Context. ${QA_EVIDENCE_TEXT}.`;
+    const requirement = {
+      ...REQUIRED_QA,
+      evidence: {
+        text: QA_EVIDENCE_TEXT,
+        start: description.indexOf(QA_EVIDENCE_TEXT),
+        end: description.indexOf(QA_EVIDENCE_TEXT) + QA_EVIDENCE_TEXT.length,
+        yearsStart: description.indexOf("5+ years"),
+        yearsEnd: description.indexOf("5+ years") + "5+ years".length,
+      },
+    };
+    const analysis = analysisWith([requirement]);
+    vi.useFakeTimers();
+    const scrollIntoView = vi.fn();
+    vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(
+      scrollIntoView,
+    );
+
+    const view = render(
+      <NextIntlClientProvider locale="en" messages={en}>
+        <JobRequirementsPanel
+          analysis={analysis}
+          description={description}
+          matrix={null}
+        />
+      </NextIntlClientProvider>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /view 5\+ years in job description/i,
+      }),
+    );
+    expect(
+      screen.getByRole("button", { name: /finding 5\+ years/i }),
+    ).toHaveAttribute("aria-busy", "true");
+
+    view.rerender(
+      <NextIntlClientProvider locale="en" messages={en}>
+        <JobRequirementsPanel
+          analysis={analysis}
+          description={description}
+          matrix={null}
+        />
+        <JobDescriptionMarkdown
+          description={description}
+          experienceAnalysis={analysis}
+        />
+      </NextIntlClientProvider>,
+    );
+    act(() => vi.advanceTimersByTime(150));
+
+    const target = document.getElementById("jd-experience-req-1");
+    expect(target).toHaveFocus();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("button", {
+        name: /view 5\+ years in job description/i,
+      }),
+    ).not.toHaveAttribute("aria-busy", "true");
+  });
+
+  it("ends a missing-target retry with explicit feedback and no live timer", () => {
+    vi.useFakeTimers();
+    renderPanel({
+      analysis: analysisWith([REQUIRED_QA]),
+      description: "",
+      matrix: null,
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /view 5\+ years in job description/i,
+      }),
+    );
+    act(() => vi.runAllTimers());
+
+    expect(
+      screen.getByRole("button", {
+        name: /5\+ years is not available in the jd/i,
+      }),
+    ).toBeInTheDocument();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("has no detectable accessibility violations", async () => {
+    const description = `Requirements: ${QA_EVIDENCE_TEXT}. Kubernetes is required.`;
+    const requirement = {
+      ...REQUIRED_QA,
+      evidence: {
+        text: QA_EVIDENCE_TEXT,
+        start: description.indexOf(QA_EVIDENCE_TEXT),
+        end: description.indexOf(QA_EVIDENCE_TEXT) + QA_EVIDENCE_TEXT.length,
+        yearsStart: description.indexOf("5+ years"),
+        yearsEnd: description.indexOf("5+ years") + "5+ years".length,
+      },
+    };
+    const analysis = analysisWith([requirement]);
+    const matrix = {
+      requirements: [
+        {
+          id: "a11y-gap",
+          requirement: "Kubernetes",
+          type: "REQUIRED",
+          criticality: "CORE",
+          judgement: "GAP",
+          evidence: "No Kubernetes evidence",
+        },
+      ],
+      eligibility: { status: "CLEAR", reasons: [] },
+    } as unknown as FitMatrix;
+    const { container } = render(
+      <NextIntlClientProvider locale="en" messages={en}>
+        <JobRequirementsPanel
+          analysis={analysis}
+          description={description}
+          matrix={matrix}
+        />
+        <JobDescriptionMarkdown
+          description={description}
+          experienceAnalysis={analysis}
+        />
+      </NextIntlClientProvider>,
+    );
+
+    expect(await axe(container)).toHaveNoViolations();
   });
 });

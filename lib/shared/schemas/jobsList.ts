@@ -5,6 +5,10 @@ import {
   EMPTY_JOB_EXPERIENCE_ANALYSIS,
   JobExperienceAnalysisSchema,
 } from "@/lib/shared/jobExperienceAnalysis";
+import {
+  LegacyJobExperienceAnalysisSchema,
+  upgradeJobExperienceAnalysisV1,
+} from "@/lib/shared/jobExperienceAnalysisCompat";
 
 /**
  * The `GET /api/jobs` and `GET /api/jobs/[id]` response contracts.
@@ -54,25 +58,37 @@ export const jobsListResponseSchema = z.object({
   items: z.array(jobListItemSchema),
   nextCursor: z.string().nullable(),
   totalCount: z.number().optional(),
-  facets: z
-    .object({ jobLevels: z.array(z.string()).optional() })
-    .optional(),
+  facets: z.object({ jobLevels: z.array(z.string()).optional() }).optional(),
 });
 
-export const jobDetailResponseSchema = z
+const jobDetailWireResponseSchema = z
   .object({
     id: z.string(),
     description: z.string().nullable(),
     fitMatrix: FitMatrixSchema.nullable(),
-    // Defaulting keeps the expand rollout compatible with an older application
-    // revision while the new detail response crosses the deployment seam.
-    experienceAnalysis: JobExperienceAnalysisSchema.optional().default(
-      EMPTY_JOB_EXPERIENCE_ANALYSIS,
-    ),
+    // `experienceAnalysis` remains frozen at v1 until the contract rollout is
+    // complete. The union also accepts the brief pre-expand shape where v2 was
+    // emitted under the old key, so staggered deployments fail open safely.
+    experienceAnalysis: z
+      .union([LegacyJobExperienceAnalysisSchema, JobExperienceAnalysisSchema])
+      .optional(),
+    experienceAnalysisV2: JobExperienceAnalysisSchema.optional(),
     /** Cache version for score/matrix coherence with the list row. */
     updatedAt: z.string(),
   })
-  .superRefine((detail, context) => {
+  .transform(({ experienceAnalysis, experienceAnalysisV2, ...detail }) => ({
+    ...detail,
+    experienceAnalysis:
+      experienceAnalysisV2 ??
+      (experienceAnalysis?.schemaVersion === 2
+        ? experienceAnalysis
+        : experienceAnalysis
+          ? upgradeJobExperienceAnalysisV1(experienceAnalysis)
+          : EMPTY_JOB_EXPERIENCE_ANALYSIS),
+  }));
+
+export const jobDetailResponseSchema = jobDetailWireResponseSchema.superRefine(
+  (detail, context) => {
     const requirements = detail.experienceAnalysis.requirements;
     for (const [index, requirement] of requirements.entries()) {
       const evidence = requirement.evidence;
@@ -90,7 +106,8 @@ export const jobDetailResponseSchema = z
         });
       }
     }
-  });
+  },
+);
 
 export type JobListItem = z.infer<typeof jobListItemSchema>;
 export type JobsListResponse = z.infer<typeof jobsListResponseSchema>;

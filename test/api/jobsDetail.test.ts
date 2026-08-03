@@ -69,6 +69,16 @@ describe("GET /api/jobs/[id]", () => {
       ],
     });
     expect(body.experienceAnalysis.requirements).toHaveLength(1);
+    expect(body.experienceAnalysisV2).toMatchObject({
+      schemaVersion: 2,
+      status: "FOUND",
+      requirements: [
+        {
+          classification: "REQUIRED",
+          years: { operator: "MINIMUM", min: 3, max: null },
+        },
+      ],
+    });
   });
 
   it("returns an empty analysis when the source has no description", async () => {
@@ -84,10 +94,42 @@ describe("GET /api/jobs/[id]", () => {
       { params: Promise.resolve({ id: JOB_ID }) },
     );
 
-    expect((await response.json()).experienceAnalysis).toEqual({
+    const body = await response.json();
+    expect(body.experienceAnalysis).toEqual({
       schemaVersion: 1,
       status: "NONE",
       requirements: [],
+    });
+    expect(body.experienceAnalysisV2).toEqual({
+      schemaVersion: 2,
+      status: "NONE",
+      requirements: [],
+    });
+  });
+
+  it("keeps fractional durations only in v2 instead of rounding for old clients", async () => {
+    jobStore.findFirst.mockResolvedValue({
+      id: JOB_ID,
+      description: "18 months of backend engineering experience is required.",
+      fitMatrix: null,
+      updatedAt: new Date("2026-08-02T00:00:00.000Z"),
+    });
+
+    const response = await GET(
+      new Request(`http://localhost/api/jobs/${JOB_ID}`),
+      { params: Promise.resolve({ id: JOB_ID }) },
+    );
+    const body = await response.json();
+
+    expect(body.experienceAnalysis).toEqual({
+      schemaVersion: 1,
+      status: "NONE",
+      requirements: [],
+    });
+    expect(body.experienceAnalysisV2).toMatchObject({
+      schemaVersion: 2,
+      status: "FOUND",
+      requirements: [{ years: { operator: "EXACT", min: 1.5, max: 1.5 } }],
     });
   });
 });

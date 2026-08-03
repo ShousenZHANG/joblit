@@ -154,7 +154,7 @@ describe("JobDetailPanel experience summary", () => {
       const yearsText = "At least 4 years";
       const yearsStart = description.indexOf(yearsText);
       const experienceAnalysis: JobExperienceAnalysis = {
-        schemaVersion: 1,
+        schemaVersion: 2,
         status: "FOUND",
         requirements: [
           {

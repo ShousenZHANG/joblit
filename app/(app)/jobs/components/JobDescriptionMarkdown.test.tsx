@@ -3,7 +3,10 @@ import { NextIntlClientProvider } from "next-intl";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { JobExperienceAnalysis } from "@/lib/shared/jobExperienceAnalysis";
+import {
+  JobExperienceAnalysisSchema,
+  type JobExperienceAnalysis,
+} from "@/lib/shared/jobExperienceAnalysis";
 import messages from "@/messages/en.json";
 import { JobDescriptionMarkdown } from "./JobDescriptionMarkdown";
 
@@ -23,9 +26,9 @@ function analysisFor(
   const nextNewline = description.indexOf("\n", yearsStart);
   const sentenceEnd = nextNewline === -1 ? description.length : nextNewline;
 
-  return {
-    schemaVersion: 1,
-    status: "FOUND",
+  return JobExperienceAnalysisSchema.parse({
+    schemaVersion: 2,
+    status: classification === "REVIEW" ? "REVIEW" : "FOUND",
     requirements: [
       {
         id: "experience-1",
@@ -41,7 +44,7 @@ function analysisFor(
         },
       },
     ],
-  };
+  });
 }
 
 function renderMarkdown(
@@ -62,8 +65,8 @@ function analysisForPhrases(
   description: string,
   phrases: string[],
 ): JobExperienceAnalysis {
-  return {
-    schemaVersion: 1,
+  return JobExperienceAnalysisSchema.parse({
+    schemaVersion: 2,
     status: "FOUND",
     requirements: phrases.map((phrase, index) => {
       const yearsStart = description.indexOf(phrase);
@@ -89,7 +92,7 @@ function analysisForPhrases(
         },
       };
     }),
-  };
+  });
 }
 
 const structuredMarkdown = [
@@ -119,7 +122,7 @@ describe("JobDescriptionMarkdown experience evidence", () => {
     expect(marks).toHaveLength(1);
     expect(marks[0]).toHaveTextContent("3+ years");
     expect(marks[0]).toHaveAttribute("aria-label", "Required: 3+ years");
-    expect(marks[0]).toHaveClass("bg-amber-100", "dark:bg-amber-300/20");
+    expect(marks[0]).toHaveClass("bg-brand-blue/15", "dark:bg-brand-blue/25");
     expect(screen.getAllByText("3+ years", { exact: false })).toHaveLength(2);
     const paragraphs = view.container.querySelectorAll("p");
     expect(paragraphs[0].querySelector("[data-experience-highlight]")).toBeNull();
@@ -172,19 +175,39 @@ describe("JobDescriptionMarkdown experience evidence", () => {
     );
   });
 
-  it("uses a neutral mark for wording that still needs human review", () => {
+  it("renders no experience mark for wording that still needs human review", () => {
     const description = "The JD mentions about 4 years of platform exposure.";
     const view = renderMarkdown(
       description,
       analysisFor(description, "4 years", "last", "REVIEW"),
     );
 
-    const mark = view.container.querySelector(
-      "mark[data-experience-highlight='REVIEW']",
+    expect(
+      view.container.querySelector("mark[data-experience-highlight='REVIEW']"),
+    ).toBeNull();
+    expect(view.container).toHaveTextContent(
+      "The JD mentions about 4 years of platform exposure.",
     );
-    expect(mark).toHaveTextContent("4 years");
-    expect(mark).toHaveClass("bg-slate-200", "dark:bg-slate-300/20");
-    expect(mark).toHaveAttribute("aria-label", "Needs review: 4 years");
+  });
+
+  it("gives a confident duration a stable focus target", () => {
+    const description = "Required: 3+ years of backend experience.";
+    const view = renderMarkdown(
+      description,
+      analysisFor(description, "3+ years"),
+    );
+
+    const mark = view.container.querySelector(
+      "mark[data-experience-highlight='REQUIRED']",
+    );
+    expect(mark).toHaveAttribute("id", "jd-experience-experience-1");
+    expect(mark).toHaveAttribute("tabindex", "-1");
+    expect(mark).toHaveClass(
+      "scroll-mt-24",
+      "focus:ring-2",
+      "focus:ring-brand-blue",
+      "motion-reduce:transition-none",
+    );
   });
 
   it("uses source offsets inside strong, links, table cells and inline code without leaking internals", () => {

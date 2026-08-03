@@ -2,15 +2,17 @@ import { z } from "zod";
 
 export const ExperienceClassificationSchema = z.enum([
   "REQUIRED",
+  "STATED",
   "PREFERRED",
+  "ALTERNATIVE",
   "REVIEW",
 ]);
 
 export const ExperienceYearsSchema = z
   .object({
     operator: z.enum(["MINIMUM", "RANGE", "MAXIMUM", "EXACT"]),
-    min: z.number().int().min(0).max(60),
-    max: z.number().int().min(0).max(60).nullable(),
+    min: z.number().min(0).max(60),
+    max: z.number().min(0).max(60).nullable(),
     text: z.string().min(1).max(80),
   })
   .strict()
@@ -91,6 +93,7 @@ export const ExperienceRelationSchema = z
   .object({
     groupId: z.string().min(1).max(160),
     kind: z.enum(["ANY_OF", "ALL_OF"]),
+    role: z.enum(["TOTAL", "SUBSET"]).optional(),
   })
   .strict();
 
@@ -129,7 +132,7 @@ export const JobExperienceRequirementSchema = z
 
 export const JobExperienceAnalysisSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.literal(2),
     status: z.enum(["NONE", "FOUND", "REVIEW"]),
     requirements: z.array(JobExperienceRequirementSchema).max(40),
     // Present only when the bounded UI payload omitted additional matches.
@@ -179,7 +182,11 @@ export const JobExperienceAnalysisSchema = z
     const seenIds = new Set<string>();
     const relationGroups = new Map<
       string,
-      { count: number; kinds: Set<ExperienceRelation["kind"]> }
+      {
+        count: number;
+        kinds: Set<ExperienceRelation["kind"]>;
+        roles: Array<ExperienceRelation["role"]>;
+      }
     >();
     const orderedOffsets = [...analysis.requirements]
       .map((requirement, index) => ({
@@ -202,9 +209,11 @@ export const JobExperienceAnalysisSchema = z
         const group = relationGroups.get(requirement.relation.groupId) ?? {
           count: 0,
           kinds: new Set<ExperienceRelation["kind"]>(),
+          roles: [],
         };
         group.count += 1;
         group.kinds.add(requirement.relation.kind);
+        group.roles.push(requirement.relation.role);
         relationGroups.set(requirement.relation.groupId, group);
       }
     }
@@ -227,6 +236,21 @@ export const JobExperienceAnalysisSchema = z
           message: `relation group ${groupId} must contain at least two members of one kind`,
         });
       }
+      const hasNestedRoles = group.roles.some((role) => role !== undefined);
+      if (
+        hasNestedRoles &&
+        (group.kinds.size !== 1 ||
+          !group.kinds.has("ALL_OF") ||
+          group.roles.some((role) => role === undefined) ||
+          group.roles.filter((role) => role === "TOTAL").length !== 1 ||
+          group.roles.filter((role) => role === "SUBSET").length < 1)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["requirements"],
+          message: `nested relation group ${groupId} needs one TOTAL and at least one SUBSET`,
+        });
+      }
     }
   });
 
@@ -239,12 +263,10 @@ export type ExperienceRelation = z.infer<typeof ExperienceRelationSchema>;
 export type JobExperienceRequirement = z.infer<
   typeof JobExperienceRequirementSchema
 >;
-export type JobExperienceAnalysis = z.infer<
-  typeof JobExperienceAnalysisSchema
->;
+export type JobExperienceAnalysis = z.infer<typeof JobExperienceAnalysisSchema>;
 
 export const EMPTY_JOB_EXPERIENCE_ANALYSIS: JobExperienceAnalysis = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   status: "NONE",
   requirements: [],
 };
@@ -271,7 +293,7 @@ type ContextualYearExpression = {
 
 type DraftRequirement = {
   requirement: JobExperienceRequirement;
-  explicitClassification: Exclude<ExperienceClassification, "REVIEW"> | null;
+  explicitClassification: "REQUIRED" | "PREFERRED" | null;
   propagationEligible: boolean;
 };
 
@@ -286,12 +308,25 @@ const WORD_NUMERALS: Readonly<Record<string, number>> = {
   eight: 8,
   nine: 9,
   ten: 10,
+  eleven: 11,
+  twelve: 12,
+  thirteen: 13,
+  fourteen: 14,
+  fifteen: 15,
+  sixteen: 16,
+  seventeen: 17,
+  eighteen: 18,
+  nineteen: 19,
+  twenty: 20,
+  thirty: 30,
+  forty: 40,
+  fifty: 50,
+  sixty: 60,
 };
 
-const YEAR_NUMBER_SOURCE =
-  "(?:[0-9]{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)";
 const YEAR_WORD_SOURCE =
-  "(?:one|two|three|four|five|six|seven|eight|nine|ten)";
+  "(?:eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|(?:twenty|thirty|forty|fifty)(?:[- ](?:one|two|three|four|five|six|seven|eight|nine))?|sixty|one|two|three|four|five|six|seven|eight|nine|ten)";
+const YEAR_NUMBER_SOURCE = `(?:[0-9]{1,2}(?:\\.[0-9])?|${YEAR_WORD_SOURCE})`;
 
 const PREFERRED_QUALIFIER_RE =
   /\b(?:preferred|desirable|desired|ideally|nice[- ]to[- ]have|bonus|optional|a plus|advantageous)\b/giu;
@@ -304,21 +339,25 @@ const REQUIRED_QUALIFIER_RE =
 const NEGATED_EXPERIENCE_RE =
   /\b(?:do|does|did)\s+not\s+(?:need|require)\b|\b(?:experience|background)\b.{0,50}\bnot\s+(?:required|necessary|essential|mandatory)\b|\bno\b(?!\s+(?:fewer|less|more)\b).{0,80}\b(?:required|necessary|needed|mandatory)\b/iu;
 const ORGANISATION_HISTORY_RE = new RegExp(
-  `\\b(?:company|business|organisation|organization|firm|team|product|platform|technology)\\b(?:[^.;]{0,45}\\b(?:has|have|brings?)\\s+(?:(?:a|an)\\s+)?(?:combined\\s+)?(?:over\\s+|more\\s+than\\s+)?${YEAR_NUMBER_SOURCE}\\s*years?\\b|[^.;]{0,60}\\b(?:operat(?:e|es|ed|ing)|launch(?:ed|es)?|found(?:ed)?|establish(?:ed)?|serv(?:e|es|ed|ing))\\b)|\\b(?:has|have)\\s+been\\s+(?:in\\s+business|operating)\\b`,
+  `\\b(?:company|business|organisation|organization|firm|team|product|platform|technology)\\b(?:[^.;]{0,45}\\b(?:has|have|brings?)\\s+(?:(?:a|an)\\s+)?(?:combined\\s+)?(?:over\\s+|more\\s+than\\s+)?${YEAR_NUMBER_SOURCE}\\s*(?:\\+\\s*)?years?\\b|[^.;]{0,60}\\b(?:operat(?:e|es|ed|ing)|launch(?:ed|es)?|found(?:ed)?|establish(?:ed)?|serv(?:e|es|ed|ing))\\b)|\\b(?:has|have)\\s+been\\s+(?:in\\s+business|operating)\\b`,
   "iu",
 );
 const NON_EXPERIENCE_DURATION_RE =
-  /\b(?:contract|engagement|assignment|visa|passport|degree|university|college|study|course|training|programme|program|apprenticeship|internship|warranty|licen[cs]e|registration|membership|clearance|certificate|certification|residen(?:ce|cy)|citizenship|work rights?|sponsorship|records?|record[- ]keeping|retention|retain(?:ed|s|ing)?|audit)\b|\byears?\s+(?:old|ago|of\s+service)\b/iu;
+  /\b(?:availability|commitment|contract|engagement|assignment|roadmap|timeline|horizon|runway|visa|passport|degree|university|college|study|course|training|programme|program|apprenticeship|internship|warranty|licen[cs]e|registration|membership|clearance|certificate|certification|residen(?:ce|cy)|citizenship|work rights?|sponsorship|records?|record[- ]keeping|retention|retain(?:ed|s|ing)?|audit)\b|\byears?\s+(?:old|ago|of\s+service)\b/iu;
 const DIRECT_EXPERIENCE_RE =
-  /\b(?:years?|yrs?)['\u2019]?\.?\s+(?:of\s+)?(?:[a-z+#./-]+\s+){0,7}(?:experience|exp)\b|\b(?:years?|yrs?)['\u2019]?\.?\s+of\s+.{1,60}?\s+experience\b|\b(?:experience|exp)\b.{0,45}\b(?:years?|yrs?)\b/iu;
+  /\b(?:years?|yrs?|months?|mos?)['\u2019]?\.?\s+(?:of\s+)?(?:[a-z+#./-]+\s+){0,7}(?:experience|exp)\b|\b(?:years?|yrs?|months?|mos?)['\u2019]?\.?\s+of\s+.{1,60}?\s+experience\b|\b(?:experience|exp)\b.{0,45}\b(?:years?|yrs?|months?|mos?)\b/iu;
 
 function yearNumber(value: string | undefined): number | null {
   if (!value) return null;
-  const normalized = value.toLocaleLowerCase("en");
-  const parsed = WORD_NUMERALS[normalized] ?? Number(normalized);
-  return Number.isInteger(parsed) && parsed >= 0 && parsed <= 60
-    ? parsed
-    : null;
+  const normalized = value.toLocaleLowerCase("en").replace(/-/g, " ").trim();
+  const words = normalized.split(/\s+/);
+  const parsed =
+    WORD_NUMERALS[normalized] ??
+    (words.length === 2
+      ? (WORD_NUMERALS[words[0] ?? ""] ?? 0) +
+        (WORD_NUMERALS[words[1] ?? ""] ?? 0)
+      : Number(normalized));
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 60 ? parsed : null;
 }
 
 function yearPattern(source: string): RegExp {
@@ -331,7 +370,139 @@ function findYearExpressions(value: string): YearExpression[] {
     regex: RegExp;
     maximum?: boolean;
     ambiguous?: boolean;
+    divisor?: number;
+    compoundYearsMonths?: boolean;
   }> = [
+    {
+      operator: "RANGE",
+      ambiguous: true,
+      regex: yearPattern(
+        `\\b(?<first>[0-9]{1,2}(?:\\.[0-9])?)\\s*(?:-|\\u2013|\\u2014|to)\\s*(?<second>[0-9]{1,2}(?:\\.[0-9])?)\\s*\\+\\s*(?:years?|yrs?)\\b`,
+      ),
+    },
+    {
+      operator: "RANGE",
+      ambiguous: true,
+      regex: yearPattern(
+        `\\b(?<first>${YEAR_NUMBER_SOURCE})\\s+or\\s+(?<second>${YEAR_NUMBER_SOURCE})\\s*(?:years?|yrs?)\\b`,
+      ),
+    },
+    {
+      operator: "RANGE",
+      regex: yearPattern(
+        `\\b(?<first>${YEAR_NUMBER_SOURCE})\\s*(?:years?|yrs?)\\s*(?:-|\\u2013|\\u2014|to)\\s*(?<second>${YEAR_NUMBER_SOURCE})\\s*(?:years?|yrs?)\\b`,
+      ),
+    },
+    {
+      operator: "RANGE",
+      divisor: 12,
+      regex: yearPattern(
+        `\\b(?<first>${YEAR_NUMBER_SOURCE})\\s*(?:months?|mos?)\\s*(?:-|\\u2013|\\u2014|to)\\s*(?<second>${YEAR_NUMBER_SOURCE})\\s*(?:months?|mos?)\\b`,
+      ),
+    },
+    {
+      operator: "EXACT",
+      compoundYearsMonths: true,
+      regex: yearPattern(
+        `\\b(?<first>${YEAR_NUMBER_SOURCE})\\s*(?:years?|yrs?)\\s*(?:and\\s+)?(?<second>${YEAR_NUMBER_SOURCE})\\s*(?:months?|mos?)\\b`,
+      ),
+    },
+    {
+      operator: "RANGE",
+      divisor: 12,
+      regex: yearPattern(
+        `\\b(?<first>${YEAR_NUMBER_SOURCE})\\s*(?:\\u2013|\\u2014|to|-(?![a-z]))\\s*(?<second>${YEAR_NUMBER_SOURCE})\\s*(?:months?|mos?)\\b`,
+      ),
+    },
+    {
+      operator: "MAXIMUM",
+      maximum: true,
+      divisor: 12,
+      regex: yearPattern(
+        `\\b(?:up\\s+to|no\\s+more\\s+than|not\\s+more\\s+than|maximum(?:\\s+of)?)\\s+(?<first>${YEAR_NUMBER_SOURCE})\\s*(?:months?|mos?)\\b`,
+      ),
+    },
+    {
+      operator: "MINIMUM",
+      divisor: 12,
+      regex: yearPattern(
+        `\\b(?:at\\s+least|minimum(?:\\s+of)?|(?:no|not)\\s+(?:fewer|less)\\s+than)\\s+(?<first>${YEAR_NUMBER_SOURCE})\\s*(?:months?|mos?)\\b`,
+      ),
+    },
+    {
+      operator: "MINIMUM",
+      divisor: 12,
+      regex: yearPattern(
+        `(?:>=|\u2265)\\s*(?<first>${YEAR_NUMBER_SOURCE})\\s*(?:months?|mos?)\\b`,
+      ),
+    },
+    {
+      operator: "MAXIMUM",
+      maximum: true,
+      divisor: 12,
+      regex: yearPattern(
+        `(?:<=|\u2264)\\s*(?<first>${YEAR_NUMBER_SOURCE})\\s*(?:months?|mos?)\\b`,
+      ),
+    },
+    {
+      operator: "MINIMUM",
+      divisor: 12,
+      regex: yearPattern(
+        `\\b(?:more\\s+than|over)\\s+(?<first>${YEAR_NUMBER_SOURCE})\\s*(?:months?|mos?)\\b`,
+      ),
+    },
+    {
+      operator: "MINIMUM",
+      divisor: 12,
+      regex: yearPattern(
+        `\\b(?<first>${YEAR_NUMBER_SOURCE})\\s*\\+\\s*(?:months?|mos?)\\b`,
+      ),
+    },
+    {
+      operator: "MINIMUM",
+      divisor: 12,
+      regex: yearPattern(
+        `\\b(?<first>${YEAR_NUMBER_SOURCE})\\s*(?:months?|mos?)\\s+(?:or\\s+more|and\\s+above)\\b`,
+      ),
+    },
+    {
+      operator: "MINIMUM",
+      regex: yearPattern(
+        `(?:>=|\u2265)\\s*(?<first>${YEAR_NUMBER_SOURCE})\\s*(?:years?|yrs?)\\b`,
+      ),
+    },
+    {
+      operator: "MAXIMUM",
+      maximum: true,
+      regex: yearPattern(
+        `(?:<=|\u2264)\\s*(?<first>${YEAR_NUMBER_SOURCE})\\s*(?:years?|yrs?)\\b`,
+      ),
+    },
+    {
+      operator: "MINIMUM",
+      regex: yearPattern(
+        `\\b(?<first>${YEAR_NUMBER_SOURCE})\\s*(?:years?|yrs?)\\s*\\+`,
+      ),
+    },
+    {
+      operator: "EXACT",
+      regex: yearPattern(
+        `\\b(?<first>${YEAR_NUMBER_SOURCE})\\s*-\\s*(?:years?|yrs?)\\b`,
+      ),
+    },
+    {
+      operator: "MINIMUM",
+      regex: yearPattern(
+        `\\b(?:at\\s+least|minimum(?:\\s+of)?|(?:no|not)\\s+(?:fewer|less)\\s+than)\\s+(?<word>${YEAR_WORD_SOURCE})\\s*\\(\\s*(?<first>[0-9]{1,2}(?:\\.[0-9])?)\\s*\\)\\s*(?:years?|yrs?)\\b`,
+      ),
+    },
+    {
+      operator: "EXACT",
+      divisor: 12,
+      regex: yearPattern(
+        `\\b(?<first>${YEAR_NUMBER_SOURCE})\\s*(?:months?|mos?)\\b`,
+      ),
+    },
     {
       operator: "EXACT",
       regex: yearPattern(
@@ -347,7 +518,7 @@ function findYearExpressions(value: string): YearExpression[] {
     {
       operator: "RANGE",
       regex: yearPattern(
-        `\\b(?<first>${YEAR_NUMBER_SOURCE})\\s*(?:-|\\u2013|\\u2014|to)\\s*(?<second>${YEAR_NUMBER_SOURCE})\\s*(?:years?|yrs?)\\b`,
+        `\\b(?<first>${YEAR_NUMBER_SOURCE})\\s*(?:\\u2013|\\u2014|to|-(?![a-z]))\\s*(?<second>${YEAR_NUMBER_SOURCE})\\s*(?:years?|yrs?)\\b`,
       ),
     },
     {
@@ -380,7 +551,6 @@ function findYearExpressions(value: string): YearExpression[] {
     },
     {
       operator: "MINIMUM",
-      ambiguous: true,
       regex: yearPattern(
         `\\b(?:more\\s+than|over)\\s+(?<first>${YEAR_NUMBER_SOURCE})\\s*(?:years?|yrs?)\\b`,
       ),
@@ -434,8 +604,16 @@ function findYearExpressions(value: string): YearExpression[] {
       if (first === null || (pattern.operator === "RANGE" && second === null)) {
         continue;
       }
-      const low = second === null ? first : Math.min(first, second);
-      const high = second === null ? first : Math.max(first, second);
+      const divisor = pattern.divisor ?? 1;
+      const compoundValue = pattern.compoundYearsMonths
+        ? first + (second ?? 0) / 12
+        : null;
+      const low =
+        compoundValue ??
+        (second === null ? first : Math.min(first, second)) / divisor;
+      const high =
+        compoundValue ??
+        (second === null ? first : Math.max(first, second)) / divisor;
       matches.push({
         operator: pattern.operator,
         min: pattern.maximum ? 0 : low,
@@ -443,7 +621,7 @@ function findYearExpressions(value: string): YearExpression[] {
           pattern.operator === "MINIMUM"
             ? null
             : pattern.maximum
-              ? first
+              ? first / divisor
               : high,
         start: match.index,
         end: match.index + match[0].length,
@@ -495,19 +673,23 @@ function classifyExpression(
   expression: YearExpression,
   context: HeadingContext,
 ): ExperienceClassification {
-  if (expression.ambiguous || !hasCandidateExperienceContext(evidence, expression)) {
+  if (
+    expression.ambiguous ||
+    !hasCandidateExperienceContext(evidence, expression)
+  ) {
     return "REVIEW";
   }
+  if (isEducationAlternative(evidence, expression)) return "ALTERNATIVE";
   const explicit = explicitQualifierClassification(evidence, expression);
   if (explicit) return explicit;
   if (context) return context;
-  return "REVIEW";
+  return "STATED";
 }
 
 function explicitQualifierClassification(
   evidence: string,
   expression: YearExpression,
-): Exclude<ExperienceClassification, "REVIEW"> | null {
+): "REQUIRED" | "PREFERRED" | null {
   const preferredDistance = nearestQualifierDistance(
     evidence,
     PREFERRED_QUALIFIER_RE,
@@ -524,6 +706,26 @@ function explicitQualifierClassification(
     return preferredDistance <= requiredDistance ? "PREFERRED" : "REQUIRED";
   }
   return null;
+}
+
+function isEducationAlternative(
+  evidence: string,
+  expression: YearExpression,
+): boolean {
+  const education =
+    "(?:bachelor(?:'s|\u2019s)?|master(?:'s|\u2019s)?|doctoral|university|college|tertiary|formal\\s+education|qualification|degree|diploma)";
+  const before = evidence.slice(0, expression.start);
+  const after = evidence.slice(expression.end);
+  return (
+    new RegExp(`\\b${education}\\b[^.;]{0,120}\\bor\\s*$`, "iu").test(before) ||
+    new RegExp(`^.{0,100}\\bor\\b[^.;]{0,120}\\b${education}\\b`, "iu").test(
+      after,
+    ) ||
+    new RegExp(
+      `\\b(?:in\\s+lieu\\s+of|instead\\s+of|in\\s+place\\s+of|as\\s+(?:an\\s+)?alternative\\s+to)\\b[^.;]{0,100}\\b${education}\\b`,
+      "iu",
+    ).test(after)
+  );
 }
 
 function hasCandidateExperienceContext(
@@ -560,6 +762,25 @@ function shouldIgnoreExpression(
     start: expression.start - localEvidence.start,
     end: expression.end - localEvidence.start,
   };
+  const before = localEvidence.text.slice(0, localExpression.start);
+  const after = localEvidence.text.slice(localExpression.end);
+  if (
+    /\b(?:available|availability|able\s+to\s+work|authori[sz]ed\s+to\s+work|remain\s+valid|validity)\b[^.;]{0,90}\b(?:for|through|until)\s+(?:the\s+)?(?:next\s+)?$/iu.test(
+      before,
+    ) ||
+    /\b(?:project|roadmap|initiative|programme|program|funding|timeline|horizon)\b[^.;]{0,70}\b(?:over|for|within|funded\s+for|spans?|covers?|runs?|lasts?|extends?)\s*(?:for\s+)?$/iu.test(
+      before,
+    ) ||
+    /\b(?:funded|financed)\s+(?:for\s+)?$/iu.test(before) ||
+    /\b(?:lived|resided|resident|based|located)\b[^.;]{0,70}\b(?:for|during)\s*$/iu.test(
+      before,
+    ) ||
+    /^\s*(?:(?:rotation|rotational\s+placement|placement|programme|program|term|roadmap|funding\s+runway|runway|contract)\b|project\b(?![^.;]{0,60}\bexperience\b))/iu.test(
+      after,
+    )
+  ) {
+    return true;
+  }
   if (NEGATED_PREFERENCE_RE.test(localEvidence.text)) return true;
   if (
     NEGATED_EXPERIENCE_RE.test(localEvidence.text) &&
@@ -588,7 +809,9 @@ function localClauseForExpression(
       boundary.index >= expression.end,
   );
   const before = boundaries
-    .filter((boundary) => boundary.index + boundary[0].length <= expression.start)
+    .filter(
+      (boundary) => boundary.index + boundary[0].length <= expression.start,
+    )
     .at(-1);
   const after = boundaries.find((boundary) => boundary.index >= expression.end);
   const start = before ? before.index + before[0].length : 0;
@@ -602,15 +825,31 @@ function relationConnector(
   end: number,
 ): { start: number; end: number; kind: ExperienceRelation["kind"] } | null {
   const between = value.slice(start, end);
-  const connectors = [
-    ...between.matchAll(/\b(and|or|plus)\b/giu),
-  ];
+  const connectors = [...between.matchAll(/\b(and|or|plus)\b/giu)];
   const connector = connectors.at(-1);
   if (!connector) return null;
   return {
     start: start + connector.index,
     end: start + connector.index + connector[0].length,
     kind: connector[1]?.toLocaleLowerCase("en") === "or" ? "ANY_OF" : "ALL_OF",
+  };
+}
+
+function includedSubsetConnector(
+  value: string,
+  start: number,
+  end: number,
+): { start: number; end: number; kind: ExperienceRelation["kind"] } | null {
+  const wordConnector = relationConnector(value, start, end);
+  if (wordConnector) return wordConnector;
+
+  const between = value.slice(start, end);
+  const punctuation = [...between.matchAll(/[,;]/gu)].at(-1);
+  if (!punctuation) return null;
+  return {
+    start: start + punctuation.index,
+    end: start + punctuation.index + punctuation[0].length,
+    kind: "ALL_OF",
   };
 }
 
@@ -627,13 +866,62 @@ function contextualizeExpressions(
       forceReview: false,
     }));
   }
-  const connectors = expressions.slice(0, -1).map((expression, index) =>
-    relationConnector(
-      evidence,
-      expression.end,
-      expressions[index + 1]?.start ?? expression.end,
-    ),
+  const inclusionGap = evidence.slice(
+    expressions[0]?.end,
+    expressions[1]?.start,
   );
+  const inclusionMatch = inclusionGap.match(/\b(?:including|of\s+which)\b/iu);
+  const subsetConnectors = expressions
+    .slice(1, -1)
+    .map((expression, index) =>
+      includedSubsetConnector(
+        evidence,
+        expression.end,
+        expressions[index + 2]?.start ?? expression.end,
+      ),
+    );
+  const safeIncludedSubsets =
+    subsetConnectors.every((connector) => connector?.kind === "ALL_OF") &&
+    !/\band\s*\/\s*or\b|\b(?:if|unless|provided(?:\s+that)?|depending(?:\s+on)?)\b/iu.test(
+      evidence,
+    );
+  if (inclusionMatch && safeIncludedSubsets) {
+    const boundaryStart =
+      (expressions[0]?.end ?? 0) + (inclusionMatch.index ?? 0);
+    const boundaryEnd = boundaryStart + inclusionMatch[0].length;
+    const groupId = `experience-group-${evidenceStart}-${evidenceStart + evidence.length}-included`;
+    return expressions.map((expression, index) => {
+      const subsetIndex = index - 1;
+      return {
+        expression,
+        clauseStart:
+          index === 0
+            ? 0
+            : subsetIndex === 0
+              ? boundaryEnd
+              : (subsetConnectors[subsetIndex - 1]?.end ?? boundaryEnd),
+        clauseEnd:
+          index === 0
+            ? boundaryStart
+            : (subsetConnectors[subsetIndex]?.start ?? evidence.length),
+        relation: {
+          groupId,
+          kind: "ALL_OF" as const,
+          role: index === 0 ? ("TOTAL" as const) : ("SUBSET" as const),
+        },
+        forceReview: false,
+      };
+    });
+  }
+  const connectors = expressions
+    .slice(0, -1)
+    .map((expression, index) =>
+      relationConnector(
+        evidence,
+        expression.end,
+        expressions[index + 1]?.start ?? expression.end,
+      ),
+    );
   const relationKind = connectors[0]?.kind;
   const connectorCount = connectors.filter(Boolean).length;
   const unsafeSyntax =
@@ -669,14 +957,14 @@ function contextualizeExpressions(
 
 function headingContext(value: string): HeadingContext | undefined {
   if (
-    /^(?:(?:required|minimum|essential) (?:qualifications?|requirements?|experience)|requirements?|qualifications?|experience|your (?:experience|background)|must[- ]haves?|skills? and experience|selection criteria|what you(?:'ll| will) bring|what we(?:'re| are) looking for|about you|who you are):?$/i.test(
+    /^(?:(?:required|minimum|essential) (?:qualifications?|requirements?|skills?(?:\s*(?:&|and)\s*(?:experience|qualifications?))?|experience(?:\s*(?:&|and)\s*skills?)?)|(?:key|job) requirements?|requirements?|qualifications?|experience|your (?:experience|background|skills?(?:\s*(?:&|and)\s*experience)?)|must[- ]haves?|skills?\s*(?:&|and)\s*(?:experience|qualifications?)|experience\s*(?:&|and)\s*(?:skills?|qualifications?)|selection criteria|what you(?:'ll| will) bring|what we(?:'re| are) looking for|about you|who you are):?$/i.test(
       value,
     )
   ) {
     return "REQUIRED";
   }
   if (
-    /^(?:(?:preferred|desirable) (?:qualifications?|skills?|experience)|preferred|desirable|nice[- ]to[- ]haves?|bonus points?|good to have):?$/i.test(
+    /^(?:(?:preferred|desirable) (?:qualifications?(?:\s*(?:&|and)\s*experience)?|skills?(?:\s*(?:&|and)\s*(?:experience|qualifications?))?|experience(?:\s*(?:&|and)\s*skills?)?)|preferred|desirable|nice[- ]to[- ]haves?|bonus points?|good to have):?$/i.test(
       value,
     )
   ) {
@@ -706,8 +994,31 @@ function inlineHeading(value: string): {
   return {
     context: parsedContext,
     remainder,
-    remainderStart:
-      separator + 1 + (rawRemainder.length - remainder.length),
+    remainderStart: separator + 1 + (rawRemainder.length - remainder.length),
+  };
+}
+
+function unknownInlineHeading(value: string): {
+  remainder: string;
+  remainderStart: number;
+} | null {
+  const separator = value.indexOf(":");
+  if (separator < 1 || separator > 80) return null;
+  const label = value.slice(0, separator).trim();
+  if (
+    !label ||
+    label.split(/\s+/).length > 10 ||
+    /\d|[.!?;]/u.test(label) ||
+    /^https?$/iu.test(label) ||
+    /^experience\s+(?:in|within|across|with|using|on)\s+.+$/iu.test(label)
+  ) {
+    return null;
+  }
+  const rawRemainder = value.slice(separator + 1);
+  const remainder = rawRemainder.trimStart();
+  return {
+    remainder,
+    remainderStart: separator + 1 + (rawRemainder.length - remainder.length),
   };
 }
 
@@ -744,7 +1055,7 @@ function contentSpan(
   rawLine: string,
 ): { text: string; start: number; end: number } | null {
   const leading =
-    rawLine.match(/^\s*(?:#{1,6}\s+)?(?:[-+*\u2022>]\s*)?/)?.[0].length ??
+    rawLine.match(/^\s*(?:#{1,6}\s+)?(?:[-+*\u2022]\s+|>\s+)?/)?.[0].length ??
     0;
   const withoutPrefix = rawLine.slice(leading);
   const text = withoutPrefix.trimEnd();
@@ -766,6 +1077,25 @@ function buildOffsetPreservingScanText(description: string): string {
         : " ".repeat(tag.length);
     })
     .replace(/[*_`~]/g, " ");
+}
+
+function htmlHeadingRanges(
+  description: string,
+): Array<{ start: number; end: number }> {
+  const ranges: Array<{ start: number; end: number }> = [];
+  for (const match of description.matchAll(
+    /<h[1-6]\b[^>]*>[\s\S]*?<\/h[1-6]\s*>/giu,
+  )) {
+    const openingEnd = match[0].indexOf(">") + 1;
+    const closingStart = match[0].toLocaleLowerCase("en").lastIndexOf("</h");
+    if (openingEnd > 0 && closingStart >= openingEnd) {
+      ranges.push({
+        start: match.index + openingEnd,
+        end: match.index + closingStart,
+      });
+    }
+  }
+  return ranges;
 }
 
 function evidenceSpans(value: string): Array<{
@@ -805,17 +1135,26 @@ function evidenceSpans(value: string): Array<{
 function cleanScope(value: string | undefined): string | null {
   const scope = (value ?? "")
     .replace(
+      /^(?:of\s+)?experience\s+(?:in|within|across|with|using|on)\s+/iu,
+      "",
+    )
+    .replace(
+      /^(?:as\s+(?:an?\s+)?|working\s+(?:in|within|across|with|as)\s+)/iu,
+      "",
+    )
+    .replace(
       /\s+(?:is\s+|are\s+)?(?:required|preferred|mandatory|essential|desired)\b.*$/i,
       "",
     )
     .trim()
     .replace(/^[,:\-\s]+|[,:\-\s]+$/g, "")
+    .replace(/\s+(?:experience|exp)\.?$/iu, "")
     .replace(/\s+/g, " ");
   if (!scope || scope.length > 160 || scope.split(/\s+/).length > 14) {
     return null;
   }
   if (
-    /^(?:(?:of\s+)?experience|professional|commercial|relevant|hands-on|industry|general|overall|work|total|duration|term|period|is|are|was|were|has|have|required|preferred)$/i.test(
+    /^(?:of|(?:of\s+)?experience|professional|commercial|relevant|hands-on|industry|general|overall|work|total|duration|term|period|is|are|was|were|has|have|required|preferred)$/i.test(
       scope,
     )
   ) {
@@ -841,7 +1180,9 @@ function bareScopeForExpression(
   const scope = cleanScope(match[1]);
   if (
     scope &&
-    !/^(?:for|during|until|within|after|before|per|throughout)\b/iu.test(scope) &&
+    !/^(?:for|during|until|within|after|before|per|throughout)\b/iu.test(
+      scope,
+    ) &&
     !/^(?:ago|old|service|contract|visa|degree|course|training|programme|program)$/iu.test(
       scope,
     )
@@ -855,21 +1196,25 @@ function scopeForExpression(
   clause: string,
   expression: YearExpression,
 ): string | null {
-  const tail = clause
-    .slice(expression.end)
-    .replace(/^['\u2019]?[.\s]*/, "");
+  const tail = clause.slice(expression.end).replace(/^['\u2019]?[.\s]*/, "");
   const genericExperience = tail.match(
-    /^(?:of\s+)?(?:(?:professional|commercial|relevant|hands-on|industry)\s+)?experience\s+(?:in|with|using|on)\s+(.+)$/i,
+    /^(?:of\s+)?(?:(?:professional|commercial|relevant|hands-on|industry)\s+)?experience\s+(?:in|within|across|with|using|on)\s+(.+)$/i,
   );
   if (genericExperience) return cleanScope(genericExperience[1]);
   const scopedExperience = tail.match(/^of\s+(.+?)\s+experience\b/i);
   if (scopedExperience) return cleanScope(scopedExperience[1]);
-  const directScope = tail.match(/^(?:in|with|using|on)\s+(.+)$/i);
+  const directScope = tail.match(
+    /^(?:(?:in|within|across|with|using|on)\s+|as\s+(?:an?\s+)?|working\s+(?:in|within|across|with|as)\s+)(.+)$/i,
+  );
   if (directScope) return cleanScope(directScope[1]);
   const bareScope = bareScopeForExpression(clause, expression);
   if (bareScope) return bareScope;
 
   const prefix = clause.slice(0, expression.start);
+  const leadingScope = prefix.match(
+    /\bexperience\s+(?:in|within|across|with|using|on)\s+([^:;]{1,120})\s*:\s*$/iu,
+  );
+  if (leadingScope) return cleanScope(leadingScope[1]);
   const prefixExperience = prefix.match(
     /([A-Za-z0-9][A-Za-z0-9+#./ -]{0,120}?)\s+experience\s*:?\s*$/i,
   );
@@ -884,14 +1229,30 @@ export function analyzeJobExperience(
   const requirements: JobExperienceRequirement[] = [];
   let context: HeadingContext = null;
   const scanText = buildOffsetPreservingScanText(description);
+  const headingRanges = htmlHeadingRanges(description);
 
   for (const lineMatch of scanText.matchAll(/[^\r\n]+/g)) {
     const lineStart = lineMatch.index;
+    const markdownHeading = /^\s*#{1,6}\s+/u.test(lineMatch[0]);
     let content = contentSpan(scanText, lineStart, lineMatch[0]);
     if (!content) continue;
+    const initialContentStart = content.start;
     const heading = headingContext(content.text);
     if (heading !== undefined) {
       context = heading;
+      continue;
+    }
+    if (markdownHeading) {
+      context = null;
+      continue;
+    }
+    if (
+      headingRanges.some(
+        (range) =>
+          initialContentStart >= range.start && initialContentStart < range.end,
+      )
+    ) {
+      context = null;
       continue;
     }
     const headingWithContent = inlineHeading(content.text);
@@ -903,11 +1264,37 @@ export function analyzeJobExperience(
         start: content.start + headingWithContent.remainderStart,
         end: content.end,
       };
+    } else {
+      const unknownHeadingWithContent = unknownInlineHeading(content.text);
+      if (unknownHeadingWithContent) {
+        context = null;
+        if (!unknownHeadingWithContent.remainder) continue;
+        content = {
+          text: unknownHeadingWithContent.remainder,
+          start: content.start + unknownHeadingWithContent.remainderStart,
+          end: content.end,
+        };
+      }
     }
 
     for (const evidenceSpan of evidenceSpans(content.text)) {
-      const trimmed = evidenceSpan.text;
-      const evidenceStart = content.start + evidenceSpan.start;
+      let trimmed = evidenceSpan.text;
+      let evidenceStart = content.start + evidenceSpan.start;
+      const spanHeading = inlineHeading(trimmed);
+      if (spanHeading) {
+        context = spanHeading.context;
+        if (!spanHeading.remainder) continue;
+        evidenceStart += spanHeading.remainderStart;
+        trimmed = spanHeading.remainder;
+      } else {
+        const unknownSpanHeading = unknownInlineHeading(trimmed);
+        if (unknownSpanHeading) {
+          context = null;
+          if (!unknownSpanHeading.remainder) continue;
+          evidenceStart += unknownSpanHeading.remainderStart;
+          trimmed = unknownSpanHeading.remainder;
+        }
+      }
       const evidenceEnd = evidenceStart + trimmed.length;
       const expressions = findYearExpressions(trimmed).filter(
         (expression) => !shouldIgnoreExpression(trimmed, expression),
@@ -933,7 +1320,7 @@ export function analyzeJobExperience(
           clause,
           localExpression,
         );
-        if (!hasCandidateContext && context === null) continue;
+        if (!hasCandidateContext) continue;
         const explicitClassification = explicitQualifierClassification(
           clause,
           localExpression,
@@ -970,7 +1357,7 @@ export function analyzeJobExperience(
             hasCandidateContext &&
             explicitClassification === null &&
             context === null &&
-            classification === "REVIEW",
+            classification === "STATED",
         });
       }
 
@@ -1005,7 +1392,9 @@ export function analyzeJobExperience(
   }
 
   const uniqueRequirements = [
-    ...new Map(requirements.map((requirement) => [requirement.id, requirement])).values(),
+    ...new Map(
+      requirements.map((requirement) => [requirement.id, requirement]),
+    ).values(),
   ];
   const truncated = uniqueRequirements.length > 40;
   let cappedRequirements = uniqueRequirements.slice(0, 40);
@@ -1015,12 +1404,18 @@ export function analyzeJobExperience(
     for (const requirement of uniqueRequirements) {
       const groupId = requirement.relation?.groupId;
       if (!groupId) continue;
-      completeGroupSizes.set(groupId, (completeGroupSizes.get(groupId) ?? 0) + 1);
+      completeGroupSizes.set(
+        groupId,
+        (completeGroupSizes.get(groupId) ?? 0) + 1,
+      );
     }
     for (const requirement of cappedRequirements) {
       const groupId = requirement.relation?.groupId;
       if (!groupId) continue;
-      includedGroupSizes.set(groupId, (includedGroupSizes.get(groupId) ?? 0) + 1);
+      includedGroupSizes.set(
+        groupId,
+        (includedGroupSizes.get(groupId) ?? 0) + 1,
+      );
     }
     const incompleteGroups = new Set(
       [...includedGroupSizes].flatMap(([groupId, count]) =>
@@ -1037,15 +1432,14 @@ export function analyzeJobExperience(
     (requirement) => requirement.classification === "REVIEW",
   );
   return JobExperienceAnalysisSchema.parse({
-    schemaVersion: 1,
-    status:
-      truncated
-        ? "REVIEW"
-        : cappedRequirements.length === 0
-          ? "NONE"
-          : needsReview
-            ? "REVIEW"
-            : "FOUND",
+    schemaVersion: 2,
+    status: truncated
+      ? "REVIEW"
+      : cappedRequirements.length === 0
+        ? "NONE"
+        : needsReview
+          ? "REVIEW"
+          : "FOUND",
     requirements: cappedRequirements,
     ...(truncated ? { truncated: true } : {}),
   });

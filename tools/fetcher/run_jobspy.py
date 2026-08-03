@@ -1420,22 +1420,147 @@ def filter_job_quality(
     return df.loc[keep_idx].copy(), _filter_audit_frame(df, audit_rows)
 
 
+DESCRIPTION_BLOCK_TAGS = {
+    "address",
+    "article",
+    "aside",
+    "blockquote",
+    "dd",
+    "div",
+    "dl",
+    "dt",
+    "figcaption",
+    "figure",
+    "footer",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "header",
+    "main",
+    "p",
+    "section",
+}
+DESCRIPTION_CONTAINER_TAGS = {"ol", "table", "tbody", "tfoot", "thead", "ul"}
+PARSER_HTML_ENTITIES = {
+    "ge": "≥",
+    "geq": "≥",
+    "le": "≤",
+    "leq": "≤",
+    "plus": "+",
+}
+
+
+def _replace_html_tags_with_structure(value: str) -> str:
+    output: List[str] = []
+    cursor = 0
+    unit_depth = 0
+    row_cell_count = 0
+
+    for match in re.finditer(r"<[^>]*>", value):
+        text_between_tags = value[cursor : match.start()]
+        if re.search(r"\S", text_between_tags):
+            output.append(text_between_tags)
+        elif (
+            text_between_tags
+            and output
+            and output[-1]
+            and not output[-1][-1].isspace()
+        ):
+            output.append(" ")
+        cursor = match.end()
+
+        raw_tag = match.group(0)
+        if raw_tag.startswith("<!"):
+            continue
+        tag = re.match(
+            r"(?is)^<\s*(/?)\s*([a-z][\w:-]*)\b[^>]*?(/?)\s*>$",
+            raw_tag,
+        )
+        if not tag:
+            output.append(raw_tag)
+            continue
+
+        closing = tag.group(1) == "/"
+        name = tag.group(2).lower()
+        if closing:
+            if name in {"li", "td", "th"}:
+                unit_depth = max(0, unit_depth - 1)
+            elif name == "tr":
+                row_cell_count = 0
+            elif name in DESCRIPTION_BLOCK_TAGS or name in DESCRIPTION_CONTAINER_TAGS:
+                output.append(" " if unit_depth > 0 else "\n\n")
+            continue
+
+        if name == "br":
+            output.append(" " if unit_depth > 0 else "\n")
+        elif name == "li":
+            output.append("; " if unit_depth > 0 else "\n- ")
+            unit_depth += 1
+        elif name == "tr":
+            output.append("\n")
+            row_cell_count = 0
+        elif name in {"td", "th"}:
+            if row_cell_count > 0:
+                output.append(" | ")
+            row_cell_count += 1
+            unit_depth += 1
+        elif name in DESCRIPTION_BLOCK_TAGS or name in DESCRIPTION_CONTAINER_TAGS:
+            output.append(" " if unit_depth > 0 else "\n\n")
+
+        if tag.group(3) == "/" and name in {"li", "td", "th"}:
+            unit_depth = max(0, unit_depth - 1)
+
+    output.append(value[cursor:])
+    return "".join(output)
+
+
+def _decode_parser_html_entities(value: str) -> str:
+    def replace_entity(match) -> str:
+        return PARSER_HTML_ENTITIES[match.group(1).lower()]
+
+    return re.sub(
+        r"(?i)&(geq|leq|plus|ge|le);?(?![a-z0-9_=])",
+        replace_entity,
+        value,
+    )
+
+
+def _html_to_structured_text(text: str) -> str:
+    """Convert one HTML fragment to deterministic, structure-preserving text."""
+    if not text:
+        return ""
+    s = str(text)
+    s = re.sub(r"<!--[\s\S]*?-->", "", s)
+    s = re.sub(
+        r"(?is)<(script|style|noscript|template|svg)\b[^>]*>[\s\S]*?</\1\s*>",
+        "\n",
+        s,
+    )
+    s = _replace_html_tags_with_structure(s)
+    s = unicodedata.normalize("NFKC", unescape(_decode_parser_html_entities(s)))
+    s = re.sub(r"[\u2010-\u2015\u2212]", "-", s)
+    s = s.replace("\u2028", "\n").replace("\u2029", "\n")
+    s = s.replace("\r\n", "\n").replace("\r", "\n")
+    s = re.sub(r"[^\S\n]+", " ", s)
+    s = re.sub(r" *\n *", "\n", s)
+    s = re.sub(r"\n{3,}", "\n\n", s)
+    return s.strip()
+
+
 def _clean_description_text(text: str) -> str:
     if not text:
         return ""
     s = str(text)
-    # Lightweight cleanup: remove HTML and normalize common escape artifacts
-    s = s.replace("\u2013", "-").replace("\u2014", "-")
-    s = s.replace("\uff0b", "+").replace("\uff1a", ":")
+    # Normalize common escaped punctuation before preserving HTML blocks.
     s = s.replace("\\+", "+").replace("\\-", "-").replace("\\&", "&")
     s = s.replace("\\/", "/").replace("\\(", "(").replace("\\)", ")")
     s = s.replace("\\_", "_").replace("\\*", "*").replace("\\#", "#")
     s = s.replace("\\'", "'").replace('\\"', '"')
     s = s.replace("\\", "")
-    s = re.sub(r"<[^>]+>", " ", s)
-    s = re.sub(r"[ \t\r\f\v]+", " ", s)
-    s = re.sub(r"\n\s*\n+", "\n\n", s)
-    return s.strip()
+    return _html_to_structured_text(s)
 
 
 def clean_description(df: pd.DataFrame) -> pd.DataFrame:
@@ -1464,13 +1589,32 @@ def _find_description_in_json_ld(payload: Any) -> str:
 
 
 def _strip_html(html_text: str) -> str:
-    text = html_text or ""
-    text = re.sub(r"(?is)<script[^>]*>.*?</script>", " ", text)
-    text = re.sub(r"(?is)<style[^>]*>.*?</style>", " ", text)
-    text = re.sub(r"(?is)<[^>]+>", " ", text)
-    text = unescape(text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+    return _html_to_structured_text(html_text)
+
+
+def _find_div_inner_html_by_class(html_text: str, class_name: str) -> str:
+    """Return one div's complete inner HTML, including nested divs."""
+    for opening in re.finditer(r"(?is)<div\b[^>]*>", html_text):
+        class_match = re.search(
+            r"(?is)\bclass\s*=\s*([\"'])(.*?)\1",
+            opening.group(0),
+        )
+        if not class_match or class_name not in class_match.group(2).split():
+            continue
+
+        depth = 1
+        for tag in re.finditer(
+            r"(?is)</?div\b[^>]*>",
+            html_text[opening.end() :],
+        ):
+            if tag.group(0).lstrip().startswith("</"):
+                depth -= 1
+                if depth == 0:
+                    return html_text[opening.end() : opening.end() + tag.start()]
+            else:
+                depth += 1
+        return ""
+    return ""
 
 
 def _extract_description_from_html(html_text: str) -> str:
@@ -1489,12 +1633,12 @@ def _extract_description_from_html(html_text: str) -> str:
         if desc:
             return _clean_description_text(desc)
 
-    linkedin_match = re.search(
-        r'(?is)<div[^>]*class="[^"]*show-more-less-html__markup[^"]*"[^>]*>(.*?)</div>',
+    linkedin_html = _find_div_inner_html_by_class(
         html_text,
+        "show-more-less-html__markup",
     )
-    if linkedin_match:
-        text = _strip_html(linkedin_match.group(1))
+    if linkedin_html:
+        text = _strip_html(linkedin_html)
         if text:
             return _clean_description_text(text)
 
