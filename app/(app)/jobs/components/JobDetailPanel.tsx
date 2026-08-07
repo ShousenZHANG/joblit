@@ -9,6 +9,7 @@ import {
   Building2,
   CalendarDays,
   ClipboardList,
+  ClipboardPaste,
   DollarSign,
   ExternalLink,
   FileText,
@@ -20,6 +21,12 @@ import {
 import { useMarket } from "@/hooks/useMarket";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { COARSE_POINTER_MIN_HEIGHT } from "@/components/ui/touchTarget";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
@@ -75,6 +82,8 @@ interface JobDetailPanelProps {
   onDelete: (job: JobItem) => void;
   onGenerateResume: (job: JobItem) => void;
   onGenerateCover: (job: JobItem) => void;
+  /** Zero-install fallback: copy the prompt, run it anywhere, paste JSON. */
+  onManualGenerate: (job: JobItem, target: "resume" | "cover") => void;
   onRetryDetail: () => void;
 }
 
@@ -111,6 +120,7 @@ export function JobDetailPanel({
   onDelete,
   onGenerateResume,
   onGenerateCover,
+  onManualGenerate,
   onRetryDetail,
 }: JobDetailPanelProps) {
   const t = useTranslations("jobs");
@@ -297,6 +307,35 @@ export function JobDetailPanel({
                       <Sparkles className="mr-1 h-4 w-4" />
                       {t("generateCl")}
                     </Button>
+                    {/* The Runner path above is primary; manual import stays
+                        reachable per target for users who run nothing locally
+                        (ADR-0015's floor). */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/75 shadow-sm transition-all duration-200 hover:bg-muted active:translate-y-[1px] sm:w-auto ${actionHeight} px-3`}
+                        >
+                          <ClipboardPaste className="mr-1 h-4 w-4" aria-hidden />
+                          {t("manualGenerate")}
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        <DropdownMenuItem
+                          className="min-h-11"
+                          onClick={() => onManualGenerate(selectedJob, "resume")}
+                        >
+                          {t("manualGenerateCv")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="min-h-11"
+                          onClick={() => onManualGenerate(selectedJob, "cover")}
+                        >
+                          {t("manualGenerateCl")}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </>
                 ) : null}
                 {!isCN && selectedJob.resumePdfUrl ? (

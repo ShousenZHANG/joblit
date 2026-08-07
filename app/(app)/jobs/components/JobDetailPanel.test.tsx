@@ -51,6 +51,7 @@ function renderPanel(
         onDelete={vi.fn()}
         onGenerateResume={vi.fn()}
         onGenerateCover={vi.fn()}
+        onManualGenerate={vi.fn()}
         onRetryDetail={vi.fn()}
       />
     </NextIntlClientProvider>,
@@ -115,6 +116,7 @@ describe("JobDetailPanel localization", () => {
           onDelete={vi.fn()}
           onGenerateResume={vi.fn()}
           onGenerateCover={vi.fn()}
+        onManualGenerate={vi.fn()}
           onRetryDetail={vi.fn()}
         />
       </NextIntlClientProvider>,

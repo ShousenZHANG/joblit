@@ -203,6 +203,9 @@
     "openJob": "Open job",
     "generateCv": "Generate CV",
     "generateCl": "Generate CL",
+    "manualGenerate": "Manual generation",
+    "manualGenerateCv": "Manual · CV",
+    "manualGenerateCl": "Manual · CL",
     "savedCv": "Saved CV",
     "savedCl": "Saved CL",
     "jobDescriptionTitle": "Job description",
@@ -313,7 +316,7 @@
     "generateSelected": "Generate CV & CL",
     "generatingSelected": "Queuing…",
     "batchQueuedTitle": "Generation batch queued",
-    "batchQueuedDesc": "{count} jobs queued. Your local Runner will pick them up.",
+    "batchQueuedDesc": "{count, plural, one {# job} other {# jobs}} queued. Your local Runner will pick them up.",
     "batchAlreadyRunning": "A generation batch is already running. Wait for it to finish, then try again."
   },
   "fetch": {

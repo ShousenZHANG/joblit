@@ -203,6 +203,9 @@
     "openJob": "打开职位",
     "generateCv": "生成简历",
     "generateCl": "生成求职信",
+    "manualGenerate": "手动生成",
+    "manualGenerateCv": "手动 · 简历",
+    "manualGenerateCl": "手动 · 求职信",
     "savedCv": "已存简历",
     "savedCl": "已存求职信",
     "jobDescriptionTitle": "职位描述",
@@ -313,7 +316,7 @@
     "generateSelected": "生成简历和求职信",
     "generatingSelected": "排队中…",
     "batchQueuedTitle": "生成批次已排队",
-    "batchQueuedDesc": "已排队 {count} 个岗位,本地 Runner 会自动处理。",
+    "batchQueuedDesc": "已排队 {count} 个岗位,本地 Runner 将自动领取。",
     "batchAlreadyRunning": "已有一个生成批次在运行,等它完成后再试。"
   },
   "fetch": {

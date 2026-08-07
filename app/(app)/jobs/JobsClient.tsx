@@ -398,9 +398,14 @@ export function JobsClient({
   }
 
   const [batchGeneratePending, setBatchGeneratePending] = useState(false);
-  async function confirmBatchGenerate() {
-    const ids = [...batchSelectedIds];
-    if (ids.length === 0 || batchGeneratePending) return;
+  /**
+   * One enqueue path for both entry points: the batch toolbar and the
+   * single-job Generate buttons. A batch of one is a first-class batch — the
+   * Runner claims it, generates whatever targets the job is still missing,
+   * and settles through the same receipts.
+   */
+  async function enqueueGenerationBatch(ids: string[]): Promise<boolean> {
+    if (ids.length === 0 || batchGeneratePending) return false;
     setBatchGeneratePending(true);
     try {
       await fetchJson("/api/application-batches", {
@@ -414,7 +419,7 @@ export function JobsClient({
         className:
           "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-900 animate-in fade-in zoom-in-95",
       });
-      exitBatchMode();
+      return true;
     } catch (err) {
       // The one expected refusal: the protocol allows a single active batch.
       // Selection survives so the retry is one click, not a re-pick.
@@ -427,9 +432,14 @@ export function JobsClient({
         variant: "destructive",
         duration: 5000,
       });
+      return false;
     } finally {
       setBatchGeneratePending(false);
     }
+  }
+
+  async function confirmBatchGenerate() {
+    if (await enqueueGenerationBatch([...batchSelectedIds])) exitBatchMode();
   }
 
   function confirmBatchDelete() {
@@ -1294,11 +1304,10 @@ export function JobsClient({
           mobileTab={mobileTab}
           onUpdateStatus={updateStatus}
           onDelete={requestDelete}
-          onGenerateResume={(job) =>
-            externalGenerate.openExternalGenerateDialog(job, "resume")
-          }
-          onGenerateCover={(job) =>
-            externalGenerate.openExternalGenerateDialog(job, "cover")
+          onGenerateResume={(job) => void enqueueGenerationBatch([job.id])}
+          onGenerateCover={(job) => void enqueueGenerationBatch([job.id])}
+          onManualGenerate={(job, target) =>
+            externalGenerate.openExternalGenerateDialog(job, target)
           }
           onRetryDetail={() => void refetchDetail()}
         />

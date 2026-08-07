@@ -1514,6 +1514,70 @@ describe("JobsClient", () => {
     expect(detailsPanel.className).toContain("flex");
   });
 
+  it("queues a single-job Runner batch from the detail Generate CV button", async () => {
+    const user = userEvent.setup();
+    const posts: unknown[] = [];
+    const mockFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith("/api/jobs?")) {
+        return new Response(
+          JSON.stringify({ items: [baseJob], nextCursor: null, facets: { jobLevels: [] } }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url === "/api/application-batches" && init?.method === "POST") {
+        posts.push(JSON.parse(String(init.body)));
+        return new Response(JSON.stringify({ batch: { id: "batch-solo" } }), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
+
+    const generateCvButton = (await screen.findAllByRole("button", { name: /^generate cv$/i }))[0];
+    await user.click(generateCvButton);
+
+    // The button hands the job to the Runner via a single-job batch — the
+    // manual dialog must NOT open on the primary path.
+    await screen.findByText("Generation batch queued");
+    expect(posts).toEqual([
+      { scope: "NEW", selectedJobIds: [baseJob.id] },
+    ]);
+    expect(screen.queryByRole("button", { name: /download zip/i })).not.toBeInTheDocument();
+  });
+
+  it("surfaces the single-active-batch refusal on the single-job path", async () => {
+    const user = userEvent.setup();
+    const mockFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith("/api/jobs?")) {
+        return new Response(
+          JSON.stringify({ items: [baseJob], nextCursor: null, facets: { jobLevels: [] } }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url === "/api/application-batches" && init?.method === "POST") {
+        return new Response(
+          JSON.stringify({ error: { code: "ACTIVE_BATCH_EXISTS", message: "busy" } }),
+          { status: 409, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
+
+    const generateClButton = (await screen.findAllByRole("button", { name: /^generate cl$/i }))[0];
+    await user.click(generateClButton);
+
+    await screen.findByText(/generation batch is already running/i);
+  });
+
   it("disables skill pack download until prompt meta is ready, then advances to Copy Prompt with one click", async () => {
     const user = userEvent.setup();
     const anchorClickSpy = vi
@@ -1564,8 +1628,10 @@ describe("JobsClient", () => {
 
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
-    const generateCvButton = (await screen.findAllByRole("button", { name: /generate cv/i }))[0];
-    await user.click(generateCvButton);
+    await user.click(
+      (await screen.findAllByRole("button", { name: /manual generation/i }))[0],
+    );
+    await user.click(await screen.findByRole("menuitem", { name: /manual · cv/i }));
 
     const downloadButton = await screen.findByRole("button", {
       name: /preparing|download zip/i,
@@ -1671,8 +1737,10 @@ describe("JobsClient", () => {
 
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
-    const generateCvButton = (await screen.findAllByRole("button", { name: /generate cv/i }))[0];
-    await user.click(generateCvButton);
+    await user.click(
+      (await screen.findAllByRole("button", { name: /manual generation/i }))[0],
+    );
+    await user.click(await screen.findByRole("menuitem", { name: /manual · cv/i }));
 
     const downloadButton = await screen.findByRole("button", { name: /download zip/i });
     await waitFor(() => {
@@ -1683,8 +1751,10 @@ describe("JobsClient", () => {
 
     await user.click(screen.getByRole("button", { name: /cancel/i }));
 
-    const generateCoverButton = (await screen.findAllByRole("button", { name: /generate cl/i }))[0];
-    await user.click(generateCoverButton);
+    await user.click(
+      (await screen.findAllByRole("button", { name: /manual generation/i }))[0],
+    );
+    await user.click(await screen.findByRole("menuitem", { name: /manual · cl/i }));
     expect(await screen.findByRole("button", { name: /copy prompt to clipboard/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /download skill pack/i })).not.toBeInTheDocument();
 
