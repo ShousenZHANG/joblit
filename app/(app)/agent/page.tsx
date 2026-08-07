@@ -5,9 +5,8 @@ import { getTranslations } from "next-intl/server";
 
 import { authOptions } from "@/auth";
 import { PageHeading } from "@/components/app-shell/PageHeading";
-import { AgentTokenManager } from "./AgentTokenManager";
+import { AgentWorkspace } from "./AgentWorkspace";
 import { RunnerPresenceChip } from "@/components/agent/RunnerPresenceChip";
-import { RunnerSetupCard } from "./RunnerSetupCard";
 
 export const dynamic = "force-dynamic";
 
@@ -35,8 +34,7 @@ export default async function AgentPage() {
           <PageHeading title={t("title")} description={t("subtitle")} actions={<RunnerPresenceChip />} />
         </div>
         <div className="min-h-0 flex-1 overflow-auto px-4 pb-4 lg:px-6 lg:pb-6">
-          <RunnerSetupCard origin={origin} />
-          <AgentTokenManager />
+          <AgentWorkspace origin={origin} />
         </div>
       </section>
     </div>

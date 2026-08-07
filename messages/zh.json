@@ -63,19 +63,26 @@
       "offline": "Runner 离线 —— 排队任务等它启动。",
       "setupCta": "去配置"
     },
-    "runner": {
+    "setup": {
       "title": "配置 Runner",
-      "description": "Runner 在你自己的机器上消化生成批次：从 Joblit 取提示词，交给本地 Hermes 网关运行，再把结果作为草稿导入等你审阅。",
-      "step1": "启动本地 Hermes 网关（默认监听 127.0.0.1:8642）。",
-      "step2": "在下方生成 Agent 令牌并复制——它只显示一次。",
-      "step3": "在准备运行 Runner 的终端里设置这些环境变量。",
-      "step4": "启动 Runner，然后在职位页排入一个批次。",
-      "envLabel": "环境变量",
-      "runLabel": "运行",
+      "stepGatewayTitle": "启动本地 Hermes 网关",
+      "stepGatewayDesc": "默认监听 127.0.0.1:8642。你的模型,你的机器。",
+      "stepTokenTitle": "创建 Agent 凭据",
+      "stepTokenCreate": "生成凭据",
+      "stepTokenDone": "已有有效凭据,可在下方管理或吊销。",
+      "stepConfigureTitle": "复制到终端并运行",
+      "snippetTokenLive": "新凭据已自动填入 —— 它只出现这一次。",
+      "snippetTokenPending": "完成第 2 步后,凭据会自动填入此处。",
+      "snippetHermesNote": "HERMES_KEY 请自行替换,它永远不会经过 Joblit。",
+      "stepConnectTitle": "Runner 建立连接",
+      "stepConnectWaiting": "等待 Runner 首次调用 —— 启动后通常一分钟内。",
+      "stepConnectDone": "Runner 已连接,配置完成。",
+      "collapsedSummary": "Runner 已配置并在线。",
+      "showGuide": "查看安装指引",
+      "hideGuide": "收起安装指引",
       "copy": "复制",
-      "copiedShort": "已复制！",
-      "copied": "已复制到剪贴板",
-      "keyNotice": "Hermes 密钥只留在你的机器上。Joblit 不会收到它，Runner 也拒绝把它发往回环地址以外的任何地方。"
+      "copiedShort": "已复制!",
+      "copied": "已复制到剪贴板"
     },
     "tokens": {
       "generateTitle": "生成新令牌",

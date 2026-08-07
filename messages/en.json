@@ -63,19 +63,26 @@
       "offline": "Runner offline — queued work waits for it.",
       "setupCta": "Set up"
     },
-    "runner": {
+    "setup": {
       "title": "Set up the Runner",
-      "description": "The Runner drains your generation batches on your own machine. It reads prompts from Joblit, runs them through your local Hermes gateway, and imports the results as drafts for you to review.",
-      "step1": "Start your local Hermes gateway (it listens on 127.0.0.1:8642 by default).",
-      "step2": "Generate an agent token below and copy it — it is shown only once.",
-      "step3": "Set these variables in the shell you will run the Runner from.",
-      "step4": "Start the Runner, then queue a batch from the Jobs page.",
-      "envLabel": "Environment",
-      "runLabel": "Run",
+      "stepGatewayTitle": "Start your local Hermes gateway",
+      "stepGatewayDesc": "It listens on 127.0.0.1:8642 by default. Your model, your machine.",
+      "stepTokenTitle": "Create an agent credential",
+      "stepTokenCreate": "Generate credential",
+      "stepTokenDone": "You have an active credential. Manage or revoke it below.",
+      "stepConfigureTitle": "Copy this into your terminal and run it",
+      "snippetTokenLive": "Your new credential is filled in — this is the only time it appears.",
+      "snippetTokenPending": "Complete step 2 and your credential fills in here automatically.",
+      "snippetHermesNote": "Replace HERMES_KEY yourself; it never touches Joblit.",
+      "stepConnectTitle": "Runner connects",
+      "stepConnectWaiting": "Waiting for the Runner's first call — usually within a minute of starting.",
+      "stepConnectDone": "Runner connected. You're done.",
+      "collapsedSummary": "Runner configured and online.",
+      "showGuide": "Show setup guide",
+      "hideGuide": "Hide setup guide",
       "copy": "Copy",
       "copiedShort": "Copied!",
-      "copied": "Copied to clipboard",
-      "keyNotice": "Your Hermes key stays on your machine. Joblit never receives it, and the Runner refuses to send it anywhere but loopback."
+      "copied": "Copied to clipboard"
     },
     "tokens": {
       "generateTitle": "Generate New Token",
