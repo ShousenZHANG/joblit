@@ -75,12 +75,37 @@ Describe 'JoblitHermes.Common security primitives' {
         { Test-JoblitArchiveEntries -ArchivePath $archivePath } | Should -Throw '*MALICIOUS_ARCHIVE_ENTRY*'
     }
 
+    It 'flags the legacy auto runtime as config drift' {
+        $config = Join-Path $TestDrive 'legacy-runtime.yaml'
+        @'
+model:
+  provider: openai-codex
+  openai_runtime: auto
+'@ | Set-Content -LiteralPath $config -Encoding utf8
+        $result = Test-JoblitProfileConfig -ConfigPath $config
+        $result.Valid | Should -BeFalse
+        $result.Issues | Should -Contain 'model.openai_runtime'
+    }
+
+    It 'migrates a packaged auto runtime to codex_app_server exactly once' {
+        $config = Join-Path $TestDrive 'migrate-runtime.yaml'
+        @'
+model:
+  provider: openai-codex
+  openai_runtime: auto
+'@ | Set-Content -LiteralPath $config -Encoding utf8
+        Set-JoblitOpenAiRuntime -ConfigPath $config | Should -BeTrue
+        [IO.File]::ReadAllText($config) | Should -Match 'openai_runtime: codex_app_server'
+        # Idempotent: a second pass changes nothing.
+        Set-JoblitOpenAiRuntime -ConfigPath $config | Should -BeFalse
+    }
+
     It 'accepts only the zero-tool Joblit config invariants' {
         $config = Join-Path $TestDrive 'config.yaml'
         @'
 model:
   provider: openai-codex
-  openai_runtime: auto
+  openai_runtime: codex_app_server
 platform_toolsets:
   api_server:
     - no_mcp
@@ -131,7 +156,7 @@ installed_at: '2026-07-24T00:00:00+00:00'
         @'
 model:
   provider: openai-codex
-  openai_runtime: auto
+  openai_runtime: codex_app_server
 platform_toolsets:
   api_server:
     - no_mcp

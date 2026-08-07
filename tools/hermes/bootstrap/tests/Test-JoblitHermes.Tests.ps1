@@ -18,7 +18,7 @@ Describe 'Test-JoblitHermesReadiness' {
         @'
 model:
   provider: openai-codex
-  openai_runtime: auto
+  openai_runtime: codex_app_server
 platform_toolsets:
   api_server:
     - no_mcp
@@ -51,7 +51,7 @@ agent:
             param($FilePath, $Arguments, $AllowFailure)
             $joined = $Arguments -join ' '
             if ($joined -match 'model.provider') { return [pscustomobject]@{ ExitCode = 0; Output = 'openai-codex' } }
-            if ($joined -match 'model.openai_runtime') { return [pscustomobject]@{ ExitCode = 0; Output = 'auto' } }
+            if ($joined -match 'model.openai_runtime') { return [pscustomobject]@{ ExitCode = 0; Output = 'codex_app_server' } }
             if ($joined -match 'auth status openai-codex') { return [pscustomobject]@{ ExitCode = 0; Output = 'openai-codex: logged in' } }
             if ($joined -match 'gateway status') { return [pscustomobject]@{ ExitCode = 0; Output = 'running' } }
             return [pscustomobject]@{ ExitCode = 0; Output = 'ok' }
@@ -136,7 +136,7 @@ agent:
             param($FilePath, $Arguments)
             $joined = $Arguments -join ' '
             if ($joined -match 'model.provider') { return [pscustomobject]@{ ExitCode = 0; Output = 'openai-codex' } }
-            if ($joined -match 'model.openai_runtime') { return [pscustomobject]@{ ExitCode = 0; Output = 'auto' } }
+            if ($joined -match 'model.openai_runtime') { return [pscustomobject]@{ ExitCode = 0; Output = 'codex_app_server' } }
             if ($joined -match 'auth status openai-codex') { return [pscustomobject]@{ ExitCode = 0; Output = 'openai-codex: logged out (expired)' } }
             return [pscustomobject]@{ ExitCode = 0; Output = 'running' }
         } -ModuleName JoblitHermes.Common
@@ -153,7 +153,7 @@ agent:
             param($FilePath, $Arguments)
             $joined = $Arguments -join ' '
             if ($joined -match 'model.provider') { return [pscustomobject]@{ ExitCode = 0; Output = 'openai-codex' } }
-            if ($joined -match 'model.openai_runtime') { return [pscustomobject]@{ ExitCode = 0; Output = 'auto' } }
+            if ($joined -match 'model.openai_runtime') { return [pscustomobject]@{ ExitCode = 0; Output = 'codex_app_server' } }
             if ($joined -match 'auth status openai-codex') { return [pscustomobject]@{ ExitCode = 0; Output = 'openai-codex: logged in' } }
             return [pscustomobject]@{ ExitCode = 1; Output = 'stopped' }
         } -ModuleName JoblitHermes.Common
@@ -165,7 +165,7 @@ agent:
             param($FilePath, $Arguments)
             $joined = $Arguments -join ' '
             if ($joined -match 'model.provider') { return [pscustomobject]@{ ExitCode = 0; Output = 'openai-codex' } }
-            if ($joined -match 'model.openai_runtime') { return [pscustomobject]@{ ExitCode = 0; Output = 'auto' } }
+            if ($joined -match 'model.openai_runtime') { return [pscustomobject]@{ ExitCode = 0; Output = 'codex_app_server' } }
             if ($joined -match 'auth status openai-codex') { return [pscustomobject]@{ ExitCode = 0; Output = 'openai-codex: logged in' } }
             return [pscustomobject]@{ ExitCode = 0; Output = 'running' }
         } -ModuleName JoblitHermes.Common

@@ -68,3 +68,13 @@ Reruns preserve a strong existing key and unrelated well-formed environment vari
 Exit categories: `0 Ready`, `10 MissingHermes`, `20 UntrustedPackage`, `30 ProfileDrift`, `40 AuthModelMismatch`, `50 GatewayDown`, `60 ApiIncompatible`. The verifier prints one official recovery action and never changes local state or reveals the API key.
 
 Deleting a Hermes Session through its Sessions API is logical transcript deletion only. It is not secure erase, proof of zero retention, or deletion of provider-side records.
+
+## OpenAI runtime
+
+The bootstrap migrates the profile's `openai_runtime` to `codex_app_server`:
+OpenAI turns run through OpenAI's own Codex app-server harness instead of the
+legacy request-shape path, which keeps subscription access on the officially
+sanctioned client. This requires the official Codex CLI (`npm i -g
+@openai/codex`, 0.130.0 or newer) and a completed `codex login`; the installer
+fails with `CODEX_CLI_MISSING` / `CODEX_CLI_TOO_OLD` otherwise. Reruns treat
+the migrated value as canonical — it is not config drift.

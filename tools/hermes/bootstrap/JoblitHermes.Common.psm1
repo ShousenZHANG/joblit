@@ -333,6 +333,50 @@ function Get-JoblitInstalledDistributionSource {
     return $Matches.value.Trim().Trim('"').Trim("'")
 }
 
+
+# The packaged profile may still ship `openai_runtime: auto` (the legacy
+# request-shape path). The bootstrap owns the migration to the official Codex
+# app-server runtime so existing packages keep installing; the validator then
+# holds the end state.
+function Set-JoblitOpenAiRuntime {
+    param([Parameter(Mandatory)][string] $ConfigPath)
+    if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) { return $false }
+    $content = [IO.File]::ReadAllText($ConfigPath)
+    if ($content -match '(?m)^\s*openai_runtime:\s*codex_app_server\s*$') { return $false }
+    if ($content -notmatch '(?m)^(\s*)openai_runtime:\s*\S+\s*$') { return $false }
+    $updated = [regex]::Replace(
+        $content,
+        '(?m)^(\s*)openai_runtime:\s*\S+\s*$',
+        '$1openai_runtime: codex_app_server',
+        1)
+    [IO.File]::WriteAllText($ConfigPath, $updated)
+    return $true
+}
+
+# The app-server runtime drives OpenAI turns through OpenAI's own harness, so
+# the official Codex CLI must exist and be new enough to expose it.
+$script:JoblitMinimumCodexCliVersion = [version]'0.130.0'
+
+function Assert-JoblitCodexCli {
+    $result = $null
+    try {
+        $result = Invoke-JoblitProcess -FilePath 'codex' -Arguments @('--version') -AllowFailure
+    } catch {
+        throw (New-JoblitFailure -Code 'CODEX_CLI_MISSING' -Message 'Codex CLI is required for the app-server runtime. Install it with: npm i -g @openai/codex')
+    }
+    if ($null -eq $result -or $result.ExitCode -ne 0) {
+        throw (New-JoblitFailure -Code 'CODEX_CLI_MISSING' -Message 'Codex CLI is required for the app-server runtime. Install it with: npm i -g @openai/codex')
+    }
+    $match = [regex]::Match([string]$result.Output, '(\d+)\.(\d+)\.(\d+)')
+    if (-not $match.Success) {
+        throw (New-JoblitFailure -Code 'CODEX_CLI_MISSING' -Message 'Codex CLI version could not be determined.')
+    }
+    $found = [version]$match.Value
+    if ($found -lt $script:JoblitMinimumCodexCliVersion) {
+        throw (New-JoblitFailure -Code 'CODEX_CLI_TOO_OLD' -Message "Codex CLI $found is older than the required $script:JoblitMinimumCodexCliVersion for the app-server runtime.")
+    }
+}
+
 function Test-JoblitProfileConfig {
     param([Parameter(Mandatory)][string] $ConfigPath)
     if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) {
@@ -341,7 +385,7 @@ function Test-JoblitProfileConfig {
     $content = [IO.File]::ReadAllText($ConfigPath)
     $issues = New-Object System.Collections.Generic.List[string]
     if ($content -notmatch '(?m)^\s*provider:\s*openai-codex\s*$') { $issues.Add('model.provider') }
-    if ($content -notmatch '(?m)^\s*openai_runtime:\s*auto\s*$') { $issues.Add('model.openai_runtime') }
+    if ($content -notmatch '(?m)^\s*openai_runtime:\s*codex_app_server\s*$') { $issues.Add('model.openai_runtime') }
     if ($content -notmatch '(?ms)^\s*api_server:\s*\r?\n\s*-\s*no_mcp\s*$') { $issues.Add('platform_toolsets.api_server') }
     if ($content -notmatch '(?ms)^\s*cron:\s*\r?\n\s*-\s*no_mcp\s*$') { $issues.Add('platform_toolsets.cron') }
     if ($content -notmatch '(?m)^\s*memory_enabled:\s*false\s*$') { $issues.Add('memory.memory_enabled') }
@@ -776,10 +820,21 @@ function Invoke-JoblitHermesInstall {
         if ($profileExists -and -not $ForceConfigUpdate) {
             $existingConfigPath = Join-Path $profileRoot 'config.yaml'
             $incomingConfigPath = Join-Path $packageRoot 'config.yaml'
-            if (
-                -not (Test-Path -LiteralPath $existingConfigPath -PathType Leaf) -or
-                (Get-JoblitFileSha256 -Path $existingConfigPath) -ne (Get-JoblitFileSha256 -Path $incomingConfigPath)
-            ) {
+            # The bootstrap itself migrates openai_runtime to codex_app_server
+            # after install, so the comparison normalises that one managed
+            # field on both sides; any OTHER difference still demands
+            # -ForceConfigUpdate.
+            $normalizeRuntime = {
+                param([string] $Path)
+                if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+                [regex]::Replace(
+                    [IO.File]::ReadAllText($Path),
+                    '(?m)^(\s*)openai_runtime:\s*\S+\s*$',
+                    '$1openai_runtime: codex_app_server')
+            }
+            $existingNormalized = & $normalizeRuntime $existingConfigPath
+            $incomingNormalized = & $normalizeRuntime $incomingConfigPath
+            if ($null -eq $existingNormalized -or $existingNormalized -cne $incomingNormalized) {
                 throw (New-JoblitFailure -Code 'CONFIG_UPDATE_REQUIRES_FORCE' -Message 'Existing config differs from the verified distribution. Review it, then rerun with -ForceConfigUpdate.')
             }
         }
@@ -801,7 +856,7 @@ function Invoke-JoblitHermesInstall {
         Write-JoblitStatus -State 'InspectExistingProfile' -Status 'Passed' -Message $(if ($profileExists) { 'Managed Joblit profile found.' } else { 'Fresh isolated profile.' })
 
         if (-not $PSCmdlet.ShouldProcess($ProfileName, 'Install or update the verified Joblit Hermes profile')) {
-            foreach ($state in @('InstallOrUpdate','ConfigureOAuth','WriteLocalEnv','InstallGateway','Probe')) {
+            foreach ($state in @('InstallOrUpdate','ConfigureOAuth','ConfigureRuntime','WriteLocalEnv','InstallGateway','Probe')) {
                 Write-JoblitStatus -State $state -Status 'Skipped' -Message 'WhatIf: no user profile, auth, environment, service, or network state changed.'
             }
             return [pscustomobject][ordered]@{
@@ -856,9 +911,14 @@ function Invoke-JoblitHermesInstall {
                 throw (New-JoblitFailure -Code 'AUTH_NOT_READY' -Message 'openai-codex OAuth did not reach logged-in state.')
             }
         }
+        Write-JoblitStatus -State 'ConfigureOAuth' -Status 'Passed' -Message 'Provider openai-codex authenticated.'
+
+        Write-JoblitStatus -State 'ConfigureRuntime' -Status 'Started' -Message 'Ensuring OpenAI turns run through the official Codex app-server runtime.'
+        Assert-JoblitCodexCli
+        $runtimeMigrated = Set-JoblitOpenAiRuntime -ConfigPath (Join-Path $profileRoot 'config.yaml')
         $configCheck = Test-JoblitProfileConfig -ConfigPath (Join-Path $profileRoot 'config.yaml')
         if (-not $configCheck.Valid) { throw (New-JoblitFailure -Code 'PROFILE_CONFIG_DRIFT' -Message ($configCheck.Issues -join ', ')) }
-        Write-JoblitStatus -State 'ConfigureOAuth' -Status 'Passed' -Message 'Provider openai-codex; runtime auto.'
+        Write-JoblitStatus -State 'ConfigureRuntime' -Status 'Passed' -Message $(if ($runtimeMigrated) { 'openai_runtime migrated to codex_app_server.' } else { 'openai_runtime already codex_app_server.' })
 
         Write-JoblitStatus -State 'WriteLocalEnv' -Status 'Started' -Message 'Writing loopback-only profile environment atomically.'
         $envPath = Join-Path $profileRoot '.env'
@@ -1015,6 +1075,8 @@ function Test-JoblitHermesReadiness {
 }
 
 Export-ModuleMember -Function @(
+    'Set-JoblitOpenAiRuntime',
+    'Assert-JoblitCodexCli',
     'Protect-JoblitSecretText',
     'Write-JoblitStatus',
     'ConvertTo-JoblitVersion',

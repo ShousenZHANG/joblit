@@ -52,6 +52,9 @@ agent:
             param($FilePath, $Arguments, $Secrets, $AllowFailure)
             $joined = $Arguments -join ' '
             $global:JoblitTestCommands.Add($joined)
+            if ($FilePath -eq 'codex') {
+                return [pscustomobject]@{ ExitCode = 0; Output = 'codex-cli 0.135.0' }
+            }
             if ($joined -match 'gateway install') {
                 $global:JoblitGatewayNonInteractive = $env:HERMES_NONINTERACTIVE
             }
@@ -204,6 +207,9 @@ installed_at: '2026-07-16T00:00:00+00:00'
             param($FilePath, $Arguments, $Secrets, $AllowFailure)
             $joined = $Arguments -join ' '
             $global:JoblitTestCommands.Add($joined)
+            if ($FilePath -eq 'codex') {
+                return [pscustomobject]@{ ExitCode = 0; Output = 'codex-cli 0.135.0' }
+            }
             if ($Arguments[0] -eq 'profile' -and $Arguments[1] -eq 'install') {
                 $sourceRoot = $Arguments[2]
                 $nameIndex = [Array]::IndexOf($Arguments, '--name')
