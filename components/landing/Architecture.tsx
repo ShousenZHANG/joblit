@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
-import { Cpu, FileCheck2, TerminalSquare } from "lucide-react";
+import { Cpu, FileCheck2, Lock, TerminalSquare } from "lucide-react";
 import { JoblitMark } from "@/components/brand/JoblitMark";
 import { ClaudeMark, OpenAiMark } from "./brandMarks";
 import { revealUp, useReveal } from "./lib/motion";
@@ -65,18 +65,21 @@ export function Architecture() {
         {t("lede")}
       </p>
 
+      {/* Composition notes: every node vertically centres its content, so
+          the stretch-to-tallest column reads as intentional breathing room
+          instead of dead space at the bottom of the boundary box. The
+          subscription label owns its line and the brand marks are pills —
+          the row can never wrap into a ragged orphan. */}
       <div className="mt-12 flex flex-col items-stretch gap-0 lg:flex-row lg:items-stretch lg:gap-6">
         {/* Joblit workspace */}
-        <div className="flex-1 rounded-2xl border border-border/70 bg-card p-5">
-          <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-foreground text-background">
-              <JoblitMark size={16} ariaLabel={null} />
-            </span>
-            <h3 className="text-sm font-bold text-foreground">
-              {t("workspaceTitle")}
-            </h3>
-          </div>
-          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+        <div className="flex flex-1 flex-col justify-center rounded-2xl border border-border/70 bg-card p-6">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-foreground text-background">
+            <JoblitMark size={17} ariaLabel={null} />
+          </span>
+          <h3 className="mt-3 text-[15px] font-bold tracking-tight text-foreground">
+            {t("workspaceTitle")}
+          </h3>
+          <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
             {t("workspaceDesc")}
           </p>
         </div>
@@ -85,48 +88,61 @@ export function Architecture() {
         <FlowConnector vertical />
 
         {/* Your machine — the boundary */}
-        <div className="relative flex-[1.4] rounded-2xl border-2 border-dashed border-brand-emerald-400/60 bg-brand-emerald-50/30 p-5 shadow-[0_0_40px_-18px_rgba(16,185,129,0.45)] dark:bg-brand-emerald-500/[0.06]">
-          <span className="absolute -top-3 left-5 rounded-full border border-brand-emerald-300 bg-background px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-brand-emerald-text">
+        <div className="relative flex flex-[1.35] flex-col justify-center rounded-2xl border-2 border-dashed border-brand-emerald-400/60 bg-brand-emerald-50/30 p-6 pt-7 shadow-[0_0_40px_-18px_rgba(16,185,129,0.45)] dark:bg-brand-emerald-500/[0.06]">
+          <span className="absolute -top-3 left-6 rounded-full border border-brand-emerald-300 bg-background px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-brand-emerald-text">
             {t("machineLabel")}
           </span>
-          <div className="flex flex-col items-stretch gap-3 pt-2 sm:flex-row sm:items-center">
-            <div className="flex flex-1 items-center gap-2 rounded-xl border border-border/70 bg-background/80 px-3 py-2.5">
-              <TerminalSquare className="h-4 w-4 shrink-0 text-brand-emerald-600" aria-hidden />
+          <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+            <div className="flex flex-1 items-center gap-2.5 rounded-xl border border-border/70 bg-card px-3.5 py-3">
+              <TerminalSquare className="h-[18px] w-[18px] shrink-0 text-brand-emerald-600" aria-hidden />
               <div className="min-w-0">
-                <div className="text-xs font-bold text-foreground">Runner</div>
-                <div className="truncate text-[10px] text-muted-foreground">
+                <div className="text-[13px] font-bold text-foreground">Runner</div>
+                <div className="text-[11px] leading-snug text-muted-foreground">
                   {t("runnerDesc")}
                 </div>
               </div>
             </div>
-            <span aria-hidden className="hidden text-muted-foreground sm:block">→</span>
-            <div className="flex flex-1 items-center gap-2 rounded-xl border border-border/70 bg-background/80 px-3 py-2.5">
-              <Cpu className="h-4 w-4 shrink-0 text-brand-emerald-600" aria-hidden />
+            <span
+              aria-hidden
+              className="hidden text-base font-semibold text-brand-emerald-600 sm:block"
+            >
+              →
+            </span>
+            <div className="flex flex-1 items-center gap-2.5 rounded-xl border border-border/70 bg-card px-3.5 py-3">
+              <Cpu className="h-[18px] w-[18px] shrink-0 text-brand-emerald-600" aria-hidden />
               <div className="min-w-0">
-                <div className="text-xs font-bold text-foreground">Hermes</div>
-                <div className="truncate text-[10px] text-muted-foreground">
+                <div className="text-[13px] font-bold text-foreground">Hermes</div>
+                <div className="text-[11px] leading-snug text-muted-foreground">
                   {t("hermesDesc")}
                 </div>
               </div>
             </div>
           </div>
-          <p className="mt-3 text-xs font-semibold text-brand-emerald-800 dark:text-brand-emerald-300">
-            {t("boundaryNote")}
-          </p>
+          <div className="mt-4 flex items-start gap-2 border-t border-brand-emerald-400/25 pt-4">
+            <Lock
+              className="mt-px h-3.5 w-3.5 shrink-0 text-brand-emerald-700 dark:text-brand-emerald-300"
+              aria-hidden
+            />
+            <p className="text-xs font-semibold leading-relaxed text-brand-emerald-800 dark:text-brand-emerald-300">
+              {t("boundaryNote")}
+            </p>
+          </div>
           {/* Nominative "works with" marks — the subscriptions Hermes can
               drive, named so a non-technical visitor recognises them. */}
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-brand-emerald-400/25 pt-3">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <div className="mt-4">
+            <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               {t("subscriptionLabel")}
             </span>
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground">
-              <OpenAiMark className="h-4 w-4" />
-              ChatGPT
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground">
-              <ClaudeMark className="h-4 w-4" />
-              Claude
-            </span>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs font-semibold text-foreground">
+                <OpenAiMark className="h-4 w-4" />
+                ChatGPT
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs font-semibold text-foreground">
+                <ClaudeMark className="h-4 w-4" />
+                Claude
+              </span>
+            </div>
           </div>
         </div>
 
@@ -134,16 +150,14 @@ export function Architecture() {
         <FlowConnector vertical />
 
         {/* Drafts back */}
-        <div className="flex-1 rounded-2xl border border-border/70 bg-card p-5">
-          <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
-              <FileCheck2 className="h-4 w-4 text-muted-foreground" aria-hidden />
-            </span>
-            <h3 className="text-sm font-bold text-foreground">
-              {t("draftsTitle")}
-            </h3>
-          </div>
-          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+        <div className="flex flex-1 flex-col justify-center rounded-2xl border border-border/70 bg-card p-6">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted">
+            <FileCheck2 className="h-[18px] w-[18px] text-muted-foreground" aria-hidden />
+          </span>
+          <h3 className="mt-3 text-[15px] font-bold tracking-tight text-foreground">
+            {t("draftsTitle")}
+          </h3>
+          <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
             {t("draftsDesc")}
           </p>
         </div>
