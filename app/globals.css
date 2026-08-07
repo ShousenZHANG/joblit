@@ -2888,3 +2888,24 @@ html[lang="zh"] {
   --font-geist-sans: system-ui, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
   --font-edu-body: system-ui, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
 }
+
+/* Architecture pipeline — a single dot drifting along each connector. The
+   component hides the dot entirely under prefers-reduced-motion. */
+@keyframes landing-flow-x {
+  from { left: 0%; opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  to { left: 100%; opacity: 0; }
+}
+@keyframes landing-flow-y {
+  from { top: 0%; opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  to { top: 100%; opacity: 0; }
+}
+.landing-flow-dot-x {
+  animation: landing-flow-x 2.4s ease-in-out infinite;
+}
+.landing-flow-dot {
+  animation: landing-flow-y 2.4s ease-in-out infinite;
+}

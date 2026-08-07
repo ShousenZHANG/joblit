@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import { AiBento } from "@/components/landing/AiBento";
+import { Architecture } from "@/components/landing/Architecture";
 import { Cta } from "@/components/landing/Cta";
+import { Faq } from "@/components/landing/Faq";
 import { Footer } from "@/components/landing/Footer";
 import { Hero } from "@/components/landing/Hero";
 import { LogoBar } from "@/components/landing/LogoBar";
@@ -40,17 +43,19 @@ const jsonLd = {
 /* ── Page ─────────────────────────────────────────────── */
 
 /**
- * Marketing landing page — three movements, nothing else:
+ * Marketing landing page — five movements, each earning its place:
  *
  *   Hero + product demo — the product does the talking
  *   LogoBar             — one line of named capability facts, no counters
- *   Cta + Footer        — the close
+ *   Architecture        — the signature visual: the local-first pipeline,
+ *                         with the loopback boundary drawn (ADR-0014/0015)
+ *   AiBento             — the AI story as product miniatures, not slogans
+ *   Faq                 — the three real objections, then the close
  *
- * The intro sections (HowItWorks, Features, Faq) and three of the four
- * atmosphere layers were removed by design: prominence through restraint.
- * The starfield stays — it is the one distinctive note, dark-mode only.
- * Every claim on this page is auditable against the codebase; the capability
- * line names what exists rather than counting what might.
+ * The generic intro sections (HowItWorks, the 2×2 feature grid) stayed dead:
+ * premium comes from depth in few sections, not from many. Three of the four
+ * atmosphere layers are gone; the starfield stays, dark-mode only. Every
+ * claim on this page is auditable against the codebase.
  */
 export default function MarketingPage() {
   return (
@@ -67,6 +72,15 @@ export default function MarketingPage() {
         <Nav />
         <Hero />
         <LogoBar />
+        <div className="cv-auto">
+          <Architecture />
+        </div>
+        <div className="cv-auto">
+          <AiBento />
+        </div>
+        <div className="cv-auto">
+          <Faq />
+        </div>
         <div className="cv-auto">
           <Cta />
         </div>

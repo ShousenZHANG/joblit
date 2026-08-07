@@ -34,19 +34,23 @@ vi.mock("next-themes", async () => {
 });
 
 describe("MarketingPage", () => {
-  it("renders the three-movement landing without the retired sections", () => {
+  it("renders the five-movement landing without the retired sections", () => {
     render(
       <NextIntlClientProvider locale="en" messages={messages}>
         <MarketingPage />
       </NextIntlClientProvider>,
     );
 
-    // Three movements by design: hero + capability facts + close. The intro
-    // sections (how-it-works, features, faq) were removed deliberately.
+    // Five movements by design: hero + capability facts + the local-first
+    // architecture + the AI bento + the three-question close. The generic
+    // intro sections (how-it-works, feature grid) stay retired.
     const required = [
       "landing-nav",
       "landing-hero",
       "landing-logobar",
+      "landing-architecture",
+      "landing-bento",
+      "landing-faq",
       "landing-cta",
       "landing-footer",
     ];

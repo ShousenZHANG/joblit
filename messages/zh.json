@@ -737,6 +737,53 @@
         "bilingual": "双语 LaTeX PDF"
       }
     },
+    "architecture": {
+      "kicker": "架构",
+      "titlePrefix": "模型跑在",
+      "titleItalic": "你自己的电脑上。",
+      "lede": "Joblit 的服务器只负责组织工作——职位、提示词、草稿、回执。AI 本身在你身边运行:Runner 通过本机回环驱动 Hermes,用你自己的订阅。服务器不持有任何模型密钥,想调用模型也做不到。",
+      "workspaceTitle": "Joblit 工作台",
+      "workspaceDesc": "抓取职位,基于你的简历档案和规则组装精确提示词,并把任务排入队列。",
+      "machineLabel": "你的电脑",
+      "runnerDesc": "一条命令,持续消费队列",
+      "hermesDesc": "用你的订阅运行模型",
+      "boundaryNote": "模型调用与你的 AI 凭证永远不出这个框。",
+      "draftsTitle": "草稿回流",
+      "draftsDesc": "定制后的简历与求职信以可审阅的草稿返回,并附带回执——未经你确认,什么都不会被发出去。",
+      "poweredByPrefix": "本地生成由",
+      "poweredBySuffix": "驱动——开源、跑在你的机器上、用你已经在付费的 AI 订阅。"
+    },
+    "bento": {
+      "kicker": "AI,可被审计",
+      "titlePrefix": "会",
+      "titleItalic": "亮出证据的 AI。",
+      "fitTitle": "证据门控的匹配度",
+      "fitBody": "模型逐条对照你的档案判断每项要求——匹配、部分匹配或缺口。分数由这些判断确定性计算得出,没有证据的断言会被直接拒绝。",
+      "deltaTitle": "增量式定制",
+      "deltaBody": "你的简历永远不会被重写。定制只返回一段摘要和至多三条新增要点——每处改动都一目了然。",
+      "localTitle": "跑在你的电脑上",
+      "localBody": "一条命令启动 Runner:消费队列、调用你本机的 Hermes 网关、把草稿导回——服务器从不生成任何内容。",
+      "receiptsTitle": "回执,而非重试",
+      "receiptsBody": "每次导入都以内容寻址的回执结算。崩溃或网络抖动只会重放回执——绝不会重跑模型或产生重复草稿。",
+      "receiptsSettled": "已结算"
+    },
+    "faq": {
+      "title": "直接回答你的疑问",
+      "items": {
+        "free": {
+          "q": "Joblit 真的免费吗?",
+          "a": "是。用 GitHub 或 Google 登录即可使用全部功能。生成跑在你已有的 AI 订阅上,我们不按 token 收费,也没有把好功能藏进付费档。"
+        },
+        "privacy": {
+          "q": "我的数据去了哪里?",
+          "a": "你的职位、简历档案和草稿保存在你的 Joblit 工作区。模型调用只发生在你自己的电脑上——服务器不持有模型密钥,想调用模型也做不到。这由架构保证,而不是一纸承诺。"
+        },
+        "byoai": {
+          "q": "必须自己跑 AI 吗?",
+          "a": "不必。手动路径零安装:把准备好的提示词复制进你常用的任意 AI,把结果粘回来,Joblit 负责导入。Runner 只是把这个循环自动化而已。"
+        }
+      }
+    },
     "cta": {
       "titlePrefix": "少花时间重复改简历，",
       "titleItalic": "让申请持续推进。",

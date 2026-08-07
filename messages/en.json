@@ -737,6 +737,53 @@
         "bilingual": "bilingual LaTeX PDFs"
       }
     },
+    "architecture": {
+      "kicker": "Architecture",
+      "titlePrefix": "The model runs on",
+      "titleItalic": "your machine.",
+      "lede": "Joblit's servers organise the work — jobs, prompts, drafts, receipts. The AI itself runs where you are: the Runner drives Hermes over loopback, on your own subscription. The servers hold no model key, so they cannot call a model even by mistake.",
+      "workspaceTitle": "Joblit workspace",
+      "workspaceDesc": "Fetches roles, builds the exact prompt from your resume profile and rules, and queues the work.",
+      "machineLabel": "Your machine",
+      "runnerDesc": "Drains the queue, one command",
+      "hermesDesc": "Runs the model on your subscription",
+      "boundaryNote": "Model calls and your AI credential never leave this box.",
+      "draftsTitle": "Drafts, back",
+      "draftsDesc": "Tailored resume and cover letter return as reviewable drafts with receipts — nothing is sent anywhere without you.",
+      "poweredByPrefix": "Local generation is powered by",
+      "poweredBySuffix": "— open source, on your machine, using the AI subscription you already pay for."
+    },
+    "bento": {
+      "kicker": "AI, kept honest",
+      "titlePrefix": "AI that shows",
+      "titleItalic": "its work.",
+      "fitTitle": "Evidence-gated fit",
+      "fitBody": "The model judges each requirement against your profile — match, partial, or gap. Scores are computed deterministically from those judgements, and any claim without evidence is rejected.",
+      "deltaTitle": "Delta tailoring",
+      "deltaBody": "Your resume is never rewritten. Tailoring returns a summary and at most three added bullets — you always see exactly what changed.",
+      "localTitle": "Runs on your machine",
+      "localBody": "One command starts the Runner. It drains the queue, calls your local Hermes gateway, and imports the drafts back — the server never generates anything.",
+      "receiptsTitle": "Receipts, not retries",
+      "receiptsBody": "Every import settles against a content-addressed receipt. A crash or a flaky network replays the receipt — it never re-runs the model or duplicates a draft.",
+      "receiptsSettled": "settled"
+    },
+    "faq": {
+      "title": "Questions, answered straight",
+      "items": {
+        "free": {
+          "q": "Is Joblit actually free?",
+          "a": "Yes. Sign in with GitHub or Google and everything works. Generation runs on the AI subscription you already have, so there is no per-token bill from us and no paid tier hiding the good parts."
+        },
+        "privacy": {
+          "q": "Where does my data go?",
+          "a": "Your jobs, resume profile, and drafts live in your Joblit workspace. Model calls happen only on your machine — the servers hold no model key and cannot call a model. That is enforced by the architecture, not promised by a policy."
+        },
+        "byoai": {
+          "q": "Do I have to run my own AI?",
+          "a": "No. The manual path needs nothing installed: copy the prepared prompt into whatever AI you already use, paste the result back, and Joblit imports it. The Runner simply automates that same loop."
+        }
+      }
+    },
     "cta": {
       "titlePrefix": "Spend less time rewriting.",
       "titleItalic": "Keep applications moving.",
