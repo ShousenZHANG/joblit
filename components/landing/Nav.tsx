@@ -37,11 +37,10 @@ export function Nav() {
 
   // Dropped the "Changelog" link — it pointed at a dead "#" anchor, which
   // reads as pre-launch in a primary nav. Re-add when a real page exists.
-  const LINKS: NavLink[] = [
-    { label: t("product"), href: "#product" },
-    { label: t("howItWorks"), href: "#how" },
-    { label: t("faq"), href: "#faq" },
-  ];
+  // The intro sections are gone by design and the demo sits right below the
+  // hero, so there is nothing left to anchor to. The GitHub button on the
+  // right is the only outbound link this nav needs.
+  const LINKS: NavLink[] = [];
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);

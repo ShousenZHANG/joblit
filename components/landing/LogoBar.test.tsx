@@ -14,12 +14,18 @@ function renderLogoBar() {
 }
 
 describe("landing LogoBar", () => {
-  it("exposes a real heading and final numeric values before animation starts", () => {
+  it("shows named, auditable capability facts with no counters", () => {
     renderLogoBar();
 
-    expect(screen.getByRole("heading", { level: 2, name: en.landing.logoBar.heading })).toBeInTheDocument();
-    expect(screen.getByText("8")).toHaveClass("sr-only");
-    expect(screen.getByText("5")).toHaveClass("sr-only");
+    expect(
+      screen.getByRole("heading", { level: 2, name: en.landing.logoBar.heading }),
+    ).toBeInTheDocument();
+    // Names, not numbers: numbers age into lies; these values are verifiable
+    // against the source registry and ADR-0015.
+    expect(screen.getByText("Greenhouse · Lever · Ashby · Workable")).toBeInTheDocument();
+    expect(screen.getByText("Your own AI — on your machine")).toBeInTheDocument();
+    expect(screen.queryByText(/gemini/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^\d+$/)).not.toBeInTheDocument();
   });
 
   it("has no automated accessibility violations", async () => {

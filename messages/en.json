@@ -709,9 +709,6 @@
   },
   "landing": {
     "nav": {
-      "product": "Product",
-      "howItWorks": "How it works",
-      "faq": "FAQ",
       "startFree": "Start free",
       "openApp": "Open app",
       "logIn": "Log in",
@@ -726,102 +723,25 @@
       "eyebrowTagline": "Agent Runner · v1",
       "titleLine1": "The job search,",
       "titleItalic": "re-engineered.",
-      "subtitle": "Joblit brings roles from LinkedIn, public feeds, and company career sites into one workspace, helps tailor your CV and cover letter to each JD, and exports clean LaTeX PDFs.",
+      "subtitle": "Joblit pulls roles into one workspace, tailors your CV and cover letter to each JD with your own AI — running on your machine — and exports clean LaTeX PDFs.",
       "startFree": "Start free",
-      "watchDemo": "See how it works",
+      "viewSource": "View source",
       "metaFree": "Free for everyone · No credit card · Google or GitHub sign-in"
     },
     "logoBar": {
-      "heading": "Plugs into your whole job hunt",
+      "heading": "What's under the hood",
       "items": {
-        "boards": "job boards",
-        "ats": "ATS platforms",
-        "byom": "Gemini + portable Skill Pack",
-        "bilingual": "bilingual resumes"
+        "boards": "role intake",
+        "ats": "company career sites",
+        "byom": "generation, local-first",
+        "bilingual": "bilingual LaTeX PDFs"
       }
-    },
-    "how": {
-      "kicker": "How it works",
-      "titlePrefix": "Submit-ready applications in",
-      "titleItalic": "three steps",
-      "titleSuffix": ".",
-      "lede": "Keep your profile in one place, reduce repetitive prompting and template work, and reuse verified context across applications.",
-      "steps": {
-        "fetch": {
-          "title": "Fetch",
-          "blurb": "Pull fresh roles from LinkedIn, public feeds, and company career sites. Deduped by URL, newest first."
-        },
-        "tailor": {
-          "title": "Tailor",
-          "blurb": "Generate a custom resume + cover letter per JD, evidence-grounded in your real experience."
-        },
-        "apply": {
-          "title": "Apply",
-          "blurb": "Review every draft, export a LaTeX PDF, then track the application in one workspace."
-        }
-      }
-    },
-    "features": {
-      "kicker": "Why Joblit",
-      "titlePrefix": "Built for the",
-      "titleItalic": "signal-to-noise",
-      "titleSuffix": "problem.",
-      "lede": "Every feature shaves friction off a real step of the hunt — not nice-to-haves, table stakes for job seekers in 2026.",
-      "experienceGate": {
-        "title": "Experience-gate insight",
-        "blurb": "Joblit reads each JD's seniority and years-of-experience demands and surfaces them up front — so you spend effort on the roles you actually clear, not the ones that auto-reject."
-      },
-      "trustworthy": {
-        "title": "Trustworthy by design",
-        "blurb": "Structured, ATS-conscious output for Workday, Greenhouse, Lever, and iCIMS. Suggested bullets are grounded in evidence from your saved experience and remain yours to review."
-      },
-      "tailor": {
-        "title": "Evidence-grounded tailoring",
-        "blurb": "Generate a role-specific resume and cover letter with Gemini using your saved profile and the target JD, then review and edit every suggestion before export."
-      },
-      "output": {
-        "title": "Pro-grade output",
-        "blurb": "Export LaTeX-typeset PDFs with locale-aware EN / CN templates. In-app generation uses Gemini; export a portable Skill Pack for optional external use with Claude, ChatGPT, or Gemini."
-      }
-    },
-    "faq": {
-      "kicker": "Questions",
-      "titlePrefix": "Honest answers to",
-      "titleItalic": "real",
-      "titleSuffix": "questions.",
-      "items": [
-        {
-          "q": "Is this just ChatGPT with extra steps?",
-          "a": "No. Joblit parses each JD into a structured schema, scores it against your profile, and grounds every bullet in real evidence from your past experience. The LLM is one part of the pipeline — the rest is structured extraction, ATS-safe formatting, and real integrations with job boards."
-        },
-        {
-          "q": "Will my data be used to train models?",
-          "a": "No. Joblit does not use your profile or documents for model training. For in-app generation, Joblit sends Gemini only the profile and target-JD context needed for the request, under the provider's API terms."
-        },
-        {
-          "q": "Is Joblit really free?",
-          "a": "Yes — every Joblit feature is free for every signed-in user. No invitation, approval, subscription, or credit card is required."
-        },
-        {
-          "q": "Does Joblit submit applications for me?",
-          "a": "No. Joblit prepares evidence-grounded, ATS-conscious documents and keeps your application status organized. You review the final materials and submit each application yourself."
-        },
-        {
-          "q": "Which AI providers can I use?",
-          "a": "In-app generation currently uses Gemini. You can also export a portable Skill Pack and choose to upload it externally to Claude, ChatGPT, or Gemini. Joblit does not currently accept personal provider API keys in the app."
-        },
-        {
-          "q": "What if the generated bullets aren't accurate?",
-          "a": "Every bullet is grounded in a line you wrote in your profile. If you don't like a change, one click reverts it. You always own the final text."
-        }
-      ]
     },
     "cta": {
       "titlePrefix": "Spend less time rewriting.",
       "titleItalic": "Keep applications moving.",
       "lede": "Free for everyone, with no credit card. Sign in with Google or GitHub, add your profile once, and reuse it across discovery, tailoring, and applications.",
-      "primary": "Start free",
-      "secondary": "See how it works"
+      "primary": "Start free"
     },
     "footer": {
       "tagline": "The AI job-search workstation. Fetch, tailor, apply. Built by people who got tired of the rest.",

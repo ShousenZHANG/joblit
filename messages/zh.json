@@ -709,9 +709,6 @@
   },
   "landing": {
     "nav": {
-      "product": "产品",
-      "howItWorks": "工作原理",
-      "faq": "常见问题",
       "startFree": "免费开始",
       "openApp": "打开应用",
       "logIn": "登录",
@@ -726,102 +723,25 @@
       "eyebrowTagline": "Agent Runner · v1",
       "titleLine1": "求职流程，",
       "titleItalic": "重新定义。",
-      "subtitle": "Joblit 将 LinkedIn、公开职位源和公司招聘网站的岗位汇集到一个工作台，按目标 JD 辅助定制简历与求职信，并导出清晰的 LaTeX PDF。",
+      "subtitle": "Joblit 把岗位汇入一个工作台,用你自己的 AI —— 在你自己的机器上 —— 为每份 JD 定制简历与求职信,并导出整洁的 LaTeX PDF。",
       "startFree": "免费开始",
-      "watchDemo": "查看工作原理",
+      "viewSource": "查看源码",
       "metaFree": "所有人免费开放 · 无需信用卡 · Google 或 GitHub 登录"
     },
     "logoBar": {
-      "heading": "贯通你的整个求职流程",
+      "heading": "引擎盖之下",
       "items": {
-        "boards": "招聘平台",
-        "ats": "ATS 平台",
-        "byom": "Gemini + 可移植 Skill Pack",
-        "bilingual": "中英双语简历"
+        "boards": "岗位聚合",
+        "ats": "公司招聘站点",
+        "byom": "本地优先生成",
+        "bilingual": "双语 LaTeX PDF"
       }
-    },
-    "how": {
-      "kicker": "工作原理",
-      "titlePrefix": "提交就绪的申请，只需",
-      "titleItalic": "三步",
-      "titleSuffix": "。",
-      "lede": "把个人档案集中管理，减少重复提示与模板整理，并在不同申请中复用经过确认的背景信息。",
-      "steps": {
-        "fetch": {
-          "title": "抓取",
-          "blurb": "从 LinkedIn、公开职位源和公司招聘网站获取最新岗位。按 URL 去重，最新优先。"
-        },
-        "tailor": {
-          "title": "定制",
-          "blurb": "为每个 JD 生成定制简历和求职信，基于你真实经历的证据。"
-        },
-        "apply": {
-          "title": "申请",
-          "blurb": "审阅每份草稿、导出 LaTeX PDF，并在一个工作台中追踪申请进度。"
-        }
-      }
-    },
-    "features": {
-      "kicker": "为什么选 Joblit",
-      "titlePrefix": "为解决",
-      "titleItalic": "信噪比",
-      "titleSuffix": "问题而生。",
-      "lede": "每一个功能都消除求职流程中的真实摩擦 —— 不是锦上添花，而是 2026 年求职者的基本配置。",
-      "experienceGate": {
-        "title": "经验门槛洞察",
-        "blurb": "Joblit 解析每个 JD 的资历与年限要求并提前标出 —— 让你把精力花在真正够得着的岗位上，而非那些会被直接刷掉的。"
-      },
-      "trustworthy": {
-        "title": "可信任的设计",
-        "blurb": "面向 Workday、Greenhouse、Lever 与 iCIMS 的结构化 ATS 友好输出。建议要点以你保存的经历证据为依据，并由你最终审阅。"
-      },
-      "tailor": {
-        "title": "基于证据的定制",
-        "blurb": "Gemini 根据你保存的档案与目标 JD 生成岗位定制简历和求职信；导出前，每一项建议都可审阅和编辑。"
-      },
-      "output": {
-        "title": "专业级输出",
-        "blurb": "导出采用中英双语模板的 LaTeX 排版 PDF。应用内生成使用 Gemini；也可导出可移植 Skill Pack，自行在 Claude、ChatGPT 或 Gemini 中使用。"
-      }
-    },
-    "faq": {
-      "kicker": "常见问题",
-      "titlePrefix": "针对",
-      "titleItalic": "真实",
-      "titleSuffix": "问题的坦诚回答。",
-      "items": [
-        {
-          "q": "这只是 ChatGPT 加几步操作吗?",
-          "a": "不是。Joblit 将每个 JD 解析为结构化数据、与你的档案评分匹配、每条要点都基于你过往经历的真实证据。LLM 只是流水线的一部分 —— 其余是结构化提取、ATS 兼容排版、以及与招聘平台的真实集成。"
-        },
-        {
-          "q": "我的数据会被用于训练模型吗?",
-          "a": "不会。Joblit 不会使用你的档案或文档训练模型。应用内生成时，Joblit 仅按提供商 API 条款向 Gemini 发送完成请求所需的档案与目标 JD 上下文。"
-        },
-        {
-          "q": "Joblit 真的免费吗?",
-          "a": "是的，Joblit 所有功能均向每位登录用户免费开放，无需邀请、审批、订阅或信用卡。"
-        },
-        {
-          "q": "Joblit 会代我提交申请吗?",
-          "a": "不会。Joblit 会准备基于证据、兼顾 ATS 的申请材料，并帮助你整理申请状态。最终材料由你审阅，每份申请也由你亲自提交。"
-        },
-        {
-          "q": "可以使用哪些 AI 服务?",
-          "a": "应用内生成目前使用 Gemini。你也可以导出可移植 Skill Pack，并选择在外部上传到 Claude、ChatGPT 或 Gemini。Joblit 应用内目前不接收个人提供商 API 密钥。"
-        },
-        {
-          "q": "如果生成的要点不准确怎么办?",
-          "a": "每条要点都基于你档案中写过的内容。如果你不满意,一键即可恢复。最终文字始终归你掌控。"
-        }
-      ]
     },
     "cta": {
       "titlePrefix": "少花时间重复改简历，",
       "titleItalic": "让申请持续推进。",
       "lede": "面向所有人免费开放，无需信用卡。使用 Google 或 GitHub 登录，一次维护档案，即可贯穿岗位发现、材料定制与申请流程。",
-      "primary": "免费开始",
-      "secondary": "查看工作原理"
+      "primary": "免费开始"
     },
     "footer": {
       "tagline": "AI 求职工作台。抓取、定制、申请。由厌倦现状的人打造。",

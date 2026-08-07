@@ -97,7 +97,6 @@ describe("landing Nav", () => {
     expect(cta).toHaveClass("h-11", "min-w-11");
     expect(menu).toHaveClass("h-11", "w-11");
     expect(menu).toHaveClass("lg:hidden");
-    expect(screen.getByRole("link", { name: en.landing.nav.product }).closest("ul")).toHaveClass("lg:flex");
     expect(github.className).toContain("focus-visible:ring-2");
     expect(cta.className).toContain("focus-visible:ring-2");
     expect(github).toHaveAttribute("target", "_blank");

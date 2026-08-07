@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Play } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { useTranslations } from "next-intl";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -110,7 +110,6 @@ export function Hero() {
             aria-hidden
             className="relative flex h-1.5 w-1.5 items-center justify-center"
           >
-            <span className="absolute inline-flex h-full w-full animate-[landing-pulse_2s_ease-in-out_infinite] rounded-full bg-brand-emerald-500 motion-reduce:animate-none" />
             <span className="relative h-1.5 w-1.5 rounded-full bg-brand-emerald-600" />
           </span>
           <span className="rounded-full bg-brand-emerald-700 px-1.5 py-0.5 text-[10px] font-bold text-white">
@@ -187,13 +186,14 @@ export function Hero() {
             />
           </Link>
         </Magnetic>
-        <Link
-          href="#how"
+        <a
+          href="https://github.com/ShousenZHANG/joblit"
+          target="_blank"
+          rel="noreferrer"
           className="inline-flex h-11 items-center gap-2 rounded-full border border-border bg-background/70 px-6 text-sm font-semibold text-foreground transition-[background-color,transform] duration-200 hover:bg-muted active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          <Play className="h-4 w-4" aria-hidden />
-          {t("watchDemo")}
-        </Link>
+          {t("viewSource")}
+        </a>
       </motion.div>
 
       {/* Meta — single honest line, no fabricated counters. */}

@@ -185,41 +185,14 @@
    reflows on scroll. Reduced from 3 colors (emerald + teal + amber) to a
    single emerald wash so brand color reads as "scarcity" rather than
    "noise". Static — no animation. */
-.landing-atmos {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background:
-    radial-gradient(ellipse 70% 50% at 50% 0%, rgba(16, 185, 129, 0.05), transparent 65%),
-    var(--nebula);
-}
 
 /* Scroll-driven colour temperature: the sky cools from dawn to dusk as the
    page scrolls — driven by the native scroll timeline (zero JS, zero
    listeners; scroll position IS the animation clock). Progressive
    enhancement: browsers without scroll() keep the static dawn. */
-.landing-atmos::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  background:
-    radial-gradient(ellipse 90% 65% at 50% 108%, oklch(0.55 0.11 268 / 0.32), transparent 62%),
-    linear-gradient(180deg, transparent 25%, oklch(0.58 0.06 255 / 0.18));
-}
 
-.dark .landing-atmos::after {
-  background:
-    radial-gradient(ellipse 90% 65% at 50% 108%, oklch(0.3 0.1 282 / 0.4), transparent 62%),
-    linear-gradient(180deg, transparent 30%, oklch(0.1 0.03 262 / 0.5));
-}
 
 @supports (animation-timeline: scroll()) {
-  .landing-atmos::after {
-    animation: atmos-dusk linear both;
-    animation-timeline: scroll(root block);
-  }
 }
 
 /* Front-loaded: dusk is clearly falling by mid-page instead of only at the
@@ -236,14 +209,6 @@
   }
 }
 
-/* Aurora Deep: the emerald wash now sits on a deep-space nebula. Already a
-   fixed, pointer-events-none plane — the nebula rides it for free, so there is
-   no `background-attachment: fixed` (an iOS Safari repaint trap) anywhere. */
-.dark .landing-atmos {
-  background:
-    radial-gradient(ellipse 70% 50% at 50% 0%, rgba(16, 185, 129, 0.07), transparent 65%),
-    var(--nebula);
-}
 
 /* Authenticated workspace atmosphere — two static light-mode layers, with a
    single 60-second compositor-only drift in dark mode. The app shell avoids
@@ -325,79 +290,18 @@
   }
 }
 
-/* Aurora — premium "living" background layered BEHIND .landing-atmos. Three
-   slow-drifting blurred emerald/teal blobs. Animates TRANSFORM ONLY (GPU
-   composited, blur is a static layer), so unlike the paint-heavy effects that
-   were removed earlier this adds no scroll-time paint cost. Reduced-motion
-   freezes the drift; the blobs stay as a soft static gradient. */
-.landing-aurora {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
-  contain: layout paint;
-}
 
-.landing-aurora-blob {
-  position: absolute;
-  border-radius: 9999px;
-  filter: blur(72px);
-  --blob-o: 0.55;
-  opacity: var(--blob-o);
-  will-change: transform, opacity;
-}
 
 /* Daylight aurora — a real dawn, not a hint. Emerald / teal / violet-sky mirror
    the dark nebula's three clouds so the two themes are one universe. */
 /* Each blob runs two clocks: its drift AND an out-of-phase opacity breath
    (aurora-breathe, staggered negative delays), so the field reads as one
    living colour mesh rather than separate shapes floating. Compositor-only. */
-.landing-aurora-blob--1 {
-  width: 44vw;
-  height: 44vw;
-  left: -6vw;
-  top: -8vw;
-  background: radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.3), transparent 68%);
-  animation:
-    aurora-drift-1 24s ease-in-out infinite,
-    aurora-breathe 11s ease-in-out infinite alternate;
-}
 
-.landing-aurora-blob--2 {
-  width: 40vw;
-  height: 40vw;
-  right: -8vw;
-  top: 2vw;
-  background: radial-gradient(circle at 50% 50%, rgba(45, 212, 191, 0.26), transparent 68%);
-  animation:
-    aurora-drift-2 30s ease-in-out infinite,
-    aurora-breathe 13s ease-in-out -4s infinite alternate;
-}
 
-.landing-aurora-blob--3 {
-  width: 50vw;
-  height: 50vw;
-  left: 18vw;
-  top: 26vw;
-  background: radial-gradient(circle at 50% 50%, rgba(139, 148, 250, 0.2), transparent 70%);
-  animation:
-    aurora-drift-3 36s ease-in-out infinite,
-    aurora-breathe 17s ease-in-out -9s infinite alternate;
-}
 
 /* Fourth cloud — a small sky-blue breath near the hero's heart. Completes the
    mesh (emerald / teal / violet / sky) so no region of the field sits still. */
-.landing-aurora-blob--4 {
-  width: 26vw;
-  height: 26vw;
-  right: 24vw;
-  top: 16vw;
-  background: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.22), transparent 68%);
-  animation:
-    aurora-drift-2 42s ease-in-out -12s infinite,
-    aurora-breathe 9s ease-in-out -2s infinite alternate;
-}
 
 @keyframes aurora-breathe {
   from {
@@ -412,10 +316,6 @@
    background and a 200ms interaction IS the sense of vastness. The two-value
    duration maps to the two animations: drift slows to 60s, the breath keeps
    its own 13s clock (stagger via per-blob delays remains). */
-.dark .landing-aurora-blob {
-  --blob-o: 0.5;
-  animation-duration: 60s, 13s;
-}
 
 @keyframes aurora-drift-1 {
   0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
@@ -434,18 +334,7 @@
 
 /* Fine grain overlay — static premium texture sitting over the aurora,
    still behind page content (z-0 < main z-1). */
-.landing-grain {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  opacity: 0.045;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-}
 
-.dark .landing-grain {
-  opacity: 0.075;
-}
 
 /* Starfield — three parallax layers behind the aurora. Dark only; on light the
    whole plane is hidden. Each layer paints its stars via box-shadow (one node,
@@ -597,10 +486,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .landing-atmos::after {
-    animation: none;
-    opacity: 0;
-  }
 
   .starfield-layer {
     transition: none;
@@ -616,12 +501,7 @@
 }
 
 @media (pointer: coarse) {
-  .landing-aurora-blob {
-    animation: none;
-    will-change: auto;
-  }
 
-  .landing-aurora-blob--4,
   .starfield-near,
   .shooting-star {
     display: none;
@@ -650,9 +530,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .landing-aurora-blob {
-    animation: none;
-  }
 }
 
 /* Nav pill elevation — two pre-painted shadow layers cross-faded on OPACITY.

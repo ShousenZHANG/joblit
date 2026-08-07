@@ -2,16 +2,27 @@
 
 import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
-import { CountUp } from "./lib/interactive";
 import { revealUp, useReveal } from "./lib/motion";
 
-// Capability strip — replaces the old fake text-wordmark "social proof"
-// (rendering "Stripe"/"Linear" in our own font implied false endorsement
-// and read as a skeleton-loading state). These are honest, verifiable
-// product facts that double as the integration story. Stats are universal
-// (numbers / product names); the labels translate.
-
-const CAPABILITY_STATS = ["8", "5", "Gemini · Skill Pack", "EN · 中文"] as const;
+// Capability strip — one quiet line of named, auditable product facts.
+//
+// The previous version animated counters ("8 job boards", "5 ATS platforms")
+// and credited an engine ("Gemini · Skill Pack") that no longer exists in the
+// codebase (ADR-0015 removed server-side generation entirely). Counters also
+// age badly: every source added or retired turns the page into a liar until
+// someone remembers to edit marketing copy.
+//
+// Names don't lie the way numbers do. Each value below is verifiable against
+// the repository: the intake pipeline (LinkedIn via the JobSpy worker plus
+// curated feed and ATS-tenant adapters), the four supported ATS providers
+// (lib/server/sources/atsBoards.ts), local-first generation (ADR-0015), and
+// the bilingual LaTeX renderers.
+const CAPABILITY_VALUES = [
+  "LinkedIn + curated sources",
+  "Greenhouse · Lever · Ashby · Workable",
+  "Your own AI — on your machine",
+  "EN · 中文",
+] as const;
 const CAPABILITY_KEYS = ["boards", "ats", "byom", "bilingual"] as const;
 
 export function LogoBar() {
@@ -28,32 +39,19 @@ export function LogoBar() {
         {t("heading")}
       </h2>
       <ul
-        className="mt-8 grid grid-cols-2 gap-x-6 gap-y-8 sm:flex sm:flex-wrap sm:items-start sm:justify-center sm:gap-x-14"
+        className="mt-8 grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-start lg:justify-center lg:gap-x-14"
         role="list"
       >
-        {CAPABILITY_KEYS.map((key, i) => {
-          const stat = CAPABILITY_STATS[i];
-          const numeric = /^\d+$/.test(stat);
-          return (
-            <li key={key} className="flex flex-col items-center text-center">
-              <span className="text-2xl font-bold tracking-tight text-foreground sm:text-[26px]">
-                {/* Real numbers tick up once on first view; non-numeric stats
-                    (model names, locales) stay static. */}
-                {numeric ? (
-                  <>
-                    <span aria-hidden="true">
-                      <CountUp to={Number(stat)} />
-                    </span>
-                    <span className="sr-only">{stat}</span>
-                  </>
-                ) : stat}
-              </span>
-              <span className="mt-1 text-xs font-medium text-muted-foreground sm:text-sm">
-                {t(`items.${key}`)}
-              </span>
-            </li>
-          );
-        })}
+        {CAPABILITY_KEYS.map((key, i) => (
+          <li key={key} className="flex flex-col items-center text-center">
+            <span className="text-base font-bold tracking-tight text-foreground sm:text-lg">
+              {CAPABILITY_VALUES[i]}
+            </span>
+            <span className="mt-1 text-xs font-medium text-muted-foreground sm:text-sm">
+              {t(`items.${key}`)}
+            </span>
+          </li>
+        ))}
       </ul>
     </motion.section>
   );

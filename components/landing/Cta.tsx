@@ -35,14 +35,6 @@ export function Cta() {
           aria-hidden
           className="pointer-events-none absolute inset-0 rounded-3xl bg-[radial-gradient(ellipse_70%_45%_at_50%_0%,rgba(16,185,129,0.16),transparent_65%)]"
         />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 rounded-3xl bg-[radial-gradient(ellipse_55%_35%_at_15%_100%,rgba(5,150,105,0.10),transparent_60%)]"
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 rounded-3xl bg-[radial-gradient(ellipse_55%_35%_at_85%_100%,rgba(20,184,166,0.08),transparent_60%)]"
-        />
         {/* Hairline emerald accent at top edge */}
         <div
           aria-hidden
@@ -79,12 +71,6 @@ export function Cta() {
                 />
               </Link>
             </Magnetic>
-            <Link
-              href="#how"
-              className="inline-flex h-11 items-center rounded-full border border-border/70 bg-background/80 px-6 text-sm font-semibold text-foreground backdrop-blur-sm transition-[background-color,border-color,transform] duration-200 hover:border-brand-emerald-300/60 hover:bg-muted active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            >
-              {t("secondary")}
-            </Link>
           </div>
         </div>
       </div>
