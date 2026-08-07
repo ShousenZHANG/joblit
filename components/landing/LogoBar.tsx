@@ -21,9 +21,8 @@ const CAPABILITY_VALUES = [
   "LinkedIn + curated sources",
   "Greenhouse · Lever · Ashby · Workable",
   "Your own AI — on your machine",
-  "EN · 中文",
 ] as const;
-const CAPABILITY_KEYS = ["boards", "ats", "byom", "bilingual"] as const;
+const CAPABILITY_KEYS = ["boards", "ats", "byom"] as const;
 
 export function LogoBar() {
   const reveal = useReveal();
@@ -39,7 +38,7 @@ export function LogoBar() {
         {t("heading")}
       </h2>
       <ul
-        className="mt-8 grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-start lg:justify-center lg:gap-x-14"
+        className="mt-8 grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-3 lg:flex lg:flex-wrap lg:items-start lg:justify-center lg:gap-x-14"
         role="list"
       >
         {CAPABILITY_KEYS.map((key, i) => (

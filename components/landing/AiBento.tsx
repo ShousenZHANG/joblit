@@ -4,8 +4,8 @@ import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import {
   CheckCircle2,
+  FileCheck2,
   MinusCircle,
-  ReceiptText,
   XCircle,
 } from "lucide-react";
 import { useSpotlight } from "./lib/interactive";
@@ -14,17 +14,17 @@ import { cn } from "@/lib/utils";
 
 /**
  * The AI story as a bento grid — each cell leads with a miniature of the
- * real product surface instead of an icon and a slogan, and every claim is
- * auditable:
+ * real product surface instead of an icon and a slogan. The copy is written
+ * for a non-technical reader, but every claim still maps to a mechanism:
  *
- * - Evidence-gated fit: the model emits judgements only; scores are
- *   aggregated deterministically (lib/server/ai/fitScoring) and ungrounded
- *   claims are rejected by the evidence gate.
- * - Delta tailoring: a summary plus at most three added bullets — the strict
- *   output contract in the prompt schema.
- * - Local-first: the Runner drives Hermes over loopback (ADR-0014/0015).
- * - Receipts: content-addressed settlement; a crash replays the receipt,
- *   never the model call (AGENTS.md fit-settlement contract).
+ * - Fit: judgement chips aggregate deterministically (lib/server/ai/fitScoring)
+ *   and ungrounded claims are rejected by the evidence gate.
+ * - Delta tailoring: summary + max three added bullets — the strict output
+ *   contract in the prompt schema.
+ * - Local-first: the Runner drives Hermes over loopback (ADR-0014/0015);
+ *   the command shown is the real one.
+ * - "Nothing runs twice": receipt-backed settlement (AGENTS.md contract) —
+ *   plain-language framing of content-addressed replay.
  */
 
 function BentoCell({
@@ -129,9 +129,8 @@ export function AiBento() {
             className="mt-4 overflow-x-auto rounded-lg border border-border/60 bg-foreground/[0.03] px-3 py-2.5 font-mono text-[11px] leading-relaxed text-muted-foreground dark:bg-background/60"
           >
 {`$ node tools/runner/cli.mjs --watch
-Working batch 4f2a…
-  resume: imported
-  cover: imported`}
+✓ Resume tailored — saved to your workspace
+✓ Cover letter — saved`}
           </pre>
         </BentoCell>
 
@@ -142,12 +141,12 @@ Working batch 4f2a…
             aria-hidden
             className="mt-4 flex items-center gap-2 rounded-lg border border-border/60 bg-background/70 px-3 py-2.5"
           >
-            <ReceiptText className="h-4 w-4 shrink-0 text-brand-emerald-600" />
-            <code className="truncate font-mono text-[11px] text-muted-foreground">
-              issueKey d41f…9c2e
-            </code>
+            <FileCheck2 className="h-4 w-4 shrink-0 text-brand-emerald-600" />
+            <span className="truncate text-[11px] font-medium text-muted-foreground">
+              {t("receiptsSaved")}
+            </span>
             <span className="ml-auto shrink-0 rounded-full bg-brand-emerald-100/80 px-2 py-0.5 text-[10px] font-bold text-brand-emerald-800 dark:bg-brand-emerald-500/15 dark:text-brand-emerald-300">
-              {t("receiptsSettled")}
+              {t("receiptsBadge")}
             </span>
           </div>
         </BentoCell>

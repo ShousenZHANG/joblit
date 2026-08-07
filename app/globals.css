@@ -2889,6 +2889,26 @@ html[lang="zh"] {
   --font-edu-body: system-ui, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
 }
 
+/* Light-mode landing canvas. The global --background is a warm cream tuned
+   for the app workspace; the landing wants a cooler, quieter paper so its
+   pure-white cards (--card is white in light mode) read as layers instead of
+   melting into the page. Fixed and viewport-sized, sharing z 0 with the
+   dark-only starfield — exactly one of the two is ever visible. */
+.landing-paper {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: oklch(0.977 0.004 250);
+}
+
+/* Re-point --background for everything inside the landing (light mode only)
+   so translucent bg-background/NN chips inside white cards pick up the same
+   cool paper instead of the app's warm cream. */
+html:not(.dark) .marketing-cool {
+  --background: oklch(0.977 0.004 250);
+}
+
 /* Architecture pipeline — a single dot drifting along each connector. The
    component hides the dot entirely under prefers-reduced-motion. */
 @keyframes landing-flow-x {

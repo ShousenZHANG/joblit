@@ -733,8 +733,7 @@
       "items": {
         "boards": "role intake",
         "ats": "company career sites",
-        "byom": "generation, local-first",
-        "bilingual": "bilingual LaTeX PDFs"
+        "byom": "generation, local-first"
       }
     },
     "architecture": {
@@ -748,6 +747,7 @@
       "runnerDesc": "Drains the queue, one command",
       "hermesDesc": "Runs the model on your subscription",
       "boundaryNote": "Model calls and your AI credential never leave this box.",
+      "subscriptionLabel": "Runs on the subscription you already have",
       "draftsTitle": "Drafts, back",
       "draftsDesc": "Tailored resume and cover letter return as reviewable drafts with receipts — nothing is sent anywhere without you.",
       "poweredByPrefix": "Local generation is powered by",
@@ -757,15 +757,16 @@
       "kicker": "AI, kept honest",
       "titlePrefix": "AI that shows",
       "titleItalic": "its work.",
-      "fitTitle": "Evidence-gated fit",
-      "fitBody": "The model judges each requirement against your profile — match, partial, or gap. Scores are computed deterministically from those judgements, and any claim without evidence is rejected.",
-      "deltaTitle": "Delta tailoring",
-      "deltaBody": "Your resume is never rewritten. Tailoring returns a summary and at most three added bullets — you always see exactly what changed.",
-      "localTitle": "Runs on your machine",
-      "localBody": "One command starts the Runner. It drains the queue, calls your local Hermes gateway, and imports the drafts back — the server never generates anything.",
-      "receiptsTitle": "Receipts, not retries",
-      "receiptsBody": "Every import settles against a content-addressed receipt. A crash or a flaky network replays the receipt — it never re-runs the model or duplicates a draft.",
-      "receiptsSettled": "settled"
+      "fitTitle": "Knows which jobs are worth your time",
+      "fitBody": "Every requirement in the job ad is checked against your profile and marked match, partial, or gap. The score comes straight from those marks — you can see exactly why a job rates high or low.",
+      "deltaTitle": "Never rewrites your resume",
+      "deltaBody": "Tailoring only adds: a fresh summary and up to three new bullet points. Everything you wrote stays untouched, and every change is visible before you use it.",
+      "localTitle": "Works on your computer, with your AI",
+      "localBody": "One command starts the helper on your own computer. It uses the AI plan you already pay for — Joblit's servers never see your AI account and never generate anything themselves.",
+      "receiptsTitle": "Nothing runs twice",
+      "receiptsBody": "Every finished draft is checked in with a receipt. If your connection drops halfway, Joblit picks up the finished draft from the receipt — it never quietly re-runs the AI or creates duplicates.",
+      "receiptsSaved": "Draft saved to your workspace",
+      "receiptsBadge": "won't run twice"
     },
     "faq": {
       "title": "Questions, answered straight",
@@ -787,7 +788,6 @@
     "cta": {
       "titlePrefix": "Spend less time rewriting.",
       "titleItalic": "Keep applications moving.",
-      "lede": "Free for everyone, with no credit card. Sign in with Google or GitHub, add your profile once, and reuse it across discovery, tailoring, and applications.",
       "primary": "Start free"
     },
     "footer": {

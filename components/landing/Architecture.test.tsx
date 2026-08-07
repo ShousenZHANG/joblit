@@ -36,6 +36,12 @@ describe("landing Architecture", () => {
       "https://github.com/NousResearch/hermes-agent",
     );
     expect(hermesLink).toHaveAttribute("target", "_blank");
+
+    // "Works with" marks: real vectors for OpenAI and Claude; Hermes stays a
+    // wordmark because no clean official vector exists — never invent one.
+    expect(screen.getByRole("img", { name: "OpenAI" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Claude" })).toBeInTheDocument();
+    expect(screen.getByText("ChatGPT")).toBeInTheDocument();
   });
 
   it("has no automated accessibility violations", async () => {

@@ -64,11 +64,13 @@ export default function MarketingPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      {/* One atmosphere layer, dark-only, behind everything. Kept outside
+      {/* One atmosphere layer per theme, behind everything. Kept outside
           <main> so no ancestor transform establishes a containing block for
-          the fixed Nav. */}
+          the fixed Nav. Light: cool near-white paper so pure-white cards
+          read as layers. Dark: the starfield. */}
+      <div aria-hidden className="landing-paper dark:hidden" />
       <Starfield />
-      <main className="relative z-[1] flex flex-col bg-transparent text-foreground">
+      <main className="marketing-cool relative z-[1] flex flex-col bg-transparent text-foreground">
         <Nav />
         <Hero />
         <LogoBar />

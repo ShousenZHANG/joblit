@@ -2,7 +2,9 @@
 
 import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
-import { Cpu, FileCheck2, LayoutGrid, TerminalSquare } from "lucide-react";
+import { Cpu, FileCheck2, TerminalSquare } from "lucide-react";
+import { JoblitMark } from "@/components/brand/JoblitMark";
+import { ClaudeMark, OpenAiMark } from "./brandMarks";
 import { revealUp, useReveal } from "./lib/motion";
 
 /**
@@ -14,6 +16,10 @@ import { revealUp, useReveal } from "./lib/motion";
  * inside the visitor's own machine, over loopback, on their own subscription,
  * through OpenAI's official Codex app-server (the bootstrap enforces that
  * runtime). Every sentence here is auditable against the repository.
+ *
+ * Brand marks (OpenAI, Claude) are nominative "works with" usage — see
+ * brandMarks.tsx. Hermes deliberately gets a wordmark, not an invented icon:
+ * Nous Research ships no clean official vector.
  */
 
 function FlowConnector({ vertical = false }: { vertical?: boolean }) {
@@ -63,8 +69,8 @@ export function Architecture() {
         {/* Joblit workspace */}
         <div className="flex-1 rounded-2xl border border-border/70 bg-card p-5">
           <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
-              <LayoutGrid className="h-4 w-4 text-muted-foreground" aria-hidden />
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-foreground text-background">
+              <JoblitMark size={16} ariaLabel={null} />
             </span>
             <h3 className="text-sm font-bold text-foreground">
               {t("workspaceTitle")}
@@ -107,6 +113,21 @@ export function Architecture() {
           <p className="mt-3 text-xs font-semibold text-brand-emerald-800 dark:text-brand-emerald-300">
             {t("boundaryNote")}
           </p>
+          {/* Nominative "works with" marks — the subscriptions Hermes can
+              drive, named so a non-technical visitor recognises them. */}
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-brand-emerald-400/25 pt-3">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              {t("subscriptionLabel")}
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground">
+              <OpenAiMark className="h-4 w-4" />
+              ChatGPT
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground">
+              <ClaudeMark className="h-4 w-4" />
+              Claude
+            </span>
+          </div>
         </div>
 
         <FlowConnector />

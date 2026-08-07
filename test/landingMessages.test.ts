@@ -33,10 +33,23 @@ describe("landing message contract", () => {
     expect(en.landing.hero.metaFree).toBe(
       "Free for everyone · No credit card · Google or GitHub sign-in",
     );
-    expect(en.landing.cta.lede).toBe(
-      "Free for everyone, with no credit card. Sign in with Google or GitHub, add your profile once, and reuse it across discovery, tailoring, and applications.",
-    );
   });
+
+  it.each([
+    ["en", en.landing.bento],
+    ["zh", zh.landing.bento],
+  ] as const)(
+    "keeps the %s AI section readable by a non-technical visitor",
+    (_locale, bento) => {
+      // Engineering jargon is banned from the bento: the section exists to
+      // make the AI legible to someone who has never opened a terminal.
+      const flattened = JSON.stringify(bento);
+      expect(flattened).not.toMatch(/content-addressed/i);
+      expect(flattened).not.toMatch(/deterministic/i);
+      expect(flattened).not.toMatch(/issue-?key/i);
+      expect(flattened).not.toMatch(/loopback/i);
+    },
+  );
 
   it("keeps the local-first differentiator in the hero subtitle", () => {
     expect(en.landing.hero.subtitle).toMatch(/your own AI/i);

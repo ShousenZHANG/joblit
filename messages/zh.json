@@ -733,8 +733,7 @@
       "items": {
         "boards": "岗位聚合",
         "ats": "公司招聘站点",
-        "byom": "本地优先生成",
-        "bilingual": "双语 LaTeX PDF"
+        "byom": "本地优先生成"
       }
     },
     "architecture": {
@@ -748,6 +747,7 @@
       "runnerDesc": "一条命令,持续消费队列",
       "hermesDesc": "用你的订阅运行模型",
       "boundaryNote": "模型调用与你的 AI 凭证永远不出这个框。",
+      "subscriptionLabel": "用你已有的订阅运行",
       "draftsTitle": "草稿回流",
       "draftsDesc": "定制后的简历与求职信以可审阅的草稿返回,并附带回执——未经你确认,什么都不会被发出去。",
       "poweredByPrefix": "本地生成由",
@@ -757,15 +757,16 @@
       "kicker": "AI,可被审计",
       "titlePrefix": "会",
       "titleItalic": "亮出证据的 AI。",
-      "fitTitle": "证据门控的匹配度",
-      "fitBody": "模型逐条对照你的档案判断每项要求——匹配、部分匹配或缺口。分数由这些判断确定性计算得出,没有证据的断言会被直接拒绝。",
-      "deltaTitle": "增量式定制",
-      "deltaBody": "你的简历永远不会被重写。定制只返回一段摘要和至多三条新增要点——每处改动都一目了然。",
-      "localTitle": "跑在你的电脑上",
-      "localBody": "一条命令启动 Runner:消费队列、调用你本机的 Hermes 网关、把草稿导回——服务器从不生成任何内容。",
-      "receiptsTitle": "回执,而非重试",
-      "receiptsBody": "每次导入都以内容寻址的回执结算。崩溃或网络抖动只会重放回执——绝不会重跑模型或产生重复草稿。",
-      "receiptsSettled": "已结算"
+      "fitTitle": "知道哪些职位值得你花时间",
+      "fitBody": "职位描述里的每条要求都会对照你的档案逐一核对,标成匹配、部分匹配或缺口。分数直接来自这些标记——一个职位为什么高分或低分,你看得清清楚楚。",
+      "deltaTitle": "绝不重写你的简历",
+      "deltaBody": "定制只做加法:一段新摘要,至多三条新要点。你写的内容原封不动,每处改动在使用前都看得见。",
+      "localTitle": "在你的电脑上,用你的 AI",
+      "localBody": "一条命令在你自己的电脑上启动助手,用的是你已经在付费的 AI 套餐——Joblit 的服务器碰不到你的 AI 账号,也从不自己生成任何内容。",
+      "receiptsTitle": "绝不重复运行",
+      "receiptsBody": "每份完成的草稿都有一张回执。就算网络中途断了,Joblit 也会凭回执取回已完成的草稿——绝不会悄悄重跑 AI,也不会产生重复。",
+      "receiptsSaved": "草稿已存入你的工作区",
+      "receiptsBadge": "不会重复运行"
     },
     "faq": {
       "title": "直接回答你的疑问",
@@ -787,7 +788,6 @@
     "cta": {
       "titlePrefix": "少花时间重复改简历，",
       "titleItalic": "让申请持续推进。",
-      "lede": "面向所有人免费开放，无需信用卡。使用 Google 或 GitHub 登录，一次维护档案，即可贯穿岗位发现、材料定制与申请流程。",
       "primary": "免费开始"
     },
     "footer": {

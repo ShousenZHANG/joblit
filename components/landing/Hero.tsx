@@ -93,6 +93,12 @@ export function Hero() {
       {/* Prismatic hairline — dawn refracting into its spectrum. The landing's
           signature stroke, sitting where the sky meets the page. */}
       <div aria-hidden className="prism-line absolute inset-x-10 top-0 lg:inset-x-24" />
+      {/* Light-mode only: a faint emerald wash so the cool-gray canvas has a
+          pulse. Dark mode keeps the starfield as the sole atmosphere. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[520px] bg-[radial-gradient(ellipse_65%_55%_at_50%_0%,rgba(16,185,129,0.07),transparent_65%)] dark:hidden"
+      />
       {/* LCP-safe: the headline block renders VISIBLE at SSR (initial=false →
           framer paints the `show` state immediately, no opacity:0 gate waiting
           on hydration). The decorative product mock below keeps its JS-driven
