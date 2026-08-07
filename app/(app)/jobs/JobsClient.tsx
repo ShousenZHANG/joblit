@@ -33,6 +33,7 @@ import { useKeyboardNavigation } from "./hooks/useKeyboardNavigation";
 import { useExternalGenerate } from "./hooks/useExternalGenerate";
 import { JobListItem } from "./components/JobListItem";
 import { useFitScan } from "./hooks/useFitScan";
+import { RunnerPresenceChip } from "@/components/agent/RunnerPresenceChip";
 import { VirtualJobList, type VirtualJobListHandle } from "./components/VirtualJobList";
 import { JobBatchDeleteDialog } from "./components/JobBatchDeleteDialog";
 import { JobSearchBar } from "./components/JobSearchBar";
@@ -185,6 +186,12 @@ export function JobsClient({
 
   const externalGenerate = useExternalGenerate(setError);
   const fitScan = useFitScan({ onJobScored: refetch });
+  // Presence matters exactly while something is queued for the Runner: a
+  // running fit scan, or a generation batch enqueued this session. The chip
+  // polls for itself; this flag only controls whether it is mounted.
+  const [generationQueued, setGenerationQueued] = useState(false);
+  const showRunnerPresence =
+    fitScan.state.status === "scanning" || generationQueued;
   // Keep renderer identity stable after virtualization first becomes useful.
   // In particular, deleting row 81 must not swap the entire virtual subtree
   // for the ordinary renderer when the visible count becomes 80.
@@ -419,6 +426,7 @@ export function JobsClient({
         className:
           "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-900 animate-in fade-in zoom-in-95",
       });
+      setGenerationQueued(true);
       return true;
     } catch (err) {
       // The one expected refusal: the protocol allows a single active batch.
@@ -1025,6 +1033,11 @@ export function JobsClient({
               </div>
             </div>
           )}
+          {showRunnerPresence ? (
+            <div className="flex items-center border-b bg-background/60 px-4 py-1.5">
+              <RunnerPresenceChip linkToSetup />
+            </div>
+          ) : null}
           {fitScan.state.status === "scanning" ? (
             <div className="flex items-center justify-between gap-3 border-b bg-brand-emerald-50/60 px-4 py-2.5 dark:bg-emerald-500/10" role="status" aria-live="polite">
               <span className="flex min-w-0 items-center gap-2 text-sm text-foreground">

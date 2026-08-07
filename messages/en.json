@@ -57,6 +57,12 @@
   "agent": {
     "title": "Agent",
     "subtitle": "Run the local Runner so tailoring happens on your machine, with your model.",
+    "presence": {
+      "activeNow": "Runner · active",
+      "activeAgo": "Runner · active {minutes}m ago",
+      "offline": "Runner offline — queued work waits for it.",
+      "setupCta": "Set up"
+    },
     "runner": {
       "title": "Set up the Runner",
       "description": "The Runner drains your generation batches on your own machine. It reads prompts from Joblit, runs them through your local Hermes gateway, and imports the results as drafts for you to review.",

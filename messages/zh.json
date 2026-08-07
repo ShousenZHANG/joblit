@@ -57,6 +57,12 @@
   "agent": {
     "title": "智能体",
     "subtitle": "运行本地 Runner，让定制在你自己的机器和模型上完成。",
+    "presence": {
+      "activeNow": "Runner · 活跃中",
+      "activeAgo": "Runner · {minutes} 分钟前活跃",
+      "offline": "Runner 离线 —— 排队任务等它启动。",
+      "setupCta": "去配置"
+    },
     "runner": {
       "title": "配置 Runner",
       "description": "Runner 在你自己的机器上消化生成批次：从 Joblit 取提示词，交给本地 Hermes 网关运行，再把结果作为草稿导入等你审阅。",
