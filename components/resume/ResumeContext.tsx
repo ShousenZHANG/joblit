@@ -2,15 +2,18 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useState,
   useEffect,
   useMemo,
+  useRef,
   type ReactNode,
 } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { useToast } from "@/hooks/use-toast";
 import { useGuide } from "@/app/GuideContext";
+import { useResumeAutosave, type AutosaveStatus } from "./useResumeAutosave";
 import { useResumeForm } from "./useResumeForm";
 import { useResumePreview } from "./useResumePreview";
 import { useResumeProfiles } from "./useResumeProfiles";
@@ -20,26 +23,39 @@ import type { UseResumeProfilesReturn } from "./useResumeProfiles";
 import { getSectionIds, type SectionId } from "./constants";
 
 /**
- * Three-state save indicator for the resume editor — mirrors the proven
- * tailor draft pattern (see app/(app)/jobs/[id]/tailor/useTailorDraft.ts
- * SaveStatus). "dirty" means the live form differs from the last saved
- * snapshot, so the SectionNav must NOT claim "Saved".
+ * Per-section fill state, powering the quiet ticks on the section rail. It
+ * answers exactly one question — "is there anything in this section yet?" —
+ * and deliberately stops there: no percentage, no score, no nagging. The
+ * sections that stay empty read as neutral, never as failures.
  */
-type ResumeSaveState = "dirty" | "saving" | "saved";
+export type SectionCompletion = Record<SectionId, boolean>;
 
 type ResumeContextValue = UseResumeFormReturn &
   UseResumePreviewReturn &
   UseResumeProfilesReturn & {
+    /** The section currently under the scroll position (drives the rail). */
     activeSection: SectionId;
+    /** Scrolls the form column to a section and marks it active. */
     setActiveSection: (section: SectionId) => void;
+    /** Highlights a section without scrolling — used by the scroll spy. */
+    setActiveSectionQuietly: (section: SectionId) => void;
+    /** Sections register their scroll anchor here for the rail's scrollspy. */
+    registerSectionNode: (section: SectionId, node: HTMLElement | null) => void;
+    /** Live anchor map. A ref so registration never triggers a render; the spy
+     *  reads it from an effect, which runs after every ref has attached. */
+    sectionNodesRef: React.RefObject<Map<SectionId, HTMLElement>>;
+    collapsedSections: ReadonlySet<SectionId>;
+    toggleSectionCollapsed: (section: SectionId) => void;
+    sectionCompletion: SectionCompletion;
     previewOpen: boolean;
     setPreviewOpen: (open: boolean) => void;
     saving: boolean;
     /** True when the live draft differs from the last persisted snapshot. */
     isDirty: boolean;
-    /** Derived three-state status driving the SectionNav save indicator. */
-    saveState: ResumeSaveState;
-    handleSave: () => Promise<void>;
+    autosaveStatus: AutosaveStatus;
+    /** Force a save now; resolves false when it failed (caller must not discard). */
+    autosaveFlush: () => Promise<boolean>;
+    autosaveRetry: () => void;
     locale: string;
     t: ReturnType<typeof useTranslations>;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -56,25 +72,55 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
   const locale = globalLocale.startsWith("zh") ? "zh-CN" : "en-AU";
 
   const validSections = getSectionIds(locale);
-  const [sectionState, setSectionState] = useState<{
-    locale: string;
-    activeSection: SectionId;
-  }>(() => ({ locale, activeSection: "personal" }));
-  // Keep the rendered section valid on the locale-changing render itself.
-  // React permits this guarded prop/state adjustment and immediately retries
-  // the render, avoiding the stale section + cascading effect render.
-  const activeSection = validSections.includes(sectionState.activeSection)
-    ? sectionState.activeSection
-    : "personal";
-  if (
-    sectionState.locale !== locale ||
-    sectionState.activeSection !== activeSection
-  ) {
-    setSectionState({ locale, activeSection });
-  }
+  // Every section is on screen at once now; `activeSection` is a scroll
+  // position, not a route. It is written by the scroll spy and read back to
+  // highlight the rail. Purely derived against the locale's section list — no
+  // render-phase state adjustment — so a locale switch that drops a section
+  // (CN has no Summary) simply falls back to the first one until the next
+  // scroll event, instead of scheduling a corrective re-render.
+  const [rawActiveSection, setRawActiveSection] = useState<SectionId>("personal");
+  const activeSection = validSections.includes(rawActiveSection)
+    ? rawActiveSection
+    : validSections[0];
+
+  // Scroll anchors, registered by each rendered section. A ref (not state)
+  // because registration happens during layout and must not re-render.
+  const sectionNodesRef = useRef(new Map<SectionId, HTMLElement>());
+  const registerSectionNode = useCallback(
+    (section: SectionId, node: HTMLElement | null) => {
+      if (node) sectionNodesRef.current.set(section, node);
+      else sectionNodesRef.current.delete(section);
+    },
+    [],
+  );
+
+  // Not hand-memoized: only click handlers call this, never an effect
+  // dependency, and a manual useCallback here defeats the compiler's own
+  // memoization of the provider.
   const setActiveSection = (section: SectionId) => {
-    setSectionState({ locale, activeSection: section });
+    setRawActiveSection(section);
+    const node = sectionNodesRef.current.get(section);
+    node?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+      block: "start",
+    });
   };
+
+  // Collapse is per-section and opt-in: everything starts open, because the
+  // whole point of the single-scroll layout is seeing the resume at once.
+  const [collapsedSections, setCollapsedSections] = useState<ReadonlySet<SectionId>>(
+    () => new Set<SectionId>(),
+  );
+  const toggleSectionCollapsed = useCallback((section: SectionId) => {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(section)) next.delete(section);
+      else next.add(section);
+      return next;
+    });
+  }, []);
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -130,11 +176,38 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
     setSavedBaseline({ activeProfileId, snapshot: liveSaveKey });
   }
   const isDirty = form.hasAnyContent && liveSaveKey !== baselineSnapshot;
-  const saveState: ResumeSaveState = saving
-    ? "saving"
-    : isDirty
-      ? "dirty"
-      : "saved";
+
+  // Quiet per-section fill state for the rail ticks. Cheap derivations over
+  // state the form already owns — no extra bookkeeping to drift out of sync.
+  const sectionCompletion: SectionCompletion = useMemo(
+    () => ({
+      personal: Boolean(
+        form.basics.fullName.trim() ||
+          form.basics.title.trim() ||
+          form.basics.email.trim() ||
+          form.basics.phone.trim(),
+      ),
+      summary: form.summary.trim().length > 0,
+      experience: form.experiences.some(
+        (entry) => entry.title.trim() || entry.company.trim(),
+      ),
+      projects: form.projects.some((entry) => entry.name.trim()),
+      education: form.education.some(
+        (entry) => entry.school.trim() || entry.degree.trim(),
+      ),
+      skills: form.skills.some(
+        (entry) => entry.category.trim() || entry.itemsText.trim(),
+      ),
+    }),
+    [
+      form.basics,
+      form.summary,
+      form.experiences,
+      form.projects,
+      form.education,
+      form.skills,
+    ],
+  );
 
   // Whether the always-on desktop preview pane is on screen (md+). On mobile
   // the pane is hidden and the preview only lives inside the dialog, so we skip
@@ -184,12 +257,17 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
     schedulePreview,
   ]);
 
-  const handleSave = async () => {
+  // The persistence primitive behind autosave. It throws on failure so the
+  // autosave hook can own the status; it deliberately raises no success toast,
+  // because a toast every time the user pauses typing is noise, not feedback.
+  // The quiet SaveIndicator says what happened instead.
+  const persistDraft = useCallback(async () => {
     setSaving(true);
     // Snapshot the exact draft being persisted up front. On success this
-    // becomes the new "last saved" baseline so the dirty indicator resets to
-    // clean even when saving the same version (where activeProfileId — and
-    // thus the re-baseline effect — does not change).
+    // becomes the new "last saved" baseline so the indicator resets to clean
+    // even when saving the same version (where activeProfileId — and thus the
+    // re-baseline effect — does not change). An edit that lands mid-request is
+    // therefore still dirty afterwards, and autosave reschedules itself.
     const savedSnapshot = JSON.stringify(form.buildPayload("save"));
     try {
       const payload = {
@@ -206,34 +284,39 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
       });
       if (!res.ok) throw new Error("Save failed");
       const json = await res.json();
-      setSavedBaseline({ activeProfileId, snapshot: savedSnapshot });
-      profiles.hydrateFromResumeApi(json);
-      toast({ title: t("toastSaved"), description: t("toastSavedDesc") });
+      // Adopt the server's version identity, never its copy of the draft:
+      // replacing the form with an echo of what we just sent would wipe any
+      // keystroke that landed while the request was in flight. Baselining
+      // against the adopted id in the same batch also stops the id-change
+      // re-baseline below from marking those keystrokes as already saved.
+      const adoptedProfileId = profiles.adoptProfileMeta(json);
+      setSavedBaseline({
+        activeProfileId: adoptedProfileId,
+        snapshot: savedSnapshot,
+      });
       markTaskComplete("resume_setup");
       preview.schedulePreview(150);
-    } catch {
-      toast({
-        title: t("toastSaveFailed"),
-        description: t("toastTryAgain"),
-        variant: "destructive",
-      });
     } finally {
       setSaving(false);
     }
-  };
+  }, [
+    form,
+    profiles,
+    locale,
+    activeProfileId,
+    markTaskComplete,
+    preview,
+  ]);
 
-  // Beforeunload guard — warn on tab-close / hard navigation only while there
-  // are unsaved edits or a save in flight, mirroring FetchClient/TailorClient.
-  // The resume editor has no autosave, so without this an entire editing
-  // session is silently lost on accidental close.
-  useEffect(() => {
-    if (!isDirty && !saving) return;
-    function onBeforeUnload(e: BeforeUnloadEvent) {
-      e.preventDefault();
-    }
-    window.addEventListener("beforeunload", onBeforeUnload);
-    return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [isDirty, saving]);
+  const autosave = useResumeAutosave({
+    saveKey: liveSaveKey,
+    isDirty,
+    enabled: form.hasAnyContent,
+    save: persistDraft,
+  });
+  const autosaveRetry = useCallback(() => {
+    void autosave.flush();
+  }, [autosave]);
 
   return (
     <ResumeContext.Provider
@@ -243,12 +326,19 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
         ...profiles,
         activeSection,
         setActiveSection,
+        setActiveSectionQuietly: setRawActiveSection,
+        registerSectionNode,
+        sectionNodesRef,
+        collapsedSections,
+        toggleSectionCollapsed,
+        sectionCompletion,
         previewOpen,
         setPreviewOpen,
         saving,
         isDirty,
-        saveState,
-        handleSave,
+        autosaveStatus: autosave.status,
+        autosaveFlush: autosave.flush,
+        autosaveRetry,
         locale,
         t,
         isTaskHighlighted,

@@ -33,34 +33,48 @@ export function useResumeProfiles({
   const [profileDeleting, setProfileDeleting] = useState(false);
   const [loadError, setLoadError] = useState(false);
 
+  /**
+   * Adopt the version list and the active version's identity from a resume API
+   * response, WITHOUT touching the draft the user is editing.
+   *
+   * Autosave uses this: overwriting the form with the server's echo of what we
+   * just sent would clobber anything typed while the request was in flight.
+   * Returns the adopted active id so the caller can re-baseline against it.
+   */
+  const adoptProfileMeta = useCallback((json: unknown): string | null => {
+    const record = (json ?? {}) as Record<string, unknown>;
+    const nextProfiles = Array.isArray(record.profiles)
+      ? (record.profiles as ResumeProfileSummary[])
+      : [];
+    const explicitActiveId =
+      typeof record.activeProfileId === "string" ? record.activeProfileId : null;
+    const inferredActiveId =
+      nextProfiles.find((profile) => profile.isActive)?.id ??
+      (nextProfiles.length > 0 ? nextProfiles[0].id : null);
+    const nextActiveProfileId = explicitActiveId ?? inferredActiveId;
+
+    setProfiles(nextProfiles);
+    setActiveProfileId(nextActiveProfileId);
+    setSelectedProfileId(nextActiveProfileId);
+
+    const activeSummary =
+      nextProfiles.find((profile) => profile.id === nextActiveProfileId) ?? null;
+    setProfileName(activeSummary?.name ?? "Custom Blank");
+    return nextActiveProfileId;
+  }, []);
+
+  /** Adopt the metadata AND replace the draft — for loads and version switches. */
   const hydrateFromResumeApi = useCallback(
     (json: unknown) => {
+      adoptProfileMeta(json);
       const record = (json ?? {}) as Record<string, unknown>;
-      const nextProfiles = Array.isArray(record.profiles)
-        ? (record.profiles as ResumeProfileSummary[])
-        : [];
-      const explicitActiveId =
-        typeof record.activeProfileId === "string" ? record.activeProfileId : null;
-      const inferredActiveId =
-        nextProfiles.find((profile) => profile.isActive)?.id ??
-        (nextProfiles.length > 0 ? nextProfiles[0].id : null);
-      const nextActiveProfileId = explicitActiveId ?? inferredActiveId;
-
-      setProfiles(nextProfiles);
-      setActiveProfileId(nextActiveProfileId);
-      setSelectedProfileId(nextActiveProfileId);
-
-      const activeSummary =
-        nextProfiles.find((profile) => profile.id === nextActiveProfileId) ?? null;
-      setProfileName(activeSummary?.name ?? "Custom Blank");
-
       const activeProfile =
         (record.activeProfile as ResumeProfilePayload | null | undefined) ??
         (record.profile as ResumeProfilePayload | null | undefined) ??
         null;
       applyProfileToDraft(activeProfile);
     },
-    [applyProfileToDraft],
+    [adoptProfileMeta, applyProfileToDraft],
   );
 
   // Initial load: a failed fetch must surface as an explicit error + retry,
@@ -294,6 +308,7 @@ export function useResumeProfiles({
     loadError,
     retryLoad: loadProfiles,
     hydrateFromResumeApi,
+    adoptProfileMeta,
     handleCreateProfile,
     handleDeleteProfile,
     handleActivateProfile,

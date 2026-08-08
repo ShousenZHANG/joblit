@@ -1,113 +1,61 @@
 "use client";
 
-import { useEffect, useRef, type ElementType } from "react";
-import {
-  User,
-  FileText,
-  Briefcase,
-  FolderKanban,
-  GraduationCap,
-  Wrench,
-  Save,
-  Eye,
-  Loader2,
-  Check,
-} from "lucide-react";
+import { useEffect, useRef } from "react";
+import { Check, Eye } from "lucide-react";
 import { useResumeContext } from "./ResumeContext";
 import type { SectionId } from "./constants";
 import { getSectionIds } from "./constants";
+import { SECTION_CONFIG_BY_ID } from "./sectionConfig";
 import { cn } from "@/lib/utils";
 import {
   COARSE_POINTER_MIN_HEIGHT,
   COARSE_POINTER_TARGET,
 } from "@/components/ui/touchTarget";
 
-type SectionTranslationKey =
-  | "personalInfo"
-  | "summary"
-  | "experience"
-  | "projects"
-  | "education"
-  | "skills";
-
-type SectionConfig = { id: SectionId; tKey: SectionTranslationKey; icon: ElementType };
-
-const SECTION_CONFIG: SectionConfig[] = [
-  { id: "personal", tKey: "personalInfo", icon: User },
-  { id: "summary", tKey: "summary", icon: FileText },
-  { id: "experience", tKey: "experience", icon: Briefcase },
-  { id: "projects", tKey: "projects", icon: FolderKanban },
-  { id: "education", tKey: "education", icon: GraduationCap },
-  { id: "skills", tKey: "skills", icon: Wrench },
-];
-
-const SECTION_CONFIG_BY_ID = new Map(SECTION_CONFIG.map((s) => [s.id, s] as const));
-
 interface SectionNavProps {
   className?: string;
+  /** The scrolling form column the spy observes. */
+  scrollRootRef?: React.RefObject<HTMLElement | null>;
 }
 
 /**
- * Primary resume navigation.
+ * Section rail — a jump list and a position indicator, not a router.
  *
- * Desktop: a compact 64px icon rail. Each section button shows only an
- * icon with a localized hover tooltip, removing the long-text labels
- * that previously truncated to "Professional expe…" on languages
- * with longer translations. The bottom dock owns the persistent
- * Saved/Saving indicator and the primary Save action — both pure-icon
- * with descriptive tooltips so the user always knows the button's
- * purpose without consuming horizontal space.
+ * Since the editor became one continuous scroll, this no longer swaps what is
+ * rendered: clicking scrolls to a section, and scrolling highlights the one
+ * you are in. The save button that used to be docked at the bottom is gone
+ * with the manual save it triggered (autosave now; see useResumeAutosave) —
+ * mixing an explicit save control with silent autosave is the one thing every
+ * design system tells you not to do.
  *
- * Mobile: the existing horizontal section tab row with the trailing
- * Eye preview + Save action cluster — unchanged.
+ * The quiet tick on an icon means the section has content. It is the only
+ * progress signal here: no percentage, no score.
  */
-export function SectionNav({ className }: SectionNavProps) {
+export function SectionNav({ className, scrollRootRef }: SectionNavProps) {
   const {
     activeSection,
     setActiveSection,
+    sectionCompletion,
     locale,
     t,
-    saving,
-    saveState,
-    handleSave,
     hasAnyContent,
     setPreviewOpen,
     schedulePreview,
-    isTaskHighlighted,
   } = useResumeContext();
 
   // Drive both nav order AND visibility from getSectionIds(locale) so the rail
   // matches the resume's per-locale module order (CN: Education before
-  // Experience). Mapping over the locale id list — instead of filtering the
-  // fixed SECTION_CONFIG — is what preserves that order.
+  // Experience).
   const visibleSections = getSectionIds(locale)
     .map((id) => SECTION_CONFIG_BY_ID.get(id))
-    .filter((s): s is SectionConfig => s !== undefined);
-  const guideHighlight = isTaskHighlighted("resume_setup");
+    .filter((section): section is NonNullable<typeof section> => section !== undefined);
 
   const mobileTabRefs = useRef<Map<SectionId, HTMLButtonElement | null>>(new Map());
   useEffect(() => {
     const node = mobileTabRefs.current.get(activeSection);
     if (!node) return;
-    node.scrollIntoView({
-      behavior: "smooth",
-      block: "nearest",
-      inline: "center",
-    });
+    node.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
   }, [activeSection]);
-
-  // Honest three-state indicator (dirty / saving / saved) — never claim
-  // "Saved" while the live draft differs from the last persisted snapshot.
-  // Empty form has nothing to save yet, so it prompts for details instead.
-  const saveStatusLabel = !hasAnyContent
-    ? t("toastAddDetailsFirst")
-    : saveState === "saving"
-      ? t("saving")
-      : saveState === "dirty"
-        ? t("unsavedChanges")
-        : t("toastSaved");
-  const isSaved = hasAnyContent && saveState === "saved";
-  const saveButtonLabel = saving ? t("saving") : t("saveSelectedResume");
 
   return (
     <nav
@@ -120,25 +68,37 @@ export function SectionNav({ className }: SectionNavProps) {
           {visibleSections.map(({ id, tKey, icon: Icon }) => {
             const isActive = activeSection === id;
             const label = t(tKey);
+            const complete = sectionCompletion[id];
             return (
               <button
                 key={id}
                 type="button"
                 onClick={() => setActiveSection(id)}
-                aria-current={isActive ? "page" : undefined}
-                aria-label={label}
+                aria-current={isActive ? "true" : undefined}
+                aria-label={complete ? `${label} — ${t("sectionFilled")}` : label}
                 title={label}
+                data-testid={`resume-rail-${id}`}
                 className={cn(
                   "group relative grid h-10 w-10 place-items-center rounded-xl",
                   COARSE_POINTER_TARGET,
                   "transition-colors duration-150 ease-out motion-reduce:transition-none",
                   "active:scale-[0.97] motion-reduce:active:scale-100",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600",
                   isActive
                     ? "bg-emerald-500/12 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
                 <Icon className="h-[18px] w-[18px]" />
+                {complete ? (
+                  <span
+                    aria-hidden
+                    data-testid={`resume-rail-tick-${id}`}
+                    className="absolute -bottom-0.5 -right-0.5 grid h-3.5 w-3.5 place-items-center rounded-full bg-emerald-500 ring-2 ring-card"
+                  >
+                    <Check className="h-2 w-2 text-white" />
+                  </span>
+                ) : null}
                 {isActive ? (
                   <span
                     aria-hidden
@@ -149,78 +109,18 @@ export function SectionNav({ className }: SectionNavProps) {
             );
           })}
         </div>
-
-        {/* Bottom dock — Save action with built-in status indicator. */}
-        <div className="mt-3 flex w-full flex-col items-center gap-2 border-t border-border/70 pt-3">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving || !hasAnyContent}
-            aria-label={saveButtonLabel}
-            aria-describedby="resume-save-status"
-            title={saveButtonLabel}
-            data-guide-anchor="resume_setup"
-            data-guide-highlight={guideHighlight ? "true" : "false"}
-            className={cn(
-              "relative grid h-10 w-10 place-items-center rounded-xl bg-emerald-600 text-white",
-              COARSE_POINTER_TARGET,
-              "shadow-[0_10px_24px_-14px_rgba(5,150,105,0.7)] transition-[transform,box-shadow,filter] duration-150 ease-out motion-reduce:transition-none",
-              "hover:brightness-105 hover:shadow-[0_14px_28px_-14px_rgba(5,150,105,0.8)]",
-              "active:scale-[0.97] motion-reduce:active:scale-100",
-              "disabled:cursor-not-allowed disabled:opacity-60",
-              guideHighlight &&
-                "ring-2 ring-emerald-400 ring-offset-2 ring-offset-background",
-            )}
-          >
-            {saving ? (
-              <Loader2 className="h-[18px] w-[18px] animate-spin motion-reduce:animate-none" aria-hidden />
-            ) : (
-              <Save className="h-[18px] w-[18px]" aria-hidden />
-            )}
-            {/* Status badge — sits at the corner of the Save button so its
-                meaning is always tied to the action itself. Saved state
-                shows a green check; saving OR unsaved edits show a pulsing
-                amber dot (so we never falsely claim "Saved" mid-edit); empty
-                state hides it entirely so we never display a mystery
-                indicator floating in the sidebar. */}
-            {hasAnyContent ? (
-              <span
-                aria-hidden
-                className={cn(
-                  "absolute -top-1 -right-1 grid h-4 w-4 place-items-center rounded-full ring-2 ring-card",
-                  isSaved
-                    ? "bg-emerald-500"
-                    : "bg-amber-500 motion-safe:animate-pulse",
-                )}
-              >
-                {isSaved ? (
-                  <Check className="h-2.5 w-2.5 text-white" aria-hidden />
-                ) : null}
-              </span>
-            ) : null}
-          </button>
-          {/* Visually-hidden live region — keeps screen-reader users in
-              the loop without crowding the rail. */}
-          <span
-            id="resume-save-status"
-            role="status"
-            aria-live="polite"
-            className="sr-only"
-          >
-            {saveStatusLabel}
-          </span>
-        </div>
       </div>
 
-      {/* Mobile: horizontal scroll tabs + trailing icon cluster */}
+      {/* Mobile: horizontal jump chips + preview */}
       <div className="flex w-full items-center gap-2 px-3 py-2 lg:hidden">
         <div
           className="scrollbar-hide flex flex-1 gap-2 overflow-x-auto scroll-smooth"
-          role="tablist"
+          role="list"
           aria-label={t("sectionsAria")}
         >
           {visibleSections.map(({ id, tKey, icon: Icon }) => {
             const isActive = activeSection === id;
+            const complete = sectionCompletion[id];
             return (
               <button
                 key={id}
@@ -229,9 +129,7 @@ export function SectionNav({ className }: SectionNavProps) {
                 }}
                 type="button"
                 onClick={() => setActiveSection(id)}
-                aria-current={isActive ? "page" : undefined}
-                role="tab"
-                aria-selected={isActive}
+                aria-current={isActive ? "true" : undefined}
                 className={cn(
                   "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm",
                   COARSE_POINTER_MIN_HEIGHT,
@@ -243,54 +141,84 @@ export function SectionNav({ className }: SectionNavProps) {
               >
                 <Icon className="h-3.5 w-3.5 shrink-0" />
                 <span className="whitespace-nowrap">{t(tKey)}</span>
+                {complete ? (
+                  <Check className="h-3 w-3 shrink-0 text-emerald-600" aria-hidden />
+                ) : null}
               </button>
             );
           })}
         </div>
 
-        <div className="flex shrink-0 items-center gap-1.5">
-          <button
-            type="button"
-            disabled={!hasAnyContent}
-            onClick={() => {
-              setPreviewOpen(true);
-              schedulePreview(0);
-            }}
-            aria-label={t("preview")}
-            title={t("preview")}
-            className={cn(
-              "grid h-9 w-9 place-items-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:border-emerald-300 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
-              COARSE_POINTER_TARGET,
-            )}
-          >
-            <Eye className="h-4 w-4" aria-hidden />
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving || !hasAnyContent}
-            aria-label={saveButtonLabel}
-            title={saveButtonLabel}
-            data-guide-anchor="resume_setup"
-            data-guide-highlight={guideHighlight ? "true" : "false"}
-            className={cn(
-              "grid h-9 w-9 place-items-center rounded-full bg-emerald-600 text-white shadow-sm",
-              COARSE_POINTER_TARGET,
-              "transition-[transform,filter] duration-150 ease-out motion-reduce:transition-none",
-              "hover:brightness-105 active:scale-[0.97] motion-reduce:active:scale-100",
-              "disabled:cursor-not-allowed disabled:opacity-60",
-              guideHighlight &&
-                "ring-2 ring-emerald-400 ring-offset-2 ring-offset-background",
-            )}
-          >
-            {saving ? (
-              <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />
-            ) : (
-              <Save className="h-4 w-4" aria-hidden />
-            )}
-          </button>
-        </div>
+        <button
+          type="button"
+          disabled={!hasAnyContent}
+          onClick={() => {
+            setPreviewOpen(true);
+            schedulePreview(0);
+          }}
+          aria-label={t("preview")}
+          title={t("preview")}
+          className={cn(
+            "grid h-9 w-9 shrink-0 place-items-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:border-emerald-300 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
+            COARSE_POINTER_TARGET,
+          )}
+        >
+          <Eye className="h-4 w-4" aria-hidden />
+        </button>
       </div>
+      {/* The scroll spy lives with the scrolling column, not the rail. */}
+      <SectionSpy scrollRootRef={scrollRootRef} />
     </nav>
   );
+}
+
+/**
+ * Highlights the section occupying the top of the reading area. Uses a
+ * rootMargin that collapses the viewport to a band just under the sticky
+ * header, so "active" means "the one you are reading", not "the one that
+ * happens to be tallest".
+ */
+function SectionSpy({
+  scrollRootRef,
+}: {
+  scrollRootRef?: React.RefObject<HTMLElement | null>;
+}) {
+  const { locale, setActiveSectionQuietly, sectionNodesRef } = useResumeContext();
+
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") return;
+    const root = scrollRootRef?.current ?? null;
+    const ids = getSectionIds(locale);
+    // Effects run after every ref has attached, so the anchor map is populated
+    // by the time we read it — no render-triggering registration needed.
+    const nodes = ids
+      .map((id) => ({ id, node: sectionNodesRef.current.get(id) }))
+      .filter((entry): entry is { id: SectionId; node: HTMLElement } => Boolean(entry.node));
+    if (nodes.length === 0) return;
+
+    const visible = new Set<SectionId>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const id = (entry.target as HTMLElement).dataset.sectionId as SectionId | undefined;
+          if (!id) continue;
+          if (entry.isIntersecting) visible.add(id);
+          else visible.delete(id);
+        }
+        // First in document order wins, so scrolling up highlights the section
+        // being scrolled into rather than the one being left.
+        const next = ids.find((id) => visible.has(id));
+        if (next) setActiveSectionQuietly(next);
+      },
+      { root, rootMargin: "0px 0px -70% 0px", threshold: 0 },
+    );
+
+    for (const { id, node } of nodes) {
+      node.dataset.sectionId = id;
+      observer.observe(node);
+    }
+    return () => observer.disconnect();
+  }, [locale, sectionNodesRef, setActiveSectionQuietly, scrollRootRef]);
+
+  return null;
 }

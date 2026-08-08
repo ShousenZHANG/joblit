@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Label } from "@/components/ui/label";
+import { FileText } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { SectionShell } from "../SectionShell";
@@ -29,31 +29,41 @@ export function SummarySection({
   const t = useTranslations("resumeForm");
 
   return (
-    <SectionShell title={t("summary")} description={t("summaryDesc")}>
+    <SectionShell
+      id="summary"
+      icon={FileText}
+      title={t("summary")}
+      description={t("summaryDesc")}
+    >
       <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label htmlFor="resume-summary">{t("summary")}</Label>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => applyBoldMarkdown("summary", summary, setSummary)}
-          >
-            {t("boldSelected")}
-          </Button>
-        </div>
         <div className="relative">
           <Textarea
             id="resume-summary"
+            aria-label={t("summary")}
             ref={registerMarkdownRef("summary")}
             value={summary}
             onChange={(e) => setSummary(e.target.value)}
             placeholder={t("summaryPlaceholder")}
-            rows={8}
+            rows={7}
+            className="pb-8"
           />
-          <span className="absolute bottom-2 right-3 text-xs text-muted-foreground">
-            {summary.length}
-          </span>
+          {/* Formatting and length sit inside the field's own footer rather
+              than above it — the label row no longer competes with the
+              section heading for attention. */}
+          <div className="absolute inset-x-2 bottom-1.5 flex items-center justify-between">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => applyBoldMarkdown("summary", summary, setSummary)}
+            >
+              {t("boldSelected")}
+            </Button>
+            <span className="pr-1 text-xs tabular-nums text-muted-foreground">
+              {summary.length}
+            </span>
+          </div>
         </div>
       </div>
     </SectionShell>

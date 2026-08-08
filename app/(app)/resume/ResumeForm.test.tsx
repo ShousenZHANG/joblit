@@ -90,12 +90,13 @@ function firstButton(name: string) {
   return screen.getAllByRole("button", { name })[0];
 }
 
-function firstTab(name: string) {
-  return screen.getAllByRole("tab", { name })[0];
+/** The section rail is a jump list now: every section is already rendered. */
+function jumpToSection(name: string) {
+  fireEvent.click(screen.getAllByRole("button", { name })[0]);
 }
 
 describe("Resume page", () => {
-  it("renders the production personal-info layout with disabled actions until content exists", async () => {
+  it("renders every section in one scroll, with no manual save control", async () => {
     mockEmptyProfileFetch();
 
     renderResumePage();
@@ -106,12 +107,20 @@ describe("Resume page", () => {
     expect(screen.getByLabelText("Email")).toBeInTheDocument();
     expect(screen.getByLabelText("Phone")).toBeInTheDocument();
 
-    expect(screen.queryByRole("button", { name: "Next" })).not.toBeInTheDocument();
+    // Single-scroll layout: the other sections are on the page already, not
+    // one route-switch away.
+    for (const section of ["personal", "summary", "experience", "projects", "education", "skills"]) {
+      expect(screen.getByTestId(`resume-section-${section}`)).toBeInTheDocument();
+    }
+
+    // Autosave owns persistence; a Save button alongside it is exactly the
+    // mixed model design systems warn against.
+    expect(
+      screen.queryByRole("button", { name: /save selected resume/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("resume-save-indicator")).not.toBeInTheDocument();
     screen
       .getAllByRole("button", { name: "Preview" })
-      .forEach((button) => expect(button).toBeDisabled());
-    screen
-      .getAllByRole("button", { name: "Save selected resume" })
       .forEach((button) => expect(button).toBeDisabled());
   }, 10_000);
 
@@ -140,23 +149,43 @@ describe("Resume page", () => {
     expect(
       await screen.findByRole("heading", { name: zhMessages.resumeForm.personalInfo }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: zhMessages.resumeForm.summary })).not.toBeInTheDocument();
+    // CN has no Summary module, so the section never renders at all.
+    expect(screen.queryByTestId("resume-section-summary")).not.toBeInTheDocument();
     expect(container.querySelector("#resume-availability-month")).toBeTruthy();
     expect(container.querySelector("#resume-gender")).toBeNull();
     expect(container.querySelector("#resume-age")).toBeNull();
   });
 
-  it("switches sections through the real section navigation", async () => {
+  it("scrolls to a section from the rail instead of swapping the canvas", async () => {
+    mockEmptyProfileFetch();
+
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+
+    renderResumePage();
+    expect(await screen.findByRole("heading", { name: "Personal info" })).toBeInTheDocument();
+
+    jumpToSection("Summary");
+
+    // Personal info stays mounted — the rail moved the viewport, not the route.
+    expect(screen.getByRole("heading", { name: "Personal info" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Summary" })).toBeInTheDocument();
+    expect(scrollIntoView).toHaveBeenCalled();
+  });
+
+  it("collapses a section from its own header without losing the others", async () => {
     mockEmptyProfileFetch();
 
     renderResumePage();
+    const heading = await screen.findByRole("heading", { name: "Personal info" });
+    const toggle = heading.closest("button");
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
 
-    expect(await screen.findByRole("heading", { name: "Personal info" })).toBeInTheDocument();
+    fireEvent.click(toggle!);
 
-    fireEvent.click(firstTab("Summary"));
-
-    expect(await screen.findByRole("heading", { name: "Summary" })).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Summary" })).toBeInTheDocument();
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByLabelText("Full name")).not.toBeInTheDocument();
+    expect(screen.getByTestId("resume-section-experience")).toBeInTheDocument();
   });
 
   it("adds experience bullets on the production experience section", async () => {
@@ -164,16 +193,13 @@ describe("Resume page", () => {
 
     renderResumePage();
 
-    expect(await screen.findByRole("heading", { name: "Personal info" })).toBeInTheDocument();
-    fireEvent.click(firstTab("Professional experience"));
-
     expect(
       await screen.findByRole("heading", { name: "Professional experience" }),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Add bullet" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Add bullet" })[0]);
 
-    expect(screen.getAllByLabelText("Experience bullet")).toHaveLength(2);
+    expect(screen.getAllByLabelText(/^Experience bullets \d+$/)).toHaveLength(2);
   });
 
   it("opens the mobile-safe preview dialog from the preview action", async () => {
@@ -194,7 +220,7 @@ describe("Resume page", () => {
     );
   });
 
-  it("keeps the save action anchored in the section rail and completes the guide task on save", async () => {
+  it("autosaves after the user stops typing and reports it quietly", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = toUrl(input);
       if (url.startsWith("/api/resume-profile") && init?.method === "POST") {
@@ -207,20 +233,55 @@ describe("Resume page", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { container } = renderResumePage();
+    renderResumePage();
     await fillBasics();
 
-    const saveAnchors = container.querySelectorAll('[data-guide-anchor="resume_setup"]');
-    expect(saveAnchors.length).toBeGreaterThanOrEqual(1);
+    const savePosts = () =>
+      fetchMock.mock.calls.filter(
+        ([input, init]) =>
+          toUrl(input).startsWith("/api/resume-profile") &&
+          (init as RequestInit | undefined)?.method === "POST",
+      ).length;
 
-    const saveButton = screen.getAllByRole("button", { name: "Save selected resume" })[0];
-    expect(saveButton).toBeEnabled();
-    fireEvent.click(saveButton);
-
+    // No click anywhere: the burst of edits settles into exactly one save.
+    await waitFor(() => expect(savePosts()).toBe(1), { timeout: 3000 });
+    expect(await screen.findByTestId("resume-save-indicator")).toHaveTextContent("Saved");
     await waitFor(() => {
       expect(guideMocks.markTaskComplete).toHaveBeenCalledWith("resume_setup");
     });
-  });
+  }, 10_000);
+
+  it("surfaces a retry — and keeps the draft — when autosave fails", async () => {
+    let failNext = true;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = toUrl(input);
+      if (url.startsWith("/api/resume-profile") && init?.method === "POST") {
+        if (failNext) {
+          failNext = false;
+          return new Response("nope", { status: 500 });
+        }
+        return new Response(JSON.stringify(emptyProfileJson()), { status: 200 });
+      }
+      if (url.startsWith("/api/resume-profile")) {
+        return new Response(JSON.stringify(emptyProfileJson()), { status: 200 });
+      }
+      return new Response("not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderResumePage();
+    await fillBasics();
+
+    const indicator = await screen.findByTestId("resume-save-indicator");
+    await waitFor(() => expect(indicator).toHaveTextContent("Couldn't save"), {
+      timeout: 3000,
+    });
+    // The draft is still in the form — a failed save must never clear it.
+    expect(screen.getByLabelText("Full name")).toHaveValue("Jane Doe");
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(indicator).toHaveTextContent("Saved"), { timeout: 3000 });
+  }, 10_000);
 
   it("saves a basics-only draft with a schema-valid body (drops seeded empty rows)", async () => {
     let savedBody: unknown = null;
@@ -240,11 +301,12 @@ describe("Resume page", () => {
     renderResumePage();
     await fillBasics();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Save selected resume" })[0]);
-
-    await waitFor(() => {
-      expect(savedBody).not.toBeNull();
-    });
+    await waitFor(
+      () => {
+        expect(savedBody).not.toBeNull();
+      },
+      { timeout: 3000 },
+    );
 
     // The untouched sections seed one empty placeholder row each; the save
     // payload must drop them so it passes the same schema the server enforces

@@ -1,62 +1,116 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useCallback, type ElementType, type ReactNode } from "react";
+import { Check, ChevronDown } from "lucide-react";
 import { useResumeContext } from "./ResumeContext";
-import { getSectionIds } from "./constants";
+import type { SectionId } from "./constants";
 import { cn } from "@/lib/utils";
 
 interface SectionShellProps {
+  id: SectionId;
+  icon: ElementType;
   title: string;
   description?: string;
-  action?: ReactNode;
   children: ReactNode;
 }
 
 /**
- * SectionShell — wraps every form section with the Joblit Design System
- * "Section head" pattern: emerald step badge inline with a 24px H2 and
- * a muted description capped at 60ch. Step number derives from the
- * active section's index in the locale-specific section list, so it
- * stays in sync between the EN and 中文 layouts (which differ in
- * length and ordering).
+ * One section inside the single-scroll editor.
+ *
+ * The editor used to show one section at a time, swapped by an icon rail —
+ * which meant the user could never see their resume's shape, only a slice of
+ * it. Every section now lives in one scroll, headed by a sticky, collapsible
+ * bar; the rail became a jump-and-highlight scrollspy. This is the pattern the
+ * whole category converged on, and the step-number badge went with it: a
+ * numbered step implies a wizard, and this was never a wizard.
+ *
+ * The tick beside the heading is the only completeness signal in the product —
+ * present when the section has content, absent otherwise. No percentage, no
+ * score, and never a warning colour for an empty optional section.
  */
-export function SectionShell({ title, description, action, children }: SectionShellProps) {
-  const { activeSection, locale } = useResumeContext();
-  const sectionIds = getSectionIds(locale);
-  const stepIndex = sectionIds.indexOf(activeSection);
-  const totalSteps = sectionIds.length;
-  const stepNumber = stepIndex >= 0 ? stepIndex + 1 : null;
+export function SectionShell({
+  id,
+  icon: Icon,
+  title,
+  description,
+  children,
+}: SectionShellProps) {
+  const {
+    registerSectionNode,
+    collapsedSections,
+    toggleSectionCollapsed,
+    sectionCompletion,
+    t,
+  } = useResumeContext();
+
+  const collapsed = collapsedSections.has(id);
+  const complete = sectionCompletion[id];
+
+  const setNode = useCallback(
+    (node: HTMLElement | null) => registerSectionNode(id, node),
+    [registerSectionNode, id],
+  );
 
   return (
-    <div className="space-y-6 py-1">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2.5">
-            {stepNumber !== null ? (
-              <span
-                className={cn(
-                  "inline-flex h-6 min-w-6 items-center justify-center rounded-md px-1.5",
-                  "bg-emerald-500/12 text-xs font-bold text-emerald-700",
-                  "dark:bg-emerald-500/15 dark:text-emerald-300",
-                )}
-                aria-label={`Step ${stepNumber} of ${totalSteps}`}
-              >
-                {stepNumber}
-              </span>
-            ) : null}
-            <h2 className="text-2xl font-bold leading-[1.15] tracking-[-0.018em] text-foreground">
-              {title}
-            </h2>
-          </div>
+    <section
+      ref={setNode}
+      id={`resume-section-${id}`}
+      data-testid={`resume-section-${id}`}
+      // Offset the scroll target so the sticky header never lands under the
+      // section title when the rail jumps here.
+      className="scroll-mt-4"
+      aria-labelledby={`resume-section-${id}-heading`}
+    >
+      <div className="sticky top-0 z-10 -mx-1 bg-background/92 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <button
+          type="button"
+          onClick={() => toggleSectionCollapsed(id)}
+          aria-expanded={!collapsed}
+          aria-controls={`resume-section-${id}-body`}
+          className="flex w-full items-center gap-2.5 rounded-lg px-1.5 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600"
+        >
+          <span
+            className={cn(
+              "grid h-7 w-7 shrink-0 place-items-center rounded-lg",
+              complete
+                ? "bg-brand-emerald-500/12 text-brand-emerald-700 dark:text-brand-emerald-300"
+                : "bg-muted text-muted-foreground",
+            )}
+          >
+            <Icon className="h-4 w-4" aria-hidden />
+          </span>
+          <h2
+            id={`resume-section-${id}-heading`}
+            className="min-w-0 flex-1 truncate text-[17px] font-bold tracking-[-0.012em] text-foreground"
+          >
+            {title}
+          </h2>
+          {complete ? (
+            <Check
+              className="h-4 w-4 shrink-0 text-brand-emerald-600"
+              aria-label={t("sectionFilled")}
+            />
+          ) : null}
+          <ChevronDown
+            aria-hidden
+            className={cn(
+              "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150 motion-reduce:transition-none",
+              collapsed && "-rotate-90",
+            )}
+          />
+        </button>
+      </div>
+
+      {collapsed ? null : (
+        <div id={`resume-section-${id}-body`} className="space-y-4 px-1 pb-2 pt-1">
           {description ? (
-            <p className="mt-2 max-w-[60ch] text-sm leading-[1.55] text-muted-foreground">
+            <p className="max-w-[62ch] text-[13px] leading-[1.55] text-muted-foreground">
               {description}
             </p>
           ) : null}
+          {children}
         </div>
-        {action ? <div className="shrink-0">{action}</div> : null}
-      </div>
-      {children}
-    </div>
+      )}
+    </section>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Download } from "lucide-react";
 import { buildPdfFilename } from "@/lib/shared/pdfFilename";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import {
 import { useResumeContext } from "./ResumeContext";
 import { SectionNav } from "./SectionNav";
 import { PreviewPanel } from "./PreviewPanel";
+import { SaveIndicator } from "./SaveIndicator";
 import { VersionSelector } from "./VersionSelector";
 
 // Lazy-load react-pdf (heaviest client dep) — only fetched when the mobile
@@ -37,7 +38,7 @@ import { ExperienceSection } from "./sections/ExperienceSection";
 import { ProjectsSection } from "./sections/ProjectsSection";
 import { EducationSection } from "./sections/EducationSection";
 import { SkillsSection } from "./sections/SkillsSection";
-import type { SectionId } from "./constants";
+import { getSectionIds, type SectionId } from "./constants";
 
 function SectionContent({ sectionId }: { sectionId: SectionId }) {
   const {
@@ -256,7 +257,8 @@ export function MobilePreviewDialog() {
 }
 
 export function ResumePageLayout() {
-  const { activeSection } = useResumeContext();
+  const { locale } = useResumeContext();
+  const formColumnRef = useRef<HTMLDivElement>(null);
 
   /* Lock outer shell scroll — Resume uses fixed-height panels with internal scroll */
   useEffect(() => {
@@ -268,6 +270,10 @@ export function ResumePageLayout() {
     };
   }, []);
 
+  // One continuous column of sections, in the locale's own module order, so
+  // the editor mirrors the document it produces.
+  const sections = getSectionIds(locale);
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* Mobile preview dialog */}
@@ -275,30 +281,30 @@ export function ResumePageLayout() {
 
       {/* Content area */}
       <div className="flex flex-1 min-h-0">
-        {/* Desktop section sidebar with persistent save action */}
-        <SectionNav className="hidden w-16 shrink-0 flex-col border-r border-border lg:flex" />
+        {/* Desktop section rail — a jump list and position indicator. */}
+        <SectionNav
+          className="hidden w-16 shrink-0 flex-col border-r border-border lg:flex"
+          scrollRootRef={formColumnRef}
+        />
 
         {/* Form content area — `min-w-0` lets the form column shrink
             when the viewport narrows so the fixed-width preview pane
             never gets squeezed. The 720px max-w on the inner canvas
             prevents the editor from sprawling on ultra-wide screens. */}
         <div className="flex flex-1 min-w-0 min-h-0 flex-col">
-          {/* Mobile tab nav */}
-          <SectionNav className="lg:hidden border-b border-border" />
+          {/* Mobile jump chips */}
+          <SectionNav className="lg:hidden border-b border-border" scrollRootRef={formColumnRef} />
 
-          {/* Scrollable form content — design spec form-canvas:
-              max-width 720px, padding 28px 40px 60px on desktop. */}
-          <div className="flex-1 min-h-0 overflow-y-auto">
-            <div className="mx-auto max-w-[720px] px-4 pb-12 pt-6 lg:px-6 lg:pb-16 lg:pt-6">
-              <VersionSelector />
-              {/* `key` resets the subtree on section switch so the
-                  fade-in always replays. `motion-reduce` opts out for
-                  users who prefer reduced motion. */}
-              <div
-                key={activeSection}
-                className="mt-6 animate-in fade-in slide-in-from-bottom-1 duration-200 ease-out motion-reduce:animate-none"
-              >
-                <SectionContent sectionId={activeSection} />
+          <div ref={formColumnRef} className="flex-1 min-h-0 overflow-y-auto">
+            <div className="mx-auto max-w-[720px] px-4 pb-16 pt-5 lg:px-6 lg:pb-24 lg:pt-5">
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <VersionSelector />
+                <SaveIndicator className="pb-3" />
+              </div>
+              <div className="space-y-8">
+                {sections.map((sectionId) => (
+                  <SectionContent key={sectionId} sectionId={sectionId} />
+                ))}
               </div>
             </div>
           </div>
