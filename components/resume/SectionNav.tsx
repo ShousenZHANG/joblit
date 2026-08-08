@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Check, Eye } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
+import { Eye } from "lucide-react";
 import { useResumeContext } from "./ResumeContext";
 import type { SectionId } from "./constants";
 import { getSectionIds } from "./constants";
@@ -42,6 +43,7 @@ export function SectionNav({ className, scrollRootRef }: SectionNavProps) {
     setPreviewOpen,
     schedulePreview,
   } = useResumeContext();
+  const reduceMotion = useReducedMotion();
 
   // Drive both nav order AND visibility from getSectionIds(locale) so the rail
   // matches the resume's per-locale module order (CN: Education before
@@ -62,7 +64,14 @@ export function SectionNav({ className, scrollRootRef }: SectionNavProps) {
       className={cn("flex [contain:layout_style]", className)}
       aria-label={t("sectionsAria")}
     >
-      {/* Desktop: 64px icon rail */}
+      {/* Desktop: 64px icon rail.
+
+          Completion is signalled by exception, not by trophy: a section with
+          content renders at normal contrast (the calm default) and only an
+          EMPTY one dims to 40%. The previous version pinned a green tick
+          badge on every filled icon — six sections filled meant six badges,
+          which read as unread-notification clutter exactly when the resume
+          was in its best state. */}
       <div className="hidden lg:flex lg:h-full lg:w-full lg:flex-col lg:items-center lg:bg-card/35 lg:px-2 lg:py-3">
         <div className="flex flex-1 flex-col items-center gap-1">
           {visibleSections.map(({ id, tKey, icon: Icon }) => {
@@ -75,9 +84,9 @@ export function SectionNav({ className, scrollRootRef }: SectionNavProps) {
                 type="button"
                 onClick={() => setActiveSection(id)}
                 aria-current={isActive ? "true" : undefined}
-                aria-label={complete ? `${label} — ${t("sectionFilled")}` : label}
-                title={label}
+                aria-label={complete ? label : `${label} — ${t("sectionEmpty")}`}
                 data-testid={`resume-rail-${id}`}
+                data-complete={complete ? "true" : "false"}
                 className={cn(
                   "group relative grid h-10 w-10 place-items-center rounded-xl",
                   COARSE_POINTER_TARGET,
@@ -86,23 +95,35 @@ export function SectionNav({ className, scrollRootRef }: SectionNavProps) {
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600",
                   isActive
                     ? "bg-emerald-500/12 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    : complete
+                      ? "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      : "text-muted-foreground/40 hover:bg-muted hover:text-foreground",
                 )}
               >
                 <Icon className="h-[18px] w-[18px]" />
-                {complete ? (
-                  <span
-                    aria-hidden
-                    data-testid={`resume-rail-tick-${id}`}
-                    className="absolute -bottom-0.5 -right-0.5 grid h-3.5 w-3.5 place-items-center rounded-full bg-emerald-500 ring-2 ring-card"
-                  >
-                    <Check className="h-2 w-2 text-white" />
-                  </span>
-                ) : null}
+                {/* Hover flyout — replaces the native title tooltip, which is
+                    slow to appear and unstyled. Pointer-events-none so it can
+                    never trap the cursor; hidden from AT (aria-label already
+                    carries the name). */}
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute left-full top-1/2 z-20 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none"
+                >
+                  {label}
+                </span>
                 {isActive ? (
-                  <span
+                  <motion.span
                     aria-hidden
-                    className="absolute -left-2 top-2 bottom-2 w-[3px] rounded-r-[3px] bg-emerald-600 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200"
+                    // One shared element sliding between icons reads as "the
+                    // indicator followed me"; per-icon fade-ins read as six
+                    // separate lights. Reduced motion snaps instead of slides.
+                    layoutId="resume-rail-indicator"
+                    transition={
+                      reduceMotion
+                        ? { duration: 0 }
+                        : { type: "spring", stiffness: 500, damping: 40 }
+                    }
+                    className="absolute -left-2 top-2 bottom-2 w-[3px] rounded-r-[3px] bg-emerald-600"
                   />
                 ) : null}
               </button>
@@ -130,20 +151,20 @@ export function SectionNav({ className, scrollRootRef }: SectionNavProps) {
                 type="button"
                 onClick={() => setActiveSection(id)}
                 aria-current={isActive ? "true" : undefined}
+                aria-label={complete ? t(tKey) : `${t(tKey)} — ${t("sectionEmpty")}`}
                 className={cn(
                   "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm",
                   COARSE_POINTER_MIN_HEIGHT,
                   "transition-colors duration-150 ease-out active:scale-[0.97] motion-reduce:active:scale-100 motion-reduce:transition-none",
                   isActive
                     ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
-                    : "border-border bg-card text-muted-foreground hover:border-emerald-300",
+                    : complete
+                      ? "border-border bg-card text-muted-foreground hover:border-emerald-300"
+                      : "border-border bg-card text-muted-foreground/50 hover:border-emerald-300",
                 )}
               >
                 <Icon className="h-3.5 w-3.5 shrink-0" />
                 <span className="whitespace-nowrap">{t(tKey)}</span>
-                {complete ? (
-                  <Check className="h-3 w-3 shrink-0 text-emerald-600" aria-hidden />
-                ) : null}
               </button>
             );
           })}

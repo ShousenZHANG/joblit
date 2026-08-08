@@ -90,9 +90,13 @@ function firstButton(name: string) {
   return screen.getAllByRole("button", { name })[0];
 }
 
-/** The section rail is a jump list now: every section is already rendered. */
+/** The section rail is a jump list now: every section is already rendered.
+ *  An empty section's button carries an "— Not filled in yet" aria suffix,
+ *  so match on the leading section name. */
 function jumpToSection(name: string) {
-  fireEvent.click(screen.getAllByRole("button", { name })[0]);
+  fireEvent.click(
+    screen.getAllByRole("button", { name: new RegExp(`^${name}`) })[0],
+  );
 }
 
 describe("Resume page", () => {

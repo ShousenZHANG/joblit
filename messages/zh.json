@@ -581,7 +581,6 @@
     "discardAndSwitch": "放弃并切换",
     "autosaveSaved": "已保存",
     "autosaveFailed": "保存失败",
-    "sectionFilled": "已填写",
     "dragToReorder": "拖动排序",
     "expanded": "已展开",
     "collapsed": "已收起",
@@ -591,7 +590,8 @@
     "untitledSkillGroup": "未命名分组",
     "emailHint": "这看起来不像邮箱地址。",
     "urlHint": "这看起来不像网址。",
-    "retry": "重试"
+    "retry": "重试",
+    "sectionEmpty": "还没填写"
   },
   "privacy": {
     "title": "隐私政策",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, type ElementType, type ReactNode } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useResumeContext } from "./ResumeContext";
 import type { SectionId } from "./constants";
 import { cn } from "@/lib/utils";
@@ -24,8 +24,11 @@ interface SectionShellProps {
  * whole category converged on, and the step-number badge went with it: a
  * numbered step implies a wizard, and this was never a wizard.
  *
- * The tick beside the heading is the only completeness signal in the product —
- * present when the section has content, absent otherwise. No percentage, no
+ * Completeness is signalled by exception: a filled section is the calm,
+ * full-contrast default, and only an EMPTY one dims. The first cut put a
+ * green tick beside every filled heading and an emerald tint under every
+ * filled icon — six ticks and six green squares once the resume was done,
+ * decoration exactly when there was nothing left to say. No percentage, no
  * score, and never a warning colour for an empty optional section.
  */
 export function SectionShell({
@@ -71,26 +74,24 @@ export function SectionShell({
         >
           <span
             className={cn(
-              "grid h-7 w-7 shrink-0 place-items-center rounded-lg",
-              complete
-                ? "bg-brand-emerald-500/12 text-brand-emerald-700 dark:text-brand-emerald-300"
-                : "bg-muted text-muted-foreground",
+              "grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-muted",
+              complete ? "text-muted-foreground" : "text-muted-foreground/45",
             )}
           >
             <Icon className="h-4 w-4" aria-hidden />
           </span>
           <h2
             id={`resume-section-${id}-heading`}
-            className="min-w-0 flex-1 truncate text-[17px] font-bold tracking-[-0.012em] text-foreground"
+            className={cn(
+              "min-w-0 flex-1 truncate text-[17px] font-bold tracking-[-0.012em]",
+              complete ? "text-foreground" : "text-muted-foreground",
+            )}
           >
             {title}
           </h2>
-          {complete ? (
-            <Check
-              className="h-4 w-4 shrink-0 text-brand-emerald-600"
-              aria-label={t("sectionFilled")}
-            />
-          ) : null}
+          {complete ? null : (
+            <span className="sr-only">{t("sectionEmpty")}</span>
+          )}
           <ChevronDown
             aria-hidden
             className={cn(

@@ -581,7 +581,6 @@
     "discardAndSwitch": "Discard & switch",
     "autosaveSaved": "Saved",
     "autosaveFailed": "Couldn't save",
-    "sectionFilled": "Has content",
     "dragToReorder": "Drag to reorder",
     "expanded": "Expanded",
     "collapsed": "Collapsed",
@@ -591,7 +590,8 @@
     "untitledSkillGroup": "Untitled group",
     "emailHint": "That doesn't look like an email address.",
     "urlHint": "That doesn't look like a web address.",
-    "retry": "Try again"
+    "retry": "Try again",
+    "sectionEmpty": "Not filled in yet"
   },
   "privacy": {
     "title": "Privacy Policy",
