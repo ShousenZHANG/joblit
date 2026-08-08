@@ -188,7 +188,10 @@ describe("Resume page", () => {
     fireEvent.click(toggle!);
 
     expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByLabelText("Full name")).not.toBeInTheDocument();
+    // The body unmounts after its exit animation, so removal is async.
+    await waitFor(() =>
+      expect(screen.queryByLabelText("Full name")).not.toBeInTheDocument(),
+    );
     expect(screen.getByTestId("resume-section-experience")).toBeInTheDocument();
   });
 

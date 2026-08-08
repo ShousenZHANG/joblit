@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, type ElementType, type ReactNode } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronDown } from "lucide-react";
 import { useResumeContext } from "./ResumeContext";
 import type { SectionId } from "./constants";
@@ -48,6 +49,7 @@ export function SectionShell({
 
   const collapsed = collapsedSections.has(id);
   const complete = sectionCompletion[id];
+  const reduceMotion = useReducedMotion();
 
   const setNode = useCallback(
     (node: HTMLElement | null) => registerSectionNode(id, node),
@@ -102,16 +104,39 @@ export function SectionShell({
         </button>
       </div>
 
-      {collapsed ? null : (
-        <div id={`resume-section-${id}-body`} className="space-y-4 px-1 pb-2 pt-1">
-          {description ? (
-            <p className="max-w-[62ch] text-[13px] leading-[1.55] text-muted-foreground">
-              {description}
-            </p>
-          ) : null}
-          {children}
-        </div>
-      )}
+      {/* Collapse animates height + opacity instead of blinking in and out.
+          overflow-hidden only DURING the transition — a permanently clipped
+          body would cut off focus rings and the entry cards' hover shadows. */}
+      <AnimatePresence initial={false}>
+        {collapsed ? null : (
+          <motion.div
+            key="body"
+            id={`resume-section-${id}-body`}
+            initial={reduceMotion ? false : { height: 0, opacity: 0 }}
+            animate={{
+              height: "auto",
+              opacity: 1,
+              transitionEnd: { overflow: "visible" },
+            }}
+            exit={
+              reduceMotion
+                ? { opacity: 0, transition: { duration: 0 } }
+                : { height: 0, opacity: 0 }
+            }
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            style={{ overflow: "hidden" }}
+          >
+            <div className="space-y-4 px-1 pb-2 pt-1">
+              {description ? (
+                <p className="max-w-[62ch] text-[13px] leading-[1.55] text-muted-foreground">
+                  {description}
+                </p>
+              ) : null}
+              {children}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }

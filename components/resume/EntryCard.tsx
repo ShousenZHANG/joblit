@@ -1,6 +1,7 @@
 "use client";
 
 import type { HTMLAttributes, ReactNode } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronDown, GripVertical, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
@@ -55,6 +56,7 @@ export function EntryCard({
 }: EntryCardProps) {
   const t = useTranslations("resumeForm");
   const hasTitle = title.trim().length > 0;
+  const reduceMotion = useReducedMotion();
 
   return (
     <div
@@ -135,11 +137,33 @@ export function EntryCard({
         ) : null}
       </div>
 
-      {expanded ? (
-        <div className="space-y-4 border-t border-border/70 px-4 pb-4 pt-4">
-          {children}
-        </div>
-      ) : null}
+      {/* Same height transition as the section bodies: a card opening into a
+          full field set is the biggest layout jump in the editor, so it is
+          the one most worth easing. Overflow clips only during the motion. */}
+      <AnimatePresence initial={false}>
+        {expanded ? (
+          <motion.div
+            key="fields"
+            initial={reduceMotion ? false : { height: 0, opacity: 0 }}
+            animate={{
+              height: "auto",
+              opacity: 1,
+              transitionEnd: { overflow: "visible" },
+            }}
+            exit={
+              reduceMotion
+                ? { opacity: 0, transition: { duration: 0 } }
+                : { height: 0, opacity: 0 }
+            }
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            style={{ overflow: "hidden" }}
+          >
+            <div className="space-y-4 border-t border-border/70 px-4 pb-4 pt-4">
+              {children}
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
       {/* Keeps the collapsed state honest for assistive tech without rendering
           the whole field set into the accessibility tree twice. */}
       <span className="sr-only">{expanded ? t("expanded") : t("collapsed")}</span>

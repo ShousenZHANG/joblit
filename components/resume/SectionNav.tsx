@@ -101,16 +101,10 @@ export function SectionNav({ className, scrollRootRef }: SectionNavProps) {
                 )}
               >
                 <Icon className="h-[18px] w-[18px]" />
-                {/* Hover flyout — replaces the native title tooltip, which is
-                    slow to appear and unstyled. Pointer-events-none so it can
-                    never trap the cursor; hidden from AT (aria-label already
-                    carries the name). */}
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute left-full top-1/2 z-20 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none"
-                >
-                  {label}
-                </span>
+                {/* No visual label. A per-icon hover chip popped on every
+                    pass-through of the rail — flicker, not help. The icons
+                    are legible, the section headings sit in the scroll column
+                    beside them, and aria-label carries the name for AT. */}
                 {isActive ? (
                   <motion.span
                     aria-hidden
