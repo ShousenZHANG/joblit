@@ -158,14 +158,6 @@ export function useJobPagination({
     [queryClient, queryString],
   );
 
-  const jobLevelOptions = useMemo(() => {
-    const fromItems = items
-      .map((item) => item.jobLevel)
-      .filter((level): level is string => Boolean(level));
-    const fromFacets = firstPage?.facets?.jobLevels ?? [];
-    return Array.from(new Set([...fromFacets, ...fromItems]));
-  }, [items, firstPage]);
-
   const { fetchNextPage, hasNextPage } = query;
 
   useEffect(() => {
@@ -216,6 +208,5 @@ export function useJobPagination({
     resetPagination,
     firstQueryError,
     refetch: query.refetch,
-    jobLevelOptions,
   };
 }

@@ -28,9 +28,6 @@ interface VirtualJobListProps {
   onSelect: (id: string) => void;
   timeZone: string | null;
   scrollRootRef: RefObject<HTMLDivElement | null>;
-  batchMode?: boolean;
-  batchSelectedIds?: Set<string>;
-  onBatchToggle?: (id: string) => void;
 }
 
 export const VirtualJobList = forwardRef<VirtualJobListHandle, VirtualJobListProps>(function VirtualJobList({
@@ -39,9 +36,6 @@ export const VirtualJobList = forwardRef<VirtualJobListHandle, VirtualJobListPro
   onSelect,
   timeZone,
   scrollRootRef,
-  batchMode,
-  batchSelectedIds,
-  onBatchToggle,
 }: VirtualJobListProps, ref) {
   const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
   const reducedMotion = useReducedMotion();
@@ -117,9 +111,6 @@ export const VirtualJobList = forwardRef<VirtualJobListHandle, VirtualJobListPro
                 isActive={job.id === effectiveSelectedId}
                 onSelect={() => onSelect(job.id)}
                 timeZone={timeZone}
-                batchMode={batchMode}
-                batchSelected={batchSelectedIds?.has(job.id)}
-                onBatchToggle={onBatchToggle}
                 setSize={items.length}
                 positionInSet={virtualRow.index + 1}
               />

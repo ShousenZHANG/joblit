@@ -7,7 +7,6 @@ import { ToastAction, type ToastActionElement } from "@/components/ui/toast";
 import { useGuide } from "@/app/GuideContext";
 import type { JobItem, JobStatus } from "../types";
 import { getErrorMessage } from "../types";
-import { runChunkedBatchDelete } from "./runChunkedBatchDelete";
 import { createSerialRunner } from "./serialRunner";
 import {
   cancelJobsQueries,
@@ -15,8 +14,6 @@ import {
   invalidateActiveJobsQueries,
   patchJobStatusInJobsCache,
   removeJobFromJobsCache,
-  removeJobsFromJobsCache,
-  restoreJobsByIdsFromSnapshots,
   restoreJobsSnapshots,
 } from "../utils/jobsQueryCache";
 
@@ -340,147 +337,6 @@ export function useJobMutations({
     };
   }, []);
 
-  const batchDeleteMutation = useMutation({
-    mutationFn: async (ids: string[]) => {
-      // Selections that exceed the server's per-request cap (100) used to
-      // surface as a hard "Failed to batch delete" error. We now chunk
-      // client-side, dispatch sequentially (so Neon's connection pool isn't
-      // hammered), and aggregate the result. A single failed chunk does
-      // NOT abort the whole operation — see runChunkedBatchDelete docstring.
-      const summary = await runChunkedBatchDelete({
-        ids,
-        sendChunk: async (chunk) => {
-          const json = (await fetchJson("/api/jobs/batch-delete", {
-            method: "POST",
-            body: JSON.stringify({ ids: chunk }),
-            fallbackError: "Failed to batch delete",
-          })) as { deleted?: unknown; notFound?: unknown };
-          const { deleted, notFound } = json;
-          if (
-            typeof deleted !== "number" ||
-            !Number.isInteger(deleted) ||
-            deleted < 0 ||
-            typeof notFound !== "number" ||
-            !Number.isInteger(notFound) ||
-            notFound < 0 ||
-            deleted + notFound !== chunk.length
-          ) {
-            throw new Error("Invalid batch delete response");
-          }
-          return { deleted, notFound };
-        },
-      });
-      if (summary.failedIds.length > 0 && summary.completedIds.length === 0) {
-        // Every chunk failed — surface as a real error so onError runs and
-        // the optimistic update gets rolled back fully.
-        throw summary.firstError ?? new Error("Failed to batch delete");
-      }
-      return summary;
-    },
-    onMutate: async (ids) => {
-      setError(null);
-      const idSet = new Set(ids);
-      hideJobs(idSet);
-      setDeletingIds((prev) => {
-        const next = new Set(prev);
-        for (const id of ids) next.add(id);
-        return next;
-      });
-      await cancelJobsQueries(queryClient);
-
-      const previousSelectedId = selectedId;
-      let nextSelectedId = selectedId;
-      if (selectedId && idSet.has(selectedId)) {
-        nextSelectedId = items.find((it) => !idSet.has(it.id))?.id ?? null;
-      }
-
-      const rollbackSnapshots = removeJobsFromJobsCache(queryClient, idSet);
-
-      if (selectedId && idSet.has(selectedId)) {
-        setSelectedId(nextSelectedId);
-      }
-
-      return { rollbackSnapshots, previousSelectedId, nextSelectedId };
-    },
-    onError: (e, ids, context) => {
-      setError(getErrorMessage(e, "Failed to batch delete"));
-      revealJobs(ids);
-      restoreJobsByIdsFromSnapshots(
-        queryClient,
-        context?.rollbackSnapshots,
-        new Set(ids),
-      );
-      if (
-        context?.previousSelectedId &&
-        (
-          selectedIdRef.current === context.nextSelectedId ||
-          selectedIdRef.current === null
-        )
-      ) {
-        setSelectedId(context.previousSelectedId);
-      }
-      toast({
-        title: "Batch delete failed",
-        description: getErrorMessage(e, "Some jobs could not be removed."),
-        variant: "destructive",
-        duration: 2400,
-        className: "border-destructive/30 bg-destructive/10 text-rose-900 animate-in fade-in zoom-in-95",
-      });
-    },
-    onSuccess: (data, ids, context) => {
-      const deleted = data.deleted;
-      const failed = data.failedIds.length;
-
-      // Committed ids become session tombstones (same contract as the single
-      // delete): survives JobsClient remounts so a stale or in-flight list
-      // payload can never resurrect them.
-      for (const id of data.completedIds) {
-        sessionDeletedJobIds.add(id);
-        queryClient.removeQueries({
-          queryKey: getJobDetailsQueryKey(id),
-          exact: true,
-        });
-      }
-
-      if (failed > 0) {
-        // Partial success only: refetch so the failed (un-suppressed) ids
-        // re-appear with fresh server state. Full success skips the refetch
-        // entirely — the optimistic removeJobsFromJobsCache() already removed
-        // the rows + decremented totalCount, so invalidating would just dim
-        // the list for no reason.
-        revealJobs(data.failedIds);
-        restoreJobsByIdsFromSnapshots(
-          queryClient,
-          context?.rollbackSnapshots,
-          new Set(data.failedIds),
-        );
-        toast({
-          title: `${deleted} of ${ids.length} jobs deleted`,
-          description: `${failed} could not be removed — try again.`,
-          variant: "destructive",
-          duration: 3200,
-          className: "border-amber-200 bg-amber-50 text-amber-900 animate-in fade-in zoom-in-95",
-        });
-        return;
-      }
-
-      toast({
-        title: `${deleted} ${deleted === 1 ? "job" : "jobs"} deleted`,
-        description: "The selected jobs were removed.",
-        duration: 1800,
-        className: "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-900 animate-in fade-in zoom-in-95",
-      });
-    },
-    onSettled: (_data, _error, ids) => {
-      if (!ids) return;
-      setDeletingIds((prev) => {
-        const next = new Set(prev);
-        for (const id of ids) next.delete(id);
-        return next;
-      });
-    },
-  });
-
   function updateStatus(id: string, status: JobStatus) {
     const previous = items.find((it) => it.id === id)?.status;
     if (!previous || previous === status) return;
@@ -490,7 +346,6 @@ export function useJobMutations({
   return {
     updateStatus,
     requestDelete,
-    batchDeleteMutation,
     updatingIds,
     deletingIds,
     error,

@@ -6,7 +6,7 @@ import { ApiError, fetchJson } from "@/lib/api/fetchJson";
 import { jobDetailResponseSchema } from "@/lib/shared/schemas/jobsList";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, CheckCircle2, CheckSquare, Loader2, MapPin, RefreshCw, SlidersHorizontal, Sparkles, Square, Trash2, X } from "lucide-react";
+import { ArrowRight, MapPin, RefreshCw, SlidersHorizontal, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -32,10 +32,8 @@ import { useJobMutations } from "./hooks/useJobMutations";
 import { useKeyboardNavigation } from "./hooks/useKeyboardNavigation";
 import { useExternalGenerate } from "./hooks/useExternalGenerate";
 import { JobListItem } from "./components/JobListItem";
-import { useFitScan } from "./hooks/useFitScan";
 import { RunnerPresenceChip } from "@/components/agent/RunnerPresenceChip";
 import { VirtualJobList, type VirtualJobListHandle } from "./components/VirtualJobList";
-import { JobBatchDeleteDialog } from "./components/JobBatchDeleteDialog";
 import { JobSearchBar } from "./components/JobSearchBar";
 import { ExternalGenerateDialog } from "./components/ExternalGenerateDialog";
 import { TailorReviewDialog } from "./components/TailorReviewDialog";
@@ -82,7 +80,6 @@ export function JobsClient({
     q, debouncedQ, setQ,
     statusFilter, setStatusFilter,
     locationFilter, setLocationFilter,
-    jobLevelFilter, setJobLevelFilter,
     market,
     queryString,
     urlState,
@@ -160,7 +157,7 @@ export function JobsClient({
 
   const {
     items, totalCount, nextCursor, loading, loadingInitial, showEmpty, loadingMore,
-    loadedCursors, resetPagination, firstQueryError, refetch, jobLevelOptions,
+    loadedCursors, resetPagination, firstQueryError, refetch,
   } = useJobPagination({
     queryString,
     initialItems,
@@ -168,12 +165,10 @@ export function JobsClient({
     suppressedDeletedIds,
     scrollRef: resultsScrollRef,
   });
-  // Sorting by score and hiding low-fit rows are not exposed yet, so every
-  // loaded row is shown. Both return with the fit tools they belong to.
   const visibleItems = items;
 
   const {
-    updateStatus, requestDelete, batchDeleteMutation,
+    updateStatus, requestDelete,
     updatingIds, deletingIds,
     error: mutationError, setError,
   } = useJobMutations({
@@ -185,13 +180,11 @@ export function JobsClient({
   });
 
   const externalGenerate = useExternalGenerate(setError);
-  const fitScan = useFitScan({ onJobScored: refetch });
-  // Presence matters exactly while something is queued for the Runner: a
-  // running fit scan, or a generation batch enqueued this session. The chip
-  // polls for itself; this flag only controls whether it is mounted.
+  // Presence matters exactly while a generation batch is queued for the
+  // Runner this session. The chip polls for itself; this flag only controls
+  // whether it is mounted.
   const [generationQueued, setGenerationQueued] = useState(false);
-  const showRunnerPresence =
-    fitScan.state.status === "scanning" || generationQueued;
+  const showRunnerPresence = generationQueued;
   // Keep renderer identity stable after virtualization first becomes useful.
   // In particular, deleting row 81 must not swap the entire virtual subtree
   // for the ordinary renderer when the visible count becomes 80.
@@ -211,12 +204,6 @@ export function JobsClient({
   // when a row above the pointer disappears or reappears after rollback.
   useLayoutEffect(restoreAnchor, [restoreAnchor, visibleItemsIdKey]);
 
-  // Full-database sweep: preview the count, confirm, move NEW -> ignored
-  // (REJECTED, reversible) server-side, then offer one-click undo.
-  const [batchSelectMode, setBatchSelectMode] = useState(false);
-  const [batchSelectedIds, setBatchSelectedIds] = useState<Set<string>>(new Set());
-  const [batchDeleteConfirmOpen, setBatchDeleteConfirmOpen] = useState(false);
-
   const lastSeenImportRef = useRef<{
     runId: string | null;
     status: FetchRunStatus | null;
@@ -224,52 +211,11 @@ export function JobsClient({
   } | null>(null);
   const lastImportRefreshAtRef = useRef<number>(0);
 
-  // Reset batch mode when filters change. Uses the "store info from previous
-  // renders" pattern recommended by React to adjust state during render
-  // instead of in an effect, avoiding cascading renders.
-  // https://react.dev/reference/react/useState#storing-information-from-previous-renders
-  const [prevQueryStringForBatch, setPrevQueryStringForBatch] =
-    useState(queryString);
-  if (prevQueryStringForBatch !== queryString) {
-    setPrevQueryStringForBatch(queryString);
-    if (batchSelectMode) {
-      setBatchSelectMode(false);
-      setBatchSelectedIds(new Set());
-    }
-  }
-
-  // Prune batch selections when the visible items change (e.g. after delete or
-  // refetch). Compare by a content-stable id key — `items` is a fresh array
-  // reference on every render (it comes from a chain of useMemos whose deps
-  // include useQueries output), so reference comparison would loop forever.
-  const itemsIdKey = useMemo(
-    () => visibleItems.map((item) => item.id).join("|"),
-    [visibleItems],
-  );
-  const [prevItemsIdKey, setPrevItemsIdKey] = useState(itemsIdKey);
-  if (itemsIdKey !== prevItemsIdKey) {
-    setPrevItemsIdKey(itemsIdKey);
-    if (
-      batchSelectMode &&
-      batchSelectedIds.size > 0 &&
-      !batchDeleteMutation.isPending
-    ) {
-      const currentIds = new Set(visibleItems.map((item) => item.id));
-      const pruned = new Set(
-        [...batchSelectedIds].filter((id) => currentIds.has(id)),
-      );
-      if (pruned.size !== batchSelectedIds.size) {
-        setBatchSelectedIds(pruned);
-      }
-    }
-  }
-
   // Lock scroll on the app shell.
   // Re-apply after any modal closes — Radix AlertDialog temporarily sets
   // `overflow: hidden` on <body> while open, which can desync the scroll
   // state of .app-shell when the dialog unmounts.
   const anyDialogOpen =
-    batchDeleteConfirmOpen ||
     externalGenerate.externalDialogOpen ||
     !!externalGenerate.tailorReviewDraft;
   useEffect(() => {
@@ -302,12 +248,8 @@ export function JobsClient({
 
   const activeFilterCount = [
     locationFilter !== "ALL",
-    jobLevelFilter !== "ALL",
     statusFilter !== "NEW",
   ].filter(Boolean).length;
-  const allVisibleBatchSelected =
-    visibleItems.length > 0 &&
-    visibleItems.every((item) => batchSelectedIds.has(item.id));
 
   function triggerSearch() {
     invalidateJobsQueries(queryClient);
@@ -379,31 +321,6 @@ export function JobsClient({
     toast,
   ]);
 
-  function toggleBatchSelect(id: string) {
-    setBatchSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function toggleSelectAll() {
-    const visibleIds = visibleItems.map((item) => item.id);
-    const allVisibleSelected =
-      visibleIds.length > 0 && visibleIds.every((id) => batchSelectedIds.has(id));
-    if (allVisibleSelected) {
-      setBatchSelectedIds(new Set());
-    } else {
-      setBatchSelectedIds(new Set(visibleIds));
-    }
-  }
-
-  function exitBatchMode() {
-    setBatchSelectMode(false);
-    setBatchSelectedIds(new Set());
-  }
-
   const [batchGeneratePending, setBatchGeneratePending] = useState(false);
   /**
    * One enqueue path for both entry points: the batch toolbar and the
@@ -444,31 +361,6 @@ export function JobsClient({
     } finally {
       setBatchGeneratePending(false);
     }
-  }
-
-  async function confirmBatchGenerate() {
-    if (await enqueueGenerationBatch([...batchSelectedIds])) exitBatchMode();
-  }
-
-  function confirmBatchDelete() {
-    const ids = [...batchSelectedIds].filter((id) => !deletingIds.has(id));
-    if (ids.length > 0) {
-      batchDeleteMutation.mutate(ids, {
-        onSuccess: (result) => {
-          if (result.failedIds.length > 0) {
-            setBatchSelectMode(true);
-            setBatchSelectedIds(new Set(result.failedIds));
-            return;
-          }
-          exitBatchMode();
-        },
-        onError: () => {
-          setBatchSelectMode(true);
-          setBatchSelectedIds(new Set(ids));
-        },
-      });
-    }
-    setBatchDeleteConfirmOpen(false);
   }
 
   const effectiveSelectedId = useMemo(() => {
@@ -707,23 +599,6 @@ export function JobsClient({
                 </SelectContent>
               </Select>
               <Select
-                value={jobLevelFilter}
-                onValueChange={(v) => { startTransition(() => { setJobLevelFilter(v); }); }}
-              >
-                <SelectTrigger
-                  className={mobileFilterSelectTriggerClass}
-                  aria-label={t("jobLevel")}
-                >
-                  <SelectValue placeholder={tc("allLevels")} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">{tc("allLevels")}</SelectItem>
-                  {jobLevelOptions.map((level) => (
-                    <SelectItem key={level} value={level}>{level}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
                 value={statusFilter}
                 onValueChange={(v) => { startTransition(() => { setStatusFilter(v as JobStatus); }); }}
               >
@@ -837,269 +712,73 @@ export function JobsClient({
                 <div className="h-full w-1/3 animate-[shimmer_1.2s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-brand-emerald-500 to-transparent" />
               </div>
             ) : null}
-            <div className="flex flex-col gap-2">
-              <JobSearchBar
-                q={q}
-                onQueryChange={setQ}
-                onSubmit={triggerSearch}
-                placeholder={t("placeholder")}
-                isDebouncing={q !== "" && q !== debouncedQ}
-              />
-              <div
-                data-testid="jobs-desktop-filter-row"
-                className={cn(
-                  "grid min-w-0 items-center gap-2",
-                  market === "AU"
-                    ? "grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)_4.75rem]"
-                    : "grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]",
-                )}
-              >
-                <Select
-                  value={locationFilter}
-                  onValueChange={(v) => {
-                    startTransition(() => {
-                      setLocationFilter(v);
-                    });
-                  }}
-                >
-                  <SelectTrigger
-                    data-testid="jobs-location-filter"
-                    className={cn(desktopFilterSelectTriggerClass, "gap-1.5")}
-                    aria-label={t("location")}
-                  >
-                    <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                    <SelectValue placeholder={tc("allLocations")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">{tc("allLocations")}</SelectItem>
-                    {(market === "CN"
-                      ? CN_LOCATION_OPTIONS
-                      : AU_LOCATION_OPTIONS
-                    ).map((loc) => (
-                      <SelectItem key={loc.value} value={loc.value}>
-                        {loc.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={jobLevelFilter}
-                  onValueChange={(v) => {
-                    startTransition(() => {
-                      setJobLevelFilter(v);
-                    });
-                  }}
-                >
-                  <SelectTrigger
-                    data-testid="jobs-level-filter"
-                    className={desktopFilterSelectTriggerClass}
-                    aria-label={t("jobLevel")}
-                  >
-                    <SelectValue placeholder={tc("allLevels")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">{tc("allLevels")}</SelectItem>
-                    {jobLevelOptions.map((level) => (
-                      <SelectItem key={level} value={level}>
-                        {level}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <JobSearchBar
+                  q={q}
+                  onQueryChange={setQ}
+                  onSubmit={triggerSearch}
+                  placeholder={t("placeholder")}
+                  isDebouncing={q !== "" && q !== debouncedQ}
+                />
               </div>
+              <Select
+                value={locationFilter}
+                onValueChange={(v) => {
+                  startTransition(() => {
+                    setLocationFilter(v);
+                  });
+                }}
+              >
+                <SelectTrigger
+                  data-testid="jobs-location-filter"
+                  className={cn(
+                    desktopFilterSelectTriggerClass,
+                    "w-[9.5rem] shrink-0 gap-1.5",
+                  )}
+                  aria-label={t("location")}
+                >
+                  <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <SelectValue placeholder={tc("allLocations")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">{tc("allLocations")}</SelectItem>
+                  {(market === "CN"
+                    ? CN_LOCATION_OPTIONS
+                    : AU_LOCATION_OPTIONS
+                  ).map((loc) => (
+                    <SelectItem key={loc.value} value={loc.value}>
+                      {loc.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
-          {batchSelectMode ? (
-            <div className="flex items-center justify-between border-b bg-brand-emerald-50/60 px-4 py-2.5 text-sm">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={toggleSelectAll}
-                  disabled={batchDeleteMutation.isPending}
-                  className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-foreground/90 transition-colors hover:bg-brand-emerald-100 disabled:cursor-wait disabled:opacity-60"
-                  aria-label={allVisibleBatchSelected ? t("deselectAll") : t("selectAll")}
-                >
-                  {allVisibleBatchSelected ? (
-                    <CheckSquare className="h-4 w-4 text-brand-emerald-600" />
-                  ) : (
-                    <Square className="h-4 w-4 text-muted-foreground" />
-                  )}
-                  {batchSelectedIds.size > 0 ? (
-                    <span className="font-semibold text-brand-emerald-text">{t("selectedCount", { count: batchSelectedIds.size })}</span>
-                  ) : (
-                    <span>{t("selectAll")}</span>
-                  )}
-                </button>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  disabled={batchSelectedIds.size === 0 || batchGeneratePending || batchDeleteMutation.isPending}
-                  onClick={confirmBatchGenerate}
-                  aria-busy={batchGeneratePending}
-                  className="flex items-center gap-1 rounded-lg bg-brand-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-all duration-150 hover:bg-brand-emerald-700 active:translate-y-px disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
-                >
-                  {batchGeneratePending ? (
-                    <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin" aria-hidden />
-                  ) : (
-                    <Sparkles className="h-3.5 w-3.5" aria-hidden />
-                  )}
-                  {batchGeneratePending ? t("generatingSelected") : t("generateSelected")}
-                </button>
-                <button
-                  type="button"
-                  disabled={batchSelectedIds.size === 0 || batchDeleteMutation.isPending}
-                  onClick={() => setBatchDeleteConfirmOpen(true)}
-                  aria-busy={batchDeleteMutation.isPending}
-                  className="flex items-center gap-1 rounded-lg bg-destructive px-3 py-1.5 text-xs font-semibold text-destructive-foreground shadow-sm transition-all duration-150 hover:bg-destructive/90 active:translate-y-px disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
-                >
-                  {batchDeleteMutation.isPending ? (
-                    <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin" aria-hidden />
-                  ) : (
-                    <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                  )}
-                  {batchDeleteMutation.isPending ? t("deletingSelected") : tc("delete")}
-                </button>
-                <button
-                  type="button"
-                  disabled={batchDeleteMutation.isPending}
-                  onClick={exitBatchMode}
-                  className="flex items-center justify-center rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-wait disabled:opacity-50"
-                  aria-label={t("exitSelectionMode")}
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="border-b">
-              <div className="flex items-center justify-between px-4 py-3 text-sm font-semibold">
-                <span>
-                  {t("results")}
-                  {typeof totalCount === "number" ? (
-                    <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                      · {t("jobCount", { count: totalCount })}
-                    </span>
-                  ) : null}
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">
-                    {t("loadedCount", { count: items.length })}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setBatchSelectMode(true)}
-                    className="flex items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    aria-label={t("enterSelectionMode")}
-                  >
-                    <CheckSquare className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-              {/* Toolbar. Three control types sat in one flat scrolling row of
-                  identical pills, so an exclusive filter, a view toggle and a
-                  bulk write were indistinguishable. Each now gets its own
-                  affordance: a connected track for the exclusive status
-                  choice, tinted toggles for view state, and plain icon
-                  buttons for the actions that actually do something. */}
-              <div className="-mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 pb-3">
-                <SegmentedControl
-                  ariaLabel={t("status")}
-                  value={statusFilter}
-                  onChange={(next) =>
-                    startTransition(() => setStatusFilter(next))
-                  }
-                  options={ACTIVE_JOB_STATUS_VALUES.map((status) => ({
-                    value: status,
-                    label: t(JOB_STATUS_LABEL_KEYS[status]),
-                  }))}
-                />
-
-                {/* One action, sized for the narrow results panel. Sorting,
-                    hiding and bulk-ignoring low fit are deliberately not
-                    rendered yet: four controls wrapped onto their own lines
-                    here and read as decoration rather than tools. */}
-                {fitScan.state.status !== "scanning" ? (
-                  <button
-                    type="button"
-                    onClick={() => void fitScan.start()}
-                    title={t("fitScan.button")}
-                    className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border/70 bg-background/80 px-3 py-1 text-[12px] font-semibold text-foreground/75 transition-colors hover:border-border hover:bg-muted hover:text-foreground"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" aria-hidden />
-                    {t("fitScan.scoreShort")}
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          )}
+          {/* The status choice IS the results header. The old layout spent
+              two rows saying "Results · 14 jobs · 10 loaded" above the tabs —
+              three counts for one list. The active segment now carries the
+              one count that matters; loading progress lives at the list
+              bottom where the loading actually happens. */}
+          <div className="border-b px-4 pb-3 pt-3">
+            <SegmentedControl
+              ariaLabel={t("status")}
+              value={statusFilter}
+              onChange={(next) =>
+                startTransition(() => setStatusFilter(next))
+              }
+              options={ACTIVE_JOB_STATUS_VALUES.map((status) => ({
+                value: status,
+                label:
+                  status === statusFilter && typeof totalCount === "number"
+                    ? `${t(JOB_STATUS_LABEL_KEYS[status])} · ${totalCount}`
+                    : t(JOB_STATUS_LABEL_KEYS[status]),
+              }))}
+            />
+          </div>
           {showRunnerPresence ? (
             <div className="flex items-center border-b bg-background/60 px-4 py-1.5">
               <RunnerPresenceChip linkToSetup />
-            </div>
-          ) : null}
-          {fitScan.state.status === "scanning" ? (
-            <div className="flex items-center justify-between gap-3 border-b bg-brand-emerald-50/60 px-4 py-2.5 dark:bg-emerald-500/10" role="status" aria-live="polite">
-              <span className="flex min-w-0 items-center gap-2 text-sm text-foreground">
-                <Loader2 className="h-4 w-4 shrink-0 text-brand-emerald-600 motion-safe:animate-spin" aria-hidden />
-                <span className="truncate">
-                  {fitScan.state.waiting
-                    ? t("fitScan.bannerWaitingRunner", {
-                        remaining: fitScan.state.remaining,
-                      })
-                    : t("fitScan.bannerScanning", {
-                        scored: fitScan.state.scored + fitScan.state.prescreened,
-                        remaining: fitScan.state.remaining,
-                      })}
-                </span>
-              </span>
-              {fitScan.state.waiting ? (
-                <Link
-                  href="/agent"
-                  className="shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-brand-emerald-text underline-offset-2 transition-colors hover:underline"
-                >
-                  {t("fitScan.setUpRunner")}
-                </Link>
-              ) : null}
-              <button
-                type="button"
-                onClick={fitScan.stop}
-                className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                {t("fitScan.stop")}
-              </button>
-            </div>
-          ) : null}
-          {fitScan.state.status === "done" || fitScan.state.status === "failed" ? (
-            <div
-              className={`flex items-center justify-between gap-3 border-b px-4 py-2.5 ${
-                fitScan.state.status === "done"
-                  ? "bg-brand-emerald-50/60 dark:bg-emerald-500/10"
-                  : "bg-destructive/5"
-              }`}
-              role="status"
-            >
-              <span className="flex min-w-0 items-center gap-2 text-sm">
-                {fitScan.state.status === "done" ? (
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-brand-emerald-600" aria-hidden />
-                ) : null}
-                <span className={`truncate ${fitScan.state.status === "failed" ? "text-destructive" : "text-foreground"}`}>
-                  {fitScan.state.status === "done"
-                    ? t("fitScan.bannerDone", {
-                        scored: fitScan.state.scored,
-                        prescreened: fitScan.state.prescreened,
-                      })
-                    : (fitScan.state.error ?? t("fitScan.failed"))}
-                </span>
-              </span>
-              <button
-                type="button"
-                onClick={fitScan.reset}
-                className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                aria-label={t("fitScan.dismiss")}
-              >
-                <X className="h-4 w-4" />
-              </button>
             </div>
           ) : null}
           <div className="relative flex min-h-0 flex-1 flex-col">
@@ -1136,9 +815,6 @@ export function JobsClient({
                     onSelect={handleSelectJob}
                     timeZone={timeZone}
                     scrollRootRef={resultsScrollRef}
-                    batchMode={batchSelectMode}
-                    batchSelectedIds={batchSelectedIds}
-                    onBatchToggle={toggleBatchSelect}
                   />
                 </div>
               ) : (
@@ -1155,9 +831,6 @@ export function JobsClient({
                         isActive={it.id === effectiveSelectedId}
                         onSelect={() => handleSelectJob(it.id)}
                         timeZone={timeZone}
-                        batchMode={batchSelectMode}
-                        batchSelected={batchSelectedIds.has(it.id)}
-                        onBatchToggle={toggleBatchSelect}
                       />
                     );
                     // `layout="position"` slides the surviving rows up smoothly
@@ -1266,7 +939,6 @@ export function JobsClient({
                           startTransition(() => {
                             setStatusFilter("NEW");
                             setLocationFilter("ALL");
-                            setJobLevelFilter("ALL");
                             setQ("");
                           })
                         }
@@ -1327,13 +999,6 @@ export function JobsClient({
         </section>
       </div>
       </div>
-      <JobBatchDeleteDialog
-        open={batchDeleteConfirmOpen}
-        onOpenChange={setBatchDeleteConfirmOpen}
-        count={batchSelectedIds.size}
-        onConfirm={confirmBatchDelete}
-        cancelLabel={tc("cancel")}
-      />
     </>
   );
 }

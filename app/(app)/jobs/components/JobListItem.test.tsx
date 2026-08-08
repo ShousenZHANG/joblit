@@ -1,6 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import enMessages from "@/messages/en.json";
 import zhMessages from "@/messages/zh.json";
@@ -50,49 +50,24 @@ function renderJobListItem({
   );
 }
 
-describe("JobListItem fit explanation", () => {
-  it("exposes the fit verdict as accessible text instead of title-only help", () => {
-    const view = renderJobListItem();
 
-    expect(
-      screen.getByText("Fit score 82. Strong TypeScript alignment"),
-    ).toHaveClass("sr-only");
-    expect(view.container.querySelector('[data-job-id="job-fit"]')).toHaveClass(
-      "[@media(any-pointer:coarse)]:min-h-11",
-    );
+afterEach(cleanup);
+
+describe("JobListItem", () => {
+  it("renders the row without any fit badge, even when legacy fit data exists", () => {
+    renderJobListItem({ fitEligibility: "PASS" });
+
+    expect(screen.getByText("Platform Engineer")).toBeInTheDocument();
+    // The fit-scoring surface was retired from the list: a stale score on an
+    // old row must not resurface as an unexplained number chip.
+    expect(screen.queryByText("82")).not.toBeInTheDocument();
+    expect(screen.queryByText(/strong typescript alignment/i)).not.toBeInTheDocument();
   });
 
-  it.each([
-    ["PASS", "Eligibility check passed."],
-    ["RISK", "Eligibility needs review."],
-    ["BLOCK", "Eligibility requirements are not met."],
-  ] as const)(
-    "announces the localized %s eligibility conclusion in English",
-    (fitEligibility, conclusion) => {
-      renderJobListItem({ fitEligibility });
+  it("renders localized status in Chinese without fit chrome", () => {
+    renderJobListItem({ locale: "zh" });
 
-      expect(
-        screen.getByText(
-          `${conclusion} Fit score 82. Strong TypeScript alignment`,
-        ),
-      ).toHaveClass("sr-only");
-    },
-  );
-
-  it.each([
-    ["PASS", "资格检查通过。"],
-    ["RISK", "资格检查需要人工确认。"],
-    ["BLOCK", "资格检查未通过。"],
-  ] as const)(
-    "announces the localized %s eligibility conclusion in Chinese",
-    (fitEligibility, conclusion) => {
-      renderJobListItem({ locale: "zh", fitEligibility });
-
-      expect(
-        screen.getByText(
-          `${conclusion} 匹配分数 82。Strong TypeScript alignment`,
-        ),
-      ).toHaveClass("sr-only");
-    },
-  );
+    expect(screen.getByText("Platform Engineer")).toBeInTheDocument();
+    expect(screen.queryByText("82")).not.toBeInTheDocument();
+  });
 });

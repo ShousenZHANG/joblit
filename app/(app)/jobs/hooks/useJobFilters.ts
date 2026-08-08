@@ -24,14 +24,13 @@ const SORT_ORDER = "newest" as const;
 function getFilterStateKey(
   state: Pick<
     JobsUrlState,
-    "q" | "statusFilter" | "locationFilter" | "jobLevelFilter"
+    "q" | "statusFilter" | "locationFilter"
   >,
 ) {
   return JSON.stringify([
     state.q,
     state.statusFilter,
     state.locationFilter,
-    state.jobLevelFilter,
   ]);
 }
 
@@ -61,9 +60,6 @@ export function useJobFilters() {
   const [locationFilter, setLocationFilterState] = useState(
     () => urlState.locationFilter,
   );
-  const [jobLevelFilter, setJobLevelFilterState] = useState(
-    () => urlState.jobLevelFilter,
-  );
   // Fit sort is a session-local view toggle (not persisted to the URL): jobs
   // ordered by AI match score, unscored last, served entirely by the API.
   const pageSize = 10;
@@ -85,10 +81,6 @@ export function useJobFilters() {
     () => wrapUserSetter(setLocationFilterState),
     [wrapUserSetter],
   );
-  const setJobLevelFilter = useMemo(
-    () => wrapUserSetter(setJobLevelFilterState),
-    [wrapUserSetter],
-  );
 
   useEffect(() => {
     latestParamsRef.current = searchParamsString;
@@ -100,7 +92,6 @@ export function useJobFilters() {
     setQState(urlState.q);
     setStatusFilterState(urlState.statusFilter);
     setLocationFilterState(urlState.locationFilter);
-    setJobLevelFilterState(urlState.jobLevelFilter);
   }, [searchParamsString, urlState]);
 
   const replaceUrlState = useCallback(
@@ -146,8 +137,8 @@ export function useJobFilters() {
   );
 
   const filters = useMemo(
-    () => ({ statusFilter, locationFilter, jobLevelFilter, market, pageSize }),
-    [statusFilter, locationFilter, jobLevelFilter, market, pageSize],
+    () => ({ statusFilter, locationFilter, market, pageSize }),
+    [statusFilter, locationFilter, market, pageSize],
   );
   const debouncedSelectFilters = useDebouncedValue(filters, 120);
   const debouncedQ = useDebouncedValue(q, 250);
@@ -168,9 +159,6 @@ export function useJobFilters() {
     if (debouncedFilters.locationFilter !== "ALL") {
       sp.set("location", debouncedFilters.locationFilter);
     }
-    if (debouncedFilters.jobLevelFilter !== "ALL") {
-      sp.set("jobLevel", debouncedFilters.jobLevelFilter);
-    }
     sp.set("market", debouncedFilters.market);
     sp.set("sort", SORT_ORDER);
     return sp.toString();
@@ -181,7 +169,6 @@ export function useJobFilters() {
       q: debouncedFilters.q.trim(),
       statusFilter: debouncedFilters.statusFilter,
       locationFilter: debouncedFilters.locationFilter,
-      jobLevelFilter: debouncedFilters.jobLevelFilter,
     };
     const nextFilterKey = getFilterStateKey(nextFilterState);
     const urlSyncTarget = urlSyncTargetRef.current;
@@ -199,8 +186,6 @@ export function useJobFilters() {
     setStatusFilter,
     locationFilter,
     setLocationFilter,
-    jobLevelFilter,
-    setJobLevelFilter,
     pageSize,
     market,
     queryString,

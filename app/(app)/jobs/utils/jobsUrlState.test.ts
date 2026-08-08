@@ -6,14 +6,13 @@ describe("jobsUrlState", () => {
     expect(
       parseJobsUrlState(
         new URLSearchParams(
-          "q=react&status=APPLIED&location=Sydney&level=Senior&job=j2&view=detail",
+          "q=react&status=APPLIED&location=Sydney&job=j2&view=detail",
         ),
       ),
     ).toEqual({
       q: "react",
       statusFilter: "APPLIED",
       locationFilter: "Sydney",
-      jobLevelFilter: "Senior",
       selectedId: "j2",
       view: "detail",
     });
@@ -26,7 +25,6 @@ describe("jobsUrlState", () => {
       q: "",
       statusFilter: "NEW",
       locationFilter: "ALL",
-      jobLevelFilter: "ALL",
       selectedId: null,
       view: "list",
     });
@@ -38,7 +36,6 @@ describe("jobsUrlState", () => {
         q: "",
         statusFilter: "NEW",
         locationFilter: "ALL",
-        jobLevelFilter: "ALL",
         selectedId: null,
         view: "list",
       }).toString(),
@@ -49,12 +46,12 @@ describe("jobsUrlState", () => {
     expect(
       writeJobsUrlState(
         new URLSearchParams(
-          "utm=x&q=old&status=APPLIED&location=Remote&level=Mid&job=j1&view=detail",
+          "utm=x&q=old&status=APPLIED&location=Remote&job=j1&view=detail",
         ),
         { q: "typescript", statusFilter: "REJECTED", selectedId: "j2" },
       ).toString(),
     ).toBe(
-      "utm=x&q=typescript&status=REJECTED&location=Remote&level=Mid&job=j2&view=detail",
+      "utm=x&q=typescript&status=REJECTED&location=Remote&job=j2&view=detail",
     );
   });
 });

@@ -214,14 +214,13 @@ describe("JobsClient", () => {
   it("restores filters from the URL and debounces canonical URL updates", async () => {
     const user = userEvent.setup();
     navigationMock.search =
-      "utm=campaign&q=react&status=APPLIED&location=Victoria%2C+Australia&level=Mid";
+      "utm=campaign&q=react&status=APPLIED&location=Victoria%2C+Australia";
 
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
     const search = screen.getAllByRole("textbox")[0];
     expect(search).toHaveValue("react");
     expect(screen.getByTestId("jobs-location-filter")).toHaveTextContent("Victoria");
-    expect(screen.getByTestId("jobs-level-filter")).toHaveTextContent("Mid");
     expect(
       screen.getByRole("radio", { name: messages.jobs.statusApplied }),
     ).toHaveAttribute("aria-checked", "true");
@@ -231,7 +230,7 @@ describe("JobsClient", () => {
 
     await waitFor(() => {
       expect(navigationMock.replace).toHaveBeenLastCalledWith(
-        "/jobs?utm=campaign&status=APPLIED&location=Victoria%2C+Australia&level=Mid",
+        "/jobs?utm=campaign&status=APPLIED&location=Victoria%2C+Australia",
         { scroll: false },
       );
     });
@@ -464,20 +463,17 @@ describe("JobsClient", () => {
     expect(navigationMock.replace).not.toHaveBeenCalled();
   });
 
-  it("keeps desktop location and level filters inside bounded grid tracks", () => {
+  it("keeps the desktop toolbar to one search-plus-location row", () => {
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
-    const filterRow = screen.getByTestId("jobs-desktop-filter-row");
-    const locationFilter = screen.getByTestId("jobs-location-filter");
-    const levelFilter = screen.getByTestId("jobs-level-filter");
-
-    expect(filterRow.className).toContain(
-      "grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)_4.75rem]",
-    );
-    for (const trigger of [locationFilter, levelFilter]) {
-      expect(trigger).toHaveClass("w-full", "min-w-0", "overflow-hidden");
-      expect(trigger.className).toContain("[&_[data-slot=select-value]]:truncate");
-    }
+    const locationTrigger = screen.getAllByTestId("jobs-location-filter")[0];
+    expect(locationTrigger).toBeInTheDocument();
+    // The level filter is gone — with a feed this small, slicing it by
+    // seniority was a control without a use case.
+    expect(screen.queryByTestId("jobs-level-filter")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /enter selection mode/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("hides setup and batch progress controls on jobs toolbar", async () => {
@@ -1970,7 +1966,7 @@ describe("JobsClient", () => {
     });
   });
 
-  describe("batch select and delete", () => {
+  describe("list interaction", () => {
     const jobA = { ...baseJob, id: "aaaa-1111", title: "Alpha Engineer", company: "AlphaCo" };
     const jobB = { ...baseJob, id: "bbbb-2222", title: "Beta Developer", company: "BetaCo" };
     const jobC = { ...baseJob, id: "cccc-3333", title: "Gamma Designer", company: "GammaCo" };
@@ -2077,61 +2073,6 @@ describe("JobsClient", () => {
       });
     });
 
-    it("keeps batch row selectors at least 44 by 44 pixels", async () => {
-      const user = userEvent.setup();
-      setupMultiJobFetch();
-      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
-      await waitForJobsRendered();
-
-      await user.click(screen.getByRole("button", { name: /enter selection mode/i }));
-      const checkbox = screen.getByRole("button", { name: /select alpha engineer/i });
-      const icon = checkbox.querySelector("svg");
-
-      expect(checkbox).toHaveClass("min-h-11", "min-w-11");
-      expect(icon).toHaveClass("h-[18px]", "w-[18px]");
-    });
-
-    it("does not navigate jobs from a batch row selector", async () => {
-      const user = userEvent.setup();
-      setupMultiJobFetch();
-      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
-      await waitForJobsRendered();
-
-      await user.click(screen.getByRole("button", { name: /enter selection mode/i }));
-      const checkbox = screen.getByRole("button", { name: /select alpha engineer/i });
-      const list = within(screen.getAllByTestId("jobs-results-scroll")[0]).getByRole("list");
-      const rows = [...list.querySelectorAll<HTMLButtonElement>("[data-job-id]")];
-
-      checkbox.focus();
-      const wasNotCancelled = fireEvent.keyDown(checkbox, { key: "ArrowDown" });
-
-      expect(wasNotCancelled).toBe(true);
-      expect(checkbox).toHaveFocus();
-      expect(rows[0]).toHaveAttribute("aria-current", "true");
-      expect(rows[1]).not.toHaveAttribute("aria-current");
-    });
-
-    it("continues keyboard navigation from the focused batch main row", async () => {
-      const user = userEvent.setup();
-      setupMultiJobFetch();
-      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
-      await waitForJobsRendered();
-
-      await user.click(screen.getByRole("button", { name: /enter selection mode/i }));
-      const list = within(screen.getAllByTestId("jobs-results-scroll")[0]).getByRole("list");
-      const rows = [...list.querySelectorAll<HTMLButtonElement>("[data-job-id]")];
-
-      await user.click(rows[1]);
-      expect(rows[1]).toHaveFocus();
-      expect(rows[0]).toHaveAttribute("aria-current", "true");
-
-      fireEvent.keyDown(rows[1], { key: "ArrowDown" });
-
-      await waitFor(() => expect(rows[2]).toHaveFocus());
-      expect(rows[2]).toHaveAttribute("aria-current", "true");
-      expect(rows[0]).not.toHaveAttribute("aria-current");
-    });
-
     it("clears with Escape, then reselects from the list root with the keyboard", async () => {
       setupMultiJobFetch();
       renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
@@ -2160,335 +2101,6 @@ describe("JobsClient", () => {
       expect(within(details).getByRole("heading", { name: "Alpha Engineer" })).toBeInTheDocument();
     });
 
-    it("lets a mutation selection replace an explicit Escape clear", async () => {
-      const user = userEvent.setup();
-      let resolveBatchDelete: (response: Response) => void = () => {};
-      const batchDeleteResponse = new Promise<Response>((resolve) => {
-        resolveBatchDelete = resolve;
-      });
-      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo, init?: RequestInit) => {
-        const url = typeof input === "string" ? input : input.url;
-        if (url.startsWith("/api/jobs/batch-delete") && init?.method === "POST") {
-          return batchDeleteResponse;
-        }
-        if (url.startsWith("/api/jobs?")) {
-          return new Response(
-            JSON.stringify({ items: [jobA, jobB, jobC], nextCursor: null, totalCount: 3, facets: { jobLevels: ["Mid"] } }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        if (url.startsWith("/api/jobs/")) {
-          return new Response(
-            JSON.stringify({ id: jobA.id, description: "desc" }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
-      }));
-      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
-      await waitForJobsRendered();
-
-      await user.click(screen.getByRole("button", { name: /enter selection mode/i }));
-      await user.click(screen.getByRole("button", { name: /select alpha engineer/i }));
-      await user.click(screen.getByRole("button", { name: /^delete$/i }));
-      await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: /delete 1 job/i }));
-
-      const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
-      const list = within(resultsPane).getByRole("list");
-      await waitFor(() => {
-        expect(within(list).queryByText("Alpha Engineer")).not.toBeInTheDocument();
-      });
-      const betaRow = list.querySelector<HTMLButtonElement>("[data-job-id='bbbb-2222']")!;
-
-      betaRow.focus();
-      fireEvent.keyDown(betaRow, { key: "Escape" });
-      await waitFor(() => expect(list).toHaveFocus());
-      expect(list.querySelector("[aria-current='true']")).toBeNull();
-
-      resolveBatchDelete(new Response(JSON.stringify({ error: "batch failed" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      }));
-
-      await waitFor(() => {
-        const restored = list.querySelector<HTMLButtonElement>("[data-job-id='aaaa-1111']");
-        expect(restored).toHaveAttribute("aria-current", "true");
-      });
-      expect(within(screen.getByTestId("jobs-details-panel")).getByRole("heading", { name: "Alpha Engineer" })).toBeInTheDocument();
-    });
-
-    it("creates a generation batch for the selected jobs", async () => {
-      // Selection mode used to end in exactly one verb: delete. The Runner
-      // pipeline starts here instead — pick jobs, one click, and the batch
-      // protocol takes over.
-      const user = userEvent.setup();
-      const { mockFetch } = setupMultiJobFetch();
-      const base = mockFetch.getMockImplementation()!;
-      mockFetch.mockImplementation(async (input: RequestInfo, init?: RequestInit) => {
-        const url = typeof input === "string" ? input : input.url;
-        if (url === "/api/application-batches" && init?.method === "POST") {
-          return new Response(
-            JSON.stringify({ id: "batch-1", taskCount: 2 }),
-            { status: 201, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        return base(input, init);
-      });
-
-      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
-      await waitForJobsRendered();
-
-      await user.click(screen.getByRole("button", { name: /enter selection mode/i }));
-      await user.click(screen.getByRole("button", { name: /select alpha engineer/i }));
-      await user.click(screen.getByRole("button", { name: /select beta developer/i }));
-      await user.click(
-        screen.getByRole("button", { name: messages.jobs.generateSelected }),
-      );
-
-      await waitFor(() => {
-        const createCall = mockFetch.mock.calls.find(
-          ([url, init]) =>
-            String(url) === "/api/application-batches" && init?.method === "POST",
-        );
-        expect(createCall).toBeTruthy();
-        const body = JSON.parse(String(createCall?.[1]?.body ?? "{}"));
-        expect(new Set(body.selectedJobIds)).toEqual(
-          new Set([jobA.id, jobB.id]),
-        );
-      });
-
-      // Confirmation names the batch size and selection mode closes.
-      await screen.findByText(
-        messages.jobs.batchQueuedTitle,
-      );
-      expect(
-        screen.queryByRole("button", { name: /select alpha engineer/i }),
-      ).not.toBeInTheDocument();
-    });
-
-    it("explains an already-running batch instead of failing silently", async () => {
-      const user = userEvent.setup();
-      const { mockFetch } = setupMultiJobFetch();
-      const base = mockFetch.getMockImplementation()!;
-      mockFetch.mockImplementation(async (input: RequestInfo, init?: RequestInit) => {
-        const url = typeof input === "string" ? input : input.url;
-        if (url === "/api/application-batches" && init?.method === "POST") {
-          return new Response(
-            JSON.stringify({
-              error: {
-                code: "ACTIVE_BATCH_EXISTS",
-                message: "An active batch already exists",
-              },
-            }),
-            { status: 409, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        return base(input, init);
-      });
-
-      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
-      await waitForJobsRendered();
-
-      await user.click(screen.getByRole("button", { name: /enter selection mode/i }));
-      await user.click(screen.getByRole("button", { name: /select alpha engineer/i }));
-      await user.click(
-        screen.getByRole("button", { name: messages.jobs.generateSelected }),
-      );
-
-      await screen.findByText(messages.jobs.batchAlreadyRunning);
-      // Selection survives so the user can retry once the batch finishes.
-      expect(
-        screen.getByRole("button", { name: /select alpha engineer/i }),
-      ).toBeInTheDocument();
-    });
-
-    it("enters batch mode and shows checkboxes when selection icon is clicked", async () => {
-      const user = userEvent.setup();
-      setupMultiJobFetch();
-      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
-      await waitForJobsRendered();
-
-      const enterBtn = screen.getByRole("button", { name: /enter selection mode/i });
-      await user.click(enterBtn);
-
-      expect(screen.getByRole("button", { name: /select alpha engineer/i })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /select beta developer/i })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /select gamma designer/i })).toBeInTheDocument();
-    });
-
-    it("selects individual items and shows correct count", async () => {
-      const user = userEvent.setup();
-      setupMultiJobFetch();
-      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
-      await waitForJobsRendered();
-
-      await user.click(screen.getByRole("button", { name: /enter selection mode/i }));
-      await user.click(screen.getByRole("button", { name: /select alpha engineer/i }));
-
-      expect(screen.getByText("1 selected")).toBeInTheDocument();
-
-      await user.click(screen.getByRole("button", { name: /select beta developer/i }));
-      expect(screen.getByText("2 selected")).toBeInTheDocument();
-    });
-
-    it("select all toggles all items", async () => {
-      const user = userEvent.setup();
-      setupMultiJobFetch();
-      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
-      await waitForJobsRendered();
-
-      await user.click(screen.getByRole("button", { name: /enter selection mode/i }));
-      await user.click(screen.getByRole("button", { name: /select all/i }));
-
-      expect(screen.getByText("3 selected")).toBeInTheDocument();
-
-      await user.click(screen.getByRole("button", { name: /deselect all/i }));
-      expect(screen.getByText("Select all")).toBeInTheDocument();
-    });
-
-    it("batch delete sends a single batch-delete request and removes items from list", async () => {
-      const user = userEvent.setup();
-      const { mockFetch } = setupMultiJobFetch();
-      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
-      await waitForJobsRendered();
-
-      await user.click(screen.getByRole("button", { name: /enter selection mode/i }));
-      await user.click(screen.getByRole("button", { name: /select alpha engineer/i }));
-      await user.click(screen.getByRole("button", { name: /select beta developer/i }));
-
-      await user.click(screen.getByRole("button", { name: /^delete$/i }));
-
-      const dialog = await screen.findByRole("alertdialog");
-      expect(within(dialog).getByText(/delete 2 jobs\?/i)).toBeInTheDocument();
-      await user.click(within(dialog).getByRole("button", { name: /delete 2 jobs/i }));
-
-      const batchCalls = mockFetch.mock.calls.filter(
-        ([url, init]) =>
-          typeof url === "string" && url.includes("/api/jobs/batch-delete") && init?.method === "POST",
-      );
-      expect(batchCalls).toHaveLength(1);
-      const body = JSON.parse(batchCalls[0][1]?.body as string);
-      expect(body.ids).toHaveLength(2);
-      expect(body.ids).toContain(jobA.id);
-      expect(body.ids).toContain(jobB.id);
-
-      const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
-      await waitFor(() => {
-        expect(within(resultsPane).queryByText("Alpha Engineer")).not.toBeInTheDocument();
-        expect(within(resultsPane).queryByText("Beta Developer")).not.toBeInTheDocument();
-        expect(within(resultsPane).getByText("Gamma Designer")).toBeInTheDocument();
-      });
-    }, 10_000);
-
-    it("exits batch mode after deletion and clears selection", async () => {
-      const user = userEvent.setup();
-      setupMultiJobFetch();
-      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
-      await waitForJobsRendered();
-
-      await user.click(screen.getByRole("button", { name: /enter selection mode/i }));
-      await user.click(screen.getByRole("button", { name: /select alpha engineer/i }));
-      await user.click(screen.getByRole("button", { name: /^delete$/i }));
-
-      const dialog = await screen.findByRole("alertdialog");
-      await user.click(within(dialog).getByRole("button", { name: /delete 1 job/i }));
-
-      await waitFor(() => {
-        expect(screen.queryByRole("button", { name: /select beta developer/i })).not.toBeInTheDocument();
-      });
-
-      expect(screen.getByRole("button", { name: /enter selection mode/i })).toBeInTheDocument();
-    });
-
-    it("keeps the failed batch selection ready for retry", async () => {
-      const user = userEvent.setup();
-      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo, init?: RequestInit) => {
-        const url = typeof input === "string" ? input : input.url;
-        if (url.startsWith("/api/jobs/batch-delete") && init?.method === "POST") {
-          return new Response(JSON.stringify({ error: "Temporary delete failure" }), {
-            status: 503,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-        if (url.startsWith("/api/jobs?")) {
-          return new Response(
-            JSON.stringify({
-              items: [jobA, jobB, jobC],
-              nextCursor: null,
-              totalCount: 3,
-              facets: { jobLevels: ["Mid"] },
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        if (url.startsWith("/api/jobs/")) {
-          return new Response(JSON.stringify({ id: jobA.id, description: "desc" }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-        return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
-      }));
-
-      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
-      await waitForJobsRendered();
-      await user.click(screen.getByRole("button", { name: /enter selection mode/i }));
-      await user.click(screen.getByRole("button", { name: /select alpha engineer/i }));
-      await user.click(screen.getByRole("button", { name: /select beta developer/i }));
-      await user.click(screen.getByRole("button", { name: /^delete$/i }));
-      await user.click(
-        within(await screen.findByRole("alertdialog")).getByRole("button", {
-          name: /delete 2 jobs/i,
-        }),
-      );
-
-      expect(await screen.findByText("2 selected")).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /select alpha engineer/i })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /select beta developer/i })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /^delete$/i })).toBeEnabled();
-    });
-
-    it("exits batch mode when X button is clicked without deleting", async () => {
-      const user = userEvent.setup();
-      setupMultiJobFetch();
-      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
-      await waitForJobsRendered();
-
-      await user.click(screen.getByRole("button", { name: /enter selection mode/i }));
-      await user.click(screen.getByRole("button", { name: /select alpha engineer/i }));
-      expect(screen.getByText("1 selected")).toBeInTheDocument();
-
-      await user.click(screen.getByRole("button", { name: /exit selection mode/i }));
-
-      expect(screen.queryByText("1 selected")).not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /enter selection mode/i })).toBeInTheDocument();
-      expect((await screen.findAllByText("Alpha Engineer")).length).toBeGreaterThan(0);
-    });
-
-    it("totalCount in header updates correctly after batch delete", async () => {
-      const user = userEvent.setup();
-      setupMultiJobFetch();
-      renderWithClient(<JobsClient initialItems={[jobA, jobB, jobC]} initialCursor={null} />);
-      await waitForJobsRendered();
-
-      await waitFor(() => {
-        expect(screen.getByText("3 loaded")).toBeInTheDocument();
-      });
-
-      await user.click(screen.getByRole("button", { name: /enter selection mode/i }));
-      await user.click(screen.getByRole("button", { name: /select all/i }));
-      await user.click(screen.getByRole("button", { name: /^delete$/i }));
-
-      const dialog = await screen.findByRole("alertdialog");
-      await user.click(within(dialog).getByRole("button", { name: /delete 3 jobs/i }));
-
-      const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
-      await waitFor(() => {
-        expect(within(resultsPane).queryByText("Alpha Engineer")).not.toBeInTheDocument();
-        expect(within(resultsPane).queryByText("Beta Developer")).not.toBeInTheDocument();
-        expect(within(resultsPane).queryByText("Gamma Designer")).not.toBeInTheDocument();
-      });
-    });
   });
 
 });
