@@ -43,7 +43,7 @@ function renderJobListItem({
       <JobListItem
         job={fitScoredJob(fitEligibility)}
         isActive
-        onSelect={vi.fn()}
+        onSelectJob={vi.fn()}
         timeZone="Australia/Sydney"
       />
     </NextIntlClientProvider>,

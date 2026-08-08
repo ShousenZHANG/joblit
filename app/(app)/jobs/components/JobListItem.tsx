@@ -7,6 +7,18 @@ import { useFormatter, useNow, useTranslations } from "next-intl";
 import { type JobItem } from "../types";
 import { jobStatusPresentation } from "../utils/jobStatusPresentation";
 
+/**
+ * Source feeds ship literal placeholder strings ("not applicable",
+ * "unknown") in jobType/jobLevel. Rendering them verbatim turned the meta
+ * row into noise; a placeholder is the absence of a value, so treat it as
+ * one.
+ */
+function meaningful(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  return /^(not applicable|unknown|n\/a|none)$/i.test(trimmed) ? null : trimmed;
+}
+
 function sourceLabel(source: string): string {
   const labels: Record<string, string> = {
     jobicy: "Jobicy",
@@ -21,14 +33,16 @@ function sourceLabel(source: string): string {
 function JobListItemInner({
   job,
   isActive,
-  onSelect,
+  onSelectJob,
   timeZone,
   setSize,
   positionInSet,
 }: {
   job: JobItem;
   isActive: boolean;
-  onSelect: () => void;
+  /** Stable reference — an inline `() => select(id)` closure would defeat
+   *  React.memo and re-render every row on each parent keystroke. */
+  onSelectJob: (id: string) => void;
   timeZone: string | null;
   setSize?: number;
   positionInSet?: number;
@@ -70,7 +84,7 @@ function JobListItemInner({
       >
         <button
           type="button"
-          onClick={onSelect}
+          onClick={() => onSelectJob(job.id)}
           data-job-id={job.id}
           data-perf="cv-auto"
           tabIndex={isActive ? 0 : -1}
@@ -101,13 +115,6 @@ function JobListItemInner({
                 >
                   {t("livenessExpired")}
                 </Badge>
-              ) : job.livenessStatus === "UNCERTAIN" ? (
-                <Badge
-                  className="border border-border bg-muted/70 text-muted-foreground"
-                  title={job.livenessReason ?? undefined}
-                >
-                  {t("livenessUncertain")}
-                </Badge>
               ) : null}
               {job.possibleDuplicate ? (
                 <Badge className="border border-amber-300/70 bg-amber-50 text-amber-800 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-300">
@@ -127,8 +134,8 @@ function JobListItemInner({
             {job.company ?? "-"} - {job.location ?? "-"}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-            <span>{job.jobType ?? t("unknownJobType")}</span>
-            {job.jobLevel ? <span>· {job.jobLevel}</span> : null}
+            {meaningful(job.jobType) ? <span>{meaningful(job.jobType)}</span> : null}
+            {meaningful(job.jobLevel) ? <span>· {meaningful(job.jobLevel)}</span> : null}
             {job.workArrangement ? (
               <span className="rounded-full bg-brand-emerald-50 px-1.5 py-0.5 font-medium text-brand-emerald-text ring-1 ring-brand-emerald-100">
                 {job.workArrangement}

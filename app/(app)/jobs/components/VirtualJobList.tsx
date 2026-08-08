@@ -109,7 +109,7 @@ export const VirtualJobList = forwardRef<VirtualJobListHandle, VirtualJobListPro
               <JobListItem
                 job={job}
                 isActive={job.id === effectiveSelectedId}
-                onSelect={() => onSelect(job.id)}
+                onSelectJob={onSelect}
                 timeZone={timeZone}
                 setSize={items.length}
                 positionInSet={virtualRow.index + 1}

@@ -337,11 +337,21 @@ export function useJobMutations({
     };
   }, []);
 
-  function updateStatus(id: string, status: JobStatus) {
-    const previous = items.find((it) => it.id === id)?.status;
-    if (!previous || previous === status) return;
-    updateStatusMutation.mutate({ id, status });
-  }
+  // Stable reference: memoized rows/panels receive this — a per-render
+  // function identity would re-render them all on every parent update.
+  const itemsRef = useRef(items);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+  const mutateStatus = updateStatusMutation.mutate;
+  const updateStatus = useCallback(
+    (id: string, status: JobStatus) => {
+      const previous = itemsRef.current.find((it) => it.id === id)?.status;
+      if (!previous || previous === status) return;
+      mutateStatus({ id, status });
+    },
+    [mutateStatus],
+  );
 
   return {
     updateStatus,

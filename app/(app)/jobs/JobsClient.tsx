@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { ApiError, fetchJson } from "@/lib/api/fetchJson";
 import { jobDetailResponseSchema } from "@/lib/shared/schemas/jobsList";
@@ -52,6 +52,42 @@ const desktopFilterSelectTriggerClass =
 
 const mobileFilterSelectTriggerClass =
   "h-11 w-full min-w-0 justify-between overflow-hidden rounded-lg px-2.5 text-xs [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate [&_[data-slot=select-value]]:text-left sm:h-9";
+
+/**
+ * One list row, memoized as a unit INCLUDING its motion wrapper.
+ *
+ * Two things made typing in the search box drop frames: every keystroke
+ * re-rendered JobsClient, and (a) each row's inline `onSelect={() => ...}`
+ * closure defeated JobListItem's React.memo, (b) each row's motion.div
+ * re-rendered and re-measured layout for 60+ rows. Memoizing at this level
+ * with stable props skips both. The per-row entrance fade is gone with it —
+ * a full list swap animating every row at once read as stutter, not polish.
+ * `layout="position"` stays: rows sliding up when one above is deleted is
+ * the one motion that carries information.
+ */
+const JobRow = React.memo(function JobRow({
+  job,
+  isActive,
+  onSelectJob,
+  timeZone,
+  reducedMotion,
+}: {
+  job: JobItem;
+  isActive: boolean;
+  onSelectJob: (id: string | null) => void;
+  timeZone: string | null;
+  reducedMotion: boolean | null;
+}) {
+  const row = (
+    <JobListItem
+      job={job}
+      isActive={isActive}
+      onSelectJob={onSelectJob}
+      timeZone={timeZone}
+    />
+  );
+  return reducedMotion ? <div>{row}</div> : <motion.div layout="position">{row}</motion.div>;
+});
 
 function getWorkspaceStateKey(
   state: Pick<JobsUrlState, "selectedId" | "view">,
@@ -362,6 +398,22 @@ export function JobsClient({
       setBatchGeneratePending(false);
     }
   }
+
+  // Stable handlers for the memoized detail panel — inline lambdas in the
+  // JSX would give it fresh props on every keystroke and defeat the memo.
+  const handleGenerateSingle = useCallback(
+    (job: JobItem) => {
+      void enqueueGenerationBatch([job.id]);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+  const handleManualGenerate = useCallback(
+    (job: JobItem, target: "resume" | "cover") =>
+      externalGenerate.openExternalGenerateDialog(job, target),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [externalGenerate.openExternalGenerateDialog],
+  );
 
   const effectiveSelectedId = useMemo(() => {
     if (selectionExplicitlyCleared) return null;
@@ -824,34 +876,16 @@ export function JobsClient({
                   tabIndex={effectiveSelectedId === null ? 0 : -1}
                   className="space-y-3 p-3"
                 >
-                  {visibleItems.map((it) => {
-                    const row = (
-                      <JobListItem
-                        job={it}
-                        isActive={it.id === effectiveSelectedId}
-                        onSelect={() => handleSelectJob(it.id)}
-                        timeZone={timeZone}
-                      />
-                    );
-                    // `layout="position"` slides the surviving rows up smoothly
-                    // when one above is deleted (and reorders), instead of a
-                    // hard snap — the "silky update" the bare list lacked. No
-                    // AnimatePresence/exit so deleted rows still unmount
-                    // immediately (keeps delete/undo behavior + tests intact).
-                    return reducedMotion ? (
-                      <div key={it.id}>{row}</div>
-                    ) : (
-                      <motion.div
-                        key={it.id}
-                        layout="position"
-                        initial={{ opacity: 0, y: -4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                      >
-                        {row}
-                      </motion.div>
-                    );
-                  })}
+                  {visibleItems.map((it) => (
+                    <JobRow
+                      key={it.id}
+                      job={it}
+                      isActive={it.id === effectiveSelectedId}
+                      onSelectJob={handleSelectJob}
+                      timeZone={timeZone}
+                      reducedMotion={reducedMotion}
+                    />
+                  ))}
                 </div>
               )
             ) : showEmpty ? (
@@ -989,11 +1023,9 @@ export function JobsClient({
           mobileTab={mobileTab}
           onUpdateStatus={updateStatus}
           onDelete={requestDelete}
-          onGenerateResume={(job) => void enqueueGenerationBatch([job.id])}
-          onGenerateCover={(job) => void enqueueGenerationBatch([job.id])}
-          onManualGenerate={(job, target) =>
-            externalGenerate.openExternalGenerateDialog(job, target)
-          }
+          onGenerateResume={handleGenerateSingle}
+          onGenerateCover={handleGenerateSingle}
+          onManualGenerate={handleManualGenerate}
           onRetryDetail={() => void refetchDetail()}
         />
         </section>

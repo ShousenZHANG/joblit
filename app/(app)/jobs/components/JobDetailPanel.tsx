@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ComponentPropsWithoutRef } from "react";
+import React, { useEffect, useRef, type ComponentPropsWithoutRef } from "react";
 import dynamic from "next/dynamic";
 import { useFormatter, useTranslations } from "next-intl";
 import {
@@ -100,7 +100,12 @@ function MetaChip({ icon: Icon, value }: { icon: React.ElementType; value?: stri
   );
 }
 
-export function JobDetailPanel({
+/**
+ * Memoized: this is the heaviest subtree on the page (markdown render,
+ * requirements panel). Every prop is either data derived from the selected
+ * job or a useCallback-stable handler, so parent keystrokes skip it.
+ */
+export const JobDetailPanel = React.memo(function JobDetailPanel({
   panelProps,
   selectedJob,
   selectedDescription,
@@ -473,4 +478,4 @@ export function JobDetailPanel({
       </ScrollArea>
     </div>
   );
-}
+});

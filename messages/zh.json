@@ -305,7 +305,6 @@
     "endOfResults": "已到结果末尾",
     "listItemAria": "{company} 的 {title}",
     "unknownCompany": "未知公司",
-    "unknownJobType": "未知类型",
     "unknownTime": "未知",
     "retry": "重试",
     "batchQueuedTitle": "生成批次已排队",

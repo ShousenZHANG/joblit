@@ -305,7 +305,6 @@
     "endOfResults": "End of results",
     "listItemAria": "{title} at {company}",
     "unknownCompany": "Unknown",
-    "unknownJobType": "Unknown",
     "unknownTime": "unknown",
     "retry": "Retry",
     "batchQueuedTitle": "Generation batch queued",
