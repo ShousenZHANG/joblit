@@ -18,10 +18,14 @@ describe("JobSearchBar", () => {
       </NextIntlClientProvider>,
     );
 
+    // The label is screen-reader-only: the visible heading made the search
+    // column taller than the filter beside it. The accessible name must
+    // survive the visual removal.
     expect(
       screen.getByText("Search saved jobs", { selector: "label" }),
-    ).not.toHaveClass("sr-only");
+    ).toHaveClass("sr-only");
     expect(screen.getByRole("textbox", { name: "Search saved jobs" })).toHaveClass(
+      "h-11",
       "[@media(any-pointer:coarse)]:min-h-11",
     );
   });

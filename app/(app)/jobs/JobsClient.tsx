@@ -563,7 +563,7 @@ export function JobsClient({
               type="button"
               onClick={() => setMobileFiltersOpen((v) => !v)}
               className={cn(
-                "flex h-11 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors sm:h-9",
+                "flex h-11 shrink-0 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-medium transition-colors",
                 mobileFiltersOpen
                   ? "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-text"
                   : "border-border bg-background text-foreground/70",
