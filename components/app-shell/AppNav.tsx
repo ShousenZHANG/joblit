@@ -20,6 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useGuide } from "@/app/GuideContext";
+import { TrendingPopover } from "./TrendingPopover";
 
 // AppNav — landing-aligned sticky pill for authenticated app pages.
 //
@@ -53,19 +54,15 @@ export function AppNav() {
   // shell scrolls an inner container — window.scrollY was permanently 0 and
   // the shrink never fired. Removed as dead code (static resting style kept).
 
-  // CN market support is temporarily limited to Resume + Discover. Jobs/Fetch
-  // (and the Agent workspace) are hidden there until CN-market search ships.
+  // CN market support is temporarily limited to Resume. Jobs/Fetch (and the
+  // Agent workspace) are hidden there until CN-market search ships.
   const isCN = useMarket() === "CN";
   const links: NavLink[] = isCN
-    ? [
-        { href: "/resume", label: t("resume") },
-        { href: "/discover", label: t("discover") },
-      ]
+    ? [{ href: "/resume", label: t("resume") }]
     : [
         { href: "/jobs", label: t("jobs") },
         { href: "/fetch", label: t("fetch") },
         { href: "/resume", label: t("resume") },
-        { href: "/discover", label: t("discover") },
         { href: "/agent", label: t("agent") },
       ];
   const email = data?.user?.email ?? "";
@@ -188,6 +185,10 @@ export function AppNav() {
             ) : null}
           </button>
           ) : null}
+
+          {/* GitHub trending — an ambient panel, not a route. Present in both
+              markets; it costs one glyph and never takes over the workspace. */}
+          <TrendingPopover />
 
           <div className="hidden lg:inline-flex">
             <LocaleSwitcher />

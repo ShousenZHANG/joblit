@@ -24,7 +24,6 @@ const serverEnvSchema = z.object({
   // Optional integrations — present in some deploys only. Declared optional so
   // their absence is never a boot failure.
   BLOB_READ_WRITE_TOKEN: z.string().optional(),
-  YOUTUBE_API_KEY: z.string().optional(),
   CRON_SECRET: z.string().optional(),
   GITHUB_OWNER: z.string().optional(),
   GITHUB_REPO: z.string().optional(),

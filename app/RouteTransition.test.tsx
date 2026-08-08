@@ -259,14 +259,14 @@ describe("RouteTransition", () => {
       </div>,
     );
 
-    window.history.replaceState({}, "", "/discover");
+    window.history.replaceState({}, "", "/agent");
     act(() => window.dispatchEvent(new PopStateEvent("popstate")));
-    mockPathname = "/discover";
+    mockPathname = "/agent";
     view.rerender(
       <div className="app-shell">
         <main id="main-content" tabIndex={-1}>
           <RouteTransition>
-            <div>Discover</div>
+            <div>Agent</div>
           </RouteTransition>
         </main>
       </div>,

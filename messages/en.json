@@ -38,7 +38,6 @@
     "fetch": "Fetch",
     "resume": "Resume",
     "guide": "Guide",
-    "discover": "Discover",
     "admin": "Admin",
     "language": "Language",
     "theme": "Theme",
@@ -53,6 +52,19 @@
     "paletteThemeDark": "Dark theme",
     "paletteThemeSystem": "System theme",
     "agent": "Agent"
+  },
+  "trending": {
+    "open": "GitHub trending",
+    "title": "Trending on GitHub",
+    "subtitle": "What the ecosystem is starring",
+    "periodLabel": "Time period",
+    "periodWeek": "Week",
+    "periodMonth": "Month",
+    "starsGained": "Stars gained this period",
+    "viewOnGitHub": "View the full board on GitHub",
+    "empty": "No trending repos right now.",
+    "error": "Couldn't reach GitHub.",
+    "retry": "Try again"
   },
   "agent": {
     "title": "Agent",
@@ -821,34 +833,6 @@
       "copyright": "© 2026 Joblit Labs. All rights reserved.",
       "designed": "Designed in Sydney · Built for candidates everywhere"
     }
-  },
-  "discover": {
-    "title": "Discover",
-    "subtitle": "What the industry is building and talking about this week",
-    "tabTrending": "Trending",
-    "tabVideos": "Videos",
-    "topThisWeek": "Top 20 This Week",
-    "topThisMonth": "Top 20 This Month",
-    "periodWeek": "This week",
-    "periodMonth": "This month",
-    "hideNoise": "Hide noise",
-    "hideNoiseHint": "Filter out awesome-lists, tutorials, and non-English listings",
-    "updated": "Updated",
-    "view": "View",
-    "starsRecently": "Stars gained this period",
-    "retry": "Retry",
-    "noRepos": "No trending repos found.",
-    "errorRepos": "Failed to load trending repos",
-    "videosTitle": "AI Videos",
-    "sortTrending": "Trending",
-    "sortLatest": "Latest",
-    "sortMostViewed": "Most viewed",
-    "noVideosTitle": "No videos in this category yet",
-    "noVideosHint": "Try a different category or filter to see more.",
-    "showAllCategories": "Show all categories",
-    "noFavoritesTitle": "No favorites match this category",
-    "noFavoritesHint": "Switch category or hit the star on a video to add it here.",
-    "showAllVideos": "Show all videos"
   },
   "tailor": {
     "backToJobs": "Back to jobs",

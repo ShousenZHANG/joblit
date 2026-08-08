@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { errorJson } from "@/lib/server/api/errorResponse";
 import { withSessionRoute } from "@/lib/server/api/routeHandler";
-import type { TrendingResponse } from "@/app/(app)/discover/types";
+import type { TrendingResponse } from "@/lib/shared/trending";
 import {
   fetchTrendingRepos,
   filterTrendingNoise,
@@ -10,10 +10,10 @@ import {
 import { reportError } from "@/lib/server/observability/errorReporter";
 import {
   buildRepoCacheKey,
+  isFresh,
   readDiscoverCache,
   writeDiscoverCache,
 } from "@/lib/server/discover/discoverCache";
-import { isFresh } from "@/lib/server/discover/videoCacheHelpers";
 
 // Slightly longer than the daily cron cadence. Serverless cold starts retain
 // the same DB-backed last-known-good payload instead of resetting an in-memory

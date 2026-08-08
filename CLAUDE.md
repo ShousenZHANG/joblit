@@ -46,7 +46,7 @@ reintroduced.
 
 - `app/(marketing)/` — Public landing pages, no auth
 - `app/(auth)/login/` — Authentication pages
-- `app/(app)/` — Protected workspace: `jobs/`, `fetch/`, `resume/`, `discover/`, `agent/`, plus `career/` (a redirect to `/jobs`, ADR-0006)
+- `app/(app)/` — Protected workspace: `jobs/`, `fetch/`, `resume/`, `agent/`, plus `career/` (a redirect to `/jobs`, ADR-0006)
 - `app/api/` — All API routes
 
 ### Backend (`lib/server/`)
@@ -58,7 +58,7 @@ reintroduced.
 - `jobs/` — Job CRUD, filtering, deletion cascade (jobListService, jobDeleteService, jobSearchService)
 - `fetchRuns/` — Unified inline executor, stale-run policy, lifecycle/dispatch locks, and the shared `fetch-run-commit/v1` transaction boundary
 - `files/` — Vercel Blob operations and PDF filename utilities
-- `discover/` — YouTube video pipeline: fetch, cache, refresh
+- `discover/` — GitHub trending scrape plus its last-known-good cache, read by the nav trending popover. The YouTube video pipeline and the Discover workspace were deleted; do not reintroduce them
 - `cnFetch/` — China Fetch Pipeline and the Nowcoder adapter
 - `api/` — Shared route utilities: `errorResponse`, `rateLimit`, `routeHandler`
 - `auth/` — Session and agent-credential middleware: `requireSession`,
@@ -83,7 +83,7 @@ reintroduced.
 - Artifact lifecycle (ADR-0010): `ApplicationArtifact`, `ApplicationArtifactInventoryCheckpoint`
 - Auth: `User`, `Account`, `Session`, `AgentCredential`
 - Fetch execution and sources: `FetchRunCommitReceipt`, `SourceHealth`, `AtsBoardSource`
-- Supporting: `DeletedJobUrl` (dedup tombstone), `DailyCheckin`, `OnboardingState`, `DiscoverVideoCache`
+- Supporting: `DeletedJobUrl` (dedup tombstone), `DailyCheckin`, `OnboardingState`, `DiscoverCache`
 
 The writer-less tables ADR-0006 deferred (`InterviewPlan`, `StarStory`, `Offer`,
 `FollowUpReminder`) and the extension's own (`FieldMappingRule`,
@@ -114,7 +114,7 @@ Required for the running app: `DATABASE_URL`, `AUTH_SECRET`, `GOOGLE_CLIENT_ID`,
 
 Migration connection: production must resolve an unpooled endpoint from `DIRECT_URL`, `DATABASE_URL_UNPOOLED`, `POSTGRES_URL_NON_POOLING`, or the verified Neon `-pooler` host mapping. `DATABASE_URL` remains pooled for the serverless runtime.
 
-Optional integrations: `BLOB_READ_WRITE_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_TOKEN`, `GITHUB_WORKFLOW_FILE`, `GITHUB_REF`, `JOBLIT_ATS_BOARDS_JSON`, `JOBLIT_WEB_URL`, `YOUTUBE_API_KEY`, `CRON_SECRET`, `ARTIFACT_RECONCILE_SECRET`, `ARTIFACT_RECONCILE_ENABLED`, `RSSHUB_URL`, `RSSHUB_JOB_ROUTES`, `GITHUB_CN_JOB_REPOS`
+Optional integrations: `BLOB_READ_WRITE_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_TOKEN`, `GITHUB_WORKFLOW_FILE`, `GITHUB_REF`, `JOBLIT_ATS_BOARDS_JSON`, `JOBLIT_WEB_URL`, `CRON_SECRET`, `ARTIFACT_RECONCILE_SECRET`, `ARTIFACT_RECONCILE_ENABLED`, `RSSHUB_URL`, `RSSHUB_JOB_ROUTES`, `GITHUB_CN_JOB_REPOS`
 
 Application modules consume optional integrations through
 `lib/server/runtimeCapabilities`, not by assembling environment-variable

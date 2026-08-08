@@ -38,7 +38,6 @@
     "fetch": "抓取",
     "resume": "简历",
     "guide": "引导",
-    "discover": "发现",
     "admin": "管理",
     "language": "语言",
     "theme": "主题",
@@ -53,6 +52,19 @@
     "paletteThemeDark": "深色主题",
     "paletteThemeSystem": "跟随系统",
     "agent": "智能体"
+  },
+  "trending": {
+    "open": "GitHub 趋势",
+    "title": "GitHub 趋势榜",
+    "subtitle": "开发者最近在给什么项目点星",
+    "periodLabel": "时间范围",
+    "periodWeek": "本周",
+    "periodMonth": "本月",
+    "starsGained": "本期新增星标",
+    "viewOnGitHub": "在 GitHub 查看完整榜单",
+    "empty": "暂时没有趋势项目。",
+    "error": "无法连接 GitHub。",
+    "retry": "重试"
   },
   "agent": {
     "title": "智能体",
@@ -821,34 +833,6 @@
       "copyright": "© 2026 Joblit Labs. 保留所有权利。",
       "designed": "设计于悉尼 · 为全球求职者打造"
     }
-  },
-  "discover": {
-    "title": "发现",
-    "subtitle": "了解本周业界在构建和讨论什么",
-    "tabTrending": "趋势",
-    "tabVideos": "视频",
-    "topThisWeek": "本周 Top 20",
-    "topThisMonth": "本月 Top 20",
-    "periodWeek": "本周",
-    "periodMonth": "本月",
-    "hideNoise": "过滤噪音",
-    "hideNoiseHint": "过滤掉 awesome 列表、教程及非英文项目",
-    "updated": "更新于",
-    "view": "查看",
-    "starsRecently": "本周期新增 star",
-    "retry": "重试",
-    "noRepos": "暂无趋势仓库。",
-    "errorRepos": "加载趋势仓库失败",
-    "videosTitle": "AI 视频",
-    "sortTrending": "热门",
-    "sortLatest": "最新",
-    "sortMostViewed": "最多观看",
-    "noVideosTitle": "该分类暂无视频",
-    "noVideosHint": "换个分类或筛选条件试试。",
-    "showAllCategories": "显示全部分类",
-    "noFavoritesTitle": "该分类下没有收藏的视频",
-    "noFavoritesHint": "切换分类，或点击视频上的星标即可添加到这里。",
-    "showAllVideos": "显示全部视频"
   },
   "tailor": {
     "backToJobs": "返回职位",

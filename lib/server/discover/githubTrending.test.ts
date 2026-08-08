@@ -13,7 +13,7 @@ import {
   isMostlyCjk,
   isLowSignalRepo,
 } from "./githubTrending";
-import type { TrendingRepo } from "@/app/(app)/discover/types";
+import type { TrendingRepo } from "@/lib/shared/trending";
 
 function fakeRepo(over: Partial<TrendingRepo> = {}): TrendingRepo {
   return {

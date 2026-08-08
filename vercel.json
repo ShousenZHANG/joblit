@@ -3,10 +3,6 @@
   "buildCommand": "node tools/deploy/vercel-build.mjs",
   "crons": [
     {
-      "path": "/api/discover/refresh-daily",
-      "schedule": "0 6 * * *"
-    },
-    {
       "path": "/api/artifacts/reconcile",
       "schedule": "0 7 * * *"
     }

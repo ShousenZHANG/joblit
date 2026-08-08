@@ -214,20 +214,23 @@ describe("AppNav", () => {
     ).toHaveClass("h-11", "w-11");
   });
 
-  it("renders all 5 primary AU app links in the desktop nav", () => {
+  it("renders all 4 primary AU app links in the desktop nav", () => {
     render(<AppNav />);
     const scope = desktopScope();
     expect(scope.getByRole("link", { name: /jobs/i })).toBeInTheDocument();
     expect(scope.getByRole("link", { name: /fetch/i })).toBeInTheDocument();
     expect(scope.getByRole("link", { name: /resume/i })).toBeInTheDocument();
-    expect(scope.getByRole("link", { name: /discover/i })).toBeInTheDocument();
     expect(
       scope.getByRole("link", { name: /agent/i }),
     ).toBeInTheDocument();
     expect(scope.queryByRole("link", { name: /admin/i })).not.toBeInTheDocument();
+    // Discover is gone: GitHub trending lives in a popover, not a route.
+    expect(
+      scope.queryByRole("link", { name: /discover/i }),
+    ).not.toBeInTheDocument();
   });
 
-  it("keeps the CN navigation focused on Resume and Discover", () => {
+  it("keeps the CN navigation focused on Resume", () => {
     marketState.value = "CN";
     render(<AppNav />);
 
@@ -235,10 +238,19 @@ describe("AppNav", () => {
     expect(scope.queryByRole("link", { name: /jobs/i })).not.toBeInTheDocument();
     expect(scope.queryByRole("link", { name: /fetch/i })).not.toBeInTheDocument();
     expect(scope.getByRole("link", { name: /resume/i })).toBeInTheDocument();
-    expect(scope.getByRole("link", { name: /discover/i })).toBeInTheDocument();
     expect(
       scope.queryByRole("link", { name: /agent/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it("offers the trending popover in both markets", () => {
+    render(<AppNav />);
+    expect(screen.getByTestId("trending-trigger")).toBeInTheDocument();
+    cleanup();
+
+    marketState.value = "CN";
+    render(<AppNav />);
+    expect(screen.getByTestId("trending-trigger")).toBeInTheDocument();
   });
 
   it("marks the link matching the current path as active", () => {

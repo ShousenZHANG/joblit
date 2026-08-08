@@ -123,7 +123,6 @@ runner — `tools/hermes/**`, `tools/runner/**`, and `tools/deploy/`.
 | Gemini | `GEMINI_API_KEY`, `GEMINI_MODEL` | optional — absent, Tailoring falls back deterministically |
 | Vercel Blob | `BLOB_READ_WRITE_TOKEN` | required for FINAL artifact persistence outside tests and for reconciliation; DRAFT does not upload |
 | GitHub Actions | `GITHUB_OWNER/REPO/TOKEN/WORKFLOW_FILE` | optional — AU fetch dispatch |
-| YouTube | `YOUTUBE_API_KEY` | optional — Discover videos |
 | Cron | `CRON_SECRET` | Vercel's bearer credential for scheduled daily refresh and artifact reconciliation |
 | Artifact reconcile | `ARTIFACT_RECONCILE_SECRET` | optional additional bearer for manual/operator calls; it does not replace `CRON_SECRET` for Vercel Cron |
 | Artifact reconcile kill switch | `ARTIFACT_RECONCILE_ENABLED` | default off; only exact `true` / `1` enables inventory, claim, and delete |

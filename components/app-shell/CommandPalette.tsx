@@ -6,7 +6,6 @@ import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
 import {
   Briefcase,
-  Compass,
   FileText,
   Laptop,
   Moon,
@@ -67,15 +66,11 @@ export function CommandPalette() {
   const pages = useMemo(
     () =>
       isCN
-        ? ([
-            { key: "resume", href: "/resume", icon: FileText },
-            { key: "discover", href: "/discover", icon: Compass },
-          ] as const)
+        ? ([{ key: "resume", href: "/resume", icon: FileText }] as const)
         : ([
             { key: "jobs", href: "/jobs", icon: Briefcase },
             { key: "fetch", href: "/fetch", icon: Telescope },
             { key: "resume", href: "/resume", icon: FileText },
-            { key: "discover", href: "/discover", icon: Compass },
             { key: "agent", href: "/agent", icon: Bot },
           ] as const),
     [isCN],

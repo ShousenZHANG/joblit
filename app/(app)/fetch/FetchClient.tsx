@@ -184,7 +184,9 @@ export function FetchClient() {
     const segments = jobTitle.split(/[\n,|]/);
     return (segments.at(-1) ?? "").trim().toLowerCase();
   }, [jobTitle]);
-  const suggestionMode = suggestionQuery.length < 2 ? "Popular" : "Suggestions";
+  // Hardcoded English until now — the fetch.popular / fetch.suggestions keys
+  // existed but nothing read them, so a zh-CN user saw an English heading.
+  const suggestionMode = t(suggestionQuery.length < 2 ? "popular" : "suggestions");
   const suggestions = useMemo(() => {
     const titles = market === "CN" ? CN_COMMON_TITLES : COMMON_TITLES;
     if (suggestionQuery.length < 2) {

@@ -35,7 +35,7 @@ and is reached through the singleton in `lib/server/prisma.ts:13` over
 | `PromptRuleTemplate`                     | Per-user **Skill Pack** rule set                                                                    | Live                                                                                                                                |
 | `AgentCredential`                        | Versioned, audience-bound and capability-scoped Runner credential; SHA-256 hash only                | Live                                                                                                                                |
 | `OnboardingState`                        | Onboarding checklist and stage                                                                      | Live                                                                                                                                |
-| `DiscoverVideoCache`                     | Global Discover cache + daily-refresh lease (ADR-0005)                                              | Live                                                                                                                                |
+| `DiscoverCache`                          | Global GitHub-trending cache read by the nav popover                                                | Live                                                                                                                                |
 | `SourceHealth`                           | Global per-source status/counters/timestamps                                                        | Live — upserted by `sourceHealthStore.ts`, read through `readSourceHealth.ts`                                                       |
 | `AtsBoardSource`                         | Global ATS board registry                                                                           | Live — **no insert path in TypeScript**; DB rows require external provisioning, while `JOBLIT_ATS_BOARDS_JSON` remains runtime-only |
 
@@ -66,7 +66,7 @@ denormalised identity snapshots with no relations. Lifecycle rows survive
 source deletion and must be retired explicitly rather than by cascade.
 
 Four models are global: `ApplicationArtifactInventoryCheckpoint` (`key @id`),
-`DiscoverVideoCache` (`key @id`), `SourceHealth` (`source @id`, deliberate per
+`DiscoverCache` (`key @id`), `SourceHealth` (`source @id`, deliberate per
 the schema comment), and `AtsBoardSource`.
 
 | Family          | Scoping                                                                                                                                           |
@@ -328,7 +328,7 @@ rest.
 | `EvidenceSnapshot.payload`                                           | `{path, excerpt}`                                                                                                 | **Nothing** — and nothing reads it back                                                                                                                                                                                                                                     |
 | `PromptRuleTemplate.{cvRules,coverRules,hardConstraints}`            | Skill Pack rule lists                                                                                             | **Nothing** — typed `unknown`, coerced by `normalizeRuleList`                                                                                                                                                                                                               |
 | `OnboardingState.checklist`                                          | Five boolean flags                                                                                                | The **patch** is validated, not the stored column                                                                                                                                                                                                                           |
-| `DiscoverVideoCache.payload`                                         | Namespaced cache blob or the daily-claim lease                                                                    | **Nothing** — cast on write and read                                                                                                                                                                                                                                        |
+| `DiscoverCache.payload`                                              | Namespaced trending cache blob                                                                                    | **Nothing** — cast on write and read                                                                                                                                                                                                                                        |
 
 ---
 
@@ -387,7 +387,7 @@ One non-namespaced lock uses the single-`bigint` form:
 `fetchRunLifecycleLock.ts` also exposes the trigger's
 `pg_try_advisory_xact_lock` with a djb2 hash masked to 31 bits (collisions
 documented as acceptable), and
-`discoverCache.ts` uses no advisory lock at all — its daily claim is a row-level
+`discoverCache.ts` uses no advisory lock at all — its writes are row-level
 lease fenced by a random `ownerToken` (ADR-0005).
 
 ---

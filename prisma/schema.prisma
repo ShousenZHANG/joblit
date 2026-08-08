@@ -917,12 +917,11 @@ model OnboardingState {
   @@index([userId, stage, updatedAt])
 }
 
-// Persistent cache for the user-triggered Discover Videos pipeline. Replaces
-// the previous in-memory Map, which was wiped on every serverless cold start
-// and drained YouTube quota. The user-facing route reads this table and falls
-// back to stale rows when the upstream API returns quotaExceeded.
-model DiscoverVideoCache {
-  key       String   @id // e.g. "videos:claude:week"
+// Persistent last-known-good cache for the GitHub trending board, read by the
+// nav's trending popover. Replaces an in-memory Map that was wiped on every
+// serverless cold start. The video pipeline this table was named for is gone.
+model DiscoverCache {
+  key       String   @id // e.g. "repos:weekly:raw"
   payload   Json
   fetchedAt DateTime
   expiresAt DateTime

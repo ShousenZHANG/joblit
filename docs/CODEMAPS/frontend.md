@@ -38,14 +38,14 @@ There is **no** root `middleware.ts`. Auth gating is per-page
 | `/fetch` | session; CN → `/resume` | The Fetch Pipeline console. |
 | `/resume` | session | The Resume Studio. The page is a 15-line shell; all logic is in `components/resume/**`. |
 | `/resume/rules` | — | `redirect("/resume")`. |
-| `/discover` | session | Both markets. |
 | `/agent` | session | Stacks `RunnerSetupCard` and `AgentTokenManager` — Runner setup and agent tokens (ADR-0014). |
 | `/career` | — | **Compatibility redirect to `/jobs`** per ADR-0006. The whole file is 6 lines. No Career client, nav entry, or translations remain. |
 
 There is no `/automation` route.
 
 `AppNav.tsx` computes the link set from `useMarket()`: CN gets
-`[/resume, /discover]`; AU gets `[/jobs, /fetch, /resume, /discover, /agent]`.
+`[/resume]`; AU gets `[/jobs, /fetch, /resume, /agent]`. GitHub trending is a nav
+popover in both markets, not a route.
 `CommandPalette.tsx` duplicates the same conditional list.
 
 `app/global-error.tsx` renders **outside** `NextIntlClientProvider`, so it reads
@@ -210,8 +210,8 @@ JSON with a null fallback, throws `ApiError(status, message, payload)` on non-2x
 and optionally validates against a Zod schema. `extractErrorMessage` (`:78-91`)
 understands three envelope shapes, because the server emits three.
 
-Production importers now span the Jobs hooks, Tailoring Edit actions, Discover,
-Guide, and Fetch-status modules. Some binary download/preview, `keepalive`, and
+Production importers now span the Jobs hooks, Tailoring Edit actions, Guide,
+and Fetch-status modules. Some binary download/preview, `keepalive`, and
 stream-specific calls still use platform `fetch` because `fetchJson` is a JSON
 adapter rather than a universal transport wrapper.
 
@@ -219,8 +219,9 @@ There is no non-HTTP transport left in the client. The retired `postMessage`
 bridge is historical (ADR-0014); the local model is now reached by the Runner,
 not the page.
 
-React Query key spaces: `["jobs", queryString]`, `["job-details", jobId]`,
-`["discover-trending", period, clean]`.
+React Query key spaces: `["jobs", queryString]`, `["job-details", jobId]`. The
+trending popover holds its two periods in component state instead — it is a
+single ambient panel with no cross-component consumers.
 
 ---
 

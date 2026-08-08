@@ -1,7 +1,15 @@
 # ADR-0005: Durable daily Discover refresh
 
-- Status: Accepted
+- Status: Superseded (2026-08-08)
 - Date: 2026-07-20
+
+> **Superseded.** The Discover workspace and the YouTube pipeline it refreshed
+> were deleted; GitHub trending survives as a nav popover. With one feed left
+> and no quota to protect, the cron, its `CRON_SECRET` route, and the daily
+> claim/complete lease are gone: the first request that finds the cache expired
+> refreshes it. `DiscoverVideoCache` was renamed `DiscoverCache`. What still
+> holds from this ADR is the durable last-known-good cache itself and the
+> stale-fallback behaviour when GitHub is unreachable.
 
 ## Context
 

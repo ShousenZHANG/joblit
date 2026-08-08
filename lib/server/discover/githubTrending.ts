@@ -1,4 +1,4 @@
-import type { TrendingRepo } from "@/app/(app)/discover/types";
+import type { TrendingRepo } from "@/lib/shared/trending";
 import { safeOutboundFetch } from "@/lib/server/net/safeFetch";
 
 // GitHub trending — EXACT parity with github.com/trending.

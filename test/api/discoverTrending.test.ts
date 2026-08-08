@@ -19,6 +19,10 @@ vi.mock("@/lib/server/discover/githubTrending", () => ({
 vi.mock("@/lib/server/discover/discoverCache", () => ({
   buildRepoCacheKey: (period: string, clean: boolean) =>
     `repos:${period}:${clean ? "clean" : "raw"}`,
+  // isFresh is pure and moved here when the video helpers were deleted; the
+  // real implementation keeps the TTL boundary honest in these tests.
+  isFresh: (entry: { expiresAt: Date }, nowMs: number) =>
+    entry.expiresAt.getTime() > nowMs,
   readDiscoverCache: mocks.readCache,
   writeDiscoverCache: mocks.writeCache,
 }));
