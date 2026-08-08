@@ -1510,7 +1510,7 @@ describe("JobsClient", () => {
     expect(detailsPanel.className).toContain("flex");
   });
 
-  it("queues a single-job Runner batch from the detail Generate CV button", async () => {
+  it("queues a single-job Runner batch from the detail Generate button", async () => {
     const user = userEvent.setup();
     const posts: unknown[] = [];
     const mockFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1534,8 +1534,8 @@ describe("JobsClient", () => {
 
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
-    const generateCvButton = (await screen.findAllByRole("button", { name: /^generate cv$/i }))[0];
-    await user.click(generateCvButton);
+    const generateButton = (await screen.findAllByRole("button", { name: /^generate documents$/i }))[0];
+    await user.click(generateButton);
 
     // The button hands the job to the Runner via a single-job batch — the
     // manual dialog must NOT open on the primary path.
@@ -1568,8 +1568,8 @@ describe("JobsClient", () => {
 
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
-    const generateClButton = (await screen.findAllByRole("button", { name: /^generate cl$/i }))[0];
-    await user.click(generateClButton);
+    const generateButton = (await screen.findAllByRole("button", { name: /^generate documents$/i }))[0];
+    await user.click(generateButton);
 
     await screen.findByText(/generation batch is already running/i);
   });

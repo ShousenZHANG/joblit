@@ -206,8 +206,6 @@
     "tabDetail": "详情",
     "mobileTablistLabel": "职位列表与详情",
     "openJob": "打开职位",
-    "generateCv": "生成简历",
-    "generateCl": "生成求职信",
     "manualGenerate": "手动生成",
     "manualGenerateCv": "手动 · 简历",
     "manualGenerateCl": "手动 · 求职信",
@@ -309,7 +307,8 @@
     "retry": "重试",
     "batchQueuedTitle": "生成批次已排队",
     "batchQueuedDesc": "已排队 {count} 个岗位,本地 Runner 将自动领取。",
-    "batchAlreadyRunning": "已有一个生成批次在运行,等它完成后再试。"
+    "batchAlreadyRunning": "已有一个生成批次在运行,等它完成后再试。",
+    "generateDocs": "生成文书"
   },
   "fetch": {
     "searchRoles": "搜索职位",

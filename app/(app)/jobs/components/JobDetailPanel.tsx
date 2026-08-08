@@ -80,8 +80,7 @@ interface JobDetailPanelProps {
   mobileTab: "list" | "detail";
   onUpdateStatus: (id: string, status: JobStatus) => void;
   onDelete: (job: JobItem) => void;
-  onGenerateResume: (job: JobItem) => void;
-  onGenerateCover: (job: JobItem) => void;
+  onGenerate: (job: JobItem) => void;
   /** Zero-install fallback: copy the prompt, run it anywhere, paste JSON. */
   onManualGenerate: (job: JobItem, target: "resume" | "cover") => void;
   onRetryDetail: () => void;
@@ -91,7 +90,10 @@ interface JobDetailPanelProps {
  *  value is empty so the row stays tight. */
 function MetaChip({ icon: Icon, value }: { icon: React.ElementType; value?: string | null }) {
   const text = value?.trim();
-  if (!text) return null;
+  // Source feeds ship literal placeholders ("not applicable", "unknown") in
+  // jobType/jobLevel — the absence of a value, not a value. Same rule as the
+  // list rows.
+  if (!text || /^(not applicable|unknown|n\/a|none)$/i.test(text)) return null;
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/70 px-2.5 py-1 text-xs font-medium text-foreground/75 shadow-sm">
       <Icon className="h-3.5 w-3.5 shrink-0 text-brand-emerald-600 dark:text-brand-emerald-400" aria-hidden />
@@ -123,8 +125,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
   mobileTab,
   onUpdateStatus,
   onDelete,
-  onGenerateResume,
-  onGenerateCover,
+  onGenerate,
   onManualGenerate,
   onRetryDetail,
 }: JobDetailPanelProps) {
@@ -204,14 +205,12 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
           // same "title / company → actions" rhythm.
           <div className="relative flex flex-col gap-3.5">
             <div className="space-y-2.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-bold tracking-tight text-foreground">
-                  {selectedJob.title}
-                </h2>
-                <Badge className={cn("rounded-full px-2.5 text-[10px] font-bold uppercase tracking-wider", statusPresentation?.headerClass)}>
-                  {statusPresentation ? t(statusPresentation.labelKey) : null}
-                </Badge>
-              </div>
+              {/* No status pill here: the Select below is the status
+                  surface, and it can be edited — the pill was its read-only
+                  echo two centimetres away. */}
+              <h2 className="text-xl font-bold tracking-tight text-foreground">
+                {selectedJob.title}
+              </h2>
               {/* Meta as icon chips — replaces the flat dotted text line for a
                   scannable, premium header. */}
               <div className="flex flex-wrap items-center gap-1.5">
@@ -277,10 +276,30 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                     ))}
                   </SelectContent>
                 </Select>
+                {!isCN ? (
+                  <>
+                    {/* THE action. One button because it is one behaviour:
+                        the Runner batch generates every document the job is
+                        still missing — the old CV/CL pair were two buttons
+                        wired to the identical call. */}
+                    <Button
+                      size="sm"
+                      disabled={externalPromptLoading}
+                      onClick={() => onGenerate(selectedJob)}
+                      className={`w-full justify-center rounded-xl border border-brand-emerald-500 bg-brand-emerald-500 text-sm font-semibold text-white shadow-[0_10px_24px_-14px_rgba(5,150,105,0.8)] transition-all duration-200 hover:border-brand-emerald-600 hover:bg-brand-emerald-600 hover:shadow-[0_14px_28px_-14px_rgba(5,150,105,0.9)] active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none sm:w-auto ${actionHeight} px-4 ${highlightGenerate ? guideHighlightClass : ""}`}
+                      data-guide-highlight={highlightGenerate ? "true" : "false"}
+                      data-guide-anchor="generate_first_pdf"
+                    >
+                      <Sparkles className="mr-1 h-4 w-4" />
+                      {t("generateDocs")}
+                    </Button>
+                  </>
+                ) : null}
                 <Button
                   asChild
+                  variant="outline"
                   size="sm"
-                  className={`w-full justify-center rounded-xl border border-brand-emerald-500 bg-brand-emerald-500 text-sm font-semibold text-white shadow-[0_10px_24px_-14px_rgba(5,150,105,0.8)] transition-all duration-200 hover:border-brand-emerald-600 hover:bg-brand-emerald-600 hover:shadow-[0_14px_28px_-14px_rgba(5,150,105,0.9)] active:translate-y-[1px] sm:w-auto ${actionHeight} px-4`}
+                  className={`w-full justify-center rounded-xl border-brand-emerald-200 bg-brand-emerald-50/60 text-sm font-semibold text-brand-emerald-800 shadow-sm transition-all duration-200 hover:border-brand-emerald-300 hover:bg-brand-emerald-100/70 active:translate-y-[1px] dark:bg-brand-emerald-500/10 dark:text-brand-emerald-300 sm:w-auto ${actionHeight} px-4`}
                 >
                   <a href={selectedJob.jobUrl} target="_blank" rel="noreferrer">
                     <ExternalLink className="mr-1 h-4 w-4" />
@@ -289,29 +308,6 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                 </Button>
                 {!isCN ? (
                   <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={externalPromptLoading}
-                      onClick={() => onGenerateResume(selectedJob)}
-                      className={`w-full justify-center rounded-xl border-brand-emerald-200 bg-brand-emerald-50/60 text-sm font-semibold text-brand-emerald-800 shadow-sm transition-all duration-200 hover:border-brand-emerald-300 hover:bg-brand-emerald-100/70 active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none dark:bg-brand-emerald-500/10 dark:text-brand-emerald-300 sm:w-auto ${actionHeight} px-4 ${highlightGenerate ? guideHighlightClass : ""}`}
-                      data-guide-highlight={highlightGenerate ? "true" : "false"}
-                      data-guide-anchor="generate_first_pdf"
-                    >
-                      <Sparkles className="mr-1 h-4 w-4" />
-                      {t("generateCv")}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={externalPromptLoading}
-                      onClick={() => onGenerateCover(selectedJob)}
-                      className={`w-full justify-center rounded-xl border-brand-emerald-200 bg-brand-emerald-50/60 text-sm font-semibold text-brand-emerald-800 shadow-sm transition-all duration-200 hover:border-brand-emerald-300 hover:bg-brand-emerald-100/70 active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none dark:bg-brand-emerald-500/10 dark:text-brand-emerald-300 sm:w-auto ${actionHeight} px-4 ${highlightGenerate ? guideHighlightClass : ""}`}
-                      data-guide-highlight={highlightGenerate ? "true" : "false"}
-                    >
-                      <Sparkles className="mr-1 h-4 w-4" />
-                      {t("generateCl")}
-                    </Button>
                     {/* The Runner path above is primary; manual import stays
                         reachable per target for users who run nothing locally
                         (ADR-0015's floor). */}
@@ -320,7 +316,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                         <Button
                           variant="outline"
                           size="sm"
-                          className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/75 shadow-sm transition-all duration-200 hover:bg-muted active:translate-y-[1px] sm:w-auto ${actionHeight} px-3`}
+                          className={`w-full justify-center rounded-xl border-transparent bg-transparent text-sm font-medium text-foreground/60 shadow-none transition-all duration-200 hover:bg-muted hover:text-foreground active:translate-y-[1px] sm:w-auto ${actionHeight} px-3`}
                         >
                           <ClipboardPaste className="mr-1 h-4 w-4" aria-hidden />
                           {t("manualGenerate")}

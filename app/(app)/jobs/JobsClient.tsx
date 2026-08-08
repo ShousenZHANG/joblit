@@ -1023,8 +1023,7 @@ export function JobsClient({
           mobileTab={mobileTab}
           onUpdateStatus={updateStatus}
           onDelete={requestDelete}
-          onGenerateResume={handleGenerateSingle}
-          onGenerateCover={handleGenerateSingle}
+          onGenerate={handleGenerateSingle}
           onManualGenerate={handleManualGenerate}
           onRetryDetail={() => void refetchDetail()}
         />
