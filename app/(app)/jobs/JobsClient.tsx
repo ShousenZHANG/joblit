@@ -6,7 +6,7 @@ import { ApiError, fetchJson } from "@/lib/api/fetchJson";
 import { jobDetailResponseSchema } from "@/lib/shared/schemas/jobsList";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, MapPin, RefreshCw, SlidersHorizontal, X } from "lucide-react";
+import { ArrowRight, MapPin, RefreshCw, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -32,8 +32,11 @@ import { useJobMutations } from "./hooks/useJobMutations";
 import { useKeyboardNavigation } from "./hooks/useKeyboardNavigation";
 import { useExternalGenerate } from "./hooks/useExternalGenerate";
 import { JobListItem } from "./components/JobListItem";
-import { RunnerPresenceChip } from "@/components/agent/RunnerPresenceChip";
 import { VirtualJobList, type VirtualJobListHandle } from "./components/VirtualJobList";
+import { BatchProgressBanner } from "./components/BatchProgressBanner";
+import { RunnerRequiredDialog } from "./components/RunnerRequiredDialog";
+import { useBatchProgress } from "./hooks/useBatchProgress";
+import { useRunnerPresence } from "@/hooks/useRunnerPresence";
 import { JobSearchBar } from "./components/JobSearchBar";
 import { ExternalGenerateDialog } from "./components/ExternalGenerateDialog";
 import { TailorReviewDialog } from "./components/TailorReviewDialog";
@@ -216,11 +219,16 @@ export function JobsClient({
   });
 
   const externalGenerate = useExternalGenerate(setError);
-  // Presence matters exactly while a generation batch is queued for the
-  // Runner this session. The chip polls for itself; this flag only controls
-  // whether it is mounted.
-  const [generationQueued, setGenerationQueued] = useState(false);
-  const showRunnerPresence = generationQueued;
+  // Generation happens on the user's machine, so the page has to ask whether
+  // anything is listening — both to gate the click and to explain a batch that
+  // is queued but not moving.
+  const runnerPresence = useRunnerPresence(true);
+  const runnerOnline = runnerPresence.status === "online";
+  const [runnerRequiredOpen, setRunnerRequiredOpen] = useState(false);
+  const openRunnerSetup = useCallback(() => {
+    window.dispatchEvent(new Event("joblit:runner-setup"));
+  }, []);
+  const batchProgress = useBatchProgress({ onJobsSettled: refetch });
   // Keep renderer identity stable after virtualization first becomes useful.
   // In particular, deleting row 81 must not swap the entire virtual subtree
   // for the ordinary renderer when the visible count becomes 80.
@@ -359,27 +367,28 @@ export function JobsClient({
 
   const [batchGeneratePending, setBatchGeneratePending] = useState(false);
   /**
-   * One enqueue path for both entry points: the batch toolbar and the
-   * single-job Generate buttons. A batch of one is a first-class batch — the
-   * Runner claims it, generates whatever targets the job is still missing,
-   * and settles through the same receipts.
+   * Queue every NEW job for tailoring.
+   *
+   * There is no per-job entry point any more: triage is what the status
+   * filters are for, and once the list is the shortlist, generating it one row
+   * at a time is just clicking. The server takes `scope: "NEW"` with no ids as
+   * "all of them", so this needs nothing new behind it.
    */
-  async function enqueueGenerationBatch(ids: string[]): Promise<boolean> {
-    if (ids.length === 0 || batchGeneratePending) return false;
+  async function generateAllNew(): Promise<boolean> {
+    if (batchGeneratePending) return false;
+    // Queueing into a machine with nothing listening looks exactly like
+    // queueing into a working one. Ask first.
+    if (!runnerOnline) {
+      setRunnerRequiredOpen(true);
+      return false;
+    }
     setBatchGeneratePending(true);
     try {
       await fetchJson("/api/application-batches", {
         method: "POST",
-        body: JSON.stringify({ scope: "NEW", selectedJobIds: ids }),
+        body: JSON.stringify({ scope: "NEW" }),
       });
-      toast({
-        title: t("batchQueuedTitle"),
-        description: t("batchQueuedDesc", { count: ids.length }),
-        duration: 6000,
-        className:
-          "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-900 animate-in fade-in zoom-in-95",
-      });
-      setGenerationQueued(true);
+      batchProgress.refresh();
       return true;
     } catch (err) {
       // The one expected refusal: the protocol allows a single active batch.
@@ -399,15 +408,8 @@ export function JobsClient({
     }
   }
 
-  // Stable handlers for the memoized detail panel — inline lambdas in the
+  // Stable handler for the memoized detail panel — an inline lambda in the
   // JSX would give it fresh props on every keystroke and defeat the memo.
-  const handleGenerateSingle = useCallback(
-    (job: JobItem) => {
-      void enqueueGenerationBatch([job.id]);
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
   const handleManualGenerate = useCallback(
     (job: JobItem, target: "resume" | "cover") =>
       externalGenerate.openExternalGenerateDialog(job, target),
@@ -827,11 +829,35 @@ export function JobsClient({
                     : t(JOB_STATUS_LABEL_KEYS[status]),
               }))}
             />
+
+            {/* The one generation control. Triage happens in the segments to
+                its left; this turns whatever survived into documents. */}
+            <button
+              type="button"
+              onClick={() => void generateAllNew()}
+              disabled={batchGeneratePending || batchProgress.state.active}
+              data-testid="jobs-generate-all"
+              data-guide-anchor="generate_first_pdf"
+              data-guide-highlight={highlightGenerate ? "true" : "false"}
+              className={cn(
+                "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-brand-emerald-600 px-3.5 text-[13px] font-semibold text-white shadow-sm transition-all duration-150",
+                "hover:bg-brand-emerald-700 active:translate-y-px",
+                "disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2",
+                highlightGenerate && guideHighlightClass,
+              )}
+            >
+              <Sparkles className="h-3.5 w-3.5" aria-hidden />
+              {t("generateAll")}
+            </button>
           </div>
-          {showRunnerPresence ? (
-            <div className="flex items-center border-b bg-background/60 px-4 py-1.5">
-              <RunnerPresenceChip linkToSetup />
-            </div>
+          {batchProgress.visible ? (
+            <BatchProgressBanner
+              state={batchProgress.state}
+              runnerOnline={runnerOnline}
+              onOpenSetup={openRunnerSetup}
+              onDismiss={batchProgress.dismiss}
+            />
           ) : null}
           <div className="relative flex min-h-0 flex-1 flex-col">
           <ScrollArea
@@ -1023,13 +1049,17 @@ export function JobsClient({
           mobileTab={mobileTab}
           onUpdateStatus={updateStatus}
           onDelete={requestDelete}
-          onGenerate={handleGenerateSingle}
           onManualGenerate={handleManualGenerate}
           onRetryDetail={() => void refetchDetail()}
         />
         </section>
       </div>
       </div>
+      <RunnerRequiredDialog
+        open={runnerRequiredOpen}
+        onOpenChange={setRunnerRequiredOpen}
+        onOpenSetup={openRunnerSetup}
+      />
     </>
   );
 }

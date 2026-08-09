@@ -46,7 +46,7 @@ reintroduced.
 
 - `app/(marketing)/` — Public landing pages, no auth
 - `app/(auth)/login/` — Authentication pages
-- `app/(app)/` — Protected workspace: `jobs/`, `fetch/`, `resume/`, `agent/`, plus `career/` (a redirect to `/jobs`, ADR-0006)
+- `app/(app)/` — Protected workspace: `jobs/`, `fetch/`, `resume/`, plus `career/` (a redirect to `/jobs`, ADR-0006). Runner setup is a nav popover, not a page; the retired `/agent` and `/discover` routes must not be reintroduced
 - `app/api/` — All API routes
 
 ### Backend (`lib/server/`)

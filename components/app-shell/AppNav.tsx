@@ -20,6 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useGuide } from "@/app/GuideContext";
+import { RunnerSetupPopover } from "./RunnerSetupPopover";
 import { TrendingPopover } from "./TrendingPopover";
 
 // AppNav — landing-aligned sticky pill for authenticated app pages.
@@ -63,7 +64,6 @@ export function AppNav() {
         { href: "/jobs", label: t("jobs") },
         { href: "/fetch", label: t("fetch") },
         { href: "/resume", label: t("resume") },
-        { href: "/agent", label: t("agent") },
       ];
   const email = data?.user?.email ?? "";
 
@@ -185,6 +185,11 @@ export function AppNav() {
             ) : null}
           </button>
           ) : null}
+
+          {/* Runner setup lived on its own page until the page turned out to
+              be one credential and one command. AU only: CN ships a single
+              Chinese resume with no local generation. */}
+          {!isCN ? <RunnerSetupPopover /> : null}
 
           {/* GitHub trending — an ambient panel, not a route. Present in both
               markets; it costs one glyph and never takes over the workspace. */}

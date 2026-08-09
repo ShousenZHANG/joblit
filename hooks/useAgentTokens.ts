@@ -22,13 +22,11 @@ export interface NewTokenResult {
 const TOKENS_ENDPOINT = "/api/agent-tokens";
 
 /**
- * The one source of truth for agent credentials on the Agent page.
+ * Agent credentials, as the nav setup panel needs them.
  *
- * Both the onboarding stepper (quick-create, raw-token injection into the
- * setup snippet) and the token manager (list, named create, revoke) consume
- * this hook, so a credential minted in one place is instantly visible in the
- * other. The raw token exists only in this hook's memory, exactly once, the
- * same as the server contract: it is never persisted anywhere client-side.
+ * The raw token exists only in this hook's memory, exactly once, mirroring the
+ * server contract: Joblit stores a SHA-256 hash and cannot show the value
+ * again. Nothing here persists it client-side either.
  */
 export function useAgentTokens() {
   const [tokens, setTokens] = useState<AgentToken[]>([]);
@@ -141,5 +139,3 @@ export function useAgentTokens() {
 
   return { tokens, loading, loadError, newToken, creating, refresh, create, revoke };
 }
-
-export type AgentTokensApi = ReturnType<typeof useAgentTokens>;

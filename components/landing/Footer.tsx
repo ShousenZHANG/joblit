@@ -25,7 +25,6 @@ export function Footer() {
       links: [
         { label: t("product.jobs"), href: "/jobs" },
         { label: t("product.resume"), href: "/resume" },
-        { label: t("product.agent"), href: "/agent" },
       ],
     },
     {

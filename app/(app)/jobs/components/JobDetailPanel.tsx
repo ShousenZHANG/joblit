@@ -14,7 +14,7 @@ import {
   ExternalLink,
   FileText,
   MapPin,
-  Sparkles,
+  MoreHorizontal,
   Trash2,
   Wifi,
 } from "lucide-react";
@@ -80,7 +80,6 @@ interface JobDetailPanelProps {
   mobileTab: "list" | "detail";
   onUpdateStatus: (id: string, status: JobStatus) => void;
   onDelete: (job: JobItem) => void;
-  onGenerate: (job: JobItem) => void;
   /** Zero-install fallback: copy the prompt, run it anywhere, paste JSON. */
   onManualGenerate: (job: JobItem, target: "resume" | "cover") => void;
   onRetryDetail: () => void;
@@ -125,7 +124,6 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
   mobileTab,
   onUpdateStatus,
   onDelete,
-  onGenerate,
   onManualGenerate,
   onRetryDetail,
 }: JobDetailPanelProps) {
@@ -276,30 +274,15 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                     ))}
                   </SelectContent>
                 </Select>
-                {!isCN ? (
-                  <>
-                    {/* THE action. One button because it is one behaviour:
-                        the Runner batch generates every document the job is
-                        still missing — the old CV/CL pair were two buttons
-                        wired to the identical call. */}
-                    <Button
-                      size="sm"
-                      disabled={externalPromptLoading}
-                      onClick={() => onGenerate(selectedJob)}
-                      className={`w-full justify-center rounded-xl border border-brand-emerald-500 bg-brand-emerald-500 text-sm font-semibold text-white shadow-[0_10px_24px_-14px_rgba(5,150,105,0.8)] transition-all duration-200 hover:border-brand-emerald-600 hover:bg-brand-emerald-600 hover:shadow-[0_14px_28px_-14px_rgba(5,150,105,0.9)] active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none sm:w-auto ${actionHeight} px-4 ${highlightGenerate ? guideHighlightClass : ""}`}
-                      data-guide-highlight={highlightGenerate ? "true" : "false"}
-                      data-guide-anchor="generate_first_pdf"
-                    >
-                      <Sparkles className="mr-1 h-4 w-4" />
-                      {t("generateDocs")}
-                    </Button>
-                  </>
-                ) : null}
+                {/* Generation is not here any more. It belongs to the
+                    shortlist, not to one row: the list toolbar queues every
+                    NEW job in one press, which is how the triage-then-generate
+                    loop actually runs. What stays are the things that are
+                    genuinely about THIS job. */}
                 <Button
                   asChild
-                  variant="outline"
                   size="sm"
-                  className={`w-full justify-center rounded-xl border-brand-emerald-200 bg-brand-emerald-50/60 text-sm font-semibold text-brand-emerald-800 shadow-sm transition-all duration-200 hover:border-brand-emerald-300 hover:bg-brand-emerald-100/70 active:translate-y-[1px] dark:bg-brand-emerald-500/10 dark:text-brand-emerald-300 sm:w-auto ${actionHeight} px-4`}
+                  className={`w-full justify-center rounded-xl border border-brand-emerald-500 bg-brand-emerald-500 text-sm font-semibold text-white shadow-[0_10px_24px_-14px_rgba(5,150,105,0.8)] transition-all duration-200 hover:border-brand-emerald-600 hover:bg-brand-emerald-600 active:translate-y-[1px] sm:w-auto ${actionHeight} px-4`}
                 >
                   <a href={selectedJob.jobUrl} target="_blank" rel="noreferrer">
                     <ExternalLink className="mr-1 h-4 w-4" />
@@ -307,37 +290,41 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                   </a>
                 </Button>
                 {!isCN ? (
-                  <>
-                    {/* The Runner path above is primary; manual import stays
-                        reachable per target for users who run nothing locally
-                        (ADR-0015's floor). */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className={`w-full justify-center rounded-xl border-transparent bg-transparent text-sm font-medium text-foreground/60 shadow-none transition-all duration-200 hover:bg-muted hover:text-foreground active:translate-y-[1px] sm:w-auto ${actionHeight} px-3`}
-                        >
-                          <ClipboardPaste className="mr-1 h-4 w-4" aria-hidden />
-                          {t("manualGenerate")}
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start">
-                        <DropdownMenuItem
-                          className="min-h-11"
-                          onClick={() => onManualGenerate(selectedJob, "resume")}
-                        >
-                          {t("manualGenerateCv")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="min-h-11"
-                          onClick={() => onManualGenerate(selectedJob, "cover")}
-                        >
-                          {t("manualGenerateCl")}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </>
+                  /* Manual import is ADR-0015's zero-install floor: it must
+                     stay reachable, but it is the exception, so it lives
+                     behind the overflow rather than spending a labelled slot
+                     in the primary row. */
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-label={t("moreActions")}
+                        data-testid="job-detail-overflow"
+                        className={`w-full justify-center rounded-xl text-foreground/60 transition-colors hover:bg-muted hover:text-foreground sm:w-9 ${actionHeight} px-0`}
+                      >
+                        <MoreHorizontal className="h-4 w-4" aria-hidden />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuItem
+                        className="min-h-11"
+                        onClick={() => onManualGenerate(selectedJob, "resume")}
+                        disabled={externalPromptLoading}
+                      >
+                        <ClipboardPaste className="mr-2 h-4 w-4" aria-hidden />
+                        {t("manualGenerateCv")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="min-h-11"
+                        onClick={() => onManualGenerate(selectedJob, "cover")}
+                        disabled={externalPromptLoading}
+                      >
+                        <ClipboardPaste className="mr-2 h-4 w-4" aria-hidden />
+                        {t("manualGenerateCl")}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 ) : null}
                 {!isCN && selectedJob.resumePdfUrl ? (
                   <Button

@@ -214,20 +214,21 @@ describe("AppNav", () => {
     ).toHaveClass("h-11", "w-11");
   });
 
-  it("renders all 4 primary AU app links in the desktop nav", () => {
+  it("renders the 3 primary AU app links in the desktop nav", () => {
     render(<AppNav />);
     const scope = desktopScope();
     expect(scope.getByRole("link", { name: /jobs/i })).toBeInTheDocument();
     expect(scope.getByRole("link", { name: /fetch/i })).toBeInTheDocument();
     expect(scope.getByRole("link", { name: /resume/i })).toBeInTheDocument();
-    expect(
-      scope.getByRole("link", { name: /agent/i }),
-    ).toBeInTheDocument();
     expect(scope.queryByRole("link", { name: /admin/i })).not.toBeInTheDocument();
-    // Discover is gone: GitHub trending lives in a popover, not a route.
+    // Two routes became popovers rather than pages: trending was never a
+    // workspace, and Runner setup turned out to be one credential and one
+    // command.
     expect(
       scope.queryByRole("link", { name: /discover/i }),
     ).not.toBeInTheDocument();
+    expect(scope.queryByRole("link", { name: /agent/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId("runner-setup-trigger")).toBeInTheDocument();
   });
 
   it("keeps the CN navigation focused on Resume", () => {

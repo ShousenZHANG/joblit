@@ -49,7 +49,6 @@ function renderPanel(
         mobileTab="detail"
         onUpdateStatus={vi.fn()}
         onDelete={vi.fn()}
-        onGenerate={vi.fn()}
         onManualGenerate={vi.fn()}
         onRetryDetail={vi.fn()}
       />
@@ -113,8 +112,7 @@ describe("JobDetailPanel localization", () => {
           mobileTab="detail"
           onUpdateStatus={vi.fn()}
           onDelete={vi.fn()}
-          onGenerate={vi.fn()}
-        onManualGenerate={vi.fn()}
+          onManualGenerate={vi.fn()}
           onRetryDetail={vi.fn()}
         />
       </NextIntlClientProvider>,

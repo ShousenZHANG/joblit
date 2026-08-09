@@ -49,8 +49,23 @@
     "paletteSearchJobs": "Search jobs for “{query}”",
     "paletteThemeLight": "Light theme",
     "paletteThemeDark": "Dark theme",
-    "paletteThemeSystem": "System theme",
-    "agent": "Agent"
+    "paletteThemeSystem": "System theme"
+  },
+  "runnerSetup": {
+    "open": "Runner setup",
+    "title": "Local AI Runner",
+    "statusOnline": "Connected",
+    "statusOffline": "Not connected",
+    "loading": "Checking…",
+    "introNoCredential": "Generation runs on your machine. Create a credential, then start the Runner with the two lines below.",
+    "createCredential": "Create credential",
+    "rawTokenOnce": "This is the only time the credential is shown. Copy the first block now.",
+    "step1": "1 · Set these in your terminal",
+    "step2": "2 · Start the Runner",
+    "modelHint": "Sign in to the model once with: codex login",
+    "regenerate": "Regenerate credential",
+    "copy": "Copy",
+    "copied": "Copied"
   },
   "trending": {
     "open": "GitHub trending",
@@ -64,81 +79,6 @@
     "empty": "No trending repos right now.",
     "error": "Couldn't reach GitHub.",
     "retry": "Try again"
-  },
-  "agent": {
-    "title": "Agent",
-    "subtitle": "Run the local Runner so tailoring happens on your machine, with your model.",
-    "presence": {
-      "activeNow": "Runner · active",
-      "activeAgo": "Runner · active {minutes}m ago",
-      "offline": "Runner offline — queued work waits for it.",
-      "setupCta": "Set up"
-    },
-    "setup": {
-      "title": "Set up the Runner",
-      "stepGatewayTitle": "Start your local Hermes gateway",
-      "stepGatewayDesc": "It listens on 127.0.0.1:8642 by default. Your model, your machine.",
-      "stepTokenTitle": "Create an agent credential",
-      "stepTokenCreate": "Generate credential",
-      "stepTokenDone": "You have an active credential. Manage or revoke it below.",
-      "stepConfigureTitle": "Copy this into your terminal and run it",
-      "snippetTokenLive": "Your new credential is filled in — this is the only time it appears.",
-      "snippetTokenPending": "Complete step 2 and your credential fills in here automatically.",
-      "snippetHermesNote": "Replace HERMES_KEY yourself; it never touches Joblit.",
-      "stepConnectTitle": "Runner connects",
-      "stepConnectWaiting": "Waiting for the Runner's first call — usually within a minute of starting.",
-      "stepConnectDone": "Runner connected. You're done.",
-      "collapsedSummary": "Runner configured and online.",
-      "showGuide": "Show setup guide",
-      "hideGuide": "Hide setup guide",
-      "copy": "Copy",
-      "copiedShort": "Copied!",
-      "copied": "Copied to clipboard"
-    },
-    "tokens": {
-      "generateTitle": "Generate New Token",
-      "namePlaceholder": "e.g. My Laptop",
-      "generate": "Generate",
-      "creating": "Creating...",
-      "revealWarning": "Copy this token now — it won't be shown again.",
-      "copy": "Copy",
-      "copiedShort": "Copied!",
-      "expiresOn": "Expires {date}",
-      "activeTitle": "Active Tokens",
-      "loadErrorTitle": "Couldn't load tokens",
-      "loadErrorDescription": "Check your connection and try again.",
-      "retry": "Retry",
-      "emptyTitle": "No active tokens",
-      "emptyDescription": "Generate one above so the Runner can sign in.",
-      "unnamed": "Unnamed token",
-      "createdAt": "Created {when}",
-      "usedAt": "Used {when}",
-      "neverUsed": "Never used",
-      "revoke": "Revoke",
-      "revokeDialogTitle": "Revoke Token",
-      "revokeDialogDescription": "This will permanently revoke <strong>\"{name}\"</strong>. Any Runner using this token stops immediately.",
-      "relative": {
-        "today": "today",
-        "yesterday": "yesterday",
-        "daysAgo": "{days, plural, one {# day ago} other {# days ago}}",
-        "weeksAgo": "{weeks, plural, one {# week ago} other {# weeks ago}}"
-      },
-      "expiry": {
-        "expired": "Expired",
-        "expiresToday": "Expires today",
-        "daysLeft": "{days, plural, one {# day left} other {# days left}}"
-      },
-      "toast": {
-        "createdTitle": "Token created",
-        "createdDescription": "Set it as JOBLIT_TOKEN before starting the Runner.",
-        "createFailedTitle": "Failed to create token",
-        "revokedTitle": "Token revoked",
-        "revokedDescription": "\"{name}\" has been permanently revoked.",
-        "revokeFailedTitle": "Failed to revoke token",
-        "copied": "Copied to clipboard",
-        "tryAgain": "Please try again."
-      }
-    }
   },
   "marketing": {
     "badge": "Powered by 95-score AI Skill Pack",
@@ -206,7 +146,6 @@
     "tabDetail": "Detail",
     "mobileTablistLabel": "Jobs list and detail",
     "openJob": "Open job",
-    "manualGenerate": "Manual generation",
     "manualGenerateCv": "Manual · CV",
     "manualGenerateCl": "Manual · CL",
     "savedCv": "Saved CV",
@@ -305,10 +244,23 @@
     "unknownCompany": "Unknown",
     "unknownTime": "unknown",
     "retry": "Retry",
-    "batchQueuedTitle": "Generation batch queued",
-    "batchQueuedDesc": "{count, plural, one {# job} other {# jobs}} queued. Your local Runner will pick them up.",
     "batchAlreadyRunning": "A generation batch is already running. Wait for it to finish, then try again.",
-    "generateDocs": "Generate documents"
+    "generateAll": "AI Generate",
+    "moreActions": "More actions",
+    "batchProgress": {
+      "generating": "AI generating · {done} of {total} done",
+      "waitingForRunner": "Waiting for your Runner · {done} of {total} done",
+      "finished": "All {total} generated",
+      "finishedWithFailures": "{done} of {total} generated · {failed} failed",
+      "setUpRunner": "Set up",
+      "dismiss": "Dismiss"
+    },
+    "runnerRequired": {
+      "title": "Your Runner isn't connected",
+      "description": "AI generation runs on your own machine, on your own AI subscription. Start the Runner first, or use Manual generation on a job to paste a prompt into any AI yourself.",
+      "setUp": "Set up the Runner",
+      "later": "Not now"
+    }
   },
   "fetch": {
     "searchRoles": "Search roles",

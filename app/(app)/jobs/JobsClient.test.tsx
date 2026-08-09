@@ -1510,7 +1510,7 @@ describe("JobsClient", () => {
     expect(detailsPanel.className).toContain("flex");
   });
 
-  it("queues a single-job Runner batch from the detail Generate button", async () => {
+  it("queues every NEW job from one toolbar press", async () => {
     const user = userEvent.setup();
     const posts: unknown[] = [];
     const mockFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1521,10 +1521,22 @@ describe("JobsClient", () => {
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }
+      if (url === "/api/agent/presence") {
+        return new Response(
+          JSON.stringify({ lastUsedAt: new Date().toISOString() }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
       if (url === "/api/application-batches" && init?.method === "POST") {
         posts.push(JSON.parse(String(init.body)));
-        return new Response(JSON.stringify({ batch: { id: "batch-solo" } }), {
+        return new Response(JSON.stringify({ batch: { id: "batch-all" } }), {
           status: 201,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.startsWith("/api/application-batches/latest")) {
+        return new Response(JSON.stringify({ batchId: null, status: null }), {
+          status: 200,
           headers: { "Content-Type": "application/json" },
         });
       }
@@ -1534,20 +1546,19 @@ describe("JobsClient", () => {
 
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
-    const generateButton = (await screen.findAllByRole("button", { name: /^generate documents$/i }))[0];
-    await user.click(generateButton);
+    const generate = await screen.findByTestId("jobs-generate-all");
+    // Presence has to resolve before the gate lets the click through.
+    await waitFor(() => expect(generate).toBeEnabled());
+    await user.click(generate);
 
-    // The button hands the job to the Runner via a single-job batch — the
-    // manual dialog must NOT open on the primary path.
-    await screen.findByText("Generation batch queued");
-    expect(posts).toEqual([
-      { scope: "NEW", selectedJobIds: [baseJob.id] },
-    ]);
-    expect(screen.queryByRole("button", { name: /download zip/i })).not.toBeInTheDocument();
+    // No ids: the server reads scope NEW as "everything still untouched",
+    // which is exactly the shortlist the user just finished triaging.
+    await waitFor(() => expect(posts).toEqual([{ scope: "NEW" }]));
   });
 
-  it("surfaces the single-active-batch refusal on the single-job path", async () => {
+  it("stops a generation that has nothing to run it, and offers setup", async () => {
     const user = userEvent.setup();
+    const posts: unknown[] = [];
     const mockFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.startsWith("/api/jobs?")) {
@@ -1556,11 +1567,25 @@ describe("JobsClient", () => {
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }
+      if (url === "/api/agent/presence") {
+        // Never called, or called long ago: the Runner is not listening.
+        return new Response(JSON.stringify({ lastUsedAt: null }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
       if (url === "/api/application-batches" && init?.method === "POST") {
-        return new Response(
-          JSON.stringify({ error: { code: "ACTIVE_BATCH_EXISTS", message: "busy" } }),
-          { status: 409, headers: { "Content-Type": "application/json" } },
-        );
+        posts.push(JSON.parse(String(init.body)));
+        return new Response(JSON.stringify({ batch: { id: "batch-all" } }), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.startsWith("/api/application-batches/latest")) {
+        return new Response(JSON.stringify({ batchId: null, status: null }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
       }
       return new Response(JSON.stringify({ error: "not mocked" }), { status: 500 });
     });
@@ -1568,10 +1593,12 @@ describe("JobsClient", () => {
 
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
-    const generateButton = (await screen.findAllByRole("button", { name: /^generate documents$/i }))[0];
-    await user.click(generateButton);
+    await user.click(await screen.findByTestId("jobs-generate-all"));
 
-    await screen.findByText(/generation batch is already running/i);
+    // Queueing into a machine with nothing listening is indistinguishable
+    // from queueing into a working one, so the click is refused up front.
+    expect(await screen.findByTestId("runner-required-dialog")).toBeInTheDocument();
+    expect(posts).toEqual([]);
   });
 
   it("disables skill pack download until prompt meta is ready, then advances to Copy Prompt with one click", async () => {
@@ -1625,7 +1652,7 @@ describe("JobsClient", () => {
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
     await user.click(
-      (await screen.findAllByRole("button", { name: /manual generation/i }))[0],
+      (await screen.findAllByTestId("job-detail-overflow"))[0],
     );
     await user.click(await screen.findByRole("menuitem", { name: /manual · cv/i }));
 
@@ -1734,7 +1761,7 @@ describe("JobsClient", () => {
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
     await user.click(
-      (await screen.findAllByRole("button", { name: /manual generation/i }))[0],
+      (await screen.findAllByTestId("job-detail-overflow"))[0],
     );
     await user.click(await screen.findByRole("menuitem", { name: /manual · cv/i }));
 
@@ -1748,7 +1775,7 @@ describe("JobsClient", () => {
     await user.click(screen.getByRole("button", { name: /cancel/i }));
 
     await user.click(
-      (await screen.findAllByRole("button", { name: /manual generation/i }))[0],
+      (await screen.findAllByTestId("job-detail-overflow"))[0],
     );
     await user.click(await screen.findByRole("menuitem", { name: /manual · cl/i }));
     expect(await screen.findByRole("button", { name: /copy prompt to clipboard/i })).toBeInTheDocument();

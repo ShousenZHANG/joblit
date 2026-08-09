@@ -49,8 +49,23 @@
     "paletteSearchJobs": "在岗位中搜索“{query}”",
     "paletteThemeLight": "浅色主题",
     "paletteThemeDark": "深色主题",
-    "paletteThemeSystem": "跟随系统",
-    "agent": "智能体"
+    "paletteThemeSystem": "跟随系统"
+  },
+  "runnerSetup": {
+    "open": "Runner 配置",
+    "title": "本地 AI Runner",
+    "statusOnline": "已连接",
+    "statusOffline": "未连接",
+    "loading": "检查中…",
+    "introNoCredential": "生成跑在你的电脑上。先创建凭据,再用下面两行启动 Runner。",
+    "createCredential": "创建凭据",
+    "rawTokenOnce": "凭据只显示这一次,请立即复制第一段。",
+    "step1": "1 · 在终端设置这两项",
+    "step2": "2 · 启动 Runner",
+    "modelHint": "模型登录一次即可:codex login",
+    "regenerate": "重新生成凭据",
+    "copy": "复制",
+    "copied": "已复制"
   },
   "trending": {
     "open": "GitHub 趋势",
@@ -64,81 +79,6 @@
     "empty": "暂时没有趋势项目。",
     "error": "无法连接 GitHub。",
     "retry": "重试"
-  },
-  "agent": {
-    "title": "智能体",
-    "subtitle": "运行本地 Runner，让定制在你自己的机器和模型上完成。",
-    "presence": {
-      "activeNow": "Runner · 活跃中",
-      "activeAgo": "Runner · {minutes} 分钟前活跃",
-      "offline": "Runner 离线 —— 排队任务等它启动。",
-      "setupCta": "去配置"
-    },
-    "setup": {
-      "title": "配置 Runner",
-      "stepGatewayTitle": "启动本地 Hermes 网关",
-      "stepGatewayDesc": "默认监听 127.0.0.1:8642。你的模型,你的机器。",
-      "stepTokenTitle": "创建 Agent 凭据",
-      "stepTokenCreate": "生成凭据",
-      "stepTokenDone": "已有有效凭据,可在下方管理或吊销。",
-      "stepConfigureTitle": "复制到终端并运行",
-      "snippetTokenLive": "新凭据已自动填入 —— 它只出现这一次。",
-      "snippetTokenPending": "完成第 2 步后,凭据会自动填入此处。",
-      "snippetHermesNote": "HERMES_KEY 请自行替换,它永远不会经过 Joblit。",
-      "stepConnectTitle": "Runner 建立连接",
-      "stepConnectWaiting": "等待 Runner 首次调用 —— 启动后通常一分钟内。",
-      "stepConnectDone": "Runner 已连接,配置完成。",
-      "collapsedSummary": "Runner 已配置并在线。",
-      "showGuide": "查看安装指引",
-      "hideGuide": "收起安装指引",
-      "copy": "复制",
-      "copiedShort": "已复制!",
-      "copied": "已复制到剪贴板"
-    },
-    "tokens": {
-      "generateTitle": "生成新令牌",
-      "namePlaceholder": "例如：我的笔记本",
-      "generate": "生成",
-      "creating": "创建中...",
-      "revealWarning": "请立即复制该令牌——它不会再次显示。",
-      "copy": "复制",
-      "copiedShort": "已复制！",
-      "expiresOn": "{date} 过期",
-      "activeTitle": "有效令牌",
-      "loadErrorTitle": "无法加载令牌",
-      "loadErrorDescription": "请检查网络后重试。",
-      "retry": "重试",
-      "emptyTitle": "暂无有效令牌",
-      "emptyDescription": "在上方生成一个，Runner 才能登录。",
-      "unnamed": "未命名令牌",
-      "createdAt": "创建于{when}",
-      "usedAt": "使用于{when}",
-      "neverUsed": "从未使用",
-      "revoke": "吊销",
-      "revokeDialogTitle": "吊销令牌",
-      "revokeDialogDescription": "这将永久吊销 <strong>“{name}”</strong>。正在使用该令牌的 Runner 会立即停止。",
-      "relative": {
-        "today": "今天",
-        "yesterday": "昨天",
-        "daysAgo": "{days} 天前",
-        "weeksAgo": "{weeks} 周前"
-      },
-      "expiry": {
-        "expired": "已过期",
-        "expiresToday": "今天过期",
-        "daysLeft": "剩余 {days} 天"
-      },
-      "toast": {
-        "createdTitle": "令牌已创建",
-        "createdDescription": "启动 Runner 前把它设为 JOBLIT_TOKEN。",
-        "createFailedTitle": "创建令牌失败",
-        "revokedTitle": "令牌已吊销",
-        "revokedDescription": "“{name}”已被永久吊销。",
-        "revokeFailedTitle": "吊销令牌失败",
-        "copied": "已复制到剪贴板",
-        "tryAgain": "请重试。"
-      }
-    }
   },
   "marketing": {
     "badge": "95 分 AI 技能包驱动",
@@ -206,7 +146,6 @@
     "tabDetail": "详情",
     "mobileTablistLabel": "职位列表与详情",
     "openJob": "打开职位",
-    "manualGenerate": "手动生成",
     "manualGenerateCv": "手动 · 简历",
     "manualGenerateCl": "手动 · 求职信",
     "savedCv": "已存简历",
@@ -305,10 +244,23 @@
     "unknownCompany": "未知公司",
     "unknownTime": "未知",
     "retry": "重试",
-    "batchQueuedTitle": "生成批次已排队",
-    "batchQueuedDesc": "已排队 {count} 个岗位,本地 Runner 将自动领取。",
     "batchAlreadyRunning": "已有一个生成批次在运行,等它完成后再试。",
-    "generateDocs": "生成文书"
+    "generateAll": "AI 生成",
+    "moreActions": "更多操作",
+    "batchProgress": {
+      "generating": "AI 生成中 · 已完成 {done}/{total}",
+      "waitingForRunner": "等待 Runner 连接 · 已完成 {done}/{total}",
+      "finished": "{total} 份已全部生成",
+      "finishedWithFailures": "已生成 {done}/{total} · {failed} 份失败",
+      "setUpRunner": "去配置",
+      "dismiss": "关闭"
+    },
+    "runnerRequired": {
+      "title": "Runner 尚未连接",
+      "description": "AI 生成跑在你自己的电脑上,用你自己的 AI 订阅。请先启动 Runner;或者用某个职位的「手动生成」,把提示词粘进任意 AI 自己跑。",
+      "setUp": "配置 Runner",
+      "later": "暂不"
+    }
   },
   "fetch": {
     "searchRoles": "搜索职位",
