@@ -22,6 +22,16 @@ export class JoblitClientError extends Error {
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
 const AGENT_TOKEN_RE = /^jfagent_v1_[0-9a-f]{64}$/;
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+/**
+ * Importing a generation is not a normal API call: the route validates the
+ * model output, compiles LaTeX through an external renderer (allowed 20s on
+ * its own), parses the resulting PDF, uploads it, and commits a transaction.
+ * The default budget was smaller than that one render step, so a slow render
+ * timed out the client while the server went on to succeed — reported as an
+ * unknown settlement, then replayed into the same wall. This budget is for
+ * the whole chain, with room for the renderer to be cold.
+ */
+const IMPORT_TIMEOUT_MS = 120_000;
 
 async function readError(response) {
   const body = await response.json().catch(() => null);
@@ -72,14 +82,16 @@ export function createJoblitClient({
   const base = parsed.origin;
 
   async function execute(path, init = {}, parseJson = false) {
-    const upstreamSignal = init.signal;
-    const deadline = createRequestDeadline(requestTimeoutMs);
+    const { timeoutMs: callTimeoutMs, ...requestInit } = init;
+    const budgetMs = callTimeoutMs ?? requestTimeoutMs;
+    const upstreamSignal = requestInit.signal;
+    const deadline = createRequestDeadline(budgetMs);
     const signal = upstreamSignal
       ? AbortSignal.any([upstreamSignal, deadline.signal])
       : deadline.signal;
     try {
       const response = await fetchImpl(`${base}${path}`, {
-        ...init,
+        ...requestInit,
         signal,
         headers: {
           "Content-Type": "application/json",
@@ -104,7 +116,7 @@ export function createJoblitClient({
       if (deadline.expired()) {
         throw new JoblitClientError(
           "JOBLIT_REQUEST_TIMEOUT",
-          `Joblit request timed out after ${requestTimeoutMs}ms`,
+          `Joblit request timed out after ${budgetMs}ms`,
           undefined,
           { cause: error },
         );
@@ -166,6 +178,7 @@ export function createJoblitClient({
       await request("/api/applications/manual-generate?finalize=true", {
         method: "POST",
         body: JSON.stringify(requestBody),
+        timeoutMs: IMPORT_TIMEOUT_MS,
       });
       return { ok: true };
     },

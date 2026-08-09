@@ -2332,6 +2332,37 @@ test("joblit: import treats any 2xx as settled, including a PDF body", async () 
   });
 });
 
+test("joblit: gives the import call a render-sized budget, not the API default", async () => {
+  // The import route compiles LaTeX through an external renderer that alone
+  // is allowed 20s. With the generic request budget the client timed out
+  // while the server went on to succeed — every slow render became an
+  // "unknown settlement" replayed into the same wall. Proof by contrast: a
+  // response slower than the general budget must still be awaited here.
+  const joblit = createJoblitClient({
+    baseUrl: "https://joblit.example.com",
+    token: AGENT_TOKEN,
+    requestTimeoutMs: 100,
+    fetchImpl: async (url, init = {}) =>
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => resolve(jsonResponse({ ok: true })), 300);
+        init.signal?.addEventListener("abort", () => {
+          clearTimeout(timer);
+          reject(new Error("aborted by client budget"));
+        });
+      }),
+  });
+
+  await assert.doesNotReject(
+    joblit.importGeneration({
+      jobId: "j",
+      target: "cover",
+      source: "codex_batch",
+      modelOutput: "{}",
+      promptMeta: {},
+    }),
+  );
+});
+
 test("joblit: reads TailoringRun status for cooperative server cancellation", async () => {
   const runId = "55555555-5555-4555-8555-555555555555";
   const calls = [];
