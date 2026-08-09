@@ -339,6 +339,7 @@ function Get-JoblitInstalledDistributionSource {
 # app-server runtime so existing packages keep installing; the validator then
 # holds the end state.
 function Set-JoblitOpenAiRuntime {
+    [CmdletBinding(SupportsShouldProcess)]
     param([Parameter(Mandatory)][string] $ConfigPath)
     if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) { return $false }
     $content = [IO.File]::ReadAllText($ConfigPath)
@@ -349,6 +350,9 @@ function Set-JoblitOpenAiRuntime {
         '(?m)^(\s*)openai_runtime:\s*\S+\s*$',
         '$1openai_runtime: codex_app_server',
         1)
+    if (-not $PSCmdlet.ShouldProcess($ConfigPath, 'Set openai_runtime to codex_app_server')) {
+        return $false
+    }
     [IO.File]::WriteAllText($ConfigPath, $updated)
     return $true
 }

@@ -100,6 +100,17 @@ model:
         Set-JoblitOpenAiRuntime -ConfigPath $config | Should -BeFalse
     }
 
+    It 'leaves the packaged runtime unchanged under WhatIf' {
+        $config = Join-Path $TestDrive 'whatif-runtime.yaml'
+        @'
+model:
+  provider: openai-codex
+  openai_runtime: auto
+'@ | Set-Content -LiteralPath $config -Encoding utf8
+        Set-JoblitOpenAiRuntime -ConfigPath $config -WhatIf | Should -BeFalse
+        [IO.File]::ReadAllText($config) | Should -Match 'openai_runtime: auto'
+    }
+
     It 'accepts only the zero-tool Joblit config invariants' {
         $config = Join-Path $TestDrive 'config.yaml'
         @'
