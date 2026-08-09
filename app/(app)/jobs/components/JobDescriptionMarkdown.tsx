@@ -6,10 +6,7 @@ import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { useTranslations } from "next-intl";
 import "highlight.js/styles/github.css";
-import type {
-  ExperienceClassification,
-  JobExperienceAnalysis,
-} from "@/lib/shared/jobExperienceAnalysis";
+import type { VisibleJobExperienceProjection } from "@/lib/shared/jobExperienceAnalysis";
 import { HIGHLIGHT_KEYWORDS, escapeRegExp } from "../utils/constants";
 import { experienceEvidenceTargetId } from "./jobExperienceEvidenceTarget";
 
@@ -40,7 +37,6 @@ type ExperienceHighlight = {
   requirementId: string;
   start: number;
   end: number;
-  classification: ExperienceClassification;
 };
 
 type HastPoint = {
@@ -59,41 +55,16 @@ type HastNode = {
   };
 };
 
-const CLASSIFICATION_PRIORITY: Record<string, number> = {
-  REQUIRED: 5,
-  STATED: 4,
-  PREFERRED: 3,
-  ALTERNATIVE: 2,
-  REVIEW: 1,
-};
-
-function experienceHighlightTone(classification: string): string {
-  switch (classification) {
-    case "REQUIRED":
-      return "bg-brand-blue/15 font-bold text-foreground ring-1 ring-brand-blue/45 dark:bg-brand-blue/25";
-    case "STATED":
-      return "bg-brand-blue/10 font-semibold text-foreground ring-1 ring-brand-blue/30 dark:bg-brand-blue/20";
-    case "PREFERRED":
-      return "bg-transparent font-semibold text-foreground ring-1 ring-brand-blue/45";
-    case "ALTERNATIVE":
-      return "border border-dashed border-brand-blue/55 bg-brand-blue/[0.06] font-semibold text-foreground";
-    default:
-      return "bg-brand-blue/10 font-semibold text-foreground ring-1 ring-brand-blue/30";
-  }
-}
-
 function collectExperienceHighlights(
   description: string,
-  analysis?: JobExperienceAnalysis | null,
+  experience: VisibleJobExperienceProjection,
 ): ExperienceHighlight[] {
-  const candidates = (analysis?.requirements ?? [])
-    .filter((requirement) => requirement.classification !== "REVIEW")
-    .map((requirement) => ({
-      requirementId: requirement.id,
-      start: requirement.evidence.yearsStart,
-      end: requirement.evidence.yearsEnd,
-      classification: requirement.classification,
-      expectedText: requirement.years.text,
+  const candidates = experience.highlights
+    .map((highlight) => ({
+      requirementId: highlight.requirementId,
+      start: highlight.start,
+      end: highlight.end,
+      expectedText: highlight.text,
     }))
     .filter(
       ({ start, end, expectedText }) =>
@@ -104,25 +75,18 @@ function collectExperienceHighlights(
         end <= description.length &&
         description.slice(start, end) === expectedText,
     )
-    .sort(
-      (a, b) =>
-        a.start - b.start ||
-        b.end - a.end ||
-        (CLASSIFICATION_PRIORITY[b.classification] ?? 0) -
-          (CLASSIFICATION_PRIORITY[a.classification] ?? 0),
-    );
+    .sort((a, b) => a.start - b.start || b.end - a.end);
 
   const accepted: ExperienceHighlight[] = [];
   for (const candidate of candidates) {
     const previous = accepted.at(-1);
-    // Duplicate or overlapping evidence is rendered once. Candidates are
-    // priority-sorted, so REQUIRED wins over PREFERRED/REVIEW at one span.
+    // Duplicate or overlapping evidence is rendered once. The shared
+    // projector has already enforced REQUIRED-only visibility.
     if (previous && candidate.start < previous.end) continue;
     accepted.push({
       requirementId: candidate.requirementId,
       start: candidate.start,
       end: candidate.end,
-      classification: candidate.classification,
     });
   }
   return accepted;
@@ -170,7 +134,7 @@ function sourceStartForTextNode(
 function experienceMark(
   value: string,
   highlight: ExperienceHighlight,
-  labels: Record<string, string>,
+  requiredLabel: string,
 ): HastNode {
   return {
     type: "element",
@@ -194,10 +158,15 @@ function experienceMark(
         "data-[evidence-active=true]:ring-2",
         "data-[evidence-active=true]:ring-brand-blue",
         "motion-reduce:transition-none",
-        ...experienceHighlightTone(highlight.classification).split(" "),
+        "bg-brand-blue/15",
+        "font-bold",
+        "text-foreground",
+        "ring-1",
+        "ring-brand-blue/45",
+        "dark:bg-brand-blue/25",
       ],
-      "data-experience-highlight": highlight.classification,
-      "aria-label": `${labels[highlight.classification] ?? highlight.classification}: ${value}`,
+      "data-experience-highlight": "REQUIRED",
+      "aria-label": `${requiredLabel}: ${value}`,
     },
     children: [{ type: "text", value }],
   };
@@ -207,7 +176,7 @@ function splitTextNodeAtExperienceOffsets(
   node: HastNode,
   description: string,
   highlights: ExperienceHighlight[],
-  labels: Record<string, string>,
+  requiredLabel: string,
 ): HastNode[] {
   const value = node.value;
   if (typeof value !== "string") return [node];
@@ -230,7 +199,11 @@ function splitTextNodeAtExperienceOffsets(
       output.push({ type: "text", value: value.slice(cursor, localStart) });
     }
     output.push(
-      experienceMark(value.slice(localStart, localEnd), highlight, labels),
+      experienceMark(
+        value.slice(localStart, localEnd),
+        highlight,
+        requiredLabel,
+      ),
     );
     cursor = localEnd;
   }
@@ -242,10 +215,10 @@ function splitTextNodeAtExperienceOffsets(
 
 function createExperienceHighlightPlugin(
   description: string,
-  analysis: JobExperienceAnalysis | null | undefined,
-  labels: Record<string, string>,
+  experience: VisibleJobExperienceProjection,
+  requiredLabel: string,
 ) {
-  const highlights = collectExperienceHighlights(description, analysis);
+  const highlights = collectExperienceHighlights(description, experience);
 
   return function rehypeExperienceHighlights() {
     return (tree: HastNode) => {
@@ -259,7 +232,7 @@ function createExperienceHighlightPlugin(
                 child,
                 description,
                 highlights,
-                labels,
+                requiredLabel,
               ),
             );
           } else {
@@ -276,10 +249,10 @@ function createExperienceHighlightPlugin(
 
 export function JobDescriptionMarkdown({
   description,
-  experienceAnalysis,
+  experience,
 }: {
   description: string;
-  experienceAnalysis?: JobExperienceAnalysis | null;
+  experience: VisibleJobExperienceProjection;
 }) {
   const t = useTranslations("jobs.experienceRequirement");
   const highlightRegex = useMemo(() => {
@@ -292,13 +265,12 @@ export function JobDescriptionMarkdown({
   }, []);
   const experienceHighlightPlugin = useMemo(
     () =>
-      createExperienceHighlightPlugin(description, experienceAnalysis, {
-        REQUIRED: t("classificationREQUIRED"),
-        STATED: t("classificationSTATED"),
-        PREFERRED: t("classificationPREFERRED"),
-        ALTERNATIVE: t("classificationALTERNATIVE"),
-      }),
-    [description, experienceAnalysis, t],
+      createExperienceHighlightPlugin(
+        description,
+        experience,
+        t("classificationREQUIRED"),
+      ),
+    [description, experience, t],
   );
 
   function highlightKeywords(text: string, keyPrefix: string) {

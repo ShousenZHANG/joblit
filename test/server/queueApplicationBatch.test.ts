@@ -80,6 +80,7 @@ describe("queueApplicationBatch", () => {
         batchId: "source-batch",
         userId: "user-1",
         status: "FAILED",
+        job: { market: "AU" },
       },
       orderBy: { updatedAt: "desc" },
       distinct: ["jobId"],

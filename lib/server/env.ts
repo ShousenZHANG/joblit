@@ -36,8 +36,6 @@ const serverEnvSchema = z.object({
     .enum(["", "0", "1", "false", "true"])
     .optional(),
   ARTIFACT_RECONCILE_SECRET: z.string().optional(),
-  JOBLIT_ATS_BOARDS_JSON: z.string().optional(),
-
   // Set to "true" only when the LaTeX renderer is reachable over plain HTTP.
   // The render token travels in a request header, so this puts a credential on
   // the wire in cleartext; it exists for a self-hosted renderer that has not

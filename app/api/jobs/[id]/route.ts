@@ -10,7 +10,10 @@ import { FitMatrixSchema } from "@/lib/shared/schemas/fitMatrix";
 import { ACTIVE_JOB_STATUS_VALUES } from "@/lib/shared/jobStatus";
 import { applicationEventErrorResponse } from "@/lib/server/applications/applicationEventErrors";
 import { analyzeJobExperience } from "@/lib/shared/jobExperienceAnalysis";
-import { projectJobExperienceAnalysisV1 } from "@/lib/shared/jobExperienceAnalysisCompat";
+import {
+  projectJobExperienceAnalysisV1,
+  projectJobExperienceAnalysisV2,
+} from "@/lib/shared/jobExperienceAnalysisCompat";
 
 export const runtime = "nodejs";
 
@@ -77,7 +80,7 @@ export async function GET(
       }
 
       const matrix = FitMatrixSchema.safeParse(job.fitMatrix);
-      const experienceAnalysisV2 = analyzeJobExperience(job.description);
+      const experienceAnalysisV3 = analyzeJobExperience(job.description);
       return NextResponse.json({
         id: job.id,
         description: job.description ?? null,
@@ -87,8 +90,10 @@ export async function GET(
         // second copy would create a stale-cache and production-backfill
         // problem without improving the user-visible result.
         experienceAnalysis:
-          projectJobExperienceAnalysisV1(experienceAnalysisV2),
-        experienceAnalysisV2,
+          projectJobExperienceAnalysisV1(experienceAnalysisV3),
+        experienceAnalysisV2:
+          projectJobExperienceAnalysisV2(experienceAnalysisV3),
+        experienceAnalysisV3,
         updatedAt: job.updatedAt.toISOString(),
       });
     },

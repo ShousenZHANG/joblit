@@ -3,6 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const harness = vi.hoisted(() => ({
   commitFetchRun: vi.fn(),
   reportError: vi.fn(),
+  findUnique: vi.fn(),
+}));
+
+vi.mock("@/lib/server/prisma", () => ({
+  prisma: { fetchRun: { findUnique: harness.findUnique } },
 }));
 
 vi.mock("@/lib/server/fetchRuns/fetchRunCommit", () => {
@@ -61,6 +66,7 @@ function post(req: Request, id = RUN_ID) {
 describe("fetch run commit api", () => {
   beforeEach(() => {
     process.env.FETCH_RUN_SECRET = "fetch-secret";
+    harness.findUnique.mockReset().mockResolvedValue({ market: "AU" });
     harness.commitFetchRun.mockReset().mockResolvedValue({
       disposition: "APPLIED",
       executionAttemptId: ATTEMPT_ID,
@@ -176,7 +182,7 @@ describe("fetch run commit api", () => {
           {
             jobUrl: "https://example.com/jobs/1",
             title: "Platform Engineer",
-            market: "GLOBAL",
+            market: "AU",
           },
         ],
         terminal: true,
@@ -206,7 +212,7 @@ describe("fetch run commit api", () => {
         {
           jobUrl: "https://example.com/jobs/1",
           title: "Platform Engineer",
-          market: "GLOBAL",
+          market: "AU",
         },
       ],
       terminal: true,
@@ -248,6 +254,25 @@ describe("fetch run commit api", () => {
     });
     expect(harness.reportError).not.toHaveBeenCalled();
   });
+
+  it.each(["CN", "GLOBAL"])(
+    "returns 410 before committing a retired %s run",
+    async (market) => {
+      harness.findUnique.mockResolvedValue({ market });
+      const response = await post(
+        request({
+          protocol: FETCH_RUN_COMMIT_PROTOCOL,
+          command: "start",
+          attemptId: ATTEMPT_ID,
+        }),
+      );
+      expect(response.status).toBe(410);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "FETCH_MARKET_RETIRED" },
+      });
+      expect(harness.commitFetchRun).not.toHaveBeenCalled();
+    },
+  );
 
   it("reports unexpected commit failures without leaking internals", async () => {
     harness.commitFetchRun.mockRejectedValueOnce(new Error("database details"));

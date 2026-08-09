@@ -20,7 +20,7 @@ A role record imported from a job board (LinkedIn, Indeed, etc.) via the **Fetch
 
 ### FetchRun
 
-A durable execution of the **Fetch Pipeline** for one user and market. Its
+A durable AU execution of the **Fetch Pipeline** for one user. Its
 versioned `FetchRunConfig` snapshots the execution input (apart from
 `dispatchMeta` bookkeeping); ordered `FetchRunCommitReceipt` rows are the
 evidence that result batches crossed the database commit boundary.
@@ -174,17 +174,17 @@ job-less receipt.
 
 ### Fetch Pipeline
 
-The job-intake side. A `FetchRun` stores a versioned, market-discriminated
-configuration, performs network discovery through the AU worker or an
-in-process CN/GLOBAL adapter, then commits ordered result batches through the
-`fetch-run-commit/v1` protocol.
+The active job-intake side is AU-only. A `FetchRun` stores a versioned AU
+configuration, performs network discovery through the remote AU worker, then
+commits ordered result batches through the `fetch-run-commit/v1` protocol.
+CN Job and Resume data remain supported, but CN discovery is retired; GLOBAL
+public-feed and ATS-board discovery is retired completely. See **ADR-0017**.
 
 New AU runs persist `FetchRunConfig` v2 with the immutable
 `au-recall-safe-v2` policy. That policy keeps Junior, Mid, and Senior roles
 while excluding only explicit higher-level or leadership titles. Historical AU
-runs may carry `au-recall-safe-v1`, which retains its original Mid ceiling;
-current CN/GLOBAL runs retain their strict v1 config contract. Neither queued
-rows nor legacy rows are rewritten.
+runs may carry `au-recall-safe-v1`, which retains its original Mid ceiling.
+The executable config reader accepts AU v1 and AU v2 only.
 The active AU policy id affects new creation only: readers validate each
 persisted policy snapshot against its registry entry, and old registered
 policies remain executable after a newer policy becomes active. Historical v1
@@ -281,11 +281,10 @@ Neither identity depends on ZIP timestamps or a wall-clock build date.
 
 ### Market
 
-Geographic region governing which job sources to fetch and which resume locale to use. `AU | CN`. See `lib/shared/market.ts`.
-
-`FetchRunConfig.market` also accepts `GLOBAL` for the global public-feed/ATS
-adapter. That is an execution-source selector, not a third UI or Resume Market;
-it follows the AU locale path.
+Geographic region governing stored Job data and Resume locale. `AU | CN`. See
+`lib/shared/market.ts`. Only AU supports new Fetch intake. CN remains a valid
+Job and Resume market for retained data and Chinese resume workflows, but CN
+Fetch is retired. `GLOBAL` is not a Joblit Market or executable Fetch config.
 
 ### Resume Locale
 
@@ -315,6 +314,7 @@ Short locale code used by next-intl for translation strings. `en | zh`. Always d
 - [ADR-0001](./docs/adr/0001-application-aicontent-provenance.md) — Why we persist AI provenance.
 - [ADR-0002](./docs/adr/0002-unified-tailor-edit-flow.md) — Why both generate paths converge through the Edit phase.
 - [ADR-0008](./docs/adr/0008-fetch-run-execution-commit-protocol.md) — Why all Fetch Pipeline adapters share one durable commit boundary.
+- [ADR-0017](./docs/adr/0017-retire-cn-and-global-job-intake.md) — Why active job intake is AU-only while CN Job and Resume data remain supported.
 - [ADR-0009](./docs/adr/0009-tailoring-run-acceptance-protocol.md) — Why all AI proposal sources share one durable acceptance protocol.
 - [AGENTS.md](./AGENTS.md) — Codex Batch protocol.
 - [docs/CODEMAPS/](./docs/CODEMAPS) — Architecture snapshots.

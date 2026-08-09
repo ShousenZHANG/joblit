@@ -3,6 +3,10 @@
 - Status: Accepted
 - Date: 2026-07-24
 
+> **Partial supersession:** ADR-0017 retires the CN and GLOBAL adapters and
+> their executable config variants. The AU versioned config, attempt fencing,
+> receipts, commit boundary, and cancellation semantics remain accepted.
+
 ## Context
 
 The three Fetch Pipeline adapters did not share one completion boundary.

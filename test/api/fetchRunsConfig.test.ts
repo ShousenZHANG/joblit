@@ -185,6 +185,31 @@ describe("fetch run config api", () => {
     expect(harness.findUnique).not.toHaveBeenCalled();
   });
 
+  it.each(["CN", "GLOBAL"])(
+    "returns 410 for a retired %s worker config",
+    async (market) => {
+      harness.findUnique.mockResolvedValue({
+        id: RUN_ID,
+        status: "QUEUED",
+        market,
+        error: null,
+        importedCount: 0,
+        queries: { market },
+        location: null,
+        hoursOld: null,
+        resultsWanted: null,
+        includeFromQueries: false,
+        filterDescription: false,
+      });
+      const response = await getConfig();
+      expect(response.status).toBe(410);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "FETCH_MARKET_RETIRED" },
+      });
+      expect(harness.reportError).not.toHaveBeenCalled();
+    },
+  );
+
   it("fails closed when a versioned row violates its contract", async () => {
     harness.findUnique.mockResolvedValue({
       id: RUN_ID,

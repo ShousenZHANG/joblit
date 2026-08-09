@@ -3,6 +3,10 @@
 - Status: Accepted
 - Date: 2026-07-29
 
+> **Partial supersession:** ADR-0017 retires the ATS-board capability together
+> with GLOBAL intake. The capability resolver remains authoritative for every
+> other optional integration described here.
+
 ## Context
 
 Server modules previously read related environment variables independently.

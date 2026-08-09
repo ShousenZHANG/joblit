@@ -107,7 +107,7 @@ function commitCommand(
       {
         jobUrl: "https://example.com/jobs/1",
         title: "Platform Engineer",
-        market: "GLOBAL" as const,
+        market: "AU" as const,
       },
     ],
     terminal: true,
@@ -646,7 +646,7 @@ describe("FetchRun execution/commit protocol", () => {
           {
             jobUrl: "https://example.com/jobs/1",
             title: "Platform Engineer",
-            market: "GLOBAL",
+            market: "CN",
             source: "forged-source",
           },
         ],
@@ -670,4 +670,19 @@ describe("FetchRun execution/commit protocol", () => {
       }),
     );
   });
+
+  it.each(["CN", "GLOBAL"])(
+    "fails closed instead of importing a retired %s run as AU",
+    async (market) => {
+      harness.run.market = market;
+      await commitFetchRun(startCommand());
+
+      await expect(commitFetchRun(commitCommand())).rejects.toMatchObject({
+        code: "RUN_MARKET_RETIRED",
+        status: 410,
+      });
+      expect(harness.prepare).not.toHaveBeenCalled();
+      expect(harness.persist).not.toHaveBeenCalled();
+    },
+  );
 });

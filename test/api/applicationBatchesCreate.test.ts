@@ -102,6 +102,7 @@ describe("application batches create api", () => {
       expect.objectContaining({
         where: expect.objectContaining({
           userId: "user-1",
+          market: "AU",
           status: "NEW",
         }),
       }),
@@ -219,6 +220,7 @@ describe("application batches create api", () => {
       expect.objectContaining({
         where: expect.objectContaining({
           userId: "user-1",
+          market: "AU",
           status: "NEW",
           id: { in: selectedJobIds },
         }),

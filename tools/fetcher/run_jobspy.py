@@ -652,11 +652,8 @@ def _resolve_title_match(
 ) -> str:
     """Mirror of resolveTitleMatchMode in lib/shared/jobRelevance.ts.
 
-    `includeFromQueries` used to mean "skip the include filter" here and
-    "apply a looser include filter" in the GLOBAL processor, while one UI
-    checkbox sent the same value to both. `titleMatch` names all three states
-    so each market can honour the same intent; the boolean remains the
-    fallback for rows persisted before the field existed.
+    `titleMatch` names all three states explicitly; the boolean remains the
+    fallback for AU rows persisted before the field existed.
     """
     for source in (run, raw_queries if isinstance(raw_queries, dict) else {}):
         value = source.get("titleMatch")
@@ -1114,8 +1111,7 @@ def filter_title(
     """Exclusion always applies; `enforce_include` gates the include filter.
 
     `relaxed_include` keeps the base-query domain constraint but lets a title
-    answer the base query rather than one of the expanded terms, which is the
-    middle setting the GLOBAL processor has always had and AU never exposed.
+    answer the base query rather than one of the expanded terms.
     """
     if df.empty:
         return df

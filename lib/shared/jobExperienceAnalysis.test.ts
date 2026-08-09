@@ -5,743 +5,376 @@ import {
   JobExperienceAnalysisSchema,
   analyzeJobExperience,
 } from "./jobExperienceAnalysis";
+import {
+  LegacyJobExperienceAnalysisSchema,
+  LegacyJobExperienceAnalysisV2Schema,
+  projectJobExperienceAnalysisV1,
+  projectJobExperienceAnalysisV2,
+  upgradeJobExperienceAnalysisV1,
+  upgradeJobExperienceAnalysisV2,
+} from "./jobExperienceAnalysisCompat";
 
-describe("analyzeJobExperience", () => {
-  it("identifies the deterministic experience contract as schema v2", () => {
-    const analysis = analyzeJobExperience("3 years of backend experience");
-
-    expect(analysis.schemaVersion).toBe(2);
+describe("analyzeJobExperience v3 contract", () => {
+  it("exposes one deterministic offline seam and a versioned empty value", () => {
+    expect(analyzeJobExperience(null)).toEqual(EMPTY_JOB_EXPERIENCE_ANALYSIS);
+    expect(analyzeJobExperience(" \n ")).toEqual({
+      schemaVersion: 3,
+      status: "NONE",
+      requirements: [],
+    });
     expect(
-      JobExperienceAnalysisSchema.safeParse({ ...analysis, schemaVersion: 1 })
-        .success,
+      JobExperienceAnalysisSchema.safeParse({
+        ...analyzeJobExperience("Requirements:\n- 3 years of Java experience"),
+        schemaVersion: 2,
+      }).success,
     ).toBe(false);
   });
 
-  it("recognizes a combined Required Skills & Experience heading", () => {
-    const description =
-      "Required Skills & Experience:\n- 5+ years of backend development experience with Java.";
+  it.each([
+    [
+      "More than 5 years of backend experience is required",
+      "MORE_THAN",
+      5,
+      null,
+    ],
+    ["> 3 years of backend experience is required", "MORE_THAN", 3, null],
+    ["At least 4 years of backend experience", "AT_LEAST", 4, null],
+    [">= 2 years of backend experience", "AT_LEAST", 2, null],
+    ["5+ years of backend experience", "AT_LEAST", 5, null],
+    ["Less than 3 years of backend experience is required", "LESS_THAN", 0, 3],
+    ["< 2 years of backend experience is required", "LESS_THAN", 0, 2],
+    ["At most 5 years of backend experience", "AT_MOST", 0, 5],
+    ["Up to 4 years of backend experience", "AT_MOST", 0, 4],
+    ["<= 6 years of backend experience", "AT_MOST", 0, 6],
+    ["Exactly 3 years of backend experience", "EXACT", 3, 3],
+    ["3-5 years of backend experience", "RANGE", 3, 5],
+  ] as const)(
+    "preserves precise comparison semantics: %s",
+    (wording, operator, min, max) => {
+      const requirement = analyzeJobExperience(`Requirements:\n- ${wording}`)
+        .requirements[0];
+      expect(requirement?.years).toMatchObject({ operator, min, max });
+      expect(requirement?.classification).toBe("REQUIRED");
+    },
+  );
 
-    const requirement = analyzeJobExperience(description).requirements[0];
+  it.each([
+    ["1 year 6 months of Java experience is required", 1.5, "1 year 6 months"],
+    ["1y6m of Java experience is required", 1.5, "1y6m"],
+    [
+      "2 yrs and 3 mos of platform experience is required",
+      2.25,
+      "2 yrs and 3 mos",
+    ],
+    ["18 months of backend experience is required", 1.5, "18 months"],
+  ] as const)(
+    "merges compound and month quantities: %s",
+    (wording, min, text) => {
+      const analysis = analyzeJobExperience(`Qualifications:\n- ${wording}`);
+      expect(analysis.requirements).toHaveLength(1);
+      expect(analysis.requirements[0]?.years).toMatchObject({
+        operator: "EXACT",
+        min,
+        max: min,
+        text,
+      });
+    },
+  );
 
-    expect(requirement).toMatchObject({
-      classification: "REQUIRED",
-      years: { operator: "MINIMUM", min: 5, max: null, text: "5+ years" },
-      scope: "backend development",
-    });
+  it("applies a bound to the complete years-and-months quantity", () => {
     expect(
-      description.slice(
-        requirement?.evidence.yearsStart,
-        requirement?.evidence.yearsEnd,
-      ),
-    ).toBe("5+ years");
+      analyzeJobExperience(
+        "Qualifications:\n- At least 1 year 6 months of platform experience",
+      ).requirements[0]?.years,
+    ).toMatchObject({ operator: "AT_LEAST", min: 1.5, max: null });
   });
 
   it.each([
-    "Required Skills & Qualifications",
-    "Required Experience and Skills",
-    "Key Requirements",
-    "Job Requirements",
-    "Your Skills and Experience",
-  ])("keeps common combined requirement headings required: %s", (heading) => {
+    "Requirements",
+    "Required Skills & Experience",
+    "Qualifications",
+    "What you'll bring",
+    "About you",
+    "Who you are",
+    "Experience",
+  ])("treats candidate quantities in %s as REQUIRED", (heading) => {
     expect(
-      analyzeJobExperience(
-        `${heading}:\n- 4 years of platform engineering experience.`,
-      ).requirements[0]?.classification,
+      analyzeJobExperience(`${heading}:\n- 3 years of .NET platform experience`)
+        .requirements[0]?.classification,
     ).toBe("REQUIRED");
   });
 
-  it("keeps a combined preferred heading preferred", () => {
+  it("keeps non-required domain evidence but makes isolated wording REVIEW", () => {
+    expect(
+      analyzeJobExperience("5 years of backend experience").requirements[0]
+        ?.classification,
+    ).toBe("REVIEW");
+    expect(
+      analyzeJobExperience("5 years of React experience is preferred")
+        .requirements[0]?.classification,
+    ).toBe("PREFERRED");
     expect(
       analyzeJobExperience(
-        "Preferred Skills & Experience:\n- 2 years of React experience.",
+        "A bachelor's degree or 4 years of equivalent professional experience is required",
+      ).requirements[0]?.classification,
+    ).toBe("ALTERNATIVE");
+    expect(
+      analyzeJobExperience(
+        "We prefer candidates with 3 years of React experience, but it is not required.",
       ).requirements[0]?.classification,
     ).toBe("PREFERRED");
   });
 
-  it("classifies an unqualified candidate-experience statement as STATED", () => {
-    const description = "5+ years of backend development experience with Java.";
-
-    expect(analyzeJobExperience(description)).toMatchObject({
-      status: "FOUND",
-      requirements: [
-        {
-          classification: "STATED",
-          years: { operator: "MINIMUM", min: 5, max: null },
-          scope: "backend development",
-        },
-      ],
-    });
-  });
-
-  it("classifies education-or-equivalent-experience as ALTERNATIVE", () => {
-    const description =
-      "Requirements: Bachelor's degree or 4 years of equivalent professional experience.";
-
-    const requirement = analyzeJobExperience(description).requirements[0];
-
-    expect(requirement).toMatchObject({
-      classification: "ALTERNATIVE",
-      years: { operator: "EXACT", min: 4, max: 4, text: "4 years" },
-      scope: "equivalent professional",
-    });
-    expect(
-      description.slice(
-        requirement?.evidence.yearsStart,
-        requirement?.evidence.yearsEnd,
-      ),
-    ).toBe("4 years");
-  });
-
-  it("recognizes experience accepted in lieu of education as ALTERNATIVE", () => {
-    expect(
-      analyzeJobExperience(
-        "4 years of equivalent professional experience may be accepted in lieu of a bachelor's degree.",
-      ).requirements[0]?.classification,
-    ).toBe("ALTERNATIVE");
-  });
-
-  it("normalizes a quantifiable month duration without changing its evidence", () => {
-    const description =
-      "18 months of backend development experience is required.";
-
-    const requirement = analyzeJobExperience(description).requirements[0];
-
-    expect(requirement).toMatchObject({
-      classification: "REQUIRED",
-      years: { operator: "EXACT", min: 1.5, max: 1.5, text: "18 months" },
-      scope: "backend development",
-    });
-    expect(
-      description.slice(
-        requirement?.evidence.yearsStart,
-        requirement?.evidence.yearsEnd,
-      ),
-    ).toBe("18 months");
-  });
-
-  it("supports a decimal minimum in years", () => {
-    const description =
-      "3.5+ years of platform engineering experience required.";
-
-    const requirement = analyzeJobExperience(description).requirements[0];
-
-    expect(requirement).toMatchObject({
-      classification: "REQUIRED",
-      years: { operator: "MINIMUM", min: 3.5, max: null, text: "3.5+ years" },
-      scope: "platform engineering",
-    });
-    expect(
-      description.slice(
-        requirement?.evidence.yearsStart,
-        requirement?.evidence.yearsEnd,
-      ),
-    ).toBe("3.5+ years");
-  });
-
-  it("does not reinterpret an ambiguous plus-suffixed range as its upper bound", () => {
-    expect(
-      analyzeJobExperience("2-4+ years of backend experience").requirements[0],
-    ).toMatchObject({
-      classification: "REVIEW",
-      years: {
-        operator: "RANGE",
-        min: 2,
-        max: 4,
-        text: "2-4+ years",
-      },
-    });
-  });
-
-  it("keeps the minimum operator for a parenthetical number", () => {
-    const description =
-      "At least five (5) years of data engineering experience is required.";
-
-    expect(analyzeJobExperience(description).requirements[0]).toMatchObject({
-      classification: "REQUIRED",
-      years: {
-        operator: "MINIMUM",
-        min: 5,
-        max: null,
-        text: "At least five (5) years",
-      },
-      scope: "data engineering",
-    });
-  });
-
   it.each([
-    [
-      ">= 4 years of cloud experience required",
-      "MINIMUM",
-      4,
-      null,
-      ">= 4 years",
-    ],
-    ["≤ 2 years of experience is preferred", "MAXIMUM", 0, 2, "≤ 2 years"],
+    ["Experience: 5+ years", "AT_LEAST", 5, "5+ years"],
+    ["Minimum overall experience: 5 years", "AT_LEAST", 5, "5 years"],
+    ["Minimum Experience (Years): 5", "AT_LEAST", 5, "5"],
   ] as const)(
-    "supports a symbolic year bound: %s",
-    (description, operator, min, max, text) => {
-      expect(analyzeJobExperience(description).requirements[0]).toMatchObject({
-        years: { operator, min, max, text },
+    "parses a narrow ATS labelled field: %s",
+    (description, operator, min, text) => {
+      const requirement = analyzeJobExperience(description).requirements[0];
+      expect(requirement).toMatchObject({
+        classification: "REQUIRED",
+        years: { operator, min, text },
       });
-    },
-  );
-
-  it("resets inherited classification at an unknown section heading", () => {
-    const description = [
-      "Requirements:",
-      "- 3 years of backend experience.",
-      "Team principles:",
-      "- 2 years of pair-programming experience informs our approach.",
-    ].join("\n");
-
-    expect(
-      analyzeJobExperience(description).requirements.map(
-        ({ classification, years }) => ({ classification, min: years.min }),
-      ),
-    ).toEqual([
-      { classification: "REQUIRED", min: 3 },
-      { classification: "STATED", min: 2 },
-    ]);
-  });
-
-  it("resets inherited classification at any HTML heading", () => {
-    const description =
-      "<h3>Requirements</h3><p>3 years of backend experience.</p>" +
-      "<h3>Team principles</h3><p>2 years of pair-programming experience informs our approach.</p>";
-
-    expect(
-      analyzeJobExperience(description).requirements.map(
-        ({ classification, years }) => ({ classification, min: years.min }),
-      ),
-    ).toEqual([
-      { classification: "REQUIRED", min: 3 },
-      { classification: "STATED", min: 2 },
-    ]);
-  });
-
-  it("resets inherited classification at any Markdown heading", () => {
-    const description = [
-      "## Requirements",
-      "- 3 years of backend experience.",
-      "## Team principles",
-      "- 2 years of pair-programming experience informs our approach.",
-    ].join("\n");
-
-    expect(
-      analyzeJobExperience(description).requirements.map(
-        ({ classification, years }) => ({ classification, min: years.min }),
-      ),
-    ).toEqual([
-      { classification: "REQUIRED", min: 3 },
-      { classification: "STATED", min: 2 },
-    ]);
-  });
-
-  it("recognizes multiple headings inside a flattened single-line JD", () => {
-    const description =
-      "Overview: We build software. About you: 5+ years of backend experience. Preferred Qualifications: 2 years of React experience.";
-
-    expect(
-      analyzeJobExperience(description).requirements.map(
-        ({ classification, years, scope }) => ({
-          classification,
-          min: years.min,
-          scope,
-        }),
-      ),
-    ).toEqual([
-      { classification: "REQUIRED", min: 5, scope: "backend" },
-      { classification: "PREFERRED", min: 2, scope: "React" },
-    ]);
-  });
-
-  it.each([
-    "Requirements:\n- You must be available for the next 3 years.",
-    "Requirements:\n- Complete a 2-year rotation.",
-    "Requirements:\n- Deliver the project over 5 years.",
-    "Requirements:\n- Applicants must have lived in Australia for 5 years.",
-    "Requirements:\n- The initiative is funded for 4 years.",
-    "Requirements:\n- Keep records for 7 years.",
-    "Requirements:\n- Our company has operated for 25 years.",
-    "Requirements:\n- Candidates must be able to work for the next 3 years.",
-  ])(
-    "rejects a non-candidate duration even under a required heading: %s",
-    (description) => {
-      expect(analyzeJobExperience(description).requirements).toEqual([]);
-    },
-  );
-
-  it.each([
-    "About us:\n- Our team brings 20+ years of combined software experience.",
-    "Our product roadmap spans 5 years with investments in Java.",
-    "You need 3 years of availability for this assignment.",
-  ])(
-    "does not promote an organisational horizon to candidate experience: %s",
-    (description) => {
-      expect(analyzeJobExperience(description).requirements).toEqual([]);
-    },
-  );
-
-  it.each([
-    "Requirements:\n- This is a 3-year contract.",
-    "Requirements:\n- The project requires 3 years.",
-    "Requirements:\n- Deliver a 5-year roadmap.",
-    "Requirements:\n- The business has a 5-year funding runway.",
-  ])("keeps a hyphenated non-experience horizon hidden: %s", (description) => {
-    expect(analyzeJobExperience(description).requirements).toEqual([]);
-  });
-
-  it.each([
-    [
-      "5+ years of experience within building services consulting",
-      "building services consulting",
-    ],
-    [
-      "4 years of experience across enterprise platforms",
-      "enterprise platforms",
-    ],
-    ["3 years as a software engineer", "software engineer"],
-    ["2 years working in data engineering", "data engineering"],
-  ] as const)(
-    "normalizes an experience scope without grammar leakage: %s",
-    (description, scope) => {
-      expect(analyzeJobExperience(description).requirements[0]?.scope).toBe(
-        scope,
-      );
-    },
-  );
-
-  it("models an overall requirement with an included subset", () => {
-    const analysis = analyzeJobExperience(
-      "Requirements:\n- 5+ years of engineering experience overall, including 2+ years of Java experience.",
-    );
-
-    expect(
-      analysis.requirements.map(({ years, scope, relation }) => ({
-        min: years.min,
-        scope,
-        kind: relation?.kind,
-        role: relation?.role,
-        groupId: relation?.groupId,
-      })),
-    ).toEqual([
-      {
-        min: 5,
-        scope: "engineering",
-        kind: "ALL_OF",
-        role: "TOTAL",
-        groupId: expect.any(String),
-      },
-      {
-        min: 2,
-        scope: "Java",
-        kind: "ALL_OF",
-        role: "SUBSET",
-        groupId: expect.any(String),
-      },
-    ]);
-    expect(analysis.requirements[0]?.relation?.groupId).toBe(
-      analysis.requirements[1]?.relation?.groupId,
-    );
-  });
-
-  it("models multiple included subsets under one overall requirement", () => {
-    const analysis = analyzeJobExperience(
-      "Requirements:\n- 5+ years of engineering experience overall, including 2+ years Java and 1+ year AWS experience.",
-    );
-
-    expect(
-      analysis.requirements.map(({ years, scope, relation }) => ({
-        min: years.min,
-        scope,
-        kind: relation?.kind,
-        role: relation?.role,
-      })),
-    ).toEqual([
-      { min: 5, scope: "engineering", kind: "ALL_OF", role: "TOTAL" },
-      { min: 2, scope: "Java", kind: "ALL_OF", role: "SUBSET" },
-      { min: 1, scope: "AWS", kind: "ALL_OF", role: "SUBSET" },
-    ]);
-    expect(
-      new Set(analysis.requirements.map((item) => item.relation?.groupId)),
-    ).toEqual(new Set([analysis.requirements[0]?.relation?.groupId]));
-  });
-
-  it("preserves comma-separated included subsets under the total", () => {
-    const requirements = analyzeJobExperience(
-      "5+ years of engineering experience overall, including 2+ years Java, 1+ year AWS and 1+ year Kubernetes experience.",
-    ).requirements;
-
-    expect(
-      requirements.map(({ years, relation }) => ({
-        min: years.min,
-        kind: relation?.kind,
-        role: relation?.role,
-        groupId: relation?.groupId,
-      })),
-    ).toEqual([
-      { min: 5, kind: "ALL_OF", role: "TOTAL", groupId: expect.any(String) },
-      { min: 2, kind: "ALL_OF", role: "SUBSET", groupId: expect.any(String) },
-      { min: 1, kind: "ALL_OF", role: "SUBSET", groupId: expect.any(String) },
-      { min: 1, kind: "ALL_OF", role: "SUBSET", groupId: expect.any(String) },
-    ]);
-    expect(
-      new Set(requirements.map((item) => item.relation?.groupId)).size,
-    ).toBe(1);
-  });
-
-  it.each([
-    [
-      "2 years to 4 years of backend experience",
-      "RANGE",
-      2,
-      4,
-      "2 years to 4 years",
-    ],
-    [
-      "12 months - 18 months of commercial experience",
-      "RANGE",
-      1,
-      1.5,
-      "12 months - 18 months",
-    ],
-  ] as const)(
-    "parses a repeated-unit duration range as one requirement: %s",
-    (description, operator, min, max, text) => {
-      const analysis = analyzeJobExperience(description);
-      expect(analysis.requirements).toHaveLength(1);
-      expect(analysis.requirements[0]?.years).toEqual({
-        operator,
-        min,
-        max,
-        text,
-      });
-    },
-  );
-
-  it.each([
-    "3 or 4 years of backend experience",
-    "3 to 5+ years of backend experience",
-  ])(
-    "keeps a structurally ambiguous duration out of the visible contract: %s",
-    (description) => {
-      const analysis = analyzeJobExperience(description);
-      expect(analysis.requirements).toHaveLength(1);
-      expect(analysis.requirements[0]?.classification).toBe("REVIEW");
-    },
-  );
-
-  it("rejects malformed TOTAL/SUBSET relation groups at the public schema", () => {
-    const valid = analyzeJobExperience(
-      "Requirements:\n- 5 years of engineering experience overall, including 2 years of Java experience.",
-    );
-    expect(JobExperienceAnalysisSchema.safeParse(valid).success).toBe(true);
-
-    const twoTotals = {
-      ...valid,
-      requirements: valid.requirements.map((requirement) => ({
-        ...requirement,
-        relation: requirement.relation
-          ? { ...requirement.relation, role: "TOTAL" as const }
-          : undefined,
-      })),
-    };
-    expect(JobExperienceAnalysisSchema.safeParse(twoTotals).success).toBe(
-      false,
-    );
-
-    const missingRole = {
-      ...valid,
-      requirements: valid.requirements.map((requirement, index) =>
-        index === 1 && requirement.relation
-          ? {
-              ...requirement,
-              relation: {
-                groupId: requirement.relation.groupId,
-                kind: requirement.relation.kind,
-              },
-            }
-          : requirement,
-      ),
-    };
-    expect(JobExperienceAnalysisSchema.safeParse(missingRole).success).toBe(
-      false,
-    );
-  });
-
-  it.each([
-    ["12+ months of backend experience", "MINIMUM", 1, null, "12+ months"],
-    [
-      "18 months or more of backend experience",
-      "MINIMUM",
-      1.5,
-      null,
-      "18 months or more",
-    ],
-    [
-      "Minimum 24 months of backend experience",
-      "MINIMUM",
-      2,
-      null,
-      "Minimum 24 months",
-    ],
-    ["3 years' experience in Java", "EXACT", 3, 3, "3 years"],
-    ["2 yrs exp. in Go", "EXACT", 2, 2, "2 yrs"],
-  ] as const)(
-    "supports a high-value quantifiable duration form: %s",
-    (description, operator, min, max, text) => {
-      expect(analyzeJobExperience(description).requirements[0]?.years).toEqual({
-        operator,
-        min,
-        max,
-        text,
-      });
-    },
-  );
-
-  it("extracts a scope that precedes its year expression", () => {
-    expect(
-      analyzeJobExperience("Experience with Java: 5 years").requirements[0],
-    ).toMatchObject({
-      classification: "STATED",
-      years: { min: 5 },
-      scope: "Java",
-    });
-  });
-
-  it.each([
-    ["eleven years of product experience", 11],
-    ["twenty-five years of consulting experience preferred", 25],
-    ["sixty years of archival experience", 60],
-  ] as const)(
-    "supports an exact English number through sixty: %s",
-    (description, min) => {
       expect(
-        analyzeJobExperience(description).requirements[0]?.years,
-      ).toMatchObject({
-        operator: "EXACT",
-        min,
-        max: min,
-      });
+        description.slice(
+          requirement?.evidence.yearsStart,
+          requirement?.evidence.yearsEnd,
+        ),
+      ).toBe(text);
     },
   );
+});
 
-  it("normalizes a mixed years-and-months duration as one requirement", () => {
+describe("candidate ownership and false-positive safety", () => {
+  it.each([
+    "3 yrs of Java experience",
+    "3 yrs. of Java experience",
+    "Minimum three years of cloud experience",
+    "A minimum of 3 years of data experience",
+    "No fewer than 3 years of backend experience",
+    "Not less than 3 years of platform experience",
+    "3 years of Java experience or more",
+    "3 years of Java experience and above",
+    "3 years of Java experience minimum",
+    "3 years of Java experience required",
+    "Between 2 and 4 years of commercial experience",
+    "2 years to 4 years of backend experience",
+    "24 months of backend experience",
+    "At least 18 months of data experience",
+    "12-18 months of commercial experience",
+    "Up to 24 months of platform experience",
+    "More than 18 months of data experience",
+    "Five years of software experience",
+    "five (5) years of product experience",
+    "five-year data engineering experience",
+    "5 years+ of backend experience",
+    "5+ years of backend experience",
+    "5 yrs experience in Java",
+    "3.5 years of platform experience",
+    "3.5+ years of platform experience",
+    "1 yr 6 mos of engineering experience",
+    "2y3m of commercial experience",
+    "No more than 5 years of industry experience",
+    "Under 4 years of professional experience",
+    "4 years of relevant experience or less",
+    "Experience in Go: 4 years",
+    "4 years working in data engineering",
+    "4 years as a software engineer",
+    "\u2265 4 years of cloud experience",
+    "\u2264 5 years of backend experience",
+    "> 5 years of security experience",
+    "< 5 years of mobile experience",
+    "<strong>Qualifications</strong><ul><li>3 years of Java experience</li></ul>",
+    "| Minimum experience | 5 years |",
+    "<table><tr><td>Minimum experience</td><td>5 years</td></tr></table>",
+  ])("recognizes a high-confidence AU JD form: %s", (line) => {
     const description =
-      "2 years and 6 months of commercial software experience required.";
+      line.startsWith("<strong") ||
+      line.startsWith("<table") ||
+      line.startsWith("|")
+        ? line
+        : `Qualifications:\n- ${line}`;
+    const requirement = analyzeJobExperience(description).requirements[0];
+    expect(requirement).toBeDefined();
+    expect(requirement?.classification).toBe("REQUIRED");
+    expect(
+      description.slice(
+        requirement?.evidence.yearsStart,
+        requirement?.evidence.yearsEnd,
+      ),
+    ).toBe(requirement?.years.text);
+  });
 
+  it.each([
+    "Our company has operated for 25 years.",
+    "Our team brings 20 years of combined software experience.",
+    "The founder has 18 years of product experience.",
+    "You will report to a manager with 15 years of engineering experience.",
+    "Our customer has 12 years of banking experience.",
+    "Our customers require 5 years of experience from their vendors.",
+    "The client requires 7 years experience from its lead consultant.",
+    "The role includes a four year bachelor's degree pathway.",
+    "Complete a 3-year graduate program.",
+    "This is a 2-year contract.",
+    "Your temporary visa must remain valid for at least 3 years.",
+    "Applicants must have lived in Australia for 5 years.",
+    "The project roadmap spans 5 years.",
+    "Records must be retained for 7 years.",
+    "The product launched 5 years ago.",
+    "Applicants must be at least 18 years old.",
+  ])("does not expose a foreign or non-role duration: %s", (description) => {
+    expect(analyzeJobExperience(`Requirements:\n- ${description}`)).toEqual(
+      EMPTY_JOB_EXPERIENCE_ANALYSIS,
+    );
+  });
+
+  it.each([
+    "You must be available for the next 3 years.",
+    "The engagement lasts for 2 years.",
+    "This assignment runs for 3 years.",
+    "Deliver the roadmap over 5 years.",
+    "The delivery timeline covers 4 years.",
+    "The visa is valid for 3 years.",
+    "Your passport must remain valid for 2 years.",
+    "Permanent residency held for 5 years is required.",
+    "Citizenship must have been held for 4 years.",
+    "Work rights must remain valid for 2 years.",
+    "Complete a four-year degree.",
+    "A 2-year diploma is offered.",
+    "Attend a 3-year university program.",
+    "The course takes 2 years.",
+    "Training runs for 18 months.",
+    "The internship lasts 12 months.",
+    "The apprenticeship is a 4-year program.",
+    "The warranty covers 5 years.",
+    "The licence remains valid for 3 years.",
+    "Registration must be renewed every 2 years.",
+    "Membership has been active for 5 years.",
+    "Clearance renewal occurs after 3 years.",
+    "The certification is valid for 2 years.",
+    "Retention policy requires 7 years.",
+    "Annual leave increases after 5 years of service.",
+    "The successful applicant must be at least 21 years old.",
+    "The company was founded 12 years ago.",
+    "The organisation was established 30 years ago.",
+    "The firm has served customers for 20 years.",
+    "The manager offers 15 years of engineering experience.",
+    "The leadership team has 40 years of combined experience.",
+    "The platform has existed for 8 years.",
+    "The contract term is 6 months.",
+    "The rotational program lasts 2 years.",
+    "Funding is secured for 4 years.",
+    "You must be located in Sydney for 3 years.",
+    "Candidates must be based in Australia for 2 years.",
+    "Applicants must have resided locally for 5 years.",
+    "Record-keeping is required for 7 years.",
+    "Audit files are held for 6 years.",
+    "The project runs over 3 years.",
+    "The product launched 5 years ago.",
+  ])("keeps a duration-only AU JD statement hidden: %s", (line) => {
+    expect(
+      analyzeJobExperience(`Requirements:\n- ${line}`).requirements,
+    ).toEqual([]);
+  });
+
+  it("uses the nearest semantic owner instead of rejecting a company lead-in", () => {
+    const analysis = analyzeJobExperience(
+      "Our team has an opening for applicants who must have 5+ years of backend experience.",
+    );
+    expect(analysis.requirements).toHaveLength(1);
+    expect(analysis.requirements[0]).toMatchObject({
+      classification: "REQUIRED",
+      years: { operator: "AT_LEAST", min: 5 },
+    });
+  });
+
+  it("keeps candidate experience in a sentence that also describes a contract", () => {
+    const analysis = analyzeJobExperience(
+      "For this 12-month contract, you must have at least 5 years of experience in Java.",
+    );
+    expect(analysis.requirements.map((item) => item.years.min)).toEqual([5]);
+  });
+
+  it("keeps candidate experience when a location gate shares the sentence", () => {
+    const description =
+      "Minimum requirements: Applicants must have unrestricted Australian work rights, hold NV1 security clearance, possess a valid driver's licence, be based in Sydney, and have at least 5 years of professional experience.";
     const analysis = analyzeJobExperience(description);
 
     expect(analysis.requirements).toHaveLength(1);
     expect(analysis.requirements[0]).toMatchObject({
       classification: "REQUIRED",
       years: {
-        operator: "EXACT",
-        min: 2.5,
-        max: 2.5,
-        text: "2 years and 6 months",
-      },
-      scope: "commercial software",
-    });
-  });
-
-  it.each([
-    ["At least 18 months of data experience", "MINIMUM", 1.5, null],
-    ["12-18 months of data experience", "RANGE", 1, 1.5],
-    ["Up to 24 months of data experience preferred", "MAXIMUM", 0, 2],
-    ["≥ 18 months of data experience", "MINIMUM", 1.5, null],
-    ["≤ 24 months of data experience preferred", "MAXIMUM", 0, 2],
-    ["More than 18 months of data experience", "MINIMUM", 1.5, null],
-  ] as const)(
-    "supports quantified month bounds and ranges: %s",
-    (description, operator, min, max) => {
-      expect(
-        analyzeJobExperience(description).requirements[0]?.years,
-      ).toMatchObject({
-        operator,
-        min,
-        max,
-      });
-    },
-  );
-
-  it.each([
-    ["More than 5 years of backend experience", "More than 5 years", 5],
-    ["Over 7 years of cloud experience preferred", "Over 7 years", 7],
-  ] as const)(
-    "keeps an explicit open lower bound displayable: %s",
-    (description, text, min) => {
-      const requirement = analyzeJobExperience(description).requirements[0];
-      expect(requirement?.classification).not.toBe("REVIEW");
-      expect(requirement?.years).toEqual({
-        operator: "MINIMUM",
-        min,
+        operator: "AT_LEAST",
+        min: 5,
         max: null,
-        text,
-      });
-    },
-  );
-
-  it.each([
-    ["5 years+ of backend experience required", "MINIMUM", 5, null, "5 years+"],
-    ["5-year backend engineering experience required", "EXACT", 5, 5, "5-year"],
-    [
-      "five-year data engineering experience preferred",
-      "EXACT",
-      5,
-      5,
-      "five-year",
-    ],
-  ] as const)(
-    "supports suffix-plus and hyphenated duration forms: %s",
-    (description, operator, min, max, text) => {
-      expect(analyzeJobExperience(description).requirements[0]).toMatchObject({
-        years: { operator, min, max, text },
-      });
-    },
-  );
-
-  it("returns the versioned empty result when the JD has no usable text", () => {
-    expect(analyzeJobExperience(null)).toEqual(EMPTY_JOB_EXPERIENCE_ANALYSIS);
-    expect(analyzeJobExperience("   \n ")).toEqual({
-      schemaVersion: 2,
-      status: "NONE",
-      requirements: [],
+        text: "at least 5 years",
+      },
     });
+    const requirement = analysis.requirements[0];
     expect(
-      JobExperienceAnalysisSchema.parse(analyzeJobExperience(undefined)),
-    ).toEqual(EMPTY_JOB_EXPERIENCE_ANALYSIS);
+      description.slice(
+        requirement?.evidence.yearsStart,
+        requirement?.evidence.yearsEnd,
+      ),
+    ).toBe(requirement?.years.text);
+    expect(
+      description.slice(requirement?.evidence.start, requirement?.evidence.end),
+    ).toBe(requirement?.evidence.text);
   });
 
-  it("extracts an explicit minimum with exact source offsets", () => {
-    const description = [
-      "Required qualifications:",
-      "- At least 5 years of professional experience in backend engineering.",
-    ].join("\n");
-
-    expect(analyzeJobExperience(description)).toEqual({
-      schemaVersion: 2,
-      status: "FOUND",
-      requirements: [
-        {
-          id: "experience-27-43",
-          classification: "REQUIRED",
-          years: {
-            operator: "MINIMUM",
-            min: 5,
-            max: null,
-            text: "At least 5 years",
-          },
-          scope: "backend engineering",
-          evidence: {
-            text: "At least 5 years of professional experience in backend engineering",
-            start: 27,
-            end: 93,
-            yearsStart: 27,
-            yearsEnd: 43,
-          },
-        },
-      ],
-    });
-  });
-
-  it.each([
-    [
-      "Requirements:\n- five+ years of experience in TypeScript",
-      { operator: "MINIMUM", min: 5, max: null, text: "five+ years" },
-    ],
-    [
-      "Minimum qualifications:\n- A minimum of ten years' experience",
-      { operator: "MINIMUM", min: 10, max: null, text: "minimum of ten years" },
-    ],
-    [
-      "Required qualifications:\n- 3-5 years of experience in cloud platforms",
-      { operator: "RANGE", min: 3, max: 5, text: "3-5 years" },
-    ],
-    [
-      "Required qualifications:\n- Between two and four years of commercial experience",
-      {
-        operator: "RANGE",
-        min: 2,
-        max: 4,
-        text: "Between two and four years",
-      },
-    ],
-    [
-      "Requirements:\n- Up to 6 years of relevant experience",
-      { operator: "MAXIMUM", min: 0, max: 6, text: "Up to 6 years" },
-    ],
-    [
-      "Requirements:\n- 4 years of experience or less",
-      {
-        operator: "MAXIMUM",
-        min: 0,
-        max: 4,
-        text: "4 years of experience or less",
-      },
-    ],
-    [
-      "Required qualifications:\n- seven years of product experience",
-      { operator: "EXACT", min: 7, max: 7, text: "seven years" },
-    ],
-  ])("normalizes supported year expression %#", (description, expected) => {
+  it("suppresses a recency window without suppressing the actual requirement", () => {
+    const description =
+      "Requirements:\n- At least 3 years of Java experience within the last 5 years.";
     const analysis = analyzeJobExperience(description);
-
-    expect(analysis.requirements[0]?.years).toEqual(expected);
+    expect(analysis.requirements).toHaveLength(1);
+    expect(analysis.requirements[0]?.years).toMatchObject({
+      operator: "AT_LEAST",
+      min: 3,
+      text: "At least 3 years",
+    });
+    expect(analysis.requirements.map((item) => item.years.text)).not.toContain(
+      "last 5 years",
+    );
   });
+});
 
-  it("lets a sentence qualifier override the inherited heading context", () => {
-    const description = [
-      "Required qualifications:",
-      "- 3 years of Java experience is preferred.",
-      "Preferred qualifications:",
-      "- A minimum of 4 years of platform experience is mandatory.",
-    ].join("\n");
-
-    expect(
-      analyzeJobExperience(description).requirements.map((requirement) => ({
-        classification: requirement.classification,
-        min: requirement.years.min,
-      })),
-    ).toEqual([
-      { classification: "PREFERRED", min: 3 },
-      { classification: "REQUIRED", min: 4 },
-    ]);
-  });
+describe("scope, section and source-offset fidelity", () => {
+  it.each([
+    ["Experience: at least 4 years in Java", "Java"],
+    ["Experience with Node.js: at least 3 years", "Node.js"],
+    ["At least 3 years of .NET platform experience", ".NET platform"],
+    ["At least 2 years of C#/.NET experience", "C#/.NET"],
+    ["3 years .NET required", ".NET"],
+    [
+      "At least 5 years' track record in cloud engineering",
+      "cloud engineering",
+    ],
+  ] as const)(
+    "extracts candidate scope without punctuation loss: %s",
+    (line, scope) => {
+      const requirement = analyzeJobExperience(`Requirements:\n- ${line}`)
+        .requirements[0];
+      expect(requirement?.scope).toBe(scope);
+    },
+  );
 
   it.each([
-    ["Qualifications: 3+ years of backend experience", "REQUIRED"],
-    ["Nice-to-haves: 2 years of React experience", "PREFERRED"],
-  ] as const)(
-    "inherits an inline section heading without corrupting offsets: %s",
-    (description, classification) => {
+    "## Requirements\n- **3+ years** of experience in Java.",
+    "<h3>Qualifications</h3><ul><li>At least 4 years of .NET experience.</li></ul>",
+    "About us: We build software. About you: 5+ years of backend experience.",
+  ])(
+    "keeps exact original evidence offsets through formatted input",
+    (description) => {
       const requirement = analyzeJobExperience(description).requirements[0];
-
-      expect(requirement?.classification).toBe(classification);
+      expect(requirement).toBeDefined();
       expect(
         description.slice(
           requirement?.evidence.start,
           requirement?.evidence.end,
         ),
       ).toBe(requirement?.evidence.text);
-    },
-  );
-
-  it.each([
-    ["five (5) years of experience is required.", "EXACT", 5],
-    ["5 or more years of experience is required.", "MINIMUM", 5],
-    ["5 years of experience or more is required.", "MINIMUM", 5],
-    ["not less than 5 years of experience is required.", "MINIMUM", 5],
-    ["Minimum 5 yrs. experience in Java is required.", "MINIMUM", 5],
-  ] as const)(
-    "preserves the semantics of common AU JD wording: %s",
-    (description, operator, minimum) => {
-      const requirement = analyzeJobExperience(description).requirements[0];
-
-      expect(requirement).toMatchObject({
-        classification: "REQUIRED",
-        years: { operator, min: minimum },
-      });
       expect(
         description.slice(
           requirement?.evidence.yearsStart,
@@ -751,455 +384,126 @@ describe("analyzeJobExperience", () => {
     },
   );
 
-  it("keeps generic grammar out of the experience scope label", () => {
-    for (const description of [
-      "five (5) years of experience is required.",
-      "5 or more years of experience is required.",
-      "5 years of experience or more is required.",
-    ]) {
-      expect(
-        analyzeJobExperience(description).requirements[0]?.scope,
-      ).toBeNull();
-    }
+  it("fails closed when no quantitative candidate evidence exists", () => {
     expect(
-      analyzeJobExperience("Minimum 5 yrs. experience in Java is required.")
-        .requirements[0]?.scope,
-    ).toBe("Java");
-  });
-
-  it.each([
-    ["5+ years of backend experience", "STATED"],
-    ["Five years of backend experience", "STATED"],
-    ["Five years of backend experience preferred", "PREFERRED"],
-  ] as const)(
-    "classifies an unheaded constraint from its own wording: %s",
-    (description, classification) => {
-      const analysis = analyzeJobExperience(description);
-
-      expect({
-        classification: analysis.requirements[0]?.classification,
-        status: analysis.status,
-      }).toEqual({
-        classification,
-        status: "FOUND",
-      });
-    },
-  );
-
-  it.each([
-    "No 5 years of experience is required.",
-    "Five years of experience is not required.",
-    "You do not need 5 years of experience.",
-    "Our company has operated successfully for 10 years.",
-    "Our engineering team brings 20 years of combined experience.",
-    "The contract duration is 2 years.",
-    "Your temporary visa must remain valid for at least 3 years.",
-    "A four year bachelor's degree is required.",
-    "The graduate training programme runs for two years.",
-    "The product launched 5 years ago.",
-    "Applicants must be at least 18 years old.",
-    "Annual leave increases after 5 years of service.",
-    "Records must be retained for 7 years for audit purposes.",
-  ])("does not treat non-role duration as experience: %s", (description) => {
-    expect(analyzeJobExperience(description)).toEqual(
-      EMPTY_JOB_EXPERIENCE_ANALYSIS,
-    );
-  });
-
-  it("keeps a real applicant requirement even when the role is a contract", () => {
-    const analysis = analyzeJobExperience(
-      "For this 12-month contract, you must have at least 5 years of experience in Java.",
-    );
-
-    expect(
-      analysis.requirements.map((requirement) => requirement.years.min),
-    ).toEqual([5]);
-  });
-
-  it("keeps different scopes separate and records an AND relationship", () => {
-    const analysis = analyzeJobExperience(
-      "Requirements:\n- At least 3 years of Java experience and 2+ years of AWS experience.",
-    );
-    const [java, aws] = analysis.requirements;
-
-    expect({
-      scopes: analysis.requirements.map((requirement) => requirement.scope),
-      years: analysis.requirements.map((requirement) => requirement.years.min),
-      relationKinds: analysis.requirements.map(
-        (requirement) => requirement.relation?.kind,
+      analyzeJobExperience(
+        "Qualifications:\n- Strong Java experience and an excellent track record.",
       ),
-      sameGroup: java?.relation?.groupId === aws?.relation?.groupId,
-    }).toEqual({
-      scopes: ["Java", "AWS"],
-      years: [3, 2],
-      relationKinds: ["ALL_OF", "ALL_OF"],
-      sameGroup: true,
-    });
+    ).toEqual(EMPTY_JOB_EXPERIENCE_ANALYSIS);
   });
+});
 
-  it("records alternative scoped requirements as ANY_OF", () => {
+describe("relations and bounded output", () => {
+  it("models an overall requirement and included subset", () => {
     const analysis = analyzeJobExperience(
-      "Requirements:\n- 5 years in backend development or 3 years in mobile development.",
+      "Requirements:\n- 5+ years of engineering experience, including 2+ years of Java experience.",
     );
-
     expect(
-      analysis.requirements.map((requirement) => ({
-        scope: requirement.scope,
-        relation: requirement.relation?.kind,
+      analysis.requirements.map((item) => ({
+        min: item.years.min,
+        scope: item.scope,
+        kind: item.relation?.kind,
+        role: item.relation?.role,
       })),
     ).toEqual([
-      { scope: "backend development", relation: "ANY_OF" },
-      { scope: "mobile development", relation: "ANY_OF" },
+      { min: 5, scope: "engineering", kind: "ALL_OF", role: "TOTAL" },
+      { min: 2, scope: "Java", kind: "ALL_OF", role: "SUBSET" },
     ]);
   });
 
-  it("uses the nearest sentence qualifier for each related requirement", () => {
-    const analysis = analyzeJobExperience(
-      "3 years of Java experience required and 5 years of AWS experience preferred.",
-    );
-
-    expect(
-      analysis.requirements.map((requirement) => requirement.classification),
-    ).toEqual(["REQUIRED", "PREFERRED"]);
-  });
-
-  it("routes an approximate experience claim to review", () => {
-    expect(
-      analyzeJobExperience(
-        "Around 5 years of professional experience is required.",
-      ),
-    ).toMatchObject({
-      status: "REVIEW",
-      requirements: [{ classification: "REVIEW" }],
-    });
-  });
-
-  it("does not display a bare duration even under a requirements heading", () => {
-    expect(analyzeJobExperience("Requirements:\n- 5 years.")).toEqual(
-      EMPTY_JOB_EXPERIENCE_ANALYSIS,
-    );
-  });
-
-  it("parses a decimal as one requirement rather than its integer tail", () => {
-    expect(
-      analyzeJobExperience("A minimum of 3.5 years of experience is required.")
-        .requirements[0]?.years,
-    ).toEqual({
-      operator: "MINIMUM",
-      min: 3.5,
-      max: null,
-      text: "minimum of 3.5 years",
-    });
-  });
-
   it.each([
-    [
-      "Requirements:\n- 3 years of backend experience minimum.",
-      { operator: "MINIMUM", classification: "REQUIRED" },
-    ],
-    [
-      "Requirements:\n- 3 yrs exp required.",
-      { operator: "EXACT", classification: "REQUIRED" },
-    ],
-    [
-      "Requirements:\n- Less than 3 years of experience.",
-      { operator: "MAXIMUM", classification: "REVIEW" },
-    ],
-  ] as const)(
-    "does not overstate common experience wording: %s",
-    (description, expected) => {
-      const requirement = analyzeJobExperience(description).requirements[0];
-
-      expect({
-        operator: requirement?.years.operator,
-        classification: requirement?.classification,
-      }).toEqual(expected);
-    },
-  );
-
-  it("ignores unrelated year durations outside a requirement context", () => {
-    expect(analyzeJobExperience("Our office lease runs for 5 years.")).toEqual(
-      EMPTY_JOB_EXPERIENCE_ANALYSIS,
-    );
-    expect(
-      analyzeJobExperience(
-        "Requirements:\n- 3 years of backend experience.\nBenefits:\n- Share awards vest over 4 years.",
-      ).requirements.map(({ years }) => years.min),
-    ).toEqual([3]);
-    expect(
-      analyzeJobExperience(
-        "Requirements:\n- 3 years of backend experience.\nResponsibilities:\n- Deliver the roadmap over 5 years.",
-      ).requirements.map(({ years }) => years.min),
-    ).toEqual([3]);
+    ["3 years Java required and 2 years Kotlin", "ALL_OF"],
+    ["3 years Java required or 2 years Kotlin", "ANY_OF"],
+  ] as const)("groups a homogeneous relation: %s", (wording, kind) => {
+    const analysis = analyzeJobExperience(wording);
+    expect(analysis.requirements).toHaveLength(2);
+    expect(analysis.requirements.map((item) => item.classification)).toEqual([
+      "REQUIRED",
+      "REQUIRED",
+    ]);
+    expect(analysis.requirements.map((item) => item.relation?.kind)).toEqual([
+      kind,
+      kind,
+    ]);
   });
 
-  it("bounds evidence from a long unpunctuated line without losing source offsets", () => {
-    const prefix = "Required: at least 4 years of backend experience ";
-    const description = `${prefix}${"context ".repeat(500)}`;
-    const analysis = analyzeJobExperience(description);
-    const requirement = analysis.requirements[0];
-
-    expect(requirement).toBeDefined();
-    expect(requirement?.evidence.text.length).toBeLessThanOrEqual(2_000);
-    expect(
-      description.slice(requirement?.evidence.start, requirement?.evidence.end),
-    ).toBe(requirement?.evidence.text);
-    expect(
-      description.slice(
-        requirement?.evidence.yearsStart,
-        requirement?.evidence.yearsEnd,
-      ),
-    ).toBe(requirement?.years.text);
-  });
-
-  it("rejects malformed persisted analyses at the shared schema seam", () => {
-    const valid = analyzeJobExperience(
-      "Requirements:\n- At least 3 years of backend experience.",
-    );
-    const requirement = valid.requirements[0];
-    expect(requirement).toBeDefined();
-
-    expect(
-      JobExperienceAnalysisSchema.safeParse({ ...valid, unexpected: true })
-        .success,
-    ).toBe(false);
-    expect(
-      JobExperienceAnalysisSchema.safeParse({
-        ...valid,
-        requirements: [
-          {
-            ...requirement,
-            evidence: {
-              ...requirement?.evidence,
-              yearsStart: (requirement?.evidence.start ?? 0) - 1,
-            },
-          },
-        ],
-      }).success,
-    ).toBe(false);
-    expect(
-      JobExperienceAnalysisSchema.safeParse({
-        ...valid,
-        requirements: [
-          {
-            ...requirement,
-            years: { ...requirement?.years, operator: "EXACT", max: 4 },
-          },
-        ],
-      }).success,
-    ).toBe(false);
-    expect(
-      JobExperienceAnalysisSchema.safeParse({
-        ...valid,
-        requirements: [
-          {
-            ...requirement,
-            years: { ...requirement?.years, text: "3 years padded" },
-          },
-        ],
-      }).success,
-    ).toBe(false);
-
-    const duplicate = { ...requirement, id: "duplicate" };
-    expect(
-      JobExperienceAnalysisSchema.safeParse({
-        schemaVersion: 1,
-        status: "FOUND",
-        requirements: [duplicate, duplicate],
-      }).success,
-    ).toBe(false);
-    expect(
-      JobExperienceAnalysisSchema.safeParse({
-        schemaVersion: 1,
-        status: "FOUND",
-        requirements: [
-          {
-            ...requirement,
-            relation: { groupId: "single", kind: "ANY_OF" },
-          },
-        ],
-      }).success,
-    ).toBe(false);
-
-    const related = analyzeJobExperience(
-      "Requirements:\n- 3 years of Java experience and 2 years of AWS experience.",
-    );
-    expect(related.requirements).toHaveLength(2);
-    expect(
-      JobExperienceAnalysisSchema.safeParse({
-        ...related,
-        requirements: related.requirements.map((item, index) =>
-          index === 1 && item.relation
-            ? { ...item, relation: { ...item.relation, kind: "ANY_OF" } }
-            : item,
-        ),
-      }).success,
-    ).toBe(false);
-  });
-
-  it("does not confuse the hiring team's wording with company tenure", () => {
+  it("fails closed for a mixed relation", () => {
     const analysis = analyzeJobExperience(
-      "Our team has an opening for applicants with 5+ years of backend experience.",
+      "3 years Java required or 2 years Kotlin and 1 year Go",
     );
-
-    expect(analysis.requirements).toHaveLength(1);
-    expect(analysis.requirements[0]?.years.min).toBe(5);
+    expect(analysis.requirements.length).toBeGreaterThan(1);
+    expect(
+      analysis.requirements.every((item) => item.classification === "REVIEW"),
+    ).toBe(true);
+    expect(
+      analysis.requirements.every((item) => item.relation === undefined),
+    ).toBe(true);
   });
 
-  it("keeps an explicitly preferred threshold even when it is not required", () => {
-    const analysis = analyzeJobExperience(
-      "Three years of React experience is preferred but not required.",
-    );
-
-    expect(analysis.requirements[0]?.classification).toBe("PREFERRED");
-  });
-
-  it("inherits HTML and Markdown headings without changing original offsets", () => {
-    const html =
-      "<h3>Requirements</h3><ul><li>At least five years of experience in data engineering.</li></ul>";
-    const markdown =
-      "## Preferred qualifications\n- 3+ years of experience with React.";
-    const htmlAnalysis = analyzeJobExperience(html);
-    const markdownAnalysis = analyzeJobExperience(markdown);
-    const htmlRequirement = htmlAnalysis.requirements[0];
-    const markdownRequirement = markdownAnalysis.requirements[0];
-
-    expect({
-      htmlClassification: htmlRequirement?.classification,
-      htmlEvidenceMatches:
-        html.slice(
-          htmlRequirement?.evidence.start,
-          htmlRequirement?.evidence.end,
-        ) === htmlRequirement?.evidence.text,
-      htmlYearsMatches:
-        html.slice(
-          htmlRequirement?.evidence.yearsStart,
-          htmlRequirement?.evidence.yearsEnd,
-        ) === htmlRequirement?.years.text,
-      markdownClassification: markdownRequirement?.classification,
-      markdownEvidenceMatches:
-        markdown.slice(
-          markdownRequirement?.evidence.start,
-          markdownRequirement?.evidence.end,
-        ) === markdownRequirement?.evidence.text,
-    }).toEqual({
-      htmlClassification: "REQUIRED",
-      htmlEvidenceMatches: true,
-      htmlYearsMatches: true,
-      markdownClassification: "PREFERRED",
-      markdownEvidenceMatches: true,
-    });
-  });
-
-  it("deterministically caps noisy JDs at the schema limit", () => {
-    const description = [
-      "Requirements:",
-      ...Array.from(
-        { length: 45 },
-        (_, index) =>
-          `- At least ${index + 1} years of experience in capability ${index + 1}.`,
-      ),
-    ].join("\n");
-
-    const first = analyzeJobExperience(description);
-    const second = analyzeJobExperience(description);
-    expect({
-      count: first.requirements.length,
-      status: first.status,
-      truncated: first.truncated,
-      stableIds: first.requirements.map(({ id }) => id),
-    }).toEqual({
-      count: 40,
-      status: "REVIEW",
-      truncated: true,
-      stableIds: second.requirements.map(({ id }) => id),
-    });
-  });
-
-  it("truncates one oversized relation group without throwing or claiming completeness", () => {
+  it("caps noisy descriptions deterministically and drops a partial group", () => {
     const description = `Applicants need ${Array.from(
       { length: 41 },
       (_, index) => `${index + 1} years of capability${index} experience`,
     ).join(" and ")}.`;
-
     expect(analyzeJobExperience(description)).toMatchObject({
-      schemaVersion: 2,
+      schemaVersion: 3,
       status: "REVIEW",
       truncated: true,
       requirements: [],
     });
   });
+});
 
-  it.each([
-    ["3 years Java required or 2 years Kotlin", "REQUIRED", "ANY_OF"],
-    ["3 years Java preferred and 2 years Kotlin", "PREFERRED", "ALL_OF"],
-  ] as const)(
-    "propagates one explicit qualifier across a simple homogeneous relation: %s",
-    (description, classification, relation) => {
-      const analysis = analyzeJobExperience(description);
-
-      expect(
-        analysis.requirements.map((requirement) => ({
-          classification: requirement.classification,
-          relation: requirement.relation?.kind,
-          scope: requirement.scope,
-        })),
-      ).toEqual([
-        { classification, relation, scope: "Java" },
-        { classification, relation, scope: "Kotlin" },
-      ]);
-    },
-  );
-
-  it.each([
-    "3 years Java required or 2 years Kotlin and 1 year Go",
-    "3 years Java required and/or 2 years Kotlin",
-    "3 years Java required or 2 years Kotlin if the team approves",
-    "3 years Java required or 2 years Kotlin unless the client objects",
-    "3 years Java required or 2 years Kotlin provided that funding continues",
-    "3 years Java required or 2 years Kotlin depending on the project",
-  ])("fails closed for an unsafe relation path: %s", (description) => {
-    const analysis = analyzeJobExperience(description);
-
-    expect({
-      status: analysis.status,
-      classifications: analysis.requirements.map(
-        (requirement) => requirement.classification,
+describe("v3 compatibility projections", () => {
+  it("projects exact comparison values into the closest frozen v2 shape", () => {
+    const v3 = analyzeJobExperience(
+      "Requirements:\n- More than 3 years of Java experience and less than 8 years of platform experience.",
+    );
+    const v2 = projectJobExperienceAnalysisV2(v3);
+    expect(LegacyJobExperienceAnalysisV2Schema.safeParse(v2).success).toBe(
+      true,
+    );
+    expect(v2.requirements.map((item) => item.years.operator)).toEqual([
+      "MINIMUM",
+      "MAXIMUM",
+    ]);
+    expect(
+      upgradeJobExperienceAnalysisV2(v2).requirements.map(
+        (item) => item.years.operator,
       ),
-      relations: analysis.requirements.map(
-        (requirement) => requirement.relation,
-      ),
-    }).toEqual({
-      status: "REVIEW",
-      classifications: Array.from(
-        { length: analysis.requirements.length },
-        () => "REVIEW",
-      ),
-      relations: Array.from(
-        { length: analysis.requirements.length },
-        () => undefined,
-      ),
-    });
-    expect(analysis.requirements.length).toBeGreaterThan(1);
+    ).toEqual(["AT_LEAST", "AT_MOST"]);
   });
 
-  it("inherits a required heading through inline Markdown emphasis", () => {
-    const description =
-      "Required qualifications:\n- **3+ years** of experience in Java.";
-    const requirement = analyzeJobExperience(description).requirements[0];
-
-    expect({
-      classification: requirement?.classification,
-      years: requirement?.years.text,
-      evidenceMatches:
-        description.slice(
-          requirement?.evidence.start,
-          requirement?.evidence.end,
-        ) === requirement?.evidence.text,
-    }).toEqual({
-      classification: "REQUIRED",
-      years: "3+ years",
-      evidenceMatches: true,
+  it("keeps v1 integer-only and removes an orphan relation", () => {
+    const v3 = analyzeJobExperience(
+      "Requirements:\n- 2 years of backend experience and 18 months of Java experience.",
+    );
+    const v1 = projectJobExperienceAnalysisV1(v3);
+    expect(LegacyJobExperienceAnalysisSchema.safeParse(v1).success).toBe(true);
+    expect(v1.requirements).toHaveLength(1);
+    expect(v1.requirements[0]).not.toHaveProperty("relation");
+    expect(upgradeJobExperienceAnalysisV1(v1)).toMatchObject({
+      schemaVersion: 3,
+      requirements: [{ years: { operator: "EXACT", min: 2 } }],
     });
+  });
+
+  it("rejects malformed v3 comparison bounds at the public seam", () => {
+    const valid = analyzeJobExperience(
+      "Requirements:\n- At least 3 years of backend experience.",
+    );
+    const requirement = valid.requirements[0];
+    expect(requirement).toBeDefined();
+    expect(
+      JobExperienceAnalysisSchema.safeParse({
+        ...valid,
+        requirements: [
+          {
+            ...requirement,
+            years: { ...requirement?.years, operator: "MORE_THAN", max: 3 },
+          },
+        ],
+      }).success,
+    ).toBe(false);
   });
 });

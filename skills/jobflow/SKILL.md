@@ -1,6 +1,6 @@
 ---
 name: joblit
-description: Use when working in the Joblit repo (joblit) or when discussing job fetch (JobSpy/LinkedIn/public feeds/company ATS/CN platforms), resume/cover tailoring, prompt rules/skill pack, or PDF export.
+description: Use when working in the Joblit repo (joblit) or when discussing Australian job fetch (JobSpy/LinkedIn), retained AU/CN Jobs and resumes, resume/cover tailoring, prompt rules/skill pack, or PDF export.
 ---
 
 # Joblit (joblit)
@@ -10,9 +10,9 @@ Job-search command center: fetch → triage → tailor CV/CL → export PDFs.
 ## When to Use
 
 - You are in the `ShousenZHANG/joblit` repo, or the user mentions Joblit/joblit.
-- The task involves job intake (JobSpy/LinkedIn, public feeds, company ATS
-  boards, or CN platforms), prompt rules/skill pack, CV/CL generation, batch
-  workflows, or PDF export.
+- The task involves AU job intake (JobSpy/LinkedIn), retained AU/CN Job or
+  Resume data, prompt rules/skill pack, CV/CL generation, batch workflows, or
+  PDF export.
 
 ## When NOT to Use
 
@@ -22,19 +22,19 @@ Job-search command center: fetch → triage → tailor CV/CL → export PDFs.
 ## Mental Model
 
 - **Intake**
-  - AU: FetchRun → GitHub Actions → Python JobSpy → import jobs (dedupe + tombstones)
-  - CN: user-triggered FetchRun → in-process public-source adapters → import jobs
-  - GLOBAL: user-triggered FetchRun → public job APIs + configured ATS boards → import jobs
+  - Active: AU FetchRun → GitHub Actions → Python JobSpy → receipt-backed import (dedupe + tombstones)
+  - Retained: CN Jobs, Resume, Chinese LaTeX, and translated UI
+  - Retired: CN Fetch/Nowcoder and GLOBAL public-feed/ATS/source-health execution (ADR-0017)
+  - Transitional schema: `SourceHealth` and `AtsBoardSource` are writer-less until Stage 2 removes them
 - **Workspace**: Jobs list + detail, search/filter, status ledger from `NEW` through `ACCEPTED`
 - **Tailoring**: prompt → external model → strict JSON import → LaTeX render → PDF
 
 ## Key Paths (start here)
 
 - UI pages: `app/(app)/` (`jobs`, `fetch`, `resume`, `resume/rules`)
-- API routes: `app/api/` (`jobs`, `fetch-runs`, `applications`, `application-batches`, `prompt-rules`, `admin/import`)
+- API routes: `app/api/` (`jobs`, `fetch-runs`, `applications`, `application-batches`, `prompt-rules`)
 - Server modules: `lib/server/` (AI prompts, LaTeX/PDF, persistence)
-- Fetch workers: AU via `tools/fetcher/run_jobspy.py` (GitHub Actions);
-  CN and GLOBAL run in-process only after the user explicitly triggers a FetchRun
+- Fetch worker: AU via `tools/fetcher/run_jobspy.py` (GitHub Actions); no CN or GLOBAL executor exists
 - Schema: `prisma/schema.prisma`
 
 More: `references/PATHS.md` and `references/FLOWS.md`.
@@ -42,6 +42,7 @@ More: `references/PATHS.md` and `references/FLOWS.md`.
 ## Non‑Negotiable Rules
 
 - **Job dedupe**: unique `(userId, jobUrl)`; normalize with `canonicalizeJobUrl()`.
+- **Fetch market**: create, config, trigger, and commit boundaries are AU-only; do not restore CN/GLOBAL adapters or source-health writes.
 - **Manual generate**: never call `manual-generate` without the matching `promptMeta` from the prompt response.
 - **Batch run**: do not use `/trigger` for Codex/batch execution (disabled by design); follow `AGENTS.md`.
 

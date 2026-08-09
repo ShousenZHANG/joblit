@@ -21,7 +21,7 @@ const motionTestState = vi.hoisted(() => ({
   cancelRun: vi.fn(),
   lanes: [] as Array<{
     id: string;
-    source: "jobspy" | "seek" | "nowcoder" | "global";
+    source: "jobspy" | "seek";
     status: "QUEUED" | "RUNNING" | "SUCCEEDED" | "PARTIAL" | "FAILED";
     importedCount: number;
   }>,
@@ -234,7 +234,7 @@ describe("FetchProgressPanel", () => {
     motionTestState.lanes = [
       {
         id: "run-1",
-        source: "nowcoder",
+        source: "jobspy",
         status: "PARTIAL",
         importedCount: 2,
       },
@@ -249,7 +249,7 @@ describe("FetchProgressPanel", () => {
     expect(screen.getByText("Imported 2 new jobs")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Nowcoder didn't finish — only results saved before it stopped are included.",
+        "LinkedIn didn't finish — only results saved before it stopped are included.",
       ),
     ).toBeInTheDocument();
     expect(
@@ -266,7 +266,7 @@ describe("FetchProgressPanel", () => {
     expect(announcement).toHaveAttribute("aria-atomic", "true");
     expect(announcement).toHaveTextContent("Partially completed");
     expect(announcement).toHaveTextContent("Imported 2 new jobs");
-    expect(announcement).toHaveTextContent("Nowcoder didn't finish");
+    expect(announcement).toHaveTextContent("LinkedIn didn't finish");
     expect(
       screen.queryByRole("button", { name: /cancel fetch/i }),
     ).not.toBeInTheDocument();

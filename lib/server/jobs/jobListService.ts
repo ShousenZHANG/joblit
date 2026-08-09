@@ -19,10 +19,7 @@ export type JobListQuery = {
   sort: "newest" | "oldest" | "fit";
   /** Deterministic verdict bands over Job.fitScore (45/60/75 thresholds). */
   fitBand?: "strong" | "good" | "moderate" | "low" | "unscored";
-  /**
-   * Locale-backed Jobs workspace. AU includes persisted GLOBAL source rows;
-   * CN remains CN-only. GLOBAL is intentionally not a UI Market.
-   */
+  /** Locale-backed Jobs workspace. AU and CN remain strictly isolated. */
   market?: Market;
   platform?: string;
 };

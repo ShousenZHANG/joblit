@@ -1,9 +1,3 @@
-import {
-  parseAtsBoardRegistryJson,
-  type AtsBoardConfig,
-  type AtsBoardRegistryIssue,
-} from "@/lib/server/sources/atsBoards";
-
 export type RuntimeEnvironment = Readonly<
   Record<string, string | undefined>
 >;
@@ -72,25 +66,6 @@ type FetchRunAuthenticationCapability =
       missing: readonly ["FETCH_RUN_SECRET"];
     };
 
-type AtsBoardsCapability =
-  | {
-      kind: "enabled";
-      boards: readonly AtsBoardConfig[];
-      issues: readonly AtsBoardRegistryIssue[];
-    }
-  | {
-      kind: "disabled";
-      reason: "ATS_BOARDS_NOT_CONFIGURED";
-      boards: readonly [];
-      issues: readonly [];
-    }
-  | {
-      kind: "invalid";
-      reason: "ATS_BOARD_CONFIG_INVALID";
-      boards: readonly [];
-      issues: readonly AtsBoardRegistryIssue[];
-    };
-
 type BlobStorageCapability =
   | { kind: "enabled"; config: { token: string } }
   | { kind: "disabled"; reason: "BLOB_STORAGE_NOT_CONFIGURED" };
@@ -125,7 +100,6 @@ export type RuntimeCapabilities = {
   artifactReconciliation: ArtifactReconciliationCapability;
   artifactReconciliationAuthentication:
     ArtifactReconciliationAuthenticationCapability;
-  atsBoards: AtsBoardsCapability;
   blobStorage: BlobStorageCapability;
   fetchRunAuthentication: FetchRunAuthenticationCapability;
   githubFetchRunDispatch: GithubFetchRunDispatchCapability;
@@ -177,33 +151,6 @@ function githubFetchRunDispatch(
         "jobspy-fetch.yml",
       ref: trimmed(environment, "GITHUB_REF") ?? "master",
     },
-  };
-}
-
-function atsBoards(environment: RuntimeEnvironment): AtsBoardsCapability {
-  const parsed = parseAtsBoardRegistryJson(
-    trimmed(environment, "JOBLIT_ATS_BOARDS_JSON"),
-  );
-  if (parsed.boards.length > 0) {
-    return {
-      kind: "enabled",
-      boards: parsed.boards,
-      issues: parsed.issues,
-    };
-  }
-  if (parsed.issues.length > 0) {
-    return {
-      kind: "invalid",
-      reason: "ATS_BOARD_CONFIG_INVALID",
-      boards: [],
-      issues: parsed.issues,
-    };
-  }
-  return {
-    kind: "disabled",
-    reason: "ATS_BOARDS_NOT_CONFIGURED",
-    boards: [],
-    issues: [],
   };
 }
 
@@ -386,7 +333,6 @@ export function resolveRuntimeCapabilities(
       reconciliationAuthentication,
     ),
     artifactReconciliationAuthentication: reconciliationAuthentication,
-    atsBoards: atsBoards(environment),
     blobStorage: blobStorage(environment),
     fetchRunAuthentication: fetchRunAuthentication(environment),
     githubFetchRunDispatch: githubFetchRunDispatch(environment),

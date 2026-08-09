@@ -9,6 +9,7 @@ import {
 import { reportError } from "@/lib/server/observability/errorReporter";
 import { FetchRunCommitWireCommandSchema } from "@/lib/shared/schemas/fetchRunCommit";
 import { getRuntimeCapabilities } from "@/lib/server/runtimeCapabilities";
+import { prisma } from "@/lib/server/prisma";
 
 export const runtime = "nodejs";
 
@@ -42,6 +43,18 @@ export async function POST(
   const parsedParams = UuidParamSchema.safeParse(await ctx.params);
   if (!parsedParams.success) {
     return errorJson("INVALID_PARAMS", "Invalid route parameters", 400);
+  }
+  const run = await prisma.fetchRun.findUnique({
+    where: { id: parsedParams.data.id },
+    select: { market: true },
+  });
+  if (!run) return errorJson("RUN_NOT_FOUND", "Fetch run not found", 404);
+  if (run.market !== "AU") {
+    return errorJson(
+      "FETCH_MARKET_RETIRED",
+      "This fetch market has been retired",
+      410,
+    );
   }
   const parsedBody = FetchRunCommitWireCommandSchema.safeParse(
     await req.json().catch(() => null),

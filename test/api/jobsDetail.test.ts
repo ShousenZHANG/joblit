@@ -79,6 +79,16 @@ describe("GET /api/jobs/[id]", () => {
         },
       ],
     });
+    expect(body.experienceAnalysisV3).toMatchObject({
+      schemaVersion: 3,
+      status: "FOUND",
+      requirements: [
+        {
+          classification: "REQUIRED",
+          years: { operator: "AT_LEAST", min: 3, max: null },
+        },
+      ],
+    });
   });
 
   it("returns an empty analysis when the source has no description", async () => {
@@ -105,6 +115,11 @@ describe("GET /api/jobs/[id]", () => {
       status: "NONE",
       requirements: [],
     });
+    expect(body.experienceAnalysisV3).toEqual({
+      schemaVersion: 3,
+      status: "NONE",
+      requirements: [],
+    });
   });
 
   it("keeps fractional durations only in v2 instead of rounding for old clients", async () => {
@@ -128,6 +143,11 @@ describe("GET /api/jobs/[id]", () => {
     });
     expect(body.experienceAnalysisV2).toMatchObject({
       schemaVersion: 2,
+      status: "FOUND",
+      requirements: [{ years: { operator: "EXACT", min: 1.5, max: 1.5 } }],
+    });
+    expect(body.experienceAnalysisV3).toMatchObject({
+      schemaVersion: 3,
       status: "FOUND",
       requirements: [{ years: { operator: "EXACT", min: 1.5, max: 1.5 } }],
     });

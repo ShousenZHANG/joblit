@@ -110,12 +110,9 @@
     "postingRisk": "Risk {score}",
     "experienceRequirement": {
       "title": "Role requirements",
-      "experienceHeading": "Experience",
+      "experienceHeading": "Required experience",
       "technologyHeading": "Technology",
       "classificationREQUIRED": "Required",
-      "classificationSTATED": "Stated",
-      "classificationPREFERRED": "Preferred",
-      "classificationALTERNATIVE": "Alternative",
       "judgementMATCH": "Match",
       "judgementGAP": "Gap",
       "judgementPARTIAL": "Partial",
@@ -281,10 +278,7 @@
     "fetching": "Fetching…",
     "retry": "Retry",
     "suggestions": "Suggestions",
-    "popular": "Popular",
-    "cnSources": "Sources",
-    "cnExcludeKeywords": "Exclude keywords",
-    "cnLocation": "Location"
+    "popular": "Popular"
   },
   "fetchProgress": {
     "title": "Fetch progress",
@@ -662,9 +656,18 @@
     "logoBar": {
       "heading": "What's under the hood",
       "items": {
-        "boards": "role intake",
-        "ats": "company career sites",
-        "byom": "generation, local-first"
+        "intake": {
+          "value": "LinkedIn role discovery",
+          "label": "Australian job intake"
+        },
+        "screening": {
+          "value": "Australian recall-safe screening",
+          "label": "eligibility and seniority policy"
+        },
+        "byom": {
+          "value": "Your own AI — on your machine",
+          "label": "generation, local-first"
+        }
       }
     },
     "architecture": {

@@ -145,6 +145,7 @@ function claimableFitWhere(
   void staleBefore;
   return {
     userId,
+    market: { in: ["AU", "CN"] },
     status: "NEW",
     fitScoredAt: null,
     OR: [
@@ -161,6 +162,7 @@ function staleLegacyFitWhere(
 ): Prisma.JobWhereInput {
   return {
     userId,
+    market: { in: ["AU", "CN"] },
     status: "NEW",
     fitScoredAt: null,
     fitSource: { startsWith: FIT_CLAIM_PREFIX },
@@ -171,6 +173,7 @@ function staleLegacyFitWhere(
 function pendingFitWhere(userId: string): Prisma.JobWhereInput {
   return {
     userId,
+    market: { in: ["AU", "CN"] },
     status: "NEW",
     fitScoredAt: null,
   };
@@ -188,7 +191,7 @@ function leasedFitWhere(
 }
 
 const FIT_PROFILE_SCOPES = [
-  { locale: "en-AU" as const, markets: ["AU", "GLOBAL"] },
+  { locale: "en-AU" as const, markets: ["AU"] },
   { locale: "zh-CN" as const, markets: ["CN"] },
 ] as const;
 
@@ -223,8 +226,10 @@ export type FitRunCancellation = FitRunStats & {
 
 export async function getFitRunStats(userId: string): Promise<FitRunStats> {
   const [total, pending] = await Promise.all([
-    prisma.job.count({ where: { userId, status: "NEW" } }),
-    prisma.job.count({ where: { userId, status: "NEW", fitScoredAt: null } }),
+    prisma.job.count({
+      where: { userId, market: { in: ["AU", "CN"] }, status: "NEW" },
+    }),
+    prisma.job.count({ where: pendingFitWhere(userId) }),
   ]);
   return { total, scored: total - pending, pending };
 }
@@ -281,7 +286,7 @@ export async function cancelFitRun(
       });
     }
     const total = await tx.job.count({
-      where: { userId, status: "NEW" },
+      where: { userId, market: { in: ["AU", "CN"] }, status: "NEW" },
     });
     const pending = await tx.job.count({
       where: pendingFitWhere(userId),
@@ -303,6 +308,7 @@ export async function resetFailedFitBatches(userId: string): Promise<number> {
     const result = await tx.job.updateMany({
       where: {
         userId,
+        market: { in: ["AU", "CN"] },
         status: "NEW",
         fitSource: { in: ["failed", "cancelled"] },
       },
@@ -684,6 +690,7 @@ export async function nextFitBatch(userId: string): Promise<ClaimedFitBatch> {
         where: {
           id: { in: itemJobIds },
           userId,
+          market: { in: ["AU", "CN"] },
           status: "NEW",
           fitScoredAt: null,
         },
@@ -710,6 +717,7 @@ export async function nextFitBatch(userId: string): Promise<ClaimedFitBatch> {
           where: {
             id: { in: itemJobIds },
             userId,
+            market: { in: ["AU", "CN"] },
             status: "NEW",
             fitScoredAt: null,
           },
@@ -836,8 +844,8 @@ export async function nextFitBatch(userId: string): Promise<ClaimedFitBatch> {
       };
     }
 
-    // A triage prompt has one resume snapshot. AU and GLOBAL share en-AU;
-    // CN uses zh-CN. Never lease a mixed-locale batch and accidentally score
+    // A triage prompt has one resume snapshot. AU uses en-AU and CN uses
+    // zh-CN. Never lease a mixed-locale batch and accidentally score
     // Chinese jobs against the English profile (or vice versa).
     const batchLocale = marketStringToResumeLocale(
       candidateWindow[0]?.market ?? "AU",

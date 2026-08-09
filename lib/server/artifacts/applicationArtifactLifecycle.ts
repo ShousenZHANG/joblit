@@ -974,6 +974,70 @@ export async function enqueueApplicationArtifactRetirements(
   return { queued };
 }
 
+/**
+ * Move every durable artifact row owned by a retiring Job/Application graph to
+ * the deletion outbox. This complements URL-pointer backfill: it also catches
+ * pathname-only stages and ledger rows no longer present on Application.
+ * A live DELETING claim is observed but never stolen.
+ */
+export async function prepareApplicationArtifactsForJobRetirement(
+  tx: ApplicationArtifactTransaction,
+  input: {
+    userId: string;
+    jobIds: readonly string[];
+    applicationIds?: readonly string[];
+    now?: Date;
+  },
+): Promise<{ queued: number; deleting: number }> {
+  const jobIds = [...new Set(input.jobIds)].sort();
+  const applicationIds = [...new Set(input.applicationIds ?? [])].sort();
+  if (
+    !UUID_RE.test(input.userId) ||
+    jobIds.some((id) => !UUID_RE.test(id)) ||
+    applicationIds.some((id) => !UUID_RE.test(id))
+  ) {
+    throw new ApplicationArtifactConflictError(
+      "Artifact retirement ownership identifiers must be UUIDs",
+    );
+  }
+  if (jobIds.length === 0 && applicationIds.length === 0) {
+    return { queued: 0, deleting: 0 };
+  }
+
+  const ownership: Prisma.ApplicationArtifactWhereInput[] = [];
+  if (jobIds.length > 0) ownership.push({ jobId: { in: jobIds } });
+  if (applicationIds.length > 0) {
+    ownership.push({ applicationId: { in: applicationIds } });
+  }
+  const now = input.now ?? new Date();
+  const queued = await tx.applicationArtifact.updateMany({
+    where: {
+      userId: input.userId,
+      OR: ownership,
+      state: { in: ["STAGED", "REFERENCED", "DELETE_PENDING"] },
+    },
+    data: {
+      state: "DELETE_PENDING",
+      deleteAfter: now,
+      deleteRequestedAt: now,
+      retryCount: 0,
+      nextAttemptAt: null,
+      claimId: null,
+      claimLeaseExpiresAt: null,
+      lastError: null,
+      deletedAt: null,
+    },
+  });
+  const deleting = await tx.applicationArtifact.count({
+    where: {
+      userId: input.userId,
+      OR: ownership,
+      state: "DELETING",
+    },
+  });
+  return { queued: queued.count, deleting };
+}
+
 export type PrepareApplicationArtifactsForAccountErasureResult = {
   queued: number;
   deleting: number;

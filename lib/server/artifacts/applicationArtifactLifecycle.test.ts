@@ -12,6 +12,7 @@ import {
   markArtifactsReferencedAndRetireSuperseded,
   parseApplicationArtifactPathname,
   prepareApplicationArtifactsForAccountErasure,
+  prepareApplicationArtifactsForJobRetirement,
   purgeDeletedApplicationArtifactsForErasedUser,
   recordUploadedArtifact,
   retireStagedArtifacts,
@@ -982,6 +983,54 @@ describe("application artifact lifecycle", () => {
       where: {
         userId: USER_ID,
         state: "DELETED",
+      },
+    });
+  });
+
+  it("queues every artifact row in a retiring Job graph without stealing DELETING claims", async () => {
+    const { applicationArtifact, database } = createDatabase();
+    applicationArtifact.updateMany.mockResolvedValue({ count: 3 });
+    applicationArtifact.count.mockResolvedValue(1);
+
+    await expect(
+      prepareApplicationArtifactsForJobRetirement(
+        database as unknown as ApplicationArtifactTransaction,
+        {
+          userId: USER_ID,
+          jobIds: [JOB_ID, JOB_ID],
+          applicationIds: [APPLICATION_ID],
+          now: NOW,
+        },
+      ),
+    ).resolves.toEqual({ queued: 3, deleting: 1 });
+
+    const ownership = [
+      { jobId: { in: [JOB_ID] } },
+      { applicationId: { in: [APPLICATION_ID] } },
+    ];
+    expect(applicationArtifact.updateMany).toHaveBeenCalledWith({
+      where: {
+        userId: USER_ID,
+        OR: ownership,
+        state: { in: ["STAGED", "REFERENCED", "DELETE_PENDING"] },
+      },
+      data: {
+        state: "DELETE_PENDING",
+        deleteAfter: NOW,
+        deleteRequestedAt: NOW,
+        retryCount: 0,
+        nextAttemptAt: null,
+        claimId: null,
+        claimLeaseExpiresAt: null,
+        lastError: null,
+        deletedAt: null,
+      },
+    });
+    expect(applicationArtifact.count).toHaveBeenCalledWith({
+      where: {
+        userId: USER_ID,
+        OR: ownership,
+        state: "DELETING",
       },
     });
   });

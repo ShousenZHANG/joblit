@@ -36,7 +36,7 @@ interface PreparedJobItem {
   salary: string | null;
   workArrangement: string | null;
   listingDate: Date | null;
-  market: "AU" | "CN" | "GLOBAL";
+  market: "AU" | "CN";
   source: string | null;
   postingRisk: number;
   postingRiskFlags: string[];

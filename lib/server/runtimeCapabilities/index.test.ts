@@ -106,21 +106,6 @@ describe("resolveRuntimeCapabilities", () => {
     });
   });
 
-  it("turns malformed ATS board JSON into an observable invalid capability", () => {
-    const capability = resolveRuntimeCapabilities({
-      JOBLIT_ATS_BOARDS_JSON: "{",
-    }).atsBoards;
-
-    expect(capability).toMatchObject({
-      kind: "invalid",
-      reason: "ATS_BOARD_CONFIG_INVALID",
-    });
-    expect(capability.boards).toEqual([]);
-    expect(capability.issues).toEqual([
-      expect.objectContaining({ code: "invalid_json" }),
-    ]);
-  });
-
   it("reports Blob storage availability without exposing an implicit fallback", () => {
     expect(resolveRuntimeCapabilities({}).blobStorage).toEqual({
       kind: "disabled",

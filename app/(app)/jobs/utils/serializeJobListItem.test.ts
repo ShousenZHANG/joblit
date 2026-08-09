@@ -16,8 +16,8 @@ describe("serializeJobListItem", () => {
       workArrangement: "Remote",
       listingDate: new Date("2026-07-18T00:00:00.000Z"),
       status: "NEW",
-      market: "GLOBAL",
-      source: "remoteok",
+      market: "AU",
+      source: "jobspy",
       postingRisk: 25,
       postingRiskFlags: ["suspicious_domain"],
       fitScore: 82,
@@ -35,8 +35,8 @@ describe("serializeJobListItem", () => {
 
     expect(serializeJobListItem(item)).toMatchObject({
       id: "job-1",
-      market: "GLOBAL",
-      source: "remoteok",
+      market: "AU",
+      source: "jobspy",
       postingRisk: 25,
       postingRiskFlags: ["suspicious_domain"],
       fitScore: 82,

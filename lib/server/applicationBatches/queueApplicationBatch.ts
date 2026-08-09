@@ -64,6 +64,7 @@ async function findNewJobIds(
   const jobs = await tx.job.findMany({
     where: {
       userId: input.userId,
+      market: "AU",
       status: "NEW",
       ...(selectedJobIds.length > 0 ? { id: { in: selectedJobIds } } : {}),
     },
@@ -87,6 +88,7 @@ async function findFailedJobIds(
       batchId: input.sourceBatchId,
       userId: input.userId,
       status: "FAILED",
+      job: { market: "AU" },
     },
     orderBy: { updatedAt: "desc" },
     distinct: ["jobId"],

@@ -1,10 +1,9 @@
 /**
  * When a FetchRun counts as abandoned.
  *
- * A run is driven either by the AU GitHub Actions worker or by an in-process
- * CN/GLOBAL adapter. Both can disappear without writing a terminal status — a
- * cancelled workflow, a serverless timeout — so a run that has not reported in
- * this long is treated as dead rather than merely slow.
+ * A run is driven by the AU GitHub Actions worker. A cancelled workflow can
+ * disappear without writing a terminal status, so a run that has not reported
+ * in this long is treated as dead rather than merely slow.
  *
  * These lived in `fetchRunQuota.ts`, which is gone: the quota it enforced was
  * removed. The staleness rule is not a quota and outlives it.

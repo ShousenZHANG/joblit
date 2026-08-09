@@ -36,8 +36,8 @@ and is reached through the singleton in `lib/server/prisma.ts:13` over
 | `AgentCredential`                        | Versioned, audience-bound and capability-scoped Runner credential; SHA-256 hash only                | Live                                                                                                                                |
 | `OnboardingState`                        | Onboarding checklist and stage                                                                      | Live                                                                                                                                |
 | `DiscoverCache`                          | Global GitHub-trending cache read by the nav popover                                                | Live                                                                                                                                |
-| `SourceHealth`                           | Global per-source status/counters/timestamps                                                        | Live — upserted by `sourceHealthStore.ts`, read through `readSourceHealth.ts`                                                       |
-| `AtsBoardSource`                         | Global ATS board registry                                                                           | Live — **no insert path in TypeScript**; DB rows require external provisioning, while `JOBLIT_ATS_BOARDS_JSON` remains runtime-only |
+| `SourceHealth`                           | Retired GLOBAL source-status projection                                                             | Stage 1 placeholder — no TypeScript reader/writer; remove in the Stage 2 contract migration                                        |
+| `AtsBoardSource`                         | Retired GLOBAL ATS-board registry                                                                   | Stage 1 placeholder — no TypeScript reader/writer or provisioning path; remove in the Stage 2 contract migration                    |
 
 The Career-workspace tables ADR-0006 kept without writers, and the extension's
 own three, were dropped in `20260731120000_drop_extension_and_career_tables`
@@ -65,9 +65,10 @@ removed by cascade cleanup.
 denormalised identity snapshots with no relations. Lifecycle rows survive
 source deletion and must be retired explicitly rather than by cascade.
 
-Four models are global: `ApplicationArtifactInventoryCheckpoint` (`key @id`),
-`DiscoverCache` (`key @id`), `SourceHealth` (`source @id`, deliberate per
-the schema comment), and `AtsBoardSource`.
+Two active models are global: `ApplicationArtifactInventoryCheckpoint`
+(`key @id`) and `DiscoverCache` (`key @id`). `SourceHealth` (`source @id`) and
+`AtsBoardSource` are unowned, writer-less Stage 1 retirement placeholders until
+the Stage 2 schema contraction; they are not active product stores.
 
 | Family          | Scoping                                                                                                                                           |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -91,10 +92,9 @@ Ownership sits in the **write predicate**, not only the read:
 | `expectedBatchCount` + `nextBatchIndex` (`:369-370`)          | Cheap projection of the one ordered batch stream.                                                                                                                                                            |
 | `FetchRunCommitReceipt.executionAttemptId` (`:397`)           | Attribution of the attempt that applied a batch. Receipt replay is keyed by run + batch identity/content, so replay survives attempt takeover without authorizing new writes.                                |
 
-`dispatchMeta` remains inside `FetchRun.queries` only for pre-`start` dispatch
-claim/idempotency and the rolling fallback for RUNNING inline rows with no
-relational attempt. It is not an execution lease once `start` has populated
-the fields above.
+`dispatchMeta` remains inside `FetchRun.queries` only for the pre-`start` AU
+dispatch claim/idempotency window. It is not an execution lease once `start`
+has populated the fields above.
 
 ### Fit settlement projection
 
@@ -269,8 +269,8 @@ the read and the inserts.
 LinkedIn subdomains, drops default ports, resolves a LinkedIn job id from the
 path or query and rewrites to a canonical form, and keeps at most one stable
 identity query param. It returns `""` on any parse failure. The same function is
-used on the delete side, the import side, the CN normalizer, and liveness
-matching.
+used on both the delete and import sides so tombstone and Job identities cannot
+diverge.
 
 ---
 
@@ -317,7 +317,7 @@ rest.
 | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Job.fitMatrix`                                                      | AI requirement matrix; score aggregated deterministically                                                         | `FitMatrixSchema` — `lib/shared/schemas/fitMatrix.ts:53`                                                                                                                                                                                                                    |
 | `Job.postingRiskFlags`                                               | `string[]` advisory flags                                                                                         | **Nothing** — coerced by `normalizePostingRiskFlags`                                                                                                                                                                                                                        |
-| `FetchRun.queries`                                                   | Versioned market-specific execution config plus pre-start dispatch/idempotency metadata (`:375`)                  | Strict AU v2 and AU/CN/GLOBAL v1 schemas; `normalizeFetchRunConfig` reads current rows while `normalizeFetchRunConfigV1` upgrades historical shapes—including GLOBAL source-only rows—and rejects unknown versions. Authoritative post-start lease fields are relational, not JSON |
+| `FetchRun.queries`                                                   | Versioned AU execution config plus pre-start dispatch/idempotency metadata (`:375`)                               | Strict AU v2 writer and historical AU v1 reader; non-AU and unknown versions fail closed. Authoritative post-start lease fields are relational, not JSON                                                                                              |
 | `FitBatchImportReceipt.settlement`                                   | Strict Fit settlement (`protocolVersion`, issue/request hashes, disjoint scored/failed outcomes)                  | `FitBatchSettlementSchema` on write and replay in `lib/server/jobs/fitBatchImport.ts`                                                                                                                                                                                       |
 | `TailoringRun.promptReceipts`                                        | Target-keyed prompt identity only; never full prompt bytes or raw model output                                    | `normalizePromptReceipts` on issue and `readPromptReceipts` on lifecycle/acceptance reads                                                                                                                                                                                   |
 | `ResumeProfile.{basics,links,skills,experiences,projects,education}` | Master Resume Profile sections                                                                                    | `ResumeProfileSchema` — `lib/shared/schemas/resumeProfile.ts:72`                                                                                                                                                                                                            |
@@ -381,7 +381,9 @@ key derivation is a rolling-deployment compatibility change, not a refactor.
 | `FRUN` `0x4652554e` | `db/advisoryLock.ts`, adapter `fetchRuns/fetchRunLifecycleLock.ts`      | `stableInt32(runId)`                                                                                                      | Attempt `start`/takeover, commit, fail, stale recovery, and cancel. It serializes changes to the relational attempt fence and is always acquired before `JOBJ` |
 | `ABAT` `0x41424154` | `tailoringRuns/tailoringRunLock.ts:3`                                   | `stableInt32(batchId)`                                                                                                    | Batch claim/completion/cancellation and batch-bound Tailoring Run acceptance; first lock in the global acceptance order                                        |
 | `TLRN` `0x544c524e` | `tailoringRuns/tailoringRunLock.ts:4`                                   | `stableInt32(runId)`                                                                                                      | Tailoring Run issue/start/prompt binding/acceptance/fail/cancel; acquired after `ABAT` and before `JOBA`                                                       |
-| `SHRC` `0x53485243` | `sources/sourceHealthStore.ts:11`                                       | per source, all acquired in one roundtrip via a `MATERIALIZED` CTE so the planner cannot hoist the lock ahead of the sort | `persistSourceHealthDiagnostics`                                                                                                                               |
+
+The former `SHRC` source-health namespace has no live owner after Stage 1; its
+constant may remain only in historical migration/ADR evidence until Stage 2.
 
 One non-namespaced lock uses the single-`bigint` form:
 `fetchRunLifecycleLock.ts` also exposes the trigger's
@@ -408,7 +410,7 @@ Most are a single additive `ALTER TABLE`. The ones that changed a domain rule:
 | `20260308223201_add_locale_to_active_resume_profile`              | Moved the active-profile key to `(userId, locale)`.                                                                                                                                                                                                                 |
 | `20260509000000_add_application_edit_workflow`                    | ADR-0001 / ADR-0002: the `ApplicationStatus` enum, `aiContent`, `aiContentHash`. Pre-existing rows are treated as finalized with NULL `aiContent`.                                                                                                                  |
 | `20260405000000_fix_field_mapping_nullable_unique`                | Backfilled NULL → `''` because `NULL != NULL` made the upsert never match.                                                                                                                                                                                          |
-| `20260720171000_add_career_lifecycle`                             | 331 lines, 8 enums and 8 tables — the ledger, global `SourceHealth`/`AtsBoardSource`, and the four tables ADR-0006 later retained.                                                                                                                                  |
+| `20260720171000_add_career_lifecycle`                             | 331 lines, 8 enums and 8 tables — the ledger, global `SourceHealth`/`AtsBoardSource`, and the four tables ADR-0006 later retained. Stage 1 removed the source writers; the two source tables remain only until the Stage 2 contraction.                         |
 | `20260720170000_extend_job_status`                                | Four `ADD VALUE`s, kept in their own migration so Postgres never consumes a new enum value in the same transaction.                                                                                                                                                 |
 | `20260720190000_collapse_job_status`                              | **Data-only, ADR-0007.** Projects retired statuses. No enum values dropped — that would rewrite `ApplicationEvent` history.                                                                                                                                         |
 | `20260724090000_fetch_run_commit_protocol`                        | ADR-0008: adds `PARTIAL`, ordered-batch counters, UUID attempt + lease pair check, non-negative/range checks, and receipt attempt attribution; makes the legacy `userEmail` snapshot nullable without dropping it.                                                  |

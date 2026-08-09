@@ -199,14 +199,14 @@ which is headless, survives a closed tab, and authenticates like any other
 agent. The profile bootstrap that keeps a Joblit Hermes install isolated from a
 user's existing profiles survives from that work.
 
-**The fetch pipeline.** Multi-source intake, the title-relevance filter in the
-Python JobSpy worker, and the adapter registry in `lib/server/sources/`. The
+**The fetch pipeline.** Australian role intake and the title-relevance filter in
+the Python JobSpy worker. The
 filtering work was the fiddliest: a title filter that matches literal tokens
 looks correct until an "AI Engineer" search silently drops every Machine
 Learning Engineer, GenAI Engineer and MLOps Engineer because none of them
 contain the string "ai". Getting recall right meant measuring against a real
 title corpus rather than reasoning about regexes. The pipeline now persists a
-versioned execution config and commits every adapter through one receipt-backed
+versioned execution config and commits every worker batch through one receipt-backed
 transaction boundary, so retries and cancellation have deterministic results.
 
 **Scoring and grounding.** The deterministic aggregator in
@@ -223,7 +223,7 @@ Most job-search tools stop at listing or tracking. Joblit closes the loop:
 
 | Stage        | What Joblit does                          | How                                                                                                                                 |
 | ------------ | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **Discover** | Batch-fetch roles from many boards        | LinkedIn via a JobSpy worker, aggregator feeds, company ATS boards, and CN sources — every source behind one hardened HTTPS gateway |
+| **Fetch**    | Batch-fetch Australian roles              | LinkedIn through the AU JobSpy worker; every batch crosses the receipt-backed FetchRun commit boundary                            |
 | **Triage**   | Fast scan, filter, status-track           | Two-pane workspace with search and JD rendering                                                                                     |
 | **Tailor**   | Generate targeted resume and cover letter | AI prompt engine with versioned rule templates                                                                                      |
 | **Apply**    | Review generated materials, then apply    | Drafts land for your approval; nothing is submitted without you                                                                     |
@@ -258,13 +258,13 @@ stores the deterministic workflow and never sees your model key.
 
 ### Job Intake Pipeline
 
-- `FetchRun` tasks with configurable role categories, markets, and filters
+- AU-only `FetchRun` tasks with configurable role categories, location, and freshness
 - **LinkedIn** runs through the JobSpy worker (`tools/fetcher/run_jobspy.py`) on GitHub Actions, and stops on any anti-bot challenge by design
-- **Aggregator feeds and company ATS boards** (Greenhouse, Lever, Ashby, Workable) run in-process as adapters in `lib/server/sources/`, each pinned to its own host allowlist with redirects refused
-- Strict `FetchRunConfig` v1 contracts for AU, CN, and GLOBAL, with legacy rows normalized only at the read boundary
+- Strict AU `FetchRunConfig` v2 writes with an AU v1 compatibility reader for historical runs
 - Receipt-backed, ordered batch commits that atomically persist Jobs and FetchRun progress; identical retries replay safely
 - Import dedupe on `userId + jobUrl` and tombstone filtering for permanently dismissed URLs
-- Title/description exclusion rules and work-type / classification filters
+- Server-owned, recall-safe title and eligibility exclusions that keep ambiguous roles
+- CN Jobs, Resume, Chinese LaTeX, and translated UI remain; CN Fetch/Nowcoder and GLOBAL feed/ATS/source-health execution are retired (ADR-0017)
 
 ### Jobs Workspace
 
@@ -543,14 +543,12 @@ A complete template lives in [`.env.example`](./.env.example).
 | `DIRECT_URL` / `DATABASE_URL_UNPOOLED` / `POSTGRES_URL_NON_POOLING`                     | Optional explicit unpooled PostgreSQL endpoint for Prisma migrations, resolved in that order. If only a standard Neon `-pooler` URL exists, Joblit derives its documented direct host; other pooled providers must configure one |
 | `BLOB_READ_WRITE_TOKEN`                                                                 | Enables FINAL PDF/photo persistence and artifact reconciliation; DRAFT edits do not require Blob                                                                                                                                 |
 | `GITHUB_OWNER` / `GITHUB_REPO` / `GITHUB_TOKEN` / `GITHUB_WORKFLOW_FILE` / `GITHUB_REF` | Fetch workflow dispatch; owner, repository, and token are required together                                                                                                                                                      |
-| `JOBLIT_ATS_BOARDS_JSON`                                                                | Credential-free deployment-owned ATS board registry                                                                                                                                                                              |
 | `JOBLIT_WEB_URL`                                                                        | Public URL of this deployment                                                                                                                                                                                                    |
 | `YOUTUBE_API_KEY`                                                                       | Discover-page video pipeline                                                                                                                                                                                                     |
 | `CRON_SECRET`                                                                           | Bearer secret Vercel attaches to scheduled daily refresh and artifact-reconciliation calls                                                                                                                                       |
 | `ARTIFACT_RECONCILE_SECRET`                                                             | Optional additional bearer for manual artifact-reconciliation calls; it does not replace `CRON_SECRET` for Vercel Cron                                                                                                           |
 | `ARTIFACT_RECONCILE_ENABLED`                                                            | Default-off kill switch; only `true` / `1` permits Application artifact inventory, claim, and deletion                                                                                                                           |
 | `LATEX_RENDER_ALLOW_INSECURE_HTTP`                                                      | Explicit `true` opt-in for a self-hosted HTTP renderer; HTTPS remains the safe default                                                                                                                                           |
-| `RSSHUB_URL` / `RSSHUB_JOB_ROUTES` / `GITHUB_CN_JOB_REPOS`                              | China job sources                                                                                                                                                                                                                |
 | `SENTRY_DSN`                                                                            | Error reporting (when SDK is installed)                                                                                                                                                                                          |
 
 ## Codex Batch Workflow

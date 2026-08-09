@@ -158,6 +158,7 @@ describe("fit scoring center apis", () => {
     expect(jobStore.updateMany).toHaveBeenNthCalledWith(3, {
       where: {
         userId: "user-1",
+        market: { in: ["AU", "CN"] },
         status: "NEW",
         fitSource: { in: ["failed", "cancelled"] },
       },
@@ -200,6 +201,7 @@ describe("fit scoring center apis", () => {
     expect(jobStore.findMany).toHaveBeenCalledWith({
       where: {
         userId: "user-1",
+        market: { in: ["AU", "CN"] },
         status: "NEW",
         fitScoredAt: null,
         OR: [
@@ -222,6 +224,7 @@ describe("fit scoring center apis", () => {
         id: JOB_A,
         updatedAt: JOB_UPDATED_AT,
         userId: "user-1",
+        market: { in: ["AU", "CN"] },
         status: "NEW",
         fitScoredAt: null,
         OR: [
@@ -353,6 +356,7 @@ describe("fit scoring center apis", () => {
     expect(jobStore.updateMany).toHaveBeenCalledWith({
       where: {
         userId: "user-1",
+        market: { in: ["AU", "CN"] },
         status: "NEW",
         fitScoredAt: null,
       },
@@ -376,7 +380,7 @@ describe("fit scoring center apis", () => {
   it("next-batch serves unscored ids from the database, not from the page", async () => {
     jobStore.findMany.mockResolvedValueOnce([
       { id: JOB_A, market: "AU" },
-      { id: JOB_B, market: "GLOBAL" },
+      { id: JOB_B, market: "AU" },
     ]);
     jobStore.updateManyAndReturn.mockResolvedValueOnce([
       { id: JOB_A },
@@ -406,6 +410,7 @@ describe("fit scoring center apis", () => {
       expect.objectContaining({
         where: expect.objectContaining({
           userId: "user-1",
+          market: { in: ["AU", "CN"] },
           status: "NEW",
           fitScoredAt: null,
         }),
@@ -469,6 +474,7 @@ describe("fit scoring center apis", () => {
     expect(jobStore.count).toHaveBeenNthCalledWith(1, {
       where: {
         userId: "user-1",
+        market: { in: ["AU", "CN"] },
         status: "NEW",
         fitScoredAt: null,
       },
@@ -476,6 +482,7 @@ describe("fit scoring center apis", () => {
     expect(jobStore.count).toHaveBeenNthCalledWith(2, {
       where: {
         userId: "user-1",
+        market: { in: ["AU", "CN"] },
         status: "NEW",
         fitScoredAt: null,
         fitSource: { startsWith: "claim:" },
@@ -651,7 +658,7 @@ describe("fit scoring center apis", () => {
       .mockResolvedValueOnce({ fitSource: legacySource });
     jobStore.findMany.mockResolvedValueOnce([
       { id: JOB_A, market: "AU" },
-      { id: JOB_B, market: "GLOBAL" },
+      { id: JOB_B, market: "AU" },
     ]);
     jobStore.updateManyAndReturn.mockResolvedValueOnce([
       { id: JOB_A },
@@ -906,7 +913,7 @@ describe("fit scoring center apis", () => {
           fitScore: { not: null, lte: 44 },
           OR: [
             {
-              market: { in: ["AU", "GLOBAL"] },
+              market: { in: ["AU"] },
               fitSnapshotHash: "2026-07-20T00:00:00.000Z",
             },
           ],

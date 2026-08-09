@@ -29,7 +29,7 @@ npm run deps:policy       # Check dependency policy
 
 ### Key Data Flow
 
-1. **Job Intake**: `FetchRun` tasks persist a strict market-specific config, then dispatch the AU GitHub Actions worker or run CN/GLOBAL adapters in-process. `executeInlineFetchRun` owns the lifecycle for both inline markets; discovery adapters only return a terminal plan. All results enter `commitFetchRun`, where ordered receipts, Jobs, counters, and terminal state commit atomically with dedupe on `userId + jobUrl` and tombstone filtering (`DeletedJobUrl`)
+1. **Job Intake**: `FetchRun` is AU-only. It persists a strict AU v2 config (with an AU v1 compatibility reader), then dispatches the GitHub Actions JobSpy worker. Results enter `commitFetchRun`, where ordered receipts, Jobs, counters, and terminal state commit atomically with dedupe on `userId + jobUrl` and tombstone filtering (`DeletedJobUrl`). CN Fetch and GLOBAL feed/ATS execution were retired by ADR-0017; CN Jobs, Resume, LaTeX, and translated UI remain product capabilities
 2. **Tailoring**: `Job` + `ResumeProfile` → AI prompt (via versioned `PromptRuleTemplate`) → the user's model runs it — the Runner through the loopback Hermes gateway, or any external model pasted back by hand — and the output is imported through `/api/applications/manual-generate` → persisted Application aggregate → PDF render via LaTeX external service. The server holds no model key and runs no generation (ADR-0015)
 3. **Batch**: External Codex and the Runner atomically complete/claim tasks through `/api/application-batches/[id]/run-once` and persist output through `manual-generate`. That interface requires Batch, task, issue, and attempt identity and commits with an Application content-hash CAS. The retired `/execute` server auto-generation route must not be reintroduced (ADR-0015).
 4. **Runner**: The local Runner (`tools/runner/`) authenticates with an `AgentCredential`, drains the fit queue and the active tailoring batch, and calls the user's Hermes gateway over loopback. Fit results settle behind `FitBatchImportReceipt`; tailoring imports settle behind `TailoringRunReceipt` and the exact attempt fence. Unknown network outcomes replay the same receipt instead of becoming false failures. It imports no repository code — the HTTP API is the contract, same as for Codex. See ADR-0014.
@@ -56,10 +56,9 @@ reintroduced.
 - `applications/` — Resume/cover artifact generation and storage
 - `applicationBatches/` — Batch task orchestration (Codex protocol, progress tracking)
 - `jobs/` — Job CRUD, filtering, deletion cascade (jobListService, jobDeleteService, jobSearchService)
-- `fetchRuns/` — Unified inline executor, stale-run policy, lifecycle/dispatch locks, and the shared `fetch-run-commit/v1` transaction boundary
+- `fetchRuns/` — AU worker dispatch, stale-run policy, lifecycle/dispatch locks, and the shared `fetch-run-commit/v1` transaction boundary
 - `files/` — Vercel Blob operations and PDF filename utilities
 - `discover/` — GitHub trending scrape plus its last-known-good cache, read by the nav trending popover. The YouTube video pipeline and the Discover workspace were deleted; do not reintroduce them
-- `cnFetch/` — China Fetch Pipeline and the Nowcoder adapter
 - `api/` — Shared route utilities: `errorResponse`, `rateLimit`, `routeHandler`
 - `auth/` — Session and agent-credential middleware: `requireSession`,
   `requireAgentCredential`
@@ -68,21 +67,21 @@ reintroduced.
 ### Shared (`lib/shared/`)
 
 - `schemas/` — Zod v4 schemas (canonical validation layer for all API boundaries)
-- `schemas/fetchRunConfig.ts` — versioned AU/CN/GLOBAL FetchRun execution contract and legacy reader
+- `schemas/fetchRunConfig.ts` — versioned AU FetchRun execution contract and historical AU reader
 - `locales/` — per-Resume-Locale prompt parameters (`coverWordRange`, `dateFormat`, `salutationStyle`, `toneRules`). UI string tables live in `messages/en.json` and `messages/zh.json`.
 - `skillsGazetteer` — Canonical skills vocabulary used in prompt quality gates
 - `aiPromptDefaults` — Default AI prompt parameters
 - `fetchRolePacks.config.json` — Role category definitions
-- `canonicalizeJobUrl`, `parseCnSalary`, `fetchExclusionCriteria` — Job normalization helpers
+- `canonicalizeJobUrl`, `parseCnSalary` — Job normalization helpers
 
-### Prisma Models (27)
+### Prisma Models (29)
 
 - Core workflow: `Job`, `FetchRun`, `FitBatchImportReceipt`, `ApplicationBatch`, `ApplicationBatchTask`, `Application`, `ResumeProfile`, `ActiveResumeProfile`, `PromptRuleTemplate`
 - Provenance: `ApplicationEvent` (immutable ledger, carries company/title snapshots so it outlives the Job), `EvidenceSnapshot`, `ClaimEvidence`
 - Tailoring acceptance (ADR-0009): `TailoringRun`, `TailoringRunReceipt`
 - Artifact lifecycle (ADR-0010): `ApplicationArtifact`, `ApplicationArtifactInventoryCheckpoint`
 - Auth: `User`, `Account`, `Session`, `AgentCredential`
-- Fetch execution and sources: `FetchRunCommitReceipt`, `SourceHealth`, `AtsBoardSource`
+- Fetch execution: `FetchRunCommitReceipt`. `SourceHealth` and `AtsBoardSource` are writer-less Stage 1 retirement placeholders retained only until the Stage 2 contract migration; do not use or provision them
 - Supporting: `DeletedJobUrl` (dedup tombstone), `DailyCheckin`, `OnboardingState`, `DiscoverCache`
 
 The writer-less tables ADR-0006 deferred (`InterviewPlan`, `StarStory`, `Offer`,
@@ -114,7 +113,7 @@ Required for the running app: `DATABASE_URL`, `AUTH_SECRET`, `GOOGLE_CLIENT_ID`,
 
 Migration connection: production must resolve an unpooled endpoint from `DIRECT_URL`, `DATABASE_URL_UNPOOLED`, `POSTGRES_URL_NON_POOLING`, or the verified Neon `-pooler` host mapping. `DATABASE_URL` remains pooled for the serverless runtime.
 
-Optional integrations: `BLOB_READ_WRITE_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_TOKEN`, `GITHUB_WORKFLOW_FILE`, `GITHUB_REF`, `JOBLIT_ATS_BOARDS_JSON`, `JOBLIT_WEB_URL`, `CRON_SECRET`, `ARTIFACT_RECONCILE_SECRET`, `ARTIFACT_RECONCILE_ENABLED`, `RSSHUB_URL`, `RSSHUB_JOB_ROUTES`, `GITHUB_CN_JOB_REPOS`
+Optional integrations: `BLOB_READ_WRITE_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_TOKEN`, `GITHUB_WORKFLOW_FILE`, `GITHUB_REF`, `JOBLIT_WEB_URL`, `CRON_SECRET`, `ARTIFACT_RECONCILE_SECRET`, `ARTIFACT_RECONCILE_ENABLED`
 
 Application modules consume optional integrations through
 `lib/server/runtimeCapabilities`, not by assembling environment-variable
@@ -155,8 +154,8 @@ blocking, redirect and size limits) stays enforced regardless.
 After editing `prisma/schema.prisma`, always run `npx prisma generate`. The client generates to `lib/generated/prisma/`. The Neon serverless adapter is configured in `lib/server/prisma.ts` — do not use the standard Prisma client directly.
 
 FetchRun execution follows ADR-0008. Preserve the `FRUN → JOBJ` advisory-lock
-order, keep network I/O outside the commit transaction, and route AU, CN, and
-GLOBAL results through `commitFetchRun`. `PARTIAL` is terminal and means some
+order, keep network I/O outside the commit transaction, and route AU worker
+results through `commitFetchRun`. Reject non-AU execution. `PARTIAL` is terminal and means some
 work may already be receipt-backed; cancellation never rolls those Jobs back.
 
 ## Codex Batch Workflow

@@ -7,7 +7,9 @@ import {
 } from "@/lib/shared/jobExperienceAnalysis";
 import {
   LegacyJobExperienceAnalysisSchema,
+  LegacyJobExperienceAnalysisV2Schema,
   upgradeJobExperienceAnalysisV1,
+  upgradeJobExperienceAnalysisV2,
 } from "@/lib/shared/jobExperienceAnalysisCompat";
 
 /**
@@ -66,26 +68,45 @@ const jobDetailWireResponseSchema = z
     id: z.string(),
     description: z.string().nullable(),
     fitMatrix: FitMatrixSchema.nullable(),
-    // `experienceAnalysis` remains frozen at v1 until the contract rollout is
-    // complete. The union also accepts the brief pre-expand shape where v2 was
-    // emitted under the old key, so staggered deployments fail open safely.
+    // The three slots support a migration-before-build rolling deployment.
+    // New clients prefer v3, while old revisions continue to consume v1/v2.
     experienceAnalysis: z
-      .union([LegacyJobExperienceAnalysisSchema, JobExperienceAnalysisSchema])
+      .union([
+        LegacyJobExperienceAnalysisSchema,
+        LegacyJobExperienceAnalysisV2Schema,
+        JobExperienceAnalysisSchema,
+      ])
       .optional(),
-    experienceAnalysisV2: JobExperienceAnalysisSchema.optional(),
+    experienceAnalysisV2: z
+      .union([LegacyJobExperienceAnalysisV2Schema, JobExperienceAnalysisSchema])
+      .optional(),
+    experienceAnalysisV3: JobExperienceAnalysisSchema.optional(),
     /** Cache version for score/matrix coherence with the list row. */
     updatedAt: z.string(),
   })
-  .transform(({ experienceAnalysis, experienceAnalysisV2, ...detail }) => ({
-    ...detail,
-    experienceAnalysis:
-      experienceAnalysisV2 ??
-      (experienceAnalysis?.schemaVersion === 2
-        ? experienceAnalysis
-        : experienceAnalysis
-          ? upgradeJobExperienceAnalysisV1(experienceAnalysis)
-          : EMPTY_JOB_EXPERIENCE_ANALYSIS),
-  }));
+  .transform(
+    ({
+      experienceAnalysis,
+      experienceAnalysisV2,
+      experienceAnalysisV3,
+      ...detail
+    }) => ({
+      ...detail,
+      experienceAnalysis:
+        experienceAnalysisV3 ??
+        (experienceAnalysisV2?.schemaVersion === 3
+          ? experienceAnalysisV2
+          : experienceAnalysisV2
+            ? upgradeJobExperienceAnalysisV2(experienceAnalysisV2)
+            : experienceAnalysis?.schemaVersion === 3
+              ? experienceAnalysis
+              : experienceAnalysis?.schemaVersion === 2
+                ? upgradeJobExperienceAnalysisV2(experienceAnalysis)
+                : experienceAnalysis
+                  ? upgradeJobExperienceAnalysisV1(experienceAnalysis)
+                  : EMPTY_JOB_EXPERIENCE_ANALYSIS),
+    }),
+  );
 
 export const jobDetailResponseSchema = jobDetailWireResponseSchema.superRefine(
   (detail, context) => {

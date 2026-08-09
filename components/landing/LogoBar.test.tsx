@@ -20,10 +20,10 @@ describe("landing LogoBar", () => {
     expect(
       screen.getByRole("heading", { level: 2, name: en.landing.logoBar.heading }),
     ).toBeInTheDocument();
-    // Names, not numbers: numbers age into lies; these values are verifiable
-    // against the source registry and ADR-0015.
-    expect(screen.getByText("Greenhouse · Lever · Ashby · Workable")).toBeInTheDocument();
+    expect(screen.getByText("LinkedIn role discovery")).toBeInTheDocument();
+    expect(screen.getByText("Australian recall-safe screening")).toBeInTheDocument();
     expect(screen.getByText("Your own AI — on your machine")).toBeInTheDocument();
+    expect(screen.queryByText(/greenhouse|lever|ashby|workable/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/gemini/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^\d+$/)).not.toBeInTheDocument();
   });

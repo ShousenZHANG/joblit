@@ -318,15 +318,10 @@ export function analyzeJobStructuralGates(
   // Jobs UI cannot disagree about the same JD sentence.
   for (const experience of analyzeJobExperience(description).requirements) {
     if (experience.classification !== "REQUIRED") continue;
-    const { operator, min, max } = experience.years;
-    const duration =
-      operator === "MINIMUM"
-        ? `${min}+ years`
-        : operator === "RANGE"
-          ? `${min}-${max} years`
-          : operator === "MAXIMUM"
-            ? `Up to ${max ?? min} years`
-            : `${min} years`;
+    // Preserve the source quantity verbatim. Reconstructing from numeric
+    // bounds would collapse v3's strict/inclusive distinction and turn
+    // month-based requirements into approximate year labels.
+    const duration = experience.years.text;
     emit(
       "EXPERIENCE",
       `${duration}${experience.scope ? ` ${experience.scope}` : " experience"}`,

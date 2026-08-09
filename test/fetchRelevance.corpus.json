@@ -4,7 +4,7 @@
   "cases": [
     {
       "name": "seniority word must not become a required title signal",
-      "why": "Measured: the GLOBAL matcher kept 12/16 for base 'AI Engineer' and 1/16 for 'Senior AI Engineer'. 'senior' names a level, not a domain.",
+      "why": "Seniority names a level, not a required role domain.",
       "baseQueries": ["Senior AI Engineer"],
       "queries": ["Senior AI Engineer"],
       "titles": {

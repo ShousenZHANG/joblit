@@ -14,13 +14,11 @@ Vocabulary is `CONTEXT.md`. Route-layer facts live in
 | `applications/` | Application lifecycle: generation acceptance, target-aware AI Content evolution, canonical resume composition, finalize render, artifact commit, ATS validation, advisory lock, review ledger, `ApplicationEvent` append | `applicationGeneration.ts` `acceptApplicationGeneration`, `applicationAiContentAggregate.ts` `evolveApplicationAiContent`, `applicationResumeComposition.ts` `composeApplicationResumeRenderInput`, `commitApplicationArtifact.ts` `commitApplicationArtifact`, `manualImportArtifact.ts`, `finalizeApplication.ts`, `persistReviewLedger.ts`, `applicationMutationLock.ts`, `atsPdfValidator.ts` |
 | `artifacts/` | ADR-0010 Application Blob lifecycle, account-erasure hooks, Vercel adapter, inventory, claim/call/fenced settle | `applicationArtifactLifecycle.ts` `prepareApplicationArtifactsForAccountErasure` / `purgeDeletedApplicationArtifactsForErasedUser`, `artifactReconciler.ts`, `artifactBlobPort.ts`, `vercelBlobAdapter.ts` |
 | `applicationBatches/` | Codex Batch state machine: claim, complete, cancel, retry | `runner.ts:169` `claimNextBatchTask`, `:282` `completeBatchTask`, `:334`, `:385`; `codexRunContext.ts:81`/`:189`/`:245`; `batchProgress.ts:9` |
-| `jobs/` | Job import/list/search/delete/status, fit leasing and receipt-backed settlement, cooldown, SimHash dedup, posting risk, liveness, market scoping | `jobImportService.ts`, `jobListService.ts`, `jobSearchService.ts`, `jobDeleteService.ts`, `fitRunService.ts`, `fitBatchImport.ts`, `jobMutationLock.ts`, `postingRisk.ts` |
+| `jobs/` | Job import/list/search/delete/status, fit leasing and receipt-backed settlement, cooldown, SimHash dedup, posting risk, market scoping | `jobImportService.ts`, `jobListService.ts`, `jobSearchService.ts`, `jobDeleteService.ts`, `fitRunService.ts`, `fitBatchImport.ts`, `jobMutationLock.ts`, `postingRisk.ts` |
 | `latex/` | Template rendering from `latexTemp/` + the remote render-service client | `compilePdf.ts:68` `compileLatexToPdf`, `renderResume.ts:203`, `renderResumeCN.ts:190`, `renderCoverLetter.ts:69`, `mapResumeProfile.ts:30` |
 | `files/` | Blob path construction, PDF filenames | `applicationArtifactBlob.ts:3`, `pdfFilename.ts:24` |
 | `discover/` | GitHub trending scrape + durable last-known-good cache, refreshed on demand by the nav popover (ADR-0005 superseded) | `githubTrending.ts:167`, `discoverCache.ts` |
-| `cnFetch/` | CN market discovery adapter: Nowcoder fetch, normalization, diagnostics, terminal-plan construction | `processFetchRun.ts`, `adapters/nowcoder.ts`, `normalize.ts` |
-| `sources/` | GLOBAL market discovery adapter: registry, ATS boards, source health, rediscovery, filtering, terminal-plan construction | `processGlobalFetchRun.ts`, `registry.ts`, `http.ts`, `atsRediscoveryService.ts`, `sourceHealthStore.ts` |
-| `fetchRuns/` | Inline lifecycle coordinator, stale-run policy, attempt/dispatch locks, and the shared `fetch-run-commit/v1` transaction boundary | `executeInlineFetchRun.ts`, `inlineFetchRunAdapter.ts`, `fetchRunCommit.ts`, `fetchRunStale.ts`, `fetchRunLifecycleLock.ts`, `triggerClaim.ts` |
+| `fetchRuns/` | AU worker lifecycle, stale-run policy, attempt/dispatch locks, and the shared `fetch-run-commit/v1` transaction boundary | `dispatchGithubFetchRun.ts`, `fetchRunCommit.ts`, `fetchRunStale.ts`, `fetchRunLifecycleLock.ts`, `triggerClaim.ts` |
 | `net/` | The single SSRF-hardened outbound gateway | `safeFetch.ts:396` `safeOutboundFetch`, `:272`, `:228` |
 | `security/` | Sanitizers for anything persisted or exported | `untrustedOutput.ts:36`/`:58`/`:76` |
 | `archive/` | Pure ZIP32 writer. Sole consumer: the Skill Pack download | `zip.ts:155` |
@@ -271,13 +269,11 @@ module-level in-memory. Documented at their definitions.
 | GitHub Actions dispatch | `app/api/fetch-runs/[id]/trigger/route.ts:312` | Yes — AU market only |
 | GitHub trending HTML | `githubTrending.ts:167` | Yes |
 | YouTube Data API | `videoPipeline.ts:431` | Yes |
-| ATS boards (Greenhouse, Lever, Ashby, Workable) | `sources/adapters/ats.ts:52` via `sources/http.ts:48` | Yes — adapters get no other network access |
-| RemoteOK / Remotive / Jobicy | injected `SourceContext.fetchJson` | Yes |
-| ATS careers-page HTML | `atsRediscoveryService.ts:74` | Yes |
-| **Nowcoder (CN)** | `cnFetch/adapters/nowcoder.ts:169` | **No** — bare platform `fetch`. The only edge in `lib/server` that bypasses the gateway |
 
-RSSHub is not implemented. `RSSHUB_URL` / `RSSHUB_JOB_ROUTES` appear only in the
-README; `cnFetch/adapters/nowcoder.ts:8` says so explicitly.
+CN discovery and GLOBAL public-feed/ATS/source-health execution edges were
+removed in Stage 1 (ADR-0017). Their names may still appear in immutable
+migrations, historical ADRs, and URL risk/canonicalization fixtures; none is an
+active outbound integration.
 
 ---
 

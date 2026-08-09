@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   JobExperienceAnalysisSchema,
+  projectVisibleJobExperience,
   type JobExperienceAnalysis,
 } from "@/lib/shared/jobExperienceAnalysis";
 import messages from "@/messages/en.json";
@@ -27,13 +28,13 @@ function analysisFor(
   const sentenceEnd = nextNewline === -1 ? description.length : nextNewline;
 
   return JobExperienceAnalysisSchema.parse({
-    schemaVersion: 2,
+    schemaVersion: 3,
     status: classification === "REVIEW" ? "REVIEW" : "FOUND",
     requirements: [
       {
         id: "experience-1",
         classification,
-        years: { operator: "MINIMUM", min: 3, max: null, text: phrase },
+        years: { operator: "AT_LEAST", min: 3, max: null, text: phrase },
         scope: "backend engineering",
         evidence: {
           text: description.slice(sentenceStart, sentenceEnd),
@@ -55,7 +56,10 @@ function renderMarkdown(
     <NextIntlClientProvider locale="en" messages={messages}>
       <JobDescriptionMarkdown
         description={description}
-        experienceAnalysis={experienceAnalysis}
+        experience={projectVisibleJobExperience(
+          description,
+          experienceAnalysis,
+        )}
       />
     </NextIntlClientProvider>,
   );
@@ -66,7 +70,7 @@ function analysisForPhrases(
   phrases: string[],
 ): JobExperienceAnalysis {
   return JobExperienceAnalysisSchema.parse({
-    schemaVersion: 2,
+    schemaVersion: 3,
     status: "FOUND",
     requirements: phrases.map((phrase, index) => {
       const yearsStart = description.indexOf(phrase);
@@ -77,7 +81,7 @@ function analysisForPhrases(
         id: `experience-${index}`,
         classification: "REQUIRED" as const,
         years: {
-          operator: "MINIMUM" as const,
+          operator: "AT_LEAST" as const,
           min: Number.parseInt(phrase, 10),
           max: null,
           text: phrase,
@@ -245,12 +249,15 @@ describe("JobDescriptionMarkdown experience evidence", () => {
       <NextIntlClientProvider locale="en" messages={messages}>
         <JobDescriptionMarkdown
           description={structuredMarkdown}
-          experienceAnalysis={analysisForPhrases(structuredMarkdown, [
-            "3+ years",
-            "4+ years",
-            "5+ years",
-            "6+ years",
-          ])}
+          experience={projectVisibleJobExperience(
+            structuredMarkdown,
+            analysisForPhrases(structuredMarkdown, [
+              "3+ years",
+              "4+ years",
+              "5+ years",
+              "6+ years",
+            ]),
+          )}
         />
       </NextIntlClientProvider>,
     );

@@ -1,6 +1,11 @@
 "use client";
 
-import React, { useEffect, useRef, type ComponentPropsWithoutRef } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  type ComponentPropsWithoutRef,
+} from "react";
 import dynamic from "next/dynamic";
 import { useFormatter, useTranslations } from "next-intl";
 import {
@@ -19,7 +24,6 @@ import {
   Wifi,
 } from "lucide-react";
 import { useMarket } from "@/hooks/useMarket";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -34,7 +38,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/u
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { FitMatrix } from "@/lib/shared/schemas/fitMatrix";
-import type { JobExperienceAnalysis } from "@/lib/shared/jobExperienceAnalysis";
+import {
+  projectVisibleJobExperience,
+  type JobExperienceAnalysis,
+} from "@/lib/shared/jobExperienceAnalysis";
 import {
   JOB_STATUS_LABEL_KEYS,
   type JobItem,
@@ -75,8 +82,6 @@ interface JobDetailPanelProps {
   tailorSource?: { cv?: CvSource; cover?: CoverSource };
   updatingIds: Set<string>;
   deletingIds: Set<string>;
-  highlightGenerate: boolean;
-  guideHighlightClass: string;
   externalPromptLoading: boolean;
   mobileTab: "list" | "detail";
   onUpdateStatus: (id: string, status: JobStatus) => void;
@@ -119,8 +124,6 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
   tailorSource,
   updatingIds,
   deletingIds,
-  highlightGenerate,
-  guideHighlightClass,
   externalPromptLoading,
   mobileTab,
   onUpdateStatus,
@@ -153,6 +156,11 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
   const statusPresentation = selectedJob
     ? jobStatusPresentation(selectedJob.status)
     : null;
+  const visibleExperience = useMemo(
+    () =>
+      projectVisibleJobExperience(selectedDescription, experienceAnalysis),
+    [selectedDescription, experienceAnalysis],
+  );
   // Reset the description scroll to the top when the selected job changes —
   // the ScrollArea viewport DOM node is reused across selections, so without
   // this a new job opens stuck at the previous job's scroll offset.
@@ -410,7 +418,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                 <span className="h-px flex-1 bg-gradient-to-r from-border to-transparent" aria-hidden />
               </div>
               <JobRequirementsPanel
-                analysis={experienceAnalysis}
+                experience={visibleExperience}
                 description={selectedDescription}
                 matrix={selectedFitMatrix}
               />
@@ -440,7 +448,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                   {selectedDescription ? (
                     <JobDescriptionMarkdown
                       description={selectedDescription}
-                      experienceAnalysis={experienceAnalysis}
+                      experience={visibleExperience}
                     />
                   ) : (
                     <div className="text-sm text-muted-foreground">

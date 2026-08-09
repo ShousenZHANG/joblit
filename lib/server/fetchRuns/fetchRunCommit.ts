@@ -12,7 +12,6 @@ import { reportError } from "@/lib/server/observability/errorReporter";
 import {
   AU_FETCH_RUN_EXECUTION_LEASE_MS,
   FETCH_RUN_COMMIT_PROTOCOL,
-  INLINE_FETCH_RUN_EXECUTION_LEASE_MS,
 } from "@/lib/shared/fetchRunProtocol";
 import type {
   FetchRunCommitBatchCommand,
@@ -103,6 +102,7 @@ export interface FetchRunCommitResult {
 
 export type FetchRunCommitErrorCode =
   | "RUN_NOT_FOUND"
+  | "RUN_MARKET_RETIRED"
   | "RUN_CANCELLED"
   | "RUN_ALREADY_TERMINAL"
   | "RUN_NOT_RUNNING"
@@ -123,25 +123,6 @@ export class FetchRunCommitError extends Error {
     super(message);
     this.name = "FetchRunCommitError";
   }
-}
-
-const EXECUTION_SUPERSEDED_CODES: readonly FetchRunCommitErrorCode[] = [
-  "RUN_ALREADY_TERMINAL",
-  "EXECUTION_LEASE_HELD",
-  "EXECUTION_LEASE_LOST",
-];
-
-export type FetchRunExecutionStopReason = "cancelled" | "superseded";
-
-/** Classify a non-failure stop without conflating takeover with user intent. */
-export function fetchRunExecutionStopReason(
-  error: unknown,
-): FetchRunExecutionStopReason | null {
-  if (!(error instanceof FetchRunCommitError)) return null;
-  if (error.code === "RUN_CANCELLED") return "cancelled";
-  return EXECUTION_SUPERSEDED_CODES.includes(error.code)
-    ? "superseded"
-    : null;
 }
 
 function isTerminal(status: FetchRunStatus): boolean {
@@ -177,12 +158,8 @@ function commitTransaction<T>(
 ): Promise<T> {
   return prisma.$transaction(action, { timeout: COMMIT_TRANSACTION_TIMEOUT_MS });
 }
-function executionLeaseExpiresAt(market: string, now: Date): Date {
-  const leaseMs =
-    market === "AU"
-      ? AU_FETCH_RUN_EXECUTION_LEASE_MS
-      : INLINE_FETCH_RUN_EXECUTION_LEASE_MS;
-  return new Date(now.getTime() + leaseMs);
+function executionLeaseExpiresAt(_market: string, now: Date): Date {
+  return new Date(now.getTime() + AU_FETCH_RUN_EXECUTION_LEASE_MS);
 }
 function assertExecutionAttempt(
   currentAttemptId: string | null,
@@ -685,17 +662,18 @@ function canonicalizeBatchCommand(
 ): BatchCommand {
   // Tenant and market are always server-derived. A remote adapter can submit
   // only discoveries; it cannot redirect them to another user or market.
-  const market: "AU" | "CN" | "GLOBAL" =
-    owner.market === "CN"
-      ? "CN"
-      : owner.market === "GLOBAL"
-        ? "GLOBAL"
-        : "AU";
+  if (owner.market !== "AU") {
+    throw new FetchRunCommitError(
+      "RUN_MARKET_RETIRED",
+      "This fetch market has been retired",
+      410,
+    );
+  }
   const items: FetchRunCommitBatchCommand["items"] = command.items.map(
     (item) => ({
       ...item,
-      market,
-      ...(market === "AU" ? { source: "jobspy" } : {}),
+      market: "AU",
+      source: "jobspy",
     }),
   );
   return { ...command, items };

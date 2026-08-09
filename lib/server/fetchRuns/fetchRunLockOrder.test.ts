@@ -146,7 +146,7 @@ describe("FetchRun commit lock order (ADR-0008)", () => {
         {
           jobUrl: "https://example.com/jobs/1",
           title: "Platform Engineer",
-          market: "GLOBAL" as const,
+          market: "AU" as const,
         },
       ],
       terminal: true,

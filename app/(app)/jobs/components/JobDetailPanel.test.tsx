@@ -43,8 +43,6 @@ function renderPanel(
         showLoadingOverlay={false}
         updatingIds={new Set()}
         deletingIds={new Set()}
-        highlightGenerate={false}
-        guideHighlightClass=""
         externalPromptLoading={false}
         mobileTab="detail"
         onUpdateStatus={vi.fn()}
@@ -106,8 +104,6 @@ describe("JobDetailPanel localization", () => {
           tailorSource={{ cv: "manual_import", cover: "fallback" }}
           updatingIds={new Set()}
           deletingIds={new Set()}
-          highlightGenerate={false}
-          guideHighlightClass=""
           externalPromptLoading={false}
           mobileTab="detail"
           onUpdateStatus={vi.fn()}
@@ -154,14 +150,14 @@ describe("JobDetailPanel experience summary", () => {
       const yearsText = "At least 4 years";
       const yearsStart = description.indexOf(yearsText);
       const experienceAnalysis: JobExperienceAnalysis = {
-        schemaVersion: 2,
+        schemaVersion: 3,
         status: "FOUND",
         requirements: [
           {
             id: "platform-years",
             classification: "REQUIRED",
             years: {
-              operator: "MINIMUM",
+              operator: "AT_LEAST",
               min: 4,
               max: null,
               text: yearsText,

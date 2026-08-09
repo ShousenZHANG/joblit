@@ -1,8 +1,5 @@
 import { z } from "zod";
-import {
-  TITLE_MATCH_MODES,
-  resolveTitleMatchMode,
-} from "@/lib/shared/jobRelevance";
+import { TITLE_MATCH_MODES, resolveTitleMatchMode } from "@/lib/shared/jobRelevance";
 import {
   AU_FETCH_POLICY,
   RegisteredAuFetchPolicySchema,
@@ -11,7 +8,6 @@ import {
 export const FETCH_RUN_CONFIG_SCHEMA_VERSION = 1 as const;
 export const AU_FETCH_RUN_CONFIG_SCHEMA_VERSION = 2 as const;
 
-const ConfigStringSchema = z.string().trim().min(1).max(160);
 const QuerySchema = z.string().trim().min(1).max(120);
 const QueryListSchema = z.array(QuerySchema).min(1).max(100);
 const OptionalLocationSchema = z.string().trim().min(1).max(160).nullable();
@@ -31,12 +27,7 @@ const DispatchMetaField = {
   dispatchMeta: FetchRunDispatchMetaSchema.optional(),
 } as const;
 
-/**
- * The persisted execution contract for the remote AU JobSpy adapter.
- *
- * Every effective fetch knob lives in this value even while the matching
- * scalar FetchRun columns remain available as legacy read projections.
- */
+/** Historical AU worker contract retained for already-created AU runs. */
 export const AuFetchRunConfigV1Schema = z
   .object({
     schemaVersion: z.literal(FETCH_RUN_CONFIG_SCHEMA_VERSION),
@@ -49,11 +40,6 @@ export const AuFetchRunConfigV1Schema = z
     resultsWanted: OptionalResultsWantedSchema,
     smartExpand: z.boolean(),
     includeFromQueries: z.boolean(),
-    /**
-     * How hard the title filter presses. Optional so rows persisted before
-     * this field still parse; `resolveTitleMatchMode` derives it from the
-     * legacy boolean when absent.
-     */
     titleMatch: z.enum(TITLE_MATCH_MODES).optional(),
     applyExcludes: z.boolean(),
     excludeTitleTerms: z.array(z.string().trim().min(1).max(40)).max(24),
@@ -66,9 +52,8 @@ export const AuFetchRunConfigV1Schema = z
   .strict();
 
 /**
- * Recall-safe AU contract. Search and exclusion behaviour is server-owned:
- * clients provide search intent, while literals here prevent a stale or custom
- * client from weakening the persisted execution policy.
+ * Recall-safe AU contract. Search and exclusion behaviour is server-owned;
+ * the client can provide search intent but cannot weaken the stored policy.
  */
 export const AuFetchRunConfigV2Schema = z
   .object({
@@ -89,101 +74,9 @@ export const AuFetchRunConfigV2Schema = z
   })
   .strict();
 
-/** The persisted execution contract for the in-process CN adapter. */
-export const CnFetchRunConfigV1Schema = z
-  .object({
-    schemaVersion: z.literal(FETCH_RUN_CONFIG_SCHEMA_VERSION),
-    market: z.literal("CN"),
-    title: z.string().trim().min(1).max(120),
-    queries: z.array(QuerySchema).min(1).max(12),
-    sources: z.array(z.literal("nowcoder")).min(1).max(1),
-    excludeKeywords: z.array(z.string().trim().min(1).max(40)).max(24),
-    locations: z.array(z.string().trim().min(1).max(80)).max(12),
-    ...DispatchMetaField,
-  })
-  .strict();
-
-/**
- * The persisted execution contract for public feeds and configured ATS
- * boards. An empty `sources` list is accepted only to represent the intent of
- * a pre-v1 legacy "all sources" row; v1 builders always persist resolved IDs.
- */
-export const GlobalFetchRunConfigV1Schema = z
-  .object({
-    schemaVersion: z.literal(FETCH_RUN_CONFIG_SCHEMA_VERSION),
-    market: z.literal("GLOBAL"),
-    title: z.string().trim().max(120),
-    baseQueries: z.array(QuerySchema).max(12),
-    queries: z.array(QuerySchema).max(100),
-    queryMode: z.enum(["query", "source-only"]).optional(),
-    location: OptionalLocationSchema,
-    hoursOld: OptionalHoursOldSchema,
-    resultsWanted: OptionalResultsWantedSchema,
-    smartExpand: z.boolean(),
-    includeFromQueries: z.boolean(),
-    /**
-     * How hard the title filter presses. Optional so rows persisted before
-     * this field still parse; `resolveTitleMatchMode` derives it from the
-     * legacy boolean when absent.
-     */
-    titleMatch: z.enum(TITLE_MATCH_MODES).optional(),
-    applyExcludes: z.boolean(),
-    excludeTitleTerms: z.array(z.string().trim().min(1).max(40)).max(24),
-    excludeDescriptionRules: z
-      .array(z.string().trim().min(1).max(80))
-      .max(24),
-    sources: z.array(ConfigStringSchema).max(24),
-    sourceSelection: z.enum(["all", "explicit"]),
-    ...DispatchMetaField,
-  })
-  .strict()
-  .superRefine((config, context) => {
-    if (config.queryMode === "source-only") {
-      if (
-        config.title ||
-        config.baseQueries.length > 0 ||
-        config.queries.length > 0 ||
-        config.sources.length === 0 ||
-        config.sourceSelection !== "explicit"
-      ) {
-        context.addIssue({
-          code: "custom",
-          message:
-            "source-only config requires explicit sources and no synthetic query fields",
-          path: ["queryMode"],
-        });
-      }
-      return;
-    }
-    if (
-      !config.title ||
-      config.baseQueries.length === 0 ||
-      config.queries.length === 0
-    ) {
-      context.addIssue({
-        code: "custom",
-        message: "query config requires title, baseQueries, and queries",
-        path: ["queries"],
-      });
-    }
-    if (config.sourceSelection === "explicit" && config.sources.length === 0) {
-      context.addIssue({
-        code: "custom",
-        message: "explicit source selection requires at least one source",
-        path: ["sources"],
-      });
-    }
-  });
-
-export const FetchRunConfigV1Schema = z.discriminatedUnion("market", [
-  AuFetchRunConfigV1Schema,
-  CnFetchRunConfigV1Schema,
-  GlobalFetchRunConfigV1Schema,
-]);
-
 export const FetchRunConfigSchema = z.union([
   AuFetchRunConfigV2Schema,
-  FetchRunConfigV1Schema,
+  AuFetchRunConfigV1Schema,
 ]);
 
 export type FetchRunDispatchMeta = z.infer<
@@ -191,21 +84,15 @@ export type FetchRunDispatchMeta = z.infer<
 >;
 export type AuFetchRunConfigV1 = z.infer<typeof AuFetchRunConfigV1Schema>;
 export type AuFetchRunConfigV2 = z.infer<typeof AuFetchRunConfigV2Schema>;
-export type CnFetchRunConfigV1 = z.infer<typeof CnFetchRunConfigV1Schema>;
-export type GlobalFetchRunConfigV1 = z.infer<
-  typeof GlobalFetchRunConfigV1Schema
->;
-export type FetchRunConfigV1 = z.infer<typeof FetchRunConfigV1Schema>;
 export type FetchRunConfig = z.infer<typeof FetchRunConfigSchema>;
-export type FetchRunMarket = FetchRunConfig["market"];
 
-type ConfigInput<T extends FetchRunConfigV1> = Omit<
-  T,
+type AuFetchRunConfigV1Input = Omit<
+  AuFetchRunConfigV1,
   "schemaVersion" | "market"
 >;
 
 export function buildAuFetchRunConfigV1(
-  input: ConfigInput<AuFetchRunConfigV1>,
+  input: AuFetchRunConfigV1Input,
 ): AuFetchRunConfigV1 {
   return AuFetchRunConfigV1Schema.parse({
     schemaVersion: FETCH_RUN_CONFIG_SCHEMA_VERSION,
@@ -240,26 +127,6 @@ export function buildAuFetchRunConfigV2(
   });
 }
 
-export function buildCnFetchRunConfigV1(
-  input: ConfigInput<CnFetchRunConfigV1>,
-): CnFetchRunConfigV1 {
-  return CnFetchRunConfigV1Schema.parse({
-    schemaVersion: FETCH_RUN_CONFIG_SCHEMA_VERSION,
-    market: "CN",
-    ...input,
-  });
-}
-
-export function buildGlobalFetchRunConfigV1(
-  input: ConfigInput<GlobalFetchRunConfigV1>,
-): GlobalFetchRunConfigV1 {
-  return GlobalFetchRunConfigV1Schema.parse({
-    schemaVersion: FETCH_RUN_CONFIG_SCHEMA_VERSION,
-    market: "GLOBAL",
-    ...input,
-  });
-}
-
 export function readFetchRunDispatchMeta(raw: unknown): FetchRunDispatchMeta {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
   const meta = (raw as Record<string, unknown>).dispatchMeta;
@@ -288,18 +155,12 @@ export function readFetchRunDispatchMeta(raw: unknown): FetchRunDispatchMeta {
   };
 }
 
-/**
- * Patch dispatch metadata without needing to understand the market-specific
- * payload. This keeps trigger bookkeeping behind the same JSON seam for both
- * legacy and v1 rows.
- */
+/** Patch dispatch bookkeeping without parsing the rest of the worker config. */
 export function withFetchRunDispatchMeta(
   raw: unknown,
   patch: Partial<FetchRunDispatchMeta>,
 ): Record<string, unknown> {
   // Historical AU rows sometimes stored the query list as the JSON root.
-  // Preserve that payload when adding dispatch bookkeeping so the legacy
-  // normalizer can still reconstruct a canonical v1 config afterwards.
   const base = Array.isArray(raw)
     ? { queries: raw }
     : raw && typeof raw === "object"
@@ -381,60 +242,46 @@ function booleanOr(defaultValue: boolean, ...values: unknown[]): boolean {
   return defaultValue;
 }
 
-function marketOf(input: StoredFetchRunConfigInput): FetchRunMarket {
+function assertAuMarket(input: StoredFetchRunConfigInput): void {
+  const rowMarket = input.market;
+  const configMarket = recordOf(input.queries).market;
   if (
-    input.market === "AU" ||
-    input.market === "CN" ||
-    input.market === "GLOBAL"
+    (typeof rowMarket === "string" && rowMarket !== "AU") ||
+    (typeof configMarket === "string" && configMarket !== "AU")
   ) {
-    return input.market;
+    throw new Error("FetchRun market is retired; only AU is executable");
   }
-  const rawMarket = recordOf(input.queries).market;
-  return rawMarket === "CN" || rawMarket === "GLOBAL" ? rawMarket : "AU";
 }
 
 function dispatchMetaField(
   raw: Record<string, unknown>,
-): Pick<FetchRunConfigV1, "dispatchMeta"> {
+): Pick<AuFetchRunConfigV1, "dispatchMeta"> {
   const dispatchMeta = readFetchRunDispatchMeta(raw);
   return Object.keys(dispatchMeta).length > 0 ? { dispatchMeta } : {};
 }
 
-type LegacySearchConfigFields = Omit<
-  ConfigInput<AuFetchRunConfigV1>,
-  "source"
->;
-
-interface LegacyQueryIdentity {
-  title: string;
-  baseQueries: string[];
-  queries: string[];
-  smartExpand: boolean;
-}
-
-function normalizeVersionedFetchRunConfig(
+/**
+ * Read historical unversioned AU rows into the v1 worker contract.
+ * Non-AU rows fail closed and must be removed by the retirement cleanup.
+ */
+export function normalizeFetchRunConfigV1(
   input: StoredFetchRunConfigInput,
-  raw: Record<string, unknown>,
-): FetchRunConfigV1 {
-  const parsed = FetchRunConfigV1Schema.parse(raw);
-  const rowMarket = marketOf(input);
-  if (parsed.market !== rowMarket) {
-    throw new Error(
-      `FetchRun market mismatch: row=${rowMarket}, config=${parsed.market}`,
-    );
+): AuFetchRunConfigV1 {
+  assertAuMarket(input);
+  const raw = input.queries;
+  const rawRecord = recordOf(raw);
+  if ("schemaVersion" in rawRecord) {
+    return AuFetchRunConfigV1Schema.parse(rawRecord);
   }
-  return parsed;
-}
 
-function legacyQueryIdentity(
-  raw: Record<string, unknown>,
-  rawQueries: string[],
-  rawTitle: string | null,
-): LegacyQueryIdentity {
-  const smartExpand = booleanOr(true, raw.smartExpand);
+  const rawQueries = Array.isArray(raw)
+    ? uniqueStrings(raw)
+    : uniqueStrings(rawRecord.queries);
+  const rawTitle = optionalString(rawRecord.title);
+  const smartExpand = booleanOr(true, rawRecord.smartExpand);
   const queries =
     rawQueries.length > 0 ? rawQueries : rawTitle ? [rawTitle] : [];
-  const explicitBaseQueries = uniqueStrings(raw.baseQueries);
+  const explicitBaseQueries = uniqueStrings(rawRecord.baseQueries);
   const baseQueries =
     explicitBaseQueries.length > 0
       ? explicitBaseQueries
@@ -443,160 +290,55 @@ function legacyQueryIdentity(
         : rawTitle
           ? [rawTitle]
           : queries;
-
-  return {
-    title: rawTitle ?? baseQueries[0] ?? queries[0] ?? "",
-    baseQueries,
-    queries,
-    smartExpand,
-  };
-}
-
-function legacySearchConfigFields(
-  input: StoredFetchRunConfigInput,
-  raw: Record<string, unknown>,
-  rawQueries: string[],
-  rawTitle: string | null,
-): LegacySearchConfigFields {
-  const identity = legacyQueryIdentity(raw, rawQueries, rawTitle);
   const includeFromQueries = booleanOr(
     true,
-    raw.includeFromQueries,
+    rawRecord.includeFromQueries,
     input.includeFromQueries,
   );
   const applyExcludes = booleanOr(
     true,
-    raw.applyExcludes,
+    rawRecord.applyExcludes,
     input.filterDescription,
   );
 
-  return {
-    ...identity,
-    location: optionalString(raw.location, input.location),
-    hoursOld: optionalPositiveInteger(raw.hoursOld, input.hoursOld),
+  return buildAuFetchRunConfigV1({
+    title: rawTitle ?? baseQueries[0] ?? queries[0] ?? "",
+    baseQueries,
+    queries,
+    smartExpand,
+    location: optionalString(rawRecord.location, input.location),
+    hoursOld: optionalPositiveInteger(rawRecord.hoursOld, input.hoursOld),
     resultsWanted: optionalPositiveInteger(
-      raw.resultsWanted,
+      rawRecord.resultsWanted,
       input.resultsWanted,
     ),
     includeFromQueries,
     titleMatch: resolveTitleMatchMode({
-      titleMatch: raw.titleMatch,
+      titleMatch: rawRecord.titleMatch,
       includeFromQueries,
     }),
     applyExcludes,
-    excludeTitleTerms: applyExcludes ? uniqueStrings(raw.excludeTitleTerms) : [],
-    excludeDescriptionRules: applyExcludes
-      ? uniqueStrings(raw.excludeDescriptionRules)
+    excludeTitleTerms: applyExcludes
+      ? uniqueStrings(rawRecord.excludeTitleTerms)
       : [],
-    ...dispatchMetaField(raw),
-  };
-}
-
-function normalizeLegacyCnConfig(
-  raw: Record<string, unknown>,
-  rawQueries: string[],
-  rawTitle: string | null,
-): CnFetchRunConfigV1 {
-  return buildCnFetchRunConfigV1({
-    title: rawTitle ?? rawQueries[0] ?? "",
-    queries: rawQueries,
-    // Nowcoder is the sole supported CN source. Legacy rows either omitted
-    // the field or carried retired scraper IDs, so both normalize here.
-    sources: ["nowcoder"],
-    excludeKeywords: uniqueStrings(raw.excludeKeywords),
-    locations: uniqueStrings(raw.locations),
-    ...dispatchMetaField(raw),
-  });
-}
-
-function normalizeLegacyGlobalConfig(
-  fields: LegacySearchConfigFields,
-  raw: Record<string, unknown>,
-): GlobalFetchRunConfigV1 {
-  const sources = uniqueStrings(raw.sources);
-  const isSourceOnly =
-    !fields.title &&
-    fields.baseQueries.length === 0 &&
-    fields.queries.length === 0;
-  const sourceSelection =
-    raw.sourceSelection === "explicit" || (isSourceOnly && sources.length > 0)
-      ? "explicit"
-      : "all";
-
-  return buildGlobalFetchRunConfigV1({
-    ...fields,
-    ...(isSourceOnly ? { queryMode: "source-only" as const } : {}),
-    sources,
-    sourceSelection,
-  });
-}
-
-function normalizeLegacyAuConfig(
-  fields: LegacySearchConfigFields,
-): AuFetchRunConfigV1 {
-  return buildAuFetchRunConfigV1({
-    ...fields,
+    excludeDescriptionRules: applyExcludes
+      ? uniqueStrings(rawRecord.excludeDescriptionRules)
+      : [],
     source: "jobspy",
+    ...dispatchMetaField(rawRecord),
   });
 }
 
-/**
- * Read either a v1 payload or one of the historical unversioned shapes.
- *
- * Versioned rows fail closed: an invalid v1 payload is never reinterpreted as
- * legacy data. This makes schema drift visible at the boundary.
- */
-export function normalizeFetchRunConfigV1(
-  input: StoredFetchRunConfigInput,
-): FetchRunConfigV1 {
-  const raw = input.queries;
-  const rawRecord = recordOf(raw);
-
-  if ("schemaVersion" in rawRecord) {
-    return normalizeVersionedFetchRunConfig(input, rawRecord);
-  }
-
-  const market = marketOf(input);
-  const rawQueries = Array.isArray(raw)
-    ? uniqueStrings(raw)
-    : uniqueStrings(rawRecord.queries);
-  const rawTitle = optionalString(rawRecord.title);
-
-  if (market === "CN") {
-    return normalizeLegacyCnConfig(rawRecord, rawQueries, rawTitle);
-  }
-
-  const fields = legacySearchConfigFields(
-    input,
-    rawRecord,
-    rawQueries,
-    rawTitle,
-  );
-  return market === "GLOBAL"
-    ? normalizeLegacyGlobalConfig(fields, rawRecord)
-    : normalizeLegacyAuConfig(fields);
-}
-
-/**
- * Read the current strict versioned contracts while retaining the v1 legacy
- * normalizer for rows written before schemaVersion existed.
- */
+/** Read the strict AU v1/v2 contracts with legacy AU row compatibility. */
 export function normalizeFetchRunConfig(
   input: StoredFetchRunConfigInput,
 ): FetchRunConfig {
+  assertAuMarket(input);
   const rawRecord = recordOf(input.queries);
   if (!("schemaVersion" in rawRecord)) {
     return normalizeFetchRunConfigV1(input);
   }
-
-  const parsed = FetchRunConfigSchema.parse(rawRecord);
-  const rowMarket = marketOf(input);
-  if (parsed.market !== rowMarket) {
-    throw new Error(
-      `FetchRun market mismatch: row=${rowMarket}, config=${parsed.market}`,
-    );
-  }
-  return parsed;
+  return FetchRunConfigSchema.parse(rawRecord);
 }
 
 export interface LegacyFetchRunConfigFields {
@@ -608,23 +350,10 @@ export interface LegacyFetchRunConfigFields {
   filterDescription: boolean;
 }
 
-/**
- * Compatibility projection consumed by the current Python worker. New clients
- * should read `run.config`; this projection can be retired with that adapter.
- */
+/** Compatibility projection consumed by the current Python AU worker. */
 export function toLegacyFetchRunConfigFields(
   config: FetchRunConfig,
 ): LegacyFetchRunConfigFields {
-  if (config.market === "CN") {
-    return {
-      queries: config,
-      location: null,
-      hoursOld: null,
-      resultsWanted: null,
-      includeFromQueries: false,
-      filterDescription: false,
-    };
-  }
   return {
     queries: config,
     location: config.location,

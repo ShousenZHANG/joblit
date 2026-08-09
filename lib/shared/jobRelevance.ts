@@ -1,41 +1,16 @@
 import manifest from "@/lib/shared/fetchRolePacks.config.json";
 
 /**
- * Title relevance — the one rule set, shared by every market.
- *
- * Joblit judged the same question in three places: `run_jobspy.py` for AU,
- * `filterSourceJobs.ts` for GLOBAL, and `cnFetch/normalize.ts` for CN. The
- * three drifted, and the drift cost the user real roles. Measured on a
- * 16-title corpus, the GLOBAL matcher kept 12 rows for the base query
- * "AI Engineer" and **1** for "Senior AI Engineer" — it treated the seniority
- * word as a required title signal, so "AI Engineer", "Staff AI Engineer" and
- * "Principal AI Engineer" were all rejected for not literally saying "senior".
- *
- * The Python matcher is the reference: it is the oldest, the most tested, and
- * the one whose behaviour users already rely on. This module ports it, and
- * both sides now read their vocabulary from `fetchRolePacks.config.json` so a
- * rule can only be changed in one place.
- *
- * `test/fetchRelevance.corpus.json` is the shared conformance corpus. The
- * TypeScript suite and `tools/fetcher/test_run_jobspy.py` both run it, so a
- * divergence between the two implementations fails a test rather than quietly
- * shrinking somebody's job list.
+ * AU title relevance shared by the TypeScript prescreen and Python worker.
+ * Both implementations read `fetchRolePacks.config.json` and execute the same
+ * conformance corpus so a rule change cannot silently shrink the job list.
  */
 
 /**
  * How hard the title filter presses.
  *
- * This replaces a boolean that meant two different things. `includeFromQueries`
- * was read by the AU worker as "skip the include filter entirely" and by the
- * GLOBAL processor as "apply a looser include filter", and one checkbox sent
- * the same value to both — so unticking it produced different amounts from the
- * two markets with nothing in the UI to explain why.
- *
- * The two readings each had a cause. AU searches through a job board, which has
- * already matched the search terms upstream, so dropping the include filter
- * still returns term-relevant rows. GLOBAL reads public feeds that return their
- * whole catalogue, so dropping it returns everything. Naming all three states
- * lets each market implement the user's intent honestly instead of guessing.
+ * Naming strict, relaxed and off keeps old AU rows readable while making the
+ * worker's matching intent explicit.
  */
 export const TITLE_MATCH_MODES = ["strict", "relaxed", "off"] as const;
 export type TitleMatchMode = (typeof TITLE_MATCH_MODES)[number];
@@ -52,8 +27,7 @@ export function isTitleMatchMode(value: unknown): value is TitleMatchMode {
  *
  * Legacy `false` maps to `off` because that is what the UI promised — the
  * control read "Strict title match … turn off to cast a wider net" — and what
- * AU already did. GLOBAL becomes wider on those rows, which is the direction
- * the setting always claimed to move.
+ * AU already did.
  */
 export function resolveTitleMatchMode(input: {
   titleMatch?: unknown;

@@ -104,13 +104,13 @@ describe("jobDetailResponseSchema", () => {
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
     expect(parsed.data.experienceAnalysis).toEqual({
-      schemaVersion: 2,
+      schemaVersion: 3,
       status: "NONE",
       requirements: [],
     });
   });
 
-  it("upgrades an old-server v1-only response to the unified v2 client contract", () => {
+  it("upgrades an old-server v1-only response to the unified v3 client contract", () => {
     const description = "At least 3 years of backend experience.";
     const parsed = jobDetailResponseSchema.parse({
       id: "job-1",
@@ -125,7 +125,7 @@ describe("jobDetailResponseSchema", () => {
     });
 
     expect(parsed.experienceAnalysis).toMatchObject({
-      schemaVersion: 2,
+      schemaVersion: 3,
       status: "FOUND",
       requirements: [{ classification: "REQUIRED", years: { min: 3 } }],
     });
@@ -157,7 +157,7 @@ describe("jobDetailResponseSchema", () => {
 
     expect(parsed.experienceAnalysis.requirements[0]).toMatchObject({
       classification: "STATED",
-      years: { min: 3.5 },
+      years: { operator: "AT_LEAST", min: 3.5 },
     });
     expect(parsed).not.toHaveProperty("experienceAnalysisV2");
   });
@@ -210,15 +210,15 @@ describe("jobDetailResponseSchema", () => {
 });
 
 describe("experience analysis expand/contract compatibility", () => {
-  it("projects v2 to a v1 payload an old client can parse", () => {
+  it("projects v3 to a v1 payload an old client can parse", () => {
     const description =
       "5 years of engineering experience, including 2 years of Java.";
-    const total = experienceRequirement(description, "5 years", 5, {
+    const total = currentExperienceRequirement(description, "5 years", 5, {
       id: "total",
       scope: "engineering",
       relation: { groupId: "g-1", kind: "ALL_OF", role: "TOTAL" },
     });
-    const subset = experienceRequirement(description, "2 years", 2, {
+    const subset = currentExperienceRequirement(description, "2 years", 2, {
       id: "subset",
       scope: "Java",
       classification: "STATED",
@@ -226,7 +226,7 @@ describe("experience analysis expand/contract compatibility", () => {
     });
 
     const legacy = projectJobExperienceAnalysisV1({
-      schemaVersion: 2,
+      schemaVersion: 3,
       status: "FOUND",
       requirements: [total, subset],
     });
@@ -254,7 +254,7 @@ describe("experience analysis expand/contract compatibility", () => {
 
   it("drops fractional requirements instead of rounding and removes orphan relations", () => {
     const description = "2 years of backend and 18 months of Java experience.";
-    const integerRequirement = experienceRequirement(
+    const integerRequirement = currentExperienceRequirement(
       description,
       "2 years",
       2,
@@ -263,7 +263,7 @@ describe("experience analysis expand/contract compatibility", () => {
         relation: { groupId: "g-2", kind: "ALL_OF", role: "TOTAL" },
       },
     );
-    const fractionalRequirement = experienceRequirement(
+    const fractionalRequirement = currentExperienceRequirement(
       description,
       "18 months",
       1.5,
@@ -274,7 +274,7 @@ describe("experience analysis expand/contract compatibility", () => {
     );
 
     const legacy = projectJobExperienceAnalysisV1({
-      schemaVersion: 2,
+      schemaVersion: 3,
       status: "FOUND",
       requirements: [integerRequirement, fractionalRequirement],
     });
@@ -290,22 +290,18 @@ describe("experience analysis expand/contract compatibility", () => {
 
   it("keeps the dual response parseable by an old non-strict client", () => {
     const description = "At least 3 years of backend experience.";
-    const v2 = {
-      schemaVersion: 2 as const,
-      status: "FOUND" as const,
-      requirements: [experienceRequirement(description, "3 years", 3)],
-    };
+    const v3 = analyzeJobExperience(description);
     const oldClientDetailSchema = z.object({
       experienceAnalysis: LegacyJobExperienceAnalysisSchema,
     });
 
     const parsed = oldClientDetailSchema.parse({
-      experienceAnalysis: projectJobExperienceAnalysisV1(v2),
-      experienceAnalysisV2: v2,
+      experienceAnalysis: projectJobExperienceAnalysisV1(v3),
+      experienceAnalysisV3: v3,
     });
 
     expect(parsed.experienceAnalysis.schemaVersion).toBe(1);
-    expect(parsed).not.toHaveProperty("experienceAnalysisV2");
+    expect(parsed).not.toHaveProperty("experienceAnalysisV3");
   });
 });
 
@@ -333,6 +329,20 @@ function experienceRequirement(
       yearsStart,
       yearsEnd: yearsStart + yearsText.length,
     },
+    ...overrides,
+  };
+}
+
+function currentExperienceRequirement(
+  description: string,
+  yearsText: string,
+  years: number,
+  overrides: Record<string, unknown> = {},
+) {
+  const legacy = experienceRequirement(description, yearsText, years);
+  return {
+    ...legacy,
+    years: { ...legacy.years, operator: "AT_LEAST" as const },
     ...overrides,
   };
 }

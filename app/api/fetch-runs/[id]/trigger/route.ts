@@ -10,12 +10,7 @@ import {
   type GithubFetchRunDispatchOutcome,
 } from "@/lib/server/fetchRuns/dispatchGithubFetchRun";
 import {
-  executeInlineFetchRun,
-  type InlineFetchRunExecutionOutcome,
-} from "@/lib/server/fetchRuns/executeInlineFetchRun";
-import {
   claimFetchRunDispatch,
-  isInlineTriggerClaim,
   type RejectedTriggerClaim,
   type TriggerClaimRequest,
 } from "@/lib/server/fetchRuns/triggerClaim";
@@ -42,6 +37,12 @@ function rejectedClaimResponse(
       });
     case "not_found":
       return errorJson("NOT_FOUND", "Not found", 404);
+    case "retired_market":
+      return errorJson(
+        "FETCH_MARKET_RETIRED",
+        "This fetch market has been retired",
+        410,
+      );
     case "state_changed":
       return errorJson(
         "RUN_NO_LONGER_ACTIVE",
@@ -55,33 +56,6 @@ function rejectedClaimResponse(
         409,
         { details: { status: result.status } },
       );
-  }
-}
-
-function inlineExecutionResponse(
-  outcome: InlineFetchRunExecutionOutcome,
-): NextResponse {
-  switch (outcome.kind) {
-    case "completed":
-      return NextResponse.json({
-        ok: true,
-        imported: outcome.imported,
-        discovered: outcome.discovered,
-      });
-    case "cancelled":
-      return errorJson("RUN_CANCELLED", "The fetch run was cancelled", 409);
-    case "superseded":
-      return NextResponse.json({ ok: true, alreadyDispatched: true });
-    case "no_longer_active":
-      return errorJson(
-        "RUN_NO_LONGER_ACTIVE",
-        "The fetch run is no longer active",
-        409,
-      );
-    case "failed":
-      return outcome.market === "GLOBAL"
-        ? errorJson("GLOBAL_FETCH_FAILED", "The global fetch failed", 502)
-        : errorJson("CN_FETCH_FAILED", "The CN fetch failed", 502);
   }
 }
 
@@ -138,14 +112,20 @@ async function triggerOwnedFetchRun(
   runId: string,
   userId: string,
 ): Promise<NextResponse> {
-  const rateLimitResponse = triggerRateLimitResponse(userId);
-  if (rateLimitResponse) return rateLimitResponse;
-
   const ownedRun = await prisma.fetchRun.findFirst({
     where: { id: runId, userId },
-    select: { id: true },
+    select: { id: true, market: true },
   });
   if (!ownedRun) return errorJson("NOT_FOUND", "Not found", 404);
+  if (ownedRun.market !== "AU") {
+    return errorJson(
+      "FETCH_MARKET_RETIRED",
+      "This fetch market has been retired",
+      410,
+    );
+  }
+  const rateLimitResponse = triggerRateLimitResponse(userId);
+  if (rateLimitResponse) return rateLimitResponse;
 
   const request: TriggerClaimRequest = {
     runId,
@@ -154,10 +134,6 @@ async function triggerOwnedFetchRun(
   };
   const claim = await claimFetchRunDispatch(request);
   if (claim.kind !== "locked") return rejectedClaimResponse(claim);
-  if (isInlineTriggerClaim(claim)) {
-    const outcome = await executeInlineFetchRun(request, claim);
-    return inlineExecutionResponse(outcome);
-  }
   const outcome = await dispatchGithubFetchRun(request, claim);
   return githubDispatchResponse(outcome);
 }

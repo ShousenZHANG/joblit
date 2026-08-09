@@ -27,7 +27,7 @@ const row = {
   workArrangement: "Remote",
   listingDate: new Date("2026-07-18T00:00:00.000Z"),
   status: "NEW",
-  source: "remoteok",
+  source: "jobspy",
   postingRisk: 25,
   postingRiskFlags: ["suspicious_domain", 42],
   fitScore: 82,
@@ -39,7 +39,7 @@ const row = {
   livenessReason: null,
   createdAt: new Date("2026-07-19T00:00:00.000Z"),
   updatedAt: new Date("2026-07-20T00:00:00.000Z"),
-  market: "GLOBAL",
+  market: "AU",
   applications: [],
 };
 
@@ -50,7 +50,7 @@ describe("listJobs market visibility", () => {
     prismaMock.job.count.mockResolvedValue(1);
   });
 
-  it("queries AU and GLOBAL rows for the AU workspace and returns fit fields", async () => {
+  it("queries only AU rows for the AU workspace and returns fit fields", async () => {
     const result = await listJobs("user-1", {
       limit: 10,
       status: "NEW",
@@ -63,7 +63,7 @@ describe("listJobs market visibility", () => {
         where: {
           userId: "user-1",
           status: "NEW",
-          market: { in: ["AU", "GLOBAL"] },
+          market: { in: ["AU"] },
         },
         select: expect.objectContaining({
           source: true,
@@ -79,12 +79,12 @@ describe("listJobs market visibility", () => {
       where: {
         userId: "user-1",
         status: "NEW",
-        market: { in: ["AU", "GLOBAL"] },
+        market: { in: ["AU"] },
       },
     });
     expect(result.items[0]).toMatchObject({
-      market: "GLOBAL",
-      source: "remoteok",
+      market: "AU",
+      source: "jobspy",
       postingRisk: 25,
       postingRiskFlags: ["suspicious_domain"],
       fitScore: 82,

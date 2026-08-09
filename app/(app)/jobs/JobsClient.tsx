@@ -1047,8 +1047,6 @@ export function JobsClient({
           tailorSource={selectedTailorSource}
           updatingIds={updatingIds}
           deletingIds={deletingIds}
-          highlightGenerate={highlightGenerate}
-          guideHighlightClass={guideHighlightClass}
           externalPromptLoading={externalGenerate.externalGenerating}
           mobileTab={mobileTab}
           onUpdateStatus={updateStatus}

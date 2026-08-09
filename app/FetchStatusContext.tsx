@@ -18,11 +18,11 @@ export type FetchRunStatus =
   | "SUCCEEDED"
   | "PARTIAL"
   | "FAILED";
-export type FetchSource = "jobspy" | "seek" | "nowcoder" | "global";
+export type FetchSource = "jobspy" | "seek";
 
-// One tracked run (a single source). A fetch action starts one of these per
-// The legacy `seek` member is read-only compatibility for stored FetchRun
-// receipts; current fetch controls no longer create that lane.
+// One tracked run for the AU worker. The legacy `seek` member is read-only
+// compatibility for stored FetchRun receipts; current fetch controls no
+// longer create that lane.
 export type FetchRunLane = {
   id: string;
   source: FetchSource;
@@ -108,10 +108,7 @@ function parseRunMetas(raw: string | null): RunMeta[] {
         (r): r is RunMeta =>
           r &&
           typeof r.id === "string" &&
-          (r.source === "jobspy" ||
-            r.source === "seek" ||
-            r.source === "nowcoder" ||
-            r.source === "global"),
+          (r.source === "jobspy" || r.source === "seek"),
       )
       .slice(0, 4);
   } catch {

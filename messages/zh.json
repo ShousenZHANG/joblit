@@ -110,12 +110,9 @@
     "postingRisk": "风险 {score}",
     "experienceRequirement": {
       "title": "职位要求",
-      "experienceHeading": "经验",
+      "experienceHeading": "必需经验年限",
       "technologyHeading": "技术栈",
       "classificationREQUIRED": "必须",
-      "classificationSTATED": "职位注明",
-      "classificationPREFERRED": "加分项",
-      "classificationALTERNATIVE": "替代条件",
       "judgementMATCH": "匹配",
       "judgementGAP": "缺口",
       "judgementPARTIAL": "部分匹配",
@@ -281,10 +278,7 @@
     "fetching": "抓取中…",
     "retry": "重试",
     "suggestions": "建议",
-    "popular": "热门",
-    "cnSources": "数据来源",
-    "cnExcludeKeywords": "排除关键词",
-    "cnLocation": "地点"
+    "popular": "热门"
   },
   "fetchProgress": {
     "title": "抓取进度",
@@ -662,9 +656,18 @@
     "logoBar": {
       "heading": "引擎盖之下",
       "items": {
-        "boards": "岗位聚合",
-        "ats": "公司招聘站点",
-        "byom": "本地优先生成"
+        "intake": {
+          "value": "LinkedIn 岗位发现",
+          "label": "澳大利亚岗位入口"
+        },
+        "screening": {
+          "value": "澳大利亚高召回筛选",
+          "label": "资格与职级策略"
+        },
+        "byom": {
+          "value": "你的 AI，在本机运行",
+          "label": "本地优先生成"
+        }
       }
     },
     "architecture": {

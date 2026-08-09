@@ -934,7 +934,8 @@ describe("JobsClient", () => {
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
     const summary = await screen.findByTestId("jd-requirements-panel");
-    expect(within(summary).getByText("Required")).toBeInTheDocument();
+    expect(within(summary).getByText("Required experience")).toBeInTheDocument();
+    expect(within(summary).queryByText("Required")).not.toBeInTheDocument();
     expect(
       within(summary).getByText("Minimum of 2 years"),
     ).toBeInTheDocument();

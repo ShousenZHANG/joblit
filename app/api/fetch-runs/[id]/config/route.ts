@@ -82,6 +82,13 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     select: FETCH_RUN_CONFIG_SELECT,
   });
   if (!run) return errorJson("NOT_FOUND", "Not found", 404);
+  if (run.market !== "AU") {
+    return errorJson(
+      "FETCH_MARKET_RETIRED",
+      "This fetch market has been retired",
+      410,
+    );
+  }
   return configResponse(run);
 }
 

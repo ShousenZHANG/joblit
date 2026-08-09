@@ -145,8 +145,8 @@ configuration before the migration starts.
 `IMPORT_SECRET` and the split `/api/admin/import` +
 `/api/fetch-runs/[id]/update` callback flow were retired by ADR-0008. The AU
 worker now authenticates configuration reads and `fetch-run-commit/v1`
-commands with the one `FETCH_RUN_SECRET`; CN and GLOBAL enter the same commit
-module in-process and do not need an HTTP credential.
+commands with the one `FETCH_RUN_SECRET`. CN Fetch and GLOBAL feed/ATS execution
+were retired by ADR-0017; non-AU execution fails closed.
 
 `LATEX_RENDER_ALLOW_INSECURE_HTTP=true` relaxes transport encryption only. The
 render token travels as a request header, so on plain HTTP it crosses the

@@ -21,7 +21,6 @@ Object.defineProperty(window.HTMLElement.prototype, "scrollIntoView", {
 const pushMock = vi.fn();
 const startRunMock = vi.fn();
 const markTaskCompleteMock = vi.fn();
-const marketMock = vi.hoisted(() => ({ value: "AU" as const }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -58,10 +57,6 @@ vi.mock("@/app/FetchStatusContext", () => ({
     importedCount: 0,
     elapsedSeconds: 0,
   }),
-}));
-
-vi.mock("@/hooks/useMarket", () => ({
-  useMarket: () => marketMock.value,
 }));
 
 describe("FetchClient", () => {

@@ -85,14 +85,13 @@ describe("ImportJobItemSchema", () => {
         market: "MARS",
       }).success,
     ).toBe(false);
-    // GLOBAL joined AU and CN when the aggregator sources landed.
     expect(
       ImportJobItemSchema.safeParse({
         jobUrl: "https://example.com/jobs/123",
         title: "Software Engineer",
         market: "GLOBAL",
       }).success,
-    ).toBe(true);
+    ).toBe(false);
     expect(
       ImportJobItemSchema.safeParse({
         jobUrl: "https://example.com/jobs/123",
@@ -105,7 +104,7 @@ describe("ImportJobItemSchema", () => {
     const unsafeInternalRow = {
       jobUrl: "https://example.com/jobs/oversized",
       title: "x".repeat(241),
-      market: "GLOBAL",
+      market: "AU",
     } as Parameters<typeof importJobsForUser>[0]["items"][number];
 
     const result = await importJobsForUser({
@@ -272,7 +271,7 @@ describe("ImportJobItemSchema", () => {
         company: "Acme Pty Ltd",
       }),
       ImportJobItemSchema.parse({
-        jobUrl: "https://remoteok.com/remote-jobs/2",
+        jobUrl: "https://example.com/jobs/2",
         title: "Backend Engineer",
         company: "Acme",
       }),
@@ -298,31 +297,31 @@ describe("ImportJobItemSchema", () => {
     expect(store.createMany.mock.calls[0][0].data[0].companyRoleKey).toBeNull();
   });
 
-  it("persists the source and GLOBAL market on imported rows", async () => {
+  it("persists the source and AU market on imported rows", async () => {
     const item = ImportJobItemSchema.parse({
-      jobUrl: "https://remoteok.com/remote-jobs/1",
+      jobUrl: "https://example.com/jobs/1",
       title: "AI Engineer",
-      market: "GLOBAL",
-      source: "remoteok",
+      market: "AU",
+      source: "jobspy",
     });
 
     const result = await importJobsForUser({ userId: "user-1", items: [item] });
 
     expect(result.imported).toBe(1);
     expect(store.createMany.mock.calls[0][0].data[0]).toMatchObject({
-      market: "GLOBAL",
-      source: "remoteok",
+      market: "AU",
+      source: "jobspy",
     });
   });
 
   it("writes description fingerprint and refreshes liveness for seen urls", async () => {
     const item = ImportJobItemSchema.parse({
-      jobUrl: "https://remoteok.com/remote-jobs/1",
+      jobUrl: "https://example.com/jobs/1",
       title: "AI Engineer",
       description:
         "Design and operate reliable distributed machine learning services.",
-      market: "GLOBAL",
-      source: "remoteok",
+      market: "AU",
+      source: "jobspy",
     });
 
     await importJobsForUser({ userId: "user-1", items: [item] });
@@ -337,7 +336,7 @@ describe("ImportJobItemSchema", () => {
     expect(store.updateMany).toHaveBeenCalledWith({
       where: {
         userId: "user-1",
-        jobUrl: { in: ["https://remoteok.com/remote-jobs/1"] },
+        jobUrl: { in: ["https://example.com/jobs/1"] },
         OR: [
           { livenessCheckedAt: null },
           { livenessCheckedAt: { lt: expect.any(Date) } },
@@ -358,10 +357,10 @@ describe("ImportJobItemSchema", () => {
       const olderAt = new Date("2026-07-20T00:00:00.000Z");
       const newerAt = new Date("2026-07-20T00:01:00.000Z");
       const item = ImportJobItemSchema.parse({
-        jobUrl: "https://remoteok.com/remote-jobs/1",
+        jobUrl: "https://example.com/jobs/1",
         title: "AI Engineer",
-        market: "GLOBAL",
-        source: "remoteok",
+        market: "AU",
+        source: "jobspy",
       });
       const olderPrepared = await prepareJobImportForUser({
         userId: "user-1",
@@ -468,10 +467,10 @@ describe("ImportJobItemSchema", () => {
         return { count: 1 };
       });
     const item = ImportJobItemSchema.parse({
-      jobUrl: "https://remoteok.com/remote-jobs/1",
+      jobUrl: "https://example.com/jobs/1",
       title: "AI Engineer",
-      market: "GLOBAL",
-      source: "remoteok",
+      market: "AU",
+      source: "jobspy",
     });
 
     const result = await importJobsForUser({ userId: "user-1", items: [item] });
@@ -492,7 +491,7 @@ describe("ImportJobItemSchema", () => {
     const fallbackRow = store.createMany.mock.calls[1]?.[0]?.data[0];
     expect(fallbackRow).toMatchObject({
       title: "AI Engineer",
-      market: "GLOBAL",
+      market: "AU",
       status: "NEW",
     });
     expect(fallbackRow).not.toHaveProperty("source");

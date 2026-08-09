@@ -11,8 +11,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/messages/en.json";
 import {
+  EMPTY_VISIBLE_JOB_EXPERIENCE,
   JobExperienceAnalysisSchema,
+  projectVisibleJobExperience,
   type JobExperienceAnalysis,
+  type VisibleJobExperienceProjection,
 } from "@/lib/shared/jobExperienceAnalysis";
 import type { FitMatrix } from "@/lib/shared/schemas/fitMatrix";
 import { JobDescriptionMarkdown } from "./JobDescriptionMarkdown";
@@ -36,10 +39,33 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function renderPanel(props: Parameters<typeof JobRequirementsPanel>[0]) {
+type PanelTestProps = Omit<
+  Parameters<typeof JobRequirementsPanel>[0],
+  "experience"
+> & {
+  analysis?: JobExperienceAnalysis | null;
+};
+
+function panelProjection(
+  description: string,
+  analysis?: JobExperienceAnalysis | null,
+): VisibleJobExperienceProjection {
+  if (description) return projectVisibleJobExperience(description, analysis);
+  if (!analysis) return EMPTY_VISIBLE_JOB_EXPERIENCE;
+  const requirements = analysis.requirements.filter(
+    (requirement) => requirement.classification === "REQUIRED",
+  );
+  return { requirements, highlights: [] };
+}
+
+function renderPanel({ analysis, description, ...props }: PanelTestProps) {
   return render(
     <NextIntlClientProvider locale="en" messages={en}>
-      <JobRequirementsPanel {...props} />
+      <JobRequirementsPanel
+        {...props}
+        description={description}
+        experience={panelProjection(description, analysis)}
+      />
     </NextIntlClientProvider>,
   );
 }
@@ -49,7 +75,7 @@ function analysisWith(
   status: JobExperienceAnalysis["status"] = "FOUND",
 ): JobExperienceAnalysis {
   return JobExperienceAnalysisSchema.parse({
-    schemaVersion: 2,
+    schemaVersion: 3,
     status,
     requirements,
   });
@@ -59,7 +85,7 @@ const QA_EVIDENCE_TEXT = "5+ years of experience in software QA";
 const REQUIRED_QA: JobExperienceAnalysis["requirements"][number] = {
   id: "req-1",
   classification: "REQUIRED",
-  years: { operator: "MINIMUM", min: 5, max: null, text: "5+ years" },
+  years: { operator: "AT_LEAST", min: 5, max: null, text: "5+ years" },
   scope: "software QA",
   evidence: {
     text: QA_EVIDENCE_TEXT,
@@ -75,7 +101,7 @@ const REVIEW_EVIDENCE_TEXT =
 const REVIEW_ONLY: JobExperienceAnalysis["requirements"][number] = {
   id: "rev-1",
   classification: "REVIEW",
-  years: { operator: "MINIMUM", min: 3, max: null, text: "3 years" },
+  years: { operator: "EXACT", min: 3, max: 3, text: "3 years" },
   scope: null,
   evidence: {
     text: REVIEW_EVIDENCE_TEXT,
@@ -107,9 +133,7 @@ describe("JobRequirementsPanel", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("5+ years")).toBeInTheDocument();
     expect(screen.getByText("software QA")).toBeInTheDocument();
-    expect(screen.getByText("Required")).toBeInTheDocument();
     expect(screen.getByText("5+ years")).toHaveClass("text-foreground");
-    expect(screen.getByText("Required")).toHaveClass("text-foreground");
     expect(screen.getByTestId("jd-requirements-panel").className).not.toMatch(
       /amber/,
     );
@@ -260,7 +284,7 @@ describe("JobRequirementsPanel", () => {
       {
         ...REQUIRED_QA,
         id: "req-b",
-        years: { operator: "MINIMUM", min: 3, max: null, text: "3+ years" },
+        years: { operator: "AT_LEAST", min: 3, max: null, text: "3+ years" },
         scope: "test automation",
         relation: { groupId: "g1", kind: "ANY_OF" },
         evidence: {
@@ -284,7 +308,7 @@ describe("JobRequirementsPanel", () => {
     expect(screen.getByText(/^or$/i)).toBeInTheDocument();
   });
 
-  it("renders stated, preferred and alternative strength without relying on colour", () => {
+  it("hides stated, preferred and alternative quantities from the product UI", () => {
     const variants = [
       { ...REQUIRED_QA, id: "stated", classification: "STATED" },
       {
@@ -319,12 +343,8 @@ describe("JobRequirementsPanel", () => {
       matrix: null,
     });
 
-    expect(screen.getByText("Stated")).toBeInTheDocument();
-    expect(screen.getByText("Preferred")).toBeInTheDocument();
-    expect(screen.getByText("Alternative")).toBeInTheDocument();
-    expect(
-      screen.getByText("Alternative").closest("[data-classification]"),
-    ).toHaveAttribute("data-classification", "ALTERNATIVE");
+    expect(screen.queryByTestId("jd-requirements-panel")).not.toBeInTheDocument();
+    expect(screen.queryByText("5+ years")).not.toBeInTheDocument();
   });
 
   it("indents a nested subset and labels it as included", () => {
@@ -375,6 +395,7 @@ describe("JobRequirementsPanel", () => {
       },
     };
     const analysis = analysisWith([requirement]);
+    const experience = projectVisibleJobExperience(description, analysis);
     vi.useFakeTimers();
     const scrollIntoView = vi.fn();
     vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(
@@ -387,13 +408,13 @@ describe("JobRequirementsPanel", () => {
     render(
       <NextIntlClientProvider locale="en" messages={en}>
         <JobRequirementsPanel
-          analysis={analysis}
+          experience={experience}
           description={description}
           matrix={null}
         />
         <JobDescriptionMarkdown
           description={description}
-          experienceAnalysis={analysis}
+          experience={experience}
         />
       </NextIntlClientProvider>,
     );
@@ -431,6 +452,7 @@ describe("JobRequirementsPanel", () => {
       },
     };
     const analysis = analysisWith([requirement]);
+    const experience = projectVisibleJobExperience(description, analysis);
     vi.useFakeTimers();
     const scrollIntoView = vi.fn();
     vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(
@@ -440,7 +462,7 @@ describe("JobRequirementsPanel", () => {
     const view = render(
       <NextIntlClientProvider locale="en" messages={en}>
         <JobRequirementsPanel
-          analysis={analysis}
+          experience={experience}
           description={description}
           matrix={null}
         />
@@ -459,13 +481,13 @@ describe("JobRequirementsPanel", () => {
     view.rerender(
       <NextIntlClientProvider locale="en" messages={en}>
         <JobRequirementsPanel
-          analysis={analysis}
+          experience={experience}
           description={description}
           matrix={null}
         />
         <JobDescriptionMarkdown
           description={description}
-          experienceAnalysis={analysis}
+          experience={experience}
         />
       </NextIntlClientProvider>,
     );
@@ -517,6 +539,7 @@ describe("JobRequirementsPanel", () => {
       },
     };
     const analysis = analysisWith([requirement]);
+    const experience = projectVisibleJobExperience(description, analysis);
     const matrix = {
       requirements: [
         {
@@ -533,13 +556,13 @@ describe("JobRequirementsPanel", () => {
     const { container } = render(
       <NextIntlClientProvider locale="en" messages={en}>
         <JobRequirementsPanel
-          analysis={analysis}
+          experience={experience}
           description={description}
           matrix={matrix}
         />
         <JobDescriptionMarkdown
           description={description}
-          experienceAnalysis={analysis}
+          experience={experience}
         />
       </NextIntlClientProvider>,
     );

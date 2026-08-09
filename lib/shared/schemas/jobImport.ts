@@ -24,7 +24,7 @@ export const ImportJobItemSchema = z
     workArrangement: z.string().trim().max(80).optional().nullable(),
     listing_date: z.string().trim().max(80).optional().nullable(),
     listingDate: z.string().trim().max(80).optional().nullable(),
-    market: z.enum(["AU", "CN", "GLOBAL"]).optional().default("AU"),
+    market: z.enum(["AU", "CN"]).optional().default("AU"),
     source: z.string().trim().max(60).optional().nullable(),
     site: z.string().trim().max(120).optional().nullable(),
   })

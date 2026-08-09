@@ -14,8 +14,8 @@ import {
 import { useTranslations } from "next-intl";
 
 import type {
-  JobExperienceAnalysis,
   JobExperienceRequirement,
+  VisibleJobExperienceProjection,
 } from "@/lib/shared/jobExperienceAnalysis";
 import type { FitJudgement, FitMatrix } from "@/lib/shared/schemas/fitMatrix";
 import {
@@ -33,9 +33,9 @@ import { experienceEvidenceTargetId } from "./jobExperienceEvidenceTarget";
  * It replaced two stacked cards (an experience card and a five-section
  * "Fit evidence" card). The rules that shaped it:
  *
- * - Only confident experience findings render. A REVIEW candidate is a guess
- *   ("3 years' service" in a leave policy once rendered as a requirement
- *   card), and a guess shown prominently costs more trust than it earns.
+ * - Only source-verifiable REQUIRED experience findings render. Preferred,
+ *   stated, alternative and review evidence stays in the domain result but
+ *   does not compete with hard requirements in the product UI.
  * - Technology is one flat cluster. The GATE / CORE / PREFERRED tiers still
  *   exist in the data and drive ordering (gates first), but three labelled
  *   sections told the reader to study a taxonomy before reading chips.
@@ -154,38 +154,6 @@ function focusExperienceEvidence(targetId: string): boolean {
   return true;
 }
 
-function classificationLabelKey(
-  classification: string,
-):
-  | "classificationREQUIRED"
-  | "classificationSTATED"
-  | "classificationPREFERRED"
-  | "classificationALTERNATIVE" {
-  switch (classification) {
-    case "REQUIRED":
-      return "classificationREQUIRED";
-    case "PREFERRED":
-      return "classificationPREFERRED";
-    case "ALTERNATIVE":
-      return "classificationALTERNATIVE";
-    default:
-      return "classificationSTATED";
-  }
-}
-
-function classificationTone(classification: string): string {
-  switch (classification) {
-    case "REQUIRED":
-      return "border-brand-blue/55 bg-brand-blue/20 font-bold text-foreground";
-    case "PREFERRED":
-      return "border-brand-blue/45 bg-transparent text-foreground";
-    case "ALTERNATIVE":
-      return "border-dashed border-brand-blue/55 bg-brand-blue/[0.05] text-foreground";
-    default:
-      return "border-brand-blue/20 bg-brand-blue/10 text-foreground";
-  }
-}
-
 function judgementLabelKey(
   judgement: FitJudgement,
 ): "judgementMATCH" | "judgementGAP" | "judgementPARTIAL" | "judgementUNKNOWN" {
@@ -277,7 +245,6 @@ function ExperienceLine({
 }) {
   const t = useTranslations("jobs.experienceRequirement");
   const targetId = experienceEvidenceTargetId(requirement.id);
-  const classification = requirement.classification;
   const [jumpState, setJumpState] = useState<
     "IDLE" | "WAITING" | "UNAVAILABLE"
   >("IDLE");
@@ -325,7 +292,7 @@ function ExperienceLine({
 
   return (
     <div
-      data-classification={classification}
+      data-classification="REQUIRED"
       data-relation-role={relationRole}
       className={cn(
         "flex min-w-0 flex-col gap-1 rounded-lg py-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3",
@@ -334,7 +301,7 @@ function ExperienceLine({
       )}
     >
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1.5">
-        <span className="rounded-md bg-brand-blue/10 px-2 py-1 text-sm font-bold leading-none tabular-nums text-foreground ring-1 ring-brand-blue/20 dark:bg-brand-blue/20">
+        <span className="rounded-full border border-brand-blue/30 bg-brand-blue/10 px-2.5 py-1 text-sm font-bold leading-none tabular-nums text-foreground shadow-sm dark:bg-brand-blue/20">
           {requirement.years.text}
         </span>
         {requirement.scope ? (
@@ -342,14 +309,6 @@ function ExperienceLine({
             {requirement.scope}
           </span>
         ) : null}
-        <span
-          className={cn(
-            "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide",
-            classificationTone(classification),
-          )}
-        >
-          {t(classificationLabelKey(classification))}
-        </span>
       </div>
       <button
         type="button"
@@ -382,29 +341,26 @@ function ExperienceLine({
 }
 
 export function JobRequirementsPanel({
-  analysis,
+  experience,
   description,
   matrix,
 }: {
-  analysis?: JobExperienceAnalysis | null;
+  experience: VisibleJobExperienceProjection;
   description: string;
   matrix: FitMatrix | null;
 }) {
   const t = useTranslations("jobs.experienceRequirement");
   const headingId = useId();
 
-  // A REVIEW finding is a low-confidence guess; it never renders.
-  const confident = (analysis?.requirements ?? []).filter(
-    (requirement) => requirement.classification !== "REVIEW",
-  );
+  const requiredExperience = experience.requirements;
   const signals = useMemo(
     () => buildTechnicalSignals(description, matrix),
     [description, matrix],
   );
 
-  if (!confident.length && !signals.length) return null;
+  if (!requiredExperience.length && !signals.length) return null;
 
-  const blocks = buildRequirementBlocks(confident);
+  const blocks = buildRequirementBlocks(requiredExperience);
 
   return (
     <section

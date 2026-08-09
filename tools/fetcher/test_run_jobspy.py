@@ -1324,12 +1324,6 @@ class RunJobspyDedupeTests(unittest.TestCase):
 class SharedRelevanceCorpusTests(unittest.TestCase):
     """Run the corpus that lib/shared/jobRelevance.test.ts also runs.
 
-    Title relevance used to be judged in three places — this worker for AU,
-    filterSourceJobs.ts for GLOBAL, cnFetch/normalize.ts for CN — and the three
-    drifted. The measured cost was real: the GLOBAL matcher kept 12 of 16 rows
-    for the base query "AI Engineer" and 1 of 16 for "Senior AI Engineer",
-    because it treated the seniority word as a required title signal.
-
     Both suites now read test/fetchRelevance.corpus.json. A rule that moves on
     one side without the other fails here or there, instead of quietly changing
     how many roles a user sees.
@@ -1390,12 +1384,7 @@ class SharedRelevanceCorpusTests(unittest.TestCase):
 
 
 class TitleMatchModeTests(unittest.TestCase):
-    """`titleMatch` replaces a boolean that meant two things.
-
-    `includeFromQueries=False` skipped the include filter here and merely
-    relaxed it in the GLOBAL processor, while one UI control sent the same
-    value to both. These assertions pin the mirror of resolveTitleMatchMode.
-    """
+    """Pin the Python mirror of resolveTitleMatchMode."""
 
     def test_explicit_mode_wins(self):
         for mode in ("strict", "relaxed", "off"):

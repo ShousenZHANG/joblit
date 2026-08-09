@@ -15,12 +15,12 @@ A job-search workflow product: **fetch** roles → **triage** them → **tailor*
 CV and cover letter → export PDFs. One user, many Jobs, one Application per
 Job.
 
-Two UI and Resume Markets: `AU` and `CN` (`lib/shared/market.ts:22`). Market is
-derived from the UI Locale cookie, and it decides which Resume Locale the LaTeX
-renderer uses and which pages appear in the nav
-(`components/app-shell/AppNav.tsx:59-70` — CN sees only `/resume` and
-`/discover`). The Fetch Pipeline additionally uses `GLOBAL` as a source-adapter
-selector; it is not a third UI or Resume Market.
+Two Job/Resume markets remain: `AU` and `CN` (`lib/shared/market.ts`). Market is
+derived from the UI Locale cookie and selects the Resume Locale and LaTeX
+renderer. CN Jobs, Resume, Chinese LaTeX, and translated UI remain supported,
+but CN navigation exposes Resume only. The executable Fetch Pipeline is AU-only;
+CN Fetch and the former `GLOBAL` source-adapter selector were retired by
+[ADR-0017](../adr/0017-retire-cn-and-global-job-intake.md).
 
 ---
 
@@ -31,14 +31,12 @@ selector; it is not a third UI or Resume Market.
 `FetchRun` is the unit of work. Creation and dispatch are separate steps.
 
 ```
-POST /api/fetch-runs            → FetchRun row (QUEUED)
-                                  + versioned FetchRunConfig (AU v2; CN/GLOBAL v1)
+POST /api/fetch-runs            → AU FetchRun row (QUEUED)
+                                  + strict AU FetchRunConfig v2
 POST /api/fetch-runs/[id]/trigger
-  ├─ market AU     → GitHub Actions workflow_dispatch → Python JobSpy
-  │                  → GET  /api/fetch-runs/[id]/config
-  │                  → POST /api/fetch-runs/[id]/commit
-  ├─ market CN     → lib/server/cnFetch/processFetchRun.ts, in-process
-  └─ market GLOBAL → lib/server/sources/processGlobalFetchRun.ts, in-process
+  └─ market AU → GitHub Actions workflow_dispatch → Python JobSpy
+                  → GET  /api/fetch-runs/[id]/config
+                  → POST /api/fetch-runs/[id]/commit
                                │
                                ▼
                   lib/server/fetchRuns/fetchRunCommit.ts
@@ -46,28 +44,24 @@ POST /api/fetch-runs/[id]/trigger
                   → Job + receipt + run projection
 ```
 
-The AU branch is asynchronous and reaches the commit module through the
-`FETCH_RUN_SECRET`-guarded HTTP adapter. Inline CN and GLOBAL execution enters
-through `executeInlineFetchRun`: the coordinator owns `start`, running
-metadata, one terminal `commit`/`fail`, stop-reason mapping, and exception
-recovery. Market adapters receive no run or attempt identity; they perform
-network discovery only after `start` and return a terminal plan. Commands form
-`fetch-run-commit/v1`, and the commit module derives the owner and market from
-the stored run.
+The asynchronous AU worker reaches the commit module through the
+`FETCH_RUN_SECRET`-guarded HTTP adapter. Commands form `fetch-run-commit/v1`,
+and the commit module derives the owner and market from the stored run. Creation,
+config, trigger, and commit boundaries reject non-AU execution. The config
+reader accepts strict AU v2 plus historical AU v1 only; unknown and retired
+market shapes fail closed.
 
 Every executor carries a UUID attempt. `start` records
-`executionAttemptId` + `executionLeaseExpiresAt` under `FRUN` (90 seconds for
-inline CN/GLOBAL, 30 minutes for AU). A same-attempt `start` renews; a different
+`executionAttemptId` + `executionLeaseExpiresAt` under `FRUN` (30 minutes for
+AU). A same-attempt `start` renews; a different
 attempt is blocked until expiry, then may take over. Expiry only makes takeover
 eligible: the current attempt remains valid until another `start` actually
 replaces it. New `commit` and external `fail` commands must match the current
 attempt; a non-terminal commit renews the lease.
 
 `dispatchMeta` in the JSON config is not this fence. Its timestamps and
-idempotency key claim the short pre-`start` dispatch window. For a rolling
-upgrade, they also suppress overlap on RUNNING inline rows whose relational
-`executionAttemptId` is still null. After `start`, only the relational attempt
-and lease authorize new execution writes.
+idempotency key claim the short pre-`start` AU dispatch window. After `start`,
+only the relational attempt and lease authorize new execution writes.
 
 Each applied result batch writes a `FetchRunCommitReceipt` in the same
 transaction as Jobs, import counters, and any terminal projection. A replay
@@ -78,20 +72,11 @@ final declared batch may be terminal. The receipt records the applying
 but the result identifies the canonical receipt attempt and does not authorize a
 stale attempt to append work or publish auxiliary projections. See ADR-0008.
 
-Historical GLOBAL rows containing only `sources` normalize to
-`queryMode: "source-only"` without synthesizing title or query fields. This
-compatibility mode is restricted to explicitly named sources and skips only
-role matching. Invalid versioned rows still fail closed.
-
-Inline client recovery observes the same run through one lease interval and
-retries that run ID once. Lease loss is a supersession/handoff, not a user
-cancellation. GLOBAL source-health and Job-liveness projections run only after
-the fenced terminal command, only for its canonical result attempt. Both stores
-reject equal or older discovery timestamps, so neither a superseded executor nor
-an older cross-run snapshot can overwrite newer observations. Projection hooks
-are best effort: failures are reported but cannot rewrite a durable terminal
-result. Any exception after inline `start` and before terminal commit enters the
-same fail recovery so an owned run is not stranded in `RUNNING`.
+Stage 1 removed the CN Nowcoder and GLOBAL public-feed/ATS executors and performs
+bounded, artifact-aware cleanup of their historical FetchRuns and GLOBAL Jobs.
+CN Job/Resume data remains. `SourceHealth` and `AtsBoardSource` stay in Prisma as
+writer-less compatibility tables only until the Stage 2 contract migration,
+after old instances and Blob retirement have converged.
 
 Import dedupes in three layers — an in-payload `Set`, the `DeletedJobUrl`
 tombstone table, and the `@@unique([userId, jobUrl])` constraint. All three key
@@ -242,8 +227,6 @@ response rather than submitted twice.
 Every route is guarded. `safeOutboundFetch` enforces HTTPS, a
 host allowlist, DNS re-checking on every hop, private-address rejection,
 bounded redirects with credential stripping, and a streaming size ceiling.
-Nowcoder also uses this gateway in production; its injectable `fetchImpl` is a
-test adapter, not a production network path.
 
 `LATEX_RENDER_ALLOW_INSECURE_HTTP=true` relaxes **transport encryption only**
 for a self-hosted renderer without TLS. Every other protection stays enforced.
@@ -299,7 +282,8 @@ These are recorded because a reader will meet them, not as a plan.
 Postgres transaction-scoped advisory locks use named namespaces. The shared
 `lib/server/db/advisoryLock.ts` owns the cross-module `FRUN`, `JOBJ`, and
 `JOBA` identities and their explicit order; specialized Fit, Tailoring Run,
-Application Event, and source-health locks remain local to their modules. A
+and Application Event locks remain local to their modules. The former
+source-health lock has no live owner after Stage 1. A
 lock is the module's first database effect; composed modules follow the
 documented order.
 Fetch commits always acquire `FRUN` before `JOBJ`, then persist Jobs, the
