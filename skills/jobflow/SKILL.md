@@ -25,7 +25,7 @@ Job-search command center: fetch → triage → tailor CV/CL → export PDFs.
   - Active: AU FetchRun → GitHub Actions → Python JobSpy → receipt-backed import (dedupe + tombstones)
   - Retained: CN Jobs, Resume, Chinese LaTeX, and translated UI
   - Retired: CN Fetch/Nowcoder and GLOBAL public-feed/ATS/source-health execution (ADR-0017)
-  - Transitional schema: `SourceHealth` and `AtsBoardSource` are writer-less until Stage 2 removes them
+  - Contracted: the retired `SourceHealth` and `AtsBoardSource` schema objects are absent
 - **Workspace**: Jobs list + detail, search/filter, status ledger from `NEW` through `ACCEPTED`
 - **Tailoring**: prompt → external model → strict JSON import → LaTeX render → PDF
 

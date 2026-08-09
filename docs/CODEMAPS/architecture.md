@@ -72,11 +72,11 @@ final declared batch may be terminal. The receipt records the applying
 but the result identifies the canonical receipt attempt and does not authorize a
 stale attempt to append work or publish auxiliary projections. See ADR-0008.
 
-Stage 1 removed the CN Nowcoder and GLOBAL public-feed/ATS executors and performs
-bounded, artifact-aware cleanup of their historical FetchRuns and GLOBAL Jobs.
-CN Job/Resume data remains. `SourceHealth` and `AtsBoardSource` stay in Prisma as
-writer-less compatibility tables only until the Stage 2 contract migration,
-after old instances and Blob retirement have converged.
+Stage 1 removed the CN Nowcoder and GLOBAL public-feed/ATS executors and used a
+bounded, artifact-aware cleanup to retire their historical FetchRuns and GLOBAL
+Jobs. CN Job/Resume data remains. After old instances, legacy rows, orphan
+Artifacts, and Blob inventory converged, Stage 2 removed the writer-less
+`SourceHealth` and `AtsBoardSource` schema contract in a fail-closed migration.
 
 Import dedupes in three layers — an in-payload `Set`, the `DeletedJobUrl`
 tombstone table, and the `@@unique([userId, jobUrl])` constraint. All three key
@@ -240,11 +240,11 @@ in the clear — treat TLS in front of the renderer as the actual fix.
 ```
 app/(marketing)  app/(auth)  app/(app)        ← React, next-intl, React Query
                                   │
-                             app/api/**        ← 71 route handlers
+                             app/api/**        ← 67 route handlers
                                   │
                             lib/server/**      ← business logic
                                   │
-                    prisma (Neon serverless)   ← 29 models
+                    prisma (Neon serverless)   ← 27 models
 ```
 
 `lib/shared/**` is imported by both sides and is the only place a contract may
@@ -282,10 +282,9 @@ These are recorded because a reader will meet them, not as a plan.
 Postgres transaction-scoped advisory locks use named namespaces. The shared
 `lib/server/db/advisoryLock.ts` owns the cross-module `FRUN`, `JOBJ`, and
 `JOBA` identities and their explicit order; specialized Fit, Tailoring Run,
-and Application Event locks remain local to their modules. The former
-source-health lock has no live owner after Stage 1. A
-lock is the module's first database effect; composed modules follow the
-documented order.
+and Application Event locks remain local to their modules. The retired
+source-health namespace has no live owner or schema object. A lock is the
+module's first database effect; composed modules follow the documented order.
 Fetch commits always acquire `FRUN` before `JOBJ`, then persist Jobs, the
 receipt, counters, and status in that transaction. Application mutation locks
 remain sorted by job ID

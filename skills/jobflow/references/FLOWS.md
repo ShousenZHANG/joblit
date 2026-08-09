@@ -23,9 +23,9 @@ not roll back receipt-backed Jobs. A cancellation or failure after the first
 commit is terminal `PARTIAL`. See ADR-0008.
 
 ADR-0017 retired CN Fetch/Nowcoder plus GLOBAL feed/ATS/source-health execution.
-CN Jobs, Resume, Chinese LaTeX, and translated UI remain. `SourceHealth` and
-`AtsBoardSource` are writer-less compatibility tables until Stage 2 removes
-their schema contract.
+CN Jobs, Resume, Chinese LaTeX, and translated UI remain. Stage 2 removed the
+writer-less `SourceHealth` and `AtsBoardSource` schema contract after legacy
+rows, Application Artifacts, and Blob inventory converged.
 
 ## 2) External model CV/CL generation (skill pack + strict JSON import)
 

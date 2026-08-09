@@ -76,6 +76,79 @@ jobs:
           npx prisma migrate deploy
           npx prisma migrate diff --from-schema=prisma/schema.prisma --to-config-datasource --exit-code
 
+      - name: Prove the post-retirement inventory deployment fence
+        run: |
+          gate_database=postgresql://ci:ci@localhost:5432/ci_retirement_gate
+          verifier=prisma/migrations/20260809161000_verify_post_retirement_inventory/migration.sql
+          psql postgresql://ci:ci@localhost:5432/postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE ci_retirement_gate WITH TEMPLATE ci'
+          psql "$gate_database" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO "User" (
+            "id", "email", "createdAt", "updatedAt"
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000001',
+            'stage2-gate@example.invalid',
+            CURRENT_TIMESTAMP,
+            CURRENT_TIMESTAMP
+          );
+          UPDATE "ApplicationArtifactInventoryCheckpoint"
+          SET
+            "cursor" = NULL,
+            "claimId" = NULL,
+            "claimLeaseExpiresAt" = NULL,
+            "scanStartedAt" = NULL,
+            "completedAt" = (
+              SELECT "finished_at" AT TIME ZONE 'UTC' - INTERVAL '1 second'
+              FROM "_prisma_migrations"
+              WHERE "migration_name" = '20260809154500_drop_retired_source_tables'
+                AND "rolled_back_at" IS NULL
+              ORDER BY "finished_at" DESC
+              LIMIT 1
+            )
+          WHERE "key" = 'vercel-applications-v1';
+          SQL
+          if psql "$gate_database" -v ON_ERROR_STOP=1 -f "$verifier"; then
+            echo 'post-retirement gate accepted a stale Blob inventory' >&2
+            exit 1
+          fi
+          psql "$gate_database" -v ON_ERROR_STOP=1 <<'SQL'
+          UPDATE "ApplicationArtifactInventoryCheckpoint"
+          SET "completedAt" = (
+            SELECT "finished_at" AT TIME ZONE 'UTC' + INTERVAL '1 second'
+            FROM "_prisma_migrations"
+            WHERE "migration_name" = '20260809154500_drop_retired_source_tables'
+              AND "rolled_back_at" IS NULL
+            ORDER BY "finished_at" DESC
+            LIMIT 1
+          )
+          WHERE "key" = 'vercel-applications-v1';
+          SQL
+          psql "$gate_database" -v ON_ERROR_STOP=1 -f "$verifier"
+          psql "$gate_database" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO "ApplicationArtifact" (
+            "id", "userId", "jobId", "target", "pathname", "state",
+            "stagedAt", "createdAt", "updatedAt"
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000002',
+            '00000000-0000-4000-8000-000000000001',
+            '00000000-0000-4000-8000-000000000003',
+            'RESUME_PDF',
+            'applications/stage2-orphan.pdf',
+            'STAGED',
+            CURRENT_TIMESTAMP,
+            CURRENT_TIMESTAMP,
+            CURRENT_TIMESTAMP
+          );
+          SQL
+          if psql "$gate_database" -v ON_ERROR_STOP=1 -f "$verifier"; then
+            echo 'post-retirement gate accepted an active orphan Artifact' >&2
+            exit 1
+          fi
+          psql "$gate_database" -v ON_ERROR_STOP=1 <<'SQL'
+          DELETE FROM "ApplicationArtifact"
+          WHERE "id" = '00000000-0000-4000-8000-000000000002';
+          SQL
+          psql "$gate_database" -v ON_ERROR_STOP=1 -f "$verifier"
+
       - name: Prove production drift converges through expand and contract migrations
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_legacy

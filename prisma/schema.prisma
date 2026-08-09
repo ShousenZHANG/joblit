@@ -60,13 +60,6 @@ enum JobLivenessStatus {
   UNCERTAIN
 }
 
-enum SourceHealthStatus {
-  HEALTHY
-  DEGRADED
-  DOWN
-  UNKNOWN
-}
-
 enum FetchRunStatus {
   QUEUED
   RUNNING
@@ -927,38 +920,4 @@ model DiscoverCache {
   expiresAt DateTime
 
   @@index([expiresAt])
-}
-
-/// Provider-level health is global operational data, never user-specific.
-model SourceHealth {
-  source              String             @id
-  status              SourceHealthStatus @default(UNKNOWN)
-  consecutiveFailures Int                @default(0)
-  lastCheckedAt       DateTime?
-  lastReachableAt     DateTime?
-  lastFailureAt       DateTime?
-  reason              String?
-  updatedAt           DateTime           @updatedAt
-
-  @@index([status, updatedAt])
-}
-
-/// Registry entry for public company ATS boards. Contains board identifiers
-/// only—never credentials. Disabled rows remain for audit and rediscovery.
-model AtsBoardSource {
-  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  sourceId           String    @unique
-  provider           String
-  boardToken         String
-  company            String
-  region             String?
-  careersUrl         String?
-  enabled            Boolean   @default(true)
-  lastRediscoveredAt DateTime?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
-
-  @@unique([provider, boardToken])
-  @@index([enabled, provider])
-  @@index([company, region])
 }

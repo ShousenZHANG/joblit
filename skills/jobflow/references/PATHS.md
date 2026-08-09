@@ -38,11 +38,13 @@ Quick index of the most commonly used locations.
 
 - `tools/fetcher/run_jobspy.py` — AU JobSpy runner (GitHub Actions)
 
-## Stage 1 retirement
+## Retired intake boundary
 
 - `lib/server/cnFetch/` and `lib/server/sources/` are retired and absent; do not recreate them.
-- `lib/server/dataRetirement/` — bounded, artifact-aware CN/GLOBAL data cleanup.
-- `tools/data-retirement/` — operator entry points for retirement planning/execution.
-- `prisma/schema.prisma` still contains writer-less `SourceHealth` and
-  `AtsBoardSource` placeholders until the Stage 2 contract migration.
+- The one-time cleanup boundary was removed after the production readiness
+  gate converged; do not rebuild it as a permanent product subsystem.
+- `prisma/migrations/20260809154500_drop_retired_source_tables/` — fail-closed
+  contraction of the retired source registry after the production readiness gate.
+- `prisma/migrations/20260809161000_verify_post_retirement_inventory/` —
+  deployment fence proving the final Blob inventory ran after contraction.
 - `docs/adr/0017-retire-cn-and-global-job-intake.md` — decision and rollout order.

@@ -74,14 +74,14 @@ reintroduced.
 - `fetchRolePacks.config.json` — Role category definitions
 - `canonicalizeJobUrl`, `parseCnSalary` — Job normalization helpers
 
-### Prisma Models (29)
+### Prisma Models (27)
 
 - Core workflow: `Job`, `FetchRun`, `FitBatchImportReceipt`, `ApplicationBatch`, `ApplicationBatchTask`, `Application`, `ResumeProfile`, `ActiveResumeProfile`, `PromptRuleTemplate`
 - Provenance: `ApplicationEvent` (immutable ledger, carries company/title snapshots so it outlives the Job), `EvidenceSnapshot`, `ClaimEvidence`
 - Tailoring acceptance (ADR-0009): `TailoringRun`, `TailoringRunReceipt`
 - Artifact lifecycle (ADR-0010): `ApplicationArtifact`, `ApplicationArtifactInventoryCheckpoint`
 - Auth: `User`, `Account`, `Session`, `AgentCredential`
-- Fetch execution: `FetchRunCommitReceipt`. `SourceHealth` and `AtsBoardSource` are writer-less Stage 1 retirement placeholders retained only until the Stage 2 contract migration; do not use or provision them
+- Fetch execution: `FetchRunCommitReceipt`
 - Supporting: `DeletedJobUrl` (dedup tombstone), `DailyCheckin`, `OnboardingState`, `DiscoverCache`
 
 The writer-less tables ADR-0006 deferred (`InterviewPlan`, `StarStory`, `Offer`,
