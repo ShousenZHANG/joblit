@@ -54,7 +54,10 @@ test("returns the final message the CLI wrote, not its stdout banner", async () 
   });
   const client = createCodexClient({ spawnImpl: impl, platform: "linux" });
 
-  const output = await client.generate({ ...PROMPT, sessionId: "joblit:t1:resume" });
+  const output = await client.generate({
+    ...PROMPT,
+    sessionId: "joblit:t1:resume",
+  });
 
   assert.equal(output, '{"cvSummary":"ok","addedBullets":[]}');
   assert.equal(calls.length, 1);
@@ -66,15 +69,20 @@ test("invokes Codex as a text generator, never as a coding agent", async () => {
     await writeFile(outPath, "done", "utf8");
     child.emit("close", 0);
   });
-  const client = createCodexClient({ spawnImpl: impl, model: "gpt-5.6-terra", platform: "linux" });
+  const client = createCodexClient({
+    spawnImpl: impl,
+    model: "gpt-5.6-sol",
+    reasoningEffort: "max",
+    platform: "linux",
+  });
 
   await client.generate({ ...PROMPT, sessionId: "joblit:t1:resume" });
 
   const args = calls[0].args;
   // A job description is untrusted internet text that goes straight into the
   // prompt. Every one of these keeps it from reaching anything.
-  assert.deepEqual(args.slice(0, 2), ["exec", "--sandbox"]);
-  assert.equal(args[2], "read-only");
+  assert.deepEqual(args.slice(0, 3), ["exec", "--strict-config", "--sandbox"]);
+  assert.equal(args[3], "read-only");
   assert.ok(args.includes("--ephemeral"));
   assert.ok(args.includes("--ignore-user-config"));
   assert.ok(args.includes("--ignore-rules"));
@@ -85,10 +93,13 @@ test("invokes Codex as a text generator, never as a coding agent", async () => {
   assert.equal(cwd, calls[0].options.cwd);
   assert.match(cwd, /joblit-codex-/);
   assert.deepEqual(args.slice(-3), ["-o", calls[0].outPath, "-"]);
-  assert.ok(args.includes("gpt-5.6-terra"));
+  assert.ok(args.includes("gpt-5.6-sol"));
+  const reasoningIndex = args.indexOf("model_reasoning_effort=max");
+  assert.ok(reasoningIndex > 0);
+  assert.equal(args[reasoningIndex - 1], "-c");
 });
 
-test("omits the model flag when none is pinned", async () => {
+test("pins the Joblit model policy when a caller supplies no override", async () => {
   const { impl, calls } = fakeSpawn(async ({ child, outPath }) => {
     await writeFile(outPath, "done", "utf8");
     child.emit("close", 0);
@@ -97,7 +108,13 @@ test("omits the model flag when none is pinned", async () => {
     ...PROMPT,
     sessionId: "joblit:t1:resume",
   });
-  assert.ok(!calls[0].args.includes("-m"));
+  const args = calls[0].args;
+  assert.deepEqual(args.slice(args.indexOf("-m"), args.indexOf("-m") + 2), [
+    "-m",
+    "gpt-5.6-sol",
+  ]);
+  assert.ok(args.includes("model_reasoning_effort=max"));
+  assert.ok(args.includes("--strict-config"));
 });
 
 test("reports a missing CLI as an actionable install instruction", async () => {
@@ -181,7 +198,11 @@ test("kills the child when it outlives the timeout", async () => {
   const { impl } = fakeSpawn(({ child }) => {
     spawned = child;
   });
-  const client = createCodexClient({ spawnImpl: impl, timeoutMs: 20, platform: "linux" });
+  const client = createCodexClient({
+    spawnImpl: impl,
+    timeoutMs: 20,
+    platform: "linux",
+  });
 
   await assert.rejects(
     client.generate({ ...PROMPT, sessionId: "joblit:t1:resume" }),
@@ -198,7 +219,11 @@ test("rejects an empty prompt before spawning anything", async () => {
   const client = createCodexClient({ spawnImpl: impl, platform: "linux" });
 
   await assert.rejects(
-    client.generate({ instructions: "", input: "x", sessionId: "joblit:t1:resume" }),
+    client.generate({
+      instructions: "",
+      input: "x",
+      sessionId: "joblit:t1:resume",
+    }),
     (error) => {
       assert.equal(error.code, "RUN_REQUEST_INVALID");
       return true;
@@ -208,7 +233,10 @@ test("rejects an empty prompt before spawning anything", async () => {
 });
 
 test("acknowledge is a no-op — a finished Codex run left nothing behind", async () => {
-  const client = createCodexClient({ spawnImpl: fakeSpawn(() => {}).impl, platform: "linux" });
+  const client = createCodexClient({
+    spawnImpl: fakeSpawn(() => {}).impl,
+    platform: "linux",
+  });
   await client.acknowledge({ sessionId: "joblit:t1:resume" });
 });
 
@@ -222,7 +250,10 @@ test("runs the Windows shim through the command processor, fully quoted", async 
   });
   const client = createCodexClient({ spawnImpl: impl, platform: "win32" });
 
-  const output = await client.generate({ ...PROMPT, sessionId: "joblit:t1:resume" });
+  const output = await client.generate({
+    ...PROMPT,
+    sessionId: "joblit:t1:resume",
+  });
 
   assert.equal(output, "windows ok");
   const [{ binary, args }] = calls;

@@ -21,7 +21,7 @@ model API key in local environment, a port to bind, and a process to keep
 alive — all before the first CV could be generated. Every one of those was a
 place to fail, and the failures were reported as Joblit failures.
 
-The durability story was worse. A Hermes run is a *remote* object: it outlives
+The durability story was worse. A Hermes run is a _remote_ object: it outlives
 the process that started it, so a Runner that died mid-generation had to
 reconcile against something still running. ADR-0016 is the machinery that made
 that safe — a local state file, a transcript cursor, compare-and-set
@@ -45,7 +45,8 @@ Hermes gateway is removed from the runtime path entirely.
    `JOBLIT_TOKEN` (`tools/runner/config.mjs`).
 
 2. **The model is pinned to a text generator, not an agent.** Every invocation
-   passes `--sandbox read-only`, `features.shell_tool=false`,
+   selects `gpt-5.6-sol` with `model_reasoning_effort=max` and passes
+   `--strict-config`, `--sandbox read-only`, `features.shell_tool=false`,
    `web_search=disabled`, `--ignore-user-config`, `--ignore-rules`,
    `--ephemeral`, and a throwaway working directory
    (`tools/runner/codexClient.mjs`). Job descriptions are untrusted text from
@@ -81,7 +82,7 @@ reversal at the time. This ADR records it.
 
 The rejection no longer binds the runtime path, because the runtime it governed
 does not exist: Joblit configures no Hermes install and reads no
-`openai_runtime`. The underlying *concern* is not dismissed — it is answered
+`openai_runtime`. The underlying _concern_ is not dismissed — it is answered
 differently, by decision 2 above, which strips the tools at the CLI boundary
 instead of trusting a runtime setting.
 

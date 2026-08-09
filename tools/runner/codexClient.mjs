@@ -9,6 +9,9 @@
  *
  * Every invocation is hardened down to "text generator":
  *
+ * - The product pins `gpt-5.6-sol` with `max` reasoning and strict config
+ *   parsing. User config and changing CLI defaults cannot silently downgrade
+ *   unattended CV/CL generation.
  * - `--sandbox read-only` (the exec default, passed explicitly so a future
  *   default change cannot silently widen it) plus `features.shell_tool=false`
  *   removes the coding-agent surface. This is what ADR-0004 objected to in the
@@ -35,6 +38,11 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import {
+  JOBLIT_CODEX_MODEL,
+  JOBLIT_CODEX_REASONING_EFFORT,
+} from "./modelPolicy.mjs";
+
 const DEFAULT_TIMEOUT_MS = 10 * 60_000;
 /** Matches the server's own ceiling for an imported model output. */
 const MAX_MODEL_OUTPUT_CHARS = 200_000;
@@ -52,9 +60,10 @@ export class CodexClientError extends Error {
  * Flags that make Codex behave as a plain completion endpoint. Order is
  * irrelevant to the CLI but kept stable for readable process listings.
  */
-function buildArgs({ model, workdir, outPath }) {
+function buildArgs({ model, reasoningEffort, workdir, outPath }) {
   const args = [
     "exec",
+    "--strict-config",
     "--sandbox",
     "read-only",
     "--skip-git-repo-check",
@@ -69,6 +78,9 @@ function buildArgs({ model, workdir, outPath }) {
     "features.shell_tool=false",
   ];
   if (model) args.push("-m", model);
+  if (reasoningEffort) {
+    args.push("-c", `model_reasoning_effort=${reasoningEffort}`);
+  }
   // The final assistant message goes to a file. stdout also carries a banner
   // and progress lines, so it is not a parseable transport.
   args.push("-o", outPath, "-");
@@ -115,7 +127,8 @@ function toWindowsShimInvocation(binary, args) {
 
 export function createCodexClient({
   binary = "codex",
-  model,
+  model = JOBLIT_CODEX_MODEL,
+  reasoningEffort = JOBLIT_CODEX_REASONING_EFFORT,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   spawnImpl = spawn,
   platform = process.platform,
@@ -128,7 +141,7 @@ export function createCodexClient({
     const workdir = await mkdtemp(path.join(tmpdir(), "joblit-codex-"));
     const outPath = path.join(workdir, "output.txt");
     try {
-      const codexArgs = buildArgs({ model, workdir, outPath });
+      const codexArgs = buildArgs({ model, reasoningEffort, workdir, outPath });
       const invocation =
         platform === "win32"
           ? toWindowsShimInvocation(binary, codexArgs)
@@ -207,9 +220,10 @@ export function createCodexClient({
         );
       }
       if (settled.kind === "spawn-error") {
-        const reason = settled.error?.code === "ENOENT"
-          ? `Codex CLI not found on PATH (looked for "${binary}"). Install it with: npm i -g @openai/codex`
-          : (settled.error?.message ?? "Codex could not be started");
+        const reason =
+          settled.error?.code === "ENOENT"
+            ? `Codex CLI not found on PATH (looked for "${binary}"). Install it with: npm i -g @openai/codex`
+            : (settled.error?.message ?? "Codex could not be started");
         throw new CodexClientError("CODEX_UNAVAILABLE", reason);
       }
       if (settled.code !== 0) {

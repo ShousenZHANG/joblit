@@ -13,18 +13,21 @@ test("loads a complete configuration from env", () => {
   assert.deepEqual(config, {
     joblitUrl: "https://joblit.example.com",
     joblitToken: "agent-token",
-    codexModel: undefined,
+    codexModel: "gpt-5.6-sol",
+    codexReasoningEffort: "max",
     codexBinary: "codex",
   });
 });
 
-test("carries optional Codex overrides through", () => {
+test("does not let ambient environment variables downgrade the pinned model", () => {
   const config = loadConfig({
     ...FULL_ENV,
     CODEX_MODEL: "gpt-5.6-terra",
+    CODEX_REASONING_EFFORT: "low",
     CODEX_BIN: "/opt/codex/bin/codex",
   });
-  assert.equal(config.codexModel, "gpt-5.6-terra");
+  assert.equal(config.codexModel, "gpt-5.6-sol");
+  assert.equal(config.codexReasoningEffort, "max");
   assert.equal(config.codexBinary, "/opt/codex/bin/codex");
 });
 
