@@ -47,6 +47,31 @@ function emptyProfileJson() {
   };
 }
 
+function populatedProfileJson() {
+  const activeProfile = {
+    locale: "en-AU",
+    basics: {
+      fullName: "Jane Doe",
+      title: "Software Engineer",
+      email: "jane@example.com",
+      phone: "+1 555 0100",
+    },
+    links: null,
+    summary: null,
+    experiences: [],
+    projects: [],
+    education: [],
+    skills: [],
+  };
+
+  return {
+    profile: activeProfile,
+    profiles: [{ id: "profile-1", name: "Primary", isActive: true }],
+    activeProfile,
+    activeProfileId: "profile-1",
+  };
+}
+
 function mockEmptyProfileFetch() {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = toUrl(input);
@@ -188,10 +213,13 @@ describe("Resume page", () => {
     fireEvent.click(toggle!);
 
     expect(toggle).toHaveAttribute("aria-expanded", "false");
-    // The body unmounts after its exit animation, so removal is async.
-    await waitFor(() =>
-      expect(screen.queryByLabelText("Full name")).not.toBeInTheDocument(),
-    );
+    // The visual exit may keep its DOM nodes mounted briefly, but collapsed
+    // controls must leave the accessibility tree and tab order immediately.
+    // Synchronize on that user-observable contract, not Framer Motion's RAF.
+    const collapsedBody = document.getElementById("resume-section-personal-body");
+    expect(collapsedBody).toHaveAttribute("aria-hidden", "true");
+    expect(collapsedBody).toHaveAttribute("inert");
+    expect(screen.queryByRole("textbox", { name: "Full name" })).not.toBeInTheDocument();
     expect(screen.getByTestId("resume-section-experience")).toBeInTheDocument();
   });
 
@@ -329,12 +357,21 @@ describe("Resume page", () => {
   });
 
   it("auto-refreshes preview when content changes while the preview is open", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    type PreviewPayload = { basics?: { title?: string } };
+    const previewWaiters: Array<(payload: PreviewPayload) => void> = [];
+    const waitForNextPreview = () =>
+      new Promise<PreviewPayload>((resolve) => {
+        previewWaiters.push(resolve);
+      });
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = toUrl(input);
       if (url.startsWith("/api/resume-profile")) {
-        return new Response(JSON.stringify(emptyProfileJson()), { status: 200 });
+        return new Response(JSON.stringify(populatedProfileJson()), { status: 200 });
       }
       if (url === "/api/resume-pdf") {
+        const payload = JSON.parse(String(init?.body)) as PreviewPayload;
+        previewWaiters.shift()?.(payload);
         return new Response(new Uint8Array([37, 80, 68, 70]), {
           status: 200,
           headers: { "content-type": "application/pdf" },
@@ -344,29 +381,19 @@ describe("Resume page", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const getPreviewCallCount = () =>
-      fetchMock.mock.calls.filter(([firstArg]) => toUrl(firstArg) === "/api/resume-pdf").length;
-
     renderResumePage();
-    await fillBasics();
+    expect(await screen.findByLabelText("Title")).toHaveValue("Software Engineer");
 
+    const initialPreview = waitForNextPreview();
     fireEvent.click(firstButton("Preview"));
     expect(await screen.findByRole("heading", { name: "PDF preview" })).toBeInTheDocument();
+    expect((await initialPreview).basics?.title).toBe("Software Engineer");
 
-    await waitFor(() => {
-      expect(getPreviewCallCount()).toBe(1);
-    });
-
+    const refreshedPreview = waitForNextPreview();
     fireEvent.change(screen.getByLabelText("Title"), {
       target: { value: "Senior Software Engineer" },
     });
-
-    await waitFor(
-      () => {
-        expect(getPreviewCallCount()).toBe(2);
-      },
-      { timeout: 2200 },
-    );
+    expect((await refreshedPreview).basics?.title).toBe("Senior Software Engineer");
   });
 
   it("does not POST the preview while a required field is mid-edit (no 400 spam)", async () => {
