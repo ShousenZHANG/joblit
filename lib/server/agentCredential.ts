@@ -36,9 +36,7 @@ export async function createAgentCredential(
   capabilities: readonly AgentCapability[] = DEFAULT_AGENT_CAPABILITIES,
 ) {
   const rawToken = generateRawAgentToken();
-  const expiresAt = new Date(
-    Date.now() + expiryDays * 24 * 60 * 60 * 1000,
-  );
+  const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
   const capabilitySnapshot = [...new Set(capabilities)];
 
   const record = await prisma.agentCredential.create({
@@ -67,7 +65,7 @@ export async function createAgentCredential(
 
 export async function listAgentCredentials(userId: string) {
   return prisma.agentCredential.findMany({
-    where: { userId, revokedAt: null },
+    where: { userId, revokedAt: null, expiresAt: { gt: new Date() } },
     select: {
       id: true,
       name: true,

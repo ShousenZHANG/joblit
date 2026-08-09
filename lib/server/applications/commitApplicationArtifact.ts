@@ -42,6 +42,7 @@ import type {
   TailoringAcceptanceRequest,
 } from "@/lib/server/tailoringRuns/tailoringRunTypes";
 import type { TailoringRunTransaction } from "@/lib/server/tailoringRuns/tailoringRunDatabase";
+import { acquireUnboundApplicationWriteAuthority } from "@/lib/server/tailoringRuns/tailoringJobOwnership";
 import {
   applicationPublicationTargets,
   fenceApplicationRenderContext,
@@ -104,7 +105,7 @@ type CommitBaseFields = {
    * Present means compare-and-swap: the write only lands if the row still
    * holds this hash. `null` matches a row that has no AI Content yet.
    * Absent means last-writer-wins under the advisory lock alone.
-  */
+   */
   expectedHash?: string | null;
   extraData?: Record<string, unknown>;
   tailoring?: readonly TailoringAcceptanceRequest[];
@@ -225,8 +226,7 @@ async function uploadStagedArtifact(
 ): Promise<UploadedArtifact> {
   // An exact retry can reuse the already referenced immutable object without
   // another network call.
-  let url =
-    staged.artifact.state === "REFERENCED" ? staged.artifact.url : null;
+  let url = staged.artifact.state === "REFERENCED" ? staged.artifact.url : null;
   if (!url) {
     const blob = await vercelArtifactBlobPort.put({
       pathname: staged.pathname,
@@ -375,7 +375,8 @@ async function loadCommitApplication(
   input: CommitInput,
 ) {
   // Tailoring acceptance owns the broader locks first:
-  // ABAT (when bound) -> TLRN -> JOBA.
+  // TJOB -> ABAT (when bound) -> TLRN -> JOBA. An unbound writer has already
+  // proved there is no active run while holding TJOB.
   await acquireApplicationMutationLock(tx, input.userId, input.job.id);
   const ownedJob = await tx.job.findFirst({
     where: { id: input.job.id, userId: input.userId },
@@ -402,8 +403,7 @@ function replayCommittedAcceptance(
   if (!parsed.success) return { kind: "invalid_ai_content" as const };
   return {
     kind: "committed" as const,
-    applicationId:
-      preparedTailoring.replayed[0]?.applicationId ?? existing.id,
+    applicationId: preparedTailoring.replayed[0]?.applicationId ?? existing.id,
     aiContent: parsed.data,
     aiContentHash: existing.aiContentHash,
     publication: projectApplicationPublication({
@@ -550,6 +550,12 @@ async function commitInTransaction(
   artifacts: VersionedCommitArtifact[],
   uploadBundle: UploadedArtifactBundle,
 ) {
+  if (!input.tailoring || input.tailoring.length === 0) {
+    await acquireUnboundApplicationWriteAuthority(tx, {
+      userId: input.userId,
+      jobId: input.job.id,
+    });
+  }
   const preparedTailoring = await prepareTailoringForCommit(tx, input);
   const loaded = await loadCommitApplication(tx, input);
   if (loaded.kind === "job_missing") return loaded;
@@ -566,9 +572,14 @@ async function commitInTransaction(
   if (resolved.kind !== "resolved") return resolved;
   const persistenceTargets = artifacts.length
     ? artifacts.map((artifact) => artifact.target)
-    : applicationPublicationTargets(resolved.aiContent, input.publicationRenderContext);
+    : applicationPublicationTargets(
+        resolved.aiContent,
+        input.publicationRenderContext,
+      );
   const renderContextFence = await fenceApplicationRenderContext(
-    tx, input, persistenceTargets,
+    tx,
+    input,
+    persistenceTargets,
   );
   if (renderContextFence.kind === "mismatched") {
     return { kind: "stale_render_context" as const };
@@ -592,7 +603,10 @@ async function persistResolvedCommit(
   uploadBundle: UploadedArtifactBundle,
   existing: ApplicationCommitRow | null,
   preparedTailoring: PreparedTailoringAcceptance | null,
-  resolved: Extract<ReturnType<typeof resolveCommitContent>, { kind: "resolved" }>,
+  resolved: Extract<
+    ReturnType<typeof resolveCommitContent>,
+    { kind: "resolved" }
+  >,
   renderContext: ApplicationPublicationRenderContext,
 ) {
   const publicationTransition = transitionApplicationPublication({
@@ -638,7 +652,10 @@ async function persistResolvedCommit(
 
 function appliedCommitResult(
   applicationId: string,
-  resolved: Extract<ReturnType<typeof resolveCommitContent>, { kind: "resolved" }>,
+  resolved: Extract<
+    ReturnType<typeof resolveCommitContent>,
+    { kind: "resolved" }
+  >,
   publication: ApplicationPublication,
   preparedTailoring: PreparedTailoringAcceptance | null,
 ) {
@@ -648,9 +665,7 @@ function appliedCommitResult(
     aiContent: resolved.aiContent,
     aiContentHash: resolved.aiContentHash,
     publication,
-    ...(preparedTailoring
-      ? { tailoringDisposition: "APPLIED" as const }
-      : {}),
+    ...(preparedTailoring ? { tailoringDisposition: "APPLIED" as const } : {}),
   };
 }
 
@@ -659,7 +674,10 @@ function applicationPersistenceData(
   artifacts: VersionedCommitArtifact[],
   urls: Partial<Record<CommitTarget, string>>,
   existing: ApplicationCommitRow | null,
-  resolved: Extract<ReturnType<typeof resolveCommitContent>, { kind: "resolved" }>,
+  resolved: Extract<
+    ReturnType<typeof resolveCommitContent>,
+    { kind: "resolved" }
+  >,
   publication: ReturnType<
     typeof transitionApplicationPublication
   >["persistence"],
@@ -685,7 +703,10 @@ async function persistCommitSideEffects(
   uploadBundle: UploadedArtifactBundle,
   existing: ApplicationCommitRow | null,
   applicationId: string,
-  resolved: Extract<ReturnType<typeof resolveCommitContent>, { kind: "resolved" }>,
+  resolved: Extract<
+    ReturnType<typeof resolveCommitContent>,
+    { kind: "resolved" }
+  >,
   preparedTailoring: PreparedTailoringAcceptance | null,
   publication: ApplicationPublication,
 ) {

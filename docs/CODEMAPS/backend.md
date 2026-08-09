@@ -8,25 +8,25 @@ Vocabulary is `CONTEXT.md`. Route-layer facts live in
 
 ## Directory map
 
-| Directory | Owns | Entry points |
-|---|---|---|
-| `ai/` | Prompt construction, evidence/review ledger, cover quality, fit scoring, Skill Pack V3. No provider client — generation is local-first (ADR-0015) | `buildPrompt.ts`, `evidenceLedger.ts` `attachEvidenceAndReview`, `promptContract.ts`, `skillPack.ts` `buildSkillPackV3Files` |
-| `applications/` | Application lifecycle: generation acceptance, target-aware AI Content evolution, canonical resume composition, finalize render, artifact commit, ATS validation, advisory lock, review ledger, `ApplicationEvent` append | `applicationGeneration.ts` `acceptApplicationGeneration`, `applicationAiContentAggregate.ts` `evolveApplicationAiContent`, `applicationResumeComposition.ts` `composeApplicationResumeRenderInput`, `commitApplicationArtifact.ts` `commitApplicationArtifact`, `manualImportArtifact.ts`, `finalizeApplication.ts`, `persistReviewLedger.ts`, `applicationMutationLock.ts`, `atsPdfValidator.ts` |
-| `artifacts/` | ADR-0010 Application Blob lifecycle, account-erasure hooks, Vercel adapter, inventory, claim/call/fenced settle | `applicationArtifactLifecycle.ts` `prepareApplicationArtifactsForAccountErasure` / `purgeDeletedApplicationArtifactsForErasedUser`, `artifactReconciler.ts`, `artifactBlobPort.ts`, `vercelBlobAdapter.ts` |
-| `applicationBatches/` | Codex Batch state machine: claim, complete, cancel, retry | `runner.ts:169` `claimNextBatchTask`, `:282` `completeBatchTask`, `:334`, `:385`; `codexRunContext.ts:81`/`:189`/`:245`; `batchProgress.ts:9` |
-| `jobs/` | Job import/list/search/delete/status, fit leasing and receipt-backed settlement, cooldown, SimHash dedup, posting risk, market scoping | `jobImportService.ts`, `jobListService.ts`, `jobSearchService.ts`, `jobDeleteService.ts`, `fitRunService.ts`, `fitBatchImport.ts`, `jobMutationLock.ts`, `postingRisk.ts` |
-| `latex/` | Template rendering from `latexTemp/` + the remote render-service client | `compilePdf.ts:68` `compileLatexToPdf`, `renderResume.ts:203`, `renderResumeCN.ts:190`, `renderCoverLetter.ts:69`, `mapResumeProfile.ts:30` |
-| `files/` | Blob path construction, PDF filenames | `applicationArtifactBlob.ts:3`, `pdfFilename.ts:24` |
-| `discover/` | GitHub trending scrape + durable last-known-good cache, refreshed on demand by the nav popover (ADR-0005 superseded) | `githubTrending.ts:167`, `discoverCache.ts` |
-| `fetchRuns/` | AU worker lifecycle, stale-run policy, attempt/dispatch locks, and the shared `fetch-run-commit/v1` transaction boundary | `dispatchGithubFetchRun.ts`, `fetchRunCommit.ts`, `fetchRunStale.ts`, `fetchRunLifecycleLock.ts`, `triggerClaim.ts` |
-| `net/` | The single SSRF-hardened outbound gateway | `safeFetch.ts:396` `safeOutboundFetch`, `:272`, `:228` |
-| `security/` | Sanitizers for anything persisted or exported | `untrustedOutput.ts:36`/`:58`/`:76` |
-| `archive/` | Pure ZIP32 writer. Sole consumer: the Skill Pack download | `zip.ts:155` |
-| `observability/` | The single error/event reporting seam | `errorReporter.ts:52` `reportError` |
-| `auth/` | Session and capability-scoped agent-credential primitives | `requireSession.ts`, `requireAgentCredential.ts`, `constantTimeEqual.ts` |
-| `runtimeCapabilities/` | Typed interpretation of optional integrations, paired credentials, feature flags, and safe fallback states | `index.ts` `resolveRuntimeCapabilities` / `getRuntimeCapabilities` |
-| `api/` | HTTP envelope, session/AgentCredential route wrappers, rate limits, LaTeX error mapping | `routeHandler.ts` `withSessionRoute` / `withAgentRoute`, `errorResponse.ts` `errorJson`, `handleLatexError.ts` |
-| loose files | Master Resume Profile CRUD, Prisma singleton, env validation, agent credentials, prompt-rule templates | `resumeProfile.ts`, `prisma.ts`, `env.ts`, `agentCredential.ts`, `promptRuleTemplates.ts` |
+| Directory              | Owns                                                                                                                                                                                                                     | Entry points                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ai/`                  | Prompt construction, evidence/review ledger, cover quality, fit scoring, Skill Pack V3. No provider client — generation is local-first (ADR-0015)                                                                        | `buildPrompt.ts`, `evidenceLedger.ts` `attachEvidenceAndReview`, `promptContract.ts`, `skillPack.ts` `buildSkillPackV3Files`                                                                                                                                                                                                                                                                      |
+| `applications/`        | Application lifecycle: generation acceptance, target-aware AI Content evolution, canonical resume composition, finalize render, artifact commit, ATS validation, advisory lock, review ledger, `ApplicationEvent` append | `applicationGeneration.ts` `acceptApplicationGeneration`, `applicationAiContentAggregate.ts` `evolveApplicationAiContent`, `applicationResumeComposition.ts` `composeApplicationResumeRenderInput`, `commitApplicationArtifact.ts` `commitApplicationArtifact`, `manualImportArtifact.ts`, `finalizeApplication.ts`, `persistReviewLedger.ts`, `applicationMutationLock.ts`, `atsPdfValidator.ts` |
+| `artifacts/`           | ADR-0010 Application Blob lifecycle, account-erasure hooks, Vercel adapter, inventory, claim/call/fenced settle                                                                                                          | `applicationArtifactLifecycle.ts` `prepareApplicationArtifactsForAccountErasure` / `purgeDeletedApplicationArtifactsForErasedUser`, `artifactReconciler.ts`, `artifactBlobPort.ts`, `vercelBlobAdapter.ts`                                                                                                                                                                                        |
+| `applicationBatches/`  | Codex Batch state machine: claim, complete, cancel, retry                                                                                                                                                                | `runner.ts:169` `claimNextBatchTask`, `:282` `completeBatchTask`, `:334`, `:385`; `codexRunContext.ts:81`/`:189`/`:245`; `batchProgress.ts:9`                                                                                                                                                                                                                                                     |
+| `jobs/`                | Job import/list/search/delete/status, fit leasing and receipt-backed settlement, cooldown, SimHash dedup, posting risk, market scoping                                                                                   | `jobImportService.ts`, `jobListService.ts`, `jobSearchService.ts`, `jobDeleteService.ts`, `fitRunService.ts`, `fitBatchImport.ts`, `jobMutationLock.ts`, `postingRisk.ts`                                                                                                                                                                                                                         |
+| `latex/`               | Template rendering from `latexTemp/` + the remote render-service client                                                                                                                                                  | `compilePdf.ts:68` `compileLatexToPdf`, `renderResume.ts:203`, `renderResumeCN.ts:190`, `renderCoverLetter.ts:69`, `mapResumeProfile.ts:30`                                                                                                                                                                                                                                                       |
+| `files/`               | Blob path construction, PDF filenames                                                                                                                                                                                    | `applicationArtifactBlob.ts:3`, `pdfFilename.ts:24`                                                                                                                                                                                                                                                                                                                                               |
+| `discover/`            | GitHub trending scrape + durable last-known-good cache, refreshed on demand by the nav popover (ADR-0005 superseded)                                                                                                     | `githubTrending.ts:167`, `discoverCache.ts`                                                                                                                                                                                                                                                                                                                                                       |
+| `fetchRuns/`           | AU worker lifecycle, stale-run policy, attempt/dispatch locks, and the shared `fetch-run-commit/v1` transaction boundary                                                                                                 | `dispatchGithubFetchRun.ts`, `fetchRunCommit.ts`, `fetchRunStale.ts`, `fetchRunLifecycleLock.ts`, `triggerClaim.ts`                                                                                                                                                                                                                                                                               |
+| `net/`                 | The single SSRF-hardened outbound gateway                                                                                                                                                                                | `safeFetch.ts:396` `safeOutboundFetch`, `:272`, `:228`                                                                                                                                                                                                                                                                                                                                            |
+| `security/`            | Sanitizers for anything persisted or exported                                                                                                                                                                            | `untrustedOutput.ts:36`/`:58`/`:76`                                                                                                                                                                                                                                                                                                                                                               |
+| `archive/`             | Pure ZIP32 writer. Sole consumer: the Skill Pack download                                                                                                                                                                | `zip.ts:155`                                                                                                                                                                                                                                                                                                                                                                                      |
+| `observability/`       | The single error/event reporting seam                                                                                                                                                                                    | `errorReporter.ts:52` `reportError`                                                                                                                                                                                                                                                                                                                                                               |
+| `auth/`                | Session and capability-scoped agent-credential primitives                                                                                                                                                                | `requireSession.ts`, `requireAgentCredential.ts`, `constantTimeEqual.ts`                                                                                                                                                                                                                                                                                                                          |
+| `runtimeCapabilities/` | Typed interpretation of optional integrations, paired credentials, feature flags, and safe fallback states                                                                                                               | `index.ts` `resolveRuntimeCapabilities` / `getRuntimeCapabilities`                                                                                                                                                                                                                                                                                                                                |
+| `api/`                 | HTTP envelope, session/AgentCredential route wrappers, rate limits, LaTeX error mapping                                                                                                                                  | `routeHandler.ts` `withSessionRoute` / `withAgentRoute`, `errorResponse.ts` `errorJson`, `handleLatexError.ts`                                                                                                                                                                                                                                                                                    |
+| loose files            | Master Resume Profile CRUD, Prisma singleton, env validation, agent credentials, prompt-rule templates                                                                                                                   | `resumeProfile.ts`, `prisma.ts`, `env.ts`, `agentCredential.ts`, `promptRuleTemplates.ts`                                                                                                                                                                                                                                                                                                         |
 
 `prisma.ts:8` throws at module load if `DATABASE_URL` is unset. The client is a
 `globalThis` singleton using `PrismaNeon`. Do not construct a standard Prisma
@@ -127,8 +127,10 @@ is the single terminal renderer for both paths (ADR-0002).
 
 ## The Application artifact commit sequence
 
-All artifact writers use `commitApplicationArtifact`. Generated writers may
-prepend the `ABAT -> TLRN` locks and complete Tailoring Run acceptance around
+All artifact writers use `commitApplicationArtifact`. Tailoring Run issuance
+and every Application content writer first take `TJOB` to serialize generation
+ownership for one Job. Generated writers then take `ABAT -> TLRN`; unbound
+writers refuse to mutate while a run is active. Tailoring Run acceptance wraps
 the Application mutation:
 
 **durable STAGED row → upload → record URL → transaction (optional Batch lock
@@ -143,10 +145,10 @@ same transaction marks the linked task `SUCCEEDED`. Neither task `PATCH` nor
 `run-once` may write success independently; they accept only `FAILED` or
 `SKIPPED` with the claimed `attemptId`.
 
-| Caller | Owns | `mergeTarget` | CAS |
-|---|---|---:|---:|
-| `manual-generate/route.ts` | one target | yes, with required `reviewContext` | no |
-| `finalize/route.ts` | already-canonical full aggregate, one rendered artifact | no | `expectedHash` |
+| Caller                     | Owns                                                    |                      `mergeTarget` |            CAS |
+| -------------------------- | ------------------------------------------------------- | ---------------------------------: | -------------: |
+| `manual-generate/route.ts` | one target                                              | yes, with required `reviewContext` |             no |
+| `finalize/route.ts`        | already-canonical full aggregate, one rendered artifact |                                 no | `expectedHash` |
 
 Upload failure never clears an existing artifact. A failed transaction, lost
 CAS, missing Job, or blocked FINAL durably retires any completed upload; a
@@ -259,13 +261,13 @@ module-level in-memory. Documented at their definitions.
 
 ## Outbound network edges
 
-| Destination | Module | Through `safeFetch`? |
-|---|---|---|
-| LaTeX render service | `compilePdf.ts:68` | Yes — host pre-parsed, 12 MiB, 20 s. Plain HTTP only under `LATEX_RENDER_ALLOW_INSECURE_HTTP` |
-| Vercel Blob put/list/del | `artifacts/vercelBlobAdapter.ts`, reached through Application commit and the protected reconciler | No — SDK-internal |
-| Vercel Blob read (resume photo) | `lib/server/resumePhotoBlob.ts` | Yes — path must be `resume-photos/${userId}/…` |
-| GitHub Actions dispatch | `app/api/fetch-runs/[id]/trigger/route.ts:312` | Yes — AU market only |
-| GitHub trending HTML | `githubTrending.ts:167` | Yes |
+| Destination                     | Module                                                                                            | Through `safeFetch`?                                                                          |
+| ------------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| LaTeX render service            | `compilePdf.ts:68`                                                                                | Yes — host pre-parsed, 12 MiB, 20 s. Plain HTTP only under `LATEX_RENDER_ALLOW_INSECURE_HTTP` |
+| Vercel Blob put/list/del        | `artifacts/vercelBlobAdapter.ts`, reached through Application commit and the protected reconciler | No — SDK-internal                                                                             |
+| Vercel Blob read (resume photo) | `lib/server/resumePhotoBlob.ts`                                                                   | Yes — path must be `resume-photos/${userId}/…`                                                |
+| GitHub Actions dispatch         | `app/api/fetch-runs/[id]/trigger/route.ts:312`                                                    | Yes — AU market only                                                                          |
+| GitHub trending HTML            | `githubTrending.ts:167`                                                                           | Yes                                                                                           |
 
 CN discovery and GLOBAL public-feed/ATS/source-health execution edges were
 removed in Stage 1 (ADR-0017). Their names may still appear in immutable
@@ -278,20 +280,20 @@ active outbound integration.
 
 ### Classes
 
-| Class | Location | Reaches HTTP via |
-|---|---|---|
-| `UnauthorizedError` | `auth/requireSession.ts` | `withSessionRoute` and `withAgentRoute` |
-| `AgentCredentialError` | `auth/requireAgentCredential.ts` | `withAgentRoute` → canonical 401 |
-| `LatexRenderError` | `latex/compilePdf.ts:13` | `handleLatexError` (`api/handleLatexError.ts:5`), which redacts `details`. Re-implemented **without** the redaction at `manual-generate/route.ts:346` |
-| `AtsPdfValidationError` | `applications/atsPdfValidator.ts:14` | 422 with the report |
-| `SafeOutboundError` | `net/safeFetch.ts:29` | never surfaced directly; translated per caller |
-| `ApplicationPromptError` | `applications/applicationPrompt.ts:74` | typed status per code |
-| `BatchRunnerError` | `applicationBatches/runner.ts:16` | 404/409, or swallowed as a task outcome |
-| `ApplicationRecordNotFoundError` / `ApplicationEventConflictError` | `applications/applicationEventErrors.ts:3`, `:10` | `applicationEventErrorResponse` → 404 / 409 |
+| Class                                                              | Location                                          | Reaches HTTP via                                                                                                                                      |
+| ------------------------------------------------------------------ | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `UnauthorizedError`                                                | `auth/requireSession.ts`                          | `withSessionRoute` and `withAgentRoute`                                                                                                               |
+| `AgentCredentialError`                                             | `auth/requireAgentCredential.ts`                  | `withAgentRoute` → canonical 401                                                                                                                      |
+| `LatexRenderError`                                                 | `latex/compilePdf.ts:13`                          | `handleLatexError` (`api/handleLatexError.ts:5`), which redacts `details`. Re-implemented **without** the redaction at `manual-generate/route.ts:346` |
+| `AtsPdfValidationError`                                            | `applications/atsPdfValidator.ts:14`              | 422 with the report                                                                                                                                   |
+| `SafeOutboundError`                                                | `net/safeFetch.ts:29`                             | never surfaced directly; translated per caller                                                                                                        |
+| `ApplicationPromptError`                                           | `applications/applicationPrompt.ts:74`            | typed status per code                                                                                                                                 |
+| `BatchRunnerError`                                                 | `applicationBatches/runner.ts:16`                 | 404/409, or swallowed as a task outcome                                                                                                               |
+| `ApplicationRecordNotFoundError` / `ApplicationEventConflictError` | `applications/applicationEventErrors.ts:3`, `:10` | `applicationEventErrorResponse` → 404 / 409                                                                                                           |
 
 ### The `throw new Error("SCREAMING_CODE")` convention
 
-A bare `Error` whose message *is* the code remains in internal provider,
+A bare `Error` whose message _is_ the code remains in internal provider,
 composition, and evidence paths. Public server-batch ownership, profile,
 concurrency, and persistence failures are translated to `AppError` by
 the retired server auto-execute path; provider details never became task output.

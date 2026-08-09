@@ -65,8 +65,10 @@ export type TailoringRunTransaction = {
   tailoringRun: {
     findUnique(args: QueryArgs): Promise<TailoringRunRow | null>;
     findFirst(args: QueryArgs): Promise<TailoringRunRow | null>;
+    findMany(args: QueryArgs): Promise<TailoringRunRow[]>;
     create(args: QueryArgs): Promise<TailoringRunRow>;
     update(args: QueryArgs): Promise<TailoringRunRow>;
+    updateMany(args: QueryArgs): Promise<{ count: number }>;
   };
   tailoringRunReceipt: {
     findMany(args: QueryArgs): Promise<TailoringReceiptRow[]>;
@@ -75,9 +77,9 @@ export type TailoringRunTransaction = {
   applicationBatchTask: {
     findFirst(args: QueryArgs): Promise<TailoringBatchTaskRow | null>;
     updateMany(args: QueryArgs): Promise<{ count: number }>;
-    groupBy(args: QueryArgs): Promise<
-      Array<{ status: string; _count: { _all: number } }>
-    >;
+    groupBy(
+      args: QueryArgs,
+    ): Promise<Array<{ status: string; _count: { _all: number } }>>;
   };
   applicationBatch: {
     findFirst(args: QueryArgs): Promise<{

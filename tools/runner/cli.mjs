@@ -16,6 +16,8 @@
  */
 
 import { parseArgs } from "node:util";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { loadConfig } from "./config.mjs";
 import { processFitQueue } from "./fitQueue.mjs";
@@ -23,7 +25,7 @@ import { createCodexClient } from "./codexClient.mjs";
 import { createJoblitClient } from "./joblitClient.mjs";
 import { processActiveBatch } from "./runner.mjs";
 
-const WATCH_INTERVAL_MS = 30_000;
+export const WATCH_INTERVAL_MS = 5_000;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -50,35 +52,69 @@ async function main() {
     model: config.codexModel,
   });
 
-  for (;;) {
-    // Fit scanning first: triage is cheap and narrows what is worth tailoring.
-    const fit = await processFitQueue({
-      joblit,
-      hermes: model,
-      signal: shutdown.signal,
-    });
-    if (fit.scored > 0 || fit.failed > 0) {
-      console.log(`Fit scan: ${fit.scored} scored, ${fit.failed} failed.`);
-    }
-    if (fit.stopped) console.log(`Fit scan stopped: ${fit.stopped}`);
+  await runRunnerLoop({
+    watch: values.watch,
+    joblit,
+    model,
+    signal: shutdown.signal,
+  });
+}
 
-    if (shutdown.signal.aborted) return;
-    const summary = await processActiveBatch({
+/**
+ * Run one or more queue cycles. An explicit tailoring batch is user-requested
+ * work, so it is checked before the background fit queue on every cycle.
+ * Dependencies are injectable to keep the public loop behavior testable
+ * without starting a subprocess or touching a real Joblit deployment.
+ */
+export async function runRunnerLoop({
+  watch,
+  joblit,
+  model,
+  signal,
+  runApplicationBatch = processActiveBatch,
+  runFitQueue = processFitQueue,
+  wait = sleep,
+  log = console.log,
+}) {
+  for (;;) {
+    const summary = await runApplicationBatch({
       joblit,
       hermes: model,
-      signal: shutdown.signal,
+      signal,
     });
     if (summary.batchId) {
-      console.log(
+      log(
         `Batch ${summary.batchId}: ${summary.succeeded} succeeded, ${summary.failed} failed, ${summary.deferred} deferred.`,
       );
     }
-    if (!values.watch || shutdown.signal.aborted) return;
-    await sleep(WATCH_INTERVAL_MS);
+
+    if (signal?.aborted) return;
+    const fit = await runFitQueue({
+      joblit,
+      hermes: model,
+      signal,
+      // Watch mode must return to the explicit application queue after each
+      // Fit claim. The model calls remain sequential; this is cooperative
+      // yielding, not concurrent generation.
+      maxBatches: watch ? 1 : undefined,
+    });
+    if (fit.scored > 0 || fit.failed > 0) {
+      log(`Fit scan: ${fit.scored} scored, ${fit.failed} failed.`);
+    }
+    if (fit.stopped) log(`Fit scan stopped: ${fit.stopped}`);
+
+    if (!watch || signal?.aborted) return;
+    await wait(WATCH_INTERVAL_MS);
+    if (signal?.aborted) return;
   }
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
-});
+const entryPath = process.argv[1]
+  ? pathToFileURL(resolve(process.argv[1])).href
+  : null;
+if (entryPath === import.meta.url) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  });
+}

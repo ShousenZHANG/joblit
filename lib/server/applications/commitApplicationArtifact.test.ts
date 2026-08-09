@@ -1,8 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  hashAiContent,
-  type AiContent,
-} from "@/lib/shared/schemas/aiContent";
+import { hashAiContent, type AiContent } from "@/lib/shared/schemas/aiContent";
 import {
   buildApplicationPublicationRenderContext,
   hashApplicationDocumentContent,
@@ -11,8 +8,14 @@ import {
 const blob = vi.hoisted(() => ({ put: vi.fn(), del: vi.fn() }));
 const store = vi.hoisted(() => ({ findUnique: vi.fn(), upsert: vi.fn() }));
 const jobStore = vi.hoisted(() => ({ findFirst: vi.fn() }));
+const tailoringRunStore = vi.hoisted(() => ({
+  findMany: vi.fn(),
+  findFirst: vi.fn(),
+  updateMany: vi.fn(),
+}));
 const database = vi.hoisted(() => ({
   transaction: vi.fn(),
+  executeRaw: vi.fn(),
   queryRaw: vi.fn(),
 }));
 const ledger = vi.hoisted(() => ({ persistReviewLedger: vi.fn() }));
@@ -29,10 +32,7 @@ const tailoringAcceptance = vi.hoisted(() => ({
 }));
 
 vi.mock("@vercel/blob", () => blob);
-vi.mock(
-  "@/lib/server/artifacts/applicationArtifactLifecycle",
-  () => lifecycle,
-);
+vi.mock("@/lib/server/artifacts/applicationArtifactLifecycle", () => lifecycle);
 vi.mock("@/lib/server/applications/persistReviewLedger", () => ledger);
 vi.mock("@/lib/server/applications/applicationMutationLock", () => lock);
 vi.mock(
@@ -48,9 +48,8 @@ vi.mock("@/lib/server/prisma", () => ({
   },
 }));
 
-const { commitApplicationArtifact } = await import(
-  "@/lib/server/applications/commitApplicationArtifact"
-);
+const { commitApplicationArtifact } =
+  await import("@/lib/server/applications/commitApplicationArtifact");
 
 const aiContent: AiContent = {
   schemaVersion: 1,
@@ -169,10 +168,16 @@ beforeEach(() => {
     fn({
       application: store,
       job: jobStore,
+      tailoringRun: tailoringRunStore,
+      $executeRaw: database.executeRaw,
       $queryRaw: database.queryRaw,
     }),
   );
+  database.executeRaw.mockReset().mockResolvedValue(0);
   database.queryRaw.mockReset().mockResolvedValue([lockedRenderSource()]);
+  tailoringRunStore.findMany.mockReset().mockResolvedValue([]);
+  tailoringRunStore.findFirst.mockReset().mockResolvedValue(null);
+  tailoringRunStore.updateMany.mockReset().mockResolvedValue({ count: 0 });
   jobStore.findFirst.mockResolvedValue({ id: "job-1" });
   store.findUnique.mockResolvedValue(null);
   store.upsert.mockResolvedValue({ id: "application-1" });
@@ -245,7 +250,10 @@ describe("commitApplicationArtifact", () => {
     async (target, artifact) => {
       const result = await commitApplicationArtifact({
         ...BASE,
-        artifacts: [artifact, { ...artifact, pdf: Buffer.from("%PDF duplicate") }],
+        artifacts: [
+          artifact,
+          { ...artifact, pdf: Buffer.from("%PDF duplicate") },
+        ],
       });
 
       expect(result).toMatchObject({
@@ -286,7 +294,10 @@ describe("commitApplicationArtifact", () => {
   });
 
   it("uploads, commits, and returns the hash the next write must send", async () => {
-    const result = await commitApplicationArtifact({ ...BASE, artifacts: [resumeArtifact] });
+    const result = await commitApplicationArtifact({
+      ...BASE,
+      artifacts: [resumeArtifact],
+    });
 
     expect(result.kind).toBe("committed");
     if (result.kind !== "committed") return;
@@ -325,7 +336,9 @@ describe("commitApplicationArtifact", () => {
 
   it("takes the advisory lock before reading the row", async () => {
     const order: string[] = [];
-    lock.acquireApplicationMutationLock.mockImplementation(() => void order.push("lock"));
+    lock.acquireApplicationMutationLock.mockImplementation(
+      () => void order.push("lock"),
+    );
     store.findUnique.mockImplementation(() => {
       order.push("read");
       return Promise.resolve(null);
@@ -336,13 +349,33 @@ describe("commitApplicationArtifact", () => {
     expect(order).toEqual(["lock", "read"]);
   });
 
+  it("rejects an unbound write while another Tailoring Run owns the Job", async () => {
+    tailoringRunStore.findFirst.mockResolvedValueOnce({ id: "active-run" });
+
+    await expect(
+      commitApplicationArtifact({ ...BASE, artifacts: [resumeArtifact] }),
+    ).rejects.toMatchObject({ code: "ATTEMPT_ACTIVE", status: 409 });
+
+    expect(lock.acquireApplicationMutationLock).not.toHaveBeenCalled();
+    expect(store.findUnique).not.toHaveBeenCalled();
+    expect(store.upsert).not.toHaveBeenCalled();
+    expect(lifecycle.retireStagedArtifacts).toHaveBeenCalledWith({
+      userId: "user-1",
+      jobId: "job-1",
+      artifactIds: ["artifact-1"],
+    });
+  });
+
   it("aborts rather than clearing the previous PDF when the upload fails", async () => {
     // manual-generate used to report the failure and commit a null URL, which
     // wiped the user's existing artifact on any transient Blob outage.
     const cause = new Error("blob unavailable");
     blob.put.mockRejectedValueOnce(cause);
 
-    const result = await commitApplicationArtifact({ ...BASE, artifacts: [resumeArtifact] });
+    const result = await commitApplicationArtifact({
+      ...BASE,
+      artifacts: [resumeArtifact],
+    });
 
     expect(result).toEqual({ kind: "upload_failed", cause });
     expect(store.upsert).not.toHaveBeenCalled();
@@ -411,16 +444,19 @@ describe("commitApplicationArtifact", () => {
   it.each([
     [
       "Profile",
-      { profileBasics: { ...PROFILE_RENDER_SOURCE.basics, fullName: "Grace Hopper" } },
+      {
+        profileBasics: {
+          ...PROFILE_RENDER_SOURCE.basics,
+          fullName: "Grace Hopper",
+        },
+      },
       resumeArtifact,
     ],
     ["Job", { jobTitle: "Principal Engineer" }, coverArtifact],
   ] as const)(
     "fences a rendered artifact when the %s context changes before commit",
     async (_source, override, artifact) => {
-      database.queryRaw.mockResolvedValueOnce([
-        lockedRenderSource(override),
-      ]);
+      database.queryRaw.mockResolvedValueOnce([lockedRenderSource(override)]);
 
       const result = await commitApplicationArtifact({
         ...BASE,
@@ -450,9 +486,7 @@ describe("commitApplicationArtifact", () => {
   ] as const)(
     "ignores a %s-irrelevant render-context change",
     async (_target, artifact, override) => {
-      database.queryRaw.mockResolvedValueOnce([
-        lockedRenderSource(override),
-      ]);
+      database.queryRaw.mockResolvedValueOnce([lockedRenderSource(override)]);
 
       const result = await commitApplicationArtifact({
         ...BASE,
@@ -633,13 +667,11 @@ describe("commitApplicationArtifact", () => {
   });
 
   it("writes no artifact columns for a DRAFT commit", async () => {
-    await commitApplicationArtifact(
-      {
-        ...BASE,
-        status: "DRAFT",
-        artifacts: [resumeArtifact],
-      } as unknown as Parameters<typeof commitApplicationArtifact>[0],
-    );
+    await commitApplicationArtifact({
+      ...BASE,
+      status: "DRAFT",
+      artifacts: [resumeArtifact],
+    } as unknown as Parameters<typeof commitApplicationArtifact>[0]);
 
     const written = store.upsert.mock.calls[0]?.[0]?.update;
     expect(written).not.toHaveProperty("resumePdfUrl");
@@ -729,7 +761,8 @@ describe("commitApplicationArtifact", () => {
       artifacts: [resumeArtifact],
     });
 
-    const written = store.upsert.mock.calls[0]?.[0]?.update.aiContent as AiContent;
+    const written = store.upsert.mock.calls[0]?.[0]?.update
+      .aiContent as AiContent;
     expect(written.cover.paragraphOne.aiText).toBe("Existing cover");
   });
 
@@ -814,14 +847,18 @@ describe("commitApplicationArtifact", () => {
     });
 
     expect(result.kind).toBe("committed");
-    const written = store.upsert.mock.calls[0]?.[0]?.update.aiContent as AiContent;
+    const written = store.upsert.mock.calls[0]?.[0]?.update
+      .aiContent as AiContent;
     expect(written.review?.verdict).toBe("blocked");
   });
 
   it("reports a Job deleted mid-render instead of hitting the foreign key", async () => {
     jobStore.findFirst.mockResolvedValue(null);
 
-    const result = await commitApplicationArtifact({ ...BASE, artifacts: [resumeArtifact] });
+    const result = await commitApplicationArtifact({
+      ...BASE,
+      artifacts: [resumeArtifact],
+    });
 
     expect(result).toEqual({ kind: "job_missing" });
     expect(store.upsert).not.toHaveBeenCalled();

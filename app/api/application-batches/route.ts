@@ -9,7 +9,6 @@ export const runtime = "nodejs";
 const CreateBatchSchema = z.object({
   scope: z.enum(["NEW"]).default("NEW"),
   limit: z.coerce.number().int().min(1).max(200).optional().default(100),
-  selectedJobIds: z.array(z.string().uuid()).min(1).max(200).optional(),
 });
 
 export async function POST(req: Request) {
@@ -26,7 +25,6 @@ export async function POST(req: Request) {
       userId,
       seed: {
         kind: "new",
-        selectedJobIds: parsed.data.selectedJobIds,
         limit: parsed.data.limit,
       },
     });
@@ -42,6 +40,13 @@ export async function POST(req: Request) {
             status: outcome.activeBatch.status,
           },
         },
+      );
+    }
+    if (outcome.kind === "profile_missing") {
+      return errorJson(
+        "NO_PROFILE",
+        "Create and save your Master Resume Profile before generating Applications.",
+        409,
       );
     }
     if (outcome.kind === "empty") {

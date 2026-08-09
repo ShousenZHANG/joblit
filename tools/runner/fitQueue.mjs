@@ -559,8 +559,14 @@ export async function processFitQueue({
   leaseWaitMs = DEFAULT_LEASE_WAIT_MS,
   cleanupRetryMs = DEFAULT_CLEANUP_RETRY_MS,
   heartbeatWait = sleep,
+  maxBatches = Number.POSITIVE_INFINITY,
 }) {
   const summary = { scored: 0, failed: 0, stopped: null };
+  const batchLimit =
+    Number.isSafeInteger(maxBatches) && maxBatches > 0
+      ? maxBatches
+      : Number.POSITIVE_INFINITY;
+  let processedBatches = 0;
 
   await reconcileSettledFitIssues({
     joblit,
@@ -585,6 +591,10 @@ export async function processFitQueue({
       const leased = nonNegativeInteger(batch.leased);
       // Empty does not mean done: another scan may still hold fresh leases.
       if (pendingTotal > 0 || leased > 0) {
+        // A bounded pass is the cooperative scheduler used by `--watch`.
+        // Yield to the outer Application-first loop instead of sleeping behind
+        // a Fit lease that may remain active for minutes.
+        if (Number.isFinite(batchLimit)) return summary;
         const requested = nonNegativeInteger(batch.retryAfterMs, leaseWaitMs);
         await sleep(
           Math.min(MAX_LEASE_WAIT_MS, Math.max(leaseWaitMs, requested)),
@@ -599,6 +609,7 @@ export async function processFitQueue({
       summary.stopped = "Scoring batch claim is missing";
       return summary;
     }
+    processedBatches += 1;
 
     // Keep release/failure calls on the established v1 shape, while binding a
     // durable prompt to both parts of the v2 Claim identity when advertised.
@@ -709,6 +720,7 @@ export async function processFitQueue({
         return summary;
       }
       summary.failed += failedCount;
+      if (processedBatches >= batchLimit) return summary;
       continue;
     }
 
@@ -759,6 +771,7 @@ export async function processFitQueue({
       log(`Fit batch failed: ${reason}`);
       await joblit.markFitFailed(claim).catch(() => undefined);
       summary.failed += batch.jobIds.length;
+      if (processedBatches >= batchLimit) return summary;
       continue;
     }
 
@@ -780,5 +793,6 @@ export async function processFitQueue({
       log,
     });
     log(`Fit batch: ${scored} scored${failed > 0 ? `, ${failed} failed` : ""}`);
+    if (processedBatches >= batchLimit) return summary;
   }
 }

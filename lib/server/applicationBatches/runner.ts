@@ -211,6 +211,39 @@ async function reclaimStaleBatchTasksTx(
   });
 }
 
+async function skipUnsafePendingBatchTasksTx(
+  tx: Prisma.TransactionClient,
+  input: { userId: string; batchId: string },
+): Promise<void> {
+  await tx.applicationBatchTask.updateMany({
+    where: {
+      batchId: input.batchId,
+      userId: input.userId,
+      status: "PENDING",
+      OR: [
+        { job: { userId: { not: input.userId } } },
+        { job: { market: { not: "AU" } } },
+        { job: { status: { not: "NEW" } } },
+        {
+          AND: [
+            { tailoringRun: null },
+            {
+              job: {
+                applications: { some: { userId: input.userId } },
+              },
+            },
+          ],
+        },
+      ],
+    },
+    data: {
+      status: "SKIPPED",
+      completedAt: new Date(),
+      error: "Skipped because the Job is no longer safe for a fresh batch",
+    },
+  });
+}
+
 /**
  * Return tasks stuck in RUNNING past the stale timeout to the queue.
  *
@@ -272,11 +305,25 @@ export async function claimNextBatchTask(input: {
       await reclaimStaleBatchTasksTx(tx, input);
     }
 
+    // Queue eligibility can change while a durable batch is waiting. Recheck
+    // at the claim boundary so a later manual Application or status change is
+    // preserved instead of being overwritten by a new two-target run.
+    await skipUnsafePendingBatchTasksTx(tx, input);
+
     const candidate = await tx.applicationBatchTask.findFirst({
       where: {
         batchId: input.batchId,
         userId: input.userId,
         status: "PENDING",
+        job: { userId: input.userId, market: "AU", status: "NEW" },
+        OR: [
+          { tailoringRun: { isNot: null } },
+          {
+            job: {
+              applications: { none: { userId: input.userId } },
+            },
+          },
+        ],
       },
       orderBy: {
         createdAt: "asc",
@@ -578,6 +625,12 @@ export async function createRetryBatchFromFailed(input: {
   }
   if (outcome.kind === "active_exists") {
     throw new BatchRunnerError("INVALID_STATE", "Active batch already exists");
+  }
+  if (outcome.kind === "profile_missing") {
+    throw new BatchRunnerError(
+      "INVALID_STATE",
+      "Create and save your Master Resume Profile before retrying this batch",
+    );
   }
   if (outcome.kind === "empty") {
     throw new BatchRunnerError("INVALID_STATE", "No failed tasks to retry");

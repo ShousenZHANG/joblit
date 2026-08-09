@@ -53,9 +53,7 @@ function baseRun(patch: Partial<TailoringRunRow> = {}): TailoringRunRow {
   };
 }
 
-function databaseFor(
-  tx: TailoringRunTransaction,
-): TailoringRunDatabase {
+function databaseFor(tx: TailoringRunTransaction): TailoringRunDatabase {
   return {
     ...tx,
     $transaction: vi.fn(async (callback) => callback(tx)),
@@ -78,9 +76,14 @@ function mutableRunTransaction(initial: TailoringRunRow) {
   const tx = {
     $executeRaw: vi.fn(async () => 0),
     tailoringRun: {
-      findFirst: vi.fn(async () => run),
+      findFirst: vi.fn(async (args?: Record<string, unknown>) => {
+        const where = args?.where as { status?: { in?: string[] } } | undefined;
+        return where?.status?.in ? null : run;
+      }),
+      findMany: vi.fn(async () => []),
       findUnique: vi.fn(async () => run),
       update,
+      updateMany: vi.fn(async () => ({ count: 0 })),
       create: vi.fn(),
     },
     tailoringRunReceipt: {
@@ -116,6 +119,60 @@ function issueInput() {
 }
 
 describe("TailoringRun issue/start/bind lifecycle", () => {
+  it("rejects a second active generation owner for the same Job", async () => {
+    const setup = mutableRunTransaction(baseRun());
+    vi.mocked(setup.tx.tailoringRun.findUnique).mockResolvedValue(null);
+    vi.mocked(setup.tx.tailoringRun.findFirst).mockResolvedValueOnce(
+      baseRun({ issueKey: "another-active-run", status: "RUNNING" }),
+    );
+    vi.mocked(setup.tx.job.findFirst).mockResolvedValue({ id: JOB_ID });
+
+    await expect(
+      issueTailoringRun(issueInput(), {
+        database: databaseFor(setup.tx),
+      }),
+    ).rejects.toMatchObject({ code: "ATTEMPT_ACTIVE" });
+    expect(setup.tx.tailoringRun.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a fresh batch run when an Application appeared after queueing", async () => {
+    const setup = mutableRunTransaction(baseRun());
+    vi.mocked(setup.tx.tailoringRun.findUnique).mockResolvedValue(null);
+    vi.mocked(setup.tx.tailoringRun.findFirst).mockResolvedValue(null);
+    vi.mocked(setup.tx.applicationBatchTask.findFirst).mockResolvedValue({
+      id: TASK_ID,
+      batchId: BATCH_ID,
+      userId: USER_ID,
+      jobId: JOB_ID,
+      status: "RUNNING",
+      executionAttemptId: ATTEMPT_A,
+      tailoringProtocolVersion: 1,
+      completionAttemptId: null,
+    });
+    vi.mocked(setup.tx.job.findFirst)
+      .mockResolvedValueOnce({ id: JOB_ID })
+      .mockResolvedValueOnce(null);
+
+    await expect(
+      issueTailoringRun(
+        {
+          ...issueInput(),
+          issueKey: `server-batch:${TASK_ID}`,
+          source: "SERVER_BATCH",
+          delivery: "FINAL",
+          requiredTargets: ["RESUME", "COVER"],
+          batch: {
+            taskId: TASK_ID,
+            batchId: BATCH_ID,
+            executionAttemptId: ATTEMPT_A,
+          },
+        },
+        { database: databaseFor(setup.tx) },
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_STATE" });
+    expect(setup.tx.tailoringRun.create).not.toHaveBeenCalled();
+  });
+
   it("replays the same issue and conflicts when its bound inputs change", async () => {
     let stored: TailoringRunRow | null = null;
     const setup = mutableRunTransaction(baseRun());
@@ -135,6 +192,9 @@ describe("TailoringRun issue/start/bind lifecycle", () => {
 
     expect(first.disposition).toBe("APPLIED");
     expect(replay.disposition).toBe("REPLAYED");
+    // The exact key replays before stale-run retirement, preserving recovery
+    // for an expired lease whose caller still owns the durable issue key.
+    expect(setup.tx.tailoringRun.findMany).toHaveBeenCalledTimes(1);
     await expect(
       issueTailoringRun(
         { ...issueInput(), jobSnapshotHash: "changed-job-snapshot" },
@@ -204,9 +264,9 @@ describe("TailoringRun issue/start/bind lifecycle", () => {
       },
     };
 
-    expect(
-      (await issueTailoringRun(input, { database })).disposition,
-    ).toBe("APPLIED");
+    expect((await issueTailoringRun(input, { database })).disposition).toBe(
+      "APPLIED",
+    );
     taskAttempt = ATTEMPT_B;
     expect(
       (
@@ -220,14 +280,11 @@ describe("TailoringRun issue/start/bind lifecycle", () => {
       ).disposition,
     ).toBe("REPLAYED");
     await expect(
-      issueTailoringRun(
-        { ...input, delivery: "DRAFT" },
-        { database },
-      ),
+      issueTailoringRun({ ...input, delivery: "DRAFT" }, { database }),
     ).rejects.toMatchObject({ code: "ISSUE_KEY_CONFLICT" });
-    await expect(
-      issueTailoringRun(input, { database }),
-    ).rejects.toMatchObject({ code: "BATCH_ATTEMPT_MISMATCH" });
+    await expect(issueTailoringRun(input, { database })).rejects.toMatchObject({
+      code: "BATCH_ATTEMPT_MISMATCH",
+    });
     await expect(
       issueTailoringRun(
         {

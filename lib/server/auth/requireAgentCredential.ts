@@ -9,7 +9,12 @@ import {
 } from "@/lib/server/agentCredential";
 import { prisma } from "@/lib/server/prisma";
 
-const LAST_USED_AT_WRITE_INTERVAL_MS = 5 * 60 * 1000;
+/**
+ * The idle Runner checks for work every five seconds. Recording activity every
+ * fifteen seconds keeps the browser's connection signal honest without
+ * turning every poll into a database write.
+ */
+export const AGENT_LAST_USED_WRITE_INTERVAL_MS = 15_000;
 const AGENT_TOKEN_PATTERN = new RegExp(
   `^${AGENT_CREDENTIAL_PREFIX}[0-9a-f]{64}$`,
 );
@@ -67,16 +72,13 @@ export async function requireAgentCredential(
   }
 
   const lastUsedAtCutoff = new Date(
-    now.getTime() - LAST_USED_AT_WRITE_INTERVAL_MS,
+    now.getTime() - AGENT_LAST_USED_WRITE_INTERVAL_MS,
   );
   if (!record.lastUsedAt || record.lastUsedAt <= lastUsedAtCutoff) {
     await prisma.agentCredential.updateMany({
       where: {
         id: record.id,
-        OR: [
-          { lastUsedAt: null },
-          { lastUsedAt: { lte: lastUsedAtCutoff } },
-        ],
+        OR: [{ lastUsedAt: null }, { lastUsedAt: { lte: lastUsedAtCutoff } }],
       },
       data: { lastUsedAt: now },
     });

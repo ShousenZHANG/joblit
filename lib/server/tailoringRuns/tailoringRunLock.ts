@@ -1,6 +1,7 @@
 import type { Prisma } from "@/lib/generated/prisma";
 
 const APPLICATION_BATCH_LOCK_NAMESPACE = 0x41424154; // "ABAT"
+const TAILORING_JOB_LOCK_NAMESPACE = 0x544a4f42; // "TJOB"
 const TAILORING_RUN_LOCK_NAMESPACE = 0x544c524e; // "TLRN"
 
 function stableInt32(value: string): number {
@@ -20,6 +21,26 @@ export async function acquireApplicationBatchLock(
     SELECT pg_advisory_xact_lock(
       ${APPLICATION_BATCH_LOCK_NAMESPACE}::integer,
       ${stableInt32(batchId)}::integer
+    )
+  `;
+}
+
+/**
+ * Serialize TailoringRun issuance for one owned Job.
+ *
+ * This is the first lock in the generation ownership order:
+ * TJOB -> ABAT (when present) -> TLRN. It lets a manual run and a batch run
+ * make one atomic decision about who may write the Job's Application.
+ */
+export async function acquireTailoringJobLock(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  jobId: string,
+): Promise<void> {
+  await tx.$executeRaw`
+    SELECT pg_advisory_xact_lock(
+      ${TAILORING_JOB_LOCK_NAMESPACE}::integer,
+      ${stableInt32(`${userId}:${jobId}`)}::integer
     )
   `;
 }

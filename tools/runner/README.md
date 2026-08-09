@@ -97,7 +97,8 @@ Drain the active batch once and exit:
 node tools/runner/cli.mjs
 ```
 
-Keep polling for new batches every 30 seconds:
+Keep polling for new batches every 5 seconds. Each cycle checks an explicit
+application batch before background fit-scoring work:
 
 ```bash
 node tools/runner/cli.mjs --watch
@@ -115,7 +116,7 @@ server-side, on the content-addressed receipts.
 
 The Runner still polls Joblit's Tailoring Run while the model works, and still
 aborts local work if another executor takes the attempt over. What disappeared
-is only the machinery for reconciling a *remote* run object that could outlive
+is only the machinery for reconciling a _remote_ run object that could outlive
 the local process.
 
 ## Failure handling

@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
+import { errorJson } from "@/lib/server/api/errorResponse";
 import { withSessionRoute, parseJsonBody } from "@/lib/server/api/routeHandler";
 import { UuidParamSchema } from "@/lib/shared/schemas/common";
-import {
-  aiContentSchema,
-  hashAiContent,
-} from "@/lib/shared/schemas/aiContent";
+import { aiContentSchema, hashAiContent } from "@/lib/shared/schemas/aiContent";
 import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
+import { acquireUnboundApplicationWriteAuthority } from "@/lib/server/tailoringRuns/tailoringJobOwnership";
+import { TailoringRunError } from "@/lib/server/tailoringRuns/tailoringRunProtocol";
 import { persistReviewLedger } from "@/lib/server/applications/persistReviewLedger";
 import { evolveApplicationAiContent } from "@/lib/server/applications/applicationAiContentAggregate";
 import {
@@ -91,7 +91,10 @@ export async function POST(
       });
       if (!existing) {
         return NextResponse.json(
-          { error: { code: "NOT_FOUND", message: "Application not found" }, requestId },
+          {
+            error: { code: "NOT_FOUND", message: "Application not found" },
+            requestId,
+          },
           { status: 404 },
         );
       }
@@ -178,107 +181,123 @@ export async function POST(
             })
           : UNAVAILABLE_APPLICATION_PUBLICATION_RENDER_CONTEXT;
 
-      const updated = await prisma.$transaction(
-        async (tx) => {
-          await acquireApplicationMutationLock(
-            tx,
-            userId,
-            existing.jobId ?? existing.id,
-          );
-          const current = await tx.application.findFirst({
-            where: { id: existing.id, userId },
-            select: {
-              jobId: true,
-              resumeProfileId: true,
-              aiContentHash: true,
-              status: true,
-              resumePdfUrl: true,
-              coverPdfUrl: true,
-              resumeContentHash: true,
-              coverContentHash: true,
-              resumePublishedHash: true,
-              coverPublishedHash: true,
-            },
-          });
-          if (!current || current.aiContentHash !== expectedHash) {
-            return {
-              kind: "stale" as const,
-              ...(current ? { currentHash: current.aiContentHash } : {}),
-            };
-          }
-          if (
-            current.jobId !== existing.jobId ||
-            current.resumeProfileId !== existing.resumeProfileId
-          ) {
-            return { kind: "stale_render_context" as const };
-          }
-          if (
-            publicationRenderContext.available &&
-            (!existing.jobId ||
-              !(await applicationRenderContextMatchesCurrentSources(
-                tx,
-                {
-                  userId,
-                  job: { id: existing.jobId },
-                  resumeProfileId: profile!.id,
-                  publicationRenderContext,
-                },
-                applicationPublicationTargets(
-                  reset,
-                  publicationRenderContext,
-                ),
-              )))
-          ) {
-            return { kind: "stale_render_context" as const };
-          }
-          const publicationTransition = transitionApplicationPublication({
-            previousAiContent: parsed.data,
-            previous: {
-              status: current.status,
-              aiContentHash: current.aiContentHash,
-              resumePdfUrl: current.resumePdfUrl,
-              coverPdfUrl: current.coverPdfUrl,
-              resumeContentHash: current.resumeContentHash,
-              coverContentHash: current.coverContentHash,
-              resumePublishedHash: current.resumePublishedHash,
-              coverPublishedHash: current.coverPublishedHash,
-            },
-            nextAiContent: reset,
-            renderContext: publicationRenderContext,
-            publishedTargets: [],
-          });
-          const result = await tx.application.updateMany({
-            where: {
-              id: existing.id,
+      const updated = await prisma
+        .$transaction(
+          async (tx) => {
+            const mutationJobId = existing.jobId ?? existing.id;
+            await acquireUnboundApplicationWriteAuthority(tx, {
               userId,
-              jobId: existing.jobId,
-              resumeProfileId: existing.resumeProfileId,
-              aiContentHash: expectedHash,
-            },
-            data: {
-              ...publicationTransition.persistence,
-              aiContent: reset,
-              aiContentHash: newHash,
-              reviewReport: reset.review ?? undefined,
-            },
-          });
-          if (result.count === 1) {
-            await persistReviewLedger(tx, {
-              userId,
-              applicationId: existing.id,
-              jobId: existing.jobId,
-              aiContent: reset,
+              jobId: mutationJobId,
             });
+            await acquireApplicationMutationLock(tx, userId, mutationJobId);
+            const current = await tx.application.findFirst({
+              where: { id: existing.id, userId },
+              select: {
+                jobId: true,
+                resumeProfileId: true,
+                aiContentHash: true,
+                status: true,
+                resumePdfUrl: true,
+                coverPdfUrl: true,
+                resumeContentHash: true,
+                coverContentHash: true,
+                resumePublishedHash: true,
+                coverPublishedHash: true,
+              },
+            });
+            if (!current || current.aiContentHash !== expectedHash) {
+              return {
+                kind: "stale" as const,
+                ...(current ? { currentHash: current.aiContentHash } : {}),
+              };
+            }
+            if (
+              current.jobId !== existing.jobId ||
+              current.resumeProfileId !== existing.resumeProfileId
+            ) {
+              return { kind: "stale_render_context" as const };
+            }
+            if (
+              publicationRenderContext.available &&
+              (!existing.jobId ||
+                !(await applicationRenderContextMatchesCurrentSources(
+                  tx,
+                  {
+                    userId,
+                    job: { id: existing.jobId },
+                    resumeProfileId: profile!.id,
+                    publicationRenderContext,
+                  },
+                  applicationPublicationTargets(
+                    reset,
+                    publicationRenderContext,
+                  ),
+                )))
+            ) {
+              return { kind: "stale_render_context" as const };
+            }
+            const publicationTransition = transitionApplicationPublication({
+              previousAiContent: parsed.data,
+              previous: {
+                status: current.status,
+                aiContentHash: current.aiContentHash,
+                resumePdfUrl: current.resumePdfUrl,
+                coverPdfUrl: current.coverPdfUrl,
+                resumeContentHash: current.resumeContentHash,
+                coverContentHash: current.coverContentHash,
+                resumePublishedHash: current.resumePublishedHash,
+                coverPublishedHash: current.coverPublishedHash,
+              },
+              nextAiContent: reset,
+              renderContext: publicationRenderContext,
+              publishedTargets: [],
+            });
+            const result = await tx.application.updateMany({
+              where: {
+                id: existing.id,
+                userId,
+                jobId: existing.jobId,
+                resumeProfileId: existing.resumeProfileId,
+                aiContentHash: expectedHash,
+              },
+              data: {
+                ...publicationTransition.persistence,
+                aiContent: reset,
+                aiContentHash: newHash,
+                reviewReport: reset.review ?? undefined,
+              },
+            });
+            if (result.count === 1) {
+              await persistReviewLedger(tx, {
+                userId,
+                applicationId: existing.id,
+                jobId: existing.jobId,
+                aiContent: reset,
+              });
+            }
+            return result.count === 1
+              ? {
+                  kind: "committed" as const,
+                  publication: publicationTransition.publication,
+                }
+              : { kind: "stale" as const };
+          },
+          { timeout: 30_000 },
+        )
+        .catch((error: unknown) => {
+          if (error instanceof TailoringRunError) {
+            return { kind: "tailoring_run_error" as const, error };
           }
-          return result.count === 1
-            ? {
-                kind: "committed" as const,
-                publication: publicationTransition.publication,
-              }
-            : { kind: "stale" as const };
-        },
-        { timeout: 30_000 },
-      );
+          throw error;
+        });
+      if (updated.kind === "tailoring_run_error") {
+        return errorJson(
+          updated.error.code,
+          updated.error.message,
+          updated.error.status,
+          { requestId },
+        );
+      }
       if (updated.kind === "stale") {
         return staleDiscardResponse(
           requestId,

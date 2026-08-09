@@ -4,178 +4,294 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchJson } from "@/lib/api/fetchJson";
 
 /**
- * Live view of the generation batch the Runner is working through.
+ * Browser projection of the durable Application Batch.
  *
- * Clicking Generate used to end the story: a toast said "queued" and then
- * nothing moved until the user reloaded and guessed. The counts already
- * existed server-side — this polls them so the page can say what is actually
- * happening, and refreshes the list the moment a job finishes so its PDFs
- * appear on their own.
- *
- * Polling is not a heartbeat. It checks once on mount, keeps going only while
- * a batch is genuinely unfinished, and stops the moment one settles. An idle
- * workspace therefore makes exactly one request and then goes quiet — which
- * is also what keeps this hook out of the way of tests that drive their own
- * timers.
+ * `watchBatch` is the important boundary: a successful create response already
+ * owns the authoritative id/count, so the UI seeds QUEUED synchronously and
+ * polls that exact batch. It never waits for `/latest` to catch up and a stale
+ * discovery request cannot erase the newly-created batch.
  */
 
 const POLL_MS = 3_000;
 const TERMINAL = new Set(["SUCCEEDED", "FAILED", "PARTIAL", "CANCELLED"]);
 
+export type BatchStatus =
+  | "QUEUED"
+  | "RUNNING"
+  | "SUCCEEDED"
+  | "FAILED"
+  | "PARTIAL"
+  | "CANCELLED";
+
+export type BatchSucceededItem = {
+  taskId: string;
+  jobId: string;
+  jobTitle: string;
+  company: string | null;
+  completedAt: string;
+  artifacts: {
+    resumePdfUrl: string | null;
+    coverPdfUrl: string | null;
+  };
+};
+
+export type BatchFailedItem = {
+  taskId: string;
+  jobId: string;
+  jobTitle: string;
+  company: string | null;
+  attempt: number;
+  error: string;
+  updatedAt: string;
+};
+
 export interface BatchProgressState {
   batchId: string | null;
-  status: string | null;
-  /** Tasks that have reached a terminal state, successful or not. */
+  status: BatchStatus | null;
+  pending: number;
+  running: number;
+  succeeded: number;
+  failed: number;
+  skipped: number;
+  /** Every task that reached a terminal state, including skipped tasks. */
   done: number;
   total: number;
-  failed: number;
-  /** True while the batch still has work the Runner can claim. */
   active: boolean;
-  /**
-   * Jobs this batch could not generate. The summary reports which tasks
-   * succeeded or failed but not which one is in flight, so there is
-   * deliberately no "currently generating" row marker — a spinner on a guessed
-   * row would be worse than none.
-   */
+  pollUnavailable: boolean;
+  succeededItems: readonly BatchSucceededItem[];
+  failedItems: readonly BatchFailedItem[];
   failedJobIds: ReadonlySet<string>;
 }
+
+export type BatchWatchSeed = {
+  id: string;
+  status: BatchStatus;
+  totalCount: number;
+};
+
+export type BatchActionProgress = {
+  pending: number;
+  running: number;
+  succeeded: number;
+  failed: number;
+  skipped?: number;
+};
 
 const EMPTY: BatchProgressState = {
   batchId: null,
   status: null,
+  pending: 0,
+  running: 0,
+  succeeded: 0,
+  failed: 0,
+  skipped: 0,
   done: 0,
   total: 0,
-  failed: 0,
   active: false,
+  pollUnavailable: false,
+  succeededItems: [],
+  failedItems: [],
   failedJobIds: new Set(),
 };
 
-type LatestResponse = { batchId: string | null; status: string | null };
+type LatestResponse = { batchId: string | null; status: BatchStatus | null };
 type SummaryResponse = {
-  batch: { id: string; status: string; totalCount: number };
-  progress: { pending: number; running: number; succeeded: number; failed: number };
-  succeeded: Array<{ jobId: string }>;
-  failed: Array<{ jobId: string }>;
+  batch: { id: string; status: BatchStatus; totalCount: number };
+  progress: {
+    pending: number;
+    running: number;
+    succeeded: number;
+    failed: number;
+    skipped?: number;
+  };
+  succeeded?: BatchSucceededItem[];
+  failed?: BatchFailedItem[];
 };
+
+function stateFromSummary(summary: SummaryResponse): BatchProgressState {
+  const skipped = summary.progress.skipped ?? 0;
+  const done =
+    summary.progress.succeeded + summary.progress.failed + skipped;
+  const failedItems = summary.failed ?? [];
+  return {
+    batchId: summary.batch.id,
+    status: summary.batch.status,
+    pending: summary.progress.pending,
+    running: summary.progress.running,
+    succeeded: summary.progress.succeeded,
+    failed: summary.progress.failed,
+    skipped,
+    done,
+    total: summary.batch.totalCount,
+    active: !TERMINAL.has(summary.batch.status),
+    pollUnavailable: false,
+    succeededItems: summary.succeeded ?? [],
+    failedItems,
+    failedJobIds: new Set(failedItems.map((item) => item.jobId)),
+  };
+}
 
 export function useBatchProgress({
   onJobsSettled,
 }: {
-  /** Called when the set of finished jobs grows, so the list can refetch. */
   onJobsSettled: () => void;
 }) {
   const [state, setState] = useState<BatchProgressState>(EMPTY);
   const [dismissedBatchId, setDismissedBatchId] = useState<string | null>(null);
-  /**
-   * Batches watched from unfinished to finished in this session. A batch that
-   * was already complete when the page loaded is history, not news, so the
-   * banner stays silent about it.
-   */
   const [watchedBatchIds, setWatchedBatchIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  // Refs, not state: the poll compares against these and would otherwise need
-  // itself as a dependency.
+
   const settledCountRef = useRef(0);
+  const settledBatchIdRef = useRef<string | null>(null);
   const settledCallbackRef = useRef(onJobsSettled);
+  const batchIdRef = useRef<string | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const epochRef = useRef(0);
+
   useEffect(() => {
     settledCallbackRef.current = onJobsSettled;
   });
 
-  /** Resolves true while the batch still has work, so the caller can decide
-   *  whether another poll is worth scheduling. */
-  const poll = useCallback(async (signal?: AbortSignal): Promise<boolean> => {
-    const latest = (await fetchJson("/api/application-batches/latest", {
-      signal,
-    })) as LatestResponse | null;
-    if (!latest?.batchId) {
-      settledCountRef.current = 0;
-      setState(EMPTY);
-      return false;
-    }
-
-    const summary = (await fetchJson(
-      `/api/application-batches/${latest.batchId}/summary`,
-      { signal },
-    )) as SummaryResponse | null;
-    if (!summary) return false;
-
-    const { progress } = summary;
-    const done = progress.succeeded + progress.failed;
-    const active = !TERMINAL.has(summary.batch.status);
-
-    // Refresh the list whenever another job has landed, so its Saved CV/CL
-    // appear without the user reloading.
-    if (done > settledCountRef.current) {
-      settledCountRef.current = done;
-      settledCallbackRef.current();
-    } else if (done < settledCountRef.current) {
-      settledCountRef.current = done;
-    }
-
-    if (active) {
-      setWatchedBatchIds((prev) =>
-        prev.has(summary.batch.id) ? prev : new Set(prev).add(summary.batch.id),
-      );
-    }
-
-    setState({
-      batchId: summary.batch.id,
-      status: summary.batch.status,
-      done,
-      total: summary.batch.totalCount,
-      failed: progress.failed,
-      active,
-      failedJobIds: new Set(summary.failed.map((item) => item.jobId)),
-    });
-    return active;
+  const stopPolling = useCallback(() => {
+    epochRef.current += 1;
+    controllerRef.current?.abort();
+    controllerRef.current = null;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
   }, []);
 
-  // One live poll chain at a time, restartable by `refresh`.
-  const controllerRef = useRef<AbortController | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const runningRef = useRef(false);
+  const applySummary = useCallback((summary: SummaryResponse) => {
+    const next = stateFromSummary(summary);
+    batchIdRef.current = next.batchId;
 
-  const startPolling = useCallback(() => {
-    if (runningRef.current) return;
-    runningRef.current = true;
-    const controller = new AbortController();
-    controllerRef.current = controller;
+    if (settledBatchIdRef.current !== next.batchId) {
+      settledBatchIdRef.current = next.batchId;
+      settledCountRef.current = 0;
+    }
+    if (next.done > settledCountRef.current) {
+      settledCountRef.current = next.done;
+      settledCallbackRef.current();
+    } else if (next.done < settledCountRef.current) {
+      settledCountRef.current = next.done;
+    }
 
-    const tick = async () => {
-      let keepGoing = false;
-      try {
-        keepGoing = await poll(controller.signal);
-      } catch {
-        // A failed poll is not worth surfacing; the banner keeps its last
-        // known counts and the chain simply ends.
-      }
-      if (controller.signal.aborted) {
-        runningRef.current = false;
-        return;
-      }
-      if (!keepGoing) {
-        runningRef.current = false;
-        return;
-      }
-      timerRef.current = setTimeout(tick, POLL_MS);
-    };
-    void tick();
-  }, [poll]);
+    if (next.active) {
+      setWatchedBatchIds((previous) =>
+        previous.has(summary.batch.id)
+          ? previous
+          : new Set(previous).add(summary.batch.id),
+      );
+    }
+    setState(next);
+    return next.active;
+  }, []);
+
+  const startPolling = useCallback(
+    (preferredBatchId?: string | null) => {
+      stopPolling();
+      const epoch = epochRef.current;
+      const controller = new AbortController();
+      controllerRef.current = controller;
+
+      const tick = async () => {
+        let batchId = preferredBatchId ?? batchIdRef.current;
+        try {
+          if (!batchId) {
+            const latest = (await fetchJson("/api/application-batches/latest", {
+              signal: controller.signal,
+            })) as LatestResponse | null;
+            if (controller.signal.aborted || epoch !== epochRef.current) return;
+            batchId = latest?.batchId ?? null;
+            if (!batchId) {
+              batchIdRef.current = null;
+              settledBatchIdRef.current = null;
+              settledCountRef.current = 0;
+              setState(EMPTY);
+              return;
+            }
+          }
+
+          const summary = (await fetchJson(
+            `/api/application-batches/${batchId}/summary`,
+            { signal: controller.signal },
+          )) as SummaryResponse | null;
+          if (controller.signal.aborted || epoch !== epochRef.current) return;
+          if (!summary) throw new Error("Missing Application Batch summary");
+
+          const active = applySummary(summary);
+          if (!active) return;
+        } catch {
+          if (controller.signal.aborted || epoch !== epochRef.current) return;
+          // A transient read failure says nothing about the durable batch.
+          // Preserve the last known state and retry rather than silently
+          // stopping the only progress feedback.
+          setState((previous) => ({ ...previous, pollUnavailable: true }));
+        }
+
+        if (controller.signal.aborted || epoch !== epochRef.current) return;
+        timerRef.current = setTimeout(tick, POLL_MS);
+      };
+
+      void tick();
+    },
+    [applySummary, stopPolling],
+  );
 
   useEffect(() => {
-    startPolling();
-    return () => {
-      controllerRef.current?.abort();
-      if (timerRef.current) clearTimeout(timerRef.current);
-      runningRef.current = false;
-    };
+    startPolling(null);
+    return stopPolling;
+  }, [startPolling, stopPolling]);
+
+  const watchBatch = useCallback(
+    (batch: BatchWatchSeed) => {
+      batchIdRef.current = batch.id;
+      settledBatchIdRef.current = batch.id;
+      settledCountRef.current = 0;
+      setDismissedBatchId(null);
+      setWatchedBatchIds((previous) =>
+        previous.has(batch.id) ? previous : new Set(previous).add(batch.id),
+      );
+      setState({
+        ...EMPTY,
+        batchId: batch.id,
+        status: batch.status,
+        pending: batch.status === "QUEUED" ? batch.totalCount : 0,
+        running: batch.status === "RUNNING" ? 1 : 0,
+        total: batch.totalCount,
+        active: !TERMINAL.has(batch.status),
+      });
+      startPolling(batch.id);
+    },
+    [startPolling],
+  );
+
+  const refresh = useCallback(() => {
+    startPolling(batchIdRef.current);
   }, [startPolling]);
 
-  /** Called right after queueing, to pick the new batch up immediately. */
-  const refresh = useCallback(() => {
-    startPolling();
-  }, [startPolling]);
+  const applyBatchAction = useCallback(
+    (result: { status: BatchStatus; progress: BatchActionProgress }) => {
+      setState((previous) => {
+        const skipped = result.progress.skipped ?? 0;
+        return {
+          ...previous,
+          status: result.status,
+          pending: result.progress.pending,
+          running: result.progress.running,
+          succeeded: result.progress.succeeded,
+          failed: result.progress.failed,
+          skipped,
+          done: result.progress.succeeded + result.progress.failed + skipped,
+          active: !TERMINAL.has(result.status),
+          pollUnavailable: false,
+        };
+      });
+      if (TERMINAL.has(result.status)) stopPolling();
+    },
+    [stopPolling],
+  );
 
   const dismiss = useCallback(() => {
     setDismissedBatchId(state.batchId);
@@ -184,12 +300,9 @@ export function useBatchProgress({
   return {
     state,
     refresh,
+    watchBatch,
+    applyBatchAction,
     dismiss,
-    /**
-     * Visible while a batch runs, and afterwards until acknowledged — but only
-     * for batches this session actually watched run. A finished batch from
-     * yesterday is not news to announce on page load.
-     */
     visible:
       state.batchId !== null &&
       state.total > 0 &&

@@ -70,7 +70,9 @@ describe("application batch runner", () => {
       id: BATCH_ID,
       status: "RUNNING",
     });
-    prismaStore.applicationBatchTask.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaStore.applicationBatchTask.updateMany.mockResolvedValueOnce({
+      count: 1,
+    });
     prismaStore.applicationBatchTask.findFirst.mockResolvedValueOnce({
       id: TASK_ID,
       jobId: JOB_ID,
@@ -125,6 +127,51 @@ describe("application batch runner", () => {
           completionAttemptId: null,
           attempt: { increment: 1 },
         }),
+      }),
+    );
+    expect(prismaStore.applicationBatchTask.updateMany).toHaveBeenCalledWith({
+      where: {
+        batchId: BATCH_ID,
+        userId: "user-1",
+        status: "PENDING",
+        OR: [
+          { job: { userId: { not: "user-1" } } },
+          { job: { market: { not: "AU" } } },
+          { job: { status: { not: "NEW" } } },
+          {
+            AND: [
+              { tailoringRun: null },
+              {
+                job: {
+                  applications: { some: { userId: "user-1" } },
+                },
+              },
+            ],
+          },
+        ],
+      },
+      data: {
+        status: "SKIPPED",
+        completedAt: expect.any(Date),
+        error: "Skipped because the Job is no longer safe for a fresh batch",
+      },
+    });
+    expect(prismaStore.applicationBatchTask.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          batchId: BATCH_ID,
+          userId: "user-1",
+          status: "PENDING",
+          job: { userId: "user-1", market: "AU", status: "NEW" },
+          OR: [
+            { tailoringRun: { isNot: null } },
+            {
+              job: {
+                applications: { none: { userId: "user-1" } },
+              },
+            },
+          ],
+        },
       }),
     );
     expect(prismaStore.applicationBatchTask.update).toHaveBeenCalledWith(
@@ -191,7 +238,9 @@ describe("application batch runner", () => {
       id: BATCH_ID,
       status: "RUNNING",
     });
-    prismaStore.applicationBatchTask.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaStore.applicationBatchTask.updateMany.mockResolvedValueOnce({
+      count: 1,
+    });
     prismaStore.applicationBatchTask.findFirst.mockResolvedValueOnce({
       id: TASK_ID,
       jobId: JOB_ID,
@@ -237,7 +286,8 @@ describe("application batch runner", () => {
         },
       })
       .mockImplementationOnce(async () => {
-        const claimWrite = prismaStore.applicationBatchTask.update.mock.calls[0]?.[0];
+        const claimWrite =
+          prismaStore.applicationBatchTask.update.mock.calls[0]?.[0];
         return {
           id: TASK_ID,
           status: "RUNNING",
@@ -351,9 +401,9 @@ describe("application batch runner", () => {
         }),
       }),
     );
-    expect(
-      prismaStore.$executeRaw.mock.calls.map((call) => call[1]),
-    ).toEqual([0x41424154, 0x544c524e]);
+    expect(prismaStore.$executeRaw.mock.calls.map((call) => call[1])).toEqual([
+      0x41424154, 0x544c524e,
+    ]);
   });
 
   it("rejects independent success completion even for the current attempt", async () => {
@@ -385,7 +435,9 @@ describe("application batch runner", () => {
       status: "RUNNING",
     });
     prismaStore.applicationBatch.update.mockResolvedValueOnce({});
-    prismaStore.applicationBatchTask.updateMany.mockResolvedValueOnce({ count: 2 });
+    prismaStore.applicationBatchTask.updateMany.mockResolvedValueOnce({
+      count: 2,
+    });
     prismaStore.tailoringRun.findMany.mockResolvedValueOnce([
       { id: "990e8400-e29b-41d4-a716-446655440000" },
       { id: "880e8400-e29b-41d4-a716-446655440000" },
@@ -425,8 +477,8 @@ describe("application batch runner", () => {
         completionAttemptId: null,
       }),
     });
-    expect(
-      prismaStore.$executeRaw.mock.calls.map((call) => call[1]),
-    ).toEqual([0x41424154, 0x544c524e, 0x544c524e]);
+    expect(prismaStore.$executeRaw.mock.calls.map((call) => call[1])).toEqual([
+      0x41424154, 0x544c524e, 0x544c524e,
+    ]);
   });
 });

@@ -43,11 +43,7 @@ function validRecord(overrides: Record<string, unknown> = {}) {
     name: "Runner",
     audience: AGENT_CREDENTIAL_AUDIENCE,
     version: AGENT_CREDENTIAL_VERSION,
-    capabilities: [
-      "fit:drain",
-      "tailoring:execute",
-      "tailoring:control",
-    ],
+    capabilities: ["fit:drain", "tailoring:execute", "tailoring:control"],
     lastUsedAt: null,
     expiresAt: new Date("2026-08-31T00:00:00.000Z"),
     revokedAt: null,
@@ -71,16 +67,15 @@ describe("requireAgentCredential", () => {
   it("authenticates a v1 Joblit Agent credential with the required capability", async () => {
     prisma.findUnique.mockResolvedValue(validRecord());
 
-    const context = await requireAgentCredential(request(RAW_TOKEN), "fit:drain");
+    const context = await requireAgentCredential(
+      request(RAW_TOKEN),
+      "fit:drain",
+    );
 
     expect(context).toEqual({
       userId: "user-1",
       credentialId: "credential-1",
-      capabilities: [
-        "fit:drain",
-        "tailoring:execute",
-        "tailoring:control",
-      ],
+      capabilities: ["fit:drain", "tailoring:execute", "tailoring:control"],
       requestId: expect.any(String),
     });
     expect(prisma.findUnique).toHaveBeenCalledWith({
@@ -124,7 +119,7 @@ describe("requireAgentCredential", () => {
     expect(prisma.findUnique).not.toHaveBeenCalled();
   });
 
-  it("throttles last-used writes with a conditional five-minute update", async () => {
+  it("refreshes last-seen often enough for a low-latency Runner status", async () => {
     prisma.findUnique.mockResolvedValue(validRecord());
 
     await requireAgentCredential(request(RAW_TOKEN), "fit:drain");
@@ -134,7 +129,7 @@ describe("requireAgentCredential", () => {
         id: "credential-1",
         OR: [
           { lastUsedAt: null },
-          { lastUsedAt: { lte: new Date("2026-07-31T11:55:00.000Z") } },
+          { lastUsedAt: { lte: new Date("2026-07-31T11:59:45.000Z") } },
         ],
       },
       data: { lastUsedAt: NOW },

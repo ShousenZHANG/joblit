@@ -9,6 +9,12 @@ const applicationStore = vi.hoisted(() => ({
   upsert: vi.fn(),
 }));
 
+const tailoringRunStore = vi.hoisted(() => ({
+  findMany: vi.fn(),
+  findFirst: vi.fn(),
+  updateMany: vi.fn(),
+}));
+
 const evidenceStore = vi.hoisted(() => ({
   evidenceCreateMany: vi.fn(),
   claimCreateMany: vi.fn(),
@@ -64,9 +70,7 @@ const applicationPrompt = vi.hoisted(() => ({
 
 const tailoringAcceptance = vi.hoisted(() => ({
   hashManualTailoringAcceptance: vi.fn(() => "request-hash"),
-  probeTailoringRunAcceptanceReplay: vi.fn(
-    async (): Promise<unknown> => null,
-  ),
+  probeTailoringRunAcceptanceReplay: vi.fn(async (): Promise<unknown> => null),
   prepareTailoringRunAcceptance: vi.fn(async (_tx, input) => ({
     userId: input.userId,
     pending: input.requests,
@@ -83,6 +87,7 @@ vi.mock("@/lib/server/prisma", () => ({
   prisma: {
     job: jobStore,
     application: applicationStore,
+    tailoringRun: tailoringRunStore,
     $transaction: transactionStore.run,
   },
 }));
@@ -143,7 +148,10 @@ vi.mock("@/lib/server/applications/applicationPrompt", () => ({
     applicationPrompt.buildApplicationPromptForUser,
 }));
 
-vi.mock("@/lib/server/tailoringRuns/tailoringRunAcceptance", () => tailoringAcceptance);
+vi.mock(
+  "@/lib/server/tailoringRuns/tailoringRunAcceptance",
+  () => tailoringAcceptance,
+);
 
 vi.mock("@/lib/server/latex/mapResumeProfile", () => ({
   mapResumeProfile: vi.fn(() => ({
@@ -254,21 +262,23 @@ describe("applications manual generate api", () => {
   beforeEach(() => {
     vi.unstubAllEnvs();
     vi.stubEnv("NODE_ENV", "test");
-    applicationPrompt.buildApplicationPromptForUser.mockReset().mockResolvedValue({
-      promptMeta: {
-        ruleSetId: "rules-1",
-        resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
-        promptTemplateVersion: "2026.07.v2",
-        schemaVersion: "2026-07-24",
-        skillPackVersion: "b".repeat(64),
-        promptHash: "c".repeat(64),
-      },
-      snapshotBinding: {
-        resumeProfileId: "660e8400-e29b-41d4-a716-446655440000",
-        resumeSnapshotHash: "d".repeat(64),
-        jobSnapshotHash: "e".repeat(64),
-      },
-    });
+    applicationPrompt.buildApplicationPromptForUser
+      .mockReset()
+      .mockResolvedValue({
+        promptMeta: {
+          ruleSetId: "rules-1",
+          resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+          promptTemplateVersion: "2026.07.v2",
+          schemaVersion: "2026-07-24",
+          skillPackVersion: "b".repeat(64),
+          promptHash: "c".repeat(64),
+        },
+        snapshotBinding: {
+          resumeProfileId: "660e8400-e29b-41d4-a716-446655440000",
+          resumeSnapshotHash: "d".repeat(64),
+          jobSnapshotHash: "e".repeat(64),
+        },
+      });
     tailoringAcceptance.hashManualTailoringAcceptance.mockClear();
     tailoringAcceptance.probeTailoringRunAcceptanceReplay
       .mockReset()
@@ -305,10 +315,12 @@ describe("applications manual generate api", () => {
       projects: [],
       education: [],
     });
-    (renderResumeTex as unknown as ReturnType<typeof vi.fn>).mockReturnValue("\\documentclass{article}");
-    (renderCoverLetterTex as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+    (renderResumeTex as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
       "\\documentclass{article}",
     );
+    (
+      renderCoverLetterTex as unknown as ReturnType<typeof vi.fn>
+    ).mockReturnValue("\\documentclass{article}");
     jobStore.findFirst.mockReset();
     // Each test seeds the route's own lookup with mockResolvedValueOnce; this
     // default answers the ownership re-check commitApplicationArtifact makes
@@ -316,6 +328,9 @@ describe("applications manual generate api", () => {
     jobStore.findFirst.mockResolvedValue({ id: VALID_JOB_ID });
     applicationStore.findUnique.mockReset();
     applicationStore.upsert.mockReset();
+    tailoringRunStore.findMany.mockReset().mockResolvedValue([]);
+    tailoringRunStore.findFirst.mockReset().mockResolvedValue(null);
+    tailoringRunStore.updateMany.mockReset().mockResolvedValue({ count: 0 });
     blobStore.put.mockReset();
     blobStore.del.mockReset();
     blobStore.del.mockResolvedValue(undefined);
@@ -387,7 +402,10 @@ describe("applications manual generate api", () => {
         callback: (tx: {
           job: typeof jobStore;
           application: typeof applicationStore;
-          evidenceSnapshot: { createMany: typeof evidenceStore.evidenceCreateMany };
+          tailoringRun: typeof tailoringRunStore;
+          evidenceSnapshot: {
+            createMany: typeof evidenceStore.evidenceCreateMany;
+          };
           claimEvidence: { createMany: typeof evidenceStore.claimCreateMany };
           $executeRaw: typeof transactionStore.executeRaw;
           $queryRaw: typeof transactionStore.queryRaw;
@@ -399,6 +417,7 @@ describe("applications manual generate api", () => {
           // a foreign-key violation.
           job: jobStore,
           application: applicationStore,
+          tailoringRun: tailoringRunStore,
           evidenceSnapshot: { createMany: evidenceStore.evidenceCreateMany },
           claimEvidence: { createMany: evidenceStore.claimCreateMany },
           $executeRaw: transactionStore.executeRaw,
@@ -407,7 +426,9 @@ describe("applications manual generate api", () => {
     );
     delete process.env.BLOB_READ_WRITE_TOKEN;
     applicationStore.findUnique.mockResolvedValue(null);
-    evidenceStore.evidenceCreateMany.mockReset().mockResolvedValue({ count: 1 });
+    evidenceStore.evidenceCreateMany
+      .mockReset()
+      .mockResolvedValue({ count: 1 });
     evidenceStore.claimCreateMany.mockReset().mockResolvedValue({ count: 1 });
     atsStore.assertAtsPdf.mockReset().mockResolvedValue({
       passed: true,
@@ -447,16 +468,20 @@ describe("applications manual generate api", () => {
   });
 
   it("returns parse error for invalid model output", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
       company: "Example Co",
       description: "Build product features",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
@@ -486,9 +511,11 @@ describe("applications manual generate api", () => {
   });
 
   it("keeps legacy manual imports compatible when promptMeta is omitted", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
@@ -497,21 +524,26 @@ describe("applications manual generate api", () => {
       description: "Build product features",
       market: "AU",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 
     const res = await POST(
-      new Request("http://localhost/api/applications/manual-generate?finalize=false", {
-        method: "POST",
-        body: JSON.stringify({
-          jobId: VALID_JOB_ID,
-          target: "resume",
-          modelOutput: VALID_OUTPUT,
-        }),
-      }),
+      new Request(
+        "http://localhost/api/applications/manual-generate?finalize=false",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            jobId: VALID_JOB_ID,
+            target: "resume",
+            modelOutput: VALID_OUTPUT,
+          }),
+        },
+      ),
     );
     const json = await res.json();
 
@@ -521,10 +553,12 @@ describe("applications manual generate api", () => {
     expect(json.aiContent.provenance).toBeUndefined();
   });
 
-  it("does not attribute a partial legacy receipt to the current exact prompt", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+  it("rejects a legacy manual import while a batch run owns the Job", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
@@ -533,25 +567,75 @@ describe("applications manual generate api", () => {
       description: "Build product features",
       market: "AU",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
+      id: "rp-1",
+      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
+    });
+    tailoringRunStore.findFirst.mockResolvedValueOnce({
+      id: "active-batch-run",
+    });
+
+    const res = await POST(
+      new Request(
+        "http://localhost/api/applications/manual-generate?finalize=false",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            jobId: VALID_JOB_ID,
+            target: "resume",
+            modelOutput: VALID_OUTPUT,
+          }),
+        },
+      ),
+    );
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({
+      error: { code: "ATTEMPT_ACTIVE" },
+    });
+    expect(applicationStore.upsert).not.toHaveBeenCalled();
+  });
+
+  it("does not attribute a partial legacy receipt to the current exact prompt", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
+    jobStore.findFirst.mockResolvedValueOnce({
+      id: VALID_JOB_ID,
+      title: "Software Engineer",
+      company: "Example Co",
+      location: "Sydney",
+      description: "Build product features",
+      market: "AU",
+    });
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 
     const res = await POST(
-      new Request("http://localhost/api/applications/manual-generate?finalize=false", {
-        method: "POST",
-        body: JSON.stringify({
-          jobId: VALID_JOB_ID,
-          target: "resume",
-          modelOutput: VALID_OUTPUT,
-          promptMeta: {
-            ruleSetId: "rules-1",
-            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
-          },
-        }),
-      }),
+      new Request(
+        "http://localhost/api/applications/manual-generate?finalize=false",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            jobId: VALID_JOB_ID,
+            target: "resume",
+            modelOutput: VALID_OUTPUT,
+            promptMeta: {
+              ruleSetId: "rules-1",
+              resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+            },
+          }),
+        },
+      ),
     );
     const json = await res.json();
 
@@ -561,16 +645,20 @@ describe("applications manual generate api", () => {
   });
 
   it("generates resume pdf from imported JSON", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
       company: "Example Co",
       description: "Build product features",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
@@ -606,16 +694,20 @@ describe("applications manual generate api", () => {
   // one is gone, and it turned out to have had no test at all — so this covers
   // the gate that remains.
   it("blocks a finalize whose claims are not grounded in the master resume", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
       company: "Example Co",
       description: "Build product features",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
@@ -651,16 +743,20 @@ describe("applications manual generate api", () => {
   });
 
   it("accepts resume JSON when model output includes commentary and trailing brace text", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
       company: "Example Co",
       description: "Build product features",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
@@ -697,16 +793,20 @@ describe("applications manual generate api", () => {
   });
 
   it("preserves Master Profile bullets and skills for the resume target", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
       company: "Example Co",
       description: "Build product features",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
       skills: [
@@ -716,7 +816,9 @@ describe("applications manual generate api", () => {
     });
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 
-    (mapResumeProfile as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+    (
+      mapResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockReturnValueOnce({
       candidate: {
         name: "Jane Doe",
         title: "Software Engineer",
@@ -731,7 +833,10 @@ describe("applications manual generate api", () => {
           dates: "2022-2023",
           title: "Engineer",
           company: "Example",
-          bullets: ["Built Java services for internal APIs.", "Maintained CI/CD pipelines on Linux."],
+          bullets: [
+            "Built Java services for internal APIs.",
+            "Maintained CI/CD pipelines on Linux.",
+          ],
         },
       ],
       projects: [],
@@ -769,7 +874,9 @@ describe("applications manual generate api", () => {
     );
 
     expect(res.status).toBe(200);
-    const renderCallArg = (renderResumeTex as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const renderCallArg = (
+      renderResumeTex as unknown as ReturnType<typeof vi.fn>
+    ).mock.calls[0][0];
     expect(renderCallArg.summary).toBe("Tailored summary");
     expect(renderCallArg.experiences[0].bullets).toEqual([
       "Built Java services for internal APIs.",
@@ -781,22 +888,29 @@ describe("applications manual generate api", () => {
   });
 
   it("allows resume import even when top responsibilities are not fully covered", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
       company: "Example Co",
-      description: "Design and build scalable backend services and CI/CD pipelines for cloud platform delivery.",
+      description:
+        "Design and build scalable backend services and CI/CD pipelines for cloud platform delivery.",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 
-    (mapResumeProfile as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+    (
+      mapResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockReturnValueOnce({
       candidate: {
         name: "Jane Doe",
         title: "Software Engineer",
@@ -845,22 +959,28 @@ describe("applications manual generate api", () => {
   });
 
   it("accepts markdown-only formatting differences in existing bullets", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
       company: "Example Co",
       description: "Build product features",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 
-    (mapResumeProfile as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+    (
+      mapResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockReturnValueOnce({
       candidate: {
         name: "Jane Doe",
         title: "Software Engineer",
@@ -875,7 +995,9 @@ describe("applications manual generate api", () => {
           dates: "2022-2023",
           title: "Engineer",
           company: "Example",
-          bullets: ["Delivered repeatable releases with Docker and Linux CI/CD pipelines."],
+          bullets: [
+            "Delivered repeatable releases with Docker and Linux CI/CD pipelines.",
+          ],
         },
       ],
       projects: [],
@@ -885,7 +1007,9 @@ describe("applications manual generate api", () => {
     const formattingOnlyPatch = JSON.stringify({
       cvSummary: "Tailored summary",
       latestExperience: {
-        bullets: ["Delivered repeatable releases with **Docker **and **Linux** CI/CD pipelines."],
+        bullets: [
+          "Delivered repeatable releases with **Docker **and **Linux** CI/CD pipelines.",
+        ],
       },
     });
 
@@ -909,22 +1033,28 @@ describe("applications manual generate api", () => {
   });
 
   it("uses AI-provided markdown bold in summary and new bullets for latex rendering", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
       company: "Example Co",
       description: "Build Java services with CI/CD and Docker",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 
-    (mapResumeProfile as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+    (
+      mapResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockReturnValueOnce({
       candidate: {
         name: "Jane Doe",
         title: "Software Engineer",
@@ -972,22 +1102,30 @@ describe("applications manual generate api", () => {
     );
 
     expect(res.status).toBe(200);
-    const renderCallArg = (renderResumeTex as unknown as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0];
+    const renderCallArg = (
+      renderResumeTex as unknown as ReturnType<typeof vi.fn>
+    ).mock.calls.at(-1)?.[0];
     expect(renderCallArg.summary).toContain("\\textbf{Java}");
-    expect(renderCallArg.experiences[0].bullets[1]).toContain("\\textbf{Docker}");
+    expect(renderCallArg.experiences[0].bullets[1]).toContain(
+      "\\textbf{Docker}",
+    );
   });
 
   it("drops ungrounded added latest-experience bullets that do not match base evidence", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
       company: "Example Co",
       description: "Build product features",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
       experiences: [
@@ -1000,7 +1138,9 @@ describe("applications manual generate api", () => {
     });
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 
-    (mapResumeProfile as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+    (
+      mapResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockReturnValueOnce({
       candidate: {
         name: "Jane Doe",
         title: "Software Engineer",
@@ -1049,7 +1189,9 @@ describe("applications manual generate api", () => {
     );
 
     expect(res.status).toBe(200);
-    const renderCallArg = (renderResumeTex as unknown as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0];
+    const renderCallArg = (
+      renderResumeTex as unknown as ReturnType<typeof vi.fn>
+    ).mock.calls.at(-1)?.[0];
     expect(renderCallArg.experiences[0].bullets).toEqual([
       "Built Java APIs.",
       "Maintained CI/CD pipelines.",
@@ -1057,16 +1199,20 @@ describe("applications manual generate api", () => {
   });
 
   it("drops redundant added latest-experience bullets that only repeat existing keywords", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
       company: "Example Co",
       description: "Build product features",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
       experiences: [
@@ -1079,7 +1225,9 @@ describe("applications manual generate api", () => {
     });
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 
-    (mapResumeProfile as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+    (
+      mapResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockReturnValueOnce({
       candidate: {
         name: "Jane Doe",
         title: "Software Engineer",
@@ -1128,7 +1276,9 @@ describe("applications manual generate api", () => {
     );
 
     expect(res.status).toBe(200);
-    const renderCallArg = (renderResumeTex as unknown as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0];
+    const renderCallArg = (
+      renderResumeTex as unknown as ReturnType<typeof vi.fn>
+    ).mock.calls.at(-1)?.[0];
     expect(renderCallArg.experiences[0].bullets).toEqual([
       "Built Java APIs.",
       "Maintained CI/CD pipelines on Linux.",
@@ -1136,16 +1286,20 @@ describe("applications manual generate api", () => {
   });
 
   it("returns 409 when prompt meta is stale", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
       company: "Example Co",
       description: "Build product features",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-07T00:00:00.000Z"),
     });
@@ -1185,16 +1339,20 @@ describe("applications manual generate api", () => {
   });
 
   it("returns 409 when prompt meta hash does not match current contract", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
       company: "Example Co",
       description: "Build product features",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
@@ -1222,16 +1380,20 @@ describe("applications manual generate api", () => {
   });
 
   it("returns 409 when prompt meta skill pack version does not match current contract", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
       company: "Example Co",
       description: "Build product features",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
@@ -1255,21 +1417,28 @@ describe("applications manual generate api", () => {
     expect(res.status).toBe(409);
     expect(json.error.code).toBe("PROMPT_META_MISMATCH");
     expect(json.error.details.mismatches).toEqual([
-      expect.objectContaining({ field: "skillPackVersion", received: "stale-pack" }),
+      expect.objectContaining({
+        field: "skillPackVersion",
+        received: "stale-pack",
+      }),
     ]);
   });
 
   it("soft-fails quality gate but still generates manual cover pdf", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
       company: "Example Co",
       description: "Build product features",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
@@ -1305,16 +1474,20 @@ describe("applications manual generate api", () => {
   });
 
   it("generates cover pdf with cover letter suffix for high-quality cover target", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
       company: "Example Co",
       description: "Build product features",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
       summary:
@@ -1366,16 +1539,20 @@ describe("applications manual generate api", () => {
   it("returns 503 before staging a production FINAL when Blob is not configured", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("BLOB_READ_WRITE_TOKEN", "");
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
       company: "Example Co",
       description: "Build product features",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
@@ -1412,16 +1589,20 @@ describe("applications manual generate api", () => {
 
   it("persists cover pdf url when blob token is configured", async () => {
     process.env.BLOB_READ_WRITE_TOKEN = "blob-token";
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
       company: "Example Co",
       description: "Build product features",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
@@ -1504,9 +1685,11 @@ describe("applications manual generate api", () => {
   it("?finalize=false skips PDF render and returns aiContent JSON for the editor", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("BLOB_READ_WRITE_TOKEN", "");
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
@@ -1514,25 +1697,30 @@ describe("applications manual generate api", () => {
       description: "Build product features",
       market: "AU",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 
     const res = await POST(
-      new Request("http://localhost/api/applications/manual-generate?finalize=false", {
-        method: "POST",
-        body: JSON.stringify({
-          jobId: VALID_JOB_ID,
-          target: "resume",
-          modelOutput: VALID_OUTPUT,
-          promptMeta: {
-            ruleSetId: "rules-1",
-            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
-          },
-        }),
-      }),
+      new Request(
+        "http://localhost/api/applications/manual-generate?finalize=false",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            jobId: VALID_JOB_ID,
+            target: "resume",
+            modelOutput: VALID_OUTPUT,
+            promptMeta: {
+              ruleSetId: "rules-1",
+              resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+            },
+          }),
+        },
+      ),
     );
 
     expect(res.status).toBe(200);
@@ -1565,9 +1753,11 @@ describe("applications manual generate api", () => {
   });
 
   it("preserves an existing cover letter when importing a resume draft", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
@@ -1576,7 +1766,9 @@ describe("applications manual generate api", () => {
       description: "Build product features",
       market: "AU",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
@@ -1589,18 +1781,21 @@ describe("applications manual generate api", () => {
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 
     const res = await POST(
-      new Request("http://localhost/api/applications/manual-generate?finalize=false", {
-        method: "POST",
-        body: JSON.stringify({
-          jobId: VALID_JOB_ID,
-          target: "resume",
-          modelOutput: VALID_OUTPUT,
-          promptMeta: {
-            ruleSetId: "rules-1",
-            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
-          },
-        }),
-      }),
+      new Request(
+        "http://localhost/api/applications/manual-generate?finalize=false",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            jobId: VALID_JOB_ID,
+            target: "resume",
+            modelOutput: VALID_OUTPUT,
+            promptMeta: {
+              ruleSetId: "rules-1",
+              resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+            },
+          }),
+        },
+      ),
     );
     const json = await res.json();
 
@@ -1624,9 +1819,11 @@ describe("applications manual generate api", () => {
   });
 
   it("preserves an existing CV when importing a cover-letter draft", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
@@ -1635,7 +1832,9 @@ describe("applications manual generate api", () => {
       description: "Build product features",
       market: "AU",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
@@ -1648,24 +1847,27 @@ describe("applications manual generate api", () => {
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 
     const res = await POST(
-      new Request("http://localhost/api/applications/manual-generate?finalize=false", {
-        method: "POST",
-        body: JSON.stringify({
-          jobId: VALID_JOB_ID,
-          target: "cover",
-          modelOutput: JSON.stringify({
-            cover: {
-              paragraphOne: "New cover one",
-              paragraphTwo: "New cover two",
-              paragraphThree: "New cover three",
+      new Request(
+        "http://localhost/api/applications/manual-generate?finalize=false",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            jobId: VALID_JOB_ID,
+            target: "cover",
+            modelOutput: JSON.stringify({
+              cover: {
+                paragraphOne: "New cover one",
+                paragraphTwo: "New cover two",
+                paragraphThree: "New cover three",
+              },
+            }),
+            promptMeta: {
+              ruleSetId: "rules-1",
+              resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
             },
           }),
-          promptMeta: {
-            ruleSetId: "rules-1",
-            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
-          },
-        }),
-      }),
+        },
+      ),
     );
     const json = await res.json();
 
@@ -1689,9 +1891,11 @@ describe("applications manual generate api", () => {
   });
 
   it("fails closed when a single-target import encounters an unknown stored schema", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
@@ -1700,7 +1904,9 @@ describe("applications manual generate api", () => {
       description: "Build product features",
       market: "AU",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
@@ -1716,18 +1922,21 @@ describe("applications manual generate api", () => {
     });
 
     const response = await POST(
-      new Request("http://localhost/api/applications/manual-generate?finalize=false", {
-        method: "POST",
-        body: JSON.stringify({
-          jobId: VALID_JOB_ID,
-          target: "resume",
-          modelOutput: VALID_OUTPUT,
-          promptMeta: {
-            ruleSetId: "rules-1",
-            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
-          },
-        }),
-      }),
+      new Request(
+        "http://localhost/api/applications/manual-generate?finalize=false",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            jobId: VALID_JOB_ID,
+            target: "resume",
+            modelOutput: VALID_OUTPUT,
+            promptMeta: {
+              ruleSetId: "rules-1",
+              resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+            },
+          }),
+        },
+      ),
     );
     const json = await response.json();
 
@@ -1737,9 +1946,11 @@ describe("applications manual generate api", () => {
   });
 
   it("requires a current prompt receipt for Codex Batch output", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
@@ -1748,7 +1959,9 @@ describe("applications manual generate api", () => {
       description: "Build product features",
       market: "AU",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
@@ -1773,13 +1986,17 @@ describe("applications manual generate api", () => {
 
     expect(res.status).toBe(400);
     expect((await res.json()).error.code).toBe("PROMPT_META_REQUIRED");
-    expect(applicationPrompt.buildApplicationPromptForUser).not.toHaveBeenCalled();
+    expect(
+      applicationPrompt.buildApplicationPromptForUser,
+    ).not.toHaveBeenCalled();
   });
 
   it("rejects legacy Resume JSON from Codex Batch even with a complete receipt", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
@@ -1788,7 +2005,9 @@ describe("applications manual generate api", () => {
       description: "Build product features",
       market: "AU",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
@@ -1821,16 +2040,20 @@ describe("applications manual generate api", () => {
 
     expect(res.status).toBe(400);
     expect((await res.json()).error.code).toBe("INVALID_AI_RESULT");
-    expect(applicationPrompt.buildApplicationPromptForUser).toHaveBeenCalledWith(
+    expect(
+      applicationPrompt.buildApplicationPromptForUser,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({ target: "resume", variant: "full" }),
     );
     expect(applicationStore.upsert).not.toHaveBeenCalled();
   });
 
   it("rejects a partial legacy receipt from Codex Batch", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
@@ -1839,7 +2062,9 @@ describe("applications manual generate api", () => {
       description: "Build product features",
       market: "AU",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
@@ -1872,16 +2097,20 @@ describe("applications manual generate api", () => {
   });
 
   it("rejects oversized Codex Batch output before persistence", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: "user-1" } });
-    const res = await POST(new Request("http://localhost/api/applications/manual-generate", {
-      method: "POST",
-      body: JSON.stringify({
-        jobId: VALID_JOB_ID,
-        target: "resume",
-        modelOutput: "x".repeat(80_001),
-        source: "codex_batch",
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      { user: { id: "user-1" } },
+    );
+    const res = await POST(
+      new Request("http://localhost/api/applications/manual-generate", {
+        method: "POST",
+        body: JSON.stringify({
+          jobId: VALID_JOB_ID,
+          target: "resume",
+          modelOutput: "x".repeat(80_001),
+          source: "codex_batch",
+        }),
       }),
-    }));
+    );
     expect(res.status).toBe(400);
     expect((await res.json()).error.code).toBe("INVALID_AI_RESULT");
     expect(jobStore.findFirst).not.toHaveBeenCalled();
@@ -1901,92 +2130,104 @@ describe("applications manual generate api", () => {
   ])(
     "persists canonical $source provenance and authoritative DRAFT job metadata",
     async ({ source, variant, protocolSource }) => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: "user-1" } });
-    jobStore.findFirst.mockResolvedValueOnce({
-      id: VALID_JOB_ID,
-      title: "Authoritative Role",
-      company: "Authoritative Co",
-      location: "Melbourne",
-      description: "Build TypeScript APIs",
-      market: "AU",
-    });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
-    applicationStore.upsert.mockResolvedValueOnce({ id: "app-local" });
-    const modelOutput = JSON.stringify({
-      cvSummary: "Strict local summary",
-      latestExperience: {
-        addedBullets: ["Automated TypeScript APIs delivery."],
-      },
-    });
+      (
+        getServerSession as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValue({ user: { id: "user-1" } });
+      jobStore.findFirst.mockResolvedValueOnce({
+        id: VALID_JOB_ID,
+        title: "Authoritative Role",
+        company: "Authoritative Co",
+        location: "Melbourne",
+        description: "Build TypeScript APIs",
+        market: "AU",
+      });
+      (
+        getResumeProfile as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce({
+        id: "rp-1",
+        updatedAt: new Date("2026-02-06T00:00:00.000Z"),
+      });
+      applicationStore.upsert.mockResolvedValueOnce({ id: "app-local" });
+      const modelOutput = JSON.stringify({
+        cvSummary: "Strict local summary",
+        latestExperience: {
+          addedBullets: ["Automated TypeScript APIs delivery."],
+        },
+      });
 
-    const res = await POST(new Request(
-      "http://localhost/api/applications/manual-generate?finalize=false",
-      {
-        method: "POST",
-        body: JSON.stringify({
+      const res = await POST(
+        new Request(
+          "http://localhost/api/applications/manual-generate?finalize=false",
+          {
+            method: "POST",
+            body: JSON.stringify({
+              jobId: VALID_JOB_ID,
+              target: "resume",
+              modelOutput,
+              source,
+              promptMeta: {
+                ruleSetId: "rules-1",
+                resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+                promptTemplateVersion: "2026.07.v2",
+                schemaVersion: "2026-07-24",
+                skillPackVersion: "b".repeat(64),
+                promptHash: "c".repeat(64),
+              },
+              tailoringRun: {
+                id: TAILORING_RUN_ID,
+                attemptId: TAILORING_ATTEMPT_ID,
+              },
+            }),
+          },
+        ),
+      );
+      const json = await res.json();
+      expect(res.status).toBe(200);
+      expect(json.job).toEqual({
+        id: VALID_JOB_ID,
+        title: "Authoritative Role",
+        company: "Authoritative Co",
+        location: "Melbourne",
+      });
+      expect(json.aiContent.source).toBe(source);
+      expect(json.aiContent.promptMetaHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(
+        applicationPrompt.buildApplicationPromptForUser,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({ target: "resume", variant }),
+      );
+      expect(
+        tailoringAcceptance.prepareTailoringRunAcceptance,
+      ).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          userId: "user-1",
           jobId: VALID_JOB_ID,
-          target: "resume",
-          modelOutput,
-          source,
-          promptMeta: {
-            ruleSetId: "rules-1",
-            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
-            promptTemplateVersion: "2026.07.v2",
-            schemaVersion: "2026-07-24",
-            skillPackVersion: "b".repeat(64),
-            promptHash: "c".repeat(64),
-          },
-          tailoringRun: {
-            id: TAILORING_RUN_ID,
-            attemptId: TAILORING_ATTEMPT_ID,
-          },
+          resumeProfileId: "rp-1",
+          requests: [
+            expect.objectContaining({
+              handle: {
+                id: TAILORING_RUN_ID,
+                attemptId: TAILORING_ATTEMPT_ID,
+              },
+              source: protocolSource,
+              delivery: "DRAFT",
+              target: "RESUME",
+              promptHash: "c".repeat(64),
+            }),
+          ],
         }),
-      },
-    ));
-    const json = await res.json();
-    expect(res.status).toBe(200);
-    expect(json.job).toEqual({
-      id: VALID_JOB_ID,
-      title: "Authoritative Role",
-      company: "Authoritative Co",
-      location: "Melbourne",
-    });
-    expect(json.aiContent.source).toBe(source);
-    expect(json.aiContent.promptMetaHash).toMatch(/^[0-9a-f]{64}$/);
-    expect(applicationPrompt.buildApplicationPromptForUser).toHaveBeenCalledWith(
-      expect.objectContaining({ target: "resume", variant }),
-    );
-    expect(tailoringAcceptance.prepareTailoringRunAcceptance).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        userId: "user-1",
-        jobId: VALID_JOB_ID,
-        resumeProfileId: "rp-1",
-        requests: [
-          expect.objectContaining({
-            handle: {
-              id: TAILORING_RUN_ID,
-              attemptId: TAILORING_ATTEMPT_ID,
-            },
-            source: protocolSource,
-            delivery: "DRAFT",
-            target: "RESUME",
-            promptHash: "c".repeat(64),
-          }),
-        ],
-      }),
-    );
-    expect(blobStore.put).not.toHaveBeenCalled();
+      );
+      expect(blobStore.put).not.toHaveBeenCalled();
     },
   );
 
   it("locks before re-reading and merging generated content", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
@@ -1995,7 +2236,9 @@ describe("applications manual generate api", () => {
       description: "Build product features",
       market: "AU",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
@@ -2044,9 +2287,11 @@ describe("applications manual generate api", () => {
 
   it("durably retires an uploaded unique artifact when the DB commit fails", async () => {
     process.env.BLOB_READ_WRITE_TOKEN = "blob-token";
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
@@ -2055,7 +2300,9 @@ describe("applications manual generate api", () => {
       description: "Build product features",
       market: "AU",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
@@ -2090,9 +2337,11 @@ describe("applications manual generate api", () => {
 
   it("keeps the previous PDF when the Blob upload fails", async () => {
     process.env.BLOB_READ_WRITE_TOKEN = "blob-token";
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
@@ -2101,7 +2350,9 @@ describe("applications manual generate api", () => {
       description: "Build product features",
       market: "AU",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
@@ -2149,9 +2400,11 @@ describe("applications manual generate api", () => {
 
   it("returns a retryable 409 and retires the upload when render inputs change before commit", async () => {
     process.env.BLOB_READ_WRITE_TOKEN = "blob-token";
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     jobStore.findFirst.mockResolvedValueOnce({
       id: VALID_JOB_ID,
       title: "Software Engineer",
@@ -2159,7 +2412,9 @@ describe("applications manual generate api", () => {
       description: "Build product features",
       market: "AU",
     });
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (
+      getResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
       id: "rp-1",
       updatedAt: new Date("2026-02-06T00:00:00.000Z"),
     });
@@ -2209,48 +2464,54 @@ describe("applications manual generate api", () => {
   });
 
   it("replays an exact DRAFT without a current Resume Profile or render adapters", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     rateLimitStore.enforce.mockImplementation(() => {
       throw new Error("rate limiter unavailable");
     });
-    jobStore.findFirst.mockRejectedValue(new Error("current Job loader unavailable"));
+    jobStore.findFirst.mockRejectedValue(
+      new Error("current Job loader unavailable"),
+    );
     (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error("current profile loader unavailable"),
     );
     applicationPrompt.buildApplicationPromptForUser.mockRejectedValue(
       new Error("the current rules are unavailable"),
     );
-    (compileLatexToPdf as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("renderer unavailable"),
-    );
-    tailoringAcceptance.probeTailoringRunAcceptanceReplay.mockResolvedValueOnce({
-      receipt: {
-        runId: TAILORING_RUN_ID,
-        target: "RESUME",
-        executionAttemptId: TAILORING_ATTEMPT_ID,
-        requestHash: "request-hash",
-        applicationId: "app-replayed",
-        aiContentHash: "receipt-content-hash",
-        delivery: "DRAFT",
-      },
-      application: {
-        id: "app-replayed",
-        status: "DRAFT",
-        aiContent: makeExistingAiContent(),
-        aiContentHash: "current-content-hash",
-        resumePdfName: "Jane Doe Software Engineer_CV.pdf",
-        job: {
-          id: VALID_JOB_ID,
-          title: "Software Engineer",
-          company: "Example Co",
-          location: "Sydney",
-          market: "AU",
+    (
+      compileLatexToPdf as unknown as ReturnType<typeof vi.fn>
+    ).mockRejectedValue(new Error("renderer unavailable"));
+    tailoringAcceptance.probeTailoringRunAcceptanceReplay.mockResolvedValueOnce(
+      {
+        receipt: {
+          runId: TAILORING_RUN_ID,
+          target: "RESUME",
+          executionAttemptId: TAILORING_ATTEMPT_ID,
+          requestHash: "request-hash",
+          applicationId: "app-replayed",
+          aiContentHash: "receipt-content-hash",
+          delivery: "DRAFT",
         },
-        resumeProfile: null,
+        application: {
+          id: "app-replayed",
+          status: "DRAFT",
+          aiContent: makeExistingAiContent(),
+          aiContentHash: "current-content-hash",
+          resumePdfName: "Jane Doe Software Engineer_CV.pdf",
+          job: {
+            id: VALID_JOB_ID,
+            title: "Software Engineer",
+            company: "Example Co",
+            location: "Sydney",
+            market: "AU",
+          },
+          resumeProfile: null,
+        },
       },
-    });
+    );
 
     const response = await POST(
       new Request(
@@ -2303,7 +2564,9 @@ describe("applications manual generate api", () => {
     expect(rateLimitStore.enforce).not.toHaveBeenCalled();
     expect(jobStore.findFirst).not.toHaveBeenCalled();
     expect(getResumeProfile).not.toHaveBeenCalled();
-    expect(applicationPrompt.buildApplicationPromptForUser).not.toHaveBeenCalled();
+    expect(
+      applicationPrompt.buildApplicationPromptForUser,
+    ).not.toHaveBeenCalled();
     expect(mapResumeProfile).not.toHaveBeenCalled();
     expect(renderResumeTex).not.toHaveBeenCalled();
     expect(compileLatexToPdf).not.toHaveBeenCalled();
@@ -2312,13 +2575,17 @@ describe("applications manual generate api", () => {
   });
 
   it("returns 409 when an accepted target is retried with different content", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     rateLimitStore.enforce.mockImplementation(() => {
       throw new Error("rate limiter unavailable");
     });
-    jobStore.findFirst.mockRejectedValue(new Error("current Job loader unavailable"));
+    jobStore.findFirst.mockRejectedValue(
+      new Error("current Job loader unavailable"),
+    );
     (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error("current profile loader unavailable"),
     );
@@ -2366,76 +2633,84 @@ describe("applications manual generate api", () => {
     expect(rateLimitStore.enforce).not.toHaveBeenCalled();
     expect(jobStore.findFirst).not.toHaveBeenCalled();
     expect(getResumeProfile).not.toHaveBeenCalled();
-    expect(applicationPrompt.buildApplicationPromptForUser).not.toHaveBeenCalled();
+    expect(
+      applicationPrompt.buildApplicationPromptForUser,
+    ).not.toHaveBeenCalled();
     expect(applicationStore.upsert).not.toHaveBeenCalled();
   });
 
   it("returns an exact FINAL acknowledgement without prompt, PDF, or Blob dependencies", async () => {
     process.env.BLOB_READ_WRITE_TOKEN = "blob-token";
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
     rateLimitStore.enforce.mockImplementation(() => {
       throw new Error("rate limiter unavailable");
     });
-    jobStore.findFirst.mockRejectedValue(new Error("current Job loader unavailable"));
+    jobStore.findFirst.mockRejectedValue(
+      new Error("current Job loader unavailable"),
+    );
     (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error("current profile loader unavailable"),
     );
     applicationPrompt.buildApplicationPromptForUser.mockRejectedValue(
       new Error("the current rules are unavailable"),
     );
-    (compileLatexToPdf as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("renderer unavailable"),
-    );
-    (mapResumeProfile as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      () => {
-        throw new Error("current Profile render adapter unavailable");
-      },
-    );
-    blobStore.put.mockRejectedValue(new Error("blob unavailable"));
-    tailoringAcceptance.probeTailoringRunAcceptanceReplay.mockResolvedValueOnce({
-      receipt: {
-        runId: TAILORING_RUN_ID,
-        target: "COVER",
-        executionAttemptId: TAILORING_ATTEMPT_ID,
-        requestHash: "request-hash",
-        applicationId: "app-final-replayed",
-        aiContentHash: "receipt-content-hash",
-        delivery: "FINAL",
-      },
-      application: {
-        id: "app-final-replayed",
-        status: "FINAL",
-        aiContent: makeExistingAiContent(),
-        aiContentHash: "current-final-hash",
-        resumePdfUrl:
-          "https://blob.example/applications/resume.current-final-hash.pdf",
-        resumePdfName: "Jane Doe Software Engineer_CV.pdf",
-        coverPdfUrl:
-          "https://blob.example/applications/cover.current-final-hash.pdf",
-        resumeContentHash: null,
-        coverContentHash: null,
-        resumePublishedHash: null,
-        coverPublishedHash: null,
-        job: {
-          id: VALID_JOB_ID,
-          title: "Software Engineer",
-          company: "Example Co",
-          location: "Sydney",
-          market: "AU",
-        },
-        resumeProfile: {
-          summary: "Base summary",
-          basics: null,
-          links: null,
-          skills: null,
-          experiences: null,
-          projects: null,
-          education: null,
-        },
-      },
+    (
+      compileLatexToPdf as unknown as ReturnType<typeof vi.fn>
+    ).mockRejectedValue(new Error("renderer unavailable"));
+    (
+      mapResumeProfile as unknown as ReturnType<typeof vi.fn>
+    ).mockImplementation(() => {
+      throw new Error("current Profile render adapter unavailable");
     });
+    blobStore.put.mockRejectedValue(new Error("blob unavailable"));
+    tailoringAcceptance.probeTailoringRunAcceptanceReplay.mockResolvedValueOnce(
+      {
+        receipt: {
+          runId: TAILORING_RUN_ID,
+          target: "COVER",
+          executionAttemptId: TAILORING_ATTEMPT_ID,
+          requestHash: "request-hash",
+          applicationId: "app-final-replayed",
+          aiContentHash: "receipt-content-hash",
+          delivery: "FINAL",
+        },
+        application: {
+          id: "app-final-replayed",
+          status: "FINAL",
+          aiContent: makeExistingAiContent(),
+          aiContentHash: "current-final-hash",
+          resumePdfUrl:
+            "https://blob.example/applications/resume.current-final-hash.pdf",
+          resumePdfName: "Jane Doe Software Engineer_CV.pdf",
+          coverPdfUrl:
+            "https://blob.example/applications/cover.current-final-hash.pdf",
+          resumeContentHash: null,
+          coverContentHash: null,
+          resumePublishedHash: null,
+          coverPublishedHash: null,
+          job: {
+            id: VALID_JOB_ID,
+            title: "Software Engineer",
+            company: "Example Co",
+            location: "Sydney",
+            market: "AU",
+          },
+          resumeProfile: {
+            summary: "Base summary",
+            basics: null,
+            links: null,
+            skills: null,
+            experiences: null,
+            projects: null,
+            education: null,
+          },
+        },
+      },
+    );
 
     const response = await POST(
       new Request("http://localhost/api/applications/manual-generate", {
@@ -2481,7 +2756,9 @@ describe("applications manual generate api", () => {
     expect(rateLimitStore.enforce).not.toHaveBeenCalled();
     expect(jobStore.findFirst).not.toHaveBeenCalled();
     expect(getResumeProfile).not.toHaveBeenCalled();
-    expect(applicationPrompt.buildApplicationPromptForUser).not.toHaveBeenCalled();
+    expect(
+      applicationPrompt.buildApplicationPromptForUser,
+    ).not.toHaveBeenCalled();
     expect(mapResumeProfile).not.toHaveBeenCalled();
     expect(renderCoverLetterTex).not.toHaveBeenCalled();
     expect(compileLatexToPdf).not.toHaveBeenCalled();

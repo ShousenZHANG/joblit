@@ -1,64 +1,59 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
-import { Check, Copy, Loader2, Plug, RefreshCw } from "lucide-react";
+import { Check, Copy, Loader2, Plug, RefreshCw, X } from "lucide-react";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent } from "@/components/ui/popover";
+import { COARSE_POINTER_TARGET } from "@/components/ui/touchTarget";
 import { useAgentTokens } from "@/hooks/useAgentTokens";
 import { useRunnerPresence } from "@/hooks/useRunnerPresence";
 import { cn } from "@/lib/utils";
-import { COARSE_POINTER_TARGET } from "@/components/ui/touchTarget";
 
-/**
- * Runner setup, condensed into the nav.
- *
- * This replaces a whole /agent workspace whose job was, in the end, to hand
- * over one credential and one command. A dedicated page for that made the
- * single most important setup step feel like a separate product — and it was
- * still possible to miss it entirely and click Generate into silence.
- *
- * Three states, in one panel:
- *  - connected: a green line and nothing to do
- *  - credential exists but nothing has called: the command to run
- *  - nothing yet: one button to mint the credential
- *
- * Credentials are single-model here: "Regenerate" revokes the old one and
- * issues a new one. The list-of-credentials UI went with the page; one person
- * running one Runner never needed it, and every extra live credential is
- * extra blast radius.
- */
+type Shell = "powershell" | "bash";
 
-/**
- * One line, not two. Splitting the environment from the command meant two
- * copies, two pastes and an ordering the user had to get right; inlining the
- * variables makes starting the Runner a single paste.
- */
-function startCommand(origin: string, token: string) {
-  return `JOBLIT_URL="${origin}" JOBLIT_TOKEN="${token}" node tools/runner/cli.mjs --watch`;
+function startCommand(origin: string, token: string, shell: Shell) {
+  if (shell === "powershell") {
+    return `$env:JOBLIT_URL='${origin}'; $env:JOBLIT_TOKEN='${token}'; node tools/runner/cli.mjs --watch`;
+  }
+  return `JOBLIT_URL='${origin}' JOBLIT_TOKEN='${token}' node tools/runner/cli.mjs --watch`;
 }
 
 function CopyRow({ label, value }: { label: string; value: string }) {
   const t = useTranslations("runnerSetup");
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
+    "idle",
+  );
 
   const copy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(value);
-      setCopied(true);
+      setCopyState("copied");
     } catch {
-      // Clipboard can be denied; the text stays selectable either way.
+      setCopyState("failed");
     }
   }, [value]);
 
   useEffect(() => {
-    if (!copied) return;
-    const timer = setTimeout(() => setCopied(false), 1600);
+    if (copyState === "idle") return;
+    const timer = setTimeout(() => setCopyState("idle"), 1800);
     return () => clearTimeout(timer);
-  }, [copied]);
+  }, [copyState]);
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
           {label}
@@ -66,24 +61,26 @@ function CopyRow({ label, value }: { label: string; value: string }) {
         <button
           type="button"
           onClick={copy}
-          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600"
+          className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600"
         >
-          {copied ? (
-            <>
-              <Check className="h-3 w-3 text-brand-emerald-600" aria-hidden />
-              {t("copied")}
-            </>
+          {copyState === "copied" ? (
+            <Check className="h-3.5 w-3.5 text-brand-emerald-600" aria-hidden />
           ) : (
-            <>
-              <Copy className="h-3 w-3" aria-hidden />
-              {t("copy")}
-            </>
+            <Copy className="h-3.5 w-3.5" aria-hidden />
           )}
+          {copyState === "copied" ? t("copied") : t("copy")}
         </button>
       </div>
-      <pre className="overflow-x-auto rounded-lg border border-border/60 bg-muted/50 px-2.5 py-2 font-mono text-[11px] leading-relaxed text-foreground/85">
+      <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-muted/50 px-3 py-2.5 font-mono text-[11px] leading-relaxed text-foreground/85">
         {value}
       </pre>
+      <span className="sr-only" aria-live="polite">
+        {copyState === "copied"
+          ? t("copied")
+          : copyState === "failed"
+            ? t("copyFailed")
+            : ""}
+      </span>
     </div>
   );
 }
@@ -91,155 +88,251 @@ function CopyRow({ label, value }: { label: string; value: string }) {
 export function RunnerSetupPopover({ className }: { className?: string }) {
   const t = useTranslations("runnerSetup");
   const [open, setOpen] = useState(false);
-  const { tokens, loading, newToken, creating, create, revoke } = useAgentTokens();
-  // Presence only matters while the panel is open — an idle workspace should
-  // not poll for a Runner nobody is looking at.
-  const presence = useRunnerPresence(open);
+  const [shell, setShell] = useState<Shell>("powershell");
+  const {
+    tokens,
+    loading,
+    loadError,
+    newToken,
+    creating,
+    refresh: refreshTokens,
+    create,
+    replace,
+  } = useAgentTokens();
+  // The trigger is a global status indicator, so it remains subscribed while
+  // the app shell is mounted. The shared presence store deduplicates this with
+  // Jobs and any open setup panel.
+  const presence = useRunnerPresence(true);
 
-  // The Jobs page opens this panel when a generation is blocked on setup.
-  // An event keeps that one-way call from prop-drilling through the app shell,
-  // matching how the command palette is already reached.
   useEffect(() => {
     const openPanel = () => setOpen(true);
     window.addEventListener("joblit:runner-setup", openPanel);
     return () => window.removeEventListener("joblit:runner-setup", openPanel);
   }, []);
 
+  const statusText = useMemo(() => {
+    if (presence.status === "unknown") return t("statusChecking");
+    if (presence.status === "unavailable") return t("statusUnavailable");
+    if (presence.status === "online") {
+      return t("statusOnlineRecent", { seconds: presence.secondsAgo });
+    }
+    if (!presence.lastUsedAt) return t("statusOfflineNever");
+    const minutes = Math.max(1, presence.minutesAgo ?? 0);
+    return t("statusOfflineLastSeen", { minutes });
+  }, [presence, t]);
+
   const hasCredential = tokens.length > 0;
   const online = presence.status === "online";
-
   const origin = typeof window === "undefined" ? "" : window.location.origin;
-  // The raw value exists exactly once, in memory, right after minting. A
-  // returning user sees the placeholder and regenerates if they lost it.
-  const tokenValue = newToken?.rawToken ?? "jfagent_v1_…";
-  const command = startCommand(origin, tokenValue);
-  // A connected Runner needs no instructions on screen. They stay one click
-  // away for the case where someone is setting up a second machine.
-  const [showSetup, setShowSetup] = useState(false);
-  const setupVisible = showSetup || !online || Boolean(newToken);
-
-  const regenerate = useCallback(async () => {
-    // Revoke first so a lost credential cannot outlive its replacement.
-    for (const token of tokens) await revoke(token);
-    await create("Joblit Runner");
-  }, [tokens, revoke, create]);
+  const command = newToken?.rawToken
+    ? startCommand(origin, newToken.rawToken, shell)
+    : null;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverPrimitive.Trigger asChild>
-        <button
-          type="button"
-          aria-label={t("open")}
-          title={t("open")}
-          data-testid="runner-setup-trigger"
-          className={cn(
-            "relative inline-flex h-11 w-11 items-center justify-center rounded-full text-foreground/70 transition-colors hover:bg-muted hover:text-foreground data-[state=open]:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 md:h-9 md:w-9",
-            COARSE_POINTER_TARGET,
-            className,
-          )}
-        >
-          <Plug className="h-4 w-4" aria-hidden />
-          {/* Present only when connected: an always-on dot is decoration, a
-              dot that appears when something is live is information. */}
-          {online ? (
-            <span
-              aria-hidden
-              data-testid="runner-online-dot"
-              className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-background"
-            />
-          ) : null}
-        </button>
-      </PopoverPrimitive.Trigger>
-
-      <PopoverContent
-        align="end"
-        sideOffset={10}
-        data-testid="runner-setup-panel"
-        className="w-[min(24rem,calc(100vw-2rem))] rounded-2xl p-0"
-      >
-        <div className="border-b border-border/60 px-4 py-3">
-          <h2 className="text-[13px] font-bold tracking-tight text-foreground">
-            {t("title")}
-          </h2>
-          <p
-            data-testid="runner-setup-status"
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverPrimitive.Trigger asChild>
+          <button
+            type="button"
+            aria-label={t("open")}
+            title={t("open")}
+            data-testid="runner-setup-trigger"
             className={cn(
-              "mt-0.5 flex items-center gap-1.5 text-[11px]",
-              online ? "text-brand-emerald-text" : "text-muted-foreground",
+              "relative inline-flex h-11 w-11 items-center justify-center rounded-full text-foreground/70 transition-colors hover:bg-muted hover:text-foreground data-[state=open]:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 md:h-9 md:w-9",
+              COARSE_POINTER_TARGET,
+              className,
             )}
           >
-            <span
-              aria-hidden
-              className={cn(
-                "h-1.5 w-1.5 rounded-full",
-                online ? "bg-emerald-500" : "bg-muted-foreground/40",
-              )}
-            />
-            {online ? t("statusOnline") : t("statusOffline")}
-          </p>
-        </div>
+            <Plug className="h-4 w-4" aria-hidden />
+            {online ? (
+              <span
+                aria-hidden
+                data-testid="runner-online-dot"
+                className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-background"
+              />
+            ) : null}
+          </button>
+        </PopoverPrimitive.Trigger>
 
-        <div className="space-y-3 p-4">
-          {loading ? (
-            <p className="text-xs text-muted-foreground">{t("loading")}</p>
-          ) : !hasCredential ? (
-            <>
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                {t("introNoCredential")}
-              </p>
-              <button
-                type="button"
-                onClick={() => void create("Joblit Runner")}
-                disabled={creating}
-                data-testid="runner-setup-create"
-                className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-xl bg-brand-emerald-600 px-3 text-[13px] font-semibold text-white transition-colors hover:bg-brand-emerald-700 disabled:cursor-wait disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2"
+        <PopoverContent
+          align="end"
+          sideOffset={10}
+          aria-labelledby="runner-setup-title"
+          data-testid="runner-setup-panel"
+          className="max-h-[calc(100dvh-2rem)] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain rounded-2xl p-0"
+        >
+          <div className="flex items-start justify-between gap-3 border-b border-border/60 py-3 pl-4 pr-2">
+            <div>
+              <h2
+                id="runner-setup-title"
+                className="text-[13px] font-bold tracking-tight text-foreground"
               >
-                {creating ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                ) : null}
-                {t("createCredential")}
-              </button>
-            </>
-          ) : (
-            <>
-              {newToken ? (
-                <p className="rounded-lg border border-brand-emerald-200 bg-brand-emerald-50/60 px-2.5 py-2 text-[11px] leading-relaxed text-brand-emerald-900 dark:border-brand-emerald-500/30 dark:bg-brand-emerald-500/10 dark:text-brand-emerald-200">
-                  {t("rawTokenOnce")}
-                </p>
-              ) : null}
-
-              {setupVisible ? (
-                <>
-                  <CopyRow label={t("startLabel")} value={command} />
-                  <p className="text-[11px] leading-relaxed text-muted-foreground">
-                    {t("modelHint")}
-                  </p>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setShowSetup(true)}
-                  data-testid="runner-setup-show"
-                  className="w-full rounded-lg px-2 py-1.5 text-left text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600"
-                >
-                  {t("showSetup")}
-                </button>
-              )}
-
+                {t("title")}
+              </h2>
+              <p
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+                data-testid="runner-setup-status"
+                className={cn(
+                  "mt-0.5 flex items-center gap-1.5 text-[11px]",
+                  online ? "text-brand-emerald-text" : "text-muted-foreground",
+                )}
+              >
+                <span
+                  aria-hidden
+                  className={cn(
+                    "h-1.5 w-1.5 shrink-0 rounded-full",
+                    online
+                      ? "bg-emerald-500"
+                      : presence.status === "unavailable"
+                        ? "bg-amber-500"
+                        : "bg-muted-foreground/40",
+                  )}
+                />
+                {statusText}
+              </p>
+            </div>
+            <PopoverPrimitive.Close asChild>
               <button
                 type="button"
-                onClick={() => void regenerate()}
-                disabled={creating}
-                data-testid="runner-setup-regenerate"
-                className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-border/70 px-3 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-wait disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600"
+                aria-label={t("close")}
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600"
+              >
+                <X className="h-4 w-4" aria-hidden />
+              </button>
+            </PopoverPrimitive.Close>
+          </div>
+
+          <div className="space-y-3 p-4">
+            {presence.status === "unavailable" ? (
+              <button
+                type="button"
+                onClick={() => void presence.refresh()}
+                className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-amber-500/30 px-3 text-xs font-semibold text-amber-700 hover:bg-amber-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 dark:text-amber-300"
               >
                 <RefreshCw className="h-3.5 w-3.5" aria-hidden />
-                {t("regenerate")}
+                {t("retryPresence")}
               </button>
-            </>
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
+            ) : null}
+
+            {loading ? (
+              <p className="text-xs text-muted-foreground">{t("loading")}</p>
+            ) : loadError ? (
+              <div
+                role="alert"
+                className="space-y-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3"
+              >
+                <p className="text-xs leading-relaxed text-destructive">
+                  {t("loadError")}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void refreshTokens()}
+                  className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-destructive/30 px-3 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600"
+                >
+                  {t("retry")}
+                </button>
+              </div>
+            ) : !hasCredential ? (
+              <>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  {t("introNoCredential")}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void create("Joblit Runner")}
+                  disabled={creating}
+                  aria-busy={creating}
+                  data-testid="runner-setup-create"
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-brand-emerald-600 px-3 text-[13px] font-semibold text-white transition-colors hover:bg-brand-emerald-700 disabled:cursor-wait disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2"
+                >
+                  {creating ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                  ) : null}
+                  {t("createCredential")}
+                </button>
+              </>
+            ) : (
+              <>
+                {command ? (
+                  <>
+                    <p className="rounded-lg border border-brand-emerald-200 bg-brand-emerald-50/60 px-2.5 py-2 text-[11px] leading-relaxed text-brand-emerald-900 dark:border-brand-emerald-500/30 dark:bg-brand-emerald-500/10 dark:text-brand-emerald-200">
+                      {t("rawTokenOnce")}
+                    </p>
+                    <div
+                      role="group"
+                      aria-label={t("shellLabel")}
+                      className="grid grid-cols-2 rounded-xl bg-muted p-1"
+                    >
+                      {(["powershell", "bash"] as const).map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          aria-pressed={shell === option}
+                          onClick={() => setShell(option)}
+                          className="min-h-11 rounded-lg px-2 text-xs font-semibold text-muted-foreground aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600"
+                        >
+                          {option === "powershell" ? "PowerShell" : "Bash"}
+                        </button>
+                      ))}
+                    </div>
+                    <CopyRow label={t("startLabel")} value={command} />
+                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                      {t("modelHint")}
+                    </p>
+                  </>
+                ) : (
+                  <p className="rounded-xl border border-border/60 bg-muted/35 p-3 text-xs leading-relaxed text-muted-foreground">
+                    {t("credentialHidden")}
+                  </p>
+                )}
+
+                <AlertDialog>
+                  <AlertDialogPrimitive.Trigger asChild>
+                    <button
+                      type="button"
+                      disabled={creating}
+                      aria-busy={creating}
+                      data-testid="runner-setup-regenerate"
+                      className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-destructive/25 px-3 text-xs font-medium text-destructive transition-colors hover:bg-destructive/5 disabled:cursor-wait disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600"
+                    >
+                      {creating ? (
+                        <Loader2
+                          className="h-3.5 w-3.5 animate-spin"
+                          aria-hidden
+                        />
+                      ) : (
+                        <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+                      )}
+                      {t("regenerate")}
+                    </button>
+                  </AlertDialogPrimitive.Trigger>
+                  <AlertDialogContent className="w-[min(28rem,calc(100vw-2rem))] rounded-2xl">
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>{t("replaceTitle")}</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {t("replaceDescription")}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="gap-2">
+                      <AlertDialogCancel className="min-h-11">
+                        {t("replaceCancel")}
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => void replace(tokens, "Joblit Runner")}
+                        className="min-h-11 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        {t("replaceConfirm")}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </>
   );
 }

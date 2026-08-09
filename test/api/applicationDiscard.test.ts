@@ -7,6 +7,11 @@ const prisma = vi.hoisted(() => ({
   },
   evidenceSnapshot: { createMany: vi.fn() },
   claimEvidence: { createMany: vi.fn() },
+  tailoringRun: {
+    findMany: vi.fn(),
+    findFirst: vi.fn(),
+    updateMany: vi.fn(),
+  },
   transaction: vi.fn(),
   executeRaw: vi.fn(),
 }));
@@ -21,14 +26,10 @@ vi.mock("@/lib/server/prisma", () => ({
     $transaction: prisma.transaction,
   },
 }));
-vi.mock(
-  "@/lib/server/applications/applicationRenderContextFence",
-  () => ({
-    applicationRenderContextMatchesCurrentSources:
-      renderContextFence.matches,
-    applicationPublicationTargets: vi.fn(() => ["resume", "cover"]),
-  }),
-);
+vi.mock("@/lib/server/applications/applicationRenderContextFence", () => ({
+  applicationRenderContextMatchesCurrentSources: renderContextFence.matches,
+  applicationPublicationTargets: vi.fn(() => ["resume", "cover"]),
+}));
 vi.mock("@/auth", () => ({ authOptions: {} }));
 vi.mock("next-auth/next", () => ({ getServerSession: vi.fn() }));
 
@@ -93,7 +94,10 @@ function makeEditedAiContent(): AiContent {
           {
             text: "rejected bullet",
             accepted: true,
-            qualityGate: { passed: false, reason: "ungrounded: no JD evidence" },
+            qualityGate: {
+              passed: false,
+              reason: "ungrounded: no JD evidence",
+            },
           },
         ],
       },
@@ -119,32 +123,43 @@ describe("POST /api/applications/[id]/discard", () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockReset();
     prisma.application.findFirst.mockReset();
     prisma.application.updateMany.mockReset().mockResolvedValue({ count: 1 });
-    prisma.evidenceSnapshot.createMany.mockReset().mockResolvedValue({ count: 1 });
+    prisma.evidenceSnapshot.createMany
+      .mockReset()
+      .mockResolvedValue({ count: 1 });
     prisma.claimEvidence.createMany.mockReset().mockResolvedValue({ count: 1 });
+    prisma.tailoringRun.findMany.mockReset().mockResolvedValue([]);
+    prisma.tailoringRun.findFirst.mockReset().mockResolvedValue(null);
+    prisma.tailoringRun.updateMany.mockReset().mockResolvedValue({ count: 0 });
     prisma.executeRaw.mockReset().mockResolvedValue(1);
     renderContextFence.matches.mockReset().mockResolvedValue(true);
-    prisma.transaction.mockReset().mockImplementation(
-      async (
-        action: (tx: {
-          application: typeof prisma.application;
-          evidenceSnapshot: typeof prisma.evidenceSnapshot;
-          claimEvidence: typeof prisma.claimEvidence;
-          $executeRaw: typeof prisma.executeRaw;
-        }) => Promise<unknown>,
-      ) =>
-        action({
-          application: prisma.application,
-          evidenceSnapshot: prisma.evidenceSnapshot,
-          claimEvidence: prisma.claimEvidence,
-          $executeRaw: prisma.executeRaw,
-        }),
-    );
+    prisma.transaction
+      .mockReset()
+      .mockImplementation(
+        async (
+          action: (tx: {
+            application: typeof prisma.application;
+            evidenceSnapshot: typeof prisma.evidenceSnapshot;
+            claimEvidence: typeof prisma.claimEvidence;
+            tailoringRun: typeof prisma.tailoringRun;
+            $executeRaw: typeof prisma.executeRaw;
+          }) => Promise<unknown>,
+        ) =>
+          action({
+            application: prisma.application,
+            evidenceSnapshot: prisma.evidenceSnapshot,
+            claimEvidence: prisma.claimEvidence,
+            tailoringRun: prisma.tailoringRun,
+            $executeRaw: prisma.executeRaw,
+          }),
+      );
   });
 
   it("clears userEdits and resets bullet accepted to qualityGate.passed", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: USER_ID },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: USER_ID },
+      },
+    );
     const edited = makeEditedAiContent();
     const expectedHash = hashAiContent(edited);
     const profile = {
@@ -184,7 +199,9 @@ describe("POST /api/applications/[id]/discard", () => {
     expect(persisted.cv.summary.accepted).toBe(true);
 
     // Bullet 1 (passed gate): userEdit cleared, accepted=true
-    expect(persisted.cv.latestExperience.addedBullets[0]?.userEdit).toBeUndefined();
+    expect(
+      persisted.cv.latestExperience.addedBullets[0]?.userEdit,
+    ).toBeUndefined();
     expect(persisted.cv.latestExperience.addedBullets[0]?.accepted).toBe(true);
 
     // Bullet 2 (failed gate): accepted=false (matches gate verdict)
@@ -197,12 +214,71 @@ describe("POST /api/applications/[id]/discard", () => {
     expect(updateCall.data.status).toBe("DRAFT");
     expect(persisted.review).toBeDefined();
     expect(prisma.evidenceSnapshot.createMany).toHaveBeenCalled();
+    expect(prisma.tailoringRun.findFirst).toHaveBeenCalledWith({
+      where: {
+        userId: USER_ID,
+        jobId: "job-1",
+        status: { in: ["ISSUED", "RUNNING"] },
+      },
+      select: { id: true },
+    });
+    expect(prisma.executeRaw).toHaveBeenCalledTimes(2);
+    expect(
+      prisma.tailoringRun.findFirst.mock.invocationCallOrder[0],
+    ).toBeLessThan(prisma.executeRaw.mock.invocationCallOrder[1]!);
   });
 
+  it.each(["ISSUED", "RUNNING"] as const)(
+    "returns ATTEMPT_ACTIVE without updating while a %s run owns the Job",
+    async (status) => {
+      (
+        getServerSession as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValue({
+        user: { id: USER_ID },
+      });
+      const edited = makeEditedAiContent();
+      const expectedHash = hashAiContent(edited);
+      prisma.application.findFirst.mockResolvedValue({
+        id: APP_ID,
+        userId: USER_ID,
+        jobId: "job-1",
+        aiContent: edited,
+        aiContentHash: expectedHash,
+        status: "DRAFT",
+        resumePdfUrl: null,
+        coverPdfUrl: null,
+        resumeContentHash: null,
+        coverContentHash: null,
+        resumePublishedHash: null,
+        coverPublishedHash: null,
+        resumeProfile: PROFILE,
+        job: JOB,
+      });
+      prisma.tailoringRun.findFirst.mockResolvedValueOnce({
+        id: `run-${status.toLowerCase()}`,
+      });
+
+      const response = await POST(request(expectedHash), { params });
+
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({
+        error: {
+          code: "ATTEMPT_ACTIVE",
+          message: "Another generation run already owns this Job",
+        },
+      });
+      expect(prisma.application.findFirst).toHaveBeenCalledTimes(1);
+      expect(prisma.application.updateMany).not.toHaveBeenCalled();
+      expect(prisma.executeRaw).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it("keeps a published resume FINAL when discarding only cover edits", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: USER_ID },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: USER_ID },
+      },
+    );
     const edited = makeEditedAiContent();
     edited.cv.summary = {
       aiText: "ai",
@@ -269,9 +345,11 @@ describe("POST /api/applications/[id]/discard", () => {
   });
 
   it("rejects discard when its locked Profile or Job context is stale", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: USER_ID },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: USER_ID },
+      },
+    );
     const edited = makeEditedAiContent();
     const expectedHash = hashAiContent(edited);
     prisma.application.findFirst.mockResolvedValue({
@@ -303,9 +381,11 @@ describe("POST /api/applications/[id]/discard", () => {
   });
 
   it("rejects discard when the Application rebinds to another Profile with the same AI hash", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: USER_ID },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: USER_ID },
+      },
+    );
     const edited = makeEditedAiContent();
     const expectedHash = hashAiContent(edited);
     prisma.application.findFirst
@@ -350,9 +430,11 @@ describe("POST /api/applications/[id]/discard", () => {
   });
 
   it("returns 400 when there is no aiContent to discard", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: USER_ID },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: USER_ID },
+      },
+    );
     prisma.application.findFirst.mockResolvedValueOnce({
       id: APP_ID,
       userId: USER_ID,
@@ -366,9 +448,11 @@ describe("POST /api/applications/[id]/discard", () => {
   });
 
   it("returns 404 when the Application is not found", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: USER_ID },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: USER_ID },
+      },
+    );
     prisma.application.findFirst.mockResolvedValueOnce(null);
 
     const res = await POST(request(null), { params });
@@ -376,15 +460,19 @@ describe("POST /api/applications/[id]/discard", () => {
   });
 
   it("returns 401 when unauthenticated", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      null,
+    );
     const res = await POST(request(null), { params });
     expect(res.status).toBe(401);
   });
 
   it("returns 409 when another tab writes after the discard read", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: USER_ID },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: USER_ID },
+      },
+    );
     const edited = makeEditedAiContent();
     const expectedHash = hashAiContent(edited);
     prisma.application.findFirst.mockResolvedValue({

@@ -7,6 +7,11 @@ const prisma = vi.hoisted(() => ({
   },
   evidenceSnapshot: { createMany: vi.fn() },
   claimEvidence: { createMany: vi.fn() },
+  tailoringRun: {
+    findMany: vi.fn(),
+    findFirst: vi.fn(),
+    updateMany: vi.fn(),
+  },
   transaction: vi.fn(),
   executeRaw: vi.fn(),
 }));
@@ -21,14 +26,10 @@ vi.mock("@/lib/server/prisma", () => ({
     $transaction: prisma.transaction,
   },
 }));
-vi.mock(
-  "@/lib/server/applications/applicationRenderContextFence",
-  () => ({
-    applicationRenderContextMatchesCurrentSources:
-      renderContextFence.matches,
-    applicationPublicationTargets: vi.fn(() => ["resume", "cover"]),
-  }),
-);
+vi.mock("@/lib/server/applications/applicationRenderContextFence", () => ({
+  applicationRenderContextMatchesCurrentSources: renderContextFence.matches,
+  applicationPublicationTargets: vi.fn(() => ["resume", "cover"]),
+}));
 
 vi.mock("@/auth", () => ({ authOptions: {} }));
 vi.mock("next-auth/next", () => ({ getServerSession: vi.fn() }));
@@ -99,10 +100,7 @@ function makeRequest(body: unknown) {
 
 const params = Promise.resolve({ id: APP_ID });
 
-function storedApplication(
-  aiContent: AiContent,
-  aiContentHash: string | null,
-) {
+function storedApplication(aiContent: AiContent, aiContentHash: string | null) {
   return {
     id: APP_ID,
     userId: USER_ID,
@@ -127,32 +125,43 @@ describe("PATCH /api/applications/[id]/draft", () => {
     prisma.application.findFirst.mockReset();
     prisma.application.updateMany.mockReset();
     prisma.application.updateMany.mockResolvedValue({ count: 1 });
-    prisma.evidenceSnapshot.createMany.mockReset().mockResolvedValue({ count: 1 });
+    prisma.evidenceSnapshot.createMany
+      .mockReset()
+      .mockResolvedValue({ count: 1 });
     prisma.claimEvidence.createMany.mockReset().mockResolvedValue({ count: 1 });
+    prisma.tailoringRun.findMany.mockReset().mockResolvedValue([]);
+    prisma.tailoringRun.findFirst.mockReset().mockResolvedValue(null);
+    prisma.tailoringRun.updateMany.mockReset().mockResolvedValue({ count: 0 });
     prisma.executeRaw.mockReset().mockResolvedValue(1);
     renderContextFence.matches.mockReset().mockResolvedValue(true);
-    prisma.transaction.mockReset().mockImplementation(
-      async (
-        action: (tx: {
-          application: typeof prisma.application;
-          evidenceSnapshot: typeof prisma.evidenceSnapshot;
-          claimEvidence: typeof prisma.claimEvidence;
-          $executeRaw: typeof prisma.executeRaw;
-        }) => Promise<unknown>,
-      ) =>
-        action({
-          application: prisma.application,
-          evidenceSnapshot: prisma.evidenceSnapshot,
-          claimEvidence: prisma.claimEvidence,
-          $executeRaw: prisma.executeRaw,
-        }),
-    );
+    prisma.transaction
+      .mockReset()
+      .mockImplementation(
+        async (
+          action: (tx: {
+            application: typeof prisma.application;
+            evidenceSnapshot: typeof prisma.evidenceSnapshot;
+            claimEvidence: typeof prisma.claimEvidence;
+            tailoringRun: typeof prisma.tailoringRun;
+            $executeRaw: typeof prisma.executeRaw;
+          }) => Promise<unknown>,
+        ) =>
+          action({
+            application: prisma.application,
+            evidenceSnapshot: prisma.evidenceSnapshot,
+            claimEvidence: prisma.claimEvidence,
+            tailoringRun: prisma.tailoringRun,
+            $executeRaw: prisma.executeRaw,
+          }),
+      );
   });
 
   it("writes aiContent + DRAFT status and returns the new hash", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: USER_ID },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: USER_ID },
+      },
+    );
     const incoming = makeAiContent();
     prisma.application.findFirst.mockResolvedValue(
       storedApplication(incoming, null),
@@ -180,16 +189,70 @@ describe("PATCH /api/applications/[id]/draft", () => {
         }),
       }),
     );
+    expect(prisma.tailoringRun.findFirst).toHaveBeenCalledWith({
+      where: {
+        userId: USER_ID,
+        jobId: "job-1",
+        status: { in: ["ISSUED", "RUNNING"] },
+      },
+      select: { id: true },
+    });
+    expect(prisma.executeRaw).toHaveBeenCalledTimes(2);
+    expect(
+      prisma.tailoringRun.findFirst.mock.invocationCallOrder[0],
+    ).toBeLessThan(prisma.executeRaw.mock.invocationCallOrder[1]!);
   });
 
+  it.each(["ISSUED", "RUNNING"] as const)(
+    "returns ATTEMPT_ACTIVE without updating while a %s run owns the Job",
+    async (status) => {
+      (
+        getServerSession as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValue({
+        user: { id: USER_ID },
+      });
+      const incoming = makeAiContent();
+      prisma.application.findFirst.mockResolvedValue(
+        storedApplication(incoming, null),
+      );
+      prisma.tailoringRun.findFirst.mockResolvedValueOnce({
+        id: `run-${status.toLowerCase()}`,
+      });
+
+      const response = await PATCH(
+        makeRequest({ aiContent: incoming, expectedHash: null }),
+        { params },
+      );
+
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({
+        error: {
+          code: "ATTEMPT_ACTIVE",
+          message: "Another generation run already owns this Job",
+        },
+      });
+      expect(prisma.application.findFirst).toHaveBeenCalledTimes(1);
+      expect(prisma.application.updateMany).not.toHaveBeenCalled();
+      expect(prisma.executeRaw).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it("keeps a published resume FINAL when only cover content is edited", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: USER_ID },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: USER_ID },
+      },
+    );
     const canonical = makeAiContent();
     canonical.cover.paragraphOne = { aiText: "Original cover", accepted: true };
-    canonical.cover.paragraphTwo = { aiText: "Second paragraph", accepted: true };
-    canonical.cover.paragraphThree = { aiText: "Third paragraph", accepted: true };
+    canonical.cover.paragraphTwo = {
+      aiText: "Second paragraph",
+      accepted: true,
+    };
+    canonical.cover.paragraphThree = {
+      aiText: "Third paragraph",
+      accepted: true,
+    };
     const submitted = structuredClone(canonical);
     submitted.cover.paragraphOne.userEdit = "Cover-only user edit";
     const expectedHash = hashAiContent(canonical);
@@ -242,9 +305,11 @@ describe("PATCH /api/applications/[id]/draft", () => {
   });
 
   it("rejects a save when its locked Profile or Job context is stale", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: USER_ID },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: USER_ID },
+      },
+    );
     const incoming = makeAiContent();
     const expectedHash = hashAiContent(incoming);
     prisma.application.findFirst.mockResolvedValue({
@@ -268,9 +333,11 @@ describe("PATCH /api/applications/[id]/draft", () => {
   });
 
   it("returns 409 when expectedHash does not match the current row", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: USER_ID },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: USER_ID },
+      },
+    );
     prisma.application.findFirst.mockResolvedValueOnce({
       id: APP_ID,
       userId: USER_ID,
@@ -288,9 +355,11 @@ describe("PATCH /api/applications/[id]/draft", () => {
   });
 
   it("returns 404 when the Application belongs to a different user", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: USER_ID },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: USER_ID },
+      },
+    );
     prisma.application.findFirst.mockResolvedValueOnce(null);
 
     const res = await PATCH(
@@ -302,9 +371,11 @@ describe("PATCH /api/applications/[id]/draft", () => {
   });
 
   it("rejects malformed aiContent payloads with 400", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: USER_ID },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: USER_ID },
+      },
+    );
 
     const res = await PATCH(
       makeRequest({ aiContent: { wrong: true }, expectedHash: null }),
@@ -316,7 +387,9 @@ describe("PATCH /api/applications/[id]/draft", () => {
   });
 
   it("returns 401 when the request is unauthenticated", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      null,
+    );
 
     const res = await PATCH(
       makeRequest({ aiContent: makeAiContent(), expectedHash: null }),
@@ -327,9 +400,11 @@ describe("PATCH /api/applications/[id]/draft", () => {
   });
 
   it("returns 409 when another tab writes after the initial hash check", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: USER_ID },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: USER_ID },
+      },
+    );
     prisma.application.findFirst.mockResolvedValue(
       storedApplication(makeAiContent(), "expected"),
     );
@@ -356,9 +431,11 @@ describe("PATCH /api/applications/[id]/draft", () => {
   });
 
   it("ignores forged model output and evidence, then rebuilds review from server sources", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: USER_ID },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: USER_ID },
+      },
+    );
     const profile = {
       userId: USER_ID,
       summary: "Built reliable TypeScript APIs.",
@@ -424,9 +501,11 @@ describe("PATCH /api/applications/[id]/draft", () => {
   });
 
   it("fails closed when canonical job evidence exists but the Job is gone", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: USER_ID },
-    });
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: USER_ID },
+      },
+    );
     const profile = {
       userId: USER_ID,
       summary: "Built reliable TypeScript APIs.",

@@ -1,16 +1,18 @@
 import type { ApplicationBatchStatus, Prisma } from "@/lib/generated/prisma";
 import { acquireJobMutationLock } from "@/lib/server/jobs/jobMutationLock";
 import { prisma } from "@/lib/server/prisma";
+import {
+  boundedApplicationBatchLimit,
+  hasAuMasterResumeProfile,
+  selectSafeNewBatchCandidates,
+} from "./batchEligibility";
 
 const ACTIVE_BATCH_STATUSES = ["QUEUED", "RUNNING"] as const;
-const DEFAULT_BATCH_LIMIT = 100;
-const MAX_BATCH_LIMIT = 200;
 const MAX_CREATE_ATTEMPTS = 2;
 
 export type ApplicationBatchSeed =
   | {
       kind: "new";
-      selectedJobIds?: readonly string[];
       limit?: number;
     }
   | {
@@ -44,35 +46,15 @@ export type QueueApplicationBatchOutcome =
       kind: "empty";
       reason: "NO_ELIGIBLE_JOBS" | "NO_FAILED_TASKS";
     }
+  | { kind: "profile_missing" }
   | { kind: "source_not_found" };
-
-function boundedLimit(limit: number | undefined): number {
-  if (limit === undefined || !Number.isFinite(limit)) {
-    return DEFAULT_BATCH_LIMIT;
-  }
-  return Math.min(Math.max(Math.floor(limit), 1), MAX_BATCH_LIMIT);
-}
 
 async function findNewJobIds(
   tx: Prisma.TransactionClient,
   input: Extract<ApplicationBatchSeed, { kind: "new" }> & { userId: string },
 ): Promise<string[]> {
-  const selectedJobIds = Array.from(new Set(input.selectedJobIds ?? [])).slice(
-    0,
-    MAX_BATCH_LIMIT,
-  );
-  const jobs = await tx.job.findMany({
-    where: {
-      userId: input.userId,
-      market: "AU",
-      status: "NEW",
-      ...(selectedJobIds.length > 0 ? { id: { in: selectedJobIds } } : {}),
-    },
-    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-    ...(selectedJobIds.length === 0 ? { take: boundedLimit(input.limit) } : {}),
-    select: { id: true },
-  });
-  return jobs.map((job) => job.id);
+  const candidates = await selectSafeNewBatchCandidates(tx, input);
+  return candidates.map((candidate) => candidate.id);
 }
 
 async function findFailedJobIds(
@@ -88,11 +70,19 @@ async function findFailedJobIds(
       batchId: input.sourceBatchId,
       userId: input.userId,
       status: "FAILED",
-      job: { market: "AU" },
+      // Retrying creates a new task and therefore a new two-target
+      // TailoringRun. Do not let it overwrite a document or draft that was
+      // accepted (or manually created) after the source task failed.
+      job: {
+        userId: input.userId,
+        market: "AU",
+        status: "NEW",
+        applications: { none: { userId: input.userId } },
+      },
     },
     orderBy: { updatedAt: "desc" },
     distinct: ["jobId"],
-    take: boundedLimit(input.limit),
+    take: boundedApplicationBatchLimit(input.limit),
     select: { jobId: true },
   });
   return failedTasks.map((task) => task.jobId);
@@ -175,6 +165,10 @@ export async function queueApplicationBatch(input: {
           orderBy: { createdAt: "desc" },
         });
         if (activeBatch) return activeExistsOutcome(activeBatch);
+
+        if (!(await hasAuMasterResumeProfile(tx, input.userId))) {
+          return { kind: "profile_missing" as const };
+        }
 
         const jobIds =
           input.seed.kind === "new"

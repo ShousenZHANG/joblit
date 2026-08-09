@@ -1,8 +1,13 @@
 import type { Prisma } from "@/lib/generated/prisma";
 import {
   acquireApplicationBatchLock,
+  acquireTailoringJobLock,
   acquireTailoringRunLock,
 } from "./tailoringRunLock";
+import {
+  assertNoActiveTailoringRun,
+  retireStaleStandaloneTailoringRuns,
+} from "./tailoringJobOwnership";
 import {
   TailoringRunError,
   requiredTargetMask,
@@ -155,6 +160,32 @@ async function validateIssueBatch(
   }
 }
 
+async function validateExclusiveJobGeneration(
+  tx: TailoringRunTransaction,
+  input: IssueTailoringRunInput,
+): Promise<void> {
+  await assertNoActiveTailoringRun(
+    tx as unknown as Prisma.TransactionClient,
+    input,
+  );
+
+  if (!input.batch) return;
+  const stillSafe = await tx.job.findFirst({
+    where: {
+      id: input.jobId,
+      userId: input.userId,
+      applications: { none: { userId: input.userId } },
+    },
+    select: { id: true },
+  });
+  if (!stillSafe) {
+    throw new TailoringRunError(
+      "INVALID_STATE",
+      "An Application already exists for this Job",
+    );
+  }
+}
+
 function issueData(
   input: IssueTailoringRunInput,
   id: string,
@@ -194,17 +225,19 @@ async function applyIssue(
   runId: string,
   key: string,
   mask: number,
+  now: Date,
 ): Promise<TailoringRunMutationResult> {
+  await acquireTailoringJobLock(
+    tx as unknown as Prisma.TransactionClient,
+    input.userId,
+    input.jobId,
+  );
   if (input.batch) {
     await acquireApplicationBatchLock(
       tx as unknown as Prisma.TransactionClient,
       input.batch.batchId,
     );
   }
-  await acquireTailoringRunLock(
-    tx as unknown as Prisma.TransactionClient,
-    runId,
-  );
   const prompts = normalizePromptReceipts(input.promptReceipts);
   validateIssuedPromptTargets(prompts, mask);
   const hash = issueInputHash(input, mask, prompts);
@@ -212,9 +245,31 @@ async function applyIssue(
     where: { userId_issueKey: { userId: input.userId, issueKey: key } },
     include: { applicationBatchTask: true },
   });
-  if (existing) return replayIssue(tx, input, existing, hash);
+  if (existing) {
+    await acquireTailoringRunLock(
+      tx as unknown as Prisma.TransactionClient,
+      runId,
+    );
+    const lockedExisting = await tx.tailoringRun.findUnique({
+      where: { userId_issueKey: { userId: input.userId, issueKey: key } },
+      include: { applicationBatchTask: true },
+    });
+    if (!lockedExisting) {
+      throw new TailoringRunError("RUN_NOT_FOUND", "Tailoring run not found");
+    }
+    return replayIssue(tx, input, lockedExisting, hash);
+  }
+  await retireStaleStandaloneTailoringRuns(
+    tx as unknown as Prisma.TransactionClient,
+    { userId: input.userId, jobId: input.jobId, now },
+  );
+  await acquireTailoringRunLock(
+    tx as unknown as Prisma.TransactionClient,
+    runId,
+  );
   await validateIssueOwnership(tx, input);
   await validateIssueBatch(tx, input);
+  await validateExclusiveJobGeneration(tx, input);
   if (input.batch) {
     const taskRun = await tx.tailoringRun.findFirst({
       where: {
@@ -298,7 +353,7 @@ export async function issueTailoringRun(
   const { issueKey, targetMask: mask } = validateIssueInput(input);
   const runId = tailoringRunIdForIssue(input.userId, issueKey);
   return deps.database.$transaction(
-    (tx) => applyIssue(tx, input, runId, issueKey, mask),
+    (tx) => applyIssue(tx, input, runId, issueKey, mask, deps.now()),
     TRANSACTION_OPTIONS,
   );
 }
@@ -319,10 +374,7 @@ function validateStartAuthority(
   now: Date,
 ): boolean {
   assertRunMutable(run);
-  const batchTask = assertBatchAttempt(
-    run,
-    input.batchExecutionAttemptId,
-  );
+  const batchTask = assertBatchAttempt(run, input.batchExecutionAttemptId);
   if (batchTask && batchTask.executionAttemptId !== attemptId) {
     throw new TailoringRunError(
       "BATCH_ATTEMPT_MISMATCH",
@@ -500,7 +552,10 @@ async function applyFailure(
   }
   assertBatchAttempt(run, input.batchExecutionAttemptId);
   if (run.status !== "RUNNING") {
-    throw new TailoringRunError("INVALID_STATE", "Tailoring run is not running");
+    throw new TailoringRunError(
+      "INVALID_STATE",
+      "Tailoring run is not running",
+    );
   }
   if (run.executionAttemptId !== input.handle.attemptId) {
     throw new TailoringRunError(

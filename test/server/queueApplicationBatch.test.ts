@@ -12,6 +12,7 @@ const store = vi.hoisted(() => ({
     createMany: vi.fn(),
   },
   job: { findMany: vi.fn() },
+  resumeProfile: { findFirst: vi.fn() },
 }));
 
 vi.mock("@/lib/server/prisma", () => ({
@@ -29,6 +30,7 @@ function transactionClient() {
     applicationBatch: store.applicationBatch,
     applicationBatchTask: store.applicationBatchTask,
     job: store.job,
+    resumeProfile: store.resumeProfile,
   };
 }
 
@@ -36,6 +38,7 @@ describe("queueApplicationBatch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     store.executeRaw.mockResolvedValue(0);
+    store.resumeProfile.findFirst.mockResolvedValue({ id: "profile-1" });
     store.transaction.mockImplementation(
       async (callback: (tx: ReturnType<typeof transactionClient>) => unknown) =>
         callback(transactionClient()),
@@ -80,7 +83,12 @@ describe("queueApplicationBatch", () => {
         batchId: "source-batch",
         userId: "user-1",
         status: "FAILED",
-        job: { market: "AU" },
+        job: {
+          userId: "user-1",
+          market: "AU",
+          status: "NEW",
+          applications: { none: { userId: "user-1" } },
+        },
       },
       orderBy: { updatedAt: "desc" },
       distinct: ["jobId"],

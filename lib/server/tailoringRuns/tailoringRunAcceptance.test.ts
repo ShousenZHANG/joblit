@@ -73,8 +73,10 @@ function transaction(
     tailoringRun: {
       findUnique: vi.fn(),
       findFirst: vi.fn(async () => run),
+      findMany: vi.fn(async () => []),
       create: vi.fn(),
       update: vi.fn(async () => run),
+      updateMany: vi.fn(async () => ({ count: 0 })),
     },
     tailoringRunReceipt: {
       findMany: vi.fn(async () => receipts),
@@ -193,10 +195,9 @@ describe("probeTailoringRunAcceptanceReplay", () => {
 
   it("conflicts before returning an accepted target with different content", async () => {
     const applicationId = "77777777-7777-4777-8777-777777777777";
-    const tx = transaction(
-      runRow({ acceptedTargetMask: 1, applicationId }),
-      [existingReceipt({ applicationId, requestHash: "first-content" })],
-    );
+    const tx = transaction(runRow({ acceptedTargetMask: 1, applicationId }), [
+      existingReceipt({ applicationId, requestHash: "first-content" }),
+    ]);
     await expect(
       probeTailoringRunAcceptanceReplay(
         tx as Parameters<typeof probeTailoringRunAcceptanceReplay>[0],
@@ -218,10 +219,9 @@ describe("probeTailoringRunAcceptanceReplay", () => {
 
   it("rejects a receipt whose Application is not owned and associated", async () => {
     const applicationId = "77777777-7777-4777-8777-777777777777";
-    const tx = transaction(
-      runRow({ acceptedTargetMask: 1, applicationId }),
-      [existingReceipt({ applicationId })],
-    );
+    const tx = transaction(runRow({ acceptedTargetMask: 1, applicationId }), [
+      existingReceipt({ applicationId }),
+    ]);
     vi.mocked(
       (tx as Parameters<typeof probeTailoringRunAcceptanceReplay>[0])
         .application.findFirst,
@@ -251,19 +251,19 @@ describe("probeTailoringRunAcceptanceReplay", () => {
       target: "RESUME",
       delivery: "DRAFT",
       promptHash: "prompt-hash",
-      modelOutput: "{\"cvSummary\":\"hello\"}",
+      modelOutput: '{"cvSummary":"hello"}',
     });
     const replay = hashManualTailoringAcceptance({
       target: "RESUME",
       delivery: "DRAFT",
       promptHash: "prompt-hash",
-      modelOutput: "{\"cvSummary\":\"hello\"}",
+      modelOutput: '{"cvSummary":"hello"}',
     });
     const changed = hashManualTailoringAcceptance({
       target: "RESUME",
       delivery: "DRAFT",
       promptHash: "prompt-hash",
-      modelOutput: "{\"cvSummary\":\"changed\"}",
+      modelOutput: '{"cvSummary":"changed"}',
     });
 
     expect(first).toMatch(/^[a-f0-9]{64}$/);
@@ -344,9 +344,7 @@ describe("prepareTailoringRunAcceptance", () => {
       prepareTailoringRunAcceptance(tx, {
         userId: USER_ID,
         jobId: JOB_ID,
-        requests: [
-          request({ requestHash: "hermes:run_private-executor" }),
-        ],
+        requests: [request({ requestHash: "hermes:run_private-executor" })],
       }),
     ).rejects.toMatchObject({ code: "RECEIPT_CONFLICT" });
     expect(tx.$executeRaw).not.toHaveBeenCalled();
@@ -451,8 +449,9 @@ describe("completeTailoringRunAcceptance", () => {
     );
     expect(tx.applicationBatch.update).toHaveBeenCalledOnce();
     const lockCalls = vi.mocked(tx.$executeRaw).mock.calls;
-    expect(lockCalls[0]?.[1]).toBe(0x41424154);
-    expect(lockCalls[1]?.[1]).toBe(0x544c524e);
+    expect(lockCalls[0]?.[1]).toBe(0x544a4f42);
+    expect(lockCalls[1]?.[1]).toBe(0x41424154);
+    expect(lockCalls[2]?.[1]).toBe(0x544c524e);
   });
 
   it("rejects a new receipt without the accepted target content hash", async () => {

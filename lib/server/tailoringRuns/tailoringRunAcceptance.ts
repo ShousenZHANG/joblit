@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Prisma } from "@/lib/generated/prisma";
 import {
   acquireApplicationBatchLock,
+  acquireTailoringJobLock,
   acquireTailoringRunLocks,
 } from "./tailoringRunLock";
 import {
@@ -82,20 +83,14 @@ function validateAcceptanceHash(value: string, field: string): void {
   try {
     assertSafeTailoringIdentity(value);
   } catch {
-    throw new TailoringRunError(
-      "RECEIPT_CONFLICT",
-      `Invalid ${field}`,
-    );
+    throw new TailoringRunError("RECEIPT_CONFLICT", `Invalid ${field}`);
   }
   if (
     !value ||
     value !== value.trim() ||
     value.length > ACCEPTANCE_HASH_MAX_LENGTH
   ) {
-    throw new TailoringRunError(
-      "RECEIPT_CONFLICT",
-      `Invalid ${field}`,
-    );
+    throw new TailoringRunError("RECEIPT_CONFLICT", `Invalid ${field}`);
   }
 }
 
@@ -132,9 +127,7 @@ export function hashManualTailoringAcceptance(input: {
     target: input.target === "RESUME" ? "resume" : "cover",
     delivery: input.delivery,
     promptHash: input.promptHash,
-    outputHash: createHash("sha256")
-      .update(input.modelOutput)
-      .digest("hex"),
+    outputHash: createHash("sha256").update(input.modelOutput).digest("hex"),
   });
 }
 
@@ -311,11 +304,7 @@ export async function probeTailoringRunAcceptanceReplay(
   validateAcceptanceHash(request.promptHash, "promptHash");
 
   const run = await readOwnedRun(database, input.userId, request.handle.id);
-  validateAggregateBinding(
-    [{ run, requests: [] }],
-    input.jobId,
-    undefined,
-  );
+  validateAggregateBinding([{ run, requests: [] }], input.jobId, undefined);
   validateReplayBinding(run, request);
 
   const receipt = (
@@ -423,7 +412,10 @@ function validatePendingRequest(
 ): void {
   assertRunMutable(run);
   if (run.status !== "RUNNING") {
-    throw new TailoringRunError("INVALID_STATE", "Tailoring run is not running");
+    throw new TailoringRunError(
+      "INVALID_STATE",
+      "Tailoring run is not running",
+    );
   }
   if (run.executionAttemptId !== request.handle.attemptId) {
     throw new TailoringRunError(
@@ -562,8 +554,8 @@ function partitionRequests(
 
 /**
  * Transaction helper used before the Application upsert. It acquires every
- * ABAT lock first, then every TLRN lock in run-id order. Exact receipt replay
- * is resolved before attempt fencing.
+ * TJOB lock first, then every ABAT lock and every TLRN lock in run-id order.
+ * Exact receipt replay is resolved before attempt fencing.
  */
 export async function prepareTailoringRunAcceptance(
   tx: TailoringRunTransaction,
@@ -581,6 +573,11 @@ export async function prepareTailoringRunAcceptance(
     );
   }
   validateUniqueRequests(input.requests);
+  await acquireTailoringJobLock(
+    tx as unknown as Prisma.TransactionClient,
+    input.userId,
+    input.jobId,
+  );
   const stale = await loadRuns(tx, input.userId, input.requests);
   await acquireAcceptanceLocks(tx, stale);
   const loaded = await reloadRuns(tx, input.userId, stale);
@@ -712,14 +709,7 @@ export async function completeTailoringRunAcceptance(
         input.documentContentHashes,
       )),
     );
-    if (
-      await finishRunProjection(
-        tx,
-        run,
-        requests,
-        input.applicationId,
-      )
-    ) {
+    if (await finishRunProjection(tx, run, requests, input.applicationId)) {
       completedRunIds.push(run.id);
     }
   }

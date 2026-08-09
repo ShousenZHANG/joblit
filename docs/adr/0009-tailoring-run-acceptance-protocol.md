@@ -123,13 +123,23 @@ as though it did not occur.
 
 Transactions acquire advisory locks in this order:
 
-1. `ABAT` for the Application Batch, when a run is batch-bound;
-2. `TLRN` for the Tailoring Run;
-3. `JOBA` for the owning `(userId, jobId)` Application mutation.
+1. `TJOB` for `(userId, jobId)` while issuing a new run;
+2. `ABAT` for the Application Batch, when a run is batch-bound;
+3. `TLRN` for the Tailoring Run;
+4. `JOBA` for the owning `(userId, jobId)` Application mutation.
 
-The order `ABAT -> TLRN -> JOBA` is mandatory; reverse acquisition is
-forbidden. Standalone runs use `TLRN -> JOBA`. Ordinary user Application edits
-may take only `JOBA` and never acquire an earlier lock afterward.
+Run issuance uses `TJOB -> ABAT -> TLRN` for batch runs and `TJOB -> TLRN`
+for standalone runs. `TJOB` serializes manual and batch ownership decisions for
+one Job, so only one active run can be issued. Acceptance uses
+`TJOB -> ABAT -> TLRN -> JOBA`; ordinary Application content edits use
+`TJOB -> JOBA` and fail while another run is active. Reverse acquisition is
+forbidden.
+
+When a new issue or unbound write encounters abandoned standalone work, it may
+retire an expired `RUNNING` lease or an `ISSUED` run older than the hand-off
+grace period. It takes the affected `TLRN` locks and rechecks the expiry before
+terminalizing. Batch runs remain governed by their task reclaim protocol, and
+an exact issue-key replay is resolved before stale-run retirement.
 
 Batch cancellation takes `ABAT` before cancelling its runs in sorted `TLRN`
 order. Acceptance rechecks batch and run state while holding the same locks.

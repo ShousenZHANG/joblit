@@ -13,6 +13,10 @@ const jobStore = vi.hoisted(() => ({
   findMany: vi.fn(),
 }));
 
+const resumeProfileStore = vi.hoisted(() => ({
+  findFirst: vi.fn(),
+}));
+
 const prismaStore = vi.hoisted(() => ({
   $executeRaw: vi.fn(),
   $transaction: vi.fn(),
@@ -23,6 +27,7 @@ vi.mock("@/lib/server/prisma", () => ({
     applicationBatch: applicationBatchStore,
     applicationBatchTask: applicationBatchTaskStore,
     job: jobStore,
+    resumeProfile: resumeProfileStore,
     $executeRaw: prismaStore.$executeRaw,
     $transaction: prismaStore.$transaction,
   },
@@ -46,6 +51,9 @@ describe("application batches create api", () => {
     applicationBatchStore.create.mockReset();
     applicationBatchTaskStore.createMany.mockReset();
     jobStore.findMany.mockReset();
+    resumeProfileStore.findFirst
+      .mockReset()
+      .mockResolvedValue({ id: "profile-1" });
     prismaStore.$executeRaw.mockReset().mockResolvedValue(0);
     prismaStore.$transaction.mockReset();
     prismaStore.$transaction.mockImplementation(
@@ -55,8 +63,39 @@ describe("application batches create api", () => {
           applicationBatch: applicationBatchStore,
           applicationBatchTask: applicationBatchTaskStore,
           job: jobStore,
+          resumeProfile: resumeProfileStore,
         }),
     );
+  });
+
+  it("refuses to create a batch when the AU Master Resume Profile is missing", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        user: { id: "user-1" },
+      },
+    );
+    applicationBatchStore.findFirst.mockResolvedValueOnce(null);
+    resumeProfileStore.findFirst.mockResolvedValueOnce(null);
+    jobStore.findMany.mockResolvedValueOnce([{ id: "job-1" }]);
+    applicationBatchStore.create.mockResolvedValueOnce({
+      id: "unsafe-batch",
+      totalCount: 1,
+      createdAt: new Date("2026-08-09T00:00:00.000Z"),
+    });
+    applicationBatchTaskStore.createMany.mockResolvedValueOnce({ count: 1 });
+
+    const res = await POST(
+      new Request("http://localhost/api/application-batches", {
+        method: "POST",
+        body: JSON.stringify({ scope: "NEW" }),
+      }),
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(json.error.code).toBe("NO_PROFILE");
+    expect(applicationBatchStore.create).not.toHaveBeenCalled();
+    expect(applicationBatchTaskStore.createMany).not.toHaveBeenCalled();
   });
 
   it("creates a queued batch for NEW jobs", async () => {
@@ -175,7 +214,7 @@ describe("application batches create api", () => {
     expect(applicationBatchTaskStore.createMany).not.toHaveBeenCalled();
   });
 
-  it("creates a batch from selected NEW job ids only", async () => {
+  it("keeps safe NEW generation account-wide when legacy selected ids are sent", async () => {
     const selectedJobIds = [
       "770e8400-e29b-41d4-a716-446655440000",
       "880e8400-e29b-41d4-a716-446655440000",
@@ -218,12 +257,16 @@ describe("application batches create api", () => {
     expect(json.batch.id).toBe("batch-selected");
     expect(jobStore.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({
+        where: {
           userId: "user-1",
           market: "AU",
           status: "NEW",
-          id: { in: selectedJobIds },
-        }),
+          applications: {
+            none: {
+              userId: "user-1",
+            },
+          },
+        },
       }),
     );
     expect(applicationBatchTaskStore.createMany).toHaveBeenCalledWith(

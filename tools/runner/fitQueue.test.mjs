@@ -212,6 +212,47 @@ test("scores a claimed batch through Hermes and imports the result", async () =>
   assert.equal(joblit.calls.markFailed.length, 0);
 });
 
+test("a bounded Fit pass yields after one claim even when more are ready", async () => {
+  const joblit = fakeJoblit({
+    batches: [
+      { jobIds: JOB_IDS, remaining: JOB_IDS.length },
+      { jobIds: JOB_IDS, remaining: 0 },
+      {},
+    ],
+  });
+  const hermes = fakeHermes();
+
+  const summary = await processFitQueue({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    maxBatches: 1,
+    log: () => {},
+  });
+
+  assert.equal(joblit.calls.nextBatch, 1);
+  assert.equal(hermes.calls.runs.length, 1);
+  assert.equal(summary.scored, JOB_IDS.length);
+});
+
+test("a bounded Fit pass yields immediately when only leased work exists", async () => {
+  const joblit = fakeJoblit({
+    batches: [{ jobIds: [], pendingTotal: 3, leased: 3, retryAfterMs: 1 }, {}],
+  });
+  const hermes = fakeHermes();
+
+  const summary = await processFitQueue({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    maxBatches: 1,
+    leaseWaitMs: 1,
+    log: () => {},
+  });
+
+  assert.equal(joblit.calls.nextBatch, 1);
+  assert.equal(hermes.calls.runs.length, 0);
+  assert.deepEqual(summary, { scored: 0, failed: 0, stopped: null });
+});
+
 test("retries the Fit prompt without claimToken only for an old strict server", async () => {
   const joblit = fakeJoblit({
     batches: [{ jobIds: JOB_IDS }, {}],

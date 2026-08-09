@@ -52,12 +52,9 @@ describe("createAgentCredential", () => {
         }),
     );
 
-    const result = await createAgentCredential(
-      "user-1",
-      "Home Runner",
-      30,
-      ["fit:drain"],
-    );
+    const result = await createAgentCredential("user-1", "Home Runner", 30, [
+      "fit:drain",
+    ]);
 
     expect(result.rawToken).toMatch(/^jfagent_v1_/);
     expect(result).toMatchObject({
@@ -71,9 +68,7 @@ describe("createAgentCredential", () => {
     expect(prisma.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         userId: "user-1",
-        tokenHash: createHash("sha256")
-          .update(result.rawToken)
-          .digest("hex"),
+        tokenHash: createHash("sha256").update(result.rawToken).digest("hex"),
         name: "Home Runner",
         audience: "joblit-agent",
         version: 1,
@@ -104,7 +99,7 @@ describe("createAgentCredential", () => {
 });
 
 describe("Agent credential management", () => {
-  it("lists only the caller's non-revoked credentials without their hashes", async () => {
+  it("lists only the caller's usable credentials without their hashes", async () => {
     const records = [
       {
         id: "credential-1",
@@ -121,7 +116,11 @@ describe("Agent credential management", () => {
 
     await expect(listAgentCredentials("user-1")).resolves.toEqual(records);
     expect(prisma.findMany).toHaveBeenCalledWith({
-      where: { userId: "user-1", revokedAt: null },
+      where: {
+        userId: "user-1",
+        revokedAt: null,
+        expiresAt: { gt: expect.any(Date) },
+      },
       select: {
         id: true,
         name: true,
@@ -139,9 +138,9 @@ describe("Agent credential management", () => {
   it("revokes only a credential owned by the caller", async () => {
     prisma.updateMany.mockResolvedValue({ count: 1 });
 
-    await expect(
-      revokeAgentCredential("user-1", "credential-1"),
-    ).resolves.toBe(true);
+    await expect(revokeAgentCredential("user-1", "credential-1")).resolves.toBe(
+      true,
+    );
     expect(prisma.updateMany).toHaveBeenCalledWith({
       where: {
         id: "credential-1",
@@ -155,9 +154,9 @@ describe("Agent credential management", () => {
   it("atomically hides absent, foreign, and already-revoked credentials", async () => {
     prisma.updateMany.mockResolvedValue({ count: 0 });
 
-    await expect(
-      revokeAgentCredential("user-1", "missing"),
-    ).resolves.toBe(false);
+    await expect(revokeAgentCredential("user-1", "missing")).resolves.toBe(
+      false,
+    );
     expect(prisma.updateMany).toHaveBeenCalledOnce();
   });
 });
