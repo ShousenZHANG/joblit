@@ -1,6 +1,8 @@
 # ADR-0016: Persist Agent queue identity and recover only provable Hermes work
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-0018 for Hermes recovery (section 5). The Fit
+  queue durability decisions — durable `FitBatchClaim` leases, receipt
+  uniqueness, cancellation semantics — remain in force.
 - **Date:** 2026-08-02
 - **Context owner:** Joblit Engineering
 

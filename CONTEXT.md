@@ -127,7 +127,7 @@ See **ADR-0001** for the persistence rationale.
 
 The end-to-end process of converting a Master Resume Profile + a Job into a finished Application. Runs through three phases:
 
-1. **Generate** — produce AI proposals (auto via Gemini, or manual via external LLM + JSON paste).
+1. **Generate** — produce AI proposals. The server never calls a model (ADR-0015): either the local Runner drives the Codex CLI, or the user pastes an external LLM's JSON back in.
 2. **Edit** — user reviews AI proposals on `/jobs/[id]/tailor`, accepts/rejects/edits.
 3. **Finalize** — render one target's LaTeX → PDF and publish that document.
 

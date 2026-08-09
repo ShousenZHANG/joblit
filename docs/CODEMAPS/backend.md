@@ -261,14 +261,11 @@ module-level in-memory. Documented at their definitions.
 
 | Destination | Module | Through `safeFetch`? |
 |---|---|---|
-| OpenAI | `providers.ts:112` | Yes — reachable only from tests |
-| Anthropic | `providers.ts:182` | Yes — reachable only from tests |
 | LaTeX render service | `compilePdf.ts:68` | Yes — host pre-parsed, 12 MiB, 20 s. Plain HTTP only under `LATEX_RENDER_ALLOW_INSECURE_HTTP` |
 | Vercel Blob put/list/del | `artifacts/vercelBlobAdapter.ts`, reached through Application commit and the protected reconciler | No — SDK-internal |
-| Vercel Blob read (resume photo) | `resumePhotoBlob.ts:99` | Yes — path must be `resume-photos/${userId}/…` |
+| Vercel Blob read (resume photo) | `lib/server/resumePhotoBlob.ts` | Yes — path must be `resume-photos/${userId}/…` |
 | GitHub Actions dispatch | `app/api/fetch-runs/[id]/trigger/route.ts:312` | Yes — AU market only |
 | GitHub trending HTML | `githubTrending.ts:167` | Yes |
-| YouTube Data API | `videoPipeline.ts:431` | Yes |
 
 CN discovery and GLOBAL public-feed/ATS/source-health execution edges were
 removed in Stage 1 (ADR-0017). Their names may still appear in immutable

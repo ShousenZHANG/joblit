@@ -43,9 +43,9 @@ There is **no** root `middleware.ts`. Auth gating is per-page
 There is no `/automation` route.
 
 `AppNav.tsx` computes the link set from `useMarket()`: CN gets
-`[/resume]`; AU gets `[/jobs, /fetch, /resume]`. GitHub trending and Runner
-setup are nav
-popover in both markets, not a route.
+`[/resume]`; AU gets `[/jobs, /fetch, /resume]`. Neither is a route any more:
+GitHub trending is a popover in both markets, Runner setup is a popover gated on
+`!isCN`. Language, theme, the guide and sign-out sit behind the account avatar.
 `CommandPalette.tsx` duplicates the same conditional list.
 
 `app/global-error.tsx` renders **outside** `NextIntlClientProvider`, so it reads
@@ -64,9 +64,9 @@ Several state machines share one closure. By responsibility:
 | Selection and URL | `selectedId`, explicit-clear state, the sole workspace URL writer, and scroll-anchor capture/restore around mutations. |
 | List data | `useJobPagination`, `useJobMutations`, suppressed-delete rows, keyboard navigation, and the >80-row virtualization latch. |
 | Generation | `useExternalGenerate` owns the interactive manual JSON-import flow; local unattended generation is not mounted in the page and belongs to the Agent Runner. |
-| Fit scan | `useFitScan` enqueues/prescreens through the session API, polls counts while the Runner drains the database queue, and Stop waits for the server to terminally cancel all pending/claimed work. |
 | Batch | Selection, create-batch mutation, active-batch conflict handling, and batch delete. |
-| Surfaces | `ExternalGenerateDialog`, `TailorReviewDialog`, mobile detail overlay, and `JobBatchDeleteDialog`. |
+| Batch progress | `useBatchProgress` polls the active batch's server-side counts, refreshes the list as jobs settle, and stops the moment a batch reaches a terminal state. |
+| Surfaces | `app/(app)/jobs/components/` — `BatchProgressBanner`, `GenerateProgress`, `JobRequirementsPanel`, `JobSearchBar`, `JobDescriptionMarkdown`, `JsonInputPanel`, `RunnerRequiredDialog`, `StepImport`, `StepIndicator`, `VirtualJobList`, plus `ExternalGenerateDialog`, `TailorReviewDialog` and the mobile detail overlay. |
 
 Per ADR-0007, status controls read `ACTIVE_JOB_STATUS_VALUES` (`:821`, `:1082`),
 while the label map in `types.ts:6-23` and the badge maps in `JobListItem.tsx`
@@ -82,9 +82,8 @@ on the colour for `APPLIED`.
 | `useJobMutations.ts` (499) | All list writes: optimistic status patch with rollback, the 5 s undo window, a serial commit runner, session tombstones, a `pagehide` flush with `keepalive`, chunked batch delete with partial-success semantics. | `{updateStatus, requestDelete, batchDeleteMutation, updatingIds, deletingIds, error, setError}` |
 | `useKeyboardNavigation.ts` (210) | j/k/Arrow/Escape row navigation with cancellable rAF focus retries for virtualized rows. | void |
 | `useExternalGenerate.ts` (504) | The interactive manual-import Generate path, stable single-target issue recovery, and the shared entry into the Edit phase. | 23 members, including raw dialog/form setters. |
-| `useFitScan.ts` | Browser control for the Runner-drained database queue: enqueue/prescreen, poll authoritative counts, cancel through the session-only server command, and show a waiting state when no Runner makes progress. It performs no model call. | `{state, start, stop, reset}` with polling/cancellation test seams. |
 | `serialRunner.ts` (30) | Chains async tasks so a burst of expiring undo timers cannot fire parallel DELETEs. | — |
-| `runChunkedBatchDelete.ts` (88) | Sequential 25-id chunks; one failing chunk does not abort the rest. | — |
+| `useBatchProgress.ts` | Polls the active batch's counts, exposes `{state, refresh, dismiss, visible}`, and ends its own chain once the batch is terminal. | Returns `active` from each poll so an idle workspace makes one request, not a heartbeat. |
 
 The deferred-delete tombstone set lives in **three** places: module-level
 `sessionDeletedJobIds` (`useJobMutations.ts:34`), component state
@@ -98,7 +97,7 @@ The deferred-delete tombstone set lives in **three** places: module-level
 exports. `jobsUrlState.ts` resolves retired statuses through `toActiveJobStatus`
 (`:38-41`) per ADR-0007; `serializeJobListItem.ts:21` does **not** and casts the
 stored status raw. Also: `visibleTotalCount.ts`, `tailorParser.ts`,
-`structuralRequirementParser.ts`, while the shared
+`jobStatusPresentation.ts`, `constants.ts`, while the shared
 `jobExperienceAnalysis.ts` module owns evidence-preserving JD year analysis;
 `skillPackMeta.ts` owns skill-pack freshness.
 
@@ -157,7 +156,9 @@ spreads all three return objects into one context value (`:238-255`) — roughly
 - Derives the Resume Locale from the UI Locale (`:56`).
 - Owns dirty tracking by stringifying `buildPayload("save")` against a baseline.
 - Gates the live preview on an actually-visible surface via `matchMedia`.
-- `beforeunload` guard while dirty — the Studio has no autosave.
+- `useResumeAutosave.ts` debounces 800 ms from the last edit, is single-flight,
+  and flushes on blur and `beforeunload`. `SaveIndicator.tsx` renders its status;
+  there is no Save button and no dirty-state nag.
 
 `useResumeForm.ts` (827) is pure client form state: eight `useState` slices, ~35
 immutable mutators, dnd-kit reordering with focus remapping, and `buildPayload(mode)`
@@ -178,6 +179,25 @@ never used.
 `ResumePageLayout.tsx` (318): `SectionContent` (`:42-178`) destructures ~40
 context values purely to re-drill them as props, giving `ExperienceSection` a
 17-prop interface. Only six files call `useResumeContext`.
+
+The editor's presentation layer was rebuilt around one scroll (ADR-less; see
+commits `b3a4852c`, `180506d9`, `a8d279f2`) and is not otherwise mapped here:
+
+| Module | Role |
+|---|---|
+| `SectionShell.tsx` / `SectionNav.tsx` | One continuous scroll with a scrollspy rail. Completion is signalled by **exception** — an empty section dims; there are no filled-in badges. |
+| `EntryCard.tsx` | A collapsed entry is a summary row (title + `entrySummary.ts` subtitle); expanding animates height. Remove is hidden when only one entry remains. |
+| `GhostAddRow.tsx` | The dashed "add another" affordance that ends every repeatable list. |
+| `BulletList.tsx` | Bullet rows with the bold-markdown seam (`applyBoldMarkdown` + `registerMarkdownRef`). |
+| `EntryLinkRows.tsx` | Optional per-entry links; a known host auto-fills an empty label through `linkBrand.ts`. |
+| `ReorderableList.tsx` / `SortableItem.tsx` | dnd-kit reordering shared by every repeatable section. |
+| `SaveIndicator.tsx` | The only autosave surface — status text, no button. |
+| `PreviewPanel.tsx` / `ResumePdfPreview.tsx` / `VersionSelector.tsx` | The right-hand preview column and profile-version switcher. |
+| `sectionConfig.ts` | Section id → icon/title/description, consumed by both the shell and the rail. |
+
+`useResumeProfiles.ts` splits identity adoption (`adoptProfileMeta`) from full
+hydration (`hydrateFromResumeApi`) on purpose: autosave must adopt the saved
+version's identity **without** replacing the draft the user is still typing into.
 
 Section ordering is locale-dependent: `getSectionIds(locale)` returns 6 sections
 for EN and 5 for CN, with Education before Experience (`constants.ts:67-75`).
@@ -253,7 +273,7 @@ allowlist for the seven template-literal-built prefixes, each naming its call
 site. Adding a key to one file and not the other now fails the build.
 
 **Surfaces with hardcoded English**, so a reader does not assume coverage:
-`TailorReviewDialog.tsx`, `JobBatchDeleteDialog.tsx`, `app/not-found.tsx`, and
+`TailorReviewDialog.tsx`, `app/not-found.tsx`, and
 the toast copy in `useJobMutations.ts` and
 `useExternalGenerate.ts`.
 

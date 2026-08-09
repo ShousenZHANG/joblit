@@ -5,6 +5,12 @@
 - **Context owner:** Joblit Engineering
 - **Supersedes:** ADR-0003 (Seek fetch via browser extension), ADR-0004 (hybrid
   local AI runtime), ADR-0012 (extension ingress and abuse budget)
+- **Partly superseded by:** ADR-0018. The authentication, queue-draining, and
+  deferred-submission decisions below still hold. Every clause describing a
+  **Hermes gateway** — decision 3, and the Hermes state consequence — is
+  obsolete: the Runner now drives the Codex CLI as a child process and holds no
+  model credential. Credentials are minted through `/api/agent-tokens`, reached
+  from the Runner setup popover in the app nav, not from a `/agent` page.
 
 ## Context
 

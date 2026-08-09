@@ -62,6 +62,14 @@ reintroduced.
 - `api/` — Shared route utilities: `errorResponse`, `rateLimit`, `routeHandler`
 - `auth/` — Session and agent-credential middleware: `requireSession`,
   `requireAgentCredential`
+- `tailoringRuns/` — Tailoring Run leases, attempt fences, and receipt settlement (ADR-0009)
+- `artifacts/` — Artifact inventory, claim, and delete reconciliation (ADR-0010)
+- `runtimeCapabilities/` — The single reader for paired optional credentials; never serialize what it returns (ADR-0013)
+- `net/` — `safeFetch`: host allowlist, private-address blocking, redirect and size limits for every outbound call
+- `security/` — Credential hashing and token-shape validation
+- `db/` — Advisory-lock helpers and transaction boundaries
+- `observability/` — `errorReporter`; Sentry is an optional, uninstalled hook
+- `archive/` — Retired-surface holding area; nothing here is on a request path
 - `prisma.ts` — Prisma singleton with Neon serverless adapter
 
 ### Shared (`lib/shared/`)
@@ -76,7 +84,8 @@ reintroduced.
 
 ### Prisma Models (27)
 
-- Core workflow: `Job`, `FetchRun`, `FitBatchImportReceipt`, `ApplicationBatch`, `ApplicationBatchTask`, `Application`, `ResumeProfile`, `ActiveResumeProfile`, `PromptRuleTemplate`
+- Core workflow: `Job`, `FetchRun`, `ApplicationBatch`, `ApplicationBatchTask`, `Application`, `ResumeProfile`, `ActiveResumeProfile`, `PromptRuleTemplate`
+- Fit queue: `FitBatchClaim`, `FitBatchClaimItem`, `FitBatchImportReceipt`
 - Provenance: `ApplicationEvent` (immutable ledger, carries company/title snapshots so it outlives the Job), `EvidenceSnapshot`, `ClaimEvidence`
 - Tailoring acceptance (ADR-0009): `TailoringRun`, `TailoringRunReceipt`
 - Artifact lifecycle (ADR-0010): `ApplicationArtifact`, `ApplicationArtifactInventoryCheckpoint`
@@ -97,7 +106,7 @@ Two locales: `en-AU` and `zh-CN` via next-intl. Locale is cookie-based. Resume p
 
 ### Authentication
 
-NextAuth v4 with GitHub + Google OAuth, Prisma adapter (database sessions). Sign-in is free, open, and self-service: no invitation or manual approval is required. Session includes `user.id`. Versioned `AgentCredential` records issued at `/agent` authenticate the Runner and external agents through `withAgentRoute`; each protected route declares a required capability, and a presented Bearer credential never falls back to the cookie. Credentials use the `jfagent_v1_` prefix, `joblit-agent` audience, and SHA-256 hashes at rest. See AGENTS.md. The AU worker uses `FETCH_RUN_SECRET` for `/api/fetch-runs/[id]/config` and `/api/fetch-runs/[id]/commit`; the commit module derives tenant identity from the stored run. The retired `/api/admin/import`, `/api/fetch-runs/[id]/update`, and `/api/ext/**` routes must not be reintroduced.
+NextAuth v4 with GitHub + Google OAuth, Prisma adapter (database sessions). Sign-in is free, open, and self-service: no invitation or manual approval is required. Session includes `user.id`. Versioned `AgentCredential` records — minted through the session-only `/api/agent-tokens` route, reached from the Runner setup popover in the app nav — authenticate the Runner and external agents through `withAgentRoute`; each protected route declares a required capability, and a presented Bearer credential never falls back to the cookie. Credentials use the `jfagent_v1_` prefix, `joblit-agent` audience, and SHA-256 hashes at rest. See AGENTS.md. The AU worker uses `FETCH_RUN_SECRET` for `/api/fetch-runs/[id]/config` and `/api/fetch-runs/[id]/commit`; the commit module derives tenant identity from the stored run. The retired `/api/admin/import`, `/api/fetch-runs/[id]/update`, and `/api/ext/**` routes must not be reintroduced.
 
 ### Testing
 
@@ -113,7 +122,7 @@ Required for the running app: `DATABASE_URL`, `AUTH_SECRET`, `GOOGLE_CLIENT_ID`,
 
 Migration connection: production must resolve an unpooled endpoint from `DIRECT_URL`, `DATABASE_URL_UNPOOLED`, `POSTGRES_URL_NON_POOLING`, or the verified Neon `-pooler` host mapping. `DATABASE_URL` remains pooled for the serverless runtime.
 
-Optional integrations: `BLOB_READ_WRITE_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_TOKEN`, `GITHUB_WORKFLOW_FILE`, `GITHUB_REF`, `JOBLIT_WEB_URL`, `CRON_SECRET`, `ARTIFACT_RECONCILE_SECRET`, `ARTIFACT_RECONCILE_ENABLED`
+Optional integrations: `BLOB_READ_WRITE_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_TOKEN`, `GITHUB_WORKFLOW_FILE`, `GITHUB_REF`, `JOBLIT_WEB_URL`, `CRON_SECRET`, `ARTIFACT_RECONCILE_SECRET`, `ARTIFACT_RECONCILE_ENABLED`, `LATEX_RENDER_ALLOW_INSECURE_HTTP`, `APPLICATION_BATCH_TASK_STALE_MS`
 
 Application modules consume optional integrations through
 `lib/server/runtimeCapabilities`, not by assembling environment-variable

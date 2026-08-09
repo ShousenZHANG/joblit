@@ -11,7 +11,9 @@ Run a deterministic, resumable batch loop that generates resume and cover output
 
 ## Authentication
 
-Use an `AgentCredential` issued from Joblit `/agent` for unattended requests:
+Use an `AgentCredential` minted through the session-only `/api/agent-tokens`
+route — reached from the Runner setup popover in the Joblit nav — for unattended
+requests:
 
 ```http
 Authorization: Bearer jfagent_v1_<64-lowercase-hex-characters>

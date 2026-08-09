@@ -96,7 +96,9 @@ Runner heartbeats its attempt while scoring through the user's Hermes gateway
 (`tools/runner/fitQueue.mjs`), and results come back through
 `/api/jobs/fit/batch-import`. The browser enqueues, polls `/api/jobs/fit/status`,
 and terminally cancels pending/claimed queue work through
-`/api/jobs/fit/cancel` (`app/(app)/jobs/hooks/useFitScan.ts`).
+`/api/jobs/fit/cancel`. **No browser surface drives this today** — `useFitScan`
+was deleted with the Jobs filter rebuild, and the fit queue is currently reached
+only by the Runner. The routes remain; see the pending fit-retirement work.
 
 Each prompt exposes a stable 64-hex issue bound once to the Claim's exact Job
 set, Resume snapshot, and prompt receipt. `lib/server/jobs/fitBatchImport.ts`
@@ -240,7 +242,7 @@ in the clear — treat TLS in front of the renderer as the actual fix.
 ```
 app/(marketing)  app/(auth)  app/(app)        ← React, next-intl, React Query
                                   │
-                             app/api/**        ← 67 route handlers
+                             app/api/**        ← 58 route handlers
                                   │
                             lib/server/**      ← business logic
                                   │
@@ -267,7 +269,7 @@ repo-import-free and pins the same HTTP shapes in its own Node tests.
   `ARTIFACT_RECONCILE_ENABLED` kill switch is explicitly enabled. Resume Photos
   remain a separate lifecycle.
 - `lib/api/fetchJson.ts` is the intended JSON client seam across Jobs, Guide,
-  Fetch status, Discover and Tailoring Edit. Binary, streaming and `keepalive`
+  Fetch status, trending and Tailoring Edit. Binary, streaming and `keepalive`
   requests still use platform `fetch` where that interface does not fit.
 - `tools/runner/` deliberately imports nothing from the repository. The HTTP
   API is its contract, exactly as for any external agent, so the shapes it
@@ -310,7 +312,7 @@ per-target hashes, per-target CAS, or independent target lifecycle state.
 ## Testing
 
 Vitest, jsdom, `pool: "vmThreads"` (the forks pool does not register suites on
-Windows in this project — `vitest.config.ts`). 265 root test files. The Runner
+Windows in this project — `vitest.config.ts`). 248 root test files. The Runner
 suites use Node's built-in test runner (`npm run test:runner`).
 
 Coverage thresholds are a **ratchet floor** set just under measured coverage,

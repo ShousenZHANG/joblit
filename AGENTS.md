@@ -20,8 +20,9 @@ Given a filtered set of `NEW` jobs, run a deterministic loop:
 Agent-facing protocol routes accept either identity, and both resolve to the
 same user-scoped context:
 
-- **AgentCredential** — `Authorization: Bearer <token>`, issued from the
-  session-only Joblit `/agent` page and stored as a SHA-256 hash. Version 1
+- **AgentCredential** — `Authorization: Bearer <token>`, minted through the
+  session-only `/api/agent-tokens` route (reached from the Runner setup popover
+  in the app nav) and stored as a SHA-256 hash. Version 1
   credentials use prefix `jfagent_v1_`, audience `joblit-agent`, and explicit
   `fit:drain`, `tailoring:execute`, or `tailoring:control` capabilities. This is
   how an unattended agent runs.
@@ -47,7 +48,8 @@ an unattended Runner claims work and reports exceptional outcomes through
 
 The first-party implementation of this protocol is the Joblit Runner
 (`tools/runner`, see its [README](tools/runner/README.md)) — a dependency-free
-local worker that generates through a loopback Hermes gateway.
+local worker that generates by running the official Codex CLI as a child
+process. It holds no model credential of its own.
 
 ## Canonical APIs
 
@@ -96,7 +98,7 @@ derived from the exact ordered Claim Job set and the server-owned prompt
 snapshot. New `next-batch` responses also carry `claimId` and `attemptId`
 (`claimToken` remains the compatibility alias). Echo that handle to `prompt`,
 verify the returned `fitClaim`, and renew it through `/api/jobs/fit/heartbeat`
-while Hermes runs. Older servers/runners may omit the new fields during the
+while the model runs. Older servers/runners may omit the new fields during the
 expand rollout.
 
 Deploy this expansion migration-before-build and switch the application alias
@@ -104,12 +106,8 @@ atomically. Old app revisions may drain work already in flight, but must not
 keep receiving requests beyond the five-minute legacy Fit lease window; old
 Runner envelopes remain supported against the new application revision.
 
-Hermes transcript recovery accepts only one matching terminal assistant row:
-non-empty content, no tool calls, and either `finish_reason: "stop"` or a
-legacy row with no finish reason. Earlier tool-call/tool rows are allowed only
-when that later unique terminal row completes the sequence and no
-assistant/tool row follows it. Treat HTTP 408/425/429/5xx as deferred work, not
-a definite model failure.
+Treat HTTP 408/425/429/5xx from the model as deferred work, not a definite
+failure.
 
 Send the returned key, unchanged `promptMeta`, same claimed Job ids, current
 attempt, and model output to `batch-import`. `FitBatchImportReceipt` is unique
@@ -119,13 +117,12 @@ settlement; different content for an already-settled issue conflicts.
 
 Treat a timeout, connection loss, or HTTP 408/425/429/5xx during import as an
 **unknown settlement**, not a failure. Replay the exact request. If the result remains
-unknown, preserve the claim and local Hermes state for a later reconciliation;
+unknown, preserve the claim for a later reconciliation;
 do not mark those Jobs failed or generate a replacement result.
 On startup, query `POST /api/jobs/fit/settlement-status` for every recoverable
-Fit phase. Preserve Hermes state for `ACTIVE`; for `SETTLED` or
-`TERMINAL_WITHOUT_RECEIPT`, retire live local phases through the same
-stop/transcript proof boundary before cleanup. The legacy `settlement` member
-remains present during rollout. Browser `POST /api/jobs/fit/cancel` is
+Fit phase. `ACTIVE` means the claim is still yours; `SETTLED` and
+`TERMINAL_WITHOUT_RECEIPT` both mean stop and drop the local work. The legacy
+`settlement` member remains present during rollout. Browser `POST /api/jobs/fit/cancel` is
 session-only: it terminally cancels pending and claimed rows, so a late Runner
 import is rejected and a later explicit Run may retry them.
 
@@ -171,28 +168,22 @@ import is rejected and a later explicit Run may retry them.
   stale attempt, cancellation, or local cleanup failure is not such a failure.
 - Keep idempotent behavior: same job/task should not produce inconsistent state.
 - Prefer schema-valid JSON only; no markdown wrapper around payload JSON.
-- Never expose a private Hermes `run_*` identifier to Joblit. Only the public
-  `{ id, attemptId }` Tailoring Run handle crosses the Joblit boundary.
+- Only the public `{ id, attemptId }` Tailoring Run handle crosses the Joblit
+  boundary. Never send a local process, session, or model-side identifier.
 
 ## Runner Recovery
 
-The first-party Runner persists only opaque Hermes session/run ids, hashes, a
-repair transcript cursor, and non-secret Tailoring Run operation identity in
-`~/.joblit/runner-state-v1.json`. It never stores prompts, model output,
-feedback text, `AgentCredential` values, or the Hermes key. Local file updates
-are atomic, serialized by a machine-local lock, and reserve starts/repairs with
-compare-and-set so two local Runner processes cannot submit the same turn.
+There is no local recovery state and no `~/.joblit/runner-state-v1.json`. A
+generation is a child process: if the Runner dies, the child dies with it, so
+nothing was produced and nothing was imported. The next run simply claims the
+task again.
 
-On restart, reconcile each starting/running/completed/repairing local operation
-against the server-owned Tailoring Run before claiming new work: acknowledge
-and clear it when the target receipt is accepted, discard it only when the
-server run is terminal without that target, and otherwise retain it for the
-exact active attempt. Before clearing a local `running` phase, stop its private
-Hermes run and observe a terminal status; clear `starting` only when the saved
-transcript cursor proves one unique terminal turn. Hermes `stopping` is only
-acknowledgement of a stop request, not a terminal state; keep polling the same
-private run id after restart. Cleanup after an accepted import is best effort
-and can be retried without reversing the authoritative Joblit settlement.
+Duplicate protection therefore lives entirely server-side, on the
+content-addressed receipts — `FitBatchImportReceipt` for the fit queue and
+`TailoringRunReceipt` plus the exact attempt fence for tailoring. An agent that
+does keep local state (an external orchestrator, say) must still reconcile it
+against the server-owned Tailoring Run before claiming new work: an import
+whose outcome is unknown is replayed unchanged, never reissued as new content.
 
 ## Deletion Contract
 

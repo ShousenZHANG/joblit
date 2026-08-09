@@ -1,6 +1,9 @@
 # ADR-0004: Use the stock Hermes local API runtime for Joblit
 
-- **Status:** Superseded by ADR-0014 (the local runtime is now driven by the Runner, not the extension)
+- **Status:** Superseded by ADR-0014 (the local runtime moved from the extension
+  to the Runner) and then by ADR-0018 (the Hermes runtime was retired entirely for
+  the Codex CLI). **The `codex_app_server` rejection recorded below was reversed** —
+  see ADR-0018, "The ADR-0004 reversal".
 - **Date:** 2026-07-15
 - **Context owner:** Joblit Engineering
 

@@ -1,5 +1,12 @@
 # Joblit Hermes Windows bootstrap
 
+> **Not on any runtime path.** ADR-0018 retired the Hermes gateway: the Runner
+> now drives the official Codex CLI as a child process and holds no model
+> credential. This tree is still built, signed, and tested by CI, but no Joblit
+> code at HEAD talks to a Hermes install. Everything below describes what this
+> bootstrap does, not how Joblit currently generates anything. Whether to delete
+> it is an open decision recorded in ADR-0018.
+
 This bootstrap installs only Joblit-owned profile files into an opaque per-account stock Hermes profile. It does not download, patch, vendor, or import Hermes runtime code. Install or update Hermes from its official project first: <https://github.com/NousResearch/hermes-agent>.
 
 Requirements: Windows PowerShell 5.1 or PowerShell 7, Node.js 22+, stock Hermes `>=0.18.2`, and a profile name supplied by authenticated Joblit context in the form `joblit-<16-64 lowercase hex characters>`. Never derive the name from an email, display name, or raw database ID.

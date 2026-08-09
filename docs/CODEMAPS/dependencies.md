@@ -11,7 +11,7 @@ ADR-0014 and `tools/runner/README.md`.
 
 | Group | Packages |
 |---|---|
-| Framework | `next ^16.2.10`, `react 19.2.7`, `react-dom 19.2.7` (both pinned exactly) |
+| Framework | `next ^16.2.11`, `react 19.2.7`, `react-dom 19.2.7` (both pinned exactly) |
 | Data | `@prisma/client ^7.8.0`, `@prisma/adapter-neon ^7.8.0`, `@neondatabase/serverless ^1.0.2` |
 | Auth | `next-auth ^4.24.13`, `@next-auth/prisma-adapter ^1.0.7` |
 | Validation | `zod ^4.3.5` — the canonical validation layer for every API boundary |
@@ -30,15 +30,15 @@ ADR-0014 and `tools/runner/README.md`.
 `axe-core` + `vitest-axe`, `tailwindcss ^4` + `@tailwindcss/postcss` +
 `tw-animate-css`, `prisma`, `knip`, `dotenv`, and the `@types/*`.
 
-There is **no** AI SDK dependency. Gemini, OpenAI and Anthropic are called over
-plain HTTP through `lib/server/net/safeFetch.ts` — see
-[backend.md](./backend.md#outbound-network-edges).
+There is **no** AI SDK dependency and **no provider module at all**. The server
+calls no model (ADR-0015); generation happens in the user's own Codex CLI, driven
+by the local Runner (ADR-0018).
 
 ### `overrides`
 
-Seven packages are pinned in `package.json:114-122` — `hono`,
-`@hono/node-server`, `lodash`, `postcss`, `fast-uri`, `uuid`, `ws`. None is a
-declared dependency; all seven are transitive. They read as security floors.
+Nine packages are pinned in `package.json` `overrides` — `lodash`, `nanoid`,
+`postcss`, `fast-uri`, `find-my-way`, `sharp`, `undici`, `uuid`, `ws`. None is a
+declared dependency; all nine are transitive. They read as security floors.
 
 `tools/ci/check-dependency-policy.mjs:19-20` reads only `pkg.dependencies` and
 `pkg.devDependencies`, so it never inspects `overrides`. If the transitive path
@@ -120,7 +120,6 @@ runner — `tools/hermes/**`, `tools/runner/**`, and `tools/deploy/`.
 | NextAuth | `AUTH_SECRET`, `GOOGLE_CLIENT_ID/SECRET`, `GITHUB_ID/SECRET` | sign-in |
 | LaTeX render service | `LATEX_RENDER_URL`, `LATEX_RENDER_TOKEN` | every PDF |
 | Fetch worker config + commits | `FETCH_RUN_SECRET` | `/api/fetch-runs/[id]/{config,commit}` |
-| Gemini | `GEMINI_API_KEY`, `GEMINI_MODEL` | optional — absent, Tailoring falls back deterministically |
 | Vercel Blob | `BLOB_READ_WRITE_TOKEN` | required for FINAL artifact persistence outside tests and for reconciliation; DRAFT does not upload |
 | GitHub Actions | `GITHUB_OWNER/REPO/TOKEN/WORKFLOW_FILE` | optional — AU fetch dispatch |
 | Cron | `CRON_SECRET` | Vercel's bearer credential for scheduled daily refresh and artifact reconciliation |

@@ -1,6 +1,7 @@
 # ADR-0015: Generation is local-first; the server holds no model key
 
-- **Status:** Accepted
+- **Status:** Accepted. The decision is unchanged; ADR-0018 replaced the local
+  engine referenced in the consequences (Hermes gateway → Codex CLI).
 - **Date:** 2026-08-02
 - **Context owner:** Joblit Engineering
 
@@ -39,12 +40,13 @@ retired server-side generation surface to non-existence.
 
 ## Consequences
 
-- Two generation paths remain, both user-owned: the Runner (automated, local
-  Hermes, loopback-only) and manual import (zero-install, any model).
+- Two generation paths remain, both user-owned: the Runner (automated; drives
+  the user's own Codex CLI as a child process, per ADR-0018) and manual import
+  (zero-install, any model).
 - Privacy claim becomes unconditional: no resume or JD content is ever sent to
   a model by Joblit's servers, because the servers cannot.
 - There is no zero-effort server generation for users who will not run
   anything locally; the manual path is their floor. Revisiting that means
   revisiting this ADR, not quietly re-adding a key.
-- Hermes stays what it is designed to be: personal, local, one profile per
-  human. Any future shared hosting of it is out of scope for this product.
+- The local engine stays personal: one machine, one signed-in account. Any
+  future shared hosting of a model runtime is out of scope for this product.

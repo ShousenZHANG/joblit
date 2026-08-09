@@ -20,8 +20,8 @@ export function loadConfig(env) {
   if (missing.length > 0) {
     throw new Error(
       `Missing required environment variables: ${missing.join(", ")}. ` +
-        "Issue JOBLIT_TOKEN from the Joblit Agent page, then sign in to the " +
-        "model with: codex login",
+        "Issue JOBLIT_TOKEN from the Runner setup popover in the Joblit nav, " +
+        "then sign in to the model with: codex login",
     );
   }
 

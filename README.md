@@ -35,15 +35,15 @@ Joblit uses both as **product infrastructure**, not just as build-time assistant
 
 ### GPT-5.6 can run the tailoring through the user's local Runner
 
-The first-party Agent path generates CVs and cover letters through a local
-Hermes runtime bound to `127.0.0.1`, driven by the
+The first-party Agent path generates CVs and cover letters through the official
+Codex CLI running as a child process of the
 [Joblit Runner](./tools/runner/) — a dependency-free Node process that speaks
 the same public API any external agent uses. Joblit already stores the Job and
 Master Resume Profile needed to build the prompt; the privacy boundary is the
-model connection: the Hermes key stays on the user's machine, and the Runner
-refuses to send it anywhere but loopback. Which model/provider receives prompt
-content is controlled by that user's Hermes configuration. A separate,
-feature-gated server-batch path can use the deployment's configured provider.
+model connection. Joblit never sees a model credential at all: `codex login`
+holds the user's own ChatGPT subscription and the child process inherits it.
+There is no server-side generation path and no server-held model key
+(ADR-0015).
 
 What the model is trusted with is deliberately narrow:
 
@@ -302,12 +302,12 @@ stores the deterministic workflow and never sees your model key.
 - **No account gate** — there is no invitation, manual approval, subscription, or credit-card requirement
 - **Run-bound worker access** — the AU JobSpy worker reads one run's config and submits `fetch-run-commit/v1` commands with `FETCH_RUN_SECRET`; the server derives the owning user and market from that run
 
-### Discover Learning Feed
+### GitHub Trending
 
-- Curated, ranked YouTube videos across Codex, Claude, RAG, agents, and harness engineering
-- Official-order GitHub weekly/monthly trending repositories with an optional low-signal filter
-- One authenticated daily Vercel Cron refresh during the `06:00 UTC` target hour; DB-backed fresh and last-known-good caches survive serverless cold starts
-- GitHub refresh remains available when `YOUTUBE_API_KEY` is absent or exhausted; an empty/changed GitHub parse never overwrites known-good content
+- Official-order GitHub weekly/monthly trending repositories, reached from the flame icon in the app nav
+- Fetched on demand the first time the popover is opened, then cached per period for the session
+- A DB-backed last-known-good cache survives serverless cold starts; an empty or changed parse never overwrites known-good content
+- The curated YouTube video pipeline and the standalone Discover workspace were deleted; do not reintroduce them
 
 ## Local Runner
 
@@ -370,9 +370,14 @@ so a scan no longer dies when you close the tab.
 
 ### Security
 
-- **The Hermes key never reaches Joblit.** The Runner reads it from your
-  environment and refuses to construct against a non-loopback base URL, so a
-  typo in `HERMES_URL` fails loudly instead of exfiltrating the key.
+- **The Runner holds no model credential.** There is nothing to leak: `codex
+  login` stores the user's own subscription auth and the Codex child process
+  inherits it. The Runner's only secret is the Joblit agent token.
+- **The model is pinned to a text generator.** Every invocation passes
+  `--sandbox read-only`, `features.shell_tool=false`, `web_search=disabled`,
+  `--ignore-user-config`, `--ignore-rules`, `--ephemeral`, and a throwaway
+  working directory. Job descriptions are untrusted text from the internet and
+  they go straight into the prompt.
 - **Agent credentials are versioned, scoped, revocable, and stored hashed.**
   A presented credential is never rescued by a session cookie, so revoking one
   stops the Runner immediately. Runner credentials use the `jfagent_v1_`
@@ -385,8 +390,10 @@ so a scan no longer dies when you close the tab.
 `withAgentRoute` accepts either a Bearer `AgentCredential` or a browser session
 and produces the same identity, so the batch protocol, the fit queue and the
 tailoring endpoints serve humans and agents through one seam. Credentials are
-issued at `/agent`; that endpoint is session-only, because minting a credential
-from a credential would let a leaked credential outlive its revocation.
+minted through the session-only `/api/agent-tokens` route, reached from the
+Runner setup popover in the app nav; that endpoint refuses Bearer auth, because
+minting a credential from a credential would let a leaked credential outlive its
+revocation.
 
 ## Architecture
 
@@ -400,8 +407,8 @@ flowchart LR
   FE --> AUTH[NextAuth]
 
   RUN -->|AgentCredential| API
-  RUN -->|loopback| HERMES[Hermes gateway on 127.0.0.1]
-  HERMES --> GPT[Model provider selected in Hermes]
+  RUN -->|child process| CODEX[codex exec CLI]
+  CODEX --> GPT[The user's own ChatGPT subscription]
 
   FE --> FR[Create FetchRun]
   FR --> GH[GitHub Actions]
@@ -431,8 +438,7 @@ app/
     fetch/            Job intake pipeline
     jobs/             Jobs triage workspace
     resume/           Resume studio + prompt rules
-    discover/         Curated learning videos
-    agent/            Runner + AgentCredential setup
+    career/           Redirect to /jobs (ADR-0006)
   api/                Backend routes
     agent-tokens/     Issue and revoke AgentCredential records (session-only)
     fetch-runs/[id]/  Run config and receipt-backed worker commit routes
@@ -456,7 +462,7 @@ test/                 API + server test suites
 - npm **>= 10**
 - PostgreSQL database (Neon recommended; any Postgres 14+ works)
 - Vercel Blob token for FINAL export and artifact reconciliation
-- Optional: a local Hermes gateway for the Runner
+- Optional: the official Codex CLI, signed in, for the local Runner
 
 ### Setup
 
@@ -482,14 +488,19 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### Local Runner (optional)
 
-Generate CVs and cover letters on your own machine. Start your Hermes gateway,
-issue an `AgentCredential` from `/agent`, then:
+Generate CVs and cover letters on your own machine. Install and sign in to the
+Codex CLI, then issue an `AgentCredential` from the Runner setup popover in the
+app nav:
 
 ```bash
-export JOBLIT_URL="http://localhost:3000"
-export JOBLIT_TOKEN="jfagent_v1_..."
-export HERMES_KEY="..."
-node tools/runner/cli.mjs --watch
+npm i -g @openai/codex
+codex login
+```
+
+The popover hands you the whole start command as one line:
+
+```bash
+JOBLIT_URL="http://localhost:3000" JOBLIT_TOKEN="jfagent_v1_..." node tools/runner/cli.mjs --watch
 ```
 
 Full setup in [tools/runner/README.md](./tools/runner/README.md).
@@ -543,8 +554,7 @@ A complete template lives in [`.env.example`](./.env.example).
 | `BLOB_READ_WRITE_TOKEN`                                                                 | Enables FINAL PDF/photo persistence and artifact reconciliation; DRAFT edits do not require Blob                                                                                                                                 |
 | `GITHUB_OWNER` / `GITHUB_REPO` / `GITHUB_TOKEN` / `GITHUB_WORKFLOW_FILE` / `GITHUB_REF` | Fetch workflow dispatch; owner, repository, and token are required together                                                                                                                                                      |
 | `JOBLIT_WEB_URL`                                                                        | Public URL of this deployment                                                                                                                                                                                                    |
-| `YOUTUBE_API_KEY`                                                                       | Discover-page video pipeline                                                                                                                                                                                                     |
-| `CRON_SECRET`                                                                           | Bearer secret Vercel attaches to scheduled daily refresh and artifact-reconciliation calls                                                                                                                                       |
+| `CRON_SECRET`                                                                           | Bearer secret Vercel attaches to the scheduled artifact-reconciliation call                                                                                                                                            |
 | `ARTIFACT_RECONCILE_SECRET`                                                             | Optional additional bearer for manual artifact-reconciliation calls; it does not replace `CRON_SECRET` for Vercel Cron                                                                                                           |
 | `ARTIFACT_RECONCILE_ENABLED`                                                            | Default-off kill switch; only `true` / `1` permits Application artifact inventory, claim, and deletion                                                                                                                           |
 | `LATEX_RENDER_ALLOW_INSECURE_HTTP`                                                      | Explicit `true` opt-in for a self-hosted HTTP renderer; HTTPS remains the safe default                                                                                                                                           |
@@ -591,10 +601,6 @@ CI runs lint, dependency policy, full test suite, and (per-PR) Lighthouse agains
   refuses any other pooled fallback because Prisma's session-scoped migration
   lock cannot survive a transaction pooler.
   `DATABASE_URL` should remain pooled for the running serverless application.
-- Vercel invokes `/api/discover/refresh-daily` once per day during the
-  `06:00 UTC` target hour.
-  Configure `CRON_SECRET` and, for videos, `YOUTUBE_API_KEY`. This schedule
-  refreshes only Discover videos and GitHub repositories.
 - Vercel invokes `/api/artifacts/reconcile` at `07:00 UTC`, but the route has no
   inventory, claim, or delete side effect until
   `ARTIFACT_RECONCILE_ENABLED=true` (or `1`). When enabling Phase C, also
@@ -794,7 +800,7 @@ application instance can still reference the removed schema.
 | `GITHUB_DISPATCH_FAILED`          | Verify `GITHUB_TOKEN` workflow permissions on the fetch repo                                             |
 | Low import volume                 | Increase fetch breadth or relax title/description excludes                                               |
 | `PROMPT_META_MISMATCH`            | Re-download skill pack and re-copy the prompt                                                            |
-| Runner not picking up work        | Check the token is still active on the Agent page, and that the Hermes gateway is running on `127.0.0.1` |
+| Runner not picking up work        | Regenerate the credential in the Runner setup popover, and confirm `codex login` is still signed in                |
 | `403 Forbidden` on Vercel preview | Disable Vercel deployment protection or use the custom domain                                            |
 
 ## Contributing

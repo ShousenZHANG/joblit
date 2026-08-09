@@ -56,11 +56,12 @@ treating an empty claim as completion.
 
 Two credentials, both local.
 
-**AgentCredential** — on the Joblit `/agent` page, issue a version 1
-credential and copy it once. Joblit stores only its SHA-256 hash and cannot
-show the raw value again. The `jfagent_v1_` prefix, `joblit-agent` audience,
-and explicit capabilities keep this trust domain separate from browser
-sessions. Revoke the credential from the same page to stop the Runner
+**AgentCredential** — open the Runner setup popover in the Joblit nav (the plug
+icon) and issue a credential. It is shown once: Joblit stores only its SHA-256
+hash and cannot show the raw value again. The `jfagent_v1_` prefix,
+`joblit-agent` audience, and explicit capabilities keep this trust domain
+separate from browser sessions. **Regenerate** in the same popover revokes the
+old credential before issuing its replacement, which stops a running Runner
 immediately.
 
 **Model access** — the official Codex CLI, signed in to your own ChatGPT
@@ -76,7 +77,7 @@ Then the Runner's own two variables:
 
 ```bash
 export JOBLIT_URL="https://your-joblit-deployment"
-export JOBLIT_TOKEN="jfagent_v1_…"   # from /agent
+export JOBLIT_TOKEN="jfagent_v1_…"   # from the Runner setup popover
 export CODEX_MODEL="gpt-5.6-terra"   # optional; unset uses the CLI default
 export CODEX_BIN="/path/to/codex"    # optional; unset resolves from PATH
 ```

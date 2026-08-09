@@ -8,24 +8,24 @@ Repo: `https://github.com/ShousenZHANG/joblit.git`
 
 ### Option A — manual copy (Cursor)
 
-Copy `skills/joblit` into your Cursor skills directory:
+Copy `skills/jobflow` into your Cursor skills directory:
 
 ```bash
 mkdir -p ~/.cursor/skills
-cp -r skills/joblit ~/.cursor/skills/joblit
+cp -r skills/jobflow ~/.cursor/skills/jobflow
 ```
 
 Windows (PowerShell):
 
 ```powershell
 New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.cursor\skills"
-Copy-Item -Recurse -Force "skills\joblit" "$env:USERPROFILE\.cursor\skills\joblit"
+Copy-Item -Recurse -Force "skills\jobflow" "$env:USERPROFILE\.cursor\skills\jobflow"
 ```
 
 ### Option B — skills CLI
 
 ```bash
-npx skills add https://github.com/ShousenZHANG/joblit.git --skill joblit -y -g
+npx skills add https://github.com/ShousenZHANG/joblit.git --skill jobflow -y -g
 ```
 
 ## Contents
