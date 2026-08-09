@@ -25,6 +25,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { COARSE_POINTER_MIN_HEIGHT } from "@/components/ui/touchTarget";
@@ -246,7 +247,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
             <div className="w-full">
               <div
                 data-testid="job-primary-actions"
-                className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center"
+                className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center lg:gap-2"
               >
                 <Select
                   value={statusPresentation?.status}
@@ -289,43 +290,6 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                     {t("openJob")}
                   </a>
                 </Button>
-                {!isCN ? (
-                  /* Manual import is ADR-0015's zero-install floor: it must
-                     stay reachable, but it is the exception, so it lives
-                     behind the overflow rather than spending a labelled slot
-                     in the primary row. */
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        aria-label={t("moreActions")}
-                        data-testid="job-detail-overflow"
-                        className={`w-full justify-center rounded-xl text-foreground/60 transition-colors hover:bg-muted hover:text-foreground sm:w-9 ${actionHeight} px-0`}
-                      >
-                        <MoreHorizontal className="h-4 w-4" aria-hidden />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start">
-                      <DropdownMenuItem
-                        className="min-h-11"
-                        onClick={() => onManualGenerate(selectedJob, "resume")}
-                        disabled={externalPromptLoading}
-                      >
-                        <ClipboardPaste className="mr-2 h-4 w-4" aria-hidden />
-                        {t("manualGenerateCv")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="min-h-11"
-                        onClick={() => onManualGenerate(selectedJob, "cover")}
-                        disabled={externalPromptLoading}
-                      >
-                        <ClipboardPaste className="mr-2 h-4 w-4" aria-hidden />
-                        {t("manualGenerateCl")}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                ) : null}
                 {!isCN && selectedJob.resumePdfUrl ? (
                   <Button
                     variant="outline"
@@ -350,17 +314,56 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                     </a>
                   </Button>
                 ) : null}
-                <Button
-                  data-testid="job-remove-button"
-                  variant="outline"
-                  size="sm"
-                  disabled={deletingIds.has(selectedJob.id)}
-                  onClick={() => onDelete(selectedJob)}
-                  className={`w-full justify-center rounded-xl border-destructive/30 bg-destructive/10 text-sm font-medium text-destructive shadow-sm transition-all duration-200 hover:border-destructive/50 hover:bg-destructive/20 hover:text-destructive active:translate-y-[1px] disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none sm:ml-auto sm:w-auto ${actionHeight} px-4`}
-                >
-                  <Trash2 className="mr-1 h-4 w-4" />
-                  {t("remove")}
-                </Button>
+                {/* Everything that is neither routine nor about this job's
+                    own output. Manual import is ADR-0015's zero-install floor,
+                    so it must stay reachable; Remove is destructive, so it
+                    should not hold a permanent red slot beside actions the
+                    user takes dozens of times a day. */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={t("moreActions")}
+                      data-testid="job-detail-overflow"
+                      className={`w-full justify-center rounded-xl text-foreground/60 transition-colors hover:bg-muted hover:text-foreground sm:ml-auto sm:w-9 ${actionHeight} px-0`}
+                    >
+                      <MoreHorizontal className="h-4 w-4" aria-hidden />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {!isCN ? (
+                      <>
+                        <DropdownMenuItem
+                          className="min-h-11"
+                          onClick={() => onManualGenerate(selectedJob, "resume")}
+                          disabled={externalPromptLoading}
+                        >
+                          <ClipboardPaste className="mr-2 h-4 w-4" aria-hidden />
+                          {t("manualGenerateCv")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="min-h-11"
+                          onClick={() => onManualGenerate(selectedJob, "cover")}
+                          disabled={externalPromptLoading}
+                        >
+                          <ClipboardPaste className="mr-2 h-4 w-4" aria-hidden />
+                          {t("manualGenerateCl")}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                      </>
+                    ) : null}
+                    <DropdownMenuItem
+                      data-testid="job-remove-button"
+                      className="min-h-11 text-destructive"
+                      disabled={deletingIds.has(selectedJob.id)}
+                      onClick={() => onDelete(selectedJob)}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" aria-hidden />
+                      {t("remove")}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
             {tailorSource ? (

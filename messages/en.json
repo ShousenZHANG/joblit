@@ -49,7 +49,8 @@
     "paletteSearchJobs": "Search jobs for “{query}”",
     "paletteThemeLight": "Light theme",
     "paletteThemeDark": "Dark theme",
-    "paletteThemeSystem": "System theme"
+    "paletteThemeSystem": "System theme",
+    "account": "Account"
   },
   "runnerSetup": {
     "open": "Runner setup",
@@ -60,12 +61,12 @@
     "introNoCredential": "Generation runs on your machine. Create a credential, then start the Runner with the two lines below.",
     "createCredential": "Create credential",
     "rawTokenOnce": "This is the only time the credential is shown. Copy the first block now.",
-    "step1": "1 · Set these in your terminal",
-    "step2": "2 · Start the Runner",
     "modelHint": "Sign in to the model once with: codex login",
     "regenerate": "Regenerate credential",
     "copy": "Copy",
-    "copied": "Copied"
+    "copied": "Copied",
+    "startLabel": "Run this in your terminal",
+    "showSetup": "Show setup command"
   },
   "trending": {
     "open": "GitHub trending",

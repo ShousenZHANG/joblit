@@ -137,7 +137,9 @@ describe("JobDetailPanel touch contract", () => {
     expect(
       panel.getByRole("link", { name: messages.jobs.openJob }),
     ).toHaveClass("[@media(any-pointer:coarse)]:min-h-11");
-    expect(panel.getByTestId("job-remove-button")).toHaveClass(
+    // Remove is a menu item behind the overflow now, so the trigger is what
+    // has to stay thumb-sized; the item itself gets min-h-11 from the menu.
+    expect(panel.getByTestId("job-detail-overflow")).toHaveClass(
       "[@media(any-pointer:coarse)]:min-h-11",
     );
   });

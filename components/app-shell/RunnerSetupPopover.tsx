@@ -29,7 +29,14 @@ import { COARSE_POINTER_TARGET } from "@/components/ui/touchTarget";
  * extra blast radius.
  */
 
-const START_COMMAND = "node tools/runner/cli.mjs --watch";
+/**
+ * One line, not two. Splitting the environment from the command meant two
+ * copies, two pastes and an ordering the user had to get right; inlining the
+ * variables makes starting the Runner a single paste.
+ */
+function startCommand(origin: string, token: string) {
+  return `JOBLIT_URL="${origin}" JOBLIT_TOKEN="${token}" node tools/runner/cli.mjs --watch`;
+}
 
 function CopyRow({ label, value }: { label: string; value: string }) {
   const t = useTranslations("runnerSetup");
@@ -105,7 +112,11 @@ export function RunnerSetupPopover({ className }: { className?: string }) {
   // The raw value exists exactly once, in memory, right after minting. A
   // returning user sees the placeholder and regenerates if they lost it.
   const tokenValue = newToken?.rawToken ?? "jfagent_v1_…";
-  const envSnippet = `export JOBLIT_URL="${origin}"\nexport JOBLIT_TOKEN="${tokenValue}"`;
+  const command = startCommand(origin, tokenValue);
+  // A connected Runner needs no instructions on screen. They stay one click
+  // away for the case where someone is setting up a second machine.
+  const [showSetup, setShowSetup] = useState(false);
+  const setupVisible = showSetup || !online || Boolean(newToken);
 
   const regenerate = useCallback(async () => {
     // Revoke first so a lost credential cannot outlive its replacement.
@@ -196,11 +207,25 @@ export function RunnerSetupPopover({ className }: { className?: string }) {
                   {t("rawTokenOnce")}
                 </p>
               ) : null}
-              <CopyRow label={t("step1")} value={envSnippet} />
-              <CopyRow label={t("step2")} value={START_COMMAND} />
-              <p className="text-[11px] leading-relaxed text-muted-foreground">
-                {t("modelHint")}
-              </p>
+
+              {setupVisible ? (
+                <>
+                  <CopyRow label={t("startLabel")} value={command} />
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    {t("modelHint")}
+                  </p>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowSetup(true)}
+                  data-testid="runner-setup-show"
+                  className="w-full rounded-lg px-2 py-1.5 text-left text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600"
+                >
+                  {t("showSetup")}
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => void regenerate()}

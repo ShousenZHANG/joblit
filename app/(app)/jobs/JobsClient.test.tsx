@@ -153,6 +153,22 @@ beforeEach(() => {
   vi.stubGlobal("fetch", mockFetch);
 });
 
+/**
+ * Remove lives in the detail overflow now — a destructive action should not
+ * hold a permanent slot beside routine ones. Opening the menu is part of
+ * every removal, so it is part of the helper rather than repeated per test.
+ */
+function findRemoveAction() {
+  // Synchronous on purpose. Several tests here run on fake timers, and
+  // `findBy*` resolves by polling on a real timer — under fake timers it never
+  // settles, the test times out before restoring real timers, and every later
+  // test in the file inherits the frozen clock. fireEvent + getBy needs no
+  // clock at all. Radix opens a menu on pointerdown.
+  const trigger = screen.getAllByTestId("job-detail-overflow")[0];
+  fireEvent.pointerDown(trigger, { button: 0, pointerType: "mouse" });
+  return screen.getByTestId("job-remove-button");
+}
+
 describe("JobsClient", () => {
   it("exposes ScrollArea component", () => {
     expect(ScrollArea).toBeDefined();
@@ -631,7 +647,7 @@ describe("JobsClient", () => {
 
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
-    const removeButton = (await screen.findAllByTestId("job-remove-button"))[0];
+    const removeButton = await findRemoveAction();
     await user.click(removeButton);
 
     const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
@@ -932,7 +948,7 @@ describe("JobsClient", () => {
     ).toHaveAttribute("data-experience-highlight", "REQUIRED");
   });
 
-  it("keeps Saved CV/CL in the primary actions row and keeps Remove as a trailing secondary action", async () => {
+  it("keeps Saved CV/CL in the primary actions row and Remove in the overflow", async () => {
     const jobWithSavedCv = {
       ...baseJob,
       id: "22222222-2222-2222-2222-222222222222",
@@ -958,9 +974,10 @@ describe("JobsClient", () => {
     expect(within(primaryActionsWithSavedCv).getByRole("link", { name: /saved cl/i })).toBeInTheDocument();
     expect(savedCvLink.querySelector("svg")).toBeNull();
 
-    const removeButton = screen.getAllByTestId("job-remove-button")[0];
-    expect(removeButton).toHaveClass("sm:ml-auto", "sm:w-auto");
-    expect(removeButton).not.toHaveClass("sm:absolute");
+    // Remove is a menu item now, not a red block in the action row.
+    const removeButton = await findRemoveAction();
+    expect(removeButton).toHaveAttribute("role", "menuitem");
+    expect(removeButton).toHaveClass("text-destructive");
   });
 
   it("uses a responsive stacked primary action layout for mobile", async () => {
@@ -1008,7 +1025,7 @@ describe("JobsClient", () => {
 
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
-    const removeButton = (await screen.findAllByTestId("job-remove-button"))[0];
+    const removeButton = await findRemoveAction();
     await user.click(removeButton);
 
     const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
@@ -1056,7 +1073,7 @@ describe("JobsClient", () => {
       <JobsClient initialItems={[baseJob]} initialCursor={null} />,
     );
 
-    const removeButton = (await screen.findAllByTestId("job-remove-button"))[0];
+    const removeButton = await findRemoveAction();
     await user.click(removeButton);
 
     // Optimistic: the row vanishes immediately with no confirm modal, and the
@@ -1148,7 +1165,7 @@ describe("JobsClient", () => {
       toJSON: () => ({}),
     }));
 
-    await user.click(screen.getByTestId("job-remove-button"));
+    await user.click(await findRemoveAction());
 
     await waitFor(() => {
       expect(within(list).queryByText("Beta Developer")).not.toBeInTheDocument();
@@ -1201,7 +1218,7 @@ describe("JobsClient", () => {
     const listBeforeDelete = within(resultsPane).getByRole("list");
     const fetchesBeforeDelete = listFetches;
 
-    await user.click(screen.getByTestId("job-remove-button"));
+    await user.click(await findRemoveAction());
 
     await waitFor(() => {
       expect(resultsPane).toHaveAttribute("data-virtual", "true");
@@ -1249,7 +1266,7 @@ describe("JobsClient", () => {
       fireEvent.click(
         within(list).getByRole("button", { name: /Beta Developer/i }),
       );
-      fireEvent.click(screen.getByTestId("job-remove-button"));
+      fireEvent.click(await findRemoveAction());
       fireEvent.click(
         within(list).getByRole("button", { name: /Alpha Engineer/i }),
       );
@@ -1304,7 +1321,7 @@ describe("JobsClient", () => {
 
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
-    const removeButton = (await screen.findAllByTestId("job-remove-button"))[0];
+    const removeButton = await findRemoveAction();
     await user.click(removeButton);
 
     const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
@@ -1353,7 +1370,7 @@ describe("JobsClient", () => {
 
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
-    const removeButton = (await screen.findAllByTestId("job-remove-button"))[0];
+    const removeButton = await findRemoveAction();
     await user.click(removeButton);
 
     // The row is gone from the list...
@@ -1404,7 +1421,7 @@ describe("JobsClient", () => {
       <JobsClient initialItems={[baseJob]} initialCursor={null} />,
     );
 
-    const removeButton = (await screen.findAllByTestId("job-remove-button"))[0];
+    const removeButton = await findRemoveAction();
     await user.click(removeButton);
 
     // The Undo action lives in the toast (toast store reset in beforeEach keeps
@@ -1473,14 +1490,14 @@ describe("JobsClient", () => {
     expect((await screen.findAllByText("Backend Engineer B")).length).toBeGreaterThan(0);
     const resultsPane = screen.getAllByTestId("jobs-results-scroll")[0];
 
-    await user.click((await screen.findAllByTestId("job-remove-button"))[0]);
+    await user.click(findRemoveAction());
     await waitFor(() => {
       expect(
         within(resultsPane).queryByRole("button", { name: /Frontend Engineer A/i }),
       ).not.toBeInTheDocument();
     });
 
-    await user.click((await screen.findAllByTestId("job-remove-button"))[0]);
+    await user.click(findRemoveAction());
     await waitFor(() => {
       expect(
         within(resultsPane).queryByRole("button", { name: /Frontend Engineer A/i }),
@@ -1936,7 +1953,7 @@ describe("JobsClient", () => {
       </NextIntlClientProvider>,
     );
 
-    const removeButton = (await screen.findAllByTestId("job-remove-button"))[0];
+    const removeButton = await findRemoveAction();
     await user.click(removeButton);
 
     await screen.findByText("Job deleted");

@@ -49,7 +49,8 @@
     "paletteSearchJobs": "在岗位中搜索“{query}”",
     "paletteThemeLight": "浅色主题",
     "paletteThemeDark": "深色主题",
-    "paletteThemeSystem": "跟随系统"
+    "paletteThemeSystem": "跟随系统",
+    "account": "账号"
   },
   "runnerSetup": {
     "open": "Runner 配置",
@@ -60,12 +61,12 @@
     "introNoCredential": "生成跑在你的电脑上。先创建凭据,再用下面两行启动 Runner。",
     "createCredential": "创建凭据",
     "rawTokenOnce": "凭据只显示这一次,请立即复制第一段。",
-    "step1": "1 · 在终端设置这两项",
-    "step2": "2 · 启动 Runner",
     "modelHint": "模型登录一次即可:codex login",
     "regenerate": "重新生成凭据",
     "copy": "复制",
-    "copied": "已复制"
+    "copied": "已复制",
+    "startLabel": "在终端运行这一行",
+    "showSetup": "显示配置命令"
   },
   "trending": {
     "open": "GitHub 趋势",

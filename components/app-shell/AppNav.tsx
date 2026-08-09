@@ -66,6 +66,7 @@ export function AppNav() {
         { href: "/resume", label: t("resume") },
       ];
   const email = data?.user?.email ?? "";
+  const accountInitial = email.trim().charAt(0) || "?";
 
   const handleSignOut = async () => {
     if (signOutInFlight.current) return;
@@ -137,55 +138,6 @@ export function AppNav() {
 
         {/* Right: session + controls */}
         <div className="flex items-center gap-2">
-          {email ? (
-            <a
-              href={`mailto:${email}`}
-              className="hidden rounded-full text-[12px] text-brand-emerald-text transition-colors hover:text-brand-emerald-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 xl:inline-block"
-              title={email}
-            >
-              {email}
-            </a>
-          ) : null}
-          {!isCN ? (
-          <button
-            type="button"
-            onClick={openGuide}
-            className="hidden h-11 items-center gap-1.5 rounded-full border border-border/70 bg-background px-2.5 text-[12px] font-medium text-foreground/80 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 md:inline-flex md:h-9"
-          >
-            <CircleHelp className="h-3.5 w-3.5" aria-hidden />
-            <span>{t("guide")}</span>
-            {state ? (
-              <span className="inline-flex items-center gap-1 text-brand-emerald-600">
-                <svg className="h-3.5 w-3.5 -rotate-90" viewBox="0 0 16 16" aria-hidden>
-                  <circle
-                    cx="8"
-                    cy="8"
-                    r="6.5"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeOpacity="0.2"
-                    strokeWidth="2.5"
-                  />
-                  <circle
-                    cx="8"
-                    cy="8"
-                    r="6.5"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeDasharray={`${(state.completedCount / state.totalCount) * 40.84} 40.84`}
-                    className="transition-[stroke-dasharray] duration-500 ease-out"
-                  />
-                </svg>
-                <span className="text-[10px] font-semibold text-brand-emerald-text">
-                  {state.completedCount}/{state.totalCount}
-                </span>
-              </span>
-            ) : null}
-          </button>
-          ) : null}
-
           {/* Runner setup lived on its own page until the page turned out to
               be one credential and one command. AU only: CN ships a single
               Chinese resume with no local generation. */}
@@ -194,11 +146,6 @@ export function AppNav() {
           {/* GitHub trending — an ambient panel, not a route. Present in both
               markets; it costs one glyph and never takes over the workspace. */}
           <TrendingPopover />
-
-          <div className="hidden lg:inline-flex">
-            <LocaleSwitcher />
-          </div>
-          <ThemeToggle className="hidden sm:inline-flex" />
 
           {/* ⌘K affordance — the palette itself lives in the app layout and
               listens for this event, avoiding prop-drilling through a server
@@ -213,16 +160,86 @@ export function AppNav() {
             <kbd className="font-sans text-[11px]">⌘K</kbd>
           </button>
 
-          <button
-            type="button"
-            onClick={handleSignOut}
-            disabled={signingOut}
-            aria-busy={signingOut}
-            className="hidden h-11 w-[7.5rem] items-center justify-center gap-1.5 rounded-full bg-foreground px-3 text-[12px] font-semibold text-background transition-colors hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70 md:inline-flex md:h-9"
-          >
-            <LogOut className="h-3.5 w-3.5" aria-hidden />
-            <span>{tc(signingOut ? "signingOut" : "signOut")}</span>
-          </button>
+          {/* Account menu. Language, theme, the guide and signing out are all
+              things you do once or rarely; standing them permanently in the
+              bar spent seven slots on a row that should read at a glance. The
+              address itself belongs here too — it identifies the session, it
+              is not a control. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label={t("account")}
+                data-testid="app-nav-account"
+                className="hidden h-11 w-11 items-center justify-center rounded-full text-sm font-bold uppercase text-brand-emerald-text ring-1 ring-brand-emerald-200 transition-colors hover:bg-brand-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 md:inline-flex md:h-9 md:w-9 dark:ring-brand-emerald-500/30 dark:hover:bg-brand-emerald-500/10"
+              >
+                {accountInitial}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[220px]">
+              {email ? (
+                <>
+                  <div className="px-2 py-1.5">
+                    <p className="truncate text-[12px] font-medium text-foreground">
+                      {email}
+                    </p>
+                  </div>
+                  <DropdownMenuSeparator />
+                </>
+              ) : null}
+              {!isCN ? (
+                <DropdownMenuItem
+                  onClick={openGuide}
+                  className="min-h-10 focus-visible:ring-2 focus-visible:ring-brand-emerald-600"
+                >
+                  <CircleHelp className="mr-2 h-4 w-4" aria-hidden />
+                  <span>{t("guide")}</span>
+                  {state ? (
+                    <span className="ml-auto text-[11px] font-semibold text-brand-emerald-text">
+                      {state.completedCount}/{state.totalCount}
+                    </span>
+                  ) : null}
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuItem
+                asChild
+                onSelect={(event) => event.preventDefault()}
+                className="min-h-10 focus-visible:ring-2 focus-visible:ring-brand-emerald-600"
+              >
+                <div className="flex items-center justify-between gap-2 py-1">
+                  <span className="text-[12px] text-muted-foreground">
+                    {t("language")}
+                  </span>
+                  <LocaleSwitcher />
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                asChild
+                onSelect={(event) => event.preventDefault()}
+                className="min-h-10 focus-visible:ring-2 focus-visible:ring-brand-emerald-600"
+              >
+                <div className="flex items-center justify-between gap-2 py-1">
+                  <span className="text-[12px] text-muted-foreground">
+                    {t("theme")}
+                  </span>
+                  <ThemeToggle />
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={(event) => {
+                  event.preventDefault();
+                  void handleSignOut();
+                }}
+                disabled={signingOut}
+                aria-busy={signingOut}
+                className="min-h-10 text-destructive focus-visible:ring-2 focus-visible:ring-brand-emerald-600 data-[disabled]:cursor-wait"
+              >
+                <LogOut className="mr-2 h-4 w-4" aria-hidden />
+                <span>{tc(signingOut ? "signingOut" : "signOut")}</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Mobile overflow menu */}
           <DropdownMenu>

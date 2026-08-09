@@ -87,6 +87,15 @@ async function openMobileMenu(user: ReturnType<typeof userEvent.setup>) {
   return screen.findByRole("menu");
 }
 
+/**
+ * Language, theme, the guide and signing out are once-or-rarely actions, so
+ * they moved behind the account avatar rather than standing in the bar.
+ */
+async function openAccountMenu(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByTestId("app-nav-account"));
+  return screen.findByRole("menu");
+}
+
 describe("AppNav", () => {
   beforeEach(() => {
     signOutMock.mockReset();
@@ -134,13 +143,16 @@ describe("AppNav", () => {
     const user = userEvent.setup();
     signOutMock.mockReturnValue(new Promise(() => undefined));
     render(<AppNav />);
-    const signOut = screen.getAllByRole("button", { name: /signOut/i })[0];
+    const menu = await openAccountMenu(user);
+    const signOut = within(menu).getByRole("menuitem", { name: /signOut/i });
 
-    await user.dblClick(signOut);
+    await user.click(signOut);
+    await user.click(signOut);
 
     expect(signOutMock).toHaveBeenCalledTimes(1);
-    expect(signOut).toBeDisabled();
-    expect(signOut).toHaveAttribute("aria-busy", "true");
+    expect(
+      within(menu).getByRole("menuitem", { name: /signingOut/i }),
+    ).toHaveAttribute("aria-busy", "true");
   });
 
   it("keeps overflow sign-out mounted and guarded until it resolves", async () => {
@@ -290,11 +302,19 @@ describe("AppNav", () => {
     expect(jobs).not.toHaveClass("bg-brand-emerald-50");
   });
 
-  it("surfaces the signed-in email and at least one sign-out control", () => {
+  it("keeps the session identity and sign-out in the account menu, not the bar", async () => {
+    const user = userEvent.setup();
     render(<AppNav />);
-    expect(screen.getByText(/alex@joblit\.tech/i)).toBeInTheDocument();
-    const signOuts = screen.getAllByRole("button", { name: /signOut/i });
-    expect(signOuts.length).toBeGreaterThan(0);
+
+    // The address identifies the session; it is not a control, so it does not
+    // stand in the bar.
+    expect(screen.queryByText(/alex@joblit\.tech/i)).not.toBeInTheDocument();
+
+    const menu = await openAccountMenu(user);
+    expect(within(menu).getByText(/alex@joblit\.tech/i)).toBeInTheDocument();
+    expect(
+      within(menu).getByRole("menuitem", { name: /signOut/i }),
+    ).toBeInTheDocument();
   });
 
   it("renders a sticky container so the nav follows page scroll", () => {
@@ -303,12 +323,13 @@ describe("AppNav", () => {
     expect(nav.className).toMatch(/\bsticky\b/);
   });
 
-  it("exposes at least one guide progress control with counts", () => {
+  it("reaches the guide and its progress from the account menu", async () => {
+    const user = userEvent.setup();
     render(<AppNav />);
-    // Desktop + mobile both render a Guide button; accept either.
-    const guideButtons = screen.getAllByRole("button", { name: /guide/i });
-    expect(guideButtons.length).toBeGreaterThan(0);
-    // Progress badge "3/5" appears at least once.
-    expect(screen.getAllByText("3/5").length).toBeGreaterThan(0);
+    const menu = await openAccountMenu(user);
+
+    const guide = within(menu).getByRole("menuitem", { name: /guide/i });
+    expect(guide).toBeInTheDocument();
+    expect(within(menu).getByText("3/5")).toBeInTheDocument();
   });
 });

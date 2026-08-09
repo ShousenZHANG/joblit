@@ -814,7 +814,7 @@ export function JobsClient({
               three counts for one list. The active segment now carries the
               one count that matters; loading progress lives at the list
               bottom where the loading actually happens. */}
-          <div className="border-b px-4 pb-3 pt-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 pb-3 pt-3">
             <SegmentedControl
               ariaLabel={t("status")}
               value={statusFilter}
@@ -837,6 +837,7 @@ export function JobsClient({
               onClick={() => void generateAllNew()}
               disabled={batchGeneratePending || batchProgress.state.active}
               data-testid="jobs-generate-all"
+              aria-label={t("generateAll")}
               data-guide-anchor="generate_first_pdf"
               data-guide-highlight={highlightGenerate ? "true" : "false"}
               className={cn(
@@ -848,7 +849,10 @@ export function JobsClient({
               )}
             >
               <Sparkles className="h-3.5 w-3.5" aria-hidden />
-              {t("generateAll")}
+              {/* The label is the first thing to go when the column narrows:
+                  the icon plus the accessible name still says what it is, and
+                  a wrapped toolbar reads worse than a compact one. */}
+              <span className="hidden sm:inline">{t("generateAll")}</span>
             </button>
           </div>
           {batchProgress.visible ? (

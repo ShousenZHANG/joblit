@@ -12,8 +12,11 @@ import { fetchJson } from "@/lib/api/fetchJson";
  * happening, and refreshes the list the moment a job finishes so its PDFs
  * appear on their own.
  *
- * Polling stops the instant the batch reaches a terminal state, so an idle
- * workspace makes no requests at all.
+ * Polling is not a heartbeat. It checks once on mount, keeps going only while
+ * a batch is genuinely unfinished, and stops the moment one settles. An idle
+ * workspace therefore makes exactly one request and then goes quiet — which
+ * is also what keeps this hook out of the way of tests that drive their own
+ * timers.
  */
 
 const POLL_MS = 3_000;
@@ -63,7 +66,15 @@ export function useBatchProgress({
 }) {
   const [state, setState] = useState<BatchProgressState>(EMPTY);
   const [dismissedBatchId, setDismissedBatchId] = useState<string | null>(null);
-  // A ref, not state: the poll compares against it and would otherwise need
+  /**
+   * Batches watched from unfinished to finished in this session. A batch that
+   * was already complete when the page loaded is history, not news, so the
+   * banner stays silent about it.
+   */
+  const [watchedBatchIds, setWatchedBatchIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  // Refs, not state: the poll compares against these and would otherwise need
   // itself as a dependency.
   const settledCountRef = useRef(0);
   const settledCallbackRef = useRef(onJobsSettled);
@@ -71,24 +82,27 @@ export function useBatchProgress({
     settledCallbackRef.current = onJobsSettled;
   });
 
-  const poll = useCallback(async (signal?: AbortSignal) => {
+  /** Resolves true while the batch still has work, so the caller can decide
+   *  whether another poll is worth scheduling. */
+  const poll = useCallback(async (signal?: AbortSignal): Promise<boolean> => {
     const latest = (await fetchJson("/api/application-batches/latest", {
       signal,
     })) as LatestResponse | null;
     if (!latest?.batchId) {
       settledCountRef.current = 0;
       setState(EMPTY);
-      return;
+      return false;
     }
 
     const summary = (await fetchJson(
       `/api/application-batches/${latest.batchId}/summary`,
       { signal },
     )) as SummaryResponse | null;
-    if (!summary) return;
+    if (!summary) return false;
 
     const { progress } = summary;
     const done = progress.succeeded + progress.failed;
+    const active = !TERMINAL.has(summary.batch.status);
 
     // Refresh the list whenever another job has landed, so its Saved CV/CL
     // appear without the user reloading.
@@ -99,44 +113,69 @@ export function useBatchProgress({
       settledCountRef.current = done;
     }
 
+    if (active) {
+      setWatchedBatchIds((prev) =>
+        prev.has(summary.batch.id) ? prev : new Set(prev).add(summary.batch.id),
+      );
+    }
+
     setState({
       batchId: summary.batch.id,
       status: summary.batch.status,
       done,
       total: summary.batch.totalCount,
       failed: progress.failed,
-      active: !TERMINAL.has(summary.batch.status),
+      active,
       failedJobIds: new Set(summary.failed.map((item) => item.jobId)),
     });
+    return active;
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
+  // One live poll chain at a time, restartable by `refresh`.
+  const controllerRef = useRef<AbortController | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const runningRef = useRef(false);
+
+  const startPolling = useCallback(() => {
+    if (runningRef.current) return;
+    runningRef.current = true;
     const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout> | null = null;
+    controllerRef.current = controller;
 
     const tick = async () => {
+      let keepGoing = false;
       try {
-        await poll(controller.signal);
+        keepGoing = await poll(controller.signal);
       } catch {
-        // A failed poll is not worth surfacing: the next one is 3s away and
-        // the banner simply keeps its last known counts.
+        // A failed poll is not worth surfacing; the banner keeps its last
+        // known counts and the chain simply ends.
       }
-      if (cancelled) return;
-      timer = setTimeout(tick, POLL_MS);
+      if (controller.signal.aborted) {
+        runningRef.current = false;
+        return;
+      }
+      if (!keepGoing) {
+        runningRef.current = false;
+        return;
+      }
+      timerRef.current = setTimeout(tick, POLL_MS);
     };
     void tick();
+  }, [poll]);
 
+  useEffect(() => {
+    startPolling();
     return () => {
-      cancelled = true;
-      controller.abort();
-      if (timer) clearTimeout(timer);
+      controllerRef.current?.abort();
+      if (timerRef.current) clearTimeout(timerRef.current);
+      runningRef.current = false;
     };
-  }, [poll]);
+  }, [startPolling]);
 
+  /** Called right after queueing, to pick the new batch up immediately. */
   const refresh = useCallback(() => {
-    void poll();
-  }, [poll]);
+    startPolling();
+  }, [startPolling]);
 
   const dismiss = useCallback(() => {
     setDismissedBatchId(state.batchId);
@@ -146,10 +185,15 @@ export function useBatchProgress({
     state,
     refresh,
     dismiss,
-    /** Terminal batches stay visible until acknowledged, then go quiet. */
+    /**
+     * Visible while a batch runs, and afterwards until acknowledged — but only
+     * for batches this session actually watched run. A finished batch from
+     * yesterday is not news to announce on page load.
+     */
     visible:
       state.batchId !== null &&
       state.total > 0 &&
-      state.batchId !== dismissedBatchId,
+      state.batchId !== dismissedBatchId &&
+      (state.active || watchedBatchIds.has(state.batchId)),
   };
 }
