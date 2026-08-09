@@ -2,9 +2,9 @@
 
 import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
-import { Cpu, FileCheck2, Lock, TerminalSquare } from "lucide-react";
+import { FileCheck2, Lock, TerminalSquare } from "lucide-react";
 import { JoblitMark } from "@/components/brand/JoblitMark";
-import { ClaudeMark, OpenAiMark } from "./brandMarks";
+import { OpenAiMark } from "./brandMarks";
 import { revealUp, useReveal } from "./lib/motion";
 
 /**
@@ -13,13 +13,13 @@ import { revealUp, useReveal } from "./lib/motion";
  * No other job-search product can draw this diagram, because no other one is
  * built this way — Joblit's servers hold no model key and cannot call a model
  * (ADR-0015). The glowing boundary is the claim: every model call happens
- * inside the visitor's own machine, over loopback, on their own subscription,
- * through OpenAI's official Codex app-server (the bootstrap enforces that
- * runtime). Every sentence here is auditable against the repository.
+ * inside the visitor's own machine, through the official Codex CLI running as
+ * a child process of the Runner (ADR-0018), on the visitor's own ChatGPT
+ * subscription. Every sentence here is auditable against the repository.
  *
- * Brand marks (OpenAI, Claude) are nominative "works with" usage — see
- * brandMarks.tsx. Hermes deliberately gets a wordmark, not an invented icon:
- * Nous Research ships no clean official vector.
+ * The OpenAI mark is nominative "works with" usage — see brandMarks.tsx. No
+ * other model brand appears: the Runner path genuinely runs on Codex alone,
+ * and the manual paste path needs no logo to be true.
  */
 
 function FlowConnector({ vertical = false }: { vertical?: boolean }) {
@@ -109,11 +109,11 @@ export function Architecture() {
               →
             </span>
             <div className="flex flex-1 items-center gap-2.5 rounded-xl border border-border/70 bg-card px-3.5 py-3">
-              <Cpu className="h-[18px] w-[18px] shrink-0 text-brand-emerald-600" aria-hidden />
+              <OpenAiMark className="h-[18px] w-[18px] shrink-0" />
               <div className="min-w-0">
-                <div className="text-[13px] font-bold text-foreground">Hermes</div>
+                <div className="text-[13px] font-bold text-foreground">Codex CLI</div>
                 <div className="text-[11px] leading-snug text-muted-foreground">
-                  {t("hermesDesc")}
+                  {t("codexDesc")}
                 </div>
               </div>
             </div>
@@ -126,23 +126,6 @@ export function Architecture() {
             <p className="text-xs font-semibold leading-relaxed text-brand-emerald-800 dark:text-brand-emerald-300">
               {t("boundaryNote")}
             </p>
-          </div>
-          {/* Nominative "works with" marks — the subscriptions Hermes can
-              drive, named so a non-technical visitor recognises them. */}
-          <div className="mt-4">
-            <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              {t("subscriptionLabel")}
-            </span>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs font-semibold text-foreground">
-                <OpenAiMark className="h-4 w-4" />
-                ChatGPT
-              </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs font-semibold text-foreground">
-                <ClaudeMark className="h-4 w-4" />
-                Claude
-              </span>
-            </div>
           </div>
         </div>
 
@@ -166,12 +149,12 @@ export function Architecture() {
       <p className="mt-8 text-center text-xs text-muted-foreground">
         {t("poweredByPrefix")}{" "}
         <a
-          href="https://github.com/NousResearch/hermes-agent"
+          href="https://github.com/openai/codex"
           target="_blank"
           rel="noreferrer"
           className="font-semibold text-foreground underline-offset-2 hover:underline"
         >
-          Hermes
+          Codex CLI
         </a>{" "}
         {t("poweredBySuffix")}
       </p>

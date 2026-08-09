@@ -727,7 +727,7 @@
     },
     "hero": {
       "eyebrowNew": "New",
-      "eyebrowTagline": "Agent Runner · v1",
+      "eyebrowTagline": "Agent Runner · Codex CLI",
       "titleLine1": "The job search,",
       "titleItalic": "re-engineered.",
       "subtitle": "Joblit pulls roles into one workspace, tailors your CV and cover letter to each JD with your own AI — running on your machine — and exports clean LaTeX PDFs.",
@@ -752,22 +752,44 @@
         }
       }
     },
+    "flow": {
+      "kicker": "The workflow",
+      "titlePrefix": "From listing to",
+      "titleItalic": "signed-off PDF.",
+      "steps": {
+        "fetch": {
+          "title": "Fetch",
+          "body": "Pull fresh roles into one list with a single run. Duplicates and dead links are filtered before you ever see them."
+        },
+        "triage": {
+          "title": "Triage",
+          "body": "Scan each ad with the fine print already pulled out, and keep only the roles worth your time."
+        },
+        "generate": {
+          "title": "Generate",
+          "body": "One press queues every kept role. Your machine writes the CV and cover letter, and progress ticks up live."
+        },
+        "export": {
+          "title": "Export",
+          "body": "Every draft comes back for review, then compiles to a clean LaTeX PDF — named, filed, ready to send."
+        }
+      }
+    },
     "architecture": {
       "kicker": "Architecture",
       "titlePrefix": "The model runs on",
       "titleItalic": "your machine.",
-      "lede": "Joblit's servers organise the work — jobs, prompts, drafts, receipts. The AI itself runs where you are: the Runner drives Hermes over loopback, on your own subscription. The servers hold no model key, so they cannot call a model even by mistake.",
+      "lede": "Joblit's servers organise the work — jobs, prompts, drafts, receipts. The AI itself runs where you are: the Runner drives the official Codex CLI on your own machine, on the ChatGPT subscription you already pay for. The servers hold no model key and cannot call a model.",
       "workspaceTitle": "Joblit workspace",
       "workspaceDesc": "Fetches roles, builds the exact prompt from your resume profile and rules, and queues the work.",
       "machineLabel": "Your machine",
       "runnerDesc": "Drains the queue, one command",
-      "hermesDesc": "Runs the model on your subscription",
+      "codexDesc": "Runs the model on your ChatGPT subscription",
       "boundaryNote": "Model calls and your AI credential never leave this box.",
-      "subscriptionLabel": "Runs on the subscription you already have",
       "draftsTitle": "Drafts, back",
       "draftsDesc": "Tailored resume and cover letter return as reviewable drafts with receipts — nothing is sent anywhere without you.",
-      "poweredByPrefix": "Local generation is powered by",
-      "poweredBySuffix": "— open source, on your machine, using the AI subscription you already pay for."
+      "poweredByPrefix": "Local generation is powered by the official",
+      "poweredBySuffix": "— open source, on your machine, using the ChatGPT subscription you already pay for."
     },
     "bento": {
       "kicker": "AI, kept honest",

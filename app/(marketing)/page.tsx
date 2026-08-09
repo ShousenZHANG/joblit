@@ -3,6 +3,7 @@ import { AiBento } from "@/components/landing/AiBento";
 import { Architecture } from "@/components/landing/Architecture";
 import { Cta } from "@/components/landing/Cta";
 import { Faq } from "@/components/landing/Faq";
+import { Flow } from "@/components/landing/Flow";
 import { Footer } from "@/components/landing/Footer";
 import { Hero } from "@/components/landing/Hero";
 import { LogoBar } from "@/components/landing/LogoBar";
@@ -43,19 +44,20 @@ const jsonLd = {
 /* ── Page ─────────────────────────────────────────────── */
 
 /**
- * Marketing landing page — five movements, each earning its place:
+ * Marketing landing page — six movements, each earning its place:
  *
  *   Hero + product demo — the product does the talking
  *   LogoBar             — one line of named capability facts, no counters
+ *   Flow                — the four-stage loop, drawn from real UI fragments
  *   Architecture        — the signature visual: the local-first pipeline,
- *                         with the loopback boundary drawn (ADR-0014/0015)
+ *                         with the machine boundary drawn (ADR-0015/0018)
  *   AiBento             — the AI story as product miniatures, not slogans
  *   Faq                 — the three real objections, then the close
  *
- * The generic intro sections (HowItWorks, the 2×2 feature grid) stayed dead:
- * premium comes from depth in few sections, not from many. Three of the four
- * atmosphere layers are gone; the starfield stays, dark-mode only. Every
- * claim on this page is auditable against the codebase.
+ * An earlier generic HowItWorks (icons + verbs) stayed dead; Flow replaced it
+ * only once every step could carry a miniature of the real surface. Three of
+ * the four atmosphere layers are gone; the starfield stays, dark-mode only.
+ * Every claim on this page is auditable against the codebase.
  */
 export default function MarketingPage() {
   return (
@@ -74,6 +76,9 @@ export default function MarketingPage() {
         <Nav />
         <Hero />
         <LogoBar />
+        <div className="cv-auto">
+          <Flow />
+        </div>
         <div className="cv-auto">
           <Architecture />
         </div>

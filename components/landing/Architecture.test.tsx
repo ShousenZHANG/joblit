@@ -14,13 +14,16 @@ function renderArchitecture() {
 }
 
 describe("landing Architecture", () => {
-  it("draws the local-first pipeline and names Hermes with a source link", () => {
+  it("draws the local-first pipeline through the Codex CLI", () => {
     renderArchitecture();
 
     expect(screen.getByTestId("landing-architecture")).toBeInTheDocument();
     expect(screen.getByText("Runner")).toBeInTheDocument();
-    // Twice by design: the chip inside the boundary and the credit link.
-    expect(screen.getAllByText("Hermes")).toHaveLength(2);
+    // Twice by design: the node inside the boundary and the credit link.
+    expect(screen.getAllByText("Codex CLI")).toHaveLength(2);
+    // The engine this section used to draw was retired by ADR-0018. Its name
+    // reappearing here means marketing has drifted from the runtime again.
+    expect(screen.queryByText(/hermes/i)).not.toBeInTheDocument();
 
     // The boundary claim is the section's whole point: model calls and the
     // user's AI credential stay inside their machine (ADR-0015). It must not
@@ -30,18 +33,18 @@ describe("landing Architecture", () => {
       screen.getByText(en.landing.architecture.boundaryNote),
     ).toBeInTheDocument();
 
-    const hermesLink = screen.getByRole("link", { name: "Hermes" });
-    expect(hermesLink).toHaveAttribute(
+    const codexLink = screen.getByRole("link", { name: "Codex CLI" });
+    expect(codexLink).toHaveAttribute(
       "href",
-      "https://github.com/NousResearch/hermes-agent",
+      "https://github.com/openai/codex",
     );
-    expect(hermesLink).toHaveAttribute("target", "_blank");
+    expect(codexLink).toHaveAttribute("target", "_blank");
 
-    // "Works with" marks: real vectors for OpenAI and Claude; Hermes stays a
-    // wordmark because no clean official vector exists — never invent one.
+    // One real vector, nominative use only. Claude was removed when the
+    // Runner path was pinned to Codex: a mark for an engine the Runner
+    // cannot drive is a false claim, however real the logo itself is.
     expect(screen.getByRole("img", { name: "OpenAI" })).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Claude" })).toBeInTheDocument();
-    expect(screen.getByText("ChatGPT")).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Claude" })).not.toBeInTheDocument();
   });
 
   it("has no automated accessibility violations", async () => {

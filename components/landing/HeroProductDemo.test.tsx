@@ -136,10 +136,19 @@ describe("HeroProductDemo interval lifecycle", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it("shows the current Agent workspace instead of the retired Extension", () => {
+  it("mirrors the current nav and the batch-only generate action", () => {
     render(<HeroProductDemo mounted reduced />);
 
-    expect(screen.getByText("Agent")).toBeInTheDocument();
+    // The demo nav mirrors the real one: three pages, nothing retired.
+    expect(screen.getByText("Jobs")).toBeInTheDocument();
+    expect(screen.getByText("Resume")).toBeInTheDocument();
+    expect(screen.queryByText("Agent")).not.toBeInTheDocument();
+    expect(screen.queryByText("Discover")).not.toBeInTheDocument();
     expect(screen.queryByText("Extension")).not.toBeInTheDocument();
+
+    // Generation is one batch action with live progress, not per-job buttons.
+    expect(screen.getByText("AI Generate")).toBeInTheDocument();
+    expect(screen.queryByText("Generate CV")).not.toBeInTheDocument();
+    expect(screen.queryByText("Generate CL")).not.toBeInTheDocument();
   });
 });

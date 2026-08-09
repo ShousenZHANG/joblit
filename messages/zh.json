@@ -727,7 +727,7 @@
     },
     "hero": {
       "eyebrowNew": "新",
-      "eyebrowTagline": "Agent Runner · v1",
+      "eyebrowTagline": "Agent Runner · Codex CLI",
       "titleLine1": "求职流程，",
       "titleItalic": "重新定义。",
       "subtitle": "Joblit 把岗位汇入一个工作台,用你自己的 AI —— 在你自己的机器上 —— 为每份 JD 定制简历与求职信,并导出整洁的 LaTeX PDF。",
@@ -752,22 +752,44 @@
         }
       }
     },
+    "flow": {
+      "kicker": "工作流",
+      "titlePrefix": "从职位列表到",
+      "titleItalic": "定稿 PDF。",
+      "steps": {
+        "fetch": {
+          "title": "抓取",
+          "body": "一次运行把新职位汇入一个列表。重复项和失效链接在你看到之前就被过滤掉了。"
+        },
+        "triage": {
+          "title": "筛选",
+          "body": "每份启事的硬性要求已经替你划出来，扫一眼就能只留下值得投的职位。"
+        },
+        "generate": {
+          "title": "生成",
+          "body": "一键把留下的职位全部排入队列。你的机器负责撰写简历与求职信，进度实时上涨。"
+        },
+        "export": {
+          "title": "导出",
+          "body": "每份草稿先回来给你审阅，然后编译成整洁的 LaTeX PDF——命名妥当，随时可发。"
+        }
+      }
+    },
     "architecture": {
       "kicker": "架构",
       "titlePrefix": "模型跑在",
       "titleItalic": "你自己的电脑上。",
-      "lede": "Joblit 的服务器只负责组织工作——职位、提示词、草稿、回执。AI 本身在你身边运行:Runner 通过本机回环驱动 Hermes,用你自己的订阅。服务器不持有任何模型密钥,想调用模型也做不到。",
+      "lede": "Joblit 的服务器只负责组织工作——职位、提示词、草稿、回执。AI 本身在你身边运行:Runner 在你自己的机器上驱动官方 Codex CLI,用你已经在付费的 ChatGPT 订阅。服务器不持有任何模型密钥,想调用模型也做不到。",
       "workspaceTitle": "Joblit 工作台",
       "workspaceDesc": "抓取职位,基于你的简历档案和规则组装精确提示词,并把任务排入队列。",
       "machineLabel": "你的电脑",
       "runnerDesc": "一条命令,持续消费队列",
-      "hermesDesc": "用你的订阅运行模型",
+      "codexDesc": "用你的 ChatGPT 订阅运行模型",
       "boundaryNote": "模型调用与你的 AI 凭证永远不出这个框。",
-      "subscriptionLabel": "用你已有的订阅运行",
       "draftsTitle": "草稿回流",
       "draftsDesc": "定制后的简历与求职信以可审阅的草稿返回,并附带回执——未经你确认,什么都不会被发出去。",
-      "poweredByPrefix": "本地生成由",
-      "poweredBySuffix": "驱动——开源、跑在你的机器上、用你已经在付费的 AI 订阅。"
+      "poweredByPrefix": "本地生成由官方",
+      "poweredBySuffix": "驱动——开源、跑在你的机器上、用你已经在付费的 ChatGPT 订阅。"
     },
     "bento": {
       "kicker": "AI,可被审计",

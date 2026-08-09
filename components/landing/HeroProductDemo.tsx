@@ -153,8 +153,6 @@ export function HeroProductDemo({
             {[
               { label: "Fetch", badge: 3 },
               { label: "Resume", badge: 2 },
-              { label: "Discover", badge: null },
-              { label: "Agent", badge: null },
             ].map((item) => (
               <li
                 key={item.label}
@@ -257,23 +255,23 @@ export function HeroProductDemo({
             ))}
           </div>
 
-          {/* Action row — Open job (primary) + Generate CV/CL with a
-              gentle Sparkles pulse to signal the AI action. */}
-          <div className="mt-3 flex flex-wrap gap-1.5">
+          {/* Action row — Open job plus the one batch AI Generate with its
+              live count, matching the real toolbar since generation went
+              batch-only. The Sparkles pulse signals the AI action. */}
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
             <span className="inline-flex items-center gap-1 rounded-lg bg-brand-emerald-500 px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm">
               <ExternalLink className="h-3 w-3" aria-hidden />
               Open job
             </span>
-            <span className="inline-flex items-center gap-1 rounded-lg border border-brand-emerald-200 bg-brand-emerald-50/60 px-2.5 py-1 text-[10px] font-semibold text-brand-emerald-800">
+            <span className="inline-flex items-center gap-1 rounded-full bg-brand-emerald-600 px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm">
               <Sparkles
                 className="h-3 w-3 animate-[landing-pulse_2.4s_ease-in-out_infinite] motion-reduce:animate-none"
                 aria-hidden
               />
-              Generate CV
+              AI Generate
             </span>
-            <span className="inline-flex items-center gap-1 rounded-lg border border-brand-emerald-200 bg-brand-emerald-50/60 px-2.5 py-1 text-[10px] font-semibold text-brand-emerald-800">
-              <Sparkles className="h-3 w-3" aria-hidden />
-              Generate CL
+            <span className="text-[10px] font-medium tabular-nums text-muted-foreground">
+              2 of 5 done
             </span>
           </div>
 
