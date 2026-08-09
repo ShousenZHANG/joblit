@@ -814,19 +814,21 @@ export function JobsClient({
               three counts for one list. The active segment now carries the
               one count that matters; loading progress lives at the list
               bottom where the loading actually happens. */}
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 pb-3 pt-3">
+          <div className="@container/jobshdr flex flex-nowrap items-center justify-between gap-2 border-b px-4 pb-3 pt-3">
             <SegmentedControl
               ariaLabel={t("status")}
               value={statusFilter}
               onChange={(next) =>
                 startTransition(() => setStatusFilter(next))
               }
+              segmentClassName="min-w-0 px-2.5"
               options={ACTIVE_JOB_STATUS_VALUES.map((status) => ({
                 value: status,
-                label:
+                label: t(JOB_STATUS_LABEL_KEYS[status]),
+                count:
                   status === statusFilter && typeof totalCount === "number"
-                    ? `${t(JOB_STATUS_LABEL_KEYS[status])} · ${totalCount}`
-                    : t(JOB_STATUS_LABEL_KEYS[status]),
+                    ? totalCount
+                    : undefined,
               }))}
             />
 
@@ -838,10 +840,12 @@ export function JobsClient({
               disabled={batchGeneratePending || batchProgress.state.active}
               data-testid="jobs-generate-all"
               aria-label={t("generateAll")}
+              title={t("generateAll")}
               data-guide-anchor="generate_first_pdf"
               data-guide-highlight={highlightGenerate ? "true" : "false"}
               className={cn(
-                "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-brand-emerald-600 px-3.5 text-[13px] font-semibold text-white shadow-sm transition-all duration-150",
+                "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-emerald-600 px-0 text-[13px] font-semibold text-white shadow-sm transition-all duration-150",
+                "@[23rem]/jobshdr:w-auto @[23rem]/jobshdr:gap-1.5 @[23rem]/jobshdr:px-3.5",
                 "hover:bg-brand-emerald-700 active:translate-y-px",
                 "disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2",
@@ -849,10 +853,13 @@ export function JobsClient({
               )}
             >
               <Sparkles className="h-3.5 w-3.5" aria-hidden />
-              {/* The label is the first thing to go when the column narrows:
-                  the icon plus the accessible name still says what it is, and
-                  a wrapped toolbar reads worse than a compact one. */}
-              <span className="hidden sm:inline">{t("generateAll")}</span>
+              {/* Measured against THIS row, not the viewport. The previous
+                  `sm:` gate never fired: the column is a fixed 380px track and
+                  only exists at viewport >= lg, so the label was always on and
+                  the row always wrapped. */}
+              <span className="hidden @[23rem]/jobshdr:inline">
+                {t("generateAll")}
+              </span>
             </button>
           </div>
           {batchProgress.visible ? (

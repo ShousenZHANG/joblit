@@ -29,7 +29,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { COARSE_POINTER_MIN_HEIGHT } from "@/components/ui/touchTarget";
@@ -322,26 +321,47 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                     </a>
                   </Button>
                 ) : null}
-                {/* Everything that is neither routine nor about this job's
-                    own output. Manual import is ADR-0015's zero-install floor,
-                    so it must stay reachable; Remove is destructive, so it
-                    should not hold a permanent red slot beside actions the
-                    user takes dozens of times a day. */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label={t("moreActions")}
-                      data-testid="job-detail-overflow"
-                      className={`w-full justify-center rounded-xl text-foreground/60 transition-colors hover:bg-muted hover:text-foreground sm:ml-auto sm:w-9 ${actionHeight} px-0`}
-                    >
-                      <MoreHorizontal className="h-4 w-4" aria-hidden />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    {!isCN ? (
-                      <>
+                {/* The trailing cluster: what is neither "open this job" nor
+                    "read what we generated for it".
+
+                    Remove is one click again. Hiding it in the overflow was
+                    protecting an action that is already reversible — the
+                    delete is a deferred commit behind an Undo toast
+                    (useJobMutations), so the menu only ever cost a click. It
+                    stays icon-only and neutral until hover, which keeps a
+                    destructive action from shouting at rest without making it
+                    hard to reach. */}
+                <div className="flex items-center gap-2 lg:ml-auto">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={t("remove")}
+                    title={t("remove")}
+                    data-testid="job-remove-button"
+                    disabled={deletingIds.has(selectedJob.id)}
+                    onClick={() => onDelete(selectedJob)}
+                    className={`flex-1 justify-center rounded-xl text-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive/40 disabled:cursor-not-allowed disabled:opacity-50 sm:w-9 sm:flex-none ${actionHeight} px-0`}
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden />
+                  </Button>
+                  {/* Manual import is ADR-0015's zero-install floor, so it has
+                      to stay reachable — but it is the exception, not the
+                      routine. CN has no manual targets, so it gets no menu
+                      rather than an empty one. */}
+                  {!isCN ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label={t("moreActions")}
+                          data-testid="job-detail-overflow"
+                          className={`flex-1 justify-center rounded-xl text-foreground/60 transition-colors hover:bg-muted hover:text-foreground sm:w-9 sm:flex-none ${actionHeight} px-0`}
+                        >
+                          <MoreHorizontal className="h-4 w-4" aria-hidden />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
                         <DropdownMenuItem
                           className="min-h-11"
                           onClick={() => onManualGenerate(selectedJob, "resume")}
@@ -358,20 +378,10 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                           <ClipboardPaste className="mr-2 h-4 w-4" aria-hidden />
                           {t("manualGenerateCl")}
                         </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                      </>
-                    ) : null}
-                    <DropdownMenuItem
-                      data-testid="job-remove-button"
-                      className="min-h-11 text-destructive"
-                      disabled={deletingIds.has(selectedJob.id)}
-                      onClick={() => onDelete(selectedJob)}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" aria-hidden />
-                      {t("remove")}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : null}
+                </div>
               </div>
             </div>
             {tailorSource ? (

@@ -159,14 +159,11 @@ beforeEach(() => {
  * every removal, so it is part of the helper rather than repeated per test.
  */
 function findRemoveAction() {
-  // Synchronous on purpose. Several tests here run on fake timers, and
-  // `findBy*` resolves by polling on a real timer — under fake timers it never
-  // settles, the test times out before restoring real timers, and every later
-  // test in the file inherits the frozen clock. fireEvent + getBy needs no
-  // clock at all. Radix opens a menu on pointerdown.
-  const trigger = screen.getAllByTestId("job-detail-overflow")[0];
-  fireEvent.pointerDown(trigger, { button: 0, pointerType: "mouse" });
-  return screen.getByTestId("job-remove-button");
+  // Remove sits directly in the detail header again — no menu to open. Kept
+  // synchronous: several tests here run on fake timers, and `findBy*` resolves
+  // by polling on a real timer, so under fake timers it never settles and the
+  // frozen clock leaks into every later test in the file.
+  return screen.getAllByTestId("job-remove-button")[0];
 }
 
 describe("JobsClient", () => {
@@ -230,7 +227,7 @@ describe("JobsClient", () => {
   it("restores filters from the URL and debounces canonical URL updates", async () => {
     const user = userEvent.setup();
     navigationMock.search =
-      "utm=campaign&q=react&status=APPLIED&location=Victoria%2C+Australia";
+      "utm=campaign&q=react&status=APPLIED&location=state%3AVIC";
 
     renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
 
@@ -246,7 +243,7 @@ describe("JobsClient", () => {
 
     await waitFor(() => {
       expect(navigationMock.replace).toHaveBeenLastCalledWith(
-        "/jobs?utm=campaign&status=APPLIED&location=Victoria%2C+Australia",
+        "/jobs?utm=campaign&status=APPLIED&location=state%3AVIC",
         { scroll: false },
       );
     });
@@ -490,6 +487,23 @@ describe("JobsClient", () => {
     expect(
       screen.queryByRole("button", { name: /enter selection mode/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps AI Generate on the status row and structurally unable to wrap", () => {
+    renderWithClient(<JobsClient initialItems={[baseJob]} initialCursor={null} />);
+
+    const generate = screen.getByTestId("jobs-generate-all");
+    const statusRow = generate.parentElement;
+    // Same row as the status segments — the point of the whole layout.
+    expect(statusRow?.querySelector('[role="radiogroup"]')).not.toBeNull();
+    // `flex-wrap` is what used to drop the button onto a line of its own; the
+    // 380px column can never widen enough to fit both at full size, so the
+    // guarantee has to be structural rather than responsive.
+    expect(statusRow?.className).toMatch(/\bflex-nowrap\b/);
+    // The label collapses against THIS row's width, not the viewport. jsdom
+    // does not evaluate container queries, so assert the wiring, not the
+    // rendered text.
+    expect(statusRow?.className).toMatch(/@container\/jobshdr/);
   });
 
   it("hides setup and batch progress controls on jobs toolbar", async () => {
@@ -949,7 +963,7 @@ describe("JobsClient", () => {
     ).toHaveAttribute("data-experience-highlight", "REQUIRED");
   });
 
-  it("keeps Saved CV/CL in the primary actions row and Remove in the overflow", async () => {
+  it("keeps Saved CV/CL in the primary actions row and Remove as a trailing icon button", async () => {
     const jobWithSavedCv = {
       ...baseJob,
       id: "22222222-2222-2222-2222-222222222222",
@@ -975,10 +989,12 @@ describe("JobsClient", () => {
     expect(within(primaryActionsWithSavedCv).getByRole("link", { name: /saved cl/i })).toBeInTheDocument();
     expect(savedCvLink.querySelector("svg")).toBeNull();
 
-    // Remove is a menu item now, not a red block in the action row.
+    // Remove is a trailing icon-only button: reachable in one click, but
+    // neutral at rest so a destructive action does not shout from the row.
     const removeButton = await findRemoveAction();
-    expect(removeButton).toHaveAttribute("role", "menuitem");
-    expect(removeButton).toHaveClass("text-destructive");
+    expect(removeButton).toHaveAttribute("aria-label", "Remove");
+    expect(removeButton).toHaveClass("hover:text-destructive");
+    expect(removeButton).not.toHaveAttribute("role", "menuitem");
   });
 
   it("uses a responsive stacked primary action layout for mobile", async () => {

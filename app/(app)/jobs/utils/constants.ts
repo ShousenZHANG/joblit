@@ -15,15 +15,25 @@ export const HIGHLIGHT_KEYWORDS = [
   "Pinecone", "Weaviate", "Snowflake", "Databricks", "Airflow", "dbt",
 ];
 
+/**
+ * Values are the `state:` keys `lib/server/jobs/jobLocationScope.ts` expands
+ * into the aliases a posting actually carries — `state:NSW` becomes
+ * ["NSW", "New South Wales", "Sydney", "Newcastle", "Wollongong"].
+ *
+ * Job.location is the source posting's own string (jobImportService writes
+ * `item.location` verbatim), so a literal "New South Wales, Australia" never
+ * matched a row reading "Sydney, AU". The filter looked useless because it was
+ * returning nothing, not because the scope was already narrow.
+ */
 export const AU_LOCATION_OPTIONS = [
-  { value: "New South Wales, Australia", label: "New South Wales" },
-  { value: "Victoria, Australia", label: "Victoria" },
-  { value: "Queensland, Australia", label: "Queensland" },
-  { value: "Western Australia, Australia", label: "Western Australia" },
-  { value: "South Australia, Australia", label: "South Australia" },
-  { value: "Australian Capital Territory, Australia", label: "ACT" },
-  { value: "Tasmania, Australia", label: "Tasmania" },
-  { value: "Northern Territory, Australia", label: "Northern Territory" },
+  { value: "state:NSW", label: "New South Wales" },
+  { value: "state:VIC", label: "Victoria" },
+  { value: "state:QLD", label: "Queensland" },
+  { value: "state:WA", label: "Western Australia" },
+  { value: "state:SA", label: "South Australia" },
+  { value: "state:ACT", label: "ACT" },
+  { value: "state:TAS", label: "Tasmania" },
+  { value: "state:NT", label: "Northern Territory" },
 ];
 
 export const CN_LOCATION_OPTIONS = [

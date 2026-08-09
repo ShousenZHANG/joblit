@@ -27,6 +27,12 @@ interface SegmentedControlProps<TValue extends string> {
   /** Required: a radiogroup with no name is unusable with a screen reader. */
   ariaLabel: string;
   className?: string;
+  /**
+   * Applied to each segment button. `className` lands on the track, which
+   * cannot reach the buttons — a caller in a narrow fixed-width column needs
+   * to tighten the segments themselves rather than the container around them.
+   */
+  segmentClassName?: string;
 }
 
 export function SegmentedControl<TValue extends string>({
@@ -35,6 +41,7 @@ export function SegmentedControl<TValue extends string>({
   onChange,
   ariaLabel,
   className,
+  segmentClassName,
 }: SegmentedControlProps<TValue>) {
   const refs = React.useRef(new Map<TValue, HTMLButtonElement | null>());
 
@@ -83,7 +90,7 @@ export function SegmentedControl<TValue extends string>({
       aria-label={ariaLabel}
       onKeyDown={handleKeyDown}
       className={cn(
-        "inline-flex items-center gap-0.5 rounded-full border border-border/60 bg-muted/50 p-0.5",
+        "inline-flex min-w-0 items-center gap-0.5 rounded-full border border-border/60 bg-muted/50 p-0.5",
         className,
       )}
     >
@@ -107,9 +114,10 @@ export function SegmentedControl<TValue extends string>({
               selected
                 ? "bg-brand-emerald-600 text-white shadow-sm"
                 : "text-muted-foreground hover:text-foreground",
+              segmentClassName,
             )}
           >
-            <span>{option.label}</span>
+            <span className="truncate">{option.label}</span>
             {typeof option.count === "number" ? (
               <span
                 className={cn(
