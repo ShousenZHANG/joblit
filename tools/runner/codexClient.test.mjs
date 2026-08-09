@@ -15,7 +15,12 @@ function fakeSpawn(behaviour) {
   const calls = [];
   const impl = (binary, args, options) => {
     const child = new EventEmitter();
-    const outPath = args[args.indexOf("-o") + 1];
+    // POSIX passes argv straight through; Windows wraps everything into one
+    // quoted `cmd /c` string, so the output path has to come back out of it.
+    const outPath =
+      args.indexOf("-o") >= 0
+        ? args[args.indexOf("-o") + 1]
+        : (args.at(-1).match(/"-o" "([^"]+)"/)?.[1] ?? "");
     child.stdin = new (class extends EventEmitter {
       end(value) {
         calls.at(-1).stdin = value;
@@ -47,7 +52,7 @@ test("returns the final message the CLI wrote, not its stdout banner", async () 
     await writeFile(outPath, '{"cvSummary":"ok","addedBullets":[]}\n', "utf8");
     child.emit("close", 0);
   });
-  const client = createCodexClient({ spawnImpl: impl });
+  const client = createCodexClient({ spawnImpl: impl, platform: "linux" });
 
   const output = await client.generate({ ...PROMPT, sessionId: "joblit:t1:resume" });
 
@@ -61,7 +66,7 @@ test("invokes Codex as a text generator, never as a coding agent", async () => {
     await writeFile(outPath, "done", "utf8");
     child.emit("close", 0);
   });
-  const client = createCodexClient({ spawnImpl: impl, model: "gpt-5.6-terra" });
+  const client = createCodexClient({ spawnImpl: impl, model: "gpt-5.6-terra", platform: "linux" });
 
   await client.generate({ ...PROMPT, sessionId: "joblit:t1:resume" });
 
@@ -88,7 +93,7 @@ test("omits the model flag when none is pinned", async () => {
     await writeFile(outPath, "done", "utf8");
     child.emit("close", 0);
   });
-  await createCodexClient({ spawnImpl: impl }).generate({
+  await createCodexClient({ spawnImpl: impl, platform: "linux" }).generate({
     ...PROMPT,
     sessionId: "joblit:t1:resume",
   });
@@ -101,7 +106,7 @@ test("reports a missing CLI as an actionable install instruction", async () => {
     error.code = "ENOENT";
     child.emit("error", error);
   });
-  const client = createCodexClient({ spawnImpl: impl });
+  const client = createCodexClient({ spawnImpl: impl, platform: "linux" });
 
   await assert.rejects(
     client.generate({ ...PROMPT, sessionId: "joblit:t1:resume" }),
@@ -118,7 +123,7 @@ test("surfaces a non-zero exit with the CLI's own diagnostics", async () => {
     child.stderr.emit("data", "stream error: unauthorized");
     child.emit("close", 1);
   });
-  const client = createCodexClient({ spawnImpl: impl });
+  const client = createCodexClient({ spawnImpl: impl, platform: "linux" });
 
   await assert.rejects(
     client.generate({ ...PROMPT, sessionId: "joblit:t7:cover" }),
@@ -136,7 +141,7 @@ test("treats a clean exit with no final message as a failure, not empty output",
   const { impl } = fakeSpawn(({ child }) => {
     child.emit("close", 0);
   });
-  const client = createCodexClient({ spawnImpl: impl });
+  const client = createCodexClient({ spawnImpl: impl, platform: "linux" });
 
   await assert.rejects(
     client.generate({ ...PROMPT, sessionId: "joblit:t1:resume" }),
@@ -154,7 +159,7 @@ test("kills the child and rejects when the batch is cancelled", async () => {
     // Never completes on its own — cancellation is what ends it.
   });
   const controller = new AbortController();
-  const client = createCodexClient({ spawnImpl: impl });
+  const client = createCodexClient({ spawnImpl: impl, platform: "linux" });
   const pending = client.generate({
     ...PROMPT,
     sessionId: "joblit:t1:resume",
@@ -176,7 +181,7 @@ test("kills the child when it outlives the timeout", async () => {
   const { impl } = fakeSpawn(({ child }) => {
     spawned = child;
   });
-  const client = createCodexClient({ spawnImpl: impl, timeoutMs: 20 });
+  const client = createCodexClient({ spawnImpl: impl, timeoutMs: 20, platform: "linux" });
 
   await assert.rejects(
     client.generate({ ...PROMPT, sessionId: "joblit:t1:resume" }),
@@ -190,7 +195,7 @@ test("kills the child when it outlives the timeout", async () => {
 
 test("rejects an empty prompt before spawning anything", async () => {
   const { impl, calls } = fakeSpawn(() => {});
-  const client = createCodexClient({ spawnImpl: impl });
+  const client = createCodexClient({ spawnImpl: impl, platform: "linux" });
 
   await assert.rejects(
     client.generate({ instructions: "", input: "x", sessionId: "joblit:t1:resume" }),
@@ -203,6 +208,51 @@ test("rejects an empty prompt before spawning anything", async () => {
 });
 
 test("acknowledge is a no-op — a finished Codex run left nothing behind", async () => {
-  const client = createCodexClient({ spawnImpl: fakeSpawn(() => {}).impl });
+  const client = createCodexClient({ spawnImpl: fakeSpawn(() => {}).impl, platform: "linux" });
   await client.acknowledge({ sessionId: "joblit:t1:resume" });
+});
+
+test("runs the Windows shim through the command processor, fully quoted", async () => {
+  // npm installs `codex.cmd` on Windows and Node refuses to execute a .cmd
+  // directly (EINVAL since the 2024 command-injection fix), so a bare spawn
+  // fails on every Windows machine.
+  const { impl, calls } = fakeSpawn(async ({ child, outPath }) => {
+    await writeFile(outPath, "windows ok", "utf8");
+    child.emit("close", 0);
+  });
+  const client = createCodexClient({ spawnImpl: impl, platform: "win32" });
+
+  const output = await client.generate({ ...PROMPT, sessionId: "joblit:t1:resume" });
+
+  assert.equal(output, "windows ok");
+  const [{ binary, args }] = calls;
+  assert.match(binary, /cmd\.exe$/i);
+  assert.deepEqual(args.slice(0, 3), ["/d", "/s", "/c"]);
+  // Verbatim, or Node rewrites our quotes as \" and cmd hunts for a program
+  // literally named \"codex\" — the failure this test exists to prevent.
+  assert.equal(calls[0].options.windowsVerbatimArguments, true);
+  // One quoted command line inside an outer pair that `/s` strips, so a temp
+  // path or install directory containing spaces survives intact.
+  const commandLine = args[3];
+  assert.ok(commandLine.startsWith('""codex" "exec"'));
+  assert.ok(commandLine.includes('"--sandbox" "read-only"'));
+  assert.ok(commandLine.endsWith('"-""'));
+});
+
+test("refuses to build a Windows command line around a quote", async () => {
+  const { impl, calls } = fakeSpawn(() => {});
+  const client = createCodexClient({
+    spawnImpl: impl,
+    platform: "win32",
+    model: 'evil" & calc.exe & "',
+  });
+
+  await assert.rejects(
+    client.generate({ ...PROMPT, sessionId: "joblit:t1:resume" }),
+    (error) => {
+      assert.equal(error.code, "CODEX_ARG_UNSAFE");
+      return true;
+    },
+  );
+  assert.equal(calls.length, 0);
 });

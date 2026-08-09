@@ -75,11 +75,50 @@ function buildArgs({ model, workdir, outPath }) {
   return args;
 }
 
+/**
+ * Windows installs the Codex CLI as a `codex.cmd` shim, and Node has refused
+ * to execute `.cmd`/`.bat` directly since the 2024 command-injection fix — a
+ * bare spawn fails with EINVAL, or ENOENT for the extensionless shell script
+ * beside it. The documented way to run a shim is through the command
+ * processor, so on Windows the real invocation becomes:
+ *
+ *   cmd.exe /d /s /c "\"codex\" \"exec\" \"--sandbox\" ..."
+ *
+ * Every token is quoted here rather than left to the shell's own splitting,
+ * because a temp path or an install directory may contain spaces. The prompt
+ * is never a token: it travels on stdin, so no untrusted text reaches a
+ * command line.
+ */
+function toWindowsShimInvocation(binary, args) {
+  const tokens = [binary, ...args];
+  const unsafe = tokens.find((token) => /["\r\n]/.test(token));
+  if (unsafe !== undefined) {
+    throw new CodexClientError(
+      "CODEX_ARG_UNSAFE",
+      `Refusing to build a Windows command line containing a quote or newline: ${unsafe}`,
+    );
+  }
+  const quoted = tokens.map((token) => `"${token}"`).join(" ");
+  return {
+    file: process.env.ComSpec || "cmd.exe",
+    // /d skips AutoRun scripts, /c runs and exits, and /s makes cmd strip
+    // exactly the first and last quote of what follows — hence the extra
+    // outer pair around an already-quoted command line.
+    args: ["/d", "/s", "/c", `"${quoted}"`],
+    // Without this Node escapes our quotes into \" while building the real
+    // command line, and cmd then looks for a program literally named
+    // `\"codex\"`. Verbatim hands the string over untouched, which is the
+    // whole reason we quoted every token ourselves above.
+    windowsVerbatimArguments: true,
+  };
+}
+
 export function createCodexClient({
   binary = "codex",
   model,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   spawnImpl = spawn,
+  platform = process.platform,
 } = {}) {
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
     throw new Error("Codex timeout must be a positive integer");
@@ -89,9 +128,17 @@ export function createCodexClient({
     const workdir = await mkdtemp(path.join(tmpdir(), "joblit-codex-"));
     const outPath = path.join(workdir, "output.txt");
     try {
-      const child = spawnImpl(binary, buildArgs({ model, workdir, outPath }), {
+      const codexArgs = buildArgs({ model, workdir, outPath });
+      const invocation =
+        platform === "win32"
+          ? toWindowsShimInvocation(binary, codexArgs)
+          : { file: binary, args: codexArgs };
+      const child = spawnImpl(invocation.file, invocation.args, {
         cwd: workdir,
         stdio: ["pipe", "pipe", "pipe"],
+        ...(invocation.windowsVerbatimArguments
+          ? { windowsVerbatimArguments: true }
+          : {}),
       });
 
       // The prompt travels on stdin (the trailing `-` argument), so it never
