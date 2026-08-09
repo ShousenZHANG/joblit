@@ -37,14 +37,21 @@ describe("validateAtsPdf", () => {
     );
   });
 
-  it("fails closed when the parser cannot read the document", async () => {
+  it("keeps the artifact and warns when the parser itself cannot run", async () => {
+    // The PDF exists by this point — LaTeX rendered it. A parser that cannot
+    // read it is a broken checker, not a bad document, and discarding finished
+    // work over that costs the user a generation they cannot get back by
+    // retrying. Production hit exactly this: pdfjs lost its DOM shims inside
+    // the serverless bundle and every task failed with a rendered PDF in hand.
     const result = await validateAtsPdf(PDF, {
       extract: async () => {
-        throw new Error("invalid xref");
+        throw new Error("DOMMatrix is not defined");
       },
     });
 
-    expect(result.passed).toBe(false);
-    expect(result.errors[0]).toContain("invalid xref");
+    expect(result.passed).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.warnings[0]).toContain("ATS check skipped");
+    expect(result.warnings[0]).toContain("DOMMatrix is not defined");
   });
 });

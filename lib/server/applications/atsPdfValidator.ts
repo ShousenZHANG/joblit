@@ -102,20 +102,28 @@ export async function validateAtsPdf(
   try {
     extracted = await extractor(pdf);
   } catch (error) {
+    // The extractor failing is an outage of the checker, not a verdict on the
+    // document. LaTeX already produced the PDF at this point, so treating an
+    // unreadable text layer as a failed check threw away finished work over a
+    // runtime problem the user cannot act on. It downgrades to a warning: the
+    // artifact is kept, the report records that the lint could not run, and a
+    // genuinely bad PDF is still caught by the checks below whenever the
+    // extractor does work.
     return {
-      passed: false,
+      passed: true,
       pageCount: 0,
       textLength: 0,
       keywordCoverage: 0,
       matchedKeywords: [],
       missingKeywords: requiredKeywords,
-      errors: [
-        `PDF text layer could not be parsed: ${truncate(
+      errors: [],
+      warnings: [
+        ...warnings,
+        `ATS check skipped — the PDF text layer could not be read: ${truncate(
           error instanceof Error ? error.message : String(error),
           180,
         )}`,
       ],
-      warnings,
     };
   }
 

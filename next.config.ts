@@ -50,6 +50,13 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // pdfjs ships a Node build that installs its own DOM shims (DOMMatrix,
+  // Path2D, ImageData) by detecting the runtime at load time. Bundling it into
+  // a serverless function defeats that detection, so page parsing died on
+  // Vercel with "DOMMatrix is not defined" while the identical call worked in
+  // plain Node locally. Leaving it external keeps the package's own
+  // environment handling intact.
+  serverExternalPackages: ["pdfjs-dist"],
   async headers() {
     return [
       {
