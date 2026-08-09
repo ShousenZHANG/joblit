@@ -6,21 +6,21 @@
  *   node tools/runner/cli.mjs            # drain the active batch once, exit
  *   node tools/runner/cli.mjs --watch    # keep polling for new batches
  *
- * Environment: JOBLIT_URL, JOBLIT_TOKEN, HERMES_KEY (required);
- * HERMES_URL (optional, defaults to http://127.0.0.1:8642).
+ * Environment: JOBLIT_URL, JOBLIT_TOKEN (required); CODEX_MODEL and
+ * CODEX_BIN (optional).
  *
- * Hermes recovery metadata is machine-local at
- * ~/.joblit/runner-state-v1.json. Local Runner processes coordinate through
- * its atomic .lock sidecar; the state file is not a cross-host data store.
+ * Generation runs through the official Codex CLI as a subprocess, on the
+ * credential `codex login` already stored. Nothing about a run outlives the
+ * process, so there is no local recovery state to reconcile: an interrupted
+ * generation simply produced nothing and is retried.
  */
 
 import { parseArgs } from "node:util";
 
 import { loadConfig } from "./config.mjs";
 import { processFitQueue } from "./fitQueue.mjs";
-import { createHermesClient } from "./hermesClient.mjs";
+import { createCodexClient } from "./codexClient.mjs";
 import { createJoblitClient } from "./joblitClient.mjs";
-import { createFileRunStateStore } from "./runStateStore.mjs";
 import { processActiveBatch } from "./runner.mjs";
 
 const WATCH_INTERVAL_MS = 30_000;
@@ -45,17 +45,16 @@ async function main() {
     baseUrl: config.joblitUrl,
     token: config.joblitToken,
   });
-  const hermes = createHermesClient({
-    baseUrl: config.hermesUrl,
-    apiKey: config.hermesKey,
-    runStateStore: createFileRunStateStore(),
+  const model = createCodexClient({
+    binary: config.codexBinary,
+    model: config.codexModel,
   });
 
   for (;;) {
     // Fit scanning first: triage is cheap and narrows what is worth tailoring.
     const fit = await processFitQueue({
       joblit,
-      hermes,
+      hermes: model,
       signal: shutdown.signal,
     });
     if (fit.scored > 0 || fit.failed > 0) {
@@ -66,7 +65,7 @@ async function main() {
     if (shutdown.signal.aborted) return;
     const summary = await processActiveBatch({
       joblit,
-      hermes,
+      hermes: model,
       signal: shutdown.signal,
     });
     if (summary.batchId) {

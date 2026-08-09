@@ -6,8 +6,6 @@ import { loadConfig } from "./config.mjs";
 const FULL_ENV = {
   JOBLIT_URL: "https://joblit.example.com",
   JOBLIT_TOKEN: "agent-token",
-  HERMES_URL: "http://127.0.0.1:9999",
-  HERMES_KEY: "local-key",
 };
 
 test("loads a complete configuration from env", () => {
@@ -15,24 +13,37 @@ test("loads a complete configuration from env", () => {
   assert.deepEqual(config, {
     joblitUrl: "https://joblit.example.com",
     joblitToken: "agent-token",
-    hermesUrl: "http://127.0.0.1:9999",
-    hermesKey: "local-key",
+    codexModel: undefined,
+    codexBinary: "codex",
   });
 });
 
-test("HERMES_URL defaults to the gateway's standard loopback port", () => {
-  const { HERMES_URL: _omitted, ...env } = FULL_ENV;
-  const config = loadConfig(env);
-  assert.equal(config.hermesUrl, "http://127.0.0.1:8642");
+test("carries optional Codex overrides through", () => {
+  const config = loadConfig({
+    ...FULL_ENV,
+    CODEX_MODEL: "gpt-5.6-terra",
+    CODEX_BIN: "/opt/codex/bin/codex",
+  });
+  assert.equal(config.codexModel, "gpt-5.6-terra");
+  assert.equal(config.codexBinary, "/opt/codex/bin/codex");
+});
+
+test("asks for no model credential — Codex holds its own login", () => {
+  // The Runner must never require an AI key. A configuration that loads
+  // without one is the enforcement of that boundary.
+  const config = loadConfig(FULL_ENV);
+  const serialized = JSON.stringify(config).toLowerCase();
+  assert.ok(!serialized.includes("key"));
+  assert.ok(!serialized.includes("secret"));
 });
 
 test("names every missing variable at once, not one per run", () => {
   assert.throws(
-    () => loadConfig({ HERMES_URL: "http://127.0.0.1:8642" }),
+    () => loadConfig({}),
     (error) => {
       assert.match(error.message, /JOBLIT_URL/);
       assert.match(error.message, /JOBLIT_TOKEN/);
-      assert.match(error.message, /HERMES_KEY/);
+      assert.match(error.message, /codex login/);
       return true;
     },
   );

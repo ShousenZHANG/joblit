@@ -1,13 +1,12 @@
 /**
- * Runner configuration. Everything comes from the local environment — the
- * Hermes key in particular is a local credential that must never be stored
- * server-side; the Runner reads it here and sends it only to the loopback
- * gateway (enforced by hermesClient).
+ * Runner configuration, all from the local environment.
+ *
+ * There is no model credential here any more. Generation runs through the
+ * official Codex CLI, which holds its own login — the Runner never sees,
+ * stores, or forwards an AI credential. Only the Joblit agent token is ours.
  */
 
-const HERMES_DEFAULT_URL = "http://127.0.0.1:8642";
-
-const REQUIRED = ["JOBLIT_URL", "JOBLIT_TOKEN", "HERMES_KEY"];
+const REQUIRED = ["JOBLIT_URL", "JOBLIT_TOKEN"];
 
 function readValue(env, name) {
   const raw = env[name];
@@ -21,14 +20,17 @@ export function loadConfig(env) {
   if (missing.length > 0) {
     throw new Error(
       `Missing required environment variables: ${missing.join(", ")}. ` +
-        "Issue JOBLIT_TOKEN from the Joblit Agent page; HERMES_KEY comes from your local Hermes gateway.",
+        "Issue JOBLIT_TOKEN from the Joblit Agent page, then sign in to the " +
+        "model with: codex login",
     );
   }
 
   return {
     joblitUrl: readValue(env, "JOBLIT_URL"),
     joblitToken: readValue(env, "JOBLIT_TOKEN"),
-    hermesUrl: readValue(env, "HERMES_URL") ?? HERMES_DEFAULT_URL,
-    hermesKey: readValue(env, "HERMES_KEY"),
+    /** Optional: pin a model. Unset means the Codex CLI's own default. */
+    codexModel: readValue(env, "CODEX_MODEL"),
+    /** Optional: override the executable, e.g. an absolute path. */
+    codexBinary: readValue(env, "CODEX_BIN") ?? "codex",
   };
 }
