@@ -67,14 +67,14 @@ describe("withAgentRoute", () => {
     auth.requireAgentCredential.mockResolvedValue({
       userId: "user-1",
       credentialId: "credential-1",
-      capabilities: ["fit:drain"],
+      capabilities: ["tailoring:execute"],
       requestId: "req-1",
     });
 
     const req = request({ Authorization: "Bearer tok" });
     const res = await withAgentRoute(
       req,
-      "fit:drain",
+      "tailoring:execute",
       async ({ userId, requestId, authKind, credentialId }) =>
         NextResponse.json({ userId, requestId, authKind, credentialId }),
     );
@@ -86,7 +86,7 @@ describe("withAgentRoute", () => {
       credentialId: "credential-1",
     });
     expect(auth.requireSession).not.toHaveBeenCalled();
-    expect(auth.requireAgentCredential).toHaveBeenCalledWith(req, "fit:drain");
+    expect(auth.requireAgentCredential).toHaveBeenCalledWith(req, "tailoring:execute");
   });
 
   it("falls back to the session when no Authorization header is present", async () => {
@@ -137,7 +137,7 @@ describe("withAgentRoute", () => {
 
     const res = await withAgentRoute(
       request({ Authorization: "" }),
-      "fit:drain",
+      "tailoring:execute",
       async () => NextResponse.json({ ok: true }),
     );
 
@@ -151,7 +151,7 @@ describe("withAgentRoute", () => {
 
     const res = await withAgentRoute(
       request(),
-      "fit:drain",
+      "tailoring:execute",
       async () => NextResponse.json({ ok: true }),
     );
 

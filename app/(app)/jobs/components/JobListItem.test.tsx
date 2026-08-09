@@ -7,19 +7,14 @@ import zhMessages from "@/messages/zh.json";
 import type { JobItem } from "../types";
 import { JobListItem } from "./JobListItem";
 
-function fitScoredJob(
-  fitEligibility?: "PASS" | "RISK" | "BLOCK",
-): JobItem {
+function baseJob(): JobItem {
   return {
-    id: "job-fit",
+    id: "job-row",
     title: "Platform Engineer",
     company: "Acme",
     location: "Sydney",
-    jobUrl: "https://example.com/job-fit",
+    jobUrl: "https://example.com/job-row",
     status: "NEW",
-    fitScore: 82,
-    fitVerdict: "Strong TypeScript alignment",
-    fitEligibility,
     createdAt: "2026-07-01T00:00:00.000Z",
     updatedAt: "2026-07-01T00:00:00.000Z",
   } as JobItem;
@@ -27,10 +22,8 @@ function fitScoredJob(
 
 function renderJobListItem({
   locale = "en",
-  fitEligibility,
 }: {
   locale?: "en" | "zh";
-  fitEligibility?: "PASS" | "RISK" | "BLOCK";
 } = {}) {
   const messages = locale === "zh" ? zhMessages : enMessages;
 
@@ -41,7 +34,7 @@ function renderJobListItem({
       now={new Date("2026-07-28T00:00:00.000Z")}
     >
       <JobListItem
-        job={fitScoredJob(fitEligibility)}
+        job={baseJob()}
         isActive
         onSelectJob={vi.fn()}
         timeZone="Australia/Sydney"
@@ -54,20 +47,15 @@ function renderJobListItem({
 afterEach(cleanup);
 
 describe("JobListItem", () => {
-  it("renders the row without any fit badge, even when legacy fit data exists", () => {
-    renderJobListItem({ fitEligibility: "PASS" });
+  it("renders the row", () => {
+    renderJobListItem();
 
     expect(screen.getByText("Platform Engineer")).toBeInTheDocument();
-    // The fit-scoring surface was retired from the list: a stale score on an
-    // old row must not resurface as an unexplained number chip.
-    expect(screen.queryByText("82")).not.toBeInTheDocument();
-    expect(screen.queryByText(/strong typescript alignment/i)).not.toBeInTheDocument();
   });
 
-  it("renders localized status in Chinese without fit chrome", () => {
+  it("renders the row under the Chinese locale", () => {
     renderJobListItem({ locale: "zh" });
 
     expect(screen.getByText("Platform Engineer")).toBeInTheDocument();
-    expect(screen.queryByText("82")).not.toBeInTheDocument();
   });
 });

@@ -3,7 +3,7 @@ import type { JobListItem } from "@/lib/server/jobs/jobListService";
 import { serializeJobListItem } from "./serializeJobListItem";
 
 describe("serializeJobListItem", () => {
-  it("preserves fit and provenance fields in the SSR hydration payload", () => {
+  it("preserves provenance fields in the SSR hydration payload", () => {
     const item: JobListItem = {
       id: "job-1",
       jobUrl: "https://example.com/jobs/1",
@@ -20,9 +20,6 @@ describe("serializeJobListItem", () => {
       source: "jobspy",
       postingRisk: 25,
       postingRiskFlags: ["suspicious_domain"],
-      fitScore: 82,
-      fitVerdict: "STRONG",
-      fitEligibility: "PASS",
       livenessStatus: "ACTIVE",
       livenessReason: null,
       possibleDuplicate: false,
@@ -39,9 +36,6 @@ describe("serializeJobListItem", () => {
       source: "jobspy",
       postingRisk: 25,
       postingRiskFlags: ["suspicious_domain"],
-      fitScore: 82,
-      fitVerdict: "STRONG",
-      fitEligibility: "PASS",
       livenessStatus: "ACTIVE",
       possibleDuplicate: false,
       listingDate: "2026-07-18T00:00:00.000Z",

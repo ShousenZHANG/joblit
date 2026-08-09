@@ -58,12 +58,12 @@ describe("durable Agent batch integrity migration", () => {
     expect(migration).not.toMatch(/(?:UPDATE|DELETE FROM)\s+"Job"/);
   });
 
-  it("maps the Fit lease index to the physical migration name", () => {
+  it("keeps the historical Fit lease index in the migration while the schema has retired it", () => {
     const physicalIndexName = "FitBatchClaim_userId_status_lease_idx";
 
+    // The 2026-08 migration file is immutable history; ADR-0019 later dropped
+    // the whole Fit queue, so the live schema must no longer declare it.
     expect(migration).toContain(`CREATE INDEX "${physicalIndexName}"`);
-    expect(schema).toContain(
-      `@@index([userId, status, executionLeaseExpiresAt], map: "${physicalIndexName}")`,
-    );
+    expect(schema).not.toContain("FitBatchClaim");
   });
 });

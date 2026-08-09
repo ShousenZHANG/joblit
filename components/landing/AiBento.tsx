@@ -2,12 +2,7 @@
 
 import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
-import {
-  CheckCircle2,
-  FileCheck2,
-  MinusCircle,
-  XCircle,
-} from "lucide-react";
+import { FileCheck2, MousePointerClick } from "lucide-react";
 import { useSpotlight } from "./lib/interactive";
 import { revealStagger, revealUp, useReveal } from "./lib/motion";
 import { cn } from "@/lib/utils";
@@ -17,11 +12,11 @@ import { cn } from "@/lib/utils";
  * real product surface instead of an icon and a slogan. The copy is written
  * for a non-technical reader, but every claim still maps to a mechanism:
  *
- * - Fit: judgement chips aggregate deterministically (lib/server/ai/fitScoring)
- *   and ungrounded claims are rejected by the evidence gate.
+ * - Fine print: the JD requirements analysis (lib/shared/jobExperienceAnalysis)
+ *   extracts hard asks with evidence offsets; every chip jumps to the sentence.
  * - Delta tailoring: summary + max three added bullets — the strict output
  *   contract in the prompt schema.
- * - Local-first: the Runner drives Hermes over loopback (ADR-0014/0015);
+ * - Local-first: the Runner drives the user's own Codex CLI (ADR-0015/0018);
  *   the command shown is the real one.
  * - "Nothing runs twice": receipt-backed settlement (AGENTS.md contract) —
  *   plain-language framing of content-addressed replay.
@@ -86,21 +81,25 @@ export function AiBento() {
       </motion.h2>
 
       <div className="mt-12 grid gap-4 sm:grid-cols-2">
-        {/* Evidence-gated fit — miniature of the real judgement chips */}
+        {/* JD fine print — miniature of the real requirement chips */}
         <BentoCell>
-          <CellHeading title={t("fitTitle")} body={t("fitBody")} />
-          <div className="mt-4 flex flex-wrap gap-1.5" aria-hidden>
-            <span className="inline-flex items-center gap-1 rounded-full border border-brand-emerald-200 bg-brand-emerald-50 px-2.5 py-1 text-xs font-medium text-brand-emerald-800 dark:border-brand-emerald-500/30 dark:bg-brand-emerald-500/10 dark:text-brand-emerald-300">
-              Kubernetes
-              <CheckCircle2 className="h-3 w-3" />
+          <CellHeading
+            title={t("requirementsTitle")}
+            body={t("requirementsBody")}
+          />
+          <div className="mt-4 flex flex-wrap items-center gap-1.5" aria-hidden>
+            <span className="inline-flex items-center rounded-full border border-brand-blue/30 bg-brand-blue/5 px-2.5 py-1 text-xs font-medium text-brand-blue">
+              8+ yrs Java
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/70 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-300">
-              GraphQL
-              <MinusCircle className="h-3 w-3" />
+            <span className="inline-flex items-center rounded-full border border-brand-blue/30 bg-brand-blue/5 px-2.5 py-1 text-xs font-medium text-brand-blue">
+              NV1 clearance
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-rose-300/70 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-800 dark:border-rose-400/30 dark:bg-rose-500/10 dark:text-rose-300">
-              Rust
-              <XCircle className="h-3 w-3" />
+            <span className="inline-flex items-center rounded-full border border-brand-blue/30 bg-brand-blue/5 px-2.5 py-1 text-xs font-medium text-brand-blue">
+              Citizens/PR only
+            </span>
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
+              <MousePointerClick className="h-3 w-3" />
+              View in JD
             </span>
           </div>
         </BentoCell>

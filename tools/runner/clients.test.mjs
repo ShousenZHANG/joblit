@@ -200,70 +200,6 @@ test("hermes: exposes only safe completed operation metadata for startup reconci
   assert.deepEqual(await hermes.recoverableOperations(), []);
 });
 
-test("hermes: exposes content-addressed Fit issues across recoverable phases", async () => {
-  const issueKey = "d".repeat(64);
-  const state = new Map([
-    [
-      `joblit:fit:${issueKey}`,
-      {
-        phase: "completed",
-        runId: "run_" + "d".repeat(32),
-        repairUsed: false,
-      },
-    ],
-    [
-      `joblit:fit:${"e".repeat(64)}`,
-      {
-        phase: "running",
-        runId: "run_" + "e".repeat(32),
-        repairUsed: false,
-      },
-    ],
-    [
-      "joblit:not-a-fit-issue",
-      {
-        phase: "completed",
-        runId: "run_" + "f".repeat(32),
-        repairUsed: false,
-      },
-    ],
-  ]);
-  const hermes = createHermesClient({
-    baseUrl: "http://127.0.0.1:8790",
-    apiKey: "k",
-    runStateStore: {
-      async get(key) {
-        return state.get(key) ?? null;
-      },
-      async set(key, value) {
-        state.set(key, structuredClone(value));
-      },
-      async delete(key) {
-        state.delete(key);
-      },
-      async list() {
-        return [...state].map(([sessionId, storedState]) => ({
-          sessionId,
-          state: structuredClone(storedState),
-        }));
-      },
-    },
-  });
-
-  assert.deepEqual(await hermes.recoverableFitIssues(), [
-    {
-      sessionId: `joblit:fit:${issueKey}`,
-      issueKey,
-      phase: "completed",
-    },
-    {
-      sessionId: `joblit:fit:${"e".repeat(64)}`,
-      issueKey: "e".repeat(64),
-      phase: "running",
-    },
-  ]);
-});
-
 test("hermes: refuses to recover completed output for a different prompt operation", async () => {
   const sessionId = "joblit:operation-mismatch";
   const state = new Map([
@@ -2248,60 +2184,6 @@ test("joblit: every call carries the bearer token and the error envelope surface
       error?.code === "NO_PROFILE" &&
       /Create your resume first/.test(error.message),
   );
-});
-
-test("joblit: fit queue calls hit the fit endpoints with the bearer token", async () => {
-  const calls = [];
-  const fetchImpl = async (url, init = {}) => {
-    calls.push({ url: String(url), init });
-    return jsonResponse({ ok: true });
-  };
-
-  const joblit = createJoblitClient({
-    baseUrl: "https://joblit.example.com",
-    token: AGENT_TOKEN,
-    fetchImpl,
-  });
-
-  await joblit.nextFitBatch();
-  await joblit.fitPrompt({ jobIds: ["job-1"] });
-  await joblit.heartbeatFitClaim({
-    claimId: "55555555-5555-4555-8555-555555555555",
-    attemptId: "44444444-4444-4444-8444-444444444444",
-  });
-  await joblit.importFitBatch({
-    jobIds: ["job-1"],
-    claimToken: "c",
-    modelOutput: "[]",
-  });
-  await joblit.fitSettlement("d".repeat(64));
-  await joblit.markFitFailed({ jobIds: ["job-1"], claimToken: "c" });
-  await joblit.releaseFitBatch({ jobIds: ["job-1"], claimToken: "c" });
-
-  assert.deepEqual(
-    calls.map((c) => c.url.replace("https://joblit.example.com", "")),
-    [
-      "/api/jobs/fit/next-batch",
-      "/api/jobs/fit/prompt",
-      "/api/jobs/fit/heartbeat",
-      "/api/jobs/fit/batch-import",
-      "/api/jobs/fit/settlement-status",
-      "/api/jobs/fit/mark-failed",
-      "/api/jobs/fit/release-batch",
-    ],
-  );
-  for (const call of calls) {
-    assert.equal(call.init.method, "POST");
-    assert.equal(call.init.headers.Authorization, `Bearer ${AGENT_TOKEN}`);
-  }
-  assert.deepEqual(JSON.parse(calls[1].init.body), { jobIds: ["job-1"] });
-  assert.deepEqual(JSON.parse(calls[2].init.body), {
-    claimId: "55555555-5555-4555-8555-555555555555",
-    attemptId: "44444444-4444-4444-8444-444444444444",
-  });
-  assert.deepEqual(JSON.parse(calls[4].init.body), {
-    issueKey: "d".repeat(64),
-  });
 });
 
 test("joblit: import treats any 2xx as settled, including a PDF body", async () => {

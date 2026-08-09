@@ -6,15 +6,21 @@ export const AGENT_CREDENTIAL_PREFIX = "jfagent_v1_";
 export const AGENT_CREDENTIAL_AUDIENCE = "joblit-agent";
 export const AGENT_CREDENTIAL_VERSION = 1;
 export const AGENT_CAPABILITY = {
-  FIT_DRAIN: "fit:drain",
   TAILORING_EXECUTE: "tailoring:execute",
   TAILORING_CONTROL: "tailoring:control",
 } as const;
 export const DEFAULT_AGENT_CAPABILITIES = [
-  AGENT_CAPABILITY.FIT_DRAIN,
   AGENT_CAPABILITY.TAILORING_EXECUTE,
   AGENT_CAPABILITY.TAILORING_CONTROL,
 ] as const;
+/**
+ * Capabilities that used to exist and may still sit on stored credentials.
+ * "fit:drain" shipped in every default mint until the fit feature was retired
+ * (ADR-0019); no route requires it any more, but validation must keep
+ * accepting rows that carry it, or every pre-retirement credential — including
+ * its live tailoring capabilities — would brick at once.
+ */
+export const LEGACY_AGENT_CAPABILITIES = ["fit:drain"] as const;
 
 export type AgentCapability = (typeof DEFAULT_AGENT_CAPABILITIES)[number];
 

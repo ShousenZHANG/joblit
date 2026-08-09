@@ -1,6 +1,6 @@
 # Data — `prisma/schema.prisma`
 
-27 models, 19 enums, 58 migrations. Client generates to `lib/generated/prisma`
+24 models, 17 enums, 59 migrations. Client generates to `lib/generated/prisma`
 and is reached through the singleton in `lib/server/prisma.ts:13` over
 `PrismaNeon`. Vocabulary is `CONTEXT.md`.
 
@@ -13,9 +13,6 @@ and is reached through the singleton in `lib/server/prisma.ts:13` over
 | `User`                                   | Tenant root, OAuth identity                                                                         | Live — adapter-owned    |
 | `Account`, `Session`                     | NextAuth records                                                                                    | Live — adapter-owned    |
 | `Job`                                    | A **Job** from the Fetch Pipeline                                                                   | Live                    |
-| `FitBatchImportReceipt`                  | Durable exact-replay settlement for one content-addressed Fit issue                                 | Live, append-only       |
-| `FitBatchClaim`                          | Durable owner, attempt fence, lease, and prompt receipt for one exact Fit batch                     | Live                    |
-| `FitBatchClaimItem`                      | Immutable ordered Fit batch membership plus terminal per-Job outcome                                | Live                    |
 | `ApplicationBatch`                       | A **Codex Batch** run header                                                                        | Live                    |
 | `ApplicationBatchTask`                   | One Job's slot in a batch                                                                           | Live                    |
 | `TailoringRun`                           | Durable execution/fencing identity for one issued Application tailoring operation                   | Live                    |
@@ -55,10 +52,6 @@ use it as the key rather than a column: `ActiveResumeProfile`
 denormalised `userId`, so a tenant filter never needs a join.
 `FetchRunCommitReceipt` and `TailoringRunReceipt` deliberately scope ownership
 through their required run parent; commit callers never supply a tenant id.
-`FitBatchClaim` carries `userId` directly and owns its immutable items.
-`FitBatchImportReceipt` also keeps `userId` so the tenant-scoped issue key
-remains directly addressable even if its optional Claim relation is later
-removed by cascade cleanup.
 `ApplicationArtifact.userId`, `jobId`, and `applicationId` are deliberately
 denormalised identity snapshots with no relations. Lifecycle rows survive
 source deletion and must be retired explicitly rather than by cascade.
@@ -73,7 +66,6 @@ gate; neither has an active schema object.
 | Jobs            | `where: {userId, …}` — `jobListService.ts:122-127`; raw SQL injects `j."userId"` at `jobSearchService.ts:119`                                     |
 | Applications    | Composite `userId_jobId`, or `findFirst({where:{id, userId}})`                                                                                    |
 | Tailoring runs  | `TailoringRun.userId`; receipts inherit ownership through their required run                                                                      |
-| Fit settlements | `FitBatchImportReceipt @@unique([userId, issueKey])`; the import module derives the same user from AgentCredential/session auth                   |
 | Resume profiles | `where: {userId, locale}`; active pointer via `userId_locale`                                                                                     |
 | Agent           | `AgentCredential.tokenHash` → `userId` at `requireAgentCredential.ts`; version, audience, capability, expiry, and revocation are checked together |
 
@@ -93,17 +85,6 @@ Ownership sits in the **write predicate**, not only the read:
 `dispatchMeta` remains inside `FetchRun.queries` only for the pre-`start` AU
 dispatch claim/idempotency window. It is not an execution lease once `start`
 has populated the fields above.
-
-### Fit settlement projection
-
-| Field                              | Authority                                                                                                                                                               |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FitBatchClaim` + ordered items    | Durable authority for one exact Job set. Lease takeover rotates `executionAttemptId` without regrouping Jobs.                                                           |
-| Claim prompt hashes + `promptMeta` | Bound once at prompt issuance; settlement validates the stored receipt rather than rebuilding mutable profile/rule state. Full prompts and model output are not stored. |
-| `FitBatchImportReceipt.issueKey`   | Stable 64-hex prompt/Claim identity, unique per user. `claimId` is also unique for protocol-v2 settlements.                                                             |
-| `requestHash`                      | Hash of protocol, issue, sorted Job ids, exact model output, and prompt receipt. Same issue with different content conflicts.                                           |
-| `settlement`                       | Strict JSON projection that accounts for every Claim item as `scored` or deterministically `failed`. Exact replay is receipt-first.                                     |
-| `Job.fitSource = claim:<uuid>`     | Rolling-deploy compatibility projection only. It is no longer the lease authority once a durable Claim exists.                                                          |
 
 ### TailoringRun acceptance projection
 
@@ -274,10 +255,8 @@ diverge.
 
 ## Enums
 
-19 enums. Workflow state is grouped across Job/Application events, FetchRun,
+17 enums. Workflow state is grouped across Job/Application events, FetchRun,
 Application Batch, Tailoring Run, and Application Artifact lifecycles.
-`FitBatchClaimStatus` and `FitBatchClaimItemOutcome` encode durable Fit queue
-ownership and complete per-item terminal accounting.
 `ApplicationArtifactTarget` and `ApplicationArtifactState` establish the
 stage/reference/retirement vocabulary used by the artifact lifecycle module
 and reconciler. Historical enum members such as `ApplicationEventSource =
@@ -313,10 +292,8 @@ rest.
 
 | Column                                                               | Shape                                                                                                             | Validated by                                                                                                                                                                                                           |
 | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Job.fitMatrix`                                                      | AI requirement matrix; score aggregated deterministically                                                         | `FitMatrixSchema` — `lib/shared/schemas/fitMatrix.ts:53`                                                                                                                                                               |
 | `Job.postingRiskFlags`                                               | `string[]` advisory flags                                                                                         | **Nothing** — coerced by `normalizePostingRiskFlags`                                                                                                                                                                   |
 | `FetchRun.queries`                                                   | Versioned AU execution config plus pre-start dispatch/idempotency metadata (`:375`)                               | Strict AU v2 writer and historical AU v1 reader; non-AU and unknown versions fail closed. Authoritative post-start lease fields are relational, not JSON                                                               |
-| `FitBatchImportReceipt.settlement`                                   | Strict Fit settlement (`protocolVersion`, issue/request hashes, disjoint scored/failed outcomes)                  | `FitBatchSettlementSchema` on write and replay in `lib/server/jobs/fitBatchImport.ts`                                                                                                                                  |
 | `TailoringRun.promptReceipts`                                        | Target-keyed prompt identity only; never full prompt bytes or raw model output                                    | `normalizePromptReceipts` on issue and `readPromptReceipts` on lifecycle/acceptance reads                                                                                                                              |
 | `ResumeProfile.{basics,links,skills,experiences,projects,education}` | Master Resume Profile sections                                                                                    | `ResumeProfileSchema` — `lib/shared/schemas/resumeProfile.ts:72`                                                                                                                                                       |
 | `Application.aiContent`                                              | **AI Content** — the ADR-0001 current-proposal snapshot with per-target provenance plus aggregate evidence/review | `aiContentSchema` — `lib/shared/schemas/aiContent.ts`, `.strict()`. Target provenance is optional for legacy v1 rows; a missing entry means unknown. The retired `skillsAdditions` key is stripped by a `z.preprocess` |
@@ -343,9 +320,6 @@ rest.
 | `EvidenceSnapshot @@unique([userId, contentHash, kind])` (`:752`)                                                   | Content-addressed reuse — identical evidence within one tenant is reused, not copied.                                                                                                                                                                                               |
 | `ClaimEvidence @@unique([applicationId, claimHash, evidenceSnapshotId])` (`:776`)                                   | Claim edges are append-only and idempotent; a retry cannot duplicate the audit trail.                                                                                                                                                                                               |
 | `ApplicationBatchTask @@unique([batchId, jobId])`                                                                   | A Job appears at most once per batch. Raw SQL also enforces one active (`QUEUED`/`RUNNING`) Application Batch per user.                                                                                                                                                             |
-| `FitBatchClaim` raw partial unique index                                                                            | At most one `ACTIVE` Claim per user; release makes that exact Claim immediately reclaimable instead of creating a different batch.                                                                                                                                                  |
-| `FitBatchClaimItem @@id([claimId, jobId])` + ordinal unique                                                         | Membership and order are immutable and duplicate-free for the life of a Claim.                                                                                                                                                                                                      |
-| `FitBatchImportReceipt @@unique([userId, issueKey])` + unique `claimId`                                             | One canonical settlement per tenant issue and durable Claim; identical request hashes replay, conflicting content fails closed.                                                                                                                                                     |
 | `TailoringRun @@unique([userId, issueKey])` (`:423`)                                                                | Issuing the same operation is idempotent within a tenant; `issueHash` detects conflicting reuse.                                                                                                                                                                                    |
 | `TailoringRun.applicationBatchTaskId @unique` (`:388`)                                                              | A batch task has at most one Tailoring Run.                                                                                                                                                                                                                                         |
 | `TailoringRunReceipt @@unique([runId, target])` (`:446`)                                                            | At most one immutable acceptance receipt per target; exact retries replay it.                                                                                                                                                                                                       |
@@ -375,7 +349,6 @@ key derivation is a rolling-deployment compatibility change, not a refactor.
 | `JOBJ` `0x4a4f424a` | `db/advisoryLock.ts`, adapter `jobs/jobMutationLock.ts`                 | `stableInt32(userId)`               | `deleteJob`, `batchDeleteJobs`, `persistPreparedJobImport` — serializes generic and FetchRun imports against permanent delete                                  |
 | `JOBA` `0x4a4f4241` | `db/advisoryLock.ts`, adapter `applications/applicationMutationLock.ts` | `stableInt32("${userId}:${jobId}")` | Both delete paths, `manual-generate`, `draft`, `finalize`, `discard`                                                                                           |
 | `JOBC` `0x4a4f4243` | `applications/applicationEvents.ts:31`                                  | same                                | `appendApplicationEvent`, in a `Serializable` transaction. `bulkAppendStatusEvents` takes **no** advisory lock — its boundary is `updateManyAndReturn`         |
-| `JOBF` `0x4a4f4246` | `jobs/fitRunService.ts`                                                 | `stableInt32(userId)`               | Durable Fit Claim acquire/takeover, prompt binding, heartbeat, cancellation/failure/release, and settlement; Job-touching flows take `JOBJ` first              |
 | `FRUN` `0x4652554e` | `db/advisoryLock.ts`, adapter `fetchRuns/fetchRunLifecycleLock.ts`      | `stableInt32(runId)`                | Attempt `start`/takeover, commit, fail, stale recovery, and cancel. It serializes changes to the relational attempt fence and is always acquired before `JOBJ` |
 | `ABAT` `0x41424154` | `tailoringRuns/tailoringRunLock.ts:3`                                   | `stableInt32(batchId)`              | Batch claim/completion/cancellation and batch-bound Tailoring Run acceptance; first lock in the global acceptance order                                        |
 | `TLRN` `0x544c524e` | `tailoringRuns/tailoringRunLock.ts:4`                                   | `stableInt32(runId)`                | Tailoring Run issue/start/prompt binding/acceptance/fail/cancel; acquired after `ABAT` and before `JOBA`                                                       |
@@ -394,7 +367,7 @@ lease fenced by a random `ownerToken` (ADR-0005).
 
 ## Migration history
 
-58 migrations, `20260114042057_init_auth_jobs` →
+59 migrations, `20260114042057_init_auth_jobs` →
 `20260809161000_verify_post_retirement_inventory`.
 Most are a single additive `ALTER TABLE`. The ones that changed a domain rule:
 
@@ -423,6 +396,7 @@ Most are a single additive `ALTER TABLE`. The ones that changed a domain rule:
 | `20260808120000_rename_discover_cache_drop_video_rows`            | Renames the surviving GitHub-trending cache to `DiscoverCache`, preserves its physical constraint/index names, and deletes retired video/refresh payloads.                                                                                                          |
 | `20260809154500_drop_retired_source_tables`                       | ADR-0017 Stage 2: locks and rechecks legacy-row, orphan-Artifact, and Blob-inventory readiness, then drops `AtsBoardSource`, `SourceHealth`, and `SourceHealthStatus` without `CASCADE`.                                                                            |
 | `20260809161000_verify_post_retirement_inventory`                 | Deployment fence: requires a settled Blob inventory whose completion is later than the source-contract migration, then rechecks legacy rows and active orphan Artifacts before the Stage 2 binary may replace Stage 1.                                              |
+| `20260809190000_retire_fit_scoring`                               | ADR-0019: drops the Fit queue tables (`FitBatchClaim`, `FitBatchClaimItem`, `FitBatchImportReceipt`), their enums, and the seven `Job.fit*` columns; the deterministic JD analysis and posting risk stay.                                                            |
 | `20260330000000_search_optimization`                              | The only Postgres-extension-installing migration: `pg_trgm` plus three GIN indexes.                                                                                                                                                                                 |
 
 After editing `prisma/schema.prisma`, run `npx prisma generate`.

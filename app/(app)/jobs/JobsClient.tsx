@@ -676,36 +676,27 @@ export function JobsClient({
   // render would show the wrong summary and disable trustworthy highlighting.
   const selectedDetailData =
     detailData?.id === selectedJob?.id ? detailData : undefined;
-  const fitDetailRefetchKeyRef = useRef<string | null>(null);
+  const detailRefetchKeyRef = useRef<string | null>(null);
   const selectedDescription = selectedDetailData?.description ?? "";
   const selectedJobId = selectedJob?.id;
   const selectedJobVersion = selectedJob?.updatedAt;
-  const selectedJobEligibility = selectedJob?.fitEligibility;
   // The list and detail have different cache lifetimes. Compare row versions
-  // so any re-score/status update refreshes the detail instead of combining a
-  // new score with a stale GATE matrix for up to five minutes.
+  // so a status update refreshes the detail instead of pairing the new row
+  // with a stale detail payload for up to five minutes.
   useEffect(() => {
     const versionChanged =
       Boolean(selectedDetailData?.updatedAt) &&
       selectedDetailData?.updatedAt !== selectedJobVersion;
-    const missingCompletedMatrix =
-      Boolean(selectedJobEligibility) && !selectedDetailData?.fitMatrix;
-    if (
-      selectedJobId &&
-      (versionChanged || missingCompletedMatrix) &&
-      !detailIsFetching
-    ) {
+    if (selectedJobId && versionChanged && !detailIsFetching) {
       const key = `${selectedJobId}:${selectedJobVersion}`;
-      if (fitDetailRefetchKeyRef.current === key) return;
-      fitDetailRefetchKeyRef.current = key;
+      if (detailRefetchKeyRef.current === key) return;
+      detailRefetchKeyRef.current = key;
       void refetchDetail();
     }
   }, [
-    selectedDetailData?.fitMatrix,
     selectedDetailData?.updatedAt,
     detailIsFetching,
     refetchDetail,
-    selectedJobEligibility,
     selectedJobId,
     selectedJobVersion,
   ]);
@@ -1323,7 +1314,6 @@ export function JobsClient({
           selectedJob={selectedJob}
           selectedDescription={selectedDescription}
           experienceAnalysis={selectedDetailData?.experienceAnalysis ?? null}
-          selectedFitMatrix={selectedDetailData?.fitMatrix ?? null}
           detailError={detailError}
           detailLoading={detailLoading}
           showLoadingOverlay={showLoadingOverlay}

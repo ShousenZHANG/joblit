@@ -1410,51 +1410,6 @@ export function createHermesClient({
       return recoverable;
     },
 
-    /**
-     * List non-secret Fit issue identities whose server receipt can be checked
-     * after a crash. Live phases are included so authoritative server
-     * settlement can trigger proof-based stop/transcript cleanup.
-     */
-    async recoverableFitIssues() {
-      if (typeof runStateStore.list !== "function") return [];
-      const entries = await runStateStore.list();
-      if (!Array.isArray(entries)) {
-        throw new HermesClientError(
-          "RUN_STATE_INVALID",
-          "Persisted Hermes run state list is invalid",
-        );
-      }
-      const recoverable = [];
-      for (const entry of entries) {
-        if (
-          !entry ||
-          typeof entry !== "object" ||
-          typeof entry.sessionId !== "string" ||
-          !SESSION_ID_RE.test(entry.sessionId)
-        ) {
-          throw new HermesClientError(
-            "RUN_STATE_INVALID",
-            "Persisted Hermes run state list is invalid",
-          );
-        }
-        assertValidRunState(entry.state);
-        const match = /^joblit:fit:([a-f0-9]{64})$/.exec(entry.sessionId);
-        if (
-          match &&
-          (entry.state.phase === "starting" ||
-            entry.state.phase === "running" ||
-            entry.state.phase === "completed") &&
-          !entry.state.operation
-        ) {
-          recoverable.push({
-            sessionId: entry.sessionId,
-            issueKey: match[1],
-            phase: entry.state.phase,
-          });
-        }
-      }
-      return recoverable;
-    },
 
     /** Forget a terminal result only after Joblit proves it cannot be used. */
     async discard({ sessionId }) {

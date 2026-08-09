@@ -51,7 +51,7 @@ describe("jobsListResponseSchema", () => {
   });
 
   it("rejects a numeric field arriving as a string", () => {
-    expect(jobListItemSchema.safeParse(row({ fitScore: "72" })).success).toBe(
+    expect(jobListItemSchema.safeParse(row({ postingRisk: "72" })).success).toBe(
       false,
     );
   });
@@ -97,7 +97,6 @@ describe("jobDetailResponseSchema", () => {
     const parsed = jobDetailResponseSchema.safeParse({
       id: "job-1",
       description: "Build things.",
-      fitMatrix: null,
       updatedAt: "2026-07-01T00:00:00.000Z",
     });
 
@@ -115,7 +114,6 @@ describe("jobDetailResponseSchema", () => {
     const parsed = jobDetailResponseSchema.parse({
       id: "job-1",
       description,
-      fitMatrix: null,
       experienceAnalysis: {
         schemaVersion: 1,
         status: "FOUND",
@@ -141,7 +139,6 @@ describe("jobDetailResponseSchema", () => {
     const parsed = jobDetailResponseSchema.parse({
       id: "job-1",
       description,
-      fitMatrix: null,
       experienceAnalysis: {
         schemaVersion: 1,
         status: "NONE",
@@ -167,7 +164,6 @@ describe("jobDetailResponseSchema", () => {
       jobDetailResponseSchema.safeParse({
         id: "job-1",
         description: "Minimum 3 years of experience.",
-        fitMatrix: null,
         experienceAnalysis: {
           schemaVersion: 1,
           status: "FOUND",
@@ -190,7 +186,6 @@ describe("jobDetailResponseSchema", () => {
       jobDetailResponseSchema.safeParse({
         id: "job-1",
         description: description.replace("backend", "systems"),
-        fitMatrix: null,
         experienceAnalysis: legacyExperienceAnalysis,
         experienceAnalysisV2: experienceAnalysis,
         updatedAt: "2026-07-01T00:00:00.000Z",
@@ -203,7 +198,6 @@ describe("jobDetailResponseSchema", () => {
       jobDetailResponseSchema.safeParse({
         id: "job-1",
         description: null,
-        fitMatrix: null,
       }).success,
     ).toBe(false);
   });

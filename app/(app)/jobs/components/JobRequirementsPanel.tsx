@@ -4,12 +4,9 @@ import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   CalendarClock,
-  CheckCircle2,
   CircleHelp,
   ListChecks,
   Loader2,
-  MinusCircle,
-  XCircle,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
@@ -17,12 +14,10 @@ import type {
   JobExperienceRequirement,
   VisibleJobExperienceProjection,
 } from "@/lib/shared/jobExperienceAnalysis";
-import type { FitJudgement, FitMatrix } from "@/lib/shared/schemas/fitMatrix";
 import {
   analyzeJobTechnicalRequirements,
   type TechnicalRequirement,
 } from "@/lib/shared/jdTechnicalAnalysis";
-import { extractSkills } from "@/lib/shared/skillsGazetteer";
 import { cn } from "@/lib/utils";
 import { experienceEvidenceTargetId } from "./jobExperienceEvidenceTarget";
 
@@ -31,7 +26,7 @@ import { experienceEvidenceTargetId } from "./jobExperienceEvidenceTarget";
  * and nothing else.
  *
  * It replaced two stacked cards (an experience card and a five-section
- * "Fit evidence" card). The rules that shaped it:
+ * requirement cards). The rules that shaped it:
  *
  * - Only source-verifiable REQUIRED experience findings render. Preferred,
  *   stated, alternative and review evidence stays in the domain result but
@@ -48,67 +43,22 @@ import { experienceEvidenceTargetId } from "./jobExperienceEvidenceTarget";
  *   reinforces the two information families.
  */
 
-type TechnicalSignal = TechnicalRequirement & {
-  judgement?: FitJudgement;
-};
+type TechnicalSignal = TechnicalRequirement;
 
 const TIER_ORDER: Record<string, number> = {
   REQUIRED: 0,
   PREFERRED: 1,
 };
 
-const JUDGEMENT_SEVERITY: Record<FitJudgement, number> = {
-  GAP: 4,
-  UNKNOWN: 3,
-  PARTIAL: 2,
-  MATCH: 1,
-};
-
-function judgementForSkill(
-  skill: string,
-  matrix: FitMatrix | null,
-): FitJudgement | undefined {
-  let selected: FitJudgement | undefined;
-  for (const requirement of matrix?.requirements ?? []) {
-    const requirementSkills = extractSkills(requirement.requirement);
-    if (!requirementSkills.has(skill)) continue;
-    const judgement = requirement.judgement;
-    if (
-      judgement === "MATCH" &&
-      requirementSkills.size > 1 &&
-      /\bor\b/i.test(requirement.requirement)
-    ) {
-      const evidencedSkills = extractSkills(
-        requirement.candidateEvidence ?? requirement.evidence ?? "",
-      );
-      if (!evidencedSkills.has(skill)) continue;
-    }
-    if (
-      !selected ||
-      JUDGEMENT_SEVERITY[judgement] > JUDGEMENT_SEVERITY[selected]
-    ) {
-      selected = judgement;
-    }
-  }
-  return selected;
-}
-
 /** Gate-tier skills first, then core, then preferred — one flat cluster. */
-export function buildTechnicalSignals(
-  description: string,
-  matrix: FitMatrix | null,
-): TechnicalSignal[] {
+export function buildTechnicalSignals(description: string): TechnicalSignal[] {
   return analyzeJobTechnicalRequirements(description)
     .filter((requirement) => requirement.priority !== "MENTIONED")
     .sort((a, b) => {
       if (a.isGate !== b.isGate) return a.isGate ? -1 : 1;
       return (TIER_ORDER[a.priority] ?? 2) - (TIER_ORDER[b.priority] ?? 2);
     })
-    .slice(0, 12)
-    .map((requirement) => ({
-      ...requirement,
-      judgement: judgementForSkill(requirement.skill, matrix),
-    }));
+    .slice(0, 12);
 }
 
 function signalTone(): string {
@@ -152,58 +102,6 @@ function focusExperienceEvidence(targetId: string): boolean {
   }, EVIDENCE_ACTIVE_MS);
   evidenceTimers.set(target, timer);
   return true;
-}
-
-function judgementLabelKey(
-  judgement: FitJudgement,
-): "judgementMATCH" | "judgementGAP" | "judgementPARTIAL" | "judgementUNKNOWN" {
-  return `judgement${judgement}`;
-}
-
-function TechnicalJudgementBadge({ judgement }: { judgement: FitJudgement }) {
-  const t = useTranslations("jobs.experienceRequirement");
-  const presentation = (() => {
-    switch (judgement) {
-      case "MATCH":
-        return {
-          Icon: CheckCircle2,
-          label: t("judgementMATCH"),
-          tone: "bg-brand-emerald-100/80 text-brand-emerald-800 dark:bg-brand-emerald-500/15 dark:text-brand-emerald-300",
-        };
-      case "GAP":
-        return {
-          Icon: XCircle,
-          label: t("judgementGAP"),
-          tone: "bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300",
-        };
-      case "PARTIAL":
-        return {
-          Icon: MinusCircle,
-          label: t("judgementPARTIAL"),
-          tone: "bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
-        };
-      case "UNKNOWN":
-        return {
-          Icon: CircleHelp,
-          label: t("judgementUNKNOWN"),
-          tone: "bg-muted text-foreground/75",
-        };
-    }
-  })();
-  const { Icon, label, tone } = presentation;
-
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none",
-        tone,
-      )}
-    >
-      <Icon className="h-3 w-3" />
-      {label}
-    </span>
-  );
 }
 
 function buildRequirementBlocks(
@@ -343,19 +241,17 @@ function ExperienceLine({
 export function JobRequirementsPanel({
   experience,
   description,
-  matrix,
 }: {
   experience: VisibleJobExperienceProjection;
   description: string;
-  matrix: FitMatrix | null;
 }) {
   const t = useTranslations("jobs.experienceRequirement");
   const headingId = useId();
 
   const requiredExperience = experience.requirements;
   const signals = useMemo(
-    () => buildTechnicalSignals(description, matrix),
-    [description, matrix],
+    () => buildTechnicalSignals(description),
+    [description],
   );
 
   if (!requiredExperience.length && !signals.length) return null;
@@ -453,37 +349,21 @@ export function JobRequirementsPanel({
             {t("technologyHeading")}
           </h4>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {signals.map((signal) => {
-              const status = signal.judgement
-                ? t(judgementLabelKey(signal.judgement))
-                : null;
-              return (
-                <span
-                  key={signal.skill}
-                  data-testid="jd-skill-chip"
-                  data-requirement-family="technology"
-                  data-judgement={signal.judgement}
-                  aria-label={
-                    status
-                      ? t("technologyStatusLabel", {
-                          skill: signal.skill,
-                          status,
-                        })
-                      : signal.skill
-                  }
-                  title={signal.evidence}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
-                    signalTone(),
-                  )}
-                >
-                  <span>{signal.skill}</span>
-                  {signal.judgement ? (
-                    <TechnicalJudgementBadge judgement={signal.judgement} />
-                  ) : null}
-                </span>
-              );
-            })}
+            {signals.map((signal) => (
+              <span
+                key={signal.skill}
+                data-testid="jd-skill-chip"
+                data-requirement-family="technology"
+                aria-label={signal.skill}
+                title={signal.evidence}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
+                  signalTone(),
+                )}
+              >
+                {signal.skill}
+              </span>
+            ))}
           </div>
         </div>
       ) : null}

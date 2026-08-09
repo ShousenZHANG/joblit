@@ -24,8 +24,9 @@ same user-scoped context:
   session-only `/api/agent-tokens` route (reached from the Runner setup popover
   in the app nav) and stored as a SHA-256 hash. Version 1
   credentials use prefix `jfagent_v1_`, audience `joblit-agent`, and explicit
-  `fit:drain`, `tailoring:execute`, or `tailoring:control` capabilities. This is
-  how an unattended agent runs.
+  `tailoring:execute` or `tailoring:control` capabilities. (`fit:drain` is a
+  retired legacy value — tolerated on stored credentials, never required, no
+  longer minted; ADR-0019.) This is how an unattended agent runs.
 - **Session cookie** — an interactive browser session, for a human driving the
   same endpoints.
 
@@ -35,16 +36,11 @@ that is still signed in. An expired or revoked credential returns `401`.
 
 Routes on the AgentCredential seam: `GET /api/application-batches/active`,
 `POST /api/application-batches/:id/run-once`, `POST /api/applications/prompt`,
-`POST /api/applications/manual-generate`, the `/api/tailoring-runs/:id` route,
-cancel, and fail endpoints, and the fit queue —
-`POST /api/jobs/fit/{next-batch,prompt,heartbeat,batch-import,mark-failed,release-batch,settlement-status}`.
-`/api/jobs/fit/run` and `/api/jobs/fit/prescreen` stay session-only: enqueuing
-work is the user's action, draining it is the agent's. Both prescreen entry
-points use the Fit service's `JOBJ` then `JOBF` write boundary; routes never
-write Fit projections directly.
-Batch creation, `/codex-run`, and the task `PATCH` route also stay session-only;
+`POST /api/applications/manual-generate`, and the `/api/tailoring-runs/:id`
+route, cancel, and fail endpoints.
+Batch creation, `/codex-run`, and the task `PATCH` route stay session-only;
 an unattended Runner claims work and reports exceptional outcomes through
-`run-once`.
+`run-once`. The fit queue and its routes were retired (ADR-0019).
 
 The first-party implementation of this protocol is the Joblit Runner
 (`tools/runner`, see its [README](tools/runner/README.md)) — a dependency-free
@@ -90,41 +86,6 @@ complete v1 execution identity exactly:
 Do not add these claim fields to the later `manual-generate` body: that strict
 request echoes the prompt response's complete `tailoringRun` handle and
 `promptMeta`, which carry the server-bound run and receipt identities.
-
-## Fit Settlement Contract
-
-`POST /api/jobs/fit/prompt` returns a 64-hex, content-addressed `issueKey`
-derived from the exact ordered Claim Job set and the server-owned prompt
-snapshot. New `next-batch` responses also carry `claimId` and `attemptId`
-(`claimToken` remains the compatibility alias). Echo that handle to `prompt`,
-verify the returned `fitClaim`, and renew it through `/api/jobs/fit/heartbeat`
-while the model runs. Older servers/runners may omit the new fields during the
-expand rollout.
-
-Deploy this expansion migration-before-build and switch the application alias
-atomically. Old app revisions may drain work already in flight, but must not
-keep receiving requests beyond the five-minute legacy Fit lease window; old
-Runner envelopes remain supported against the new application revision.
-
-Treat HTTP 408/425/429/5xx from the model as deferred work, not a definite
-failure.
-
-Send the returned key, unchanged `promptMeta`, same claimed Job ids, current
-attempt, and model output to `batch-import`. `FitBatchImportReceipt` is unique
-by `(userId, issueKey)` and is written in the same transaction as every claimed
-Job outcome and the terminal Claim. An identical retry replays the stored
-settlement; different content for an already-settled issue conflicts.
-
-Treat a timeout, connection loss, or HTTP 408/425/429/5xx during import as an
-**unknown settlement**, not a failure. Replay the exact request. If the result remains
-unknown, preserve the claim for a later reconciliation;
-do not mark those Jobs failed or generate a replacement result.
-On startup, query `POST /api/jobs/fit/settlement-status` for every recoverable
-Fit phase. `ACTIVE` means the claim is still yours; `SETTLED` and
-`TERMINAL_WITHOUT_RECEIPT` both mean stop and drop the local work. The legacy
-`settlement` member remains present during rollout. Browser `POST /api/jobs/fit/cancel` is
-session-only: it terminally cancels pending and claimed rows, so a late Runner
-import is rejected and a later explicit Run may retry them.
 
 ## Rules
 
@@ -178,9 +139,8 @@ generation is a child process: if the Runner dies, the child dies with it, so
 nothing was produced and nothing was imported. The next run simply claims the
 task again.
 
-Duplicate protection therefore lives entirely server-side, on the
-content-addressed receipts — `FitBatchImportReceipt` for the fit queue and
-`TailoringRunReceipt` plus the exact attempt fence for tailoring. An agent that
+Duplicate protection therefore lives entirely server-side, on
+`TailoringRunReceipt` plus the exact attempt fence. An agent that
 does keep local state (an external orchestrator, say) must still reconcile it
 against the server-owned Tailoring Run before claiming new work: an import
 whose outcome is unknown is replayed unchanged, never reissued as new content.

@@ -30,9 +30,7 @@ import {
   ApplicationPromptError,
   ApplicationPromptRequestSchema,
   MAX_APPLICATION_PROMPT_CHARS,
-  TriagePromptRequestSchema,
   buildApplicationPromptForUser,
-  buildTriagePromptForUser,
 } from "@/lib/server/applications/applicationPrompt";
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
@@ -193,88 +191,6 @@ describe("application prompt service", () => {
     expect(full.promptMeta.promptHash).not.toBe(lean.promptMeta.promptHash);
     expect(full.expectedJsonSchema).toEqual(lean.expectedJsonSchema);
     expect(full.prompt.input).not.toBe(lean.prompt.input);
-  });
-
-  it("accepts complete durable and claimToken-only v1 Fit handles", () => {
-    const claimId = "77777777-7777-4777-8777-777777777777";
-    const attemptId = "88888888-8888-4888-8888-888888888888";
-
-    expect(
-      TriagePromptRequestSchema.safeParse({ jobIds: [JOB_ID] }).success,
-    ).toBe(true);
-    expect(
-      TriagePromptRequestSchema.safeParse({
-        jobIds: [JOB_ID],
-        claimToken: attemptId,
-      }).success,
-    ).toBe(true);
-    expect(
-      TriagePromptRequestSchema.safeParse({
-        jobIds: [JOB_ID],
-        claimId,
-        claimToken: attemptId,
-      }).success,
-    ).toBe(true);
-    expect(
-      TriagePromptRequestSchema.safeParse({
-        jobIds: [JOB_ID],
-        attemptId,
-      }).success,
-    ).toBe(false);
-    expect(
-      TriagePromptRequestSchema.safeParse({
-        jobIds: [JOB_ID],
-        claimId,
-      }).success,
-    ).toBe(false);
-    expect(
-      TriagePromptRequestSchema.safeParse({
-        jobIds: [JOB_ID],
-        claimId,
-        claimToken: attemptId,
-        attemptId: "99999999-9999-4999-8999-999999999999",
-      }).success,
-    ).toBe(false);
-  });
-
-  it("issues one stable, non-secret Fit identity from authoritative prompt content", async () => {
-    dependencies.jobFindMany.mockResolvedValue([
-      {
-        id: OTHER_JOB_ID,
-        title: "Platform Engineer",
-        company: "Beta",
-        description: "Operate reliable Kubernetes platforms.",
-        market: "AU",
-      },
-      {
-        id: JOB_ID,
-        title: "Backend Engineer",
-        company: "Acme",
-        description: "Build reliable distributed APIs.",
-        market: "AU",
-      },
-    ]);
-    dependencies.getResumeProfile.mockResolvedValue(profile);
-    dependencies.getRules.mockResolvedValue(rules);
-
-    const first = await buildTriagePromptForUser({
-      userId: USER_ID,
-      jobIds: [JOB_ID, OTHER_JOB_ID],
-    });
-    const afterRestart = await buildTriagePromptForUser({
-      userId: USER_ID,
-      jobIds: [OTHER_JOB_ID, JOB_ID],
-    });
-
-    expect(first.issueKey).toMatch(/^[a-f0-9]{64}$/);
-    expect(first.prompt.sessionId).toBe(first.issueKey);
-    expect(afterRestart.issueKey).toBe(first.issueKey);
-    expect(afterRestart.prompt.sessionId).toBe(first.issueKey);
-    expect(first.promptMeta.promptHash).toBe(
-      afterRestart.promptMeta.promptHash,
-    );
-    expect(first.issueKey).not.toContain(USER_ID);
-    expect(first.issueKey).not.toContain(JOB_ID);
   });
 
   it("rejects invalid service input before database access", async () => {

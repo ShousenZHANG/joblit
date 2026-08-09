@@ -6,7 +6,6 @@ import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import { deleteJob } from "@/lib/server/jobs/jobDeleteService";
 import { updateJobStatus } from "@/lib/server/jobs/jobStatusService";
-import { FitMatrixSchema } from "@/lib/shared/schemas/fitMatrix";
 import { ACTIVE_JOB_STATUS_VALUES } from "@/lib/shared/jobStatus";
 import { applicationEventErrorResponse } from "@/lib/server/applications/applicationEventErrors";
 import { analyzeJobExperience } from "@/lib/shared/jobExperienceAnalysis";
@@ -70,7 +69,6 @@ export async function GET(
         select: {
           id: true,
           description: true,
-          fitMatrix: true,
           updatedAt: true,
         },
       });
@@ -79,12 +77,10 @@ export async function GET(
         return errorJson("NOT_FOUND", "Not found", 404);
       }
 
-      const matrix = FitMatrixSchema.safeParse(job.fitMatrix);
       const experienceAnalysisV3 = analyzeJobExperience(job.description);
       return NextResponse.json({
         id: job.id,
         description: job.description ?? null,
-        fitMatrix: matrix.success ? matrix.data : null,
         // This is deliberately derived from the authoritative description on
         // read. Experience years are not filter/sort data, so persisting a
         // second copy would create a stale-cache and production-backfill

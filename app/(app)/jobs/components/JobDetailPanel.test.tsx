@@ -37,7 +37,6 @@ function renderPanel(
         selectedJob={selectedJob}
         selectedDescription={options.selectedDescription ?? ""}
         experienceAnalysis={options.experienceAnalysis}
-        selectedFitMatrix={null}
         detailError={null}
         detailLoading={false}
         showLoadingOverlay={false}
@@ -97,7 +96,6 @@ describe("JobDetailPanel localization", () => {
         <JobDetailPanel
           selectedJob={job({ listingDate: "2026-07-01T00:00:00.000Z" })}
           selectedDescription=""
-          selectedFitMatrix={null}
           detailError={null}
           detailLoading={false}
           showLoadingOverlay={false}
@@ -174,7 +172,7 @@ describe("JobDetailPanel experience summary", () => {
         ],
       };
 
-      const view = renderPanel(job({ fitScore: 72, fitVerdict: "GOOD" }), {
+      const view = renderPanel(job(), {
         selectedDescription: description,
         experienceAnalysis,
       });

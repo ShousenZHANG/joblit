@@ -30,7 +30,6 @@ const row = {
   source: "jobspy",
   postingRisk: 25,
   postingRiskFlags: ["suspicious_domain", 42],
-  fitScore: 82,
   fitVerdict: "STRONG",
   fitEligibility: "PASS",
   companyRoleKey: null,
@@ -50,7 +49,7 @@ describe("listJobs market visibility", () => {
     prismaMock.job.count.mockResolvedValue(1);
   });
 
-  it("queries only AU rows for the AU workspace and returns fit fields", async () => {
+  it("queries only AU rows for the AU workspace", async () => {
     const result = await listJobs("user-1", {
       limit: 10,
       status: "NEW",
@@ -69,9 +68,6 @@ describe("listJobs market visibility", () => {
           source: true,
           postingRisk: true,
           postingRiskFlags: true,
-          fitScore: true,
-          fitVerdict: true,
-          fitEligibility: true,
         }),
       }),
     );
@@ -87,7 +83,6 @@ describe("listJobs market visibility", () => {
       source: "jobspy",
       postingRisk: 25,
       postingRiskFlags: ["suspicious_domain"],
-      fitScore: 82,
       fitVerdict: "STRONG",
       fitEligibility: "PASS",
     });

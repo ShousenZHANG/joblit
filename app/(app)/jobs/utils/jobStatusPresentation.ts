@@ -10,7 +10,7 @@ import { toActiveJobStatus, type ActiveJobStatusValue } from "@/lib/shared/jobSt
  *
  * This exists because the label map and two badge maps were maintained
  * separately and had already diverged: `APPLIED` was sky blue in a list row and
- * a fit-score colour in the detail header, and `REJECTED` was rose in one and
+ * a different colour in the detail header, and `REJECTED` was rose in one and
  * neutral grey in the other. The same Job rendered differently depending on
  * which pane you looked at.
  */

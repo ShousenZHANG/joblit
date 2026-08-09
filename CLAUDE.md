@@ -32,7 +32,7 @@ npm run deps:policy       # Check dependency policy
 1. **Job Intake**: `FetchRun` is AU-only. It persists a strict AU v2 config (with an AU v1 compatibility reader), then dispatches the GitHub Actions JobSpy worker. Results enter `commitFetchRun`, where ordered receipts, Jobs, counters, and terminal state commit atomically with dedupe on `userId + jobUrl` and tombstone filtering (`DeletedJobUrl`). CN Fetch and GLOBAL feed/ATS execution were retired by ADR-0017; CN Jobs, Resume, LaTeX, and translated UI remain product capabilities
 2. **Tailoring**: `Job` + `ResumeProfile` → AI prompt (via versioned `PromptRuleTemplate`) → the user's model runs it — the Runner through the loopback Hermes gateway, or any external model pasted back by hand — and the output is imported through `/api/applications/manual-generate` → persisted Application aggregate → PDF render via LaTeX external service. The server holds no model key and runs no generation (ADR-0015)
 3. **Batch**: External Codex and the Runner atomically complete/claim tasks through `/api/application-batches/[id]/run-once` and persist output through `manual-generate`. That interface requires Batch, task, issue, and attempt identity and commits with an Application content-hash CAS. The retired `/execute` server auto-generation route must not be reintroduced (ADR-0015).
-4. **Runner**: The local Runner (`tools/runner/`) authenticates with an `AgentCredential`, drains the fit queue and the active tailoring batch, and calls the user's Hermes gateway over loopback. Fit results settle behind `FitBatchImportReceipt`; tailoring imports settle behind `TailoringRunReceipt` and the exact attempt fence. Unknown network outcomes replay the same receipt instead of becoming false failures. It imports no repository code — the HTTP API is the contract, same as for Codex. See ADR-0014.
+4. **Runner**: The local Runner (`tools/runner/`) authenticates with an `AgentCredential`, drains the active tailoring batch, and runs the official Codex CLI as a child process (ADR-0018). Imports settle behind `TailoringRunReceipt` and the exact attempt fence; unknown network outcomes replay the same receipt instead of becoming false failures. It imports no repository code — the HTTP API is the contract, same as for Codex. AI fit scoring was retired end to end (ADR-0019); the deterministic JD requirements analysis is the surviving triage signal.
 
 Current tailoring output is delta-only: Resume returns `cvSummary` plus zero to
 three `latestExperience.addedBullets`; Cover returns only its three body
@@ -51,7 +51,7 @@ reintroduced.
 
 ### Backend (`lib/server/`)
 
-- `ai/` — Prompt building, skill pack management, CV/CL quality gates. No provider client: generation is local-first (ADR-0015)
+- `ai/` — Prompt building, skill pack management, CV/CL quality gates. No provider client: generation is local-first (ADR-0015). The fit-scoring modules were deleted (ADR-0019)
 - `latex/` — LaTeX template rendering (`renderResume.ts` for EN, `renderResumeCN.ts` for CN)
 - `applications/` — Resume/cover artifact generation and storage
 - `applicationBatches/` — Batch task orchestration (Codex protocol, progress tracking)
@@ -82,10 +82,9 @@ reintroduced.
 - `fetchRolePacks.config.json` — Role category definitions
 - `canonicalizeJobUrl`, `parseCnSalary` — Job normalization helpers
 
-### Prisma Models (27)
+### Prisma Models (24)
 
 - Core workflow: `Job`, `FetchRun`, `ApplicationBatch`, `ApplicationBatchTask`, `Application`, `ResumeProfile`, `ActiveResumeProfile`, `PromptRuleTemplate`
-- Fit queue: `FitBatchClaim`, `FitBatchClaimItem`, `FitBatchImportReceipt`
 - Provenance: `ApplicationEvent` (immutable ledger, carries company/title snapshots so it outlives the Job), `EvidenceSnapshot`, `ClaimEvidence`
 - Tailoring acceptance (ADR-0009): `TailoringRun`, `TailoringRunReceipt`
 - Artifact lifecycle (ADR-0010): `ApplicationArtifact`, `ApplicationArtifactInventoryCheckpoint`
@@ -106,7 +105,7 @@ Two locales: `en-AU` and `zh-CN` via next-intl. Locale is cookie-based. Resume p
 
 ### Authentication
 
-NextAuth v4 with GitHub + Google OAuth, Prisma adapter (database sessions). Sign-in is free, open, and self-service: no invitation or manual approval is required. Session includes `user.id`. Versioned `AgentCredential` records — minted through the session-only `/api/agent-tokens` route, reached from the Runner setup popover in the app nav — authenticate the Runner and external agents through `withAgentRoute`; each protected route declares a required capability, and a presented Bearer credential never falls back to the cookie. Credentials use the `jfagent_v1_` prefix, `joblit-agent` audience, and SHA-256 hashes at rest. See AGENTS.md. The AU worker uses `FETCH_RUN_SECRET` for `/api/fetch-runs/[id]/config` and `/api/fetch-runs/[id]/commit`; the commit module derives tenant identity from the stored run. The retired `/api/admin/import`, `/api/fetch-runs/[id]/update`, and `/api/ext/**` routes must not be reintroduced.
+NextAuth v4 with GitHub + Google OAuth, Prisma adapter (database sessions). Sign-in is free, open, and self-service: no invitation or manual approval is required. Session includes `user.id`. Versioned `AgentCredential` records — minted through the session-only `/api/agent-tokens` route, reached from the Runner setup popover in the app nav — authenticate the Runner and external agents through `withAgentRoute`; each protected route declares a required capability, and a presented Bearer credential never falls back to the cookie. Credentials use the `jfagent_v1_` prefix, `joblit-agent` audience, and SHA-256 hashes at rest. See AGENTS.md. The AU worker uses `FETCH_RUN_SECRET` for `/api/fetch-runs/[id]/config` and `/api/fetch-runs/[id]/commit`; the commit module derives tenant identity from the stored run. The retired `/api/admin/import`, `/api/fetch-runs/[id]/update`, `/api/ext/**`, `/api/jobs/fit/**`, and `/api/jobs/bulk-ignore` routes must not be reintroduced. Stored credentials may still carry the retired `fit:drain` capability; validation tolerates it (ADR-0019) and new mints no longer include it.
 
 ### Testing
 

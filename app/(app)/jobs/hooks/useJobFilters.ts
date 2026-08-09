@@ -60,8 +60,6 @@ export function useJobFilters() {
   const [locationFilter, setLocationFilterState] = useState(
     () => urlState.locationFilter,
   );
-  // Fit sort is a session-local view toggle (not persisted to the URL): jobs
-  // ordered by AI match score, unscored last, served entirely by the API.
   const pageSize = 10;
 
   const wrapUserSetter = useCallback(

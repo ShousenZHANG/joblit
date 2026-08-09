@@ -38,24 +38,6 @@ export async function listJobsWithRelevance(
   }
   if (jobLevel) conditions.push(Prisma.sql`LOWER(j."jobLevel") = LOWER(${jobLevel})`);
 
-  switch (query.fitBand) {
-    case "strong":
-      conditions.push(Prisma.sql`j."fitScore" >= 75`);
-      break;
-    case "good":
-      conditions.push(Prisma.sql`j."fitScore" >= 60 AND j."fitScore" < 75`);
-      break;
-    case "moderate":
-      conditions.push(Prisma.sql`j."fitScore" >= 45 AND j."fitScore" < 60`);
-      break;
-    case "low":
-      conditions.push(Prisma.sql`j."fitScore" < 45`);
-      break;
-    case "unscored":
-      conditions.push(Prisma.sql`j."fitScore" IS NULL`);
-      break;
-  }
-
   const locationTerms = getJobLocationTerms(location);
   if (locationTerms?.length) {
     const locationConditions = locationTerms.map((term) => {
@@ -95,9 +77,6 @@ export async function listJobsWithRelevance(
     source: string | null;
     postingRisk: number | null;
     postingRiskFlags: unknown;
-    fitScore: number | null;
-    fitVerdict: string | null;
-    fitEligibility: string | null;
     livenessStatus: "ACTIVE" | "EXPIRED" | "UNCERTAIN";
     livenessReason: string | null;
     possibleDuplicate: boolean;
@@ -117,7 +96,6 @@ export async function listJobsWithRelevance(
           j."jobType", j."jobLevel", j."salary", j."workArrangement", j."listingDate",
           j."status", j."market", j."source",
           j."postingRisk", j."postingRiskFlags",
-          j."fitScore", j."fitVerdict", j."fitEligibility",
           j."livenessStatus", j."livenessReason",
           j."descriptionSimHash",
           (
@@ -158,8 +136,7 @@ export async function listJobsWithRelevance(
         ranked."location", ranked."jobType", ranked."jobLevel", ranked."salary",
         ranked."workArrangement", ranked."listingDate", ranked."status",
         ranked."market", ranked."source", ranked."postingRisk",
-        ranked."postingRiskFlags", ranked."fitScore", ranked."fitVerdict",
-        ranked."fitEligibility", ranked."livenessStatus",
+        ranked."postingRiskFlags", ranked."livenessStatus",
         ranked."livenessReason", ranked."possibleDuplicate",
         ranked."descriptionSimHash",
         ranked."createdAt", ranked."updatedAt",
@@ -207,7 +184,6 @@ export async function listJobsWithRelevance(
     `location=${location ?? ""}`,
     `jobLevel=${jobLevel ?? ""}`,
     `sort=${sort}`,
-    `fitBand=${query.fitBand ?? ""}`,
     `market=${market ?? ""}`,
   ].join("|");
 

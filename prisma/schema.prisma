@@ -140,19 +140,6 @@ enum TailoringRunTarget {
   COVER
 }
 
-enum FitBatchClaimStatus {
-  ACTIVE
-  SETTLED
-  FAILED
-  CANCELLED
-  SUPERSEDED
-}
-
-enum FitBatchClaimItemOutcome {
-  SCORED
-  FAILED
-}
-
 model User {
   id            String    @id @default(uuid()) @db.Uuid
   email         String?   @unique
@@ -178,8 +165,6 @@ model User {
   applicationBatchTasks  ApplicationBatchTask[]
   tailoringRuns          TailoringRun[]
   agentCredentials       AgentCredential[]
-  fitBatchClaims         FitBatchClaim[]
-  fitBatchImportReceipts FitBatchImportReceipt[]
   applicationEvents      ApplicationEvent[]
   evidenceSnapshots      EvidenceSnapshot[]
   claimEvidence          ClaimEvidence[]
@@ -243,17 +228,7 @@ model Job {
   /// Null for rows imported before provenance tracking existed.
   source          String?
 
-  // AI role-fit triage. The matrix is model-produced per-requirement judgements;
-  // the score/verdict are ALWAYS aggregated deterministically by Joblit.
-  fitScore        Int?
-  fitVerdict      String? // "STRONG" | "GOOD" | "MODERATE" | "WEAK" | "POOR"
-  fitEligibility  String? // "PASS" | "RISK" | "BLOCK"
-  fitMatrix       Json? // requirement matrix; null when only prescreened
-  fitSource       String? // "prescreen" | "batch" | transient "claim:<uuid>"
-  fitScoredAt     DateTime?
-  fitSnapshotHash String? // resume snapshot hash the score was computed against
-
-  // Posting legitimacy — the third axis beside role fit and eligibility.
+  // Posting legitimacy — a deterministic advisory axis.
   // Deterministic, computed at import, zero LLM. Higher is riskier. Flags are
   // advisory only: a risky posting is surfaced, never dropped.
   postingRisk      Int?
@@ -287,7 +262,6 @@ model Job {
   @@index([userId, status])
   @@index([userId, market, createdAt])
   @@index([userId, jobLevel], map: "idx_job_user_joblevel")
-  @@index([userId, fitScore])
   @@index([userId, postingRisk])
   @@index([userId, companyRoleKey])
   @@index([userId, descriptionSimHash])
@@ -296,88 +270,6 @@ model Job {
   @@index([title(ops: raw("gin_trgm_ops"))], map: "idx_job_title_trgm", type: Gin)
   @@index([company(ops: raw("gin_trgm_ops"))], map: "idx_job_company_trgm", type: Gin)
   @@index([location(ops: raw("gin_trgm_ops"))], map: "idx_job_location_trgm", type: Gin)
-}
-
-/// Durable proof that one exact Fit result crossed the Job update commit seam.
-/// A matching retry returns the same validated settlement semantics.
-model FitBatchImportReceipt {
-  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId String @db.Uuid
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  issueKey           String         @db.Char(64)
-  requestHash        String         @db.Char(64)
-  settlement         Json
-  protocolVersion    Int            @default(1)
-  claimId            String?        @unique @db.Uuid
-  claim              FitBatchClaim? @relation(fields: [claimId], references: [id], onDelete: SetNull)
-  executionAttemptId String?        @db.Uuid
-  createdAt          DateTime       @default(now())
-
-  @@unique([userId, issueKey])
-  @@index([userId, createdAt])
-}
-
-/// Durable, content-addressed ownership of one exact ordered Fit job set.
-/// Prompt text and model output remain outside PostgreSQL; receipt hashes are
-/// enough to fence settlement and replay without retaining those payloads.
-/// Raw SQL enforces at most one ACTIVE Claim per user; Prisma cannot express
-/// that partial unique index, so every writer must still handle P2002 safely.
-model FitBatchClaim {
-  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId String @db.Uuid
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  status          FitBatchClaimStatus @default(ACTIVE)
-  protocolVersion Int                 @default(2)
-
-  /// Bound once `/fit/prompt` issues the immutable prompt receipt.
-  issueKey           String? @db.Char(64)
-  issueHash          String? @db.Char(64)
-  promptHash         String? @db.Char(64)
-  promptMetaHash     String? @db.Char(64)
-  promptMeta         Json?
-  resumeProfileId    String? @db.Uuid
-  resumeSnapshotHash String? @db.Char(64)
-  jobSetHash         String? @db.Char(64)
-
-  executionAttemptId      String    @db.Uuid
-  executionLeaseExpiresAt DateTime?
-  lastHeartbeatAt         DateTime?
-  attempt                 Int       @default(1)
-
-  errorCode    String?
-  errorMessage String?
-  issuedAt     DateTime  @default(now())
-  settledAt    DateTime?
-  terminalAt   DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-
-  items   FitBatchClaimItem[]
-  receipt FitBatchImportReceipt?
-
-  @@index([userId, status, executionLeaseExpiresAt], map: "FitBatchClaim_userId_status_lease_idx")
-  @@index([userId, issueKey, updatedAt])
-  @@index([executionAttemptId])
-}
-
-/// Immutable ordered membership. `jobId` is intentionally an identity
-/// snapshot rather than a foreign key so settlement can record a deterministic
-/// failed outcome when a Job is deleted while an Agent is working.
-model FitBatchClaimItem {
-  claimId String        @db.Uuid
-  claim   FitBatchClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
-  ordinal Int
-  jobId   String        @db.Uuid
-
-  outcome     FitBatchClaimItemOutcome?
-  failureCode String?
-  releasedAt  DateTime?
-
-  @@id([claimId, jobId])
-  @@unique([claimId, ordinal])
-  @@index([jobId])
 }
 
 /// Raw SQL enforces at most one QUEUED/RUNNING batch per user. The partial

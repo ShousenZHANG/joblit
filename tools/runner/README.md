@@ -10,25 +10,11 @@ external agent uses (see [AGENTS.md](../../AGENTS.md)), authenticated with an
 
 ## What it does
 
-Each cycle it drains two queues. Fit scanning runs first — coarse triage is
-cheap and narrows what is worth tailoring.
+Each cycle it drains the active tailoring batch, then sleeps. (The background
+fit-scanning queue it also used to drain was retired with the fit feature —
+ADR-0019.)
 
-**Fit scan.** `POST /api/jobs/fit/next-batch` leases one durable, exact
-`FitBatchClaim`; `/api/jobs/fit/prompt` binds its prompt receipt, the Runner
-heartbeats the current attempt while the model scores it, and
-`/api/jobs/fit/batch-import` records every Job as scored or failed. The prompt's
-stable 64-hex `issueKey` is content-addressed from the Claim Job set and prompt
-snapshot. The server writes a unique `FitBatchImportReceipt`, item outcomes,
-Job projections, and terminal Claim in one transaction, so an exact retry
-returns the original validated settlement. A definite failure is marked or
-released; an unknown import outcome deliberately keeps the completed result
-for replay. On restart, the Runner asks
-`/api/jobs/fit/settlement-status` whether each completed issue committed before
-forgetting it. The browser's Stop action calls `/api/jobs/fit/cancel`; claimed
-work can finish locally, but its stale claim cannot import after cancellation,
-and the next explicit scan can re-queue it.
-
-**Tailoring batch.**
+It claims and completes work like this:
 
 1. `GET /api/application-batches/active` — find the batch you queued from the
    Jobs page.
@@ -78,12 +64,17 @@ Then the Runner's own two variables:
 ```bash
 export JOBLIT_URL="https://your-joblit-deployment"
 export JOBLIT_TOKEN="jfagent_v1_…"   # from the Runner setup popover
-export CODEX_MODEL="gpt-5.6-terra"   # optional; unset uses the CLI default
-export CODEX_BIN="/path/to/codex"    # optional; unset resolves from PATH
 ```
 
+Joblit pins every generation to `gpt-5.6-sol` with
+`model_reasoning_effort=max`. Ambient `CODEX_MODEL`, the user's
+`config.toml`, and CLI catalog defaults cannot silently downgrade it. The
+Runner prints the effective model policy at startup. `CODEX_BIN` remains an
+optional executable-path override when `codex` is not on `PATH`.
+
 Every invocation is pinned to a text generator, never a coding agent:
-`--sandbox read-only`, `features.shell_tool=false`, `web_search=disabled`,
+`--strict-config`, `--sandbox read-only`, `features.shell_tool=false`,
+`web_search=disabled`,
 `--ignore-user-config`, `--ignore-rules`, `--ephemeral`, and a throwaway
 working directory. Job descriptions are untrusted text from the internet and
 they go straight into the prompt, so the model gets no filesystem, no network,
@@ -97,15 +88,14 @@ Drain the active batch once and exit:
 node tools/runner/cli.mjs
 ```
 
-Keep polling for new batches every 5 seconds. Each cycle checks an explicit
-application batch before background fit-scoring work:
+Keep polling for new batches every 5 seconds:
 
 ```bash
 node tools/runner/cli.mjs --watch
 ```
 
-Typical loop: start a fit scan or select jobs and click **Generate CV & CL** in
-the Jobs page, then leave the Runner running. Generated materials and their
+Typical loop: triage your list, press **AI Generate** in the Jobs page, then
+leave the Runner running. Generated materials and their
 PDFs land in Joblit for review; the Runner never submits an application.
 
 A Codex run is a subprocess, so there is no local recovery state and no
@@ -130,10 +120,8 @@ the Jobs page.
 
 Timeouts, transport loss, and retryable 408/425/429/5xx responses from Joblit
 are deferred. A Tailoring import makes up to three total attempts with the
-exact same receipt. A Fit import makes one exact replay (two total attempts)
-with its stable issue and durable `FitBatchImportReceipt`. If the outcome is
-still unknown the Runner does **not** report `FAILED` — the server receipt
-decides on a later pass.
+exact same receipt. If the outcome is still unknown the Runner does **not**
+report `FAILED` — the server receipt decides on a later pass.
 
 Common causes:
 

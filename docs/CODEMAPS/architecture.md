@@ -90,37 +90,14 @@ failed run after the first commit is terminal `PARTIAL`, not `FAILED`.
 
 ### 2. Triage — which roles are worth applying to
 
-Fit scoring runs in the local Runner. The server creates or re-leases one
-durable, immutable `FitBatchClaim` (`lib/server/jobs/fitRunService.ts`), the
-Runner heartbeats its attempt while scoring through the user's Hermes gateway
-(`tools/runner/fitQueue.mjs`), and results come back through
-`/api/jobs/fit/batch-import`. The browser enqueues, polls `/api/jobs/fit/status`,
-and terminally cancels pending/claimed queue work through
-`/api/jobs/fit/cancel`. **No browser surface drives this today** — `useFitScan`
-was deleted with the Jobs filter rebuild, and the fit queue is currently reached
-only by the Runner. The routes remain; see the pending fit-retirement work.
-
-Each prompt exposes a stable 64-hex issue bound once to the Claim's exact Job
-set, Resume snapshot, and prompt receipt. `lib/server/jobs/fitBatchImport.ts`
-validates the current attempt and accounts for every Claim item while writing
-Job projections, item outcomes, `FitBatchImportReceipt`, and the terminal Claim
-atomically. An exact retry reads the receipt first, so a lost response remains
-recoverable after lease takeover. `/api/jobs/fit/settlement-status` distinguishes
-active, settled, and terminal-without-receipt work before the Runner clears any
-local result.
-
-Same-session Hermes starts and repairs use file-backed compare-and-set. A start
-reservation also records a transcript cursor plus request hashes; after an
-ambiguous start response, output is recovered only from one provable matching
-terminal turn. An incomplete tool-call snapshot stays deferred; a completed
-tool sequence qualifies only through a later unique terminal `stop` output.
-Retryable gateway responses are not submitted twice or projected as model failure.
-This is a conservative adapter over unmodified Hermes, not a claim of remote
-exactly-once execution (ADR-0016).
-
-**The model emits per-requirement judgements only.** `aggregateFitMatrix`
-computes the score deterministically from them
-(`prisma/schema.prisma:224-226`). Do not move scoring into the prompt.
+AI fit scoring was retired end to end (ADR-0019): the queue tables, the
+`/api/jobs/fit/**` routes, the Runner drain, and the Job score columns are
+gone, and `/api/jobs/fit/**` plus `/api/jobs/bulk-ignore` are pinned absent.
+Triage now rests on deterministic signals computed at read or import time:
+the JD requirements analysis (`lib/shared/jobExperienceAnalysis`,
+`lib/shared/jdTechnicalAnalysis`) extracts hard asks with evidence offsets,
+and posting risk (`lib/server/jobs/postingRisk.ts`) flags suspicious ads at
+import. No model runs during triage, so the same ad always reads the same way.
 
 Job status is a projection, not the source of truth — ADR-0007. Seven values
 are stored so `ApplicationEvent` history stays readable; three are surfaced

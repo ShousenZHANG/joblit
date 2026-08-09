@@ -149,7 +149,7 @@ beforeEach(() => {
     }
     if (url.startsWith("/api/jobs/") && (!init || init.method === "GET")) {
       return new Response(
-        JSON.stringify({ id: baseJob.id, description: "Job description", fitMatrix: null, updatedAt: baseJob.updatedAt }),
+        JSON.stringify({ id: baseJob.id, description: "Job description", updatedAt: baseJob.updatedAt }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
     }
@@ -544,7 +544,6 @@ describe("JobsClient", () => {
           JSON.stringify({
             id: baseJob.id,
             description: "Job description",
-            fitMatrix: null,
             updatedAt: baseJob.updatedAt,
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
@@ -916,7 +915,7 @@ describe("JobsClient", () => {
       }
       if (url.startsWith("/api/jobs/") && (!init || init.method === "GET")) {
         return new Response(
-          JSON.stringify({ id: baseJob.id, description: "Job description", fitMatrix: null, updatedAt: baseJob.updatedAt }),
+          JSON.stringify({ id: baseJob.id, description: "Job description", updatedAt: baseJob.updatedAt }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }
@@ -991,7 +990,7 @@ describe("JobsClient", () => {
       }
       if (url.startsWith("/api/jobs/") && (!init || init.method === "GET")) {
         return new Response(
-          JSON.stringify({ id: baseJob.id, description: "Job description", fitMatrix: null, updatedAt: baseJob.updatedAt }),
+          JSON.stringify({ id: baseJob.id, description: "Job description", updatedAt: baseJob.updatedAt }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }
@@ -1145,7 +1144,7 @@ describe("JobsClient", () => {
         (!init || !init.method || init.method === "GET")
       ) {
         return new Response(
-          JSON.stringify({ id: baseJob.id, description: markdown, fitMatrix: null, updatedAt: baseJob.updatedAt }),
+          JSON.stringify({ id: baseJob.id, description: markdown, updatedAt: baseJob.updatedAt }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }
@@ -1199,7 +1198,6 @@ describe("JobsClient", () => {
           JSON.stringify({
             id: baseJob.id,
             description: jd,
-            fitMatrix: null,
             experienceAnalysis: analyzeJobExperience(jd),
             updatedAt: baseJob.updatedAt,
           }),
@@ -1297,7 +1295,7 @@ describe("JobsClient", () => {
       }
       if (url.startsWith("/api/jobs/") && (!init || init.method === "GET")) {
         return new Response(
-          JSON.stringify({ id: baseJob.id, description: "Job description", fitMatrix: null, updatedAt: baseJob.updatedAt }),
+          JSON.stringify({ id: baseJob.id, description: "Job description", updatedAt: baseJob.updatedAt }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }
@@ -1343,7 +1341,7 @@ describe("JobsClient", () => {
       }
       if (url.startsWith("/api/jobs/") && (!init || init.method === "GET")) {
         return new Response(
-          JSON.stringify({ id: baseJob.id, description: "Job description", fitMatrix: null, updatedAt: baseJob.updatedAt }),
+          JSON.stringify({ id: baseJob.id, description: "Job description", updatedAt: baseJob.updatedAt }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }
@@ -1593,7 +1591,7 @@ describe("JobsClient", () => {
       }
       if (url.startsWith("/api/jobs/") && (!init || init.method === "GET")) {
         return new Response(
-          JSON.stringify({ id: baseJob.id, description: "Job description", fitMatrix: null, updatedAt: baseJob.updatedAt }),
+          JSON.stringify({ id: baseJob.id, description: "Job description", updatedAt: baseJob.updatedAt }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }
@@ -1641,7 +1639,7 @@ describe("JobsClient", () => {
         });
       }
       if (url.startsWith("/api/jobs/") && (!init || init.method === "GET")) {
-        return new Response(JSON.stringify({ id: baseJob.id, description: "d", fitMatrix: null, updatedAt: baseJob.updatedAt }), {
+        return new Response(JSON.stringify({ id: baseJob.id, description: "d", updatedAt: baseJob.updatedAt }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });
@@ -1691,7 +1689,7 @@ describe("JobsClient", () => {
       }
       if (url.startsWith("/api/jobs/") && (!init || init.method === "GET")) {
         return new Response(
-          JSON.stringify({ id: baseJob.id, description: "Job description", fitMatrix: null, updatedAt: baseJob.updatedAt }),
+          JSON.stringify({ id: baseJob.id, description: "Job description", updatedAt: baseJob.updatedAt }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }
@@ -1944,7 +1942,6 @@ describe("JobsClient", () => {
           JSON.stringify({
             id: baseJob.id,
             description: "Job description",
-            fitMatrix: null,
             updatedAt: baseJob.updatedAt,
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
@@ -2032,7 +2029,7 @@ describe("JobsClient", () => {
       }
       if (url.startsWith("/api/jobs/") && (!init || init.method === "GET")) {
         return new Response(
-          JSON.stringify({ id: baseJob.id, description: "Job description", fitMatrix: null, updatedAt: baseJob.updatedAt }),
+          JSON.stringify({ id: baseJob.id, description: "Job description", updatedAt: baseJob.updatedAt }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }
@@ -2117,7 +2114,7 @@ describe("JobsClient", () => {
       }
       if (url.startsWith("/api/jobs/") && (!init || init.method === "GET")) {
         return new Response(
-          JSON.stringify({ id: baseJob.id, description: "Job description", fitMatrix: null, updatedAt: baseJob.updatedAt }),
+          JSON.stringify({ id: baseJob.id, description: "Job description", updatedAt: baseJob.updatedAt }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }
@@ -2232,7 +2229,7 @@ describe("JobsClient", () => {
       }
       if (url.startsWith("/api/jobs/") && (!init || init.method === "GET")) {
         return new Response(
-          JSON.stringify({ id: baseJob.id, description: "Job description", fitMatrix: null, updatedAt: baseJob.updatedAt }),
+          JSON.stringify({ id: baseJob.id, description: "Job description", updatedAt: baseJob.updatedAt }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }
@@ -2321,7 +2318,7 @@ describe("JobsClient", () => {
       }
       if (url.startsWith("/api/jobs/") && (!init || init.method === "GET")) {
         return new Response(
-          JSON.stringify({ id: baseJob.id, description: "Job description", fitMatrix: null, updatedAt: baseJob.updatedAt }),
+          JSON.stringify({ id: baseJob.id, description: "Job description", updatedAt: baseJob.updatedAt }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }

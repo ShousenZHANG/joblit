@@ -17,7 +17,6 @@ import {
   type JobExperienceAnalysis,
   type VisibleJobExperienceProjection,
 } from "@/lib/shared/jobExperienceAnalysis";
-import type { FitMatrix } from "@/lib/shared/schemas/fitMatrix";
 import { JobDescriptionMarkdown } from "./JobDescriptionMarkdown";
 import { JobRequirementsPanel } from "./JobRequirementsPanel";
 
@@ -124,8 +123,7 @@ describe("JobRequirementsPanel", () => {
   it("renders one neutral role-requirements surface with a compact experience row", () => {
     renderPanel({
       analysis: analysisWith([REQUIRED_QA]),
-      description: "",
-      matrix: null,
+      description: ""
     });
 
     expect(
@@ -157,8 +155,7 @@ describe("JobRequirementsPanel", () => {
   it("never renders a REVIEW candidate — no hedge card, no wording", () => {
     renderPanel({
       analysis: analysisWith([REVIEW_ONLY], "REVIEW"),
-      description: "",
-      matrix: null,
+      description: ""
     });
 
     expect(screen.queryByText(/Loyalty Leave/)).not.toBeInTheDocument();
@@ -172,8 +169,7 @@ describe("JobRequirementsPanel", () => {
   it("flattens technology into one cluster with no tier or gate sections", () => {
     renderPanel({
       analysis: null,
-      description: DESCRIPTION,
-      matrix: null,
+      description: DESCRIPTION
     });
 
     expect(screen.getByText("SRE")).toBeInTheDocument();
@@ -195,7 +191,7 @@ describe("JobRequirementsPanel", () => {
   });
 
   it("orders gate-tier skills before the rest of the cluster", () => {
-    renderPanel({ analysis: null, description: DESCRIPTION, matrix: null });
+    renderPanel({ analysis: null, description: DESCRIPTION });
 
     const chips = screen
       .getAllByTestId("jd-skill-chip")
@@ -204,7 +200,7 @@ describe("JobRequirementsPanel", () => {
   });
 
   it("gives technology one consistent emerald identity", () => {
-    renderPanel({ analysis: null, description: DESCRIPTION, matrix: null });
+    renderPanel({ analysis: null, description: DESCRIPTION });
 
     for (const chip of screen.getAllByTestId("jd-skill-chip")) {
       expect(chip.className).toMatch(/emerald/);
@@ -213,62 +209,10 @@ describe("JobRequirementsPanel", () => {
     }
   });
 
-  it("does not recolour technology away from emerald after a scan", () => {
-    const matrix = {
-      requirements: [
-        {
-          id: "m-1",
-          requirement: "Kubernetes",
-          type: "REQUIRED",
-          criticality: "CORE",
-          judgement: "MATCH",
-          evidence: "Kubernetes at Acme",
-        },
-      ],
-      eligibility: { status: "CLEAR", reasons: [] },
-    } as unknown as FitMatrix;
-
-    renderPanel({ analysis: null, description: DESCRIPTION, matrix });
-
-    const matched = screen
-      .getAllByTestId("jd-skill-chip")
-      .find((chip) => chip.textContent?.includes("Kubernetes"));
-    expect(matched?.className).toMatch(/emerald/);
-    expect(matched).toHaveAttribute("data-judgement", "MATCH");
-    expect(matched).toHaveAccessibleName("Kubernetes: Match");
-    expect(screen.getByText("Match")).toBeVisible();
-  });
-
-  it("keeps the technology family emerald while making a gap unmistakable", () => {
-    const matrix = {
-      requirements: [
-        {
-          id: "m-gap",
-          requirement: "Kubernetes",
-          type: "REQUIRED",
-          criticality: "CORE",
-          judgement: "GAP",
-          evidence: "No Kubernetes evidence",
-        },
-      ],
-      eligibility: { status: "CLEAR", reasons: [] },
-    } as unknown as FitMatrix;
-
-    renderPanel({ analysis: null, description: DESCRIPTION, matrix });
-
-    const gap = screen
-      .getAllByTestId("jd-skill-chip")
-      .find((chip) => chip.textContent?.includes("Kubernetes"));
-    expect(gap?.className).toMatch(/emerald/);
-    expect(gap).toHaveAccessibleName("Kubernetes: Gap");
-    expect(screen.getByText("Gap")).toHaveClass("text-rose-700");
-  });
-
   it("renders nothing at all for a job with no detectable asks", () => {
     const { container } = renderPanel({
       analysis: null,
-      description: "We are a friendly team with great snacks.",
-      matrix: null,
+      description: "We are a friendly team with great snacks."
     });
     expect(container).toBeEmptyDOMElement();
   });
@@ -299,8 +243,7 @@ describe("JobRequirementsPanel", () => {
 
     renderPanel({
       analysis: analysisWith(grouped),
-      description: "",
-      matrix: null,
+      description: ""
     });
 
     expect(screen.getByText("5+ years")).toBeInTheDocument();
@@ -339,8 +282,7 @@ describe("JobRequirementsPanel", () => {
 
     renderPanel({
       analysis: analysisWith(variants),
-      description: "",
-      matrix: null,
+      description: ""
     });
 
     expect(screen.queryByTestId("jd-requirements-panel")).not.toBeInTheDocument();
@@ -372,8 +314,7 @@ describe("JobRequirementsPanel", () => {
 
     renderPanel({
       analysis: analysisWith(nested),
-      description: "",
-      matrix: null,
+      description: ""
     });
 
     const subset = screen.getByText("2 years").closest("[data-relation-role]");
@@ -410,7 +351,6 @@ describe("JobRequirementsPanel", () => {
         <JobRequirementsPanel
           experience={experience}
           description={description}
-          matrix={null}
         />
         <JobDescriptionMarkdown
           description={description}
@@ -464,7 +404,6 @@ describe("JobRequirementsPanel", () => {
         <JobRequirementsPanel
           experience={experience}
           description={description}
-          matrix={null}
         />
       </NextIntlClientProvider>,
     );
@@ -483,7 +422,6 @@ describe("JobRequirementsPanel", () => {
         <JobRequirementsPanel
           experience={experience}
           description={description}
-          matrix={null}
         />
         <JobDescriptionMarkdown
           description={description}
@@ -507,8 +445,7 @@ describe("JobRequirementsPanel", () => {
     vi.useFakeTimers();
     renderPanel({
       analysis: analysisWith([REQUIRED_QA]),
-      description: "",
-      matrix: null,
+      description: ""
     });
 
     fireEvent.click(
@@ -539,26 +476,11 @@ describe("JobRequirementsPanel", () => {
       },
     };
     const analysis = analysisWith([requirement]);
-    const experience = projectVisibleJobExperience(description, analysis);
-    const matrix = {
-      requirements: [
-        {
-          id: "a11y-gap",
-          requirement: "Kubernetes",
-          type: "REQUIRED",
-          criticality: "CORE",
-          judgement: "GAP",
-          evidence: "No Kubernetes evidence",
-        },
-      ],
-      eligibility: { status: "CLEAR", reasons: [] },
-    } as unknown as FitMatrix;
-    const { container } = render(
+    const experience = projectVisibleJobExperience(description, analysis);    const { container } = render(
       <NextIntlClientProvider locale="en" messages={en}>
         <JobRequirementsPanel
           experience={experience}
           description={description}
-          matrix={matrix}
         />
         <JobDescriptionMarkdown
           description={description}

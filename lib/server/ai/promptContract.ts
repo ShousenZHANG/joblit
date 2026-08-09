@@ -13,7 +13,7 @@ export {
 
 export type PromptTarget = "resume" | "cover";
 /** Prompt targets that produce non-application artifacts (job-fit triage). */
-export type ExtendedPromptTarget = PromptTarget | "match" | "triage";
+export type ExtendedPromptTarget = PromptTarget;
 export type PromptVariant = "full" | "lean";
 
 export const PROMPT_TEMPLATE_VERSION = "2026.07.v2";

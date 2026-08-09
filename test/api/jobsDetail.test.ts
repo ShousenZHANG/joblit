@@ -38,7 +38,6 @@ describe("GET /api/jobs/[id]", () => {
         "Minimum requirements:",
         "At least 3 years of backend engineering experience.",
       ].join("\n"),
-      fitMatrix: null,
       updatedAt: new Date("2026-08-02T00:00:00.000Z"),
     });
 
@@ -54,7 +53,6 @@ describe("GET /api/jobs/[id]", () => {
       select: {
         id: true,
         description: true,
-        fitMatrix: true,
         updatedAt: true,
       },
     });
@@ -95,7 +93,6 @@ describe("GET /api/jobs/[id]", () => {
     jobStore.findFirst.mockResolvedValue({
       id: JOB_ID,
       description: null,
-      fitMatrix: null,
       updatedAt: new Date("2026-08-02T00:00:00.000Z"),
     });
 
@@ -126,7 +123,6 @@ describe("GET /api/jobs/[id]", () => {
     jobStore.findFirst.mockResolvedValue({
       id: JOB_ID,
       description: "18 months of backend engineering experience is required.",
-      fitMatrix: null,
       updatedAt: new Date("2026-08-02T00:00:00.000Z"),
     });
 

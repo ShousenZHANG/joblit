@@ -19,7 +19,7 @@ describe("landing AiBento", () => {
 
     expect(screen.getByTestId("landing-bento")).toBeInTheDocument();
     for (const title of [
-      en.landing.bento.fitTitle,
+      en.landing.bento.requirementsTitle,
       en.landing.bento.deltaTitle,
       en.landing.bento.localTitle,
       en.landing.bento.receiptsTitle,

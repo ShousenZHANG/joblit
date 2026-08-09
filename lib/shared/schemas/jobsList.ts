@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { JOB_STATUS_VALUES } from "@/lib/shared/jobStatus";
-import { FitMatrixSchema } from "@/lib/shared/schemas/fitMatrix";
 import {
   EMPTY_JOB_EXPERIENCE_ANALYSIS,
   JobExperienceAnalysisSchema,
@@ -46,9 +45,6 @@ export const jobListItemSchema = z.object({
   resumePdfUrl: z.string().nullable().optional(),
   resumePdfName: z.string().nullable().optional(),
   coverPdfUrl: z.string().nullable().optional(),
-  fitScore: z.number().nullable().optional(),
-  fitVerdict: z.string().nullable().optional(),
-  fitEligibility: z.string().nullable().optional(),
   livenessStatus: z.enum(["ACTIVE", "EXPIRED", "UNCERTAIN"]).optional(),
   livenessReason: z.string().nullable().optional(),
   possibleDuplicate: z.boolean().optional(),
@@ -67,7 +63,6 @@ const jobDetailWireResponseSchema = z
   .object({
     id: z.string(),
     description: z.string().nullable(),
-    fitMatrix: FitMatrixSchema.nullable(),
     // The three slots support a migration-before-build rolling deployment.
     // New clients prefer v3, while old revisions continue to consume v1/v2.
     experienceAnalysis: z

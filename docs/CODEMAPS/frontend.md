@@ -77,7 +77,7 @@ on the colour for `APPLIED`.
 
 | Hook | Owns | Returns |
 |---|---|---|
-| `useJobFilters.ts` (213) | Filter state ↔ URL, debounced. Two writers: `router.replace` for filters, `history.replaceState` for workspace state. | 16 members. `sortByFit` is never set, so the `sort=fit` branch at `:176` is unreachable. |
+| `useJobFilters.ts` | Filter state ↔ URL, debounced. Two writers: `router.replace` for filters, `history.replaceState` for workspace state. | 16 members. |
 | `useJobPagination.ts` (221) | The list `useInfiniteQuery`, page merge/de-dup, the suppressed-delete filter, the scroll listener. | 13 members. `pageResponses` has no consumer. |
 | `useJobMutations.ts` (499) | All list writes: optimistic status patch with rollback, the 5 s undo window, a serial commit runner, session tombstones, a `pagehide` flush with `keepalive`, chunked batch delete with partial-success semantics. | `{updateStatus, requestDelete, batchDeleteMutation, updatingIds, deletingIds, error, setError}` |
 | `useKeyboardNavigation.ts` (210) | j/k/Arrow/Escape row navigation with cancellable rAF focus retries for virtualized rows. | void |

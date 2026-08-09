@@ -184,26 +184,6 @@ describe("applications prompt api", () => {
     },
   );
 
-  it("builds a match prompt without issuing a TailoringRun", async () => {
-    const response = await POST(request({
-      jobId: VALID_JOB_ID,
-      target: "match",
-      source: "manual_import",
-      delivery: "DRAFT",
-      issueKey: ISSUE_KEY,
-    }));
-    const json = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(applicationPrompt.build).toHaveBeenCalledWith({
-      userId: "user-1",
-      jobId: VALID_JOB_ID,
-      target: "match",
-    });
-    expect(tailoringRuns.issuePrompt).not.toHaveBeenCalled();
-    expect(json).not.toHaveProperty("tailoringRun");
-  });
-
   it("does not let an AgentCredential enter the manual compatibility lane", async () => {
     const response = await POST(
       request(

@@ -36,7 +36,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import type { FitMatrix } from "@/lib/shared/schemas/fitMatrix";
 import {
   projectVisibleJobExperience,
   type JobExperienceAnalysis,
@@ -74,7 +73,6 @@ interface JobDetailPanelProps {
   selectedJob: JobItem | null;
   selectedDescription: string;
   experienceAnalysis?: JobExperienceAnalysis | null;
-  selectedFitMatrix: FitMatrix | null;
   detailError: string | null;
   detailLoading: boolean;
   showLoadingOverlay: boolean;
@@ -116,7 +114,6 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
   selectedJob,
   selectedDescription,
   experienceAnalysis,
-  selectedFitMatrix,
   detailError,
   detailLoading,
   showLoadingOverlay,
@@ -430,7 +427,6 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
               <JobRequirementsPanel
                 experience={visibleExperience}
                 description={selectedDescription}
-                matrix={selectedFitMatrix}
               />
               {detailError ? (
                 <div className="flex flex-wrap items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">

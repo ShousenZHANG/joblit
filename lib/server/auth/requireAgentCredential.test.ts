@@ -43,6 +43,8 @@ function validRecord(overrides: Record<string, unknown> = {}) {
     name: "Runner",
     audience: AGENT_CREDENTIAL_AUDIENCE,
     version: AGENT_CREDENTIAL_VERSION,
+    // Pre-retirement rows carry the retired "fit:drain" value (ADR-0019).
+    // Validation must tolerate it, or every old credential bricks at once.
     capabilities: ["fit:drain", "tailoring:execute", "tailoring:control"],
     lastUsedAt: null,
     expiresAt: new Date("2026-08-31T00:00:00.000Z"),
@@ -69,7 +71,7 @@ describe("requireAgentCredential", () => {
 
     const context = await requireAgentCredential(
       request(RAW_TOKEN),
-      "fit:drain",
+      "tailoring:execute",
     );
 
     expect(context).toEqual({
@@ -87,7 +89,7 @@ describe("requireAgentCredential", () => {
     const retiredToken = `jfext_${"b".repeat(64)}`;
 
     await expect(
-      requireAgentCredential(request(retiredToken), "fit:drain"),
+      requireAgentCredential(request(retiredToken), "tailoring:execute"),
     ).rejects.toBeInstanceOf(AgentCredentialError);
     expect(prisma.findUnique).not.toHaveBeenCalled();
     expect(prisma.updateMany).not.toHaveBeenCalled();
@@ -98,22 +100,22 @@ describe("requireAgentCredential", () => {
     ["wrong contract version", { version: 2 }],
     ["expired", { expiresAt: NOW }],
     ["revoked", { revokedAt: NOW }],
-    ["missing capability", { capabilities: ["tailoring:execute"] }],
+    ["missing capability", { capabilities: ["tailoring:control"] }],
   ])("rejects a credential with %s", async (_reason, override) => {
     prisma.findUnique.mockResolvedValue(validRecord(override));
 
     await expect(
-      requireAgentCredential(request(RAW_TOKEN), "fit:drain"),
+      requireAgentCredential(request(RAW_TOKEN), "tailoring:execute"),
     ).rejects.toBeInstanceOf(AgentCredentialError);
     expect(prisma.updateMany).not.toHaveBeenCalled();
   });
 
   it("rejects a missing or malformed Bearer credential without a lookup", async () => {
     await expect(
-      requireAgentCredential(request(), "fit:drain"),
+      requireAgentCredential(request(), "tailoring:execute"),
     ).rejects.toBeInstanceOf(AgentCredentialError);
     await expect(
-      requireAgentCredential(request("not-an-agent-token"), "fit:drain"),
+      requireAgentCredential(request("not-an-agent-token"), "tailoring:execute"),
     ).rejects.toBeInstanceOf(AgentCredentialError);
 
     expect(prisma.findUnique).not.toHaveBeenCalled();
@@ -122,7 +124,7 @@ describe("requireAgentCredential", () => {
   it("refreshes last-seen often enough for a low-latency Runner status", async () => {
     prisma.findUnique.mockResolvedValue(validRecord());
 
-    await requireAgentCredential(request(RAW_TOKEN), "fit:drain");
+    await requireAgentCredential(request(RAW_TOKEN), "tailoring:execute");
 
     expect(prisma.updateMany).toHaveBeenCalledWith({
       where: {

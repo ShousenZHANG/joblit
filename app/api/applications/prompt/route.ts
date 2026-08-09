@@ -39,10 +39,7 @@ export async function POST(req: Request) {
         jobId: parsed.data.jobId,
         target: parsed.data.target,
       });
-      const tailoringRun =
-        parsed.data.target === "match"
-          ? null
-          : await issuePromptTailoringRun({
+      const tailoringRun = await issuePromptTailoringRun({
               userId,
               jobId: parsed.data.jobId,
               target: parsed.data.target,

@@ -25,7 +25,7 @@ describe("jobStatusPresentation", () => {
 
   it("gives one Job the same status in a list row and a detail header", () => {
     // These were separate maps that disagreed: APPLIED was sky blue in the row
-    // and a fit-score colour in the header; REJECTED was rose in one and
+    // and a different colour in the header; REJECTED was rose in one and
     // neutral grey in the other.
     for (const stored of JOB_STATUS_VALUES) {
       const presentation = jobStatusPresentation(stored);

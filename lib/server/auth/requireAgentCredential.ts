@@ -4,6 +4,7 @@ import {
   AGENT_CREDENTIAL_PREFIX,
   AGENT_CREDENTIAL_VERSION,
   DEFAULT_AGENT_CAPABILITIES,
+  LEGACY_AGENT_CAPABILITIES,
   hashAgentToken,
   type AgentCapability,
 } from "@/lib/server/agentCredential";
@@ -18,7 +19,10 @@ export const AGENT_LAST_USED_WRITE_INTERVAL_MS = 15_000;
 const AGENT_TOKEN_PATTERN = new RegExp(
   `^${AGENT_CREDENTIAL_PREFIX}[0-9a-f]{64}$`,
 );
-const KNOWN_CAPABILITIES = new Set<string>(DEFAULT_AGENT_CAPABILITIES);
+const KNOWN_CAPABILITIES = new Set<string>([
+  ...DEFAULT_AGENT_CAPABILITIES,
+  ...LEGACY_AGENT_CAPABILITIES,
+]);
 
 export type AgentCredentialContext = {
   userId: string;

@@ -45,22 +45,6 @@ describe("listJobsWithRelevance", () => {
       .mockResolvedValueOnce([{ count: BigInt(0) }]);
   });
 
-  it("keeps fit-band filtering active when text search uses relevance SQL", async () => {
-    await listJobsWithRelevance("11111111-1111-4111-8111-111111111111", {
-      limit: 20,
-      q: "platform engineer",
-      sort: "newest",
-      fitBand: "strong",
-      market: "AU",
-    });
-
-    const call = prismaMock.$queryRaw.mock.calls[0] ?? [];
-    const sql = renderSql(call[0] as readonly string[], call.slice(1));
-    expect(sql).toContain('j."fitScore" >= 75');
-    expect(sql).toContain('j."market" IN');
-    expect(sql).toContain("ROW_NUMBER()");
-  });
-
   it("applies state aliases and ranked cursor pagination", async () => {
     await listJobsWithRelevance("11111111-1111-4111-8111-111111111111", {
       limit: 20,

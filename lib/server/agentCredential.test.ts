@@ -53,7 +53,7 @@ describe("createAgentCredential", () => {
     );
 
     const result = await createAgentCredential("user-1", "Home Runner", 30, [
-      "fit:drain",
+      "tailoring:execute",
     ]);
 
     expect(result.rawToken).toMatch(/^jfagent_v1_/);
@@ -62,7 +62,7 @@ describe("createAgentCredential", () => {
       name: "Home Runner",
       audience: AGENT_CREDENTIAL_AUDIENCE,
       version: AGENT_CREDENTIAL_VERSION,
-      capabilities: ["fit:drain"],
+      capabilities: ["tailoring:execute"],
       createdAt,
     });
     expect(prisma.create).toHaveBeenCalledWith({
@@ -72,7 +72,7 @@ describe("createAgentCredential", () => {
         name: "Home Runner",
         audience: "joblit-agent",
         version: 1,
-        capabilities: ["fit:drain"],
+        capabilities: ["tailoring:execute"],
         expiresAt: expect.any(Date),
       }),
     });

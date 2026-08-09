@@ -14,7 +14,7 @@ const PromptIdentitySchema = z.object({
 });
 
 const ManualPromptRequestSchema = PromptIdentitySchema.extend({
-  target: z.enum(["resume", "cover", "match"]),
+  target: z.enum(["resume", "cover"]),
   source: z.literal("manual_import").optional().default("manual_import"),
   delivery: z.enum(["DRAFT", "FINAL"]).optional().default("DRAFT"),
   issueKey: z.string().uuid().optional(),

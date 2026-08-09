@@ -106,11 +106,11 @@ describe("application ledger invariants", () => {
 
     await expect(
       bulkAppendStatusEvents("user-a", {
-        where: { fitScore: { lte: 44 } },
+        where: { postingRisk: { gte: 80 } },
         fromStatus: "NEW",
         toStatus: "REJECTED",
         source: "USER",
-        note: "Bulk ignored low-fit roles",
+        note: "Bulk ignored risky postings",
         idempotencyPrefix: "bulk-1",
         projectionUpdatedAt: changedAt,
       }),
@@ -120,7 +120,7 @@ describe("application ledger invariants", () => {
     expect(db.updateManyAndReturn).toHaveBeenCalledWith({
       where: {
         AND: [
-          { fitScore: { lte: 44 } },
+          { postingRisk: { gte: 80 } },
           { userId: "user-a", status: "NEW" },
         ],
       },

@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { runRunnerLoop } from "./cli.mjs";
 
-test("the watch loop prioritizes an explicit application batch before background fit work", async () => {
+test("a single pass drains the application batch once and exits", async () => {
   const events = [];
   const shutdown = new AbortController();
 
@@ -14,14 +14,10 @@ test("the watch loop prioritizes an explicit application batch before background
       events.push("application");
       return { batchId: null, succeeded: 0, failed: 0, deferred: 0 };
     },
-    runFitQueue: async () => {
-      events.push("fit");
-      return { scored: 0, failed: 0 };
-    },
     log: () => undefined,
   });
 
-  assert.deepEqual(events, ["application", "fit"]);
+  assert.deepEqual(events, ["application"]);
 });
 
 test("idle watch checks for newly queued work again within five seconds", async () => {
@@ -37,7 +33,6 @@ test("idle watch checks for newly queued work again within five seconds", async 
       failed: 0,
       deferred: 0,
     }),
-    runFitQueue: async () => ({ scored: 0, failed: 0 }),
     wait: async (milliseconds) => {
       waits.push(milliseconds);
       shutdown.abort();
@@ -48,26 +43,23 @@ test("idle watch checks for newly queued work again within five seconds", async 
   assert.deepEqual(waits, [5_000]);
 });
 
-test("watch mode yields after one Fit claim so application work is checked again", async () => {
+test("an aborted signal stops the watch loop without another cycle", async () => {
+  let cycles = 0;
   const shutdown = new AbortController();
-  let fitLimit;
 
   await runRunnerLoop({
     watch: true,
     signal: shutdown.signal,
-    runApplicationBatch: async () => ({
-      batchId: null,
-      succeeded: 0,
-      failed: 0,
-      deferred: 0,
-    }),
-    runFitQueue: async ({ maxBatches }) => {
-      fitLimit = maxBatches;
+    runApplicationBatch: async () => {
+      cycles += 1;
       shutdown.abort();
-      return { scored: 1, failed: 0 };
+      return { batchId: null, succeeded: 0, failed: 0, deferred: 0 };
+    },
+    wait: async () => {
+      throw new Error("must not wait after abort");
     },
     log: () => undefined,
   });
 
-  assert.equal(fitLimit, 1);
+  assert.equal(cycles, 1);
 });
