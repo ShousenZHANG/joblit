@@ -171,17 +171,28 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
   // here marks the form clean. Keystrokes never touch activeProfileId, so the
   // snapshot stays put and edits register as dirty. Saving the SAME version
   // re-baselines explicitly in handleSave (activeProfileId may be unchanged).
+  //
+  // The baseline is keyed on locale as well as the profile id. `locale` is
+  // part of the save payload, so switching languages changed liveSaveKey and
+  // marked the untouched draft dirty — autosave then fired with the PREVIOUS
+  // locale's content and profileId under the NEW locale, before that locale's
+  // profile had even finished loading. Re-baselining on the locale change
+  // keeps the switch clean; the profile fetch it triggers hydrates the real
+  // draft a moment later.
   const { activeProfileId } = profiles;
   const [savedBaseline, setSavedBaseline] = useState(() => ({
     activeProfileId,
+    locale,
     snapshot: liveSaveKey,
   }));
-  const baselineSnapshot =
-    savedBaseline.activeProfileId === activeProfileId
-      ? savedBaseline.snapshot
-      : liveSaveKey;
-  if (savedBaseline.activeProfileId !== activeProfileId) {
-    setSavedBaseline({ activeProfileId, snapshot: liveSaveKey });
+  const baselineIsCurrent =
+    savedBaseline.activeProfileId === activeProfileId &&
+    savedBaseline.locale === locale;
+  const baselineSnapshot = baselineIsCurrent
+    ? savedBaseline.snapshot
+    : liveSaveKey;
+  if (!baselineIsCurrent) {
+    setSavedBaseline({ activeProfileId, locale, snapshot: liveSaveKey });
   }
   const isDirty = form.hasAnyContent && liveSaveKey !== baselineSnapshot;
 
@@ -356,6 +367,7 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
       const adoptedProfileId = profiles.adoptProfileMeta(json);
       setSavedBaseline({
         activeProfileId: adoptedProfileId,
+        locale,
         snapshot: savedSnapshot,
       });
       markTaskComplete("resume_setup");

@@ -527,6 +527,46 @@ describe("resumeProfile data access", () => {
     expect(resumeProfileStore.create).not.toHaveBeenCalled();
   });
 
+  it("refuses to write a profile from another locale", async () => {
+    // Switching the editor's locale used to fire an autosave carrying the
+    // PREVIOUS locale's profileId with the NEW locale. The lookup ignored
+    // locale, so the CN profile was updated and then pinned as the active
+    // profile for en-AU — every later EN load returned the Chinese resume.
+    // The DB returns nothing for an id that does not live in the target
+    // locale, which is what this mock stands in for.
+    resumeProfileStore.findFirst.mockResolvedValueOnce(null);
+
+    const result = await upsertResumeProfile(
+      "user-1",
+      { summary: "Chinese content" },
+      { profileId: "rp-cn", locale: "en-AU" },
+    );
+
+    // The lookup itself must carry the locale — that is the actual guard, and
+    // a mock cannot enforce a WHERE clause on our behalf.
+    expect(resumeProfileStore.findFirst).toHaveBeenCalledWith({
+      where: { id: "rp-cn", userId: "user-1", locale: "en-AU" },
+    });
+    expect(result).toBeNull();
+    expect(resumeProfileStore.update).not.toHaveBeenCalled();
+    expect(resumeProfileStore.create).not.toHaveBeenCalled();
+    // The critical assertion: the active pointer for the target locale must
+    // never be repointed at a profile belonging to a different one.
+    expect(activeResumeProfileStore.upsert).not.toHaveBeenCalled();
+  });
+
+  it("scopes activation to the requested locale", async () => {
+    resumeProfileStore.findFirst.mockResolvedValueOnce(null);
+
+    const result = await setActiveResumeProfile("user-1", "en-AU", "rp-cn");
+
+    expect(resumeProfileStore.findFirst).toHaveBeenCalledWith({
+      where: { id: "rp-cn", userId: "user-1", locale: "en-AU" },
+    });
+    expect(result).toBeNull();
+    expect(activeResumeProfileStore.upsert).not.toHaveBeenCalled();
+  });
+
   it("creates a new profile and marks it active", async () => {
     activeResumeProfileStore.findUnique.mockResolvedValueOnce({ resumeProfileId: "rp-active" });
     resumeProfileStore.findFirst.mockResolvedValueOnce({

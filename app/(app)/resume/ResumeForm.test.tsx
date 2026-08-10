@@ -398,6 +398,55 @@ describe("Resume page", () => {
     expect((await refreshedPreview).basics?.title).toBe("Senior Software Engineer");
   });
 
+  it("does not save when only the locale changes", async () => {
+    // Switching languages changed the save payload (locale is part of it) and
+    // so marked the untouched draft dirty. Autosave then wrote the PREVIOUS
+    // locale's content — under the previous locale's profileId — into the new
+    // locale, which repointed that locale's active profile at the wrong
+    // resume. Switching must be clean: the new locale's profile is fetched,
+    // nothing is written.
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = toUrl(input);
+      if (url.startsWith("/api/resume-profile")) {
+        return new Response(JSON.stringify(populatedProfileJson()), { status: 200 });
+      }
+      if (url === "/api/resume-pdf") {
+        return new Response(new Uint8Array([37, 80, 68, 70]), {
+          status: 200,
+          headers: { "content-type": "application/pdf" },
+        });
+      }
+      void init;
+      return new Response("not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const saveCalls = () =>
+      fetchMock.mock.calls.filter(
+        ([firstArg, init]) =>
+          toUrl(firstArg).startsWith("/api/resume-profile") &&
+          (init as RequestInit | undefined)?.method === "POST",
+      ).length;
+
+    const view = renderResumePage();
+    expect(await screen.findByLabelText("Title")).toHaveValue("Software Engineer");
+    expect(saveCalls()).toBe(0);
+
+    view.rerender(
+      <NextIntlClientProvider locale="zh-CN" messages={zhMessages}>
+        <div className="app-shell">
+          <ResumeFormProvider>
+            <ResumePageLayout />
+          </ResumeFormProvider>
+        </div>
+      </NextIntlClientProvider>,
+    );
+
+    // Well past the 800ms autosave debounce.
+    await new Promise((resolve) => setTimeout(resolve, 1400));
+    expect(saveCalls()).toBe(0);
+  }, 15_000);
+
   it("does not compile a preview from typing alone", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = toUrl(input);

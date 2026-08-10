@@ -304,10 +304,26 @@ async function getFallbackLatestProfile(userId: string, locale: string) {
   return latest;
 }
 
-async function getTargetProfile(userId: string, profileId?: string) {
+/**
+ * Resolve an explicitly requested profile, scoped to its owner and — when the
+ * caller names one — its locale.
+ *
+ * The locale scope is load-bearing, not defensive tidiness. Resume profiles
+ * are per-locale (`ActiveResumeProfile` is keyed on `userId + locale`), so a
+ * write that names a profile from one locale while asking for another would
+ * update that profile and then repoint the *target* locale's active pointer at
+ * it — silently making the Chinese resume the active English one. The editor
+ * could produce exactly that request while switching locales, and the result
+ * outlived the session because it was persisted.
+ */
+async function getTargetProfile(
+  userId: string,
+  profileId?: string,
+  locale?: string,
+) {
   if (!profileId) return null;
   return prisma.resumeProfile.findFirst({
-    where: { id: profileId, userId },
+    where: { id: profileId, userId, ...(locale ? { locale } : {}) },
   });
 }
 
@@ -349,6 +365,11 @@ export async function getResumeProfile(userId: string, options?: { profileId?: s
   const locale = options?.locale ?? "en-AU";
   const explicitProfileId = options?.profileId;
   if (explicitProfileId) {
+    // Deliberately NOT locale-scoped. An Application stores the exact profile
+    // it was built from, and historical rows can legitimately pair a profile
+    // with a market whose locale differs. Reading back what a document was
+    // actually rendered from is correct; the locale guard belongs on writes
+    // and on the active pointer, which is where cross-locale damage occurs.
     return getTargetProfile(userId, explicitProfileId);
   }
 
@@ -371,7 +392,9 @@ export async function getResumeProfile(userId: string, options?: { profileId?: s
 }
 
 export async function setActiveResumeProfile(userId: string, locale: string, profileId: string) {
-  const target = await getTargetProfile(userId, profileId);
+  // Scoped: the pointer is keyed on locale, so activating a profile from a
+  // different one would make that locale serve the wrong resume.
+  const target = await getTargetProfile(userId, profileId, locale);
   if (!target) return null;
   await ensureActivePointer(userId, locale, target.id);
   return target;
@@ -575,7 +598,7 @@ export async function upsertResumeProfile(
   const explicitProfileId = options?.profileId;
 
   const target = explicitProfileId
-    ? await getTargetProfile(userId, explicitProfileId)
+    ? await getTargetProfile(userId, explicitProfileId, locale)
     : await getResumeProfile(userId, { locale });
 
   if (explicitProfileId && !target) {
