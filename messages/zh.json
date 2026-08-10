@@ -359,7 +359,14 @@
     "batchTitleProgress": "（{done}/{total}）生成中 - Joblit",
     "batchDoneTitle": "生成已完成",
     "batchDoneFailedTitle": "生成失败",
-    "batchDoneSummary": "{succeeded} 份已就绪，{failed} 份失败。"
+    "batchDoneSummary": "{succeeded} 份已就绪，{failed} 份失败。",
+    "generateThisJob": "AI 生成",
+    "generateQueueing": "加入中…",
+    "generateRetry": "重试",
+    "generateStalledHint": "生成器已停止响应，该职位会自动重新排队。",
+    "generateQueuedToast": "已加入生成队列。",
+    "generateAlreadyQueuedToast": "该职位已在生成队列中。",
+    "generateNoProfile": "请先保存主简历，再生成。"
   },
   "fetch": {
     "searchRoles": "搜索职位",

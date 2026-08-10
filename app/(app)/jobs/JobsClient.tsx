@@ -58,6 +58,7 @@ import {
 import { BatchProgressBanner } from "./components/BatchProgressBanner";
 import { useBatchProgress, type BatchStatus } from "./hooks/useBatchProgress";
 import { useBatchCompletionSignal } from "./hooks/useBatchCompletionSignal";
+import { useEnqueueJobTailoring } from "./hooks/useEnqueueJobTailoring";
 import { useRunnerPresence } from "@/hooks/useRunnerPresence";
 import { JobSearchBar } from "./components/JobSearchBar";
 import { ExternalGenerateDialog } from "./components/ExternalGenerateDialog";
@@ -387,6 +388,33 @@ export function JobsClient({
       totalCount: active.totalCount ?? batchPreflight.eligibleCount,
     });
   }, [batchPreflight, batchProgress.state.batchId, watchBatchProgress]);
+  const { enqueueJob, pendingJobId: generatePendingJobId } =
+    useEnqueueJobTailoring({
+      fallbackErrorMessage: t("errorLoadJobs"),
+      onQueued: (result) => {
+        // Seed the watcher from the response rather than waiting for the next
+        // `/latest` poll, so the banner and the row badge agree immediately.
+        batchProgress.watchBatch({
+          id: result.batchId,
+          status: "QUEUED",
+          totalCount: 0,
+        });
+        void refetch();
+        toast({
+          title:
+            result.queuedCount > 0
+              ? t("generateQueuedToast")
+              : t("generateAlreadyQueuedToast"),
+        });
+      },
+      onError: (message, code) => {
+        toast({
+          title: code === "NO_PROFILE" ? t("generateNoProfile") : message,
+          variant: "destructive",
+          duration: 5000,
+        });
+      },
+    });
   useBatchCompletionSignal({
     state: batchProgress.state,
     toast,
@@ -1520,6 +1548,8 @@ export function JobsClient({
               onUpdateStatus={updateStatus}
               onDelete={requestDelete}
               onManualGenerate={handleManualGenerate}
+              onGenerateJob={enqueueJob}
+              generatePendingJobId={generatePendingJobId}
               onReviewApplication={handleJobReview}
               reviewLoading={tailorReview.loading}
               reviewError={

@@ -55,6 +55,7 @@ import {
 } from "../types";
 import { selectableJobStatuses } from "@/lib/shared/jobStatus";
 import { jobStatusPresentation } from "../utils/jobStatusPresentation";
+import { JobGenerateButton } from "./JobGenerateButton";
 import { JobRequirementsPanel } from "./JobRequirementsPanel";
 
 // Markdown body (react-markdown + rehype-highlight + highlight.js CSS) is the
@@ -92,6 +93,10 @@ interface JobDetailPanelProps {
   onDelete: (job: JobItem) => void;
   /** Zero-install fallback: copy the prompt, run it anywhere, paste JSON. */
   onManualGenerate: (job: JobItem, target: "resume" | "cover") => void;
+  /** Queue this Job for AI generation. Absent on surfaces that cannot queue. */
+  onGenerateJob?: (jobId: string) => void;
+  /** Set while this specific Job's enqueue request is in flight. */
+  generatePendingJobId?: string | null;
   onReviewApplication?: (
     applicationId: string,
     jobId: string,
@@ -151,6 +156,8 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
   onUpdateStatus,
   onDelete,
   onManualGenerate,
+  onGenerateJob,
+  generatePendingJobId,
   onReviewApplication,
   reviewLoading,
   reviewError,
@@ -329,11 +336,19 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                     ))}
                   </SelectContent>
                 </Select>
-                {/* Generation is not here any more. It belongs to the
-                    shortlist, not to one row: the list toolbar queues every
-                    NEW job in one press, which is how the triage-then-generate
-                    loop actually runs. What stays are the things that are
-                    genuinely about THIS job. */}
+                {/* Generation is back here, and this is the primary place it
+                    lives. The toolbar sweep remains for triage, but the common
+                    case is reading one description and wanting that one — and
+                    the sweep used to refuse outright while any run was
+                    draining, so wanting one Job meant waiting on a hundred. */}
+                {!isCN && onGenerateJob ? (
+                  <JobGenerateButton
+                    job={selectedJob}
+                    pending={generatePendingJobId === selectedJob.id}
+                    onGenerate={onGenerateJob}
+                    className={`w-full justify-center rounded-xl text-sm font-semibold shadow-sm transition-all duration-200 active:translate-y-[1px] sm:w-auto ${actionHeight} px-4`}
+                  />
+                ) : null}
                 <Button
                   asChild
                   size="sm"

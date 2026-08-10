@@ -359,7 +359,14 @@
     "batchTitleProgress": "({done}/{total}) Generating - Joblit",
     "batchDoneTitle": "Generation finished",
     "batchDoneFailedTitle": "Generation failed",
-    "batchDoneSummary": "{succeeded} ready, {failed} failed."
+    "batchDoneSummary": "{succeeded} ready, {failed} failed.",
+    "generateThisJob": "AI Generate",
+    "generateQueueing": "Queueing...",
+    "generateRetry": "Try again",
+    "generateStalledHint": "The generator stopped responding. This job is queued again automatically.",
+    "generateQueuedToast": "Added to the generation queue.",
+    "generateAlreadyQueuedToast": "Already in the generation queue.",
+    "generateNoProfile": "Save your master resume before generating."
   },
   "fetch": {
     "searchRoles": "Search roles",
