@@ -30,7 +30,14 @@ const CompletedTaskSchema = z.object({
 const ReleasedTaskSchema = z.object({
   taskId: z.string().uuid(),
   attemptId: z.string().uuid(),
-  reason: z.literal("PUBLICATION_SETTLEMENT_UNKNOWN"),
+  // Both settlements are receipt-idempotent, so both are safe to hand back.
+  // This was a single literal, which meant a Runner that gave up on an
+  // ambiguous IMPORT could not release its claim: the release 400'd and the
+  // task stayed leased until it aged out, freezing the batch behind it.
+  reason: z.enum([
+    "PUBLICATION_SETTLEMENT_UNKNOWN",
+    "IMPORT_SETTLEMENT_UNKNOWN",
+  ]),
 }).strict();
 
 const BodySchema = z.object({

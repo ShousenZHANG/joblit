@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { AppError } from "@/lib/server/api/appError";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import {
   acceptedAddedBulletTexts,
@@ -366,7 +367,28 @@ function nextPublishedHash(input: {
 }): string | null {
   if (input.published.has(input.target)) {
     if (!input.contentHash) {
-      throw new Error(`APPLICATION_DOCUMENT_MISSING:${input.target}`);
+      // A document that is already published has stopped being publishable —
+      // its half of the merged AI Content no longer yields a render decision.
+      // Reachable when a second target's import rebuilds the shared review and
+      // that rebuild retracts the first target's claims.
+      //
+      // This used to be a bare Error, which meant a genuine, permanent
+      // conflict left the route with no mapped response: Next answered 500
+      // with no body, the Runner read that as "settlement unknown", replayed
+      // the identical receipt three times and deferred — an outage shape for
+      // a state no retry can change. Typed and non-retryable now, so the
+      // caller is told to regenerate instead of being asked to wait.
+      throw new AppError({
+        code: "APPLICATION_DOCUMENT_MISSING",
+        status: 409,
+        publicMessage:
+          "A published document is no longer complete after merging the other one. Generate this job again.",
+        publicDetails: { target: input.target },
+        privateDetails: {
+          target: input.target,
+          published: [...input.published],
+        },
+      });
     }
     return input.contentHash;
   }

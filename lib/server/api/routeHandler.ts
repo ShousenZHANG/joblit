@@ -51,6 +51,27 @@ export type SessionRouteParams<TParams> = {
  * That last guarantee is the reason to use this rather than an inline
  * `try/catch (UnauthorizedError)` — the two look equivalent and are not.
  */
+/**
+ * The answer for a bug: a coded envelope, never a rethrow.
+ *
+ * Rethrowing handed the request to Next, which replies 500 with no body — no
+ * error code, no requestId, nothing to correlate against a log line. To the
+ * Runner that is indistinguishable from a lost connection, so it replays the
+ * receipt, defers, and the batch stalls. Every server-side bug therefore
+ * presented as the same anonymous outage.
+ *
+ * The status stays 500 because an unexpected throw genuinely may have
+ * committed something; only the shape changes, so the failure can be found.
+ */
+function unexpectedErrorResponse(requestId: string) {
+  return errorJson(
+    "UNEXPECTED_ERROR",
+    "Something went wrong on our side. Please try again.",
+    500,
+    { requestId },
+  );
+}
+
 export async function withSessionRoute<TParams>(
   handler: SessionRouteHandler<SessionContext & { params: TParams }>,
   options: SessionRouteParams<TParams>,
@@ -84,7 +105,7 @@ export async function withSessionRoute(
     const typed = toErrorResponse(err, session.requestId);
     if (typed) return typed;
     reportError(err, { scope: "route.session", requestId: session.requestId });
-    throw err;
+    return unexpectedErrorResponse(session.requestId);
   }
 }
 
@@ -172,7 +193,7 @@ export async function withAgentRoute(
     const typed = toErrorResponse(err, session.requestId);
     if (typed) return typed;
     reportError(err, { scope: "route.agent", requestId: session.requestId });
-    throw err;
+    return unexpectedErrorResponse(session.requestId);
   }
 }
 

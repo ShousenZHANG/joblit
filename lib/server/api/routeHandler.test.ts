@@ -53,14 +53,19 @@ describe("withSessionRoute", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  it("reports an unexpected error from the handler before rethrowing", async () => {
+  it("answers an unexpected handler error with a coded envelope", async () => {
+    // This used to assert the rethrow. Rethrowing left Next to answer 500 with
+    // no body — no code, no requestId — which an agent client cannot tell from
+    // a dropped connection, so it replayed the request and stalled its queue.
     const boom = new Error("boom");
-    await expect(
-      withSessionRoute(async () => {
-        throw boom;
-      }),
-    ).rejects.toThrow(boom);
+    const res = await withSessionRoute(async () => {
+      throw boom;
+    });
 
+    expect(res.status).toBe(500);
+    const json = await res.json();
+    expect(json.error.code).toBe("UNEXPECTED_ERROR");
+    expect(json.requestId).toBe("req-1");
     expect(reportError).toHaveBeenCalledWith(boom, {
       scope: "route.session",
       requestId: "req-1",

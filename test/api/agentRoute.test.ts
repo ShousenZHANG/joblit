@@ -146,6 +146,32 @@ describe("withAgentRoute", () => {
     expect(auth.requireSession).not.toHaveBeenCalled();
   });
 
+  it("answers an unexpected throw with a coded envelope, never a bare 500", async () => {
+    // A rethrow handed the request to Next, whose 500 carries no body: no
+    // code, no requestId. The Runner cannot tell that from a dropped
+    // connection, so it replays the receipt and stalls the batch. Every server
+    // bug looked like the same anonymous outage.
+    auth.requireAgentCredential.mockResolvedValue({
+      userId: "user-1",
+      credentialId: "credential-1",
+      capabilities: ["tailoring:execute"],
+      requestId: "req-boom",
+    });
+
+    const res = await withAgentRoute(
+      request({ Authorization: "Bearer tok" }),
+      "tailoring:execute",
+      async () => {
+        throw new TypeError("Cannot read properties of undefined");
+      },
+    );
+
+    expect(res.status).toBe(500);
+    const json = await res.json();
+    expect(json.error.code).toBe("UNEXPECTED_ERROR");
+    expect(json.requestId).toBe("req-boom");
+  });
+
   it("rejects a missing session as 401", async () => {
     auth.requireSession.mockRejectedValue(new UnauthorizedError());
 
