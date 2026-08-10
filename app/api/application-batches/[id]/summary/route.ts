@@ -119,8 +119,17 @@ export async function GET(
             userId,
             job: { userId },
             OR: [
-              // Deferred: released back to PENDING after at least one attempt.
-              { status: "PENDING", attempt: { gt: 0 } },
+              // Deferred or reclaimed: back in PENDING carrying the reason it
+              // got there. This used to key on `attempt > 0`, which was wrong:
+              // releaseBatchTask records the reason but deliberately does not
+              // bump `attempt` (that counter is an idempotency fence, not a
+              // try count). A deferred task therefore had attempt=0 and
+              // appeared in NO bucket at all — the batch reported
+              // "0 succeeded, 0 failed, 0 deferred" while a task sat stuck,
+              // which is worse than the stall it was hiding. The recorded
+              // reason is the honest signal, and a task that has never run has
+              // none.
+              { status: "PENDING", error: { not: null } },
               // Stalled: claimed, but the lease has expired with no completion.
               {
                 status: "RUNNING",

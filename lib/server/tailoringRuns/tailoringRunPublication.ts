@@ -188,6 +188,17 @@ export async function completeTailoringRunPublication(
     };
   }
 
+  // The column is NOT NULL, but the run's attempt id is nullable — it is
+  // cleared whenever an attempt is released or reclaimed. Publishing after that
+  // happened would hand Prisma a null and raise a validation error with no
+  // `code` at all, which reaches an agent client as an anonymous 500 and gets
+  // replayed forever. It is a permanent fence violation, so say so.
+  if (!prepared.run.executionAttemptId) {
+    throw new TailoringRunError(
+      "ATTEMPT_STALE",
+      "This run has no live attempt to publish against. Generate this job again.",
+    );
+  }
   const receipt = await tx.tailoringRunPublicationReceipt.create({
     data: {
       runId: prepared.run.id,

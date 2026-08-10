@@ -99,7 +99,15 @@ function makeEvidence(
   text: string,
   scopeKey: string,
 ): AiEvidenceReference | null {
-  const excerpt = normalize(text).slice(0, MAX_EVIDENCE_EXCERPT);
+  // Normalise AFTER slicing as well as before. assertCanonicalEvidenceReferences
+  // re-runs normalize() on the stored excerpt and demands byte equality, and
+  // normalize() ends in .trim() — so a slice that lands on a whitespace
+  // boundary produced an excerpt that could never validate. That threw a bare
+  // Error from inside the commit transaction, which reached the client as an
+  // anonymous 500, which an agent reads as "settlement unknown" and replays
+  // forever. A permanent stall decided by where the 480th character of a job
+  // description happens to fall.
+  const excerpt = normalize(normalize(text).slice(0, MAX_EVIDENCE_EXCERPT));
   if (excerpt.length < minimumEvidenceLength(kind, path)) return null;
   const contentHash = sha256(excerpt);
   return {
@@ -356,7 +364,9 @@ export function assertCanonicalEvidenceReferences(
   evidence: readonly AiEvidenceReference[],
 ) {
   for (const item of evidence) {
-    const excerpt = normalize(item.excerpt).slice(0, MAX_EVIDENCE_EXCERPT);
+    const excerpt = normalize(
+      normalize(item.excerpt).slice(0, MAX_EVIDENCE_EXCERPT),
+    );
     const contentHash = sha256(excerpt);
     const id = stableId("ev", `${scopeKey}\n${item.kind}\n${contentHash}`);
     if (

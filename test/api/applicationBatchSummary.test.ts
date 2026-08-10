@@ -133,6 +133,44 @@ describe("application batch summary api", () => {
     expect(reapExpiredBatchLeases).not.toHaveBeenCalled();
   });
 
+  it("finds a deferred task by its recorded reason, not by an attempt counter", async () => {
+    // The predicate used to be `status PENDING AND attempt > 0`. But
+    // releaseBatchTask records the reason and deliberately does NOT bump
+    // `attempt` — that counter is an idempotency fence, not a try count. So a
+    // deferred task had attempt=0 and landed in no bucket at all: the batch
+    // reported "0 succeeded, 0 failed, 0 deferred" while a task sat stuck,
+    // which reads as "nothing to do" rather than "something is wrong".
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    applicationBatchStore.findFirst.mockResolvedValue({
+      id: BATCH_ID,
+      scope: "NEW",
+      status: "RUNNING",
+      totalCount: 1,
+      error: null,
+      createdAt: new Date("2026-02-22T10:00:00.000Z"),
+      updatedAt: new Date("2026-02-22T10:02:00.000Z"),
+      startedAt: new Date("2026-02-22T10:00:10.000Z"),
+      completedAt: null,
+    });
+    applicationBatchTaskStore.groupBy.mockResolvedValue([]);
+    applicationBatchTaskStore.findMany.mockResolvedValue([]);
+    applicationStore.findMany.mockResolvedValue([]);
+
+    await GET(
+      new Request(`http://localhost/api/application-batches/${BATCH_ID}/summary`),
+      { params: Promise.resolve({ id: BATCH_ID }) },
+    );
+
+    const unsettledQuery = applicationBatchTaskStore.findMany.mock.calls[2][0];
+    expect(unsettledQuery.where.OR).toContainEqual({
+      status: "PENDING",
+      error: { not: null },
+    });
+    expect(JSON.stringify(unsettledQuery.where)).not.toContain("attempt");
+  });
+
   it("reports deferred and stalled work instead of leaving it as silent progress", async () => {
     // A deferred task is PENDING with a reason; a stalled one is RUNNING with
     // an expired lease. Neither used to reach the browser, so the banner could

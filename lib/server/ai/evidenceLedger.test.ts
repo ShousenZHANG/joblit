@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  assertCanonicalEvidenceReferences,
   attachEvidenceAndReview,
   evidenceLedgerInternals,
   refreshEvidenceReview,
@@ -180,5 +181,56 @@ describe("evidence ledger", () => {
     };
 
     expect(refreshEvidenceReview(withoutEvidence).review).toBeUndefined();
+  });
+});
+
+/**
+ * Every excerpt this module mints is later re-validated by
+ * assertCanonicalEvidenceReferences, which re-runs normalize() and demands
+ * byte equality. normalize() ends in .trim(), so an excerpt truncated on a
+ * whitespace boundary could never validate — and the validator throws a bare
+ * Error from inside the commit transaction, which reaches an agent client as
+ * an anonymous 500 and gets replayed forever. A permanent, unrecoverable stall
+ * decided by where the 480th character of a job description happens to fall.
+ */
+describe("evidence excerpts survive their own validator", () => {
+  function longTextTruncatingOn(charIndex: number, boundary: string): string {
+    // Build text whose normalized form has `boundary` exactly at charIndex,
+    // and which is comfortably longer than the excerpt cap.
+    const head = "responsibility ".repeat(200).slice(0, charIndex);
+    return `${head}${boundary}${"trailing detail ".repeat(60)}`;
+  }
+
+  it("accepts an excerpt truncated on a space", () => {
+    const jobDescription = longTextTruncatingOn(479, " ");
+    const reviewed = attachEvidenceAndReview({
+      aiContent: content(),
+      resumeSnapshot: { summary: "Backend engineer building secure APIs." },
+      jobDescription,
+      scopeKey: "user-1",
+    });
+
+    expect(reviewed.evidence?.length).toBeGreaterThan(0);
+    expect(() =>
+      assertCanonicalEvidenceReferences("user-1", reviewed.evidence ?? []),
+    ).not.toThrow();
+  });
+
+  it("accepts excerpts truncated at every boundary near the cap", () => {
+    // One unlucky offset is enough to wedge a user permanently, so sweep the
+    // window rather than trusting a single sample.
+    for (let offset = 470; offset <= 490; offset += 1) {
+      const jobDescription = longTextTruncatingOn(offset, " ");
+      const reviewed = attachEvidenceAndReview({
+        aiContent: content(),
+        resumeSnapshot: { summary: "Backend engineer building secure APIs." },
+        jobDescription,
+        scopeKey: "user-1",
+      });
+      expect(
+        () => assertCanonicalEvidenceReferences("user-1", reviewed.evidence ?? []),
+        `offset ${offset}`,
+      ).not.toThrow();
+    }
   });
 });

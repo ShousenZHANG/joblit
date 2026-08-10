@@ -364,7 +364,11 @@ async function settleImport({
       return await joblit.importGeneration(request, { finalize });
     } catch (error) {
       if (!isAmbiguousJoblitError(error)) throw error;
-      if (signal?.aborted) throw error;
+      // Aborting does not make the settlement any less unknown. Rethrowing the
+      // raw error here dropped the one classification the caller needs to
+      // release its lease, so an interrupted import left the task claimed with
+      // no reason recorded and no deferral logged.
+      if (signal?.aborted) throw importSettlementUnknown(error);
       if (attempt === SETTLEMENT_ATTEMPTS) {
         throw importSettlementUnknown(error);
       }
@@ -901,7 +905,15 @@ export async function processActiveBatch({
       // Success is settled by the imports themselves; nothing to report.
       summary.succeeded += 1;
     } catch (error) {
-      if (signal?.aborted) return summary;
+      if (signal?.aborted) {
+        // Say so. Returning in silence is what produced a run that logged two
+        // replays and then "0 succeeded, 0 failed, 0 deferred" — the task was
+        // neither settled nor reported, and the only thing that would ever
+        // free it was the lease expiring.
+        log(`  interrupted: ${errorMessage(error)}`);
+        summary.deferred += 1;
+        return summary;
+      }
       if (
         error &&
         typeof error === "object" &&

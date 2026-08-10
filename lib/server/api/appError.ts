@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { errorJson } from "@/lib/server/api/errorResponse";
 import { reportError } from "@/lib/server/observability/errorReporter";
+import { classifyDatabaseError } from "./databaseError";
 
 /**
  * A failure a caller is allowed to see.
@@ -96,6 +97,22 @@ export function toErrorResponse(err: unknown, requestId?: string): NextResponse 
       });
     }
     return errorJson(err.code, err.message, err.status, { requestId });
+  }
+
+  // Prisma errors have a `code` but no `status`, so they fell past the check
+  // above into a bodyless 500 — a pool timeout and a unique-constraint
+  // violation looked identical to every client. Classify them, because the
+  // status code is what tells an agent whether to replay or to stop.
+  const database = classifyDatabaseError(err);
+  if (database) {
+    reportError(err, {
+      scope: "app.error.database",
+      requestId,
+      tags: { code: database.code, prismaCode: database.prismaCode },
+    });
+    return errorJson(database.code, database.message, database.status, {
+      requestId,
+    });
   }
 
   return null;

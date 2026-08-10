@@ -177,29 +177,37 @@ export async function POST(req: Request) {
   if (data.tailoringRun && receivedPromptHash) {
     let replay;
     try {
-      replay = await prisma.$transaction((tx) =>
-        probeTailoringRunAcceptanceReplay(
-          tx as unknown as Parameters<
-            typeof probeTailoringRunAcceptanceReplay
-          >[0],
-          {
-            userId,
-            jobId: data.jobId,
-            request: {
-              handle: data.tailoringRun!,
-              source: protocolSource(data.source),
-              delivery,
-              target,
-              requestHash: hashManualTailoringAcceptance({
-                target,
+      replay = await prisma.$transaction(
+        (tx) =>
+          probeTailoringRunAcceptanceReplay(
+            tx as unknown as Parameters<
+              typeof probeTailoringRunAcceptanceReplay
+            >[0],
+            {
+              userId,
+              jobId: data.jobId,
+              request: {
+                handle: data.tailoringRun!,
+                source: protocolSource(data.source),
                 delivery,
+                target,
+                requestHash: hashManualTailoringAcceptance({
+                  target,
+                  delivery,
+                  promptHash: receivedPromptHash,
+                  modelOutput: data.modelOutput,
+                }),
                 promptHash: receivedPromptHash,
-                modelOutput: data.modelOutput,
-              }),
-              promptHash: receivedPromptHash,
+              },
             },
-          },
-        ),
+          ),
+        // This was the only transaction on the import path without explicit
+        // options, so it inherited Prisma's defaults — a 2s wait for a pooled
+        // connection. Under the load a draining batch creates, that expires as
+        // P2024 before the work is even attempted, and until this commit a
+        // P2024 was an anonymous 500 the Runner replayed forever. The rest of
+        // this path uses 30s; match it.
+        { maxWait: 15_000, timeout: 30_000 },
       );
     } catch (error) {
       if (error instanceof TailoringRunError) {
