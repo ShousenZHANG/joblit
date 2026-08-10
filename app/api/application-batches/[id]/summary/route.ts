@@ -4,6 +4,7 @@ import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { UuidParamSchema } from "@/lib/shared/schemas/common";
 import { prisma } from "@/lib/server/prisma";
 import { taskProgressFromGroupBy } from "@/lib/server/applicationBatches/batchProgress";
+import { reapExpiredBatchLeases } from "@/lib/server/applicationBatches/runner";
 import { getApplicationReviewId } from "@/lib/server/applications/applicationReviewAvailability";
 
 export const runtime = "nodejs";
@@ -33,6 +34,15 @@ export async function GET(
       });
 
       if (!batch) return errorJson("NOT_FOUND", "Not found", 404);
+
+      // Recovery cannot depend on the Runner: when one is killed mid-task, the
+      // process that would reclaim the lease is the process that died. This is
+      // the read the open UI polls, so it is the one place guaranteed to run
+      // while a user is waiting. Terminal batches are skipped — their tasks are
+      // settled, and a reclaim there would only churn.
+      if (!["SUCCEEDED", "FAILED", "CANCELLED"].includes(batch.status)) {
+        await reapExpiredBatchLeases({ userId, batchId: batch.id });
+      }
 
       const grouped = await prisma.applicationBatchTask.groupBy({
         by: ["status"],

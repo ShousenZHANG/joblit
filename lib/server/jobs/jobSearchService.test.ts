@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const prismaMock = vi.hoisted(() => ({
   $queryRaw: vi.fn(),
+  // Relevance search resolves the same per-Job tailoring state as the plain
+  // list path. An empty result keeps every row `idle`.
+  applicationBatchTask: {
+    findMany: vi.fn(async () => []),
+  },
 }));
 
 vi.mock("@/lib/server/prisma", () => ({ prisma: prismaMock }));

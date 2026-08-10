@@ -8,6 +8,12 @@ type EtagJobItem = {
   resumePdfUrl?: string | null;
   resumePdfName?: string | null;
   coverPdfUrl?: string | null;
+  /**
+   * Live tailoring state. It changes without the Job row itself changing, so
+   * leaving it out of the validator would make every poll answer 304 while the
+   * badge on screen went stale.
+   */
+  tailoringState?: string | null;
 };
 
 type BuildJobsListEtagInput = {
@@ -37,6 +43,7 @@ export function buildJobsListEtag(input: BuildJobsListEtagInput): string {
         item.resumePdfUrl ?? "",
         item.resumePdfName ?? "",
         item.coverPdfUrl ?? "",
+        item.tailoringState ?? "",
       ].join(":"),
     )
     .join("|");

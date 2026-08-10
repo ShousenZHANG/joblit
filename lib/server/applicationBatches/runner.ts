@@ -270,6 +270,51 @@ export async function reclaimStaleBatchTasks(input: {
   });
 }
 
+/**
+ * Reclaim expired leases from a read path, without paying for a write when
+ * there is nothing expired.
+ *
+ * Reclaim used to happen only inside a claim. That is fine while a Runner is
+ * alive, and useless the moment one is not: a Runner killed mid-task left its
+ * task RUNNING behind an expired lease, the batch stayed non-terminal, and the
+ * only thing that could free it was the very process that had died. The user
+ * saw a spinner that no amount of waiting would resolve, and could not queue
+ * anything else because a live batch already existed.
+ *
+ * The `findFirst` guard matters: this runs on a polled GET. Taking the batch
+ * advisory lock on every poll would serialise reads behind writes for no
+ * reason, so the lock is taken only when an expired lease actually exists.
+ *
+ * Returns whether anything was reclaimed, so a caller can re-read.
+ */
+export async function reapExpiredBatchLeases(input: {
+  userId: string;
+  batchId: string;
+  now?: Date;
+}): Promise<boolean> {
+  const now = input.now ?? new Date();
+  const expired = await prisma.applicationBatchTask.findFirst({
+    where: {
+      batchId: input.batchId,
+      userId: input.userId,
+      status: "RUNNING",
+      completedAt: null,
+      OR: [
+        { executionLeaseExpiresAt: { lte: now } },
+        {
+          executionLeaseExpiresAt: null,
+          startedAt: { lte: new Date(now.getTime() - STALE_TASK_TIMEOUT_MS) },
+        },
+      ],
+    },
+    select: { id: true },
+  });
+  if (!expired) return false;
+
+  await reclaimStaleBatchTasks(input);
+  return true;
+}
+
 export async function claimNextBatchTask(input: {
   userId: string;
   batchId: string;

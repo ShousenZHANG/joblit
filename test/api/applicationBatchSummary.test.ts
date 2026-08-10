@@ -21,6 +21,11 @@ vi.mock("@/lib/server/prisma", () => ({
   },
 }));
 
+const reapExpiredBatchLeases = vi.hoisted(() => vi.fn(async () => false));
+vi.mock("@/lib/server/applicationBatches/runner", () => ({
+  reapExpiredBatchLeases,
+}));
+
 vi.mock("@/auth", () => ({
   authOptions: {},
 }));
@@ -60,6 +65,72 @@ describe("application batch summary api", () => {
     applicationBatchTaskStore.groupBy.mockReset();
     applicationBatchTaskStore.findMany.mockReset();
     applicationStore.findMany.mockReset();
+    reapExpiredBatchLeases.mockClear();
+  });
+
+  it("reclaims expired leases on a live batch so a dead Runner is not required", async () => {
+    // Reclaim used to happen only inside a claim, which meant the only thing
+    // that could free a task abandoned by a killed Runner was the process that
+    // had died. The batch stayed live, blocking a new one, and the UI showed a
+    // spinner nothing could resolve. This polled read is the one call
+    // guaranteed to happen while a user is waiting, so it does the reaping.
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    applicationBatchStore.findFirst.mockResolvedValue({
+      id: BATCH_ID,
+      scope: "NEW",
+      status: "RUNNING",
+      totalCount: 1,
+      error: null,
+      createdAt: new Date("2026-02-22T10:00:00.000Z"),
+      updatedAt: new Date("2026-02-22T10:02:00.000Z"),
+      startedAt: new Date("2026-02-22T10:00:10.000Z"),
+      completedAt: null,
+    });
+    applicationBatchTaskStore.groupBy.mockResolvedValue([]);
+    applicationBatchTaskStore.findMany.mockResolvedValue([]);
+    applicationStore.findMany.mockResolvedValue([]);
+
+    await GET(
+      new Request(`http://localhost/api/application-batches/${BATCH_ID}/summary`),
+      { params: Promise.resolve({ id: BATCH_ID }) },
+    );
+
+    expect(reapExpiredBatchLeases).toHaveBeenCalledWith({
+      userId: "user-1",
+      batchId: BATCH_ID,
+    });
+  });
+
+  it("does not reap a terminal batch", async () => {
+    // Terminal tasks are settled. Reclaiming there would resurrect finished
+    // work as PENDING and re-open a batch the user has already been told is
+    // done.
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    applicationBatchStore.findFirst.mockResolvedValue({
+      id: BATCH_ID,
+      scope: "NEW",
+      status: "SUCCEEDED",
+      totalCount: 1,
+      error: null,
+      createdAt: new Date("2026-02-22T10:00:00.000Z"),
+      updatedAt: new Date("2026-02-22T10:02:00.000Z"),
+      startedAt: new Date("2026-02-22T10:00:10.000Z"),
+      completedAt: new Date("2026-02-22T10:02:00.000Z"),
+    });
+    applicationBatchTaskStore.groupBy.mockResolvedValue([]);
+    applicationBatchTaskStore.findMany.mockResolvedValue([]);
+    applicationStore.findMany.mockResolvedValue([]);
+
+    await GET(
+      new Request(`http://localhost/api/application-batches/${BATCH_ID}/summary`),
+      { params: Promise.resolve({ id: BATCH_ID }) },
+    );
+
+    expect(reapExpiredBatchLeases).not.toHaveBeenCalled();
   });
 
   it("reports deferred and stalled work instead of leaving it as silent progress", async () => {

@@ -350,7 +350,12 @@
       "viewDetails": "查看详情",
       "setUpRunner": "去配置",
       "dismiss": "关闭"
-    }
+    },
+    "tailoringQueued": "排队中",
+    "tailoringRunning": "生成中",
+    "tailoringStalled": "已中断 · 将重试",
+    "tailoringFailed": "生成失败",
+    "tailoringReady": "已完成"
   },
   "fetch": {
     "searchRoles": "搜索职位",

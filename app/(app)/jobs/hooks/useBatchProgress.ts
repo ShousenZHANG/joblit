@@ -169,6 +169,12 @@ export function useBatchProgress({
     if (settledBatchIdRef.current !== next.batchId) {
       settledBatchIdRef.current = next.batchId;
       settledCountRef.current = 0;
+      // Rows now carry a per-Job tailoring badge, and a freshly queued batch
+      // changes every one of them before anything has settled. Refetching only
+      // on settlement would leave the list claiming nothing was queued until
+      // the first Job finished — minutes of the user's own request being
+      // invisible on the only screen that lists it.
+      if (next.active) settledCallbackRef.current();
     }
     if (next.done > settledCountRef.current) {
       settledCountRef.current = next.done;

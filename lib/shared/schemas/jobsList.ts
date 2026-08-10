@@ -46,6 +46,14 @@ export const jobListItemSchema = z.object({
   resumePdfUrl: z.string().nullable().optional(),
   resumePdfName: z.string().nullable().optional(),
   coverPdfUrl: z.string().nullable().optional(),
+  /**
+   * Where this Job's tailoring work stands, decided by the server against the
+   * lease it issued. Optional so a cached response from before this shipped
+   * still parses; absent means the row simply has nothing in flight.
+   */
+  tailoringState: z
+    .enum(["idle", "queued", "running", "stalled", "failed"])
+    .optional(),
   livenessStatus: z.enum(["ACTIVE", "EXPIRED", "UNCERTAIN"]).optional(),
   livenessReason: z.string().nullable().optional(),
   possibleDuplicate: z.boolean().optional(),

@@ -27,6 +27,7 @@ describe("serializeJobListItem", () => {
       resumePdfUrl: null,
       resumePdfName: null,
       coverPdfUrl: null,
+      tailoringState: "queued" as const,
       createdAt: new Date("2026-07-19T00:00:00.000Z"),
       updatedAt: new Date("2026-07-20T00:00:00.000Z"),
     };
@@ -40,6 +41,11 @@ describe("serializeJobListItem", () => {
       livenessStatus: "ACTIVE",
       possibleDuplicate: false,
       applicationId: "11111111-1111-4111-8111-111111111111",
+      // Dropping this in the serializer would make the SSR first page render
+      // every row as idle, and the badge would only appear once the client
+      // refetched — a flash of "nothing queued" on exactly the reload a user
+      // performs to check whether anything is queued.
+      tailoringState: "queued",
       listingDate: "2026-07-18T00:00:00.000Z",
       createdAt: "2026-07-19T00:00:00.000Z",
       updatedAt: "2026-07-20T00:00:00.000Z",

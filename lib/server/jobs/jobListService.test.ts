@@ -5,6 +5,11 @@ const prismaMock = vi.hoisted(() => ({
     findMany: vi.fn(),
     count: vi.fn(),
   },
+  // The list resolves each page's live tailoring state. Nothing here exercises
+  // it, so an empty result keeps every row `idle`.
+  applicationBatchTask: {
+    findMany: vi.fn(async () => []),
+  },
 }));
 
 vi.mock("@/lib/server/prisma", () => ({ prisma: prismaMock }));

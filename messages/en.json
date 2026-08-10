@@ -350,7 +350,12 @@
       "viewDetails": "View details",
       "setUpRunner": "Set up",
       "dismiss": "Dismiss"
-    }
+    },
+    "tailoringQueued": "Queued",
+    "tailoringRunning": "Generating",
+    "tailoringStalled": "Stalled - will retry",
+    "tailoringFailed": "Generation failed",
+    "tailoringReady": "Ready"
   },
   "fetch": {
     "searchRoles": "Search roles",

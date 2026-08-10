@@ -34,6 +34,7 @@ export function serializeJobListItem(item: JobListItem): JobItem {
     resumePdfUrl: item.resumePdfUrl,
     resumePdfName: item.resumePdfName,
     coverPdfUrl: item.coverPdfUrl,
+    tailoringState: item.tailoringState,
     createdAt: item.createdAt.toISOString(),
     updatedAt: item.updatedAt.toISOString(),
   };
