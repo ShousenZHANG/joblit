@@ -728,6 +728,38 @@ test("keeps the server's own error code visible on a deferred import", async () 
   assert.match(output, /requestId=req-abc/);
 });
 
+test("carries the database code through to the deferred log line", async () => {
+  // upstreamCode=DATABASE_ERROR alone says only "the database rejected it".
+  // The Prisma code says which class of rejection, and it is the difference
+  // between a one-line diagnosis and another round trip through the platform
+  // log. The code travels; Prisma's message, which names tables and columns,
+  // never does.
+  const serverRejection = () =>
+    Object.assign(new Error("The database rejected this change."), {
+      code: "DATABASE_ERROR",
+      status: 500,
+      requestId: "req-db",
+      databaseCode: "P2011",
+    });
+  const joblit = fakeJoblit({
+    steps: [{ tasks: [{ ...TASK, remainingTargets: ["RESUME"] }] }],
+    importErrors: [serverRejection(), serverRejection(), serverRejection()],
+  });
+  const hermes = fakeHermes();
+  const logs = [];
+
+  await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    settlementRetryMs: 1,
+    log: (message) => logs.push(message),
+  });
+
+  const output = logs.join(" ");
+  assert.match(output, /databaseCode=P2011/);
+  assert.match(output, /upstreamCode=DATABASE_ERROR/);
+});
+
 test("treats local acknowledgement cleanup as non-authoritative", async () => {
   const joblit = fakeJoblit({
     steps: [{ tasks: [TASK] }, { tasks: [], batchStatus: "COMPLETED" }],

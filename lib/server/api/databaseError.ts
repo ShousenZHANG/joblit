@@ -23,12 +23,27 @@ const RETRYABLE_PRISMA_CODES = new Set([
   "P2034", // Transaction failed due to a write conflict or deadlock; retry
 ]);
 
-/** A decision the data has already made. Retrying changes nothing. */
+/**
+ * A decision the data has already made. Retrying changes nothing.
+ *
+ * This list is documentation, not the safety net — see the default below.
+ */
 const PERMANENT_PRISMA_CODES = new Set([
+  "P2000", // Value too long for the column
   "P2002", // Unique constraint failed
   "P2003", // Foreign key constraint failed
   "P2004", // A database constraint failed
+  "P2005", // Invalid value for the field type
+  "P2006", // Invalid value for the model field
+  "P2011", // Null constraint violation
+  "P2012", // Missing a required value
+  "P2013", // Missing a required argument
+  "P2014", // The change would violate a required relation
+  "P2019", // Input error
+  "P2020", // Value out of range for the type
+  "P2023", // Inconsistent column data
   "P2025", // Required record not found
+  "P2033", // Number out of range for a 64-bit integer
 ]);
 
 type PrismaLikeError = Error & { code: string; meta?: unknown };
@@ -78,13 +93,26 @@ export function classifyDatabaseError(
       prismaCode: err.code,
     };
   }
-  // An unclassified Prisma code. 500 is the honest answer — it may have
-  // committed — but it is now a named 500 with the Prisma code in the log,
-  // which is the whole difference between a diagnosable failure and an outage.
+  // An unclassified Prisma code defaults to DETERMINISTIC, not retryable.
+  //
+  // The first version of this defaulted to 500, reasoning that an unknown
+  // failure might have committed. That reasoning ignored the cost asymmetry a
+  // 5xx carries here: the Runner replays a 5xx, so a deterministic error it
+  // cannot fix loops forever and parks the queue — which is exactly what
+  // production then did, seven passes running, with this very code. Getting a
+  // transient error wrong costs one task the user can queue again; getting a
+  // permanent one wrong costs the queue. Prisma's transient codes are few and
+  // enumerable, so anything outside that set is treated as a decision.
+  //
+  // The Prisma code ships in `details`. The code names an error class and
+  // leaks nothing about the schema — that is Prisma's MESSAGE, which is why
+  // only the code travels — and without it the next failure is another round
+  // trip through the platform log.
   return {
     code: "DATABASE_ERROR",
-    status: 500,
-    message: "Something went wrong on our side. Please try again.",
+    status: 422,
+    message:
+      "The database rejected this change. It will not succeed on a retry.",
     prismaCode: err.code,
   };
 }

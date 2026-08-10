@@ -28,13 +28,45 @@ describe("classifyDatabaseError", () => {
     expect(result!.status).toBeLessThan(500);
   });
 
-  it("still names an unclassified Prisma code instead of hiding it", () => {
+  it("treats an unclassified Prisma code as deterministic, not retryable", () => {
+    // The first version answered 500 here, reasoning that an unknown failure
+    // might have committed. But the Runner replays every 5xx, so a
+    // deterministic error it cannot fix loops forever and parks the queue —
+    // which is what production then did, seven passes running, with exactly
+    // this code. Anything outside the small enumerable set of transient Prisma
+    // codes is a decision, and must stop the client.
     const result = classifyDatabaseError(prismaError("P9999"));
     expect(result).toMatchObject({
       code: "DATABASE_ERROR",
-      status: 500,
       prismaCode: "P9999",
     });
+    expect(result!.status).toBeLessThan(500);
+  });
+
+  it("keeps every known-deterministic write failure below 500", () => {
+    // Each of these is a rejection of the data itself. Replaying any of them
+    // burns three attempts and defers the task, forever.
+    for (const code of [
+      "P2000", // value too long
+      "P2011", // null constraint
+      "P2012", // missing required value
+      "P2014", // required relation violated
+      "P2023", // inconsistent column data
+    ]) {
+      expect(
+        classifyDatabaseError(prismaError(code))!.status,
+        code,
+      ).toBeLessThan(500);
+    }
+  });
+
+  it("keeps the transient set retryable so a pool blip is not a hard failure", () => {
+    for (const code of ["P2024", "P1001", "P1017", "P2034"]) {
+      expect(
+        classifyDatabaseError(prismaError(code))!.status,
+        code,
+      ).toBeGreaterThanOrEqual(500);
+    }
   });
 
   it("never leaks the database's own message to a client", () => {

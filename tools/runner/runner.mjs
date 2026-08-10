@@ -85,6 +85,7 @@ function errorTelemetry(error) {
     ["status", error.status],
     ["code", error.code],
     ["upstreamCode", error.upstreamCode],
+    ["databaseCode", error.databaseCode],
     ["requestId", error.requestId],
     ["elapsedMs", error.elapsedMs],
   ]
@@ -330,6 +331,9 @@ function importSettlementUnknown(cause) {
   // actually said. That turned a one-line diagnosis into an archaeology dig.
   if (isRecord(cause) && typeof cause.code === "string") {
     error.upstreamCode = cause.code;
+  }
+  if (isRecord(cause) && typeof cause.databaseCode === "string") {
+    error.databaseCode = cause.databaseCode;
   }
   if (isRecord(cause) && typeof cause.message === "string") {
     error.upstreamMessage = cause.message;

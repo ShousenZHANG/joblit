@@ -111,6 +111,11 @@ export function toErrorResponse(err: unknown, requestId?: string): NextResponse 
       tags: { code: database.code, prismaCode: database.prismaCode },
     });
     return errorJson(database.code, database.message, database.status, {
+      // The Prisma code, not its message. The code names an error class;
+      // the message names tables, columns and constraints. Shipping the code
+      // is what turns the next occurrence into a diagnosis instead of another
+      // round trip through the platform log.
+      details: { databaseCode: database.prismaCode },
       requestId,
     });
   }

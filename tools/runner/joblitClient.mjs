@@ -14,12 +14,13 @@ export class JoblitClientError extends Error {
     code,
     message,
     status,
-    { cause, phase, requestId, elapsedMs } = {},
+    { cause, phase, requestId, elapsedMs, databaseCode } = {},
   ) {
     super(message);
     this.name = "JoblitClientError";
     this.code = code;
     this.status = status;
+    if (databaseCode !== undefined) this.databaseCode = databaseCode;
     if (phase !== undefined) this.phase = phase;
     if (requestId !== undefined) this.requestId = requestId;
     if (elapsedMs !== undefined) this.elapsedMs = elapsedMs;
@@ -53,6 +54,15 @@ async function readError(response) {
       message: error.message,
       requestId:
         body && typeof body.requestId === "string" ? body.requestId : undefined,
+      // The server ships the Prisma code (never its message) for a database
+      // rejection. Dropping it here is what forced a round trip through the
+      // platform log to learn which class of failure it actually was.
+      databaseCode:
+        error.details &&
+        typeof error.details === "object" &&
+        typeof error.details.databaseCode === "string"
+          ? error.details.databaseCode
+          : undefined,
     };
   }
   return {
@@ -119,6 +129,7 @@ export function createJoblitClient({
         throw new JoblitClientError(error.code, error.message, response.status, {
           phase,
           requestId: error.requestId,
+          databaseCode: error.databaseCode,
           elapsedMs: Date.now() - startedAt,
         });
       }
