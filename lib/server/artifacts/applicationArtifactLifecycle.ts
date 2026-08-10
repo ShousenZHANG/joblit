@@ -78,6 +78,14 @@ export type ApplicationArtifactDatabase = ApplicationArtifactTransaction & {
 
 export class ApplicationArtifactConflictError extends Error {
   readonly code = "APPLICATION_ARTIFACT_CONFLICT";
+  /**
+   * Required, not decorative. `isCodedError` recognises an error by `code` AND
+   * a numeric `status`; without one this rendered as a bodyless 500, and an
+   * agent client reads any 5xx as "settlement unknown" and replays. Every
+   * conflict this class reports is a decision already made about stored
+   * artifacts, so replaying it can only burn attempts and park the batch.
+   */
+  readonly status = 409;
 
   constructor(message: string) {
     super(message);

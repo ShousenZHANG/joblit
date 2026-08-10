@@ -4,6 +4,7 @@ import {
   sanitizeRendered,
   renderBullets,
   renderLinks,
+  replaceLiteral,
 } from "./templateUtils";
 
 describe("replaceTokens", () => {
@@ -95,5 +96,46 @@ describe("renderLinks", () => {
     ];
     const result = renderLinks(links, " | ");
     expect(result).toBe("\\href{https://a.com}{A} | \\href{https://b.com}{B}");
+  });
+});
+
+/**
+ * `String.prototype.replace` reads `$&`, `` $` ``, `$'` and `$1` out of its
+ * REPLACEMENT argument. Rendered LaTeX is full of `\$` from escapeLatex, so a
+ * resume bullet or cover paragraph containing the wrong two characters could
+ * splice the template's own preamble into the document body — silently, in a
+ * PDF the user then sends to an employer.
+ */
+describe("replaceLiteral", () => {
+  it("treats $-patterns in the replacement as literal text", () => {
+    const template = "PREAMBLE\n\input{content}\nTAIL";
+
+    // Each of these is a real special pattern for String.replace.
+    for (const payload of ["$&", "$`", "$'", "$1", "cost: $&100"]) {
+      expect(replaceLiteral(template, "\input{content}", payload)).toBe(
+        `PREAMBLE\n${payload}\nTAIL`,
+      );
+    }
+  });
+
+  it("differs from String.replace on exactly the case that corrupts a document", () => {
+    // Pin the reason this helper exists. `$\`` re-inserts everything before the
+    // match — the entire preamble — into the middle of the rendered document.
+    const template = "PREAMBLE\n\input{content}\nTAIL";
+    const naive = template.replace("\input{content}", "$`");
+    expect(naive).toContain("PREAMBLE\nPREAMBLE");
+    expect(replaceLiteral(template, "\input{content}", "$`")).toBe(
+      "PREAMBLE\n$`\nTAIL",
+    );
+  });
+
+  it("replaces only the first occurrence, like the call sites expect", () => {
+    expect(replaceLiteral("a X b X c", "X", "1")).toBe("a 1 b X c");
+  });
+
+  it("returns the text unchanged when the placeholder is absent", () => {
+    expect(replaceLiteral("no marker here", "\input{content}", "x")).toBe(
+      "no marker here",
+    );
   });
 });

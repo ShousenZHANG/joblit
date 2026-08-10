@@ -1,3 +1,4 @@
+import { AppError } from "@/lib/server/api/appError";
 import { prisma } from "@/lib/server/prisma";
 import type { Prisma } from "@/lib/generated/prisma";
 import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
@@ -85,6 +86,8 @@ export const APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE = {
 
 class DuplicateApplicationArtifactTargetError extends Error {
   readonly code = "DUPLICATE_APPLICATION_ARTIFACT_TARGET";
+  /** Deterministic caller error; see ApplicationArtifactConflictError. */
+  readonly status = 409;
 
   constructor(readonly target: CommitTarget) {
     super(`Duplicate application artifact target: ${target}`);
@@ -247,7 +250,17 @@ async function uploadStagedArtifact(
     });
     url = recorded.artifact.url;
   }
-  if (!url) throw new Error("APPLICATION_ARTIFACT_UPLOAD_URL_MISSING");
+  if (!url) {
+    // The upload reported success without a URL. Nothing downstream can
+    // recover, and a 500 here would be replayed against storage that already
+    // took the bytes.
+    throw new AppError({
+      code: "APPLICATION_ARTIFACT_UPLOAD_URL_MISSING",
+      status: 502,
+      publicMessage:
+        "The PDF was uploaded but storage returned no address. Please try again.",
+    });
+  }
   return {
     artifactId: staged.artifact.id,
     target: artifact.target,
@@ -510,7 +523,18 @@ function resolveCommitContent(
       reviewContext: input.reviewContext,
     });
     if (evolved.kind !== "evolved") {
-      throw new Error("APPLICATION_AI_CONTENT_REVIEW_CONTEXT_REQUIRED");
+      // A modelled outcome, not a crash: evolveApplicationAiContent returns
+      // review_context_required when it cannot rebuild the shared review. As a
+      // bare Error it rendered as an anonymous 500 that the Runner replays
+      // forever, which is precisely the failure shape commitResultResponse was
+      // written to eliminate — and it was hiding here, one layer down.
+      throw new AppError({
+        code: "APPLICATION_REVIEW_CONTEXT_REQUIRED",
+        status: 409,
+        publicMessage:
+          "The job description is unavailable, so the draft cannot be reviewed. Generate this job again.",
+        privateDetails: { evolved: evolved.kind },
+      });
     }
     aiContent = evolved.aiContent;
   }
@@ -610,7 +634,14 @@ async function commitInTransaction(
     input.tailoring &&
     input.tailoring.length > 0
   ) {
-    throw new Error("TAILORING_ACCEPTANCE_AND_PUBLICATION_CONFLICT");
+    // A caller passed both an acceptance and a publication for one commit.
+    // Permanent by construction, so it must never read as a retryable 500.
+    throw new AppError({
+      code: "TAILORING_ACCEPTANCE_AND_PUBLICATION_CONFLICT",
+      status: 409,
+      publicMessage:
+        "A tailoring acceptance and a publication cannot be committed together.",
+    });
   }
   if (
     (!input.tailoring || input.tailoring.length === 0) &&
@@ -828,7 +859,16 @@ async function persistCommitSideEffects(
         ? publication.resume
         : publication.cover;
     if (document.status !== "FINAL" || !document.contentHash) {
-      throw new Error("TAILORING_PUBLICATION_NOT_FINAL");
+      throw new AppError({
+        code: "TAILORING_PUBLICATION_NOT_FINAL",
+        status: 409,
+        publicMessage:
+          "This document is not complete enough to publish. Generate this job again.",
+        privateDetails: {
+          target: input.tailoringPublication.target,
+          status: document.status,
+        },
+      });
     }
     await completeTailoringRunPublication(
       tx as unknown as TailoringRunTransaction,

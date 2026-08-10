@@ -1,3 +1,4 @@
+import { AppError } from "@/lib/server/api/appError";
 import { attachEvidenceAndReview } from "@/lib/server/ai/evidenceLedger";
 import type {
   AiAddedBullet,
@@ -263,7 +264,12 @@ export function evolveApplicationAiContent(
     // Keep the runtime assertion so an untyped JavaScript caller also fails
     // closed instead of manufacturing an invalid aggregate.
     if (!input.current) {
-      throw new Error("APPLICATION_AI_CONTENT_CURRENT_REQUIRED");
+      throw new AppError({
+        code: "APPLICATION_AI_CONTENT_CURRENT_REQUIRED",
+        status: 409,
+        publicMessage:
+          "There is no existing draft to apply this change to. Generate this job again.",
+      });
     }
     reviewBasis = input.current;
     changed =

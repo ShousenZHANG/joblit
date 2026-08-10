@@ -48,7 +48,13 @@ function promptReceipt(meta: PromptMeta) {
 export async function issuePromptTailoringRun(input: PromptRunInput) {
   const binding = input.payload.snapshotBinding;
   if (!binding) {
-    throw new Error("TAILORING_SNAPSHOT_BINDING_MISSING");
+    // The prompt was built without the snapshot hashes a run is fenced
+    // against. Deterministic — a retry issues the same prompt — so it must not
+    // reach an agent client as a retryable 500.
+    throw new TailoringRunError(
+      "PROMPT_NOT_BOUND",
+      "This prompt is missing its snapshot binding. Generate this job again.",
+    );
   }
   const target = protocolTarget(input.target);
   const issue = await issueTailoringRun({

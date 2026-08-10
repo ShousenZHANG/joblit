@@ -403,3 +403,72 @@ describe("evolveApplicationAiContent", () => {
     expect(result).toEqual({ kind: "review_context_required" });
   });
 });
+
+/**
+ * The production state nothing covered: a COVER draft imported onto an
+ * Application whose RESUME has already been accepted and published. Every
+ * existing case here merges into a fresh or same-target aggregate.
+ *
+ * The evidence array is rebuilt from scratch on that second merge, and the
+ * commit then re-validates it through assertCanonicalEvidenceReferences. If
+ * those two disagree by a single byte, the validator throws a bare Error from
+ * inside the commit transaction, which reaches an agent client as an anonymous
+ * 500 and is replayed until the batch parks.
+ */
+describe("merging cover onto an already-published resume", () => {
+  const LONG_JD = `${"deliver reliable typescript services ".repeat(40)}end.`;
+
+  it("produces evidence that still passes canonical validation", async () => {
+    const { assertCanonicalEvidenceReferences } = await import(
+      "@/lib/server/ai/evidenceLedger"
+    );
+    const context = { ...REVIEW_CONTEXT, jobDescription: LONG_JD };
+    const published = attachEvidenceAndReview({
+      scopeKey: context.scopeKey,
+      resumeSnapshot: context.resumeSnapshot,
+      jobDescription: context.jobDescription,
+      aiContent: makeContent("existing"),
+    });
+
+    const evolved = evolveApplicationAiContent({
+      current: published,
+      command: {
+        kind: "replace_target_proposal",
+        target: "cover",
+        proposal: makeContent("incoming"),
+      },
+      reviewContext: context,
+    });
+
+    expect(evolved.kind).toBe("evolved");
+    const merged = evolved.kind === "evolved" ? evolved.aiContent : null;
+    expect(merged?.evidence?.length).toBeGreaterThan(0);
+    expect(() =>
+      assertCanonicalEvidenceReferences(context.scopeKey, merged?.evidence ?? []),
+    ).not.toThrow();
+  });
+
+  it("keeps the published resume half untouched", () => {
+    // A cover import that silently rewrote the resume would invalidate the PDF
+    // already published against it.
+    const published = makeContent("existing");
+    const evolved = evolveApplicationAiContent({
+      current: published,
+      command: {
+        kind: "replace_target_proposal",
+        target: "cover",
+        proposal: makeContent("incoming"),
+      },
+      reviewContext: REVIEW_CONTEXT,
+    });
+
+    expect(evolved.kind).toBe("evolved");
+    if (evolved.kind !== "evolved") return;
+    expect(evolved.aiContent.cv.summary.aiText).toBe(
+      published.cv.summary.aiText,
+    );
+    expect(evolved.aiContent.provenance?.resume).toEqual(
+      published.provenance?.resume,
+    );
+  });
+});

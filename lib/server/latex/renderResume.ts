@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
+  replaceLiteral,
   replaceTokens,
   sanitizeRendered,
   renderBullets as sharedRenderBullets,
@@ -222,7 +223,7 @@ export function renderResumeTex(input: RenderResumeInput) {
 
   const educationRendered = renderEducationSection(input.education);
 
-  const rendered = replaceAll(main, {
+  const withTokens = replaceAll(main, {
     CANDIDATE_NAME: input.candidate.name,
     CANDIDATE_TITLE: input.candidate.title,
     CANDIDATE_EMAIL: input.candidate.email,
@@ -236,10 +237,20 @@ export function renderResumeTex(input: RenderResumeInput) {
     LAST_UPDATED: input.lastUpdated ?? "",
     PROJECTS_SECTION: projectsRendered,
     EDUCATION_SECTION: educationRendered,
-  })
-    .replace("\\input{sections/summary.tex}", summaryRendered)
-    .replace("\\input{sections/skills.tex}", skillsRendered)
-    .replace("\\input{sections/experience.tex}", experienceRendered);
+  });
+  // Not String.replace: it reads `$&`, `` $` `` and `$'` out of the REPLACEMENT
+  // text, and every one of these replacements is user-authored resume content
+  // that escapeLatex has filled with `\$`. A candidate whose bullet contained
+  // the wrong two characters could splice the template's own preamble into the
+  // middle of their resume.
+  const rendered = [
+    ["\\input{sections/summary.tex}", summaryRendered],
+    ["\\input{sections/skills.tex}", skillsRendered],
+    ["\\input{sections/experience.tex}", experienceRendered],
+  ].reduce(
+    (tex, [placeholder, value]) => replaceLiteral(tex, placeholder, value),
+    withTokens,
+  );
 
   return sanitizeRendered(rendered);
 }

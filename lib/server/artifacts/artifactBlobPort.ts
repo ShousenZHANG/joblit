@@ -52,6 +52,13 @@ export interface ArtifactBlobPort {
 
 export class ArtifactBlobPortUnavailableError extends Error {
   readonly code = "ARTIFACT_BLOB_PORT_UNAVAILABLE";
+  /**
+   * 503, not 409: storage being unconfigured is an environment problem that a
+   * later attempt genuinely may not hit, so replaying is the correct client
+   * behaviour here. It still needs a status to be rendered as a coded response
+   * at all.
+   */
+  readonly status = 503;
 
   constructor(message = "Application artifact Blob storage is not configured") {
     super(message);
