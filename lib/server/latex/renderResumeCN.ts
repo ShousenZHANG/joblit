@@ -190,6 +190,17 @@ function renderProjects(entries: ProjectEntry[]) {
 export function renderResumeCNTex(input: RenderResumeCNInput) {
   const template = readTemplate();
 
+  // 个人总结 leads the page when present — the mainstream Chinese resume
+  // convention — and vanishes without a trace when the profile has none.
+  // (The mapper passed summary for months while the template had no token
+  // for it, so the field silently never reached the PDF.)
+  const trimmedSummary = input.summary.trim();
+  const summarySection = trimmedSummary
+    ? `\section{个人总结}
+
+${trimmedSummary} \par`
+    : "";
+
   const projectsSection =
     input.projects.length > 0
       ? `\\section{项目经历}\n\n${renderProjects(input.projects)}`
@@ -206,6 +217,7 @@ export function renderResumeCNTex(input: RenderResumeCNInput) {
     CANDIDATE_EMAIL: input.candidate.email,
     CANDIDATE_PHONE: input.candidate.phone,
     PHOTO_BLOCK: input.photoBlock,
+    SUMMARY_SECTION: summarySection,
     PERSONAL_INFO_LINE: input.personalInfoLine,
     CONTACT_EXTRA_LINE: input.contactExtraLine,
     LINKS_LINE: input.linksLine,
