@@ -355,7 +355,11 @@
     "tailoringRunning": "生成中",
     "tailoringStalled": "已中断 · 将重试",
     "tailoringFailed": "生成失败",
-    "tailoringReady": "已完成"
+    "tailoringReady": "已完成",
+    "batchTitleProgress": "（{done}/{total}）生成中 - Joblit",
+    "batchDoneTitle": "生成已完成",
+    "batchDoneFailedTitle": "生成失败",
+    "batchDoneSummary": "{succeeded} 份已就绪，{failed} 份失败。"
   },
   "fetch": {
     "searchRoles": "搜索职位",

@@ -57,6 +57,7 @@ import {
 } from "./components/VirtualJobList";
 import { BatchProgressBanner } from "./components/BatchProgressBanner";
 import { useBatchProgress, type BatchStatus } from "./hooks/useBatchProgress";
+import { useBatchCompletionSignal } from "./hooks/useBatchCompletionSignal";
 import { useRunnerPresence } from "@/hooks/useRunnerPresence";
 import { JobSearchBar } from "./components/JobSearchBar";
 import { ExternalGenerateDialog } from "./components/ExternalGenerateDialog";
@@ -386,6 +387,18 @@ export function JobsClient({
       totalCount: active.totalCount ?? batchPreflight.eligibleCount,
     });
   }, [batchPreflight, batchProgress.state.batchId, watchBatchProgress]);
+  useBatchCompletionSignal({
+    state: batchProgress.state,
+    toast,
+    labels: {
+      titlePrefix: ({ done, total }) =>
+        t("batchTitleProgress", { done, total }),
+      doneTitle: t("batchDoneTitle"),
+      failedTitle: t("batchDoneFailedTitle"),
+      doneDescription: ({ succeeded, failed }) =>
+        t("batchDoneSummary", { succeeded, failed }),
+    },
+  });
   const refreshedTerminalBatchRef = useRef<string | null>(null);
   useEffect(() => {
     if (

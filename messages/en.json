@@ -355,7 +355,11 @@
     "tailoringRunning": "Generating",
     "tailoringStalled": "Stalled - will retry",
     "tailoringFailed": "Generation failed",
-    "tailoringReady": "Ready"
+    "tailoringReady": "Ready",
+    "batchTitleProgress": "({done}/{total}) Generating - Joblit",
+    "batchDoneTitle": "Generation finished",
+    "batchDoneFailedTitle": "Generation failed",
+    "batchDoneSummary": "{succeeded} ready, {failed} failed."
   },
   "fetch": {
     "searchRoles": "Search roles",
