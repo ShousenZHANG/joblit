@@ -30,6 +30,14 @@ import { getSectionIds, type SectionId } from "./constants";
  */
 export type SectionCompletion = Record<SectionId, boolean>;
 
+/**
+ * Delay between a commit (a field losing focus, a section change) and the
+ * compile. Long enough to coalesce a blur with the section change it caused,
+ * short enough that the refresh still feels like a direct consequence of
+ * finishing the field.
+ */
+const PREVIEW_COMMIT_DELAY_MS = 120;
+
 type ResumeContextValue = UseResumeFormReturn &
   UseResumePreviewReturn &
   UseResumeProfilesReturn & {
@@ -49,6 +57,8 @@ type ResumeContextValue = UseResumeFormReturn &
     sectionCompletion: SectionCompletion;
     previewOpen: boolean;
     setPreviewOpen: (open: boolean) => void;
+    /** True when the draft has moved on from the PDF currently on screen. */
+    hasUnpreviewedChanges: boolean;
     saving: boolean;
     /** True when the live draft differs from the last persisted snapshot. */
     isDirty: boolean;
@@ -242,19 +252,71 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
     () => (livePreviewPayload ? JSON.stringify(livePreviewPayload) : ""),
     [livePreviewPayload],
   );
+  // The draft has moved on from the PDF on screen. Drives the quiet badge so
+  // the gap between "what I typed" and "what I see" is always stated rather
+  // than discovered when the picture suddenly changes.
+  const hasUnpreviewedChanges =
+    Boolean(livePreviewKey) && livePreviewKey !== preview.previewedKey;
+
+  // One commit = one compile. Held in a ref so the window listener below can
+  // be registered once and still read the current draft.
+  const commitPreviewRef = useRef<() => void>(() => {});
+  // Synced in an effect, never during render: a commit only ever fires from a
+  // blur handler or another effect, both of which run after the commit that
+  // wrote this, so it is always current by the time anything reads it.
   useEffect(() => {
-    if (!livePreviewPayload || !livePreviewKey) return;
+    commitPreviewRef.current = () => {
+      if (!livePreviewPayload || !livePreviewKey) return;
+      if (!previewOpen && !isPreviewPaneVisible) return;
+      // A short delay coalesces a blur that is immediately followed by the
+      // section change it caused.
+      schedulePreview(PREVIEW_COMMIT_DELAY_MS, false, {
+        payload: livePreviewPayload,
+        payloadKey: livePreviewKey,
+      });
+    };
+  });
+
+  // Leaving a field is the commit. Capture-phase blur on window fires for
+  // every element that loses focus, so no per-input wiring is needed — the
+  // same seam useResumeAutosave uses, deliberately with its own predicate:
+  // autosave asks "is it unsaved", this asks "is it unpreviewed", and a draft
+  // can easily be one without the other.
+  //
+  // Blurring without editing costs nothing: schedulePreview skips a payload
+  // key it has already rendered.
+  useEffect(() => {
+    const onBlurCapture = () => commitPreviewRef.current();
+    window.addEventListener("blur", onBlurCapture, true);
+    return () => window.removeEventListener("blur", onBlurCapture, true);
+  }, []);
+
+  // Moving to another section is the other commit. Gated on unpreviewed work
+  // so merely scrolling through a finished resume never compiles anything.
+  const previewedSectionRef = useRef(activeSection);
+  useEffect(() => {
+    if (previewedSectionRef.current === activeSection) return;
+    previewedSectionRef.current = activeSection;
+    if (!hasUnpreviewedChanges) return;
+    commitPreviewRef.current();
+  }, [activeSection, hasUnpreviewedChanges]);
+
+  // First paint. The keystroke effect used to double as this; without it a
+  // freshly opened editor would sit empty until the user blurred something.
+  // Keyed on the profile id so switching versions re-renders too.
+  const hydratedPreviewProfileRef = useRef<string | null>(null);
+  useEffect(() => {
+    const profileId = profiles.selectedProfileId ?? null;
+    if (hydratedPreviewProfileRef.current === profileId) return;
+    if (!livePreviewPayload) return;
     if (!previewOpen && !isPreviewPaneVisible) return;
-    schedulePreview(400, false, {
-      payload: livePreviewPayload,
-      payloadKey: livePreviewKey,
-    });
+    hydratedPreviewProfileRef.current = profileId;
+    commitPreviewRef.current();
   }, [
+    profiles.selectedProfileId,
     livePreviewPayload,
-    livePreviewKey,
     previewOpen,
     isPreviewPaneVisible,
-    schedulePreview,
   ]);
 
   // The persistence primitive behind autosave. It throws on failure so the
@@ -295,7 +357,6 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
         snapshot: savedSnapshot,
       });
       markTaskComplete("resume_setup");
-      preview.schedulePreview(150);
     } finally {
       setSaving(false);
     }
@@ -334,6 +395,7 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
         sectionCompletion,
         previewOpen,
         setPreviewOpen,
+        hasUnpreviewedChanges,
         saving,
         isDirty,
         autosaveStatus: autosave.status,

@@ -33,8 +33,15 @@ interface PreviewPanelProps {
 }
 
 export function PreviewPanel({ className }: PreviewPanelProps) {
-  const { pdfUrl, previewStatus, previewError, schedulePreview, basics, t } =
-    useResumeContext();
+  const {
+    pdfUrl,
+    previewStatus,
+    previewError,
+    schedulePreview,
+    hasUnpreviewedChanges,
+    basics,
+    t,
+  } = useResumeContext();
 
   const downloadFilename = buildPdfFilename(
     basics.fullName,
@@ -55,6 +62,17 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
         <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
           {t("pdfPreview")}
         </span>
+        {/* Says the quiet part out loud: the draft has moved on from this
+            picture. Without it a commit-based refresh looks like a stale
+            preview rather than a deliberate one. */}
+        {hasUnpreviewedChanges && previewStatus !== "loading" ? (
+          <span
+            data-testid="preview-pending-badge"
+            className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+          >
+            {t("previewPending")}
+          </span>
+        ) : null}
         <div className="ml-auto flex items-center gap-1">
           {/* Refresh */}
           <Button

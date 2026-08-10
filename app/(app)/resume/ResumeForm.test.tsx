@@ -356,7 +356,7 @@ describe("Resume page", () => {
     expect(body.links).toBeNull();
   });
 
-  it("auto-refreshes preview when content changes while the preview is open", async () => {
+  it("refreshes the preview when a field is committed, not while typing", async () => {
     type PreviewPayload = { basics?: { title?: string } };
     const previewWaiters: Array<(payload: PreviewPayload) => void> = [];
     const waitForNextPreview = () =>
@@ -390,11 +390,50 @@ describe("Resume page", () => {
     expect((await initialPreview).basics?.title).toBe("Software Engineer");
 
     const refreshedPreview = waitForNextPreview();
-    fireEvent.change(screen.getByLabelText("Title"), {
-      target: { value: "Senior Software Engineer" },
-    });
+    const title = screen.getByLabelText("Title");
+    fireEvent.change(title, { target: { value: "Senior Software Engineer" } });
+    // Leaving the field is the commit. Typing alone must not compile — that is
+    // what made the preview feel like it was permanently refreshing.
+    fireEvent.blur(title);
     expect((await refreshedPreview).basics?.title).toBe("Senior Software Engineer");
   });
+
+  it("does not compile a preview from typing alone", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = toUrl(input);
+      if (url.startsWith("/api/resume-profile")) {
+        return new Response(JSON.stringify(populatedProfileJson()), { status: 200 });
+      }
+      if (url === "/api/resume-pdf") {
+        return new Response(new Uint8Array([37, 80, 68, 70]), {
+          status: 200,
+          headers: { "content-type": "application/pdf" },
+        });
+      }
+      return new Response("not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const previewCalls = () =>
+      fetchMock.mock.calls.filter(([firstArg]) => toUrl(firstArg) === "/api/resume-pdf").length;
+
+    renderResumePage();
+    expect(await screen.findByLabelText("Title")).toHaveValue("Software Engineer");
+    fireEvent.click(firstButton("Preview"));
+    expect(await screen.findByRole("heading", { name: "PDF preview" })).toBeInTheDocument();
+    await waitFor(() => expect(previewCalls()).toBe(1));
+
+    const title = screen.getByLabelText("Title");
+    fireEvent.change(title, { target: { value: "Staff Engineer" } });
+    fireEvent.change(title, { target: { value: "Staff Platform Engineer" } });
+    // Well past the old 400ms keystroke debounce.
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    expect(previewCalls()).toBe(1);
+
+    // One commit, one compile — regardless of how many keystrokes preceded it.
+    fireEvent.blur(title);
+    await waitFor(() => expect(previewCalls()).toBe(2));
+  }, 15_000);
 
   it("does not POST the preview while a required field is mid-edit (no 400 spam)", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -427,17 +466,16 @@ describe("Resume page", () => {
 
     // Half-typed email fails the shared schema — the client must hold the last
     // good preview and NOT POST (which would 400 on the server).
-    fireEvent.change(screen.getByLabelText("Email"), {
-      target: { value: "jane@" },
-    });
+    const email = screen.getByLabelText("Email");
+    fireEvent.change(email, { target: { value: "jane@" } });
+    fireEvent.blur(email);
 
     await new Promise((resolve) => setTimeout(resolve, 1200));
     expect(getPreviewCallCount()).toBe(1);
 
     // Completing the email back to a valid value resumes preview rendering.
-    fireEvent.change(screen.getByLabelText("Email"), {
-      target: { value: "jane@example.org" },
-    });
+    fireEvent.change(email, { target: { value: "jane@example.org" } });
+    fireEvent.blur(email);
     await waitFor(
       () => {
         expect(getPreviewCallCount()).toBe(2);

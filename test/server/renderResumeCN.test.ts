@@ -67,17 +67,16 @@ describe("renderResumeCNTex", () => {
     expect(output).toContain("男");
     // No unresolved tokens should leak into output.
     expect(output).not.toContain("{{");
-    // 个人总结 leads the page when present. This used to assert the opposite
-    // — the mapper passed summary while the template had no token for it, and
-    // the drop was pinned here as if intended.
-    expect(output).toContain("\\section{个人总结}");
     // \[ opens display math in LaTeX. A halved line-break command
     // (\\[4pt] -> \[4pt]) once shipped and made every CN compile die with
     // "Display math should end with $$" at the contact line. Pin its absence:
     // a lone backslash before [ must never appear in the rendered document.
     expect(output).not.toMatch(/(^|[^\\])\\\[/m);
-    expect(output).toContain(fullInput.summary);
-    expect(output.indexOf("个人总结")).toBeLessThan(output.indexOf("教育背景"));
+    // The CN document renders no 个人总结, even when the shared profile
+    // carries a summary: SECTION_IDS_CN gives this locale no Summary section
+    // to edit, so printing one would show text the user cannot reach.
+    expect(output).not.toContain("个人总结");
+    expect(output).not.toContain(fullInput.summary);
   });
 
   it("contains expected section headers in the right order", () => {

@@ -20,6 +20,11 @@ export function useResumePreview({
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [previewStatus, setPreviewStatus] = useState<PreviewStatus>("idle");
   const [previewError, setPreviewError] = useState<string | null>(null);
+  // The payload key the on-screen PDF was actually built from. Advances only
+  // on a successful compile, so a failed one correctly leaves the caller's
+  // "unpreviewed changes" badge lit. `previewLatestKeyRef` cannot serve this:
+  // a ref change does not re-render the badge.
+  const [previewedKey, setPreviewedKey] = useState<string | null>(null);
 
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewAbortRef = useRef<AbortController | null>(null);
@@ -98,15 +103,14 @@ export function useResumePreview({
       }
       previewAbortRef.current?.abort();
 
-      // Manual force refresh: always show "loading" so the spinner gives
-      // immediate feedback even when a stale preview is on screen.
-      // Background autosave refresh (force === undefined): keep showing the
-      // existing preview as "ready" to avoid flicker on every keystroke.
-      if (!pdfUrlRef.current || options?.force) {
-        setPreviewStatus("loading");
-      } else {
-        setPreviewStatus("ready");
-      }
+      // Always announce the compile. The old code reported "ready" for
+      // background refreshes because keystroke-driven compiles would strobe
+      // the spinner several times a second. Refreshes are commit-driven now —
+      // one per field the user finishes — so staying silent while the picture
+      // is about to change is the dishonest option. Nothing flickers: the
+      // skeleton is gated on `!pdfUrl`, so a stale preview stays painted and
+      // only the Refresh control shows motion.
+      setPreviewStatus("loading");
       setPreviewError(null);
       previewScheduledKeyRef.current = payloadKey;
 
@@ -164,6 +168,7 @@ export function useResumePreview({
           });
           setPreviewStatus("ready");
           previewLatestKeyRef.current = payloadKey;
+          setPreviewedKey(payloadKey);
         } catch (err) {
           if ((err as Error).name === "AbortError") return;
           if (!pdfUrlRef.current) {
@@ -192,11 +197,14 @@ export function useResumePreview({
     });
     setPreviewStatus("idle");
     setPreviewError(null);
+    previewLatestKeyRef.current = null;
+    setPreviewedKey(null);
   }, []);
 
   return {
     pdfUrl,
     setPdfUrl,
+    previewedKey,
     previewStatus,
     setPreviewStatus,
     previewError,

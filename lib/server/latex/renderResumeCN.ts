@@ -190,14 +190,12 @@ function renderProjects(entries: ProjectEntry[]) {
 export function renderResumeCNTex(input: RenderResumeCNInput) {
   const template = readTemplate();
 
-  // 个人总结 leads the page when present — the mainstream Chinese resume
-  // convention — and vanishes without a trace when the profile has none.
-  // (The mapper passed summary for months while the template had no token
-  // for it, so the field silently never reached the PDF.)
-  const trimmedSummary = input.summary.trim();
-  const summarySection = trimmedSummary
-    ? `\\section{个人总结}\n\n${trimmedSummary} \\par`
-    : "";
+  // `summary` is deliberately NOT rendered. The CN editor ships no Summary
+  // section at all (SECTION_IDS_CN in components/resume/constants.ts), so a
+  // personal-summary block here would print text the user cannot see or edit in this
+  // locale — it would only ever carry a value left over from the EN profile.
+  // The field stays on the input type because both locales share one profile
+  // schema; only the CN document drops it.
 
   const projectsSection =
     input.projects.length > 0
@@ -215,7 +213,6 @@ export function renderResumeCNTex(input: RenderResumeCNInput) {
     CANDIDATE_EMAIL: input.candidate.email,
     CANDIDATE_PHONE: input.candidate.phone,
     PHOTO_BLOCK: input.photoBlock,
-    SUMMARY_SECTION: summarySection,
     PERSONAL_INFO_LINE: input.personalInfoLine,
     CONTACT_EXTRA_LINE: input.contactExtraLine,
     LINKS_LINE: input.linksLine,

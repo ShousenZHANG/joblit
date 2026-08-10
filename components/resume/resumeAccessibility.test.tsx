@@ -39,6 +39,7 @@ const translations: Record<string, string> = {
   saveSelectedResume: "保存所选简历",
   preview: "预览",
   pdfPreview: "PDF 预览",
+  previewPending: "有未刷新的更改",
   pdfPreviewDesc: "预览会自动刷新",
   sectionsAria: "简历栏目",
   refreshPreview: "刷新预览",

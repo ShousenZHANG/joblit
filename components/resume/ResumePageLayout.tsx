@@ -179,8 +179,17 @@ function SectionContent({ sectionId }: { sectionId: SectionId }) {
 }
 
 export function MobilePreviewDialog() {
-  const { previewOpen, setPreviewOpen, pdfUrl, previewStatus, previewError, schedulePreview, basics, t } =
-    useResumeContext();
+  const {
+    previewOpen,
+    setPreviewOpen,
+    pdfUrl,
+    previewStatus,
+    previewError,
+    schedulePreview,
+    hasUnpreviewedChanges,
+    basics,
+    t,
+  } = useResumeContext();
 
   const downloadFilename = buildPdfFilename(
     basics.fullName,
@@ -205,6 +214,14 @@ export function MobilePreviewDialog() {
             data-testid="resume-mobile-preview-header"
             className="flex min-h-[calc(2.75rem+env(safe-area-inset-top))] shrink-0 items-center justify-end gap-2 border-b border-border bg-background/90 pt-[env(safe-area-inset-top)] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] sm:min-h-11 sm:px-3 sm:pt-0"
           >
+            {hasUnpreviewedChanges && previewStatus !== "loading" ? (
+              <span
+                data-testid="preview-pending-badge-mobile"
+                className="mr-auto rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+              >
+                {t("previewPending")}
+              </span>
+            ) : null}
             {pdfUrl && (
               <a
                 href={pdfUrl}
