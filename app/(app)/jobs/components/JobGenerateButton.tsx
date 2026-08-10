@@ -23,12 +23,22 @@ export function JobGenerateButton({
   pending,
   onGenerate,
   className,
+  guideHighlighted = false,
+  guideHighlightClass,
 }: {
   job: Pick<JobItem, "id" | "tailoringState" | "applicationId">;
   /** This specific Job's request is in flight. */
   pending: boolean;
   onGenerate: (jobId: string) => void;
   className?: string;
+  /**
+   * Onboarding highlight for the "generate your first PDF" task. The anchor
+   * followed the action here: it used to sit on the toolbar sweep, which no
+   * longer exists, and an onboarding step pointing at nothing is worse than
+   * no onboarding step.
+   */
+  guideHighlighted?: boolean;
+  guideHighlightClass?: string;
 }) {
   const t = useTranslations("jobs");
   const state = job.tailoringState ?? "idle";
@@ -63,7 +73,13 @@ export function JobGenerateButton({
       data-testid="job-generate-button"
       title={state === "stalled" ? t("generateStalledHint") : undefined}
       onClick={() => onGenerate(job.id)}
-      className={className}
+      data-guide-anchor="generate_first_pdf"
+      data-guide-highlight={guideHighlighted ? "true" : "false"}
+      className={
+        guideHighlighted && guideHighlightClass
+          ? `${className ?? ""} ${guideHighlightClass}`
+          : className
+      }
     >
       {busy ? (
         <Loader2 className="mr-1 h-4 w-4 motion-safe:animate-spin" aria-hidden />

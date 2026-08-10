@@ -64,7 +64,7 @@ agent. Codex runs Joblit's batch loop through a documented HTTP protocol
 ([AGENTS.md](./AGENTS.md)):
 
 ```
-POST /api/application-batches              → create a batch from NEW-status jobs
+POST /api/application-batches/enqueue      → add chosen jobs to the tailoring queue
 POST /api/application-batches/:id/run-once → report failure/skip + claim next
 POST /api/applications/prompt              → issue the task-bound Tailoring Run
 POST /api/applications/manual-generate     → accept one target with its run handle
@@ -190,7 +190,7 @@ deterministic workflow and never sees your model key.
 
 ### Batch Automation (Codex Workflow)
 
-- Create `NEW`-scope batches from filtered jobs
+- Queue any `NEW` job for tailoring from its own AI Generate button
 - Atomic claim-and-complete loop via `POST /api/application-batches/:id/run-once`
 - Progress tracking via batch summary API
 - Full external orchestration protocol documented in [AGENTS.md](./AGENTS.md)
@@ -428,7 +428,7 @@ A complete template lives in [`.env.example`](./.env.example).
 The full external orchestration protocol is documented in
 [AGENTS.md](./AGENTS.md), which is the canonical contract. In short:
 
-1. Fetch jobs and keep target roles as `NEW`, then `POST /api/application-batches` with scope `NEW`.
+1. Fetch jobs and keep target roles as `NEW`, then `POST /api/application-batches/enqueue` with the `jobIds` you want. It appends to the live batch rather than refusing while one drains.
 2. Claim through `run-once`, advertise supported protocols, and retain the task's exact attempt, issue, target, and publication progress.
 3. For protocol v2, request prompts only for `remainingTargets`, persist each through `manual-generate?finalize=false`, then finalize only `remainingPublicationTargets` with the returned Application identity and the exact run fence.
 4. A task succeeds only after both current PDFs have publication receipts. Report only `FAILED` or `SKIPPED`; success needs no callback.

@@ -50,7 +50,7 @@ process. It holds no model credential of its own.
 
 ## Canonical APIs
 
-- Create batch: `POST /api/application-batches`
+- Enqueue Jobs for tailoring: `POST /api/application-batches/enqueue` (body `{ jobIds }`; appends to the live batch, or opens one)
 - Claim run context (interactive session): `POST /api/application-batches/:id/codex-run`
 - Orchestrated run step (report failure/skip + claim): `POST /api/application-batches/:id/run-once`
 - Report task failure/skip (interactive session): `PATCH /api/application-batches/:id/tasks/:taskId`

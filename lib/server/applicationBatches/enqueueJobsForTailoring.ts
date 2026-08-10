@@ -12,6 +12,13 @@ export type EnqueueJobsOutcome =
   | {
       kind: "enqueued";
       batchId: string;
+      /**
+       * Task count of the batch after this call. The client seeds its progress
+       * banner from this: without a real total it has nothing to render a
+       * fraction against, and the user presses Generate and sees nothing until
+       * the next poll lands.
+       */
+      totalCount: number;
       /** Jobs that became new PENDING tasks in this call. */
       queuedJobIds: string[];
       /** Already queued or running in the live batch; asking again is a no-op. */
@@ -178,6 +185,7 @@ export async function enqueueJobsForTailoring(input: {
     return {
       kind: "enqueued" as const,
       batchId,
+      totalCount,
       queuedJobIds,
       alreadyQueuedJobIds,
       ineligibleJobIds,

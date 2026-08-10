@@ -64,10 +64,6 @@ import { JobSearchBar } from "./components/JobSearchBar";
 import { ExternalGenerateDialog } from "./components/ExternalGenerateDialog";
 import { TailorReviewDialog } from "./components/TailorReviewDialog";
 import { JobDetailPanel } from "./components/JobDetailPanel";
-import {
-  BatchPreflightDialog,
-  type BatchPreflightView,
-} from "./components/BatchPreflightDialog";
 import { BatchDetailsDialog } from "./components/BatchDetailsDialog";
 import { cn } from "@/lib/utils";
 import {
@@ -87,16 +83,6 @@ const desktopFilterSelectTriggerClass =
 
 const mobileFilterSelectTriggerClass =
   "h-11 w-full min-w-0 justify-between overflow-hidden rounded-lg px-2.5 text-xs [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate [&_[data-slot=select-value]]:text-left sm:h-9";
-
-type BatchPreflight = BatchPreflightView & {
-  scope: "NEW";
-  safeTotal?: number;
-  activeBatch?: {
-    id: string;
-    status: Extract<BatchStatus, "QUEUED" | "RUNNING">;
-    totalCount?: number;
-  } | null;
-};
 
 /**
  * One list row, memoized as a unit INCLUDING its motion wrapper.
@@ -302,12 +288,6 @@ export function JobsClient({
     window.dispatchEvent(new Event("joblit:runner-setup"));
   }, []);
   const batchProgress = useBatchProgress({ onJobsSettled: refetch });
-  const [batchPreflight, setBatchPreflight] = useState<BatchPreflight | null>(
-    null,
-  );
-  const [batchPreflightLoading, setBatchPreflightLoading] = useState(true);
-  const [batchPreflightError, setBatchPreflightError] = useState(false);
-  const [batchPreflightOpen, setBatchPreflightOpen] = useState(false);
   const [batchDetailsOpen, setBatchDetailsOpen] = useState(false);
   const [batchActionPending, setBatchActionPending] = useState<
     "cancel" | "retry" | null
@@ -341,53 +321,9 @@ export function JobsClient({
     },
     [handleBatchReview],
   );
-  const refreshBatchPreflight = useCallback(async (signal?: AbortSignal) => {
-    setBatchPreflightLoading(true);
-    setBatchPreflightError(false);
-    try {
-      const response = (await fetchJson("/api/application-batches/preflight", {
-        signal,
-      })) as BatchPreflight;
-      const ready = response.ready ?? response.eligibleCount;
-      const incomplete = response.incomplete ?? 0;
-      const alreadyGenerated = response.alreadyGenerated ?? 0;
-      const eligibleTotal =
-        response.eligibleTotal ?? response.safeTotal ?? ready;
-      setBatchPreflight({
-        ...response,
-        profileReady: response.profileReady !== false,
-        ready,
-        incomplete,
-        alreadyGenerated,
-        eligibleTotal,
-        totalNew: response.totalNew ?? ready + incomplete + alreadyGenerated,
-        capped: response.capped ?? eligibleTotal > response.eligibleCount,
-      });
-    } catch {
-      if (!signal?.aborted) setBatchPreflightError(true);
-    } finally {
-      if (!signal?.aborted) setBatchPreflightLoading(false);
-    }
-  }, []);
-  useEffect(() => {
-    const controller = new AbortController();
-    queueMicrotask(() => {
-      if (!controller.signal.aborted) {
-        void refreshBatchPreflight(controller.signal);
-      }
-    });
-    return () => controller.abort();
-  }, [refreshBatchPreflight]);
-  const watchBatchProgress = batchProgress.watchBatch;
-  useEffect(() => {
-    const active = batchPreflight?.activeBatch;
-    if (!active || active.id === batchProgress.state.batchId) return;
-    watchBatchProgress({
-      id: active.id,
-      status: active.status,
-      totalCount: active.totalCount ?? batchPreflight.eligibleCount,
-    });
-  }, [batchPreflight, batchProgress.state.batchId, watchBatchProgress]);
+  // An active batch started in another tab is adopted by useBatchProgress's own
+  // `/api/application-batches/latest` discovery on mount. Preflight used to do
+  // the same thing a second way, and went with the toolbar sweep it served.
   const { enqueueJob, pendingJobId: generatePendingJobId } =
     useEnqueueJobTailoring({
       fallbackErrorMessage: t("errorLoadJobs"),
@@ -397,7 +333,10 @@ export function JobsClient({
         batchProgress.watchBatch({
           id: result.batchId,
           status: "QUEUED",
-          totalCount: 0,
+          // The server's own post-insert count. Seeding 0 here rendered no
+          // banner at all — it needs a total to show a fraction against — so
+          // the user pressed Generate and got silence until the next poll.
+          totalCount: result.totalCount,
         });
         void refetch();
         toast({
@@ -427,24 +366,6 @@ export function JobsClient({
         t("batchDoneSummary", { succeeded, failed }),
     },
   });
-  const refreshedTerminalBatchRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (
-      !batchProgress.state.batchId ||
-      batchProgress.state.active ||
-      !batchProgress.state.status ||
-      refreshedTerminalBatchRef.current === batchProgress.state.batchId
-    ) {
-      return;
-    }
-    refreshedTerminalBatchRef.current = batchProgress.state.batchId;
-    void refreshBatchPreflight();
-  }, [
-    batchProgress.state.active,
-    batchProgress.state.batchId,
-    batchProgress.state.status,
-    refreshBatchPreflight,
-  ]);
   // Keep renderer identity stable after virtualization first becomes useful.
   // In particular, deleting row 81 must not swap the entire virtual subtree
   // for the ordinary renderer when the visible count becomes 80.
@@ -582,55 +503,6 @@ export function JobsClient({
     toast,
   ]);
 
-  const [batchGeneratePending, setBatchGeneratePending] = useState(false);
-  /**
-   * Queue every server-approved NEW job for tailoring.
-   *
-   * The server owns the safety policy for `scope: "NEW"`: only jobs with no
-   * existing Application are queued, while partial or complete Applications
-   * are preserved. Search and location filters never narrow this global scope.
-   */
-  async function generateAllNew(): Promise<boolean> {
-    if (batchGeneratePending) return false;
-    setBatchGeneratePending(true);
-    try {
-      const response = (await fetchJson("/api/application-batches", {
-        method: "POST",
-        body: JSON.stringify({ scope: "NEW" }),
-      })) as {
-        batch: { id: string; status: "QUEUED"; totalCount: number };
-      };
-      // The create response is the authority. Seed it now so the UI says
-      // QUEUED in the same interaction, even if `/latest` or Runner presence
-      // is stale or unavailable.
-      batchProgress.watchBatch(response.batch);
-      setBatchPreflightOpen(false);
-      return true;
-    } catch (err) {
-      // The one expected refusal: the protocol allows a single active batch.
-      // Selection survives so the retry is one click, not a re-pick.
-      const alreadyRunning =
-        err instanceof ApiError && err.code === "ACTIVE_BATCH_EXISTS";
-      if (alreadyRunning) {
-        // Another tab may have won the queue race after this page's `/latest`
-        // discovery had already gone idle. Re-read the authoritative preflight
-        // now so its active batch is adopted and watched without a page reload.
-        setBatchPreflightOpen(false);
-        await refreshBatchPreflight();
-      }
-      toast({
-        title: alreadyRunning
-          ? t("batchAlreadyRunning")
-          : getErrorMessage(err, t("errorLoadJobs")),
-        variant: "destructive",
-        duration: 5000,
-      });
-      return false;
-    } finally {
-      setBatchGeneratePending(false);
-    }
-  }
-
   async function cancelActiveBatch() {
     const batchId = batchProgress.state.batchId;
     if (!batchId || batchActionPending) return;
@@ -653,7 +525,6 @@ export function JobsClient({
         status: result.batchStatus,
         progress: result.progress,
       });
-      void refreshBatchPreflight();
     } catch (error) {
       toast({
         title: getErrorMessage(error, t("batchDetails.cancelError")),
@@ -680,7 +551,6 @@ export function JobsClient({
         batch: { id: string; status: "QUEUED"; totalCount: number };
       };
       batchProgress.watchBatch(result.batch);
-      void refreshBatchPreflight();
     } catch (error) {
       toast({
         title: getErrorMessage(error, t("batchDetails.retryError")),
@@ -773,23 +643,6 @@ export function JobsClient({
     ? tailorReview.tailorSourceByJob[selectedJob.id]
     : undefined;
   const highlightGenerate = isTaskHighlighted("generate_first_pdf");
-  const preflightActiveBatch =
-    batchPreflight?.activeBatch &&
-    batchPreflight.activeBatch.id !== batchProgress.state.batchId
-      ? batchPreflight.activeBatch
-      : null;
-  const batchEntryActive =
-    batchProgress.state.active || preflightActiveBatch !== null;
-  const batchEntryStatus = batchProgress.state.active
-    ? batchProgress.state.status
-    : preflightActiveBatch?.status;
-  const batchEntryDone = batchProgress.state.active
-    ? batchProgress.state.done
-    : 0;
-  const batchEntryTotal = batchProgress.state.active
-    ? batchProgress.state.total
-    : (preflightActiveBatch?.totalCount ?? batchPreflight?.eligibleCount ?? 0);
-  const batchPreflightRetry = batchPreflightError && !batchEntryActive;
 
   const detailQuery = useQuery({
     queryKey: getJobDetailsQueryKey(effectiveSelectedId),
@@ -878,20 +731,6 @@ export function JobsClient({
         }}
         onFinalized={tailorReview.handleFinalized}
       />
-
-      {batchPreflight ? (
-        <BatchPreflightDialog
-          open={batchPreflightOpen}
-          onOpenChange={setBatchPreflightOpen}
-          preflight={batchPreflight}
-          runnerStatus={
-            runnerPresence.status as
-              "online" | "offline" | "unknown" | "unavailable"
-          }
-          submitting={batchGeneratePending}
-          onConfirm={() => void generateAllNew()}
-        />
-      ) : null}
 
       {batchProgress.state.batchId ? (
         <BatchDetailsDialog
@@ -1185,124 +1024,13 @@ export function JobsClient({
                   }))}
                 />
 
-                {/* Batch generation belongs to the NEW inbox. Its count is the
-                server's global queue scope, never this filtered page count. */}
-                {statusFilter === "NEW" ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (batchEntryActive) {
-                        if (
-                          !batchProgress.state.active &&
-                          preflightActiveBatch
-                        ) {
-                          watchBatchProgress({
-                            id: preflightActiveBatch.id,
-                            status: preflightActiveBatch.status,
-                            totalCount:
-                              preflightActiveBatch.totalCount ??
-                              batchPreflight?.eligibleCount ??
-                              0,
-                          });
-                        }
-                        setBatchDetailsOpen(true);
-                      } else if (batchPreflightRetry) {
-                        void refreshBatchPreflight();
-                      } else {
-                        setBatchPreflightOpen(true);
-                      }
-                    }}
-                    disabled={
-                      !batchEntryActive &&
-                      (batchPreflightLoading ||
-                        batchGeneratePending ||
-                        (!batchPreflight && !batchPreflightRetry) ||
-                        (!!batchPreflight &&
-                          batchPreflight.eligibleCount === 0 &&
-                          batchPreflight.profileReady &&
-                          !batchPreflightRetry))
-                    }
-                    data-testid="jobs-generate-all"
-                    aria-label={
-                      batchEntryActive
-                        ? t("batchProgress.openDetails")
-                        : batchPreflightRetry
-                          ? t("batchPreflight.retryCheck")
-                          : batchPreflight
-                            ? t("generateAllAria", {
-                                count: batchPreflight.eligibleCount,
-                              })
-                            : t("generateAll")
-                    }
-                    title={
-                      batchEntryActive
-                        ? t("batchProgress.openDetails")
-                        : batchPreflightRetry
-                          ? t("batchPreflight.retryCheck")
-                          : batchPreflight
-                            ? t("generateAllAria", {
-                                count: batchPreflight.eligibleCount,
-                              })
-                            : t("generateAll")
-                    }
-                    data-guide-anchor="generate_first_pdf"
-                    data-guide-highlight={highlightGenerate ? "true" : "false"}
-                    className={cn(
-                      "inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-brand-emerald-700 px-3 text-[13px] font-semibold text-white shadow-sm transition-colors duration-150",
-                      "hover:bg-brand-emerald-800 active:bg-brand-emerald-800",
-                      "disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2",
-                      highlightGenerate && guideHighlightClass,
-                    )}
-                  >
-                    {!batchEntryActive &&
-                    (batchPreflightLoading || batchGeneratePending) ? (
-                      <Loader2
-                        className="h-3.5 w-3.5 motion-safe:animate-spin"
-                        aria-hidden
-                      />
-                    ) : batchPreflightRetry ? (
-                      <RefreshCw className="h-3.5 w-3.5" aria-hidden />
-                    ) : (
-                      <Sparkles className="h-3.5 w-3.5" aria-hidden />
-                    )}
-                    <span>
-                      {batchEntryActive
-                        ? t(
-                            batchEntryStatus === "QUEUED"
-                              ? "batchProgress.queuedButton"
-                              : "batchProgress.runningButton",
-                            {
-                              done: batchEntryDone,
-                              total: batchEntryTotal,
-                            },
-                          )
-                        : batchGeneratePending
-                          ? t("batchPreflight.starting")
-                          : batchPreflight?.profileReady === false
-                            ? t("batchPreflight.openResume")
-                            : batchPreflightRetry
-                              ? t("batchPreflight.retryCheck")
-                              : t("generateAll")}
-                    </span>
-                    {batchPreflight &&
-                    !batchEntryActive &&
-                    batchPreflight.profileReady ? (
-                      <span className="min-w-5 rounded-full bg-white/20 px-1.5 py-0.5 text-[11px] font-bold tabular-nums">
-                        {batchPreflight.eligibleCount}
-                      </span>
-                    ) : null}
-                  </button>
-                ) : null}
+                {/* The batch sweep button lived here. It queued every
+                eligible NEW job in one press and refused outright while any
+                run was draining — so wanting a single job meant committing
+                to a hundred, or waiting on a hundred. Generation is now a
+                per-job action in the JD header, and this row is the status
+                filter again, nothing else. */}
               </div>
-              {statusFilter === "NEW" && batchPreflightRetry ? (
-                <p
-                  role="alert"
-                  className="border-b bg-amber-50 px-4 py-2 text-xs leading-5 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"
-                >
-                  {t("batchPreflight.loadError")}
-                </p>
-              ) : null}
               {batchProgress.visible ? (
                 <BatchProgressBanner
                   state={batchProgress.state}
@@ -1550,6 +1278,8 @@ export function JobsClient({
               onManualGenerate={handleManualGenerate}
               onGenerateJob={enqueueJob}
               generatePendingJobId={generatePendingJobId}
+              generateGuideHighlighted={highlightGenerate}
+              generateGuideHighlightClass={guideHighlightClass}
               onReviewApplication={handleJobReview}
               reviewLoading={tailorReview.loading}
               reviewError={

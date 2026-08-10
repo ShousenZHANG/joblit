@@ -17,13 +17,16 @@ const EnqueueSchema = z.object({
 });
 
 /**
- * Add specific Jobs to the tailoring queue.
+ * Add specific Jobs to the tailoring queue. This is the only entry point for
+ * fresh tailoring work.
  *
- * Deliberately not `POST /api/application-batches`, which owns "queue every
- * eligible Job and refuse if one is already running". That route answers 409
- * ACTIVE_BATCH_EXISTS by design; this one appends instead, because a user
- * asking for one Job should never have to know whether a batch happens to be
- * draining right now.
+ * It appends to whatever batch is currently draining, and opens one when none
+ * is. That is the whole point: a user asking for one Job should never have to
+ * know, or wait on, whatever else happens to be running. The batch is how the
+ * Runner drains work, not something the user schedules around.
+ *
+ * Retrying a failed task is the one other way tasks are created, and it has
+ * its own route (`/api/application-batches/:id/retry-failed`).
  */
 export async function POST(req: Request) {
   return withSessionRoute(async ({ userId, requestId }) => {
@@ -68,6 +71,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         batchId: outcome.batchId,
+        totalCount: outcome.totalCount,
         queuedCount: outcome.queuedJobIds.length,
         queuedJobIds: outcome.queuedJobIds,
         alreadyQueuedJobIds: outcome.alreadyQueuedJobIds,

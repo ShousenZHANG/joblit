@@ -130,8 +130,12 @@ describe("queueApplicationBatch", () => {
   });
 
   it("rolls back instead of returning a header with fewer tasks", async () => {
-    store.applicationBatch.findFirst.mockResolvedValueOnce(null);
-    store.job.findMany.mockResolvedValueOnce([{ id: "job-1" }]);
+    store.applicationBatch.findFirst
+      .mockResolvedValueOnce({ id: "source-batch" })
+      .mockResolvedValueOnce(null);
+    store.applicationBatchTask.findMany.mockResolvedValueOnce([
+      { jobId: "job-1" },
+    ]);
     store.applicationBatch.create.mockResolvedValueOnce({
       id: "batch-1",
       totalCount: 1,
@@ -142,19 +146,24 @@ describe("queueApplicationBatch", () => {
     await expect(
       queueApplicationBatch({
         userId: "user-1",
-        seed: { kind: "new" },
+        seed: { kind: "retry_failed", sourceBatchId: "source-batch" },
       }),
     ).rejects.toThrow("task count did not match its header");
   });
 
   it("retries once when a mixed-deploy winner disappears before conflict lookup", async () => {
     store.applicationBatch.findFirst
+      // attempt 1: source lookup, then the active-batch probe
+      .mockResolvedValueOnce({ id: "source-batch" })
       .mockResolvedValueOnce(null)
+      // post-rollback probe: the winner is already gone
       .mockResolvedValueOnce(null)
+      // attempt 2: source lookup, then the active-batch probe
+      .mockResolvedValueOnce({ id: "source-batch" })
       .mockResolvedValueOnce(null);
-    store.job.findMany
-      .mockResolvedValueOnce([{ id: "job-1" }])
-      .mockResolvedValueOnce([{ id: "job-1" }]);
+    store.applicationBatchTask.findMany
+      .mockResolvedValueOnce([{ jobId: "job-1" }])
+      .mockResolvedValueOnce([{ jobId: "job-1" }]);
     store.applicationBatch.create
       .mockRejectedValueOnce({ code: "P2002" })
       .mockResolvedValueOnce({
@@ -167,7 +176,7 @@ describe("queueApplicationBatch", () => {
     await expect(
       queueApplicationBatch({
         userId: "user-1",
-        seed: { kind: "new" },
+        seed: { kind: "retry_failed", sourceBatchId: "source-batch" },
       }),
     ).resolves.toMatchObject({
       kind: "queued",

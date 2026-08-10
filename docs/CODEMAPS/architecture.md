@@ -156,11 +156,13 @@ accepted target through `manual-generate`, then independently finalize only
 PDFs; a publication-only claim never calls Codex. Bound FINAL/v1 tasks remain
 v1 during rolling deployment.
 
-Fresh and failed-task retry batches enter through one
-`queueApplicationBatch` transaction. It takes the per-user Job mutation lock
-before checking active work, selecting Jobs, and creating the exact header/task
-set; a partial unique PostgreSQL index independently enforces one `QUEUED` or
-`RUNNING` batch per user. Permanent Job deletion first row-locks target Jobs in
+Fresh work enters through `enqueueJobsForTailoring`, which appends the
+requested Jobs to the live batch or opens one, taking the per-user Job mutation
+lock and then the batch lock. Failed-task retry enters through
+`queueApplicationBatch`, which takes the Job mutation lock before checking
+active work, selecting Jobs, and creating the exact header/task set. A partial
+unique PostgreSQL index independently enforces one `QUEUED` or `RUNNING` batch
+per user; enqueue extends that batch rather than competing with it. Permanent Job deletion first row-locks target Jobs in
 stable order, then takes affected ABAT locks, lets task rows cascade, and
 reconciles each surviving batch in the same transaction. The row fence closes
 the expand-window race with a legacy in-flight task FK insert. A now-empty

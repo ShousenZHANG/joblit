@@ -5,6 +5,8 @@ import { ApiError, fetchJson } from "@/lib/api/fetchJson";
 
 export type EnqueueResponse = {
   batchId: string;
+  /** Task count of the batch after this call, for seeding the progress UI. */
+  totalCount: number;
   queuedCount: number;
   queuedJobIds: string[];
   alreadyQueuedJobIds: string[];

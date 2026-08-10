@@ -64,7 +64,7 @@ Several state machines share one closure. By responsibility:
 | Selection and URL | `selectedId`, explicit-clear state, the sole workspace URL writer, and scroll-anchor capture/restore around mutations. |
 | List data | `useJobPagination`, `useJobMutations`, suppressed-delete rows, keyboard navigation, and the >80-row virtualization latch. |
 | Generation | `useExternalGenerate` owns interactive manual import; `useTailorReviewController` opens manual, batch, or saved Application content in one full-screen Review & Edit dialog. Local unattended generation belongs to the Agent Runner. |
-| Batch | Selection, create-batch mutation, active-batch conflict handling, and batch delete. |
+| Batch | Per-job enqueue, live progress banner, per-row tailoring state, cancel/retry from the details dialog. |
 | Batch progress | `useBatchProgress` polls the active batch's server-side counts, refreshes the list as jobs settle, and stops the moment a batch reaches a terminal state. |
 | Surfaces | `app/(app)/jobs/components/` — `BatchProgressBanner`, `BatchDetailsDialog`, `GenerateProgress`, `JobRequirementsPanel`, `JobSearchBar`, `JobDescriptionMarkdown`, `JsonInputPanel`, `StepImport`, `StepIndicator`, `VirtualJobList`, plus `ExternalGenerateDialog`, `TailorReviewDialog` and the mobile detail overlay. |
 

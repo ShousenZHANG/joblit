@@ -4,22 +4,22 @@ import { prisma } from "@/lib/server/prisma";
 import {
   boundedApplicationBatchLimit,
   hasAuMasterResumeProfile,
-  selectSafeNewBatchCandidates,
 } from "./batchEligibility";
 
 const ACTIVE_BATCH_STATUSES = ["QUEUED", "RUNNING"] as const;
 const MAX_CREATE_ATTEMPTS = 2;
 
-export type ApplicationBatchSeed =
-  | {
-      kind: "new";
-      limit?: number;
-    }
-  | {
-      kind: "retry_failed";
-      sourceBatchId: string;
-      limit?: number;
-    };
+/**
+ * Retry is the only seed left. The "queue every eligible NEW Job" seed went
+ * with the toolbar sweep that was its only caller: work now enters the queue
+ * one Job at a time through `enqueueJobsForTailoring`, which appends to a live
+ * batch instead of refusing while one drains.
+ */
+export type ApplicationBatchSeed = {
+  kind: "retry_failed";
+  sourceBatchId: string;
+  limit?: number;
+};
 
 type QueuedBatch = {
   id: string;
@@ -44,18 +44,10 @@ export type QueueApplicationBatchOutcome =
     }
   | {
       kind: "empty";
-      reason: "NO_ELIGIBLE_JOBS" | "NO_FAILED_TASKS";
+      reason: "NO_FAILED_TASKS";
     }
   | { kind: "profile_missing" }
   | { kind: "source_not_found" };
-
-async function findNewJobIds(
-  tx: Prisma.TransactionClient,
-  input: Extract<ApplicationBatchSeed, { kind: "new" }> & { userId: string },
-): Promise<string[]> {
-  const candidates = await selectSafeNewBatchCandidates(tx, input);
-  return candidates.map((candidate) => candidate.id);
-}
 
 async function findFailedJobIds(
   tx: Prisma.TransactionClient,
@@ -123,12 +115,12 @@ function activeExistsOutcome(activeBatch: {
 }
 
 /**
- * Queue either a fresh or retry Application Batch behind one transaction.
+ * Queue a retry Application Batch behind one transaction.
  *
  * The per-user Job mutation lock is deliberately the transaction's first
- * statement. It serializes both queue modes with permanent Job deletion, so
- * candidate selection and task insertion cannot straddle a deleted Job. It
- * also serializes every in-repo batch creator for the single-active invariant.
+ * statement. It serializes this with permanent Job deletion, so candidate
+ * selection and task insertion cannot straddle a deleted Job. It also
+ * serializes every in-repo batch creator for the single-active invariant.
  */
 export async function queueApplicationBatch(input: {
   userId: string;
@@ -145,16 +137,14 @@ export async function queueApplicationBatch(input: {
       return await prisma.$transaction(async (tx) => {
         await acquireJobMutationLock(tx, input.userId);
 
-        if (input.seed.kind === "retry_failed") {
-          const source = await tx.applicationBatch.findFirst({
-            where: {
-              id: input.seed.sourceBatchId,
-              userId: input.userId,
-            },
-            select: { id: true },
-          });
-          if (!source) return { kind: "source_not_found" as const };
-        }
+        const source = await tx.applicationBatch.findFirst({
+          where: {
+            id: input.seed.sourceBatchId,
+            userId: input.userId,
+          },
+          select: { id: true },
+        });
+        if (!source) return { kind: "source_not_found" as const };
 
         const activeBatch = await tx.applicationBatch.findFirst({
           where: {
@@ -170,26 +160,14 @@ export async function queueApplicationBatch(input: {
           return { kind: "profile_missing" as const };
         }
 
-        const jobIds =
-          input.seed.kind === "new"
-            ? await findNewJobIds(tx, {
-                ...input.seed,
-                userId: input.userId,
-              })
-            : await findFailedJobIds(tx, {
-                userId: input.userId,
-                sourceBatchId: input.seed.sourceBatchId,
-                limit: input.seed.limit,
-              });
+        const jobIds = await findFailedJobIds(tx, {
+          userId: input.userId,
+          sourceBatchId: input.seed.sourceBatchId,
+          limit: input.seed.limit,
+        });
 
         if (jobIds.length === 0) {
-          return {
-            kind: "empty" as const,
-            reason:
-              input.seed.kind === "new"
-                ? ("NO_ELIGIBLE_JOBS" as const)
-                : ("NO_FAILED_TASKS" as const),
-          };
+          return { kind: "empty" as const, reason: "NO_FAILED_TASKS" as const };
         }
 
         let created: { id: string; totalCount: number; createdAt: Date };
@@ -241,9 +219,7 @@ export async function queueApplicationBatch(input: {
             totalCount: created.totalCount,
             createdAt: created.createdAt,
           },
-          ...(input.seed.kind === "retry_failed"
-            ? { sourceBatchId: input.seed.sourceBatchId }
-            : {}),
+          sourceBatchId: input.seed.sourceBatchId,
         };
       });
     } catch (error) {

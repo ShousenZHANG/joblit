@@ -124,12 +124,6 @@ beforeEach(() => {
   }
   const mockFetch = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input.url;
-    if (url === "/api/application-batches/preflight") {
-      return new Response(
-        JSON.stringify({ scope: "NEW", eligibleCount: 1, maxJobs: 100 }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
-    }
     if (url.startsWith("/api/application-batches/latest")) {
       return new Response(
         JSON.stringify({ batchId: null, status: null, updatedAt: null }),
@@ -571,330 +565,6 @@ describe("JobsClient", () => {
     expect(
       screen.queryByRole("button", { name: /enter selection mode/i }),
     ).not.toBeInTheDocument();
-  });
-
-  it("keeps AI Generate on the status row and structurally unable to wrap", () => {
-    renderWithClient(
-      <JobsClient initialItems={[baseJob]} initialCursor={null} />,
-    );
-
-    const generate = screen.getByTestId("jobs-generate-all");
-    const statusRow = generate.parentElement;
-    // Same row as the status segments — the point of the whole layout.
-    expect(statusRow?.querySelector('[role="radiogroup"]')).not.toBeNull();
-    // `flex-wrap` is what used to drop the button onto a line of its own; the
-    // 380px column can never widen enough to fit both at full size, so the
-    // guarantee has to be structural rather than responsive.
-    expect(statusRow?.className).toMatch(/\bflex-nowrap\b/);
-    // The label collapses against THIS row's width, not the viewport. jsdom
-    // does not evaluate container queries, so assert the wiring, not the
-    // rendered text.
-    expect(statusRow?.className).toMatch(/@container\/jobshdr/);
-  });
-
-  it("shows a labelled 44px batch action with the authoritative global NEW count only in NEW", async () => {
-    const user = userEvent.setup();
-    const mockFetch = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
-      const url = typeof input === "string" ? input : input.url;
-      if (url === "/api/application-batches/preflight") {
-        return new Response(
-          JSON.stringify({ scope: "NEW", eligibleCount: 8, maxJobs: 100 }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
-      }
-      if (url.startsWith("/api/application-batches/latest")) {
-        return new Response(JSON.stringify({ batchId: null, status: null }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      if (url.startsWith("/api/jobs?")) {
-        return new Response(
-          JSON.stringify({
-            items: [baseJob],
-            nextCursor: null,
-            totalCount: 1,
-            facets: { jobLevels: ["Mid"] },
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
-      }
-      if (url.startsWith("/api/jobs/") && (!init || init.method === "GET")) {
-        return new Response(
-          JSON.stringify({
-            id: baseJob.id,
-            description: "Job description",
-            updatedAt: baseJob.updatedAt,
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
-      }
-      return new Response(JSON.stringify({ error: "not mocked" }), {
-        status: 500,
-      });
-    });
-    vi.stubGlobal("fetch", mockFetch);
-
-    renderWithClient(
-      <JobsClient initialItems={[baseJob]} initialCursor={null} />,
-    );
-
-    await waitFor(() =>
-      expect(mockFetch).toHaveBeenCalledWith(
-        "/api/application-batches/preflight",
-        expect.anything(),
-      ),
-    );
-    const generate = screen.getByTestId("jobs-generate-all");
-    expect(generate).toHaveAccessibleName(
-      "Generate CVs and cover letters for 8 New jobs",
-    );
-    expect(generate).toHaveTextContent("AI Generate");
-    expect(generate).toHaveTextContent("8");
-    expect(generate.className).toMatch(/\bh-11\b/);
-
-    await user.click(
-      screen.getByRole("radio", { name: messages.jobs.statusApplied }),
-    );
-    await waitFor(() =>
-      expect(screen.queryByTestId("jobs-generate-all")).not.toBeInTheDocument(),
-    );
-  });
-
-  it("keeps an active batch action enabled even when preflight has no eligible jobs or profile", async () => {
-    const user = userEvent.setup();
-    const batchId = "22222222-2222-2222-2222-222222222222";
-    const mockFetch = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url === "/api/application-batches/preflight") {
-        return new Response(
-          JSON.stringify({
-            scope: "NEW",
-            eligibleCount: 0,
-            maxJobs: 100,
-            profileReady: false,
-            activeBatch: { id: batchId, status: "QUEUED", totalCount: 4 },
-            ready: 0,
-            incomplete: 0,
-            alreadyGenerated: 4,
-            eligibleTotal: 0,
-            totalNew: 4,
-            capped: false,
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
-      }
-      if (url === `/api/application-batches/${batchId}/summary`) {
-        return new Response(
-          JSON.stringify({
-            batch: { id: batchId, status: "QUEUED", totalCount: 4 },
-            progress: {
-              pending: 4,
-              running: 0,
-              succeeded: 0,
-              failed: 0,
-              skipped: 0,
-            },
-            succeeded: [],
-            failed: [],
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
-      }
-      if (url.startsWith("/api/application-batches/latest")) {
-        return new Response(JSON.stringify({ batchId: null, status: null }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      if (url.startsWith("/api/jobs?")) {
-        return new Response(
-          JSON.stringify({
-            items: [baseJob],
-            nextCursor: null,
-            facets: { jobLevels: [] },
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
-      }
-      return new Response(JSON.stringify({ error: "not mocked" }), {
-        status: 500,
-      });
-    });
-    vi.stubGlobal("fetch", mockFetch);
-
-    renderWithClient(
-      <JobsClient initialItems={[baseJob]} initialCursor={null} />,
-    );
-
-    const activeAction = await screen.findByRole("button", {
-      name: "View batch details",
-    });
-    expect(activeAction).toBeEnabled();
-    await user.click(activeAction);
-    expect(
-      screen.getByRole("heading", { name: "Batch details" }),
-    ).toBeInTheDocument();
-  });
-
-  it("explains a failed preflight check and lets the user retry it", async () => {
-    const user = userEvent.setup();
-    let preflightAttempts = 0;
-    const mockFetch = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url === "/api/application-batches/preflight") {
-        preflightAttempts += 1;
-        if (preflightAttempts === 1) {
-          return new Response(
-            JSON.stringify({ error: "temporarily unavailable" }),
-            {
-              status: 503,
-              headers: { "Content-Type": "application/json" },
-            },
-          );
-        }
-        return new Response(
-          JSON.stringify({ scope: "NEW", eligibleCount: 3, maxJobs: 100 }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
-      }
-      if (url.startsWith("/api/application-batches/latest")) {
-        return new Response(JSON.stringify({ batchId: null, status: null }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      if (url.startsWith("/api/jobs?")) {
-        return new Response(
-          JSON.stringify({
-            items: [baseJob],
-            nextCursor: null,
-            facets: { jobLevels: [] },
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
-      }
-      return new Response(JSON.stringify({ error: "not mocked" }), {
-        status: 500,
-      });
-    });
-    vi.stubGlobal("fetch", mockFetch);
-
-    renderWithClient(
-      <JobsClient initialItems={[baseJob]} initialCursor={null} />,
-    );
-
-    expect(
-      await screen.findByText("Could not check which New jobs are ready."),
-    ).toBeInTheDocument();
-    const retry = screen.getByRole("button", { name: "Retry batch check" });
-    expect(retry).toBeEnabled();
-    await user.click(retry);
-
-    await waitFor(() => expect(retry).toHaveTextContent("AI Generate"));
-    expect(retry).toHaveTextContent("3");
-  });
-
-  it("adopts the existing active batch after a create conflict without reloading", async () => {
-    const user = userEvent.setup();
-    const batchId = "22222222-2222-2222-2222-222222222222";
-    let preflightAttempts = 0;
-    const mockFetch = vi.fn(
-      async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = String(input);
-        if (url === "/api/application-batches/preflight") {
-          preflightAttempts += 1;
-          return new Response(
-            JSON.stringify({
-              scope: "NEW",
-              eligibleCount: preflightAttempts === 1 ? 2 : 0,
-              maxJobs: 100,
-              profileReady: true,
-              activeBatch:
-                preflightAttempts === 1
-                  ? null
-                  : { id: batchId, status: "QUEUED", totalCount: 2 },
-              ready: preflightAttempts === 1 ? 2 : 0,
-              incomplete: 0,
-              alreadyGenerated: 0,
-              eligibleTotal: preflightAttempts === 1 ? 2 : 0,
-              totalNew: preflightAttempts === 1 ? 2 : 0,
-              capped: false,
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        if (url === "/api/application-batches" && init?.method === "POST") {
-          return new Response(
-            JSON.stringify({
-              error: {
-                code: "ACTIVE_BATCH_EXISTS",
-                message: "An active batch already exists",
-                details: { batchId, status: "QUEUED" },
-              },
-            }),
-            { status: 409, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        if (url === `/api/application-batches/${batchId}/summary`) {
-          return new Response(
-            JSON.stringify({
-              batch: { id: batchId, status: "QUEUED", totalCount: 2 },
-              progress: {
-                pending: 2,
-                running: 0,
-                succeeded: 0,
-                failed: 0,
-                skipped: 0,
-              },
-              succeeded: [],
-              failed: [],
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        if (url.startsWith("/api/application-batches/latest")) {
-          return new Response(JSON.stringify({ batchId: null, status: null }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-        if (url.startsWith("/api/jobs?")) {
-          return new Response(
-            JSON.stringify({
-              items: [baseJob],
-              nextCursor: null,
-              facets: { jobLevels: [] },
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        return new Response(JSON.stringify({ error: "not mocked" }), {
-          status: 500,
-        });
-      },
-    );
-    vi.stubGlobal("fetch", mockFetch);
-
-    renderWithClient(
-      <JobsClient initialItems={[baseJob]} initialCursor={null} />,
-    );
-
-    const generate = await screen.findByRole("button", {
-      name: "Generate CVs and cover letters for 2 New jobs",
-    });
-    await user.click(generate);
-    await user.click(screen.getByRole("button", { name: "Queue 2 jobs" }));
-
-    await waitFor(() => expect(preflightAttempts).toBe(2));
-    const activeAction = await screen.findByRole("button", {
-      name: "View batch details",
-    });
-    expect(activeAction).toBeEnabled();
-    expect(mockFetch).toHaveBeenCalledWith(
-      `/api/application-batches/${batchId}/summary`,
-      expect.anything(),
-    );
   });
 
   it("hides setup and batch progress controls on jobs toolbar", async () => {
@@ -2232,6 +1902,113 @@ describe("JobsClient", () => {
     unmount();
   });
 
+  it("queues one job from the JD header instead of sweeping every NEW job", async () => {
+    // The toolbar sweep is gone. This is the whole replacement path: pick a
+    // job, press its own button, and exactly that job enters the queue.
+    const user = userEvent.setup();
+    const posts: unknown[] = [];
+    const mockFetch = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/application-batches/enqueue") {
+          posts.push(JSON.parse(String(init?.body)));
+          return new Response(
+            JSON.stringify({
+              batchId: "11111111-1111-4111-8111-111111111111",
+              totalCount: 1,
+              queuedCount: 1,
+              queuedJobIds: [baseJob.id],
+              alreadyQueuedJobIds: [],
+              ineligibleJobIds: [],
+            }),
+            { status: 202, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (url.startsWith("/api/application-batches/latest")) {
+          return new Response(
+            JSON.stringify({ batchId: null, status: null, updatedAt: null }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (url.includes("/summary")) {
+          return new Response(
+            JSON.stringify({
+              batch: {
+                id: "11111111-1111-4111-8111-111111111111",
+                status: "QUEUED",
+                totalCount: 1,
+              },
+              progress: { pending: 1, running: 0, succeeded: 0, failed: 0, skipped: 0 },
+              remainingCount: 1,
+              failed: [],
+              succeeded: [],
+              unsettled: [],
+              stalledCount: 0,
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (url.startsWith("/api/jobs")) {
+          return new Response(
+            JSON.stringify({
+              items: [baseJob],
+              nextCursor: null,
+              facets: { jobLevels: ["Mid"] },
+              id: baseJob.id,
+              description: "Job description",
+              updatedAt: baseJob.updatedAt,
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    );
+    vi.stubGlobal("fetch", mockFetch);
+
+    renderWithClient(
+      <JobsClient initialItems={[baseJob]} initialCursor={null} />,
+    );
+
+    const generate = await screen.findByTestId("job-generate-button");
+    await user.click(generate);
+
+    await waitFor(() => expect(posts).toEqual([{ jobIds: [baseJob.id] }]));
+
+    // Carried over from the sweep test this replaced: the enqueue response is
+    // the authority, so the banner must say QUEUED in the same interaction —
+    // without waiting for `/latest` to catch up, and regardless of whether a
+    // Runner is online to pick the work up.
+    await waitFor(() =>
+      expect(screen.getByTestId("batch-progress-banner")).toBeInTheDocument(),
+    );
+  });
+
+  it("no longer offers a sweep control on the status row", async () => {
+    // Guards the deletion itself: the sweep queued a hundred jobs behind one
+    // press and refused while any run drained. If it ever comes back by
+    // accident, it comes back with both of those properties.
+    renderWithClient(
+      <JobsClient initialItems={[baseJob]} initialCursor={null} />,
+    );
+
+    expect(screen.queryByTestId("jobs-generate-all")).not.toBeInTheDocument();
+
+    const calls = () =>
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.map(
+        ([input]) => String(input),
+      );
+    // Prove the page actually issued requests first — otherwise "never called
+    // preflight" is true of a component that never called anything.
+    await waitFor(() =>
+      expect(calls().some((url) => url.startsWith("/api/jobs"))).toBe(true),
+    );
+    expect(calls().some((url) => url.includes("preflight"))).toBe(false);
+  });
+
   it("keeps results and details panels both visible on mobile layouts", async () => {
     const user = userEvent.setup();
     renderWithClient(
@@ -2253,221 +2030,6 @@ describe("JobsClient", () => {
 
     expect(resultsPanel.className).toContain("flex");
     expect(detailsPanel.className).toContain("flex");
-  });
-
-  it("queues every global eligible NEW job after confirmation", async () => {
-    const user = userEvent.setup();
-    const posts: unknown[] = [];
-    const mockFetch = vi.fn(
-      async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = String(input);
-        if (url === "/api/application-batches/preflight") {
-          return new Response(
-            JSON.stringify({
-              scope: "NEW",
-              eligibleCount: 1,
-              maxJobs: 100,
-              profileReady: true,
-              activeBatch: null,
-              ready: 1,
-              incomplete: 0,
-              alreadyGenerated: 0,
-              totalNew: 1,
-              capped: false,
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        if (url.startsWith("/api/jobs?")) {
-          return new Response(
-            JSON.stringify({
-              items: [baseJob],
-              nextCursor: null,
-              facets: { jobLevels: [] },
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        if (url === "/api/agent/presence") {
-          return new Response(
-            JSON.stringify({ lastUsedAt: new Date().toISOString() }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        if (url === "/api/application-batches" && init?.method === "POST") {
-          posts.push(JSON.parse(String(init.body)));
-          return new Response(
-            JSON.stringify({
-              batch: {
-                id: "22222222-2222-2222-2222-222222222222",
-                status: "QUEUED",
-                totalCount: 1,
-              },
-            }),
-            { status: 201, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        if (url.startsWith("/api/application-batches/latest")) {
-          return new Response(JSON.stringify({ batchId: null, status: null }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-        return new Response(JSON.stringify({ error: "not mocked" }), {
-          status: 500,
-        });
-      },
-    );
-    vi.stubGlobal("fetch", mockFetch);
-
-    renderWithClient(
-      <JobsClient initialItems={[baseJob]} initialCursor={null} />,
-    );
-
-    const generate = await screen.findByTestId("jobs-generate-all");
-    await waitFor(() => expect(generate).toBeEnabled());
-    await user.click(generate);
-    await user.click(screen.getByRole("button", { name: "Queue 1 jobs" }));
-
-    await waitFor(() => expect(posts).toEqual([{ scope: "NEW" }]));
-  });
-
-  it("confirms the global scope, queues while Runner is offline, and shows QUEUED immediately", async () => {
-    const user = userEvent.setup();
-    const posts: unknown[] = [];
-    let resolveSummary!: (response: Response) => void;
-    const summaryResponse = new Promise<Response>((resolve) => {
-      resolveSummary = resolve;
-    });
-    const batchId = "22222222-2222-2222-2222-222222222222";
-    const mockFetch = vi.fn(
-      async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = String(input);
-        if (url === "/api/application-batches/preflight") {
-          return new Response(
-            JSON.stringify({
-              scope: "NEW",
-              eligibleCount: 5,
-              maxJobs: 100,
-              profileReady: true,
-              activeBatch: null,
-              ready: 5,
-              incomplete: 3,
-              alreadyGenerated: 2,
-              eligibleTotal: 5,
-              totalNew: 10,
-              capped: false,
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        if (url === "/api/agent/presence") {
-          return new Response(JSON.stringify({ lastUsedAt: null }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-        if (url.startsWith("/api/application-batches/latest")) {
-          return new Response(JSON.stringify({ batchId: null, status: null }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-        if (url === `/api/application-batches/${batchId}/summary`) {
-          return summaryResponse;
-        }
-        if (url === "/api/application-batches" && init?.method === "POST") {
-          posts.push(JSON.parse(String(init.body)));
-          return new Response(
-            JSON.stringify({
-              batch: { id: batchId, status: "QUEUED", totalCount: 5 },
-            }),
-            { status: 201, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        if (url.startsWith("/api/jobs?")) {
-          return new Response(
-            JSON.stringify({
-              items: [baseJob],
-              nextCursor: null,
-              totalCount: 1,
-              facets: { jobLevels: ["Mid"] },
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        if (url.startsWith("/api/jobs/") && (!init || init.method === "GET")) {
-          return new Response(
-            JSON.stringify({
-              id: baseJob.id,
-              description: "Job description",
-              updatedAt: baseJob.updatedAt,
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        return new Response(JSON.stringify({ error: "not mocked" }), {
-          status: 500,
-        });
-      },
-    );
-    vi.stubGlobal("fetch", mockFetch);
-
-    renderWithClient(
-      <JobsClient initialItems={[baseJob]} initialCursor={null} />,
-    );
-
-    const generate = await screen.findByRole("button", {
-      name: "Generate CVs and cover letters for 5 New jobs",
-    });
-    await user.click(generate);
-
-    expect(
-      screen.getByRole("heading", {
-        name: "Generate applications for 5 jobs?",
-      }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/regardless of the current search or location filters/i),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/tailored CV and cover letter/i),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Will generate")).toBeInTheDocument();
-    expect(screen.getByText("Partial · skipped")).toBeInTheDocument();
-    expect(screen.getByText("Complete · skipped")).toBeInTheDocument();
-    expect(
-      screen.getByText(/preserved and skipped to prevent overwriting/i),
-    ).toBeInTheDocument();
-    expect(posts).toEqual([]);
-
-    await user.click(screen.getByRole("button", { name: "Queue 5 jobs" }));
-
-    expect(posts).toEqual([{ scope: "NEW" }]);
-    const progress = await screen.findByRole("progressbar", {
-      name: "Application generation progress",
-    });
-    expect(progress).toHaveAttribute("aria-valuenow", "0");
-    expect(progress).toHaveAttribute("aria-valuemax", "5");
-    expect(screen.getByText(/Queued/i)).toBeInTheDocument();
-
-    resolveSummary(
-      new Response(
-        JSON.stringify({
-          batch: { id: batchId, status: "QUEUED", totalCount: 5 },
-          progress: {
-            pending: 5,
-            running: 0,
-            succeeded: 0,
-            failed: 0,
-            skipped: 0,
-          },
-          succeeded: [],
-          failed: [],
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    );
   });
 
   it("disables skill pack download until prompt meta is ready, then advances to Copy Prompt with one click", async () => {
@@ -3009,12 +2571,6 @@ describe("JobsClient", () => {
             return await new Promise<Response>((resolve) => {
               pending.push({ signal: init?.signal ?? undefined, resolve });
             });
-          }
-          if (url === "/api/application-batches/preflight") {
-            return new Response(
-              JSON.stringify({ scope: "NEW", eligibleCount: 2, maxJobs: 100 }),
-              { status: 200, headers: { "Content-Type": "application/json" } },
-            );
           }
           if (url.startsWith("/api/application-batches/latest")) {
             return new Response(

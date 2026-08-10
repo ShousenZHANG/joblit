@@ -70,6 +70,7 @@ describe("enqueueJobsForTailoring", () => {
     expect(outcome).toMatchObject({
       kind: "enqueued",
       batchId: BATCH_ID,
+      totalCount: 7,
       queuedJobIds: [JOB_A],
     });
     expect(tx.applicationBatch.create).not.toHaveBeenCalled();
@@ -155,6 +156,23 @@ describe("enqueueJobsForTailoring", () => {
       where: { id: BATCH_ID },
       data: { totalCount: 12 },
     });
+  });
+
+  it("reports the post-insert total so the client can seed its progress UI", async () => {
+    // Seeding 0 rendered no banner at all — the progress UI needs a total to
+    // show a fraction against — so the user pressed Generate and got silence
+    // until the next poll landed.
+    withProfile();
+    tx.job.findMany.mockResolvedValue([{ id: JOB_A }]);
+    tx.applicationBatch.findFirst.mockResolvedValue({ id: BATCH_ID });
+    tx.applicationBatchTask.count.mockResolvedValue(3);
+
+    const outcome = await enqueueJobsForTailoring({
+      userId: "user-1",
+      jobIds: [JOB_A],
+    });
+
+    expect(outcome).toMatchObject({ kind: "enqueued", totalCount: 3 });
   });
 
   it("refuses a Job that already has an Application", async () => {
