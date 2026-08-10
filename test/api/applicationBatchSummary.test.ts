@@ -62,6 +62,79 @@ describe("application batch summary api", () => {
     applicationStore.findMany.mockReset();
   });
 
+  it("reports deferred and stalled work instead of leaving it as silent progress", async () => {
+    // A deferred task is PENDING with a reason; a stalled one is RUNNING with
+    // an expired lease. Neither used to reach the browser, so the banner could
+    // only say "0 of N done" with a spinner — forever, and indistinguishable
+    // from a run that was actually moving.
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    applicationBatchStore.findFirst.mockResolvedValueOnce({
+      id: BATCH_ID,
+      scope: "NEW",
+      status: "RUNNING",
+      totalCount: 2,
+      error: null,
+      createdAt: new Date("2026-02-22T10:00:00.000Z"),
+      updatedAt: new Date("2026-02-22T10:02:00.000Z"),
+      startedAt: new Date("2026-02-22T10:00:10.000Z"),
+      completedAt: null,
+    });
+    applicationBatchTaskStore.groupBy.mockResolvedValueOnce([
+      { status: "PENDING", _count: { _all: 1 } },
+      { status: "RUNNING", _count: { _all: 1 } },
+    ]);
+    applicationBatchTaskStore.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: "task-deferred",
+          jobId: "job-1",
+          status: "PENDING",
+          error: "IMPORT_SETTLEMENT_UNKNOWN",
+          attempt: 3,
+          executionLeaseExpiresAt: null,
+          updatedAt: new Date("2026-02-22T10:01:00.000Z"),
+          job: { title: "Backend Engineer", company: "Acme", jobUrl: "https://x/1" },
+        },
+        {
+          id: "task-stalled",
+          jobId: "job-2",
+          status: "RUNNING",
+          error: null,
+          attempt: 1,
+          executionLeaseExpiresAt: new Date("2026-02-22T09:50:00.000Z"),
+          updatedAt: new Date("2026-02-22T09:40:00.000Z"),
+          job: { title: "Data Engineer", company: "Globex", jobUrl: "https://x/2" },
+        },
+      ]);
+    applicationStore.findMany.mockResolvedValueOnce([]);
+
+    const res = await GET(
+      new Request(`http://localhost/api/application-batches/${BATCH_ID}/summary`),
+      { params: Promise.resolve({ id: BATCH_ID }) },
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.stalledCount).toBe(1);
+    expect(json.unsettled).toEqual([
+      expect.objectContaining({
+        taskId: "task-deferred",
+        state: "deferred",
+        attempt: 3,
+        reason: "IMPORT_SETTLEMENT_UNKNOWN",
+      }),
+      expect.objectContaining({
+        taskId: "task-stalled",
+        state: "stalled",
+        reason: null,
+      }),
+    ]);
+  });
+
   it("returns success/failure/remaining summary for codex batch run", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
       {
@@ -112,7 +185,9 @@ describe("application batch summary api", () => {
             jobUrl: "https://example.com/1",
           },
         },
-      ]);
+      ])
+      // Third call: deferred/stalled tasks. None in this fixture.
+      .mockResolvedValueOnce([]);
     applicationStore.findMany.mockResolvedValueOnce([
       {
         id: "application-1",
@@ -232,6 +307,28 @@ describe("application batch summary api", () => {
                 },
               },
             ],
+      )
+      // Deferred/stalled tasks are scoped the same way; a cross-tenant Job
+      // must never surface through the new unsettled list either.
+      .mockImplementationOnce(async ({ where }) =>
+        where.job?.userId === "user-1"
+          ? []
+          : [
+              {
+                id: "task-deferred-cross-tenant",
+                jobId: "job-other-tenant-3",
+                status: "PENDING",
+                error: "IMPORT_SETTLEMENT_UNKNOWN",
+                attempt: 2,
+                executionLeaseExpiresAt: null,
+                updatedAt: new Date("2026-02-22T10:02:00.000Z"),
+                job: {
+                  title: "Private deferred role",
+                  company: "Other tenant",
+                  jobUrl: "https://example.com/private-deferred",
+                },
+              },
+            ],
       );
     applicationStore.findMany.mockResolvedValueOnce([]);
 
@@ -292,7 +389,8 @@ describe("application batch summary api", () => {
             jobUrl: "https://example.com/1",
           },
         },
-      ]);
+      ])
+      .mockResolvedValueOnce([]);
     applicationStore.findMany.mockImplementationOnce(async ({ where }) =>
       where.userId === "user-1" && where.job?.userId === "user-1"
         ? []

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { errorJson, notFoundError, validationError } from "@/lib/server/api/errorResponse";
+import { commitRejectionResponse } from "@/lib/server/applications/commitResultResponse";
 import { withAgentRoute } from "@/lib/server/api/routeHandler";
 import {
   APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE,
@@ -456,17 +457,16 @@ export async function POST(req: Request) {
       }
       throw error;
     }
-    if (committed.kind === "invalid_ai_content") {
-      return errorJson(
-        "AI_CONTENT_INVALID",
-        "The stored application content cannot be safely merged. Re-generate both targets.",
-        409,
-        { requestId },
-      );
-    }
     if (committed.kind !== "committed") {
-      return errorJson("APPLICATION_PERSIST_FAILED", "Could not save the draft", 500, {
+      // Every rejection kind, mapped identically to the FINAL branch. This
+      // used to answer a bare 500 for all but one kind, which the Runner reads
+      // as "settlement unknown" — so a deterministic 409 stalled the queue.
+      return commitRejectionResponse(committed, {
         requestId,
+        scope: "applications.manual-generate.draft",
+        userId,
+        jobId: job.id,
+        target: data.target,
       });
     }
     return NextResponse.json(
@@ -548,54 +548,14 @@ export async function POST(req: Request) {
       reviewContext,
       ...(tailoringAcceptance ? { tailoring: tailoringAcceptance } : {}),
     });
-    if (result.kind === "review_blocked") {
-      return errorJson(
-        "APPLICATION_REVIEW_BLOCKED",
-        "The combined draft contains claims that are not grounded in the master resume.",
-        422,
-        { details: result.review, requestId },
-      );
-    }
-    if (result.kind === "invalid_ai_content") {
-      return errorJson(
-        "AI_CONTENT_INVALID",
-        "The stored application content cannot be safely merged. Re-generate both targets.",
-        409,
-        { requestId },
-      );
-    }
-    if (result.kind === "stale_render_context") {
-      return errorJson(
-        "STALE_RENDER_CONTEXT",
-        "Your resume profile or job changed while the PDF was rendering. Generate it again.",
-        409,
-        { requestId },
-      );
-    }
-    if (result.kind === "blob_not_configured") {
-      return errorJson(
-        APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE.code,
-        APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE.message,
-        APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE.status,
-        { requestId },
-      );
-    }
     if (result.kind !== "committed") {
-      // An upload failure used to be swallowed here, committing a null URL that
-      // cleared the user's previous PDF. It is now a plain failure.
-      if (result.kind === "upload_failed") {
-        reportError(result.cause, {
-          scope: "applications.manual-generate.blob-upload",
-          userId,
-          tags: { jobId: job.id, target: data.target },
-        });
-      }
-      return errorJson(
-        "APPLICATION_PERSIST_FAILED",
-        "The PDF was rendered but could not be saved. Please try again.",
-        500,
-        { requestId },
-      );
+      return commitRejectionResponse(result, {
+        requestId,
+        scope: "applications.manual-generate.final",
+        userId,
+        jobId: job.id,
+        target: data.target,
+      });
     }
     committed = result;
   } catch (error) {

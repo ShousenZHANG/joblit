@@ -47,7 +47,13 @@ export async function GET(
       });
       const progress = taskProgressFromGroupBy(grouped);
 
-      const [failedTasks, succeededTasks] = await Promise.all([
+      // A deferred task is reset to PENDING with its reason recorded, and a
+      // task whose lease has aged out is RUNNING with nobody working on it.
+      // Neither was ever sent to the browser, so the UI could only report
+      // "0 of N done" with a spinner — indistinguishable from progress, for
+      // as long as the user was willing to watch.
+      const now = new Date();
+      const [failedTasks, succeededTasks, unsettledTasks] = await Promise.all([
         prisma.applicationBatchTask.findMany({
           where: {
             batchId: batch.id,
@@ -97,6 +103,34 @@ export async function GET(
             },
           },
         }),
+        prisma.applicationBatchTask.findMany({
+          where: {
+            batchId: batch.id,
+            userId,
+            job: { userId },
+            OR: [
+              // Deferred: released back to PENDING after at least one attempt.
+              { status: "PENDING", attempt: { gt: 0 } },
+              // Stalled: claimed, but the lease has expired with no completion.
+              {
+                status: "RUNNING",
+                executionLeaseExpiresAt: { lt: now },
+              },
+            ],
+          },
+          orderBy: [{ updatedAt: "desc" }],
+          take: 100,
+          select: {
+            id: true,
+            jobId: true,
+            status: true,
+            error: true,
+            attempt: true,
+            executionLeaseExpiresAt: true,
+            updatedAt: true,
+            job: { select: { title: true, company: true, jobUrl: true } },
+          },
+        }),
       ]);
 
       const projectedJobIds = Array.from(
@@ -133,6 +167,23 @@ export async function GET(
         },
         progress,
         remainingCount: progress.pending + progress.running,
+        // Work that is not moving, named so the client never has to guess.
+        // `stalled` is decided here, against the lease the server issued —
+        // a spinner must never outlive it.
+        unsettled: unsettledTasks.map((task) => ({
+          taskId: task.id,
+          jobId: task.jobId,
+          jobTitle: task.job.title,
+          company: task.job.company,
+          state:
+            task.status === "RUNNING" ? ("stalled" as const) : ("deferred" as const),
+          attempt: task.attempt,
+          reason: task.error ?? null,
+          leaseExpiresAt: task.executionLeaseExpiresAt?.toISOString() ?? null,
+          updatedAt: task.updatedAt.toISOString(),
+        })),
+        stalledCount: unsettledTasks.filter((task) => task.status === "RUNNING")
+          .length,
         failed: failedTasks.map((task) => {
           const artifacts = artifactsByJobId.get(task.jobId);
           return {

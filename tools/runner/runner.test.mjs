@@ -684,6 +684,48 @@ test("defers an import whose settlement stays unknown instead of reporting FAILE
   assert.equal(summary.succeeded, 0);
   assert.equal(summary.failed, 0);
   assert.equal(summary.deferred, 1);
+  // Giving the lease back is the whole point. Publication released and import
+  // did not, so one deferred import pinned the claim and every later pass
+  // reported "another task lease is active" until the lease aged out.
+  assert.deepEqual(joblit.calls.releases, [
+    {
+      batchId: "batch-1",
+      taskId: TASK.taskId,
+      attemptId: TASK.attemptId,
+      reason: "IMPORT_SETTLEMENT_UNKNOWN",
+    },
+  ]);
+});
+
+test("keeps the server's own error code visible on a deferred import", async () => {
+  // The wrapper overwrites `code` with the Runner's verdict, so without this
+  // the only thing a log ever showed was IMPORT_SETTLEMENT_UNKNOWN — never
+  // what the server actually said, which is what made a deterministic 409
+  // masquerading as a 500 take days to find.
+  const serverRejection = () =>
+    Object.assign(new Error("Could not save the draft"), {
+      code: "APPLICATION_PERSIST_FAILED",
+      status: 500,
+      requestId: "req-abc",
+    });
+  const joblit = fakeJoblit({
+    steps: [{ tasks: [{ ...TASK, remainingTargets: ["RESUME"] }] }],
+    importErrors: [serverRejection(), serverRejection(), serverRejection()],
+  });
+  const hermes = fakeHermes();
+  const logs = [];
+
+  const summary = await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    settlementRetryMs: 1,
+    log: (message) => logs.push(message),
+  });
+
+  assert.equal(summary.deferred, 1);
+  const output = logs.join(" ");
+  assert.match(output, /upstreamCode=APPLICATION_PERSIST_FAILED/);
+  assert.match(output, /requestId=req-abc/);
 });
 
 test("treats local acknowledgement cleanup as non-authoritative", async () => {

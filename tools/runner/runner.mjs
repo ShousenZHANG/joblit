@@ -84,6 +84,7 @@ function errorTelemetry(error) {
     ["phase", error.phase],
     ["status", error.status],
     ["code", error.code],
+    ["upstreamCode", error.upstreamCode],
     ["requestId", error.requestId],
     ["elapsedMs", error.elapsedMs],
   ]
@@ -322,6 +323,16 @@ function importSettlementUnknown(cause) {
     if (isRecord(cause) && cause[field] !== undefined) {
       error[field] = cause[field];
     }
+  }
+  // Carry the server's own classification. This wrapper overwrites `code`
+  // with the Runner's verdict, so without `upstreamCode` the only thing a log
+  // ever showed was that the Runner did not know — never what the server
+  // actually said. That turned a one-line diagnosis into an archaeology dig.
+  if (isRecord(cause) && typeof cause.code === "string") {
+    error.upstreamCode = cause.code;
+  }
+  if (isRecord(cause) && typeof cause.message === "string") {
+    error.upstreamMessage = cause.message;
   }
   return error;
 }
@@ -915,18 +926,26 @@ export async function processActiveBatch({
         isAmbiguousHermesError(error) ||
         isAmbiguousJoblitError(error)
       ) {
+        // Give the lease back for BOTH unknown settlements. Import is
+        // receipt-idempotent exactly like publication, so holding a claim
+        // after giving up buys nothing and costs everything: the task cannot
+        // be retried until the lease expires, and the whole batch reports
+        // "another task lease is active" for as long as it takes. Publication
+        // released; import did not, which is why one deferral froze the queue.
+        const deferredCode =
+          error && typeof error === "object" && "code" in error
+            ? error.code
+            : undefined;
         if (
-          error &&
-          typeof error === "object" &&
-          "code" in error &&
-          error.code === "PUBLICATION_SETTLEMENT_UNKNOWN" &&
+          (deferredCode === "PUBLICATION_SETTLEMENT_UNKNOWN" ||
+            deferredCode === "IMPORT_SETTLEMENT_UNKNOWN") &&
           typeof joblit.releaseTask === "function"
         ) {
           try {
             await joblit.releaseTask(active.batchId, {
               taskId: task.taskId,
               attemptId: task.attemptId,
-              reason: "PUBLICATION_SETTLEMENT_UNKNOWN",
+              reason: deferredCode,
             });
           } catch (releaseError) {
             log(`  release deferred: ${describeError(releaseError)}`);
