@@ -196,9 +196,7 @@ export function renderResumeCNTex(input: RenderResumeCNInput) {
   // for it, so the field silently never reached the PDF.)
   const trimmedSummary = input.summary.trim();
   const summarySection = trimmedSummary
-    ? `\section{个人总结}
-
-${trimmedSummary} \par`
+    ? `\\section{个人总结}\n\n${trimmedSummary} \\par`
     : "";
 
   const projectsSection =
