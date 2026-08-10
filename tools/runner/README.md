@@ -99,8 +99,9 @@ Keep polling for new batches every 5 seconds:
 node tools/runner/cli.mjs --watch
 ```
 
-Typical loop: triage your list, press **AI Generate** in the Jobs page, then
-leave the Runner running. Generated materials and their
+Typical loop: triage your list, then open each role you want and press
+**AI Generate** in its description header — one press per job, and they queue
+behind each other. Leave the Runner running. Generated materials and their
 PDFs land in Joblit for review; the Runner never submits an application.
 
 A Codex run is a subprocess, so there is no persisted model output and no

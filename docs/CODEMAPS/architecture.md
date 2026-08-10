@@ -146,7 +146,8 @@ distributes this contract together with the user's active effective rules.
 
 ### 4. Codex Batch — tailoring without a human
 
-`ApplicationBatch` over `NEW` Jobs. `POST /api/application-batches/[id]/run-once`
+`ApplicationBatch` over the Jobs a user explicitly enqueues.
+`POST /api/application-batches/[id]/run-once`
 reports only a previous `FAILED`/`SKIPPED` attempt and claims new tasks. Each
 task response includes its fencing `attemptId`, stable derived `issueKey`, and
 durable acceptance/publication progress. New Runners advertise `[2, 1]` and use

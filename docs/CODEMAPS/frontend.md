@@ -55,7 +55,7 @@ the locale cookie directly and uses an inlined EN/ZH table.
 
 ## The Jobs workspace
 
-### `JobsClient.tsx` — 1313 lines
+### `JobsClient.tsx` — 1297 lines
 
 Several state machines share one closure. By responsibility:
 
@@ -66,7 +66,7 @@ Several state machines share one closure. By responsibility:
 | Generation | `useExternalGenerate` owns interactive manual import; `useTailorReviewController` opens manual, batch, or saved Application content in one full-screen Review & Edit dialog. Local unattended generation belongs to the Agent Runner. |
 | Batch | Per-job enqueue, live progress banner, per-row tailoring state, cancel/retry from the details dialog. |
 | Batch progress | `useBatchProgress` polls the active batch's server-side counts, refreshes the list as jobs settle, and stops the moment a batch reaches a terminal state. |
-| Surfaces | `app/(app)/jobs/components/` — `BatchProgressBanner`, `BatchDetailsDialog`, `GenerateProgress`, `JobRequirementsPanel`, `JobSearchBar`, `JobDescriptionMarkdown`, `JsonInputPanel`, `StepImport`, `StepIndicator`, `VirtualJobList`, plus `ExternalGenerateDialog`, `TailorReviewDialog` and the mobile detail overlay. |
+| Surfaces | `app/(app)/jobs/components/` — `JobGenerateButton`, `JobTailoringBadge`, `BatchProgressBanner`, `BatchDetailsDialog`, `GenerateProgress`, `JobRequirementsPanel`, `JobSearchBar`, `JobDescriptionMarkdown`, `JsonInputPanel`, `StepImport`, `StepIndicator`, `VirtualJobList`, plus `ExternalGenerateDialog`, `TailorReviewDialog` and the mobile detail overlay. |
 
 Per ADR-0007, status controls read `ACTIVE_JOB_STATUS_VALUES` (`:821`, `:1082`),
 while the label map in `types.ts:6-23` and the badge maps in `JobListItem.tsx`
@@ -290,7 +290,7 @@ the toast copy in `useJobMutations.ts` and
 
 56 colocated files, ~369 cases. The densest cluster is Jobs.
 
-`JobsClient.test.tsx` is 2299 lines / 64 cases — the largest in the repo. Two
+`JobsClient.test.tsx` is 2922 lines / 58 cases — the largest in the repo. Two
 things to know before editing it: its seam is `globalThis.fetch` patched with a
 40-line URL router (`:128-169`), and several assertions pin Tailwind class
 literals (`:487-495`, `:523-528`) rather than behaviour, so a visual tweak breaks

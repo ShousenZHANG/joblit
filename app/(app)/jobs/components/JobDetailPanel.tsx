@@ -341,11 +341,12 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                     ))}
                   </SelectContent>
                 </Select>
-                {/* Generation is back here, and this is the primary place it
-                    lives. The toolbar sweep remains for triage, but the common
-                    case is reading one description and wanting that one — and
-                    the sweep used to refuse outright while any run was
-                    draining, so wanting one Job meant waiting on a hundred. */}
+                {/* Generation lives here, and only here. The toolbar sweep
+                    that used to own it queued every eligible job in one press
+                    and refused outright while any run was draining, so wanting
+                    one job meant committing to a hundred or waiting on a
+                    hundred. Asking for the job you are reading is the natural
+                    unit. */}
                 {!isCN && onGenerateJob ? (
                   <JobGenerateButton
                     job={selectedJob}

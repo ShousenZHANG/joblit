@@ -39,7 +39,8 @@ Routes on the AgentCredential seam: `GET /api/application-batches/active`,
 `POST /api/applications/manual-generate`, target-scoped
 `POST /api/applications/:id/finalize`, and the `/api/tailoring-runs/:id`
 route, cancel, and fail endpoints.
-Batch creation, `/codex-run`, and the task `PATCH` route stay session-only;
+Batch enqueue (`POST /api/application-batches/enqueue`), `/codex-run`, and the
+task `PATCH` route stay session-only;
 an unattended Runner claims work and reports exceptional outcomes through
 `run-once`. The fit queue and its routes were retired (ADR-0019).
 

@@ -10,17 +10,15 @@ import React, {
   useTransition,
 } from "react";
 import Link from "next/link";
-import { ApiError, fetchJson } from "@/lib/api/fetchJson";
+import { fetchJson } from "@/lib/api/fetchJson";
 import { jobDetailResponseSchema } from "@/lib/shared/schemas/jobsList";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
-  Loader2,
   MapPin,
   RefreshCw,
   SlidersHorizontal,
-  Sparkles,
   X,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -1006,7 +1004,7 @@ export function JobsClient({
               three counts for one list. The active segment now carries the
               one count that matters; loading progress lives at the list
               bottom where the loading actually happens. */}
-              <div className="@container/jobshdr flex flex-nowrap items-center justify-between gap-2 border-b px-4 pb-3 pt-3">
+              <div className="flex items-center gap-2 border-b px-4 pb-3 pt-3">
                 <SegmentedControl
                   ariaLabel={t("status")}
                   value={statusFilter}

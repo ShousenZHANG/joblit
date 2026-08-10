@@ -1902,6 +1902,73 @@ describe("JobsClient", () => {
     unmount();
   });
 
+  it("adopts a batch left running by another tab, and opens its details", async () => {
+    // This is the path that replaced preflight's activeBatch adoption. Nothing
+    // covered it before: the only useBatchProgress case mocks /latest as empty
+    // and exercises watchBatch instead, so the discovery chain
+    // (/latest -> /summary -> applySummary -> banner) was untested at every
+    // level while being the sole reason deleting preflight was safe.
+    const user = userEvent.setup();
+    const BATCH = "22222222-2222-4222-8222-222222222222";
+    const mockFetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("/api/application-batches/latest")) {
+        return new Response(
+          JSON.stringify({
+            batchId: BATCH,
+            status: "RUNNING",
+            updatedAt: "2026-08-10T00:00:00.000Z",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.includes("/summary")) {
+        return new Response(
+          JSON.stringify({
+            batch: { id: BATCH, status: "RUNNING", totalCount: 2 },
+            progress: { pending: 1, running: 1, succeeded: 0, failed: 0, skipped: 0 },
+            remainingCount: 2,
+            failed: [],
+            succeeded: [],
+            unsettled: [],
+            stalledCount: 0,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.startsWith("/api/jobs")) {
+        return new Response(
+          JSON.stringify({
+            items: [baseJob],
+            nextCursor: null,
+            facets: { jobLevels: ["Mid"] },
+            id: baseJob.id,
+            description: "Job description",
+            updatedAt: baseJob.updatedAt,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    renderWithClient(
+      <JobsClient initialItems={[baseJob]} initialCursor={null} />,
+    );
+
+    const banner = await screen.findByTestId("batch-progress-banner");
+
+    // Cancel and Retry-failed live only inside the details dialog, and the
+    // banner is now its only opener. If this link breaks, work in flight
+    // becomes uncancellable.
+    await user.click(within(banner).getByRole("button", { name: /details/i }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
   it("queues one job from the JD header instead of sweeping every NEW job", async () => {
     // The toolbar sweep is gone. This is the whole replacement path: pick a
     // job, press its own button, and exactly that job enters the queue.
