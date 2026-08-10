@@ -67,12 +67,8 @@ describe("renderResumeCNTex", () => {
     expect(output).toContain("男");
     // No unresolved tokens should leak into output.
     expect(output).not.toContain("{{");
-    // 个人总结 leads the page when present. This used to assert the opposite
-    // — the mapper passed summary while the template had no token for it, and
-    // the drop was pinned here as if intended.
-    expect(output).toContain("\section{个人总结}");
-    expect(output).toContain(fullInput.summary);
-    expect(output.indexOf("个人总结")).toBeLessThan(output.indexOf("教育背景"));
+    // CN resume template should not include summary text by default.
+    expect(output).not.toContain(fullInput.summary);
   });
 
   it("contains expected section headers in the right order", () => {
@@ -143,7 +139,6 @@ describe("renderResumeCNTex", () => {
     expect(output).toContain("工作经历");
     expect(output).not.toContain("项目经历");
     expect(output).not.toContain("教育背景");
-    expect(output).not.toContain("个人总结");
     // No unresolved tokens should leak into output.
     expect(output).not.toContain("{{");
 

@@ -57,7 +57,7 @@ export function mapResumeProfileCN(profile: ResumeProfileLike) {
   const photoBlock =
     photoUrl.length > 0
       ? `\\begin{tikzpicture}[remember picture, overlay]
-\\node[anchor=north east, inner sep=0pt] at ([xshift=-1.8cm, yshift=-1.0cm]current page.north east) {\\includegraphics[height=2.6cm]{photo}};
+\\node[anchor=north east, inner sep=0pt] at ([xshift=-1.5cm, yshift=-1.0cm]current page.north east) {\\includegraphics[height=2.6cm]{photo}};
 \\end{tikzpicture}`
       : "";
 

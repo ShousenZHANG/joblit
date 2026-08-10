@@ -1,64 +1,54 @@
-\documentclass[11pt, a4paper]{article}
+\documentclass[10pt, a4paper]{article}
 
-% Layout per the top Chinese LaTeX resume templates (billryan, hijiangtao,
-% resume-ng): single column, one page, 0.7--0.8in side margins, tighter top
-% and bottom. 11pt is the band those templates share; article has no 10.5pt.
-\usepackage[left=1.8cm, right=1.8cm, top=1.0cm, bottom=1.0cm]{geometry}
+\usepackage[left=1.5cm, right=1.5cm, top=1.0cm, bottom=1.0cm]{geometry}
 \usepackage{xeCJK}
 \usepackage{fontspec}
 \usepackage{titlesec}
 \usepackage{enumitem}
 \usepackage{hyperref}
-\usepackage{xcolor}
+\usepackage[dvipsnames]{xcolor}
 \usepackage{graphicx}
+\usepackage{ifthen}
+\usepackage{tabularx}
+\usepackage{array}
 \usepackage{tikz}
 
-% 宋体正文 + 黑体加粗 — the convention every top template implements
-% (AdobeSong/AdobeHeiti in billryan, the Noto pair in the Overleaf ctex
-% template). Noto ships in the render service's TeX Live, so both weights are
-% real: no AutoFakeBold. AutoFakeSlant stays because CJK has no italic faces.
-% \IfFontExistsTF so a render host missing the serif face degrades to the
-% previous all-sans setup instead of failing the compile — a resume that
-% renders in yesterday's style beats one that does not render.
-\IfFontExistsTF{Noto Serif CJK SC}{%
-  \setCJKmainfont[BoldFont=Noto Sans CJK SC, AutoFakeSlant]{Noto Serif CJK SC}%
-}{%
-  \setCJKmainfont[BoldFont=Noto Sans CJK SC Bold, AutoFakeSlant]{Noto Sans CJK SC}%
-}
-% Latin runs (tech stacks, URLs, company names) in a Times-class serif that
-% ships with TeX Live, so mixed lines sit on one visual register.
-\IfFontExistsTF{TeX Gyre Termes}{\setmainfont{TeX Gyre Termes}}{}
+% Modern Sans-serif setup for Big Tech aesthetic
+\setCJKmainfont[BoldFont=Noto Sans CJK SC Bold, AutoFakeSlant]{Noto Sans CJK SC}
+\renewcommand{\familydefault}{\sfdefault}
 
-% Typography polish. microtype adds character protrusion under XeLaTeX so
-% Latin runs have cleaner optical margins; frenchspacing enforces single
-% spacing after periods.
+% Typography polish (CJK font left untouched). microtype adds character
+% protrusion under XeLaTeX so Latin runs (tech stacks, URLs, English terms)
+% have cleaner optical margins; frenchspacing enforces single spacing after
+% periods. Both are no-risk: microtype is already used by the EN template, so
+% the render service has it.
 \usepackage{microtype}
 \frenchspacing
 
-% Colour discipline: black and white, one dark navy reserved for URLs.
-% The reference templates are monochrome and HR guidance is unanimous that
-% decoration costs credibility; grey exists only to de-emphasise metadata.
-\definecolor{linkColor}{RGB}{0, 51, 102}
+% Colors
+\definecolor{primaryColor}{RGB}{0, 79, 144}
 \definecolor{grayText}{RGB}{100, 100, 100}
+\definecolor{ruleColor}{RGB}{138, 152, 165}
 
-% Section headers: bold black, no number, full-width hairline underneath —
-% the one treatment all three reference templates agree on. More space above
-% than below so each section reads as a boundary.
-\titleformat{\section}{\normalsize\bfseries}{}{0em}{}[\vspace{2pt}\hrule height 0.5pt]
-\titlespacing*{\section}{0pt}{6pt}{4pt}
+% Section formatting — ruled headers. More space ABOVE the header than below
+% so each section reads as a clear boundary (big-tech scannability) rather than
+% running into the previous block.
+\titleformat{\section}{\normalsize\bfseries\color{primaryColor}}{}{0em}{}[\vspace{2pt}{\color{ruleColor}\hrule height 0.5pt}]
+\titlespacing*{\section}{0pt}{5pt}{4pt}
 
 % Remove page numbers
 \pagestyle{empty}
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0pt}
 
-% Hyperlink styling — internal links stay black, URLs get the one accent.
-\hypersetup{colorlinks=true, linkcolor=black, urlcolor=linkColor}
+% Hyperlink styling
+\hypersetup{colorlinks=true, linkcolor=primaryColor, urlcolor=primaryColor}
 
-% List styling — compact but not crushed; the reference templates run
-% itemsep 0-3pt and the page has vertical headroom at one page.
-\setlist[itemize]{leftmargin=13pt, itemsep=2pt, topsep=2pt, parsep=0pt, partopsep=0pt}
-\renewcommand\labelitemi{$\vcenter{\hbox{\footnotesize$\bullet$}}$}
+% List styling — bullets get a little breathing room between lines for
+% readability (the page has vertical headroom, so density isn't the
+% constraint; legibility is).
+\setlist[itemize]{leftmargin=13pt, itemsep=3pt, topsep=2.5pt, parsep=0pt, partopsep=0pt}
+\renewcommand\labelitemi{\textcolor{primaryColor}{$\vcenter{\hbox{\footnotesize$\bullet$}}$}}
 
 \begin{document}
 
@@ -67,18 +57,15 @@
 
 % === HEADER (full-width centered, compact) ===
 \begin{center}
-{\LARGE\bfseries {{CANDIDATE_NAME}}} \[4pt]
+{\LARGE\bfseries {{CANDIDATE_NAME}}} \\[4pt]
 \small\sloppy
-{{CANDIDATE_PHONE}} \enspace $\cdot$ \enspace {{CANDIDATE_EMAIL}}\allowbreak{{CONTACT_EXTRA_LINE}}\allowbreak{{LINKS_LINE}} \[2pt]
+{{CANDIDATE_PHONE}} \enspace $\cdot$ \enspace {{CANDIDATE_EMAIL}}\allowbreak{{CONTACT_EXTRA_LINE}}\allowbreak{{LINKS_LINE}} \\[2pt]
 \small\sloppy
 求职意向：\textbf{{{CANDIDATE_TITLE}}}\allowbreak \enspace \textbf{\color{grayText} {{PERSONAL_INFO_LINE}}}
 \normalsize
 \end{center}
 
 \vspace{2.5pt}
-
-% === SUMMARY (omitted entirely when the profile has none) ===
-{{SUMMARY_SECTION}}
 
 % === EDUCATION ===
 {{EDUCATION_SECTION}}
