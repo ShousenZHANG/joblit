@@ -5,8 +5,10 @@ import { UuidParamSchema } from "@/lib/shared/schemas/common";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import {
+  BatchRunnerError,
   getBatchLeaseRetryHint,
   getBatchProgress,
+  releaseBatchTask,
 } from "@/lib/server/applicationBatches/runner";
 import { getResumeProfile } from "@/lib/server/resumeProfile";
 import {
@@ -25,9 +27,24 @@ const CompletedTaskSchema = z.object({
   error: z.string().trim().max(500).optional().nullable(),
 }).strict();
 
+const ReleasedTaskSchema = z.object({
+  taskId: z.string().uuid(),
+  attemptId: z.string().uuid(),
+  reason: z.literal("PUBLICATION_SETTLEMENT_UNKNOWN"),
+}).strict();
+
 const BodySchema = z.object({
-  maxSteps: z.number().int().min(1).max(20).optional().default(1),
+  maxSteps: z.number().int().min(0).max(20).optional().default(1),
   completedTasks: z.array(CompletedTaskSchema).max(20).optional().default([]),
+  releasedTasks: z.array(ReleasedTaskSchema).max(20).optional().default([]),
+  // Missing means an already-running v1 watcher. The server must not select a
+  // newer protocol until the caller explicitly advertises it.
+  supportedProtocolVersions: z
+    .array(z.union([z.literal(2), z.literal(1)]))
+    .min(1)
+    .max(2)
+    .optional()
+    .default([1]),
 }).strict();
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -64,6 +81,24 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       }
 
       const runContext = await buildBatchRunContext({ userId, profile });
+      const releaseResults = [];
+      for (const released of parsedBody.data.releasedTasks) {
+        try {
+          const result = await releaseBatchTask({
+            userId,
+            batchId: batch.id,
+            ...released,
+          });
+          releaseResults.push({ ...released, accepted: true, ...result });
+        } catch (error) {
+          if (!(error instanceof BatchRunnerError)) throw error;
+          releaseResults.push({
+            ...released,
+            accepted: false,
+            error: error.code,
+          });
+        }
+      }
       const completionResults = await completeBatchRunTasks({
         userId,
         batchId: batch.id,
@@ -76,6 +111,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         batchId: batch.id,
         batchStatus: batch.status,
         maxSteps,
+        supportedProtocolVersions: Array.from(
+          new Set(parsedBody.data.supportedProtocolVersions),
+        ),
       });
 
       if (claimed.kind === "not_found") {
@@ -124,6 +162,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           claimedCount: claimed.tasks.length,
           completedCount: completionResults.filter((result) => result.accepted).length,
           completionResults,
+          releasedCount: releaseResults.filter((result) => result.accepted).length,
+          releaseResults,
           stopReason: executionStopReason,
           retryAfterMs: leaseRetryHint?.retryAfterMs ?? null,
           earliestLeaseExpiresAt:

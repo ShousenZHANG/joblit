@@ -59,6 +59,10 @@ export async function issuePromptTailoringRun(input: PromptRunInput) {
     source: input.source,
     delivery: input.delivery,
     requiredTargets: input.batch ? ["RESUME", "COVER"] : [target],
+    publicationRequiredTargets:
+      input.batch && input.delivery === "DRAFT"
+        ? ["RESUME", "COVER"]
+        : [],
     resumeSnapshotHash: binding.resumeSnapshotHash,
     jobSnapshotHash: binding.jobSnapshotHash,
     batch: input.batch,

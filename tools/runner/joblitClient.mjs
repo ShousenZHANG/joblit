@@ -10,11 +10,19 @@
 import { createRequestDeadline } from "./requestDeadline.mjs";
 
 export class JoblitClientError extends Error {
-  constructor(code, message, status, { cause } = {}) {
+  constructor(
+    code,
+    message,
+    status,
+    { cause, phase, requestId, elapsedMs } = {},
+  ) {
     super(message);
     this.name = "JoblitClientError";
     this.code = code;
     this.status = status;
+    if (phase !== undefined) this.phase = phase;
+    if (requestId !== undefined) this.requestId = requestId;
+    if (elapsedMs !== undefined) this.elapsedMs = elapsedMs;
     if (cause !== undefined) this.cause = cause;
   }
 }
@@ -31,7 +39,7 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
  * unknown settlement, then replayed into the same wall. This budget is for
  * the whole chain, with room for the renderer to be cold.
  */
-const IMPORT_TIMEOUT_MS = 120_000;
+const PUBLICATION_TIMEOUT_MS = 120_000;
 
 async function readError(response) {
   const body = await response.json().catch(() => null);
@@ -43,11 +51,17 @@ async function readError(response) {
           ? error.code
           : "JOBLIT_HTTP_ERROR",
       message: error.message,
+      requestId:
+        body && typeof body.requestId === "string" ? body.requestId : undefined,
     };
   }
   return {
     code: "JOBLIT_HTTP_ERROR",
     message: `Joblit HTTP ${response.status}`,
+    requestId:
+      body && typeof body === "object" && typeof body.requestId === "string"
+        ? body.requestId
+        : undefined,
   };
 }
 
@@ -82,7 +96,8 @@ export function createJoblitClient({
   const base = parsed.origin;
 
   async function execute(path, init = {}, parseJson = false) {
-    const { timeoutMs: callTimeoutMs, ...requestInit } = init;
+    const { timeoutMs: callTimeoutMs, phase, ...requestInit } = init;
+    const startedAt = Date.now();
     const budgetMs = callTimeoutMs ?? requestTimeoutMs;
     const upstreamSignal = requestInit.signal;
     const deadline = createRequestDeadline(budgetMs);
@@ -101,7 +116,11 @@ export function createJoblitClient({
       });
       if (!response.ok) {
         const error = await readError(response);
-        throw new JoblitClientError(error.code, error.message, response.status);
+        throw new JoblitClientError(error.code, error.message, response.status, {
+          phase,
+          requestId: error.requestId,
+          elapsedMs: Date.now() - startedAt,
+        });
       }
       return parseJson ? await response.json() : response;
     } catch (error) {
@@ -110,7 +129,7 @@ export function createJoblitClient({
           "JOBLIT_REQUEST_ABORTED",
           "Joblit request cancelled",
           undefined,
-          { cause: error },
+          { cause: error, phase, elapsedMs: Date.now() - startedAt },
         );
       }
       if (deadline.expired()) {
@@ -118,7 +137,7 @@ export function createJoblitClient({
           "JOBLIT_REQUEST_TIMEOUT",
           `Joblit request timed out after ${budgetMs}ms`,
           undefined,
-          { cause: error },
+          { cause: error, phase, elapsedMs: Date.now() - startedAt },
         );
       }
       if (error instanceof JoblitClientError) throw error;
@@ -126,7 +145,7 @@ export function createJoblitClient({
         "JOBLIT_TRANSPORT_ERROR",
         "Joblit request outcome could not be confirmed",
         undefined,
-        { cause: error },
+        { cause: error, phase, elapsedMs: Date.now() - startedAt },
       );
     } finally {
       deadline.dispose();
@@ -151,7 +170,11 @@ export function createJoblitClient({
         `/api/application-batches/${encodeURIComponent(batchId)}/run-once`,
         {
           method: "POST",
-          body: JSON.stringify({ maxSteps: 1, completedTasks }),
+          body: JSON.stringify({
+            maxSteps: 1,
+            completedTasks,
+            supportedProtocolVersions: [2, 1],
+          }),
         },
       );
     },
@@ -174,13 +197,67 @@ export function createJoblitClient({
      * the response body; the Runner only needs the settlement, so any 2xx is
      * success and the body is discarded.
      */
-    async importGeneration(requestBody) {
-      await request("/api/applications/manual-generate?finalize=true", {
+    async importGeneration(requestBody, { finalize = true } = {}) {
+      const path = `/api/applications/manual-generate?finalize=${String(finalize)}`;
+      const init = {
         method: "POST",
         body: JSON.stringify(requestBody),
-        timeoutMs: IMPORT_TIMEOUT_MS,
+        phase: "import",
+      };
+      if (!finalize) return requestJson(path, init);
+      const response = await request(path, {
+        ...init,
+        timeoutMs: PUBLICATION_TIMEOUT_MS,
       });
+      // Drain the discarded PDF so Undici can reuse this connection for the
+      // immediately-following Cover request. Once the server returned 2xx the
+      // import is authoritative; a late body-stream failure must not reverse
+      // that settlement into an ambiguous import.
+      try {
+        await response.arrayBuffer();
+      } catch {
+        // Best-effort resource cleanup only. The 2xx settlement still wins.
+      }
       return { ok: true };
+    },
+
+    async publishGeneration({
+      applicationId,
+      expectedHash,
+      runId,
+      attemptId,
+      target,
+      batchAttemptId,
+    }) {
+      return requestJson(
+        `/api/applications/${encodeURIComponent(applicationId)}/finalize?target=${encodeURIComponent(target)}`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            expectedHash,
+            tailoringRun: { id: runId, attemptId },
+            batchAttemptId,
+          }),
+          timeoutMs: PUBLICATION_TIMEOUT_MS,
+          phase: "publication",
+        },
+      );
+    },
+
+    async releaseTask(batchId, releasedTask) {
+      return requestJson(
+        `/api/application-batches/${encodeURIComponent(batchId)}/run-once`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            maxSteps: 0,
+            completedTasks: [],
+            releasedTasks: [releasedTask],
+            supportedProtocolVersions: [2, 1],
+          }),
+          phase: "release",
+        },
+      );
     },
   };
 }

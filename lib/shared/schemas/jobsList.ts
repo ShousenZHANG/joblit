@@ -42,6 +42,7 @@ export const jobListItemSchema = z.object({
   source: z.string().nullable().optional(),
   postingRisk: z.number().nullable().optional(),
   postingRiskFlags: z.array(z.string()).nullable().optional(),
+  applicationId: z.string().uuid().nullable().optional(),
   resumePdfUrl: z.string().nullable().optional(),
   resumePdfName: z.string().nullable().optional(),
   coverPdfUrl: z.string().nullable().optional(),

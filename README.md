@@ -71,15 +71,15 @@ POST /api/applications/manual-generate     → accept one target with its run ha
 GET  /api/application-batches/:id/summary  → progress (interactive session)
 ```
 
-Every claimed task carries `protocolVersion: 1`, an attempt UUID, and a stable,
-Joblit-derived `issueKey`. Success has no independent callback: accepting the
-final required target atomically commits the Application, its immutable
-receipt, the Tailoring Run, and the batch task in one transaction, so a lost
-response replays the same receipt instead of fabricating a second success.
-After a stale reclaim, the new claim reports `acceptedTargets` and
-`remainingTargets`, and the executor processes only what is missing while the
-already accepted half is preserved. `run-once` reports only `FAILED` or
-`SKIPPED`; an ambiguous timeout during import is never treated as failure.
+New Runners advertise protocol `[2, 1]`; an older caller that advertises
+nothing stays on protocol v1. Protocol v2 first persists each generated target
+as an editable DRAFT, then publishes its PDF independently. A task is complete
+only when every required target has both an immutable acceptance receipt and an
+immutable publication receipt. After a stale reclaim, the claim reports
+`remainingTargets` and `remainingPublicationTargets`, so an uncertain Cover
+publication retries without another Codex run. Existing bound v1 tasks remain
+FINAL/v1 for their lifetime. See
+[ADR-0020](./docs/adr/0020-durable-two-stage-tailoring-publication.md).
 
 ### How Codex was used to build Joblit
 
@@ -213,16 +213,17 @@ on your own machine. It replaces the Chrome extension
 
 ### What it does
 
-Each cycle it drains the active tailoring batch, then sleeps. It claims a task
-from the batch protocol, generates each remaining target by running `codex
-exec` as a child process, and imports the result with the exact receipt and
-TailoringRun handle the prompt endpoint issued. Success is implicit; only
-failures are reported back.
+Each cycle it drains the active tailoring batch, then sleeps. It claims a task,
+generates each `remainingTarget` by running `codex exec`, and first persists the
+result as an editable DRAFT with the exact issued receipt. It then publishes
+each `remainingPublicationTarget` as a PDF. A recovered publication-only task
+never calls Codex again. Success is implicit; only failures and skips are
+reported back.
 
-The Runner keeps no machine-local state (ADR-0018). An unknown network outcome
-during import replays the byte-identical receipt rather than becoming a false
-failure, so a dropped connection never re-runs the model or creates duplicates
-(ADR-0009).
+The Runner keeps no model output on disk (ADR-0018). An unknown import replays
+the byte-identical receipt. Once DRAFT persistence succeeds, publication
+recovery is server-owned and reuses the Application and content hashes, so a
+dropped PDF response never re-runs the model or creates duplicates (ADR-0020).
 
 Generated materials and their PDFs land in Joblit for review. The Runner never
 submits an application.
@@ -428,9 +429,9 @@ The full external orchestration protocol is documented in
 [AGENTS.md](./AGENTS.md), which is the canonical contract. In short:
 
 1. Fetch jobs and keep target roles as `NEW`, then `POST /api/application-batches` with scope `NEW`.
-2. Claim tasks through `run-once`; retain each task's `protocolVersion`, `attemptId`, `issueKey`, and target progress.
-3. Request prompts only for `remainingTargets`, import each result through `manual-generate` with its exact `promptMeta` and `tailoringRun` handle. The final target import commits task success.
-4. Report only `FAILED` or `SKIPPED` with `attemptId`; success needs no callback.
+2. Claim through `run-once`, advertise supported protocols, and retain the task's exact attempt, issue, target, and publication progress.
+3. For protocol v2, request prompts only for `remainingTargets`, persist each through `manual-generate?finalize=false`, then finalize only `remainingPublicationTargets` with the returned Application identity and the exact run fence.
+4. A task succeeds only after both current PDFs have publication receipts. Report only `FAILED` or `SKIPPED`; success needs no callback.
 
 ## Testing
 

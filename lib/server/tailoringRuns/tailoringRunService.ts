@@ -39,7 +39,10 @@ import {
 } from "./tailoringRunHash";
 import { completeBoundBatchTask } from "./tailoringBatchProjection";
 import { tailoringRunLeaseMs } from "./tailoringRunLease";
-import { APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION } from "../applicationBatches/tailoringTaskContract";
+import {
+  APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION,
+  LEGACY_APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION,
+} from "../applicationBatches/tailoringTaskContract";
 import type {
   BindTailoringRunPromptInput,
   CancelTailoringRunInput,
@@ -57,9 +60,13 @@ const ISSUE_KEY_RE = /^[A-Za-z0-9:_-]{1,120}$/;
 function validateIssueInput(input: IssueTailoringRunInput): {
   issueKey: string;
   targetMask: number;
+  publicationTargetMask: number;
 } {
   const issueKey = input.issueKey.trim();
   const mask = requiredTargetMask(input.requiredTargets);
+  const publicationTargetMask = requiredTargetMask(
+    input.publicationRequiredTargets ?? [],
+  );
   let safeIssueKey = true;
   try {
     assertSafeTailoringIdentity(issueKey);
@@ -75,6 +82,12 @@ function validateIssueInput(input: IssueTailoringRunInput): {
       "At least one target is required",
     );
   }
+  if ((publicationTargetMask & mask) !== publicationTargetMask) {
+    throw new TailoringRunError(
+      "TARGET_NOT_REQUIRED",
+      "Publication target is not required by this run",
+    );
+  }
   const batchSource =
     input.source === "CODEX_BATCH" || input.source === "SERVER_BATCH";
   if (batchSource !== Boolean(input.batch)) {
@@ -83,7 +96,7 @@ function validateIssueInput(input: IssueTailoringRunInput): {
       "Batch source and task binding must be supplied together",
     );
   }
-  return { issueKey, targetMask: mask };
+  return { issueKey, targetMask: mask, publicationTargetMask };
 }
 
 async function validateIssueOwnership(
@@ -143,10 +156,11 @@ async function validateIssueBatch(
       "Application batch task is not running",
     );
   }
-  if (
-    task.tailoringProtocolVersion !==
-    APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION
-  ) {
+  const expectedProtocolVersion =
+    input.delivery === "DRAFT"
+      ? APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION
+      : LEGACY_APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION;
+  if (task.tailoringProtocolVersion !== expectedProtocolVersion) {
     throw new TailoringRunError(
       "BATCH_PROTOCOL_MISMATCH",
       "Application batch task has not entered the TailoringRun protocol",
@@ -191,6 +205,7 @@ function issueData(
   id: string,
   key: string,
   mask: number,
+  publicationTargetMask: number,
   hash: string,
   promptReceipts: ReturnType<typeof normalizePromptReceipts>,
 ) {
@@ -205,6 +220,8 @@ function issueData(
     status: "ISSUED",
     requiredTargetMask: mask,
     acceptedTargetMask: 0,
+    publicationRequiredTargetMask: publicationTargetMask,
+    publishedTargetMask: 0,
     issueKey: key,
     issueHash: hash,
     promptReceipts,
@@ -225,6 +242,7 @@ async function applyIssue(
   runId: string,
   key: string,
   mask: number,
+  publicationTargetMask: number,
   now: Date,
 ): Promise<TailoringRunMutationResult> {
   await acquireTailoringJobLock(
@@ -240,7 +258,7 @@ async function applyIssue(
   }
   const prompts = normalizePromptReceipts(input.promptReceipts);
   validateIssuedPromptTargets(prompts, mask);
-  const hash = issueInputHash(input, mask, prompts);
+  const hash = issueInputHash(input, mask, publicationTargetMask, prompts);
   const existing = await tx.tailoringRun.findUnique({
     where: { userId_issueKey: { userId: input.userId, issueKey: key } },
     include: { applicationBatchTask: true },
@@ -286,7 +304,15 @@ async function applyIssue(
     }
   }
   const created = await tx.tailoringRun.create({
-    data: issueData(input, runId, key, mask, hash, prompts),
+    data: issueData(
+      input,
+      runId,
+      key,
+      mask,
+      publicationTargetMask,
+      hash,
+      prompts,
+    ),
   });
   return { disposition: "APPLIED", run: snapshotOf(created) };
 }
@@ -294,6 +320,7 @@ async function applyIssue(
 function issueInputHash(
   input: IssueTailoringRunInput,
   mask: number,
+  publicationTargetMask: number,
   prompts: ReturnType<typeof normalizePromptReceipts>,
 ): string {
   return issueHash({
@@ -303,6 +330,7 @@ function issueInputHash(
     source: input.source,
     delivery: input.delivery,
     requiredTargetMask: mask,
+    publicationRequiredTargetMask: publicationTargetMask,
     resumeSnapshotHash: validateSnapshotHash(
       input.resumeSnapshotHash,
       "resumeSnapshotHash",
@@ -350,10 +378,23 @@ export async function issueTailoringRun(
   overrides?: Partial<TailoringRunDependencies>,
 ): Promise<TailoringRunMutationResult> {
   const deps = tailoringRunDependencies(overrides);
-  const { issueKey, targetMask: mask } = validateIssueInput(input);
+  const {
+    issueKey,
+    targetMask: mask,
+    publicationTargetMask,
+  } = validateIssueInput(input);
   const runId = tailoringRunIdForIssue(input.userId, issueKey);
   return deps.database.$transaction(
-    (tx) => applyIssue(tx, input, runId, issueKey, mask, deps.now()),
+    (tx) =>
+      applyIssue(
+        tx,
+        input,
+        runId,
+        issueKey,
+        mask,
+        publicationTargetMask,
+        deps.now(),
+      ),
     TRANSACTION_OPTIONS,
   );
 }

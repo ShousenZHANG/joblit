@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 
 import type { TailoringRunTarget } from "@/lib/server/tailoringRuns/tailoringRunProtocol";
 
-export const APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION = 1 as const;
+export const APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION = 2 as const;
+export const LEGACY_APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION = 1 as const;
+export type ApplicationBatchTailoringProtocolVersion = 1 | 2;
 
 export const APPLICATION_BATCH_TARGETS = ["RESUME", "COVER"] as const satisfies
   readonly TailoringRunTarget[];
@@ -44,17 +46,29 @@ export function applicationBatchTargetsFromMask(
 export function applicationBatchTargetProgress(input: {
   requiredTargetMask?: number | null;
   acceptedTargetMask?: number | null;
+  publicationRequiredTargetMask?: number | null;
+  publishedTargetMask?: number | null;
 }): {
   acceptedTargets: TailoringRunTarget[];
   remainingTargets: TailoringRunTarget[];
+  publishedTargets: TailoringRunTarget[];
+  remainingPublicationTargets: TailoringRunTarget[];
 } {
   const requiredTargetMask = input.requiredTargetMask ?? 3;
   const acceptedTargetMask =
     (input.acceptedTargetMask ?? 0) & requiredTargetMask;
+  const publicationRequiredTargetMask =
+    (input.publicationRequiredTargetMask ?? 0) & requiredTargetMask;
+  const publishedTargetMask =
+    (input.publishedTargetMask ?? 0) & publicationRequiredTargetMask;
   return {
     acceptedTargets: applicationBatchTargetsFromMask(acceptedTargetMask),
     remainingTargets: applicationBatchTargetsFromMask(
       requiredTargetMask & ~acceptedTargetMask,
+    ),
+    publishedTargets: applicationBatchTargetsFromMask(publishedTargetMask),
+    remainingPublicationTargets: applicationBatchTargetsFromMask(
+      acceptedTargetMask & publicationRequiredTargetMask & ~publishedTargetMask,
     ),
   };
 }

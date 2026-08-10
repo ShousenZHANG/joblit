@@ -102,7 +102,7 @@ export const VirtualJobList = forwardRef<VirtualJobListHandle, VirtualJobListPro
                 transform: `translateY(${virtualRow.start}px)`,
                 transition: isScrolling || reducedMotion
                   ? "none"
-                  : "transform 220ms cubic-bezier(0.16, 1, 0.3, 1)",
+                  : "transform 180ms cubic-bezier(0.16, 1, 0.3, 1)",
                 willChange: "transform",
               }}
             >

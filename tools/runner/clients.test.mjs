@@ -2175,6 +2175,7 @@ test("joblit: every call carries the bearer token and the error envelope surface
   assert.deepEqual(JSON.parse(runOnceCall.init.body), {
     maxSteps: 1,
     completedTasks: [],
+    supportedProtocolVersions: [2, 1],
   });
 
   // The server's own message travels — not a status code.
@@ -2187,14 +2188,16 @@ test("joblit: every call carries the bearer token and the error envelope surface
 });
 
 test("joblit: import treats any 2xx as settled, including a PDF body", async () => {
+  let pdfResponse;
   const fetchImpl = async (url, init = {}) => {
     if (String(url).includes("/api/applications/manual-generate")) {
       assert.match(String(url), /finalize=true/);
       assert.equal(init.headers.Authorization, `Bearer ${AGENT_TOKEN}`);
-      return new Response(new Blob(["%PDF-1.7"], { type: "application/pdf" }), {
+      pdfResponse = new Response(new Blob(["%PDF-1.7"], { type: "application/pdf" }), {
         status: 200,
         headers: { "content-type": "application/pdf" },
       });
+      return pdfResponse;
     }
     return jsonResponse({ error: "unexpected" }, 500);
   };
@@ -2212,6 +2215,160 @@ test("joblit: import treats any 2xx as settled, including a PDF body", async () 
     modelOutput: "{}",
     promptMeta: {},
   });
+  assert.equal(
+    pdfResponse.bodyUsed,
+    true,
+    "the discarded PDF must be drained so the next Cover request can reuse the connection",
+  );
+});
+
+test("joblit: a failed best-effort PDF drain cannot reverse a settled 2xx import", async () => {
+  const response = {
+    ok: true,
+    status: 200,
+    arrayBuffer: async () => {
+      throw new TypeError("response stream closed after headers");
+    },
+  };
+  const joblit = createJoblitClient({
+    baseUrl: "https://joblit.example.com",
+    token: AGENT_TOKEN,
+    fetchImpl: async () => response,
+  });
+
+  await assert.doesNotReject(
+    joblit.importGeneration({
+      jobId: "j",
+      target: "cover",
+      source: "codex_batch",
+      modelOutput: "{}",
+      promptMeta: {},
+    }),
+  );
+});
+
+test("joblit: draft import returns the durable Application before publication", async () => {
+  const fetchImpl = async (url) => {
+    assert.match(String(url), /manual-generate\?finalize=false/);
+    return jsonResponse({
+      applicationId: "22222222-2222-4222-9222-222222222222",
+      aiContentHash: "aggregate-hash",
+    });
+  };
+  const joblit = createJoblitClient({
+    baseUrl: "https://joblit.example.com",
+    token: AGENT_TOKEN,
+    fetchImpl,
+  });
+
+  assert.deepEqual(
+    await joblit.importGeneration({ target: "resume" }, { finalize: false }),
+    {
+    applicationId: "22222222-2222-4222-9222-222222222222",
+    aiContentHash: "aggregate-hash",
+    },
+  );
+});
+
+test("joblit: publication carries the persisted Application and Tailoring Run fence", async () => {
+  const calls = [];
+  const fetchImpl = async (url, init = {}) => {
+    calls.push({ url: String(url), init });
+    return jsonResponse({ status: "DRAFT", requestId: "request-1" });
+  };
+  const joblit = createJoblitClient({
+    baseUrl: "https://joblit.example.com",
+    token: AGENT_TOKEN,
+    fetchImpl,
+  });
+
+  await joblit.publishGeneration({
+    applicationId: "22222222-2222-4222-9222-222222222222",
+    expectedHash: "aggregate-hash",
+    runId: "33333333-3333-4333-8333-333333333333",
+    attemptId: "44444444-4444-4444-8444-444444444444",
+    target: "cover",
+    batchAttemptId: "44444444-4444-4444-8444-444444444444",
+  });
+
+  assert.match(
+    calls[0].url,
+    /\/api\/applications\/22222222-2222-4222-9222-222222222222\/finalize\?target=cover$/,
+  );
+  assert.deepEqual(JSON.parse(calls[0].init.body), {
+    expectedHash: "aggregate-hash",
+    tailoringRun: {
+      id: "33333333-3333-4333-8333-333333333333",
+      attemptId: "44444444-4444-4444-8444-444444444444",
+    },
+    batchAttemptId: "44444444-4444-4444-8444-444444444444",
+  });
+});
+
+test("joblit: releases an ambiguous v2 publication without claiming another task", async () => {
+  const calls = [];
+  const fetchImpl = async (url, init = {}) => {
+    calls.push({ url: String(url), init });
+    return jsonResponse({ released: true });
+  };
+  const joblit = createJoblitClient({
+    baseUrl: "https://joblit.example.com",
+    token: AGENT_TOKEN,
+    fetchImpl,
+  });
+
+  await joblit.releaseTask("batch-1", {
+    taskId: "11111111-1111-4111-8111-111111111111",
+    attemptId: "22222222-2222-4222-8222-222222222222",
+    reason: "PUBLICATION_SETTLEMENT_UNKNOWN",
+  });
+
+  assert.match(calls[0].url, /\/api\/application-batches\/batch-1\/run-once$/);
+  assert.deepEqual(JSON.parse(calls[0].init.body), {
+    maxSteps: 0,
+    completedTasks: [],
+    releasedTasks: [
+      {
+        taskId: "11111111-1111-4111-8111-111111111111",
+        attemptId: "22222222-2222-4222-8222-222222222222",
+        reason: "PUBLICATION_SETTLEMENT_UNKNOWN",
+      },
+    ],
+    supportedProtocolVersions: [2, 1],
+  });
+});
+
+test("joblit: errors preserve request telemetry for settlement diagnosis", async () => {
+  const fetchImpl = async () =>
+    jsonResponse(
+      {
+        error: { code: "LATEX_RENDER_FAILED", message: "Render failed" },
+        requestId: "req-publication-1",
+      },
+      503,
+    );
+  const joblit = createJoblitClient({
+    baseUrl: "https://joblit.example.com",
+    token: AGENT_TOKEN,
+    fetchImpl,
+  });
+
+  await assert.rejects(
+    joblit.publishGeneration({
+      applicationId: "22222222-2222-4222-9222-222222222222",
+      expectedHash: "aggregate-hash",
+      runId: "33333333-3333-4333-8333-333333333333",
+      attemptId: "44444444-4444-4444-8444-444444444444",
+      target: "cover",
+      batchAttemptId: "44444444-4444-4444-8444-444444444444",
+    }),
+    (error) =>
+      error?.phase === "publication" &&
+      error?.status === 503 &&
+      error?.code === "LATEX_RENDER_FAILED" &&
+      error?.requestId === "req-publication-1" &&
+      Number.isFinite(error?.elapsedMs),
+  );
 });
 
 test("joblit: gives the import call a render-sized budget, not the API default", async () => {

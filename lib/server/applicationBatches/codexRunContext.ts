@@ -26,9 +26,15 @@ type BatchRunTask = {
   taskId: string;
   attemptId: string;
   issueKey: string;
-  protocolVersion: 1;
+  protocolVersion: 1 | 2;
+  delivery: "FINAL" | "DRAFT";
   acceptedTargets: Array<"RESUME" | "COVER">;
   remainingTargets: Array<"RESUME" | "COVER">;
+  publishedTargets: Array<"RESUME" | "COVER">;
+  remainingPublicationTargets: Array<"RESUME" | "COVER">;
+  applicationId: string | null;
+  applicationAiContentHash: string | null;
+  tailoringRun: { id: string; attemptId: string } | null;
   jobId: string;
   job: {
     id: string;
@@ -159,6 +165,7 @@ export async function claimBatchRunTasks(input: {
   batchId: string;
   batchStatus: ApplicationBatchStatus;
   maxSteps: number;
+  supportedProtocolVersions?: Array<1 | 2>;
 }): Promise<
   | {
       kind: "ok";
@@ -194,6 +201,7 @@ export async function claimBatchRunTasks(input: {
       userId: input.userId,
       batchId: input.batchId,
       skipStaleReclaim: true,
+      supportedProtocolVersions: input.supportedProtocolVersions ?? [1],
     });
 
     if (claimed.kind === "not_found") {
@@ -232,8 +240,14 @@ export async function claimBatchRunTasks(input: {
         attemptId: claimed.task.attemptId,
         issueKey: claimed.task.issueKey,
         protocolVersion: claimed.task.protocolVersion,
+        delivery: claimed.task.delivery,
         acceptedTargets: claimed.task.acceptedTargets,
         remainingTargets: claimed.task.remainingTargets,
+        publishedTargets: claimed.task.publishedTargets,
+        remainingPublicationTargets: claimed.task.remainingPublicationTargets,
+        applicationId: claimed.task.applicationId,
+        applicationAiContentHash: claimed.task.applicationAiContentHash,
+        tailoringRun: claimed.task.tailoringRun,
         jobId: claimed.task.jobId,
         job: {
           id: job.id,

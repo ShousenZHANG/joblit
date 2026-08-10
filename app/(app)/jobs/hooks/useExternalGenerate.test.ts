@@ -379,7 +379,10 @@ describe("useExternalGenerate stable issue recovery", () => {
       },
     );
     vi.stubGlobal("fetch", fetchMock);
-    const { result } = renderHook(() => useExternalGenerate(vi.fn()));
+    const onDraftPersisted = vi.fn();
+    const { result } = renderHook(() =>
+      useExternalGenerate(vi.fn(), { onDraftPersisted }),
+    );
 
     await act(async () => {
       await result.current.openExternalGenerateDialog(job, "resume");
@@ -412,8 +415,13 @@ describe("useExternalGenerate stable issue recovery", () => {
       target: "resume",
       tailoringRun,
     });
-    expect(hookDependencies.markTaskComplete).toHaveBeenCalledWith(
-      "generate_first_pdf",
+    expect(onDraftPersisted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: "resume",
+        source: "manual_import",
+        resumePdfUrl: null,
+        coverPdfUrl: null,
+      }),
     );
   });
 });

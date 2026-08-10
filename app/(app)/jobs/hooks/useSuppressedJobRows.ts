@@ -29,6 +29,8 @@ interface ViewportAnchor {
   jobId: string | null;
   offsetTop: number;
   scrollTop: number;
+  viewport: HTMLElement;
+  previousOverflowAnchor: string;
 }
 
 export interface SuppressedJobRows {
@@ -57,6 +59,7 @@ export function useSuppressedJobRows(input: {
     () => new Set(sessionDeletedJobIds),
   );
   const anchorRef = useRef<ViewportAnchor | null>(null);
+  const aboveViewportDeletedIdsRef = useRef<Set<string>>(new Set());
 
   const findViewport = useCallback(
     () =>
@@ -67,21 +70,47 @@ export function useSuppressedJobRows(input: {
   );
 
   const captureAnchor = useCallback(
-    (excludedIds: ReadonlySet<string>) => {
+    (changedIds: ReadonlySet<string>, operation: "hide" | "reveal") => {
       const viewport = findViewport();
       if (!viewport) return;
+      const viewportRect = viewport.getBoundingClientRect();
+      const viewportTop = viewportRect.top;
+      const rows = Array.from(
+        viewport.querySelectorAll<HTMLElement>("[data-job-id]"),
+      );
+
+      if (operation === "hide") {
+        let deletionAboveViewport = false;
+        for (const row of rows) {
+          const id = row.dataset.jobId;
+          if (!id || !changedIds.has(id)) continue;
+          if (row.getBoundingClientRect().bottom <= viewportTop) {
+            aboveViewportDeletedIdsRef.current.add(id);
+            deletionAboveViewport = true;
+          }
+        }
+        if (!deletionAboveViewport) return;
+      } else {
+        const restoresRowAboveViewport = [...changedIds].some((id) =>
+          aboveViewportDeletedIdsRef.current.has(id),
+        );
+        for (const id of changedIds) {
+          aboveViewportDeletedIdsRef.current.delete(id);
+        }
+        if (!restoresRowAboveViewport) return;
+      }
       // Compensation below is against a stable row identity, so disable native
       // overflow anchoring — otherwise Chrome applies a second, competing
       // correction for the same DOM change.
+      const previousOverflowAnchor =
+        anchorRef.current?.viewport === viewport
+          ? anchorRef.current.previousOverflowAnchor
+          : viewport.style.overflowAnchor;
       viewport.style.overflowAnchor = "none";
 
-      const viewportRect = viewport.getBoundingClientRect();
-      const viewportTop = viewportRect.top;
-      const anchor = Array.from(
-        viewport.querySelectorAll<HTMLElement>("[data-job-id]"),
-      ).find((row) => {
+      const anchor = rows.find((row) => {
         const id = row.dataset.jobId;
-        if (!id || excludedIds.has(id)) return false;
+        if (!id || changedIds.has(id)) return false;
         const rowRect = row.getBoundingClientRect();
         return rowRect.bottom > viewportTop && rowRect.top < viewportRect.bottom;
       });
@@ -92,6 +121,8 @@ export function useSuppressedJobRows(input: {
           ? anchor.getBoundingClientRect().top - viewportTop
           : 0,
         scrollTop: viewport.scrollTop,
+        viewport,
+        previousOverflowAnchor,
       };
     },
     [findViewport],
@@ -103,7 +134,7 @@ export function useSuppressedJobRows(input: {
       if (hidden.size === 0) return;
       // Anchor against a row that is staying: the ones leaving cannot hold a
       // position after this render.
-      captureAnchor(hidden);
+      captureAnchor(hidden, "hide");
       setSuppressedDeletedIds((previous) => {
         const missing = [...hidden].filter((id) => !previous.has(id));
         if (missing.length === 0) return previous;
@@ -119,8 +150,9 @@ export function useSuppressedJobRows(input: {
     (ids: Iterable<string>) => {
       const revealed = new Set(ids);
       if (revealed.size === 0) return;
-      // Nothing is leaving, so any visible row is a valid anchor.
-      captureAnchor(new Set());
+      // Only reverse compensation for rows that originally disappeared above
+      // the viewport. Revealing a visible row leaves scrollTop untouched.
+      captureAnchor(revealed, "reveal");
       setSuppressedDeletedIds((previous) => {
         const present = [...revealed].filter((id) => previous.has(id));
         if (present.length === 0) return previous;
@@ -137,23 +169,26 @@ export function useSuppressedJobRows(input: {
     if (!snapshot) return;
     anchorRef.current = null;
 
-    const viewport = findViewport();
-    if (!viewport) return;
+    const viewport = snapshot.viewport;
 
-    if (snapshot.jobId) {
-      const anchor = viewport.querySelector<HTMLElement>(
-        `[data-job-id="${CSS.escape(snapshot.jobId)}"]`,
-      );
-      if (anchor) {
-        const viewportTop = viewport.getBoundingClientRect().top;
-        const nextOffsetTop = anchor.getBoundingClientRect().top - viewportTop;
-        viewport.scrollTop += nextOffsetTop - snapshot.offsetTop;
-        return;
+    try {
+      if (snapshot.jobId) {
+        const anchor = viewport.querySelector<HTMLElement>(
+          `[data-job-id="${CSS.escape(snapshot.jobId)}"]`,
+        );
+        if (anchor) {
+          const viewportTop = viewport.getBoundingClientRect().top;
+          const nextOffsetTop = anchor.getBoundingClientRect().top - viewportTop;
+          viewport.scrollTop += nextOffsetTop - snapshot.offsetTop;
+          return;
+        }
       }
+      // The anchored row went away too; fall back to the raw offset.
+      viewport.scrollTop = snapshot.scrollTop;
+    } finally {
+      viewport.style.overflowAnchor = snapshot.previousOverflowAnchor;
     }
-    // The anchored row went away too; fall back to the raw offset.
-    viewport.scrollTop = snapshot.scrollTop;
-  }, [findViewport]);
+  }, []);
 
   return { suppressedDeletedIds, hideJobs, revealJobs, restoreAnchor };
 }

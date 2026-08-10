@@ -32,6 +32,8 @@ function runRow(patch: Partial<TailoringRunRow> = {}): TailoringRunRow {
     status: "RUNNING",
     requiredTargetMask: 1,
     acceptedTargetMask: 0,
+    publicationRequiredTargetMask: 0,
+    publishedTargetMask: 0,
     issueKey: "issue",
     issueHash: "issue-hash",
     promptReceipts: { RESUME: { promptHash: "prompt-hash" } },
@@ -80,6 +82,10 @@ function transaction(
     },
     tailoringRunReceipt: {
       findMany: vi.fn(async () => receipts),
+      create: vi.fn(),
+    },
+    tailoringRunPublicationReceipt: {
+      findMany: vi.fn(async () => []),
       create: vi.fn(),
     },
     applicationBatchTask: {
@@ -352,6 +358,69 @@ describe("prepareTailoringRunAcceptance", () => {
 });
 
 describe("completeTailoringRunAcceptance", () => {
+  it("keeps a v2 batch running after both draft targets are durable but unpublished", async () => {
+    const task = {
+      id: "99999999-9999-4999-8999-999999999999",
+      batchId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      userId: USER_ID,
+      jobId: JOB_ID,
+      status: "RUNNING",
+      executionAttemptId: TASK_ATTEMPT,
+      tailoringProtocolVersion: 2,
+      completionAttemptId: null,
+    };
+    const run = runRow({
+      source: "CODEX_BATCH",
+      delivery: "DRAFT",
+      requiredTargetMask: 3,
+      acceptedTargetMask: 1,
+      publicationRequiredTargetMask: 3,
+      publishedTargetMask: 0,
+      applicationBatchTaskId: task.id,
+      applicationBatchTask: task,
+      promptReceipts: { COVER: { promptHash: "cover-prompt" } },
+    });
+    const tx = transaction(run);
+    vi.mocked(tx.tailoringRunReceipt.create).mockImplementation(async (args) =>
+      args.data as TailoringReceiptRow,
+    );
+    const prepared = await prepareTailoringRunAcceptance(tx, {
+      userId: USER_ID,
+      jobId: JOB_ID,
+      requests: [
+        request({
+          source: "CODEX_BATCH",
+          delivery: "DRAFT",
+          target: "COVER",
+          promptHash: "cover-prompt",
+          requestHash: "cover-request",
+          batchExecutionAttemptId: TASK_ATTEMPT,
+        }),
+      ],
+    });
+
+    const completed = await completeTailoringRunAcceptance(tx, {
+      prepared,
+      applicationId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      aiContentHash: "aggregate-content-hash",
+      documentContentHashes: { COVER: "cover-document-content-hash" },
+    });
+
+    expect(completed.completedRunIds).toEqual([]);
+    expect(tx.tailoringRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          acceptedTargetMask: 3,
+          applicationId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        }),
+      }),
+    );
+    expect(tx.tailoringRun.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "SUCCEEDED" }) }),
+    );
+    expect(tx.applicationBatchTask.updateMany).not.toHaveBeenCalled();
+  });
+
   it("commits the last target, receipt, task, and batch projection together", async () => {
     const task = {
       id: "99999999-9999-4999-8999-999999999999",

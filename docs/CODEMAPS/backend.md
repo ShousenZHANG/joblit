@@ -48,11 +48,10 @@ Entry: `POST /api/applications/manual-generate`.
 
 1. Prompt built separately by `buildApplicationPromptForUser` — `applicationPrompt.ts`
 2. Current Resume/Cover prompt responses include a public Tailoring Run
-   `{ id, attemptId }` handle. Codex Batch must return it unchanged. During the
-   Phase A/B rolling window a client talking to an old service may label a
-   response as legacy and import without manufacturing a run; Phase C makes the
-   handle mandatory after legacy telemetry reaches zero. A private Hermes
-   `run_*` identifier never crosses into Joblit
+   `{ id, attemptId }` handle. Codex Batch must return it unchanged. A new
+   Runner advertises protocol `[2, 1]`; missing capabilities and already-bound
+   FINAL runs remain v1. Private Codex process/session identifiers never cross
+   into Joblit
 3. External LLM runs the prompt; the route validates the request envelope with
    `ManualGenerateSchema`
 4. The route rebuilds the exact Full or Lean prompt and validates its generation
@@ -65,15 +64,17 @@ Entry: `POST /api/applications/manual-generate`.
 6. The same accept seam owns normalization, Resume bullet
    grounding/non-redundancy gates, Cover quality, provenance, evidence, and
    canonical `AiContent`
-7. `buildManualImportArtifact` is a pure rendering adapter over the accepted
-   canonical result
+7. Protocol v2 does not render during acceptance. It persists the canonical
+   target as DRAFT and returns `applicationId` plus `aiContentHash`; v1 FINAL
+   keeps `buildManualImportArtifact` as its compatibility rendering adapter
 8. `commitApplicationArtifact({ mergeTarget, reviewContext, tailoring })`
    validates the run attempt and immutable target receipt before the Application
    mutation, folds that target into the stored aggregate, preserves the other
    target and its known provenance, then re-reviews the complete aggregate
-9. `?finalize=false` commits `DRAFT` with no artifact. FINAL mode compiles and
-   validates the requested PDF before commit; a blocked combined review returns
-   `review_blocked` and the new Blob is cleaned up
+9. `?finalize=false` commits `DRAFT` with no artifact. Protocol v2 then calls
+   target-scoped `/api/applications/:id/finalize` with the run and batch attempt;
+   the commit records a `TailoringRunPublicationReceipt`. FINAL v1 compiles and
+   validates during import. A blocked combined review cleans up the new Blob
 
 The current external output contract is intentionally small: Resume returns
 `cvSummary` and zero to three `latestExperience.addedBullets`; Cover returns
@@ -81,12 +82,13 @@ only its three body paragraphs. Existing bullets and skills remain owned by the
 Master Resume Profile.
 
 The first-party adapter for this path is `tools/runner/`. It polls the
-server-owned Tailoring Run while Hermes executes and requires the exact active
-`{ id, attemptId }` on every non-terminal response. Unknown import settlements
-replay the same immutable prompt/run receipt; a superseded attempt, cancellation
-or exhausted unknown settlement is deferred rather than reported as a failure
-against a newer executor. `run-once` exposes a bounded lease retry hint when a
-batch is still running but no task is claimable.
+server-owned Tailoring Run while Codex executes and requires the exact active
+`{ id, attemptId }` on every non-terminal response. Unknown imports replay the
+same prompt/run receipt. Unknown publications replay the stored
+Application/content/run identity; after three attempts the task is released
+behind a new fence and reclaimed publication-only, never regenerated.
+`run-once` exposes a bounded lease retry hint when a batch is still running but
+no task is claimable.
 
 
 `GET /api/prompt-rules/skill-pack` converts the user's active effective
@@ -109,7 +111,7 @@ UI marks it fresh. See ADR-0002.
 - `compileLatexToPdf` — the single renderer
 - `commitApplicationArtifact` — the artifact persistence sequence shared by
   server generation, manual/Agent Runner generation, and Editor Finalize; generated
-  writers also use it as the Tailoring Run acceptance boundary
+  writers use it as the Tailoring Run acceptance or publication boundary
 - `persistReviewLedger` — reached through the commit module plus non-artifact draft and discard transactions
 
 Once a `DRAFT` Application exists, `app/api/applications/[id]/finalize/route.ts`
@@ -125,17 +127,17 @@ ownership for one Job. Generated writers then take `ABAT -> TLRN`; unbound
 writers refuse to mutate while a run is active. Tailoring Run acceptance wraps
 the Application mutation:
 
-**durable STAGED row → upload → record URL → transaction (optional Batch lock
-→ optional Tailoring Run lock → Application lock → Job ownership recheck →
-optional aggregate CAS → optional single-target fold + full re-review → FINAL
-review gate → hash → Application upsert + REFERENCED transition + superseded
-DELETE_PENDING outbox → review ledger → immutable target receipt → run/task
-projection)**
+**durable STAGED row → upload → record URL → transaction (TJOB → optional ABAT
+→ optional TLRN → JOBA → ownership recheck → optional aggregate CAS → FINAL
+review gate → Application update + REFERENCED transition + superseded
+DELETE_PENDING outbox → review ledger → immutable publication receipt →
+run/task projection)**
 
-When the accepted receipt completes a batch run's required target mask, that
-same transaction marks the linked task `SUCCEEDED`. Neither task `PATCH` nor
-`run-once` may write success independently; they accept only `FAILED` or
-`SKIPPED` with the claimed `attemptId`.
+For protocol v2, acceptance alone cannot mark a task successful. The
+transaction that records the final required publication receipt marks the
+linked task `SUCCEEDED`. Neither task `PATCH` nor `run-once` may write success
+independently; they accept only `FAILED` or `SKIPPED` with the claimed
+`attemptId`.
 
 | Caller                     | Owns                                                    |                      `mergeTarget` |            CAS |
 | -------------------------- | ------------------------------------------------------- | ---------------------------------: | -------------: |

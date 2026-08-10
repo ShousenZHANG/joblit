@@ -53,6 +53,18 @@ describe("JobListItem", () => {
     expect(screen.getByText("Platform Engineer")).toBeInTheDocument();
   });
 
+  it("limits its 180ms motion to composited and visual properties", () => {
+    renderJobListItem();
+
+    const surface = screen.getByRole("listitem").firstElementChild;
+    expect(surface).toHaveClass("duration-[180ms]");
+    expect(surface).toHaveClass(
+      "transition-[background-color,border-color,box-shadow,transform]",
+    );
+    expect(surface).toHaveClass("motion-reduce:transition-none");
+    expect(surface).not.toHaveClass("transition-all");
+  });
+
   it("renders the row under the Chinese locale", () => {
     renderJobListItem({ locale: "zh" });
 

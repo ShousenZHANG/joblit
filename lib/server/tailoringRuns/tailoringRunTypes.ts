@@ -33,6 +33,7 @@ export type IssueTailoringRunInput = {
   source: TailoringRunSource;
   delivery: TailoringRunDelivery;
   requiredTargets: readonly TailoringRunTarget[];
+  publicationRequiredTargets?: readonly TailoringRunTarget[];
   resumeSnapshotHash: string;
   jobSnapshotHash: string;
   batch?: TailoringBatchBinding | null;
@@ -74,6 +75,8 @@ export type TailoringRunSnapshot = {
   delivery: TailoringRunDelivery;
   requiredTargetMask: number;
   acceptedTargetMask: number;
+  publicationRequiredTargetMask: number;
+  publishedTargetMask: number;
   applicationId: string | null;
   applicationBatchTaskId: string | null;
   handle: TailoringRunHandle | null;
@@ -179,6 +182,8 @@ export type PreparedTailoringRun = {
   delivery: TailoringRunDelivery;
   requiredTargetMask: number;
   acceptedTargetMask: number;
+  publicationRequiredTargetMask: number;
+  publishedTargetMask: number;
   executionAttemptId: string;
   applicationBatchTaskId: string | null;
   batchId: string | null;

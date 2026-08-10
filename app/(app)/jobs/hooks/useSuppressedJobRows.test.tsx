@@ -73,15 +73,33 @@ describe("useSuppressedJobRows", () => {
     ]);
   });
 
-  it("captures the viewport as part of hiding, never as a separate step", () => {
+  it("captures the viewport as part of hiding a row above it", () => {
     // Capture disables native overflow anchoring so the browser does not apply
     // a second, competing correction. Seeing that flag proves the measurement
     // ran inside hideJobs rather than being left to the caller.
     const { result } = render();
     expect(mounted.viewport.style.overflowAnchor).toBe("");
+    const row = mounted.viewport.querySelector<HTMLElement>(
+      '[data-job-id="job-b"]',
+    )!;
+    row.getBoundingClientRect = () =>
+      ({ top: -90, bottom: -40 }) as DOMRect;
 
     act(() => result.current.hideJobs(["job-b"]));
     expect(mounted.viewport.style.overflowAnchor).toBe("none");
+  });
+
+  it("does not compensate a visible deletion or change its scroll position", () => {
+    const { result } = render();
+    const before = mounted.viewport.scrollTop;
+
+    act(() => result.current.hideJobs(["job-b"]));
+    expect(mounted.viewport.style.overflowAnchor).toBe("");
+    mounted.viewport.querySelector('[data-job-id="job-b"]')?.remove();
+    act(() => result.current.restoreAnchor());
+
+    expect(mounted.viewport.style.overflowAnchor).toBe("");
+    expect(mounted.viewport.scrollTop).toBe(before);
   });
 
   it("anchors against a row that is staying, not one being hidden", () => {
@@ -91,6 +109,10 @@ describe("useSuppressedJobRows", () => {
     // prevent. Proven by removing every row except the anchor's and checking
     // the offset path ran rather than the fallback.
     const { result } = render();
+    mounted.viewport.querySelector<HTMLElement>(
+      '[data-job-id="job-a"]',
+    )!.getBoundingClientRect = () =>
+      ({ top: -90, bottom: -40 }) as DOMRect;
     act(() => result.current.hideJobs(["job-a"]));
 
     mounted.viewport.querySelector('[data-job-id="job-a"]')?.remove();
@@ -104,7 +126,12 @@ describe("useSuppressedJobRows", () => {
 
   it("captures on reveal too, so a rollback does not jump either", () => {
     const { result } = render();
+    mounted.viewport.querySelector<HTMLElement>(
+      '[data-job-id="job-b"]',
+    )!.getBoundingClientRect = () =>
+      ({ top: -90, bottom: -40 }) as DOMRect;
     act(() => result.current.hideJobs(["job-b"]));
+    act(() => result.current.restoreAnchor());
     mounted.viewport.style.overflowAnchor = "";
 
     act(() => result.current.revealJobs(["job-b"]));
@@ -113,6 +140,10 @@ describe("useSuppressedJobRows", () => {
 
   it("restores the scroll position once, then forgets the snapshot", () => {
     const { result } = render();
+    mounted.viewport.querySelector<HTMLElement>(
+      '[data-job-id="job-b"]',
+    )!.getBoundingClientRect = () =>
+      ({ top: -90, bottom: -40 }) as DOMRect;
     act(() => result.current.hideJobs(["job-b"]));
 
     // The anchored row is gone, so the fallback restores the raw offset.
@@ -129,6 +160,28 @@ describe("useSuppressedJobRows", () => {
     mounted.viewport.scrollTop = 5;
     act(() => result.current.restoreAnchor());
     expect(mounted.viewport.scrollTop).toBe(5);
+  });
+
+  it("restores native overflow anchoring after compensating for a deletion above the viewport", () => {
+    const viewport = mounted.viewport;
+    viewport.getBoundingClientRect = () =>
+      ({ top: 100, bottom: 600 }) as DOMRect;
+    const rows = viewport.querySelectorAll<HTMLElement>("[data-job-id]");
+    rows[0]!.getBoundingClientRect = () =>
+      ({ top: 0, bottom: 80 }) as DOMRect;
+    rows[1]!.getBoundingClientRect = () =>
+      ({ top: 120, bottom: 170 }) as DOMRect;
+    rows[2]!.getBoundingClientRect = () =>
+      ({ top: 180, bottom: 230 }) as DOMRect;
+
+    const { result } = render();
+    act(() => result.current.hideJobs(["job-a"]));
+    expect(viewport.style.overflowAnchor).toBe("none");
+
+    rows[0]!.remove();
+    act(() => result.current.restoreAnchor());
+
+    expect(viewport.style.overflowAnchor).toBe("");
   });
 
   it("does nothing when there is no viewport to measure", () => {

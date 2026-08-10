@@ -30,6 +30,14 @@ export type TailoringReceiptRow = {
   delivery: TailoringRunDelivery;
 };
 
+export type TailoringPublicationReceiptRow = {
+  runId: string;
+  target: TailoringRunTarget;
+  executionAttemptId: string;
+  applicationId: string | null;
+  documentContentHash: string;
+};
+
 export type TailoringRunRow = {
   id: string;
   userId: string;
@@ -42,6 +50,8 @@ export type TailoringRunRow = {
   status: TailoringRunStatus;
   requiredTargetMask: number;
   acceptedTargetMask: number;
+  publicationRequiredTargetMask: number;
+  publishedTargetMask: number;
   issueKey: string;
   issueHash: string;
   promptReceipts: unknown;
@@ -73,6 +83,10 @@ export type TailoringRunTransaction = {
   tailoringRunReceipt: {
     findMany(args: QueryArgs): Promise<TailoringReceiptRow[]>;
     create(args: QueryArgs): Promise<TailoringReceiptRow>;
+  };
+  tailoringRunPublicationReceipt: {
+    findMany(args: QueryArgs): Promise<TailoringPublicationReceiptRow[]>;
+    create(args: QueryArgs): Promise<TailoringPublicationReceiptRow>;
   };
   applicationBatchTask: {
     findFirst(args: QueryArgs): Promise<TailoringBatchTaskRow | null>;

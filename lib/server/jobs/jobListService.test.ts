@@ -42,6 +42,25 @@ const row = {
   applications: [],
 };
 
+const editableAiContent = {
+  schemaVersion: 1,
+  generatedAt: "2026-08-10T00:00:00.000Z",
+  promptMetaHash: "prompt-hash",
+  cv: {
+    summary: {
+      aiText: "Platform engineer.",
+      originalText: "Engineer.",
+      accepted: true,
+    },
+    latestExperience: { experienceIndex: 0, addedBullets: [] },
+  },
+  cover: {
+    paragraphOne: { aiText: "One", accepted: true },
+    paragraphTwo: { aiText: "Two", accepted: true },
+    paragraphThree: { aiText: "Three", accepted: true },
+  },
+};
+
 describe("listJobs market visibility", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -104,6 +123,83 @@ describe("listJobs market visibility", () => {
       }),
     );
   });
+
+  it("projects only the Application identity needed to open Review & Edit", async () => {
+    prismaMock.job.findMany.mockResolvedValueOnce([
+      {
+        ...row,
+        applications: [
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            aiContent: editableAiContent,
+            resumePdfUrl: "https://example.com/cv.pdf",
+            resumePdfName: "Alex Platform Engineer_CV.pdf",
+            coverPdfUrl: "https://example.com/cl.pdf",
+          },
+        ],
+      },
+    ]);
+
+    const result = await listJobs("user-1", {
+      limit: 10,
+      sort: "newest",
+      market: "AU",
+    });
+
+    expect(result.items[0]).toMatchObject({
+      applicationId: "22222222-2222-4222-8222-222222222222",
+      resumePdfUrl: "https://example.com/cv.pdf",
+      coverPdfUrl: "https://example.com/cl.pdf",
+    });
+    expect(result.items[0]).not.toHaveProperty("aiContent");
+    expect(prismaMock.job.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          applications: expect.objectContaining({
+            where: { userId: "user-1" },
+            take: 1,
+          }),
+        }),
+      }),
+    );
+  });
+
+  it.each([
+    ["missing", null],
+    ["invalid", { schemaVersion: 1 }],
+  ])(
+    "keeps legacy PDFs downloadable but withholds the Review identity for %s AI Content",
+    async (_case, aiContent) => {
+      prismaMock.job.findMany.mockResolvedValueOnce([
+        {
+          ...row,
+          applications: [
+            {
+              id: "22222222-2222-4222-8222-222222222222",
+              aiContent,
+              resumePdfUrl: "https://example.com/legacy-cv.pdf",
+              resumePdfName: "Legacy CV.pdf",
+              coverPdfUrl: "https://example.com/legacy-cl.pdf",
+            },
+          ],
+        },
+      ]);
+
+      const result = await listJobs("user-1", {
+        limit: 10,
+        sort: "newest",
+        market: "AU",
+      });
+
+      expect(result.items[0]).toMatchObject({
+        applicationId: null,
+        resumePdfUrl: "https://example.com/legacy-cv.pdf",
+        resumePdfName: "Legacy CV.pdf",
+        coverPdfUrl: "https://example.com/legacy-cl.pdf",
+      });
+      expect(result.items[0]).not.toHaveProperty("aiContent");
+    },
+  );
 
   it("uses the persisted description SimHash to expose cross-source duplicates", async () => {
     const fingerprint = computeSimHash64(

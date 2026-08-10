@@ -42,6 +42,11 @@ import type {
   TailoringAcceptanceRequest,
 } from "@/lib/server/tailoringRuns/tailoringRunTypes";
 import type { TailoringRunTransaction } from "@/lib/server/tailoringRuns/tailoringRunDatabase";
+import {
+  completeTailoringRunPublication,
+  prepareTailoringRunPublication,
+  type TailoringPublicationRequest,
+} from "@/lib/server/tailoringRuns/tailoringRunPublication";
 import { acquireUnboundApplicationWriteAuthority } from "@/lib/server/tailoringRuns/tailoringJobOwnership";
 import {
   applicationPublicationTargets,
@@ -109,6 +114,7 @@ type CommitBaseFields = {
   expectedHash?: string | null;
   extraData?: Record<string, unknown>;
   tailoring?: readonly TailoringAcceptanceRequest[];
+  tailoringPublication?: TailoringPublicationRequest;
 };
 
 type CommitBaseInput = CommitBaseFields &
@@ -370,6 +376,26 @@ async function prepareTailoringForCommit(
   );
 }
 
+type PreparedTailoringPublication = Awaited<
+  ReturnType<typeof prepareTailoringRunPublication>
+>;
+
+async function preparePublicationForCommit(
+  tx: Prisma.TransactionClient,
+  input: CommitInput,
+): Promise<PreparedTailoringPublication | null> {
+  if (!input.tailoringPublication) return null;
+  return prepareTailoringRunPublication(
+    tx as unknown as TailoringRunTransaction,
+    {
+      userId: input.userId,
+      jobId: input.job.id,
+      applicationId: input.tailoringPublication.applicationId,
+      request: input.tailoringPublication,
+    },
+  );
+}
+
 async function loadCommitApplication(
   tx: Prisma.TransactionClient,
   input: CommitInput,
@@ -404,6 +430,35 @@ function replayCommittedAcceptance(
   return {
     kind: "committed" as const,
     applicationId: preparedTailoring.replayed[0]?.applicationId ?? existing.id,
+    aiContent: parsed.data,
+    aiContentHash: existing.aiContentHash,
+    publication: projectApplicationPublication({
+      aiContent: parsed.data,
+      record: applicationPublicationRecord(existing),
+      renderContext: UNAVAILABLE_APPLICATION_PUBLICATION_RENDER_CONTEXT,
+    }),
+    superseded: [] as string[],
+    urls: {
+      ...(existing.resumePdfUrl ? { resume: existing.resumePdfUrl } : {}),
+      ...(existing.coverPdfUrl ? { cover: existing.coverPdfUrl } : {}),
+    } satisfies Partial<Record<CommitTarget, string>>,
+    tailoringDisposition: "REPLAYED" as const,
+  };
+}
+
+function replayCommittedPublication(
+  existing: ApplicationCommitRow | null,
+  preparedPublication: PreparedTailoringPublication | null,
+) {
+  if (preparedPublication?.disposition !== "REPLAYED") return null;
+  if (!existing?.aiContent || !existing.aiContentHash) {
+    return { kind: "invalid_ai_content" as const };
+  }
+  const parsed = aiContentSchema.safeParse(existing.aiContent);
+  if (!parsed.success) return { kind: "invalid_ai_content" as const };
+  return {
+    kind: "committed" as const,
+    applicationId: existing.id,
     aiContent: parsed.data,
     aiContentHash: existing.aiContentHash,
     publication: projectApplicationPublication({
@@ -550,13 +605,24 @@ async function commitInTransaction(
   artifacts: VersionedCommitArtifact[],
   uploadBundle: UploadedArtifactBundle,
 ) {
-  if (!input.tailoring || input.tailoring.length === 0) {
+  if (
+    input.tailoringPublication &&
+    input.tailoring &&
+    input.tailoring.length > 0
+  ) {
+    throw new Error("TAILORING_ACCEPTANCE_AND_PUBLICATION_CONFLICT");
+  }
+  if (
+    (!input.tailoring || input.tailoring.length === 0) &&
+    !input.tailoringPublication
+  ) {
     await acquireUnboundApplicationWriteAuthority(tx, {
       userId: input.userId,
       jobId: input.job.id,
     });
   }
   const preparedTailoring = await prepareTailoringForCommit(tx, input);
+  const preparedPublication = await preparePublicationForCommit(tx, input);
   const loaded = await loadCommitApplication(tx, input);
   if (loaded.kind === "job_missing") return loaded;
   const replay = replayCommittedAcceptance(
@@ -565,6 +631,11 @@ async function commitInTransaction(
     preparedTailoring,
   );
   if (replay) return replay;
+  const publicationReplay = replayCommittedPublication(
+    loaded.existing,
+    preparedPublication,
+  );
+  if (publicationReplay) return publicationReplay;
   if (hasExpectedHashConflict(input, loaded.existing)) {
     return { kind: "stale_write" as const };
   }
@@ -591,6 +662,7 @@ async function commitInTransaction(
     uploadBundle,
     loaded.existing,
     preparedTailoring,
+    preparedPublication,
     resolved,
     renderContextFence.current,
   );
@@ -603,6 +675,7 @@ async function persistResolvedCommit(
   uploadBundle: UploadedArtifactBundle,
   existing: ApplicationCommitRow | null,
   preparedTailoring: PreparedTailoringAcceptance | null,
+  preparedPublication: PreparedTailoringPublication | null,
   resolved: Extract<
     ReturnType<typeof resolveCommitContent>,
     { kind: "resolved" }
@@ -640,6 +713,7 @@ async function persistResolvedCommit(
     application.id,
     resolved,
     preparedTailoring,
+    preparedPublication,
     publicationTransition.publication,
   );
   return appliedCommitResult(
@@ -647,6 +721,7 @@ async function persistResolvedCommit(
     resolved,
     publicationTransition.publication,
     preparedTailoring,
+    preparedPublication,
   );
 }
 
@@ -658,6 +733,7 @@ function appliedCommitResult(
   >,
   publication: ApplicationPublication,
   preparedTailoring: PreparedTailoringAcceptance | null,
+  preparedPublication: PreparedTailoringPublication | null,
 ) {
   return {
     kind: "committed" as const,
@@ -665,7 +741,9 @@ function appliedCommitResult(
     aiContent: resolved.aiContent,
     aiContentHash: resolved.aiContentHash,
     publication,
-    ...(preparedTailoring ? { tailoringDisposition: "APPLIED" as const } : {}),
+    ...(preparedTailoring || preparedPublication
+      ? { tailoringDisposition: "APPLIED" as const }
+      : {}),
   };
 }
 
@@ -708,6 +786,7 @@ async function persistCommitSideEffects(
     { kind: "resolved" }
   >,
   preparedTailoring: PreparedTailoringAcceptance | null,
+  preparedPublication: PreparedTailoringPublication | null,
   publication: ApplicationPublication,
 ) {
   await markArtifactsReferencedAndRetireSuperseded(
@@ -732,16 +811,34 @@ async function persistCommitSideEffects(
     jobId: input.job.id,
     aiContent: resolved.aiContent,
   });
-  if (!preparedTailoring) return;
-  await completeTailoringRunAcceptance(
-    tx as unknown as TailoringRunTransaction,
-    {
-      prepared: preparedTailoring,
-      applicationId,
-      aiContentHash: resolved.aiContentHash,
-      documentContentHashes: publicationDocumentContentHashes(publication),
-    },
-  );
+  if (preparedTailoring) {
+    await completeTailoringRunAcceptance(
+      tx as unknown as TailoringRunTransaction,
+      {
+        prepared: preparedTailoring,
+        applicationId,
+        aiContentHash: resolved.aiContentHash,
+        documentContentHashes: publicationDocumentContentHashes(publication),
+      },
+    );
+  }
+  if (preparedPublication && input.tailoringPublication) {
+    const document =
+      input.tailoringPublication.target === "RESUME"
+        ? publication.resume
+        : publication.cover;
+    if (document.status !== "FINAL" || !document.contentHash) {
+      throw new Error("TAILORING_PUBLICATION_NOT_FINAL");
+    }
+    await completeTailoringRunPublication(
+      tx as unknown as TailoringRunTransaction,
+      {
+        prepared: preparedPublication,
+        applicationId,
+        documentContentHash: document.contentHash,
+      },
+    );
+  }
 }
 
 async function retireCommitBundle(

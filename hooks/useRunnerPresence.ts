@@ -10,6 +10,8 @@ import { useCallback, useEffect, useState } from "react";
 const DEFAULT_ONLINE_WINDOW_MS = 90_000;
 const OFFLINE_POLL_MS = 5_000;
 const ONLINE_POLL_MS = 20_000;
+const CONNECTION_CHECK_INTERVAL_MS = 1_000;
+const CONNECTION_CHECK_WINDOW_MS = 15_000;
 
 export type RunnerPresence =
   | { status: "unknown" }
@@ -21,10 +23,14 @@ export type RunnerPresence =
     }
   | {
       status: "online";
+      /** Credential whose authenticated activity produced this observation. */
+      credentialId: string | null;
       lastUsedAt: Date;
       minutesAgo: number;
       secondsAgo: number;
       onlineWindowMs: number;
+      /** The Runner was recently online, but the latest presence read failed. */
+      checkDelayed: boolean;
     };
 
 export type RunnerPresenceView = RunnerPresence & {
@@ -33,15 +39,21 @@ export type RunnerPresenceView = RunnerPresence & {
 
 type PresenceResponse = {
   status?: "online" | "offline";
+  credentialId?: string | null;
   lastUsedAt: string | null;
   checkedAt?: string;
   onlineWindowMs?: number;
 };
 
 let snapshot: RunnerPresence = { status: "unknown" };
-let inFlight: Promise<void> | null = null;
+let credentialScope: string | null = null;
+let scopeVersion = 0;
+let inFlight: { scopeVersion: number; promise: Promise<void> } | null = null;
 let expiryTimer: ReturnType<typeof setTimeout> | null = null;
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
+let connectionCheckTimer: ReturnType<typeof setTimeout> | null = null;
+let connectionCheckUntil = 0;
+let connectionCheckCredentialId: string | null = null;
 let activeConsumers = 0;
 const listeners = new Set<(next: RunnerPresence) => void>();
 
@@ -90,7 +102,24 @@ type ParsedPresence = {
   minutesAgoAtExpiry: number | null;
 };
 
-function parsePresence(json: PresenceResponse): ParsedPresence {
+function parsePresence(
+  json: PresenceResponse,
+  expectedCredentialId: string | null,
+): ParsedPresence {
+  // A scoped replacement check is satisfied only by authenticated activity
+  // from that exact credential. Treat stale caches or incompatible responses
+  // as offline instead of borrowing an older Runner's green state.
+  if (
+    expectedCredentialId !== null &&
+    json.credentialId !== expectedCredentialId
+  ) {
+    return {
+      presence: { status: "offline", lastUsedAt: null, minutesAgo: null },
+      expiresInMs: null,
+      minutesAgoAtExpiry: null,
+    };
+  }
+
   if (!json.lastUsedAt) {
     return {
       presence: { status: "offline", lastUsedAt: null, minutesAgo: null },
@@ -133,10 +162,12 @@ function parsePresence(json: PresenceResponse): ParsedPresence {
   return {
     presence: {
       status: "online",
+      credentialId: json.credentialId ?? null,
       lastUsedAt,
       minutesAgo: Math.floor(ageMs / 60_000),
       secondsAgo: Math.floor(ageMs / 1_000),
       onlineWindowMs,
+      checkDelayed: false,
     },
     expiresInMs: Math.max(0, onlineWindowMs - ageMs),
     minutesAgoAtExpiry: Math.floor(
@@ -145,14 +176,35 @@ function parsePresence(json: PresenceResponse): ParsedPresence {
   };
 }
 
-export function refreshRunnerPresence(): Promise<void> {
-  if (inFlight) return inFlight;
+function presenceEndpoint(credentialId: string | null): string {
+  if (!credentialId) return "/api/agent/presence";
+  return `/api/agent/presence?credentialId=${encodeURIComponent(credentialId)}`;
+}
 
-  inFlight = (async () => {
+function bindCredentialScope(credentialId: string): void {
+  if (credentialScope === credentialId) return;
+  credentialScope = credentialId;
+  scopeVersion += 1;
+  clearExpiryTimer();
+  // Invalidating synchronously prevents one render where the newly displayed
+  // command inherits an old Runner's online snapshot.
+  publish({ status: "offline", lastUsedAt: null, minutesAgo: null });
+}
+
+export function refreshRunnerPresence(): Promise<void> {
+  const requestScopeVersion = scopeVersion;
+  const requestCredentialId = credentialScope;
+  if (inFlight?.scopeVersion === requestScopeVersion) return inFlight.promise;
+
+  const operation = (async () => {
     try {
-      const response = await fetch("/api/agent/presence");
+      const response = await fetch(presenceEndpoint(requestCredentialId));
       if (!response.ok) throw new Error(`status=${response.status}`);
-      const parsed = parsePresence((await response.json()) as PresenceResponse);
+      const parsed = parsePresence(
+        (await response.json()) as PresenceResponse,
+        requestCredentialId,
+      );
+      if (requestScopeVersion !== scopeVersion) return;
       const next = parsed.presence;
       publish(next);
       if (
@@ -169,26 +221,109 @@ export function refreshRunnerPresence(): Promise<void> {
         clearExpiryTimer();
       }
     } catch {
-      clearExpiryTimer();
-      publish({ status: "unavailable", lastUsedAt: lastObservedAt() });
+      if (requestScopeVersion !== scopeVersion) return;
+      // A transient presence endpoint failure is not evidence that a Runner
+      // which was just observed online has disconnected. Preserve that
+      // observation until its original server-derived TTL expires, while
+      // exposing that the follow-up check was delayed.
+      if (snapshot.status === "online") {
+        publish({ ...snapshot, checkDelayed: true });
+      } else {
+        clearExpiryTimer();
+        publish({ status: "unavailable", lastUsedAt: lastObservedAt() });
+      }
     } finally {
-      inFlight = null;
+      if (inFlight?.scopeVersion === requestScopeVersion) inFlight = null;
     }
   })();
 
-  return inFlight;
+  inFlight = { scopeVersion: requestScopeVersion, promise: operation };
+  return operation;
+}
+
+/**
+ * Make one issued credential the active presence identity and immediately
+ * re-read it. This carries no raw token and is safe to call repeatedly.
+ */
+export function refreshRunnerPresenceForCredential(
+  credentialId: string,
+): Promise<void> {
+  bindCredentialScope(credentialId);
+  return refreshRunnerPresence();
 }
 
 function pollDelay() {
-  return snapshot.status === "online" ? ONLINE_POLL_MS : OFFLINE_POLL_MS;
+  return snapshot.status === "online" && !snapshot.checkDelayed
+    ? ONLINE_POLL_MS
+    : OFFLINE_POLL_MS;
 }
 
 function schedulePoll() {
   if (activeConsumers === 0 || typeof window === "undefined") return;
+  if (connectionCheckUntil > Date.now()) return;
   if (pollTimer !== null) clearTimeout(pollTimer);
   pollTimer = setTimeout(() => {
     void refreshRunnerPresence().finally(schedulePoll);
   }, pollDelay());
+}
+
+function finishConnectionCheck(resumePolling: boolean) {
+  if (connectionCheckTimer !== null) clearTimeout(connectionCheckTimer);
+  connectionCheckTimer = null;
+  connectionCheckUntil = 0;
+  connectionCheckCredentialId = null;
+  if (resumePolling && activeConsumers > 0) schedulePoll();
+}
+
+function scheduleConnectionCheck() {
+  const freshOnline =
+    snapshot.status === "online" &&
+    !snapshot.checkDelayed &&
+    (connectionCheckCredentialId === null ||
+      snapshot.credentialId === connectionCheckCredentialId);
+  if (
+    activeConsumers === 0 ||
+    typeof window === "undefined" ||
+    freshOnline ||
+    Date.now() >= connectionCheckUntil
+  ) {
+    finishConnectionCheck(activeConsumers > 0);
+    return;
+  }
+
+  if (connectionCheckTimer !== null) clearTimeout(connectionCheckTimer);
+  connectionCheckTimer = setTimeout(() => {
+    connectionCheckTimer = null;
+    if (Date.now() >= connectionCheckUntil) {
+      finishConnectionCheck(true);
+      return;
+    }
+    void refreshRunnerPresence().finally(scheduleConnectionCheck);
+  }, CONNECTION_CHECK_INTERVAL_MS);
+}
+
+/**
+ * Start one shared, short-lived fast check after the user copies a Runner
+ * command. Repeated callers extend the same burst instead of creating parallel
+ * timers or requests; the module-level in-flight guard also deduplicates the
+ * immediate read.
+ */
+export function beginRunnerConnectionCheck(
+  credentialId?: string,
+): Promise<void> {
+  if (credentialId) bindCredentialScope(credentialId);
+  connectionCheckCredentialId = credentialId ?? credentialScope;
+  connectionCheckUntil = Date.now() + CONNECTION_CHECK_WINDOW_MS;
+  if (pollTimer !== null) clearTimeout(pollTimer);
+  pollTimer = null;
+  if (connectionCheckTimer !== null) clearTimeout(connectionCheckTimer);
+  connectionCheckTimer = null;
+  return refreshRunnerPresence().finally(scheduleConnectionCheck);
+}
+
+/** Stop the fast setup burst while leaving ordinary shared presence polling. */
+export function cancelRunnerConnectionCheck(): void {
+  finishConnectionCheck(true);
 }
 
 function refreshOnFocus() {
@@ -211,6 +346,7 @@ function activatePolling() {
     if (activeConsumers > 0) return;
     if (pollTimer !== null) clearTimeout(pollTimer);
     pollTimer = null;
+    finishConnectionCheck(false);
     window.removeEventListener("focus", refreshOnFocus);
     document.removeEventListener("visibilitychange", refreshOnVisibility);
   };
@@ -224,6 +360,9 @@ function subscribe(listener: (next: RunnerPresence) => void) {
     if (listeners.size === 0) {
       clearExpiryTimer();
       snapshot = { status: "unknown" };
+      credentialScope = null;
+      scopeVersion += 1;
+      inFlight = null;
     }
   };
 }

@@ -187,8 +187,8 @@ export function useJobMutations({
         }
         setError(getErrorMessage(e, "Failed to delete job"));
         toast({
-          title: "Delete failed",
-          description: getErrorMessage(e, "The job could not be removed."),
+          title: t("deleteFailedTitle"),
+          description: t("deleteFailedRestored"),
           variant: "destructive",
           duration: 2400,
           className:
@@ -202,7 +202,7 @@ export function useJobMutations({
         });
       }
     },
-    [queryClient, revealJobs, setSelectedId, toast],
+    [queryClient, revealJobs, setSelectedId, toast, t],
   );
 
   const undoDelete = useCallback(
@@ -269,7 +269,7 @@ export function useJobMutations({
         style: { animationDuration: `${UNDO_WINDOW_MS}ms` },
       });
       const handle = toast({
-        title: t("jobDeleted"),
+        title: t("jobRemovedFromList"),
         description: createElement(Fragment, null, job.title, countdownBar),
         duration: UNDO_WINDOW_MS,
         className:

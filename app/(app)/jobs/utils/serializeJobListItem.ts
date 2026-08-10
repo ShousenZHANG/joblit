@@ -30,6 +30,7 @@ export function serializeJobListItem(item: JobListItem): JobItem {
     livenessStatus: item.livenessStatus,
     livenessReason: item.livenessReason,
     possibleDuplicate: item.possibleDuplicate,
+    applicationId: item.applicationId,
     resumePdfUrl: item.resumePdfUrl,
     resumePdfName: item.resumePdfName,
     coverPdfUrl: item.coverPdfUrl,

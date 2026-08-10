@@ -16,9 +16,17 @@ const database = vi.hoisted(() => ({
   executeRaw: vi.fn(),
   queryRaw: vi.fn(),
 }));
+const tailoringPublication = vi.hoisted(() => ({
+  prepare: vi.fn(),
+  complete: vi.fn(),
+}));
 
 vi.mock("@/lib/server/prisma", () => ({
   prisma: { $transaction: database.transaction },
+}));
+vi.mock("@/lib/server/tailoringRuns/tailoringRunPublication", () => ({
+  prepareTailoringRunPublication: tailoringPublication.prepare,
+  completeTailoringRunPublication: tailoringPublication.complete,
 }));
 
 const { confirmApplicationPublicationReplay } = await import(
@@ -150,6 +158,47 @@ describe("confirmApplicationPublicationReplay", () => {
     });
     expect(database.executeRaw).toHaveBeenCalledOnce();
     expect(database.queryRaw).toHaveBeenCalledOnce();
+  });
+
+  it("records an agent publication receipt in the same locked no-render replay", async () => {
+    const prepared = { disposition: "PENDING", run: { id: "run-1" } };
+    tailoringPublication.prepare.mockResolvedValueOnce(prepared);
+    tailoringPublication.complete.mockResolvedValueOnce({ completed: true });
+
+    const result = await confirmApplicationPublicationReplay({
+      ...INPUT,
+      tailoringPublication: {
+        handle: {
+          id: "55555555-5555-4555-8555-555555555555",
+          attemptId: "66666666-6666-4666-8666-666666666666",
+        },
+        applicationId: APPLICATION_ID,
+        target: "RESUME",
+        batchExecutionAttemptId: "66666666-6666-4666-8666-666666666666",
+      },
+    });
+
+    expect(result.kind).toBe("replayed");
+    expect(tailoringPublication.prepare).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        userId: USER_ID,
+        jobId: JOB_ID,
+        applicationId: APPLICATION_ID,
+        request: expect.objectContaining({ target: "RESUME" }),
+      }),
+    );
+    expect(tailoringPublication.complete).toHaveBeenCalledWith(
+      tailoringPublication.prepare.mock.calls[0][0],
+      {
+        prepared,
+        applicationId: APPLICATION_ID,
+        documentContentHash: RESUME_CONTENT_HASH,
+      },
+    );
+    expect(
+      tailoringPublication.prepare.mock.invocationCallOrder[0],
+    ).toBeLessThan(database.executeRaw.mock.invocationCallOrder[0]!);
   });
 
   it("rejects the fast replay when Profile inputs changed after the initial read", async () => {

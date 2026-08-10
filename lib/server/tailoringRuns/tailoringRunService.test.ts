@@ -37,6 +37,8 @@ function baseRun(patch: Partial<TailoringRunRow> = {}): TailoringRunRow {
     status: "ISSUED",
     requiredTargetMask: 1,
     acceptedTargetMask: 0,
+    publicationRequiredTargetMask: 0,
+    publishedTargetMask: 0,
     issueKey: "manual:job:resume",
     issueHash: "issue-hash",
     promptReceipts: {},
@@ -374,6 +376,7 @@ describe("TailoringRun issue/start/bind lifecycle", () => {
     const setup = mutableRunTransaction(
       baseRun({
         source: "SERVER_BATCH",
+        delivery: "FINAL",
         applicationBatchTaskId: TASK_ID,
         applicationBatchTask: task,
       }),
@@ -406,6 +409,7 @@ describe("TailoringRun issue/start/bind lifecycle", () => {
     const setup = mutableRunTransaction(
       baseRun({
         source: "SERVER_BATCH",
+        delivery: "FINAL",
         status: "RUNNING",
         executionAttemptId: ATTEMPT_A,
         executionLeaseExpiresAt: new Date("2026-07-26T01:00:00.000Z"),

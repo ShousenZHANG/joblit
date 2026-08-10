@@ -112,7 +112,7 @@ persisted Application aggregate and Edit model (ADR-0002).
 
 ```
   buildApplicationPromptForUser
-  [the user's model runs the prompt — Runner via loopback Hermes, or manual]
+  [the user's model runs the prompt — Runner via local Codex CLI, or manual]
   parse*Output + Quality Gate
                           │
                  attachEvidenceAndReview
@@ -149,11 +149,12 @@ distributes this contract together with the user's active effective rules.
 `ApplicationBatch` over `NEW` Jobs. `POST /api/application-batches/[id]/run-once`
 reports only a previous `FAILED`/`SKIPPED` attempt and claims new tasks. Each
 task response includes its fencing `attemptId`, stable derived `issueKey`, and
-durable `acceptedTargets`/`remainingTargets`. External Codex requests only the
-missing target prompts with `source = codex_batch`, `delivery = FINAL`, the
-claimed `issueKey`, and the batch/task/attempt binding, then echoes each
-response's `promptMeta` and public `tailoringRun` handle through
-`manual-generate`. Reclaim preserves the accepted Application half.
+durable acceptance/publication progress. New Runners advertise `[2, 1]` and use
+protocol v2: request only missing prompts with `delivery = DRAFT`, persist each
+accepted target through `manual-generate`, then independently finalize only
+`remainingPublicationTargets`. Reclaim preserves accepted content and current
+PDFs; a publication-only claim never calls Codex. Bound FINAL/v1 tasks remain
+v1 during rolling deployment.
 
 Fresh and failed-task retry batches enter through one
 `queueApplicationBatch` transaction. It takes the per-user Job mutation lock
@@ -165,31 +166,31 @@ reconciles each surviving batch in the same transaction. The row fence closes
 the expand-window race with a legacy in-flight task FK insert. A now-empty
 active batch becomes `CANCELLED`, not falsely `SUCCEEDED` or `FAILED`.
 
-There is no independent success callback. The final required target is the
-point of no return: its transaction commits the Application mutation,
-immutable `TailoringRunReceipt`, terminal `TailoringRun`, and
-`ApplicationBatchTask = SUCCEEDED` together. Task `PATCH` and `run-once`
-completion input therefore accept only `FAILED`/`SKIPPED` with the claimed
-`attemptId`. The retired `/execute` server auto-generation route was removed with the
+There is no independent success callback. Acceptance commits the DRAFT
+Application and immutable `TailoringRunReceipt`; target publication commits the
+PDF and immutable `TailoringRunPublicationReceipt`. Only the final required
+publication marks the Tailoring Run and task `SUCCEEDED`. Task `PATCH` and
+`run-once` completion input therefore accept only `FAILED`/`SKIPPED` with the
+claimed `attemptId`. The retired `/execute` server auto-generation route was removed with the
 Gemini provider chain (ADR-0015).
 For protocol-v1 tasks, the same transaction also writes
 `completionAttemptId = executionAttemptId`; a database constraint rejects an
 old worker's unreceipted success after a new claim.
-Private Hermes `run_*` identifiers stay in the Runner and never enter
-Joblit's domain model. Protocol in `AGENTS.md`; durability details in ADR-0009.
+Private Codex process/session identifiers stay in the Runner and never enter
+Joblit's domain model. Protocol in `AGENTS.md`; acceptance and publication
+durability in ADR-0009 and ADR-0020.
 
-While Hermes executes, the Runner polls the Tailoring Run and accepts a
+While Codex executes, the Runner polls the Tailoring Run and accepts a
 non-terminal response only when its active `{ id, attemptId }` matches the
 issued handle. Takeover aborts stale local work. Unknown import outcomes replay
-the byte-identical receipt and remain deferred if still unconfirmed; they are
-never converted into a false task failure. When no task is claimable but a live
-lease remains, `run-once` returns a bounded retry hint and the Runner waits.
+the byte-identical receipt. Unknown publication outcomes replay the same
+Application/content/run fence and, if unresolved, release immediately behind a
+fresh attempt fence. When no task is claimable but a live lease remains,
+`run-once` returns a bounded retry hint and the Runner waits.
 
-Machine-local Hermes state contains only opaque ids, hashes, a repair cursor,
-and non-secret operation identity. Startup reconciles it against accepted
-target masks before new work. A Hermes `stopping` response is non-terminal, and
-an interrupted repair is recovered from one unambiguous session-transcript
-response rather than submitted twice.
+The Codex child process does not outlive the Runner and model output is not
+stored locally. After DRAFT acceptance, the server-owned Application and
+publication masks are the recovery source of truth.
 
 ---
 

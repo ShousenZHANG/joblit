@@ -74,7 +74,7 @@ function JobListItemInner({
       className="w-full"
     >
       <div
-        className={`joblit-list-item flex w-full items-start gap-0 rounded-2xl border border-l-4 border-border/60 bg-background/80 text-left backdrop-blur-sm transition-all duration-200 ease-out hover:-translate-y-[1px] ${
+        className={`joblit-list-item flex w-full items-start gap-0 rounded-2xl border border-l-4 border-border/60 bg-background/80 text-left backdrop-blur-sm transition-[background-color,border-color,box-shadow,transform] duration-[180ms] ease-out hover:-translate-y-[1px] motion-reduce:transition-none motion-reduce:hover:translate-y-0 ${
           isActive
             ? "border-l-brand-emerald-500 bg-brand-emerald-50/50 shadow-sm"
             : // Signal lock: hovering a row lights its left edge emerald. The

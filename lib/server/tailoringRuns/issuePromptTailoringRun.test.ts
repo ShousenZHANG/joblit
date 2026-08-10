@@ -105,4 +105,25 @@ describe("issuePromptTailoringRun", () => {
     ).rejects.toMatchObject({ code: "PROMPT_CONFLICT" });
     expect(lifecycle.fail).not.toHaveBeenCalled();
   });
+
+  it("requires both documents to publish for a protocol-v2 draft batch", async () => {
+    await issuePromptTailoringRun({
+      ...input,
+      source: "CODEX_BATCH",
+      delivery: "DRAFT",
+      batch: {
+        batchId: "batch-1",
+        taskId: "task-1",
+        executionAttemptId: ATTEMPT_ID,
+      },
+    });
+
+    expect(lifecycle.issue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        delivery: "DRAFT",
+        requiredTargets: ["RESUME", "COVER"],
+        publicationRequiredTargets: ["RESUME", "COVER"],
+      }),
+    );
+  });
 });

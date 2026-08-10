@@ -13,7 +13,8 @@
  */
 
 const TARGET_LABELS = { RESUME: "resume", COVER: "cover" };
-const AGENT_EXECUTION_PROTOCOL_VERSION = 1;
+const AGENT_EXECUTION_PROTOCOL_VERSION = 2;
+const SUPPORTED_AGENT_EXECUTION_PROTOCOLS = new Set([1, 2]);
 const DEFAULT_CANCELLATION_POLL_MS = 1_500;
 const DEFAULT_SETTLEMENT_RETRY_MS = 250;
 const DEFAULT_LEASE_WAIT_MAX_MS = 30_000;
@@ -75,6 +76,28 @@ function sleep(ms, signal) {
 
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function errorTelemetry(error) {
+  if (!isRecord(error)) return "";
+  const fields = [
+    ["phase", error.phase],
+    ["status", error.status],
+    ["code", error.code],
+    ["requestId", error.requestId],
+    ["elapsedMs", error.elapsedMs],
+  ]
+    .filter(([, value]) =>
+      typeof value === "string"
+        ? value.length > 0
+        : typeof value === "number" && Number.isFinite(value),
+    )
+    .map(([key, value]) => `${key}=${String(value)}`);
+  return fields.length > 0 ? ` [${fields.join(" ")}]` : "";
+}
+
+function describeError(error) {
+  return `${errorMessage(error)}${errorTelemetry(error)}`;
 }
 
 function readRecoverableOperation(value) {
@@ -237,6 +260,36 @@ function isAmbiguousJoblitError(error) {
   );
 }
 
+const SUPERSEDED_EXECUTION_CODES = new Set([
+  "TAILORING_ATTEMPT_STALE",
+  "ATTEMPT_STALE",
+  "BATCH_ATTEMPT_MISMATCH",
+  "BATCH_TASK_NOT_RUNNING",
+]);
+
+const AUTHORITATIVE_TERMINAL_EXECUTION_CODES = new Set([
+  "TAILORING_RUN_TERMINAL",
+  "RUN_ALREADY_TERMINAL",
+]);
+
+function isSupersededExecutionError(error) {
+  return (
+    error &&
+    typeof error === "object" &&
+    "code" in error &&
+    SUPERSEDED_EXECUTION_CODES.has(error.code)
+  );
+}
+
+function isAuthoritativeTerminalExecutionError(error) {
+  return (
+    error &&
+    typeof error === "object" &&
+    "code" in error &&
+    AUTHORITATIVE_TERMINAL_EXECUTION_CODES.has(error.code)
+  );
+}
+
 function isAmbiguousHermesError(error) {
   if (error instanceof TypeError) return true;
   if (
@@ -265,14 +318,39 @@ function importSettlementUnknown(cause) {
     { cause },
   );
   error.code = "IMPORT_SETTLEMENT_UNKNOWN";
+  for (const field of ["phase", "status", "requestId", "elapsedMs"]) {
+    if (isRecord(cause) && cause[field] !== undefined) {
+      error[field] = cause[field];
+    }
+  }
   return error;
 }
 
-async function settleImport({ joblit, request, signal, retryMs, log }) {
+function publicationSettlementUnknown(cause) {
+  const error = new Error(
+    "Joblit publication settlement is unknown; the exact publication receipt will be replayed on recovery",
+    { cause },
+  );
+  error.code = "PUBLICATION_SETTLEMENT_UNKNOWN";
+  for (const field of ["phase", "status", "requestId", "elapsedMs"]) {
+    if (isRecord(cause) && cause[field] !== undefined) {
+      error[field] = cause[field];
+    }
+  }
+  return error;
+}
+
+async function settleImport({
+  joblit,
+  request,
+  finalize = true,
+  signal,
+  retryMs,
+  log,
+}) {
   for (let attempt = 1; attempt <= SETTLEMENT_ATTEMPTS; attempt += 1) {
     try {
-      await joblit.importGeneration(request);
-      return;
+      return await joblit.importGeneration(request, { finalize });
     } catch (error) {
       if (!isAmbiguousJoblitError(error)) throw error;
       if (signal?.aborted) throw error;
@@ -285,6 +363,70 @@ async function settleImport({ joblit, request, signal, retryMs, log }) {
       await sleep(retryMs * attempt, signal);
     }
   }
+}
+
+async function settlePublication({ joblit, request, signal, retryMs, log }) {
+  for (let attempt = 1; attempt <= SETTLEMENT_ATTEMPTS; attempt += 1) {
+    try {
+      return await joblit.publishGeneration(request);
+    } catch (error) {
+      if (!isAmbiguousJoblitError(error)) throw error;
+      if (signal?.aborted) throw error;
+      if (attempt === SETTLEMENT_ATTEMPTS) {
+        throw publicationSettlementUnknown(error);
+      }
+      log(
+        `  publication response unknown${errorTelemetry(error)}; replaying the exact receipt (${attempt + 1}/${SETTLEMENT_ATTEMPTS})`,
+      );
+      await sleep(retryMs * attempt, signal);
+    }
+  }
+}
+
+function readDraftImport(value) {
+  if (
+    !isRecord(value) ||
+    typeof value.applicationId !== "string" ||
+    value.applicationId.length === 0 ||
+    typeof value.aiContentHash !== "string" ||
+    value.aiContentHash.length === 0
+  ) {
+    const error = new Error(
+      "Joblit draft import did not return its durable Application identity",
+    );
+    error.code = "DRAFT_IMPORT_RESPONSE_INVALID";
+    throw error;
+  }
+  return value;
+}
+
+function publicationRequest({ task, target, application, handle }) {
+  if (!isRecord(handle) || !handle.id || !handle.attemptId) {
+    const error = new Error(
+      "Joblit did not return the Tailoring Run handle required for publication",
+    );
+    error.code = "PUBLICATION_HANDLE_MISSING";
+    throw error;
+  }
+  if (
+    !isRecord(application) ||
+    typeof application.applicationId !== "string" ||
+    typeof application.aiContentHash !== "string"
+  ) {
+    const error = new Error(
+      "Joblit did not return the durable Application required for publication",
+    );
+    error.code = "PUBLICATION_APPLICATION_MISSING";
+    throw error;
+  }
+  return {
+    applicationId: application.applicationId,
+    expectedHash: application.aiContentHash,
+    runId: handle.id,
+    attemptId: handle.attemptId,
+    target,
+    batchAttemptId: task.attemptId,
+  };
 }
 
 async function acknowledgeImport({ hermes, sessionId, signal, retryMs, log }) {
@@ -467,9 +609,14 @@ async function withTailoringControl({
  *         taskId: string,
  *         attemptId: string,
  *         issueKey: string,
- *         protocolVersion: 1,
+ *         protocolVersion: 1 | 2,
+ *         delivery?: "FINAL" | "DRAFT",
  *         jobId: string,
  *         remainingTargets: Array<"RESUME" | "COVER">,
+ *         remainingPublicationTargets?: Array<"RESUME" | "COVER">,
+ *         applicationId?: string | null,
+ *         applicationAiContentHash?: string | null,
+ *         tailoringRun?: { id: string, attemptId: string } | null,
  *         job?: { title?: string, company?: string | null },
  *       }>,
  *       execution: {
@@ -483,7 +630,9 @@ async function withTailoringControl({
  *       promptMeta: object,
  *       tailoringRun?: object,
  *     }>,
- *     importGeneration(request: object): Promise<unknown>,
+ *     importGeneration(request: object, options?: { finalize?: boolean }): Promise<unknown>,
+ *     publishGeneration?(request: object): Promise<unknown>,
+ *     releaseTask?(batchId: string, request: object): Promise<unknown>,
  *     tailoringRunStatus(runId: string, options?: { signal?: AbortSignal }): Promise<object>,
  *   },
  *   hermes: {
@@ -570,24 +719,62 @@ export async function processActiveBatch({
     const label = task.job?.title
       ? `${task.job.title}${task.job.company ? ` @ ${task.job.company}` : ""}`
       : task.jobId;
-    log(`Task ${task.taskId} (${label}): ${task.remainingTargets.join(", ")}`);
+    const pendingWork = [
+      ...task.remainingTargets,
+      ...(task.remainingPublicationTargets ?? []).map(
+        (target) => `${target} publication`,
+      ),
+    ];
+    log(`Task ${task.taskId} (${label}): ${pendingWork.join(", ")}`);
 
     try {
-      if (task.protocolVersion !== AGENT_EXECUTION_PROTOCOL_VERSION) {
+      if (!SUPPORTED_AGENT_EXECUTION_PROTOCOLS.has(task.protocolVersion)) {
         throw new Error(
           `Unsupported Agent execution protocol ${String(task.protocolVersion)}`,
         );
+      }
+      if (
+        task.protocolVersion === 2 &&
+        (task.remainingPublicationTargets?.length ?? 0) > 0
+      ) {
+        if (typeof joblit.publishGeneration !== "function") {
+          throw new Error(
+            `Agent execution protocol ${AGENT_EXECUTION_PROTOCOL_VERSION} requires target publication`,
+          );
+        }
+        for (const remaining of task.remainingPublicationTargets) {
+          const target = TARGET_LABELS[remaining];
+          if (!target)
+            throw new Error(`Unknown publication target ${remaining}`);
+          await settlePublication({
+            joblit,
+            request: publicationRequest({
+              task,
+              target,
+              application: {
+                applicationId: task.applicationId,
+                aiContentHash: task.applicationAiContentHash,
+              },
+              handle: task.tailoringRun,
+            }),
+            signal,
+            retryMs: settlementRetryMs,
+            log,
+          });
+          log(`  ${target}: published`);
+        }
       }
       for (const remaining of task.remainingTargets) {
         const target = TARGET_LABELS[remaining];
         if (!target) throw new Error(`Unknown target ${remaining}`);
 
+        const delivery = task.delivery ?? "FINAL";
         const issued = validateIssuedPrompt(
           await joblit.prompt({
             jobId: task.jobId,
             target,
             source: "codex_batch",
-            delivery: "FINAL",
+            delivery,
             protocolVersion: task.protocolVersion,
             issueKey: task.issueKey,
             batchId: active.batchId,
@@ -630,10 +817,12 @@ export async function processActiveBatch({
           promptMeta: issued.promptMeta,
           ...(issued.tailoringRun ? { tailoringRun: issued.tailoringRun } : {}),
         };
+        let importResult;
         try {
-          await settleImport({
+          importResult = await settleImport({
             joblit,
             request: { ...importRequest, modelOutput },
+            finalize: delivery === "FINAL",
             signal,
             retryMs: settlementRetryMs,
             log,
@@ -657,9 +846,10 @@ export async function processActiveBatch({
                 signal: controlledSignal,
               }),
           });
-          await settleImport({
+          importResult = await settleImport({
             joblit,
             request: { ...importRequest, modelOutput },
+            finalize: delivery === "FINAL",
             signal,
             retryMs: settlementRetryMs,
             log,
@@ -675,6 +865,27 @@ export async function processActiveBatch({
           log,
         });
         log(`  ${target}: imported`);
+        if (delivery === "DRAFT") {
+          if (typeof joblit.publishGeneration !== "function") {
+            throw new Error(
+              `Agent execution protocol ${AGENT_EXECUTION_PROTOCOL_VERSION} requires target publication`,
+            );
+          }
+          const durableApplication = readDraftImport(importResult);
+          await settlePublication({
+            joblit,
+            request: publicationRequest({
+              task,
+              target,
+              application: durableApplication,
+              handle: issued.tailoringRun,
+            }),
+            signal,
+            retryMs: settlementRetryMs,
+            log,
+          });
+          log(`  ${target}: published`);
+        }
       }
       // Success is settled by the imports themselves; nothing to report.
       summary.succeeded += 1;
@@ -689,30 +900,43 @@ export async function processActiveBatch({
         log(`  stopped: ${errorMessage(error)}`);
         return summary;
       }
-      if (
-        error &&
-        typeof error === "object" &&
-        "code" in error &&
-        error.code === "TAILORING_RUN_TERMINAL"
-      ) {
+      if (isAuthoritativeTerminalExecutionError(error)) {
         log(`  stopped: ${errorMessage(error)}`);
         continue;
       }
       if (
+        isSupersededExecutionError(error) ||
         (error &&
           typeof error === "object" &&
           "code" in error &&
           (error.code === "IMPORT_SETTLEMENT_UNKNOWN" ||
-            error.code === "TAILORING_ATTEMPT_STALE" ||
+            error.code === "PUBLICATION_SETTLEMENT_UNKNOWN" ||
             error.code === "TAILORING_STATUS_INVALID")) ||
         isAmbiguousHermesError(error) ||
         isAmbiguousJoblitError(error)
       ) {
-        log(`  deferred: ${errorMessage(error)}`);
+        if (
+          error &&
+          typeof error === "object" &&
+          "code" in error &&
+          error.code === "PUBLICATION_SETTLEMENT_UNKNOWN" &&
+          typeof joblit.releaseTask === "function"
+        ) {
+          try {
+            await joblit.releaseTask(active.batchId, {
+              taskId: task.taskId,
+              attemptId: task.attemptId,
+              reason: "PUBLICATION_SETTLEMENT_UNKNOWN",
+            });
+          } catch (releaseError) {
+            log(`  release deferred: ${describeError(releaseError)}`);
+          }
+        }
+        log(`  deferred: ${describeError(error)}`);
         summary.deferred += 1;
         return summary;
       }
-      const reason = errorMessage(error);
+      const reason = describeError(error);
       log(`  FAILED: ${reason}`);
       completedTasks = [
         {

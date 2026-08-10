@@ -26,6 +26,8 @@ describe("TailoringRun batch cutover", () => {
     ).toEqual({
       acceptedTargets: ["RESUME"],
       remainingTargets: ["COVER"],
+      publishedTargets: [],
+      remainingPublicationTargets: [],
     });
   });
 

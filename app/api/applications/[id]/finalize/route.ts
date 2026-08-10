@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
-import { withSessionRoute, parseJsonBody } from "@/lib/server/api/routeHandler";
+import { withAgentRoute, parseJsonBody } from "@/lib/server/api/routeHandler";
 import { UuidParamSchema } from "@/lib/shared/schemas/common";
 import {
   APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE,
@@ -32,13 +32,28 @@ import {
 
 export const runtime = "nodejs";
 
-const BodySchema = z.object({
+const BodySchema = z
+  .object({
   /**
    * Hash from the client's last-known load. Stale-write guard against
    * concurrent autosaves from a second tab.
    */
-  expectedHash: z.string().nullable(),
-});
+    expectedHash: z.string().nullable(),
+    tailoringRun: z
+      .object({ id: z.string().uuid(), attemptId: z.string().uuid() })
+      .strict()
+      .optional(),
+    batchAttemptId: z.string().uuid().optional(),
+  })
+  .strict()
+  .superRefine((body, context) => {
+    if (Boolean(body.tailoringRun) === Boolean(body.batchAttemptId)) return;
+    context.addIssue({
+      code: "custom",
+      message: "tailoringRun and batchAttemptId must be supplied together",
+      path: [body.tailoringRun ? "batchAttemptId" : "tailoringRun"],
+    });
+  });
 
 function parseTarget(req: Request): "resume" | "cover" {
   const url = new URL(req.url);
@@ -81,11 +96,21 @@ export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  return withSessionRoute(
-    async ({ userId, requestId, params }) => {
+  return withAgentRoute(
+    req,
+    "tailoring:execute",
+    async ({ userId, requestId, params, authKind }) => {
       const parsedBody = await parseJsonBody(req, BodySchema, requestId);
       if (!parsedBody.ok) return parsedBody.response;
       const { expectedHash } = parsedBody.data;
+      if (authKind === "agent" && !parsedBody.data.tailoringRun) {
+        return errorJson(
+          "AGENT_PROTOCOL_REQUIRED",
+          "Agent publication requires its TailoringRun handle.",
+          403,
+          { requestId },
+        );
+      }
 
       const existing = await prisma.application.findFirst({
         where: { id: params.id, userId },
@@ -286,6 +311,16 @@ export async function POST(
           expectedHash,
           target,
           renderContext: publicationRenderContext,
+          ...(parsedBody.data.tailoringRun && parsedBody.data.batchAttemptId
+            ? {
+                tailoringPublication: {
+                  handle: parsedBody.data.tailoringRun,
+                  applicationId: existing.id,
+                  target: target === "cover" ? ("COVER" as const) : ("RESUME" as const),
+                  batchExecutionAttemptId: parsedBody.data.batchAttemptId,
+                },
+              }
+            : {}),
         });
         if (replay.kind === "stale_write") {
           return staleFinalizeResponse(requestId);
@@ -370,6 +405,16 @@ export async function POST(
         status: "FINAL",
         // The canonical rebuild above already carries both halves.
         expectedHash,
+        ...(parsedBody.data.tailoringRun && parsedBody.data.batchAttemptId
+          ? {
+              tailoringPublication: {
+                handle: parsedBody.data.tailoringRun,
+                applicationId: existing.id,
+                target: target === "cover" ? "COVER" : "RESUME",
+                batchExecutionAttemptId: parsedBody.data.batchAttemptId,
+              },
+            }
+          : {}),
       });
 
       if (commit.kind === "stale_write") return staleFinalizeResponse(requestId);

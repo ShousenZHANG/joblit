@@ -8,6 +8,7 @@ import { normalizePostingRiskFlags } from "./jobListItemMapper";
 import { getJobLocationTerms } from "./jobLocationScope";
 import type { JobStatusValue } from "@/lib/shared/jobStatus";
 import { findNearDuplicateJobIds } from "./simHashDuplicateService";
+import { getApplicationReviewId } from "@/lib/server/applications/applicationReviewAvailability";
 
 export type JobListQuery = {
   limit: number;
@@ -43,6 +44,7 @@ export type JobListItem = {
   livenessStatus: "ACTIVE" | "EXPIRED" | "UNCERTAIN";
   livenessReason: string | null;
   possibleDuplicate: boolean;
+  applicationId: string | null;
   resumePdfUrl: string | null;
   resumePdfName: string | null;
   coverPdfUrl: string | null;
@@ -111,7 +113,10 @@ function getCursorPage<T extends { id: string }>(
   };
 }
 
-export async function listJobs(userId: string, query: JobListQuery): Promise<JobListResult> {
+export async function listJobs(
+  userId: string,
+  query: JobListQuery,
+): Promise<JobListResult> {
   const { limit, cursor, sort } = query;
   const orderBy =
     sort === "oldest"
@@ -153,7 +158,15 @@ export async function listJobs(userId: string, query: JobListQuery): Promise<Job
         updatedAt: true,
         market: true,
         applications: {
-          select: { resumePdfUrl: true, resumePdfName: true, coverPdfUrl: true },
+          where: { userId },
+          take: 1,
+          select: {
+            id: true,
+            aiContent: true,
+            resumePdfUrl: true,
+            resumePdfName: true,
+            coverPdfUrl: true,
+          },
         },
       },
     }),
@@ -175,10 +188,7 @@ export async function listJobs(userId: string, query: JobListQuery): Promise<Job
       })
     : [];
   const duplicateCountByKey = new Map(
-    duplicateGroups.map((group) => [
-      group.companyRoleKey,
-      group._count._all,
-    ]),
+    duplicateGroups.map((group) => [group.companyRoleKey, group._count._all]),
   );
   const simHashDuplicateIds = await findNearDuplicateJobIds(
     userId,
@@ -188,15 +198,24 @@ export async function listJobs(userId: string, query: JobListQuery): Promise<Job
   const normalized = jobsWithExtra.map((job) => {
     const { applications, ...rest } = job;
     const application = applications?.[0] ?? null;
-    const { companyRoleKey, descriptionSimHash: _descriptionSimHash, ...publicFields } =
-      rest;
+    const {
+      companyRoleKey,
+      descriptionSimHash: _descriptionSimHash,
+      ...publicFields
+    } = rest;
     return {
       ...publicFields,
-      postingRiskFlags: normalizePostingRiskFlags(publicFields.postingRiskFlags),
+      postingRiskFlags: normalizePostingRiskFlags(
+        publicFields.postingRiskFlags,
+      ),
       possibleDuplicate:
         (companyRoleKey
           ? (duplicateCountByKey.get(companyRoleKey) ?? 0) > 1
           : false) || simHashDuplicateIds.has(job.id),
+      applicationId: getApplicationReviewId({
+        id: application?.id,
+        aiContent: application?.aiContent,
+      }),
       resumePdfUrl: application?.resumePdfUrl ?? null,
       resumePdfName: application?.resumePdfName ?? null,
       coverPdfUrl: application?.coverPdfUrl ?? null,
@@ -233,6 +252,7 @@ export async function listJobs(userId: string, query: JobListQuery): Promise<Job
       id: job.id,
       status: job.status,
       updatedAt: job.updatedAt,
+      applicationId: job.applicationId ?? null,
       resumePdfUrl: job.resumePdfUrl ?? null,
       resumePdfName: job.resumePdfName ?? null,
       coverPdfUrl: job.coverPdfUrl ?? null,

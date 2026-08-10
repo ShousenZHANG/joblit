@@ -36,7 +36,8 @@ that is still signed in. An expired or revoked credential returns `401`.
 
 Routes on the AgentCredential seam: `GET /api/application-batches/active`,
 `POST /api/application-batches/:id/run-once`, `POST /api/applications/prompt`,
-`POST /api/applications/manual-generate`, and the `/api/tailoring-runs/:id`
+`POST /api/applications/manual-generate`, target-scoped
+`POST /api/applications/:id/finalize`, and the `/api/tailoring-runs/:id`
 route, cancel, and fail endpoints.
 Batch creation, `/codex-run`, and the task `PATCH` route stay session-only;
 an unattended Runner claims work and reports exceptional outcomes through
@@ -56,6 +57,7 @@ process. It holds no model credential of its own.
 - Batch summary (interactive session): `GET /api/application-batches/:id/summary`
 - Prompt for external generation: `POST /api/applications/prompt`
 - Persist generated artifact: `POST /api/applications/manual-generate`
+- Publish one persisted target: `POST /api/applications/:id/finalize?target=resume|cover`
 
 ## Versioned Agent Request
 
@@ -66,16 +68,17 @@ Authorization: Bearer jfagent_v1_<64-lowercase-hex-characters>
 Content-Type: application/json
 ```
 
-After `run-once` returns a claimed task, the prompt request must echo the
-complete v1 execution identity exactly:
+The first-party Runner advertises `[2, 1]`; a missing capability list defaults
+to v1 for rolling compatibility. After `run-once` returns a task, the prompt
+request must echo its complete execution identity exactly. A new v2 task uses:
 
 ```json
 {
   "jobId": "<tasks[].jobId UUID>",
   "target": "resume",
   "source": "codex_batch",
-  "delivery": "FINAL",
-  "protocolVersion": 1,
+  "delivery": "DRAFT",
+  "protocolVersion": 2,
   "issueKey": "<tasks[].issueKey UUID>",
   "batchId": "<batch.id UUID>",
   "batchTaskId": "<tasks[].id UUID>",
@@ -85,18 +88,21 @@ complete v1 execution identity exactly:
 
 Do not add these claim fields to the later `manual-generate` body: that strict
 request echoes the prompt response's complete `tailoringRun` handle and
-`promptMeta`, which carry the server-bound run and receipt identities.
+`promptMeta`. A v2 DRAFT response returns `applicationId` and `aiContentHash`;
+the target finalize call echoes those identities plus the same Tailoring Run
+and batch attempt. A bound FINAL/v1 run never upgrades to v2.
 
 ## Rules
 
 - Do not use `/trigger` for execution. It is intentionally disabled.
 - Every claimed task includes `attemptId`, the stable Joblit-derived
-  `issueKey`, `protocolVersion`, `acceptedTargets`, and `remainingTargets`.
-  Request and import only `remainingTargets`; never regenerate an accepted
-  target after stale reclaim. Send `source: "codex_batch"`,
-  `delivery: "FINAL"`, the claim's exact `protocolVersion` (currently `1`), the
-  current batch ID as `batchId`, the claimed `taskId` as `batchTaskId`, its
-  `attemptId` as `batchAttemptId`, and its exact `issueKey`.
+  `issueKey`, `protocolVersion`, `acceptedTargets`, `remainingTargets`,
+  `publishedTargets`, and `remainingPublicationTargets`. Request and import
+  only `remainingTargets`; publish only `remainingPublicationTargets`; never
+  regenerate an accepted target after reclaim. Send `source: "codex_batch"`,
+  the claim's exact `delivery` and `protocolVersion`, the current batch ID as
+  `batchId`, the claimed `taskId` as `batchTaskId`, its `attemptId` as
+  `batchAttemptId`, and its exact `issueKey`.
 - For every claimed task and remaining target, call
   `/api/applications/prompt`; always
   send that exact response's complete, unmodified `promptMeta` and returned
@@ -112,10 +118,11 @@ request echoes the prompt response's complete `tailoringRun` handle and
   `skillsFinal`, full experience bullet lists, or section/header aliases.
 - Batch run context exposes contract identity only. It never fabricates a
   `promptMeta` before a concrete job prompt exists.
-- Do not report `SUCCEEDED` through `PATCH` or `run-once`. The final required
-  target import atomically commits the Application, Tailoring Run receipt, and
-  task success. Failure and skip reports accept only `FAILED` or `SKIPPED` and
-  must echo the claimed task's `attemptId`.
+- Do not report `SUCCEEDED` through `PATCH` or `run-once`. Protocol v2 first
+  commits each target's DRAFT and acceptance receipt, then independently
+  commits its PDF and publication receipt. The final required publication
+  settles task success. Failure and skip reports accept only `FAILED` or
+  `SKIPPED` and must echo the claimed task's `attemptId`.
 - Fence every in-flight model call against the prompt response's exact
   Tailoring Run `{ id, attemptId }`. Polling a non-terminal run must return that
   same active handle. A changed attempt means the lease was superseded: stop
@@ -125,8 +132,10 @@ request echoes the prompt response's complete `tailoringRun` handle and
   `execution.retryAfterMs` lease hint and poll again. An empty claim is not a
   terminal batch result.
 - Mark a task `FAILED` with a concise error only for a deterministic,
-  unrecoverable generation or validation failure. An ambiguous import outcome,
-  stale attempt, cancellation, or local cleanup failure is not such a failure.
+  unrecoverable generation, validation, or publication failure. An ambiguous
+  import/publication outcome, stale attempt, cancellation, or local cleanup
+  failure is not such a failure. Release an unresolved v2 publication attempt;
+  its next claim is publication-only and must not call the model.
 - Keep idempotent behavior: same job/task should not produce inconsistent state.
 - Prefer schema-valid JSON only; no markdown wrapper around payload JSON.
 - Only the public `{ id, attemptId }` Tailoring Run handle crosses the Joblit
@@ -140,10 +149,13 @@ nothing was produced and nothing was imported. The next run simply claims the
 task again.
 
 Duplicate protection therefore lives entirely server-side, on
-`TailoringRunReceipt` plus the exact attempt fence. An agent that
+`TailoringRunReceipt`, `TailoringRunPublicationReceipt`, and the exact attempt
+fence. An agent that
 does keep local state (an external orchestrator, say) must still reconcile it
 against the server-owned Tailoring Run before claiming new work: an import
 whose outcome is unknown is replayed unchanged, never reissued as new content.
+Once a v2 DRAFT is accepted, publication recovery uses the stored Application;
+`remainingPublicationTargets` never trigger another model call (ADR-0020).
 
 ## Deletion Contract
 

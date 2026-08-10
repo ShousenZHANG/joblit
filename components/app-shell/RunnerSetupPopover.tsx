@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
@@ -19,7 +19,12 @@ import {
 import { Popover, PopoverContent } from "@/components/ui/popover";
 import { COARSE_POINTER_TARGET } from "@/components/ui/touchTarget";
 import { useAgentTokens } from "@/hooks/useAgentTokens";
-import { useRunnerPresence } from "@/hooks/useRunnerPresence";
+import {
+  beginRunnerConnectionCheck,
+  cancelRunnerConnectionCheck,
+  refreshRunnerPresenceForCredential,
+  useRunnerPresence,
+} from "@/hooks/useRunnerPresence";
 import { cn } from "@/lib/utils";
 
 type Shell = "powershell" | "bash";
@@ -31,7 +36,15 @@ function startCommand(origin: string, token: string, shell: Shell) {
   return `JOBLIT_URL='${origin}' JOBLIT_TOKEN='${token}' node tools/runner/cli.mjs --watch`;
 }
 
-function CopyRow({ label, value }: { label: string; value: string }) {
+function CopyRow({
+  label,
+  value,
+  onCopied,
+}: {
+  label: string;
+  value: string;
+  onCopied?: () => void;
+}) {
   const t = useTranslations("runnerSetup");
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
     "idle",
@@ -41,10 +54,11 @@ function CopyRow({ label, value }: { label: string; value: string }) {
     try {
       await navigator.clipboard.writeText(value);
       setCopyState("copied");
+      onCopied?.();
     } catch {
       setCopyState("failed");
     }
-  }, [value]);
+  }, [onCopied, value]);
 
   useEffect(() => {
     if (copyState === "idle") return;
@@ -89,6 +103,8 @@ export function RunnerSetupPopover({ className }: { className?: string }) {
   const t = useTranslations("runnerSetup");
   const [open, setOpen] = useState(false);
   const [shell, setShell] = useState<Shell>("powershell");
+  const [awaitingRunner, setAwaitingRunner] = useState(false);
+  const awaitingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const {
     tokens,
     loading,
@@ -99,30 +115,86 @@ export function RunnerSetupPopover({ className }: { className?: string }) {
     create,
     replace,
   } = useAgentTokens();
+  const newCredentialId = newToken?.id ?? null;
   // The trigger is a global status indicator, so it remains subscribed while
   // the app shell is mounted. The shared presence store deduplicates this with
   // Jobs and any open setup panel.
   const presence = useRunnerPresence(true);
+  const refreshPresence = presence.refresh;
+
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      setOpen(nextOpen);
+      if (nextOpen) void refreshPresence();
+    },
+    [refreshPresence],
+  );
 
   useEffect(() => {
-    const openPanel = () => setOpen(true);
+    const openPanel = () => handleOpenChange(true);
     window.addEventListener("joblit:runner-setup", openPanel);
     return () => window.removeEventListener("joblit:runner-setup", openPanel);
+  }, [handleOpenChange]);
+
+  useEffect(() => {
+    return () => {
+      cancelRunnerConnectionCheck();
+      if (awaitingTimerRef.current !== null) {
+        clearTimeout(awaitingTimerRef.current);
+      }
+    };
   }, []);
+
+  useEffect(() => {
+    if (!newCredentialId) return;
+    // Bind as soon as the one-time command becomes visible. The previous
+    // Runner may remain online while its DELETE is settling, but its activity
+    // must never make the replacement command look connected.
+    void refreshRunnerPresenceForCredential(newCredentialId);
+  }, [newCredentialId]);
+
+  const hasCredential = tokens.length > 0;
+  const online =
+    presence.status === "online" &&
+    (!newCredentialId || presence.credentialId === newCredentialId);
+  const checkDelayed = online && presence.checkDelayed;
+
+  const handleCommandCopied = useCallback(() => {
+    if (!newCredentialId) return;
+    if (awaitingTimerRef.current !== null) {
+      clearTimeout(awaitingTimerRef.current);
+    }
+    setAwaitingRunner(true);
+    awaitingTimerRef.current = setTimeout(() => {
+      awaitingTimerRef.current = null;
+      setAwaitingRunner(false);
+    }, 15_000);
+    void beginRunnerConnectionCheck(newCredentialId);
+  }, [newCredentialId]);
+
+  const handleReplace = useCallback(async () => {
+    const issued = await replace(tokens, "Joblit Runner");
+    if (issued) {
+      // The old credential revocations have now settled. Force a fresh scoped
+      // read rather than waiting for the ordinary five-second poll.
+      await refreshRunnerPresenceForCredential(issued.id);
+    }
+  }, [replace, tokens]);
 
   const statusText = useMemo(() => {
     if (presence.status === "unknown") return t("statusChecking");
     if (presence.status === "unavailable") return t("statusUnavailable");
-    if (presence.status === "online") {
+    if (presence.status === "online" && online) {
+      if (presence.checkDelayed) return t("statusCheckDelayed");
       return t("statusOnlineRecent", { seconds: presence.secondsAgo });
     }
+    if (awaitingRunner) return t("statusWaiting");
+    if (hasCredential) return t("statusCredentialReady");
     if (!presence.lastUsedAt) return t("statusOfflineNever");
     const minutes = Math.max(1, presence.minutesAgo ?? 0);
     return t("statusOfflineLastSeen", { minutes });
-  }, [presence, t]);
+  }, [awaitingRunner, hasCredential, online, presence, t]);
 
-  const hasCredential = tokens.length > 0;
-  const online = presence.status === "online";
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   const command = newToken?.rawToken
     ? startCommand(origin, newToken.rawToken, shell)
@@ -130,7 +202,7 @@ export function RunnerSetupPopover({ className }: { className?: string }) {
 
   return (
     <>
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={handleOpenChange}>
         <PopoverPrimitive.Trigger asChild>
           <button
             type="button"
@@ -176,20 +248,31 @@ export function RunnerSetupPopover({ className }: { className?: string }) {
                 data-testid="runner-setup-status"
                 className={cn(
                   "mt-0.5 flex items-center gap-1.5 text-[11px]",
-                  online ? "text-brand-emerald-text" : "text-muted-foreground",
+                  checkDelayed
+                    ? "text-amber-700 dark:text-amber-300"
+                    : online
+                      ? "text-brand-emerald-text"
+                      : "text-muted-foreground",
                 )}
               >
-                <span
-                  aria-hidden
-                  className={cn(
-                    "h-1.5 w-1.5 shrink-0 rounded-full",
-                    online
-                      ? "bg-emerald-500"
-                      : presence.status === "unavailable"
+                {awaitingRunner && !online ? (
+                  <Loader2
+                    className="h-3 w-3 animate-spin motion-reduce:animate-none"
+                    aria-hidden
+                  />
+                ) : (
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "h-1.5 w-1.5 shrink-0 rounded-full",
+                      checkDelayed || presence.status === "unavailable"
                         ? "bg-amber-500"
-                        : "bg-muted-foreground/40",
-                  )}
-                />
+                        : online
+                          ? "bg-emerald-500"
+                          : "bg-muted-foreground/40",
+                    )}
+                  />
+                )}
                 {statusText}
               </p>
             </div>
@@ -205,7 +288,7 @@ export function RunnerSetupPopover({ className }: { className?: string }) {
           </div>
 
           <div className="space-y-3 p-4">
-            {presence.status === "unavailable" ? (
+            {presence.status === "unavailable" || checkDelayed ? (
               <button
                 type="button"
                 onClick={() => void presence.refresh()}
@@ -277,7 +360,11 @@ export function RunnerSetupPopover({ className }: { className?: string }) {
                         </button>
                       ))}
                     </div>
-                    <CopyRow label={t("startLabel")} value={command} />
+                    <CopyRow
+                      label={t("startLabel")}
+                      value={command}
+                      onCopied={handleCommandCopied}
+                    />
                     <p className="text-[11px] leading-relaxed text-muted-foreground">
                       {t("modelHint")}
                     </p>
@@ -320,7 +407,7 @@ export function RunnerSetupPopover({ className }: { className?: string }) {
                         {t("replaceCancel")}
                       </AlertDialogCancel>
                       <AlertDialogAction
-                        onClick={() => void replace(tokens, "Joblit Runner")}
+                        onClick={() => void handleReplace()}
                         className="min-h-11 bg-destructive text-destructive-foreground hover:bg-destructive/90"
                       >
                         {t("replaceConfirm")}

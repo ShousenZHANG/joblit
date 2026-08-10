@@ -49,13 +49,17 @@ afterEach(() => {
 describe("GET /api/agent/presence", () => {
   it("returns the newest lastUsedAt across the caller's live credentials", async () => {
     const seen = new Date("2026-08-07T10:00:00.000Z");
-    prisma.agentCredential.findFirst.mockResolvedValue({ lastUsedAt: seen });
+    prisma.agentCredential.findFirst.mockResolvedValue({
+      id: "credential-live",
+      lastUsedAt: seen,
+    });
 
     const res = await GET();
 
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       status: "online",
+      credentialId: "credential-live",
       lastUsedAt: seen.toISOString(),
       checkedAt: NOW.toISOString(),
       onlineWindowMs: 90_000,
@@ -82,6 +86,7 @@ describe("GET /api/agent/presence", () => {
 
     await expect(res.json()).resolves.toEqual({
       status: "offline",
+      credentialId: null,
       lastUsedAt: null,
       checkedAt: NOW.toISOString(),
       onlineWindowMs: 90_000,
@@ -90,15 +95,48 @@ describe("GET /api/agent/presence", () => {
 
   it("stays online between the Runner's sixty-second Fit heartbeats", async () => {
     const seen = new Date(NOW.getTime() - 70_000);
-    prisma.agentCredential.findFirst.mockResolvedValue({ lastUsedAt: seen });
+    prisma.agentCredential.findFirst.mockResolvedValue({
+      id: "credential-live",
+      lastUsedAt: seen,
+    });
 
     const res = await GET();
 
     await expect(res.json()).resolves.toMatchObject({
       status: "online",
+      credentialId: "credential-live",
       lastUsedAt: seen.toISOString(),
       onlineWindowMs: 90_000,
     });
+  });
+
+  it("scopes presence to the newly issued credential instead of an older online Runner", async () => {
+    const replacementId = "44444444-4444-4444-8444-444444444444";
+    prisma.agentCredential.findFirst.mockResolvedValue(null);
+
+    const res = await GET(
+      new Request(
+        `http://localhost/api/agent/presence?credentialId=${replacementId}`,
+      ),
+    );
+
+    await expect(res.json()).resolves.toMatchObject({
+      status: "offline",
+      credentialId: null,
+      lastUsedAt: null,
+    });
+    expect(prisma.agentCredential.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: replacementId,
+          userId: USER_ID,
+          revokedAt: null,
+          expiresAt: expect.objectContaining({ gt: expect.any(Date) }),
+          lastUsedAt: { not: null },
+        }),
+        select: { id: true, lastUsedAt: true },
+      }),
+    );
   });
 
   it("requires a session", async () => {

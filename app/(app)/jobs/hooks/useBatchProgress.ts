@@ -16,15 +16,11 @@ const POLL_MS = 3_000;
 const TERMINAL = new Set(["SUCCEEDED", "FAILED", "PARTIAL", "CANCELLED"]);
 
 export type BatchStatus =
-  | "QUEUED"
-  | "RUNNING"
-  | "SUCCEEDED"
-  | "FAILED"
-  | "PARTIAL"
-  | "CANCELLED";
+  "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "PARTIAL" | "CANCELLED";
 
 export type BatchSucceededItem = {
   taskId: string;
+  applicationId: string | null;
   jobId: string;
   jobTitle: string;
   company: string | null;
@@ -37,12 +33,17 @@ export type BatchSucceededItem = {
 
 export type BatchFailedItem = {
   taskId: string;
+  applicationId: string | null;
   jobId: string;
   jobTitle: string;
   company: string | null;
   attempt: number;
   error: string;
   updatedAt: string;
+  artifacts: {
+    resumePdfUrl: string | null;
+    coverPdfUrl: string | null;
+  };
 };
 
 export interface BatchProgressState {
@@ -110,8 +111,7 @@ type SummaryResponse = {
 
 function stateFromSummary(summary: SummaryResponse): BatchProgressState {
   const skipped = summary.progress.skipped ?? 0;
-  const done =
-    summary.progress.succeeded + summary.progress.failed + skipped;
+  const done = summary.progress.succeeded + summary.progress.failed + skipped;
   const failedItems = summary.failed ?? [];
   return {
     batchId: summary.batch.id,

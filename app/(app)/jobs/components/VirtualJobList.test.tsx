@@ -347,6 +347,15 @@ describe("VirtualJobList", () => {
     expect(row.parentElement).toHaveStyle({ transition: "none" });
   });
 
+  it("uses the shared 180ms ease-out motion for row repositioning", () => {
+    render(<VirtualListHarness selectedId={virtualJobs[0].id} />);
+
+    const row = screen.getByRole("listitem", { name: /Virtual role 0/i });
+    expect(row.parentElement).toHaveStyle({
+      transition: "transform 180ms cubic-bezier(0.16, 1, 0.3, 1)",
+    });
+  });
+
   it("keeps the offscreen active row mounted as the only row tab stop", () => {
     render(<VirtualListHarness selectedId={virtualJobs[8].id} />);
 

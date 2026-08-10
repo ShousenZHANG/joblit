@@ -39,12 +39,15 @@ import {
   claimNextBatchTask,
   completeBatchTask,
   getBatchLeaseRetryHint,
+  releaseBatchTask,
 } from "@/lib/server/applicationBatches/runner";
 
 const BATCH_ID = "550e8400-e29b-41d4-a716-446655440000";
 const TASK_ID = "660e8400-e29b-41d4-a716-446655440000";
 const JOB_ID = "770e8400-e29b-41d4-a716-446655440000";
 const OLD_ATTEMPT_ID = "880e8400-e29b-41d4-a716-446655440000";
+const RUN_ID = "990e8400-e29b-41d4-a716-446655440000";
+const APPLICATION_ID = "aa0e8400-e29b-41d4-a716-446655440000";
 
 describe("application batch runner", () => {
   beforeEach(() => {
@@ -196,6 +199,46 @@ describe("application batch runner", () => {
     );
   });
 
+  it("selects protocol v2 only for an unbound task whose Runner advertises it", async () => {
+    prismaStore.applicationBatch.findFirst.mockResolvedValueOnce({
+      id: BATCH_ID,
+      status: "RUNNING",
+    });
+    prismaStore.applicationBatchTask.updateMany.mockResolvedValueOnce({ count: 0 });
+    prismaStore.applicationBatchTask.findFirst.mockResolvedValueOnce({
+      id: TASK_ID,
+      jobId: JOB_ID,
+      job: {
+        title: "Software Engineer",
+        company: "Acme",
+        jobUrl: "https://example.com/jobs/1",
+      },
+      tailoringRun: null,
+    });
+    prismaStore.applicationBatchTask.update.mockResolvedValueOnce({});
+
+    const claimed = await claimNextBatchTask({
+      userId: "user-1",
+      batchId: BATCH_ID,
+      supportedProtocolVersions: [2, 1],
+    });
+
+    expect(claimed.kind).toBe("claimed");
+    if (claimed.kind !== "claimed") return;
+    expect(claimed.task).toMatchObject({
+      protocolVersion: 2,
+      delivery: "DRAFT",
+      acceptedTargets: [],
+      remainingTargets: ["RESUME", "COVER"],
+      remainingPublicationTargets: [],
+    });
+    expect(prismaStore.applicationBatchTask.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ tailoringProtocolVersion: 2 }),
+      }),
+    );
+  });
+
   it("caps the retry poll while preserving the earliest lease deadline", async () => {
     const now = new Date("2026-02-22T10:00:00.000Z");
     prismaStore.applicationBatchTask.findMany.mockResolvedValueOnce([
@@ -250,8 +293,18 @@ describe("application batch runner", () => {
         jobUrl: "https://example.com/jobs/1",
       },
       tailoringRun: {
+        id: RUN_ID,
+        status: "RUNNING",
+        attempt: 1,
+        startedAt: new Date("2026-02-22T09:00:00.000Z"),
+        executionAttemptId: OLD_ATTEMPT_ID,
+        applicationId: APPLICATION_ID,
+        application: { aiContentHash: "legacy-content-hash" },
         requiredTargetMask: 3,
         acceptedTargetMask: 1,
+        delivery: "FINAL",
+        publicationRequiredTargetMask: 0,
+        publishedTargetMask: 0,
       },
     });
     prismaStore.applicationBatchTask.update.mockResolvedValueOnce({});
@@ -259,6 +312,7 @@ describe("application batch runner", () => {
     const claimed = await claimNextBatchTask({
       userId: "user-1",
       batchId: BATCH_ID,
+      supportedProtocolVersions: [2, 1],
     });
 
     expect(claimed.kind).toBe("claimed");
@@ -267,6 +321,110 @@ describe("application batch runner", () => {
       acceptedTargets: ["RESUME"],
       remainingTargets: ["COVER"],
       protocolVersion: 1,
+      delivery: "FINAL",
+      remainingPublicationTargets: [],
+    });
+  });
+
+  it("rebinds an expired v2 publication-only run to the newly claimed task attempt", async () => {
+    prismaStore.applicationBatch.findFirst.mockResolvedValueOnce({
+      id: BATCH_ID,
+      status: "RUNNING",
+    });
+    prismaStore.applicationBatchTask.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaStore.applicationBatchTask.findFirst.mockResolvedValueOnce({
+      id: TASK_ID,
+      jobId: JOB_ID,
+      job: {
+        title: "Software Engineer",
+        company: "Acme",
+        jobUrl: "https://example.com/jobs/1",
+      },
+      tailoringRun: {
+        id: RUN_ID,
+        status: "RUNNING",
+        attempt: 1,
+        executionAttemptId: OLD_ATTEMPT_ID,
+        requiredTargetMask: 3,
+        acceptedTargetMask: 3,
+        publicationRequiredTargetMask: 3,
+        publishedTargetMask: 1,
+        delivery: "DRAFT",
+        issueKey: "issue-v2",
+        applicationId: APPLICATION_ID,
+        application: { aiContentHash: "durable-content-hash" },
+      },
+    });
+    prismaStore.applicationBatchTask.update.mockResolvedValueOnce({});
+    prismaStore.tailoringRun.update.mockResolvedValueOnce({});
+
+    const claimed = await claimNextBatchTask({
+      userId: "user-1",
+      batchId: BATCH_ID,
+      supportedProtocolVersions: [2, 1],
+    });
+
+    expect(claimed.kind).toBe("claimed");
+    if (claimed.kind !== "claimed") return;
+    expect(claimed.task).toMatchObject({
+      protocolVersion: 2,
+      delivery: "DRAFT",
+      remainingTargets: [],
+      remainingPublicationTargets: ["COVER"],
+      applicationId: APPLICATION_ID,
+      applicationAiContentHash: "durable-content-hash",
+      tailoringRun: {
+        id: RUN_ID,
+        attemptId: claimed.task.attemptId,
+      },
+    });
+    expect(prismaStore.tailoringRun.update).toHaveBeenCalledWith({
+      where: { id: RUN_ID },
+      data: expect.objectContaining({
+        status: "RUNNING",
+        executionAttemptId: claimed.task.attemptId,
+        executionLeaseExpiresAt: expect.any(Date),
+        attempt: { increment: 1 },
+      }),
+    });
+  });
+
+  it("releases an ambiguous v2 publication immediately and fences its late attempt", async () => {
+    prismaStore.applicationBatchTask.findFirst.mockResolvedValueOnce({
+      id: TASK_ID,
+      status: "RUNNING",
+      executionAttemptId: OLD_ATTEMPT_ID,
+      tailoringProtocolVersion: 2,
+      tailoringRun: { id: RUN_ID, executionAttemptId: OLD_ATTEMPT_ID },
+    });
+    prismaStore.applicationBatchTask.update.mockResolvedValueOnce({});
+    prismaStore.tailoringRun.update.mockResolvedValueOnce({});
+
+    await expect(
+      releaseBatchTask({
+        userId: "user-1",
+        batchId: BATCH_ID,
+        taskId: TASK_ID,
+        attemptId: OLD_ATTEMPT_ID,
+        reason: "PUBLICATION_SETTLEMENT_UNKNOWN",
+      }),
+    ).resolves.toEqual({ released: true, replayed: false });
+
+    expect(prismaStore.applicationBatchTask.update).toHaveBeenCalledWith({
+      where: { id: TASK_ID },
+      data: expect.objectContaining({
+        status: "PENDING",
+        executionAttemptId: OLD_ATTEMPT_ID,
+        executionLeaseExpiresAt: null,
+      }),
+    });
+    expect(prismaStore.tailoringRun.update).toHaveBeenCalledWith({
+      where: { id: RUN_ID },
+      data: expect.objectContaining({
+        status: "RUNNING",
+        executionAttemptId: expect.not.stringMatching(OLD_ATTEMPT_ID),
+        executionLeaseExpiresAt: null,
+      }),
     });
   });
 

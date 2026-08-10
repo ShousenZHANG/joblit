@@ -1,4 +1,11 @@
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -24,7 +31,7 @@ function renderPopover() {
 }
 
 describe("RunnerSetupPopover", () => {
-  it("updates the global connection dot without opening the panel", async () => {
+  it("rechecks presence immediately when the setup panel opens", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-09T10:00:00.000Z"));
     let online = false;
@@ -52,9 +59,42 @@ describe("RunnerSetupPopover", () => {
 
     online = true;
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(5_000);
+      fireEvent.click(screen.getByTestId("runner-setup-trigger"));
+      await Promise.resolve();
+      await Promise.resolve();
     });
     expect(screen.getByTestId("runner-online-dot")).toBeInTheDocument();
+  });
+
+  it("opens and rechecks presence immediately for the external setup event", async () => {
+    let online = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input) === "/api/agent-tokens") {
+          return Response.json({ data: [] });
+        }
+        return Response.json({
+          status: online ? "online" : "offline",
+          lastUsedAt: online ? new Date().toISOString() : null,
+          checkedAt: new Date().toISOString(),
+          onlineWindowMs: 90_000,
+        });
+      }),
+    );
+
+    renderPopover();
+    await waitFor(() =>
+      expect(screen.queryByTestId("runner-online-dot")).not.toBeInTheDocument(),
+    );
+
+    online = true;
+    await act(async () => {
+      window.dispatchEvent(new Event("joblit:runner-setup"));
+    });
+
+    expect(await screen.findByTestId("runner-setup-panel")).toBeVisible();
+    expect(await screen.findByTestId("runner-online-dot")).toBeInTheDocument();
   });
 
   it("shows a retryable credential error instead of pretending setup is empty", async () => {
@@ -183,6 +223,9 @@ describe("RunnerSetupPopover", () => {
     const user = userEvent.setup();
     renderPopover();
     await user.click(screen.getByTestId("runner-setup-trigger"));
+    expect(await screen.findByTestId("runner-setup-status")).toHaveTextContent(
+      en.runnerSetup.statusCredentialReady,
+    );
     await user.click(await screen.findByTestId("runner-setup-regenerate"));
 
     expect(await screen.findByRole("alertdialog")).toBeVisible();
@@ -200,6 +243,108 @@ describe("RunnerSetupPopover", () => {
     await user.click(screen.getByRole("button", { name: "Bash" }));
     expect(screen.getByText(/^JOBLIT_URL=/)).toHaveTextContent(
       "node tools/runner/cli.mjs --watch",
+    );
+
+    await user.click(screen.getByRole("button", { name: en.runnerSetup.copy }));
+    expect(screen.getByTestId("runner-setup-status")).toHaveTextContent(
+      en.runnerSetup.statusWaiting,
+    );
+  });
+
+  it("does not reuse an old Runner's online state while replacement revocation is delayed", async () => {
+    const oldCredentialId = "33333333-3333-4333-8333-333333333333";
+    const replacementId = "44444444-4444-4444-8444-444444444444";
+    let replacementOnline = false;
+    let releaseDelete!: () => void;
+    const deleteBarrier = new Promise<void>((resolve) => {
+      releaseDelete = resolve;
+    });
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method ?? "GET";
+        if (url.startsWith("/api/agent/presence")) {
+          const scopedToReplacement = url.includes(
+            `credentialId=${replacementId}`,
+          );
+          if (scopedToReplacement) {
+            return Response.json({
+              status: replacementOnline ? "online" : "offline",
+              credentialId: replacementOnline ? replacementId : null,
+              lastUsedAt: replacementOnline ? new Date().toISOString() : null,
+              checkedAt: new Date().toISOString(),
+              onlineWindowMs: 90_000,
+            });
+          }
+          return Response.json({
+            status: "online",
+            credentialId: oldCredentialId,
+            lastUsedAt: new Date().toISOString(),
+            checkedAt: new Date().toISOString(),
+            onlineWindowMs: 90_000,
+          });
+        }
+        if (method === "POST") {
+          return Response.json(
+            {
+              data: {
+                id: replacementId,
+                rawToken: `jfagent_v1_${"b".repeat(64)}`,
+                expiresAt: "2026-12-01T00:00:00.000Z",
+              },
+            },
+            { status: 201 },
+          );
+        }
+        if (method === "DELETE") {
+          await deleteBarrier;
+          return Response.json({ data: { revoked: true } });
+        }
+        return Response.json({
+          data: [
+            {
+              id: oldCredentialId,
+              name: "Old Runner",
+              lastUsedAt: new Date().toISOString(),
+              expiresAt: "2026-12-01T00:00:00.000Z",
+              createdAt: "2026-08-01T00:00:00.000Z",
+            },
+          ],
+        });
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const user = userEvent.setup();
+    renderPopover();
+    await user.click(screen.getByTestId("runner-setup-trigger"));
+    expect(await screen.findByTestId("runner-online-dot")).toBeVisible();
+    await user.click(await screen.findByTestId("runner-setup-regenerate"));
+    await user.click(
+      await screen.findByRole("button", {
+        name: en.runnerSetup.replaceConfirm,
+      }),
+    );
+
+    await screen.findByText(en.runnerSetup.rawTokenOnce);
+    expect(screen.queryByTestId("runner-online-dot")).not.toBeInTheDocument();
+    expect(screen.getByTestId("runner-setup-status")).toHaveTextContent(
+      en.runnerSetup.statusCredentialReady,
+    );
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        String(input).includes(`credentialId=${replacementId}`),
+      ),
+    ).toBe(true);
+
+    replacementOnline = true;
+    releaseDelete();
+
+    await waitFor(() =>
+      expect(screen.getByTestId("runner-online-dot")).toBeVisible(),
+    );
+    expect(screen.getByTestId("runner-setup-status")).toHaveTextContent(
+      /Connected/,
     );
   });
 

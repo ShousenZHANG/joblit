@@ -7,6 +7,11 @@
 > writer. References to Local AI below describe the historical rollout and
 > retained rows; current unattended imports come from the Agent Runner with an
 > `AgentCredential` and a public Tailoring Run handle.
+>
+> **Implementation note — 2026-08-10:** ADR-0020 preserves this immutable
+> acceptance receipt but separates new protocol-v2 DRAFT acceptance from PDF
+> publication. A batch now settles only after independent publication receipts
+> cover every required target; direct FINAL remains protocol-v1 compatibility.
 
 ## Context
 

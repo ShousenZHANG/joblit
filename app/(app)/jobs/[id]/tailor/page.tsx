@@ -1,16 +1,7 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth";
-import { prisma } from "@/lib/server/prisma";
-import { buildPdfFilename } from "@/lib/server/files/pdfFilename";
-import { getResumeProfile } from "@/lib/server/resumeProfile";
-import { aiContentSchema } from "@/lib/shared/schemas/aiContent";
-import {
-  buildApplicationPublicationRenderContext,
-  projectApplicationPublication,
-} from "@/lib/server/applications/applicationPublication";
-import { marketStringToResumeLocale } from "@/lib/shared/market";
-import { asRecord, toStringValue } from "@/lib/shared/utils/text";
+import { loadApplicationReviewSnapshot } from "@/lib/server/applications/applicationReviewSnapshot";
 import { TailorClient } from "./TailorClient";
 import { LegacyApplicationBanner } from "./LegacyApplicationBanner";
 
@@ -28,144 +19,39 @@ export default async function TailorPage({ params }: TailorPageProps) {
   }
   const userId = session.user.id;
   const { id } = await params;
-
-  const application = await prisma.application.findFirst({
-    where: { id, userId },
-    select: {
-      id: true,
-      status: true,
-      aiContent: true,
-      aiContentHash: true,
-      resumePdfUrl: true,
-      resumePdfName: true,
-      coverPdfUrl: true,
-      resumeContentHash: true,
-      coverContentHash: true,
-      resumePublishedHash: true,
-      coverPublishedHash: true,
-      role: true,
-      company: true,
-      jobId: true,
-      resumeProfileId: true,
-      job: {
-        select: {
-          id: true,
-          title: true,
-          company: true,
-          location: true,
-          market: true,
-        },
-      },
-      resumeProfile: {
-        select: {
-          summary: true,
-          basics: true,
-          links: true,
-          skills: true,
-          experiences: true,
-          projects: true,
-          education: true,
-        },
-      },
-    },
+  const result = await loadApplicationReviewSnapshot({
+    userId,
+    applicationId: id,
   });
-
-  if (!application) {
+  if (result.kind === "not_found" || result.kind === "busy") {
     redirect("/jobs");
   }
-
-  // Legacy migration path: rows that pre-date the edit workflow have
-  // no aiContent. Force the user to re-generate before editing.
-  if (!application.aiContent) {
+  if (result.kind === "legacy") {
+    const legacy = result.application;
     return (
       <LegacyApplicationBanner
-        applicationId={application.id}
-        jobId={application.jobId}
-        jobTitle={application.job?.title ?? application.role ?? "Untitled"}
-        company={application.job?.company ?? application.company ?? ""}
-        resumePdfUrl={application.resumePdfUrl}
+        applicationId={legacy.applicationId}
+        jobId={legacy.jobId}
+        jobTitle={legacy.jobTitle}
+        company={legacy.company}
+        resumePdfUrl={legacy.resumePdfUrl}
+        invalidShape={legacy.invalidShape}
       />
     );
   }
-
-  const parsed = aiContentSchema.safeParse(application.aiContent);
-  if (!parsed.success) {
-    return (
-      <LegacyApplicationBanner
-        applicationId={application.id}
-        jobId={application.jobId}
-        jobTitle={application.job?.title ?? application.role ?? "Untitled"}
-        company={application.job?.company ?? application.company ?? ""}
-        resumePdfUrl={application.resumePdfUrl}
-        invalidShape
-      />
-    );
-  }
-
-  const jobTitle = application.job?.title ?? application.role ?? "Untitled";
-  const job = {
-    title: jobTitle,
-    company: application.job?.company ?? application.company ?? null,
-    market: application.job?.market ?? "AU",
-  };
-  const publicationProfile =
-    application.resumeProfile ??
-    (await getResumeProfile(userId, {
-      profileId: application.resumeProfileId ?? undefined,
-      locale: marketStringToResumeLocale(job.market),
-    }));
-  if (!publicationProfile) {
-    return (
-      <LegacyApplicationBanner
-        applicationId={application.id}
-        jobId={application.jobId}
-        jobTitle={jobTitle}
-        company={job.company ?? ""}
-        resumePdfUrl={application.resumePdfUrl}
-        invalidShape
-      />
-    );
-  }
-  // Built here, from the same helper the finalize/preview routes use, so the
-  // in-page Download button cannot drift from the server's Content-Disposition.
-  const candidateName = toStringValue(
-    asRecord(publicationProfile.basics).fullName,
-  );
-  const publication = projectApplicationPublication({
-    aiContent: parsed.data,
-    record: {
-      status: application.status,
-      aiContentHash: application.aiContentHash,
-      resumePdfUrl: application.resumePdfUrl,
-      coverPdfUrl: application.coverPdfUrl,
-      resumeContentHash: application.resumeContentHash,
-      coverContentHash: application.coverContentHash,
-      resumePublishedHash: application.resumePublishedHash,
-      coverPublishedHash: application.coverPublishedHash,
-    },
-    renderContext: buildApplicationPublicationRenderContext({
-      profile: publicationProfile,
-      job,
-    }),
-  });
+  const snapshot = result.snapshot;
 
   return (
     <TailorClient
-      applicationId={application.id}
-      initialPublication={publication}
-      initialAiContent={parsed.data}
-      initialAiContentHash={application.aiContentHash}
-      resumePdfUrl={application.resumePdfUrl}
-      coverPdfUrl={application.coverPdfUrl}
-      resumePdfName={buildPdfFilename(candidateName, jobTitle, "cv")}
-      coverPdfName={buildPdfFilename(candidateName, jobTitle, "cl")}
-      job={{
-        id: application.job?.id ?? null,
-        title: jobTitle,
-        company: job.company,
-        location: application.job?.location ?? null,
-        market: job.market,
-      }}
+      applicationId={snapshot.applicationId}
+      initialPublication={snapshot.publication}
+      initialAiContent={snapshot.aiContent}
+      initialAiContentHash={snapshot.aiContentHash}
+      resumePdfUrl={snapshot.documents.resume.pdfUrl}
+      coverPdfUrl={snapshot.documents.cover.pdfUrl}
+      resumePdfName={snapshot.documents.resume.pdfName}
+      coverPdfName={snapshot.documents.cover.pdfName}
+      job={snapshot.job}
     />
   );
 }

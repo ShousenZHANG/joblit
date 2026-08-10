@@ -1,12 +1,17 @@
 import { Prisma } from "@/lib/generated/prisma";
 import { prisma } from "@/lib/server/prisma";
 import { buildJobsListEtag } from "@/lib/server/jobsListEtag";
-import type { JobListQuery, JobListResult, JobListItem } from "./jobListService";
+import type {
+  JobListQuery,
+  JobListResult,
+  JobListItem,
+} from "./jobListService";
 import { getVisibleJobMarkets } from "./jobMarketScope";
 import { normalizePostingRiskFlags } from "./jobListItemMapper";
 import { getJobLocationTerms } from "./jobLocationScope";
 import { escapeLikePattern } from "./searchUtils";
 import { findNearDuplicateJobIds } from "./simHashDuplicateService";
+import { getApplicationReviewId } from "@/lib/server/applications/applicationReviewAvailability";
 
 export async function listJobsWithRelevance(
   userId: string,
@@ -32,11 +37,10 @@ export async function listJobsWithRelevance(
     const visibleMarkets = getVisibleJobMarkets(market).map(
       (value) => Prisma.sql`${value}`,
     );
-    conditions.push(
-      Prisma.sql`j."market" IN (${Prisma.join(visibleMarkets)})`,
-    );
+    conditions.push(Prisma.sql`j."market" IN (${Prisma.join(visibleMarkets)})`);
   }
-  if (jobLevel) conditions.push(Prisma.sql`LOWER(j."jobLevel") = LOWER(${jobLevel})`);
+  if (jobLevel)
+    conditions.push(Prisma.sql`LOWER(j."jobLevel") = LOWER(${jobLevel})`);
 
   const locationTerms = getJobLocationTerms(location);
   if (locationTerms?.length) {
@@ -83,6 +87,8 @@ export async function listJobsWithRelevance(
     descriptionSimHash: string | null;
     createdAt: Date;
     updatedAt: Date;
+    applicationId: string | null;
+    aiContent: unknown;
     resumePdfUrl: string | null;
     resumePdfName: string | null;
     coverPdfUrl: string | null;
@@ -108,7 +114,7 @@ export async function listJobsWithRelevance(
             )
           ) AS "possibleDuplicate",
           j."createdAt", j."updatedAt",
-          a."resumePdfUrl", a."resumePdfName", a."coverPdfUrl",
+          a."id" AS "applicationId", a."aiContent", a."resumePdfUrl", a."resumePdfName", a."coverPdfUrl",
           GREATEST(
             similarity(LOWER(j."title"), LOWER(${q})),
             similarity(LOWER(COALESCE(j."company", '')), LOWER(${q})),
@@ -116,9 +122,10 @@ export async function listJobsWithRelevance(
           ) AS relevance
         FROM "Job" j
         LEFT JOIN LATERAL (
-          SELECT "resumePdfUrl", "resumePdfName", "coverPdfUrl"
+          SELECT "id", "aiContent", "resumePdfUrl", "resumePdfName", "coverPdfUrl"
           FROM "Application"
           WHERE "jobId" = j."id"
+            AND "userId" = j."userId"
           LIMIT 1
         ) a ON true
         WHERE ${whereClause}
@@ -140,7 +147,7 @@ export async function listJobsWithRelevance(
         ranked."livenessReason", ranked."possibleDuplicate",
         ranked."descriptionSimHash",
         ranked."createdAt", ranked."updatedAt",
-        ranked."resumePdfUrl", ranked."resumePdfName", ranked."coverPdfUrl"
+        ranked."applicationId", ranked."aiContent", ranked."resumePdfUrl", ranked."resumePdfName", ranked."coverPdfUrl"
       FROM ranked
       WHERE ${cursorClause}
       ORDER BY ranked."rowNumber"
@@ -159,21 +166,30 @@ export async function listJobsWithRelevance(
     visibleRows,
   );
   const items: JobListItem[] = visibleRows.map((r) => {
-    const { descriptionSimHash: _descriptionSimHash, ...publicFields } = r;
+    const {
+      descriptionSimHash: _descriptionSimHash,
+      aiContent,
+      ...publicFields
+    } = r;
     return {
       ...publicFields,
-      possibleDuplicate:
-        r.possibleDuplicate || simHashDuplicateIds.has(r.id),
+      possibleDuplicate: r.possibleDuplicate || simHashDuplicateIds.has(r.id),
       postingRiskFlags: normalizePostingRiskFlags(r.postingRiskFlags),
+      applicationId: getApplicationReviewId({
+        id: r.applicationId,
+        aiContent,
+      }),
       resumePdfUrl: r.resumePdfUrl ?? null,
       resumePdfName: r.resumePdfName ?? null,
       coverPdfUrl: r.coverPdfUrl ?? null,
     };
   });
-  const nextCursor = hasMore ? items[items.length - 1]?.id ?? null : null;
+  const nextCursor = hasMore ? (items[items.length - 1]?.id ?? null) : null;
 
   const jobLevels = Array.from(
-    new Set(items.map((j) => j.jobLevel).filter((l): l is string => Boolean(l))),
+    new Set(
+      items.map((j) => j.jobLevel).filter((l): l is string => Boolean(l)),
+    ),
   );
 
   const { sort } = query;
@@ -197,6 +213,7 @@ export async function listJobsWithRelevance(
       id: j.id,
       status: j.status,
       updatedAt: j.updatedAt,
+      applicationId: j.applicationId,
       resumePdfUrl: j.resumePdfUrl,
       resumePdfName: j.resumePdfName,
       coverPdfUrl: j.coverPdfUrl,

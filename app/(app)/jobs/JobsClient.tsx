@@ -1,27 +1,45 @@
 "use client";
 
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import Link from "next/link";
 import { ApiError, fetchJson } from "@/lib/api/fetchJson";
 import { jobDetailResponseSchema } from "@/lib/shared/schemas/jobsList";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, Loader2, MapPin, RefreshCw, SlidersHorizontal, Sparkles, X } from "lucide-react";
+import {
+  ArrowRight,
+  Loader2,
+  MapPin,
+  RefreshCw,
+  SlidersHorizontal,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAccessibleTabs } from "@/components/ui/useAccessibleTabs";
 import { useToast } from "@/hooks/use-toast";
 import { useGuide } from "@/app/GuideContext";
 import { useFetchStatus, type FetchRunStatus } from "@/app/FetchStatusContext";
 
-import {
-  JOB_STATUS_LABEL_KEYS,
-  type JobItem,
-  type JobStatus,
-} from "./types";
+import { JOB_STATUS_LABEL_KEYS, type JobItem, type JobStatus } from "./types";
 import { ACTIVE_JOB_STATUS_VALUES } from "@/lib/shared/jobStatus";
 import { SegmentedControl } from "@/components/app-shell/SegmentedControl";
 import { getErrorMessage } from "./types";
@@ -31,8 +49,12 @@ import { useSuppressedJobRows } from "./hooks/useSuppressedJobRows";
 import { useJobMutations } from "./hooks/useJobMutations";
 import { useKeyboardNavigation } from "./hooks/useKeyboardNavigation";
 import { useExternalGenerate } from "./hooks/useExternalGenerate";
+import { useTailorReviewController } from "./hooks/useTailorReviewController";
 import { JobListItem } from "./components/JobListItem";
-import { VirtualJobList, type VirtualJobListHandle } from "./components/VirtualJobList";
+import {
+  VirtualJobList,
+  type VirtualJobListHandle,
+} from "./components/VirtualJobList";
 import { BatchProgressBanner } from "./components/BatchProgressBanner";
 import { useBatchProgress, type BatchStatus } from "./hooks/useBatchProgress";
 import { useRunnerPresence } from "@/hooks/useRunnerPresence";
@@ -46,7 +68,11 @@ import {
 } from "./components/BatchPreflightDialog";
 import { BatchDetailsDialog } from "./components/BatchDetailsDialog";
 import { cn } from "@/lib/utils";
-import { AU_LOCATION_OPTIONS, CN_LOCATION_OPTIONS, getUserTimeZone } from "./utils/constants";
+import {
+  AU_LOCATION_OPTIONS,
+  CN_LOCATION_OPTIONS,
+  getUserTimeZone,
+} from "./utils/constants";
 import type { JobsUrlState } from "./utils/jobsUrlState";
 import {
   getJobDetailsQueryKey,
@@ -103,7 +129,16 @@ const JobRow = React.memo(function JobRow({
       timeZone={timeZone}
     />
   );
-  return reducedMotion ? <div>{row}</div> : <motion.div layout="position">{row}</motion.div>;
+  return reducedMotion ? (
+    <div>{row}</div>
+  ) : (
+    <motion.div
+      layout="position"
+      transition={{ duration: 0.18, ease: "easeOut" }}
+    >
+      {row}
+    </motion.div>
+  );
 });
 
 function getWorkspaceStateKey(
@@ -124,15 +159,25 @@ export function JobsClient({
   const t = useTranslations("jobs");
   const tc = useTranslations("common");
   const tn = useTranslations("nav");
-  const { runId: fetchRunId, status: fetchStatus, importedCount: fetchImportedCount } = useFetchStatus();
+  const {
+    runId: fetchRunId,
+    status: fetchStatus,
+    importedCount: fetchImportedCount,
+  } = useFetchStatus();
   const guideHighlightClass =
     "ring-2 ring-brand-emerald-500 ring-offset-2 ring-offset-background shadow-[0_0_0_4px_rgba(16,185,129,0.22)]";
   const queryClient = useQueryClient();
+  const tailorReview = useTailorReviewController();
+  const { cancelApplicationReviewLoad, openApplicationReview } = tailorReview;
 
   const {
-    q, debouncedQ, setQ,
-    statusFilter, setStatusFilter,
-    locationFilter, setLocationFilter,
+    q,
+    debouncedQ,
+    setQ,
+    statusFilter,
+    setStatusFilter,
+    locationFilter,
+    setLocationFilter,
     market,
     queryString,
     urlState,
@@ -144,10 +189,9 @@ export function JobsClient({
   const [selectedId, setSelectedId] = useState<string | null>(
     () => urlSelectedId ?? initialItems[0]?.id ?? null,
   );
-  const [selectionExplicitlyCleared, setSelectionExplicitlyCleared] = useState(false);
-  const [mobileTab, setMobileTab] = useState<"list" | "detail">(
-    () => urlView,
-  );
+  const [selectionExplicitlyCleared, setSelectionExplicitlyCleared] =
+    useState(false);
+  const [mobileTab, setMobileTab] = useState<"list" | "detail">(() => urlView);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [timeZone] = useState<string | null>(() => getUserTimeZone() || null);
   const [isPending, startTransition] = useTransition();
@@ -180,11 +224,12 @@ export function JobsClient({
   );
   const setSelectedIdFromMutation = useCallback(
     (id: string | null) => {
+      cancelApplicationReviewLoad();
       setSelectionExplicitlyCleared(false);
       setSelectedId(id);
       persistWorkspaceUrl({ selectedId: id });
     },
-    [persistWorkspaceUrl],
+    [cancelApplicationReviewLoad, persistWorkspaceUrl],
   );
 
   useEffect(() => {
@@ -203,14 +248,24 @@ export function JobsClient({
     }
 
     pendingWorkspaceUrlRef.current = null;
+    cancelApplicationReviewLoad();
     setSelectionExplicitlyCleared(false);
     setSelectedId(urlSelectedId);
     setMobileTab(urlView);
-  }, [urlSelectedId, urlView]);
+  }, [cancelApplicationReviewLoad, urlSelectedId, urlView]);
 
   const {
-    items, totalCount, nextCursor, loading, loadingInitial, showEmpty, loadingMore,
-    loadedCursors, resetPagination, firstQueryError, refetch,
+    items,
+    totalCount,
+    nextCursor,
+    loading,
+    loadingInitial,
+    showEmpty,
+    loadingMore,
+    loadedCursors,
+    resetPagination,
+    firstQueryError,
+    refetch,
   } = useJobPagination({
     queryString,
     initialItems,
@@ -221,9 +276,12 @@ export function JobsClient({
   const visibleItems = items;
 
   const {
-    updateStatus, requestDelete,
-    updatingIds, deletingIds,
-    error: mutationError, setError,
+    updateStatus,
+    requestDelete,
+    updatingIds,
+    deletingIds,
+    error: mutationError,
+    setError,
   } = useJobMutations({
     items: visibleItems,
     selectedId,
@@ -232,7 +290,9 @@ export function JobsClient({
     revealJobs,
   });
 
-  const externalGenerate = useExternalGenerate(setError);
+  const externalGenerate = useExternalGenerate(setError, {
+    onDraftPersisted: tailorReview.openPersistedDraft,
+  });
   // Generation happens on the user's machine. Presence explains why a queued
   // batch may be waiting, but it is deliberately not a queueing prerequisite.
   const runnerPresence = useRunnerPresence(true);
@@ -240,7 +300,9 @@ export function JobsClient({
     window.dispatchEvent(new Event("joblit:runner-setup"));
   }, []);
   const batchProgress = useBatchProgress({ onJobsSettled: refetch });
-  const [batchPreflight, setBatchPreflight] = useState<BatchPreflight | null>(null);
+  const [batchPreflight, setBatchPreflight] = useState<BatchPreflight | null>(
+    null,
+  );
   const [batchPreflightLoading, setBatchPreflightLoading] = useState(true);
   const [batchPreflightError, setBatchPreflightError] = useState(false);
   const [batchPreflightOpen, setBatchPreflightOpen] = useState(false);
@@ -248,6 +310,35 @@ export function JobsClient({
   const [batchActionPending, setBatchActionPending] = useState<
     "cancel" | "retry" | null
   >(null);
+  const handleBatchDetailsOpenChange = useCallback(
+    (open: boolean) => {
+      setBatchDetailsOpen(open);
+      if (!open) cancelApplicationReviewLoad();
+    },
+    [cancelApplicationReviewLoad],
+  );
+  const handleBatchReview = useCallback(
+    async (
+      applicationId: string,
+      jobId: string,
+      target: "resume" | "cover",
+    ) => {
+      const opened = await openApplicationReview({
+        applicationId,
+        jobId,
+        target,
+      });
+      if (opened) setBatchDetailsOpen(false);
+      return opened;
+    },
+    [openApplicationReview],
+  );
+  const handleJobReview = useCallback(
+    (applicationId: string, jobId: string, target: "resume" | "cover") => {
+      void handleBatchReview(applicationId, jobId, target);
+    },
+    [handleBatchReview],
+  );
   const refreshBatchPreflight = useCallback(async (signal?: AbortSignal) => {
     setBatchPreflightLoading(true);
     setBatchPreflightError(false);
@@ -294,11 +385,7 @@ export function JobsClient({
       status: active.status,
       totalCount: active.totalCount ?? batchPreflight.eligibleCount,
     });
-  }, [
-    batchPreflight,
-    batchProgress.state.batchId,
-    watchBatchProgress,
-  ]);
+  }, [batchPreflight, batchProgress.state.batchId, watchBatchProgress]);
   const refreshedTerminalBatchRef = useRef<string | null>(null);
   useEffect(() => {
     if (
@@ -348,8 +435,7 @@ export function JobsClient({
   // `overflow: hidden` on <body> while open, which can desync the scroll
   // state of .app-shell when the dialog unmounts.
   const anyDialogOpen =
-    externalGenerate.externalDialogOpen ||
-    !!externalGenerate.tailorReviewDraft;
+    externalGenerate.externalDialogOpen || !!tailorReview.draft;
   useEffect(() => {
     if (typeof document === "undefined") return;
     const appShell = document.querySelector<HTMLElement>(".app-shell");
@@ -392,7 +478,8 @@ export function JobsClient({
     const current = {
       runId: fetchRunId ?? null,
       status: (fetchStatus ?? null) as FetchRunStatus | null,
-      importedCount: typeof fetchImportedCount === "number" ? fetchImportedCount : 0,
+      importedCount:
+        typeof fetchImportedCount === "number" ? fetchImportedCount : 0,
     };
     const previous = lastSeenImportRef.current;
     lastSeenImportRef.current = current;
@@ -410,7 +497,8 @@ export function JobsClient({
       previous.status === "FAILED";
     const justBecameTerminal = isTerminal && !wasTerminal;
     const isFirstPage = loadedCursors.length === 1 && loadedCursors[0] === null;
-    const inProgress = current.status === "RUNNING" || current.status === "QUEUED";
+    const inProgress =
+      current.status === "RUNNING" || current.status === "QUEUED";
     const delta = current.importedCount - previous.importedCount;
 
     // A terminal transition invalidates every loaded page even when the final
@@ -575,31 +663,41 @@ export function JobsClient({
   const effectiveSelectedId = useMemo(() => {
     if (selectionExplicitlyCleared) return null;
     if (!visibleItems.length) return null;
-    if (
-      selectedId &&
-      visibleItems.some((item) => item.id === selectedId)
-    ) {
+    if (selectedId && visibleItems.some((item) => item.id === selectedId)) {
       return selectedId;
     }
     return visibleItems[0]?.id ?? null;
   }, [selectedId, selectionExplicitlyCleared, visibleItems]);
 
-  const handleSelectJob = useCallback((id: string | null) => {
-    const showDetail =
-      id !== null && typeof window !== "undefined" && window.innerWidth < 1024;
-    setSelectionExplicitlyCleared(id === null);
-    setSelectedId(id);
-    if (id !== null) {
-      markTaskComplete("review_jobs");
-    }
-    if (showDetail) {
-      setMobileTab("detail");
-    }
-    persistWorkspaceUrl({
-      selectedId: id,
-      ...(showDetail ? { view: "detail" as const } : {}),
-    });
-  }, [markTaskComplete, persistWorkspaceUrl]);
+  // Selection can also change implicitly when filters remove the active row.
+  // A layout effect closes that final context-change gap before a stale review
+  // response can paint an editor for the job that just disappeared.
+  useLayoutEffect(() => {
+    cancelApplicationReviewLoad();
+  }, [cancelApplicationReviewLoad, effectiveSelectedId]);
+
+  const handleSelectJob = useCallback(
+    (id: string | null) => {
+      cancelApplicationReviewLoad();
+      const showDetail =
+        id !== null &&
+        typeof window !== "undefined" &&
+        window.innerWidth < 1024;
+      setSelectionExplicitlyCleared(id === null);
+      setSelectedId(id);
+      if (id !== null) {
+        markTaskComplete("review_jobs");
+      }
+      if (showDetail) {
+        setMobileTab("detail");
+      }
+      persistWorkspaceUrl({
+        selectedId: id,
+        ...(showDetail ? { view: "detail" as const } : {}),
+      });
+    },
+    [cancelApplicationReviewLoad, markTaskComplete, persistWorkspaceUrl],
+  );
 
   const handleMobileTabChange = useCallback(
     (view: "list" | "detail") => {
@@ -631,7 +729,7 @@ export function JobsClient({
   const selectedJob =
     visibleItems.find((item) => item.id === effectiveSelectedId) ?? null;
   const selectedTailorSource = selectedJob
-    ? externalGenerate.tailorSourceByJob[selectedJob.id]
+    ? tailorReview.tailorSourceByJob[selectedJob.id]
     : undefined;
   const highlightGenerate = isTaskHighlighted("generate_first_pdf");
   const preflightActiveBatch =
@@ -650,8 +748,7 @@ export function JobsClient({
   const batchEntryTotal = batchProgress.state.active
     ? batchProgress.state.total
     : (preflightActiveBatch?.totalCount ?? batchPreflight?.eligibleCount ?? 0);
-  const batchPreflightRetry =
-    batchPreflightError && !batchEntryActive;
+  const batchPreflightRetry = batchPreflightError && !batchEntryActive;
 
   const detailQuery = useQuery({
     queryKey: getJobDetailsQueryKey(effectiveSelectedId),
@@ -733,12 +830,12 @@ export function JobsClient({
       />
 
       <TailorReviewDialog
-        open={!!externalGenerate.tailorReviewDraft}
-        draft={externalGenerate.tailorReviewDraft}
+        open={!!tailorReview.draft}
+        draft={tailorReview.draft}
         onOpenChange={(open) => {
-          if (!open) externalGenerate.closeTailorReview();
+          if (!open) tailorReview.closeReview();
         }}
-        onFinalized={externalGenerate.handleTailorReviewFinalized}
+        onFinalized={tailorReview.handleFinalized}
       />
 
       {batchPreflight ? (
@@ -747,7 +844,8 @@ export function JobsClient({
           onOpenChange={setBatchPreflightOpen}
           preflight={batchPreflight}
           runnerStatus={
-            runnerPresence.status as "online" | "offline" | "unknown" | "unavailable"
+            runnerPresence.status as
+              "online" | "offline" | "unknown" | "unavailable"
           }
           submitting={batchGeneratePending}
           onConfirm={() => void generateAllNew()}
@@ -756,12 +854,15 @@ export function JobsClient({
 
       {batchProgress.state.batchId ? (
         <BatchDetailsDialog
-          open={batchDetailsOpen}
-          onOpenChange={setBatchDetailsOpen}
+          open={batchDetailsOpen && !tailorReview.draft}
+          onOpenChange={handleBatchDetailsOpenChange}
           state={batchProgress.state}
           actionPending={batchActionPending !== null}
           onCancel={() => void cancelActiveBatch()}
           onRetryFailed={() => void retryFailedBatch()}
+          reviewLoading={tailorReview.loading}
+          reviewError={tailorReview.loadError}
+          onReview={handleBatchReview}
         />
       ) : null}
 
@@ -769,566 +870,656 @@ export function JobsClient({
         data-testid="jobs-shell"
         className="relative flex flex-1 flex-col gap-2 pb-0 text-foreground lg:min-h-0 lg:h-full lg:overflow-hidden"
       >
-      <div className="flex flex-1 flex-col gap-2 lg:min-h-0 lg:h-full lg:overflow-hidden">
-        <div aria-live="polite" className="sr-only">
-          {totalCount !== undefined ? t("jobsFound", { count: totalCount }) : t("loadingJobs")}
-        </div>
-        {/* Mobile-only toolbar. Desktop search/filter row was moved
+        <div className="flex flex-1 flex-col gap-2 lg:min-h-0 lg:h-full lg:overflow-hidden">
+          <div aria-live="polite" className="sr-only">
+            {totalCount !== undefined
+              ? t("jobsFound", { count: totalCount })
+              : t("loadingJobs")}
+          </div>
+          {/* Mobile-only toolbar. Desktop search/filter row was moved
             into the results (list) column header to match the
             reference layout and reclaim vertical space for the detail
             pane. See the desktop-only block further down. */}
-        <div
-        role="search"
-        aria-label={t("searchLandmark")}
-        data-testid="jobs-toolbar"
-        className="relative rounded-2xl border border-border/70 bg-background/90 p-3 shadow-sm backdrop-blur lg:hidden"
-      >
-        {loading ? (
-          <div className="absolute top-0 left-0 right-0 z-10 h-0.5 overflow-hidden rounded-t-2xl">
-            <div className="h-full w-1/3 animate-[shimmer_1.2s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-brand-emerald-500 to-transparent" />
-          </div>
-        ) : null}
-
-        {/* Mobile: compact search + filter toggle */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <div className="flex-1">
-              <JobSearchBar
-                q={q}
-                onQueryChange={setQ}
-                onSubmit={triggerSearch}
-                placeholder={t("placeholder")}
-                isDebouncing={q !== "" && q !== debouncedQ}
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => setMobileFiltersOpen((v) => !v)}
-              className={cn(
-                "flex h-11 shrink-0 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-medium transition-colors",
-                mobileFiltersOpen
-                  ? "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-text"
-                  : "border-border bg-background text-foreground/70",
-              )}
-            >
-              <SlidersHorizontal className="h-3.5 w-3.5" />
-              {activeFilterCount > 0 && (
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-brand-emerald-500 text-[10px] font-bold text-white">
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {mobileFiltersOpen && (
-            <div className="grid grid-cols-2 gap-2 rounded-lg border border-border/60 bg-muted/40 p-2.5">
-              <Select
-                value={locationFilter}
-                onValueChange={(v) => { startTransition(() => { setLocationFilter(v); }); }}
-              >
-                <SelectTrigger
-                  className={cn(mobileFilterSelectTriggerClass, "gap-1.5")}
-                  aria-label={t("location")}
-                >
-                  <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                  <SelectValue placeholder={tc("allLocations")} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">{tc("allLocations")}</SelectItem>
-                  {(market === "CN" ? CN_LOCATION_OPTIONS : AU_LOCATION_OPTIONS).map((loc) => (
-                    <SelectItem key={loc.value} value={loc.value}>{loc.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={statusFilter}
-                onValueChange={(v) => { startTransition(() => { setStatusFilter(v as JobStatus); }); }}
-              >
-                <SelectTrigger
-                  className={mobileFilterSelectTriggerClass}
-                  aria-label={t("status")}
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ACTIVE_JOB_STATUS_VALUES.map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {t(JOB_STATUS_LABEL_KEYS[status])}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-        </div>
-
-      </div>
-
-      {activeError ? (
-        <div
-          role="alert"
-          className="flex items-start justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
-        >
-          <span className="min-w-0">{activeError}</span>
-          {activeErrorKind === "query" ? (
-            <button
-              type="button"
-              onClick={() => void refetch()}
-              disabled={loading}
-              className="flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 font-medium transition-colors hover:bg-destructive/15 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw
-                className={cn("h-3.5 w-3.5", loading && "motion-safe:animate-spin")}
-                aria-hidden
-              />
-              {tc("retry")}
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setError(null)}
-              aria-label={tc("close")}
-              className="shrink-0 rounded-md p-0.5 transition-colors hover:bg-destructive/15"
-            >
-              <X className="h-4 w-4" aria-hidden />
-            </button>
-          )}
-        </div>
-      ) : null}
-
-        <section className="relative flex flex-1 flex-col gap-3 lg:grid lg:min-h-0 lg:h-full lg:grid-cols-[380px_1fr] lg:items-stretch">
-        <div
-          className="flex shrink-0 items-center rounded-lg bg-muted/70 p-0.5 lg:hidden"
-          aria-label={t("mobileTablistLabel")}
-          {...mobileTabs.tabListProps}
-        >
-          <button
-            type="button"
-            {...mobileTabs.getTabProps("list")}
-            className={cn(
-              "flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-150 min-h-[44px]",
-              mobileTab === "list"
-                ? "bg-background text-brand-emerald-text shadow-sm"
-                : "text-muted-foreground active:bg-background/60",
-            )}
+          <div
+            role="search"
+            aria-label={t("searchLandmark")}
+            data-testid="jobs-toolbar"
+            className="relative rounded-2xl border border-border/70 bg-background/90 p-3 shadow-sm backdrop-blur lg:hidden"
           >
-            {tn("jobs")}
-            <span className="ml-1 text-[10px] font-normal opacity-70">
-              {typeof totalCount === "number" ? totalCount : items.length}
-            </span>
-          </button>
-          <button
-            type="button"
-            {...mobileTabs.getTabProps("detail")}
-            className={cn(
-              "flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-150 min-h-[44px]",
-              mobileTab === "detail"
-                ? "bg-background text-brand-emerald-text shadow-sm"
-                : "text-muted-foreground active:bg-background/60",
-            )}
-          >
-            {t("tabDetail")}
-          </button>
-        </div>
-
-        {/* Results panel */}
-        <div
-          {...mobileTabs.getPanelProps("list")}
-          hidden={undefined}
-          data-testid="jobs-results-panel"
-          className={cn(
-            "relative flex flex-col overflow-hidden backdrop-blur transition-shadow duration-200 ease-out",
-            "rounded-2xl border border-border/70 bg-background/90 shadow-sm",
-            "lg:rounded-3xl lg:border-2 lg:border-border/50 lg:bg-background/85 lg:shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] lg:hover:shadow-[0_24px_50px_-36px_rgba(5,150,105,0.22)]",
-            "min-h-[clamp(18rem,calc(100dvh-16rem),32rem)] max-h-[calc(100dvh-12rem)] lg:h-auto lg:min-h-0 lg:max-h-none lg:flex-1",
-            mobileTab !== "list" && "hidden lg:flex",
-          )}
-        >
-          {/* Desktop toolbar — lives inside the list column (not above
-              the two-pane grid) so the detail pane stretches full
-              height. Compact three-row stack tuned for the 380px
-              column width. */}
-          <div className="hidden shrink-0 border-b border-border/60 p-3 lg:block">
             {loading ? (
-              <div className="absolute top-0 left-0 right-0 z-10 h-0.5 overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 z-10 h-0.5 overflow-hidden rounded-t-2xl">
                 <div className="h-full w-1/3 animate-[shimmer_1.2s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-brand-emerald-500 to-transparent" />
               </div>
             ) : null}
-            <div className="flex items-center gap-2">
-              <div className="min-w-0 flex-1">
-                <JobSearchBar
-                  q={q}
-                  onQueryChange={setQ}
-                  onSubmit={triggerSearch}
-                  placeholder={t("placeholder")}
-                  isDebouncing={q !== "" && q !== debouncedQ}
-                />
-              </div>
-              <Select
-                value={locationFilter}
-                onValueChange={(v) => {
-                  startTransition(() => {
-                    setLocationFilter(v);
-                  });
-                }}
-              >
-                <SelectTrigger
-                  data-testid="jobs-location-filter"
+
+            {/* Mobile: compact search + filter toggle */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <JobSearchBar
+                    q={q}
+                    onQueryChange={setQ}
+                    onSubmit={triggerSearch}
+                    placeholder={t("placeholder")}
+                    isDebouncing={q !== "" && q !== debouncedQ}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMobileFiltersOpen((v) => !v)}
                   className={cn(
-                    desktopFilterSelectTriggerClass,
-                    "w-[9.5rem] shrink-0 gap-1.5",
+                    "flex h-11 shrink-0 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-medium transition-colors",
+                    mobileFiltersOpen
+                      ? "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-text"
+                      : "border-border bg-background text-foreground/70",
                   )}
-                  aria-label={t("location")}
                 >
-                  <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                  <SelectValue placeholder={tc("allLocations")} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">{tc("allLocations")}</SelectItem>
-                  {(market === "CN"
-                    ? CN_LOCATION_OPTIONS
-                    : AU_LOCATION_OPTIONS
-                  ).map((loc) => (
-                    <SelectItem key={loc.value} value={loc.value}>
-                      {loc.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                  {activeFilterCount > 0 && (
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-brand-emerald-500 text-[10px] font-bold text-white">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              {mobileFiltersOpen && (
+                <div className="grid grid-cols-2 gap-2 rounded-lg border border-border/60 bg-muted/40 p-2.5">
+                  <Select
+                    value={locationFilter}
+                    onValueChange={(v) => {
+                      startTransition(() => {
+                        setLocationFilter(v);
+                      });
+                    }}
+                  >
+                    <SelectTrigger
+                      className={cn(mobileFilterSelectTriggerClass, "gap-1.5")}
+                      aria-label={t("location")}
+                    >
+                      <MapPin
+                        className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                        aria-hidden
+                      />
+                      <SelectValue placeholder={tc("allLocations")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">{tc("allLocations")}</SelectItem>
+                      {(market === "CN"
+                        ? CN_LOCATION_OPTIONS
+                        : AU_LOCATION_OPTIONS
+                      ).map((loc) => (
+                        <SelectItem key={loc.value} value={loc.value}>
+                          {loc.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={statusFilter}
+                    onValueChange={(v) => {
+                      startTransition(() => {
+                        setStatusFilter(v as JobStatus);
+                      });
+                    }}
+                  >
+                    <SelectTrigger
+                      className={mobileFilterSelectTriggerClass}
+                      aria-label={t("status")}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ACTIVE_JOB_STATUS_VALUES.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {t(JOB_STATUS_LABEL_KEYS[status])}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           </div>
-          {/* The status choice IS the results header. The old layout spent
+
+          {activeError ? (
+            <div
+              role="alert"
+              className="flex items-start justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+            >
+              <span className="min-w-0">{activeError}</span>
+              {activeErrorKind === "query" ? (
+                <button
+                  type="button"
+                  onClick={() => void refetch()}
+                  disabled={loading}
+                  className="flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 font-medium transition-colors hover:bg-destructive/15 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <RefreshCw
+                    className={cn(
+                      "h-3.5 w-3.5",
+                      loading && "motion-safe:animate-spin",
+                    )}
+                    aria-hidden
+                  />
+                  {tc("retry")}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setError(null)}
+                  aria-label={tc("close")}
+                  className="shrink-0 rounded-md p-0.5 transition-colors hover:bg-destructive/15"
+                >
+                  <X className="h-4 w-4" aria-hidden />
+                </button>
+              )}
+            </div>
+          ) : null}
+
+          <section className="relative flex flex-1 flex-col gap-3 lg:grid lg:min-h-0 lg:h-full lg:grid-cols-[380px_1fr] lg:items-stretch">
+            <div
+              className="flex shrink-0 items-center rounded-lg bg-muted/70 p-0.5 lg:hidden"
+              aria-label={t("mobileTablistLabel")}
+              {...mobileTabs.tabListProps}
+            >
+              <button
+                type="button"
+                {...mobileTabs.getTabProps("list")}
+                className={cn(
+                  "flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-150 min-h-[44px]",
+                  mobileTab === "list"
+                    ? "bg-background text-brand-emerald-text shadow-sm"
+                    : "text-muted-foreground active:bg-background/60",
+                )}
+              >
+                {tn("jobs")}
+                <span className="ml-1 text-[10px] font-normal opacity-70">
+                  {typeof totalCount === "number" ? totalCount : items.length}
+                </span>
+              </button>
+              <button
+                type="button"
+                {...mobileTabs.getTabProps("detail")}
+                className={cn(
+                  "flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-150 min-h-[44px]",
+                  mobileTab === "detail"
+                    ? "bg-background text-brand-emerald-text shadow-sm"
+                    : "text-muted-foreground active:bg-background/60",
+                )}
+              >
+                {t("tabDetail")}
+              </button>
+            </div>
+
+            {/* Results panel */}
+            <div
+              {...mobileTabs.getPanelProps("list")}
+              hidden={undefined}
+              data-testid="jobs-results-panel"
+              className={cn(
+                "relative flex flex-col overflow-hidden backdrop-blur transition-shadow duration-200 ease-out",
+                "rounded-2xl border border-border/70 bg-background/90 shadow-sm",
+                "lg:rounded-3xl lg:border-2 lg:border-border/50 lg:bg-background/85 lg:shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] lg:hover:shadow-[0_24px_50px_-36px_rgba(5,150,105,0.22)]",
+                "min-h-[clamp(18rem,calc(100dvh-16rem),32rem)] max-h-[calc(100dvh-12rem)] lg:h-auto lg:min-h-0 lg:max-h-none lg:flex-1",
+                mobileTab !== "list" && "hidden lg:flex",
+              )}
+            >
+              {/* Desktop toolbar — lives inside the list column (not above
+              the two-pane grid) so the detail pane stretches full
+              height. Compact three-row stack tuned for the 380px
+              column width. */}
+              <div className="hidden shrink-0 border-b border-border/60 p-3 lg:block">
+                {loading ? (
+                  <div className="absolute top-0 left-0 right-0 z-10 h-0.5 overflow-hidden">
+                    <div className="h-full w-1/3 animate-[shimmer_1.2s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-brand-emerald-500 to-transparent" />
+                  </div>
+                ) : null}
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <JobSearchBar
+                      q={q}
+                      onQueryChange={setQ}
+                      onSubmit={triggerSearch}
+                      placeholder={t("placeholder")}
+                      isDebouncing={q !== "" && q !== debouncedQ}
+                    />
+                  </div>
+                  <Select
+                    value={locationFilter}
+                    onValueChange={(v) => {
+                      startTransition(() => {
+                        setLocationFilter(v);
+                      });
+                    }}
+                  >
+                    <SelectTrigger
+                      data-testid="jobs-location-filter"
+                      className={cn(
+                        desktopFilterSelectTriggerClass,
+                        "w-[9.5rem] shrink-0 gap-1.5",
+                      )}
+                      aria-label={t("location")}
+                    >
+                      <MapPin
+                        className="h-4 w-4 shrink-0 text-muted-foreground"
+                        aria-hidden
+                      />
+                      <SelectValue placeholder={tc("allLocations")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">{tc("allLocations")}</SelectItem>
+                      {(market === "CN"
+                        ? CN_LOCATION_OPTIONS
+                        : AU_LOCATION_OPTIONS
+                      ).map((loc) => (
+                        <SelectItem key={loc.value} value={loc.value}>
+                          {loc.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {/* The status choice IS the results header. The old layout spent
               two rows saying "Results · 14 jobs · 10 loaded" above the tabs —
               three counts for one list. The active segment now carries the
               one count that matters; loading progress lives at the list
               bottom where the loading actually happens. */}
-          <div className="@container/jobshdr flex flex-nowrap items-center justify-between gap-2 border-b px-4 pb-3 pt-3">
-            <SegmentedControl
-              ariaLabel={t("status")}
-              value={statusFilter}
-              onChange={(next) =>
-                startTransition(() => setStatusFilter(next))
-              }
-              segmentClassName="min-w-0 px-2.5"
-              options={ACTIVE_JOB_STATUS_VALUES.map((status) => ({
-                value: status,
-                label: t(JOB_STATUS_LABEL_KEYS[status]),
-                count:
-                  status === statusFilter && typeof totalCount === "number"
-                    ? totalCount
-                    : undefined,
-              }))}
-            />
-
-            {/* Batch generation belongs to the NEW inbox. Its count is the
-                server's global queue scope, never this filtered page count. */}
-            {statusFilter === "NEW" ? (
-              <button
-                type="button"
-                onClick={() => {
-                  if (batchEntryActive) {
-                    if (!batchProgress.state.active && preflightActiveBatch) {
-                      watchBatchProgress({
-                        id: preflightActiveBatch.id,
-                        status: preflightActiveBatch.status,
-                        totalCount:
-                          preflightActiveBatch.totalCount ??
-                          batchPreflight?.eligibleCount ??
-                          0,
-                      });
-                    }
-                    setBatchDetailsOpen(true);
-                  } else if (batchPreflightRetry) {
-                    void refreshBatchPreflight();
-                  } else {
-                    setBatchPreflightOpen(true);
+              <div className="@container/jobshdr flex flex-nowrap items-center justify-between gap-2 border-b px-4 pb-3 pt-3">
+                <SegmentedControl
+                  ariaLabel={t("status")}
+                  value={statusFilter}
+                  onChange={(next) =>
+                    startTransition(() => setStatusFilter(next))
                   }
-                }}
-                disabled={
-                  !batchEntryActive &&
-                  (batchPreflightLoading ||
-                    batchGeneratePending ||
-                    (!batchPreflight && !batchPreflightRetry) ||
-                    (!!batchPreflight &&
-                      batchPreflight.eligibleCount === 0 &&
-                      batchPreflight.profileReady &&
-                      !batchPreflightRetry))
-                }
-                data-testid="jobs-generate-all"
-                aria-label={
-                  batchEntryActive
-                    ? t("batchProgress.openDetails")
-                    : batchPreflightRetry
-                      ? t("batchPreflight.retryCheck")
-                    : batchPreflight
-                    ? t("generateAllAria", { count: batchPreflight.eligibleCount })
-                    : t("generateAll")
-                }
-                title={
-                  batchEntryActive
-                    ? t("batchProgress.openDetails")
-                    : batchPreflightRetry
-                      ? t("batchPreflight.retryCheck")
-                    : batchPreflight
-                    ? t("generateAllAria", { count: batchPreflight.eligibleCount })
-                    : t("generateAll")
-                }
-                data-guide-anchor="generate_first_pdf"
-                data-guide-highlight={highlightGenerate ? "true" : "false"}
-                className={cn(
-                  "inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-brand-emerald-700 px-3 text-[13px] font-semibold text-white shadow-sm transition-colors duration-150",
-                  "hover:bg-brand-emerald-800 active:bg-brand-emerald-800",
-                  "disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2",
-                  highlightGenerate && guideHighlightClass,
-                )}
-              >
-                {!batchEntryActive &&
-                (batchPreflightLoading || batchGeneratePending) ? (
-                  <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin" aria-hidden />
-                ) : batchPreflightRetry ? (
-                  <RefreshCw className="h-3.5 w-3.5" aria-hidden />
-                ) : (
-                  <Sparkles className="h-3.5 w-3.5" aria-hidden />
-                )}
-                <span>
-                  {batchEntryActive
-                    ? t(
-                        batchEntryStatus === "QUEUED"
-                          ? "batchProgress.queuedButton"
-                          : "batchProgress.runningButton",
-                        {
-                          done: batchEntryDone,
-                          total: batchEntryTotal,
-                        },
-                      )
-                    : batchGeneratePending
-                      ? t("batchPreflight.starting")
-                      : batchPreflight?.profileReady === false
-                        ? t("batchPreflight.openResume")
+                  segmentClassName="min-w-0 px-2.5"
+                  options={ACTIVE_JOB_STATUS_VALUES.map((status) => ({
+                    value: status,
+                    label: t(JOB_STATUS_LABEL_KEYS[status]),
+                    count:
+                      status === statusFilter && typeof totalCount === "number"
+                        ? totalCount
+                        : undefined,
+                  }))}
+                />
+
+                {/* Batch generation belongs to the NEW inbox. Its count is the
+                server's global queue scope, never this filtered page count. */}
+                {statusFilter === "NEW" ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (batchEntryActive) {
+                        if (
+                          !batchProgress.state.active &&
+                          preflightActiveBatch
+                        ) {
+                          watchBatchProgress({
+                            id: preflightActiveBatch.id,
+                            status: preflightActiveBatch.status,
+                            totalCount:
+                              preflightActiveBatch.totalCount ??
+                              batchPreflight?.eligibleCount ??
+                              0,
+                          });
+                        }
+                        setBatchDetailsOpen(true);
+                      } else if (batchPreflightRetry) {
+                        void refreshBatchPreflight();
+                      } else {
+                        setBatchPreflightOpen(true);
+                      }
+                    }}
+                    disabled={
+                      !batchEntryActive &&
+                      (batchPreflightLoading ||
+                        batchGeneratePending ||
+                        (!batchPreflight && !batchPreflightRetry) ||
+                        (!!batchPreflight &&
+                          batchPreflight.eligibleCount === 0 &&
+                          batchPreflight.profileReady &&
+                          !batchPreflightRetry))
+                    }
+                    data-testid="jobs-generate-all"
+                    aria-label={
+                      batchEntryActive
+                        ? t("batchProgress.openDetails")
                         : batchPreflightRetry
                           ? t("batchPreflight.retryCheck")
-                        : t("generateAll")}
-                </span>
-                {batchPreflight && !batchEntryActive && batchPreflight.profileReady ? (
-                  <span className="min-w-5 rounded-full bg-white/20 px-1.5 py-0.5 text-[11px] font-bold tabular-nums">
-                    {batchPreflight.eligibleCount}
-                  </span>
-                ) : null}
-              </button>
-            ) : null}
-          </div>
-          {statusFilter === "NEW" && batchPreflightRetry ? (
-            <p
-              role="alert"
-              className="border-b bg-amber-50 px-4 py-2 text-xs leading-5 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"
-            >
-              {t("batchPreflight.loadError")}
-            </p>
-          ) : null}
-          {batchProgress.visible ? (
-            <BatchProgressBanner
-              state={batchProgress.state}
-              runnerStatus={
-                runnerPresence.status as "online" | "offline" | "unknown" | "unavailable"
-              }
-              onOpenSetup={openRunnerSetup}
-              onViewDetails={() => setBatchDetailsOpen(true)}
-              onDismiss={batchProgress.dismiss}
-            />
-          ) : null}
-          <div className="relative flex min-h-0 flex-1 flex-col">
-          <ScrollArea
-            ref={resultsScrollRef}
-            type="scroll"
-            data-testid="jobs-results-scroll"
-            data-loading={showLoadingOverlay ? "true" : "false"}
-            data-virtual={virtualListEnabled ? "true" : "false"}
-            className={`jobs-scroll-area max-h-full flex-1 min-h-0 transition-opacity duration-200 ease-out ${listOpacityClass}`}
-          >
-            {loadingInitial ? (
-              <div className="space-y-3 p-3">
-                {Array.from({ length: 6 }).map((_, idx) => (
-                  <div key={`s-${idx}`} className="rounded-lg border p-3">
-                    <Skeleton className="h-4 w-2/3" />
-                    <Skeleton className="mt-2 h-3 w-1/2" />
-                    <Skeleton className="mt-2 h-3 w-1/3" />
-                  </div>
-                ))}
-              </div>
-            ) : null}
-            {visibleItems.length > 0 ? (
-              virtualListEnabled ? (
-                <div
-                  ref={jobListRef}
-                  role="list"
-                  tabIndex={effectiveSelectedId === null ? 0 : -1}
-                >
-                  <VirtualJobList
-                    ref={virtualJobListRef}
-                    items={visibleItems}
-                    effectiveSelectedId={effectiveSelectedId}
-                    onSelect={handleSelectJob}
-                    timeZone={timeZone}
-                    scrollRootRef={resultsScrollRef}
-                  />
-                </div>
-              ) : (
-                <div
-                  ref={jobListRef}
-                  role="list"
-                  tabIndex={effectiveSelectedId === null ? 0 : -1}
-                  className="space-y-3 p-3"
-                >
-                  {visibleItems.map((it) => (
-                    <JobRow
-                      key={it.id}
-                      job={it}
-                      isActive={it.id === effectiveSelectedId}
-                      onSelectJob={handleSelectJob}
-                      timeZone={timeZone}
-                      reducedMotion={reducedMotion}
-                    />
-                  ))}
-                </div>
-              )
-            ) : showEmpty ? (
-              <div className="flex h-full min-h-[440px] flex-col items-center justify-center px-6 py-12 text-center">
-                <motion.div
-                  initial={reducedMotion ? false : { opacity: 0, y: 10, scale: 0.97 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                  className="flex flex-col items-center"
-                >
-                  {/* Layered emblem: soft glow + concentric rings + a crisp tile */}
-                  <div className="relative mb-6 flex h-20 w-20 items-center justify-center">
-                    <span
-                      aria-hidden
-                      className="absolute inset-0 rounded-full bg-brand-emerald-400/20 blur-2xl"
-                    />
-                    <span
-                      aria-hidden
-                      className="absolute inset-0 rounded-full ring-1 ring-brand-emerald-100"
-                    />
-                    <span
-                      aria-hidden
-                      className="absolute inset-[7px] rounded-full ring-1 ring-brand-emerald-100/70"
-                    />
-                    {!reducedMotion && (
-                      <span
+                          : batchPreflight
+                            ? t("generateAllAria", {
+                                count: batchPreflight.eligibleCount,
+                              })
+                            : t("generateAll")
+                    }
+                    title={
+                      batchEntryActive
+                        ? t("batchProgress.openDetails")
+                        : batchPreflightRetry
+                          ? t("batchPreflight.retryCheck")
+                          : batchPreflight
+                            ? t("generateAllAria", {
+                                count: batchPreflight.eligibleCount,
+                              })
+                            : t("generateAll")
+                    }
+                    data-guide-anchor="generate_first_pdf"
+                    data-guide-highlight={highlightGenerate ? "true" : "false"}
+                    className={cn(
+                      "inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-brand-emerald-700 px-3 text-[13px] font-semibold text-white shadow-sm transition-colors duration-150",
+                      "hover:bg-brand-emerald-800 active:bg-brand-emerald-800",
+                      "disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2",
+                      highlightGenerate && guideHighlightClass,
+                    )}
+                  >
+                    {!batchEntryActive &&
+                    (batchPreflightLoading || batchGeneratePending) ? (
+                      <Loader2
+                        className="h-3.5 w-3.5 motion-safe:animate-spin"
                         aria-hidden
-                        className="absolute inset-0 rounded-full ring-1 ring-brand-emerald-300/50 motion-safe:animate-ping [animation-duration:3s]"
                       />
+                    ) : batchPreflightRetry ? (
+                      <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5" aria-hidden />
                     )}
-                    <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-emerald-50 to-white text-brand-emerald-600 shadow-sm ring-1 ring-brand-emerald-100 dark:from-brand-emerald-500/10 dark:to-transparent">
-                      {/* An empty board is empty sky: a constellation, not a
-                          compass. The lead star breathes; the rest are quiet. */}
-                      <svg viewBox="0 0 48 48" fill="none" className="h-7 w-7" aria-hidden>
-                        <path
-                          d="M10 30 L20 14 L31 24 L40 12"
-                          stroke="currentColor"
-                          strokeWidth="1"
-                          strokeDasharray="2 3"
-                          strokeLinecap="round"
-                          opacity="0.45"
-                        />
-                        <path
-                          d="M20 14 L26 36"
-                          stroke="currentColor"
-                          strokeWidth="1"
-                          strokeDasharray="2 3"
-                          strokeLinecap="round"
-                          opacity="0.28"
-                        />
-                        <circle cx="10" cy="30" r="1.3" fill="currentColor" opacity="0.7" />
-                        <circle cx="31" cy="24" r="1.3" fill="currentColor" opacity="0.7" />
-                        <circle cx="40" cy="12" r="1.1" fill="currentColor" opacity="0.55" />
-                        <circle cx="26" cy="36" r="1.1" fill="currentColor" opacity="0.55" />
-                        <circle cx="20" cy="14" r="2.4" fill="currentColor" className="cosmos-star" />
-                      </svg>
+                    <span>
+                      {batchEntryActive
+                        ? t(
+                            batchEntryStatus === "QUEUED"
+                              ? "batchProgress.queuedButton"
+                              : "batchProgress.runningButton",
+                            {
+                              done: batchEntryDone,
+                              total: batchEntryTotal,
+                            },
+                          )
+                        : batchGeneratePending
+                          ? t("batchPreflight.starting")
+                          : batchPreflight?.profileReady === false
+                            ? t("batchPreflight.openResume")
+                            : batchPreflightRetry
+                              ? t("batchPreflight.retryCheck")
+                              : t("generateAll")}
                     </span>
-                  </div>
-                  <h3 className="text-base font-semibold tracking-tight text-foreground">
-                    {activeFilterCount > 0 ? t("emptyHeadlineFiltered") : t("emptyHeadline")}
-                  </h3>
-                  <p className="mt-1.5 max-w-xs text-sm leading-relaxed text-muted-foreground">
-                    {activeFilterCount > 0 ? t("emptySubtextFiltered") : t("emptySubtext")}
-                  </p>
-                  <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
-                    <Button
-                      asChild
-                      size="sm"
-                      className="group h-10 gap-1.5 rounded-full bg-brand-emerald-600 px-5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-brand-emerald-700 hover:shadow-md"
-                    >
-                      <Link href="/fetch">
-                        {t("emptyFetchCta")}
-                        <ArrowRight
-                          className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
-                          aria-hidden
-                        />
-                      </Link>
-                    </Button>
-                    {activeFilterCount > 0 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          startTransition(() => {
-                            setStatusFilter("NEW");
-                            setLocationFilter("ALL");
-                            setQ("");
-                          })
-                        }
-                        className="h-10 rounded-full px-4 text-sm font-medium text-muted-foreground hover:text-foreground"
+                    {batchPreflight &&
+                    !batchEntryActive &&
+                    batchPreflight.profileReady ? (
+                      <span className="min-w-5 rounded-full bg-white/20 px-1.5 py-0.5 text-[11px] font-bold tabular-nums">
+                        {batchPreflight.eligibleCount}
+                      </span>
+                    ) : null}
+                  </button>
+                ) : null}
+              </div>
+              {statusFilter === "NEW" && batchPreflightRetry ? (
+                <p
+                  role="alert"
+                  className="border-b bg-amber-50 px-4 py-2 text-xs leading-5 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"
+                >
+                  {t("batchPreflight.loadError")}
+                </p>
+              ) : null}
+              {batchProgress.visible ? (
+                <BatchProgressBanner
+                  state={batchProgress.state}
+                  runnerStatus={
+                    runnerPresence.status as
+                      "online" | "offline" | "unknown" | "unavailable"
+                  }
+                  onOpenSetup={openRunnerSetup}
+                  onViewDetails={() => setBatchDetailsOpen(true)}
+                  onDismiss={batchProgress.dismiss}
+                />
+              ) : null}
+              <div className="relative flex min-h-0 flex-1 flex-col">
+                <ScrollArea
+                  ref={resultsScrollRef}
+                  type="scroll"
+                  data-testid="jobs-results-scroll"
+                  data-loading={showLoadingOverlay ? "true" : "false"}
+                  data-virtual={virtualListEnabled ? "true" : "false"}
+                  className={`jobs-scroll-area max-h-full flex-1 min-h-0 transition-opacity duration-200 ease-out ${listOpacityClass}`}
+                >
+                  {loadingInitial ? (
+                    <div className="space-y-3 p-3">
+                      {Array.from({ length: 6 }).map((_, idx) => (
+                        <div key={`s-${idx}`} className="rounded-lg border p-3">
+                          <Skeleton className="h-4 w-2/3" />
+                          <Skeleton className="mt-2 h-3 w-1/2" />
+                          <Skeleton className="mt-2 h-3 w-1/3" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {visibleItems.length > 0 ? (
+                    virtualListEnabled ? (
+                      <div
+                        ref={jobListRef}
+                        role="list"
+                        tabIndex={effectiveSelectedId === null ? 0 : -1}
                       >
-                        {t("emptyClearFilters")}
-                      </Button>
-                    )}
+                        <VirtualJobList
+                          ref={virtualJobListRef}
+                          items={visibleItems}
+                          effectiveSelectedId={effectiveSelectedId}
+                          onSelect={handleSelectJob}
+                          timeZone={timeZone}
+                          scrollRootRef={resultsScrollRef}
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        ref={jobListRef}
+                        role="list"
+                        tabIndex={effectiveSelectedId === null ? 0 : -1}
+                        className="space-y-3 p-3"
+                      >
+                        {visibleItems.map((it) => (
+                          <JobRow
+                            key={it.id}
+                            job={it}
+                            isActive={it.id === effectiveSelectedId}
+                            onSelectJob={handleSelectJob}
+                            timeZone={timeZone}
+                            reducedMotion={reducedMotion}
+                          />
+                        ))}
+                      </div>
+                    )
+                  ) : showEmpty ? (
+                    <div className="flex h-full min-h-[440px] flex-col items-center justify-center px-6 py-12 text-center">
+                      <motion.div
+                        initial={
+                          reducedMotion
+                            ? false
+                            : { opacity: 0, y: 10, scale: 0.97 }
+                        }
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                        className="flex flex-col items-center"
+                      >
+                        {/* Layered emblem: soft glow + concentric rings + a crisp tile */}
+                        <div className="relative mb-6 flex h-20 w-20 items-center justify-center">
+                          <span
+                            aria-hidden
+                            className="absolute inset-0 rounded-full bg-brand-emerald-400/20 blur-2xl"
+                          />
+                          <span
+                            aria-hidden
+                            className="absolute inset-0 rounded-full ring-1 ring-brand-emerald-100"
+                          />
+                          <span
+                            aria-hidden
+                            className="absolute inset-[7px] rounded-full ring-1 ring-brand-emerald-100/70"
+                          />
+                          {!reducedMotion && (
+                            <span
+                              aria-hidden
+                              className="absolute inset-0 rounded-full ring-1 ring-brand-emerald-300/50 motion-safe:animate-ping [animation-duration:3s]"
+                            />
+                          )}
+                          <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-emerald-50 to-white text-brand-emerald-600 shadow-sm ring-1 ring-brand-emerald-100 dark:from-brand-emerald-500/10 dark:to-transparent">
+                            {/* An empty board is empty sky: a constellation, not a
+                          compass. The lead star breathes; the rest are quiet. */}
+                            <svg
+                              viewBox="0 0 48 48"
+                              fill="none"
+                              className="h-7 w-7"
+                              aria-hidden
+                            >
+                              <path
+                                d="M10 30 L20 14 L31 24 L40 12"
+                                stroke="currentColor"
+                                strokeWidth="1"
+                                strokeDasharray="2 3"
+                                strokeLinecap="round"
+                                opacity="0.45"
+                              />
+                              <path
+                                d="M20 14 L26 36"
+                                stroke="currentColor"
+                                strokeWidth="1"
+                                strokeDasharray="2 3"
+                                strokeLinecap="round"
+                                opacity="0.28"
+                              />
+                              <circle
+                                cx="10"
+                                cy="30"
+                                r="1.3"
+                                fill="currentColor"
+                                opacity="0.7"
+                              />
+                              <circle
+                                cx="31"
+                                cy="24"
+                                r="1.3"
+                                fill="currentColor"
+                                opacity="0.7"
+                              />
+                              <circle
+                                cx="40"
+                                cy="12"
+                                r="1.1"
+                                fill="currentColor"
+                                opacity="0.55"
+                              />
+                              <circle
+                                cx="26"
+                                cy="36"
+                                r="1.1"
+                                fill="currentColor"
+                                opacity="0.55"
+                              />
+                              <circle
+                                cx="20"
+                                cy="14"
+                                r="2.4"
+                                fill="currentColor"
+                                className="cosmos-star"
+                              />
+                            </svg>
+                          </span>
+                        </div>
+                        <h3 className="text-base font-semibold tracking-tight text-foreground">
+                          {activeFilterCount > 0
+                            ? t("emptyHeadlineFiltered")
+                            : t("emptyHeadline")}
+                        </h3>
+                        <p className="mt-1.5 max-w-xs text-sm leading-relaxed text-muted-foreground">
+                          {activeFilterCount > 0
+                            ? t("emptySubtextFiltered")
+                            : t("emptySubtext")}
+                        </p>
+                        <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
+                          <Button
+                            asChild
+                            size="sm"
+                            className="group h-10 gap-1.5 rounded-full bg-brand-emerald-600 px-5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-brand-emerald-700 hover:shadow-md"
+                          >
+                            <Link href="/fetch">
+                              {t("emptyFetchCta")}
+                              <ArrowRight
+                                className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
+                                aria-hidden
+                              />
+                            </Link>
+                          </Button>
+                          {activeFilterCount > 0 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                startTransition(() => {
+                                  setStatusFilter("NEW");
+                                  setLocationFilter("ALL");
+                                  setQ("");
+                                })
+                              }
+                              className="h-10 rounded-full px-4 text-sm font-medium text-muted-foreground hover:text-foreground"
+                            >
+                              {t("emptyClearFilters")}
+                            </Button>
+                          )}
+                        </div>
+                      </motion.div>
+                    </div>
+                  ) : null}
+                </ScrollArea>
+              </div>
+              <div className="border-t px-4 py-2 text-xs text-muted-foreground">
+                {loadingMore ? (
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 motion-safe:animate-spin rounded-full border-2 border-brand-emerald-500 border-t-transparent" />
+                    <span>{t("loadingMore")}</span>
                   </div>
-                </motion.div>
+                ) : nextCursor ? (
+                  t("scrollToLoadMore")
+                ) : (
+                  t("endOfResults")
+                )}
               </div>
-            ) : null}
-          </ScrollArea>
-          </div>
-          <div className="border-t px-4 py-2 text-xs text-muted-foreground">
-            {loadingMore ? (
-              <div className="flex items-center gap-2">
-                <div className="h-3 w-3 motion-safe:animate-spin rounded-full border-2 border-brand-emerald-500 border-t-transparent" />
-                <span>{t("loadingMore")}</span>
-              </div>
-            ) : nextCursor ? (
-              t("scrollToLoadMore")
-            ) : (
-              t("endOfResults")
-            )}
-          </div>
-        </div>
+            </div>
 
-        {/* Detail panel */}
-        <JobDetailPanel
-          panelProps={{
-            ...mobileTabs.getPanelProps("detail"),
-            hidden: undefined,
-          }}
-          selectedJob={selectedJob}
-          selectedDescription={selectedDescription}
-          experienceAnalysis={selectedDetailData?.experienceAnalysis ?? null}
-          detailError={detailError}
-          detailLoading={detailLoading}
-          showLoadingOverlay={showLoadingOverlay}
-          tailorSource={selectedTailorSource}
-          updatingIds={updatingIds}
-          deletingIds={deletingIds}
-          externalPromptLoading={externalGenerate.externalGenerating}
-          mobileTab={mobileTab}
-          onUpdateStatus={updateStatus}
-          onDelete={requestDelete}
-          onManualGenerate={handleManualGenerate}
-          onRetryDetail={() => void refetchDetail()}
-        />
-        </section>
-      </div>
+            {/* Detail panel */}
+            <JobDetailPanel
+              panelProps={{
+                ...mobileTabs.getPanelProps("detail"),
+                hidden: undefined,
+              }}
+              selectedJob={selectedJob}
+              selectedDescription={selectedDescription}
+              experienceAnalysis={
+                selectedDetailData?.experienceAnalysis ?? null
+              }
+              detailError={detailError}
+              detailLoading={detailLoading}
+              showLoadingOverlay={showLoadingOverlay}
+              tailorSource={selectedTailorSource}
+              updatingIds={updatingIds}
+              deletingIds={deletingIds}
+              externalPromptLoading={externalGenerate.externalGenerating}
+              mobileTab={mobileTab}
+              onUpdateStatus={updateStatus}
+              onDelete={requestDelete}
+              onManualGenerate={handleManualGenerate}
+              onReviewApplication={handleJobReview}
+              reviewLoading={tailorReview.loading}
+              reviewError={
+                selectedJob?.applicationId &&
+                tailorReview.loadErrorFor?.applicationId ===
+                  selectedJob.applicationId
+                  ? tailorReview.loadError
+                  : null
+              }
+              onRetryDetail={() => void refetchDetail()}
+            />
+          </section>
+        </div>
       </div>
     </>
   );

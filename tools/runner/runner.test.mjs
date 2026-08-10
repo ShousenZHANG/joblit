@@ -22,7 +22,14 @@ const RESUME_RUN_ID = "55555555-5555-4555-8555-555555555555";
 const COVER_RUN_ID = "66666666-6666-4666-8666-666666666666";
 
 function fakeJoblit(script) {
-  const calls = { runOnce: [], prompt: [], imports: [], statuses: [] };
+  const calls = {
+    runOnce: [],
+    prompt: [],
+    imports: [],
+    publications: [],
+    releases: [],
+    statuses: [],
+  };
   let step = 0;
   const tailoringStatuses = [...(script.tailoringStatuses ?? [])];
   return {
@@ -93,7 +100,21 @@ function fakeJoblit(script) {
         calls.imports.push(request);
         if (script.importErrors?.length) throw script.importErrors.shift();
         if (script.importError) throw script.importError;
-        return { ok: true };
+        return script.importResult ?? { ok: true };
+      },
+      async publishGeneration(request) {
+        calls.publications.push(request);
+        if (script.publicationErrors?.length) {
+          throw script.publicationErrors.shift();
+        }
+        if (script.publicationError) throw script.publicationError;
+        return script.publicationResult ?? { ok: true };
+      },
+      async releaseTask(batchId, request) {
+        calls.releases.push({ batchId, ...request });
+        if (script.releaseErrors?.length) throw script.releaseErrors.shift();
+        if (script.releaseError) throw script.releaseError;
+        return { released: true };
       },
     },
   };
@@ -164,6 +185,210 @@ const TASK = {
   remainingTargets: ["RESUME", "COVER"],
   job: makeJob("a"),
 };
+
+test("persists protocol-v2 output before publishing its PDF", async () => {
+  const task = {
+    ...TASK,
+    protocolVersion: 2,
+    delivery: "DRAFT",
+    remainingTargets: ["RESUME"],
+    remainingPublicationTargets: [],
+  };
+  const joblit = fakeJoblit({
+    steps: [{ tasks: [task] }, { tasks: [], batchStatus: "COMPLETED" }],
+    importResult: {
+      applicationId: "77777777-7777-4777-8777-777777777777",
+      aiContentHash: "draft-content-hash",
+    },
+  });
+  const hermes = fakeHermes();
+
+  const summary = await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    log: () => {},
+  });
+
+  assert.equal(hermes.calls.runs.length, 1);
+  assert.equal(joblit.calls.imports.length, 1);
+  assert.equal(joblit.calls.publications.length, 1);
+  assert.equal(joblit.calls.prompt[0].delivery, "DRAFT");
+  assert.deepEqual(joblit.calls.publications[0], {
+    applicationId: "77777777-7777-4777-8777-777777777777",
+    expectedHash: "draft-content-hash",
+    runId: RESUME_RUN_ID,
+    attemptId: TASK.attemptId,
+    target: "resume",
+    batchAttemptId: TASK.attemptId,
+  });
+  assert.equal(summary.succeeded, 1);
+});
+
+test("recovers a durable protocol-v2 draft by publishing without calling Hermes again", async () => {
+  const task = {
+    ...TASK,
+    protocolVersion: 2,
+    delivery: "DRAFT",
+    remainingTargets: [],
+    remainingPublicationTargets: ["COVER"],
+    applicationId: "77777777-7777-4777-8777-777777777777",
+    applicationAiContentHash: "durable-content-hash",
+    tailoringRun: {
+      id: COVER_RUN_ID,
+      attemptId: TASK.attemptId,
+    },
+  };
+  const joblit = fakeJoblit({
+    steps: [{ tasks: [task] }, { tasks: [], batchStatus: "COMPLETED" }],
+  });
+  const hermes = fakeHermes();
+
+  const summary = await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    log: () => {},
+  });
+
+  assert.equal(joblit.calls.prompt.length, 0);
+  assert.equal(hermes.calls.runs.length, 0);
+  assert.equal(joblit.calls.imports.length, 0);
+  assert.deepEqual(joblit.calls.publications, [
+    {
+      applicationId: "77777777-7777-4777-8777-777777777777",
+      expectedHash: "durable-content-hash",
+      runId: COVER_RUN_ID,
+      attemptId: TASK.attemptId,
+      target: "cover",
+      batchAttemptId: TASK.attemptId,
+    },
+  ]);
+  assert.equal(summary.succeeded, 1);
+});
+
+test("replays an ambiguous publication exactly without regenerating Codex output", async () => {
+  const unknown = () =>
+    Object.assign(new Error("connection reset after publication"), {
+      code: "JOBLIT_TRANSPORT_ERROR",
+      phase: "publication",
+      status: 504,
+      requestId: "req-publication-timeout",
+      elapsedMs: 12_345,
+    });
+  const task = {
+    ...TASK,
+    protocolVersion: 2,
+    delivery: "DRAFT",
+    remainingTargets: [],
+    remainingPublicationTargets: ["COVER"],
+    applicationId: "77777777-7777-4777-8777-777777777777",
+    applicationAiContentHash: "durable-content-hash",
+    tailoringRun: {
+      id: COVER_RUN_ID,
+      attemptId: TASK.attemptId,
+    },
+  };
+  const joblit = fakeJoblit({
+    steps: [{ tasks: [task] }],
+    publicationErrors: [unknown(), unknown(), unknown()],
+  });
+  const hermes = fakeHermes();
+  const logs = [];
+
+  const summary = await processActiveBatch({
+    joblit: joblit.client,
+    hermes: hermes.client,
+    settlementRetryMs: 1,
+    log: (message) => logs.push(message),
+  });
+
+  assert.equal(joblit.calls.publications.length, 3);
+  assert.deepEqual(joblit.calls.publications[1], joblit.calls.publications[0]);
+  assert.deepEqual(joblit.calls.publications[2], joblit.calls.publications[0]);
+  assert.equal(joblit.calls.prompt.length, 0);
+  assert.equal(hermes.calls.runs.length, 0);
+  assert.equal(joblit.calls.imports.length, 0);
+  assert.equal(joblit.calls.runOnce.length, 1);
+  assert.deepEqual(joblit.calls.releases, [
+    {
+      batchId: "batch-1",
+      taskId: TASK.taskId,
+      attemptId: TASK.attemptId,
+      reason: "PUBLICATION_SETTLEMENT_UNKNOWN",
+    },
+  ]);
+  assert.equal(summary.succeeded, 0);
+  assert.equal(summary.failed, 0);
+  assert.equal(summary.deferred, 1);
+  assert.match(
+    logs.join("\n"),
+    /phase=publication status=504 code=PUBLICATION_SETTLEMENT_UNKNOWN requestId=req-publication-timeout elapsedMs=12345/,
+  );
+});
+
+test("defers a publication fenced by a newer attempt without reporting FAILED", async () => {
+  const task = {
+    ...TASK,
+    protocolVersion: 2,
+    delivery: "DRAFT",
+    remainingTargets: [],
+    remainingPublicationTargets: ["COVER"],
+    applicationId: "77777777-7777-4777-8777-777777777777",
+    applicationAiContentHash: "durable-content-hash",
+    tailoringRun: { id: COVER_RUN_ID, attemptId: TASK.attemptId },
+  };
+  const joblit = fakeJoblit({
+    steps: [{ tasks: [task] }],
+    publicationError: Object.assign(
+      new Error("The tailoring attempt has been superseded"),
+      { code: "ATTEMPT_STALE", status: 409 },
+    ),
+  });
+
+  const summary = await processActiveBatch({
+    joblit: joblit.client,
+    hermes: fakeHermes().client,
+    log: () => {},
+  });
+
+  assert.equal(summary.failed, 0);
+  assert.equal(summary.deferred, 1);
+  assert.equal(joblit.calls.runOnce.length, 1);
+  assert.deepEqual(joblit.calls.runOnce[0].completedTasks, []);
+  assert.deepEqual(joblit.calls.releases, []);
+});
+
+test("stops a publication for an already terminal run without reporting FAILED", async () => {
+  const task = {
+    ...TASK,
+    protocolVersion: 2,
+    delivery: "DRAFT",
+    remainingTargets: [],
+    remainingPublicationTargets: ["COVER"],
+    applicationId: "77777777-7777-4777-8777-777777777777",
+    applicationAiContentHash: "durable-content-hash",
+    tailoringRun: { id: COVER_RUN_ID, attemptId: TASK.attemptId },
+  };
+  const joblit = fakeJoblit({
+    steps: [{ tasks: [task] }, { tasks: [], batchStatus: "COMPLETED" }],
+    publicationError: Object.assign(
+      new Error("The tailoring run is already terminal"),
+      { code: "RUN_ALREADY_TERMINAL", status: 409 },
+    ),
+  });
+
+  const summary = await processActiveBatch({
+    joblit: joblit.client,
+    hermes: fakeHermes().client,
+    log: () => {},
+  });
+
+  assert.equal(summary.succeeded, 0);
+  assert.equal(summary.failed, 0);
+  assert.equal(summary.deferred, 0);
+  assert.equal(joblit.calls.runOnce.length, 2);
+  assert.deepEqual(joblit.calls.runOnce[1].completedTasks, []);
+  assert.deepEqual(joblit.calls.releases, []);
+});
 
 test("generates every remaining target and settles the task by importing", async () => {
   const joblit = fakeJoblit({
@@ -330,7 +555,7 @@ test("stops on an authoritative Hermes cancellation without reporting FAILED", a
 test("fails closed before prompt issuance for an unsupported protocol version", async () => {
   const joblit = fakeJoblit({
     steps: [
-      { tasks: [{ ...TASK, protocolVersion: 2 }] },
+      { tasks: [{ ...TASK, protocolVersion: 3 }] },
       { tasks: [], batchStatus: "COMPLETED" },
     ],
   });
@@ -346,7 +571,7 @@ test("fails closed before prompt issuance for an unsupported protocol version", 
   assert.equal(hermes.calls.runs.length, 0);
   assert.match(
     joblit.calls.runOnce[1].completedTasks[0].error,
-    /Unsupported Agent execution protocol 2/,
+    /Unsupported Agent execution protocol 3/,
   );
 });
 

@@ -18,6 +18,8 @@ import type { TailoringRunTransaction } from "@/lib/server/tailoringRuns/tailori
 import { APPLICATION_BATCH_TASK_LEASE_MS } from "@/lib/server/tailoringRuns/tailoringRunLease";
 import {
   APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION,
+  LEGACY_APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION,
+  type ApplicationBatchTailoringProtocolVersion,
   applicationBatchTailoringIssueKey,
   applicationBatchTargetProgress,
 } from "./tailoringTaskContract";
@@ -64,9 +66,15 @@ type ClaimResult =
         id: string;
         attemptId: string;
         issueKey: string;
-        protocolVersion: typeof APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION;
+        protocolVersion: ApplicationBatchTailoringProtocolVersion;
+        delivery: "FINAL" | "DRAFT";
         acceptedTargets: Array<"RESUME" | "COVER">;
         remainingTargets: Array<"RESUME" | "COVER">;
+        publishedTargets: Array<"RESUME" | "COVER">;
+        remainingPublicationTargets: Array<"RESUME" | "COVER">;
+        applicationId: string | null;
+        applicationAiContentHash: string | null;
+        tailoringRun: { id: string; attemptId: string } | null;
         jobId: string;
         title: string;
         company: string | null;
@@ -267,6 +275,7 @@ export async function claimNextBatchTask(input: {
   batchId: string;
   /** Set when the caller already reclaimed for this run. */
   skipStaleReclaim?: boolean;
+  supportedProtocolVersions?: ApplicationBatchTailoringProtocolVersion[];
 }): Promise<ClaimResult> {
   const claimed = await prisma.$transaction(async (tx) => {
     await acquireApplicationBatchLock(tx, input.batchId);
@@ -340,9 +349,20 @@ export async function claimNextBatchTask(input: {
         },
         tailoringRun: {
           select: {
+            id: true,
+            status: true,
+            attempt: true,
+            startedAt: true,
+            applicationId: true,
             requiredTargetMask: true,
             acceptedTargetMask: true,
+            publicationRequiredTargetMask: true,
+            publishedTargetMask: true,
+            delivery: true,
             issueKey: true,
+            application: {
+              select: { aiContentHash: true },
+            },
           },
         },
       },
@@ -351,6 +371,20 @@ export async function claimNextBatchTask(input: {
     if (!candidate) return { kind: "empty" as const };
 
     const executionAttemptId = randomUUID();
+    // A bound run owns its protocol forever. In particular, a partially
+    // accepted FINAL run must never switch to DRAFT during recovery.
+    const protocolVersion: ApplicationBatchTailoringProtocolVersion =
+      candidate.tailoringRun?.delivery === "DRAFT"
+        ? APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION
+        : candidate.tailoringRun
+          ? LEGACY_APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION
+          : input.supportedProtocolVersions?.includes(
+                APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION,
+              )
+            ? APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION
+            : LEGACY_APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION;
+    const delivery = protocolVersion === 2 ? ("DRAFT" as const) : ("FINAL" as const);
+    const leaseExpiresAt = new Date(Date.now() + TASK_LEASE_MS);
     await tx.applicationBatchTask.update({
       where: {
         id: candidate.id,
@@ -359,15 +393,35 @@ export async function claimNextBatchTask(input: {
         status: "RUNNING",
         startedAt: new Date(),
         executionAttemptId,
-        executionLeaseExpiresAt: new Date(Date.now() + TASK_LEASE_MS),
-        tailoringProtocolVersion: APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION,
+        executionLeaseExpiresAt: leaseExpiresAt,
+        tailoringProtocolVersion: protocolVersion,
         completionAttemptId: null,
         error: null,
       },
     });
+    if (candidate.tailoringRun) {
+      await acquireTailoringRunLocks(tx, [candidate.tailoringRun.id]);
+      await tx.tailoringRun.update({
+        where: { id: candidate.tailoringRun.id },
+        data: {
+          status: "RUNNING",
+          executionAttemptId,
+          executionLeaseExpiresAt: leaseExpiresAt,
+          attempt: { increment: 1 },
+          startedAt: candidate.tailoringRun.startedAt ?? new Date(),
+          errorCode: null,
+          errorMessage: null,
+          terminalAt: null,
+        },
+      });
+    }
     const targetProgress = applicationBatchTargetProgress({
       requiredTargetMask: candidate.tailoringRun?.requiredTargetMask,
       acceptedTargetMask: candidate.tailoringRun?.acceptedTargetMask,
+      publicationRequiredTargetMask:
+        candidate.tailoringRun?.publicationRequiredTargetMask ??
+        (protocolVersion === 2 ? 3 : 0),
+      publishedTargetMask: candidate.tailoringRun?.publishedTargetMask,
     });
 
     return {
@@ -378,8 +432,15 @@ export async function claimNextBatchTask(input: {
         issueKey:
           candidate.tailoringRun?.issueKey ??
           applicationBatchTailoringIssueKey(candidate.id),
-        protocolVersion: APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION,
+        protocolVersion,
+        delivery,
         ...targetProgress,
+        applicationId: candidate.tailoringRun?.applicationId ?? null,
+        applicationAiContentHash:
+          candidate.tailoringRun?.application?.aiContentHash ?? null,
+        tailoringRun: candidate.tailoringRun
+          ? { id: candidate.tailoringRun.id, attemptId: executionAttemptId }
+          : null,
         jobId: candidate.jobId,
         title: candidate.job.title,
         company: candidate.job.company,
@@ -395,6 +456,95 @@ export async function claimNextBatchTask(input: {
     batchStatus: reconciled.batchStatus,
     progress: reconciled.progress,
   };
+}
+
+/**
+ * Give a protocol-v2 publication-only task back to the queue immediately.
+ *
+ * The task retains the released attempt as an idempotency receipt while its
+ * TailoringRun is rebound to an unreachable fence token. A late publication
+ * from the released worker therefore fails ATTEMPT_STALE, while the next claim
+ * can install one fresh shared batch/run attempt without waiting for the
+ * normal twenty-minute crash lease.
+ */
+export async function releaseBatchTask(input: {
+  userId: string;
+  batchId: string;
+  taskId: string;
+  attemptId: string;
+  reason?: string | null;
+}): Promise<{ released: boolean; replayed: boolean }> {
+  return prisma.$transaction(async (tx) => {
+    await acquireApplicationBatchLock(tx, input.batchId);
+    const task = await tx.applicationBatchTask.findFirst({
+      where: {
+        id: input.taskId,
+        batchId: input.batchId,
+        userId: input.userId,
+      },
+      select: {
+        id: true,
+        status: true,
+        executionAttemptId: true,
+        tailoringProtocolVersion: true,
+        tailoringRun: {
+          select: { id: true, executionAttemptId: true },
+        },
+      },
+    });
+    if (!task) throw new BatchRunnerError("NOT_FOUND", "Task not found");
+    if (task.tailoringProtocolVersion !== 2 || !task.tailoringRun) {
+      throw new BatchRunnerError(
+        "INVALID_STATE",
+        "Only a bound protocol-v2 task can be released",
+      );
+    }
+    if (task.executionAttemptId !== input.attemptId) {
+      throw new BatchRunnerError(
+        "INVALID_STATE",
+        "Task execution attempt is stale",
+      );
+    }
+    if (task.status === "PENDING") {
+      return { released: true, replayed: true };
+    }
+    if (TERMINAL_TASK_STATUSES.includes(task.status)) {
+      return { released: false, replayed: true };
+    }
+    if (task.status !== "RUNNING") {
+      throw new BatchRunnerError("INVALID_STATE", "Task is not running");
+    }
+
+    await acquireTailoringRunLocks(tx, [task.tailoringRun.id]);
+    if (task.tailoringRun.executionAttemptId !== input.attemptId) {
+      throw new BatchRunnerError(
+        "INVALID_STATE",
+        "Tailoring execution attempt is stale",
+      );
+    }
+    const fenceAttemptId = randomUUID();
+    await tx.tailoringRun.update({
+      where: { id: task.tailoringRun.id },
+      data: {
+        status: "RUNNING",
+        executionAttemptId: fenceAttemptId,
+        executionLeaseExpiresAt: null,
+      },
+    });
+    await tx.applicationBatchTask.update({
+      where: { id: task.id },
+      data: {
+        status: "PENDING",
+        startedAt: null,
+        completedAt: null,
+        executionAttemptId: input.attemptId,
+        executionLeaseExpiresAt: null,
+        completionAttemptId: null,
+        error: safeTaskError(input.reason ?? "Publication settlement deferred"),
+      },
+    });
+    return { released: true, replayed: false };
+  });
 }
 
 export async function completeBatchTask(input: {

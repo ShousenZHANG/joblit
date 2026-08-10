@@ -63,10 +63,10 @@ Several state machines share one closure. By responsibility:
 |---|---|
 | Selection and URL | `selectedId`, explicit-clear state, the sole workspace URL writer, and scroll-anchor capture/restore around mutations. |
 | List data | `useJobPagination`, `useJobMutations`, suppressed-delete rows, keyboard navigation, and the >80-row virtualization latch. |
-| Generation | `useExternalGenerate` owns the interactive manual JSON-import flow; local unattended generation is not mounted in the page and belongs to the Agent Runner. |
+| Generation | `useExternalGenerate` owns interactive manual import; `useTailorReviewController` opens manual, batch, or saved Application content in one full-screen Review & Edit dialog. Local unattended generation belongs to the Agent Runner. |
 | Batch | Selection, create-batch mutation, active-batch conflict handling, and batch delete. |
 | Batch progress | `useBatchProgress` polls the active batch's server-side counts, refreshes the list as jobs settle, and stops the moment a batch reaches a terminal state. |
-| Surfaces | `app/(app)/jobs/components/` — `BatchProgressBanner`, `GenerateProgress`, `JobRequirementsPanel`, `JobSearchBar`, `JobDescriptionMarkdown`, `JsonInputPanel`, `RunnerRequiredDialog`, `StepImport`, `StepIndicator`, `VirtualJobList`, plus `ExternalGenerateDialog`, `TailorReviewDialog` and the mobile detail overlay. |
+| Surfaces | `app/(app)/jobs/components/` — `BatchProgressBanner`, `BatchDetailsDialog`, `GenerateProgress`, `JobRequirementsPanel`, `JobSearchBar`, `JobDescriptionMarkdown`, `JsonInputPanel`, `StepImport`, `StepIndicator`, `VirtualJobList`, plus `ExternalGenerateDialog`, `TailorReviewDialog` and the mobile detail overlay. |
 
 Per ADR-0007, status controls read `ACTIVE_JOB_STATUS_VALUES` (`:821`, `:1082`),
 while the label map in `types.ts:6-23` and the badge maps in `JobListItem.tsx`
@@ -82,6 +82,7 @@ on the colour for `APPLIED`.
 | `useJobMutations.ts` (499) | All list writes: optimistic status patch with rollback, the 5 s undo window, a serial commit runner, session tombstones, a `pagehide` flush with `keepalive`, chunked batch delete with partial-success semantics. | `{updateStatus, requestDelete, batchDeleteMutation, updatingIds, deletingIds, error, setError}` |
 | `useKeyboardNavigation.ts` (210) | j/k/Arrow/Escape row navigation with cancellable rAF focus retries for virtualized rows. | void |
 | `useExternalGenerate.ts` (504) | The interactive manual-import Generate path, stable single-target issue recovery, and the shared entry into the Edit phase. | 23 members, including raw dialog/form setters. |
+| `useTailorReviewController.ts` | Demand-loads a tenant-checked Application review snapshot, aborts stale selections, and opens the shared full-screen editor without placing AI content in list responses. | Manual and persisted-Application open/close state plus request cancellation. |
 | `serialRunner.ts` (30) | Chains async tasks so a burst of expiring undo timers cannot fire parallel DELETEs. | — |
 | `useBatchProgress.ts` | Polls the active batch's counts, exposes `{state, refresh, dismiss, visible}`, and ends its own chain once the batch is terminal. | Returns `active` from each poll so an idle workspace makes one request, not a heartbeat. |
 
@@ -140,6 +141,12 @@ It is also the only surface that parses a blocked finalize — `extractBlockedRe
 (`:724-737`) reads an `ApiError` with status 422 and code
 `APPLICATION_REVIEW_BLOCKED`, which is what `fetchJson`'s typed `payload` makes
 possible.
+
+Batch results and Saved CV/CL actions pass only an `applicationId` into the
+controller. `GET /api/applications/:id/review-snapshot` is session-only and
+`no-store`; it verifies the Application, Job, and bound Resume Profile all
+belong to the current user before returning AI content. Legacy rows without
+valid AI content keep their direct PDF fallback.
 
 `patchSummary`, `patchLatestExperience`, `patchCover`, `callFinalize`,
 `handleDiscard`, `StatusPill` and `extractMessage` are duplicated between the two

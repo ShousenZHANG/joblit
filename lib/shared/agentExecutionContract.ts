@@ -7,7 +7,8 @@ import { z } from "zod";
  * Application Batch task. A Runner must echo that exact value when requesting
  * a task-bound prompt, so an incompatible client fails before prompt issuance.
  */
-export const AGENT_EXECUTION_PROTOCOL_VERSION = 1 as const;
+export const LEGACY_AGENT_EXECUTION_PROTOCOL_VERSION = 1 as const;
+export const AGENT_EXECUTION_PROTOCOL_VERSION = 2 as const;
 
 const PromptIdentitySchema = z.object({
   jobId: z.string().uuid(),
@@ -20,18 +21,27 @@ const ManualPromptRequestSchema = PromptIdentitySchema.extend({
   issueKey: z.string().uuid().optional(),
 }).strict();
 
-const CodexBatchPromptRequestSchema = PromptIdentitySchema.extend({
+const CodexBatchPromptIdentitySchema = PromptIdentitySchema.extend({
   target: z.enum(["resume", "cover"]),
   source: z.literal("codex_batch"),
-  delivery: z.literal("FINAL"),
-  protocolVersion: z.literal(AGENT_EXECUTION_PROTOCOL_VERSION),
   issueKey: z.string().uuid(),
   batchId: z.string().uuid(),
   batchTaskId: z.string().uuid(),
   batchAttemptId: z.string().uuid(),
+});
+
+const LegacyCodexBatchPromptRequestSchema = CodexBatchPromptIdentitySchema.extend({
+  delivery: z.literal("FINAL"),
+  protocolVersion: z.literal(LEGACY_AGENT_EXECUTION_PROTOCOL_VERSION),
+}).strict();
+
+const CodexBatchPromptRequestSchema = CodexBatchPromptIdentitySchema.extend({
+  delivery: z.literal("DRAFT"),
+  protocolVersion: z.literal(AGENT_EXECUTION_PROTOCOL_VERSION),
 }).strict();
 
 export const AgentApplicationPromptRequestSchema = z.union([
   CodexBatchPromptRequestSchema,
+  LegacyCodexBatchPromptRequestSchema,
   ManualPromptRequestSchema,
 ]);

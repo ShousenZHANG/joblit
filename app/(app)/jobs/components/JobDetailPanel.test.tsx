@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import { describe, expect, it, vi } from "vitest";
 
@@ -29,6 +31,11 @@ function renderPanel(
   options: {
     selectedDescription?: string;
     experienceAnalysis?: JobExperienceAnalysis | null;
+    onReviewApplication?: (
+      applicationId: string,
+      jobId: string,
+      target: "resume" | "cover",
+    ) => void;
   } = {},
 ) {
   return render(
@@ -47,6 +54,7 @@ function renderPanel(
         onUpdateStatus={vi.fn()}
         onDelete={vi.fn()}
         onManualGenerate={vi.fn()}
+        onReviewApplication={options.onReviewApplication}
         onRetryDetail={vi.fn()}
       />
     </NextIntlClientProvider>,
@@ -56,7 +64,9 @@ function renderPanel(
 describe("JobDetailPanel status presentation", () => {
   it("shows the active statuses with their own labels", () => {
     renderPanel(job({ status: "APPLIED" }));
-    expect(screen.getAllByText(messages.jobs.statusApplied).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(messages.jobs.statusApplied).length,
+    ).toBeGreaterThan(0);
   });
 
   // ADR-0007 retired INTERVIEW, OFFER, ACCEPTED and WITHDRAWN but kept them
@@ -113,7 +123,9 @@ describe("JobDetailPanel localization", () => {
     );
 
     expect(screen.getByText("职位描述")).toBeInTheDocument();
-    expect(screen.getByText("该职位暂时没有可用的职位描述。")).toBeInTheDocument();
+    expect(
+      screen.getByText("该职位暂时没有可用的职位描述。"),
+    ).toBeInTheDocument();
     expect(screen.getByText("简历来源：手动导入")).toBeInTheDocument();
     expect(screen.getByText("求职信来源：回退版本")).toBeInTheDocument();
     expect(screen.getByText(/^发布于/)).toBeInTheDocument();
@@ -139,57 +151,135 @@ describe("JobDetailPanel touch contract", () => {
   });
 });
 
+describe("JobDetailPanel saved document review", () => {
+  it("opens an owned saved document in the shared editor", async () => {
+    const user = userEvent.setup();
+    const onReviewApplication = vi.fn();
+    renderPanel(
+      job({
+        applicationId: "11111111-1111-4111-8111-111111111111",
+        resumePdfUrl: "https://example.com/stored-cv.pdf",
+      }),
+      { onReviewApplication },
+    );
+
+    const savedCv = screen.getByRole("button", { name: messages.jobs.savedCv });
+    expect(
+      screen.queryByRole("link", { name: messages.jobs.savedCv }),
+    ).not.toBeInTheDocument();
+    await user.click(savedCv);
+    expect(onReviewApplication).toHaveBeenCalledWith(
+      "11111111-1111-4111-8111-111111111111",
+      "job-1",
+      "resume",
+    );
+  });
+
+  it("keeps the PDF link for a legacy row without an Application identity", () => {
+    renderPanel(
+      job({
+        applicationId: null,
+        resumePdfUrl: "https://example.com/legacy-cv.pdf",
+      }),
+    );
+
+    expect(
+      screen.getByRole("link", { name: messages.jobs.savedCv }),
+    ).toHaveAttribute("href", "https://example.com/legacy-cv.pdf");
+  });
+});
+
+describe("JobDetailPanel delete focus", () => {
+  it("hands focus to the replacement job heading after deleting with the keyboard", async () => {
+    const first = job();
+    const replacement = job({ id: "job-2", title: "Backend Engineer" });
+
+    function Harness() {
+      const [selected, setSelected] = useState(first);
+      return (
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <JobDetailPanel
+            selectedJob={selected}
+            selectedDescription=""
+            detailError={null}
+            detailLoading={false}
+            showLoadingOverlay={false}
+            updatingIds={new Set()}
+            deletingIds={new Set()}
+            externalPromptLoading={false}
+            mobileTab="detail"
+            onUpdateStatus={vi.fn()}
+            onDelete={() => setSelected(replacement)}
+            onManualGenerate={vi.fn()}
+            onRetryDetail={vi.fn()}
+          />
+        </NextIntlClientProvider>
+      );
+    }
+
+    const user = userEvent.setup();
+    const view = render(<Harness />);
+    await user.click(
+      within(view.container).getByRole("button", {
+        name: messages.jobs.remove,
+      }),
+    );
+
+    expect(
+      await within(view.container).findByRole("heading", {
+        name: "Backend Engineer",
+      }),
+    ).toHaveFocus();
+  });
+});
+
 describe("JobDetailPanel experience summary", () => {
-  it(
-    "renders the JD-derived requirement in the merged panel and passes it to the description",
-    async () => {
-      const description =
-        "Requirements: At least 4 years of platform engineering experience.";
-      const yearsText = "At least 4 years";
-      const yearsStart = description.indexOf(yearsText);
-      const experienceAnalysis: JobExperienceAnalysis = {
-        schemaVersion: 3,
-        status: "FOUND",
-        requirements: [
-          {
-            id: "platform-years",
-            classification: "REQUIRED",
-            years: {
-              operator: "AT_LEAST",
-              min: 4,
-              max: null,
-              text: yearsText,
-            },
-            scope: "platform engineering",
-            evidence: {
-              text: description,
-              start: 0,
-              end: description.length,
-              yearsStart,
-              yearsEnd: yearsStart + yearsText.length,
-            },
+  it("renders the JD-derived requirement in the merged panel and passes it to the description", async () => {
+    const description =
+      "Requirements: At least 4 years of platform engineering experience.";
+    const yearsText = "At least 4 years";
+    const yearsStart = description.indexOf(yearsText);
+    const experienceAnalysis: JobExperienceAnalysis = {
+      schemaVersion: 3,
+      status: "FOUND",
+      requirements: [
+        {
+          id: "platform-years",
+          classification: "REQUIRED",
+          years: {
+            operator: "AT_LEAST",
+            min: 4,
+            max: null,
+            text: yearsText,
           },
-        ],
-      };
+          scope: "platform engineering",
+          evidence: {
+            text: description,
+            start: 0,
+            end: description.length,
+            yearsStart,
+            yearsEnd: yearsStart + yearsText.length,
+          },
+        },
+      ],
+    };
 
-      const view = renderPanel(job(), {
-        selectedDescription: description,
-        experienceAnalysis,
-      });
+    const view = renderPanel(job(), {
+      selectedDescription: description,
+      experienceAnalysis,
+    });
 
-      const panel = screen.getByTestId("jd-requirements-panel");
-      expect(panel).toHaveTextContent("At least 4 years");
+    const panel = screen.getByTestId("jd-requirements-panel");
+    expect(panel).toHaveTextContent("At least 4 years");
 
-      const highlighted = await within(view.container).findByLabelText(
-        "Required: At least 4 years",
-        {},
-        { timeout: 5_000 },
-      );
-      expect(highlighted).toHaveAttribute(
-        "data-experience-highlight",
-        "REQUIRED",
-      );
-    },
-    10_000,
-  );
+    const highlighted = await within(view.container).findByLabelText(
+      "Required: At least 4 years",
+      {},
+      { timeout: 5_000 },
+    );
+    expect(highlighted).toHaveAttribute(
+      "data-experience-highlight",
+      "REQUIRED",
+    );
+  }, 10_000);
 });

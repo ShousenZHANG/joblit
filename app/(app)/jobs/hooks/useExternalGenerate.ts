@@ -1,22 +1,12 @@
 import { useCallback, useMemo, useState } from "react";
 import { ApiError, fetchJson } from "@/lib/api/fetchJson";
-import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { useGuide } from "@/app/GuideContext";
-import type { JobItem, ExternalPromptMeta, CvSource, CoverSource } from "../types";
+import type { JobItem, ExternalPromptMeta } from "../types";
 import { getErrorMessage } from "../types";
 import type { DialogPhase } from "../components/StepIndicator";
-import type {
-  TailorReviewDraft,
-  TailorReviewFinalized,
-} from "../components/TailorReviewDialog";
 import { isSkillPackFresh, writeSavedSkillPackMeta } from "../utils/skillPackMeta";
 import { parseTailorOutput, filenameFromDisposition } from "../utils/tailorParser";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
-import {
-  invalidateActiveJobsQueries,
-  patchGeneratedJobArtifactInJobsCache,
-} from "../utils/jobsQueryCache";
 import type { TailoringRunHandle } from "@/lib/shared/tailoringRunContract";
 import {
   manualGenerateDraftResponseSchema,
@@ -95,10 +85,19 @@ export async function persistGeneratedDraft(input: {
   }
 }
 
-export function useExternalGenerate(setError: (e: string | null) => void) {
+export function useExternalGenerate(
+  setError: (e: string | null) => void,
+  options?: {
+    onDraftPersisted?: (input: {
+      draft: PersistedGeneratedDraft;
+      target: "resume" | "cover";
+      source: GeneratedDraftSource;
+      resumePdfUrl?: string | null;
+      coverPdfUrl?: string | null;
+    }) => void | Promise<void>;
+  },
+) {
   const { toast } = useToast();
-  const { markTaskComplete } = useGuide();
-  const queryClient = useQueryClient();
 
   const [externalDialogOpen, setExternalDialogOpen] = useState(false);
   const [externalPromptLoading, setExternalPromptLoading] = useState(false);
@@ -117,45 +116,6 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
     useState<"en-AU" | "zh-CN">("en-AU");
   const [dialogPhase, setDialogPhase] = useState<DialogPhase>(1);
   const [promptCopied, setPromptCopied] = useState(false);
-  const [tailorSourceByJob, setTailorSourceByJob] = useState<
-    Record<string, { cv?: CvSource; cover?: CoverSource }>
-  >({});
-  const [tailorReviewDraft, setTailorReviewDraft] =
-    useState<TailorReviewDraft | null>(null);
-
-  const openTailorReviewFromPersistedDraft = useCallback(async (input: {
-    draft: PersistedGeneratedDraft;
-    target: "resume" | "cover";
-    source: GeneratedDraftSource;
-    resumePdfUrl?: string | null;
-    coverPdfUrl?: string | null;
-  }) => {
-    const { draft, target, source } = input;
-    markTaskComplete("generate_first_pdf");
-    setTailorSourceByJob((prev) => ({
-      ...prev,
-      [draft.job.id]: {
-        ...prev[draft.job.id],
-        ...(target === "resume"
-          ? { cv: source as CvSource }
-          : { cover: source as CoverSource }),
-      },
-    }));
-    await invalidateActiveJobsQueries(queryClient);
-    setTailorReviewDraft({
-      applicationId: draft.applicationId,
-      target,
-      initialPublication: draft.publication,
-      initialAiContent: draft.aiContent,
-      initialAiContentHash: draft.aiContentHash,
-      resumePdfUrl: input.resumePdfUrl ?? null,
-      coverPdfUrl: input.coverPdfUrl ?? null,
-      pdfName: draft.pdfName,
-      source,
-      job: draft.job,
-    });
-  }, [markTaskComplete, queryClient]);
-
   async function loadTailorPrompt(job: JobItem, target: "resume" | "cover"): Promise<{
     promptText: string;
     shortPromptText: string;
@@ -411,7 +371,7 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
       clearManualIssueKey(job.id, target);
       setExternalDialogOpen(false);
       setDialogPhase(1);
-      await openTailorReviewFromPersistedDraft({
+      await options?.onDraftPersisted?.({
         draft,
         target,
         source: "manual_import",
@@ -442,39 +402,6 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
     [externalModelOutput, externalTarget],
   );
 
-  function closeTailorReview() {
-    setTailorReviewDraft(null);
-  }
-
-  function handleTailorReviewFinalized(result: TailorReviewFinalized) {
-    const jobId = tailorReviewDraft?.job.id;
-    if (!jobId) return;
-
-    const finalizedSource = tailorReviewDraft?.source ?? "manual_import";
-    setTailorSourceByJob((prev) => ({
-      ...prev,
-      [jobId]: {
-        ...prev[jobId],
-        ...(result.target === "resume"
-          ? { cv: finalizedSource as CvSource }
-          : { cover: finalizedSource as CoverSource }),
-      },
-    }));
-
-    patchGeneratedJobArtifactInJobsCache({
-      queryClient,
-      id: jobId,
-      patch:
-        result.target === "resume"
-          ? {
-              resumePdfUrl: result.resumePdfUrl ?? null,
-              resumePdfName: result.resumePdfName ?? null,
-            }
-          : { coverPdfUrl: result.coverPdfUrl ?? null },
-    });
-    void invalidateActiveJobsQueries(queryClient);
-  }
-
   return {
     externalDialogOpen, setExternalDialogOpen,
     externalPromptLoading,
@@ -490,15 +417,10 @@ export function useExternalGenerate(setError: (e: string | null) => void) {
     externalSkillPackFresh, setExternalSkillPackFresh,
     dialogPhase, setDialogPhase,
     promptCopied,
-    tailorSourceByJob,
-    tailorReviewDraft,
     parsedExternalOutput,
     openExternalGenerateDialog,
     copySmartPrompt,
     downloadSkillPack,
     generateFromImportedJson,
-    closeTailorReview,
-    handleTailorReviewFinalized,
-    openTailorReviewFromPersistedDraft,
   };
 }

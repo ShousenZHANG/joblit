@@ -24,7 +24,10 @@ import {
   assertSafeTailoringIdentity,
   hashTailoringRunValue,
 } from "./tailoringRunHash";
-import { APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION } from "../applicationBatches/tailoringTaskContract";
+import {
+  APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION,
+  LEGACY_APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION,
+} from "../applicationBatches/tailoringTaskContract";
 
 const HASH_MAX_LENGTH = 256;
 const RECEIPT_STRING_MAX_LENGTH = 256;
@@ -105,6 +108,7 @@ export function issueHash(input: {
   source: string;
   delivery: string;
   requiredTargetMask: number;
+  publicationRequiredTargetMask: number;
   resumeSnapshotHash: string;
   jobSnapshotHash: string;
   batchTaskId?: string | null;
@@ -154,6 +158,8 @@ export function snapshotOf(run: TailoringRunRow): TailoringRunSnapshot {
     delivery: run.delivery,
     requiredTargetMask: run.requiredTargetMask,
     acceptedTargetMask: run.acceptedTargetMask,
+    publicationRequiredTargetMask: run.publicationRequiredTargetMask,
+    publishedTargetMask: run.publishedTargetMask,
     applicationId: run.applicationId,
     applicationBatchTaskId: run.applicationBatchTaskId,
     handle,
@@ -203,10 +209,11 @@ export function assertBatchAttempt(
 ): TailoringBatchTaskRow | null {
   const task = run.applicationBatchTask ?? null;
   if (!task) return null;
-  if (
-    task.tailoringProtocolVersion !==
-    APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION
-  ) {
+  const expectedProtocolVersion =
+    run.delivery === "DRAFT"
+      ? APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION
+      : LEGACY_APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION;
+  if (task.tailoringProtocolVersion !== expectedProtocolVersion) {
     throw new TailoringRunError(
       "BATCH_PROTOCOL_MISMATCH",
       "The batch task has not claimed the TailoringRun protocol",

@@ -492,6 +492,8 @@ function preparedRunOf(run: TailoringRunRow): PreparedTailoringRun {
     delivery: run.delivery,
     requiredTargetMask: run.requiredTargetMask,
     acceptedTargetMask: run.acceptedTargetMask,
+    publicationRequiredTargetMask: run.publicationRequiredTargetMask ?? 0,
+    publishedTargetMask: run.publishedTargetMask ?? 0,
     executionAttemptId: run.executionAttemptId,
     applicationBatchTaskId: run.applicationBatchTaskId,
     batchId: task?.batchId ?? null,
@@ -647,7 +649,11 @@ async function finishRunProjection(
   applicationId: string,
 ): Promise<boolean> {
   const mask = acceptedMask(run, requests);
-  const completed = (mask & run.requiredTargetMask) === run.requiredTargetMask;
+  const accepted = (mask & run.requiredTargetMask) === run.requiredTargetMask;
+  const published =
+    (run.publishedTargetMask & run.publicationRequiredTargetMask) ===
+    run.publicationRequiredTargetMask;
+  const completed = accepted && published;
   await tx.tailoringRun.update({
     where: { id: run.id },
     data: {

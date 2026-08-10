@@ -69,6 +69,8 @@ import {
 } from "@/lib/server/applications/applicationPublication";
 
 const APP_ID = "22222222-2222-4222-9222-222222222222";
+const RUN_ID = "33333333-3333-4333-8333-333333333333";
+const ATTEMPT_ID = "44444444-4444-4444-8444-444444444444";
 const USER_ID = "user-1";
 const PROFILE = {
   id: "profile-linked",
@@ -249,6 +251,114 @@ describe("POST /api/applications/[id]/finalize", () => {
       }),
     );
     expect(renderLimiter.enforce).toHaveBeenCalledWith(USER_ID, expect.any(String));
+  });
+
+  it("publishes an already-persisted batch target with its Tailoring Run fence", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: USER_ID },
+    });
+    const ai = makeAiContent();
+    const hash = hashAiContent(ai);
+    prisma.application.findFirst.mockResolvedValueOnce({
+      ...ownedReviewSources(),
+      id: APP_ID,
+      userId: USER_ID,
+      status: "DRAFT",
+      aiContent: ai,
+      aiContentHash: hash,
+      resumeProfileId: "profile-linked",
+      resumePdfUrl: null,
+      coverPdfUrl: null,
+    });
+
+    const res = await POST(
+      makeRequest({
+        expectedHash: hash,
+        tailoringRun: { id: RUN_ID, attemptId: ATTEMPT_ID },
+        batchAttemptId: ATTEMPT_ID,
+      }),
+      { params },
+    );
+
+    expect(res.status).toBe(200);
+    expect(commit.commitApplicationArtifact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedHash: hash,
+        tailoringPublication: {
+          handle: { id: RUN_ID, attemptId: ATTEMPT_ID },
+          applicationId: APP_ID,
+          target: "RESUME",
+          batchExecutionAttemptId: ATTEMPT_ID,
+        },
+      }),
+    );
+  });
+
+  it("settles a Tailoring Run receipt when the PDF was already finalized manually", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: USER_ID },
+    });
+    const ai = makeAiContent();
+    const hash = hashAiContent(ai);
+    const resumeHash = hashApplicationDocumentContent(
+      ai,
+      "resume",
+      RENDER_CONTEXT,
+    );
+    prisma.application.findFirst.mockResolvedValueOnce({
+      ...ownedReviewSources(),
+      id: APP_ID,
+      userId: USER_ID,
+      status: "DRAFT",
+      aiContent: ai,
+      aiContentHash: hash,
+      resumeProfileId: PROFILE.id,
+      resumePdfUrl: "https://blob.example/current-resume.pdf",
+      coverPdfUrl: null,
+      resumeContentHash: resumeHash,
+      resumePublishedHash: resumeHash,
+      coverContentHash: null,
+      coverPublishedHash: null,
+    });
+    publicationReplay.confirmApplicationPublicationReplay.mockResolvedValueOnce({
+      kind: "replayed",
+      aiContentHash: hash,
+      publication: {
+        status: "DRAFT",
+        resume: {
+          status: "FINAL",
+          contentHash: resumeHash,
+          publishedHash: resumeHash,
+        },
+        cover: { status: "MISSING", contentHash: null, publishedHash: null },
+      },
+      resumePdfUrl: "https://blob.example/current-resume.pdf",
+      resumePdfName: null,
+      coverPdfUrl: null,
+    });
+
+    const res = await POST(
+      makeRequest({
+        expectedHash: hash,
+        tailoringRun: { id: RUN_ID, attemptId: ATTEMPT_ID },
+        batchAttemptId: ATTEMPT_ID,
+      }),
+      { params },
+    );
+
+    expect(res.status).toBe(200);
+    expect(publicationReplay.confirmApplicationPublicationReplay).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tailoringPublication: {
+          handle: { id: RUN_ID, attemptId: ATTEMPT_ID },
+          applicationId: APP_ID,
+          target: "RESUME",
+          batchExecutionAttemptId: ATTEMPT_ID,
+        },
+      }),
+    );
+    expect(renderer.renderApplicationPdf).not.toHaveBeenCalled();
+    expect(commit.commitApplicationArtifact).not.toHaveBeenCalled();
   });
 
   it.each(["resume", "cover"] as const)(

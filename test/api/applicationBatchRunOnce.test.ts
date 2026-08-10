@@ -6,6 +6,7 @@ const runner = vi.hoisted(() => ({
   reclaimStaleBatchTasks: vi.fn(),
   claimNextBatchTask: vi.fn(),
   completeBatchTask: vi.fn(),
+  releaseBatchTask: vi.fn(),
   getBatchProgress: vi.fn(),
   getBatchLeaseRetryHint: vi.fn(),
   BatchRunnerError: class BatchRunnerError extends Error {
@@ -69,6 +70,7 @@ describe("application batch run-once api", () => {
     runner.reclaimStaleBatchTasks.mockReset();
     runner.claimNextBatchTask.mockReset();
     runner.completeBatchTask.mockReset();
+    runner.releaseBatchTask.mockReset();
     runner.getBatchProgress.mockReset();
     runner.getBatchLeaseRetryHint.mockReset();
     promptRules.getActivePromptSkillRulesForUser.mockReset();
@@ -187,6 +189,125 @@ describe("application batch run-once api", () => {
         error: "compile failed",
       }),
     );
+    expect(runner.claimNextBatchTask).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ supportedProtocolVersions: [1] }),
+    );
+  });
+
+  it("forwards an explicit v2 capability without changing the server-first default", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    applicationBatchStore.findFirst.mockResolvedValueOnce({
+      id: BATCH_ID,
+      status: "RUNNING",
+      scope: "NEW",
+      totalCount: 1,
+      error: null,
+    });
+    resumeProfile.getResumeProfile.mockResolvedValueOnce({
+      id: "profile-1",
+      updatedAt: new Date("2026-02-22T10:00:00.000Z"),
+    });
+    promptRules.getActivePromptSkillRulesForUser.mockResolvedValueOnce({
+      id: "rules-1",
+      locale: "en-AU",
+      cvRules: [],
+      coverRules: [],
+      hardConstraints: [],
+    });
+    runner.claimNextBatchTask.mockResolvedValueOnce({
+      kind: "done",
+      batchStatus: "RUNNING",
+      progress: {
+        pending: 0,
+        running: 0,
+        succeeded: 0,
+        failed: 0,
+        skipped: 0,
+      },
+    });
+    runner.getBatchProgress.mockResolvedValueOnce({
+      pending: 0,
+      running: 0,
+      succeeded: 0,
+      failed: 0,
+      skipped: 0,
+    });
+
+    const res = await POST(
+      new Request(`http://localhost/api/application-batches/${BATCH_ID}/run-once`, {
+        method: "POST",
+        body: JSON.stringify({ supportedProtocolVersions: [2, 1] }),
+      }),
+      { params: Promise.resolve({ id: BATCH_ID }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect(runner.claimNextBatchTask).toHaveBeenCalledWith(
+      expect.objectContaining({ supportedProtocolVersions: [2, 1] }),
+    );
+  });
+
+  it("releases a v2 publication lease without claiming work in the same request", async () => {
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+    applicationBatchStore.findFirst.mockResolvedValueOnce({
+      id: BATCH_ID,
+      status: "RUNNING",
+      scope: "NEW",
+      totalCount: 1,
+      error: null,
+    });
+    resumeProfile.getResumeProfile.mockResolvedValueOnce({
+      id: "profile-1",
+      updatedAt: new Date("2026-02-22T10:00:00.000Z"),
+    });
+    promptRules.getActivePromptSkillRulesForUser.mockResolvedValueOnce({
+      id: "rules-1",
+      locale: "en-AU",
+      cvRules: [],
+      coverRules: [],
+      hardConstraints: [],
+    });
+    runner.releaseBatchTask.mockResolvedValueOnce({ released: true, replayed: false });
+    runner.getBatchProgress.mockResolvedValueOnce({
+      pending: 1,
+      running: 0,
+      succeeded: 0,
+      failed: 0,
+      skipped: 0,
+    });
+
+    const res = await POST(
+      new Request(`http://localhost/api/application-batches/${BATCH_ID}/run-once`, {
+        method: "POST",
+        body: JSON.stringify({
+          maxSteps: 0,
+          supportedProtocolVersions: [2, 1],
+          releasedTasks: [
+            {
+              taskId: TASK_ID,
+              attemptId: COMPLETED_ATTEMPT_ID,
+              reason: "PUBLICATION_SETTLEMENT_UNKNOWN",
+            },
+          ],
+        }),
+      }),
+      { params: Promise.resolve({ id: BATCH_ID }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect(runner.releaseBatchTask).toHaveBeenCalledWith({
+      userId: "user-1",
+      batchId: BATCH_ID,
+      taskId: TASK_ID,
+      attemptId: COMPLETED_ATTEMPT_ID,
+      reason: "PUBLICATION_SETTLEMENT_UNKNOWN",
+    });
+    expect(runner.claimNextBatchTask).not.toHaveBeenCalled();
   });
 
   it("rejects independent success completion before touching the batch", async () => {

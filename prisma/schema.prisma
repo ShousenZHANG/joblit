@@ -152,22 +152,22 @@ model User {
   accounts Account[]
   sessions Session[]
 
-  jobs                   Job[]
-  fetchRuns              FetchRun[]
-  deletedJobUrls         DeletedJobUrl[]
-  dailyCheckins          DailyCheckin[]
-  resumeProfiles         ResumeProfile[]
-  activeResumeProfiles   ActiveResumeProfile[]
-  applications           Application[]
-  promptRuleTemplates    PromptRuleTemplate[]
-  onboardingState        OnboardingState?
-  applicationBatches     ApplicationBatch[]
-  applicationBatchTasks  ApplicationBatchTask[]
-  tailoringRuns          TailoringRun[]
-  agentCredentials       AgentCredential[]
-  applicationEvents      ApplicationEvent[]
-  evidenceSnapshots      EvidenceSnapshot[]
-  claimEvidence          ClaimEvidence[]
+  jobs                  Job[]
+  fetchRuns             FetchRun[]
+  deletedJobUrls        DeletedJobUrl[]
+  dailyCheckins         DailyCheckin[]
+  resumeProfiles        ResumeProfile[]
+  activeResumeProfiles  ActiveResumeProfile[]
+  applications          Application[]
+  promptRuleTemplates   PromptRuleTemplate[]
+  onboardingState       OnboardingState?
+  applicationBatches    ApplicationBatch[]
+  applicationBatchTasks ApplicationBatchTask[]
+  tailoringRuns         TailoringRun[]
+  agentCredentials      AgentCredential[]
+  applicationEvents     ApplicationEvent[]
+  evidenceSnapshots     EvidenceSnapshot[]
+  claimEvidence         ClaimEvidence[]
 }
 
 model Account {
@@ -350,8 +350,12 @@ model TailoringRun {
   delivery TailoringRunDelivery
   status   TailoringRunStatus   @default(ISSUED)
 
-  requiredTargetMask Int
-  acceptedTargetMask Int @default(0)
+  requiredTargetMask            Int
+  acceptedTargetMask            Int @default(0)
+  /// Targets whose accepted proposal must also have a current PDF before a
+  /// bound batch task can succeed. Zero preserves legacy/manual semantics.
+  publicationRequiredTargetMask Int @default(0)
+  publishedTargetMask           Int @default(0)
 
   issueKey       String
   issueHash      String
@@ -373,7 +377,8 @@ model TailoringRun {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
-  receipts TailoringRunReceipt[]
+  receipts            TailoringRunReceipt[]
+  publicationReceipts TailoringRunPublicationReceipt[]
 
   @@unique([userId, issueKey])
   @@index([userId, status, updatedAt])
@@ -400,6 +405,27 @@ model TailoringRunReceipt {
   documentContentHash String?
   delivery            TailoringRunDelivery
   createdAt           DateTime             @default(now())
+
+  @@unique([runId, target])
+  @@index([applicationId, createdAt])
+  @@index([executionAttemptId])
+}
+
+/// Immutable proof that one accepted target was published from its exact
+/// documentContentHash. It is separate from generation acceptance so a render
+/// outage never loses the durable AI proposal and can be retried without a
+/// second model call.
+model TailoringRunPublicationReceipt {
+  id    String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  runId String       @db.Uuid
+  run   TailoringRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  target              TailoringRunTarget
+  executionAttemptId  String             @db.Uuid
+  applicationId       String?            @db.Uuid
+  application         Application?       @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  documentContentHash String
+  createdAt           DateTime           @default(now())
 
   @@unique([runId, target])
   @@index([applicationId, createdAt])
@@ -581,11 +607,12 @@ model Application {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  applicationEvents ApplicationEvent[]
-  evidenceSnapshots EvidenceSnapshot[]
-  claimEvidence     ClaimEvidence[]
-  tailoringRuns     TailoringRun[]
-  tailoringReceipts TailoringRunReceipt[]
+  applicationEvents            ApplicationEvent[]
+  evidenceSnapshots            EvidenceSnapshot[]
+  claimEvidence                ClaimEvidence[]
+  tailoringRuns                TailoringRun[]
+  tailoringReceipts            TailoringRunReceipt[]
+  tailoringPublicationReceipts TailoringRunPublicationReceipt[]
 
   @@unique([userId, jobId])
   @@index([userId, createdAt])

@@ -18,6 +18,7 @@ import {
   DollarSign,
   ExternalLink,
   FileText,
+  Loader2,
   MapPin,
   MoreHorizontal,
   Trash2,
@@ -33,7 +34,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { COARSE_POINTER_MIN_HEIGHT } from "@/components/ui/touchTarget";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
@@ -55,7 +61,8 @@ import { JobRequirementsPanel } from "./JobRequirementsPanel";
 // jobs-list's heaviest dep cluster — load it as a dynamic chunk only when a
 // job's description actually renders.
 const JobDescriptionMarkdown = dynamic(
-  () => import("./JobDescriptionMarkdown").then((m) => m.JobDescriptionMarkdown),
+  () =>
+    import("./JobDescriptionMarkdown").then((m) => m.JobDescriptionMarkdown),
   {
     ssr: false,
     loading: () => (
@@ -85,12 +92,28 @@ interface JobDetailPanelProps {
   onDelete: (job: JobItem) => void;
   /** Zero-install fallback: copy the prompt, run it anywhere, paste JSON. */
   onManualGenerate: (job: JobItem, target: "resume" | "cover") => void;
+  onReviewApplication?: (
+    applicationId: string,
+    jobId: string,
+    target: "resume" | "cover",
+  ) => void;
+  reviewLoading?: {
+    applicationId: string;
+    target: "resume" | "cover";
+  } | null;
+  reviewError?: string | null;
   onRetryDetail: () => void;
 }
 
 /** Small icon + label pill for the header meta row. Renders nothing when the
  *  value is empty so the row stays tight. */
-function MetaChip({ icon: Icon, value }: { icon: React.ElementType; value?: string | null }) {
+function MetaChip({
+  icon: Icon,
+  value,
+}: {
+  icon: React.ElementType;
+  value?: string | null;
+}) {
   const text = value?.trim();
   // Source feeds ship literal placeholders ("not applicable", "unknown") in
   // jobType/jobLevel — the absence of a value, not a value. Same rule as the
@@ -98,7 +121,10 @@ function MetaChip({ icon: Icon, value }: { icon: React.ElementType; value?: stri
   if (!text || /^(not applicable|unknown|n\/a|none)$/i.test(text)) return null;
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/70 px-2.5 py-1 text-xs font-medium text-foreground/75 shadow-sm">
-      <Icon className="h-3.5 w-3.5 shrink-0 text-brand-emerald-600 dark:text-brand-emerald-400" aria-hidden />
+      <Icon
+        className="h-3.5 w-3.5 shrink-0 text-brand-emerald-600 dark:text-brand-emerald-400"
+        aria-hidden
+      />
       <span className="truncate">{text}</span>
     </span>
   );
@@ -125,6 +151,9 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
   onUpdateStatus,
   onDelete,
   onManualGenerate,
+  onReviewApplication,
+  reviewLoading,
+  reviewError,
   onRetryDetail,
 }: JobDetailPanelProps) {
   const t = useTranslations("jobs");
@@ -153,19 +182,27 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
     ? jobStatusPresentation(selectedJob.status)
     : null;
   const visibleExperience = useMemo(
-    () =>
-      projectVisibleJobExperience(selectedDescription, experienceAnalysis),
+    () => projectVisibleJobExperience(selectedDescription, experienceAnalysis),
     [selectedDescription, experienceAnalysis],
   );
   // Reset the description scroll to the top when the selected job changes —
   // the ScrollArea viewport DOM node is reused across selections, so without
   // this a new job opens stuck at the previous job's scroll offset.
   const scrollRootRef = useRef<HTMLDivElement>(null);
+  const panelRootRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const focusAfterDeleteRef = useRef(false);
   useEffect(() => {
     const viewport = scrollRootRef.current?.querySelector<HTMLElement>(
       "[data-radix-scroll-area-viewport]",
     );
     if (viewport) viewport.scrollTop = 0;
+  }, [selectedJob?.id]);
+
+  useEffect(() => {
+    if (!focusAfterDeleteRef.current) return;
+    focusAfterDeleteRef.current = false;
+    (titleRef.current ?? panelRootRef.current)?.focus();
   }, [selectedJob?.id]);
 
   const isAppliedSelected = selectedJob?.status === "APPLIED";
@@ -178,6 +215,8 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
   return (
     <div
       {...panelProps}
+      ref={panelRootRef}
+      tabIndex={-1}
       hidden={undefined}
       data-testid="jobs-details-panel"
       className={cn(
@@ -211,7 +250,11 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
               {/* No status pill here: the Select below is the status
                   surface, and it can be edited — the pill was its read-only
                   echo two centimetres away. */}
-              <h2 className="text-xl font-bold tracking-tight text-foreground">
+              <h2
+                ref={titleRef}
+                tabIndex={-1}
+                className="rounded-md text-xl font-bold tracking-tight text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2"
+              >
                 {selectedJob.title}
               </h2>
               {/* Meta as icon chips — replaces the flat dotted text line for a
@@ -238,10 +281,13 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                   value={
                     selectedJob.listingDate
                       ? t("postedDate", {
-                          date: format.dateTime(new Date(selectedJob.listingDate), {
-                            day: "numeric",
-                            month: "short",
-                          }),
+                          date: format.dateTime(
+                            new Date(selectedJob.listingDate),
+                            {
+                              day: "numeric",
+                              month: "short",
+                            },
+                          ),
                         })
                       : null
                   }
@@ -255,7 +301,9 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
               >
                 <Select
                   value={statusPresentation?.status}
-                  onValueChange={(v) => onUpdateStatus(selectedJob.id, v as JobStatus)}
+                  onValueChange={(v) =>
+                    onUpdateStatus(selectedJob.id, v as JobStatus)
+                  }
                   disabled={updatingIds.has(selectedJob.id)}
                 >
                   <SelectTrigger
@@ -268,7 +316,9 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                     )}
                   >
                     <span className="truncate">
-                      {statusPresentation ? t(statusPresentation.labelKey) : null}
+                      {statusPresentation
+                        ? t(statusPresentation.labelKey)
+                        : null}
                     </span>
                   </SelectTrigger>
                   <SelectContent>
@@ -295,28 +345,106 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                   </a>
                 </Button>
                 {!isCN && selectedJob.resumePdfUrl ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    asChild
-                    className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] sm:w-auto ${actionHeight} px-4`}
-                  >
-                    <a href={selectedJob.resumePdfUrl} target="_blank" rel="noreferrer">
+                  selectedJob.applicationId && onReviewApplication ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={
+                        reviewLoading?.applicationId ===
+                          selectedJob.applicationId &&
+                        reviewLoading.target === "resume"
+                      }
+                      aria-busy={
+                        reviewLoading?.applicationId ===
+                          selectedJob.applicationId &&
+                        reviewLoading.target === "resume"
+                      }
+                      onClick={() =>
+                        onReviewApplication(
+                          selectedJob.applicationId!,
+                          selectedJob.id,
+                          "resume",
+                        )
+                      }
+                      className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] sm:w-auto ${actionHeight} px-4`}
+                    >
+                      {reviewLoading?.applicationId ===
+                        selectedJob.applicationId &&
+                      reviewLoading.target === "resume" ? (
+                        <Loader2
+                          className="motion-safe:animate-spin"
+                          aria-hidden
+                        />
+                      ) : null}
                       {t("savedCv")}
-                    </a>
-                  </Button>
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      asChild
+                      className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] sm:w-auto ${actionHeight} px-4`}
+                    >
+                      <a
+                        href={selectedJob.resumePdfUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {t("savedCv")}
+                      </a>
+                    </Button>
+                  )
                 ) : null}
                 {!isCN && selectedJob.coverPdfUrl ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    asChild
-                    className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] sm:w-auto ${actionHeight} px-4`}
-                  >
-                    <a href={selectedJob.coverPdfUrl} target="_blank" rel="noreferrer">
+                  selectedJob.applicationId && onReviewApplication ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={
+                        reviewLoading?.applicationId ===
+                          selectedJob.applicationId &&
+                        reviewLoading.target === "cover"
+                      }
+                      aria-busy={
+                        reviewLoading?.applicationId ===
+                          selectedJob.applicationId &&
+                        reviewLoading.target === "cover"
+                      }
+                      onClick={() =>
+                        onReviewApplication(
+                          selectedJob.applicationId!,
+                          selectedJob.id,
+                          "cover",
+                        )
+                      }
+                      className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] sm:w-auto ${actionHeight} px-4`}
+                    >
+                      {reviewLoading?.applicationId ===
+                        selectedJob.applicationId &&
+                      reviewLoading.target === "cover" ? (
+                        <Loader2
+                          className="motion-safe:animate-spin"
+                          aria-hidden
+                        />
+                      ) : null}
                       {t("savedCl")}
-                    </a>
-                  </Button>
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      asChild
+                      className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] sm:w-auto ${actionHeight} px-4`}
+                    >
+                      <a
+                        href={selectedJob.coverPdfUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {t("savedCl")}
+                      </a>
+                    </Button>
+                  )
                 ) : null}
                 {/* The trailing cluster: what is neither "open this job" nor
                     "read what we generated for it".
@@ -336,7 +464,10 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                     title={t("remove")}
                     data-testid="job-remove-button"
                     disabled={deletingIds.has(selectedJob.id)}
-                    onClick={() => onDelete(selectedJob)}
+                    onClick={() => {
+                      focusAfterDeleteRef.current = true;
+                      onDelete(selectedJob);
+                    }}
                     className={`flex-1 justify-center rounded-xl text-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive/40 disabled:cursor-not-allowed disabled:opacity-50 sm:w-9 sm:flex-none ${actionHeight} px-0`}
                   >
                     <Trash2 className="h-4 w-4" aria-hidden />
@@ -361,10 +492,15 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
                           className="min-h-11"
-                          onClick={() => onManualGenerate(selectedJob, "resume")}
+                          onClick={() =>
+                            onManualGenerate(selectedJob, "resume")
+                          }
                           disabled={externalPromptLoading}
                         >
-                          <ClipboardPaste className="mr-2 h-4 w-4" aria-hidden />
+                          <ClipboardPaste
+                            className="mr-2 h-4 w-4"
+                            aria-hidden
+                          />
                           {t("manualGenerateCv")}
                         </DropdownMenuItem>
                         <DropdownMenuItem
@@ -372,7 +508,10 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                           onClick={() => onManualGenerate(selectedJob, "cover")}
                           disabled={externalPromptLoading}
                         >
-                          <ClipboardPaste className="mr-2 h-4 w-4" aria-hidden />
+                          <ClipboardPaste
+                            className="mr-2 h-4 w-4"
+                            aria-hidden
+                          />
                           {t("manualGenerateCl")}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -381,6 +520,14 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                 </div>
               </div>
             </div>
+            {reviewError ? (
+              <p
+                role="alert"
+                className="flex items-start gap-2 rounded-xl border border-amber-300/70 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100"
+              >
+                {reviewError}
+              </p>
+            ) : null}
             {tailorSource ? (
               <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                 {tailorSource.cv ? (
@@ -401,7 +548,9 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
             ) : null}
           </div>
         ) : (
-          <div className="relative text-sm text-muted-foreground">{t("selectJobToPreview")}</div>
+          <div className="relative text-sm text-muted-foreground">
+            {t("selectJobToPreview")}
+          </div>
         )}
       </div>
       <ScrollArea
@@ -422,7 +571,10 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                 <span className="text-xs font-semibold uppercase tracking-wider text-foreground/80">
                   {t("jobDescriptionTitle")}
                 </span>
-                <span className="h-px flex-1 bg-gradient-to-r from-border to-transparent" aria-hidden />
+                <span
+                  className="h-px flex-1 bg-gradient-to-r from-border to-transparent"
+                  aria-hidden
+                />
               </div>
               <JobRequirementsPanel
                 experience={visibleExperience}
@@ -471,7 +623,9 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
               <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-emerald-50 to-brand-emerald-100 text-brand-emerald-600 shadow-[0_16px_32px_-18px_rgba(5,150,105,0.5)] ring-1 ring-brand-emerald-100 dark:from-brand-emerald-500/10 dark:to-brand-emerald-500/5 dark:text-brand-emerald-300">
                 <ClipboardList className="h-6 w-6" aria-hidden />
               </span>
-              <p className="max-w-[18rem] text-sm text-muted-foreground">{t("selectJobHint")}</p>
+              <p className="max-w-[18rem] text-sm text-muted-foreground">
+                {t("selectJobHint")}
+              </p>
             </div>
           )}
         </div>

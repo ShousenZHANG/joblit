@@ -4,10 +4,14 @@ import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import { UuidParamSchema } from "@/lib/shared/schemas/common";
 import { prisma } from "@/lib/server/prisma";
 import { taskProgressFromGroupBy } from "@/lib/server/applicationBatches/batchProgress";
+import { getApplicationReviewId } from "@/lib/server/applications/applicationReviewAvailability";
 
 export const runtime = "nodejs";
 
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(
+  _req: Request,
+  ctx: { params: Promise<{ id: string }> },
+) {
   return withSessionRoute(
     async ({ userId, params }) => {
       const batch = await prisma.applicationBatch.findFirst({
@@ -35,6 +39,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
         where: {
           batchId: batch.id,
           userId,
+          job: { userId },
         },
         _count: {
           _all: true,
@@ -48,6 +53,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
             batchId: batch.id,
             userId,
             status: "FAILED",
+            job: { userId },
           },
           orderBy: [{ updatedAt: "desc" }],
           take: 100,
@@ -72,6 +78,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
             batchId: batch.id,
             userId,
             status: "SUCCEEDED",
+            job: { userId },
           },
           orderBy: [{ completedAt: "desc" }, { updatedAt: "desc" }],
           take: 100,
@@ -92,22 +99,29 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
         }),
       ]);
 
-      const succeededJobIds = Array.from(new Set(succeededTasks.map((task) => task.jobId)));
+      const projectedJobIds = Array.from(
+        new Set([...succeededTasks, ...failedTasks].map((task) => task.jobId)),
+      );
       const applicationArtifacts =
-        succeededJobIds.length > 0
+        projectedJobIds.length > 0
           ? await prisma.application.findMany({
               where: {
                 userId,
-                jobId: { in: succeededJobIds },
+                jobId: { in: projectedJobIds },
+                job: { userId },
               },
               select: {
+                id: true,
                 jobId: true,
+                aiContent: true,
                 resumePdfUrl: true,
                 coverPdfUrl: true,
               },
             })
           : [];
-      const artifactsByJobId = new Map(applicationArtifacts.map((item) => [item.jobId, item]));
+      const artifactsByJobId = new Map(
+        applicationArtifacts.map((item) => [item.jobId, item]),
+      );
 
       return NextResponse.json({
         batch: {
@@ -119,20 +133,35 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
         },
         progress,
         remainingCount: progress.pending + progress.running,
-        failed: failedTasks.map((task) => ({
-          taskId: task.id,
-          jobId: task.jobId,
-          jobTitle: task.job.title,
-          company: task.job.company,
-          jobUrl: task.job.jobUrl,
-          attempt: task.attempt,
-          error: task.error ?? "TASK_FAILED",
-          updatedAt: task.updatedAt.toISOString(),
-        })),
+        failed: failedTasks.map((task) => {
+          const artifacts = artifactsByJobId.get(task.jobId);
+          return {
+            taskId: task.id,
+            applicationId: getApplicationReviewId({
+              id: artifacts?.id,
+              aiContent: artifacts?.aiContent,
+            }),
+            jobId: task.jobId,
+            jobTitle: task.job.title,
+            company: task.job.company,
+            jobUrl: task.job.jobUrl,
+            attempt: task.attempt,
+            error: task.error ?? "TASK_FAILED",
+            updatedAt: task.updatedAt.toISOString(),
+            artifacts: {
+              resumePdfUrl: artifacts?.resumePdfUrl ?? null,
+              coverPdfUrl: artifacts?.coverPdfUrl ?? null,
+            },
+          };
+        }),
         succeeded: succeededTasks.map((task) => {
           const artifacts = artifactsByJobId.get(task.jobId);
           return {
             taskId: task.id,
+            applicationId: getApplicationReviewId({
+              id: artifacts?.id,
+              aiContent: artifacts?.aiContent,
+            }),
             jobId: task.jobId,
             jobTitle: task.job.title,
             company: task.job.company,
@@ -149,4 +178,3 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     { params: ctx.params, schema: UuidParamSchema },
   );
 }
-

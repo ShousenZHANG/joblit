@@ -5,7 +5,6 @@ import type {
   TailoringBatchTaskRow,
   TailoringRunTransaction,
 } from "./tailoringRunDatabase";
-import { APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION } from "../applicationBatches/tailoringTaskContract";
 import { reconcileApplicationBatchTx } from "../applicationBatches/batchReconciliation";
 import type { BatchProgress } from "../applicationBatches/batchProgress";
 
@@ -111,7 +110,7 @@ export async function completeBoundBatchTask(
       userId: task.userId,
       status: "RUNNING",
       executionAttemptId,
-      tailoringProtocolVersion: APPLICATION_BATCH_TAILORING_PROTOCOL_VERSION,
+      tailoringProtocolVersion: task.tailoringProtocolVersion,
     },
     data: {
       status,

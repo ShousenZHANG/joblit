@@ -24,12 +24,17 @@ It claims and completes work like this:
    `POST /api/applications/prompt` for the prompt and its receipt, echoing the
    task's `protocolVersion`, `issueKey`, and batch/task/attempt identity.
 4. Run the prompt through `codex exec` and wait for the output.
-5. `POST /api/applications/manual-generate?finalize=true` — import the output
-   with the receipt and Tailoring Run handle exactly as issued.
-6. Repeat until the batch has nothing left to claim.
+5. On protocol v2, `POST /api/applications/manual-generate?finalize=false` to
+   durably persist the editable content and acceptance receipt before any PDF
+   work begins.
+6. Publish each `remainingPublicationTarget` through the target-scoped finalize
+   endpoint with the returned Application identity and exact Tailoring Run
+   attempt. Both current PDFs are required before the task succeeds.
+7. Repeat until the batch has nothing left to claim.
 
-Success is never reported. The final import settles the task; only `FAILED`
-and `SKIPPED` travel back through `run-once`.
+Success is never reported. The final publication receipt settles the task;
+only `FAILED` and `SKIPPED` travel back through `run-once`. Old callers that do
+not advertise v2 continue on the direct-FINAL protocol v1 path.
 
 While the model is running, the Runner polls Joblit's Tailoring Run. Every
 non-terminal response must carry the exact issued `{ id, attemptId }`; a changed
@@ -98,11 +103,16 @@ Typical loop: triage your list, press **AI Generate** in the Jobs page, then
 leave the Runner running. Generated materials and their
 PDFs land in Joblit for review; the Runner never submits an application.
 
-A Codex run is a subprocess, so there is no local recovery state and no
+A Codex run is a subprocess, so there is no persisted model output and no
 `~/.joblit/runner-state-v1.json`. If the Runner dies mid-generation the child
 dies with it: nothing was produced, nothing was imported, and the next run
 simply claims the task again. Duplicate protection stays where it belongs —
 server-side, on the content-addressed receipts.
+
+Once a protocol-v2 DRAFT has been accepted, its Application is the recovery
+state. A publication-only reclaim never invokes Codex. An ambiguous publication
+is replayed exactly; if it remains unknown, the task is released behind a new
+attempt fence instead of waiting for the normal crash lease.
 
 The Runner still polls Joblit's Tailoring Run while the model works, and still
 aborts local work if another executor takes the attempt over. What disappeared
@@ -132,6 +142,8 @@ Common causes:
 - `CODEX_TIMEOUT` — the model produced nothing within the run budget.
 - `IMPORT_SETTLEMENT_UNKNOWN` — retry later; do not regenerate or mark the
   task failed.
+- `PUBLICATION_SETTLEMENT_UNKNOWN` — the task is released and recovered from
+  its stored DRAFT; do not regenerate the target.
 - `Create your resume first` — no active `ResumeProfile` for the locale.
 
 ## Tests
