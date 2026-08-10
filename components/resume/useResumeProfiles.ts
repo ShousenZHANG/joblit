@@ -9,9 +9,8 @@ interface UseResumeProfilesParams {
   resetDraft: () => void;
   toast: (opts: { title: string; description?: string; variant?: "default" | "destructive" }) => void;
   t: (key: string, values?: Record<string, string | number>) => string;
-  setPdfUrl: (updater: (prev: string | null) => string | null) => void;
-  setPreviewStatus: (status: "idle" | "loading" | "ready" | "error") => void;
-  setPreviewError: (error: string | null) => void;
+  /** Clears every piece of preview state, including the key it was built from. */
+  resetPreview: () => void;
 }
 
 export function useResumeProfiles({
@@ -20,9 +19,7 @@ export function useResumeProfiles({
   resetDraft: _resetDraft,
   toast,
   t,
-  setPdfUrl,
-  setPreviewStatus,
-  setPreviewError,
+  resetPreview,
 }: UseResumeProfilesParams) {
   const [profiles, setProfiles] = useState<ResumeProfileSummary[]>([]);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
@@ -118,14 +115,14 @@ export function useResumeProfiles({
     return () => controller.abort();
   }, [loadProfiles]);
 
+  // Blanking the PDF must also forget the key it was built from. Otherwise
+  // "New version → copy" produces a byte-identical draft, the preview is
+  // cleared, and the recompile is then deduped against the key of the PDF we
+  // just threw away — leaving the pane permanently blank with no badge to
+  // explain it, recoverable only by a manual force refresh.
   const resetPreviewState = useCallback(() => {
-    setPdfUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
-    setPreviewStatus("idle");
-    setPreviewError(null);
-  }, [setPdfUrl, setPreviewStatus, setPreviewError]);
+    resetPreview();
+  }, [resetPreview]);
 
   const handleCreateProfile = useCallback(
     async (mode: "copy" | "blank" = "copy") => {

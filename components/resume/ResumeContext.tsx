@@ -159,9 +159,7 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
     locale,
     applyProfileToDraft: form.applyProfileToDraft,
     resetDraft: form.resetDraft,
-    setPdfUrl: preview.setPdfUrl,
-    setPreviewStatus: preview.setPreviewStatus,
-    setPreviewError: preview.setPreviewError,
+    resetPreview: preview.resetPreview,
     t: t as unknown as (key: string, values?: Record<string, string | number>) => string,
     toast,
   });
@@ -304,7 +302,11 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
   // First paint. The keystroke effect used to double as this; without it a
   // freshly opened editor would sit empty until the user blurred something.
   // Keyed on the profile id so switching versions re-renders too.
-  const hydratedPreviewProfileRef = useRef<string | null>(null);
+  // The sentinel is deliberately not null: a brand-new, never-saved profile
+  // HAS a null id, so initialising to null would read as "already hydrated"
+  // and that editor would never paint a first preview.
+  const NOT_HYDRATED = Symbol.for("joblit.preview.not-hydrated");
+  const hydratedPreviewProfileRef = useRef<string | null | symbol>(NOT_HYDRATED);
   useEffect(() => {
     const profileId = profiles.selectedProfileId ?? null;
     if (hydratedPreviewProfileRef.current === profileId) return;
