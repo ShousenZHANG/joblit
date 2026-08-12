@@ -11,11 +11,6 @@ import type {
   ApplicationPublication,
 } from "@/lib/shared/applicationPublication";
 import { aiContentSchema } from "@/lib/shared/schemas/aiContent";
-import {
-  completeTailoringRunPublication,
-  prepareTailoringRunPublication,
-} from "@/lib/server/tailoringRuns/tailoringRunPublication";
-import type { TailoringRunTransaction } from "@/lib/server/tailoringRuns/tailoringRunDatabase";
 
 type ConfirmApplicationPublicationReplayInput = {
   userId: string;
@@ -25,12 +20,6 @@ type ConfirmApplicationPublicationReplayInput = {
   expectedHash: string | null;
   target: ApplicationDocumentTarget;
   renderContext: ApplicationPublicationRenderContext;
-  tailoringPublication?: {
-    handle: { id: string; attemptId: string };
-    applicationId: string;
-    target: "RESUME" | "COVER";
-    batchExecutionAttemptId: string;
-  };
 };
 
 export type ApplicationPublicationReplayResult =
@@ -58,19 +47,10 @@ export async function confirmApplicationPublicationReplay(
 ): Promise<ApplicationPublicationReplayResult> {
   return prisma.$transaction(
     async (tx) => {
-      // Agent replay is a write: acquire its ownership locks before JOBA so
-      // this path preserves the global TJOB -> ABAT -> TLRN -> JOBA order used
-      // by the normal publication commit. Taking JOBA first can deadlock a
-      // concurrent writer that already owns TJOB.
-      const publicationTx = tx as unknown as TailoringRunTransaction;
-      const preparedPublication = input.tailoringPublication
-        ? await prepareTailoringRunPublication(publicationTx, {
-            userId: input.userId,
-            jobId: input.jobId,
-            applicationId: input.applicationId,
-            request: input.tailoringPublication,
-          })
-        : null;
+      // JOBA is the only lock left here. The run-ownership locks that had to
+      // precede it existed to keep the TJOB -> ABAT -> TLRN -> JOBA order the
+      // batch path required; with no runs to own, this is a plain read fenced
+      // by the Application's own mutation lock.
       await acquireApplicationMutationLock(tx, input.userId, input.jobId);
       const current = await tx.application.findFirst({
         where: { id: input.applicationId, userId: input.userId },
@@ -132,13 +112,6 @@ export async function confirmApplicationPublicationReplay(
       const publishedDocument = publication[input.target];
       if (!publishedDocument.contentHash) {
         return { kind: "render_required" };
-      }
-      if (preparedPublication) {
-        await completeTailoringRunPublication(publicationTx, {
-          prepared: preparedPublication,
-          applicationId: input.applicationId,
-          documentContentHash: publishedDocument.contentHash,
-        });
       }
       return {
         kind: "replayed",

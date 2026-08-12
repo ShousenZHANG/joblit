@@ -8,7 +8,6 @@ import {
   CoverGenerationOutputSchema,
   ResumeGenerationOutputSchema,
 } from "@/lib/server/ai/promptContract";
-import { TailoringRunHandleSchema } from "@/lib/shared/tailoringRunContract";
 
 // ── Zod Schemas ──
 
@@ -18,8 +17,10 @@ export const ManualGenerateSchema = z
     target: z.enum(["resume", "cover"]),
     modelOutput: z.string().min(1).max(80_000),
     promptMeta: z.record(z.string(), z.unknown()).optional(),
-    tailoringRun: TailoringRunHandleSchema.optional(),
-    source: z.enum(["manual_import", "codex_batch"]).default("manual_import"),
+    // Only one source can post here now. Kept as a field rather than dropped
+    // so an older client's body still validates instead of 400-ing on a key
+    // the server simply no longer needs.
+    source: z.literal("manual_import").default("manual_import"),
   })
   .strict();
 

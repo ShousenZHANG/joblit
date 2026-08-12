@@ -6,7 +6,6 @@ import { COARSE_POINTER_MIN_HEIGHT } from "@/components/ui/touchTarget";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import { type JobItem } from "../types";
 import { jobStatusPresentation } from "../utils/jobStatusPresentation";
-import { JobTailoringBadge } from "./JobTailoringBadge";
 
 /**
  * Source feeds ship literal placeholder strings ("not applicable",
@@ -97,9 +96,6 @@ function JobListItemInner({
               <Badge className={jobStatusPresentation(job.status).badgeClass}>
                 {t(jobStatusPresentation(job.status).labelKey)}
               </Badge>
-              {/* Directly after status: this is the one badge that tells the
-                  user whether the thing they asked for is still coming. */}
-              <JobTailoringBadge job={job} />
               {typeof job.postingRisk === "number" && job.postingRisk >= 25 ? (
                 <Badge
                   className={

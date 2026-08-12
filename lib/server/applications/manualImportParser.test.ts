@@ -93,16 +93,17 @@ describe("manual import parser modes", () => {
     expect(parseCoverStrictOutput(JSON.stringify(cover)).data).toEqual(cover);
   });
 
-  it("accepts only current import sources and rejects retired Local AI writes", () => {
+  it("accepts manual_import alone and rejects every retired source", () => {
     const base = {
       jobId: "550e8400-e29b-41d4-a716-446655440000",
       target: "resume",
       modelOutput: JSON.stringify(resume),
     } as const;
     expect(ManualGenerateSchema.parse(base).source).toBe("manual_import");
+    // codex_batch went with the Runner: the only writer is the browser now.
     expect(
-      ManualGenerateSchema.parse({ ...base, source: "codex_batch" }).source,
-    ).toBe("codex_batch");
+      ManualGenerateSchema.safeParse({ ...base, source: "codex_batch" }).success,
+    ).toBe(false);
     expect(
       ManualGenerateSchema.safeParse({ ...base, source: "local_ai" }).success,
     ).toBe(false);

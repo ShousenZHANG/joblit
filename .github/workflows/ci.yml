@@ -227,12 +227,6 @@ jobs:
       - name: Test (with coverage ratchet)
         run: npm run test:coverage
 
-      - name: Test Hermes profile packaging and signatures
-        run: npm run hermes:package:test
-
-      - name: Test Joblit Runner
-        run: npm run test:runner
-
       - name: Build
         run: npm run build
 

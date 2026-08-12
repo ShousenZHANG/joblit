@@ -195,7 +195,6 @@ describe("jobDeleteService", () => {
         "lock",
         "job.findFirst",
         "job.lockRows",
-        "applicationBatchTask.findMany",
         "application.lock:job-1",
         "application.findUnique",
         "deletedJobUrl.upsert",
@@ -347,7 +346,6 @@ describe("jobDeleteService", () => {
         "lock",
         "job.findMany",
         "job.lockRows",
-        "applicationBatchTask.findMany",
         "application.lock:a",
         "application.lock:b",
         "application.findMany",
@@ -436,75 +434,15 @@ describe("jobDeleteService", () => {
 
       await batchDeleteJobs("user-1", ["z-job", "a-job"]);
 
-      expect(prismaStore.operations.slice(0, 7)).toEqual([
+      // One step shorter: the Application Batch lock went with the queue.
+      expect(prismaStore.operations.slice(0, 6)).toEqual([
         "lock",
         "job.findMany",
         "job.lockRows",
-        "applicationBatchTask.findMany",
         "application.lock:a-job",
         "application.lock:z-job",
         "application.findMany",
       ]);
-    });
-
-    it("reconciles affected batches after the Job cascade and cancels zero-task batches", async () => {
-      prismaStore.job.findMany.mockImplementationOnce(async () => {
-        prismaStore.operations.push("job.findMany");
-        return [{ id: "a", jobUrl: "https://e.com/a" }];
-      });
-      prismaStore.applicationBatchTask.findMany.mockImplementationOnce(
-        async () => {
-          prismaStore.operations.push("applicationBatchTask.findMany");
-          return [{ batchId: "batch-b" }, { batchId: "batch-a" }];
-        },
-      );
-      prismaStore.applicationBatch.findFirst.mockImplementation(
-        async ({ where }: { where: { id: string } }) => {
-          prismaStore.operations.push(`applicationBatch.findFirst:${where.id}`);
-          return {
-            id: where.id,
-            status: "RUNNING",
-            totalCount: 1,
-            startedAt: new Date("2026-08-02T00:00:00.000Z"),
-            completedAt: null,
-          };
-        },
-      );
-      prismaStore.applicationBatchTask.groupBy.mockImplementation(async () => {
-        prismaStore.operations.push("applicationBatchTask.groupBy");
-        return [];
-      });
-
-      await batchDeleteJobs("user-1", ["a"]);
-
-      expect(prismaStore.applicationBatch.update).toHaveBeenCalledTimes(2);
-      expect(prismaStore.applicationBatch.update.mock.calls).toEqual([
-        [
-          expect.objectContaining({
-            where: { id: "batch-a" },
-            data: expect.objectContaining({
-              status: "CANCELLED",
-              totalCount: 0,
-              completedAt: expect.any(Date),
-              error: "All jobs in this batch were deleted.",
-            }),
-          }),
-        ],
-        [
-          expect.objectContaining({
-            where: { id: "batch-b" },
-            data: expect.objectContaining({
-              status: "CANCELLED",
-              totalCount: 0,
-              completedAt: expect.any(Date),
-              error: "All jobs in this batch were deleted.",
-            }),
-          }),
-        ],
-      ]);
-      expect(prismaStore.operations.indexOf("job.deleteMany")).toBeLessThan(
-        prismaStore.operations.indexOf("applicationBatch.findFirst:batch-a"),
-      );
     });
 
     it("deduplicates repeated ids before counting and deleting", async () => {

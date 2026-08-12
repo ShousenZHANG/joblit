@@ -93,17 +93,11 @@ export async function loadApplicationReviewSnapshot(input: {
     return { kind: "not_found" };
   }
 
-  if (application.jobId) {
-    const activeRun = await prisma.tailoringRun.findFirst({
-      where: {
-        userId: input.userId,
-        jobId: application.jobId,
-        status: { in: ["ISSUED", "RUNNING"] },
-      },
-      select: { id: true },
-    });
-    if (activeRun) return { kind: "busy" };
-  }
+  // The "busy" guard read TailoringRun to stop a user opening Review while an
+  // unattended Runner was mid-write on the same Job. With no Runner there is
+  // no concurrent writer to lose a race against: the only writer is this
+  // browser, and its own commits are serialised by the Application mutation
+  // lock. The `busy` result kind is kept for callers that still switch on it.
 
   const jobTitle = application.job?.title ?? application.role ?? "Untitled";
   const company = application.job?.company ?? application.company ?? null;

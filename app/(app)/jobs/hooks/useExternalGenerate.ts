@@ -7,42 +7,12 @@ import type { DialogPhase } from "../components/StepIndicator";
 import { isSkillPackFresh, writeSavedSkillPackMeta } from "../utils/skillPackMeta";
 import { parseTailorOutput, filenameFromDisposition } from "../utils/tailorParser";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
-import type { TailoringRunHandle } from "@/lib/shared/tailoringRunContract";
 import {
   manualGenerateDraftResponseSchema,
   type ManualGenerateDraftResponse,
 } from "./manualGenerateDraftResponse";
 
 export type GeneratedDraftSource = "manual_import";
-
-const MANUAL_TAILORING_ISSUE_PREFIX = "joblit.tailoring.manual.v1";
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function manualIssueStorageKey(jobId: string, target: "resume" | "cover") {
-  return `${MANUAL_TAILORING_ISSUE_PREFIX}:${jobId}:${target}`;
-}
-
-function getOrCreateManualIssueKey(
-  jobId: string,
-  target: "resume" | "cover",
-): string {
-  const storageKey = manualIssueStorageKey(jobId, target);
-  const existing =
-    typeof window === "undefined" ? null : window.sessionStorage.getItem(storageKey);
-  if (existing && UUID_RE.test(existing)) return existing;
-  const created = crypto.randomUUID();
-  if (typeof window !== "undefined") {
-    window.sessionStorage.setItem(storageKey, created);
-  }
-  return created;
-}
-
-function clearManualIssueKey(jobId: string, target: "resume" | "cover") {
-  if (typeof window !== "undefined") {
-    window.sessionStorage.removeItem(manualIssueStorageKey(jobId, target));
-  }
-}
 
 /** Import rejection carrying the server's stable code + validator details. */
 export class DraftImportError extends Error {
@@ -63,7 +33,6 @@ export async function persistGeneratedDraft(input: {
   target: "resume" | "cover";
   modelOutput: string;
   promptMeta?: Record<string, unknown> | ExternalPromptMeta | null;
-  tailoringRun?: TailoringRunHandle | null;
   source: GeneratedDraftSource;
 }): Promise<PersistedGeneratedDraft> {
   try {
@@ -109,8 +78,6 @@ export function useExternalGenerate(
   const [externalGenerating, setExternalGenerating] = useState(false);
   const [externalStep, setExternalStep] = useState<1 | 2 | 3>(1);
   const [externalPromptMeta, setExternalPromptMeta] = useState<ExternalPromptMeta | null>(null);
-  const [externalTailoringRun, setExternalTailoringRun] =
-    useState<TailoringRunHandle | null>(null);
   const [externalSkillPackFresh, setExternalSkillPackFresh] = useState(false);
   const [externalSkillPackLocale, setExternalSkillPackLocale] =
     useState<"en-AU" | "zh-CN">("en-AU");
@@ -120,43 +87,19 @@ export function useExternalGenerate(
     promptText: string;
     shortPromptText: string;
     promptMeta: ExternalPromptMeta | null;
-    tailoringRun: TailoringRunHandle | null;
   }> {
     type TailorPromptResponse = {
       prompt?: { systemPrompt?: string; userPrompt?: string; shortUserPrompt?: string };
       promptMeta?: Record<string, unknown>;
-      tailoringRun?: { id?: unknown; attemptId?: unknown };
     };
-    const requestPrompt = (issueKey: string) =>
-      fetchJson("/api/applications/prompt", {
-        method: "POST",
-        body: JSON.stringify({
-          jobId: job.id,
-          target,
-          source: "manual_import",
-          delivery: "DRAFT",
-          issueKey,
-        }),
-        fallbackError: "Failed to build prompt",
-      }) as Promise<TailorPromptResponse>;
-
-    let json: TailorPromptResponse;
-    try {
-      json = await requestPrompt(getOrCreateManualIssueKey(job.id, target));
-    } catch (error) {
-      const runCannotResume =
-        error instanceof ApiError &&
-        (error.code === "ISSUE_KEY_CONFLICT" ||
-          error.code === "RUN_ALREADY_TERMINAL" ||
-          error.code === "PROMPT_CONFLICT");
-      if (!runCannotResume) throw error;
-
-      // The stable key is bound to its original snapshots and terminal run.
-      // Rotate only when that operation cannot accept new output; transport
-      // retries continue to reuse the existing key and receipt.
-      clearManualIssueKey(job.id, target);
-      json = await requestPrompt(getOrCreateManualIssueKey(job.id, target));
-    }
+    // Issuing a prompt is a pure read now. The stable issue key and its
+    // rotate-on-conflict dance existed only to resume a TailoringRun that a
+    // previous call had minted; there is no run to resume.
+    const json = (await fetchJson("/api/applications/prompt", {
+      method: "POST",
+      body: JSON.stringify({ jobId: job.id, target }),
+      fallbackError: "Failed to build prompt",
+    })) as TailorPromptResponse;
     const fullPromptText = [
       "You are given SYSTEM and USER instructions below. Follow them strictly. Output exactly one valid JSON object (no markdown or code fences).",
       "",
@@ -198,12 +141,7 @@ export function useExternalGenerate(
             promptHash: typeof json.promptMeta.promptHash === "string" ? json.promptMeta.promptHash : undefined,
           }
         : null;
-    const tailoringRun =
-      typeof json.tailoringRun?.id === "string" &&
-      typeof json.tailoringRun.attemptId === "string"
-        ? { id: json.tailoringRun.id, attemptId: json.tailoringRun.attemptId }
-        : null;
-    return { promptText: fullPromptText, shortPromptText, promptMeta, tailoringRun };
+    return { promptText: fullPromptText, shortPromptText, promptMeta };
   }
 
   const openExternalGenerateDialog = useCallback(async (job: JobItem, target: "resume" | "cover") => {
@@ -215,7 +153,6 @@ export function useExternalGenerate(
     setExternalPromptText("");
     setExternalShortPromptText("");
     setExternalPromptMeta(null);
-    setExternalTailoringRun(null);
     setExternalSkillPackFresh(false);
     setExternalSkillPackLocale(
       marketStringToResumeLocale(job.market ?? "AU"),
@@ -224,12 +161,11 @@ export function useExternalGenerate(
     setError(null);
     setExternalPromptLoading(true);
     try {
-      const { promptText, shortPromptText, promptMeta, tailoringRun } =
+      const { promptText, shortPromptText, promptMeta } =
         await loadTailorPrompt(job, target);
       setExternalPromptText(promptText);
       setExternalShortPromptText(shortPromptText);
       setExternalPromptMeta(promptMeta);
-      setExternalTailoringRun(tailoringRun);
       const fresh = isSkillPackFresh(promptMeta);
       setExternalSkillPackFresh(fresh);
       const initialStep = fresh ? 2 : 1;
@@ -365,10 +301,8 @@ export function useExternalGenerate(
         target,
         modelOutput,
         promptMeta: externalPromptMeta,
-        tailoringRun: externalTailoringRun,
         source: "manual_import",
       });
-      clearManualIssueKey(job.id, target);
       setExternalDialogOpen(false);
       setDialogPhase(1);
       await options?.onDraftPersisted?.({
@@ -413,7 +347,6 @@ export function useExternalGenerate(
     externalGenerating,
     externalStep, setExternalStep,
     externalPromptMeta,
-    externalTailoringRun,
     externalSkillPackFresh, setExternalSkillPackFresh,
     dialogPhase, setDialogPhase,
     promptCopied,

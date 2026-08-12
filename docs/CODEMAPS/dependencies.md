@@ -2,8 +2,9 @@
 
 One npm project: the root Next.js app. Node `>=20.10`, npm `>=10`.
 
-`tools/runner/` is dependency-free Node with no package of its own — see
-ADR-0014 and `tools/runner/README.md`.
+`tools/` holds no second package. The dependency-free Runner and Hermes trees
+were deleted by ADR-0022; what remains under `tools/` is CI policy scripts, the
+deploy helpers, the Python fetcher, and the README metrics script.
 
 ---
 
@@ -31,8 +32,8 @@ ADR-0014 and `tools/runner/README.md`.
 `tw-animate-css`, `prisma`, `knip`, `dotenv`, and the `@types/*`.
 
 There is **no** AI SDK dependency and **no provider module at all**. The server
-calls no model (ADR-0015); generation happens in the user's own Codex CLI, driven
-by the local Runner (ADR-0018).
+calls no model (ADR-0015), and since ADR-0022 nothing in the repository drives
+one either: generation happens wherever the user pastes the prompt.
 
 ### `overrides`
 
@@ -40,7 +41,7 @@ Nine packages are pinned in `package.json` `overrides` — `lodash`, `nanoid`,
 `postcss`, `fast-uri`, `find-my-way`, `sharp`, `undici`, `uuid`, `ws`. None is a
 declared dependency; all nine are transitive. They read as security floors.
 
-`tools/ci/check-dependency-policy.mjs:19-20` reads only `pkg.dependencies` and
+`tools/ci/check-dependency-policy.mjs:18-19` reads only `pkg.dependencies` and
 `pkg.devDependencies`, so it never inspects `overrides`. If the transitive path
 that pulls one of these in changes, the pin silently stops applying and nothing
 in the repo reports it. `npm audit --omit=dev` would catch a vulnerable resolved
@@ -63,15 +64,17 @@ Adding any package therefore requires an allowlist edit in the same commit.
 
 ## Verification
 
-`npm run verify` → `tools/ci/verify.mjs`. Seven steps, in order:
+`npm run verify` → `tools/ci/verify.mjs`. Five steps, in order
+(`verify.mjs:23-27`):
 
 1. `tsc --noEmit` (root)
 2. `npm run lint`
 3. `npm run deps:policy`
 4. `npm run deadcode` — knip over files, dependencies, exports, types, duplicates
 5. `npm run test` — root Vitest
-6. `npm run test:runner` — Runner suites, Node's built-in test runner
-7. `npm run hermes:package:test` — Hermes packaging and signatures
+
+The Runner and Hermes steps were removed with their code (ADR-0022), together
+with the `test:runner` and `hermes:*` package scripts.
 
 It prints a pass/fail summary and exits non-zero if any step failed.
 `CONTRIBUTING.md` names this one command rather than a checklist, so the
@@ -83,13 +86,23 @@ Deliberately **not** in `verify`, because they need credentials or network:
 ### CI
 
 `.github/workflows/ci.yml`, one `verify` job plus a `python-worker` job:
-dependency policy → security policy → deployment-order policy → `npm audit
---omit=dev --audit-level=high` → knip → lint → `test:coverage` → Hermes
-packaging tests → Runner tests → `next build`. The Python fetcher is tested
-separately with pytest.
+dependency policy → security policy → deployment-order policy → full migration
+replay against a Postgres service plus `prisma migrate diff --exit-code` → the
+post-retirement inventory fence → the expand/contract drift replay → `npm audit
+--omit=dev --audit-level=high` → knip → lint → `test:coverage` → `next build`.
+The Python fetcher is tested separately with pytest.
+
+**Known stale steps.** The `verify` job still runs
+`npm run hermes:package:test` and `npm run test:runner` after
+`test:coverage`. Neither script exists in `package.json` any more, so both
+steps fail. `test/ciWorkflow.test.ts` does not pin them, so nothing in the root
+suite catches it.
+
+Other workflows: `dependency-policy.yml`, `hermes-profile.yml` (also orphaned
+by ADR-0022), `jobspy-fetch.yml`, `lighthouse.yml`.
 
 CI supplies dummy env values that satisfy module-load guards like
-`prisma.ts`'s `DATABASE_URL` check. No service is contacted.
+`prisma.ts`'s `DATABASE_URL` check. No external service is contacted.
 
 ---
 
@@ -97,17 +110,21 @@ CI supplies dummy env values that satisfy module-load guards like
 
 Vitest 4, jsdom, setup at `test/setup.ts`, path alias `@` → repo root.
 
-`pool: "vmThreads"` — the default `forks` pool fails to register suites on
-Windows in this project (`vitest.config.ts:56-58`).
+`pool: "vmThreads"` with `maxWorkers: 4` — the default `forks` pool fails to
+register suites on Windows in this project (`vitest.config.ts:48-54`).
 
 Coverage thresholds are a **ratchet floor** set just under measured coverage,
-not an aspirational gate: statements 57.7, branches 46.5, functions 54.1, lines
-60.3 (`vitest.config.ts:41-46`). The comment there explains the reasoning — a
+not an aspirational gate: statements 76.5, branches 66.5, functions 75, lines
+79 (`vitest.config.ts:42-46`). The comment there explains the reasoning — a
 hard 80% today would be a false gate because much of `app/` UI is untested, so
 locking the floor is the honest move and still blocks any drop.
 
-Excluded from the root run: the `tools/` suites that use Node's built-in test
-runner — `tools/hermes/**`, `tools/runner/**`, and `tools/deploy/`.
+Excluded from the root run (`vitest.config.ts:55-66`):
+`tools/deploy/vercel-build.test.mjs`, which uses Node's built-in test runner.
+The `tools/hermes/**` and `tools/runner/**` exclusions are left over from
+ADR-0022 and now match nothing. `tools/ci/server-fetch-policy.test.mjs` and
+`tools/deploy/migrationUrl.test.ts` are **not** excluded and do run under
+Vitest.
 
 ---
 
@@ -122,11 +139,11 @@ runner — `tools/hermes/**`, `tools/runner/**`, and `tools/deploy/`.
 | Fetch worker config + commits | `FETCH_RUN_SECRET` | `/api/fetch-runs/[id]/{config,commit}` |
 | Vercel Blob | `BLOB_READ_WRITE_TOKEN` | required for FINAL artifact persistence outside tests and for reconciliation; DRAFT does not upload |
 | GitHub Actions | `GITHUB_OWNER/REPO/TOKEN/WORKFLOW_FILE` | optional — AU fetch dispatch |
-| Cron | `CRON_SECRET` | Vercel's bearer credential for scheduled daily refresh and artifact reconciliation |
+| Cron | `CRON_SECRET` | Vercel's bearer credential for the one scheduled job — `/api/artifacts/reconcile`, daily at 07:00 UTC (`vercel.json`) |
 | Artifact reconcile | `ARTIFACT_RECONCILE_SECRET` | optional additional bearer for manual/operator calls; it does not replace `CRON_SECRET` for Vercel Cron |
 | Artifact reconcile kill switch | `ARTIFACT_RECONCILE_ENABLED` | default off; only exact `true` / `1` enables inventory, claim, and delete |
 
-`lib/server/env.ts:55` `validateServerEnv` owns baseline boot requirements.
+`lib/server/env.ts:56` `validateServerEnv` owns baseline boot requirements.
 `BLOB_READ_WRITE_TOKEN` is enforced at the FINAL/reconciler boundary
 instead of global boot because DRAFT edits do not touch Blob storage.
 

@@ -55,7 +55,6 @@ import {
 } from "../types";
 import { selectableJobStatuses } from "@/lib/shared/jobStatus";
 import { jobStatusPresentation } from "../utils/jobStatusPresentation";
-import { JobGenerateButton } from "./JobGenerateButton";
 import { JobRequirementsPanel } from "./JobRequirementsPanel";
 
 // Markdown body (react-markdown + rehype-highlight + highlight.js CSS) is the
@@ -93,13 +92,6 @@ interface JobDetailPanelProps {
   onDelete: (job: JobItem) => void;
   /** Zero-install fallback: copy the prompt, run it anywhere, paste JSON. */
   onManualGenerate: (job: JobItem, target: "resume" | "cover") => void;
-  /** Queue this Job for AI generation. Absent on surfaces that cannot queue. */
-  onGenerateJob?: (jobId: string) => void;
-  /** Set while this specific Job's enqueue request is in flight. */
-  generatePendingJobId?: string | null;
-  /** Onboarding highlight for the first-PDF task. */
-  generateGuideHighlighted?: boolean;
-  generateGuideHighlightClass?: string;
   onReviewApplication?: (
     applicationId: string,
     jobId: string,
@@ -159,10 +151,6 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
   onUpdateStatus,
   onDelete,
   onManualGenerate,
-  onGenerateJob,
-  generatePendingJobId,
-  generateGuideHighlighted,
-  generateGuideHighlightClass,
   onReviewApplication,
   reviewLoading,
   reviewError,
@@ -341,22 +329,6 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                     ))}
                   </SelectContent>
                 </Select>
-                {/* Generation lives here, and only here. The toolbar sweep
-                    that used to own it queued every eligible job in one press
-                    and refused outright while any run was draining, so wanting
-                    one job meant committing to a hundred or waiting on a
-                    hundred. Asking for the job you are reading is the natural
-                    unit. */}
-                {!isCN && onGenerateJob ? (
-                  <JobGenerateButton
-                    job={selectedJob}
-                    pending={generatePendingJobId === selectedJob.id}
-                    onGenerate={onGenerateJob}
-                    guideHighlighted={generateGuideHighlighted}
-                    guideHighlightClass={generateGuideHighlightClass}
-                    className={`w-full justify-center rounded-xl text-sm font-semibold shadow-sm transition-all duration-200 active:translate-y-[1px] sm:w-auto ${actionHeight} px-4`}
-                  />
-                ) : null}
                 <Button
                   asChild
                   size="sm"

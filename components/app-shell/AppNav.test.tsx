@@ -240,7 +240,9 @@ describe("AppNav", () => {
       scope.queryByRole("link", { name: /discover/i }),
     ).not.toBeInTheDocument();
     expect(scope.queryByRole("link", { name: /agent/i })).not.toBeInTheDocument();
-    expect(screen.getByTestId("runner-setup-trigger")).toBeInTheDocument();
+    // The Runner setup popover went with the Runner. Generation is a manual
+    // copy/paste flow started from a Job, so the nav has nothing to configure.
+    expect(screen.queryByTestId("runner-setup-trigger")).not.toBeInTheDocument();
   });
 
   it("keeps the CN navigation focused on Resume", () => {

@@ -9,12 +9,6 @@ const applicationStore = vi.hoisted(() => ({
   upsert: vi.fn(),
 }));
 
-const tailoringRunStore = vi.hoisted(() => ({
-  findMany: vi.fn(),
-  findFirst: vi.fn(),
-  updateMany: vi.fn(),
-}));
-
 const evidenceStore = vi.hoisted(() => ({
   evidenceCreateMany: vi.fn(),
   claimCreateMany: vi.fn(),
@@ -46,10 +40,6 @@ const rateLimitStore = vi.hoisted(() => ({
   enforce: vi.fn(() => null),
 }));
 
-const agentAuth = vi.hoisted(() => ({
-  requireAgentCredential: vi.fn(),
-}));
-
 const applicationPrompt = vi.hoisted(() => ({
   buildApplicationPromptForUser: vi.fn(async () => ({
     promptMeta: {
@@ -68,26 +58,10 @@ const applicationPrompt = vi.hoisted(() => ({
   })),
 }));
 
-const tailoringAcceptance = vi.hoisted(() => ({
-  hashManualTailoringAcceptance: vi.fn(() => "request-hash"),
-  probeTailoringRunAcceptanceReplay: vi.fn(async (): Promise<unknown> => null),
-  prepareTailoringRunAcceptance: vi.fn(async (_tx, input) => ({
-    userId: input.userId,
-    pending: input.requests,
-    replayed: [],
-    runs: [],
-  })),
-  completeTailoringRunAcceptance: vi.fn(async () => ({
-    receipts: [],
-    completedRunIds: [],
-  })),
-}));
-
 vi.mock("@/lib/server/prisma", () => ({
   prisma: {
     job: jobStore,
     application: applicationStore,
-    tailoringRun: tailoringRunStore,
     $transaction: transactionStore.run,
   },
 }));
@@ -121,10 +95,6 @@ vi.mock("next-auth/next", () => ({
   getServerSession: vi.fn(),
 }));
 
-vi.mock("@/lib/server/auth/requireAgentCredential", () => ({
-  requireAgentCredential: agentAuth.requireAgentCredential,
-}));
-
 vi.mock("@/lib/server/api/aiRateLimit", () => ({
   enforceAiRateLimit: rateLimitStore.enforce,
 }));
@@ -148,10 +118,6 @@ vi.mock("@/lib/server/applications/applicationPrompt", () => ({
     applicationPrompt.buildApplicationPromptForUser,
 }));
 
-vi.mock(
-  "@/lib/server/tailoringRuns/tailoringRunAcceptance",
-  () => tailoringAcceptance,
-);
 
 vi.mock("@/lib/server/latex/mapResumeProfile", () => ({
   mapResumeProfile: vi.fn(() => ({
@@ -209,7 +175,6 @@ import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import { renderResumeTex } from "@/lib/server/latex/renderResume";
 import { renderCoverLetterTex } from "@/lib/server/latex/renderCoverLetter";
 import { compileLatexToPdf } from "@/lib/server/latex/compilePdf";
-import { TailoringRunError } from "@/lib/server/tailoringRuns/tailoringRunProtocol";
 import { POST } from "@/app/api/applications/manual-generate/route";
 
 const VALID_JOB_ID = "550e8400-e29b-41d4-a716-446655440000";
@@ -279,19 +244,7 @@ describe("applications manual generate api", () => {
           jobSnapshotHash: "e".repeat(64),
         },
       });
-    tailoringAcceptance.hashManualTailoringAcceptance.mockClear();
-    tailoringAcceptance.probeTailoringRunAcceptanceReplay
-      .mockReset()
-      .mockResolvedValue(null);
-    tailoringAcceptance.prepareTailoringRunAcceptance.mockClear();
-    tailoringAcceptance.completeTailoringRunAcceptance.mockClear();
     rateLimitStore.enforce.mockReset().mockReturnValue(null);
-    agentAuth.requireAgentCredential.mockReset().mockResolvedValue({
-      userId: "user-1",
-      credentialId: "credential-1",
-      capabilities: ["tailoring:execute"],
-      requestId: "agent-request-id",
-    });
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockReset();
     (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockReset();
     (mapResumeProfile as unknown as ReturnType<typeof vi.fn>).mockReset();
@@ -328,9 +281,6 @@ describe("applications manual generate api", () => {
     jobStore.findFirst.mockResolvedValue({ id: VALID_JOB_ID });
     applicationStore.findUnique.mockReset();
     applicationStore.upsert.mockReset();
-    tailoringRunStore.findMany.mockReset().mockResolvedValue([]);
-    tailoringRunStore.findFirst.mockReset().mockResolvedValue(null);
-    tailoringRunStore.updateMany.mockReset().mockResolvedValue({ count: 0 });
     blobStore.put.mockReset();
     blobStore.del.mockReset();
     blobStore.del.mockResolvedValue(undefined);
@@ -402,7 +352,6 @@ describe("applications manual generate api", () => {
         callback: (tx: {
           job: typeof jobStore;
           application: typeof applicationStore;
-          tailoringRun: typeof tailoringRunStore;
           evidenceSnapshot: {
             createMany: typeof evidenceStore.evidenceCreateMany;
           };
@@ -417,8 +366,7 @@ describe("applications manual generate api", () => {
           // a foreign-key violation.
           job: jobStore,
           application: applicationStore,
-          tailoringRun: tailoringRunStore,
-          evidenceSnapshot: { createMany: evidenceStore.evidenceCreateMany },
+                evidenceSnapshot: { createMany: evidenceStore.evidenceCreateMany },
           claimEvidence: { createMany: evidenceStore.claimCreateMany },
           $executeRaw: transactionStore.executeRaw,
           $queryRaw: transactionStore.queryRaw,
@@ -444,27 +392,6 @@ describe("applications manual generate api", () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-  });
-
-  it("does not let an AgentCredential import through manual compatibility", async () => {
-    const res = await POST(
-      new Request("http://localhost/api/applications/manual-generate", {
-        method: "POST",
-        headers: { Authorization: "Bearer agent-token" },
-        body: JSON.stringify({
-          jobId: VALID_JOB_ID,
-          target: "resume",
-          modelOutput: VALID_OUTPUT,
-          source: "manual_import",
-        }),
-      }),
-    );
-
-    expect(res.status).toBe(403);
-    await expect(res.json()).resolves.toMatchObject({
-      error: { code: "AGENT_PROTOCOL_REQUIRED" },
-    });
-    expect(jobStore.findFirst).not.toHaveBeenCalled();
   });
 
   it("returns parse error for invalid model output", async () => {
@@ -551,51 +478,6 @@ describe("applications manual generate api", () => {
     expect(json.aiContent.promptMetaHash).toBe("");
     expect(json.aiContent.source).toBe("manual_import");
     expect(json.aiContent.provenance).toBeUndefined();
-  });
-
-  it("rejects a legacy manual import while a batch run owns the Job", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
-      {
-        user: { id: "user-1" },
-      },
-    );
-    jobStore.findFirst.mockResolvedValueOnce({
-      id: VALID_JOB_ID,
-      title: "Software Engineer",
-      company: "Example Co",
-      location: "Sydney",
-      description: "Build product features",
-      market: "AU",
-    });
-    (
-      getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
-    tailoringRunStore.findFirst.mockResolvedValueOnce({
-      id: "active-batch-run",
-    });
-
-    const res = await POST(
-      new Request(
-        "http://localhost/api/applications/manual-generate?finalize=false",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            jobId: VALID_JOB_ID,
-            target: "resume",
-            modelOutput: VALID_OUTPUT,
-          }),
-        },
-      ),
-    );
-
-    expect(res.status).toBe(409);
-    await expect(res.json()).resolves.toMatchObject({
-      error: { code: "ATTEMPT_ACTIVE" },
-    });
-    expect(applicationStore.upsert).not.toHaveBeenCalled();
   });
 
   it("does not attribute a partial legacy receipt to the current exact prompt", async () => {
@@ -1945,283 +1827,6 @@ describe("applications manual generate api", () => {
     expect(applicationStore.upsert).not.toHaveBeenCalled();
   });
 
-  it("requires a current prompt receipt for Codex Batch output", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
-      {
-        user: { id: "user-1" },
-      },
-    );
-    jobStore.findFirst.mockResolvedValueOnce({
-      id: VALID_JOB_ID,
-      title: "Software Engineer",
-      company: "Example Co",
-      location: "Sydney",
-      description: "Build product features",
-      market: "AU",
-    });
-    (
-      getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
-
-    const res = await POST(
-      new Request(
-        "http://localhost/api/applications/manual-generate?finalize=false",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            jobId: VALID_JOB_ID,
-            target: "resume",
-            modelOutput: JSON.stringify({
-              cvSummary: "Strict",
-              latestExperience: { addedBullets: [] },
-            }),
-            source: "codex_batch",
-          }),
-        },
-      ),
-    );
-
-    expect(res.status).toBe(400);
-    expect((await res.json()).error.code).toBe("PROMPT_META_REQUIRED");
-    expect(
-      applicationPrompt.buildApplicationPromptForUser,
-    ).not.toHaveBeenCalled();
-  });
-
-  it("rejects legacy Resume JSON from Codex Batch even with a complete receipt", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
-      {
-        user: { id: "user-1" },
-      },
-    );
-    jobStore.findFirst.mockResolvedValueOnce({
-      id: VALID_JOB_ID,
-      title: "Software Engineer",
-      company: "Example Co",
-      location: "Sydney",
-      description: "Build product features",
-      market: "AU",
-    });
-    (
-      getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
-
-    const res = await POST(
-      new Request(
-        "http://localhost/api/applications/manual-generate?finalize=false",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            jobId: VALID_JOB_ID,
-            target: "resume",
-            modelOutput: JSON.stringify({
-              cvSummary: "Legacy",
-              latestExperience: { bullets: ["Built APIs."] },
-            }),
-            source: "codex_batch",
-            promptMeta: {
-              ruleSetId: "rules-1",
-              resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
-              promptTemplateVersion: "2026.07.v2",
-              schemaVersion: "2026-07-24",
-              skillPackVersion: "b".repeat(64),
-              promptHash: "c".repeat(64),
-            },
-          }),
-        },
-      ),
-    );
-
-    expect(res.status).toBe(400);
-    expect((await res.json()).error.code).toBe("INVALID_AI_RESULT");
-    expect(
-      applicationPrompt.buildApplicationPromptForUser,
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({ target: "resume", variant: "full" }),
-    );
-    expect(applicationStore.upsert).not.toHaveBeenCalled();
-  });
-
-  it("rejects a partial legacy receipt from Codex Batch", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
-      {
-        user: { id: "user-1" },
-      },
-    );
-    jobStore.findFirst.mockResolvedValueOnce({
-      id: VALID_JOB_ID,
-      title: "Software Engineer",
-      company: "Example Co",
-      location: "Sydney",
-      description: "Build product features",
-      market: "AU",
-    });
-    (
-      getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
-
-    const res = await POST(
-      new Request(
-        "http://localhost/api/applications/manual-generate?finalize=false",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            jobId: VALID_JOB_ID,
-            target: "resume",
-            modelOutput: JSON.stringify({
-              cvSummary: "Strict",
-              latestExperience: { addedBullets: [] },
-            }),
-            source: "codex_batch",
-            promptMeta: {
-              ruleSetId: "rules-1",
-              resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
-            },
-          }),
-        },
-      ),
-    );
-
-    expect(res.status).toBe(400);
-    expect((await res.json()).error.code).toBe("PROMPT_META_REQUIRED");
-    expect(applicationStore.upsert).not.toHaveBeenCalled();
-  });
-
-  it("rejects oversized Codex Batch output before persistence", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
-      { user: { id: "user-1" } },
-    );
-    const res = await POST(
-      new Request("http://localhost/api/applications/manual-generate", {
-        method: "POST",
-        body: JSON.stringify({
-          jobId: VALID_JOB_ID,
-          target: "resume",
-          modelOutput: "x".repeat(80_001),
-          source: "codex_batch",
-        }),
-      }),
-    );
-    expect(res.status).toBe(400);
-    expect((await res.json()).error.code).toBe("INVALID_AI_RESULT");
-    expect(jobStore.findFirst).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    {
-      source: "manual_import" as const,
-      variant: "full" as const,
-      protocolSource: "MANUAL_IMPORT" as const,
-    },
-    {
-      source: "codex_batch" as const,
-      variant: "full" as const,
-      protocolSource: "CODEX_BATCH" as const,
-    },
-  ])(
-    "persists canonical $source provenance and authoritative DRAFT job metadata",
-    async ({ source, variant, protocolSource }) => {
-      (
-        getServerSession as unknown as ReturnType<typeof vi.fn>
-      ).mockResolvedValue({ user: { id: "user-1" } });
-      jobStore.findFirst.mockResolvedValueOnce({
-        id: VALID_JOB_ID,
-        title: "Authoritative Role",
-        company: "Authoritative Co",
-        location: "Melbourne",
-        description: "Build TypeScript APIs",
-        market: "AU",
-      });
-      (
-        getResumeProfile as unknown as ReturnType<typeof vi.fn>
-      ).mockResolvedValueOnce({
-        id: "rp-1",
-        updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-      });
-      applicationStore.upsert.mockResolvedValueOnce({ id: "app-local" });
-      const modelOutput = JSON.stringify({
-        cvSummary: "Strict local summary",
-        latestExperience: {
-          addedBullets: ["Automated TypeScript APIs delivery."],
-        },
-      });
-
-      const res = await POST(
-        new Request(
-          "http://localhost/api/applications/manual-generate?finalize=false",
-          {
-            method: "POST",
-            body: JSON.stringify({
-              jobId: VALID_JOB_ID,
-              target: "resume",
-              modelOutput,
-              source,
-              promptMeta: {
-                ruleSetId: "rules-1",
-                resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
-                promptTemplateVersion: "2026.07.v2",
-                schemaVersion: "2026-07-24",
-                skillPackVersion: "b".repeat(64),
-                promptHash: "c".repeat(64),
-              },
-              tailoringRun: {
-                id: TAILORING_RUN_ID,
-                attemptId: TAILORING_ATTEMPT_ID,
-              },
-            }),
-          },
-        ),
-      );
-      const json = await res.json();
-      expect(res.status).toBe(200);
-      expect(json.job).toEqual({
-        id: VALID_JOB_ID,
-        title: "Authoritative Role",
-        company: "Authoritative Co",
-        location: "Melbourne",
-      });
-      expect(json.aiContent.source).toBe(source);
-      expect(json.aiContent.promptMetaHash).toMatch(/^[0-9a-f]{64}$/);
-      expect(
-        applicationPrompt.buildApplicationPromptForUser,
-      ).toHaveBeenCalledWith(
-        expect.objectContaining({ target: "resume", variant }),
-      );
-      expect(
-        tailoringAcceptance.prepareTailoringRunAcceptance,
-      ).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          userId: "user-1",
-          jobId: VALID_JOB_ID,
-          resumeProfileId: "rp-1",
-          requests: [
-            expect.objectContaining({
-              handle: {
-                id: TAILORING_RUN_ID,
-                attemptId: TAILORING_ATTEMPT_ID,
-              },
-              source: protocolSource,
-              delivery: "DRAFT",
-              target: "RESUME",
-              promptHash: "c".repeat(64),
-            }),
-          ],
-        }),
-      );
-      expect(blobStore.put).not.toHaveBeenCalled();
-    },
-  );
-
   it("locks before re-reading and merging generated content", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
       {
@@ -2463,306 +2068,4 @@ describe("applications manual generate api", () => {
     });
   });
 
-  it("replays an exact DRAFT without a current Resume Profile or render adapters", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
-      {
-        user: { id: "user-1" },
-      },
-    );
-    rateLimitStore.enforce.mockImplementation(() => {
-      throw new Error("rate limiter unavailable");
-    });
-    jobStore.findFirst.mockRejectedValue(
-      new Error("current Job loader unavailable"),
-    );
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("current profile loader unavailable"),
-    );
-    applicationPrompt.buildApplicationPromptForUser.mockRejectedValue(
-      new Error("the current rules are unavailable"),
-    );
-    (
-      compileLatexToPdf as unknown as ReturnType<typeof vi.fn>
-    ).mockRejectedValue(new Error("renderer unavailable"));
-    tailoringAcceptance.probeTailoringRunAcceptanceReplay.mockResolvedValueOnce(
-      {
-        receipt: {
-          runId: TAILORING_RUN_ID,
-          target: "RESUME",
-          executionAttemptId: TAILORING_ATTEMPT_ID,
-          requestHash: "request-hash",
-          applicationId: "app-replayed",
-          aiContentHash: "receipt-content-hash",
-          delivery: "DRAFT",
-        },
-        application: {
-          id: "app-replayed",
-          status: "DRAFT",
-          aiContent: makeExistingAiContent(),
-          aiContentHash: "current-content-hash",
-          resumePdfName: "Jane Doe Software Engineer_CV.pdf",
-          job: {
-            id: VALID_JOB_ID,
-            title: "Software Engineer",
-            company: "Example Co",
-            location: "Sydney",
-            market: "AU",
-          },
-          resumeProfile: null,
-        },
-      },
-    );
-
-    const response = await POST(
-      new Request(
-        "http://localhost/api/applications/manual-generate?finalize=false",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            jobId: VALID_JOB_ID,
-            target: "resume",
-            modelOutput: VALID_OUTPUT,
-            source: "manual_import",
-            promptMeta: {
-              ruleSetId: "rules-1",
-              resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
-              promptTemplateVersion: "2026.07.v2",
-              schemaVersion: "2026-07-24",
-              skillPackVersion: "b".repeat(64),
-              promptHash: "c".repeat(64),
-            },
-            tailoringRun: {
-              id: TAILORING_RUN_ID,
-              attemptId: TAILORING_ATTEMPT_ID,
-            },
-          }),
-        },
-      ),
-    );
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get("x-tailoring-replay")).toBe("exact");
-    await expect(response.json()).resolves.toMatchObject({
-      applicationId: "app-replayed",
-      status: "DRAFT",
-      publication: {
-        status: "DRAFT",
-        resume: { status: "DRAFT", publishedHash: null },
-        cover: { status: "DRAFT", publishedHash: null },
-      },
-      aiContentHash: "current-content-hash",
-      aiContent: makeExistingAiContent(),
-      pdfName: "Jane Doe Software Engineer_CV.pdf",
-      job: {
-        id: VALID_JOB_ID,
-        title: "Software Engineer",
-        company: "Example Co",
-        location: "Sydney",
-      },
-      replayed: true,
-    });
-    expect(rateLimitStore.enforce).not.toHaveBeenCalled();
-    expect(jobStore.findFirst).not.toHaveBeenCalled();
-    expect(getResumeProfile).not.toHaveBeenCalled();
-    expect(
-      applicationPrompt.buildApplicationPromptForUser,
-    ).not.toHaveBeenCalled();
-    expect(mapResumeProfile).not.toHaveBeenCalled();
-    expect(renderResumeTex).not.toHaveBeenCalled();
-    expect(compileLatexToPdf).not.toHaveBeenCalled();
-    expect(blobStore.put).not.toHaveBeenCalled();
-    expect(applicationStore.upsert).not.toHaveBeenCalled();
-  });
-
-  it("returns 409 when an accepted target is retried with different content", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
-      {
-        user: { id: "user-1" },
-      },
-    );
-    rateLimitStore.enforce.mockImplementation(() => {
-      throw new Error("rate limiter unavailable");
-    });
-    jobStore.findFirst.mockRejectedValue(
-      new Error("current Job loader unavailable"),
-    );
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("current profile loader unavailable"),
-    );
-    tailoringAcceptance.probeTailoringRunAcceptanceReplay.mockRejectedValueOnce(
-      new TailoringRunError(
-        "RECEIPT_CONFLICT",
-        "The target was already accepted with different content",
-      ),
-    );
-
-    const response = await POST(
-      new Request(
-        "http://localhost/api/applications/manual-generate?finalize=false",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            jobId: VALID_JOB_ID,
-            target: "resume",
-            modelOutput: VALID_OUTPUT.replace(
-              "Tailored summary",
-              "Changed summary",
-            ),
-            source: "manual_import",
-            promptMeta: {
-              ruleSetId: "rules-1",
-              resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
-              promptTemplateVersion: "2026.07.v2",
-              schemaVersion: "2026-07-24",
-              skillPackVersion: "b".repeat(64),
-              promptHash: "c".repeat(64),
-            },
-            tailoringRun: {
-              id: TAILORING_RUN_ID,
-              attemptId: TAILORING_ATTEMPT_ID,
-            },
-          }),
-        },
-      ),
-    );
-
-    expect(response.status).toBe(409);
-    await expect(response.json()).resolves.toMatchObject({
-      error: { code: "RECEIPT_CONFLICT" },
-    });
-    expect(rateLimitStore.enforce).not.toHaveBeenCalled();
-    expect(jobStore.findFirst).not.toHaveBeenCalled();
-    expect(getResumeProfile).not.toHaveBeenCalled();
-    expect(
-      applicationPrompt.buildApplicationPromptForUser,
-    ).not.toHaveBeenCalled();
-    expect(applicationStore.upsert).not.toHaveBeenCalled();
-  });
-
-  it("returns an exact FINAL acknowledgement without prompt, PDF, or Blob dependencies", async () => {
-    process.env.BLOB_READ_WRITE_TOKEN = "blob-token";
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
-      {
-        user: { id: "user-1" },
-      },
-    );
-    rateLimitStore.enforce.mockImplementation(() => {
-      throw new Error("rate limiter unavailable");
-    });
-    jobStore.findFirst.mockRejectedValue(
-      new Error("current Job loader unavailable"),
-    );
-    (getResumeProfile as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("current profile loader unavailable"),
-    );
-    applicationPrompt.buildApplicationPromptForUser.mockRejectedValue(
-      new Error("the current rules are unavailable"),
-    );
-    (
-      compileLatexToPdf as unknown as ReturnType<typeof vi.fn>
-    ).mockRejectedValue(new Error("renderer unavailable"));
-    (
-      mapResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockImplementation(() => {
-      throw new Error("current Profile render adapter unavailable");
-    });
-    blobStore.put.mockRejectedValue(new Error("blob unavailable"));
-    tailoringAcceptance.probeTailoringRunAcceptanceReplay.mockResolvedValueOnce(
-      {
-        receipt: {
-          runId: TAILORING_RUN_ID,
-          target: "COVER",
-          executionAttemptId: TAILORING_ATTEMPT_ID,
-          requestHash: "request-hash",
-          applicationId: "app-final-replayed",
-          aiContentHash: "receipt-content-hash",
-          delivery: "FINAL",
-        },
-        application: {
-          id: "app-final-replayed",
-          status: "FINAL",
-          aiContent: makeExistingAiContent(),
-          aiContentHash: "current-final-hash",
-          resumePdfUrl:
-            "https://blob.example/applications/resume.current-final-hash.pdf",
-          resumePdfName: "Jane Doe Software Engineer_CV.pdf",
-          coverPdfUrl:
-            "https://blob.example/applications/cover.current-final-hash.pdf",
-          resumeContentHash: null,
-          coverContentHash: null,
-          resumePublishedHash: null,
-          coverPublishedHash: null,
-          job: {
-            id: VALID_JOB_ID,
-            title: "Software Engineer",
-            company: "Example Co",
-            location: "Sydney",
-            market: "AU",
-          },
-          resumeProfile: {
-            summary: "Base summary",
-            basics: null,
-            links: null,
-            skills: null,
-            experiences: null,
-            projects: null,
-            education: null,
-          },
-        },
-      },
-    );
-
-    const response = await POST(
-      new Request("http://localhost/api/applications/manual-generate", {
-        method: "POST",
-        body: JSON.stringify({
-          jobId: VALID_JOB_ID,
-          target: "cover",
-          modelOutput: VALID_OUTPUT,
-          source: "codex_batch",
-          promptMeta: {
-            ruleSetId: "rules-1",
-            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
-            promptTemplateVersion: "2026.07.v2",
-            schemaVersion: "2026-07-24",
-            skillPackVersion: "b".repeat(64),
-            promptHash: "c".repeat(64),
-          },
-          tailoringRun: {
-            id: TAILORING_RUN_ID,
-            attemptId: TAILORING_ATTEMPT_ID,
-          },
-        }),
-      }),
-    );
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toContain("application/json");
-    expect(response.headers.get("x-tailoring-replay")).toBe("exact");
-    expect(response.headers.get("x-tailoring-delivery")).toBe("FINAL");
-    await expect(response.json()).resolves.toMatchObject({
-      applicationId: "app-final-replayed",
-      status: "DRAFT",
-      publication: {
-        status: "DRAFT",
-        resume: { status: "DRAFT", publishedHash: null },
-        cover: { status: "DRAFT", publishedHash: null },
-      },
-      aiContentHash: "current-final-hash",
-      acceptedDelivery: "FINAL",
-      target: "cover",
-      replayed: true,
-    });
-    expect(rateLimitStore.enforce).not.toHaveBeenCalled();
-    expect(jobStore.findFirst).not.toHaveBeenCalled();
-    expect(getResumeProfile).not.toHaveBeenCalled();
-    expect(
-      applicationPrompt.buildApplicationPromptForUser,
-    ).not.toHaveBeenCalled();
-    expect(mapResumeProfile).not.toHaveBeenCalled();
-    expect(renderCoverLetterTex).not.toHaveBeenCalled();
-    expect(compileLatexToPdf).not.toHaveBeenCalled();
-    expect(blobStore.put).not.toHaveBeenCalled();
-    expect(applicationStore.upsert).not.toHaveBeenCalled();
-  });
 });

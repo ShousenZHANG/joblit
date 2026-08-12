@@ -56,13 +56,8 @@ export default defineConfig({
       "**/node_modules/**",
       "**/dist/**",
       "**/.next/**",
-      // Hermes package policy suites use Node's built-in test runner.
-      "tools/hermes/**/*.test.mjs",
       // Deployment-order policy uses Node's built-in test runner.
       "tools/deploy/vercel-build.test.mjs",
-      // The Joblit Runner is dependency-free Node and uses the built-in
-      // test runner (`npm run test:runner`).
-      "tools/runner/**/*.test.mjs",
     ],
   },
 });

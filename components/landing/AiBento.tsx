@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
  *   contract in the prompt schema.
  * - Local-first: the Runner drives the user's own Codex CLI (ADR-0015/0018);
  *   the command shown is the real one.
- * - "Nothing runs twice": receipt-backed settlement (AGENTS.md contract) —
+ * - "Nothing runs twice": content-hash CAS on the Application commit —
  *   plain-language framing of content-addressed replay.
  */
 

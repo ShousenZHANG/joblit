@@ -1,7 +1,7 @@
 # Data — `prisma/schema.prisma`
 
-24 models, 17 enums, 59 migrations. Client generates to `lib/generated/prisma`
-and is reached through the singleton in `lib/server/prisma.ts:13` over
+19 models, 10 enums, 62 migrations. Client generates to `lib/generated/prisma`
+and is reached through the singleton in `lib/server/prisma.ts:11` over
 `PrismaNeon`. Vocabulary is `CONTEXT.md`.
 
 ---
@@ -13,10 +13,6 @@ and is reached through the singleton in `lib/server/prisma.ts:13` over
 | `User`                                   | Tenant root, OAuth identity                                                                         | Live — adapter-owned    |
 | `Account`, `Session`                     | NextAuth records                                                                                    | Live — adapter-owned    |
 | `Job`                                    | A **Job** from the Fetch Pipeline                                                                   | Live                    |
-| `ApplicationBatch`                       | A **Codex Batch** run header                                                                        | Live                    |
-| `ApplicationBatchTask`                   | One Job's slot in a batch                                                                           | Live                    |
-| `TailoringRun`                           | Durable execution/fencing identity for one issued Application tailoring operation                   | Live                    |
-| `TailoringRunReceipt`                    | Immutable per-target acceptance receipt                                                             | Live, append-only       |
 | `DeletedJobUrl`                          | Tombstone for a canonical `jobUrl` the user deleted                                                 | Live                    |
 | `DailyCheckin`                           | Per-local-date triage streak                                                                        | Live                    |
 | `FetchRun`                               | A Fetch Pipeline task                                                                               | Live                    |
@@ -30,7 +26,6 @@ and is reached through the singleton in `lib/server/prisma.ts:13` over
 | `EvidenceSnapshot`                       | Content-addressed evidence backing AI claims                                                        | **Written, never read** |
 | `ClaimEvidence`                          | Claim → evidence edge                                                                               | **Written, never read** |
 | `PromptRuleTemplate`                     | Per-user **Skill Pack** rule set                                                                    | Live                    |
-| `AgentCredential`                        | Versioned, audience-bound and capability-scoped Runner credential; SHA-256 hash only                | Live                    |
 | `OnboardingState`                        | Onboarding checklist and stage                                                                      | Live                    |
 | `DiscoverCache`                          | Global GitHub-trending cache read by the nav popover                                                | Live                    |
 
@@ -40,6 +35,13 @@ against measured row counts. `EvidenceSnapshot` and `ClaimEvidence` are written
 but never read — they are **not** in that group and still receive writes from
 `persistReviewLedger.ts`.
 
+`ApplicationBatch`, `ApplicationBatchTask`, `TailoringRun`,
+`TailoringRunReceipt`, `TailoringRunPublicationReceipt` and `AgentCredential`
+were dropped in
+`20260811090000_drop_runner_queue_and_tailoring_runs` (ADR-0022) together with
+their seven enums. Dropping `AgentCredential` is also the revocation for every
+agent token ever minted.
+
 ---
 
 ## Ownership and tenancy
@@ -48,10 +50,10 @@ Most models carry `userId String @db.Uuid` with a `Cascade` FK to `User`. Two
 use it as the key rather than a column: `ActiveResumeProfile`
 (`@@id([userId, locale])`) and `OnboardingState` (`userId @unique`).
 
-`ApplicationBatchTask` and `ClaimEvidence` carry both a parent id and a
-denormalised `userId`, so a tenant filter never needs a join.
-`FetchRunCommitReceipt` and `TailoringRunReceipt` deliberately scope ownership
-through their required run parent; commit callers never supply a tenant id.
+`ClaimEvidence` carries both a parent id and a denormalised `userId`, so a
+tenant filter never needs a join.
+`FetchRunCommitReceipt` deliberately scopes ownership
+through its required run parent; commit callers never supply a tenant id.
 `ApplicationArtifact.userId`, `jobId`, and `applicationId` are deliberately
 denormalised identity snapshots with no relations. Lifecycle rows survive
 source deletion and must be retired explicitly rather than by cascade.
@@ -63,40 +65,50 @@ gate; neither has an active schema object.
 
 | Family          | Scoping                                                                                                                                           |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Jobs            | `where: {userId, …}` — `jobListService.ts:122-127`; raw SQL injects `j."userId"` at `jobSearchService.ts:119`                                     |
+| Jobs            | `where: {userId, …}` — `jobListService.ts:66` `buildWhereClause`, `:97`; raw SQL injects `j."userId"` at `jobSearchService.ts:27`                 |
 | Applications    | Composite `userId_jobId`, or `findFirst({where:{id, userId}})`                                                                                    |
-| Tailoring runs  | `TailoringRun.userId`; receipts inherit ownership through their required run                                                                      |
 | Resume profiles | `where: {userId, locale}`; active pointer via `userId_locale`                                                                                     |
-| Agent           | `AgentCredential.tokenHash` → `userId` at `requireAgentCredential.ts`; version, audience, capability, expiry, and revocation are checked together |
+
+There is no bearer-credential tenancy path left: ADR-0022 dropped
+`AgentCredential`, so every request's tenant comes from the NextAuth session or,
+for the AU worker, from the stored `FetchRun`.
 
 Ownership sits in the **write predicate**, not only the read:
-`jobDeleteService.ts:107` and `:188` keep `userId` inside the `deleteMany`.
+`jobDeleteService.ts:257` and `:347` keep `userId` inside the `deleteMany`.
 
 ### FetchRun execution projection
 
 | Field                                                         | Authority                                                                                                                                                                                                    |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `FetchRun.userId` (`:350`)                                    | Sole tenant authority for config reads and commits.                                                                                                                                                          |
-| `FetchRun.userEmail` (`:355`)                                 | Nullable pre-v1 compatibility snapshot. New code neither writes nor reads it; deletion waits for a separate contract migration after the rollback window.                                                    |
-| `executionAttemptId` + `executionLeaseExpiresAt` (`:371-372`) | Current executor fence and takeover deadline. The migration check requires both to be null or both non-null. Lease expiry permits a new `start`; it does not revoke the current UUID until takeover commits. |
-| `expectedBatchCount` + `nextBatchIndex` (`:369-370`)          | Cheap projection of the one ordered batch stream.                                                                                                                                                            |
-| `FetchRunCommitReceipt.executionAttemptId` (`:397`)           | Attribution of the attempt that applied a batch. Receipt replay is keyed by run + batch identity/content, so replay survives attempt takeover without authorizing new writes.                                |
+| `FetchRun.userId` (`:249`)                                    | Sole tenant authority for config reads and commits.                                                                                                                                                          |
+| `FetchRun.userEmail` (`:254`)                                 | Nullable pre-v1 compatibility snapshot. New code neither writes nor reads it; deletion waits for a separate contract migration after the rollback window.                                                    |
+| `executionAttemptId` + `executionLeaseExpiresAt` (`:270-271`) | Current executor fence and takeover deadline. The migration check requires both to be null or both non-null. Lease expiry permits a new `start`; it does not revoke the current UUID until takeover commits. |
+| `expectedBatchCount` + `nextBatchIndex` (`:268-269`)          | Cheap projection of the one ordered batch stream.                                                                                                                                                            |
+| `FetchRunCommitReceipt.executionAttemptId` (`:296`)           | Attribution of the attempt that applied a batch. Receipt replay is keyed by run + batch identity/content, so replay survives attempt takeover without authorizing new writes.                                |
 
 `dispatchMeta` remains inside `FetchRun.queries` only for the pre-`start` AU
 dispatch claim/idempotency window. It is not an execution lease once `start`
 has populated the fields above.
 
-### TailoringRun acceptance projection
+This is now the **only** attempt-fenced projection in the schema. The
+TailoringRun acceptance projection — attempt fences, required/accepted target
+masks, `issueKey`/`issueHash`, `promptReceipts` and both receipt tables — was
+dropped with ADR-0022.
 
-| Field                                                         | Authority                                                                                                                                                                               |
-| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TailoringRun.executionAttemptId` + `executionLeaseExpiresAt` | Current executor fence and takeover deadline. A stale attempt cannot accept new output after takeover.                                                                                  |
-| `requiredTargetMask` + `acceptedTargetMask`                   | Required and durably accepted Resume/Cover projection.                                                                                                                                  |
-| `issueKey` + `issueHash`                                      | Idempotent issuance identity; same key with different issued inputs is rejected.                                                                                                        |
-| `promptReceipts` + snapshot hashes                            | Bind accepted output to the issued prompt/profile/job without storing full prompts or model output.                                                                                     |
-| `TailoringRunReceipt`                                         | Immutable evidence for one `(run, target)` acceptance. Exact replay returns the receipt; conflicting content is rejected.                                                               |
-| `ApplicationBatchTask.executionAttemptId`                     | Batch-side projection of the same active attempt.                                                                                                                                       |
-| `tailoringProtocolVersion` + `completionAttemptId`            | Historical rows remain v0. A v1 claim upgrades atomically and clears proof; v1 success is database-valid only when the final receipt writes `completionAttemptId = executionAttemptId`. |
+### Application publication projection
+
+ADR-0020's document-level half survives whole; only the receipt fence around it
+died.
+
+| Field                                                    | Authority                                                                                                       |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `resumeContentHash` / `coverContentHash` (`:384-385`)    | Render-effective content identity for each target, computed from canonical `aiContent` plus the render context.  |
+| `resumePublishedHash` / `coverPublishedHash` (`:387-388`) | The content identity the current target PDF pointer actually represents.                                        |
+| `status` (`:380`)                                        | Compatibility projection: `FINAL` only when every present target is independently current.                      |
+
+`transitionApplicationPublication` is the single writer of that pair, and
+`applicationPublicationReplay.ts` reads it so a repeated `/finalize` click is a
+read rather than another compile.
 
 ### Application Artifact lifecycle projection
 
@@ -138,23 +150,16 @@ Selected relations. `Cascade` from `User` is universal and omitted here.
 
 | Child.field                         | Parent                  | Rule         | Line  |
 | ----------------------------------- | ----------------------- | ------------ | ----- |
-| `ApplicationBatchTask.batch`        | `ApplicationBatch`      | Cascade      | `304` |
-| `ApplicationBatchTask.job`          | `Job`                   | Cascade      | `308` |
-| `TailoringRun.applicationBatchTask` | `ApplicationBatchTask?` | SetNull      | `369` |
-| `TailoringRun.resumeProfile`        | `ResumeProfile?`        | SetNull      | `366` |
-| `TailoringRun.application`          | `Application?`          | SetNull      | `372` |
-| `TailoringRunReceipt.run`           | `TailoringRun`          | Cascade      | `414` |
-| `TailoringRunReceipt.application`   | `Application?`          | SetNull      | `420` |
-| `FetchRunCommitReceipt.fetchRun`    | `FetchRun`              | Cascade      | `394` |
-| `ActiveResumeProfile.resumeProfile` | `ResumeProfile`         | Cascade      | `444` |
-| `Application.job`                   | `Job?`                  | **SetNull**  | `458` |
-| `Application.resumeProfile`         | `ResumeProfile?`        | **SetNull**  | `461` |
-| `ApplicationEvent.job`              | `Job?`                  | **SetNull**  | `506` |
-| `ApplicationEvent.application`      | `Application?`          | **SetNull**  | `508` |
-| `EvidenceSnapshot.application`      | `Application?`          | **SetNull**  | `547` |
-| `EvidenceSnapshot.job`              | `Job?`                  | **SetNull**  | `549` |
-| `ClaimEvidence.application`         | `Application`           | Cascade      | `574` |
-| `ClaimEvidence.evidenceSnapshot`    | `EvidenceSnapshot`      | **Restrict** | `576` |
+| `FetchRunCommitReceipt.fetchRun`    | `FetchRun`              | Cascade      | `293` |
+| `ActiveResumeProfile.resumeProfile` | `ResumeProfile`         | Cascade      | `343` |
+| `Application.job`                   | `Job?`                  | **SetNull**  | `357` |
+| `Application.resumeProfile`         | `ResumeProfile?`        | **SetNull**  | `360` |
+| `ApplicationEvent.job`              | `Job?`                  | **SetNull**  | `474` |
+| `ApplicationEvent.application`      | `Application?`          | **SetNull**  | `476` |
+| `EvidenceSnapshot.application`      | `Application?`          | **SetNull**  | `516` |
+| `EvidenceSnapshot.job`              | `Job?`                  | **SetNull**  | `518` |
+| `ClaimEvidence.application`         | `Application`           | Cascade      | `542` |
+| `ClaimEvidence.evidenceSnapshot`    | `EvidenceSnapshot`      | **Restrict** | `544` |
 
 `ClaimEvidence.evidenceSnapshot` is the only `Restrict` in the schema.
 `ApplicationArtifact` is intentionally absent from the relation table: its
@@ -189,22 +194,25 @@ no account-erasure request/status model currently monitors that tail.
 
 `deleteJob(userId, jobId)` — one transaction, 30 s timeout:
 
-1. Take the per-user Job mutation lock first.
+1. Take the per-user Job mutation lock first (`:207`).
 2. Read the owned Job; `null` returns `{alreadyDeleted: true}`.
-3. Row-lock the owned Job ids in stable order, then discover and lock affected
-   Application Batches. This fences an in-flight legacy task FK insert.
-4. Take the Application mutation lock before reading artifact pointers.
-5. Upsert the canonical `DeletedJobUrl` tombstone.
+3. Row-lock the owned Job ids in stable order (`:215`).
+4. Take the Application mutation lock before reading artifact pointers (`:219`).
+5. Upsert the canonical `DeletedJobUrl` tombstone (`:232`).
 6. In the same transaction, convert the four current artifact pointers into
    durable `ApplicationArtifact.DELETE_PENDING` work.
 7. Capture the Application's content-addressed EvidenceSnapshot ids, delete the
-   Application, then remove only candidate snapshots with no surviving claims.
-   Captured ids let the final shared reference be reclaimed even when an older
-   Job deletion already set the snapshot's `jobId` to null.
-8. Delete the owned Job row and reconcile affected batch headers.
+   Application (`:247`), then remove only candidate snapshots with no surviving
+   claims (`:190`). Captured ids let the final shared reference be reclaimed
+   even when an older Job deletion already set the snapshot's `jobId` to null.
+8. Delete the owned Job row (`:256`).
 9. Return `artifactRetirement.queued`; the protected reconciler owns the later
    Blob call and fenced settlement. The deprecated `blobCleanup` projection is
    retained additively for API compatibility while clients migrate.
+
+Batch-header reconciliation and the ABAT lock step went with the queue
+(ADR-0022); the row-lock in step 3 remains as the stable-order fence for the
+Application locks that follow.
 
 `batchDeleteJobs` is the same shape, taking Application locks in **sorted id
 order**, deduplicating artifact URLs, and using one
@@ -228,21 +236,23 @@ design, until external retirement and privacy cleanup settle.
 ## The `DeletedJobUrl` tombstone
 
 Keeps a deleted Job from resurrecting on the next fetch. Rationale at
-`jobImportService.ts:86-93`.
+`jobImportService.ts:194-202`.
 
-- **Writers**: two, both inside the delete transaction — `jobDeleteService.ts:98`
-  (upsert) and `:180` (createMany).
-- **Reader**: one — `jobImportService.ts:197`.
+- **Writers**: two, both inside the delete transaction — `jobDeleteService.ts:232`
+  (upsert) and `:323` (createMany).
+- **Reader**: one — `jobImportService.ts:225`.
 - **No delete path exists.** A tombstone is permanent for the life of the user
-  row. This is why `app/api/jobs/bulk-ignore/route.ts` moves `NEW → REJECTED`
-  instead of deleting.
+  row. The retired `/api/jobs/bulk-ignore` route moved `NEW → REJECTED` for the
+  same reason; the reversible triage path is still a status write, not a delete.
 
-Import dedupes in three layers: an in-payload `Set` (`:157-162`), the tombstone
-exclusion (`:197-209`, with stored values re-canonicalized at `:204-206` so rows
-written before a canonicalizer change still match), and
-`@@unique([userId, jobUrl])` + `skipDuplicates` (`:212`). The job mutation lock
-is the first statement (`:195`), so a delete cannot commit a tombstone between
-the read and the inserts.
+Import dedupes in three layers: an in-payload `Set` (`:147`), the tombstone
+exclusion (`excludeTombstonedJobs`, `:220-233`, with stored values
+re-canonicalized at `:232-233` so rows written before a canonicalizer change
+still match), and `@@unique([userId, jobUrl])` + `skipDuplicates` (`:311`).
+`prepareJobImportForUser` deliberately stops before any tombstone read;
+`persistPreparedJobImport` takes the job mutation lock as its first statement
+(`:337`) and only then filters and inserts, so a delete cannot commit a
+tombstone between the read and the inserts.
 
 `canonicalizeJobUrl` (`lib/shared/canonicalizeJobUrl.ts:59`) strips `www.`, folds
 LinkedIn subdomains, drops default ports, resolves a LinkedIn job id from the
@@ -255,16 +265,20 @@ diverge.
 
 ## Enums
 
-17 enums. Workflow state is grouped across Job/Application events, FetchRun,
-Application Batch, Tailoring Run, and Application Artifact lifecycles.
+10 enums: `JobStatus`, `ApplicationEventType`, `ApplicationEventSource`,
+`EvidenceKind`, `JobLivenessStatus`, `FetchRunStatus`, `OnboardingStage`,
+`ApplicationStatus`, `ApplicationArtifactTarget`, `ApplicationArtifactState`.
+Workflow state is grouped across Job/Application events, FetchRun, and the
+Application Artifact lifecycle.
 `ApplicationArtifactTarget` and `ApplicationArtifactState` establish the
 stage/reference/retirement vocabulary used by the artifact lifecycle module
 and reconciler. Historical enum members such as `ApplicationEventSource =
 EXTENSION` remain readable audit values; they do not imply an active browser
 extension writer.
 
-The only enum with no TypeScript reference is `ApplicationBatchScope` (one
-member, `NEW`, used solely as a schema default).
+The seven batch/Tailoring Run enums, including `ApplicationBatchScope`, were
+dropped with their tables in
+`20260811090000_drop_runner_queue_and_tailoring_runs`.
 
 `EvidenceKind` declares seven members; only `RESUME_PROFILE` and
 `JOB_DESCRIPTION` are ever written.
@@ -276,15 +290,15 @@ record history verbatim.
 
 - **Stored**: seven.
 - **Surfaced**: `ACTIVE_JOB_STATUS_VALUES = ["NEW","APPLIED","REJECTED"]` — `lib/shared/jobStatus.ts:24`
-- **Projection**: `INTERVIEW`/`OFFER`/`ACCEPTED` → `APPLIED`, `WITHDRAWN` → `REJECTED`; unknown → `NEW` — `jobStatus.ts:40-45`, `:75`
-- **Transitions**: `canTransitionJobStatus` projects the source and rejects any non-active target — `:78-85`
+- **Projection**: `INTERVIEW`/`OFFER`/`ACCEPTED` → `APPLIED`, `WITHDRAWN` → `REJECTED`; unknown → `NEW` — `jobStatus.ts:40-45`, `:77`
+- **Transitions**: `canTransitionJobStatus` projects the source and rejects any non-active target — `:83-95`
 
-`toActiveJobStatus` is applied at exactly two call sites, both client-side:
-`jobsQueryCache.ts:23` and `jobsUrlState.ts:40`. **It is not applied on any
-server read path** — `jobListService.ts:159` selects `status` raw. Enforcement
-elsewhere is at the API boundary: the list filter accepts all seven, status
-writes accept only the three active values, and the transition gate rejects the
-rest.
+`toActiveJobStatus` is applied at four call sites, all client-side:
+`jobsQueryCache.ts:23`, `jobsUrlState.ts:37`, `jobStatusPresentation.ts:64`,
+and `serializeJobListItem.ts:25`. **It is not applied on any server read
+path** — `jobListService.ts:149` selects `status` raw. Enforcement elsewhere is
+at the API boundary: the list filter accepts all seven, status writes accept
+only the three active values, and the transition gate rejects the rest.
 
 ---
 
@@ -293,9 +307,8 @@ rest.
 | Column                                                               | Shape                                                                                                             | Validated by                                                                                                                                                                                                           |
 | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Job.postingRiskFlags`                                               | `string[]` advisory flags                                                                                         | **Nothing** — coerced by `normalizePostingRiskFlags`                                                                                                                                                                   |
-| `FetchRun.queries`                                                   | Versioned AU execution config plus pre-start dispatch/idempotency metadata (`:375`)                               | Strict AU v2 writer and historical AU v1 reader; non-AU and unknown versions fail closed. Authoritative post-start lease fields are relational, not JSON                                                               |
-| `TailoringRun.promptReceipts`                                        | Target-keyed prompt identity only; never full prompt bytes or raw model output                                    | `normalizePromptReceipts` on issue and `readPromptReceipts` on lifecycle/acceptance reads                                                                                                                              |
-| `ResumeProfile.{basics,links,skills,experiences,projects,education}` | Master Resume Profile sections                                                                                    | `ResumeProfileSchema` — `lib/shared/schemas/resumeProfile.ts:72`                                                                                                                                                       |
+| `FetchRun.queries`                                                   | Versioned AU execution config plus pre-start dispatch/idempotency metadata (`:274`)                               | Strict AU v2 writer and historical AU v1 reader; non-AU and unknown versions fail closed. Authoritative post-start lease fields are relational, not JSON                                                               |
+| `ResumeProfile.{basics,links,skills,experiences,projects,education}` | Master Resume Profile sections                                                                                    | `ResumeProfileSchema` — `lib/shared/schemas/resumeProfile.ts`                                                                                                                                                          |
 | `Application.aiContent`                                              | **AI Content** — the ADR-0001 current-proposal snapshot with per-target provenance plus aggregate evidence/review | `aiContentSchema` — `lib/shared/schemas/aiContent.ts`, `.strict()`. Target provenance is optional for legacy v1 rows; a missing entry means unknown. The retired `skillsAdditions` key is stripped by a `z.preprocess` |
 | `Application.atsValidation`                                          | Last ATS/PDF machine-readability result                                                                           | **Nothing** — written as an object literal, read back through a `typeof` guard                                                                                                                                         |
 | `Application.reviewReport`                                           | Reviewer report; the same object also lives at `aiContent.review`                                                 | `applicationReviewSchema` on write; **no server-side parse of the stored column**                                                                                                                                      |
@@ -311,24 +324,25 @@ rest.
 
 | Constraint                                                                                                          | Rule                                                                                                                                                                                                                                                                                |
 | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Job @@unique([userId, jobUrl])` (`:309`)                                                                           | A Job is identified within a user by its canonical `jobUrl`. With `skipDuplicates` this makes import idempotent with no find-then-create race.                                                                                                                                      |
-| `DeletedJobUrl @@unique([userId, jobUrl])` (`:459`)                                                                 | One tombstone per user per URL; makes both delete paths idempotent.                                                                                                                                                                                                                 |
-| `FetchRunCommitReceipt @@unique([fetchRunId, batchKey])` (`:534`) and `@@unique([fetchRunId, batchIndex])` (`:535`) | One request identity and one ordered slot per run; same-content retries replay across attempts, while conflicting content or order fails closed. The receipt's `executionAttemptId` is attribution, not part of either unique key.                                                  |
-| `Application @@unique([userId, jobId])` (`:624`)                                                                    | One Application per `(userId, jobId)`. Note `jobId` is nullable and Postgres treats NULLs as distinct, so this does not bound orphaned Applications.                                                                                                                                |
-| `ActiveResumeProfile @@id([userId, locale])` (`:576`)                                                               | Exactly one active Master Resume Profile per `(user, Resume Locale)` — enforced as the primary key, so upsert is the only way to move the pointer.                                                                                                                                  |
-| `ApplicationEvent @@unique([userId, idempotencyKey])` (`:716`)                                                      | Replay safety for the status ledger. A reused key with a different payload raises `IDEMPOTENCY_KEY_REUSED`.                                                                                                                                                                         |
-| `EvidenceSnapshot @@unique([userId, contentHash, kind])` (`:752`)                                                   | Content-addressed reuse — identical evidence within one tenant is reused, not copied.                                                                                                                                                                                               |
-| `ClaimEvidence @@unique([applicationId, claimHash, evidenceSnapshotId])` (`:776`)                                   | Claim edges are append-only and idempotent; a retry cannot duplicate the audit trail.                                                                                                                                                                                               |
-| `ApplicationBatchTask @@unique([batchId, jobId])`                                                                   | A Job appears at most once per batch. Raw SQL also enforces one active (`QUEUED`/`RUNNING`) Application Batch per user.                                                                                                                                                             |
-| `TailoringRun @@unique([userId, issueKey])` (`:423`)                                                                | Issuing the same operation is idempotent within a tenant; `issueHash` detects conflicting reuse.                                                                                                                                                                                    |
-| `TailoringRun.applicationBatchTaskId @unique` (`:388`)                                                              | A batch task has at most one Tailoring Run.                                                                                                                                                                                                                                         |
-| `TailoringRunReceipt @@unique([runId, target])` (`:446`)                                                            | At most one immutable acceptance receipt per target; exact retries replay it.                                                                                                                                                                                                       |
-| `TailoringRunPublicationReceipt @@unique([runId, target])`                                                         | At most one immutable PDF publication receipt per accepted target; the stored document content hash must match the accepted receipt before a task can settle.                                                                                                                       |
-| `ApplicationArtifact.storageIdentity @unique` / `provisionalIdentity @unique`                                       | One canonical physical identity per recorded object and one upload reservation per immutable pathname. Pathname and URL presentation aliases are deliberately non-unique. SQL checks also enforce non-negative retries, paired claims/leases, and state-compatible nullable fields. |
-| `AgentCredential.tokenHash @unique`                                                                                 | Lookup by hash only; the raw `jfagent_v1_` credential is shown once and never stored.                                                                                                                                                                                               |
-| `Job.companyRoleKey` — **index, deliberately not unique** (`:317`)                                                  | A soft "same opening" hint. Distinct openings can collide, so it powers a possible-duplicate badge and never an automatic removal.                                                                                                                                                  |
-| `Job.descriptionSimHash` — **index only** (`:318`)                                                                  | Advisory 64-bit SimHash near-duplicate detection. It is never used as a unique key.                                                                                                                                                                                                 |
-| Trigram GIN on `Job.title/company/location`                                                                         | Created by raw SQL in `20260330000000_search_optimization`, not by Prisma. Exists in the database but not in the model — flagged at `:307`. Powers the ILIKE relevance path.                                                                                                        |
+| `Job @@unique([userId, jobUrl])` (`:207`)                                                                           | A Job is identified within a user by its canonical `jobUrl`. With `skipDuplicates` this makes import idempotent with no find-then-create race.                                                                                                                                      |
+| `DeletedJobUrl @@unique([userId, jobUrl])` (`:231`)                                                                 | One tombstone per user per URL; makes both delete paths idempotent.                                                                                                                                                                                                                 |
+| `FetchRunCommitReceipt @@unique([fetchRunId, batchKey])` (`:306`) and `@@unique([fetchRunId, batchIndex])` (`:307`) | One request identity and one ordered slot per run; same-content retries replay across attempts, while conflicting content or order fails closed. The receipt's `executionAttemptId` is attribution, not part of either unique key.                                                  |
+| `Application @@unique([userId, jobId])` (`:401`)                                                                    | One Application per `(userId, jobId)`. Note `jobId` is nullable and Postgres treats NULLs as distinct, so this does not bound orphaned Applications.                                                                                                                                |
+| `ActiveResumeProfile @@id([userId, locale])` (`:347`)                                                               | Exactly one active Master Resume Profile per `(user, Resume Locale)` — enforced as the primary key, so upsert is the only way to move the pointer.                                                                                                                                  |
+| `ApplicationEvent @@unique([userId, idempotencyKey])` (`:493`)                                                      | Replay safety for the status ledger. A reused key with a different payload raises `IDEMPOTENCY_KEY_REUSED`.                                                                                                                                                                         |
+| `EvidenceSnapshot @@unique([userId, contentHash, kind])` (`:528`)                                                   | Content-addressed reuse — identical evidence within one tenant is reused, not copied.                                                                                                                                                                                               |
+| `ClaimEvidence @@unique([applicationId, claimHash, evidenceSnapshotId])` (`:552`)                                   | Claim edges are append-only and idempotent; a retry cannot duplicate the audit trail.                                                                                                                                                                                               |
+| `ApplicationArtifact.storageIdentity @unique` (`:421`) / `provisionalIdentity @unique` (`:424`)                     | One canonical physical identity per recorded object and one upload reservation per immutable pathname. Pathname and URL presentation aliases are deliberately non-unique. SQL checks also enforce non-negative retries, paired claims/leases, and state-compatible nullable fields. |
+| `Job.companyRoleKey` — **index, deliberately not unique** (`:214`)                                                  | A soft "same opening" hint. Distinct openings can collide, so it powers a possible-duplicate badge and never an automatic removal.                                                                                                                                                  |
+| `Job.descriptionSimHash` — **index only** (`:215`)                                                                  | Advisory 64-bit SimHash near-duplicate detection. It is never used as a unique key.                                                                                                                                                                                                 |
+| Trigram GIN on `Job.title/company/location` (`:218-220`)                                                            | Declared in the model as `type: Gin` with `raw("gin_trgm_ops")`. The `pg_trgm` extension itself is installed by raw SQL in `20260330000000_search_optimization`, not by Prisma. Powers the ILIKE relevance path.                                                                    |
+
+The batch and Tailoring Run constraints — `ApplicationBatchTask`'s
+`@@unique([batchId, jobId])`, the raw-SQL one-active-batch-per-user index,
+`TailoringRun`'s `@@unique([userId, issueKey])` and
+`applicationBatchTaskId @unique`, both receipt tables' `@@unique([runId, target])`,
+and `AgentCredential.tokenHash @unique` — were dropped with their tables in
+`20260811090000_drop_runner_queue_and_tailoring_runs`.
 
 ---
 
@@ -341,21 +355,20 @@ function returns `void`, which driver adapters cannot deserialize through
 the interface.
 
 `lib/server/db/advisoryLock.ts` centralizes the `FRUN`, `JOBJ`, and `JOBA`
-namespaces, their shared FNV-1a key, and the required broad-to-narrow order.
-Older specialized namespaces remain local to their owning module; changing any
+namespaces, their shared FNV-1a key (`stableInt32`, `:32`), and the required
+broad-to-narrow order. `JOBC` remains local to its owning module; changing any
 key derivation is a rolling-deployment compatibility change, not a refactor.
 
 | Namespace           | Constant                                                                | Key                                 | Taken by                                                                                                                                                       |
 | ------------------- | ----------------------------------------------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `JOBJ` `0x4a4f424a` | `db/advisoryLock.ts`, adapter `jobs/jobMutationLock.ts`                 | `stableInt32(userId)`               | `deleteJob`, `batchDeleteJobs`, `persistPreparedJobImport` — serializes generic and FetchRun imports against permanent delete                                  |
 | `JOBA` `0x4a4f4241` | `db/advisoryLock.ts`, adapter `applications/applicationMutationLock.ts` | `stableInt32("${userId}:${jobId}")` | Both delete paths, `manual-generate`, `draft`, `finalize`, `discard`                                                                                           |
-| `JOBC` `0x4a4f4243` | `applications/applicationEvents.ts:31`                                  | same                                | `appendApplicationEvent`, in a `Serializable` transaction. `bulkAppendStatusEvents` takes **no** advisory lock — its boundary is `updateManyAndReturn`         |
+| `JOBC` `0x4a4f4243` | `applications/applicationEvents.ts:47`                                  | same                                | `appendApplicationEvent`, in a `Serializable` transaction. `bulkAppendStatusEvents` takes **no** advisory lock — its boundary is `updateManyAndReturn`         |
 | `FRUN` `0x4652554e` | `db/advisoryLock.ts`, adapter `fetchRuns/fetchRunLifecycleLock.ts`      | `stableInt32(runId)`                | Attempt `start`/takeover, commit, fail, stale recovery, and cancel. It serializes changes to the relational attempt fence and is always acquired before `JOBJ` |
-| `ABAT` `0x41424154` | `tailoringRuns/tailoringRunLock.ts:3`                                   | `stableInt32(batchId)`              | Batch claim/completion/cancellation and batch-bound Tailoring Run acceptance; first lock in the global acceptance order                                        |
-| `TLRN` `0x544c524e` | `tailoringRuns/tailoringRunLock.ts:4`                                   | `stableInt32(runId)`                | Tailoring Run issue/start/prompt binding/acceptance/fail/cancel; acquired after `ABAT` and before `JOBA`                                                       |
 
-The former `SHRC` source-health namespace and schema objects appear only in
-historical migration/ADR evidence; no live module owns them.
+The `ABAT` and `TLRN` namespaces went with `lib/server/tailoringRuns/**`
+(ADR-0022), and the `SHRC` source-health namespace with ADR-0017. All three
+appear only in historical migration/ADR evidence; no live module owns them.
 
 One non-namespaced lock uses the single-`bigint` form:
 `fetchRunLifecycleLock.ts` also exposes the trigger's
@@ -368,8 +381,8 @@ lease fenced by a random `ownerToken` (ADR-0005).
 
 ## Migration history
 
-59 migrations, `20260114042057_init_auth_jobs` →
-`20260809161000_verify_post_retirement_inventory`.
+62 migrations, `20260114042057_init_auth_jobs` →
+`20260811090000_drop_runner_queue_and_tailoring_runs`.
 Most are a single additive `ALTER TABLE`. The ones that changed a domain rule:
 
 | Migration                                                         | Change                                                                                                                                                                                                                                                              |
@@ -398,7 +411,8 @@ Most are a single additive `ALTER TABLE`. The ones that changed a domain rule:
 | `20260809154500_drop_retired_source_tables`                       | ADR-0017 Stage 2: locks and rechecks legacy-row, orphan-Artifact, and Blob-inventory readiness, then drops `AtsBoardSource`, `SourceHealth`, and `SourceHealthStatus` without `CASCADE`.                                                                            |
 | `20260809161000_verify_post_retirement_inventory`                 | Deployment fence: requires a settled Blob inventory whose completion is later than the source-contract migration, then rechecks legacy rows and active orphan Artifacts before the Stage 2 binary may replace Stage 1.                                              |
 | `20260809190000_retire_fit_scoring`                               | ADR-0019: drops the Fit queue tables (`FitBatchClaim`, `FitBatchClaimItem`, `FitBatchImportReceipt`), their enums, and the seven `Job.fit*` columns; the deterministic JD analysis and posting risk stay.                                                            |
-| `20260810113000_durable_tailoring_publication`                    | ADR-0020: adds independent required/published target masks, protocol-v2 task constraints, and immutable target publication receipts so DRAFT acceptance and PDF publication recover independently.                                                                  |
+| `20260810113000_durable_tailoring_publication`                    | ADR-0020: adds independent required/published target masks, protocol-v2 task constraints, and immutable target publication receipts so DRAFT acceptance and PDF publication recover independently. Its document-level half survives; the receipt half was dropped a day later.      |
+| `20260811090000_drop_runner_queue_and_tailoring_runs`             | ADR-0022: drops `TailoringRunPublicationReceipt`, `TailoringRunReceipt`, `TailoringRun`, `ApplicationBatchTask`, `ApplicationBatch` and `AgentCredential` in dependency order, plus their seven enums. Dropping `AgentCredential` is the revocation for every token ever minted.     |
 | `20260330000000_search_optimization`                              | The only Postgres-extension-installing migration: `pg_trgm` plus three GIN indexes.                                                                                                                                                                                 |
 
 After editing `prisma/schema.prisma`, run `npx prisma generate`.

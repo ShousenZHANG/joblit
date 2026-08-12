@@ -1,7 +1,6 @@
 import { Prisma } from "@/lib/generated/prisma";
 import { prisma } from "@/lib/server/prisma";
 import { buildJobsListEtag } from "@/lib/server/jobsListEtag";
-import { getJobTailoringStates } from "./jobTailoringState";
 import type {
   JobListQuery,
   JobListResult,
@@ -187,18 +186,6 @@ export async function listJobsWithRelevance(
   });
   const nextCursor = hasMore ? (items[items.length - 1]?.id ?? null) : null;
 
-  // Relevance search is a second list path over the same rows. Leaving it out
-  // would mean a queued Job showed its state until the user typed in the
-  // search box, and then silently stopped.
-  const tailoringStates = await getJobTailoringStates({
-    userId,
-    jobIds: items.map((j) => j.id),
-  });
-  const itemsWithState: JobListItem[] = items.map((j) => ({
-    ...j,
-    tailoringState: tailoringStates.get(j.id) ?? ("idle" as const),
-  }));
-
   const jobLevels = Array.from(
     new Set(
       items.map((j) => j.jobLevel).filter((l): l is string => Boolean(l)),
@@ -222,7 +209,7 @@ export async function listJobsWithRelevance(
     nextCursor,
     filtersSignature,
     jobLevels,
-    items: itemsWithState.map((j) => ({
+    items: items.map((j) => ({
       id: j.id,
       status: j.status,
       updatedAt: j.updatedAt,
@@ -230,13 +217,12 @@ export async function listJobsWithRelevance(
       resumePdfUrl: j.resumePdfUrl,
       resumePdfName: j.resumePdfName,
       coverPdfUrl: j.coverPdfUrl,
-      tailoringState: j.tailoringState,
     })),
     totalCount,
   });
 
   return {
-    items: itemsWithState,
+    items,
     nextCursor,
     totalCount,
     etag,

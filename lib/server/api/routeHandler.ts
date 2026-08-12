@@ -14,19 +14,8 @@ import {
 } from "@/lib/server/api/errorResponse";
 import { toErrorResponse } from "@/lib/server/api/appError";
 import { reportError } from "@/lib/server/observability/errorReporter";
-import type { AgentCapability } from "@/lib/server/agentCredential";
 
 type SessionRouteHandler<TContext extends SessionContext> = (
-  context: TContext,
-) => Promise<NextResponse>;
-
-export type AgentRouteContext = SessionContext & {
-  authKind: "agent" | "session";
-  credentialId?: string;
-  capabilities?: AgentCapability[];
-};
-
-type AgentRouteHandler<TContext extends AgentRouteContext> = (
   context: TContext,
 ) => Promise<NextResponse>;
 
@@ -105,94 +94,6 @@ export async function withSessionRoute(
     const typed = toErrorResponse(err, session.requestId);
     if (typed) return typed;
     reportError(err, { scope: "route.session", requestId: session.requestId });
-    return unexpectedErrorResponse(session.requestId);
-  }
-}
-
-/**
- * The agent seam: one handler, two identities.
- *
- * The batch protocol — create, claim, prompt, import — sat behind the browser
- * session only, so its documented external worker (Codex, and now the local
- * Runner) had no first-class way in; AGENTS.md never even had an auth section.
- * A request carrying `Authorization: Bearer` is judged as a versioned,
- * capability-scoped AgentCredential holder; one without falls back to the
- * session cookie. Both carry the same user identity, while `authKind` remains
- * visible so a route can keep browser-only compatibility inputs away from an
- * unattended credential.
- *
- * A presented token is judged as a token, never rescued by a cookie: falling
- * back would let a revoked token keep working from a signed-in browser, which
- * defeats revocation.
- */
-export async function withAgentRoute<TParams>(
-  req: Request,
-  requiredCapability: AgentCapability,
-  handler: AgentRouteHandler<AgentRouteContext & { params: TParams }>,
-  options: SessionRouteParams<TParams>,
-): Promise<NextResponse>;
-export async function withAgentRoute(
-  req: Request,
-  requiredCapability: AgentCapability,
-  handler: AgentRouteHandler<AgentRouteContext>,
-): Promise<NextResponse>;
-export async function withAgentRoute(
-  req: Request,
-  requiredCapability: AgentCapability,
-  handler: (context: never) => Promise<NextResponse>,
-  options?: SessionRouteParams<unknown>,
-): Promise<NextResponse> {
-  const run = handler as (
-    context: AgentRouteContext & { params?: unknown },
-  ) => Promise<NextResponse>;
-  // Header presence selects the credential trust domain even when its value
-  // is empty or malformed. Otherwise `Authorization: ""` plus a valid cookie
-  // would silently downgrade to session authentication.
-  const hasBearer = req.headers.has("Authorization");
-
-  let session: AgentRouteContext;
-  try {
-    if (hasBearer) {
-      // Lazily loaded: the token validator imports prisma at module scope, and
-      // a static import here would drag the database into every route's module
-      // graph — including session-only routes and their tests.
-      const { requireAgentCredential } = await import(
-        "@/lib/server/auth/requireAgentCredential"
-      );
-      const credential = await requireAgentCredential(req, requiredCapability);
-      session = {
-        userId: credential.userId,
-        requestId: credential.requestId,
-        authKind: "agent",
-        credentialId: credential.credentialId,
-        capabilities: credential.capabilities,
-      };
-    } else {
-      session = {
-        ...(await requireSession()),
-        authKind: "session",
-      };
-    }
-  } catch (err) {
-    if (
-      err instanceof UnauthorizedError ||
-      (err instanceof Error && err.name === "AgentCredentialError")
-    ) {
-      return unauthorizedError();
-    }
-    reportError(err, { scope: "route.agent" });
-    throw err;
-  }
-
-  try {
-    if (!options) return await run(session);
-    const parsed = options.schema.safeParse(await options.params);
-    if (!parsed.success) return invalidParamsError(session.requestId);
-    return await run({ ...session, params: parsed.data });
-  } catch (err) {
-    const typed = toErrorResponse(err, session.requestId);
-    if (typed) return typed;
-    reportError(err, { scope: "route.agent", requestId: session.requestId });
     return unexpectedErrorResponse(session.requestId);
   }
 }

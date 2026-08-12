@@ -121,41 +121,4 @@ describe("application review snapshot api", () => {
     expect(body).not.toHaveProperty("prompt");
   });
 
-  it("returns a no-store conflict while generation is still settling", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: "user-1" },
-    });
-    stores.application.findFirst.mockResolvedValueOnce({
-      id: APPLICATION_ID,
-      jobId: JOB_ID,
-      job: {
-        id: JOB_ID,
-        userId: "user-1",
-        title: "Platform Engineer",
-        company: "Lumi",
-        location: "Sydney",
-        market: "AU",
-      },
-      resumeProfile: null,
-    });
-    stores.tailoringRun.findFirst.mockResolvedValueOnce({ id: "run-1" });
-
-    const response = await GET(
-      new Request(`http://localhost/api/applications/${APPLICATION_ID}/review-snapshot`),
-      { params: Promise.resolve({ id: APPLICATION_ID }) },
-    );
-    const body = await response.json();
-
-    expect(response.status).toBe(409);
-    expect(response.headers.get("cache-control")).toBe(
-      "private, no-store, max-age=0",
-    );
-    expect(body).toEqual(
-      expect.objectContaining({
-        error: expect.objectContaining({
-          code: "APPLICATION_REVIEW_SETTLING",
-        }),
-      }),
-    );
-  });
 });

@@ -7,11 +7,6 @@ import {
   enqueueApplicationArtifactRetirements,
 } from "@/lib/server/artifacts/applicationArtifactLifecycle";
 import { Prisma } from "@/lib/generated/prisma";
-import {
-  lockApplicationBatchesForJobDeletion,
-  reconcileApplicationBatchesAfterJobDeletion,
-} from "@/lib/server/applicationBatches/batchReconciliation";
-
 type ArtifactRetirementResult = { queued: number };
 type LegacyBlobCleanupResult = {
   attempted: number;
@@ -219,11 +214,6 @@ export async function deleteJob(
 
       await lockOwnedJobRowsForDeletion(tx, userId, [job.id]);
 
-      const affectedBatchIds = await lockApplicationBatchesForJobDeletion(tx, {
-        userId,
-        jobIds: [job.id],
-      });
-
       // Generation/autosave/finalize use this same lock. Take it before reading
       // artifact URLs so no committed Blob can appear between read and delete.
       await acquireApplicationMutationLock(tx, userId, job.id);
@@ -265,10 +255,6 @@ export async function deleteJob(
       // if another code path removed the row.
       const deletedJob = await tx.job.deleteMany({
         where: { id: job.id, userId },
-      });
-      await reconcileApplicationBatchesAfterJobDeletion(tx, {
-        userId,
-        batchIds: affectedBatchIds,
       });
       return {
         deleted: deletedJob.count > 0,
@@ -315,10 +301,6 @@ export async function batchDeleteJobs(
 
       const foundIds = jobs.map((job) => job.id).sort();
       await lockOwnedJobRowsForDeletion(tx, userId, foundIds);
-      const affectedBatchIds = await lockApplicationBatchesForJobDeletion(tx, {
-        userId,
-        jobIds: foundIds,
-      });
       // Fixed order prevents two overlapping batch deletes from waiting on
       // the same application locks in opposite order.
       for (const foundId of foundIds) {
@@ -363,10 +345,6 @@ export async function batchDeleteJobs(
       );
       const deletedJobs = await tx.job.deleteMany({
         where: { id: { in: foundIds }, userId },
-      });
-      await reconcileApplicationBatchesAfterJobDeletion(tx, {
-        userId,
-        batchIds: affectedBatchIds,
       });
       return {
         deleted: deletedJobs.count,

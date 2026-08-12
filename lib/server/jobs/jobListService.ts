@@ -9,10 +9,6 @@ import { getJobLocationTerms } from "./jobLocationScope";
 import type { JobStatusValue } from "@/lib/shared/jobStatus";
 import { findNearDuplicateJobIds } from "./simHashDuplicateService";
 import { getApplicationReviewId } from "@/lib/server/applications/applicationReviewAvailability";
-import {
-  getJobTailoringStates,
-  type JobTailoringState,
-} from "./jobTailoringState";
 
 export type JobListQuery = {
   limit: number;
@@ -52,7 +48,6 @@ export type JobListItem = {
   resumePdfUrl: string | null;
   resumePdfName: string | null;
   coverPdfUrl: string | null;
-  tailoringState: JobTailoringState;
 };
 
 export type JobListResult = {
@@ -227,18 +222,7 @@ export async function listJobs(
     };
   });
 
-  const { items: pageItems, nextCursor } = getCursorPage(normalized, limit);
-
-  // Only the page is queried, and only after paging, so the extra round trip
-  // scales with what is on screen rather than with what matched.
-  const tailoringStates = await getJobTailoringStates({
-    userId,
-    jobIds: pageItems.map((job) => job.id),
-  });
-  const items = pageItems.map((job) => ({
-    ...job,
-    tailoringState: tailoringStates.get(job.id) ?? ("idle" as const),
-  }));
+  const { items, nextCursor } = getCursorPage(normalized, limit);
 
   const jobLevels = Array.from(
     new Set(
@@ -272,10 +256,6 @@ export async function listJobs(
       resumePdfUrl: job.resumePdfUrl ?? null,
       resumePdfName: job.resumePdfName ?? null,
       coverPdfUrl: job.coverPdfUrl ?? null,
-      // Without this the row's state could go queued → running → failed while
-      // the validator stayed identical, and every poll would answer 304. The
-      // user would watch a stale badge and conclude nothing was happening.
-      tailoringState: job.tailoringState,
     })),
     totalCount,
   });

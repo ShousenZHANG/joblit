@@ -25,8 +25,6 @@ const STEPS = [
   { name: "dependency policy", command: "npm", args: ["run", "deps:policy"], cwd: repoRoot },
   { name: "dead code", command: "npm", args: ["run", "deadcode"], cwd: repoRoot },
   { name: "tests", command: "npm", args: ["run", "test"], cwd: repoRoot },
-  { name: "runner tests", command: "npm", args: ["run", "test:runner"], cwd: repoRoot },
-  { name: "hermes packaging tests", command: "npm", args: ["run", "hermes:package:test"], cwd: repoRoot },
 ];
 
 function run(step) {

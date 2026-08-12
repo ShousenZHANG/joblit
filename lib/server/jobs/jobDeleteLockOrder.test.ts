@@ -151,13 +151,6 @@ describe("job delete cascade lock order", () => {
     expect(applicationKeys).toEqual(expected);
   });
 
-  it("row-locks Jobs in stable order before reading affected batch tasks", async () => {
-    await batchDeleteJobs(USER_ID, JOB_IDS);
-
-    expect(store.jobRowLocks).toEqual([["job-a", "job-b", "job-c"]]);
-    expect(store.applicationBatchTaskFindMany).toHaveBeenCalledTimes(1);
-  });
-
   it("never steps backwards through the declared global order", async () => {
     await batchDeleteJobs(USER_ID, JOB_IDS);
 
@@ -181,29 +174,4 @@ describe("job delete cascade lock order", () => {
     expect(jobLocks[0].key).toBe(stableInt32(USER_ID));
   });
 
-  it("takes affected Application Batch locks in stable order before application locks", async () => {
-    store.applicationBatchTaskFindMany.mockResolvedValueOnce([
-      { batchId: "batch-z" },
-      { batchId: "batch-a" },
-      { batchId: "batch-z" },
-    ]);
-
-    await batchDeleteJobs(USER_ID, JOB_IDS);
-
-    const applicationBatchNamespace = 0x41424154; // "ABAT"
-    const batchKeys = store.locks
-      .filter((lock) => lock.namespace === applicationBatchNamespace)
-      .map((lock) => lock.key);
-    expect(batchKeys).toEqual(
-      ["batch-a", "batch-z"].map((batchId) => stableInt32(batchId)),
-    );
-
-    const lastBatchLock = store.locks
-      .map((lock) => lock.namespace)
-      .lastIndexOf(applicationBatchNamespace);
-    const firstApplicationLock = store.locks.findIndex(
-      (lock) => lock.namespace === LOCK_NAMESPACES.applicationMutation,
-    );
-    expect(lastBatchLock).toBeLessThan(firstApplicationLock);
-  });
 });

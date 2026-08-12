@@ -6,8 +6,6 @@ import { withSessionRoute, parseJsonBody } from "@/lib/server/api/routeHandler";
 import { UuidParamSchema } from "@/lib/shared/schemas/common";
 import { aiContentSchema, hashAiContent } from "@/lib/shared/schemas/aiContent";
 import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
-import { acquireUnboundApplicationWriteAuthority } from "@/lib/server/tailoringRuns/tailoringJobOwnership";
-import { TailoringRunError } from "@/lib/server/tailoringRuns/tailoringRunProtocol";
 import { persistReviewLedger } from "@/lib/server/applications/persistReviewLedger";
 import { evolveApplicationAiContent } from "@/lib/server/applications/applicationAiContentAggregate";
 import {
@@ -79,10 +77,10 @@ export async function PATCH(
         .$transaction(
           async (tx) => {
             const mutationJobId = existing.jobId ?? existing.id;
-            await acquireUnboundApplicationWriteAuthority(tx, {
-              userId,
-              jobId: mutationJobId,
-            });
+            // acquireUnboundApplicationWriteAuthority went with the
+            // TailoringRun table it interleaved with. The lock that actually
+            // serialises concurrent writers to this Application is JOBA, taken
+            // here and unchanged.
             await acquireApplicationMutationLock(tx, userId, mutationJobId);
             const current = await tx.application.findFirst({
               where: { id: existing.id, userId },
@@ -238,21 +236,7 @@ export async function PATCH(
             };
           },
           { timeout: 30_000 },
-        )
-        .catch((error: unknown) => {
-          if (error instanceof TailoringRunError) {
-            return { kind: "tailoring_run_error" as const, error };
-          }
-          throw error;
-        });
-      if (committed.kind === "tailoring_run_error") {
-        return errorJson(
-          committed.error.code,
-          committed.error.message,
-          committed.error.status,
-          { requestId },
         );
-      }
       if (committed.kind === "not_found") {
         return NextResponse.json(
           {

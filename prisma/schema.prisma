@@ -74,26 +74,6 @@ enum OnboardingStage {
   RETURNING_USER
 }
 
-enum ApplicationBatchScope {
-  NEW
-}
-
-enum ApplicationBatchStatus {
-  QUEUED
-  RUNNING
-  SUCCEEDED
-  FAILED
-  CANCELLED
-}
-
-enum ApplicationBatchTaskStatus {
-  PENDING
-  RUNNING
-  SUCCEEDED
-  FAILED
-  SKIPPED
-}
-
 enum ApplicationStatus {
   DRAFT
   FINAL
@@ -112,32 +92,6 @@ enum ApplicationArtifactState {
   DELETE_PENDING
   DELETING
   DELETED
-}
-
-enum TailoringRunSource {
-  MANUAL_IMPORT
-  LOCAL_AI
-  CODEX_BATCH
-  SERVER_BATCH
-}
-
-enum TailoringRunDelivery {
-  DRAFT
-  FINAL
-}
-
-enum TailoringRunStatus {
-  ISSUED
-  RUNNING
-  SUCCEEDED
-  FAILED
-  CANCELLED
-  PARTIAL
-}
-
-enum TailoringRunTarget {
-  RESUME
-  COVER
 }
 
 model User {
@@ -161,10 +115,6 @@ model User {
   applications          Application[]
   promptRuleTemplates   PromptRuleTemplate[]
   onboardingState       OnboardingState?
-  applicationBatches    ApplicationBatch[]
-  applicationBatchTasks ApplicationBatchTask[]
-  tailoringRuns         TailoringRun[]
-  agentCredentials      AgentCredential[]
   applicationEvents     ApplicationEvent[]
   evidenceSnapshots     EvidenceSnapshot[]
   claimEvidence         ClaimEvidence[]
@@ -251,8 +201,6 @@ model Job {
   updatedAt DateTime @updatedAt
 
   applications          Application[]
-  applicationBatchTasks ApplicationBatchTask[]
-  tailoringRuns         TailoringRun[]
   applicationEvents     ApplicationEvent[]
   evidenceSnapshots     EvidenceSnapshot[]
 
@@ -270,166 +218,6 @@ model Job {
   @@index([title(ops: raw("gin_trgm_ops"))], map: "idx_job_title_trgm", type: Gin)
   @@index([company(ops: raw("gin_trgm_ops"))], map: "idx_job_company_trgm", type: Gin)
   @@index([location(ops: raw("gin_trgm_ops"))], map: "idx_job_location_trgm", type: Gin)
-}
-
-/// Raw SQL enforces at most one QUEUED/RUNNING batch per user. The partial
-/// unique index is intentionally absent from Prisma's declarative index list.
-model ApplicationBatch {
-  id     String @id @default(uuid()) @db.Uuid
-  userId String @db.Uuid
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  scope       ApplicationBatchScope  @default(NEW)
-  status      ApplicationBatchStatus @default(QUEUED)
-  totalCount  Int
-  error       String?
-  startedAt   DateTime?
-  completedAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  tasks ApplicationBatchTask[]
-
-  @@index([userId, createdAt])
-  @@index([userId, status, updatedAt])
-}
-
-model ApplicationBatchTask {
-  id      String           @id @default(uuid()) @db.Uuid
-  batchId String           @db.Uuid
-  batch   ApplicationBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  userId  String           @db.Uuid
-  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  jobId   String           @db.Uuid
-  job     Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
-
-  status      ApplicationBatchTaskStatus @default(PENDING)
-  error       String?
-  startedAt   DateTime?
-  completedAt DateTime?
-  attempt     Int                        @default(0)
-
-  executionAttemptId       String?   @db.Uuid
-  executionLeaseExpiresAt  DateTime?
-  /// 0 = legacy task semantics; a v1 claim upgrades this atomically before work.
-  tailoringProtocolVersion Int       @default(0)
-  /// Durable proof that the current attempt completed through TailoringRun acceptance.
-  completionAttemptId      String?   @db.Uuid
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  tailoringRun TailoringRun?
-
-  @@unique([batchId, jobId])
-  @@index([jobId, batchId])
-  @@index([batchId, status, createdAt])
-  @@index([userId, status, createdAt])
-  @@index([executionAttemptId])
-  @@index([completionAttemptId])
-}
-
-model TailoringRun {
-  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId String @db.Uuid
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  jobId  String @db.Uuid
-  job    Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
-
-  resumeProfileId String?        @db.Uuid
-  resumeProfile   ResumeProfile? @relation(fields: [resumeProfileId], references: [id], onDelete: SetNull)
-
-  applicationBatchTaskId String?               @unique @db.Uuid
-  applicationBatchTask   ApplicationBatchTask? @relation(fields: [applicationBatchTaskId], references: [id], onDelete: SetNull)
-
-  applicationId String?      @db.Uuid
-  application   Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
-
-  source   TailoringRunSource
-  delivery TailoringRunDelivery
-  status   TailoringRunStatus   @default(ISSUED)
-
-  requiredTargetMask            Int
-  acceptedTargetMask            Int @default(0)
-  /// Targets whose accepted proposal must also have a current PDF before a
-  /// bound batch task can succeed. Zero preserves legacy/manual semantics.
-  publicationRequiredTargetMask Int @default(0)
-  publishedTargetMask           Int @default(0)
-
-  issueKey       String
-  issueHash      String
-  promptReceipts Json
-
-  resumeSnapshotHash String
-  jobSnapshotHash    String
-
-  executionAttemptId      String?   @db.Uuid
-  executionLeaseExpiresAt DateTime?
-  attempt                 Int       @default(0)
-
-  errorCode    String?
-  errorMessage String?
-
-  issuedAt   DateTime  @default(now())
-  startedAt  DateTime?
-  terminalAt DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-
-  receipts            TailoringRunReceipt[]
-  publicationReceipts TailoringRunPublicationReceipt[]
-
-  @@unique([userId, issueKey])
-  @@index([userId, status, updatedAt])
-  @@index([jobId, status, createdAt])
-  @@index([resumeProfileId])
-  @@index([applicationId, createdAt])
-  @@index([executionAttemptId])
-}
-
-model TailoringRunReceipt {
-  id    String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  runId String       @db.Uuid
-  run   TailoringRun @relation(fields: [runId], references: [id], onDelete: Cascade)
-
-  target             TailoringRunTarget
-  executionAttemptId String             @db.Uuid
-  requestHash        String
-
-  applicationId       String?              @db.Uuid
-  application         Application?         @relation(fields: [applicationId], references: [id], onDelete: SetNull)
-  aiContentHash       String
-  /// Target-scoped content identity accepted by this receipt. Null only for
-  /// receipts created before document-level publication tracking.
-  documentContentHash String?
-  delivery            TailoringRunDelivery
-  createdAt           DateTime             @default(now())
-
-  @@unique([runId, target])
-  @@index([applicationId, createdAt])
-  @@index([executionAttemptId])
-}
-
-/// Immutable proof that one accepted target was published from its exact
-/// documentContentHash. It is separate from generation acceptance so a render
-/// outage never loses the durable AI proposal and can be retried without a
-/// second model call.
-model TailoringRunPublicationReceipt {
-  id    String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  runId String       @db.Uuid
-  run   TailoringRun @relation(fields: [runId], references: [id], onDelete: Cascade)
-
-  target              TailoringRunTarget
-  executionAttemptId  String             @db.Uuid
-  applicationId       String?            @db.Uuid
-  application         Application?       @relation(fields: [applicationId], references: [id], onDelete: SetNull)
-  documentContentHash String
-  createdAt           DateTime           @default(now())
-
-  @@unique([runId, target])
-  @@index([applicationId, createdAt])
-  @@index([executionAttemptId])
 }
 
 model DeletedJobUrl {
@@ -541,7 +329,6 @@ model ResumeProfile {
 
   applications     Application[]
   activeSelections ActiveResumeProfile[]
-  tailoringRuns    TailoringRun[]
 
   @@index([userId, name])
   @@index([userId, updatedAt])
@@ -610,9 +397,6 @@ model Application {
   applicationEvents            ApplicationEvent[]
   evidenceSnapshots            EvidenceSnapshot[]
   claimEvidence                ClaimEvidence[]
-  tailoringRuns                TailoringRun[]
-  tailoringReceipts            TailoringRunReceipt[]
-  tailoringPublicationReceipts TailoringRunPublicationReceipt[]
 
   @@unique([userId, jobId])
   @@index([userId, createdAt])
@@ -791,26 +575,6 @@ model PromptRuleTemplate {
 
   @@unique([userId, version])
   @@index([userId, isActive, updatedAt])
-}
-
-model AgentCredential {
-  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId String @db.Uuid
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  tokenHash    String    @unique // SHA-256 hash; the raw jfagent_v1_ token is shown once
-  name         String    @default("Joblit Runner")
-  audience     String    @default("joblit-agent")
-  version      Int       @default(1)
-  capabilities String[]
-  lastUsedAt   DateTime?
-  expiresAt    DateTime
-  revokedAt    DateTime?
-
-  createdAt DateTime @default(now())
-
-  @@index([userId, revokedAt])
-  @@index([audience, version, revokedAt])
 }
 
 model OnboardingState {

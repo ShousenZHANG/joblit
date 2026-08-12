@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { errorJson, notFoundError, validationError } from "@/lib/server/api/errorResponse";
 import { commitRejectionResponse } from "@/lib/server/applications/commitResultResponse";
-import { withAgentRoute } from "@/lib/server/api/routeHandler";
+import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import {
   APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE,
   commitApplicationArtifact,
@@ -35,17 +35,6 @@ import {
   projectApplicationPublication,
   UNAVAILABLE_APPLICATION_PUBLICATION_RENDER_CONTEXT,
 } from "@/lib/server/applications/applicationPublication";
-import {
-  hashManualTailoringAcceptance,
-  probeTailoringRunAcceptanceReplay,
-} from "@/lib/server/tailoringRuns/tailoringRunAcceptance";
-import {
-  TailoringRunError,
-  type TailoringRunDelivery,
-  type TailoringRunSource,
-  type TailoringRunTarget,
-} from "@/lib/server/tailoringRuns/tailoringRunProtocol";
-import type { TailoringAcceptanceRequest } from "@/lib/server/tailoringRuns/tailoringRunTypes";
 
 export const runtime = "nodejs";
 
@@ -64,52 +53,21 @@ function parseFinalizeFlag(req: Request): boolean {
   return v !== "false" && v !== "0";
 }
 
-function requiresAuthoritativeReceipt(source: string): boolean {
-  return source === "codex_batch";
-}
-
-function requiresTailoringRun(source: string): boolean {
-  // Codex Batch is a coordinated server contract and has no legacy client
-  // population. Manual imports retain their documented copy/paste fallback.
-  return source === "codex_batch";
-}
-
-function generationSourceLabel(): string {
-  return "Codex Batch";
-}
-
-function protocolSource(source: string): TailoringRunSource {
-  if (source === "codex_batch") return "CODEX_BATCH";
-  return "MANUAL_IMPORT";
-}
-
-function protocolTarget(target: "resume" | "cover"): TailoringRunTarget {
-  return target === "resume" ? "RESUME" : "COVER";
-}
 
 export async function POST(req: Request) {
   const finalize = parseFinalizeFlag(req);
-  return withAgentRoute(req, "tailoring:execute", async ({
-    userId,
-    requestId,
-    authKind,
-  }) => {
+  return withSessionRoute(async ({ userId, requestId }) => {
     const body = await req.json().catch(() => null);
     const parsed = ManualGenerateSchema.safeParse(body);
     if (!parsed.success) {
-      const strictOutputTooLarge =
-        body &&
-        typeof body === "object" &&
-        requiresAuthoritativeReceipt(
-          String((body as { source?: unknown }).source ?? "manual_import"),
-        ) &&
-        parsed.error.issues.some(
-          (issue) => issue.path.join(".") === "modelOutput" && issue.code === "too_big",
-        );
-      if (strictOutputTooLarge) {
+      const outputTooLarge = parsed.error.issues.some(
+        (issue) =>
+          issue.path.join(".") === "modelOutput" && issue.code === "too_big",
+      );
+      if (outputTooLarge) {
         return errorJson(
           "INVALID_AI_RESULT",
-          `${generationSourceLabel()} output exceeds the 80,000 character limit.`,
+          "Pasted output exceeds the 80,000 character limit.",
           400,
           { requestId },
         );
@@ -117,168 +75,23 @@ export async function POST(req: Request) {
       return validationError(parsed.error, requestId);
     }
     const data = parsed.data;
-    if (authKind === "agent" && data.source !== "codex_batch") {
-      return errorJson(
-        "AGENT_PROTOCOL_REQUIRED",
-        "Agent credentials must use the versioned Codex Batch protocol.",
-        403,
-        { requestId },
-      );
-    }
 
-  if (requiresAuthoritativeReceipt(data.source) && !data.promptMeta) {
-    return errorJson(
-      "PROMPT_META_REQUIRED",
-      `${generationSourceLabel()} output must include the generation receipt. Run the current prompt again.`,
-      400,
-      { requestId },
-    );
-  }
-  if (data.tailoringRun && !data.promptMeta) {
-    return errorJson(
-      "PROMPT_META_REQUIRED",
-      "A TailoringRun import must include the prompt receipt issued with that run.",
-      400,
-      { requestId },
-    );
-  }
   const importedPromptMeta = data.promptMeta
     ? ImportedPromptMetaSchema.safeParse(data.promptMeta)
     : null;
   if (importedPromptMeta && !importedPromptMeta.success) {
     return validationError(importedPromptMeta.error, requestId);
   }
-  if (
-    importedPromptMeta?.success &&
-    requiresAuthoritativeReceipt(data.source) &&
-    (!importedPromptMeta.data.promptTemplateVersion ||
-      !importedPromptMeta.data.schemaVersion ||
-      !importedPromptMeta.data.skillPackVersion ||
-      !importedPromptMeta.data.promptHash)
-  ) {
-    return errorJson(
-      "PROMPT_META_REQUIRED",
-      `${generationSourceLabel()} output must include the complete generation receipt. Run the current prompt again.`,
-      400,
-      { requestId },
-    );
-  }
-
-  const delivery: TailoringRunDelivery = finalize ? "FINAL" : "DRAFT";
-  const target = protocolTarget(data.target);
   const receivedPromptHash =
     importedPromptMeta?.success && importedPromptMeta.data.promptHash
       ? importedPromptMeta.data.promptHash
       : null;
 
-  // Exact receipt replay must not depend on today's prompt rules, resume
-  // snapshot, renderer, or Blob service. The immutable receipt is probed
-  // before any of those adapters run.
-  if (data.tailoringRun && receivedPromptHash) {
-    let replay;
-    try {
-      replay = await prisma.$transaction(
-        (tx) =>
-          probeTailoringRunAcceptanceReplay(
-            tx as unknown as Parameters<
-              typeof probeTailoringRunAcceptanceReplay
-            >[0],
-            {
-              userId,
-              jobId: data.jobId,
-              request: {
-                handle: data.tailoringRun!,
-                source: protocolSource(data.source),
-                delivery,
-                target,
-                requestHash: hashManualTailoringAcceptance({
-                  target,
-                  delivery,
-                  promptHash: receivedPromptHash,
-                  modelOutput: data.modelOutput,
-                }),
-                promptHash: receivedPromptHash,
-              },
-            },
-          ),
-        // This was the only transaction on the import path without explicit
-        // options, so it inherited Prisma's defaults — a 2s wait for a pooled
-        // connection. Under the load a draining batch creates, that expires as
-        // P2024 before the work is even attempted, and until this commit a
-        // P2024 was an anonymous 500 the Runner replayed forever. The rest of
-        // this path uses 30s; match it.
-        { maxWait: 15_000, timeout: 30_000 },
-      );
-    } catch (error) {
-      if (error instanceof TailoringRunError) {
-        return errorJson(error.code, error.message, error.status, { requestId });
-      }
-      throw error;
-    }
-
-    if (replay) {
-      const currentAiContent = aiContentSchema.safeParse(
-        replay.application.aiContent,
-      );
-      if (!currentAiContent.success) {
-        return errorJson(
-          "AI_CONTENT_INVALID",
-          "The accepted Application content is unavailable.",
-          409,
-          { requestId },
-        );
-      }
-      const replayHeaders = {
-        "x-application-id": replay.application.id,
-        "x-request-id": requestId,
-        "x-tailoring-replay": "exact",
-        "x-tailoring-delivery": delivery,
-      };
-      const publication = projectApplicationPublication({
-        aiContent: currentAiContent.data,
-        record: {
-          status: replay.application.status,
-          aiContentHash: replay.application.aiContentHash,
-          resumePdfUrl: replay.application.resumePdfUrl,
-          coverPdfUrl: replay.application.coverPdfUrl,
-          resumeContentHash: replay.application.resumeContentHash,
-          coverContentHash: replay.application.coverContentHash,
-          resumePublishedHash: replay.application.resumePublishedHash,
-          coverPublishedHash: replay.application.coverPublishedHash,
-        },
-        renderContext: UNAVAILABLE_APPLICATION_PUBLICATION_RENDER_CONTEXT,
-      });
-      if (!finalize) {
-        return NextResponse.json(
-          {
-            applicationId: replay.application.id,
-            status: publication.status,
-            publication,
-            aiContentHash: replay.application.aiContentHash,
-            aiContent: currentAiContent.data,
-            pdfName: replay.application.resumePdfName,
-            job: replay.application.job,
-            replayed: true,
-            requestId,
-          },
-          { status: 200, headers: replayHeaders },
-        );
-      }
-      return NextResponse.json(
-        {
-          applicationId: replay.application.id,
-          status: publication.status,
-          publication,
-          aiContentHash: replay.application.aiContentHash,
-          acceptedDelivery: "FINAL",
-          target: data.target,
-          replayed: true,
-          requestId,
-        },
-        { status: 200, headers: replayHeaders },
-      );
-    }
-  }
+  // The exact-receipt replay probe went with the TailoringRun table. It made
+  // an unattended worker's repeated POST return the earlier verdict instead of
+  // committing twice; a person pasting into a dialog has the dialog's own
+  // in-flight guard, and a DRAFT import compiles no PDF, so a double submit
+  // costs a rewrite of the same content rather than a duplicate artifact.
 
   const limited = enforceAiRateLimit(userId, requestId);
   if (limited) return limited;
@@ -394,15 +207,6 @@ export async function POST(req: Request) {
       { details: artifact.error.details, requestId },
     );
   }
-  if (requiresTailoringRun(data.source) && !data.tailoringRun) {
-    return errorJson(
-      "TAILORING_RUN_REQUIRED",
-      `${generationSourceLabel()} output must include its TailoringRun handle. Run the current prompt again.`,
-      400,
-      { requestId },
-    );
-  }
-
   // The grounding gate lives at the commit boundary, which reviews the merged
   // CV + Cover snapshot. There used to be a pre-emptive check here, reading a
   // review that acceptApplicationGeneration had built over ONE target with the
@@ -415,37 +219,12 @@ export async function POST(req: Request) {
     jobDescription: job.description,
     jobSourceAvailable: true,
   };
-  const tailoringAcceptance: readonly TailoringAcceptanceRequest[] | undefined =
-    data.tailoringRun && promptSnapshotBinding
-      ? [
-          {
-            handle: data.tailoringRun,
-            source: protocolSource(data.source),
-            delivery,
-            target,
-            requestHash: hashManualTailoringAcceptance({
-              target,
-              delivery,
-              promptHash: promptMetaHash,
-              modelOutput: data.modelOutput,
-            }),
-            promptHash: promptMetaHash,
-            resumeSnapshotHash: promptSnapshotBinding.resumeSnapshotHash,
-            jobSnapshotHash: promptSnapshotBinding.jobSnapshotHash,
-            ...(data.source === "codex_batch"
-              ? { batchExecutionAttemptId: data.tailoringRun.attemptId }
-              : {}),
-          },
-        ]
-      : undefined;
 
   // DRAFT mode: skip PDF compile + Blob upload. Just persist the
   // aiContent snapshot and return JSON. Caller navigates to
   // /jobs/[id]/tailor to review.
   if (!finalize) {
-    let committed;
-    try {
-      committed = await commitApplicationArtifact({
+    const committed = await commitApplicationArtifact({
         userId,
         job,
         resumeProfileId: profile.id,
@@ -457,14 +236,7 @@ export async function POST(req: Request) {
         status: "DRAFT",
         mergeTarget: data.target,
         reviewContext,
-        ...(tailoringAcceptance ? { tailoring: tailoringAcceptance } : {}),
       });
-    } catch (error) {
-      if (error instanceof TailoringRunError) {
-        return errorJson(error.code, error.message, error.status, { requestId });
-      }
-      throw error;
-    }
     if (committed.kind !== "committed") {
       // Every rejection kind, mapped identically to the FINAL branch. This
       // used to answer a bare 500 for all but one kind, which the Runner reads
@@ -554,7 +326,6 @@ export async function POST(req: Request) {
       status: "FINAL",
       mergeTarget: data.target,
       reviewContext,
-      ...(tailoringAcceptance ? { tailoring: tailoringAcceptance } : {}),
     });
     if (result.kind !== "committed") {
       return commitRejectionResponse(result, {
@@ -567,9 +338,6 @@ export async function POST(req: Request) {
     }
     committed = result;
   } catch (error) {
-    if (error instanceof TailoringRunError) {
-      return errorJson(error.code, error.message, error.status, { requestId });
-    }
     reportError(error, {
       scope: "applications.manual-generate.commit",
       userId,

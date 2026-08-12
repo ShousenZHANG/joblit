@@ -53,16 +53,10 @@ import {
   VirtualJobList,
   type VirtualJobListHandle,
 } from "./components/VirtualJobList";
-import { BatchProgressBanner } from "./components/BatchProgressBanner";
-import { useBatchProgress, type BatchStatus } from "./hooks/useBatchProgress";
-import { useBatchCompletionSignal } from "./hooks/useBatchCompletionSignal";
-import { useEnqueueJobTailoring } from "./hooks/useEnqueueJobTailoring";
-import { useRunnerPresence } from "@/hooks/useRunnerPresence";
 import { JobSearchBar } from "./components/JobSearchBar";
 import { ExternalGenerateDialog } from "./components/ExternalGenerateDialog";
 import { TailorReviewDialog } from "./components/TailorReviewDialog";
 import { JobDetailPanel } from "./components/JobDetailPanel";
-import { BatchDetailsDialog } from "./components/BatchDetailsDialog";
 import { cn } from "@/lib/utils";
 import {
   AU_LOCATION_OPTIONS,
@@ -281,89 +275,12 @@ export function JobsClient({
   });
   // Generation happens on the user's machine. Presence explains why a queued
   // batch may be waiting, but it is deliberately not a queueing prerequisite.
-  const runnerPresence = useRunnerPresence(true);
-  const openRunnerSetup = useCallback(() => {
-    window.dispatchEvent(new Event("joblit:runner-setup"));
-  }, []);
-  const batchProgress = useBatchProgress({ onJobsSettled: refetch });
-  const [batchDetailsOpen, setBatchDetailsOpen] = useState(false);
-  const [batchActionPending, setBatchActionPending] = useState<
-    "cancel" | "retry" | null
-  >(null);
-  const handleBatchDetailsOpenChange = useCallback(
-    (open: boolean) => {
-      setBatchDetailsOpen(open);
-      if (!open) cancelApplicationReviewLoad();
-    },
-    [cancelApplicationReviewLoad],
-  );
-  const handleBatchReview = useCallback(
-    async (
-      applicationId: string,
-      jobId: string,
-      target: "resume" | "cover",
-    ) => {
-      const opened = await openApplicationReview({
-        applicationId,
-        jobId,
-        target,
-      });
-      if (opened) setBatchDetailsOpen(false);
-      return opened;
+  const handleJobReview = useCallback(
+    (applicationId: string, jobId: string, target: "resume" | "cover") => {
+      void openApplicationReview({ applicationId, jobId, target });
     },
     [openApplicationReview],
   );
-  const handleJobReview = useCallback(
-    (applicationId: string, jobId: string, target: "resume" | "cover") => {
-      void handleBatchReview(applicationId, jobId, target);
-    },
-    [handleBatchReview],
-  );
-  // An active batch started in another tab is adopted by useBatchProgress's own
-  // `/api/application-batches/latest` discovery on mount. Preflight used to do
-  // the same thing a second way, and went with the toolbar sweep it served.
-  const { enqueueJob, pendingJobId: generatePendingJobId } =
-    useEnqueueJobTailoring({
-      fallbackErrorMessage: t("errorLoadJobs"),
-      onQueued: (result) => {
-        // Seed the watcher from the response rather than waiting for the next
-        // `/latest` poll, so the banner and the row badge agree immediately.
-        batchProgress.watchBatch({
-          id: result.batchId,
-          status: "QUEUED",
-          // The server's own post-insert count. Seeding 0 here rendered no
-          // banner at all — it needs a total to show a fraction against — so
-          // the user pressed Generate and got silence until the next poll.
-          totalCount: result.totalCount,
-        });
-        void refetch();
-        toast({
-          title:
-            result.queuedCount > 0
-              ? t("generateQueuedToast")
-              : t("generateAlreadyQueuedToast"),
-        });
-      },
-      onError: (message, code) => {
-        toast({
-          title: code === "NO_PROFILE" ? t("generateNoProfile") : message,
-          variant: "destructive",
-          duration: 5000,
-        });
-      },
-    });
-  useBatchCompletionSignal({
-    state: batchProgress.state,
-    toast,
-    labels: {
-      titlePrefix: ({ done, total }) =>
-        t("batchTitleProgress", { done, total }),
-      doneTitle: t("batchDoneTitle"),
-      failedTitle: t("batchDoneFailedTitle"),
-      doneDescription: ({ succeeded, failed }) =>
-        t("batchDoneSummary", { succeeded, failed }),
-    },
-  });
   // Keep renderer identity stable after virtualization first becomes useful.
   // In particular, deleting row 81 must not swap the entire virtual subtree
   // for the ordinary renderer when the visible count becomes 80.
@@ -500,65 +417,6 @@ export function JobsClient({
     t,
     toast,
   ]);
-
-  async function cancelActiveBatch() {
-    const batchId = batchProgress.state.batchId;
-    if (!batchId || batchActionPending) return;
-    setBatchActionPending("cancel");
-    try {
-      const result = (await fetchJson(
-        `/api/application-batches/${batchId}/cancel`,
-        { method: "POST" },
-      )) as {
-        batchStatus: BatchStatus;
-        progress: {
-          pending: number;
-          running: number;
-          succeeded: number;
-          failed: number;
-          skipped?: number;
-        };
-      };
-      batchProgress.applyBatchAction({
-        status: result.batchStatus,
-        progress: result.progress,
-      });
-    } catch (error) {
-      toast({
-        title: getErrorMessage(error, t("batchDetails.cancelError")),
-        variant: "destructive",
-        duration: 5000,
-      });
-    } finally {
-      setBatchActionPending(null);
-    }
-  }
-
-  async function retryFailedBatch() {
-    const batchId = batchProgress.state.batchId;
-    if (!batchId || batchActionPending) return;
-    setBatchActionPending("retry");
-    try {
-      const result = (await fetchJson(
-        `/api/application-batches/${batchId}/retry-failed`,
-        {
-          method: "POST",
-          body: JSON.stringify({}),
-        },
-      )) as {
-        batch: { id: string; status: "QUEUED"; totalCount: number };
-      };
-      batchProgress.watchBatch(result.batch);
-    } catch (error) {
-      toast({
-        title: getErrorMessage(error, t("batchDetails.retryError")),
-        variant: "destructive",
-        duration: 5000,
-      });
-    } finally {
-      setBatchActionPending(null);
-    }
-  }
 
   // Stable handler for the memoized detail panel — an inline lambda in the
   // JSX would give it fresh props on every keystroke and defeat the memo.
@@ -729,20 +587,6 @@ export function JobsClient({
         }}
         onFinalized={tailorReview.handleFinalized}
       />
-
-      {batchProgress.state.batchId ? (
-        <BatchDetailsDialog
-          open={batchDetailsOpen && !tailorReview.draft}
-          onOpenChange={handleBatchDetailsOpenChange}
-          state={batchProgress.state}
-          actionPending={batchActionPending !== null}
-          onCancel={() => void cancelActiveBatch()}
-          onRetryFailed={() => void retryFailedBatch()}
-          reviewLoading={tailorReview.loading}
-          reviewError={tailorReview.loadError}
-          onReview={handleBatchReview}
-        />
-      ) : null}
 
       <div
         data-testid="jobs-shell"
@@ -1029,18 +873,6 @@ export function JobsClient({
                 per-job action in the JD header, and this row is the status
                 filter again, nothing else. */}
               </div>
-              {batchProgress.visible ? (
-                <BatchProgressBanner
-                  state={batchProgress.state}
-                  runnerStatus={
-                    runnerPresence.status as
-                      "online" | "offline" | "unknown" | "unavailable"
-                  }
-                  onOpenSetup={openRunnerSetup}
-                  onViewDetails={() => setBatchDetailsOpen(true)}
-                  onDismiss={batchProgress.dismiss}
-                />
-              ) : null}
               <div className="relative flex min-h-0 flex-1 flex-col">
                 <ScrollArea
                   ref={resultsScrollRef}
@@ -1274,10 +1106,6 @@ export function JobsClient({
               onUpdateStatus={updateStatus}
               onDelete={requestDelete}
               onManualGenerate={handleManualGenerate}
-              onGenerateJob={enqueueJob}
-              generatePendingJobId={generatePendingJobId}
-              generateGuideHighlighted={highlightGenerate}
-              generateGuideHighlightClass={guideHighlightClass}
               onReviewApplication={handleJobReview}
               reviewLoading={tailorReview.loading}
               reviewError={

@@ -7,11 +7,11 @@ Vocabulary is `CONTEXT.md`.
 
 ## Provider stack
 
-`app/layout.tsx:52-71` is the only `<html>`. It resolves `getLocale()` /
-`getMessages()` and wraps everything in `NextIntlClientProvider`, then
-`Providers`.
+`app/layout.tsx:61` is the only `<html>`. It resolves `getLocale()` /
+`getMessages()` (`:57-58`) and wraps everything in `NextIntlClientProvider`,
+then `Providers`.
 
-`app/providers.tsx:13-42`, outermost first: `ThemeProvider` →
+`app/providers.tsx:27-35`, outermost first: `ThemeProvider` →
 `MotionConfig reducedMotion="user"` → `QueryClientProvider` (`staleTime` 15 s,
 no refetch on focus) → `SessionProvider` → `NextTopLoader` →
 `FetchStatusProvider` → children + `FetchProgressPanel` → `Toaster`.
@@ -26,26 +26,27 @@ There is **no** root `middleware.ts`. Auth gating is per-page
 | Group | What it is | Auth |
 |---|---|---|
 | `(marketing)` | Public landing + legal. Loads `Instrument_Serif` scoped to this group. | None |
-| `(auth)` | Sign-in. Resolves the session before any UI and redirects authenticated visitors to a sanitized callback (`login/page.tsx:27-49`). | Inverse gate |
+| `(auth)` | Sign-in. Resolves the session before any UI and redirects authenticated visitors to a sanitized callback (`login/page.tsx:30-38`). | Inverse gate |
 | `(app)` | Authenticated workspace shell: atmosphere layers, `GuideProvider`, `AppNav`, `CommandPalette`, `RouteTransition`. The layout itself does not gate. | Per page |
 
 ### Pages under `(app)`
 
 | Page | Gate | Notes |
 |---|---|---|
-| `/jobs` | session; **CN market redirects to `/resume`** (`page.tsx:117`) | `force-dynamic`. SSR runs `listJobs` and seeds the same infinite-query key the client reads, then `HydrationBoundary`. |
-| `/jobs/[id]/tailor` | session; missing Application → `/jobs` | The full-page Edit surface. Two legacy escape hatches for rows with no or invalid `aiContent`. |
+| `/jobs` | session; **CN market redirects to `/resume`** (`page.tsx:114`) | `force-dynamic`. SSR runs `listJobs` and seeds the same infinite-query key the client reads, then `HydrationBoundary`. |
+| `/jobs/[id]/tailor` | session; `not_found`/`busy` → `/jobs` | The full-page Edit surface. A `legacy` snapshot (no or invalid `aiContent`) renders `LegacyApplicationBanner` instead. The `busy` kind is now unreachable — ADR-0022 removed the TailoringRun read behind it, though the union member is kept for callers that still switch on it. |
 | `/fetch` | session; CN → `/resume` | The Fetch Pipeline console. |
-| `/resume` | session | The Resume Studio. The page is a 15-line shell; all logic is in `components/resume/**`. |
+| `/resume` | session | The Resume Studio. The page is a 23-line shell; all logic is in `components/resume/**`. |
 | `/resume/rules` | — | `redirect("/resume")`. |
 | `/career` | — | **Compatibility redirect to `/jobs`** per ADR-0006. The whole file is 6 lines. No Career client, nav entry, or translations remain. |
 
 There is no `/automation` route.
 
-`AppNav.tsx` computes the link set from `useMarket()`: CN gets
-`[/resume]`; AU gets `[/jobs, /fetch, /resume]`. Neither is a route any more:
-GitHub trending is a popover in both markets, Runner setup is a popover gated on
-`!isCN`. Language, theme, the guide and sign-out sit behind the account avatar.
+`AppNav.tsx:59-66` computes the link set from `useMarket()`: CN gets
+`[/resume]`; AU gets `[/jobs, /fetch, /resume]`. GitHub trending is a popover
+in both markets rather than a route (`TrendingPopover`). The Runner setup
+popover went with ADR-0022; a comment at `:140-142` marks where it stood.
+Language, theme, the guide and sign-out sit behind the account avatar.
 `CommandPalette.tsx` duplicates the same conditional list.
 
 `app/global-error.tsx` renders **outside** `NextIntlClientProvider`, so it reads
@@ -55,50 +56,52 @@ the locale cookie directly and uses an inlined EN/ZH table.
 
 ## The Jobs workspace
 
-### `JobsClient.tsx` — 1297 lines
+### `JobsClient.tsx` — 1125 lines
 
 Several state machines share one closure. By responsibility:
 
 | Area | Owns |
 |---|---|
 | Selection and URL | `selectedId`, explicit-clear state, the sole workspace URL writer, and scroll-anchor capture/restore around mutations. |
-| List data | `useJobPagination`, `useJobMutations`, suppressed-delete rows, keyboard navigation, and the >80-row virtualization latch. |
-| Generation | `useExternalGenerate` owns interactive manual import; `useTailorReviewController` opens manual, batch, or saved Application content in one full-screen Review & Edit dialog. Local unattended generation belongs to the Agent Runner. |
-| Batch | Per-job enqueue, live progress banner, per-row tailoring state, cancel/retry from the details dialog. |
-| Batch progress | `useBatchProgress` polls the active batch's server-side counts, refreshes the list as jobs settle, and stops the moment a batch reaches a terminal state. |
-| Surfaces | `app/(app)/jobs/components/` — `JobGenerateButton`, `JobTailoringBadge`, `BatchProgressBanner`, `BatchDetailsDialog`, `GenerateProgress`, `JobRequirementsPanel`, `JobSearchBar`, `JobDescriptionMarkdown`, `JsonInputPanel`, `StepImport`, `StepIndicator`, `VirtualJobList`, plus `ExternalGenerateDialog`, `TailorReviewDialog` and the mobile detail overlay. |
+| List data | `useJobPagination`, `useJobMutations`, `useSuppressedJobRows`, keyboard navigation, and the >80-row virtualization latch. |
+| Generation | `useExternalGenerate` owns the whole manual copy/paste path — issue a prompt, paste the JSON back, persist a DRAFT. `useTailorReviewController` opens manual or saved Application content in one full-screen Review & Edit dialog. There is no unattended generation: ADR-0022 deleted the Runner, the enqueue button, the per-row tailoring badge, the progress banner and the batch details dialog. |
+| Surfaces | `app/(app)/jobs/components/` — `GenerateProgress`, `JobRequirementsPanel`, `JobSearchBar`, `JobDescriptionMarkdown`, `JsonInputPanel`, `StepImport`, `StepIndicator`, `VirtualJobList`, plus `ExternalGenerateDialog`, `TailorReviewDialog` and the mobile detail overlay. |
 
-Per ADR-0007, status controls read `ACTIVE_JOB_STATUS_VALUES` (`:821`, `:1082`),
-while the label map in `types.ts:6-23` and the badge maps in `JobListItem.tsx`
-and `JobDetailPanel.tsx` still carry all seven enum values — and they disagree
-on the colour for `APPLIED`.
+Per ADR-0007, status controls read `ACTIVE_JOB_STATUS_VALUES`, while the label
+map in `types.ts:10-27` still carries all seven enum values. Badge colour is no
+longer duplicated per surface: `utils/jobStatusPresentation.ts:41` is the single
+map, and it projects a stored status through `toActiveJobStatus` (`:64`).
 
 ### `app/(app)/jobs/hooks/`
 
 | Hook | Owns | Returns |
 |---|---|---|
-| `useJobFilters.ts` | Filter state ↔ URL, debounced. Two writers: `router.replace` for filters, `history.replaceState` for workspace state. | 16 members. |
-| `useJobPagination.ts` (221) | The list `useInfiniteQuery`, page merge/de-dup, the suppressed-delete filter, the scroll listener. | 13 members. `pageResponses` has no consumer. |
-| `useJobMutations.ts` (499) | All list writes: optimistic status patch with rollback, the 5 s undo window, a serial commit runner, session tombstones, a `pagehide` flush with `keepalive`, chunked batch delete with partial-success semantics. | `{updateStatus, requestDelete, batchDeleteMutation, updatingIds, deletingIds, error, setError}` |
+| `useJobFilters.ts` (193) | Filter state ↔ URL, debounced. Two writers: `router.replace` for filters, `history.replaceState` for workspace state. | 16 members. |
+| `useJobPagination.ts` (212) | The list `useInfiniteQuery`, page merge/de-dup, the suppressed-delete filter, the scroll listener. | 13 members. |
+| `useJobMutations.ts` (364) | All list writes: optimistic status patch with rollback, the 5 s undo window, a serial commit runner, session tombstones, a `pagehide` flush with `keepalive`, chunked batch delete with partial-success semantics. | `{updateStatus, requestDelete, batchDeleteMutation, updatingIds, deletingIds, error, setError}` |
+| `useSuppressedJobRows.ts` (194) | The deferred-delete suppression set and the scroll-anchor capture/restore around it, extracted from `JobsClient`. | Suppression state plus the anchor helpers. |
 | `useKeyboardNavigation.ts` (210) | j/k/Arrow/Escape row navigation with cancellable rAF focus retries for virtualized rows. | void |
-| `useExternalGenerate.ts` (504) | The interactive manual-import Generate path, stable single-target issue recovery, and the shared entry into the Edit phase. | 23 members, including raw dialog/form setters. |
-| `useTailorReviewController.ts` | Demand-loads a tenant-checked Application review snapshot, aborts stale selections, and opens the shared full-screen editor without placing AI content in list responses. | Manual and persisted-Application open/close state plus request cancellation. |
+| `useExternalGenerate.ts` (359) | The whole manual copy/paste path: `POST /api/applications/prompt`, the paste dialog, `POST /api/applications/manual-generate?finalize=false`, and the entry into the Edit phase. `persistGeneratedDraft` (`:31`) is its exported import seam and `GeneratedDraftSource` is now just `"manual_import"`. | Dialog/form state plus the persist action. |
+| `useTailorReviewController.ts` (222) | Demand-loads a tenant-checked Application review snapshot, aborts stale selections, and opens the shared full-screen editor without placing AI content in list responses. | Manual and persisted-Application open/close state plus request cancellation. |
 | `serialRunner.ts` (30) | Chains async tasks so a burst of expiring undo timers cannot fire parallel DELETEs. | — |
-| `useBatchProgress.ts` | Polls the active batch's counts, exposes `{state, refresh, dismiss, visible}`, and ends its own chain once the batch is terminal. | Returns `active` from each poll so an idle workspace makes one request, not a heartbeat. |
+| `manualGenerateDraftResponse.ts` | The Zod schema `useExternalGenerate` validates the DRAFT import response against. | — |
 
-The deferred-delete tombstone set lives in **three** places: module-level
-`sessionDeletedJobIds` (`useJobMutations.ts:34`), component state
-`suppressedDeletedIds` (`JobsClient.tsx:118`), and the filter
-(`useJobPagination.ts:95-98`). `useExternalGenerate` is constructed from
-`useJobMutations`' error setter.
+`useBatchProgress`, `useBatchCompletionSignal` and `useEnqueueJobTailoring`
+went with the queue (ADR-0022). Nothing in the workspace polls a server-side
+job any more.
+
+The deferred-delete tombstone set still lives in more than one place:
+module-level `sessionDeletedJobIds` in `useJobMutations.ts`, the state owned by
+`useSuppressedJobRows`, and the filter inside `useJobPagination`.
+`useExternalGenerate` is constructed from `useJobMutations`' error setter.
 
 ### `app/(app)/jobs/utils/`
 
 `jobsQueryCache.ts` (283) is the single owner of the `["jobs"]` key space — 14
-exports. `jobsUrlState.ts` resolves retired statuses through `toActiveJobStatus`
-(`:38-41`) per ADR-0007; `serializeJobListItem.ts:21` does **not** and casts the
-stored status raw. Also: `visibleTotalCount.ts`, `tailorParser.ts`,
-`jobStatusPresentation.ts`, `constants.ts`, while the shared
+exports. Both `jobsUrlState.ts:37` and `serializeJobListItem.ts:25` resolve
+retired statuses through `toActiveJobStatus` per ADR-0007, so the SSR-seeded
+first page and the client-fetched pages agree. Also: `visibleTotalCount.ts`,
+`tailorParser.ts`, `jobStatusPresentation.ts`, `constants.ts`, while the shared
 `jobExperienceAnalysis.ts` module owns evidence-preserving JD year analysis;
 `skillPackMeta.ts` owns skill-pack freshness.
 
@@ -106,86 +109,86 @@ stored status raw. Also: `visibleTotalCount.ts`, `tailorParser.ts`,
 
 ## The Tailoring Edit surfaces
 
-Two implementations. Both mount `useTailorDraft` and reuse the same five
-presentational modules from `app/(app)/jobs/[id]/tailor/`.
+Two entry points, one engine. Both are thin: they build a
+`useTailoringEditSession` and hand it to a view.
 
-### Shared engine — `useTailorDraft.ts` (222)
+### Shared session — `useTailoringEditSession.ts` (406)
 
-Owns the AI Content draft and its autosave. A monotonic `versionRef`, a 2000 ms
-debounce, `startPersist` serialized behind `inFlightRef`, and `flushNow()` which
-drains the debounce and **throws** if the newest version failed. It returns the
-`aiContentHash` that both callers pass as `expectedHash`.
+The single owner of an edit session. It exposes `document` (target selection,
+publication state, content mutators), `content`, `preview`, `busy`, `issue`,
+and the three commands `finalize`, `discard`, `saveAndExit`. Callers pass only
+the initial snapshot and a message table, so localization stays at the call
+site.
 
-### `TailorClient.tsx` (517) — the full-page route
+It composes:
 
-Has a doc tab, so one session edits both `resume` and `cover`. Localized. Renders
-`ReviewGateCard` unconditionally from the persisted review. `PdfPreview` runs
-with the default 30 s idle auto-refresh.
+| Module | Role |
+|---|---|
+| `useTailorDraft.ts` (273) | The AI Content draft and its autosave: a monotonic version ref, a debounce, a single-flight persist, and a flush that throws if the newest version failed. Supplies the `aiContentHash` used as `expectedHash`. |
+| `useTailoringPreviewLifecycle.ts` (738) | The preview state machine — debounce with queued follow-up, in-flight guards, object-URL revocation on replace and unmount, and `PreviewSyncStatus`. |
+| `useTailoringSessionCommands.ts` (162) | `finalize` / `discard` / `saveAndExit`, including the blocked-review 422 path. |
+| `tailorActions.ts` (139), `tailorResponseSchemas.ts` | The HTTP calls and their response schemas. |
+| `useUnsavedChangesGuard.ts` | The leave-with-unsaved-work guard. |
 
-**`handleRefresh` calls `/finalize`, not `/preview`** (`:134-152`) — refreshing
-the PDF commits the draft and sets status `FINAL`. Per `CONTEXT.md`, `FINAL`
-asserts that the rendered PDF reflects committed AI Content.
+### `TailorClient.tsx` (73) — the full-page route
 
-### `TailorReviewDialog.tsx` (749) — the dialog inside Jobs
+Builds the session with the `tailor` message namespace, wires back/finalize to
+`router.push("/jobs")`, and renders `TailorClientView.tsx` (486). Localized.
 
-Single target, fixed from `initialDraft.target`. All UI copy is hardcoded
-English — no `useTranslations` call in the file. Closing is intercepted so the
-draft flushes first.
+### `TailorReviewDialog.tsx` (141) — the dialog inside Jobs
 
-**`handleRefresh` calls `/preview`** and produces an object URL (`:254-302`). It
-owns a preview-sync state machine the page surface lacks: four refs, a 1400 ms
-debounce with a 500 ms queued follow-up, in-flight/queued guards, and object-URL
-revocation on replace and unmount.
+A full-screen `Dialog` around `TailorReviewDialogView.tsx` (473). It builds the
+same session with `initialTarget` fixed from the draft and `autoPreview: true`,
+and intercepts close so `saveAndExit` runs first. It is localized through the
+same `tailor` namespace; the props contract lives in
+`TailorReviewDialog.types.ts`.
 
-It is also the only surface that parses a blocked finalize — `extractBlockedReview`
-(`:724-737`) reads an `ApiError` with status 422 and code
-`APPLICATION_REVIEW_BLOCKED`, which is what `fetchJson`'s typed `payload` makes
-possible.
-
-Batch results and Saved CV/CL actions pass only an `applicationId` into the
-controller. `GET /api/applications/:id/review-snapshot` is session-only and
-`no-store`; it verifies the Application, Job, and bound Resume Profile all
-belong to the current user before returning AI content. Legacy rows without
-valid AI content keep their direct PDF fallback.
-
-`patchSummary`, `patchLatestExperience`, `patchCover`, `callFinalize`,
-`handleDiscard`, `StatusPill` and `extractMessage` are duplicated between the two
-files, in places character for character.
+Saved CV/CL actions pass only an `applicationId` into the controller.
+`GET /api/applications/:id/review-snapshot` is session-only and `no-store`; it
+verifies the Application, Job, and bound Resume Profile all belong to the
+current user before returning AI content. It no longer consults a run table for
+a `busy` verdict — ADR-0022 removed the only concurrent writer that guard
+existed for. Legacy rows without valid AI content keep their direct PDF
+fallback.
 
 ---
 
 ## The Resume Studio — `components/resume/**`
 
-`ResumeContext.tsx` (266) is the composition root. It calls three hooks and
-spreads all three return objects into one context value (`:238-255`) — roughly
-75 members covering form editing, PDF preview, and profile-version management.
+`ResumeContext.tsx` (432) is the composition root. It calls three hooks and
+spreads all three return objects into one context value (`:397-421`), then adds
+section-navigation, completion, autosave and locale members on top.
 
-- Derives the Resume Locale from the UI Locale (`:56`).
-- Owns dirty tracking by stringifying `buildPayload("save")` against a baseline.
+- Derives the Resume Locale from the UI Locale (`:82`).
+- Owns dirty tracking by stringifying `buildPayload("save")` against a baseline
+  keyed on `(activeProfileId, locale)` (`:175-195`), so a locale switch cannot
+  re-baseline against the other locale's content.
 - Gates the live preview on an actually-visible surface via `matchMedia`.
-- `useResumeAutosave.ts` debounces 800 ms from the last edit, is single-flight,
-  and flushes on blur and `beforeunload`. `SaveIndicator.tsx` renders its status;
-  there is no Save button and no dirty-state nag.
+- `useResumeAutosave.ts` (168) debounces 800 ms from the last edit
+  (`DEFAULT_DELAY_MS`, `:55`), is single-flight, and flushes on blur and
+  `beforeunload` (`:159-160`). `SaveIndicator.tsx` renders its status; there is
+  no Save button and no dirty-state nag.
 
-`useResumeForm.ts` (827) is pure client form state: eight `useState` slices, ~35
-immutable mutators, dnd-kit reordering with focus remapping, and `buildPayload(mode)`
-— the single serializer, which differs between `"preview"` (only fully renderable
+`useResumeForm.ts` (827) is pure client form state: `useState` slices, immutable
+mutators, dnd-kit reordering with focus remapping, and `buildPayload(mode)` —
+the single serializer, which differs between `"preview"` (only fully renderable
 entries) and `"save"`, and constructs objects field by field so the client-only
-`rowId` never reaches the API. It returns 55 keys and has no direct test.
+`rowId` never reaches the API. It has no direct test.
 
-`useResumePreview.ts` (209) validates against the shared `ResumeProfileSchema`
-before POSTing, so a mid-typing draft never 400s the server; dedups by payload
-key; keeps the last good PDF painted during refreshes; retries once on 502/503/504.
+`useResumePreview.ts` (217) validates against the shared `ResumeProfileSchema`
+before POSTing (`:89`), so a mid-typing draft never 400s the server; dedups by
+payload key; keeps the last good PDF painted during refreshes; retries once on
+502/503/504 (`:149`).
 
-`useResumeProfiles.ts` (301) owns profile versions. It takes `setPdfUrl`,
+`useResumeProfiles.ts` (315) owns profile versions. It takes `setPdfUrl`,
 `setPreviewStatus` and `setPreviewError` as parameters and reimplements
-`resetPreviewState` (`:107-114`) as a copy of `useResumePreview`'s own
-`resetPreview` (`:188-195`). A fourth parameter, `resetDraft`, is accepted and
-never used.
+`resetPreviewState` (`:123`) as a copy of `useResumePreview`'s own
+`resetPreview` (`:193`). A fourth parameter, `resetDraft`, is accepted and
+never used (`:19`).
 
-`ResumePageLayout.tsx` (318): `SectionContent` (`:42-178`) destructures ~40
-context values purely to re-drill them as props, giving `ExperienceSection` a
-17-prop interface. Only six files call `useResumeContext`.
+`ResumePageLayout.tsx` (344): `SectionContent` (`:43`) destructures context
+values purely to re-drill them as props. Eight files call `useResumeContext`,
+one of which is the provider itself and one a test.
 
 The editor's presentation layer was rebuilt around one scroll (ADR-less; see
 commits `b3a4852c`, `180506d9`, `a8d279f2`) and is not otherwise mapped here:
@@ -207,7 +210,8 @@ hydration (`hydrateFromResumeApi`) on purpose: autosave must adopt the saved
 version's identity **without** replacing the draft the user is still typing into.
 
 Section ordering is locale-dependent: `getSectionIds(locale)` returns 6 sections
-for EN and 5 for CN, with Education before Experience (`constants.ts:67-75`).
+for EN and 5 for CN (no Summary), with Education before Experience
+(`constants.ts:67-75`).
 
 ---
 
@@ -217,9 +221,9 @@ Exactly three `createContext` calls exist.
 
 | Context | Carries | Mounted | `useX()` without a provider |
 |---|---|---|---|
-| `FetchStatusContext` (`app/FetchStatusContext.tsx:60`) | Fetch-run lanes and their aggregate; per-user localStorage keys, cross-tab resync, a 3→8→15 s backoff poller, an elapsed ticker | `app/providers.tsx:32` — global, so it wraps marketing and auth too | **Throws** (`:413-419`) |
-| `GuideContext` (`app/GuideContext.tsx:62`) | Onboarding Quick Start. Also *renders* the coachmark, beacon, launcher and panel (`:673-977`), and owns a focus trap, a `MutationObserver` anchor tracker with a 30-attempt budget, and a global `?` shortcut. Disabled entirely in the CN market | `app/(app)/layout.tsx:21` — `(app)` only | **Silent no-op stub** (`:981-993`) |
-| `ResumeContext` (`components/resume/ResumeContext.tsx:49`) | The whole Resume Studio | `app/(app)/resume/page.tsx:17` | **Throws** (`:262-266`) |
+| `FetchStatusContext` (`app/FetchStatusContext.tsx:69`) | Fetch-run lanes and their aggregate; per-user localStorage keys, cross-tab resync, a backoff poller, an elapsed ticker | `app/providers.tsx:32` — global, so it wraps marketing and auth too | **Throws** (`:510`) |
+| `GuideContext` (`app/GuideContext.tsx:48`) | Onboarding Quick Start. Also *renders* `GuideCoachmark`, `GuideLauncher` and `GuidePanel`, and composes the hooks under `app/guide/`. Disabled entirely in the CN market | `app/(app)/layout.tsx:21` — `(app)` only | **Silent no-op stub** — `useGuide` falls back to `EMPTY_GUIDE_CONTEXT` (`:295-304`) |
+| `ResumeContext` (`components/resume/ResumeContext.tsx:75`) | The whole Resume Studio | `app/(app)/resume/page.tsx` | **Throws** (`:428-432`) |
 
 The two missing-provider contracts differ. A component accidentally rendered
 outside `GuideProvider` silently stops completing onboarding tasks rather than
@@ -233,9 +237,10 @@ Two cross-component channels bypass context: the `joblit:command-palette` and
 ## Client-side data access
 
 `lib/api/fetchJson.ts` is the intended seam. It sets `Content-Type`, parses
-JSON with a null fallback, throws `ApiError(status, message, payload)` on non-2xx,
-and optionally validates against a Zod schema. `extractErrorMessage` (`:78-91`)
-understands three envelope shapes, because the server emits three.
+JSON with a null fallback, throws `ApiError(status, message, payload)` on
+non-2xx (`:85`), and optionally validates against a Zod schema.
+`extractErrorMessage` (`:108`) understands more than one envelope shape,
+because the server emits more than one.
 
 Production importers now span the Jobs hooks, Tailoring Edit actions, Guide,
 and Fetch-status modules. Some binary download/preview, `keepalive`, and
@@ -243,8 +248,9 @@ stream-specific calls still use platform `fetch` because `fetchJson` is a JSON
 adapter rather than a universal transport wrapper.
 
 There is no non-HTTP transport left in the client. The retired `postMessage`
-bridge is historical (ADR-0014); the local model is now reached by the Runner,
-not the page.
+bridge is historical (ADR-0014), and the Runner that replaced it is itself
+retired (ADR-0022). The model is reached by the user, in their own browser tab,
+by pasting.
 
 React Query key spaces: `["jobs", queryString]`, `["job-details", jobId]`. The
 trending popover holds its two periods in component state instead — it is a
@@ -254,7 +260,7 @@ single ambient panel with no cross-component consumers.
 
 ## i18n wiring
 
-1. `next.config.ts:3` — `createNextIntlPlugin("./i18n/request.ts")`
+1. `next.config.ts:4` — `createNextIntlPlugin("./i18n/request.ts")`
 2. `i18n/routing.ts:3-8` — locales `["en","zh"]`, `localePrefix: "never"` (no
    locale segment in any URL), `localeDetection: false` (`Accept-Language` is
    ignored)
@@ -263,43 +269,46 @@ single ambient panel with no cross-component consumers.
 4. `app/layout.tsx:65` — `NextIntlClientProvider`, so the full catalog ships to
    every client route, marketing included.
 
-**The cookie.** `components/LocaleSwitcher.tsx:19-28` is the only writer: it sets
+**The cookie.** `components/LocaleSwitcher.tsx:21-26` is the only writer: it sets
 `localStorage` and `document.cookie` client-side, then `router.refresh()`. There
 is no middleware and no server-side write.
 
 **Market derivation.** `hooks/useMarket.ts` = `uiLocaleToMarket(useLocale())`.
-`ResumeContext.tsx:56` separately derives the Resume Locale from the same UI
+`ResumeContext.tsx:82` separately derives the Resume Locale from the same UI
 Locale.
 
-**17 namespaces**, identical key sets in both files. Largest: `jobs` 178,
-`resumeForm` 147, `tailor` 92, `landing` 79, `privacy` 58, `agent` 50.
+**16 namespaces**, identical key sets in both files. Largest by leaf key:
+`resumeForm` 148, `jobs` 145, `landing` 92, `tailor` 92, `privacy` 58,
+`terms` 49. The `agent` namespace went with the Runner setup popover
+(ADR-0022).
 
 **The gate.** `test/messagesContract.test.ts` asserts (a) en and zh key
 structures are identical, and (b) every key is referenced from source, with an
-allowlist for the seven template-literal-built prefixes, each naming its call
-site. Adding a key to one file and not the other now fails the build.
+allowlist (`DYNAMIC_KEY_PREFIXES`, `:46`) for the three template-literal-built
+prefixes, each naming its call site. Adding a key to one file and not the other
+fails the suite.
 
 **Surfaces with hardcoded English**, so a reader does not assume coverage:
-`TailorReviewDialog.tsx`, `app/not-found.tsx`, and
-the toast copy in `useJobMutations.ts` and
-`useExternalGenerate.ts`.
+`app/not-found.tsx` and the toast copy in `useExternalGenerate.ts`. The
+Tailoring dialog is now localized — `TailorReviewDialogView.tsx` calls
+`useTranslations`.
 
 ---
 
 ## Tests
 
-56 colocated files, ~369 cases. The densest cluster is Jobs.
+68 colocated files, ~461 cases. The densest cluster is Jobs.
 
-`JobsClient.test.tsx` is 2922 lines / 58 cases — the largest in the repo. Two
-things to know before editing it: its seam is `globalThis.fetch` patched with a
-40-line URL router (`:128-169`), and several assertions pin Tailwind class
-literals (`:487-495`, `:523-528`) rather than behaviour, so a visual tweak breaks
-the suite.
+`JobsClient.test.tsx` is 2837 lines / 53 cases — the largest in the repo. Two
+things to know before editing it: its seam is `vi.stubGlobal("fetch", …)` with a
+per-suite URL router, and several assertions pin Tailwind class literals
+(`:613-617`, `:1110`) rather than behaviour, so a visual tweak breaks the suite.
 
 **Untested by any colocated test**: `useResumeForm.ts` (827 lines),
-`useResumeProfiles.ts`, `useResumePreview.ts`, `ResumeContext.tsx`, all six
-resume sections, `useJobFilters.ts`, `useJobPagination.ts`, `useJobMutations.ts`
-(534 lines, exercised only indirectly through the full-page render).
+`useResumeProfiles.ts`, `ResumeContext.tsx`, all six resume sections,
+`useJobFilters.ts`, `useJobPagination.ts`, `useJobMutations.ts` (364 lines,
+exercised only indirectly through the full-page render). `useResumePreview.ts`
+does have one (`useResumePreview.test.ts`).
 
 Where a named seam exists — `useTailorDraft`, `fetchJson` — the tests mock the
 module and stay short. That contrast is structural, not cultural.

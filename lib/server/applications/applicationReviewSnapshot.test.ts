@@ -190,23 +190,4 @@ describe("application review snapshot", () => {
     expect(stores.tailoringRun.findFirst).not.toHaveBeenCalled();
   });
 
-  it("does not open an edit session while generation still owns the Job", async () => {
-    stores.application.findFirst.mockResolvedValueOnce(applicationRow());
-    stores.tailoringRun.findFirst.mockResolvedValueOnce({ id: "run-1" });
-
-    await expect(
-      loadApplicationReviewSnapshot({
-        userId: USER_ID,
-        applicationId: APPLICATION_ID,
-      }),
-    ).resolves.toEqual({ kind: "busy" });
-    expect(stores.tailoringRun.findFirst).toHaveBeenCalledWith({
-      where: {
-        userId: USER_ID,
-        jobId: JOB_ID,
-        status: { in: ["ISSUED", "RUNNING"] },
-      },
-      select: { id: true },
-    });
-  });
 });

@@ -2,7 +2,7 @@
 
 # Joblit
 
-**An end-to-end job-search workstation.** Fetch roles, triage them, tailor a custom resume and cover letter for each JD with a local Agent Runner, and export production-grade PDFs — without copy-paste.
+**An end-to-end job-search workstation.** Fetch roles, triage them, tailor a custom resume and cover letter for each JD with the assistant you already use, and export production-grade PDFs.
 
 [Live Demo](https://www.joblit.tech) · [Codex Batch Protocol](./AGENTS.md) · [Domain Context](./CONTEXT.md) · [Report a bug](https://github.com/ShousenZHANG/joblit/issues)
 
@@ -33,21 +33,17 @@
 
 Joblit uses both as **product infrastructure**, not just as build-time assistants.
 
-### GPT-5.6 runs the tailoring through the user's local Runner
+### The user's own model does the writing
 
-The first-party Agent path generates CVs and cover letters through the official
-Codex CLI running as a child process of the
-[Joblit Runner](./tools/runner/) — a dependency-free Node process that speaks
-the same public API any external agent uses. Joblit already stores the Job and
-Master Resume Profile needed to build the prompt; the privacy boundary is the
-model connection. Joblit never sees a model credential at all: `codex login`
-holds the user's own ChatGPT subscription and the child process inherits it.
-There is no server-side generation path and no server-held model key
-(ADR-0015).
+Joblit issues the prompt and accepts the result; it never calls a model and
+never holds a model credential (ADR-0015). The user copies the generated
+prompt into whichever assistant they already pay for, and pastes the JSON
+back. The privacy boundary is the model connection, and it stays on their
+side of it.
 
 What the model is trusted with is deliberately narrow:
 
-| Joblit asks GPT-5.6 for                           | Joblit computes itself                              |
+| Joblit asks the model for                         | Joblit computes itself                              |
 | ------------------------------------------------- | --------------------------------------------------- |
 | Rewritten summary and bullet candidates           | Which claims survive the evidence gate              |
 | A strict JSON payload against a published schema  | The hard-gate caps and the final document           |
@@ -57,29 +53,21 @@ traces every generated claim back to evidence in the candidate's real profile,
 and **blocks the PDF from rendering** when a claim has none — the model
 proposes, it never gets the last word on what carries the user's name.
 
-### Codex drives the batch pipeline
+### The tailoring loop
 
-Tailoring one application at a time is fine; tailoring forty is a job for an
-agent. Codex runs Joblit's batch loop through a documented HTTP protocol
-([AGENTS.md](./AGENTS.md)):
+Three session-authenticated endpoints, one job at a time:
 
 ```
-POST /api/application-batches/enqueue      → add chosen jobs to the tailoring queue
-POST /api/application-batches/:id/run-once → report failure/skip + claim next
-POST /api/applications/prompt              → issue the task-bound Tailoring Run
-POST /api/applications/manual-generate     → accept one target with its run handle
-GET  /api/application-batches/:id/summary  → progress (interactive session)
+POST /api/applications/prompt              → issue the prompt for one target
+POST /api/applications/manual-generate     → import the pasted JSON as a draft
+POST /api/applications/:id/finalize        → publish one target to PDF
 ```
 
-New Runners advertise protocol `[2, 1]`; an older caller that advertises
-nothing stays on protocol v1. Protocol v2 first persists each generated target
-as an editable DRAFT, then publishes its PDF independently. A task is complete
-only when every required target has both an immutable acceptance receipt and an
-immutable publication receipt. After a stale reclaim, the claim reports
-`remainingTargets` and `remainingPublicationTargets`, so an uncertain Cover
-publication retries without another Codex run. Existing bound v1 tasks remain
-FINAL/v1 for their lifetime. See
-[ADR-0020](./docs/adr/0020-durable-two-stage-tailoring-publication.md).
+An earlier design drove this loop from a local Runner process over a versioned
+agent protocol, with a durable batch queue and receipt-backed settlement.
+It was retired (ADR-0022): installing a CLI and minting a bearer credential is
+a price nobody paid, and the machinery that made an unattended worker's
+retries safe was where the bugs lived.
 
 ### How Codex was used to build Joblit
 
@@ -126,8 +114,8 @@ Most job-search tools stop at listing or tracking. Joblit closes the loop:
 | **Export**   | Production-grade PDF output               | LaTeX compile pipeline, EN + CN templates                                                              |
 
 The product differentiator is **where the AI can run**: tailoring flows through
-your own local Runner and your own Codex CLI login, while Joblit stores the
-deterministic workflow and never sees your model key.
+whichever assistant you already use, while Joblit stores the deterministic
+workflow and never sees your model key.
 
 > Joblit is free and open to everyone. Sign in with Google or GitHub; no invitation, manual approval, subscription, or credit card is required.
 
@@ -135,7 +123,6 @@ deterministic workflow and never sees your model key.
 
 - [Codex & GPT-5.6](#codex--gpt-56)
 - [Features](#features)
-- [Local Runner](#local-runner)
 - [Architecture](#architecture)
 - [Project Structure](#project-structure)
 - [Quick Start](#quick-start)
@@ -188,13 +175,6 @@ deterministic workflow and never sees your model key.
 - LaTeX-based resume and cover-letter rendering with bilingual templates
 - FINAL artifacts persist through Vercel Blob outside tests; DRAFT edits do not upload
 
-### Batch Automation (Codex Workflow)
-
-- Queue any `NEW` job for tailoring from its own AI Generate button
-- Atomic claim-and-complete loop via `POST /api/application-batches/:id/run-once`
-- Progress tracking via batch summary API
-- Full external orchestration protocol documented in [AGENTS.md](./AGENTS.md)
-
 ### Open Access & Fetch Worker
 
 - **Self-service access** — anyone can sign in with Google or GitHub OAuth and start using Joblit immediately
@@ -205,69 +185,11 @@ deterministic workflow and never sees your model key.
 - Official-order GitHub weekly/monthly trending repositories, reached from the flame icon in the app nav
 - A DB-backed last-known-good cache survives serverless cold starts; an empty or changed parse never overwrites known-good content
 
-## Local Runner
-
-`tools/runner/` is a dependency-free Node process that generates your materials
-on your own machine. It replaces the Chrome extension
-([ADR-0014](./docs/adr/0014-retire-the-browser-extension-for-a-local-runner.md)).
-
-### What it does
-
-Each cycle it drains the active tailoring batch, then sleeps. It claims a task,
-generates each `remainingTarget` by running `codex exec`, and first persists the
-result as an editable DRAFT with the exact issued receipt. It then publishes
-each `remainingPublicationTarget` as a PDF. A recovered publication-only task
-never calls Codex again. Success is implicit; only failures and skips are
-reported back.
-
-The Runner keeps no model output on disk (ADR-0018). An unknown import replays
-the byte-identical receipt. Once DRAFT persistence succeeds, publication
-recovery is server-owned and reuses the Application and content hashes, so a
-dropped PDF response never re-runs the model or creates duplicates (ADR-0020).
-
-Generated materials and their PDFs land in Joblit for review. The Runner never
-submits an application.
-
-### Why it is not in the browser
-
-The extension reached the local model through a service worker, a content
-script, a `postMessage` bridge, a wire contract and a run registry. The Runner
-makes one HTTPS call to Joblit and runs one local child process. It is
-headless, so work no longer dies when you close a tab.
-
-### Security
-
-- **The Runner holds no model credential.** There is nothing to leak: `codex
-  login` stores the user's own subscription auth and the Codex child process
-  inherits it. The Runner's only secret is the Joblit agent token.
-- **The model is pinned to a text generator.** Every invocation passes
-  `--sandbox read-only`, `features.shell_tool=false`, `web_search=disabled`,
-  `--ignore-user-config`, `--ignore-rules`, `--ephemeral`, and a throwaway
-  working directory. Job descriptions are untrusted text from the internet and
-  they go straight into the prompt.
-- **Agent credentials are versioned, scoped, revocable, and stored hashed.**
-  A presented credential is never rescued by a session cookie, so revoking one
-  stops the Runner immediately. Runner credentials use the `jfagent_v1_`
-  prefix, the `joblit-agent` audience, and explicit capabilities.
-- **The Runner imports no repository code.** The HTTP API is its only contract,
-  the same one documented in [AGENTS.md](./AGENTS.md) for external agents.
-
-### Protocol
-
-`withAgentRoute` accepts either a Bearer `AgentCredential` or a browser session
-and produces the same identity, so the batch protocol and the tailoring
-endpoints serve humans and agents through one seam. Credentials are minted
-through the session-only `/api/agent-tokens` route, reached from the Runner
-setup popover in the app nav; that endpoint refuses Bearer auth, because
-minting a credential from a credential would let a leaked credential outlive
-its revocation.
-
 ## Architecture
 
 ```mermaid
 flowchart LR
   U[User] --> FE[Next.js UI]
-  U --> RUN[Local Runner]
 
   FE --> API[Next.js API Routes]
   API --> DB[(PostgreSQL via Prisma)]
@@ -307,7 +229,6 @@ app/
     resume/           Resume studio + prompt rules
     career/           Redirect to /jobs (ADR-0006)
   api/                Backend routes
-    agent-tokens/     Issue and revoke AgentCredential records (session-only)
     fetch-runs/[id]/  Run config and receipt-backed worker commit routes
 lib/
   api/                Client-side fetch helper
@@ -315,7 +236,6 @@ lib/
   shared/             Zod schemas, market/locale seam, shared config
 prisma/               Schema + migrations
 tools/
-  runner/             The local Runner — tailoring batch drain
   fetcher/            Python JobSpy worker
   ci/, deploy/        Policy gates and deployment guards
 test/                 API + server test suites
@@ -329,7 +249,6 @@ test/                 API + server test suites
 - npm **>= 10**
 - PostgreSQL database (Neon recommended; any Postgres 14+ works)
 - Vercel Blob token for FINAL export and artifact reconciliation
-- Optional: the official Codex CLI, signed in, for the local Runner
 
 ### Setup
 
@@ -352,25 +271,6 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
-
-### Local Runner (optional)
-
-Generate CVs and cover letters on your own machine. Install and sign in to the
-Codex CLI, then issue an `AgentCredential` from the Runner setup popover in the
-app nav:
-
-```bash
-npm i -g @openai/codex
-codex login
-```
-
-The popover hands you the whole start command as one line:
-
-```bash
-JOBLIT_URL="http://localhost:3000" JOBLIT_TOKEN="jfagent_v1_..." node tools/runner/cli.mjs --watch
-```
-
-Full setup in [tools/runner/README.md](./tools/runner/README.md).
 
 ## Scripts
 
@@ -423,15 +323,18 @@ A complete template lives in [`.env.example`](./.env.example).
 | `LATEX_RENDER_ALLOW_INSECURE_HTTP`                                                      | Explicit `true` opt-in for a self-hosted HTTP renderer; HTTPS remains the safe default                                                                                                                                           |
 | `SENTRY_DSN`                                                                            | Error reporting (when SDK is installed)                                                                                                                                                                                          |
 
-## Codex Batch Workflow
+## Tailoring Workflow
 
-The full external orchestration protocol is documented in
-[AGENTS.md](./AGENTS.md), which is the canonical contract. In short:
+1. Fetch jobs and keep target roles as `NEW`.
+2. Open a job and choose **Generate CV** or **Generate cover letter** from the
+   detail header's overflow menu.
+3. Download the skill pack once, copy the prompt, and paste it into whichever
+   assistant you use.
+4. Paste the JSON back. It lands as a DRAFT you review in Review & Edit.
+5. Publish each target to PDF from there.
 
-1. Fetch jobs and keep target roles as `NEW`, then `POST /api/application-batches/enqueue` with the `jobIds` you want. It appends to the live batch rather than refusing while one drains.
-2. Claim through `run-once`, advertise supported protocols, and retain the task's exact attempt, issue, target, and publication progress.
-3. For protocol v2, request prompts only for `remainingTargets`, persist each through `manual-generate?finalize=false`, then finalize only `remainingPublicationTargets` with the returned Application identity and the exact run fence.
-4. A task succeeds only after both current PDFs have publication receipts. Report only `FAILED` or `SKIPPED`; success needs no callback.
+Each target is its own round trip. The batch queue that used to drive this
+unattended was retired ([ADR-0022](./docs/adr/0022-retire-the-runner-and-the-batch-queue.md)).
 
 ## Testing
 
@@ -470,7 +373,6 @@ CI runs lint, dependency policy, full test suite, and (per-PR) Lighthouse agains
 | `GITHUB_DISPATCH_FAILED`          | Verify `GITHUB_TOKEN` workflow permissions on the fetch repo                                             |
 | Low import volume                 | Increase fetch breadth or relax title/description excludes                                               |
 | `PROMPT_META_MISMATCH`            | Re-download skill pack and re-copy the prompt                                                            |
-| Runner not picking up work        | Regenerate the credential in the Runner setup popover, and confirm `codex login` is still signed in                |
 | `403 Forbidden` on Vercel preview | Disable Vercel deployment protection or use the custom domain                                            |
 
 ## Contributing

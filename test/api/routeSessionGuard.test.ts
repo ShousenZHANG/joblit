@@ -46,7 +46,8 @@ const NON_SESSION_ROUTES = new Set([
 
 describe("route session seam", () => {
   it("finds route files to check", () => {
-    expect(ROUTES.length).toBeGreaterThan(40);
+    // 15 API routes went with the Runner, the batch queue and agent tokens.
+    expect(ROUTES.length).toBeGreaterThan(25);
   });
 
   it("never hand-rolls the UnauthorizedError preamble", () => {
@@ -66,10 +67,9 @@ describe("route session seam", () => {
   it("routes every session-authenticated handler through the wrapper", () => {
     const offenders = ROUTES.filter(({ path, source }) => {
       if (NON_SESSION_ROUTES.has(path)) return false;
-      if (source.includes("requireAgentCredential")) return false;
-      // withAgentRoute is the dual-identity wrapper (session or bearer) used
-      // by the batch-protocol routes the local Runner drives.
-      return !/with(Email)?SessionRoute|withAgentRoute/.test(source);
+      // withAgentRoute went with the batch protocol. Every authenticated
+      // route is a browser session now, so there is one wrapper to check.
+      return !/with(Email)?SessionRoute/.test(source);
     }).map(({ path }) => path);
     expect(offenders).toEqual([]);
   });

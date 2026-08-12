@@ -167,7 +167,7 @@ Gates today:
 ### Codex Batch
 
 External orchestration protocol that loops over `NEW` jobs and tailors each
-one. See `AGENTS.md`. For every concrete job and target, Codex obtains the exact
+one. For every concrete job and target, the user obtains the exact
 prompt and `promptMeta` generation receipt before importing through
 `manual-generate`; batch context itself carries contract identity, not a
 job-less receipt.
@@ -316,5 +316,4 @@ Short locale code used by next-intl for translation strings. `en | zh`. Always d
 - [ADR-0008](./docs/adr/0008-fetch-run-execution-commit-protocol.md) — Why all Fetch Pipeline adapters share one durable commit boundary.
 - [ADR-0017](./docs/adr/0017-retire-cn-and-global-job-intake.md) — Why active job intake is AU-only while CN Job and Resume data remain supported.
 - [ADR-0009](./docs/adr/0009-tailoring-run-acceptance-protocol.md) — Why all AI proposal sources share one durable acceptance protocol.
-- [AGENTS.md](./AGENTS.md) — Codex Batch protocol.
 - [docs/CODEMAPS/](./docs/CODEMAPS) — Architecture snapshots.

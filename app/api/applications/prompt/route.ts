@@ -1,36 +1,30 @@
-import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { errorJson, validationError } from "@/lib/server/api/errorResponse";
-import { withAgentRoute } from "@/lib/server/api/routeHandler";
+import { withSessionRoute } from "@/lib/server/api/routeHandler";
 import {
   ApplicationPromptError,
   buildApplicationPromptForUser,
 } from "@/lib/server/applications/applicationPrompt";
-import { issuePromptTailoringRun } from "@/lib/server/tailoringRuns/issuePromptTailoringRun";
-import { TailoringRunError } from "@/lib/server/tailoringRuns/tailoringRunProtocol";
-import { AgentApplicationPromptRequestSchema } from "@/lib/shared/agentExecutionContract";
+import { ManualPromptRequestSchema } from "@/lib/shared/agentExecutionContract";
 
 export const runtime = "nodejs";
 
+/**
+ * Issue the prompt for one target so the user can paste it into a chatbot.
+ *
+ * This used to mint a TailoringRun on every call, including for the browser's
+ * own copy/paste flow — which then dragged a manual import through a receipt
+ * probe and an acceptance commit it never needed. The run existed to fence an
+ * unattended worker's retries against each other; a person pressing Copy has
+ * no retries to fence. Issuing a prompt is a pure read again.
+ */
 export async function POST(req: Request) {
-  return withAgentRoute(req, "tailoring:execute", async ({
-    userId,
-    requestId,
-    authKind,
-  }) => {
+  return withSessionRoute(async ({ userId, requestId }) => {
     const json = await req.json().catch(() => null);
-    const parsed = AgentApplicationPromptRequestSchema.safeParse(json);
+    const parsed = ManualPromptRequestSchema.safeParse(json);
     if (!parsed.success) {
       return validationError(parsed.error, requestId);
-    }
-    if (authKind === "agent" && parsed.data.source !== "codex_batch") {
-      return errorJson(
-        "AGENT_PROTOCOL_REQUIRED",
-        "Agent credentials must use the versioned Codex Batch protocol.",
-        403,
-        { requestId },
-      );
     }
 
     try {
@@ -39,31 +33,9 @@ export async function POST(req: Request) {
         jobId: parsed.data.jobId,
         target: parsed.data.target,
       });
-      const tailoringRun = await issuePromptTailoringRun({
-              userId,
-              jobId: parsed.data.jobId,
-              target: parsed.data.target,
-              source:
-                parsed.data.source === "codex_batch"
-                  ? "CODEX_BATCH"
-                  : "MANUAL_IMPORT",
-              delivery: parsed.data.delivery,
-              issueKey: parsed.data.issueKey ?? randomUUID(),
-              payload,
-              ...(parsed.data.source === "codex_batch"
-                ? {
-                    batch: {
-                      batchId: parsed.data.batchId!,
-                      taskId: parsed.data.batchTaskId!,
-                      executionAttemptId: parsed.data.batchAttemptId!,
-                    },
-                  }
-                : {}),
-            });
       return NextResponse.json({
         ...payload,
         requestId,
-        ...(tailoringRun ? { tailoringRun } : {}),
         prompt: {
           ...payload.prompt,
           systemPrompt: payload.prompt.instructions,
@@ -79,9 +51,6 @@ export async function POST(req: Request) {
           error.status,
           { details: error.details, requestId },
         );
-      }
-      if (error instanceof TailoringRunError) {
-        return errorJson(error.code, error.message, error.status, { requestId });
       }
       throw error;
     }

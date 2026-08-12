@@ -38,16 +38,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:runner": "node --test tools/runner/cli.test.mjs tools/runner/config.test.mjs tools/runner/codexClient.test.mjs tools/runner/clients.test.mjs tools/runner/runner.test.mjs tools/runner/fitQueue.test.mjs",
     "deadcode": "knip --include files,dependencies,exports,types,duplicates",
     "deps:policy": "node tools/ci/check-dependency-policy.mjs",
     "deps:audit": "npm audit --omit=dev --audit-level=high",
-    "readme:metrics": "node tools/readme/update-metrics-badges.mjs",
-    "hermes:profile:test": "vitest run test/hermesProfileSource.test.ts",
-    "hermes:package:test": "node --test tools/hermes/package.test.mjs tools/hermes/signature.test.mjs",
-    "hermes:package:build": "node tools/hermes/build-package.mjs",
-    "hermes:package:verify": "node tools/hermes/verify-package.mjs",
-    "hermes:package:sign": "node tools/hermes/sign-manifest.mjs"
+    "readme:metrics": "node tools/readme/update-metrics-badges.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

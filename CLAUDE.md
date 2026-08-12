@@ -105,7 +105,7 @@ Two locales: `en-AU` and `zh-CN` via next-intl. Locale is cookie-based. Resume p
 
 ### Authentication
 
-NextAuth v4 with GitHub + Google OAuth, Prisma adapter (database sessions). Sign-in is free, open, and self-service: no invitation or manual approval is required. Session includes `user.id`. Versioned `AgentCredential` records — minted through the session-only `/api/agent-tokens` route, reached from the Runner setup popover in the app nav — authenticate the Runner and external agents through `withAgentRoute`; each protected route declares a required capability, and a presented Bearer credential never falls back to the cookie. Credentials use the `jfagent_v1_` prefix, `joblit-agent` audience, and SHA-256 hashes at rest. See AGENTS.md. The AU worker uses `FETCH_RUN_SECRET` for `/api/fetch-runs/[id]/config` and `/api/fetch-runs/[id]/commit`; the commit module derives tenant identity from the stored run. The retired `/api/admin/import`, `/api/fetch-runs/[id]/update`, `/api/ext/**`, `/api/jobs/fit/**`, and `/api/jobs/bulk-ignore` routes must not be reintroduced. Stored credentials may still carry the retired `fit:drain` capability; validation tolerates it (ADR-0019) and new mints no longer include it.
+NextAuth v4 with GitHub + Google OAuth, Prisma adapter (database sessions). Sign-in is free, open, and self-service: no invitation or manual approval is required. Session includes `user.id`. The AU worker uses `FETCH_RUN_SECRET` for `/api/fetch-runs/[id]/config` and `/api/fetch-runs/[id]/commit`; the commit module derives tenant identity from the stored run. Every route is session-authenticated; `withAgentRoute` and `AgentCredential` were retired with the Runner (ADR-0022). The retired `/api/admin/import`, `/api/fetch-runs/[id]/update`, `/api/ext/**`, `/api/jobs/fit/**`, `/api/jobs/bulk-ignore`, `/api/agent-tokens`, `/api/agent/presence`, `/api/application-batches/**` and `/api/tailoring-runs/**` routes must not be reintroduced.
 
 ### Testing
 
@@ -168,7 +168,7 @@ work may already be receipt-backed; cancellation never rolls those Jobs back.
 
 ## Codex Batch Workflow
 
-The `AGENTS.md` file documents the external orchestration protocol for the Codex batch workflow. Key API: `POST /api/application-batches/[id]/run-once` is atomic (claim next pending task + complete previous task in one call) and idempotent for the same `taskId`.
+Generation is manual copy/paste only (ADR-0022). `POST /api/applications/prompt` issues the prompt for one target, the user pastes it into any chatbot, and `POST /api/applications/manual-generate` imports the JSON; `POST /api/applications/:id/finalize` publishes one target to PDF. All three are session-authenticated. The local Runner, the Application Batch queue and the TailoringRun receipt ledger were deleted.
 
 ## Architecture Reference
 
