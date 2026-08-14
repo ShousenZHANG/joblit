@@ -11,7 +11,7 @@ Vocabulary is `CONTEXT.md`. Route-layer facts live in
 | Directory              | Owns                                                                                                                                                                                                                     | Entry points                                                                                                                                                                                                                                                                                                                                                                                      |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ai/`                  | Prompt construction, evidence/review ledger, cover quality, Skill Pack V3. No provider client — generation is local-first (ADR-0015)                                                                        | `buildPrompt.ts`, `evidenceLedger.ts` `attachEvidenceAndReview`, `promptContract.ts`, `skillPack.ts` `buildSkillPackV3Files`                                                                                                                                                                                                                                                                      |
-| `applications/`        | Application lifecycle: generation acceptance, target-aware AI Content evolution, canonical resume composition, finalize render, artifact commit, ATS validation, advisory lock, review ledger, `ApplicationEvent` append | `applicationGeneration.ts` `acceptApplicationGeneration`, `applicationAiContentAggregate.ts` `evolveApplicationAiContent`, `applicationResumeComposition.ts` `composeApplicationResumeRenderInput`, `commitApplicationArtifact.ts` `commitApplicationArtifact`, `manualImportArtifact.ts`, `finalizeApplication.ts`, `persistReviewLedger.ts`, `applicationMutationLock.ts`, `atsPdfValidator.ts` |
+| `applications/`        | Application lifecycle: generation acceptance, target-aware AI Content evolution, canonical resume composition, non-artifact edit commit, finalize render, artifact commit, ATS validation, advisory lock, review ledger, `ApplicationEvent` append | `applicationGeneration.ts` `acceptApplicationGeneration`, `applicationAiContentAggregate.ts` `evolveApplicationAiContent`, `applicationResumeComposition.ts` `composeApplicationResumeRenderInput`, `applicationEdit.ts` `autoSaveApplicationEdit` / `discardApplicationEdits`, `commitApplicationArtifact.ts` `commitApplicationArtifact`, `manualImportArtifact.ts`, `finalizeApplication.ts`, `persistReviewLedger.ts`, `applicationMutationLock.ts`, `atsPdfValidator.ts` |
 | `artifacts/`           | ADR-0010 Application Blob lifecycle, account-erasure hooks, Vercel adapter, inventory, claim/call/fenced settle                                                                                                          | `applicationArtifactLifecycle.ts` `prepareApplicationArtifactsForAccountErasure` / `purgeDeletedApplicationArtifactsForErasedUser`, `artifactReconciler.ts`, `artifactBlobPort.ts`, `vercelBlobAdapter.ts`                                                                                                                                                                                        |
 | `jobs/`                | Job list/search/delete/status, cooldown, SimHash, posting risk, market scoping                                                                                              | `jobListService.ts`, `jobSearchService.ts`, `jobDeleteService.ts`, `jobMutationLock.ts`, `postingRisk.ts`                                                                                                                                                                                                                                                 |
 | `latex/`               | Template rendering from `latexTemp/` + the remote render-service client                                                                                                                                                  | `compilePdf.ts:69` `compileLatexToPdf`, `renderResume.ts:204`, `renderResumeCN.ts:190`, `renderCoverLetter.ts:81`, `mapResumeProfile.ts:30`                                                                                                                                                                                                                                                       |
@@ -114,7 +114,13 @@ UI marks it fresh. See ADR-0002.
 - `compileLatexToPdf` — the single renderer
 - `commitApplicationArtifact` — the artifact persistence sequence shared by
   manual import and Editor Finalize
-- `persistReviewLedger` — reached through the commit module plus non-artifact draft and discard transactions
+- `applicationEdit` — the caller-shaped Auto-save/discard interface hiding
+  ownership, JOBA, whole-row CAS, source fencing, publication transition and
+  Review Ledger persistence
+- `applicationSourceSnapshot` — the shared owned Profile/Job row-lock seam for
+  evidence review and document render fences
+- `persistReviewLedger` — reached through the artifact commit and Application
+  Edit modules
 
 Once a `DRAFT` Application exists, `app/api/applications/[id]/finalize/route.ts`
 is the single terminal renderer (ADR-0002). It publishes exactly one target per
@@ -149,9 +155,12 @@ CAS, missing Job, or blocked FINAL durably retires any completed upload; a
 superseded Blob becomes eligible only after its replacement transaction
 commits. The protected reconciler owns both external deletion and settlement.
 
-Editor Auto-save and discard render no artifact. They retain their own lock +
-aggregate-CAS transactions, evolve AI Content through
-`evolveApplicationAiContent`, and persist the review ledger.
+Editor Auto-save and discard render no artifact. Both cross the Application
+Edit module, which performs the aggregate-CAS transaction and composes
+`evolveApplicationAiContent`, locked Profile/Job sources,
+`transitionApplicationPublication`, and the Review Ledger behind one seam.
+The shared source snapshot keeps SQL aliases, tenant checks and `FOR SHARE`
+ordering identical to Finalize and replay.
 
 ### ADR-0010 lifecycle cutover status
 

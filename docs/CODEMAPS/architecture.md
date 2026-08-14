@@ -152,6 +152,11 @@ with the user's decision (ADR-0001). The client may only change `accepted` and
 server-owned. `evolveApplicationAiContent` treats browser payloads as Edit
 commands and owns target preservation, provenance, discard, and review
 ordering (`lib/server/applications/applicationAiContentAggregate.ts`).
+`applicationEdit.ts` is the deep Application Edit module around that pure
+aggregate interface: Auto-save and discard cross its caller-shaped interface,
+while it hides ownership, JOBA, whole-row CAS, locked Profile/Job sources via
+`applicationSourceSnapshot.ts`, Application Document Publication and Review
+Ledger persistence.
 
 CV and Cover have independent generation provenance, but evidence, review, and
 `aiContentHash` still cover the complete aggregate.
@@ -227,9 +232,8 @@ survives the Runner's deletion holding a single schema — the browser's
 - Business logic still sits inline in large route handlers such as `finalize`,
   `manual-generate`, `fetch-runs`, and `fetch-runs/[id]/trigger`.
 - Artifact persistence is centralized in `commitApplicationArtifact`.
-  Non-artifact Auto-save and discard still own route-local lock + CAS
-  transactions, but both delegate AI Content semantics to
-  `evolveApplicationAiContent`. See
+  Non-artifact Auto-save and discard converge through `applicationEdit.ts`;
+  their routes retain only HTTP/session adaptation. See
   [backend.md](./backend.md#the-application-artifact-commit-sequence).
 - ADR-0010 adds the `ApplicationArtifact` lifecycle seam: durable
   stage/reference/retirement, claim-call-fenced settlement, and a reconciler
@@ -262,6 +266,10 @@ receipt, counters, and status in that transaction. Application mutation locks
 remain sorted by job ID
 (`lib/server/applications/applicationMutationLock.ts:16-25`). Full table in
 [data.md](./data.md#advisory-locks).
+
+Database row locks come only after the required advisory-lock hierarchy. Job
+deletion uses `JOBJ → sorted JOBA → sorted Job rows`; Application source fences
+use `JOBA → Job/Profile rows`. This prevents advisory/row lock-order cycles.
 
 The execution lease is a persisted fencing protocol, not an advisory lock.
 `FRUN` serializes ownership changes and cancellation; the UUID attempt is what

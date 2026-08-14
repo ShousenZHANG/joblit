@@ -14,6 +14,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const store = vi.hoisted(() => ({
   locks: [] as { namespace: number; key: number }[],
   jobRowLocks: [] as string[][],
+  lockSequence: [] as ("advisory" | "job_rows")[],
   transaction: vi.fn(),
   jobFindMany: vi.fn(),
   jobDeleteMany: vi.fn(),
@@ -62,6 +63,7 @@ const JOB_IDS = ["job-c", "job-a", "job-b"];
 function recordingTx() {
   return {
     $executeRaw: async (_s: TemplateStringsArray, ...values: unknown[]) => {
+      store.lockSequence.push("advisory");
       store.locks.push({
         namespace: Number(values[0]),
         key: Number(values[1]),
@@ -69,6 +71,7 @@ function recordingTx() {
       return 1;
     },
     $queryRaw: async (_s: TemplateStringsArray, ...values: unknown[]) => {
+      store.lockSequence.push("job_rows");
       const joined = values[1] as { values?: unknown[] } | undefined;
       store.jobRowLocks.push(
         (joined?.values ?? []).map((value) => String(value)),
@@ -99,6 +102,7 @@ describe("job delete cascade lock order", () => {
   beforeEach(() => {
     store.locks.length = 0;
     store.jobRowLocks.length = 0;
+    store.lockSequence.length = 0;
     vi.clearAllMocks();
 
     store.transaction.mockImplementation(
@@ -149,6 +153,18 @@ describe("job delete cascade lock order", () => {
       .map((jobId) => stableInt32(`${USER_ID}:${jobId}`));
 
     expect(applicationKeys).toEqual(expected);
+  });
+
+  it("takes Job row locks only after every Application advisory lock", async () => {
+    await batchDeleteJobs(USER_ID, JOB_IDS);
+
+    expect(store.lockSequence).toEqual([
+      "advisory",
+      "advisory",
+      "advisory",
+      "advisory",
+      "job_rows",
+    ]);
   });
 
   it("never steps backwards through the declared global order", async () => {

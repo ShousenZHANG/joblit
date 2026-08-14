@@ -1,366 +1,248 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const prisma = vi.hoisted(() => ({
-  application: {
-    findFirst: vi.fn(),
-    updateMany: vi.fn(),
-  },
-  evidenceSnapshot: { createMany: vi.fn() },
-  claimEvidence: { createMany: vi.fn() },
-  tailoringRun: {
-    findMany: vi.fn(),
-    findFirst: vi.fn(),
-    updateMany: vi.fn(),
-  },
-  transaction: vi.fn(),
-  executeRaw: vi.fn(),
+const applicationEdit = vi.hoisted(() => ({
+  discardApplicationEdits: vi.fn(),
 }));
 
-const renderContextFence = vi.hoisted(() => ({
-  matches: vi.fn(),
-}));
-
-vi.mock("@/lib/server/prisma", () => ({
-  prisma: {
-    application: prisma.application,
-    $transaction: prisma.transaction,
-  },
-}));
-vi.mock("@/lib/server/applications/applicationRenderContextFence", () => ({
-  applicationRenderContextMatchesCurrentSources: renderContextFence.matches,
-  applicationPublicationTargets: vi.fn(() => ["resume", "cover"]),
-}));
+vi.mock("@/lib/server/applications/applicationEdit", () => applicationEdit);
 vi.mock("@/auth", () => ({ authOptions: {} }));
 vi.mock("next-auth/next", () => ({ getServerSession: vi.fn() }));
 
 import { getServerSession } from "next-auth/next";
 import { POST } from "@/app/api/applications/[id]/discard/route";
+import type { ApplicationPublication } from "@/lib/shared/applicationPublication";
 import {
   AI_CONTENT_SCHEMA_VERSION,
-  hashAiContent,
   type AiContent,
 } from "@/lib/shared/schemas/aiContent";
-import {
-  buildApplicationPublicationRenderContext,
-  hashApplicationDocumentContent,
-} from "@/lib/server/applications/applicationPublication";
 
 const APP_ID = "33333333-3333-4333-9333-333333333333";
 const USER_ID = "user-1";
-const PROFILE = {
-  id: "profile-1",
-  userId: USER_ID,
-  summary: "Base summary",
-  basics: null,
-  links: null,
-  skills: null,
-  experiences: null,
-  projects: null,
-  education: null,
-};
-const JOB = {
-  userId: USER_ID,
-  title: "Engineer",
-  company: "Acme",
-  description: "Build reliable TypeScript APIs.",
-  market: "AU",
-};
-const RENDER_CONTEXT = buildApplicationPublicationRenderContext({
-  profile: PROFILE,
-  job: JOB,
-});
+const EXPECTED_HASH = "expected-hash";
 
-function makeEditedAiContent(): AiContent {
-  return {
-    schemaVersion: AI_CONTENT_SCHEMA_VERSION,
-    generatedAt: "2026-05-09T00:00:00.000Z",
-    promptMetaHash: "p1",
-    cv: {
-      summary: {
-        aiText: "ai",
-        originalText: "orig",
-        userEdit: "user override",
-        accepted: false,
-      },
-      latestExperience: {
-        experienceIndex: 0,
-        addedBullets: [
-          {
-            text: "passed bullet",
-            userEdit: "edited user text",
-            accepted: false,
-            qualityGate: { passed: true },
-          },
-          {
-            text: "rejected bullet",
-            accepted: true,
-            qualityGate: {
-              passed: false,
-              reason: "ungrounded: no JD evidence",
-            },
-          },
-        ],
-      },
-    },
-    cover: {
-      paragraphOne: { aiText: "p1", userEdit: "edited", accepted: false },
-      paragraphTwo: { aiText: "p2", accepted: true },
-      paragraphThree: { aiText: "p3", accepted: true },
-    },
-  };
-}
+const aiContent: AiContent = {
+  schemaVersion: AI_CONTENT_SCHEMA_VERSION,
+  generatedAt: "2026-05-09T00:00:00.000Z",
+  promptMetaHash: "p1",
+  cv: {
+    summary: { aiText: "Tailored summary", originalText: "Original", accepted: true },
+    latestExperience: { experienceIndex: 0, addedBullets: [] },
+  },
+  cover: {
+    paragraphOne: { aiText: "", accepted: false },
+    paragraphTwo: { aiText: "", accepted: false },
+    paragraphThree: { aiText: "", accepted: false },
+  },
+};
 
-const params = Promise.resolve({ id: APP_ID });
-const request = (expectedHash: string | null) =>
-  new Request(`http://localhost/api/applications/${APP_ID}/discard`, {
+const publication: ApplicationPublication = {
+  status: "DRAFT",
+  resume: {
+    status: "DRAFT",
+    contentHash: "resume-content-hash",
+    publishedHash: null,
+  },
+  cover: { status: "MISSING", contentHash: null, publishedHash: null },
+};
+
+function request(body: unknown = { expectedHash: EXPECTED_HASH }) {
+  return new Request(`http://localhost/api/applications/${APP_ID}/discard`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ expectedHash }),
+    body: JSON.stringify(body),
   });
+}
+
+function routeContext(id = APP_ID) {
+  return { params: Promise.resolve({ id }) };
+}
 
 describe("POST /api/applications/[id]/discard", () => {
   beforeEach(() => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockReset();
-    prisma.application.findFirst.mockReset();
-    prisma.application.updateMany.mockReset().mockResolvedValue({ count: 1 });
-    prisma.evidenceSnapshot.createMany
-      .mockReset()
-      .mockResolvedValue({ count: 1 });
-    prisma.claimEvidence.createMany.mockReset().mockResolvedValue({ count: 1 });
-    prisma.tailoringRun.findMany.mockReset().mockResolvedValue([]);
-    prisma.tailoringRun.findFirst.mockReset().mockResolvedValue(null);
-    prisma.tailoringRun.updateMany.mockReset().mockResolvedValue({ count: 0 });
-    prisma.executeRaw.mockReset().mockResolvedValue(1);
-    renderContextFence.matches.mockReset().mockResolvedValue(true);
-    prisma.transaction
-      .mockReset()
-      .mockImplementation(
-        async (
-          action: (tx: {
-            application: typeof prisma.application;
-            evidenceSnapshot: typeof prisma.evidenceSnapshot;
-            claimEvidence: typeof prisma.claimEvidence;
-            tailoringRun: typeof prisma.tailoringRun;
-            $executeRaw: typeof prisma.executeRaw;
-          }) => Promise<unknown>,
-        ) =>
-          action({
-            application: prisma.application,
-            evidenceSnapshot: prisma.evidenceSnapshot,
-            claimEvidence: prisma.claimEvidence,
-            tailoringRun: prisma.tailoringRun,
-            $executeRaw: prisma.executeRaw,
-          }),
-      );
+    vi.mocked(getServerSession).mockReset().mockResolvedValue({
+      user: { id: USER_ID },
+    });
+    applicationEdit.discardApplicationEdits.mockReset();
   });
 
-  it("clears userEdits and resets bullet accepted to qualityGate.passed", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
-      {
-        user: { id: USER_ID },
-      },
-    );
-    const edited = makeEditedAiContent();
-    const expectedHash = hashAiContent(edited);
-    const profile = {
-      userId: USER_ID,
-      summary: "Built reliable TypeScript APIs.",
-      basics: null,
-      links: null,
-      skills: null,
-      experiences: null,
-      projects: null,
-      education: null,
-    };
-    prisma.application.findFirst.mockResolvedValue({
-      id: APP_ID,
-      userId: USER_ID,
-      jobId: "job-1",
-      aiContent: edited,
-      aiContentHash: expectedHash,
-      resumeProfile: profile,
-      job: {
-        ...JOB,
-        description: "Build reliable TypeScript APIs.",
-      },
+  it("passes the authenticated Application identity and CAS hash to the module", async () => {
+    applicationEdit.discardApplicationEdits.mockResolvedValue({
+      kind: "committed",
+      aiContent,
+      aiContentHash: "next-hash",
+      publication,
     });
 
-    const res = await POST(request(expectedHash), { params });
-    const json = await res.json();
+    const response = await POST(request(), routeContext());
 
-    expect(res.status).toBe(200);
-    expect(json.status).toBe("DRAFT");
-
-    const updateCall = prisma.application.updateMany.mock.calls[0]?.[0];
-    const persisted = updateCall.data.aiContent as AiContent;
-
-    // Summary: userEdit cleared, accepted back to true
-    expect(persisted.cv.summary.userEdit).toBeUndefined();
-    expect(persisted.cv.summary.accepted).toBe(true);
-
-    // Bullet 1 (passed gate): userEdit cleared, accepted=true
-    expect(
-      persisted.cv.latestExperience.addedBullets[0]?.userEdit,
-    ).toBeUndefined();
-    expect(persisted.cv.latestExperience.addedBullets[0]?.accepted).toBe(true);
-
-    // Bullet 2 (failed gate): accepted=false (matches gate verdict)
-    expect(persisted.cv.latestExperience.addedBullets[1]?.accepted).toBe(false);
-
-    // Cover paragraphs: userEdit cleared, accepted=true
-    expect(persisted.cover.paragraphOne.userEdit).toBeUndefined();
-    expect(persisted.cover.paragraphOne.accepted).toBe(true);
-
-    expect(updateCall.data.status).toBe("DRAFT");
-    expect(persisted.review).toBeDefined();
-    expect(prisma.evidenceSnapshot.createMany).toHaveBeenCalled();
-    // One advisory lock now: JOBA. TJOB went with the TailoringRun table.
-    expect(prisma.executeRaw).toHaveBeenCalledTimes(1);
+    expect(response.status).toBe(200);
+    expect(applicationEdit.discardApplicationEdits).toHaveBeenCalledOnce();
+    expect(applicationEdit.discardApplicationEdits).toHaveBeenCalledWith({
+      userId: USER_ID,
+      applicationId: APP_ID,
+      expectedHash: EXPECTED_HASH,
+    });
   });
 
-  it("rejects discard when its locked Profile or Job context is stale", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
-      {
-        user: { id: USER_ID },
-      },
-    );
-    const edited = makeEditedAiContent();
-    const expectedHash = hashAiContent(edited);
-    prisma.application.findFirst.mockResolvedValue({
-      id: APP_ID,
-      userId: USER_ID,
-      jobId: "job-1",
-      aiContent: edited,
-      aiContentHash: expectedHash,
+  it("returns the committed Application Edit snapshot without adding adapter fields", async () => {
+    applicationEdit.discardApplicationEdits.mockResolvedValue({
+      kind: "committed",
+      aiContent,
+      aiContentHash: "next-hash",
+      publication,
+    });
+
+    const response = await POST(request(), routeContext());
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({
       status: "DRAFT",
-      resumePdfUrl: null,
-      coverPdfUrl: null,
-      resumeContentHash: null,
-      coverContentHash: null,
-      resumePublishedHash: null,
-      coverPublishedHash: null,
-      resumeProfile: PROFILE,
-      job: JOB,
+      publication,
+      aiContent,
+      aiContentHash: "next-hash",
+      requestId: expect.any(String),
     });
-    renderContextFence.matches.mockResolvedValueOnce(false);
-
-    const response = await POST(request(expectedHash), { params });
-
-    expect(response.status).toBe(409);
-    await expect(response.json()).resolves.toMatchObject({
-      error: { code: "STALE_RENDER_CONTEXT" },
-    });
-    expect(renderContextFence.matches).toHaveBeenCalledOnce();
-    expect(prisma.application.updateMany).not.toHaveBeenCalled();
   });
 
-  it("rejects discard when the Application rebinds to another Profile with the same AI hash", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
-      {
-        user: { id: USER_ID },
+  it("returns 401 without entering the module when unauthenticated", async () => {
+    vi.mocked(getServerSession).mockResolvedValue(null);
+
+    const response = await POST(request(), routeContext());
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "UNAUTHORIZED", message: "Unauthorized" },
+    });
+    expect(applicationEdit.discardApplicationEdits).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid Application id before entering the module", async () => {
+    const response = await POST(request(), routeContext("not-a-uuid"));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "INVALID_PARAMS",
+        message: "Invalid route parameters",
       },
-    );
-    const edited = makeEditedAiContent();
-    const expectedHash = hashAiContent(edited);
-    prisma.application.findFirst
-      .mockResolvedValueOnce({
-        id: APP_ID,
-        userId: USER_ID,
-        jobId: "job-1",
-        resumeProfileId: PROFILE.id,
-        aiContent: edited,
-        aiContentHash: expectedHash,
-        status: "DRAFT",
-        resumePdfUrl: null,
-        coverPdfUrl: null,
-        resumeContentHash: null,
-        coverContentHash: null,
-        resumePublishedHash: null,
-        coverPublishedHash: null,
-        resumeProfile: PROFILE,
-        job: JOB,
-      })
-      .mockResolvedValueOnce({
-        jobId: "job-1",
-        resumeProfileId: "profile-2",
-        aiContentHash: expectedHash,
-        status: "DRAFT",
-        resumePdfUrl: null,
-        coverPdfUrl: null,
-        resumeContentHash: null,
-        coverContentHash: null,
-        resumePublishedHash: null,
-        coverPublishedHash: null,
-      });
-
-    const response = await POST(request(expectedHash), { params });
-
-    expect(response.status).toBe(409);
-    await expect(response.json()).resolves.toMatchObject({
-      error: { code: "STALE_RENDER_CONTEXT" },
+      requestId: expect.any(String),
     });
-    expect(renderContextFence.matches).not.toHaveBeenCalled();
-    expect(prisma.application.updateMany).not.toHaveBeenCalled();
+    expect(applicationEdit.discardApplicationEdits).not.toHaveBeenCalled();
   });
 
-  it("returns 400 when there is no aiContent to discard", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
-      {
-        user: { id: USER_ID },
+  it("rejects an invalid body before entering the module", async () => {
+    const response = await POST(request({ expectedHash: 42 }), routeContext());
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "INVALID_BODY",
+        message: "Invalid request body",
+        details: expect.any(Object),
       },
-    );
-    prisma.application.findFirst.mockResolvedValueOnce({
-      id: APP_ID,
-      userId: USER_ID,
-      jobId: "job-1",
-      aiContent: null,
-      aiContentHash: null,
+      requestId: expect.any(String),
     });
-
-    const res = await POST(request(null), { params });
-    expect(res.status).toBe(400);
+    expect(applicationEdit.discardApplicationEdits).not.toHaveBeenCalled();
   });
 
-  it("returns 404 when the Application is not found", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
-      {
-        user: { id: USER_ID },
+  it.each([
+    {
+      name: "not found",
+      result: { kind: "not_found" },
+      status: 404,
+      body: {
+        error: { code: "NOT_FOUND", message: "Application not found" },
       },
-    );
-    prisma.application.findFirst.mockResolvedValueOnce(null);
-
-    const res = await POST(request(null), { params });
-    expect(res.status).toBe(404);
-  });
-
-  it("returns 401 when unauthenticated", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
-      null,
-    );
-    const res = await POST(request(null), { params });
-    expect(res.status).toBe(401);
-  });
-
-  it("returns 409 when another tab writes after the discard read", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
-      {
-        user: { id: USER_ID },
+    },
+    {
+      name: "stale write",
+      result: { kind: "stale_write", currentHash: "current-hash" },
+      status: 409,
+      body: {
+        error: {
+          code: "STALE_WRITE",
+          message: "Another tab updated this draft",
+        },
+        currentHash: "current-hash",
       },
-    );
-    const edited = makeEditedAiContent();
-    const expectedHash = hashAiContent(edited);
-    prisma.application.findFirst.mockResolvedValue({
-      id: APP_ID,
-      userId: USER_ID,
-      jobId: "job-1",
-      aiContent: edited,
-      aiContentHash: expectedHash,
-    });
-    prisma.application.updateMany.mockResolvedValueOnce({ count: 0 });
+    },
+    {
+      name: "stale write whose current hash is null",
+      result: { kind: "stale_write", currentHash: null },
+      status: 409,
+      body: {
+        error: {
+          code: "STALE_WRITE",
+          message: "Another tab updated this draft",
+        },
+        currentHash: null,
+      },
+    },
+    {
+      name: "stale write whose winning row cannot be observed",
+      result: { kind: "stale_write" },
+      status: 409,
+      body: {
+        error: {
+          code: "STALE_WRITE",
+          message: "Another tab updated this draft",
+        },
+      },
+    },
+    {
+      name: "missing AI Content",
+      result: { kind: "no_ai_content" },
+      status: 400,
+      body: {
+        error: {
+          code: "NO_AI_CONTENT",
+          message: "No AI content to discard",
+        },
+      },
+    },
+    {
+      name: "invalid stored AI Content",
+      result: { kind: "invalid_ai_content" },
+      status: 500,
+      body: {
+        error: {
+          code: "AI_CONTENT_INVALID",
+          message: "Stored aiContent failed schema validation",
+        },
+      },
+    },
+    {
+      name: "unavailable canonical evidence",
+      result: { kind: "canonical_evidence_unavailable" },
+      status: 409,
+      body: {
+        error: {
+          code: "CANONICAL_EVIDENCE_UNAVAILABLE",
+          message:
+            "The server source snapshot is unavailable. Re-generate this draft.",
+        },
+      },
+    },
+    {
+      name: "stale render context",
+      result: { kind: "stale_render_context" },
+      status: 409,
+      body: {
+        error: {
+          code: "STALE_RENDER_CONTEXT",
+          message:
+            "Your resume profile or job changed while edits were being discarded. Try again.",
+        },
+      },
+    },
+  ])("maps $name to the existing HTTP contract", async ({ result, status, body }) => {
+    applicationEdit.discardApplicationEdits.mockResolvedValue(result);
 
-    const response = await POST(request(expectedHash), { params });
+    const response = await POST(request(), routeContext());
+    const json = await response.json();
 
-    expect(response.status).toBe(409);
-    expect(prisma.executeRaw).toHaveBeenCalled();
+    expect(response.status).toBe(status);
+    expect(json).toEqual({ ...body, requestId: expect.any(String) });
   });
 });

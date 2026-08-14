@@ -194,8 +194,8 @@ describe("jobDeleteService", () => {
       expect(prismaStore.operations).toEqual([
         "lock",
         "job.findFirst",
-        "job.lockRows",
         "application.lock:job-1",
+        "job.lockRows",
         "application.findUnique",
         "deletedJobUrl.upsert",
         "application.deleteMany",
@@ -345,9 +345,9 @@ describe("jobDeleteService", () => {
       expect(prismaStore.operations).toEqual([
         "lock",
         "job.findMany",
-        "job.lockRows",
         "application.lock:a",
         "application.lock:b",
+        "job.lockRows",
         "application.findMany",
         "deletedJobUrl.createMany",
         "application.deleteMany",
@@ -438,9 +438,9 @@ describe("jobDeleteService", () => {
       expect(prismaStore.operations.slice(0, 6)).toEqual([
         "lock",
         "job.findMany",
-        "job.lockRows",
         "application.lock:a-job",
         "application.lock:z-job",
+        "job.lockRows",
         "application.findMany",
       ]);
     });

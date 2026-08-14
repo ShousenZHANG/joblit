@@ -22,7 +22,6 @@ Quick index of the most commonly used locations.
 - `POST /api/applications/prompt` — build prompt + `promptMeta` + expected schema
 - `POST /api/applications/manual-generate` — import strict JSON + render PDFs (requires `promptMeta`)
 - `app/api/prompt-rules/*` — prompt templates + skill pack download
-- `app/api/application-batches/*` — batch CV/CL workflows
 
 ## Server and data
 
@@ -32,6 +31,10 @@ Quick index of the most commonly used locations.
   owned cancel/status, stale recovery, receipt replay, and `FRUN → JOBJ`
 - `lib/server/fetchRuns/fetchRunJobIntake.ts` — private Job normalization,
   tombstone/dedupe, risk/liveness, and persistence implementation
+- `lib/server/applications/applicationEdit.ts` — Application Edit interface for
+  Auto-save/discard, JOBA, aggregate CAS, source fencing, publication and review
+- `lib/server/applications/applicationSourceSnapshot.ts` — shared owned
+  Profile/Job source row lock for review and render fences
 - `lib/server/ai/*` — prompt contract, skill pack builder, schema validation
 - `lib/server/latex/*` — LaTeX render for resume/cover
 - `prisma/schema.prisma` — DB models

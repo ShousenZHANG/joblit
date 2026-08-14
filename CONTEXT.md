@@ -10,7 +10,10 @@ When a domain concept needs sharpening, add it here rather than letting two syno
 
 ### Master Resume Profile (`ResumeProfile`)
 
-The user's source-of-truth resume. One per `(userId, locale)`. Edited in the **Resume Studio** (`/resume`). Contains basics, summary, experience, projects, education, skills.
+The user's versioned source-of-truth resume. A user may keep multiple profiles
+per locale; `ActiveResumeProfile` selects one active profile for each
+`(userId, locale)`. Edited in the **Resume Studio** (`/resume`). Contains
+basics, summary, experience, projects, education, and skills.
 
 Synonyms to avoid: "master resume", "base resume" — use **Master Resume Profile** or **`ResumeProfile`**.
 
@@ -127,50 +130,25 @@ See **ADR-0001** for the persistence rationale.
 
 The end-to-end process of converting a Master Resume Profile + a Job into a finished Application. Runs through three phases:
 
-1. **Generate** — produce AI proposals. The server never calls a model (ADR-0015): either the local Runner drives the Codex CLI, or the user pastes an external LLM's JSON back in.
+1. **Generate** — produce AI proposals. The server never calls a model
+   (ADR-0015); the user obtains the prompt and pastes an external LLM's JSON
+   back through manual import (ADR-0022).
 2. **Edit** — user reviews AI proposals on `/jobs/[id]/tailor`, accepts/rejects/edits.
 3. **Finalize** — render one target's LaTeX → PDF and publish that document.
 
 The **Edit** phase is new in v1.x. Before that, generate→finalize was atomic. See **ADR-0002**.
 
-### Tailoring Run (`TailoringRun`)
-
-A durable execution that generates the required Resume and/or Cover AI
-proposals for one Job from one issued set of prompt receipts and source
-snapshots. It owns execution progress and cancellation; unlike an Application,
-it is execution history rather than the user's current artifact.
-
-Synonyms to avoid: "AI task", "generation session" — use **Tailoring Run**.
-
-### Tailoring Run Receipt (`TailoringRunReceipt`)
-
-Immutable evidence that one target of a Tailoring Run crossed the Application
-acceptance seam. There is at most one accepted receipt for each required target;
-an identical retry reuses that evidence instead of creating another acceptance.
-
-Synonyms to avoid: "completion flag", "callback record" — use **Tailoring Run
-Receipt**.
-
 ### Quality Gate
 
 The set of post-generation filters that grade AI-added bullets.
 `acceptApplicationGeneration` is the single generation-acceptance seam and
-applies the grounding/non-redundancy checks from `manualImportParser.ts` for
-manual import, Agent Runner/Codex, and server-batch output. Bullets that fail a
-gate are **shown but disabled** in the Edit panel; the user may override by
-editing the bullet text.
+applies the grounding/non-redundancy checks from `manualImportParser.ts` to
+manual imports. Bullets that fail a gate are **shown but disabled** in the Edit
+panel; the user may override by editing the bullet text.
 
 Gates today:
 - **Grounded** — the bullet must reference at least one term from the JD or master profile.
 - **Non-redundant** — the bullet must not duplicate an existing bullet on the same experience.
-
-### Codex Batch
-
-External orchestration protocol that loops over `NEW` jobs and tailors each
-one. For every concrete job and target, the user obtains the exact
-prompt and `promptMeta` generation receipt before importing through
-`manual-generate`; batch context itself carries contract identity, not a
-job-less receipt.
 
 ### Fetch Pipeline
 

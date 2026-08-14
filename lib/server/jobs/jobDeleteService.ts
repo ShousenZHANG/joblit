@@ -34,10 +34,11 @@ type BatchDeleteResult = {
 const JOB_MUTATION_TRANSACTION_TIMEOUT_MS = 30_000;
 
 /**
- * Fence even pre-JOBJ ApplicationBatch writers during an expand cutover.
- * PostgreSQL's FK check takes a key-share lock on each Job; this ordered
- * FOR UPDATE either waits for that task insert to commit (so the subsequent
- * batch-task read sees it) or makes the insert wait and fail after deletion.
+ * Lock owned Job rows after the advisory-lock hierarchy is complete.
+ * PostgreSQL FK checks take key-share locks on these rows, so the explicit
+ * lock makes the following child reads authoritative. Keeping this row lock
+ * after JOBA also prevents a JOBA <-> Job-row lock-order inversion with
+ * Application writers that fence their render/review sources.
  */
 async function lockOwnedJobRowsForDeletion(
   tx: Prisma.TransactionClient,
@@ -212,11 +213,10 @@ export async function deleteJob(
       });
       if (!job) return null;
 
-      await lockOwnedJobRowsForDeletion(tx, userId, [job.id]);
-
       // Generation/autosave/finalize use this same lock. Take it before reading
       // artifact URLs so no committed Blob can appear between read and delete.
       await acquireApplicationMutationLock(tx, userId, job.id);
+      await lockOwnedJobRowsForDeletion(tx, userId, [job.id]);
       const application = await tx.application.findUnique({
         where: { userId_jobId: { userId, jobId: job.id } },
         select: {
@@ -300,12 +300,12 @@ export async function batchDeleteJobs(
       }
 
       const foundIds = jobs.map((job) => job.id).sort();
-      await lockOwnedJobRowsForDeletion(tx, userId, foundIds);
       // Fixed order prevents two overlapping batch deletes from waiting on
       // the same application locks in opposite order.
       for (const foundId of foundIds) {
         await acquireApplicationMutationLock(tx, userId, foundId);
       }
+      await lockOwnedJobRowsForDeletion(tx, userId, foundIds);
       const applications = await tx.application.findMany({
         where: { userId, jobId: { in: foundIds } },
         select: {

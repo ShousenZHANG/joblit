@@ -8,6 +8,7 @@ import {
 } from "@/lib/server/applications/applicationPublication";
 import type { ApplicationDocumentTarget } from "@/lib/shared/applicationPublication";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
+import { lockOwnedApplicationSources } from "./applicationSourceSnapshot";
 
 type RenderContextFenceInput = {
   userId: string;
@@ -15,35 +16,6 @@ type RenderContextFenceInput = {
   resumeProfileId: string;
   publicationRenderContext: ApplicationPublicationRenderContext;
 };
-
-type LockedRenderSource = {
-  profileSummary: string | null;
-  profileBasics: unknown;
-  profileLinks: unknown;
-  profileSkills: unknown;
-  profileExperiences: unknown;
-  profileProjects: unknown;
-  profileEducation: unknown;
-  jobTitle: string;
-  jobCompany: string | null;
-  jobMarket: string;
-};
-
-/**
- * Re-read and lock every non-AI source that contributes to a rendered
- * Application document. A matching result stays protected until the caller's
- * transaction commits, so the PDF pointer cannot be advanced against a newer
- * Profile or Job revision.
- */
-export async function applicationRenderContextMatchesCurrentSources(
-  tx: Prisma.TransactionClient,
-  input: RenderContextFenceInput,
-  targets: readonly ApplicationDocumentTarget[],
-): Promise<boolean> {
-  return (
-    (await fenceApplicationRenderContext(tx, input, targets)).kind === "matched"
-  );
-}
 
 export type ApplicationRenderContextFence =
   | {
@@ -68,41 +40,26 @@ export async function fenceApplicationRenderContext(
   if (!input.publicationRenderContext.available) {
     return { kind: "mismatched" };
   }
-  const [source] = await tx.$queryRaw<LockedRenderSource[]>`
-    SELECT
-      profile."summary" AS "profileSummary",
-      profile."basics" AS "profileBasics",
-      profile."links" AS "profileLinks",
-      profile."skills" AS "profileSkills",
-      profile."experiences" AS "profileExperiences",
-      profile."projects" AS "profileProjects",
-      profile."education" AS "profileEducation",
-      job."title" AS "jobTitle",
-      job."company" AS "jobCompany",
-      job."market" AS "jobMarket"
-    FROM "Job" AS job
-    INNER JOIN "ResumeProfile" AS profile
-      ON profile."id" = ${input.resumeProfileId}::uuid
-      AND profile."userId" = ${input.userId}::uuid
-    WHERE job."id" = ${input.job.id}::uuid
-      AND job."userId" = ${input.userId}::uuid
-    FOR SHARE OF job, profile
-  `;
+  const source = await lockOwnedApplicationSources(tx, {
+    userId: input.userId,
+    jobId: input.job.id,
+    resumeProfileId: input.resumeProfileId,
+  });
   if (!source) return { kind: "mismatched" };
   const current = buildApplicationPublicationRenderContext({
     profile: {
-      summary: source.profileSummary,
-      basics: source.profileBasics,
-      links: source.profileLinks,
-      skills: source.profileSkills,
-      experiences: source.profileExperiences,
-      projects: source.profileProjects,
-      education: source.profileEducation,
+      summary: source.profile.summary,
+      basics: source.profile.basics,
+      links: source.profile.links,
+      skills: source.profile.skills,
+      experiences: source.profile.experiences,
+      projects: source.profile.projects,
+      education: source.profile.education,
     },
     job: {
-      title: source.jobTitle,
-      company: source.jobCompany,
-      market: source.jobMarket,
+      title: source.job.title,
+      company: source.job.company,
+      market: source.job.market,
     },
   });
   const matches = targets.every((target) =>
