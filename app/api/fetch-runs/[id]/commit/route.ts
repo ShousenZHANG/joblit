@@ -5,11 +5,9 @@ import { UuidParamSchema } from "@/lib/shared/schemas/common";
 import {
   FetchRunCommitError,
   commitFetchRun,
-} from "@/lib/server/fetchRuns/fetchRunCommit";
+} from "@/lib/server/fetchRuns/fetchRun";
 import { reportError } from "@/lib/server/observability/errorReporter";
-import { FetchRunCommitWireCommandSchema } from "@/lib/shared/schemas/fetchRunCommit";
 import { getRuntimeCapabilities } from "@/lib/server/runtimeCapabilities";
-import { prisma } from "@/lib/server/prisma";
 
 export const runtime = "nodejs";
 
@@ -44,36 +42,21 @@ export async function POST(
   if (!parsedParams.success) {
     return errorJson("INVALID_PARAMS", "Invalid route parameters", 400);
   }
-  const run = await prisma.fetchRun.findUnique({
-    where: { id: parsedParams.data.id },
-    select: { market: true },
-  });
-  if (!run) return errorJson("RUN_NOT_FOUND", "Fetch run not found", 404);
-  if (run.market !== "AU") {
-    return errorJson(
-      "FETCH_MARKET_RETIRED",
-      "This fetch market has been retired",
-      410,
-    );
-  }
-  const parsedBody = FetchRunCommitWireCommandSchema.safeParse(
-    await req.json().catch(() => null),
-  );
-  if (!parsedBody.success) {
-    return errorJson("INVALID_BODY", "Invalid request body", 400, {
-      details: parsedBody.error.flatten(),
-    });
-  }
+  const wireCommand = await req.json().catch(() => null);
 
   try {
     const result = await commitFetchRun({
-      ...parsedBody.data,
       runId: parsedParams.data.id,
+      wireCommand,
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     if (error instanceof FetchRunCommitError) {
-      return errorJson(error.code, error.message, error.status, {
+      const code =
+        error.code === "RUN_MARKET_RETIRED"
+          ? "FETCH_MARKET_RETIRED"
+          : error.code;
+      return errorJson(code, error.message, error.status, {
         ...(error.details ? { details: error.details } : {}),
       });
     }

@@ -28,8 +28,10 @@ Quick index of the most commonly used locations.
 
 - `lib/shared/canonicalizeJobUrl.ts` — stable URL normalization
 - `lib/shared/schemas/fetchRunConfig.ts` — strict AU v2 config plus historical AU v1 reader; non-AU fails closed
-- `lib/server/fetchRuns/fetchRunCommit.ts` — shared execution/commit boundary,
-  receipt replay, lifecycle projection, and `FRUN → JOBJ` lock order
+- `lib/server/fetchRuns/fetchRun.ts` — FetchRun interface for worker commits,
+  owned cancel/status, stale recovery, receipt replay, and `FRUN → JOBJ`
+- `lib/server/fetchRuns/fetchRunJobIntake.ts` — private Job normalization,
+  tombstone/dedupe, risk/liveness, and persistence implementation
 - `lib/server/ai/*` — prompt contract, skill pack builder, schema validation
 - `lib/server/latex/*` — LaTeX render for resume/cover
 - `prisma/schema.prisma` — DB models

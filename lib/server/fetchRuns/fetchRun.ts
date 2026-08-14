@@ -3,20 +3,26 @@ import { prisma } from "@/lib/server/prisma";
 import { acquireFetchRunLifecycleLock } from "./fetchRunLifecycleLock";
 import { hashFetchRunBatch } from "./fetchRunBatchHash";
 import {
-  isJobImportEnrichmentMigrationRace,
-  persistPreparedJobImport,
-  prepareJobImportForUser,
-  type PreparedJobImport,
-} from "@/lib/server/jobs/jobImportService";
+  isFetchRunJobIntakeMigrationRace,
+  persistFetchRunJobIntake,
+  prepareFetchRunJobIntake,
+  type PreparedFetchRunJobIntake,
+} from "./fetchRunJobIntake";
 import { reportError } from "@/lib/server/observability/errorReporter";
+import {
+  FETCH_RUN_STALE_AFTER_MS,
+  FETCH_RUN_STALE_ERROR,
+  fetchRunStaleCutoff,
+} from "./fetchRunStale";
 import {
   AU_FETCH_RUN_EXECUTION_LEASE_MS,
   FETCH_RUN_COMMIT_PROTOCOL,
 } from "@/lib/shared/fetchRunProtocol";
-import type {
-  FetchRunCommitBatchCommand,
-  FetchRunCommitFailCommand,
-  FetchRunCommitStartCommand,
+import {
+  FetchRunCommitWireCommandSchema,
+  type FetchRunCommitBatchCommand,
+  type FetchRunCommitFailCommand,
+  type FetchRunCommitStartCommand,
 } from "@/lib/shared/schemas/fetchRunCommit";
 
 export { FETCH_RUN_COMMIT_PROTOCOL } from "@/lib/shared/fetchRunProtocol";
@@ -45,11 +51,13 @@ type FetchRunInternalStaleFailCommand = {
 export type FetchRunCommitCommand =
   | RunBound<FetchRunCommitStartCommand>
   | RunBound<FetchRunCommitBatchCommand>
+  | FetchRunExternalFailCommand;
+type FetchRunFailureCommand =
   | FetchRunExternalFailCommand
   | FetchRunInternalStaleFailCommand;
 
 type BatchCommand = Extract<FetchRunCommitCommand, { command: "commit" }>;
-type FailCommand = Extract<FetchRunCommitCommand, { command: "fail" }>;
+type FailCommand = Extract<FetchRunFailureCommand, { command: "fail" }>;
 type Transaction = Prisma.TransactionClient;
 interface RunProjectionRecord {
   status: FetchRunStatus;
@@ -62,6 +70,7 @@ interface StartRunRecord extends RunProjectionRecord {
   executionLeaseExpiresAt: Date | null;
 }
 interface FailRunRecord extends RunProjectionRecord {
+  market: string;
   commitStartedAt: Date | null;
   nextBatchIndex: number;
   updatedAt: Date;
@@ -86,6 +95,43 @@ const RUN_PROJECTION_SELECT = {
   executionAttemptId: true,
 } as const;
 
+const FETCH_RUN_STATUS_SELECT = {
+  id: true,
+  status: true,
+  importedCount: true,
+  error: true,
+  queries: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.FetchRunSelect;
+
+type FetchRunStatusRow = Prisma.FetchRunGetPayload<{
+  select: typeof FETCH_RUN_STATUS_SELECT;
+}>;
+
+export interface FetchRunStatusView {
+  id: string;
+  status: FetchRunStatus;
+  importedCount: number;
+  error: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  queryTitle: string | null;
+  queryTerms: string[];
+  smartExpand: boolean;
+}
+
+export type FetchRunCancelResult =
+  | { kind: "not_found" }
+  | { kind: "finished"; status: FetchRunStatus }
+  | { kind: "cancelled"; status: "FAILED" | "PARTIAL" };
+
+export interface FetchRunStaleSweepResult {
+  ids: string[];
+  candidateCount: number;
+  staleAfterMs: number;
+}
+
 export interface FetchRunCommitResult {
   disposition: "APPLIED" | "REPLAYED";
   /**
@@ -100,7 +146,15 @@ export interface FetchRunCommitResult {
   status: FetchRunStatus;
 }
 
+export interface FetchRunCommitRequest {
+  /** Trusted route identity. Any run ID inside the worker body is ignored. */
+  runId: string;
+  /** Untrusted `fetch-run-commit/v1` worker payload. */
+  wireCommand: unknown;
+}
+
 export type FetchRunCommitErrorCode =
+  | "INVALID_BODY"
   | "RUN_NOT_FOUND"
   | "RUN_MARKET_RETIRED"
   | "RUN_CANCELLED"
@@ -128,6 +182,68 @@ export class FetchRunCommitError extends Error {
 function isTerminal(status: FetchRunStatus): boolean {
   return TERMINAL_STATUSES.includes(status);
 }
+
+function normalizeQueryTerms(raw: unknown): string[] {
+  const terms: string[] = [];
+  const seen = new Set<string>();
+  const push = (value: unknown) => {
+    if (typeof value !== "string") return;
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    terms.push(trimmed);
+  };
+
+  if (Array.isArray(raw)) {
+    raw.forEach(push);
+  } else if (raw && typeof raw === "object") {
+    const value = raw as Record<string, unknown>;
+    if (Array.isArray(value.queries)) value.queries.forEach(push);
+    push(value.title);
+  }
+  return terms;
+}
+
+function resolveQueryTitle(raw: unknown, terms: readonly string[]): string | null {
+  if (raw && typeof raw === "object") {
+    const title = (raw as Record<string, unknown>).title;
+    if (typeof title === "string" && title.trim()) return title.trim();
+  }
+  return terms[0] ?? null;
+}
+
+function resolveSmartExpand(raw: unknown): boolean {
+  if (raw && typeof raw === "object") {
+    const smartExpand = (raw as Record<string, unknown>).smartExpand;
+    if (typeof smartExpand === "boolean") return smartExpand;
+  }
+  return true;
+}
+
+function statusView(run: FetchRunStatusRow): FetchRunStatusView {
+  const queryTerms = normalizeQueryTerms(run.queries);
+  return {
+    id: run.id,
+    status: run.status,
+    importedCount: run.importedCount,
+    error: run.error,
+    createdAt: run.createdAt,
+    updatedAt: run.updatedAt,
+    queryTitle: resolveQueryTitle(run.queries, queryTerms),
+    queryTerms,
+    smartExpand: resolveSmartExpand(run.queries),
+  };
+}
+
+function isStaleActiveRun(run: FetchRunStatusRow, cutoff: Date): boolean {
+  return (
+    (run.status === "QUEUED" || run.status === "RUNNING") &&
+    run.updatedAt < cutoff
+  );
+}
+
 function resultFor(
   disposition: FetchRunCommitResult["disposition"],
   status: FetchRunStatus,
@@ -174,6 +290,14 @@ function assertExecutionAttempt(
 }
 function runNotFound(): never {
   throw new FetchRunCommitError("RUN_NOT_FOUND", "Fetch run not found", 404);
+}
+function assertAuExecutionMarket(market: string): void {
+  if (market === "AU") return;
+  throw new FetchRunCommitError(
+    "RUN_MARKET_RETIRED",
+    "This fetch market has been retired",
+    410,
+  );
 }
 function assertRunNotCancelled(
   status: FetchRunStatus,
@@ -277,6 +401,7 @@ async function applyStart(
 ): Promise<FetchRunCommitResult> {
   await acquireFetchRunLifecycleLock(tx, runId);
   const run = await loadStartRun(tx, runId);
+  assertAuExecutionMarket(run.market);
   assertRunNotCancelled(run.status, run.error);
   const now = new Date();
   const leaseExpiresAt = executionLeaseExpiresAt(run.market, now);
@@ -306,6 +431,7 @@ async function loadFailRun(
     where: { id: runId },
     select: {
       ...RUN_PROJECTION_SELECT,
+      market: true,
       commitStartedAt: true,
       nextBatchIndex: true,
       updatedAt: true,
@@ -350,6 +476,7 @@ async function applyFailure(
 ): Promise<FetchRunCommitResult> {
   await acquireFetchRunLifecycleLock(tx, command.runId);
   const run = await loadFailRun(tx, command.runId);
+  if (!command.staleBefore) assertAuExecutionMarket(run.market);
   assertRunNotCancelled(run.status, run.error);
   if (!command.staleBefore) {
     // External executors remain fenced even when the run is terminal.
@@ -369,9 +496,138 @@ async function failFetchRun(
   return commitTransaction((tx) => applyFailure(tx, command));
 }
 
+interface CancelRunRecord {
+  id: string;
+  status: FetchRunStatus;
+  commitStartedAt: Date | null;
+}
+
+async function loadOwnedCancelRun(
+  tx: Transaction,
+  runId: string,
+  userId: string,
+): Promise<CancelRunRecord | null> {
+  return tx.fetchRun.findFirst({
+    where: { id: runId, userId },
+    select: { id: true, status: true, commitStartedAt: true },
+  });
+}
+
+async function applyCancellation(
+  tx: Transaction,
+  input: { runId: string; userId: string },
+): Promise<FetchRunCancelResult> {
+  await acquireFetchRunLifecycleLock(tx, input.runId);
+  const run = await loadOwnedCancelRun(tx, input.runId, input.userId);
+  if (!run) return { kind: "not_found" };
+  if (isTerminal(run.status)) return { kind: "finished", status: run.status };
+
+  const status: "FAILED" | "PARTIAL" = run.commitStartedAt
+    ? "PARTIAL"
+    : "FAILED";
+  const cancelled = await tx.fetchRun.updateMany({
+    where: {
+      id: run.id,
+      userId: input.userId,
+      status: { in: ["QUEUED", "RUNNING"] },
+    },
+    data: {
+      status,
+      error: FETCH_RUN_CANCELLED_ERROR,
+      terminalAt: new Date(),
+    },
+  });
+  if (cancelled.count > 0) return { kind: "cancelled", status };
+
+  const current = await tx.fetchRun.findFirst({
+    where: { id: run.id, userId: input.userId },
+    select: { status: true },
+  });
+  return { kind: "finished", status: current?.status ?? "FAILED" };
+}
+
+export async function cancelFetchRun(input: {
+  runId: string;
+  userId: string;
+}): Promise<FetchRunCancelResult> {
+  return commitTransaction((tx) => applyCancellation(tx, input));
+}
+
+async function readOwnedFetchRunStatus(
+  runId: string,
+  userId: string,
+): Promise<FetchRunStatusRow | null> {
+  return prisma.fetchRun.findFirst({
+    where: { id: runId, userId },
+    select: FETCH_RUN_STATUS_SELECT,
+  });
+}
+
+function isExpectedStaleRecoveryRace(error: unknown): boolean {
+  return (
+    error instanceof FetchRunCommitError &&
+    (error.code === "RUN_NOT_FOUND" ||
+      error.code === "RUN_ALREADY_TERMINAL" ||
+      error.code === "RUN_CANCELLED")
+  );
+}
+
+async function recoverStaleFetchRun(runId: string, cutoff: Date): Promise<boolean> {
+  try {
+    const result = await failFetchRun({
+      protocol: FETCH_RUN_COMMIT_PROTOCOL,
+      command: "fail",
+      runId,
+      error: FETCH_RUN_STALE_ERROR,
+      staleBefore: cutoff,
+    });
+    return result.disposition === "APPLIED";
+  } catch (error) {
+    if (isExpectedStaleRecoveryRace(error)) return false;
+    throw error;
+  }
+}
+
+export async function getFetchRunStatus(input: {
+  runId: string;
+  userId: string;
+}): Promise<FetchRunStatusView | null> {
+  let run = await readOwnedFetchRunStatus(input.runId, input.userId);
+  if (!run) return null;
+
+  const cutoff = fetchRunStaleCutoff();
+  if (isStaleActiveRun(run, cutoff)) {
+    await recoverStaleFetchRun(run.id, cutoff);
+    run = await readOwnedFetchRunStatus(input.runId, input.userId);
+    if (!run) return null;
+  }
+  return statusView(run);
+}
+
+export async function sweepStaleFetchRuns(): Promise<FetchRunStaleSweepResult> {
+  const cutoff = fetchRunStaleCutoff();
+  const candidates = await prisma.fetchRun.findMany({
+    where: {
+      status: { in: ["QUEUED", "RUNNING"] },
+      updatedAt: { lt: cutoff },
+    },
+    select: { id: true },
+    take: 100,
+  });
+  const ids: string[] = [];
+  for (const candidate of candidates) {
+    if (await recoverStaleFetchRun(candidate.id, cutoff)) ids.push(candidate.id);
+  }
+  return {
+    ids,
+    candidateCount: candidates.length,
+    staleAfterMs: FETCH_RUN_STALE_AFTER_MS,
+  };
+}
+
 interface ApplyBatchInput {
   command: BatchCommand;
-  prepared: PreparedJobImport;
+  prepared: PreparedFetchRunJobIntake;
   requestHash: string;
   includeEnrichment: boolean;
 }
@@ -613,7 +869,7 @@ async function persistBatch(
   input: ApplyBatchInput,
   run: BatchRunRecord,
 ): Promise<FetchRunCommitResult> {
-  const imported = await persistPreparedJobImport(tx, {
+  const imported = await persistFetchRunJobIntake(tx, {
     userId: run.userId,
     prepared: input.prepared,
     includeEnrichment: input.includeEnrichment,
@@ -628,6 +884,7 @@ async function applyBatch(
 ): Promise<FetchRunCommitResult> {
   await acquireFetchRunLifecycleLock(tx, input.command.runId);
   const run = await loadBatchRun(tx, input.command.runId);
+  assertAuExecutionMarket(run.market);
   const prior = await loadBatchReceipt(tx, input.command);
   const replay = replayBatchReceipt(run, prior, input);
   if (replay) return replay;
@@ -656,19 +913,9 @@ async function loadCommitOwner(runId: string): Promise<CommitOwner> {
   return owner ?? runNotFound();
 }
 
-function canonicalizeBatchCommand(
-  command: BatchCommand,
-  owner: CommitOwner,
-): BatchCommand {
+function canonicalizeBatchCommand(command: BatchCommand): BatchCommand {
   // Tenant and market are always server-derived. A remote adapter can submit
   // only discoveries; it cannot redirect them to another user or market.
-  if (owner.market !== "AU") {
-    throw new FetchRunCommitError(
-      "RUN_MARKET_RETIRED",
-      "This fetch market has been retired",
-      410,
-    );
-  }
   const items: FetchRunCommitBatchCommand["items"] = command.items.map(
     (item) => ({
       ...item,
@@ -683,8 +930,8 @@ async function prepareBatchInput(
   command: BatchCommand,
   owner: CommitOwner,
 ): Promise<ApplyBatchInput> {
-  const canonicalCommand = canonicalizeBatchCommand(command, owner);
-  const prepared = await prepareJobImportForUser({
+  const canonicalCommand = canonicalizeBatchCommand(command);
+  const prepared = await prepareFetchRunJobIntake({
     userId: owner.userId,
     items: canonicalCommand.items,
   });
@@ -703,7 +950,7 @@ async function applyBatchWithMigrationFallback(
   try {
     return await applyBatchTransaction(input);
   } catch (error) {
-    if (!isJobImportEnrichmentMigrationRace(error)) throw error;
+    if (!isFetchRunJobIntakeMigrationRace(error)) throw error;
     reportError(error, {
       scope: "fetchRuns.commit.enrichment_migration_race",
       userId: owner.userId,
@@ -723,27 +970,47 @@ async function applyBatchWithMigrationFallback(
 
 async function commitBatch(
   command: BatchCommand,
+  owner: CommitOwner,
 ): Promise<FetchRunCommitResult> {
-  const owner = await loadCommitOwner(command.runId);
   const input = await prepareBatchInput(command, owner);
   return applyBatchWithMigrationFallback(input, owner);
 }
 
+function parseCommitCommand(
+  input: FetchRunCommitRequest,
+): FetchRunCommitCommand {
+  const parsed = FetchRunCommitWireCommandSchema.safeParse(input.wireCommand);
+  if (!parsed.success) {
+    throw new FetchRunCommitError(
+      "INVALID_BODY",
+      "Invalid request body",
+      400,
+      parsed.error.flatten(),
+    );
+  }
+  return { ...parsed.data, runId: input.runId };
+}
+
 /**
- * The single execution/commit interface for remote and in-process adapters.
- * Network discovery must complete before entering this module.
+ * The worker execution/commit entry point of the FetchRun interface.
+ * Network discovery must complete before entering this module. The module
+ * owns target lookup, AU-only execution policy, wire validation, tenant
+ * derivation, lifecycle fencing, and durable projection.
  */
 export async function commitFetchRun(
-  command: FetchRunCommitCommand,
+  input: FetchRunCommitRequest,
 ): Promise<FetchRunCommitResult> {
-  if (command.protocol !== FETCH_RUN_COMMIT_PROTOCOL) {
-    throw new Error("Unsupported FetchRun commit protocol");
-  }
+  // Preserve the established API precedence: target existence and retired
+  // market checks happen before worker-body validation. Every external
+  // command is checked again under FRUN before it can mutate durable state.
+  const owner = await loadCommitOwner(input.runId);
+  assertAuExecutionMarket(owner.market);
+  const command = parseCommitCommand(input);
   if (command.command === "start") {
     return startFetchRun(command.runId, command.attemptId);
   }
   if (command.command === "fail") {
     return failFetchRun(command);
   }
-  return commitBatch(command);
+  return commitBatch(command, owner);
 }

@@ -236,23 +236,23 @@ design, until external retirement and privacy cleanup settle.
 ## The `DeletedJobUrl` tombstone
 
 Keeps a deleted Job from resurrecting on the next fetch. Rationale at
-`jobImportService.ts:194-202`.
+`fetchRunJobIntake.ts:181-189`.
 
 - **Writers**: two, both inside the delete transaction — `jobDeleteService.ts:232`
   (upsert) and `:323` (createMany).
-- **Reader**: one — `jobImportService.ts:225`.
+- **Reader**: one — `fetchRunJobIntake.ts:213`.
 - **No delete path exists.** A tombstone is permanent for the life of the user
   row. The retired `/api/jobs/bulk-ignore` route moved `NEW → REJECTED` for the
   same reason; the reversible triage path is still a status write, not a delete.
 
-Import dedupes in three layers: an in-payload `Set` (`:147`), the tombstone
-exclusion (`excludeTombstonedJobs`, `:220-233`, with stored values
-re-canonicalized at `:232-233` so rows written before a canonicalizer change
-still match), and `@@unique([userId, jobUrl])` + `skipDuplicates` (`:311`).
-`prepareJobImportForUser` deliberately stops before any tombstone read;
-`persistPreparedJobImport` takes the job mutation lock as its first statement
-(`:337`) and only then filters and inserts, so a delete cannot commit a
-tombstone between the read and the inserts.
+Import dedupes in three layers: an in-payload `Set` (`:135`), the tombstone
+exclusion (`excludeTombstonedJobs`, `:208-223`, with stored values
+re-canonicalized at `:221` so rows written before a canonicalizer change
+still match), and `@@unique([userId, jobUrl])` + `skipDuplicates` (`:299`).
+`prepareFetchRunJobIntake` deliberately stops before any tombstone read;
+`persistFetchRunJobIntake` takes the job mutation lock as its first statement
+(`:323`) even for an empty result, and only then filters and inserts, so a
+delete cannot commit a tombstone between the read and the inserts.
 
 `canonicalizeJobUrl` (`lib/shared/canonicalizeJobUrl.ts:59`) strips `www.`, folds
 LinkedIn subdomains, drops default ports, resolves a LinkedIn job id from the
@@ -361,7 +361,7 @@ key derivation is a rolling-deployment compatibility change, not a refactor.
 
 | Namespace           | Constant                                                                | Key                                 | Taken by                                                                                                                                                       |
 | ------------------- | ----------------------------------------------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `JOBJ` `0x4a4f424a` | `db/advisoryLock.ts`, adapter `jobs/jobMutationLock.ts`                 | `stableInt32(userId)`               | `deleteJob`, `batchDeleteJobs`, `persistPreparedJobImport` — serializes generic and FetchRun imports against permanent delete                                  |
+| `JOBJ` `0x4a4f424a` | `db/advisoryLock.ts`, adapter `jobs/jobMutationLock.ts`                 | `stableInt32(userId)`               | `deleteJob`, `batchDeleteJobs`, `persistFetchRunJobIntake` — serializes FetchRun imports against permanent delete                                             |
 | `JOBA` `0x4a4f4241` | `db/advisoryLock.ts`, adapter `applications/applicationMutationLock.ts` | `stableInt32("${userId}:${jobId}")` | Both delete paths, `manual-generate`, `draft`, `finalize`, `discard`                                                                                           |
 | `JOBC` `0x4a4f4243` | `applications/applicationEvents.ts:47`                                  | same                                | `appendApplicationEvent`, in a `Serializable` transaction. `bulkAppendStatusEvents` takes **no** advisory lock — its boundary is `updateManyAndReturn`         |
 | `FRUN` `0x4652554e` | `db/advisoryLock.ts`, adapter `fetchRuns/fetchRunLifecycleLock.ts`      | `stableInt32(runId)`                | Attempt `start`/takeover, commit, fail, stale recovery, and cancel. It serializes changes to the relational attempt fence and is always acquired before `JOBJ` |

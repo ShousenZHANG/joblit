@@ -1,4 +1,3 @@
-import { prisma } from "@/lib/server/prisma";
 import { canonicalizeJobUrl } from "@/lib/shared/canonicalizeJobUrl";
 import {
   ImportJobItemSchema,
@@ -14,16 +13,6 @@ import {
 import { reportError } from "@/lib/server/observability/errorReporter";
 import { acquireJobMutationLock } from "@/lib/server/jobs/jobMutationLock";
 import { sanitizePipelineUrl } from "@/lib/server/security/untrustedOutput";
-
-// Compatibility exports keep existing ingestion callers stable while the
-// canonical wire schema lives in lib/shared.
-export { ImportJobItemSchema };
-export type { ImportJobItem };
-
-export interface ImportJobsResult {
-  imported: number;
-  invalid: number;
-}
 
 interface PreparedJobItem {
   jobUrl: string;
@@ -47,14 +36,13 @@ interface PreparedJobItem {
 type ParsedImportJobItem = ReturnType<typeof ImportJobItemSchema.parse>;
 type JobImportTransaction = Parameters<typeof acquireJobMutationLock>[0];
 
-export interface PreparedJobImport {
+export interface PreparedFetchRunJobIntake {
   invalid: number;
   observedAt: Date;
   items: PreparedJobItem[];
 }
 
 const BATCH_SIZE = 200;
-const IMPORT_TRANSACTION_TIMEOUT_MS = 30_000;
 const ENRICHMENT_COLUMNS = [
   "source",
   "postingrisk",
@@ -177,7 +165,7 @@ async function applyApplicationCooldown(
   }
 }
 
-export function isJobImportEnrichmentMigrationRace(error: unknown): boolean {
+export function isFetchRunJobIntakeMigrationRace(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const candidate = error as {
     code?: unknown;
@@ -191,25 +179,24 @@ export function isJobImportEnrichmentMigrationRace(error: unknown): boolean {
 }
 
 /**
- * Normalise → tombstone-filter → dedupe → atomic batch insert for one user.
+ * Normalize, tombstone-filter, dedupe, and persist one FetchRun batch.
  *
- * Single source of truth for job ingestion. The DB unique(userId, jobUrl) +
- * skipDuplicates makes the createMany idempotent under concurrent imports
+ * Private Job intake implementation for the FetchRun module. The database
+ * unique(userId, jobUrl) plus skipDuplicates keeps retries idempotent
  * (no find-then-create race), and DeletedJobUrl tombstones keep a job the user
- * deleted from resurrecting on a re-fetch — the same guarantees whether the
- * rows came from a current server-side fetcher or a retained legacy source.
+ * deleted from resurrecting on a re-fetch.
  */
 /**
  * Preparation intentionally stops before tombstone reads and writes. Those
  * operations run later under the caller's JOBJ transaction lock.
  */
-export async function prepareJobImportForUser({
+export async function prepareFetchRunJobIntake({
   userId,
   items,
 }: {
   userId: string;
   items: ImportJobItem[];
-}): Promise<PreparedJobImport> {
+}): Promise<PreparedFetchRunJobIntake> {
   const observedAt = new Date();
   const normalized = normalizeJobItems(items);
   const deduplicated = dedupePreparedJobItems(normalized.items);
@@ -317,11 +304,11 @@ async function persistPreparedJobBatch(
 }
 
 /**
- * Persist prepared jobs through an existing transaction. The global lock
- * order for run-bound imports is FRUN -> JOBJ; generic imports enter here with
- * no FRUN lock and acquire only JOBJ.
+ * Persist prepared jobs inside the FetchRun commit transaction. The global
+ * lock order is FRUN -> JOBJ; the caller already owns FRUN before this
+ * implementation acquires JOBJ.
  */
-export async function persistPreparedJobImport(
+export async function persistFetchRunJobIntake(
   tx: JobImportTransaction,
   {
     userId,
@@ -329,12 +316,12 @@ export async function persistPreparedJobImport(
     includeEnrichment,
   }: {
     userId: string;
-    prepared: PreparedJobImport;
+    prepared: PreparedFetchRunJobIntake;
     includeEnrichment: boolean;
   },
 ): Promise<number> {
-  if (prepared.items.length === 0) return 0;
   await acquireJobMutationLock(tx, userId);
+  if (prepared.items.length === 0) return 0;
   const eligible = await excludeTombstonedJobs(tx, userId, prepared.items);
   let written = 0;
   for (let index = 0; index < eligible.length; index += BATCH_SIZE) {
@@ -348,47 +335,4 @@ export async function persistPreparedJobImport(
     );
   }
   return written;
-}
-
-/**
- * Shallow convenience adapter for imports that do not participate in a wider
- * commit transaction.
- */
-export async function importJobsForUser({
-  userId,
-  items,
-}: {
-  userId: string;
-  items: ImportJobItem[];
-}): Promise<ImportJobsResult> {
-  const prepared = await prepareJobImportForUser({ userId, items });
-  if (prepared.items.length === 0) {
-    return { imported: 0, invalid: prepared.invalid };
-  }
-
-  async function runImportTransaction(includeEnrichment: boolean): Promise<number> {
-    return prisma.$transaction(
-      (tx) =>
-        persistPreparedJobImport(tx, {
-          userId,
-          prepared,
-          includeEnrichment,
-        }),
-      { timeout: IMPORT_TRANSACTION_TIMEOUT_MS },
-    );
-  }
-
-  let written: number;
-  try {
-    written = await runImportTransaction(true);
-  } catch (error) {
-    if (!isJobImportEnrichmentMigrationRace(error)) throw error;
-    reportError(error, {
-      scope: "jobs.import.enrichment_migration_race",
-      userId,
-    });
-    written = await runImportTransaction(false);
-  }
-
-  return { imported: written, invalid: prepared.invalid };
 }

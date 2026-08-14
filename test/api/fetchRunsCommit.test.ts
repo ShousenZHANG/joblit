@@ -3,14 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const harness = vi.hoisted(() => ({
   commitFetchRun: vi.fn(),
   reportError: vi.fn(),
-  findUnique: vi.fn(),
 }));
 
-vi.mock("@/lib/server/prisma", () => ({
-  prisma: { fetchRun: { findUnique: harness.findUnique } },
-}));
-
-vi.mock("@/lib/server/fetchRuns/fetchRunCommit", () => {
+vi.mock("@/lib/server/fetchRuns/fetchRun", () => {
   class FetchRunCommitError extends Error {
     constructor(
       readonly code: string,
@@ -37,7 +32,7 @@ import { POST } from "@/app/api/fetch-runs/[id]/commit/route";
 import {
   FETCH_RUN_COMMIT_PROTOCOL,
   FetchRunCommitError,
-} from "@/lib/server/fetchRuns/fetchRunCommit";
+} from "@/lib/server/fetchRuns/fetchRun";
 
 const RUN_ID = "550e8400-e29b-41d4-a716-446655440000";
 const ATTEMPT_ID = "11111111-1111-4111-8111-111111111111";
@@ -66,7 +61,6 @@ function post(req: Request, id = RUN_ID) {
 describe("fetch run commit api", () => {
   beforeEach(() => {
     process.env.FETCH_RUN_SECRET = "fetch-secret";
-    harness.findUnique.mockReset().mockResolvedValue({ market: "AU" });
     harness.commitFetchRun.mockReset().mockResolvedValue({
       disposition: "APPLIED",
       executionAttemptId: ATTEMPT_ID,
@@ -120,12 +114,21 @@ describe("fetch run commit api", () => {
       error: { code: "INVALID_PARAMS" },
     });
 
+    const invalidBodyError = () =>
+      new FetchRunCommitError(
+        "INVALID_BODY",
+        "Invalid request body",
+        400,
+        { fieldErrors: {} },
+      );
+    harness.commitFetchRun.mockRejectedValueOnce(invalidBodyError());
     const invalidJson = await post(request("{", { raw: true }));
     expect(invalidJson.status).toBe(400);
     await expect(invalidJson.json()).resolves.toMatchObject({
       error: { code: "INVALID_BODY" },
     });
 
+    harness.commitFetchRun.mockRejectedValueOnce(invalidBodyError());
     const missingAttempt = await post(
       request({
         protocol: FETCH_RUN_COMMIT_PROTOCOL,
@@ -135,6 +138,7 @@ describe("fetch run commit api", () => {
     );
     expect(missingAttempt.status).toBe(400);
 
+    harness.commitFetchRun.mockRejectedValueOnce(invalidBodyError());
     const invalidStream = await post(
       request({
         protocol: FETCH_RUN_COMMIT_PROTOCOL,
@@ -155,10 +159,10 @@ describe("fetch run commit api", () => {
         details: expect.anything(),
       },
     });
-    expect(harness.commitFetchRun).not.toHaveBeenCalled();
+    expect(harness.commitFetchRun).toHaveBeenCalledTimes(3);
   });
 
-  it("binds the authenticated body to the run id from the route", async () => {
+  it("passes route identity separately from the untrusted worker payload", async () => {
     harness.commitFetchRun.mockResolvedValueOnce({
       disposition: "APPLIED",
       executionAttemptId: ATTEMPT_ID,
@@ -201,22 +205,26 @@ describe("fetch run commit api", () => {
       status: "SUCCEEDED",
     });
     expect(harness.commitFetchRun).toHaveBeenCalledWith({
-      protocol: FETCH_RUN_COMMIT_PROTOCOL,
-      command: "commit",
       runId: RUN_ID,
-      attemptId: ATTEMPT_ID,
-      batchKey: "batch_0",
-      batchIndex: 0,
-      batchCount: 1,
-      items: [
-        {
-          jobUrl: "https://example.com/jobs/1",
-          title: "Platform Engineer",
-          market: "AU",
-        },
-      ],
-      terminal: true,
-      discoveredCount: 3,
+      wireCommand: {
+        protocol: FETCH_RUN_COMMIT_PROTOCOL,
+        command: "commit",
+        runId: "forged-run-id",
+        userId: "forged-user-id",
+        attemptId: ATTEMPT_ID,
+        batchKey: "batch_0",
+        batchIndex: 0,
+        batchCount: 1,
+        items: [
+          {
+            jobUrl: "https://example.com/jobs/1",
+            title: "Platform Engineer",
+            market: "AU",
+          },
+        ],
+        terminal: true,
+        discoveredCount: 3,
+      },
     });
   });
 
@@ -255,24 +263,27 @@ describe("fetch run commit api", () => {
     expect(harness.reportError).not.toHaveBeenCalled();
   });
 
-  it.each(["CN", "GLOBAL"])(
-    "returns 410 before committing a retired %s run",
-    async (market) => {
-      harness.findUnique.mockResolvedValue({ market });
-      const response = await post(
-        request({
-          protocol: FETCH_RUN_COMMIT_PROTOCOL,
-          command: "start",
-          attemptId: ATTEMPT_ID,
-        }),
-      );
-      expect(response.status).toBe(410);
-      await expect(response.json()).resolves.toMatchObject({
-        error: { code: "FETCH_MARKET_RETIRED" },
-      });
-      expect(harness.commitFetchRun).not.toHaveBeenCalled();
-    },
-  );
+  it("maps the module's retired-market error to the stable HTTP error", async () => {
+    harness.commitFetchRun.mockRejectedValueOnce(
+      new FetchRunCommitError(
+        "RUN_MARKET_RETIRED",
+        "This fetch market has been retired",
+        410,
+      ),
+    );
+    const response = await post(
+      request({
+        protocol: FETCH_RUN_COMMIT_PROTOCOL,
+        command: "start",
+        attemptId: ATTEMPT_ID,
+      }),
+    );
+    expect(response.status).toBe(410);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "FETCH_MARKET_RETIRED" },
+    });
+    expect(harness.commitFetchRun).toHaveBeenCalledTimes(1);
+  });
 
   it("reports unexpected commit failures without leaking internals", async () => {
     harness.commitFetchRun.mockRejectedValueOnce(new Error("database details"));

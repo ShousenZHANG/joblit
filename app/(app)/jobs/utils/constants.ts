@@ -20,7 +20,7 @@ export const HIGHLIGHT_KEYWORDS = [
  * into the aliases a posting actually carries — `state:NSW` becomes
  * ["NSW", "New South Wales", "Sydney", "Newcastle", "Wollongong"].
  *
- * Job.location is the source posting's own string (jobImportService writes
+ * Job.location is the source posting's own string (FetchRun Job intake writes
  * `item.location` verbatim), so a literal "New South Wales, Australia" never
  * matched a row reading "Sydney, AU". The filter looked useless because it was
  * returning nothing, not because the scope was already narrow.

@@ -2,15 +2,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * ADR-0008 declares the `FRUN → JOBJ` lock order mandatory, and until now no
- * test executed it. `fetchRunCommit.test.ts` mocks `acquireFetchRunLifecycleLock`
- * away and mocks `jobImportService` wholesale, so the order was asserted
+ * test executed it. `fetchRun.test.ts` mocks `acquireFetchRunLifecycleLock`
+ * away and mocks the private Job intake implementation, so the order was asserted
  * nowhere — a reversal would have deadlocked in production against a
  * concurrent cancel, with a green suite.
  *
- * This file leaves both lock modules real and records the namespace each one
- * issues, so the sequence is observed rather than assumed. Only prisma and the
- * job import body are substituted; the substitute takes the real job mutation
- * lock exactly where the real `persistPreparedJobImport` does.
+ * This file leaves both lock modules and `persistFetchRunJobIntake` real, then
+ * records the namespace each one issues. Prisma and intake preparation are
+ * substituted; the real intake persists an empty prepared batch so the test
+ * observes FRUN -> JOBJ without needing the rest of the Job write adapter.
  */
 
 const harness = vi.hoisted(() => ({
@@ -23,7 +23,6 @@ const harness = vi.hoisted(() => ({
   receiptFindUnique: vi.fn(),
   receiptCreate: vi.fn(),
   prepare: vi.fn(),
-  persist: vi.fn(),
   reportError: vi.fn(),
   run: {
     userId: "server-user",
@@ -50,22 +49,15 @@ vi.mock("@/lib/server/prisma", () => ({
   },
 }));
 
-// Deliberately NOT mocked: ./fetchRunLifecycleLock and jobMutationLock.
-vi.mock("@/lib/server/jobs/jobImportService", async () => {
-  const { acquireJobMutationLock } = await import(
-    "@/lib/server/jobs/jobMutationLock"
+// Deliberately real: fetchRunLifecycleLock, jobMutationLock, and intake persist.
+vi.mock("./fetchRunJobIntake", async () => {
+  const actual = await vi.importActual<typeof import("./fetchRunJobIntake")>(
+    "./fetchRunJobIntake",
   );
   return {
-    prepareJobImportForUser: harness.prepare,
-    persistPreparedJobImport: async (
-      tx: Parameters<typeof acquireJobMutationLock>[0],
-      input: { userId: string },
-    ) => {
-      // The real implementation takes this lock as its first statement.
-      await acquireJobMutationLock(tx, input.userId);
-      return harness.persist();
-    },
-    isJobImportEnrichmentMigrationRace: () => false,
+    ...actual,
+    prepareFetchRunJobIntake: harness.prepare,
+    isFetchRunJobIntakeMigrationRace: () => false,
   };
 });
 
@@ -74,7 +66,7 @@ vi.mock("@/lib/server/observability/errorReporter", () => ({
 }));
 
 import { LOCK_NAMESPACES, LOCK_ORDER } from "@/lib/server/db/advisoryLock";
-import { FETCH_RUN_COMMIT_PROTOCOL, commitFetchRun } from "./fetchRunCommit";
+import { FETCH_RUN_COMMIT_PROTOCOL, commitFetchRun } from "./fetchRun";
 
 const RUN_ID = "550e8400-e29b-41d4-a716-446655440000";
 const ATTEMPT_ID = "11111111-1111-4111-8111-111111111111";
@@ -108,7 +100,6 @@ describe("FetchRun commit lock order (ADR-0008)", () => {
       harness.receiptFindUnique,
       harness.receiptCreate,
       harness.prepare,
-      harness.persist,
       harness.reportError,
     ]) {
       mock.mockReset();
@@ -127,41 +118,42 @@ describe("FetchRun commit lock order (ADR-0008)", () => {
     harness.receiptFindUnique.mockImplementation(async () => null);
     harness.receiptCreate.mockImplementation(async () => ({}));
     harness.prepare.mockImplementation(async () => ({
-      prepared: [{ jobUrl: "https://example.com/jobs/1" }],
-      invalidCount: 0,
+      invalid: 0,
+      observedAt: new Date("2026-07-24T00:00:00.000Z"),
+      items: [],
     }));
-    harness.persist.mockImplementation(async () => 1);
   });
 
   function commitCommand() {
     return {
-      protocol: FETCH_RUN_COMMIT_PROTOCOL,
-      command: "commit" as const,
       runId: RUN_ID,
-      attemptId: ATTEMPT_ID,
-      batchKey: "batch-0",
-      batchIndex: 0,
-      batchCount: 1,
-      items: [
-        {
-          jobUrl: "https://example.com/jobs/1",
-          title: "Platform Engineer",
-          market: "AU" as const,
-        },
-      ],
-      terminal: true,
-      discoveredCount: 1,
+      wireCommand: {
+        protocol: FETCH_RUN_COMMIT_PROTOCOL,
+        command: "commit" as const,
+        attemptId: ATTEMPT_ID,
+        batchKey: "batch-0",
+        batchIndex: 0,
+        batchCount: 1,
+        items: [
+          {
+            jobUrl: "https://example.com/jobs/1",
+            title: "Platform Engineer",
+            market: "AU" as const,
+          },
+        ],
+        terminal: true,
+        discoveredCount: 1,
+      },
     };
   }
 
-  it("takes the FetchRun lifecycle lock before the job mutation lock", async () => {
+  it("takes FRUN before the real intake's JOBJ lock for an empty batch", async () => {
     await commitFetchRun(commitCommand());
 
-    expect(harness.locks).toContain(LOCK_NAMESPACES.fetchRunLifecycle);
-    expect(harness.locks).toContain(LOCK_NAMESPACES.jobMutation);
-    expect(harness.locks.indexOf(LOCK_NAMESPACES.fetchRunLifecycle)).toBeLessThan(
-      harness.locks.indexOf(LOCK_NAMESPACES.jobMutation),
-    );
+    expect(harness.locks).toEqual([
+      LOCK_NAMESPACES.fetchRunLifecycle,
+      LOCK_NAMESPACES.jobMutation,
+    ]);
   });
 
   it("takes the lifecycle lock as the transaction's first statement", async () => {
@@ -185,21 +177,25 @@ describe("FetchRun commit lock order (ADR-0008)", () => {
 
   it("takes the lifecycle lock on start, before any job work", async () => {
     await commitFetchRun({
-      protocol: FETCH_RUN_COMMIT_PROTOCOL,
-      command: "start" as const,
       runId: RUN_ID,
-      attemptId: ATTEMPT_ID,
+      wireCommand: {
+        protocol: FETCH_RUN_COMMIT_PROTOCOL,
+        command: "start" as const,
+        attemptId: ATTEMPT_ID,
+      },
     });
     expect(harness.locks).toEqual([LOCK_NAMESPACES.fetchRunLifecycle]);
   });
 
   it("takes the lifecycle lock on fail, so cancel cannot interleave", async () => {
     await commitFetchRun({
-      protocol: FETCH_RUN_COMMIT_PROTOCOL,
-      command: "fail" as const,
       runId: RUN_ID,
-      attemptId: ATTEMPT_ID,
-      error: "source timed out",
+      wireCommand: {
+        protocol: FETCH_RUN_COMMIT_PROTOCOL,
+        command: "fail" as const,
+        attemptId: ATTEMPT_ID,
+        error: "source timed out",
+      },
     });
     expect(harness.locks).toEqual([LOCK_NAMESPACES.fetchRunLifecycle]);
   });

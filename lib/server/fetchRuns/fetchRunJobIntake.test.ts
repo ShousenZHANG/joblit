@@ -25,13 +25,43 @@ vi.mock("@/lib/server/jobs/applicationCooldownService", () => ({
 }));
 
 import {
+  isFetchRunJobIntakeMigrationRace,
+  persistFetchRunJobIntake,
+  prepareFetchRunJobIntake,
+} from "./fetchRunJobIntake";
+import {
   ImportJobItemSchema,
-  importJobsForUser,
-  persistPreparedJobImport,
-  prepareJobImportForUser,
-} from "./jobImportService";
+  type ImportJobItem,
+} from "@/lib/shared/schemas/jobImport";
 
-describe("ImportJobItemSchema", () => {
+async function runIntake({
+  userId,
+  items,
+}: {
+  userId: string;
+  items: ImportJobItem[];
+}) {
+  const prepared = await prepareFetchRunJobIntake({ userId, items });
+  if (prepared.items.length === 0) {
+    return { imported: 0, invalid: prepared.invalid };
+  }
+  const persist = (includeEnrichment: boolean) =>
+    store.transaction((tx: Parameters<typeof persistFetchRunJobIntake>[0]) =>
+      persistFetchRunJobIntake(tx, {
+        userId,
+        prepared,
+        includeEnrichment,
+      }),
+    );
+  try {
+    return { imported: await persist(true), invalid: prepared.invalid };
+  } catch (error) {
+    if (!isFetchRunJobIntakeMigrationRace(error)) throw error;
+    return { imported: await persist(false), invalid: prepared.invalid };
+  }
+}
+
+describe("FetchRun Job intake implementation", () => {
   beforeEach(() => {
     store.operations.length = 0;
     store.transaction.mockReset().mockImplementation(async (callback) =>
@@ -59,6 +89,27 @@ describe("ImportJobItemSchema", () => {
     });
     store.updateMany.mockReset().mockResolvedValue({ count: 0 });
     store.buildCooldownFilter.mockReset().mockResolvedValue(() => true);
+  });
+
+  it("acquires JOBJ before returning from an empty prepared batch", async () => {
+    const prepared = await prepareFetchRunJobIntake({
+      userId: "user-1",
+      items: [],
+    });
+
+    const imported = await store.transaction(
+      (tx: Parameters<typeof persistFetchRunJobIntake>[0]) =>
+        persistFetchRunJobIntake(tx, {
+          userId: "user-1",
+          prepared,
+          includeEnrichment: true,
+        }),
+    );
+
+    expect(imported).toBe(0);
+    expect(store.operations).toEqual(["lock"]);
+    expect(store.deletedFindMany).not.toHaveBeenCalled();
+    expect(store.createMany).not.toHaveBeenCalled();
   });
 
   it("normalizes bounded producer fields", () => {
@@ -105,9 +156,9 @@ describe("ImportJobItemSchema", () => {
       jobUrl: "https://example.com/jobs/oversized",
       title: "x".repeat(241),
       market: "AU",
-    } as Parameters<typeof importJobsForUser>[0]["items"][number];
+    } as Parameters<typeof runIntake>[0]["items"][number];
 
-    const result = await importJobsForUser({
+    const result = await runIntake({
       userId: "user-1",
       items: [unsafeInternalRow],
     });
@@ -130,7 +181,7 @@ describe("ImportJobItemSchema", () => {
       }),
     ];
 
-    const result = await importJobsForUser({ userId: "user-1", items });
+    const result = await runIntake({ userId: "user-1", items });
 
     expect(result).toEqual({ imported: 2, invalid: 0 });
     const data = store.createMany.mock.calls[0][0].data;
@@ -157,7 +208,7 @@ describe("ImportJobItemSchema", () => {
       }),
     ];
 
-    const result = await importJobsForUser({ userId: "user-1", items });
+    const result = await runIntake({ userId: "user-1", items });
 
     expect(result).toEqual({ imported: 1, invalid: 0 });
     expect(store.operations).toEqual(["lock", "tombstones", "insert"]);
@@ -178,7 +229,7 @@ describe("ImportJobItemSchema", () => {
       company: "Acme",
     });
 
-    const result = await importJobsForUser({ userId: "user-1", items: [item] });
+    const result = await runIntake({ userId: "user-1", items: [item] });
 
     expect(result).toEqual({ imported: 0, invalid: 0 });
     expect(store.transaction).not.toHaveBeenCalled();
@@ -194,7 +245,7 @@ describe("ImportJobItemSchema", () => {
       company: "Acme",
     });
 
-    const result = await importJobsForUser({ userId: "user-1", items: [item] });
+    const result = await runIntake({ userId: "user-1", items: [item] });
 
     expect(result.imported).toBe(1);
     expect(store.createMany).toHaveBeenCalledTimes(1);
@@ -210,7 +261,7 @@ describe("ImportJobItemSchema", () => {
       company: "Acme",
     });
 
-    const result = await importJobsForUser({ userId: "user-1", items: [item] });
+    const result = await runIntake({ userId: "user-1", items: [item] });
 
     expect(result).toEqual({ imported: 0, invalid: 1 });
     expect(store.transaction).not.toHaveBeenCalled();
@@ -223,7 +274,7 @@ describe("ImportJobItemSchema", () => {
       company: "Acme Robotics",
     });
 
-    await importJobsForUser({ userId: "user-1", items: [item] });
+    await runIntake({ userId: "user-1", items: [item] });
 
     const row = store.createMany.mock.calls[0][0].data[0];
     expect(row.postingRisk).toBe(0);
@@ -237,7 +288,7 @@ describe("ImportJobItemSchema", () => {
       company: "Acme Robotics",
     });
 
-    const result = await importJobsForUser({ userId: "user-1", items: [item] });
+    const result = await runIntake({ userId: "user-1", items: [item] });
 
     // Still imported — risk is advisory, never a drop.
     expect(result.imported).toBe(1);
@@ -256,7 +307,7 @@ describe("ImportJobItemSchema", () => {
       company: "Acme Robotics",
     });
 
-    await importJobsForUser({ userId: "user-1", items: [item] });
+    await runIntake({ userId: "user-1", items: [item] });
 
     const row = store.createMany.mock.calls[0][0].data[0];
     expect(row.jobUrl).toBe("https://bit.ly/xyz");
@@ -277,7 +328,7 @@ describe("ImportJobItemSchema", () => {
       }),
     ];
 
-    await importJobsForUser({ userId: "user-1", items });
+    await runIntake({ userId: "user-1", items });
 
     const rows = store.createMany.mock.calls[0][0].data;
     // Both rows import — the key is a hint, not a hard dedup.
@@ -292,7 +343,7 @@ describe("ImportJobItemSchema", () => {
       title: "Backend Engineer",
     });
 
-    await importJobsForUser({ userId: "user-1", items: [item] });
+    await runIntake({ userId: "user-1", items: [item] });
 
     expect(store.createMany.mock.calls[0][0].data[0].companyRoleKey).toBeNull();
   });
@@ -305,7 +356,7 @@ describe("ImportJobItemSchema", () => {
       source: "jobspy",
     });
 
-    const result = await importJobsForUser({ userId: "user-1", items: [item] });
+    const result = await runIntake({ userId: "user-1", items: [item] });
 
     expect(result.imported).toBe(1);
     expect(store.createMany.mock.calls[0][0].data[0]).toMatchObject({
@@ -324,7 +375,7 @@ describe("ImportJobItemSchema", () => {
       source: "jobspy",
     });
 
-    await importJobsForUser({ userId: "user-1", items: [item] });
+    await runIntake({ userId: "user-1", items: [item] });
 
     expect(store.createMany.mock.calls[0][0].data[0]).toMatchObject({
       descriptionSimHash: expect.stringMatching(/^[0-9a-f]{16}$/),
@@ -362,7 +413,7 @@ describe("ImportJobItemSchema", () => {
         market: "AU",
         source: "jobspy",
       });
-      const olderPrepared = await prepareJobImportForUser({
+      const olderPrepared = await prepareFetchRunJobIntake({
         userId: "user-1",
         items: [item],
       });
@@ -401,9 +452,9 @@ describe("ImportJobItemSchema", () => {
           createMany: store.createMany,
           updateMany: store.updateMany,
         },
-      } as unknown as Parameters<typeof persistPreparedJobImport>[0];
+      } as unknown as Parameters<typeof persistFetchRunJobIntake>[0];
 
-      await persistPreparedJobImport(tx, {
+      await persistFetchRunJobIntake(tx, {
         userId: "user-1",
         prepared: olderPrepared,
         includeEnrichment: true,
@@ -430,7 +481,7 @@ describe("ImportJobItemSchema", () => {
       site: "linkedin",
     });
 
-    await importJobsForUser({ userId: "user-1", items: [item] });
+    await runIntake({ userId: "user-1", items: [item] });
 
     expect(store.createMany.mock.calls[0][0].data[0].source).toBe("jobspy");
   });
@@ -441,7 +492,7 @@ describe("ImportJobItemSchema", () => {
       title: "Dev",
     });
 
-    await importJobsForUser({ userId: "user-1", items: [item] });
+    await runIntake({ userId: "user-1", items: [item] });
 
     expect(store.createMany.mock.calls[0][0].data[0]).toMatchObject({
       market: "AU",
@@ -473,7 +524,7 @@ describe("ImportJobItemSchema", () => {
       source: "jobspy",
     });
 
-    const result = await importJobsForUser({ userId: "user-1", items: [item] });
+    const result = await runIntake({ userId: "user-1", items: [item] });
 
     expect(result.imported).toBe(1);
     expect(store.transaction).toHaveBeenCalledTimes(2);
@@ -507,7 +558,7 @@ describe("ImportJobItemSchema", () => {
       job_type: "fulltime",
     });
 
-    await importJobsForUser({ userId: "user-1", items: [item] });
+    await runIntake({ userId: "user-1", items: [item] });
 
     expect(store.createMany.mock.calls[0][0].data[0].jobType).toBe("fulltime");
   });

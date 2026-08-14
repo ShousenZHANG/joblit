@@ -3,8 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const harness = vi.hoisted(() => ({
   transaction: vi.fn(),
   ownerFindUnique: vi.fn(),
+  statusFindFirst: vi.fn(),
+  staleFindMany: vi.fn(),
   runFindUnique: vi.fn(),
+  runFindFirst: vi.fn(),
   runUpdate: vi.fn(),
+  runUpdateMany: vi.fn(),
   receiptFindUnique: vi.fn(),
   receiptCreate: vi.fn(),
   prepare: vi.fn(),
@@ -14,7 +18,10 @@ const harness = vi.hoisted(() => ({
   exists: true,
   persistCount: 2,
   invalidCount: 1,
+  migrationRace: false,
+  staleCandidateIds: [] as string[],
   run: {
+    id: "550e8400-e29b-41d4-a716-446655440000",
     userId: "server-user",
     market: "AU",
     status: "QUEUED",
@@ -28,6 +35,12 @@ const harness = vi.hoisted(() => ({
     terminalAt: null as Date | null,
     executionAttemptId: null as string | null,
     executionLeaseExpiresAt: null as Date | null,
+    queries: {
+      title: "Platform Engineer",
+      queries: ["Platform Engineer"],
+      smartExpand: true,
+    } as unknown,
+    createdAt: new Date("2026-07-24T00:00:00.000Z"),
     updatedAt: new Date("2026-07-24T00:00:00.000Z"),
   },
   receipts: new Map<
@@ -50,6 +63,8 @@ vi.mock("@/lib/server/prisma", () => ({
     $transaction: harness.transaction,
     fetchRun: {
       findUnique: harness.ownerFindUnique,
+      findFirst: harness.statusFindFirst,
+      findMany: harness.staleFindMany,
     },
   },
 }));
@@ -58,10 +73,10 @@ vi.mock("./fetchRunLifecycleLock", () => ({
   acquireFetchRunLifecycleLock: harness.lock,
 }));
 
-vi.mock("@/lib/server/jobs/jobImportService", () => ({
-  prepareJobImportForUser: harness.prepare,
-  persistPreparedJobImport: harness.persist,
-  isJobImportEnrichmentMigrationRace: () => false,
+vi.mock("./fetchRunJobIntake", () => ({
+  prepareFetchRunJobIntake: harness.prepare,
+  persistFetchRunJobIntake: harness.persist,
+  isFetchRunJobIntakeMigrationRace: () => harness.migrationRace,
 }));
 
 vi.mock("@/lib/server/observability/errorReporter", () => ({
@@ -71,12 +86,21 @@ vi.mock("@/lib/server/observability/errorReporter", () => ({
 import {
   FETCH_RUN_CANCELLED_ERROR,
   FETCH_RUN_COMMIT_PROTOCOL,
-  commitFetchRun,
-} from "./fetchRunCommit";
+  cancelFetchRun,
+  commitFetchRun as submitFetchRunCommand,
+  getFetchRunStatus,
+  sweepStaleFetchRuns,
+  type FetchRunCommitCommand,
+} from "./fetchRun";
 
 const RUN_ID = "550e8400-e29b-41d4-a716-446655440000";
 const ATTEMPT_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_ATTEMPT_ID = "22222222-2222-4222-8222-222222222222";
+
+function commitFetchRun(command: FetchRunCommitCommand) {
+  const { runId, ...wireCommand } = command;
+  return submitFetchRunCommand({ runId, wireCommand });
+}
 
 function startCommand(attemptId = ATTEMPT_ID) {
   return {
@@ -135,7 +159,10 @@ describe("FetchRun execution/commit protocol", () => {
     harness.exists = true;
     harness.persistCount = 2;
     harness.invalidCount = 1;
+    harness.migrationRace = false;
+    harness.staleCandidateIds.length = 0;
     harness.run = {
+      id: RUN_ID,
       userId: "server-user",
       market: "AU",
       status: "QUEUED",
@@ -149,6 +176,12 @@ describe("FetchRun execution/commit protocol", () => {
       terminalAt: null,
       executionAttemptId: null,
       executionLeaseExpiresAt: null,
+      queries: {
+        title: "Platform Engineer",
+        queries: ["Platform Engineer"],
+        smartExpand: true,
+      },
+      createdAt: new Date("2026-07-24T00:00:00.000Z"),
       updatedAt: new Date("2026-07-24T00:00:00.000Z"),
     };
     harness.receipts.clear();
@@ -157,8 +190,12 @@ describe("FetchRun execution/commit protocol", () => {
     for (const mock of [
       harness.transaction,
       harness.ownerFindUnique,
+      harness.statusFindFirst,
+      harness.staleFindMany,
       harness.runFindUnique,
+      harness.runFindFirst,
       harness.runUpdate,
+      harness.runUpdateMany,
       harness.receiptFindUnique,
       harness.receiptCreate,
       harness.prepare,
@@ -174,7 +211,9 @@ describe("FetchRun execution/commit protocol", () => {
         callback: (tx: {
           fetchRun: {
             findUnique: typeof harness.runFindUnique;
+            findFirst: typeof harness.runFindFirst;
             update: typeof harness.runUpdate;
+            updateMany: typeof harness.runUpdateMany;
           };
           fetchRunCommitReceipt: {
             findUnique: typeof harness.receiptFindUnique;
@@ -185,7 +224,9 @@ describe("FetchRun execution/commit protocol", () => {
         callback({
           fetchRun: {
             findUnique: harness.runFindUnique,
+            findFirst: harness.runFindFirst,
             update: harness.runUpdate,
+            updateMany: harness.runUpdateMany,
           },
           fetchRunCommitReceipt: {
             findUnique: harness.receiptFindUnique,
@@ -198,9 +239,20 @@ describe("FetchRun execution/commit protocol", () => {
         ? { userId: harness.run.userId, market: harness.run.market }
         : null,
     );
+    harness.statusFindFirst.mockImplementation(async () =>
+      harness.exists ? { ...harness.run } : null,
+    );
+    harness.staleFindMany.mockImplementation(async () =>
+      harness.staleCandidateIds.map((id) => ({ id })),
+    );
     harness.runFindUnique.mockImplementation(async () =>
       harness.exists ? { ...harness.run } : null,
     );
+    harness.runFindFirst.mockImplementation(async ({ where }) => {
+      if (!harness.exists) return null;
+      if (where?.userId && where.userId !== harness.run.userId) return null;
+      return { ...harness.run };
+    });
     harness.runUpdate.mockImplementation(
       async ({ data }: { data: Record<string, unknown> }) => {
         harness.operations.push("projection");
@@ -223,6 +275,15 @@ describe("FetchRun execution/commit protocol", () => {
           }
         }
         return { ...harness.run };
+      },
+    );
+    harness.runUpdateMany.mockImplementation(
+      async ({ data }: { data: Record<string, unknown> }) => {
+        if (!harness.exists || !["QUEUED", "RUNNING"].includes(harness.run.status)) {
+          return { count: 0 };
+        }
+        Object.assign(harness.run, data);
+        return { count: 1 };
       },
     );
     harness.receiptFindUnique.mockImplementation(
@@ -276,6 +337,29 @@ describe("FetchRun execution/commit protocol", () => {
     harness.lock.mockImplementation(async () => {
       harness.operations.push("lock");
     });
+  });
+
+  it("checks target existence and AU policy before parsing the worker body", async () => {
+    harness.exists = false;
+    await expect(
+      submitFetchRunCommand({ runId: RUN_ID, wireCommand: null }),
+    ).rejects.toMatchObject({ code: "RUN_NOT_FOUND", status: 404 });
+
+    harness.exists = true;
+    harness.run.market = "CN";
+    await expect(
+      submitFetchRunCommand({ runId: RUN_ID, wireCommand: null }),
+    ).rejects.toMatchObject({ code: "RUN_MARKET_RETIRED", status: 410 });
+
+    harness.run.market = "AU";
+    await expect(
+      submitFetchRunCommand({ runId: RUN_ID, wireCommand: null }),
+    ).rejects.toMatchObject({
+      code: "INVALID_BODY",
+      status: 400,
+      details: expect.anything(),
+    });
+    expect(harness.transaction).not.toHaveBeenCalled();
   });
 
   it("starts a queued run once and replays an already-running start", async () => {
@@ -541,13 +625,51 @@ describe("FetchRun execution/commit protocol", () => {
     });
   });
 
+  it("retries the complete commit transaction without enrichment columns", async () => {
+    const migrationError = Object.assign(
+      new Error('The column "Job.source" does not exist'),
+      { code: "P2022" },
+    );
+    harness.migrationRace = true;
+    harness.persist
+      .mockRejectedValueOnce(migrationError)
+      .mockImplementationOnce(async () => {
+        harness.operations.push("persist");
+        return 1;
+      });
+
+    await commitFetchRun(startCommand());
+    await expect(commitFetchRun(commitCommand())).resolves.toMatchObject({
+      disposition: "APPLIED",
+      batchImported: 1,
+      status: "SUCCEEDED",
+    });
+
+    expect(harness.transaction).toHaveBeenCalledTimes(3);
+    expect(harness.persist).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      expect.objectContaining({ includeEnrichment: true }),
+    );
+    expect(harness.persist).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      expect.objectContaining({ includeEnrichment: false }),
+    );
+    expect(harness.reportError).toHaveBeenCalledWith(
+      migrationError,
+      expect.objectContaining({ scope: "fetchRuns.commit.enrichment_migration_race" }),
+    );
+  });
+
   it("rejects a terminal batch that omits the total discovered count", async () => {
     await commitFetchRun(startCommand());
 
     await expect(
       commitFetchRun(commitCommand({ discoveredCount: undefined })),
     ).rejects.toMatchObject({
-      code: "INVALID_TERMINAL_BATCH",
+      code: "INVALID_BODY",
+      status: 400,
     });
   });
 
@@ -614,27 +736,6 @@ describe("FetchRun execution/commit protocol", () => {
     });
   });
 
-  it("does not expire a run refreshed after the stale snapshot", async () => {
-    await commitFetchRun(startCommand());
-    harness.run.updatedAt = new Date("2026-07-24T00:10:00.000Z");
-
-    await expect(
-      commitFetchRun({
-        protocol: FETCH_RUN_COMMIT_PROTOCOL,
-        command: "fail",
-        runId: RUN_ID,
-        error: "stale",
-        staleBefore: new Date("2026-07-24T00:05:00.000Z"),
-      }),
-    ).resolves.toMatchObject({
-      disposition: "REPLAYED",
-      status: "RUNNING",
-    });
-    expect(harness.run.status).toBe("RUNNING");
-    expect(harness.run.error).toBeNull();
-    expect(harness.runUpdate).toHaveBeenCalledTimes(1);
-  });
-
   it("derives tenant and market from the run, never from adapter items", async () => {
     harness.run.userId = "authoritative-user";
     harness.run.market = "AU";
@@ -672,17 +773,139 @@ describe("FetchRun execution/commit protocol", () => {
   });
 
   it.each(["CN", "GLOBAL"])(
-    "fails closed instead of importing a retired %s run as AU",
+    "rejects every external command for a retired %s run",
     async (market) => {
       harness.run.market = market;
-      await commitFetchRun(startCommand());
-
-      await expect(commitFetchRun(commitCommand())).rejects.toMatchObject({
-        code: "RUN_MARKET_RETIRED",
-        status: 410,
-      });
+      for (const command of [
+        startCommand(),
+        commitCommand(),
+        failCommand(),
+      ]) {
+        await expect(commitFetchRun(command)).rejects.toMatchObject({
+          code: "RUN_MARKET_RETIRED",
+          status: 410,
+        });
+      }
       expect(harness.prepare).not.toHaveBeenCalled();
       expect(harness.persist).not.toHaveBeenCalled();
+      expect(harness.transaction).not.toHaveBeenCalled();
     },
   );
+
+  it("cancels an owned active run through the FetchRun interface", async () => {
+    harness.run.status = "RUNNING";
+
+    await expect(
+      cancelFetchRun({ runId: RUN_ID, userId: "server-user" }),
+    ).resolves.toEqual({ kind: "cancelled", status: "FAILED" });
+
+    expect(harness.lock).toHaveBeenCalledTimes(1);
+    expect(harness.run).toMatchObject({
+      status: "FAILED",
+      error: FETCH_RUN_CANCELLED_ERROR,
+      terminalAt: expect.any(Date),
+    });
+  });
+
+  it("projects cancellation after durable progress as PARTIAL", async () => {
+    harness.run.status = "RUNNING";
+    harness.run.commitStartedAt = new Date("2026-07-24T00:05:00.000Z");
+
+    await expect(
+      cancelFetchRun({ runId: RUN_ID, userId: "server-user" }),
+    ).resolves.toEqual({ kind: "cancelled", status: "PARTIAL" });
+    expect(harness.run.status).toBe("PARTIAL");
+  });
+
+  it("checks cancellation ownership only after acquiring FRUN", async () => {
+    harness.run.status = "RUNNING";
+
+    await expect(
+      cancelFetchRun({ runId: RUN_ID, userId: "another-user" }),
+    ).resolves.toEqual({ kind: "not_found" });
+
+    expect(harness.operations[0]).toBe("lock");
+    expect(harness.runUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("returns the owned status view without leaking persisted query JSON", async () => {
+    harness.run.status = "RUNNING";
+    harness.run.updatedAt = new Date();
+    harness.run.queries = {
+      title: "Platform Engineer",
+      queries: ["Platform Engineer", "Backend Engineer", "platform engineer"],
+      smartExpand: false,
+    };
+
+    await expect(
+      getFetchRunStatus({ runId: RUN_ID, userId: "server-user" }),
+    ).resolves.toMatchObject({
+      id: RUN_ID,
+      status: "RUNNING",
+      queryTitle: "Platform Engineer",
+      queryTerms: ["Platform Engineer", "Backend Engineer"],
+      smartExpand: false,
+    });
+  });
+
+  it("recovers a stale owned run through the same locked failure transition", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-07-24T01:00:00.000Z"));
+      harness.run.status = "RUNNING";
+      harness.run.executionAttemptId = ATTEMPT_ID;
+      harness.run.updatedAt = new Date("2026-07-24T00:00:00.000Z");
+
+      await expect(
+        getFetchRunStatus({ runId: RUN_ID, userId: "server-user" }),
+      ).resolves.toMatchObject({
+        status: "FAILED",
+        error: "Dispatch timeout: worker did not report status within 30 minutes",
+      });
+      expect(harness.lock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("lets progress after a stale status snapshot win recovery", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-07-24T01:00:00.000Z"));
+      harness.run.status = "RUNNING";
+      harness.run.executionAttemptId = ATTEMPT_ID;
+      harness.run.updatedAt = new Date("2026-07-24T00:45:00.000Z");
+      harness.statusFindFirst.mockResolvedValueOnce({
+        ...harness.run,
+        updatedAt: new Date("2026-07-24T00:00:00.000Z"),
+      });
+
+      await expect(
+        getFetchRunStatus({ runId: RUN_ID, userId: "server-user" }),
+      ).resolves.toMatchObject({ status: "RUNNING", error: null });
+      expect(harness.runUpdate).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("sweeps stale candidates through the shared recovery implementation", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-07-24T01:00:00.000Z"));
+      harness.run.status = "RUNNING";
+      harness.run.executionAttemptId = ATTEMPT_ID;
+      harness.run.updatedAt = new Date("2026-07-24T00:00:00.000Z");
+      harness.staleCandidateIds.push(RUN_ID);
+
+      await expect(sweepStaleFetchRuns()).resolves.toEqual({
+        ids: [RUN_ID],
+        candidateCount: 1,
+        staleAfterMs: 30 * 60 * 1000,
+      });
+      expect(harness.run.status).toBe("FAILED");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

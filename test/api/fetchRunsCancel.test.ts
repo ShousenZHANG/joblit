@@ -1,30 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const store = vi.hoisted(() => ({
-  findFirst: vi.fn(),
-  updateMany: vi.fn(),
-  executeRawLock: vi.fn(),
+  cancelFetchRun: vi.fn(),
 }));
 
-vi.mock("@/lib/server/prisma", () => ({
-  prisma: {
-    $transaction: async (
-      action: (tx: {
-        fetchRun: {
-          findFirst: typeof store.findFirst;
-          updateMany: typeof store.updateMany;
-        };
-        $executeRaw: typeof store.executeRawLock;
-      }) => Promise<unknown>,
-    ) =>
-      action({
-        fetchRun: {
-          findFirst: store.findFirst,
-          updateMany: store.updateMany,
-        },
-        $executeRaw: store.executeRawLock,
-      }),
-  },
+vi.mock("@/lib/server/fetchRuns/fetchRun", () => ({
+  cancelFetchRun: store.cancelFetchRun,
 }));
 
 vi.mock("@/auth", () => ({ authOptions: {} }));
@@ -50,15 +31,13 @@ describe("fetch run cancel api", () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "user-1" },
     });
-    store.executeRawLock.mockResolvedValue(1);
-    store.updateMany.mockResolvedValue({ count: 1 });
+    store.cancelFetchRun.mockReset();
   });
 
   it("cancels only an active run owned by the current user", async () => {
-    store.findFirst.mockResolvedValueOnce({
-      id: RUN_ID,
-      status: "RUNNING",
-      commitStartedAt: null,
+    store.cancelFetchRun.mockResolvedValueOnce({
+      kind: "cancelled",
+      status: "FAILED",
     });
 
     const response = await cancel();
@@ -68,26 +47,16 @@ describe("fetch run cancel api", () => {
       ok: true,
       status: "FAILED",
     });
-    expect(store.executeRawLock).toHaveBeenCalled();
-    expect(store.updateMany).toHaveBeenCalledWith({
-      where: {
-        id: RUN_ID,
-        userId: "user-1",
-        status: { in: ["QUEUED", "RUNNING"] },
-      },
-      data: {
-        status: "FAILED",
-        error: "Cancelled by user",
-        terminalAt: expect.any(Date),
-      },
+    expect(store.cancelFetchRun).toHaveBeenCalledWith({
+      runId: RUN_ID,
+      userId: "user-1",
     });
   });
 
   it("preserves committed batches as a PARTIAL terminal result", async () => {
-    store.findFirst.mockResolvedValueOnce({
-      id: RUN_ID,
-      status: "RUNNING",
-      commitStartedAt: new Date("2026-07-24T00:00:00.000Z"),
+    store.cancelFetchRun.mockResolvedValueOnce({
+      kind: "cancelled",
+      status: "PARTIAL",
     });
 
     const response = await cancel();
@@ -97,21 +66,12 @@ describe("fetch run cancel api", () => {
       ok: true,
       status: "PARTIAL",
     });
-    expect(store.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          status: "PARTIAL",
-          error: "Cancelled by user",
-        }),
-      }),
-    );
   });
 
   it("cannot overwrite a run that completed before the lifecycle lock", async () => {
-    store.findFirst.mockResolvedValueOnce({
-      id: RUN_ID,
+    store.cancelFetchRun.mockResolvedValueOnce({
+      kind: "finished",
       status: "SUCCEEDED",
-      commitStartedAt: new Date(),
     });
 
     const response = await cancel();
@@ -124,6 +84,5 @@ describe("fetch run cancel api", () => {
         details: { status: "SUCCEEDED" },
       },
     });
-    expect(store.updateMany).not.toHaveBeenCalled();
   });
 });

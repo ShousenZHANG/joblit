@@ -39,14 +39,18 @@ POST /api/fetch-runs/[id]/trigger
                   → POST /api/fetch-runs/[id]/commit
                                │
                                ▼
-                  lib/server/fetchRuns/fetchRunCommit.ts
+                  lib/server/fetchRuns/fetchRun.ts
                   FRUN → attempt fence → JOBJ
                   → Job + receipt + run projection
 ```
 
-The asynchronous AU worker reaches the commit module through the
+The asynchronous AU worker reaches the FetchRun module through the
 `FETCH_RUN_SECRET`-guarded HTTP adapter. Commands form `fetch-run-commit/v1`,
-and the commit module derives the owner and market from the stored run. Creation,
+and the module validates the untrusted wire command, derives the owner and
+market from the stored run, and enforces AU-only execution before every
+external lifecycle mutation. User cancel,
+status-triggered stale recovery, manual stale sweep, and ordered worker commits
+cross the same FetchRun interface. Creation,
 config, trigger, and commit boundaries reject non-AU execution. The config
 reader accepts strict AU v2 plus historical AU v1 only; unknown and retired
 market shapes fail closed.
@@ -303,8 +307,8 @@ gates, the build, and dependency audits.
 
 | I want to change…                                                    | Start at                                                                                                                                                                                                            |
 | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| How a Job is imported or deduped                                     | `lib/server/jobs/jobImportService.ts`                                                                                                                                                                               |
-| How a FetchRun starts, commits, fails, or races cancellation         | `lib/server/fetchRuns/fetchRunCommit.ts`, then ADR-0008                                                                                                                                                             |
+| How a Job is imported or deduped                                     | `lib/server/fetchRuns/fetchRunJobIntake.ts`, behind the FetchRun interface                                                                                                                                           |
+| How a FetchRun starts, commits, fails, cancels, or recovers stale runs | `lib/server/fetchRuns/fetchRun.ts`, then ADR-0008                                                                                                                                                                    |
 | The persisted FetchRun execution contract                            | `lib/shared/schemas/fetchRunConfig.ts`                                                                                                                                                                              |
 | What the AI is asked                                                 | `lib/server/ai/applicationPromptBuilder.ts`, `lib/server/applications/applicationPrompt.ts`                                                                                                                         |
 | Which AI proposals are allowed through                               | The Quality Gate — `lib/server/applications/manualImportParser.ts:409` `isGroundedAddedBullet`, `:446` `isNonRedundantAddedBullet`                                                                                  |
