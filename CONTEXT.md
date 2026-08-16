@@ -90,37 +90,40 @@ each target when known: `generatedAt`, `promptMetaHash`, and source. The legacy
 root `generatedAt`, `promptMetaHash`, and optional `source` describe the latest
 whole import only and must not be attributed to a preserved target.
 
-Evidence and review remain aggregate-wide, and are built **exactly once** per
-request, at the merge. After a target replacement or an evidence-aware
-Edit/discard, the server rebuilds evidence and reviews the combined CV + Cover
-snapshot before persistence.
-
-The generation-acceptance seam deliberately produces no review. A proposal for
-one target, judged while the other target is still empty, is a different
-snapshot from the document that gets persisted, so gating on it asked the
-grounding question of the wrong content. The browser may change only
-`accepted` and `userEdit`.
+Generated content is judged once, at the import boundary, by
+`lib/server/ai/summaryLint.ts` — never downstream and never by another model.
+The browser may change only `accepted`, `userEdit`, and the skills selection.
 
 Captures:
 - **Summary**: AI rewritten text + the original (for diff display).
-- **Latest experience bullets**: AI-added bullets, each carrying `text`, `userEdit?`, `accepted`, and the quality-gate verdict.
+- **Skills selection**: `{ aiSelection, userSelection? }`, each an array of
+  `{ group, items }` index references into `ResumeProfile.skills`. Absent on
+  rows written before tailoring selected skills, which renders the master
+  profile's skills unchanged.
 - **Cover letter paragraphs**: AI drafts of the three body paragraphs, each with `userEdit?` and `accepted`.
 
-The skills section is not part of this snapshot. AI-proposed skill additions were removed: the model proposed skills the candidate had no evidence for, so the grounding gate blocked finalize on almost every draft that carried them. A CV's skills come from the master profile only.
+**AI writes no experience bullets and no skill names** (ADR-0023). Both were
+retired for the same reason: the model proposed content the candidate had no
+evidence for, and a gate that judges generated text is a probabilistic check on
+a probabilistic output. Selection by index replaces judgement after the fact —
+a model that returns integers cannot fabricate. New skills enter through the
+Resume Studio, where the candidate types them.
 
-**`accepted` gates additions, not replacements.** An AI-added bullet is an
-addition: the user opts in, and an unaccepted bullet is omitted from the
-document. The summary and the three Cover paragraphs are replacements of
-required content — a Cover letter missing a body paragraph is invalid, not
-shorter, and Finalize rejects it with `COVER_PARAGRAPHS_INCOMPLETE`. Rejecting
-a replacement therefore cannot mean omitting it; the user edits it instead, and
-`userEdit` already wins when present.
+**`accepted` gates additions, not replacements.** Tailoring now produces only
+replacements — the summary and the three Cover paragraphs — so `accepted` has
+no remaining gate to perform and is preserved for provenance rather than read.
+A Cover letter missing a body paragraph is invalid, not shorter, and Finalize
+rejects it with `COVER_PARAGRAPHS_INCOMPLETE`; rejecting a replacement cannot
+mean omitting it, so the user edits it instead and `userEdit` wins when present.
 
 The one derivation of a proposal's final text lives in
-`lib/shared/aiContentText.ts` and is used by the LaTeX composition, the evidence
-ledger, and the claim ledger, so all three describe the same document.
+`lib/shared/aiContentText.ts`, alongside `resolveSkillsSelection`, which turns a
+selection back into the profile's own strings. The LaTeX composition, the review
+panel and the document content hash all read from there, so all three describe
+the same document.
 
-See **ADR-0001** for the persistence rationale.
+See **ADR-0001** for the persistence rationale and **ADR-0023** for the current
+tailoring contract.
 
 ---
 
@@ -133,22 +136,32 @@ The end-to-end process of converting a Master Resume Profile + a Job into a fini
 1. **Generate** — produce AI proposals. The server never calls a model
    (ADR-0015); the user obtains the prompt and pastes an external LLM's JSON
    back through manual import (ADR-0022).
-2. **Edit** — user reviews AI proposals on `/jobs/[id]/tailor`, accepts/rejects/edits.
+2. **Edit** — user reviews AI proposals in the Tailor dialog, editing the
+   summary and cover paragraphs and narrowing or reordering the skills.
 3. **Finalize** — render one target's LaTeX → PDF and publish that document.
+   Nothing else renders a PDF; there is no tailoring preview (ADR-0023).
 
 The **Edit** phase is new in v1.x. Before that, generate→finalize was atomic. See **ADR-0002**.
 
-### Quality Gate
+### Import Gate
 
-The set of post-generation filters that grade AI-added bullets.
-`acceptApplicationGeneration` is the single generation-acceptance seam and
-applies the grounding/non-redundancy checks from `manualImportParser.ts` to
-manual imports. Bullets that fail a gate are **shown but disabled** in the Edit
-panel; the user may override by editing the bullet text.
+The checks a generated payload must pass to be accepted at all.
+`acceptApplicationGeneration` is the single generation-acceptance seam, and
+every check it runs is a deterministic string or index comparison — no model is
+asked to judge a model, which is exactly how the retired grounding gate failed.
 
-Gates today:
-- **Grounded** — the bullet must reference at least one term from the JD or master profile.
-- **Non-redundant** — the bullet must not duplicate an existing bullet on the same experience.
+Gates today (ADR-0023):
+- **Summary length** — 120 to 350 characters, enforced by the output schema.
+- **Title present** — the summary must contain the posting's job title with
+  seniority words stripped, so a candidate claims the role and not the level.
+- **Grounded numbers** — every number in the summary must already appear on the
+  Master Resume Profile.
+- **Grounded skills** — every gazetteer-recognised skill in the summary must
+  already appear on the profile.
+- **In-bank selection** — every skills index must resolve against the profile.
+
+A failure is a 4xx naming the offending token, not a warning: the user edits one
+word and re-imports.
 
 ### Fetch Pipeline
 
@@ -280,7 +293,7 @@ Short locale code used by next-intl for translation strings. `en | zh`. Always d
 |---|---|
 | "Resume" (alone) | **Master Resume Profile** or **Application** (be specific) |
 | "Save" | **Auto-save** (background, debounced) or **Finalize** (explicit, renders PDF) |
-| "AI bullets" | **AI-added bullets** (the additions) or **AI proposals** (summary, AI-added bullets, or Cover paragraphs) |
+| "AI bullets" | Nothing — AI writes no bullets. Say **AI proposals** (the summary, the skills selection, or the Cover paragraphs) |
 | "Generate" (alone) | **Generate AI proposals** or **Tailor** (the full pipeline) |
 | "Cover letter" (as separate noun) | Treat as part of **Application** — a single Application has both CV and CL artifacts |
 | "Draft" (vague) | **`DRAFT` Application** or **AI proposal** |

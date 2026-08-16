@@ -31,16 +31,26 @@ npm run deps:policy       # Check dependency policy
 
 1. **Job Intake**: `FetchRun` is AU-only. It persists a strict AU v2 config (with an AU v1 compatibility reader), then dispatches the GitHub Actions JobSpy worker. Results enter `commitFetchRun`, where ordered receipts, Jobs, counters, and terminal state commit atomically with dedupe on `userId + jobUrl` and tombstone filtering (`DeletedJobUrl`). CN Fetch and GLOBAL feed/ATS execution were retired by ADR-0017; CN Jobs, Resume, LaTeX, and translated UI remain product capabilities
 2. **Tailoring**: `Job` + `ResumeProfile` → AI prompt (via versioned `PromptRuleTemplate`) → the user's model runs it through the local Codex CLI Runner, or an external result is imported by hand → persisted Application aggregate → target-scoped PDF render via the LaTeX service. The server holds no model key and runs no generation (ADR-0015)
-3. **Batch**: External Codex and the Runner atomically complete/claim tasks through `/api/application-batches/[id]/run-once`. Protocol v2 persists each generated target as DRAFT through `manual-generate`, then publishes Resume/Cover independently; both publication receipts are required for success. The interface requires Batch, task, issue, attempt, and target identity and commits with content-hash CAS fences (ADR-0020). Fresh work enters one Job at a time through `POST /api/application-batches/enqueue`, which appends to the live batch instead of refusing while one drains (ADR-0021); failed-task retry keeps its own `retry-failed` route. The retired `/execute`, `POST /api/application-batches`, and `/api/application-batches/preflight` routes must not be reintroduced.
-4. **Runner**: The local Runner (`tools/runner/`) authenticates with an `AgentCredential`, drains the active tailoring batch, and runs the official Codex CLI as a child process (ADR-0018). Acceptance and publication settle behind immutable receipts and exact attempt fences; publication-only recovery never calls Codex again. It imports no repository code — the HTTP API is the contract. AI fit scoring was retired end to end (ADR-0019); deterministic JD requirements analysis is the surviving triage signal.
+3. **Triage**: AI fit scoring was retired end to end (ADR-0019); deterministic JD requirements analysis is the surviving triage signal.
 
-Current tailoring output is delta-only: Resume returns `cvSummary` plus zero to
-three `latestExperience.addedBullets`; Cover returns only its three body
-paragraphs. Existing bullets and skills remain owned by `ResumeProfile`. Skill
-Pack V3 must package the user's active effective `PromptRuleTemplate`, not
-defaults. The retired `/api/applications/generate` and
-`/api/applications/generate-cover-letter` session routes must not be
-reintroduced.
+Tailoring changes two things on a CV and nothing else (ADR-0023). The summary is
+regenerated within a 120-350 character window and checked at the import boundary
+by `lib/server/ai/summaryLint.ts`: it must name the target role with seniority
+words stripped, and it may state no number and no skill the Master Resume
+Profile does not already carry. The skills section is chosen by **index
+reference** into the candidate's own skill bank — the model returns
+`{ group, items }` positions, never a skill name, and an index that does not
+resolve against the profile is rejected. Cover returns only its three body
+paragraphs. Experience bullets are never AI-written.
+
+AI-added bullets, the evidence ledger and the review gate were deleted with
+ADR-0023; a gate that judges generated text is a probabilistic check on a
+probabilistic output, and a model that can only return integers cannot
+fabricate. Do not reintroduce either. Skill Pack V3 must package the user's
+active effective `PromptRuleTemplate`, not defaults. The retired
+`/api/applications/generate`, `/api/applications/generate-cover-letter` and
+`/api/applications/[id]/preview` routes, and the `/jobs/[id]/tailor` page, must
+not be reintroduced.
 
 ### Route Groups
 
@@ -51,25 +61,22 @@ reintroduced.
 
 ### Backend (`lib/server/`)
 
-- `ai/` — Prompt building, skill pack management, CV/CL quality gates. No provider client: generation is local-first (ADR-0015). The fit-scoring modules were deleted (ADR-0019)
+- `ai/` — Prompt building, skill pack management, and `summaryLint.ts`, the deterministic gate on generated summaries (ADR-0023). No provider client: generation is local-first (ADR-0015). The fit-scoring modules were deleted (ADR-0019)
 - `latex/` — LaTeX template rendering (`renderResume.ts` for EN, `renderResumeCN.ts` for CN)
-- `applications/` — Resume/cover artifact generation and storage
-- `applicationBatches/` — Batch task orchestration (Codex protocol, progress tracking)
+- `applications/` — Resume/cover artifact generation and storage; `applicationEdit.ts` owns the whole non-artifact edit commit behind two functions
 - `jobs/` — Job CRUD, filtering, deletion cascade (jobListService, jobDeleteService, jobSearchService)
-- `fetchRuns/` — AU worker dispatch, stale-run policy, lifecycle/dispatch locks, and the shared `fetch-run-commit/v1` transaction boundary
+- `fetchRuns/` — `fetchRun.ts` owns every durable FetchRun transition (worker commit, user cancel, status read, stale sweep); `fetchRunJobIntake.ts` is its private Job-writing half
 - `files/` — Vercel Blob operations and PDF filename utilities
 - `discover/` — GitHub trending scrape plus its last-known-good cache, read by the nav trending popover. The YouTube video pipeline and the Discover workspace were deleted; do not reintroduce them
-- `api/` — Shared route utilities: `errorResponse`, `rateLimit`, `routeHandler`
-- `auth/` — Session and agent-credential middleware: `requireSession`,
-  `requireAgentCredential`
-- `tailoringRuns/` — Tailoring Run leases, attempt fences, and receipt settlement (ADR-0009)
+- `api/` — Shared route utilities: `errorResponse`, `rateLimit`, `routeHandler`, plus the typed-error layer (`appError`, `databaseError`)
+- `auth/` — Session middleware: `requireSession`, and `constantTimeEqual` for the two shared service secrets
 - `artifacts/` — Artifact inventory, claim, and delete reconciliation (ADR-0010)
 - `runtimeCapabilities/` — The single reader for paired optional credentials; never serialize what it returns (ADR-0013)
-- `net/` — `safeFetch`: host allowlist, private-address blocking, redirect and size limits for every outbound call
-- `security/` — Credential hashing and token-shape validation
+- `net/` — `safeFetch`: host allowlist, private-address blocking, redirect and size limits for every outbound call. Enforced by a TypeScript-AST CI gate, not convention: no other file under `app/api/**` or `lib/server/**` may call `fetch()`
+- `security/` — `untrustedOutput.ts`: markdown, TSV and pipeline-URL sanitizers
 - `db/` — Advisory-lock helpers and transaction boundaries
 - `observability/` — `errorReporter`; Sentry is an optional, uninstalled hook
-- `archive/` — Retired-surface holding area; nothing here is on a request path
+- `archive/` — `zip.ts`, the ZIP32 builder on the Skill Pack download path
 - `prisma.ts` — Prisma singleton with Neon serverless adapter
 
 ### Shared (`lib/shared/`)
@@ -82,13 +89,12 @@ reintroduced.
 - `fetchRolePacks.config.json` — Role category definitions
 - `canonicalizeJobUrl`, `parseCnSalary` — Job normalization helpers
 
-### Prisma Models (24)
+### Prisma Models (17)
 
-- Core workflow: `Job`, `FetchRun`, `ApplicationBatch`, `ApplicationBatchTask`, `Application`, `ResumeProfile`, `ActiveResumeProfile`, `PromptRuleTemplate`
-- Provenance: `ApplicationEvent` (immutable ledger, carries company/title snapshots so it outlives the Job), `EvidenceSnapshot`, `ClaimEvidence`
-- Tailoring acceptance (ADR-0009): `TailoringRun`, `TailoringRunReceipt`
+- Core workflow: `Job`, `FetchRun`, `Application`, `ResumeProfile`, `ActiveResumeProfile`, `PromptRuleTemplate`
+- Provenance: `ApplicationEvent` (immutable ledger, carries company/title snapshots so it outlives the Job)
 - Artifact lifecycle (ADR-0010): `ApplicationArtifact`, `ApplicationArtifactInventoryCheckpoint`
-- Auth: `User`, `Account`, `Session`, `AgentCredential`
+- Auth: `User`, `Account`, `Session`
 - Fetch execution: `FetchRunCommitReceipt`
 - Supporting: `DeletedJobUrl` (dedup tombstone), `DailyCheckin`, `OnboardingState`, `DiscoverCache`
 
@@ -166,9 +172,19 @@ order, keep network I/O outside the commit transaction, and route AU worker
 results through `commitFetchRun`. Reject non-AU execution. `PARTIAL` is terminal and means some
 work may already be receipt-backed; cancellation never rolls those Jobs back.
 
-## Codex Batch Workflow
+## Tailoring Workflow
 
-Generation is manual copy/paste only (ADR-0022). `POST /api/applications/prompt` issues the prompt for one target, the user pastes it into any chatbot, and `POST /api/applications/manual-generate` imports the JSON; `POST /api/applications/:id/finalize` publishes one target to PDF. All three are session-authenticated. The local Runner, the Application Batch queue and the TailoringRun receipt ledger were deleted.
+Generation is manual copy/paste only (ADR-0022). `POST /api/applications/prompt`
+issues the prompt for one target, the user pastes it into any chatbot, and
+`POST /api/applications/manual-generate` imports the JSON as a DRAFT;
+`PATCH /api/applications/:id/draft` autosaves review edits, and
+`POST /api/applications/:id/finalize` publishes one target to PDF. All are
+session-authenticated. The whole flow lives in one dialog
+(`app/(app)/jobs/components/tailoring/TailorDialog.tsx`) behind one menu entry.
+
+Finalize is the only thing that renders a PDF — there is no tailoring preview
+(ADR-0023). The local Runner, the Application Batch queue and the TailoringRun
+receipt ledger were deleted.
 
 ## Architecture Reference
 
