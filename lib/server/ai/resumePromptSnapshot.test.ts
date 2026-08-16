@@ -156,15 +156,41 @@ describe("buildResumePromptSnapshot", () => {
     expect(snapshot.experiences?.[0]?.bullets.length).toBeLessThanOrEqual(
       RESUME_PROMPT_SNAPSHOT_LIMITS.experiences.bullets,
     );
-    expect(snapshot.projects?.length).toBeLessThanOrEqual(
+    // Sections the total-size trim may drop entirely on an oversized profile.
+    expect(snapshot.projects?.length ?? 0).toBeLessThanOrEqual(
       RESUME_PROMPT_SNAPSHOT_LIMITS.projects.entries,
     );
-    expect(snapshot.education?.length).toBeLessThanOrEqual(
+    expect(snapshot.education?.length ?? 0).toBeLessThanOrEqual(
       RESUME_PROMPT_SNAPSHOT_LIMITS.education.entries,
     );
     expect(JSON.stringify(snapshot).length).toBeLessThanOrEqual(
       RESUME_PROMPT_SNAPSHOT_LIMITS.totalChars,
     );
+  });
+
+  it("never trims skills to make room, however oversized the profile", () => {
+    const skills = Array.from({ length: 12 }, (_, group) => ({
+      category: `Group ${group}`,
+      items: Array.from({ length: 30 }, (_, item) => `Skill ${group}-${item}`),
+    }));
+    const snapshot = buildResumePromptSnapshot({
+      skills,
+      // Enough evidence to blow the total budget several times over.
+      experiences: Array.from({ length: 20 }, (_, index) => ({
+        title: `Role ${index}`,
+        company: `Company ${index}`,
+        bullets: Array.from({ length: 12 }, () => "x".repeat(400)),
+      })),
+      projects: Array.from({ length: 20 }, (_, index) => ({
+        name: `Project ${index}`,
+        bullets: Array.from({ length: 12 }, () => "y".repeat(400)),
+      })),
+    });
+
+    // Tailoring selects skills by index, so a trimmed skill is one the
+    // candidate can never surface — every group must survive.
+    expect(snapshot.skills).toHaveLength(12);
+    expect(snapshot.skills?.[11]?.items).toHaveLength(30);
   });
 
   it("omits nulls and keeps sanitized raw content without LaTeX escaping", () => {

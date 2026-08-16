@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import { getResumeProfile } from "@/lib/server/resumeProfile";
 import {
@@ -7,10 +8,27 @@ import {
 import { buildPdfFilename, resumeFilenameSegments } from "@/lib/server/files/pdfFilename";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
 import { aiContentSchema } from "@/lib/shared/schemas/aiContent";
+import { ResumeSkillSchema } from "@/lib/shared/schemas/resumeProfile";
 import {
-  applicationReviewSnapshotSchema,
-  type ApplicationReviewSnapshot,
-} from "@/lib/shared/schemas/applicationReviewSnapshot";
+  tailorReviewSnapshotSchema,
+  type MasterSkillGroup,
+  type TailorReviewSnapshot,
+} from "@/lib/shared/tailorReviewSnapshot";
+
+const masterSkillsSchema = z.array(ResumeSkillSchema);
+
+/**
+ * The bound profile's skill bank, or nothing.
+ *
+ * `ResumeProfile.skills` is a JSON column, so a row written before the current
+ * shape can hold anything. A bank that will not parse is returned empty rather
+ * than rejected: the selection resolves to whatever still exists, and an empty
+ * bank makes the review panel say so instead of failing the whole snapshot.
+ */
+function readMasterSkills(value: unknown): MasterSkillGroup[] {
+  const parsed = masterSkillsSchema.safeParse(value ?? []);
+  return parsed.success ? parsed.data : [];
+}
 
 export type LegacyApplicationReview = {
   applicationId: string;
@@ -22,7 +40,7 @@ export type LegacyApplicationReview = {
 };
 
 export type ApplicationReviewSnapshotResult =
-  | { kind: "ready"; snapshot: ApplicationReviewSnapshot }
+  | { kind: "ready"; snapshot: TailorReviewSnapshot }
   | { kind: "legacy"; application: LegacyApplicationReview }
   | { kind: "busy" }
   | { kind: "not_found" };
@@ -148,11 +166,12 @@ export async function loadApplicationReviewSnapshot(input: {
 
   return {
     kind: "ready",
-    snapshot: applicationReviewSnapshotSchema.parse({
+    snapshot: tailorReviewSnapshotSchema.parse({
       applicationId: application.id,
       publication,
       aiContentHash: application.aiContentHash,
       aiContent: parsedAiContent.data,
+      masterSkills: readMasterSkills(profile.skills),
       documents: {
         resume: {
           pdfUrl: application.resumePdfUrl,

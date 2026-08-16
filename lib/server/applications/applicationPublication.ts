@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { AppError } from "@/lib/server/api/appError";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import {
-  acceptedAddedBulletTexts,
   coverParagraphTexts,
+  effectiveSkillsSelection,
   proposalText,
 } from "@/lib/shared/aiContentText";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
@@ -288,14 +288,13 @@ export function rebaseApplicationPublicationForRenderContext(
 }
 
 function resumePublicationDecision(aiContent: AiContent) {
-  const summary = proposalText(aiContent.cv.summary);
-  const addedBullets = acceptedAddedBulletTexts(
-    aiContent.cv.latestExperience.addedBullets,
-  );
   return {
-    summary,
-    experienceIndex: aiContent.cv.latestExperience.experienceIndex,
-    addedBullets,
+    summary: proposalText(aiContent.cv.summary),
+    // The selection that ships, not the pair: re-picking the same skills by
+    // hand must not dirty a published PDF that already renders them.
+    skills: aiContent.cv.skillsSelection
+      ? effectiveSkillsSelection(aiContent.cv.skillsSelection)
+      : null,
   };
 }
 

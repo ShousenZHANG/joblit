@@ -32,15 +32,16 @@ function normalizeRuleList(value: unknown, fallback: string[]) {
 const RETIRED_CV_OUTPUT_RULE_PATTERNS = [
   /\bskillsFinal\b/i,
   /\bskillsAdditions\b/i,
-  /\blatestExperience\.bullets\b/i,
-  /\bcomplete final bullet/i,
+  /\blatestExperience\b/i,
+  /\baddedBullets\b/i,
+  // Generation stopped writing experience text entirely: the resume contract is
+  // a summary plus index references into the candidate's own skills. Any stored
+  // rule that still talks about bullets is instructing a field the model can no
+  // longer return, so the whole vocabulary retires rather than a phrase list.
+  /\bbullets?\b/i,
   /\bfull ordered output\b/i,
-  /\breorder(?:ed|ing)?\b.*\bbullet/i,
-  /\bbullet.*\breorder(?:ed|ing)?\b/i,
-  /\bpreserve\b.*\b(?:existing|original|base)\b.*\bbullet/i,
-  /\b(?:existing|original|base)\b.*\bbullet.*\bpreserve\b/i,
   /\boutput comments?\b/i,
-  /\bstill include\b.*\b(?:bullet|verbatim)\b/i,
+  /\bstill include\b.*\bverbatim\b/i,
 ] as const;
 
 const RETIRED_COVER_OUTPUT_RULE_PATTERNS = [

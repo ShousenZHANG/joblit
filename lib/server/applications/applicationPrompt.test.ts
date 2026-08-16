@@ -173,24 +173,26 @@ describe("application prompt service", () => {
     },
   );
 
-  it("binds prompt metadata to the full or lean prompt bytes", async () => {
+  it("binds prompt metadata to the exact prompt bytes", async () => {
     arrangeSuccess();
-    const full = await buildApplicationPromptForUser({
+    const first = await buildApplicationPromptForUser({
       userId: USER_ID,
       jobId: JOB_ID,
       target: "resume",
-      variant: "full",
-    });
-    const lean = await buildApplicationPromptForUser({
-      userId: USER_ID,
-      jobId: JOB_ID,
-      target: "resume",
-      variant: "lean",
     });
 
-    expect(full.promptMeta.promptHash).not.toBe(lean.promptMeta.promptHash);
-    expect(full.expectedJsonSchema).toEqual(lean.expectedJsonSchema);
-    expect(full.prompt.input).not.toBe(lean.prompt.input);
+    arrangeSuccess({ description: "Build reliable distributed APIs at scale." });
+    const rephrasedJob = await buildApplicationPromptForUser({
+      userId: USER_ID,
+      jobId: JOB_ID,
+      target: "resume",
+    });
+
+    expect(first.prompt.input).not.toBe(rephrasedJob.prompt.input);
+    expect(first.promptMeta.promptHash).not.toBe(
+      rephrasedJob.promptMeta.promptHash,
+    );
+    expect(first.expectedJsonSchema).toEqual(rephrasedJob.expectedJsonSchema);
   });
 
   it("rejects invalid service input before database access", async () => {

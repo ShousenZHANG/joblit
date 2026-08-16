@@ -139,63 +139,6 @@ async function enqueueApplicationRetirements(
   return queued;
 }
 
-/**
- * Remove the evidence snapshots the deleted Jobs leave behind.
- *
- * Both of `EvidenceSnapshot`'s foreign keys are `SetNull`, and nothing else in
- * the codebase deletes the table, so without this a deleted Job left its
- * extracted JD text and resume claims in Postgres with every non-user key null
- * — unreachable through each index the model declares, and removable only by
- * deleting the account.
- *
- * Two constraints shape this. Candidate ids must be captured *before* the
- * Application delete because a snapshot shared from an older Job may already
- * have `jobId = null`; deletion must run *after* that Application delete so its
- * ClaimEvidence edges have cascaded. It must still skip any snapshot another
- * Application cites or a retained STAR story uses as provenance: ids are
- * content-addressed on `(userId, kind, contentHash)` rather than on the Job.
- */
-type EvidenceCleanupTransaction = Pick<
-  Prisma.TransactionClient,
-  "claimEvidence" | "evidenceSnapshot"
->;
-
-async function collectEvidenceSnapshotIds(
-  tx: EvidenceCleanupTransaction,
-  userId: string,
-  applicationIds: string[],
-): Promise<string[]> {
-  if (applicationIds.length === 0) return [];
-  const rows = await tx.claimEvidence.findMany({
-    where: {
-      userId,
-      applicationId: { in: applicationIds },
-    },
-    select: { evidenceSnapshotId: true },
-  });
-  return [...new Set(rows.map((row) => row.evidenceSnapshotId))];
-}
-
-async function deleteUnreferencedEvidence(
-  tx: EvidenceCleanupTransaction,
-  userId: string,
-  jobIds: string[],
-  evidenceSnapshotIds: string[],
-): Promise<void> {
-  const identities: Prisma.EvidenceSnapshotWhereInput[] = [];
-  if (jobIds.length > 0) identities.push({ jobId: { in: jobIds } });
-  if (evidenceSnapshotIds.length > 0) {
-    identities.push({ id: { in: evidenceSnapshotIds } });
-  }
-  if (identities.length === 0) return;
-  await tx.evidenceSnapshot.deleteMany({
-    where: {
-      userId,
-      OR: identities,
-      claims: { none: {} },
-    },
-  });
-}
 
 export async function deleteJob(
   userId: string,
@@ -239,18 +182,7 @@ export async function deleteJob(
         userId,
         application ? [application] : [],
       );
-      const evidenceSnapshotIds = await collectEvidenceSnapshotIds(
-        tx,
-        userId,
-        application ? [application.id] : [],
-      );
       await tx.application.deleteMany({ where: { userId, jobId: job.id } });
-      await deleteUnreferencedEvidence(
-        tx,
-        userId,
-        [job.id],
-        evidenceSnapshotIds,
-      );
       // deleteMany keeps ownership in the write predicate and remains idempotent
       // if another code path removed the row.
       const deletedJob = await tx.job.deleteMany({
@@ -329,20 +261,9 @@ export async function batchDeleteJobs(
         userId,
         applications,
       );
-      const evidenceSnapshotIds = await collectEvidenceSnapshotIds(
-        tx,
-        userId,
-        applications.map((application) => application.id),
-      );
       await tx.application.deleteMany({
         where: { userId, jobId: { in: foundIds } },
       });
-      await deleteUnreferencedEvidence(
-        tx,
-        userId,
-        foundIds,
-        evidenceSnapshotIds,
-      );
       const deletedJobs = await tx.job.deleteMany({
         where: { id: { in: foundIds }, userId },
       });

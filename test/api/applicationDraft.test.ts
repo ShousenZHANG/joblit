@@ -27,7 +27,7 @@ function makeAiContent(): AiContent {
     promptMetaHash: "p1",
     cv: {
       summary: { aiText: "ai", originalText: "orig", accepted: true },
-      latestExperience: { experienceIndex: 0, addedBullets: [] },
+      skillsSelection: { aiSelection: [{ group: 0, items: [0] }] },
     },
     cover: {
       paragraphOne: { aiText: "one", accepted: true },
@@ -266,28 +266,6 @@ describe("PATCH /api/applications/[id]/draft adapter", () => {
       error: {
         code: "AI_CONTENT_INVALID",
         message: "Stored aiContent failed schema validation",
-      },
-      requestId: expect.any(String),
-    });
-  });
-
-  it("maps unavailable canonical evidence to the exact 409 JSON", async () => {
-    applicationEdit.autoSaveApplicationEdit.mockResolvedValueOnce({
-      kind: "canonical_evidence_unavailable",
-    });
-
-    const response = await PATCH(
-      makeRequest({ aiContent: makeAiContent(), expectedHash: null }),
-      { params },
-    );
-    const json = await response.json();
-
-    expect(response.status).toBe(409);
-    expect(json).toEqual({
-      error: {
-        code: "CANONICAL_EVIDENCE_UNAVAILABLE",
-        message:
-          "The server source snapshot is unavailable. Re-generate this draft.",
       },
       requestId: expect.any(String),
     });

@@ -1,9 +1,6 @@
 import { z } from "zod";
 
 import {
-  buildLeanCoverUserPrompt,
-  buildLeanResumeUserPrompt,
-  buildLeanSystemPrompt,
   buildV2CoverUserPrompt,
   buildV2ResumeUserPrompt,
   buildV2SystemPrompt,
@@ -87,12 +84,6 @@ export async function buildApplicationPromptForUser(input: {
   userId: string;
   jobId: string;
   target: "resume" | "cover";
-  /**
-   * "lean" produces a slimmed prompt for local reasoning models (Hermes) that
-   * stall on the full V2 prompt; "full" (default) keeps the rich cloud/manual
-   * prompt. Metadata is bound to the exact variant and prompt bytes.
-   */
-  variant?: "full" | "lean";
 }): Promise<ApplicationPromptPayload> {
   const parsed = ApplicationPromptRequestSchema.safeParse({
     jobId: input.jobId,
@@ -145,42 +136,29 @@ export async function buildApplicationPromptForUser(input: {
     company: job.company || "the company",
     description,
   };
-  const resumeInput = { baseLatestBullets, coverage };
 
-  const lean = input.variant === "lean";
-  const instructions = lean
-    ? buildLeanSystemPrompt(rules, locale)
-    : buildV2SystemPrompt(rules, locale);
+  const instructions = buildV2SystemPrompt(rules, locale);
   const promptInput =
     parsed.data.target === "resume"
-      ? lean
-        ? buildLeanResumeUserPrompt({
-            target: "resume",
-            rules,
-            candidate,
-            job: jobInput,
-            resume: resumeInput,
-          })
-        : buildV2ResumeUserPrompt({
-            target: "resume",
-            rules,
-            candidate,
-            job: jobInput,
-            resume: resumeInput,
-          })
-      : lean
-        ? buildLeanCoverUserPrompt({
+      ? buildV2ResumeUserPrompt({
+          target: "resume",
+          rules,
+          candidate,
+          job: jobInput,
+          resume: { coverage },
+        })
+      : // The job's market decides the cover conventions. A stored rule
+        // template records one locale per user, so passing it through would
+        // hand a zh-CN posting the en-AU word range.
+        buildV2CoverUserPrompt(
+          {
             target: "cover",
             rules,
             candidate,
             job: jobInput,
-          })
-        : buildV2CoverUserPrompt({
-            target: "cover",
-            rules,
-            candidate,
-            job: jobInput,
-          });
+          },
+          locale,
+        );
 
   if (instructions.length + promptInput.length > MAX_APPLICATION_PROMPT_CHARS) {
     throw new ApplicationPromptError(
@@ -195,7 +173,7 @@ export async function buildApplicationPromptForUser(input: {
     ruleSetId: rules.id,
     resumeSnapshotUpdatedAt: profile.updatedAt.toISOString(),
     locale,
-    variant: lean ? "lean" : "full",
+    variant: "full",
     prompt: { instructions, input: promptInput },
     effectiveRules: rules,
     resumeSnapshot: candidate,

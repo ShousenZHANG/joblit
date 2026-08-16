@@ -2,10 +2,8 @@ import { AppError } from "@/lib/server/api/appError";
 import { prisma } from "@/lib/server/prisma";
 import type { Prisma } from "@/lib/generated/prisma";
 import { acquireApplicationMutationLock } from "@/lib/server/applications/applicationMutationLock";
-import { persistReviewLedger } from "@/lib/server/applications/persistReviewLedger";
 import {
   evolveApplicationAiContent,
-  type ApplicationAiContentReviewContext,
 } from "@/lib/server/applications/applicationAiContentAggregate";
 import {
   markArtifactsReferencedAndRetireSuperseded,
@@ -20,7 +18,6 @@ import { getRuntimeCapabilities } from "@/lib/server/runtimeCapabilities";
 import {
   aiContentSchema,
   hashAiContent,
-  type AiApplicationReview,
   type AiContent,
 } from "@/lib/shared/schemas/aiContent";
 import type { ApplicationPublication } from "@/lib/shared/applicationPublication";
@@ -115,20 +112,13 @@ type CommitBaseInput = CommitBaseFields &
       }
   );
 
-export type CommitInput =
-  | (CommitBaseInput & {
-      /**
-       * A single-target proposal is folded into the stored Application under
-       * the mutation lock, then the complete aggregate is re-reviewed before
-       * it can be persisted.
-       */
-      mergeTarget: CommitTarget;
-      reviewContext: ApplicationAiContentReviewContext;
-    })
-  | (CommitBaseInput & {
-      mergeTarget?: undefined;
-      reviewContext?: never;
-    });
+export type CommitInput = CommitBaseInput & {
+  /**
+   * A single-target proposal is folded into the stored Application under the
+   * mutation lock, preserving whichever target this commit does not carry.
+   */
+  mergeTarget?: CommitTarget;
+};
 
 export type CommitResult =
   | {
@@ -143,7 +133,6 @@ export type CommitResult =
   | { kind: "stale_render_context" }
   | { kind: "job_missing" }
   | { kind: "invalid_ai_content" }
-  | { kind: "review_blocked"; review: AiApplicationReview }
   | { kind: "blob_not_configured" }
   | { kind: "upload_failed"; cause: unknown };
 
@@ -400,33 +389,14 @@ function resolveCommitContent(
     if (existing?.aiContent != null && !previousParsed?.success) {
       return { kind: "invalid_ai_content" as const };
     }
-    const evolved = evolveApplicationAiContent({
+    aiContent = evolveApplicationAiContent({
       current: previousAiContent,
       command: {
         kind: "replace_target_proposal",
         target: input.mergeTarget,
         proposal: input.aiContent,
       },
-      reviewContext: input.reviewContext,
     });
-    if (evolved.kind !== "evolved") {
-      // A modelled outcome, not a crash: evolveApplicationAiContent returns
-      // review_context_required when it cannot rebuild the shared review. As a
-      // bare Error it rendered as an anonymous 500 that the Runner replays
-      // forever, which is precisely the failure shape commitResultResponse was
-      // written to eliminate — and it was hiding here, one layer down.
-      throw new AppError({
-        code: "APPLICATION_REVIEW_CONTEXT_REQUIRED",
-        status: 409,
-        publicMessage:
-          "The job description is unavailable, so the draft cannot be reviewed. Generate this job again.",
-        privateDetails: { evolved: evolved.kind },
-      });
-    }
-    aiContent = evolved.aiContent;
-  }
-  if (input.status === "FINAL" && aiContent.review?.verdict === "blocked") {
-    return { kind: "review_blocked" as const, review: aiContent.review };
   }
   return {
     kind: "resolved" as const,
@@ -641,7 +611,6 @@ function applicationPersistenceData(
     aiContent: resolved.aiContent,
     aiContentHash: resolved.aiContentHash,
     atsValidation: mergeAtsValidation(existing, artifacts),
-    reviewReport: resolved.aiContent.review ?? undefined,
     ...publication,
     ...artifactPersistenceColumns(input, artifacts, urls),
   };
@@ -676,12 +645,6 @@ async function persistCommitSideEffects(
       superseded: supersededArtifacts(existing, artifacts, uploadBundle.urls),
     },
   );
-  await persistReviewLedger(tx, {
-    userId: input.userId,
-    applicationId,
-    jobId: input.job.id,
-    aiContent: resolved.aiContent,
-  });
 }
 
 async function retireCommitBundle(

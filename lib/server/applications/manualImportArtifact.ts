@@ -46,18 +46,14 @@ function parseFilename(candidate: string, role: string, target: ManualImportTarg
 
 /**
  * Rendering adapter retained for the manual-generate route. Generation output
- * parsing, normalization, Quality Gates, provenance and canonical AI Content
- * construction belong to acceptApplicationGeneration.
- *
- * Evidence and review do not: they describe the merged CV + Cover document, so
- * they are built once at the commit boundary. The AI Content returned here
- * carries no review, and no caller should gate on one.
+ * parsing, normalization, the summary lint, the skills-selection bounds check,
+ * provenance and canonical AI Content construction all belong to
+ * acceptApplicationGeneration.
  *
  * The authoritative decode policy is derived from `source`; callers cannot
  * select a more permissive dialect.
  */
 export function buildManualImportArtifact(input: {
-  evidenceScopeKey: string;
   target: ManualImportTarget;
   modelOutput: string;
   source: ManualImportSource;
@@ -67,7 +63,6 @@ export function buildManualImportArtifact(input: {
   job: ManualImportJob;
 }): ManualImportArtifactResult {
   const accepted = acceptApplicationGeneration({
-    evidenceScopeKey: input.evidenceScopeKey,
     target: input.target,
     source: input.source,
     rawOutput: input.modelOutput,

@@ -5,43 +5,44 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useGuide } from "@/app/GuideContext";
 import { fetchJson } from "@/lib/api/fetchJson";
 import {
-  applicationReviewSnapshotSchema,
-  type ApplicationReviewSnapshot,
-} from "@/lib/shared/schemas/applicationReviewSnapshot";
-import type { CvSource, CoverSource } from "../types";
+  tailorReviewSnapshotSchema,
+  type TailorReviewSnapshot,
+} from "@/lib/shared/tailorReviewSnapshot";
+import type { CvSource, CoverSource, JobItem } from "../types";
 import { getErrorMessage } from "../types";
+import type { TailorTarget } from "../components/tailoring/tailorActions";
 import type {
   TailorReviewDraft,
   TailorReviewFinalized,
-} from "../components/TailorReviewDialog";
-import type { TailorTarget } from "../[id]/tailor/tailorActions";
-import type { ManualGenerateDraftResponse } from "./manualGenerateDraftResponse";
+} from "../components/tailoring/tailorDialogTypes";
 import {
   invalidateActiveJobsQueries,
   patchGeneratedJobArtifactInJobsCache,
 } from "../utils/jobsQueryCache";
 
 export type ReviewDraftSource = "manual_import" | "ai";
-export type ApplicationReviewLoad = {
-  applicationId: string;
-  jobId: string;
+
+/** The job and target the dialog opened for. */
+export interface TailorDialogSession {
+  job: JobItem;
   target: TailorTarget;
-};
+}
+
+const LOAD_FAILED = "Saved tailoring could not be opened";
 
 function snapshotToDraft(
-  snapshot: ApplicationReviewSnapshot,
-  target: TailorTarget,
+  snapshot: TailorReviewSnapshot,
+  source: ReviewDraftSource,
 ): TailorReviewDraft {
   return {
     applicationId: snapshot.applicationId,
-    target,
     initialPublication: snapshot.publication,
     initialAiContent: snapshot.aiContent,
     initialAiContentHash: snapshot.aiContentHash,
+    masterSkills: snapshot.masterSkills,
     resumePdfUrl: snapshot.documents.resume.pdfUrl,
     coverPdfUrl: snapshot.documents.cover.pdfUrl,
-    pdfName: snapshot.documents[target].pdfName,
-    source: "ai",
+    source,
     job: {
       id: snapshot.job.id,
       title: snapshot.job.title,
@@ -52,36 +53,48 @@ function snapshotToDraft(
 }
 
 /**
- * Own the single Jobs-page tailoring editor session.
+ * Own the single Jobs-page tailoring dialog.
  *
- * Manual imports and completed Runner batches enter through different read
- * seams, but everything after this boundary shares the same autosave, preview,
- * conflict detection, Finalize flow, and query-cache projection.
+ * The dialog is one surface for one job: copy a prompt, paste the result back,
+ * edit it, publish it. This hook holds only what outlives a single step — which
+ * job is open, the loaded Application, and the projection back into the jobs
+ * query cache once a PDF is published.
  */
 export function useTailorReviewController() {
   const { markTaskComplete } = useGuide();
   const queryClient = useQueryClient();
+  const [session, setSession] = useState<TailorDialogSession | null>(null);
   const [draft, setDraft] = useState<TailorReviewDraft | null>(null);
-  const [loading, setLoading] = useState<ApplicationReviewLoad | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loadErrorFor, setLoadErrorFor] =
-    useState<ApplicationReviewLoad | null>(null);
+  const [draftLoading, setDraftLoading] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
   const [tailorSourceByJob, setTailorSourceByJob] = useState<
     Record<string, { cv?: CvSource; cover?: CoverSource }>
   >({});
   const loadEpochRef = useRef(0);
   const loadControllerRef = useRef<AbortController | null>(null);
 
-  const cancelApplicationReviewLoad = useCallback(() => {
+  const abortLoad = useCallback(() => {
     loadEpochRef.current += 1;
     loadControllerRef.current?.abort();
     loadControllerRef.current = null;
-    setLoading(null);
-    setLoadError(null);
-    setLoadErrorFor(null);
   }, []);
 
-  useEffect(() => cancelApplicationReviewLoad, [cancelApplicationReviewLoad]);
+  /**
+   * Close the dialog and drop any snapshot still in flight.
+   *
+   * Selection can change under an open dialog through history navigation or a
+   * delete that promotes the next row. A snapshot that lands after that belongs
+   * to a job the user is no longer looking at, so the dialog goes with it.
+   */
+  const cancelTailorDialog = useCallback(() => {
+    abortLoad();
+    setDraftLoading(false);
+    setDraftError(null);
+    setSession(null);
+    setDraft(null);
+  }, [abortLoad]);
+
+  useEffect(() => cancelTailorDialog, [cancelTailorDialog]);
 
   const rememberSource = useCallback(
     (jobId: string | null, target: TailorTarget, source: ReviewDraftSource) => {
@@ -99,48 +112,18 @@ export function useTailorReviewController() {
     [],
   );
 
-  const openPersistedDraft = useCallback(
-    (input: {
-      draft: ManualGenerateDraftResponse;
-      target: TailorTarget;
-      source: "manual_import";
-      resumePdfUrl?: string | null;
-      coverPdfUrl?: string | null;
-    }) => {
-      cancelApplicationReviewLoad();
-      markTaskComplete("generate_first_pdf");
-      rememberSource(input.draft.job.id, input.target, input.source);
-      setDraft({
-        applicationId: input.draft.applicationId,
-        target: input.target,
-        initialPublication: input.draft.publication,
-        initialAiContent: input.draft.aiContent,
-        initialAiContentHash: input.draft.aiContentHash,
-        resumePdfUrl: input.resumePdfUrl ?? null,
-        coverPdfUrl: input.coverPdfUrl ?? null,
-        pdfName: input.draft.pdfName,
-        source: input.source,
-        job: input.draft.job,
-      });
-      void invalidateActiveJobsQueries(queryClient);
-    },
-    [
-      cancelApplicationReviewLoad,
-      markTaskComplete,
-      queryClient,
-      rememberSource,
-    ],
-  );
-
-  const openApplicationReview = useCallback(
-    async (input: ApplicationReviewLoad): Promise<boolean> => {
-      loadControllerRef.current?.abort();
+  const loadDraft = useCallback(
+    async (input: {
+      applicationId: string;
+      jobId: string;
+      source: ReviewDraftSource;
+    }): Promise<boolean> => {
+      abortLoad();
       const controller = new AbortController();
       loadControllerRef.current = controller;
-      const epoch = ++loadEpochRef.current;
-      setLoadError(null);
-      setLoadErrorFor(null);
-      setLoading(input);
+      const epoch = loadEpochRef.current;
+      setDraftError(null);
+      setDraftLoading(true);
 
       try {
         const snapshot = await fetchJson(
@@ -148,49 +131,58 @@ export function useTailorReviewController() {
           {
             cache: "no-store",
             signal: controller.signal,
-            fallbackError: "Review & Edit is not available yet",
-            schema: applicationReviewSnapshotSchema,
+            fallbackError: LOAD_FAILED,
+            schema: tailorReviewSnapshotSchema,
           },
         );
         if (controller.signal.aborted || epoch !== loadEpochRef.current) {
           return false;
         }
         if (snapshot.job.id !== input.jobId) {
-          setLoadError("This result no longer matches the selected job.");
-          setLoadErrorFor(input);
+          setDraftError("This result no longer matches the selected job.");
           return false;
         }
         markTaskComplete("generate_first_pdf");
-        rememberSource(snapshot.job.id, input.target, "ai");
-        setDraft(snapshotToDraft(snapshot, input.target));
+        setDraft(snapshotToDraft(snapshot, input.source));
         return true;
       } catch (error) {
         if (controller.signal.aborted || epoch !== loadEpochRef.current) {
           return false;
         }
-        setLoadError(
-          getErrorMessage(error, "Review & Edit is not available yet"),
-        );
-        setLoadErrorFor(input);
+        setDraftError(getErrorMessage(error, LOAD_FAILED));
         return false;
       } finally {
         if (epoch === loadEpochRef.current) {
           loadControllerRef.current = null;
-          setLoading(null);
+          setDraftLoading(false);
         }
       }
     },
-    [markTaskComplete, rememberSource],
+    [abortLoad, markTaskComplete],
   );
 
-  const closeReview = useCallback(() => setDraft(null), []);
+  const openTailorDialog = useCallback(
+    (job: JobItem, target: TailorTarget) => {
+      abortLoad();
+      setDraftError(null);
+      setDraft(null);
+      setSession({ job, target });
+      if (job.applicationId) {
+        void loadDraft({
+          applicationId: job.applicationId,
+          jobId: job.id,
+          source: "ai",
+        });
+      }
+    },
+    [abortLoad, loadDraft],
+  );
 
   const handleFinalized = useCallback(
     (result: TailorReviewFinalized) => {
-      const jobId = draft?.job.id;
+      const jobId = session?.job.id;
       if (!jobId) return;
-      const source = draft.source ?? "ai";
-      rememberSource(jobId, result.target, source);
+      rememberSource(jobId, result.target, draft?.source ?? "ai");
       patchGeneratedJobArtifactInJobsCache({
         queryClient,
         id: jobId,
@@ -204,19 +196,40 @@ export function useTailorReviewController() {
       });
       void invalidateActiveJobsQueries(queryClient);
     },
-    [draft, queryClient, rememberSource],
+    [draft, queryClient, rememberSource, session],
+  );
+
+  const handleImported = useCallback(
+    async (input: {
+      applicationId: string;
+      jobId: string;
+      target: TailorTarget;
+    }): Promise<boolean> => {
+      markTaskComplete("generate_first_pdf");
+      rememberSource(input.jobId, input.target, "manual_import");
+      void invalidateActiveJobsQueries(queryClient);
+      // The import response carries the Application but not the candidate's
+      // skill bank, and the review panel cannot name a single selected skill
+      // without it. Re-reading the snapshot is one request that also settles
+      // the CAS baseline the editor is about to autosave against.
+      return loadDraft({
+        applicationId: input.applicationId,
+        jobId: input.jobId,
+        source: "manual_import",
+      });
+    },
+    [loadDraft, markTaskComplete, queryClient, rememberSource],
   );
 
   return {
+    session,
     draft,
-    loading,
-    loadError,
-    loadErrorFor,
+    draftLoading,
+    draftError,
     tailorSourceByJob,
-    openPersistedDraft,
-    openApplicationReview,
-    cancelApplicationReviewLoad,
-    closeReview,
+    openTailorDialog,
+    cancelTailorDialog,
+    handleImported,
     handleFinalized,
   };
 }

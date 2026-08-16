@@ -31,11 +31,7 @@ function renderPanel(
   options: {
     selectedDescription?: string;
     experienceAnalysis?: JobExperienceAnalysis | null;
-    onReviewApplication?: (
-      applicationId: string,
-      jobId: string,
-      target: "resume" | "cover",
-    ) => void;
+    onTailor?: (job: JobItem, target: "resume" | "cover") => void;
   } = {},
 ) {
   return render(
@@ -49,12 +45,10 @@ function renderPanel(
         showLoadingOverlay={false}
         updatingIds={new Set()}
         deletingIds={new Set()}
-        externalPromptLoading={false}
         mobileTab="detail"
         onUpdateStatus={vi.fn()}
         onDelete={vi.fn()}
-        onManualGenerate={vi.fn()}
-        onReviewApplication={options.onReviewApplication}
+        onTailor={options.onTailor ?? vi.fn()}
         onRetryDetail={vi.fn()}
       />
     </NextIntlClientProvider>,
@@ -112,11 +106,10 @@ describe("JobDetailPanel localization", () => {
           tailorSource={{ cv: "manual_import", cover: "fallback" }}
           updatingIds={new Set()}
           deletingIds={new Set()}
-          externalPromptLoading={false}
           mobileTab="detail"
           onUpdateStatus={vi.fn()}
           onDelete={vi.fn()}
-          onManualGenerate={vi.fn()}
+          onTailor={vi.fn()}
           onRetryDetail={vi.fn()}
         />
       </NextIntlClientProvider>,
@@ -152,27 +145,35 @@ describe("JobDetailPanel touch contract", () => {
 });
 
 describe("JobDetailPanel saved document review", () => {
-  it("opens an owned saved document in the shared editor", async () => {
+  it("opens an owned saved document in the tailoring dialog", async () => {
     const user = userEvent.setup();
-    const onReviewApplication = vi.fn();
-    renderPanel(
-      job({
-        applicationId: "11111111-1111-4111-8111-111111111111",
-        resumePdfUrl: "https://example.com/stored-cv.pdf",
-      }),
-      { onReviewApplication },
-    );
+    const onTailor = vi.fn();
+    const selected = job({
+      applicationId: "11111111-1111-4111-8111-111111111111",
+      resumePdfUrl: "https://example.com/stored-cv.pdf",
+    });
+    renderPanel(selected, { onTailor });
 
     const savedCv = screen.getByRole("button", { name: messages.jobs.savedCv });
     expect(
       screen.queryByRole("link", { name: messages.jobs.savedCv }),
     ).not.toBeInTheDocument();
     await user.click(savedCv);
-    expect(onReviewApplication).toHaveBeenCalledWith(
-      "11111111-1111-4111-8111-111111111111",
-      "job-1",
-      "resume",
-    );
+    expect(onTailor).toHaveBeenCalledWith(selected, "resume");
+  });
+
+  it("offers one Tailor entry in the overflow menu", async () => {
+    const user = userEvent.setup();
+    const onTailor = vi.fn();
+    const selected = job();
+    const view = renderPanel(selected, { onTailor });
+
+    await user.click(within(view.container).getByTestId("job-detail-overflow"));
+    const items = await screen.findAllByRole("menuitem");
+    expect(items).toHaveLength(1);
+    await user.click(items[0]);
+    expect(items[0]).toHaveTextContent(messages.jobs.tailorAction);
+    expect(onTailor).toHaveBeenCalledWith(selected, "resume");
   });
 
   it("keeps the PDF link for a legacy row without an Application identity", () => {
@@ -206,11 +207,10 @@ describe("JobDetailPanel delete focus", () => {
             showLoadingOverlay={false}
             updatingIds={new Set()}
             deletingIds={new Set()}
-            externalPromptLoading={false}
             mobileTab="detail"
             onUpdateStatus={vi.fn()}
             onDelete={() => setSelected(replacement)}
-            onManualGenerate={vi.fn()}
+            onTailor={vi.fn()}
             onRetryDetail={vi.fn()}
           />
         </NextIntlClientProvider>

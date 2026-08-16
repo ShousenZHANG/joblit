@@ -46,7 +46,6 @@ import { useJobPagination } from "./hooks/useJobPagination";
 import { useSuppressedJobRows } from "./hooks/useSuppressedJobRows";
 import { useJobMutations } from "./hooks/useJobMutations";
 import { useKeyboardNavigation } from "./hooks/useKeyboardNavigation";
-import { useExternalGenerate } from "./hooks/useExternalGenerate";
 import { useTailorReviewController } from "./hooks/useTailorReviewController";
 import { JobListItem } from "./components/JobListItem";
 import {
@@ -54,8 +53,7 @@ import {
   type VirtualJobListHandle,
 } from "./components/VirtualJobList";
 import { JobSearchBar } from "./components/JobSearchBar";
-import { ExternalGenerateDialog } from "./components/ExternalGenerateDialog";
-import { TailorReviewDialog } from "./components/TailorReviewDialog";
+import { TailorDialog } from "./components/tailoring/TailorDialog";
 import { JobDetailPanel } from "./components/JobDetailPanel";
 import { cn } from "@/lib/utils";
 import {
@@ -148,7 +146,7 @@ export function JobsClient({
     "ring-2 ring-brand-emerald-500 ring-offset-2 ring-offset-background shadow-[0_0_0_4px_rgba(16,185,129,0.22)]";
   const queryClient = useQueryClient();
   const tailorReview = useTailorReviewController();
-  const { cancelApplicationReviewLoad, openApplicationReview } = tailorReview;
+  const { cancelTailorDialog, openTailorDialog } = tailorReview;
 
   const {
     q,
@@ -204,12 +202,12 @@ export function JobsClient({
   );
   const setSelectedIdFromMutation = useCallback(
     (id: string | null) => {
-      cancelApplicationReviewLoad();
+      cancelTailorDialog();
       setSelectionExplicitlyCleared(false);
       setSelectedId(id);
       persistWorkspaceUrl({ selectedId: id });
     },
-    [cancelApplicationReviewLoad, persistWorkspaceUrl],
+    [cancelTailorDialog, persistWorkspaceUrl],
   );
 
   useEffect(() => {
@@ -228,11 +226,11 @@ export function JobsClient({
     }
 
     pendingWorkspaceUrlRef.current = null;
-    cancelApplicationReviewLoad();
+    cancelTailorDialog();
     setSelectionExplicitlyCleared(false);
     setSelectedId(urlSelectedId);
     setMobileTab(urlView);
-  }, [cancelApplicationReviewLoad, urlSelectedId, urlView]);
+  }, [cancelTailorDialog, urlSelectedId, urlView]);
 
   const {
     items,
@@ -270,17 +268,6 @@ export function JobsClient({
     revealJobs,
   });
 
-  const externalGenerate = useExternalGenerate(setError, {
-    onDraftPersisted: tailorReview.openPersistedDraft,
-  });
-  // Generation happens on the user's machine. Presence explains why a queued
-  // batch may be waiting, but it is deliberately not a queueing prerequisite.
-  const handleJobReview = useCallback(
-    (applicationId: string, jobId: string, target: "resume" | "cover") => {
-      void openApplicationReview({ applicationId, jobId, target });
-    },
-    [openApplicationReview],
-  );
   // Keep renderer identity stable after virtualization first becomes useful.
   // In particular, deleting row 81 must not swap the entire virtual subtree
   // for the ordinary renderer when the visible count becomes 80.
@@ -311,8 +298,7 @@ export function JobsClient({
   // Re-apply after any modal closes — Radix AlertDialog temporarily sets
   // `overflow: hidden` on <body> while open, which can desync the scroll
   // state of .app-shell when the dialog unmounts.
-  const anyDialogOpen =
-    externalGenerate.externalDialogOpen || !!tailorReview.draft;
+  const anyDialogOpen = !!tailorReview.session;
   useEffect(() => {
     if (typeof document === "undefined") return;
     const appShell = document.querySelector<HTMLElement>(".app-shell");
@@ -420,11 +406,9 @@ export function JobsClient({
 
   // Stable handler for the memoized detail panel — an inline lambda in the
   // JSX would give it fresh props on every keystroke and defeat the memo.
-  const handleManualGenerate = useCallback(
-    (job: JobItem, target: "resume" | "cover") =>
-      externalGenerate.openExternalGenerateDialog(job, target),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [externalGenerate.openExternalGenerateDialog],
+  const handleTailor = useCallback(
+    (job: JobItem, target: "resume" | "cover") => openTailorDialog(job, target),
+    [openTailorDialog],
   );
 
   const effectiveSelectedId = useMemo(() => {
@@ -440,12 +424,12 @@ export function JobsClient({
   // A layout effect closes that final context-change gap before a stale review
   // response can paint an editor for the job that just disappeared.
   useLayoutEffect(() => {
-    cancelApplicationReviewLoad();
-  }, [cancelApplicationReviewLoad, effectiveSelectedId]);
+    cancelTailorDialog();
+  }, [cancelTailorDialog, effectiveSelectedId]);
 
   const handleSelectJob = useCallback(
     (id: string | null) => {
-      cancelApplicationReviewLoad();
+      cancelTailorDialog();
       const showDetail =
         id !== null &&
         typeof window !== "undefined" &&
@@ -463,7 +447,7 @@ export function JobsClient({
         ...(showDetail ? { view: "detail" as const } : {}),
       });
     },
-    [cancelApplicationReviewLoad, markTaskComplete, persistWorkspaceUrl],
+    [cancelTailorDialog, markTaskComplete, persistWorkspaceUrl],
   );
 
   const handleMobileTabChange = useCallback(
@@ -553,38 +537,16 @@ export function JobsClient({
   const detailLoading = detailIsFetching && !selectedDetailData;
   return (
     <>
-      <ExternalGenerateDialog
-        open={externalGenerate.externalDialogOpen}
-        onOpenChange={externalGenerate.setExternalDialogOpen}
-        dialogPhase={externalGenerate.dialogPhase}
-        setDialogPhase={externalGenerate.setDialogPhase}
-        externalTarget={externalGenerate.externalTarget}
-        externalStep={externalGenerate.externalStep}
-        setExternalStep={externalGenerate.setExternalStep}
-        externalSkillPackFresh={externalGenerate.externalSkillPackFresh}
-        setExternalSkillPackFresh={externalGenerate.setExternalSkillPackFresh}
-        externalSkillPackLoading={externalGenerate.externalSkillPackLoading}
-        externalPromptLoading={externalGenerate.externalPromptLoading}
-        externalPromptMeta={externalGenerate.externalPromptMeta}
-        externalPromptText={externalGenerate.externalPromptText}
-        externalShortPromptText={externalGenerate.externalShortPromptText}
-        promptCopied={externalGenerate.promptCopied}
-        externalModelOutput={externalGenerate.externalModelOutput}
-        setExternalModelOutput={externalGenerate.setExternalModelOutput}
-        externalGenerating={externalGenerate.externalGenerating}
-        parsedExternalOutput={externalGenerate.parsedExternalOutput}
-        selectedJob={selectedJob}
-        onCopySmartPrompt={externalGenerate.copySmartPrompt}
-        onDownloadSkillPack={externalGenerate.downloadSkillPack}
-        onGenerate={externalGenerate.generateFromImportedJson}
-      />
-
-      <TailorReviewDialog
-        open={!!tailorReview.draft}
+      <TailorDialog
+        job={tailorReview.session?.job ?? null}
+        initialTarget={tailorReview.session?.target ?? "resume"}
         draft={tailorReview.draft}
+        draftLoading={tailorReview.draftLoading}
+        draftError={tailorReview.draftError}
         onOpenChange={(open) => {
-          if (!open) tailorReview.closeReview();
+          if (!open) tailorReview.cancelTailorDialog();
         }}
+        onImported={tailorReview.handleImported}
         onFinalized={tailorReview.handleFinalized}
       />
 
@@ -1101,20 +1063,10 @@ export function JobsClient({
               tailorSource={selectedTailorSource}
               updatingIds={updatingIds}
               deletingIds={deletingIds}
-              externalPromptLoading={externalGenerate.externalGenerating}
               mobileTab={mobileTab}
               onUpdateStatus={updateStatus}
               onDelete={requestDelete}
-              onManualGenerate={handleManualGenerate}
-              onReviewApplication={handleJobReview}
-              reviewLoading={tailorReview.loading}
-              reviewError={
-                selectedJob?.applicationId &&
-                tailorReview.loadErrorFor?.applicationId ===
-                  selectedJob.applicationId
-                  ? tailorReview.loadError
-                  : null
-              }
+              onTailor={handleTailor}
               onRetryDetail={() => void refetchDetail()}
             />
           </section>

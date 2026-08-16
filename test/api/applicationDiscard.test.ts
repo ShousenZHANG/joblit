@@ -26,7 +26,7 @@ const aiContent: AiContent = {
   promptMetaHash: "p1",
   cv: {
     summary: { aiText: "Tailored summary", originalText: "Original", accepted: true },
-    latestExperience: { experienceIndex: 0, addedBullets: [] },
+    skillsSelection: { aiSelection: [{ group: 0, items: [0] }] },
   },
   cover: {
     paragraphOne: { aiText: "", accepted: false },
@@ -209,18 +209,6 @@ describe("POST /api/applications/[id]/discard", () => {
         error: {
           code: "AI_CONTENT_INVALID",
           message: "Stored aiContent failed schema validation",
-        },
-      },
-    },
-    {
-      name: "unavailable canonical evidence",
-      result: { kind: "canonical_evidence_unavailable" },
-      status: 409,
-      body: {
-        error: {
-          code: "CANONICAL_EVIDENCE_UNAVAILABLE",
-          message:
-            "The server source snapshot is unavailable. Re-generate this draft.",
         },
       },
     },

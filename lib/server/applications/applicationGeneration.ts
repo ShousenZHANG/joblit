@@ -1,22 +1,25 @@
 import { buildCoverEvidenceContext } from "@/lib/server/ai/coverContext";
 import { evaluateCoverQuality } from "@/lib/server/ai/coverQuality";
-import { buildResumePromptSnapshot } from "@/lib/server/ai/resumePromptSnapshot";
+import {
+  lintGeneratedSummary,
+  profileTextForLint,
+  type SummaryLintFailure,
+} from "@/lib/server/ai/summaryLint";
 import { getLocaleProfile } from "@/lib/shared/locales";
 import type { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import {
   AI_CONTENT_SCHEMA_VERSION,
-  type AiAddedBullet,
   type AiContent,
 } from "@/lib/shared/schemas/aiContent";
+import type { SkillsSelection } from "@/lib/shared/schemas/applicationGenerationOutput";
 import {
-  canonicalizeLatestBullets,
-  getLatestRawBullets,
-  isGroundedAddedBullet,
-  isNonRedundantAddedBullet,
+  masterSkillGroups,
   parseCoverManualOutput,
   parseCoverStrictOutput,
   parseResumeManualOutput,
   parseResumeStrictOutput,
+  validateSkillsSelectionBounds,
+  type SkillsSelectionBoundsFailure,
 } from "./manualImportParser";
 
 export type ApplicationGenerationTarget = "resume" | "cover";
@@ -36,7 +39,6 @@ type ApplicationGenerationError = {
 type AcceptedApplicationGeneration = {
   ok: true;
   target: ApplicationGenerationTarget;
-  inputFormat: "current" | "v1_compat";
   aiContent: AiContent;
   coverQualityGate: "pass" | "soft-fail";
   coverQualityIssueCount: number;
@@ -52,7 +54,6 @@ export type ApplicationGenerationAcceptance =
   | RejectedApplicationGeneration;
 
 export type AcceptApplicationGenerationInput = {
-  evidenceScopeKey: string;
   target: ApplicationGenerationTarget;
   source: ApplicationGenerationSource;
   rawOutput: string;
@@ -64,12 +65,6 @@ export type AcceptApplicationGenerationInput = {
     company: string | null;
     description: string | null;
   };
-};
-
-type DecodedResumeOutput = {
-  ok: true;
-  data: NonNullable<ReturnType<typeof parseResumeManualOutput>["data"]>;
-  inputFormat: AcceptedApplicationGeneration["inputFormat"];
 };
 
 type DecodedCoverOutput = {
@@ -109,7 +104,7 @@ function invalidOutputMessage(
     return `${generationSourceLabel(source)} returned invalid ${artifact} JSON.`;
   }
   if (target === "resume") {
-    return "Unable to parse model output. Resume JSON must include cvSummary and latestExperience.addedBullets.";
+    return "Unable to parse model output. Resume JSON must include cvSummary and skillsSelection.";
   }
   return "Unable to parse model output. Cover JSON must include cover.paragraphOne/paragraphTwo/paragraphThree.";
 }
@@ -131,112 +126,59 @@ function rejectInvalidOutput(
   };
 }
 
-function joinEvidence(parts: Array<string | undefined>): string {
-  return parts
-    .filter((item): item is string => Boolean(item))
-    .join(" ");
-}
-
-function collectCandidateEvidence(
-  profile: Record<string, unknown>,
-  baseLatestBullets: string[],
-): string[] {
-  const snapshot = buildResumePromptSnapshot(profile);
-  const evidence = [
-    ...baseLatestBullets,
-    snapshot.summary,
-    ...(snapshot.skills ?? []).map((group) =>
-      joinEvidence([group.category, ...group.items]),
-    ),
-    ...(snapshot.experiences ?? []).map((experience) =>
-      joinEvidence([
-        experience.title,
-        experience.company,
-        ...experience.bullets,
-      ]),
-    ),
-    ...(snapshot.projects ?? []).map((project) =>
-      joinEvidence([project.name, project.stack, ...project.bullets]),
-    ),
-    ...(snapshot.education ?? []).map((education) =>
-      joinEvidence([education.school, education.degree, education.details]),
-    ),
-  ];
-  return evidence
-    .filter((item): item is string => Boolean(item))
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function decodeResumeOutput(
-  input: AcceptApplicationGenerationInput,
-): DecodedResumeOutput | RejectedApplicationGeneration {
-  const parsed =
-    input.source === "manual_import"
-      ? parseResumeManualOutput(input.rawOutput)
-      : parseResumeStrictOutput(input.rawOutput);
-  if (!parsed.data) {
-    return rejectInvalidOutput(input.source, "resume", parsed.issues);
-  }
+/**
+ * A selection index that addresses nothing. The model was handed a numbered
+ * skill bank, so this means it either invented an index or answered against a
+ * profile the user has since edited; both are deterministic failures.
+ */
+function rejectSkillsSelection(
+  failure: SkillsSelectionBoundsFailure,
+): RejectedApplicationGeneration {
+  const where =
+    failure.kind === "group_out_of_range"
+      ? `skill group ${failure.group}`
+      : `item ${failure.item} of skill group ${failure.group}`;
   return {
-    ok: true,
-    data: parsed.data,
-    inputFormat:
-      "addedBullets" in parsed.data.latestExperience
-        ? "current"
-        : "v1_compat",
+    ok: false,
+    error: {
+      status: 400,
+      code: "SKILLS_SELECTION_INVALID",
+      message: `The selection refers to ${where}, which is not in your skills. Re-copy the prompt and try again.`,
+    },
   };
 }
 
-function resolveBaseBullets(input: AcceptApplicationGenerationInput): string[] {
-  const baseLatestRawBullets = getLatestRawBullets(input.profile);
-  if (baseLatestRawBullets.length > 0) return baseLatestRawBullets;
-  return (
-    input.master.experiences[0]?.bullets
-      .map((item) => item.trim())
-      .filter(Boolean) ?? []
-  );
-}
+function rejectSummary(
+  failure: SummaryLintFailure,
+): RejectedApplicationGeneration {
+  const rejection = {
+    title_missing: {
+      code: "SUMMARY_TITLE_MISSING",
+      message:
+        failure.kind === "title_missing"
+          ? `The summary must name the target role ("${failure.requiredTitle}").`
+          : "",
+    },
+    ungrounded_number: {
+      code: "SUMMARY_UNGROUNDED_NUMBER",
+      message:
+        failure.kind === "ungrounded_number"
+          ? `The summary claims "${failure.token}", which does not appear anywhere in your profile.`
+          : "",
+    },
+    ungrounded_skill: {
+      code: "SUMMARY_UNGROUNDED_SKILL",
+      message:
+        failure.kind === "ungrounded_skill"
+          ? `The summary claims "${failure.skill}", which is not in your profile. Add it in the Resume Studio or edit the summary.`
+          : "",
+    },
+  }[failure.kind];
 
-function extractAddedBulletTexts(
-  output: DecodedResumeOutput["data"],
-  baseBullets: string[],
-): string[] {
-  const latestExperience = output.latestExperience;
-  if ("addedBullets" in latestExperience) {
-    return latestExperience.addedBullets;
-  }
-  return canonicalizeLatestBullets(
-    baseBullets,
-    latestExperience.bullets,
-  ).addedBullets;
-}
-
-function gateAddedBullets(
-  addedBulletTexts: string[],
-  candidateEvidence: string[],
-  baseBullets: string[],
-): AiAddedBullet[] {
-  const acceptedAddedBullets: string[] = [];
-  return addedBulletTexts.map((bullet) => {
-    const grounded = isGroundedAddedBullet(bullet, candidateEvidence);
-    const nonRedundant = grounded
-      ? isNonRedundantAddedBullet(bullet, baseBullets, acceptedAddedBullets)
-      : false;
-    const passed = grounded && nonRedundant;
-    const reason = !grounded
-      ? "ungrounded: no Master Resume Profile evidence"
-      : !nonRedundant
-        ? "redundant: too similar to an existing bullet"
-        : undefined;
-
-    if (passed) acceptedAddedBullets.push(bullet);
-    return {
-      text: bullet,
-      accepted: passed,
-      qualityGate: { passed, ...(reason ? { reason } : {}) },
-    };
-  });
+  return {
+    ok: false,
+    error: { status: 422, ...rejection },
+  };
 }
 
 function buildGenerationMetadata(
@@ -274,7 +216,7 @@ function buildGenerationMetadata(
 function buildResumeAiContent(
   input: AcceptApplicationGenerationInput,
   cvSummary: string,
-  addedBullets: AiAddedBullet[],
+  skillsSelection: SkillsSelection,
 ): AiContent {
   const generatedAt = new Date().toISOString();
   return {
@@ -285,46 +227,43 @@ function buildResumeAiContent(
         originalText: input.master.summary ?? "",
         accepted: true,
       },
-      latestExperience: {
-        experienceIndex: 0,
-        addedBullets,
-      },
+      skillsSelection: { aiSelection: skillsSelection },
     },
     cover: emptyCover(),
-  };
-}
-
-function tooManyAddedBullets(): RejectedApplicationGeneration {
-  return {
-    ok: false,
-    error: {
-      status: 400,
-      code: "INVALID_LATEST_EXPERIENCE_BULLETS",
-      message: "latestExperience contains more than 3 AI-added bullets.",
-    },
   };
 }
 
 function acceptResumeGeneration(
   input: AcceptApplicationGenerationInput,
 ): ApplicationGenerationAcceptance {
-  const decoded = decodeResumeOutput(input);
-  if (!decoded.ok) return decoded;
+  const parsed =
+    input.source === "manual_import"
+      ? parseResumeManualOutput(input.rawOutput)
+      : parseResumeStrictOutput(input.rawOutput);
+  if (!parsed.data) {
+    return rejectInvalidOutput(input.source, "resume", parsed.issues);
+  }
 
-  const baseBullets = resolveBaseBullets(input);
-  const bulletTexts = extractAddedBulletTexts(decoded.data, baseBullets);
-  if (bulletTexts.length > 3) return tooManyAddedBullets();
+  const bounds = validateSkillsSelectionBounds(
+    parsed.data.skillsSelection,
+    masterSkillGroups(input.profile),
+  );
+  if (bounds) return rejectSkillsSelection(bounds);
 
-  const evidence = collectCandidateEvidence(input.profile, baseBullets);
-  const addedBullets = gateAddedBullets(bulletTexts, evidence, baseBullets);
+  const lint = lintGeneratedSummary({
+    summary: parsed.data.cvSummary,
+    jobTitle: input.job.title,
+    profileText: profileTextForLint(input.profile),
+  });
+  if (!lint.ok) return rejectSummary(lint.failure);
+
   return {
     ok: true,
     target: "resume",
-    inputFormat: decoded.inputFormat,
     aiContent: buildResumeAiContent(
       input,
-      decoded.data.cvSummary,
-      addedBullets,
+      parsed.data.cvSummary,
+      parsed.data.skillsSelection,
     ),
     coverQualityGate: "pass",
     coverQualityIssueCount: 0,
@@ -386,10 +325,6 @@ function buildCoverAiContent(
         originalText: input.master.summary ?? "",
         accepted: false,
       },
-      latestExperience: {
-        experienceIndex: 0,
-        addedBullets: [],
-      },
     },
     cover: {
       paragraphOne: { aiText: cover.paragraphOne, accepted: true },
@@ -409,7 +344,6 @@ function acceptCoverGeneration(
   return {
     ok: true,
     target: "cover",
-    inputFormat: "current",
     aiContent: buildCoverAiContent(input, decoded.data.cover),
     coverQualityGate: qualityReport.passed ? "pass" : "soft-fail",
     coverQualityIssueCount: qualityReport.issues.length,

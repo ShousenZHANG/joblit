@@ -17,8 +17,6 @@ import {
 import {
   aiContentSchema,
 } from "@/lib/shared/schemas/aiContent";
-import { evolveApplicationAiContent } from "@/lib/server/applications/applicationAiContentAggregate";
-import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import {
   buildApplicationPublicationRenderContext,
   projectApplicationPublication,
@@ -201,47 +199,10 @@ export async function POST(
           { status: 409 },
         );
       }
-      const evolved = evolveApplicationAiContent({
-        current: aiContentParsed.data,
-        command: { kind: "refresh_review", preserveReviewedAt: true },
-        reviewContext: {
-          scopeKey: userId,
-          resumeSnapshot: {
-            profile,
-            renderInput: mapResumeProfile(profile),
-          },
-          jobDescription: existing.job.description,
-          jobSourceAvailable: true,
-        },
-      });
-      if (evolved.kind !== "evolved") {
-        return NextResponse.json(
-          {
-            error: {
-              code: "CANONICAL_EVIDENCE_UNAVAILABLE",
-              message:
-                "The server source snapshot is unavailable. Re-generate this draft.",
-            },
-            requestId,
-          },
-          { status: 409 },
-        );
-      }
-      const canonicalContent = evolved.aiContent;
-      if (canonicalContent.review?.verdict === "blocked") {
-        return NextResponse.json(
-          {
-            error: {
-              code: "APPLICATION_REVIEW_BLOCKED",
-              message:
-                "Resolve unsupported claims before finalizing this application.",
-              details: canonicalContent.review,
-            },
-            requestId,
-          },
-          { status: 422 },
-        );
-      }
+      // The stored aggregate is already canonical: generation is validated at
+      // the import boundary and the browser can only edit text and reorder its
+      // own skills, so there is nothing to re-derive here before rendering.
+      const canonicalContent = aiContentParsed.data;
 
       const job = existing.job;
       const renderSnapshot = {
@@ -354,7 +315,7 @@ export async function POST(
         atsValidation = await assertAtsPdf(pdf, {
           maxPages: 2,
           minTextChars: target === "cover" ? 160 : 180,
-          requiredKeywords: buildAtsKeywords(canonicalContent, renderJob.title),
+          requiredKeywords: buildAtsKeywords(renderJob.title),
         });
       } catch (error) {
         const response = atsValidationErrorResponse(error, requestId);
@@ -379,14 +340,6 @@ export async function POST(
         return staleRenderContextResponse(requestId);
       }
       if (commit.kind === "job_missing") return notFoundError("job", requestId);
-      if (commit.kind === "review_blocked") {
-        return errorJson(
-          "APPLICATION_REVIEW_BLOCKED",
-          "Resolve unsupported claims before finalizing this application.",
-          422,
-          { details: commit.review, requestId },
-        );
-      }
       if (commit.kind === "blob_not_configured") {
         return errorJson(
           APPLICATION_ARTIFACT_STORAGE_UNAVAILABLE.code,

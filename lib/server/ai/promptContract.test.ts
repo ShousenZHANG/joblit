@@ -22,34 +22,43 @@ describe("prompt contract", () => {
     },
   });
 
-  it("publishes the current additions-only resume contract and paragraph-only cover contract", () => {
+  it("publishes the current summary-and-selection resume contract and paragraph-only cover contract", () => {
+    // A contract that changed shape must not validate against old receipts.
     expect(PROMPT_TEMPLATE_VERSION).not.toBe("2026.02.v1");
+    expect(PROMPT_TEMPLATE_VERSION).not.toBe("2026.07.v2");
     expect(PROMPT_SCHEMA_VERSION).not.toBe("2026-02-22");
+    expect(PROMPT_SCHEMA_VERSION).not.toBe("2026-07-24");
     expect(getExpectedJsonShapeForTarget("resume")).toEqual({
       cvSummary: "string",
-      latestExperience: {
-        addedBullets: ["string"],
-      },
+      skillsSelection: [{ group: "number", items: ["number"] }],
     });
     expect(getExpectedJsonSchemaForTarget("resume")).toMatchObject({
       additionalProperties: false,
-      required: ["cvSummary", "latestExperience"],
+      required: ["cvSummary", "skillsSelection"],
       properties: {
-        latestExperience: {
-          additionalProperties: false,
-          required: ["addedBullets"],
-          properties: {
-            addedBullets: {
-              type: "array",
-              minItems: 0,
-              maxItems: 3,
+        cvSummary: { type: "string", minLength: 120, maxLength: 350 },
+        skillsSelection: {
+          type: "array",
+          minItems: 1,
+          maxItems: 12,
+          items: {
+            additionalProperties: false,
+            required: ["group", "items"],
+            properties: {
+              group: { type: "integer", minimum: 0, maximum: 11 },
+              items: {
+                type: "array",
+                minItems: 1,
+                maxItems: 30,
+                items: { type: "integer", minimum: 0, maximum: 29 },
+              },
             },
           },
         },
       },
     });
     expect(JSON.stringify(getExpectedJsonSchemaForTarget("resume"))).not.toMatch(
-      /skillsFinal|skillsAdditions|"\s*bullets\s*"/,
+      /skillsFinal|skillsAdditions|latestExperience|addedBullets|"\s*bullets\s*"/,
     );
 
     expect(getExpectedJsonShapeForTarget("cover")).toEqual({

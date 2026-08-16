@@ -22,32 +22,20 @@ vi.mock("@/lib/server/latex/mapResumeProfile", () => ({
 }));
 
 import {
+  buildAtsKeywords,
   renderApplicationPdf,
   renderCoverLetterPdf,
 } from "./finalizeApplication";
 
 const aiContent: AiContent = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   generatedAt: "2026-07-20T00:00:00.000Z",
   promptMetaHash: "sha256:test",
-  evidence: [
-    {
-      id: `ev_${"a".repeat(32)}`,
-      kind: "candidate",
-      path: "resume.skills[0]",
-      contentHash: "a".repeat(64),
-      excerpt: "aws cloud engineering",
-    },
-  ],
   cv: {
     summary: {
       aiText: "Security-focused engineer",
       originalText: "Engineer",
       accepted: true,
-    },
-    latestExperience: {
-      experienceIndex: 0,
-      addedBullets: [],
     },
   },
   cover: {
@@ -188,13 +176,13 @@ describe("renderApplicationPdf", () => {
   });
 
   /**
-   * ADR-0001's composition rule: `userEdit ?? aiText` for the summary, and
-   * accepted `addedBullets` appended to the target experience.
+   * ADR-0001's composition rule, as it now stands: `userEdit ?? aiText` for the
+   * summary, the skills selection resolved against the master profile, and the
+   * experience section rendered exactly as the candidate wrote it.
    *
-   * Every fixture above uses `experiences: []` and `addedBullets: []`, so
-   * neither branch of that rule ran in any test — the thing the ADR exists to
-   * protect was uncovered. These drive it with real values and read the TeX
-   * that `renderResumeTex` actually produced.
+   * Every fixture above uses `experiences: []`, so no branch of that rule ran
+   * in any test — the thing the ADR exists to protect was uncovered. These
+   * drive it with real values and read the TeX `renderResumeTex` produced.
    */
   describe("the ADR-0001 composition rule", () => {
     const withExperience = {
@@ -207,7 +195,10 @@ describe("renderApplicationPdf", () => {
         linkedinText: "linkedin.com/in/jane",
       },
       summary: "Profile summary",
-      skills: [{ label: "Core", items: ["TypeScript"] }],
+      skills: [
+        { label: "Core", items: ["TypeScript", "Node.js"] },
+        { label: "Cloud", items: ["AWS"] },
+      ],
       experiences: [
         {
           company: "Acme",
@@ -266,60 +257,98 @@ describe("renderApplicationPdf", () => {
       expect(tex).toContain("Profile summary");
     });
 
-    it("appends accepted bullets to the targeted experience only", async () => {
+    it("renders every experience bullet exactly as the candidate wrote it", async () => {
+      // Tailoring writes no bullets. The master profile owns this section
+      // outright, so both experiences survive a resume render untouched.
       const tex = await renderTex({
         ...aiContent,
         cv: {
-          ...aiContent.cv,
-          latestExperience: {
-            experienceIndex: 0,
-            addedBullets: [
-              { text: "Accepted addition", accepted: true },
-              { text: "Rejected addition", accepted: false },
-            ],
-          },
+          summary: { ...aiContent.cv.summary, userEdit: "Edited by the user" },
+          skillsSelection: { aiSelection: [{ group: 1, items: [0] }] },
         },
       });
 
       expect(tex).toContain("Base bullet");
-      expect(tex).toContain("Accepted addition");
-      expect(tex).not.toContain("Rejected addition");
-      // The second experience is untouched.
       expect(tex).toContain("Older bullet");
     });
 
-    it("prefers a bullet's user edit over its AI text", async () => {
+    it("renders the selected skills in the tailored order", async () => {
       const tex = await renderTex({
         ...aiContent,
         cv: {
           ...aiContent.cv,
-          latestExperience: {
-            experienceIndex: 0,
-            addedBullets: [
-              { text: "AI wording", userEdit: "User wording", accepted: true },
+          skillsSelection: {
+            aiSelection: [
+              { group: 1, items: [0] },
+              { group: 0, items: [1] },
             ],
           },
         },
       });
 
-      expect(tex).toContain("User wording");
-      expect(tex).not.toContain("AI wording");
+      expect(tex).toContain("AWS");
+      expect(tex).toContain("Node.js");
+      // Narrowed out of the Core group by the selection.
+      expect(tex).not.toContain("TypeScript");
+      expect(tex.indexOf("AWS")).toBeLessThan(tex.indexOf("Node.js"));
     });
 
-    it("leaves the experiences alone when experienceIndex is out of range", async () => {
+    it("renders the user's narrowed selection over the AI's", async () => {
       const tex = await renderTex({
         ...aiContent,
         cv: {
           ...aiContent.cv,
-          latestExperience: {
-            experienceIndex: 99,
-            addedBullets: [{ text: "Orphan addition", accepted: true }],
+          skillsSelection: {
+            aiSelection: [{ group: 0, items: [0, 1] }],
+            userSelection: [{ group: 1, items: [0] }],
           },
         },
       });
 
-      expect(tex).toContain("Base bullet");
-      expect(tex).not.toContain("Orphan addition");
+      expect(tex).toContain("AWS");
+      expect(tex).not.toContain("TypeScript");
+      expect(tex).not.toContain("Node.js");
+    });
+
+    it("renders the whole master skills section when there is no selection", async () => {
+      const tex = await renderTex(aiContent);
+
+      expect(tex).toContain("TypeScript");
+      expect(tex).toContain("Node.js");
+      expect(tex).toContain("AWS");
+    });
+  });
+
+  /**
+   * The keyword list a rendered PDF must contain to count as on-target. It used
+   * to also mine the review ledger's extracted requirements; the title was
+   * always the load-bearing half, and the summary lint now guarantees the
+   * tailored summary states it.
+   */
+  describe("buildAtsKeywords", () => {
+    it("reads its keywords from the job title alone", () => {
+      expect(buildAtsKeywords("Senior Platform Engineer")).toEqual([
+        "Senior",
+        "Platform",
+        "Engineer",
+      ]);
+    });
+
+    it("splits on the separators a posting bolts onto a title", () => {
+      expect(buildAtsKeywords("Data Engineer - Analytics/Reporting (Remote)")).toEqual(
+        ["Data", "Engineer", "Analytics", "Reporting", "Remote"],
+      );
+    });
+
+    it("drops short tokens and repeats so the ATS check stays meaningful", () => {
+      expect(buildAtsKeywords("QA Engineer, Engineer of AI")).toEqual([
+        "Engineer",
+      ]);
+    });
+
+    it("caps the list at thirty keywords", () => {
+      const title = Array.from({ length: 40 }, (_, i) => `Keyword${i}`).join(" ");
+      expect(buildAtsKeywords(title)).toHaveLength(30);
     });
   });
 

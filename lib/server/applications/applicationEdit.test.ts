@@ -7,8 +7,6 @@ const database = vi.hoisted(() => ({
   transaction: vi.fn(),
   executeRaw: vi.fn(),
   queryRaw: vi.fn(),
-  evidenceCreateMany: vi.fn(),
-  claimCreateMany: vi.fn(),
 }));
 
 vi.mock("@/lib/server/prisma", () => ({
@@ -111,15 +109,12 @@ let updateCount: number;
 let transactionEffects: string[];
 let transactionActive: boolean;
 let updateObservedInsideTransaction: boolean;
-let ledgerObservedInsideTransaction: boolean;
 
 const transactionClient = {
   application: {
     findFirst: database.lockedFindFirst,
     updateMany: database.updateMany,
   },
-  evidenceSnapshot: { createMany: database.evidenceCreateMany },
-  claimEvidence: { createMany: database.claimCreateMany },
   $executeRaw: database.executeRaw,
   $queryRaw: database.queryRaw,
 };
@@ -139,9 +134,11 @@ function makeAiContent(): AiContent {
         originalText: "Original summary.",
         accepted: true,
       },
-      latestExperience: {
-        experienceIndex: 0,
-        addedBullets: [],
+      skillsSelection: {
+        aiSelection: [
+          { group: 0, items: [0, 1] },
+          { group: 1, items: [0] },
+        ],
       },
     },
     cover: {
@@ -162,25 +159,12 @@ function makeEditedAiContent(): AiContent {
         userEdit: "User-edited summary.",
         accepted: false,
       },
-      latestExperience: {
-        experienceIndex: 0,
-        addedBullets: [
-          {
-            text: "Passed bullet",
-            userEdit: "Edited passed bullet",
-            accepted: false,
-            qualityGate: { passed: true },
-          },
-          {
-            text: "Failed bullet",
-            userEdit: "Edited failed bullet",
-            accepted: true,
-            qualityGate: {
-              passed: false,
-              reason: "ungrounded: no JD evidence",
-            },
-          },
+      skillsSelection: {
+        aiSelection: [
+          { group: 0, items: [0, 1] },
+          { group: 1, items: [0] },
         ],
+        userSelection: [{ group: 1, items: [0] }],
       },
     },
     cover: {
@@ -274,7 +258,6 @@ describe("Application Edit interface", () => {
     transactionEffects = [];
     transactionActive = false;
     updateObservedInsideTransaction = false;
-    ledgerObservedInsideTransaction = false;
 
     database.preflightFindFirst
       .mockReset()
@@ -296,16 +279,6 @@ describe("Application Edit interface", () => {
       updateObservedInsideTransaction = transactionActive;
       return { count: updateCount };
     });
-    database.evidenceCreateMany.mockReset().mockImplementation(async () => {
-      transactionEffects.push("evidence_ledger");
-      ledgerObservedInsideTransaction = transactionActive;
-      return { count: 1 };
-    });
-    database.claimCreateMany.mockReset().mockImplementation(async () => {
-      transactionEffects.push("claim_ledger");
-      ledgerObservedInsideTransaction = transactionActive;
-      return { count: 1 };
-    });
     database.transaction
       .mockReset()
       .mockImplementation(async (action: TransactionAction) => {
@@ -318,28 +291,19 @@ describe("Application Edit interface", () => {
       });
   });
 
-  it("auto-saves only browser-owned decisions and rebuilds forged review data from locked sources", async () => {
+  it("auto-saves only browser-owned decisions and rebuilds server-owned state from the stored row", async () => {
     const stored = makeAiContent();
     const expectedHash = arrangeApplication(stored);
     const submitted = structuredClone(stored);
     submitted.cv.summary.aiText = "FORGED MODEL OUTPUT";
-    submitted.cv.summary.userEdit = "Improved revenue by 999%.";
-    submitted.evidence = [
-      {
-        id: `ev_${"f".repeat(32)}`,
-        kind: "candidate",
-        path: "resume.summary",
-        contentHash: "f".repeat(64),
-        excerpt: "Improved revenue by 999%.",
-      },
-    ];
-    submitted.review = {
-      verdict: "pass",
-      reviewedAt: "2026-08-14T01:00:00.000Z",
-      coveragePercent: 100,
-      requirements: [],
-      issues: [],
+    submitted.cv.summary.userEdit = "A user-approved summary.";
+    // The generation's own record of what it selected is not the browser's to
+    // rewrite: Discard has to be able to restore it.
+    submitted.cv.skillsSelection = {
+      aiSelection: [{ group: 9, items: [9] }],
+      userSelection: [{ group: 1, items: [0] }],
     };
+    submitted.promptMetaHash = "forged-prompt";
 
     const result = await autoSaveApplicationEdit({
       userId: USER_ID,
@@ -350,28 +314,20 @@ describe("Application Edit interface", () => {
 
     expect(result.kind).toBe("committed");
     if (result.kind !== "committed") return;
-    expect(result.aiContent.cv.summary.aiText).toBe(
-      stored.cv.summary.aiText,
-    );
-    expect(result.aiContent.cv.summary.userEdit).toBe(
-      "Improved revenue by 999%.",
-    );
-    expect(result.aiContent.evidence).not.toEqual(submitted.evidence);
-    expect(result.aiContent.evidence?.length).toBeGreaterThan(0);
-    expect(result.aiContent.review?.verdict).toBe("blocked");
-    expect(result.aiContent.review?.issues.join(" ")).toContain("999%");
+    expect(result.aiContent.cv.summary.aiText).toBe(stored.cv.summary.aiText);
+    expect(result.aiContent.cv.summary.userEdit).toBe("A user-approved summary.");
+    expect(result.aiContent.promptMetaHash).toBe(stored.promptMetaHash);
+    expect(result.aiContent.cv.skillsSelection).toEqual({
+      aiSelection: stored.cv.skillsSelection?.aiSelection,
+      userSelection: [{ group: 1, items: [0] }],
+    });
     expect(result.aiContentHash).toBe(hashAiContent(result.aiContent));
 
     const update = database.updateMany.mock.calls[0]?.[0];
     expect(update.data.aiContent).toEqual(result.aiContent);
     expect(update.data.aiContentHash).toBe(result.aiContentHash);
-    expect(database.evidenceCreateMany).toHaveBeenCalledOnce();
     expect(transactionEffects[0]).toBe("JOBA");
-    expect(transactionEffects.indexOf("application_update")).toBeLessThan(
-      transactionEffects.indexOf("evidence_ledger"),
-    );
     expect(updateObservedInsideTransaction).toBe(true);
-    expect(ledgerObservedInsideTransaction).toBe(true);
     expect(database.transaction).toHaveBeenCalledWith(
       expect.any(Function),
       { timeout: 30_000 },
@@ -450,7 +406,7 @@ describe("Application Edit interface", () => {
     );
   });
 
-  it("discards edits and restores acceptance from replacement and quality-gate semantics", async () => {
+  it("discards edits and restores the summary, the cover and the AI's own skill selection", async () => {
     const edited = makeEditedAiContent();
     const expectedHash = arrangeApplication(edited);
 
@@ -464,15 +420,11 @@ describe("Application Edit interface", () => {
     if (result.kind !== "committed") return;
     expect(result.aiContent.cv.summary.userEdit).toBeUndefined();
     expect(result.aiContent.cv.summary.accepted).toBe(true);
-    expect(
-      result.aiContent.cv.latestExperience.addedBullets[0]?.userEdit,
-    ).toBeUndefined();
-    expect(
-      result.aiContent.cv.latestExperience.addedBullets[0]?.accepted,
-    ).toBe(true);
-    expect(
-      result.aiContent.cv.latestExperience.addedBullets[1]?.accepted,
-    ).toBe(false);
+    expect(result.aiContent.cv.summary.aiText).toBe(edited.cv.summary.aiText);
+    // The whole point of keeping aiSelection server-owned through an edit.
+    expect(result.aiContent.cv.skillsSelection).toEqual({
+      aiSelection: edited.cv.skillsSelection?.aiSelection,
+    });
     expect(result.aiContent.cover.paragraphOne.userEdit).toBeUndefined();
     expect(result.aiContent.cover.paragraphOne.accepted).toBe(true);
   });
@@ -518,7 +470,7 @@ describe("Application Edit interface", () => {
     expect(database.updateMany).not.toHaveBeenCalled();
   });
 
-  it("reports a late CAS loss and does not append the review ledger", async () => {
+  it("reports a late CAS loss instead of claiming the write landed", async () => {
     const current = makeAiContent();
     const expectedHash = arrangeApplication(current);
     updateCount = 0;
@@ -541,8 +493,6 @@ describe("Application Edit interface", () => {
       },
       data: expect.any(Object),
     });
-    expect(database.evidenceCreateMany).not.toHaveBeenCalled();
-    expect(database.claimCreateMany).not.toHaveBeenCalled();
   });
 
   it("returns not_found when an Auto-save Application disappears inside the transaction", async () => {
@@ -716,7 +666,10 @@ describe("Application Edit interface", () => {
     expect(database.updateMany).not.toHaveBeenCalled();
   });
 
-  it("fails closed when canonical review evidence has no owned Job source", async () => {
+  it("still saves an edit when the owned Job source is gone, but publishes nothing", async () => {
+    // The edit itself only needs the stored aggregate. Without a Job there is
+    // no render context, so no target can reach FINAL off the back of a save —
+    // the document that would be published cannot even be described.
     const current = makeAiContent();
     const expectedHash = hashAiContent(current);
     preflightResult = makePreflight(expectedHash, { job: null });
@@ -729,8 +682,12 @@ describe("Application Edit interface", () => {
       submittedAiContent: current,
     });
 
-    expect(result).toEqual({ kind: "canonical_evidence_unavailable" });
+    expect(result.kind).toBe("committed");
+    if (result.kind !== "committed") return;
+    expect(result.publication.status).not.toBe("FINAL");
+    expect(result.publication.resume.status).not.toBe("FINAL");
+    expect(result.publication.cover.status).not.toBe("FINAL");
+    // No Job means no source row to lock against.
     expect(database.queryRaw).not.toHaveBeenCalled();
-    expect(database.updateMany).not.toHaveBeenCalled();
   });
 });

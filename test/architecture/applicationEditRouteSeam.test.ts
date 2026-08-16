@@ -14,7 +14,6 @@ const FORBIDDEN_IMPLEMENTATION_IMPORTS = [
   "applicationPublication",
   "applicationRenderContextFence",
   "applicationSourceSnapshot",
-  "persistReviewLedger",
   "mapResumeProfile",
 ] as const;
 

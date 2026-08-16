@@ -180,11 +180,39 @@ import { POST } from "@/app/api/applications/manual-generate/route";
 const VALID_JOB_ID = "550e8400-e29b-41d4-a716-446655440000";
 const TAILORING_RUN_ID = "770e8400-e29b-41d4-a716-446655440000";
 const TAILORING_ATTEMPT_ID = "880e8400-e29b-41d4-a716-446655440000";
+
+/**
+ * The Master Resume Profile every import is judged against: the skill bank the
+ * selection indexes address, and the only text the summary lint will accept a
+ * number or a skill from.
+ */
+const PROFILE = {
+  id: "rp-1",
+  updatedAt: new Date("2026-02-06T00:00:00.000Z"),
+  skills: [
+    { label: "Backend", items: ["Java", "Spring Boot"] },
+    { label: "Platform", items: ["Linux", "Docker"] },
+  ],
+};
+
+/**
+ * Names the target role, states no figure the profile cannot support, and
+ * mentions no skill the candidate has not written. Anything else is a 422.
+ */
+const VALID_SUMMARY =
+  "Software Engineer delivering Java and Spring Boot services on Linux, with " +
+  "Docker-based delivery pipelines and a focus on dependable production " +
+  "releases for platform teams.";
+
+/** Platform first, then Backend: a real reorder, not the profile's own order. */
+const VALID_SELECTION = [
+  { group: 1, items: [1, 0] },
+  { group: 0, items: [0] },
+];
+
 const VALID_OUTPUT = JSON.stringify({
-  cvSummary: "Tailored summary",
-  latestExperience: {
-    bullets: ["base bullet one"],
-  },
+  cvSummary: VALID_SUMMARY,
+  skillsSelection: VALID_SELECTION,
   cover: {
     paragraphOne: "One",
     paragraphTwo: "Two",
@@ -194,26 +222,17 @@ const VALID_OUTPUT = JSON.stringify({
 
 function makeExistingAiContent() {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: "2026-07-19T00:00:00.000Z",
     promptMetaHash: "existing-prompt",
-    source: "local_ai",
+    source: "manual_import",
     cv: {
       summary: {
         aiText: "Existing CV summary",
         originalText: "Base summary",
         accepted: true,
       },
-      latestExperience: {
-        experienceIndex: 0,
-        addedBullets: [
-          {
-            text: "Existing CV bullet",
-            accepted: true,
-            qualityGate: { passed: true },
-          },
-        ],
-      },
+      skillsSelection: { aiSelection: [{ group: 0, items: [0] }] },
     },
     cover: {
       paragraphOne: { aiText: "Existing cover one", accepted: true },
@@ -408,10 +427,7 @@ describe("applications manual generate api", () => {
     });
     (
       getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
+    ).mockResolvedValueOnce(PROFILE);
 
     const res = await POST(
       new Request("http://localhost/api/applications/manual-generate", {
@@ -453,10 +469,7 @@ describe("applications manual generate api", () => {
     });
     (
       getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
+    ).mockResolvedValueOnce(PROFILE);
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 
     const res = await POST(
@@ -496,10 +509,7 @@ describe("applications manual generate api", () => {
     });
     (
       getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
+    ).mockResolvedValueOnce(PROFILE);
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 
     const res = await POST(
@@ -540,10 +550,7 @@ describe("applications manual generate api", () => {
     });
     (
       getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
+    ).mockResolvedValueOnce(PROFILE);
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 
     const res = await POST(
@@ -570,12 +577,10 @@ describe("applications manual generate api", () => {
     expect(res.headers.get("x-tailor-cv-source")).toBe("manual_import");
   });
 
-  // The grounding gate on this route used to fire twice: pre-emptively on a
-  // review acceptApplicationGeneration had built over one target in isolation,
-  // and again at the commit boundary on the merged snapshot. The pre-emptive
-  // one is gone, and it turned out to have had no test at all — so this covers
-  // the gate that remains.
-  it("blocks a finalize whose claims are not grounded in the master resume", async () => {
+  // The grounding gate used to fire at the commit boundary, after the PDF had
+  // already been compiled and uploaded. The summary lint runs before any of
+  // that, so an ungrounded claim costs no render.
+  it("rejects an ungrounded finalize before compiling or uploading anything", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
       {
         user: { id: "user-1" },
@@ -589,10 +594,7 @@ describe("applications manual generate api", () => {
     });
     (
       getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
+    ).mockResolvedValueOnce(PROFILE);
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 
     const res = await POST(
@@ -602,10 +604,12 @@ describe("applications manual generate api", () => {
           jobId: VALID_JOB_ID,
           target: "resume",
           modelOutput: JSON.stringify({
-            // A figure the master profile never states. The ledger blocks an
-            // unsupported numeric claim.
-            cvSummary: "Engineer who cut infrastructure spend by 9400%.",
-            latestExperience: { addedBullets: [] },
+            // A figure the master profile never states.
+            cvSummary:
+              "Software Engineer delivering Java and Spring Boot services on " +
+              "Linux, cutting infrastructure spend by 9400% with Docker " +
+              "pipelines and dependable production releases for platform teams.",
+            skillsSelection: VALID_SELECTION,
           }),
           promptMeta: {
             ruleSetId: "rules-1",
@@ -621,7 +625,10 @@ describe("applications manual generate api", () => {
 
     expect(res.status).toBe(422);
     const json = await res.json();
-    expect(json.error.code).toBe("APPLICATION_REVIEW_BLOCKED");
+    expect(json.error.code).toBe("SUMMARY_UNGROUNDED_NUMBER");
+    expect(compileLatexToPdf).not.toHaveBeenCalled();
+    expect(artifactLifecycle.stageApplicationArtifact).not.toHaveBeenCalled();
+    expect(applicationStore.upsert).not.toHaveBeenCalled();
   });
 
   it("accepts resume JSON when model output includes commentary and trailing brace text", async () => {
@@ -638,18 +645,15 @@ describe("applications manual generate api", () => {
     });
     (
       getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
+    ).mockResolvedValueOnce(PROFILE);
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 
     const noisyOutput = [
       "Sure - generated output below:",
       "```json",
       "{",
-      '  "cvSummary": "Tailored summary",',
-      '  "latestExperience": { "bullets": ["base bullet one"] }',
+      `  "cvSummary": ${JSON.stringify(VALID_SUMMARY)},`,
+      `  "skillsSelection": ${JSON.stringify(VALID_SELECTION)}`,
       "}",
       "```",
       "Validation note: {format: ok}",
@@ -674,7 +678,7 @@ describe("applications manual generate api", () => {
     expect(res.headers.get("content-type")).toBe("application/pdf");
   });
 
-  it("preserves Master Profile bullets and skills for the resume target", async () => {
+  it("preserves Master Profile bullets and renders only the profile's own skills", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
       {
         user: { id: "user-1" },
@@ -688,14 +692,7 @@ describe("applications manual generate api", () => {
     });
     (
       getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-      skills: [
-        { label: "Backend", items: ["Java", "Spring Boot"] },
-        { label: "Cloud", items: ["GCP"] },
-      ],
-    });
+    ).mockResolvedValueOnce(PROFILE);
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 
     (
@@ -708,7 +705,10 @@ describe("applications manual generate api", () => {
         phone: "+1 555 0100",
       },
       summary: "Base summary",
-      skills: [{ label: "Backend", items: ["Java"] }],
+      skills: [
+        { label: "Backend", items: ["Java", "Spring Boot"] },
+        { label: "Platform", items: ["Linux", "Docker"] },
+      ],
       experiences: [
         {
           location: "Sydney, AU",
@@ -725,28 +725,13 @@ describe("applications manual generate api", () => {
       education: [],
     });
 
-    const resumePatch = JSON.stringify({
-      cvSummary: "Tailored summary",
-      latestExperience: {
-        bullets: [
-          "Maintained CI/CD pipelines on Linux.",
-          "Built Java services for internal APIs.",
-          "Built internal developer tooling that reduced rollback risk across Linux service deployments.",
-        ],
-      },
-      skillsFinal: [
-        { label: "Backend", items: ["Java", "Spring Boot"] },
-        { label: "Cloud", items: ["GCP"] },
-      ],
-    });
-
     const res = await POST(
       new Request("http://localhost/api/applications/manual-generate", {
         method: "POST",
         body: JSON.stringify({
           jobId: VALID_JOB_ID,
           target: "resume",
-          modelOutput: resumePatch,
+          modelOutput: VALID_OUTPUT,
           promptMeta: {
             ruleSetId: "rules-1",
             resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
@@ -759,12 +744,17 @@ describe("applications manual generate api", () => {
     const renderCallArg = (
       renderResumeTex as unknown as ReturnType<typeof vi.fn>
     ).mock.calls[0][0];
-    expect(renderCallArg.summary).toBe("Tailored summary");
+    expect(renderCallArg.summary).toBe(VALID_SUMMARY);
+    // Experience is no longer a tailoring surface: the profile's own bullets
+    // reach the renderer in the profile's own order.
     expect(renderCallArg.experiences[0].bullets).toEqual([
       "Built Java services for internal APIs.",
       "Maintained CI/CD pipelines on Linux.",
     ]);
+    // The selection reorders and narrows the candidate's own groups; every
+    // string here came out of the profile, none out of the model.
     expect(renderCallArg.skills).toEqual([
+      { label: "Platform", items: ["Docker", "Linux"] },
       { label: "Backend", items: ["Java"] },
     ]);
   });
@@ -784,10 +774,7 @@ describe("applications manual generate api", () => {
     });
     (
       getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
+    ).mockResolvedValueOnce(PROFILE);
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 
     (
@@ -814,20 +801,13 @@ describe("applications manual generate api", () => {
       education: [],
     });
 
-    const importedPatch = JSON.stringify({
-      cvSummary: "Tailored summary",
-      latestExperience: {
-        bullets: ["old-1 rewritten", "old-2"],
-      },
-    });
-
     const res = await POST(
       new Request("http://localhost/api/applications/manual-generate", {
         method: "POST",
         body: JSON.stringify({
           jobId: VALID_JOB_ID,
           target: "resume",
-          modelOutput: importedPatch,
+          modelOutput: VALID_OUTPUT,
           promptMeta: {
             ruleSetId: "rules-1",
             resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
@@ -840,81 +820,7 @@ describe("applications manual generate api", () => {
     expect(res.headers.get("content-type")).toBe("application/pdf");
   });
 
-  it("accepts markdown-only formatting differences in existing bullets", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
-      {
-        user: { id: "user-1" },
-      },
-    );
-    jobStore.findFirst.mockResolvedValueOnce({
-      id: VALID_JOB_ID,
-      title: "Software Engineer",
-      company: "Example Co",
-      description: "Build product features",
-    });
-    (
-      getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
-    applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
-
-    (
-      mapResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockReturnValueOnce({
-      candidate: {
-        name: "Jane Doe",
-        title: "Software Engineer",
-        email: "jane@example.com",
-        phone: "+1 555 0100",
-      },
-      summary: "Base summary",
-      skills: [],
-      experiences: [
-        {
-          location: "Sydney, AU",
-          dates: "2022-2023",
-          title: "Engineer",
-          company: "Example",
-          bullets: [
-            "Delivered repeatable releases with Docker and Linux CI/CD pipelines.",
-          ],
-        },
-      ],
-      projects: [],
-      education: [],
-    });
-
-    const formattingOnlyPatch = JSON.stringify({
-      cvSummary: "Tailored summary",
-      latestExperience: {
-        bullets: [
-          "Delivered repeatable releases with **Docker **and **Linux** CI/CD pipelines.",
-        ],
-      },
-    });
-
-    const res = await POST(
-      new Request("http://localhost/api/applications/manual-generate", {
-        method: "POST",
-        body: JSON.stringify({
-          jobId: VALID_JOB_ID,
-          target: "resume",
-          modelOutput: formattingOnlyPatch,
-          promptMeta: {
-            ruleSetId: "rules-1",
-            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
-          },
-        }),
-      }),
-    );
-
-    expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toBe("application/pdf");
-  });
-
-  it("uses AI-provided markdown bold in summary and new bullets for latex rendering", async () => {
+  it("uses AI-provided markdown bold in the summary for latex rendering", async () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
       {
         user: { id: "user-1" },
@@ -928,10 +834,7 @@ describe("applications manual generate api", () => {
     });
     (
       getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
+    ).mockResolvedValueOnce(PROFILE);
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 
     (
@@ -959,13 +862,8 @@ describe("applications manual generate api", () => {
     });
 
     const patch = JSON.stringify({
-      cvSummary: "Focused on **Java** delivery with reliable pipelines.",
-      latestExperience: {
-        bullets: [
-          "Maintained deployment pipelines for services.",
-          "Improved deployment pipelines for services with **Docker** rollback safety checks.",
-        ],
-      },
+      cvSummary: VALID_SUMMARY.replace("Java", "**Java**"),
+      skillsSelection: VALID_SELECTION,
     });
 
     const res = await POST(
@@ -988,183 +886,153 @@ describe("applications manual generate api", () => {
       renderResumeTex as unknown as ReturnType<typeof vi.fn>
     ).mock.calls.at(-1)?.[0];
     expect(renderCallArg.summary).toContain("\\textbf{Java}");
-    expect(renderCallArg.experiences[0].bullets[1]).toContain(
-      "\\textbf{Docker}",
-    );
   });
 
-  it("drops ungrounded added latest-experience bullets that do not match base evidence", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
-      {
-        user: { id: "user-1" },
-      },
-    );
-    jobStore.findFirst.mockResolvedValueOnce({
-      id: VALID_JOB_ID,
-      title: "Software Engineer",
-      company: "Example Co",
-      description: "Build product features",
-    });
-    (
-      getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-      experiences: [
-        {
-          title: "Engineer",
-          company: "Example",
-          bullets: ["Built Java APIs.", "Maintained CI/CD pipelines."],
-        },
-      ],
-    });
-    applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
-
-    (
-      mapResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockReturnValueOnce({
-      candidate: {
-        name: "Jane Doe",
+  /**
+   * The gates that replaced the evidence ledger. Both run at the import
+   * boundary — before anything is rendered, uploaded or persisted — and both
+   * are deterministic string comparisons against the candidate's own profile,
+   * so no model is asked to judge a model.
+   */
+  describe("the import boundary refuses content the profile cannot support", () => {
+    function importResume(modelOutput: string) {
+      (
+        getServerSession as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValue({ user: { id: "user-1" } });
+      jobStore.findFirst.mockResolvedValueOnce({
+        id: VALID_JOB_ID,
         title: "Software Engineer",
-        email: "jane@example.com",
-        phone: "+1 555 0100",
-      },
-      summary: "Base summary",
-      skills: [],
-      experiences: [
-        {
-          location: "Sydney, AU",
-          dates: "2022-2023",
-          title: "Engineer",
-          company: "Example",
-          bullets: ["Built Java APIs.", "Maintained CI/CD pipelines."],
-        },
-      ],
-      projects: [],
-      education: [],
-    });
+        company: "Example Co",
+        description: "Build product features",
+        market: "AU",
+      });
+      (
+        getResumeProfile as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(PROFILE);
 
-    const patch = JSON.stringify({
-      cvSummary: "Tailored summary",
-      latestExperience: {
-        bullets: [
-          "Built Java APIs.",
-          "Maintained CI/CD pipelines.",
-          "Led M&A due diligence for Fortune 500 acquisitions.",
-        ],
-      },
-    });
-
-    const res = await POST(
-      new Request("http://localhost/api/applications/manual-generate", {
-        method: "POST",
-        body: JSON.stringify({
-          jobId: VALID_JOB_ID,
-          target: "resume",
-          modelOutput: patch,
-          promptMeta: {
-            ruleSetId: "rules-1",
-            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+      return POST(
+        new Request(
+          "http://localhost/api/applications/manual-generate?finalize=false",
+          {
+            method: "POST",
+            body: JSON.stringify({
+              jobId: VALID_JOB_ID,
+              target: "resume",
+              modelOutput,
+              promptMeta: {
+                ruleSetId: "rules-1",
+                resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
+              },
+            }),
           },
+        ),
+      );
+    }
+
+    it("returns 422 SUMMARY_TITLE_MISSING when the summary omits the job title", async () => {
+      const res = await importResume(
+        JSON.stringify({
+          cvSummary:
+            "Backend specialist delivering Java and Spring Boot services on " +
+            "Linux, with Docker-based delivery pipelines and a focus on " +
+            "dependable production releases for platform teams.",
+          skillsSelection: VALID_SELECTION,
         }),
-      }),
-    );
+      );
+      const json = await res.json();
 
-    expect(res.status).toBe(200);
-    const renderCallArg = (
-      renderResumeTex as unknown as ReturnType<typeof vi.fn>
-    ).mock.calls.at(-1)?.[0];
-    expect(renderCallArg.experiences[0].bullets).toEqual([
-      "Built Java APIs.",
-      "Maintained CI/CD pipelines.",
-    ]);
-  });
-
-  it("drops redundant added latest-experience bullets that only repeat existing keywords", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
-      {
-        user: { id: "user-1" },
-      },
-    );
-    jobStore.findFirst.mockResolvedValueOnce({
-      id: VALID_JOB_ID,
-      title: "Software Engineer",
-      company: "Example Co",
-      description: "Build product features",
-    });
-    (
-      getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-      experiences: [
-        {
-          title: "Engineer",
-          company: "Example",
-          bullets: ["Built Java APIs.", "Maintained CI/CD pipelines on Linux."],
-        },
-      ],
-    });
-    applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
-
-    (
-      mapResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockReturnValueOnce({
-      candidate: {
-        name: "Jane Doe",
-        title: "Software Engineer",
-        email: "jane@example.com",
-        phone: "+1 555 0100",
-      },
-      summary: "Base summary",
-      skills: [],
-      experiences: [
-        {
-          location: "Sydney, AU",
-          dates: "2022-2023",
-          title: "Engineer",
-          company: "Example",
-          bullets: ["Built Java APIs.", "Maintained CI/CD pipelines on Linux."],
-        },
-      ],
-      projects: [],
-      education: [],
+      expect(res.status).toBe(422);
+      expect(json.error.code).toBe("SUMMARY_TITLE_MISSING");
+      expect(applicationStore.upsert).not.toHaveBeenCalled();
     });
 
-    const patch = JSON.stringify({
-      cvSummary: "Tailored summary",
-      latestExperience: {
-        bullets: [
-          "Built Java APIs.",
-          "Maintained CI/CD pipelines on Linux.",
-          "Built Java APIs and maintained CI/CD pipelines on Linux.",
-        ],
-      },
-    });
-
-    const res = await POST(
-      new Request("http://localhost/api/applications/manual-generate", {
-        method: "POST",
-        body: JSON.stringify({
-          jobId: VALID_JOB_ID,
-          target: "resume",
-          modelOutput: patch,
-          promptMeta: {
-            ruleSetId: "rules-1",
-            resumeSnapshotUpdatedAt: "2026-02-06T00:00:00.000Z",
-          },
+    it("returns 422 SUMMARY_UNGROUNDED_NUMBER when the summary invents a figure", async () => {
+      const res = await importResume(
+        JSON.stringify({
+          cvSummary:
+            "Software Engineer delivering Java and Spring Boot services on " +
+            "Linux, cutting release time by 63% with Docker pipelines and " +
+            "dependable production releases for platform teams.",
+          skillsSelection: VALID_SELECTION,
         }),
-      }),
-    );
+      );
+      const json = await res.json();
 
-    expect(res.status).toBe(200);
-    const renderCallArg = (
-      renderResumeTex as unknown as ReturnType<typeof vi.fn>
-    ).mock.calls.at(-1)?.[0];
-    expect(renderCallArg.experiences[0].bullets).toEqual([
-      "Built Java APIs.",
-      "Maintained CI/CD pipelines on Linux.",
-    ]);
+      expect(res.status).toBe(422);
+      expect(json.error.code).toBe("SUMMARY_UNGROUNDED_NUMBER");
+      expect(json.error.message).toContain("63%");
+      expect(applicationStore.upsert).not.toHaveBeenCalled();
+    });
+
+    it("returns 422 SUMMARY_UNGROUNDED_SKILL when the summary claims a skill the profile lacks", async () => {
+      const res = await importResume(
+        JSON.stringify({
+          cvSummary:
+            "Software Engineer delivering Java and Kubernetes services on " +
+            "Linux, with Docker-based delivery pipelines and a focus on " +
+            "dependable production releases for platform teams.",
+          skillsSelection: VALID_SELECTION,
+        }),
+      );
+      const json = await res.json();
+
+      expect(res.status).toBe(422);
+      expect(json.error.code).toBe("SUMMARY_UNGROUNDED_SKILL");
+      expect(json.error.message).toContain("Kubernetes");
+      expect(applicationStore.upsert).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 SKILLS_SELECTION_INVALID for a group index outside the bank", async () => {
+      const res = await importResume(
+        JSON.stringify({
+          cvSummary: VALID_SUMMARY,
+          skillsSelection: [{ group: 5, items: [0] }],
+        }),
+      );
+      const json = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(json.error.code).toBe("SKILLS_SELECTION_INVALID");
+      expect(applicationStore.upsert).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 SKILLS_SELECTION_INVALID for an item index outside its group", async () => {
+      const res = await importResume(
+        JSON.stringify({
+          cvSummary: VALID_SUMMARY,
+          skillsSelection: [{ group: 0, items: [0, 4] }],
+        }),
+      );
+      const json = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(json.error.code).toBe("SKILLS_SELECTION_INVALID");
+      expect(applicationStore.upsert).not.toHaveBeenCalled();
+    });
+
+    it("persists the selection the model returned when everything resolves", async () => {
+      applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
+
+      const res = await importResume(VALID_OUTPUT);
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.aiContent.cv.summary.aiText).toBe(VALID_SUMMARY);
+      expect(json.aiContent.cv.skillsSelection).toEqual({
+        aiSelection: VALID_SELECTION,
+      });
+      expect(applicationStore.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            aiContent: expect.objectContaining({
+              cv: expect.objectContaining({
+                skillsSelection: { aiSelection: VALID_SELECTION },
+              }),
+            }),
+          }),
+        }),
+      );
+    });
   });
 
   it("returns 409 when prompt meta is stale", async () => {
@@ -1234,10 +1102,7 @@ describe("applications manual generate api", () => {
     });
     (
       getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
+    ).mockResolvedValueOnce(PROFILE);
 
     const res = await POST(
       new Request("http://localhost/api/applications/manual-generate", {
@@ -1275,10 +1140,7 @@ describe("applications manual generate api", () => {
     });
     (
       getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
+    ).mockResolvedValueOnce(PROFILE);
 
     const res = await POST(
       new Request("http://localhost/api/applications/manual-generate", {
@@ -1320,10 +1182,7 @@ describe("applications manual generate api", () => {
     });
     (
       getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
+    ).mockResolvedValueOnce(PROFILE);
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 
     const weakCoverOutput = JSON.stringify({
@@ -1434,10 +1293,7 @@ describe("applications manual generate api", () => {
     });
     (
       getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
+    ).mockResolvedValueOnce(PROFILE);
 
     const response = await POST(
       new Request("http://localhost/api/applications/manual-generate", {
@@ -1484,10 +1340,7 @@ describe("applications manual generate api", () => {
     });
     (
       getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
+    ).mockResolvedValueOnce(PROFILE);
     blobStore.put.mockResolvedValueOnce({
       url: "https://blob.vercel-storage.com/cover.pdf",
     });
@@ -1581,10 +1434,7 @@ describe("applications manual generate api", () => {
     });
     (
       getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
+    ).mockResolvedValueOnce(PROFILE);
     applicationStore.upsert.mockResolvedValueOnce({ id: "app-1" });
 
     const res = await POST(
@@ -1611,7 +1461,7 @@ describe("applications manual generate api", () => {
     expect(json.applicationId).toBe("app-1");
     expect(json.status).toBe("DRAFT");
     expect(typeof json.aiContentHash).toBe("string");
-    expect(json.aiContent.cv.summary.aiText).toBe("Tailored summary");
+    expect(json.aiContent.cv.summary.aiText).toBe(VALID_SUMMARY);
     // DRAFT mode renders nothing, so the review dialog would otherwise have no
     // name for its object-URL download. A profile without basics degrades to
     // the job title alone rather than to "undefined".
@@ -1650,10 +1500,7 @@ describe("applications manual generate api", () => {
     });
     (
       getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
+    ).mockResolvedValueOnce(PROFILE);
     const existing = makeExistingAiContent();
     applicationStore.findUnique.mockResolvedValueOnce({
       resumePdfUrl: null,
@@ -1682,9 +1529,12 @@ describe("applications manual generate api", () => {
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(json.aiContent.cv.summary.aiText).toBe("Tailored summary");
+    expect(json.aiContent.cv.summary.aiText).toBe(VALID_SUMMARY);
     expect(json.aiContent.cover).toMatchObject(existing.cover);
-    expect(json.aiContent.review).toBeDefined();
+    // The merge must not resurrect the retired ledger or bullet halves.
+    expect(json.aiContent.schemaVersion).toBe(2);
+    expect(json.aiContent.review).toBeUndefined();
+    expect(json.aiContent.cv.latestExperience).toBeUndefined();
     expect(applicationStore.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         update: expect.objectContaining({
@@ -1716,10 +1566,7 @@ describe("applications manual generate api", () => {
     });
     (
       getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
+    ).mockResolvedValueOnce(PROFILE);
     const existing = makeExistingAiContent();
     applicationStore.findUnique.mockResolvedValueOnce({
       resumePdfUrl: null,
@@ -1756,7 +1603,10 @@ describe("applications manual generate api", () => {
     expect(res.status).toBe(200);
     expect(json.aiContent.cv).toMatchObject(existing.cv);
     expect(json.aiContent.cover.paragraphOne.aiText).toBe("New cover one");
-    expect(json.aiContent.review).toBeDefined();
+    // The merge must not resurrect the retired ledger or bullet halves.
+    expect(json.aiContent.schemaVersion).toBe(2);
+    expect(json.aiContent.review).toBeUndefined();
+    expect(json.aiContent.cv.latestExperience).toBeUndefined();
     expect(applicationStore.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         update: expect.objectContaining({
@@ -1788,10 +1638,7 @@ describe("applications manual generate api", () => {
     });
     (
       getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
+    ).mockResolvedValueOnce(PROFILE);
     applicationStore.findUnique.mockResolvedValueOnce({
       resumePdfUrl: null,
       coverPdfUrl: "https://blob.example/existing-cover.pdf",
@@ -1843,10 +1690,7 @@ describe("applications manual generate api", () => {
     });
     (
       getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
+    ).mockResolvedValueOnce(PROFILE);
     const order: string[] = [];
     transactionStore.executeRaw.mockImplementationOnce(async () => {
       order.push("lock");
@@ -1907,10 +1751,7 @@ describe("applications manual generate api", () => {
     });
     (
       getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
+    ).mockResolvedValueOnce(PROFILE);
     blobStore.put.mockResolvedValueOnce({
       url: "https://blob.vercel-storage.com/new-resume.pdf",
     });
@@ -1957,10 +1798,7 @@ describe("applications manual generate api", () => {
     });
     (
       getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
+    ).mockResolvedValueOnce(PROFILE);
     applicationStore.findUnique.mockResolvedValueOnce({
       resumePdfUrl: "https://blob.vercel-storage.com/stale-resume.pdf",
       coverPdfUrl: null,
@@ -2019,10 +1857,7 @@ describe("applications manual generate api", () => {
     });
     (
       getResumeProfile as unknown as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      id: "rp-1",
-      updatedAt: new Date("2026-02-06T00:00:00.000Z"),
-    });
+    ).mockResolvedValueOnce(PROFILE);
     blobStore.put.mockResolvedValueOnce({
       url: "https://blob.vercel-storage.com/stale-render.pdf",
     });

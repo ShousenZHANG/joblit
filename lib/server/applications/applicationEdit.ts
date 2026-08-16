@@ -2,7 +2,6 @@ import { isDeepStrictEqual } from "node:util";
 
 import type { Prisma } from "@/lib/generated/prisma";
 import { prisma } from "@/lib/server/prisma";
-import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import type { ApplicationPublication } from "@/lib/shared/applicationPublication";
 import {
   aiContentSchema,
@@ -23,7 +22,6 @@ import {
   ownedApplicationSources,
   type ApplicationSources,
 } from "./applicationSourceSnapshot";
-import { persistReviewLedger } from "./persistReviewLedger";
 
 const APPLICATION_EDIT_TRANSACTION_TIMEOUT_MS = 30_000;
 
@@ -76,7 +74,6 @@ export type ApplicationEditFailure =
   | { kind: "not_found" }
   | { kind: "stale_write"; currentHash?: string | null }
   | { kind: "invalid_ai_content" }
-  | { kind: "canonical_evidence_unavailable" }
   | { kind: "stale_render_context" };
 
 export type AutoSaveApplicationEditResult =
@@ -143,22 +140,6 @@ async function lockCurrentApplicationEditSources(
   return isDeepStrictEqual(current, expected) ? current : null;
 }
 
-function reviewContext(
-  sources: ApplicationSources,
-  userId: string,
-) {
-  if (!sources.profile) return undefined;
-  return {
-    scopeKey: userId,
-    resumeSnapshot: {
-      profile: sources.profile,
-      renderInput: mapResumeProfile(sources.profile),
-    },
-    jobDescription: sources.job?.description,
-    jobSourceAvailable: Boolean(sources.job),
-  };
-}
-
 function publicationRenderContext(sources: ApplicationSources) {
   return sources.profile && sources.job
     ? buildApplicationPublicationRenderContext({
@@ -175,17 +156,13 @@ function publicationRenderContext(sources: ApplicationSources) {
 function applicationEditMutationResult(
   current: AiContent,
   mutation: ApplicationEditMutation,
-  sources: ApplicationSources,
-  userId: string,
-) {
-  const context = reviewContext(sources, userId);
+): AiContent {
   return evolveApplicationAiContent({
     current,
     command:
       mutation.kind === "apply_client_edits"
         ? { kind: "apply_client_edits", submitted: mutation.submitted }
         : { kind: "discard_edits" },
-    ...(context ? { reviewContext: context } : {}),
   });
 }
 
@@ -235,17 +212,7 @@ async function applyApplicationEdit(
   );
   if (!sources) return { kind: "stale_render_context" };
 
-  const evolved = applicationEditMutationResult(
-    parsed.data,
-    input.mutation,
-    sources,
-    input.userId,
-  );
-  if (evolved.kind !== "evolved") {
-    return { kind: "canonical_evidence_unavailable" };
-  }
-
-  const aiContent = evolved.aiContent;
+  const aiContent = applicationEditMutationResult(parsed.data, input.mutation);
   const aiContentHash = hashAiContent(aiContent);
   const transition = transitionApplicationPublication({
     previousAiContent: parsed.data,
@@ -275,17 +242,10 @@ async function applyApplicationEdit(
       ...transition.persistence,
       aiContent,
       aiContentHash,
-      reviewReport: aiContent.review ?? undefined,
     },
   });
   if (updated.count !== 1) return { kind: "stale_write" };
 
-  await persistReviewLedger(tx, {
-    userId: input.userId,
-    applicationId: input.applicationId,
-    jobId: current.jobId,
-    aiContent,
-  });
   return {
     kind: "committed",
     aiContent,

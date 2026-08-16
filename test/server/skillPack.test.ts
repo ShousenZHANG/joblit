@@ -8,6 +8,10 @@ import {
   buildStructuredSkillRulesFromEffective,
   getStructuredSkillRules,
 } from "@/lib/server/ai/promptSkills";
+import {
+  CV_SUMMARY_LENGTH,
+  ResumeGenerationOutputSchema,
+} from "@/lib/shared/schemas/applicationGenerationOutput";
 
 const rules = getStructuredSkillRules("en-AU");
 
@@ -104,11 +108,15 @@ describe("skill pack V3 (single source of truth)", () => {
       buildSkillPackV3Files(rules),
       "joblit-skills-v3/instructions/quality-gates.md",
     );
-    expect(qualityGates.content).toContain("ADDITIONS_ONLY");
+    expect(qualityGates.content).toContain("SUMMARY_LENGTH");
+    expect(qualityGates.content).toContain("TITLE_PRESENT");
+    expect(qualityGates.content).toContain("SELECTION_INDEXES_ONLY");
+    expect(qualityGates.content).toContain("SELECTION_IN_BANK");
     expect(qualityGates.content).toContain("WORD_COUNT_RANGE");
+    expect(qualityGates.content).not.toContain("ADDITIONS_ONLY");
   });
 
-  it("exports the current delta-only resume and three-paragraph cover schemas", () => {
+  it("exports the current summary-plus-selection resume and three-paragraph cover schemas", () => {
     const files = buildSkillPackV3Files(rules);
     const resumeSchema = JSON.parse(
       get(files, "joblit-skills-v3/schema/resume-output.schema.json").content,
@@ -120,17 +128,23 @@ describe("skill pack V3 (single source of truth)", () => {
     expect(resumeSchema.$schema).toBe(
       "https://json-schema.org/draft/2020-12/schema",
     );
-    expect(resumeSchema.required).toEqual(["cvSummary", "latestExperience"]);
+    expect(resumeSchema.required).toEqual(["cvSummary", "skillsSelection"]);
     expect(resumeSchema.properties).not.toHaveProperty("skillsFinal");
-    expect(resumeSchema.properties.latestExperience.required).toEqual([
-      "addedBullets",
+    expect(resumeSchema.properties).not.toHaveProperty("latestExperience");
+    expect(resumeSchema.properties.cvSummary).toMatchObject({
+      minLength: CV_SUMMARY_LENGTH.min,
+      maxLength: CV_SUMMARY_LENGTH.max,
+    });
+    expect(resumeSchema.properties.skillsSelection.items.required).toEqual([
+      "group",
+      "items",
     ]);
     expect(
-      resumeSchema.properties.latestExperience.properties.addedBullets,
-    ).toMatchObject({
-      minItems: 0,
-      maxItems: 3,
-    });
+      resumeSchema.properties.skillsSelection.items.properties.group.type,
+    ).toBe("integer");
+    expect(
+      resumeSchema.properties.skillsSelection.items.properties.items.items.type,
+    ).toBe("integer");
     expect(Object.keys(coverSchema.properties.cover.properties).sort()).toEqual([
       "paragraphOne",
       "paragraphThree",
@@ -147,18 +161,41 @@ describe("skill pack V3 (single source of truth)", () => {
       get(files, "joblit-skills-v3/examples/cover-output.full.json").content,
     );
 
+    expect(
+      ResumeGenerationOutputSchema.safeParse(resume).success,
+    ).toBe(true);
     expect(Object.keys(resume).sort()).toEqual([
       "cvSummary",
-      "latestExperience",
+      "skillsSelection",
     ]);
-    expect(Object.keys(resume.latestExperience)).toEqual(["addedBullets"]);
-    expect(resume.latestExperience.addedBullets.length).toBeLessThanOrEqual(3);
     expect(Object.keys(cover)).toEqual(["cover"]);
     expect(Object.keys(cover.cover).sort()).toEqual([
       "paragraphOne",
       "paragraphThree",
       "paragraphTwo",
     ]);
+  });
+
+  it("numbers the packaged skill bank inside the resume prompt template", () => {
+    const files = buildSkillPackV3Files(rules, {
+      resumeSnapshot: {
+        summary: "Backend engineer",
+        skills: [
+          { category: "Backend", items: ["TypeScript", "Go"] },
+          { category: "Cloud", items: ["AWS"] },
+        ],
+      },
+      resumeSnapshotUpdatedAt: "2026-08-17T00:00:00.000Z",
+    });
+    const resume = get(
+      files,
+      "joblit-skills-v3/prompts/resume-job-prompt.template.md",
+    );
+
+    expect(resume.content).toContain("<skill-bank>");
+    expect(resume.content).toContain('group 0: "Backend"');
+    expect(resume.content).toContain("  1: Go");
+    expect(resume.content).toContain('group 1: "Cloud"');
   });
 
   it("supports redacted skill pack context export", () => {

@@ -8,17 +8,11 @@ import {
 const blob = vi.hoisted(() => ({ put: vi.fn(), del: vi.fn() }));
 const store = vi.hoisted(() => ({ findUnique: vi.fn(), upsert: vi.fn() }));
 const jobStore = vi.hoisted(() => ({ findFirst: vi.fn() }));
-const tailoringRunStore = vi.hoisted(() => ({
-  findMany: vi.fn(),
-  findFirst: vi.fn(),
-  updateMany: vi.fn(),
-}));
 const database = vi.hoisted(() => ({
   transaction: vi.fn(),
   executeRaw: vi.fn(),
   queryRaw: vi.fn(),
 }));
-const ledger = vi.hoisted(() => ({ persistReviewLedger: vi.fn() }));
 const lock = vi.hoisted(() => ({ acquireApplicationMutationLock: vi.fn() }));
 const lifecycle = vi.hoisted(() => ({
   stageApplicationArtifact: vi.fn(),
@@ -26,14 +20,9 @@ const lifecycle = vi.hoisted(() => ({
   markArtifactsReferencedAndRetireSuperseded: vi.fn(),
   retireStagedArtifacts: vi.fn(),
 }));
-const tailoringAcceptance = vi.hoisted(() => ({
-  prepareTailoringRunAcceptance: vi.fn(),
-  completeTailoringRunAcceptance: vi.fn(),
-}));
 
 vi.mock("@vercel/blob", () => blob);
 vi.mock("@/lib/server/artifacts/applicationArtifactLifecycle", () => lifecycle);
-vi.mock("@/lib/server/applications/persistReviewLedger", () => ledger);
 vi.mock("@/lib/server/applications/applicationMutationLock", () => lock);
 vi.mock("@/lib/server/prisma", () => ({
   prisma: {
@@ -48,12 +37,12 @@ const { commitApplicationArtifact } =
   await import("@/lib/server/applications/commitApplicationArtifact");
 
 const aiContent: AiContent = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   generatedAt: "2026-07-22T00:00:00.000Z",
   promptMetaHash: "sha256:test",
   cv: {
     summary: { aiText: "Summary", originalText: "Original", accepted: true },
-    latestExperience: { experienceIndex: 0, addedBullets: [] },
+    skillsSelection: { aiSelection: [{ group: 0, items: [0] }] },
   },
   cover: {
     paragraphOne: { aiText: "One", accepted: true },
@@ -120,16 +109,6 @@ const BASE = {
   status: "FINAL" as const,
 };
 
-const REVIEW_CONTEXT = {
-  scopeKey: "user-1",
-  resumeSnapshot: {
-    summary: "Summary",
-    skills: [{ label: "Languages", items: ["TypeScript"] }],
-  },
-  jobDescription: "Build reliable TypeScript systems.",
-  jobSourceAvailable: true,
-};
-
 const resumeArtifact = {
   target: "resume" as const,
   pdf: Buffer.from("%PDF-1.7"),
@@ -141,20 +120,6 @@ const coverArtifact = {
   pdf: Buffer.from("%PDF-1.7 cover"),
 };
 
-const tailoringRequest = {
-  handle: {
-    id: "11111111-1111-4111-8111-111111111111",
-    attemptId: "22222222-2222-4222-8222-222222222222",
-  },
-  source: "LOCAL_AI" as const,
-  delivery: "FINAL" as const,
-  target: "RESUME" as const,
-  requestHash: "sha256:accept-resume-v1",
-  promptHash: "sha256:prompt-resume-v1",
-  resumeSnapshotHash: "sha256:resume-profile-v1",
-  jobSnapshotHash: "sha256:job-v1",
-};
-
 beforeEach(() => {
   vi.unstubAllEnvs();
   vi.clearAllMocks();
@@ -164,16 +129,12 @@ beforeEach(() => {
     fn({
       application: store,
       job: jobStore,
-      tailoringRun: tailoringRunStore,
       $executeRaw: database.executeRaw,
       $queryRaw: database.queryRaw,
     }),
   );
   database.executeRaw.mockReset().mockResolvedValue(0);
   database.queryRaw.mockReset().mockResolvedValue([lockedRenderSource()]);
-  tailoringRunStore.findMany.mockReset().mockResolvedValue([]);
-  tailoringRunStore.findFirst.mockReset().mockResolvedValue(null);
-  tailoringRunStore.updateMany.mockReset().mockResolvedValue({ count: 0 });
   jobStore.findFirst.mockResolvedValue({ id: "job-1" });
   store.findUnique.mockResolvedValue(null);
   store.upsert.mockResolvedValue({ id: "application-1" });
@@ -219,18 +180,6 @@ beforeEach(() => {
     queued: 1,
     awaitingUploadResolution: 0,
   });
-  tailoringAcceptance.prepareTailoringRunAcceptance.mockImplementation(
-    async (_tx, input) => ({
-      userId: input.userId,
-      pending: [...input.requests],
-      replayed: [],
-      runs: [],
-    }),
-  );
-  tailoringAcceptance.completeTailoringRunAcceptance.mockResolvedValue({
-    receipts: [],
-    completedRunIds: [],
-  });
 });
 
 afterEach(() => {
@@ -269,7 +218,6 @@ describe("commitApplicationArtifact", () => {
     const result = await commitApplicationArtifact({
       ...BASE,
       mergeTarget: "resume",
-      reviewContext: REVIEW_CONTEXT,
       artifacts: [coverArtifact],
     });
 
@@ -736,7 +684,6 @@ describe("commitApplicationArtifact", () => {
     await commitApplicationArtifact({
       ...BASE,
       mergeTarget: "resume",
-      reviewContext: REVIEW_CONTEXT,
       artifacts: [resumeArtifact],
     });
 
@@ -760,7 +707,6 @@ describe("commitApplicationArtifact", () => {
     const result = await commitApplicationArtifact({
       ...BASE,
       mergeTarget: "resume",
-      reviewContext: REVIEW_CONTEXT,
       artifacts: [resumeArtifact],
     });
 
@@ -774,62 +720,6 @@ describe("commitApplicationArtifact", () => {
     expect(blob.del).not.toHaveBeenCalled();
   });
 
-  it("blocks a FINAL single-target commit when the preserved target fails review", async () => {
-    const stored = structuredClone(aiContent);
-    stored.cover.paragraphOne.aiText =
-      "I increased revenue by 999% without supporting evidence.";
-    store.findUnique.mockResolvedValue({
-      resumePdfUrl: null,
-      coverPdfUrl: "https://blob.example/existing-cover.pdf",
-      aiContent: stored,
-      aiContentHash: null,
-      atsValidation: null,
-    });
-
-    const result = await commitApplicationArtifact({
-      ...BASE,
-      mergeTarget: "resume",
-      reviewContext: REVIEW_CONTEXT,
-      artifacts: [resumeArtifact],
-    });
-
-    expect(result.kind).toBe("review_blocked");
-    if (result.kind !== "review_blocked") return;
-    expect(result.review.issues.join(" ")).toContain("999%");
-    expect(store.upsert).not.toHaveBeenCalled();
-    expect(lifecycle.retireStagedArtifacts).toHaveBeenCalledWith({
-      userId: "user-1",
-      jobId: "job-1",
-      artifactIds: ["artifact-1"],
-    });
-    expect(blob.del).not.toHaveBeenCalled();
-  });
-
-  it("persists a blocked aggregate as DRAFT so the user can resolve it", async () => {
-    const stored = structuredClone(aiContent);
-    stored.cover.paragraphOne.aiText =
-      "I increased revenue by 999% without supporting evidence.";
-    store.findUnique.mockResolvedValue({
-      resumePdfUrl: null,
-      coverPdfUrl: null,
-      aiContent: stored,
-      aiContentHash: null,
-      atsValidation: null,
-    });
-
-    const result = await commitApplicationArtifact({
-      ...BASE,
-      status: "DRAFT",
-      mergeTarget: "resume",
-      reviewContext: REVIEW_CONTEXT,
-      artifacts: [],
-    });
-
-    expect(result.kind).toBe("committed");
-    const written = store.upsert.mock.calls[0]?.[0]?.update
-      .aiContent as AiContent;
-    expect(written.review?.verdict).toBe("blocked");
-  });
 
   it("reports a Job deleted mid-render instead of hitting the foreign key", async () => {
     jobStore.findFirst.mockResolvedValue(null);
@@ -849,17 +739,30 @@ describe("commitApplicationArtifact", () => {
     expect(blob.del).not.toHaveBeenCalled();
   });
 
-  it("persists the review ledger inside the transaction", async () => {
-    await commitApplicationArtifact({ ...BASE, artifacts: [resumeArtifact] });
+  it("preserves the stored skills selection when merging the other target", async () => {
+    // A cover import must not retailor the resume: the selection the resume
+    // PDF was published against has to survive untouched.
+    const stored = structuredClone(aiContent);
+    stored.cv.skillsSelection = {
+      aiSelection: [{ group: 0, items: [0] }],
+      userSelection: [{ group: 0, items: [0] }],
+    };
+    store.findUnique.mockResolvedValue({
+      resumePdfUrl: "https://blob.example/existing-resume.pdf",
+      coverPdfUrl: null,
+      aiContent: stored,
+      aiContentHash: null,
+      atsValidation: null,
+    });
 
-    expect(ledger.persistReviewLedger).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        userId: "user-1",
-        applicationId: "application-1",
-        jobId: "job-1",
-      }),
-    );
+    await commitApplicationArtifact({
+      ...BASE,
+      mergeTarget: "cover",
+      artifacts: [coverArtifact],
+    });
+
+    const written = store.upsert.mock.calls[0]?.[0]?.update
+      .aiContent as AiContent;
+    expect(written.cv.skillsSelection).toEqual(stored.cv.skillsSelection);
   });
-
 });

@@ -2,70 +2,76 @@ import { describe, expect, it } from "vitest";
 
 import { parseTailorOutput } from "./tailorParser";
 
+const SUMMARY =
+  "Grounded platform engineer with eight years across Kubernetes, Go and TypeScript, shipping serverless data pipelines for Australian fintechs and holding full working rights.";
+
+const RESUME_OUTPUT = {
+  cvSummary: SUMMARY,
+  skillsSelection: [
+    { group: 0, items: [0, 2] },
+    { group: 1, items: [1] },
+  ],
+};
+
+const COVER_OUTPUT = {
+  cover: {
+    paragraphOne: "Intent",
+    paragraphTwo: "Evidence",
+    paragraphThree: "Motivation",
+  },
+};
+
 describe("parseTailorOutput", () => {
-  it("accepts the current resume delta contract, including zero added bullets", () => {
-    expect(
-      parseTailorOutput(
-        JSON.stringify({
-          cvSummary: "Grounded **platform** engineer.",
-          latestExperience: { addedBullets: [] },
-        }),
-        "resume",
-      ),
-    ).toEqual({
-      cvSummary: "Grounded **platform** engineer.",
-      latestExperience: { addedBullets: [] },
-    });
+  it("accepts the current resume contract", () => {
+    expect(parseTailorOutput(JSON.stringify(RESUME_OUTPUT), "resume")).toEqual(
+      RESUME_OUTPUT,
+    );
   });
 
-  it("keeps the bounded v1 resume dialect usable from the manual UI", () => {
-    expect(
-      parseTailorOutput(
-        JSON.stringify({
-          cvSummary: "Summary",
-          latestExperience: { bullets: ["Built grounded APIs"] },
-          skillsFinal: [{ label: "Backend", items: ["TypeScript"] }],
-        }),
-        "resume",
-      ),
-    ).toEqual({
-      cvSummary: "Summary",
-      // The browser cannot diff against the authoritative Master Resume
-      // Profile; the server acceptance seam derives additions on import.
-      latestExperience: { addedBullets: [] },
-    });
+  it("accepts the current cover contract", () => {
+    expect(parseTailorOutput(JSON.stringify(COVER_OUTPUT), "cover")).toEqual(
+      COVER_OUTPUT,
+    );
   });
 
-  it("rejects malformed legacy resume output and more than three current additions", () => {
+  it("tolerates how a chatbot wraps its answer", () => {
+    const wrapped = [
+      "Here you go!",
+      "```json",
+      JSON.stringify(COVER_OUTPUT).replace(/"/g, "“").replace(/“(?=[,:}\]])/g, "”"),
+      "```",
+    ].join("\n");
+    // Only the wrapping is repaired; the payload is unchanged.
+    expect(parseTailorOutput(wrapped, "cover")).toEqual(COVER_OUTPUT);
     expect(
       parseTailorOutput(
-        JSON.stringify({
-          cvSummary: "Summary",
-          latestExperience: { bullets: [] },
-          skillsFinal: [{ label: "Backend", items: [] }],
-        }),
+        `Result:\n${JSON.stringify(RESUME_OUTPUT)},\n`,
+        "resume",
+      ),
+    ).toEqual(RESUME_OUTPUT);
+  });
+
+  it("rejects a summary outside the shared length window", () => {
+    expect(
+      parseTailorOutput(
+        JSON.stringify({ ...RESUME_OUTPUT, cvSummary: "Too short." }),
         "resume",
       ),
     ).toBeNull();
     expect(
       parseTailorOutput(
-        JSON.stringify({
-          cvSummary: "Summary",
-          latestExperience: {
-            addedBullets: ["one", "two", "three", "four"],
-          },
-        }),
+        JSON.stringify({ ...RESUME_OUTPUT, cvSummary: "x".repeat(351) }),
         "resume",
       ),
     ).toBeNull();
   });
 
-  it("enforces the shared current-contract text bounds before enabling import", () => {
+  it("rejects retired keys rather than importing content the CV cannot carry", () => {
     expect(
       parseTailorOutput(
         JSON.stringify({
-          cvSummary: "x".repeat(2001),
-          latestExperience: { addedBullets: [] },
+          ...RESUME_OUTPUT,
+          latestExperience: { addedBullets: ["Built grounded APIs"] },
         }),
         "resume",
       ),
@@ -73,45 +79,37 @@ describe("parseTailorOutput", () => {
     expect(
       parseTailorOutput(
         JSON.stringify({
-          cvSummary: "Summary",
-          latestExperience: { addedBullets: ["x".repeat(321)] },
-        }),
-        "resume",
-      ),
-    ).toBeNull();
-    expect(
-      parseTailorOutput(
-        JSON.stringify({
-          cover: {
-            paragraphOne: "x".repeat(2001),
-            paragraphTwo: "Evidence",
-            paragraphThree: "Motivation",
-          },
+          cover: { ...COVER_OUTPUT.cover, subject: "Legacy metadata" },
         }),
         "cover",
       ),
     ).toBeNull();
   });
 
-  it("accepts current cover output and strips bounded v1 header metadata", () => {
-    const current = {
-      cover: {
-        paragraphOne: "Intent",
-        paragraphTwo: "Evidence",
-        paragraphThree: "Motivation",
-      },
-    };
-    expect(parseTailorOutput(JSON.stringify(current), "cover")).toEqual(current);
+  it("rejects a skills selection that is empty or repeats a group", () => {
+    expect(
+      parseTailorOutput(
+        JSON.stringify({ ...RESUME_OUTPUT, skillsSelection: [] }),
+        "resume",
+      ),
+    ).toBeNull();
     expect(
       parseTailorOutput(
         JSON.stringify({
-          cover: {
-            ...current.cover,
-            subject: "Legacy metadata",
-          },
+          ...RESUME_OUTPUT,
+          skillsSelection: [
+            { group: 0, items: [0] },
+            { group: 0, items: [1] },
+          ],
         }),
-        "cover",
+        "resume",
       ),
-    ).toEqual(current);
+    ).toBeNull();
+  });
+
+  it("rejects the other document's payload", () => {
+    expect(parseTailorOutput(JSON.stringify(COVER_OUTPUT), "resume")).toBeNull();
+    expect(parseTailorOutput(JSON.stringify(RESUME_OUTPUT), "cover")).toBeNull();
+    expect(parseTailorOutput("   ", "resume")).toBeNull();
   });
 });

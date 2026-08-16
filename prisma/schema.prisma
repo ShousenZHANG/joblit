@@ -44,16 +44,6 @@ enum ApplicationEventSource {
   IMPORT
 }
 
-enum EvidenceKind {
-  RESUME_PROFILE
-  JOB_DESCRIPTION
-  APPLICATION_DRAFT
-  USER_CLAIM
-  STAR_STORY
-  INTERVIEW_NOTE
-  OFFER
-}
-
 enum JobLivenessStatus {
   ACTIVE
   EXPIRED
@@ -116,8 +106,6 @@ model User {
   promptRuleTemplates   PromptRuleTemplate[]
   onboardingState       OnboardingState?
   applicationEvents     ApplicationEvent[]
-  evidenceSnapshots     EvidenceSnapshot[]
-  claimEvidence         ClaimEvidence[]
 }
 
 model Account {
@@ -202,7 +190,6 @@ model Job {
 
   applications          Application[]
   applicationEvents     ApplicationEvent[]
-  evidenceSnapshots     EvidenceSnapshot[]
 
   @@unique([userId, jobUrl])
   @@index([userId, createdAt])
@@ -388,15 +375,11 @@ model Application {
   coverPublishedHash  String?
   /// Last deterministic ATS/PDF machine-readability validation result.
   atsValidation       Json?
-  /// Last structured reviewer report, including evidence coverage.
-  reviewReport        Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   applicationEvents            ApplicationEvent[]
-  evidenceSnapshots            EvidenceSnapshot[]
-  claimEvidence                ClaimEvidence[]
 
   @@unique([userId, jobId])
   @@index([userId, createdAt])
@@ -495,63 +478,6 @@ model ApplicationEvent {
   @@index([userId, jobId, occurredAt])
   @@index([applicationId, occurredAt])
   @@index([userId, type, occurredAt])
-}
-
-/// Content-addressed evidence. `id` and `contentHash` are deterministic
-/// SHA-256 derivatives generated from canonical JSON; identical evidence
-/// within one tenant and kind is reused instead of copied.
-/// Content-addressed evidence backing CV/CL claims.
-///
-/// Both foreign keys are SetNull rather than Cascade because one row is reused
-/// across Applications whose evidence text matches — the id is derived from
-/// (userId, kind, contentHash), not from the Job. `jobDeleteService` therefore
-/// removes only rows with no surviving ClaimEvidence or STAR-story provenance
-/// reference; a shared row outlives the Job it happens to point at, and its
-/// `jobId` becomes null.
-model EvidenceSnapshot {
-  id            String       @id
-  userId        String       @db.Uuid
-  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  applicationId String?      @db.Uuid
-  application   Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
-  jobId         String?      @db.Uuid
-  job           Job?         @relation(fields: [jobId], references: [id], onDelete: SetNull)
-
-  kind        EvidenceKind
-  contentHash String
-  payload     Json
-  sourceLabel String?
-  createdAt   DateTime     @default(now())
-
-  claims ClaimEvidence[]
-
-  @@unique([userId, contentHash, kind])
-  @@index([userId, createdAt])
-  @@index([applicationId, kind])
-  @@index([jobId, kind])
-}
-
-/// Claim-to-evidence edge used by CV/CL review. Claims may reference multiple
-/// snapshots; no unsupported claim is considered grounded merely because an
-/// edge exists; caller must still show the referenced source to the user.
-model ClaimEvidence {
-  id                 String           @id
-  userId             String           @db.Uuid
-  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  applicationId      String           @db.Uuid
-  application        Application      @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  evidenceSnapshotId String
-  evidenceSnapshot   EvidenceSnapshot @relation(fields: [evidenceSnapshotId], references: [id], onDelete: Restrict)
-
-  claimKey     String
-  claimText    String
-  claimHash    String
-  evidencePath String?
-  createdAt    DateTime @default(now())
-
-  @@unique([applicationId, claimHash, evidenceSnapshotId])
-  @@index([userId, applicationId])
-  @@index([evidenceSnapshotId])
 }
 
 // Legacy Career-workspace records are retained to avoid destructive data loss.

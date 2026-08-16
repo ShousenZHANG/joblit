@@ -2,21 +2,25 @@ import { describe, expect, it } from "vitest";
 
 import {
   ManualGenerateSchema,
+  masterSkillGroups,
   parseCoverManualOutput,
   parseCoverStrictOutput,
   parseResumeManualOutput,
   parseResumeStrictOutput,
+  validateSkillsSelectionBounds,
 } from "./manualImportParser";
 
-const resume = {
-  cvSummary: "Evidence-grounded engineer",
-  latestExperience: { addedBullets: ["Built new production APIs."] },
-};
+const CV_SUMMARY =
+  "Backend Engineer with production TypeScript and AWS experience, shipping " +
+  "resilient services and observable delivery pipelines for high-traffic " +
+  "platform teams across Australia.";
 
-const legacyResume = {
-  cvSummary: "Evidence-grounded engineer",
-  latestExperience: { bullets: ["Built production APIs."] },
-  skillsFinal: [{ label: "Backend", items: ["TypeScript"] }],
+const resume = {
+  cvSummary: CV_SUMMARY,
+  skillsSelection: [
+    { group: 0, items: [1, 0] },
+    { group: 1, items: [0] },
+  ],
 };
 
 const cover = {
@@ -27,20 +31,39 @@ const cover = {
   },
 };
 
+const masterSkills = [
+  { items: ["TypeScript", "Node.js"] },
+  { items: ["AWS"] },
+];
+
 describe("manual import parser modes", () => {
-  it("keeps legacy resume aliases, fences, and trailing-comma repair", () => {
+  it("keeps legacy resume selection aliases, fences, and trailing-comma repair", () => {
     const result = parseResumeManualOutput(
       `\`\`\`json\n${JSON.stringify({
-        cv_summary: legacyResume.cvSummary,
-        latest_experience: legacyResume.latestExperience,
-        skills_final: [{ category: "Backend", items: ["TypeScript"] }],
+        cv_summary: CV_SUMMARY,
+        skills_selection: [
+          { group_index: 0, item_indexes: ["1", "0"] },
+          { groupIndex: 1, itemIndexes: [0] },
+        ],
       }).replace(/}$/, ",}")}\n\`\`\``,
     );
 
-    expect(result.data).toEqual({
-      cvSummary: legacyResume.cvSummary,
-      latestExperience: legacyResume.latestExperience,
-    });
+    expect(result.data).toEqual(resume);
+  });
+
+  it("drops a named skill rather than smuggling it past the index contract", () => {
+    // Selection is index references only. A payload that writes skill names has
+    // nothing index-shaped left, so it fails rather than introducing a skill
+    // the candidate never wrote.
+    const result = parseResumeManualOutput(
+      JSON.stringify({
+        cvSummary: CV_SUMMARY,
+        skillsSelection: [{ group: 0, items: ["Rust", "Kubernetes"] }],
+      }),
+    );
+
+    expect(result.data).toBeNull();
+    expect(result.issues.length).toBeGreaterThan(0);
   });
 
   it("keeps legacy flat cover aliases", () => {
@@ -70,12 +93,25 @@ describe("manual import parser modes", () => {
 
   it.each([
     ["fenced JSON", `\`\`\`json\n${JSON.stringify(resume)}\n\`\`\``],
-    ["snake_case alias", JSON.stringify({ ...resume, cvSummary: undefined, cv_summary: "Alias" })],
+    [
+      "snake_case alias",
+      JSON.stringify({ ...resume, cvSummary: undefined, cv_summary: CV_SUMMARY }),
+    ],
     ["trailing comma", `${JSON.stringify(resume).slice(0, -1)},}`],
     ["unknown key", JSON.stringify({ ...resume, prompt: "not allowed" })],
-    ["legacy full bullets", JSON.stringify(legacyResume)],
-    ["retired skillsFinal key", JSON.stringify({ ...resume, skillsFinal: legacyResume.skillsFinal })],
-    ["retired skillsAdditions key", JSON.stringify({ ...resume, skillsAdditions: [{ category: "Backend", items: ["TypeScript"] }] })],
+    ["a missing skills selection", JSON.stringify({ cvSummary: CV_SUMMARY })],
+    [
+      "retired latestExperience key",
+      JSON.stringify({ ...resume, latestExperience: { addedBullets: ["Built APIs."] } }),
+    ],
+    [
+      "retired skillsFinal key",
+      JSON.stringify({ ...resume, skillsFinal: [{ label: "Backend", items: ["TypeScript"] }] }),
+    ],
+    [
+      "a summary below the length window",
+      JSON.stringify({ ...resume, cvSummary: "Backend engineer." }),
+    ],
   ])("strict resume rejects %s", (_label, raw) => {
     expect(parseResumeStrictOutput(raw).data).toBeNull();
   });
@@ -109,5 +145,96 @@ describe("manual import parser modes", () => {
     ).toBe(false);
     expect(ManualGenerateSchema.safeParse({ ...base, userId: "attacker" }).success).toBe(false);
   });
+});
 
+describe("validateSkillsSelectionBounds", () => {
+  it("accepts a selection that addresses only skills the candidate wrote", () => {
+    expect(
+      validateSkillsSelectionBounds(
+        [
+          { group: 0, items: [1, 0] },
+          { group: 1, items: [0] },
+        ],
+        masterSkills,
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects a group index past the end of the bank", () => {
+    // The schema bounds the index structurally; only the profile knows that
+    // group 2 does not exist, so the bank is the authority here.
+    expect(
+      validateSkillsSelectionBounds([{ group: 2, items: [0] }], masterSkills),
+    ).toEqual({ kind: "group_out_of_range", group: 2 });
+  });
+
+  it("rejects an item index past the end of its group", () => {
+    expect(
+      validateSkillsSelectionBounds([{ group: 1, items: [0, 1] }], masterSkills),
+    ).toEqual({ kind: "item_out_of_range", group: 1, item: 1 });
+  });
+
+  it("names the first out-of-range reference rather than the last", () => {
+    expect(
+      validateSkillsSelectionBounds(
+        [
+          { group: 0, items: [0] },
+          { group: 5, items: [0] },
+          { group: 9, items: [0] },
+        ],
+        masterSkills,
+      ),
+    ).toEqual({ kind: "group_out_of_range", group: 5 });
+  });
+
+  it("rejects every index when the candidate has no skills at all", () => {
+    expect(validateSkillsSelectionBounds([{ group: 0, items: [0] }], [])).toEqual({
+      kind: "group_out_of_range",
+      group: 0,
+    });
+  });
+});
+
+describe("masterSkillGroups", () => {
+  it("reads the stored profile's category groups", () => {
+    expect(
+      masterSkillGroups({
+        skills: [{ category: "Languages", items: ["TypeScript", "Go"] }],
+      }),
+    ).toEqual([{ category: "Languages", items: ["TypeScript", "Go"] }]);
+  });
+
+  it("reads a legacy group that labels itself with label", () => {
+    expect(
+      masterSkillGroups({ skills: [{ label: "Cloud", items: ["AWS"] }] }),
+    ).toEqual([{ category: "Cloud", items: ["AWS"] }]);
+  });
+
+  it("keeps group positions so an index still addresses the same group", () => {
+    // The selection is positional. Dropping or reordering a group here would
+    // silently repoint every index the model returned.
+    expect(
+      masterSkillGroups({
+        skills: [
+          { label: "Languages", items: ["TypeScript"] },
+          { category: "Cloud", items: ["AWS", "Terraform"] },
+        ],
+      }),
+    ).toEqual([
+      { category: "Languages", items: ["TypeScript"] },
+      { category: "Cloud", items: ["AWS", "Terraform"] },
+    ]);
+  });
+
+  it("drops non-string items rather than exposing them as skills", () => {
+    expect(
+      masterSkillGroups({ skills: [{ category: "Mixed", items: ["AWS", 7, null] }] }),
+    ).toEqual([{ category: "Mixed", items: ["AWS"] }]);
+  });
+
+  it("reads an empty bank from a profile with no skills", () => {
+    expect(masterSkillGroups({})).toEqual([]);
+    expect(masterSkillGroups(null)).toEqual([]);
+    expect(masterSkillGroups({ skills: "not an array" })).toEqual([]);
+  });
 });

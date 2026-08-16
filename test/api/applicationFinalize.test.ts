@@ -36,8 +36,12 @@ vi.mock("@/lib/server/applications/finalizeApplication", () => renderer);
  * `commitApplicationArtifact` and are covered by its own tests — including
  * that a lost CAS durably retires the new Blob and spares the current one, and
  * that a throwing transaction preserves the same retirement intent. What remains here is
- * route-level: the pre-checks, the idempotent short-circuit, the review gate,
- * and mapping commit results onto responses.
+ * route-level: the pre-checks, the idempotent short-circuit, and mapping
+ * commit results onto responses.
+ *
+ * There is no review gate left to cover. Generated content is judged at the
+ * import boundary by `lib/server/ai/summaryLint.ts`, so nothing arrives here
+ * that finalize could still be the last chance to catch.
  */
 vi.mock("@/lib/server/applications/commitApplicationArtifact", () => commit);
 vi.mock(
@@ -61,8 +65,6 @@ import {
   hashAiContent,
   type AiContent,
 } from "@/lib/shared/schemas/aiContent";
-import { attachEvidenceAndReview } from "@/lib/server/ai/evidenceLedger";
-import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import {
   buildApplicationPublicationRenderContext,
   hashApplicationDocumentContent,
@@ -126,7 +128,7 @@ function makeAiContent(): AiContent {
     promptMetaHash: "p1",
     cv: {
       summary: { aiText: "ai", originalText: "orig", accepted: true },
-      latestExperience: { experienceIndex: 0, addedBullets: [] },
+      skillsSelection: { aiSelection: [{ group: 0, items: [0] }] },
     },
     cover: {
       paragraphOne: { aiText: "", accepted: false },
@@ -234,7 +236,6 @@ describe("POST /api/applications/[id]/finalize", () => {
               aiText: ai.cover.paragraphOne.aiText,
             }),
           }),
-          review: expect.any(Object),
         }),
       }),
     );
@@ -563,15 +564,7 @@ describe("POST /api/applications/[id]/finalize", () => {
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: USER_ID },
     });
-    const ai = attachEvidenceAndReview({
-      aiContent: makeAiContent(),
-      resumeSnapshot: {
-        profile: PROFILE,
-        renderInput: mapResumeProfile(PROFILE),
-      },
-      jobDescription: JOB.description,
-      scopeKey: USER_ID,
-    });
+    const ai = makeAiContent();
     const hash = hashAiContent(ai);
     const resumeContentHash = hashApplicationDocumentContent(
       ai,
@@ -692,111 +685,6 @@ describe("POST /api/applications/[id]/finalize", () => {
     const response = await POST(makeRequest({ expectedHash: hash }), { params });
 
     expect(response.status).toBe(429);
-    expect(renderer.renderApplicationPdf).not.toHaveBeenCalled();
-    expect(commit.commitApplicationArtifact).not.toHaveBeenCalled();
-  });
-
-  it("blocks unsupported claims in a legacy row with no prior review", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: USER_ID },
-    });
-    const legacy = makeAiContent();
-    legacy.cover.paragraphOne = {
-      aiText: "I increased revenue by 999% without supporting evidence.",
-      accepted: true,
-    };
-    const hash = hashAiContent(legacy);
-    prisma.application.findFirst.mockResolvedValueOnce({
-      ...ownedReviewSources(),
-      id: APP_ID,
-      userId: USER_ID,
-      status: "DRAFT",
-      aiContent: legacy,
-      aiContentHash: hash,
-      resumePdfUrl: null,
-      resumePdfName: null,
-      coverPdfUrl: null,
-      atsValidation: null,
-    });
-
-    const response = await POST(makeRequest({ expectedHash: hash }), { params });
-    const json = await response.json();
-
-    expect(response.status).toBe(422);
-    expect(json.error.code).toBe("APPLICATION_REVIEW_BLOCKED");
-    expect(json.error.details.issues.join(" ")).toContain("999%");
-    expect(renderer.renderApplicationPdf).not.toHaveBeenCalled();
-    expect(commit.commitApplicationArtifact).not.toHaveBeenCalled();
-  });
-
-  it("rebuilds stored evidence from server sources and blocks a forged pass verdict", async () => {
-    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      user: { id: USER_ID },
-    });
-    const profile = {
-      userId: USER_ID,
-      summary: "Built reliable TypeScript APIs.",
-      basics: null,
-      links: null,
-      skills: null,
-      experiences: null,
-      projects: null,
-      education: null,
-    };
-    const forged = attachEvidenceAndReview({
-      aiContent: makeAiContent(),
-      resumeSnapshot: profile,
-      jobDescription: "Build reliable TypeScript APIs.",
-      scopeKey: USER_ID,
-    });
-    forged.cv.summary.userEdit = "Improved revenue by 999%.";
-    forged.evidence = [
-      {
-        id: `ev_${"f".repeat(32)}`,
-        kind: "candidate",
-        path: "resume.summary",
-        contentHash: "f".repeat(64),
-        excerpt: "improved revenue by 999%",
-      },
-    ];
-    forged.review = {
-      verdict: "pass",
-      reviewedAt: "2026-07-20T12:00:00.000Z",
-      coveragePercent: 100,
-      requirements: [],
-      issues: [],
-    };
-    const hash = hashAiContent(forged);
-    prisma.application.findFirst.mockResolvedValueOnce({
-      id: APP_ID,
-      userId: USER_ID,
-      status: "DRAFT",
-      aiContent: forged,
-      aiContentHash: hash,
-      resumePdfUrl: null,
-      resumePdfName: null,
-      coverPdfUrl: null,
-      atsValidation: null,
-      jobId: "job-1",
-      company: "Acme",
-      role: "Engineer",
-      resumeProfile: profile,
-      job: {
-        id: "job-1",
-        userId: USER_ID,
-        title: "Engineer",
-        company: "Acme",
-        market: "AU",
-        description: "Build reliable TypeScript APIs.",
-      },
-    });
-
-    const response = await POST(makeRequest({ expectedHash: hash }), { params });
-    const json = await response.json();
-
-    expect(response.status).toBe(422);
-    expect(json.error.code).toBe("APPLICATION_REVIEW_BLOCKED");
-    expect(json.error.details.issues.join(" ")).toContain("999%");
     expect(renderer.renderApplicationPdf).not.toHaveBeenCalled();
     expect(commit.commitApplicationArtifact).not.toHaveBeenCalled();
   });

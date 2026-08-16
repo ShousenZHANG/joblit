@@ -8,6 +8,7 @@ import {
   CoverGenerationOutputSchema,
   ResumeGenerationOutputSchema,
 } from "@/lib/server/ai/promptContract";
+import type { SkillsSelection } from "@/lib/shared/schemas/applicationGenerationOutput";
 
 // ── Zod Schemas ──
 
@@ -35,45 +36,7 @@ export const ImportedPromptMetaSchema = z
   })
   .strict();
 
-const ResumeSkillGroupSchema = z
-  .object({
-    label: z.string().trim().min(1).max(100).optional(),
-    category: z.string().trim().min(1).max(100).optional(),
-    items: z.array(z.string().trim().min(1).max(120)).min(1).max(40),
-  })
-  .strict()
-  .transform((value) => ({
-    label: (value.label ?? value.category ?? "").trim(),
-    items: value.items,
-  }))
-  .refine((value) => value.label.length > 0, {
-    message: "skillsFinal item must include label or category",
-  });
-
-const ResumeCurrentOutputSchema = ResumeGenerationOutputSchema;
-
-const ResumeLegacyOutputSchema = z
-  .object({
-    cvSummary: z.string().trim().min(1).max(2000),
-    latestExperience: z
-      .object({
-        bullets: z.array(z.string().trim().min(1).max(320)).min(1).max(15),
-      })
-      .strict(),
-    skillsFinal: z.array(ResumeSkillGroupSchema).min(1).max(20).optional(),
-  })
-  .strict()
-  .transform(({ cvSummary, latestExperience }) => ({
-    cvSummary,
-    latestExperience,
-  }));
-
-const ResumeManualOutputSchema = z.union([
-  ResumeCurrentOutputSchema,
-  ResumeLegacyOutputSchema,
-]);
-
-const ResumeStrictOutputSchema = ResumeCurrentOutputSchema;
+const ResumeStrictOutputSchema = ResumeGenerationOutputSchema;
 
 const CoverLegacyContentSchema = z
   .object({
@@ -97,7 +60,7 @@ const CoverLegacyContentSchema = z
 const CoverManualOutputSchema = z.object({ cover: CoverLegacyContentSchema }).strict();
 const CoverStrictOutputSchema = CoverGenerationOutputSchema;
 
-type ResumeManualOutput = z.infer<typeof ResumeManualOutputSchema>;
+type ResumeManualOutput = z.infer<typeof ResumeStrictOutputSchema>;
 type CoverManualOutput = z.infer<typeof CoverManualOutputSchema>;
 
 type ParsedOutput<T> = { data: T | null; issues: string[] };
@@ -197,9 +160,9 @@ function parseJsonCandidate(raw: string): unknown | null {
   if (direct) return direct;
 
   const repaired = text
-    .replace(/[\u201C\u201D]/g, '"')
-    .replace(/[\u2018\u2019]/g, "'")
-    .replace(/\u00A0/g, " ")
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/ /g, " ")
     .replace(/,\s*([}\]])/g, "$1");
 
   const repairedDirect = parse(repaired);
@@ -222,6 +185,38 @@ function parseJsonCandidate(raw: string): unknown | null {
 
 // ── Resume Output Parsing ──
 
+function readIndex(value: unknown): number | null {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
+    return value;
+  }
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) {
+    return Number.parseInt(value, 10);
+  }
+  return null;
+}
+
+/**
+ * Normalizes the dialects a chatbot produces for a skills selection into the
+ * `{ group, items }` shape. Only index-shaped values survive: a payload that
+ * names skills as strings loses them here rather than smuggling a skill the
+ * candidate never wrote into the strict schema below.
+ */
+function normalizeSkillsSelection(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  return value.map((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return entry;
+    const record = entry as Record<string, unknown>;
+    const group = readIndex(
+      record.group ?? record.groupIndex ?? record.group_index ?? record.category,
+    );
+    const rawItems = record.items ?? record.itemIndexes ?? record.item_indexes;
+    const items = Array.isArray(rawItems)
+      ? rawItems.map(readIndex).filter((index): index is number => index !== null)
+      : undefined;
+    return { group: group ?? undefined, items };
+  });
+}
+
 export function parseResumeManualOutput(raw: string): {
   data: ResumeManualOutput | null;
   issues: string[];
@@ -232,32 +227,8 @@ export function parseResumeManualOutput(raw: string): {
   }
 
   const record = candidate as Record<string, unknown>;
-  const latestExperienceCandidate =
-    (record.latestExperience as unknown) ??
-    (record.latest_experience as unknown) ??
-    (record.latestExperienceBlock as unknown);
-  const latestExperienceRecord =
-    latestExperienceCandidate &&
-    typeof latestExperienceCandidate === "object" &&
-    !Array.isArray(latestExperienceCandidate)
-      ? (latestExperienceCandidate as Record<string, unknown>)
-      : null;
-  const currentAddedBullets = Array.isArray(latestExperienceRecord?.addedBullets)
-    ? latestExperienceRecord.addedBullets
-    : Array.isArray(latestExperienceRecord?.added_bullets)
-      ? latestExperienceRecord.added_bullets
-      : Array.isArray(record.addedBullets)
-        ? record.addedBullets
-        : Array.isArray(record.added_bullets)
-          ? record.added_bullets
-          : null;
-  const legacyBullets = Array.isArray(latestExperienceRecord?.bullets)
-    ? latestExperienceRecord.bullets
-    : Array.isArray(record.latestExperienceBullets)
-      ? record.latestExperienceBullets
-      : Array.isArray(record.latest_experience_bullets)
-        ? record.latest_experience_bullets
-        : null;
+  const rawSelection =
+    record.skillsSelection ?? record.skills_selection ?? record.skills;
 
   const payload: Record<string, unknown> = {
     cvSummary:
@@ -268,30 +239,75 @@ export function parseResumeManualOutput(raw: string): {
           : typeof record.summary === "string"
             ? record.summary
             : "",
-    latestExperience: currentAddedBullets
-      ? { addedBullets: currentAddedBullets }
-      : legacyBullets
-        ? { bullets: legacyBullets }
-        : undefined,
-    ...(currentAddedBullets
-      ? {}
-      : {
-          skillsFinal: Array.isArray(record.skillsFinal)
-            ? record.skillsFinal
-            : Array.isArray(record.skills_final)
-              ? record.skills_final
-              : Array.isArray(record.skills)
-                ? record.skills
-                : undefined,
-        }),
+    skillsSelection: normalizeSkillsSelection(rawSelection),
   };
 
-  const parsed = ResumeManualOutputSchema.safeParse(payload);
+  const parsed = ResumeStrictOutputSchema.safeParse(payload);
   if (parsed.success) return { data: parsed.data, issues: [] };
   return {
     data: null,
     issues: zodIssues(parsed.error),
   };
+}
+
+// ── Skills Selection Bounds ──
+
+export type SkillsSelectionBoundsFailure = {
+  kind: "group_out_of_range" | "item_out_of_range";
+  group: number;
+  item?: number;
+};
+
+/**
+ * Confirms every index in a selection addresses a skill the candidate actually
+ * wrote. The generation schema bounds indexes structurally; only the profile
+ * knows whether index 7 exists, so this runs at the import boundary with the
+ * master profile in hand.
+ *
+ * This is the check that makes selection-by-reference safe: a model cannot name
+ * a skill, and an index it invents addresses nothing and is rejected here.
+ */
+export function validateSkillsSelectionBounds(
+  selection: SkillsSelection,
+  masterSkills: readonly { items: readonly string[] }[],
+): SkillsSelectionBoundsFailure | null {
+  for (const entry of selection) {
+    const group = masterSkills[entry.group];
+    if (!group) {
+      return { kind: "group_out_of_range", group: entry.group };
+    }
+    for (const item of entry.items) {
+      if (!group.items[item]) {
+        return { kind: "item_out_of_range", group: entry.group, item };
+      }
+    }
+  }
+  return null;
+}
+
+/** The candidate's skill groups, in the shape the bounds check needs. */
+export function masterSkillGroups(
+  profile: unknown,
+): { category: string; items: string[] }[] {
+  if (!profile || typeof profile !== "object") return [];
+  const skills = (profile as Record<string, unknown>).skills;
+  if (!Array.isArray(skills)) return [];
+  return skills
+    .map((group) => {
+      if (!group || typeof group !== "object") return null;
+      const record = group as Record<string, unknown>;
+      const category =
+        typeof record.category === "string"
+          ? record.category
+          : typeof record.label === "string"
+            ? record.label
+            : "";
+      const items = Array.isArray(record.items)
+        ? record.items.filter((item): item is string => typeof item === "string")
+        : [];
+      return { category, items };
+    })
+    .filter((group): group is { category: string; items: string[] } => group !== null);
 }
 
 // ── Cover Output Parsing ──
@@ -352,192 +368,4 @@ export function parseCoverManualOutput(raw: string): {
     data: null,
     issues: zodIssues(parsed.error),
   };
-}
-
-// ── Bullet Canonicalization ──
-
-export function normalizeBulletForCompare(value: string) {
-  return value
-    .normalize("NFKC")
-    .replace(/\*\*|__|`/g, "")
-    .replace(/\s+([,.;:!?])/g, "$1")
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function tokenizeBulletForSimilarity(value: string) {
-  return new Set(
-    normalizeBulletForCompare(value)
-      .split(" ")
-      .map((token) => token.trim())
-      .filter((token) => token.length >= 3),
-  );
-}
-
-const BULLET_KEYWORD_STOPWORDS = new Set([
-  "built", "build", "design", "designed", "develop", "developed",
-  "deliver", "delivered", "lead", "led", "manage", "managed",
-  "maintain", "maintained", "improve", "improved", "optimize", "optimized",
-  "collaborate", "collaborated", "support", "supported", "work", "worked",
-  "own", "owned", "drive", "drove", "using", "with", "for", "and",
-  "the", "a", "an", "to", "of", "in", "on", "by",
-]);
-
-function extractMeaningfulKeywords(value: string) {
-  return new Set(
-    Array.from(tokenizeBulletForSimilarity(value)).filter(
-      (token) => token.length >= 4 && !BULLET_KEYWORD_STOPWORDS.has(token),
-    ),
-  );
-}
-
-function bulletSimilarityScore(a: string, b: string) {
-  const ta = tokenizeBulletForSimilarity(a);
-  const tb = tokenizeBulletForSimilarity(b);
-  if (ta.size === 0 || tb.size === 0) return 0;
-
-  let intersection = 0;
-  for (const token of ta) {
-    if (tb.has(token)) intersection += 1;
-  }
-  const union = new Set([...ta, ...tb]).size;
-  return union === 0 ? 0 : intersection / union;
-}
-
-export function isGroundedAddedBullet(
-  addedBullet: string,
-  candidateEvidence: string[],
-) {
-  if (!addedBullet.trim()) return false;
-  if (candidateEvidence.length === 0) return false;
-
-  let bestScore = 0;
-  let bestSharedTokens = 0;
-
-  const addedTokens = new Set(
-    Array.from(tokenizeBulletForSimilarity(addedBullet)).filter(
-      (token) => !BULLET_KEYWORD_STOPWORDS.has(token),
-    ),
-  );
-  if (addedTokens.size === 0) return false;
-
-  for (const evidenceItem of candidateEvidence) {
-    bestScore = Math.max(
-      bestScore,
-      bulletSimilarityScore(addedBullet, evidenceItem),
-    );
-    const baseTokens = new Set(
-      Array.from(tokenizeBulletForSimilarity(evidenceItem)).filter(
-        (token) => !BULLET_KEYWORD_STOPWORDS.has(token),
-      ),
-    );
-    let shared = 0;
-    for (const token of addedTokens) {
-      if (baseTokens.has(token)) shared += 1;
-    }
-    bestSharedTokens = Math.max(bestSharedTokens, shared);
-  }
-
-  return bestSharedTokens >= 2 || bestScore >= 0.28;
-}
-
-export function isNonRedundantAddedBullet(
-  addedBullet: string,
-  baseBullets: string[],
-  acceptedAddedBullets: string[],
-) {
-  const compareBullets = [...baseBullets, ...acceptedAddedBullets];
-  if (compareBullets.length === 0) return true;
-
-  for (const existing of compareBullets) {
-    if (bulletSimilarityScore(addedBullet, existing) >= 0.62) {
-      return false;
-    }
-  }
-
-  const baseKeywords = new Set<string>();
-  for (const existing of compareBullets) {
-    for (const kw of extractMeaningfulKeywords(existing)) {
-      baseKeywords.add(kw);
-    }
-  }
-
-  const addedKeywords = extractMeaningfulKeywords(addedBullet);
-  if (addedKeywords.size === 0) return false;
-
-  let novelCount = 0;
-  for (const kw of addedKeywords) {
-    if (!baseKeywords.has(kw)) novelCount += 1;
-  }
-
-  const noveltyRatio = novelCount / addedKeywords.size;
-  return novelCount >= 1 && noveltyRatio >= 0.25;
-}
-
-export function canonicalizeLatestBullets(baseBullets: string[], incomingBullets: string[]) {
-  const normalizedBase = baseBullets.map(normalizeBulletForCompare);
-  const usedBaseIndexes = new Set<number>();
-  const canonicalBullets: string[] = [];
-  const addedBullets: string[] = [];
-
-  for (const incoming of incomingBullets) {
-    const normalizedIncoming = normalizeBulletForCompare(incoming);
-    let matchedIndex = -1;
-
-    for (let i = 0; i < normalizedBase.length; i += 1) {
-      if (usedBaseIndexes.has(i)) continue;
-      if (normalizedBase[i] === normalizedIncoming) {
-        matchedIndex = i;
-        break;
-      }
-    }
-
-    if (matchedIndex < 0) {
-      let bestIndex = -1;
-      let bestScore = 0;
-      for (let i = 0; i < baseBullets.length; i += 1) {
-        if (usedBaseIndexes.has(i)) continue;
-        const score = bulletSimilarityScore(incoming, baseBullets[i]);
-        if (score > bestScore) {
-          bestScore = score;
-          bestIndex = i;
-        }
-      }
-      if (bestIndex >= 0 && bestScore >= 0.82) {
-        matchedIndex = bestIndex;
-      }
-    }
-
-    if (matchedIndex >= 0) {
-      usedBaseIndexes.add(matchedIndex);
-      canonicalBullets.push(baseBullets[matchedIndex]);
-    } else {
-      canonicalBullets.push(incoming);
-      addedBullets.push(incoming);
-    }
-  }
-
-  for (let i = 0; i < baseBullets.length; i += 1) {
-    if (!usedBaseIndexes.has(i)) canonicalBullets.push(baseBullets[i]);
-  }
-
-  return { canonicalBullets, addedBullets };
-}
-
-export function getLatestRawBullets(profile: unknown): string[] {
-  if (!profile || typeof profile !== "object") return [];
-  const record = profile as Record<string, unknown>;
-  const experiences = Array.isArray(record.experiences) ? record.experiences : [];
-  const latest =
-    experiences.length > 0 && experiences[0] && typeof experiences[0] === "object"
-      ? (experiences[0] as Record<string, unknown>)
-      : null;
-  const bullets = latest?.bullets;
-  if (!Array.isArray(bullets)) return [];
-  return bullets
-    .filter((item): item is string => typeof item === "string")
-    .map((item) => item.trim())
-    .filter(Boolean);
 }

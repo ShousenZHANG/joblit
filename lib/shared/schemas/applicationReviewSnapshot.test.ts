@@ -18,7 +18,7 @@ const snapshot = {
   },
   aiContentHash: "content-hash",
   aiContent: {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: "2026-08-10T00:00:00.000Z",
     promptMetaHash: "prompt-hash",
     cv: {
@@ -27,7 +27,9 @@ const snapshot = {
         originalText: "Software engineer.",
         accepted: true,
       },
-      latestExperience: { experienceIndex: 0, addedBullets: [] },
+      skillsSelection: {
+        aiSelection: [{ group: 0, items: [2, 0] }],
+      },
     },
     cover: {
       paragraphOne: { aiText: "One", accepted: true },

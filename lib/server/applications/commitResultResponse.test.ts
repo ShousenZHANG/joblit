@@ -38,7 +38,6 @@ const REJECTIONS: Rejection[] = [
   { kind: "stale_render_context" },
   { kind: "job_missing" },
   { kind: "invalid_ai_content" },
-  { kind: "review_blocked", review: { grounded: false } as never },
   { kind: "blob_not_configured" },
   { kind: "upload_failed", cause: new Error("blob down") },
 ];
@@ -61,7 +60,7 @@ describe("commitRejectionResponse", () => {
       (result) =>
         result.kind !== "upload_failed" && result.kind !== "blob_not_configured",
     );
-    expect(permanent).toHaveLength(5);
+    expect(permanent).toHaveLength(4);
 
     for (const result of permanent) {
       const response = commitRejectionResponse(result, CONTEXT);

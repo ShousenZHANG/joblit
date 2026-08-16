@@ -16,7 +16,10 @@ const master = {
     websiteText: undefined,
   },
   summary: "Master summary",
-  skills: [{ label: "Core", items: ["TypeScript"] }],
+  skills: [
+    { label: "Core", items: ["TypeScript", "Node.js"] },
+    { label: "Cloud", items: ["AWS", "Terraform"] },
+  ],
   experiences: [
     {
       title: "Engineer",
@@ -39,71 +42,38 @@ const master = {
   education: [],
 };
 
-function makeCv(
-  overrides: Partial<AiContent["cv"]> = {},
-): AiContent["cv"] {
+function makeCv(overrides: Partial<AiContent["cv"]> = {}): AiContent["cv"] {
   return {
     summary: {
       aiText: "AI summary",
       originalText: "Master summary",
       accepted: true,
     },
-    latestExperience: {
-      experienceIndex: 0,
-      addedBullets: [],
-    },
     ...overrides,
   };
 }
 
 describe("composeApplicationResumeRenderInput", () => {
-  it("keeps Master Resume Profile skills and applies canonical AI edits", () => {
-    const cv = makeCv({
-      summary: {
-        aiText: "AI summary",
-        originalText: "Master summary",
-        userEdit: "Led **reliable** delivery & operations.",
-        accepted: true,
-      },
-      latestExperience: {
-        experienceIndex: 1,
-        addedBullets: [
-          {
-            text: "Shipped **20%** faster.",
-            accepted: true,
-          },
-          {
-            text: "Rejected addition.",
-            accepted: false,
-          },
-          {
-            text: "Original accepted text.",
-            userEdit: "User-edited addition & result.",
-            accepted: true,
-          },
-        ],
-      },
+  it("applies the canonical summary edit and escapes it for LaTeX", () => {
+    const result = composeApplicationResumeRenderInput({
+      master,
+      cv: makeCv({
+        summary: {
+          aiText: "AI summary",
+          originalText: "Master summary",
+          userEdit: "Led **reliable** delivery & operations.",
+          accepted: true,
+        },
+      }),
     });
 
-    const result = composeApplicationResumeRenderInput({ master, cv });
-
-    expect(result.skills).toEqual(master.skills);
     expect(result.summary).toBe(
       "Led \\textbf{reliable} delivery \\& operations.",
     );
-    expect(result.experiences[0]).toEqual(master.experiences[0]);
-    expect(result.experiences[1]?.bullets).toEqual([
-      "Master bullet two",
-      "Shipped \\textbf{20\\%} faster.",
-      "User-edited addition \\& result.",
-    ]);
   });
 
   it("falls back through AI text to the already-renderable Master summary", () => {
-    const ai = composeApplicationResumeRenderInput({
-      master,
-      cv: makeCv(),
-    });
+    const ai = composeApplicationResumeRenderInput({ master, cv: makeCv() });
     expect(ai.summary).toBe("AI summary");
 
     const fallback = composeApplicationResumeRenderInput({
@@ -119,26 +89,113 @@ describe("composeApplicationResumeRenderInput", () => {
     expect(fallback.summary).toBe("Master summary");
   });
 
-  it("leaves experiences unchanged when experienceIndex is out of range", () => {
+  it("renders the Master Resume Profile's skills when there is no selection", () => {
+    // A draft written before tailoring selected skills keeps rendering the
+    // document it already rendered.
+    const result = composeApplicationResumeRenderInput({ master, cv: makeCv() });
+
+    expect(result.skills).toEqual(master.skills);
+  });
+
+  it("narrows and reorders the skills the selection addresses", () => {
     const result = composeApplicationResumeRenderInput({
       master,
       cv: makeCv({
-        latestExperience: {
-          experienceIndex: 99,
-          addedBullets: [{ text: "Accepted addition.", accepted: true }],
+        skillsSelection: {
+          aiSelection: [
+            { group: 1, items: [1, 0] },
+            { group: 0, items: [0] },
+          ],
         },
       }),
     });
 
+    expect(result.skills).toEqual([
+      { label: "Cloud", items: ["Terraform", "AWS"] },
+      { label: "Core", items: ["TypeScript"] },
+    ]);
+  });
+
+  it("renders the user's narrowed selection over the AI's", () => {
+    const result = composeApplicationResumeRenderInput({
+      master,
+      cv: makeCv({
+        skillsSelection: {
+          aiSelection: [{ group: 0, items: [0, 1] }],
+          userSelection: [{ group: 1, items: [0] }],
+        },
+      }),
+    });
+
+    expect(result.skills).toEqual([{ label: "Cloud", items: ["AWS"] }]);
+  });
+
+  it("adds no skill the Master Resume Profile does not already hold", () => {
+    // The selection carries indexes only, so resolving it can never introduce
+    // a string the candidate did not write.
+    const result = composeApplicationResumeRenderInput({
+      master,
+      cv: makeCv({
+        skillsSelection: {
+          aiSelection: [
+            { group: 0, items: [0, 1] },
+            { group: 1, items: [0, 1] },
+          ],
+        },
+      }),
+    });
+
+    const owned = new Set(master.skills.flatMap((group) => group.items));
+    for (const group of result.skills) {
+      for (const item of group.items) expect(owned.has(item)).toBe(true);
+    }
+  });
+
+  it("drops a selection reference the profile no longer resolves", () => {
+    // A profile edit between generation and finalize is normal; the render
+    // context fence un-publishes the document, so this renders what survives.
+    const result = composeApplicationResumeRenderInput({
+      master,
+      cv: makeCv({
+        skillsSelection: {
+          aiSelection: [
+            { group: 7, items: [0] },
+            { group: 0, items: [0, 5] },
+          ],
+        },
+      }),
+    });
+
+    expect(result.skills).toEqual([{ label: "Core", items: ["TypeScript"] }]);
+  });
+
+  it("leaves every experience exactly as the candidate wrote it", () => {
+    // Tailoring writes no bullets. The master profile owns the experience
+    // section outright.
+    const result = composeApplicationResumeRenderInput({
+      master,
+      cv: makeCv({
+        summary: {
+          aiText: "AI summary",
+          originalText: "Master summary",
+          userEdit: "Edited summary.",
+          accepted: true,
+        },
+        skillsSelection: { aiSelection: [{ group: 0, items: [1] }] },
+      }),
+    });
+
     expect(result.experiences).toEqual(master.experiences);
+    expect(result.projects).toEqual(master.projects);
+    expect(result.education).toEqual(master.education);
   });
 
   it("does not mutate either input", () => {
     const masterInput = structuredClone(master);
     const cv = makeCv({
-      latestExperience: {
-        experienceIndex: 0,
-        addedBullets: [{ text: "Accepted addition.", accepted: true }],
+      skillsSelection: {
+        aiSelection: [{ group: 1, items: [0] }],
+        userSelection: [{ group: 0, items: [0] }],
       },
     });
     const cvInput = structuredClone(cv);

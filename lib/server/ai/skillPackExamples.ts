@@ -1,8 +1,9 @@
 type ResumeOutput = {
   readonly cvSummary: string;
-  readonly latestExperience: {
-    readonly addedBullets: readonly string[];
-  };
+  readonly skillsSelection: readonly {
+    readonly group: number;
+    readonly items: readonly number[];
+  }[];
 };
 
 type CoverOutput = {
@@ -13,16 +14,19 @@ type CoverOutput = {
   };
 };
 
+/**
+ * The indexes below are illustrative. A real selection references the groups
+ * and items of the pack owner's own `context/resume-snapshot.json`, which is
+ * why the walkthroughs tell the reader to read their bank rather than copy
+ * these numbers.
+ */
 const EN_AU_RESUME: ResumeOutput = {
   cvSummary:
-    "Platform-focused software engineer with 6+ years delivering **cloud-native** services across **AWS** and **GCP**. Led **CI/CD pipeline** modernisation and **Kubernetes** migration for a 200-service platform, improving deployment frequency by 40%. Experienced in **infrastructure-as-code**, **observability**, and cross-functional product delivery.",
-  latestExperience: {
-    addedBullets: [
-      "Architected an event-driven data pipeline using **Kafka** and **AWS Lambda** to process more than 2M events daily",
-      "Mentored three engineers on **infrastructure-as-code** practices and platform engineering principles",
-      "Improved **incident response** processes and runbooks, reducing MTTR from 45 to 18 minutes",
-    ],
-  },
+    "Platform engineer with 6+ years delivering **cloud-native** services across **AWS** and **GCP**. Led **CI/CD** modernisation and a **Kubernetes** migration for a 200-service platform, lifting deployment frequency 40%.",
+  skillsSelection: [
+    { group: 0, items: [2, 0, 4] },
+    { group: 1, items: [1, 3] },
+  ],
 };
 
 const EN_AU_COVER: CoverOutput = {
@@ -38,14 +42,11 @@ const EN_AU_COVER: CoverOutput = {
 
 const ZH_CN_RESUME: ResumeOutput = {
   cvSummary:
-    "专注平台工程的高级软件工程师，拥有 6 年以上**云原生**服务交付经验，覆盖 **AWS** 与 **GCP**。主导 **CI/CD 流水线**现代化和 **Kubernetes** 迁移，为 200+ 微服务平台提升部署频率 40%。擅长**基础设施即代码**、**可观测性**与跨职能协作。",
-  latestExperience: {
-    addedBullets: [
-      "基于 **Kafka** 与 **AWS Lambda** 构建事件驱动数据管道，日处理 200 万以上事件",
-      "指导三名工程师落实**基础设施即代码**实践与平台工程规范",
-      "优化**事故响应**流程与运行手册，将 MTTR 从 45 分钟缩短至 18 分钟",
-    ],
-  },
+    "专注平台工程的软件工程师，拥有 6 年以上**云原生**服务交付经验，覆盖 **AWS** 与 **GCP**。主导 **CI/CD 流水线**现代化与 **Kubernetes** 迁移，为 200+ 微服务平台提升部署频率 40%，并建立跨团队的**可观测性**规范。",
+  skillsSelection: [
+    { group: 0, items: [2, 0, 4] },
+    { group: 1, items: [1, 3] },
+  ],
 };
 
 const ZH_CN_COVER: CoverOutput = {
@@ -63,14 +64,22 @@ const EN_AU_RESUME_WALKTHROUGH = `# Resume Output Walkthrough
 
 ## cvSummary
 - Repositions the candidate for the role using only supplied evidence.
+- Runs 120-350 characters, and contains the posting's role title with its
+  seniority word and trailing qualifiers dropped.
+- States no number and names no technology that is missing from the resume
+  snapshot; Joblit rejects the import when either appears.
 - Bolds a small set of JD-critical keywords with clean Markdown markers.
-- Does not return skills; the Master Resume Profile owns the skills section.
 
-## latestExperience.addedBullets
-- Contains additions only, never a copy of the existing experience bullets.
-- Contains zero to three strings; this example uses three grounded additions.
-- Each addition maps to an under-covered JD responsibility and preserves the
-  candidate's existing tone.
+## skillsSelection
+- References the candidate's own skills by index and never by name: \`group\`
+  indexes the snapshot's \`skills\` array, and each entry of \`items\` indexes
+  that group's \`items\` array.
+- Read the numbering out of \`context/resume-snapshot.json\`. The indexes in
+  the example are illustrative and will not match another profile.
+- Drops the groups and items the posting does not reward. A tailored skills
+  section is shorter than the master one, never longer.
+- Array order is render order: most relevant first, in both dimensions.
+- Selects each group at most once, and each index at most once per group.
 `;
 
 const EN_AU_COVER_WALKTHROUGH = `# Cover Output Walkthrough
@@ -93,13 +102,18 @@ const ZH_CN_RESUME_WALKTHROUGH = `# 简历输出说明
 
 ## cvSummary
 - 仅根据提供的证据调整候选人的岗位定位。
+- 长度为 120 至 350 个字符，并且必须包含岗位标题（去掉资历词与后缀限定语）。
+- 不得出现简历快照中没有的数字或技术名称，否则导入会被拒绝。
 - 使用语法正确的 Markdown 标记突出少量 JD 关键字。
-- 不返回技能字段；技能始终由主简历档案维护。
 
-## latestExperience.addedBullets
-- 只包含新增内容，不复制现有经历要点。
-- 数量为 0 至 3 条；本示例包含 3 条有证据支持的新增要点。
-- 每条新增要点优先覆盖尚未充分体现的 JD 职责，并保持原有语气。
+## skillsSelection
+- 只用序号引用候选人已有的技能，绝不写出技能名称：\`group\` 对应快照 \`skills\`
+  数组的下标，\`items\` 中的每个数字对应该分组 \`items\` 数组的下标。
+- 序号请从 \`context/resume-snapshot.json\` 中读取；示例中的数字仅作说明，
+  换一份档案就不再成立。
+- 删除与该岗位无关的分组和条目：定制后的技能区只会更短，不会更长。
+- 数组顺序即渲染顺序，分组之间与分组内部都按相关度由高到低排列。
+- 每个分组最多出现一次，分组内每个序号最多出现一次。
 `;
 
 const ZH_CN_COVER_WALKTHROUGH = `# 求职信输出说明

@@ -14,13 +14,12 @@ import {
   Building2,
   CalendarDays,
   ClipboardList,
-  ClipboardPaste,
   DollarSign,
   ExternalLink,
   FileText,
-  Loader2,
   MapPin,
   MoreHorizontal,
+  Sparkles,
   Trash2,
   Wifi,
 } from "lucide-react";
@@ -86,22 +85,14 @@ interface JobDetailPanelProps {
   tailorSource?: { cv?: CvSource; cover?: CoverSource };
   updatingIds: Set<string>;
   deletingIds: Set<string>;
-  externalPromptLoading: boolean;
   mobileTab: "list" | "detail";
   onUpdateStatus: (id: string, status: JobStatus) => void;
   onDelete: (job: JobItem) => void;
-  /** Zero-install fallback: copy the prompt, run it anywhere, paste JSON. */
-  onManualGenerate: (job: JobItem, target: "resume" | "cover") => void;
-  onReviewApplication?: (
-    applicationId: string,
-    jobId: string,
-    target: "resume" | "cover",
-  ) => void;
-  reviewLoading?: {
-    applicationId: string;
-    target: "resume" | "cover";
-  } | null;
-  reviewError?: string | null;
+  /**
+   * Open the one tailoring surface. The target only picks which document the
+   * dialog lands on; both are reachable from inside it.
+   */
+  onTailor: (job: JobItem, target: "resume" | "cover") => void;
   onRetryDetail: () => void;
 }
 
@@ -130,6 +121,47 @@ function MetaChip({
   );
 }
 
+interface SavedDocumentButtonProps {
+  label: string;
+  href: string;
+  className: string;
+  /** Null when the row predates Applications and only the PDF survives. */
+  onOpenTailor: (() => void) | null;
+}
+
+/**
+ * A published document is an entry point back into tailoring, not a download.
+ * Without an Application behind it there is nothing to reopen, so the same
+ * control degrades to a plain link to the stored PDF.
+ */
+function SavedDocumentButton({
+  label,
+  href,
+  className,
+  onOpenTailor,
+}: SavedDocumentButtonProps) {
+  const shared = `w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] sm:w-auto ${className} px-4`;
+  if (!onOpenTailor) {
+    return (
+      <Button variant="outline" size="sm" asChild className={shared}>
+        <a href={href} target="_blank" rel="noreferrer">
+          {label}
+        </a>
+      </Button>
+    );
+  }
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={onOpenTailor}
+      className={shared}
+    >
+      {label}
+    </Button>
+  );
+}
+
 /**
  * Memoized: this is the heaviest subtree on the page (markdown render,
  * requirements panel). Every prop is either data derived from the selected
@@ -146,14 +178,10 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
   tailorSource,
   updatingIds,
   deletingIds,
-  externalPromptLoading,
   mobileTab,
   onUpdateStatus,
   onDelete,
-  onManualGenerate,
-  onReviewApplication,
-  reviewLoading,
-  reviewError,
+  onTailor,
   onRetryDetail,
 }: JobDetailPanelProps) {
   const t = useTranslations("jobs");
@@ -340,106 +368,28 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                   </a>
                 </Button>
                 {!isCN && selectedJob.resumePdfUrl ? (
-                  selectedJob.applicationId && onReviewApplication ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={
-                        reviewLoading?.applicationId ===
-                          selectedJob.applicationId &&
-                        reviewLoading.target === "resume"
-                      }
-                      aria-busy={
-                        reviewLoading?.applicationId ===
-                          selectedJob.applicationId &&
-                        reviewLoading.target === "resume"
-                      }
-                      onClick={() =>
-                        onReviewApplication(
-                          selectedJob.applicationId!,
-                          selectedJob.id,
-                          "resume",
-                        )
-                      }
-                      className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] sm:w-auto ${actionHeight} px-4`}
-                    >
-                      {reviewLoading?.applicationId ===
-                        selectedJob.applicationId &&
-                      reviewLoading.target === "resume" ? (
-                        <Loader2
-                          className="motion-safe:animate-spin"
-                          aria-hidden
-                        />
-                      ) : null}
-                      {t("savedCv")}
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      asChild
-                      className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] sm:w-auto ${actionHeight} px-4`}
-                    >
-                      <a
-                        href={selectedJob.resumePdfUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {t("savedCv")}
-                      </a>
-                    </Button>
-                  )
+                  <SavedDocumentButton
+                    label={t("savedCv")}
+                    href={selectedJob.resumePdfUrl}
+                    className={actionHeight}
+                    onOpenTailor={
+                      selectedJob.applicationId
+                        ? () => onTailor(selectedJob, "resume")
+                        : null
+                    }
+                  />
                 ) : null}
                 {!isCN && selectedJob.coverPdfUrl ? (
-                  selectedJob.applicationId && onReviewApplication ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={
-                        reviewLoading?.applicationId ===
-                          selectedJob.applicationId &&
-                        reviewLoading.target === "cover"
-                      }
-                      aria-busy={
-                        reviewLoading?.applicationId ===
-                          selectedJob.applicationId &&
-                        reviewLoading.target === "cover"
-                      }
-                      onClick={() =>
-                        onReviewApplication(
-                          selectedJob.applicationId!,
-                          selectedJob.id,
-                          "cover",
-                        )
-                      }
-                      className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] sm:w-auto ${actionHeight} px-4`}
-                    >
-                      {reviewLoading?.applicationId ===
-                        selectedJob.applicationId &&
-                      reviewLoading.target === "cover" ? (
-                        <Loader2
-                          className="motion-safe:animate-spin"
-                          aria-hidden
-                        />
-                      ) : null}
-                      {t("savedCl")}
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      asChild
-                      className={`w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] sm:w-auto ${actionHeight} px-4`}
-                    >
-                      <a
-                        href={selectedJob.coverPdfUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {t("savedCl")}
-                      </a>
-                    </Button>
-                  )
+                  <SavedDocumentButton
+                    label={t("savedCl")}
+                    href={selectedJob.coverPdfUrl}
+                    className={actionHeight}
+                    onOpenTailor={
+                      selectedJob.applicationId
+                        ? () => onTailor(selectedJob, "cover")
+                        : null
+                    }
+                  />
                 ) : null}
                 {/* The trailing cluster: what is neither "open this job" nor
                     "read what we generated for it".
@@ -467,10 +417,10 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                   >
                     <Trash2 className="h-4 w-4" aria-hidden />
                   </Button>
-                  {/* Manual import is ADR-0015's zero-install floor, so it has
-                      to stay reachable — but it is the exception, not the
-                      routine. CN has no manual targets, so it gets no menu
-                      rather than an empty one. */}
+                  {/* One entry, because there is one tailoring surface: the
+                      dialog carries both documents and the user picks inside
+                      it. CN ships a single Chinese resume with no tailoring, so
+                      it gets no menu rather than an empty one. */}
                   {!isCN ? (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -487,27 +437,10 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
                           className="min-h-11"
-                          onClick={() =>
-                            onManualGenerate(selectedJob, "resume")
-                          }
-                          disabled={externalPromptLoading}
+                          onClick={() => onTailor(selectedJob, "resume")}
                         >
-                          <ClipboardPaste
-                            className="mr-2 h-4 w-4"
-                            aria-hidden
-                          />
-                          {t("manualGenerateCv")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="min-h-11"
-                          onClick={() => onManualGenerate(selectedJob, "cover")}
-                          disabled={externalPromptLoading}
-                        >
-                          <ClipboardPaste
-                            className="mr-2 h-4 w-4"
-                            aria-hidden
-                          />
-                          {t("manualGenerateCl")}
+                          <Sparkles className="mr-2 h-4 w-4" aria-hidden />
+                          {t("tailorAction")}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -515,14 +448,6 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                 </div>
               </div>
             </div>
-            {reviewError ? (
-              <p
-                role="alert"
-                className="flex items-start gap-2 rounded-xl border border-amber-300/70 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100"
-              >
-                {reviewError}
-              </p>
-            ) : null}
             {tailorSource ? (
               <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                 {tailorSource.cv ? (

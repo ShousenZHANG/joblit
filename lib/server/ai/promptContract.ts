@@ -16,8 +16,8 @@ export type PromptTarget = "resume" | "cover";
 export type ExtendedPromptTarget = PromptTarget;
 export type PromptVariant = "full" | "lean";
 
-export const PROMPT_TEMPLATE_VERSION = "2026.07.v2";
-export const PROMPT_SCHEMA_VERSION = "2026-07-24";
+export const PROMPT_TEMPLATE_VERSION = "2026.08.v3";
+export const PROMPT_SCHEMA_VERSION = "2026-08-17";
 
 export type PromptMeta = {
   ruleSetId: string;
@@ -105,7 +105,7 @@ const RESUME_OUTPUT_SHAPE = shapeFromJsonSchema(
   RESUME_OUTPUT_JSON_SCHEMA,
 ) as {
   cvSummary: "string";
-  latestExperience: { addedBullets: ["string"] };
+  skillsSelection: [{ group: "number"; items: ["number"] }];
 };
 const COVER_OUTPUT_SHAPE = shapeFromJsonSchema(COVER_OUTPUT_JSON_SCHEMA) as {
   cover: {

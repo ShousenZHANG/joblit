@@ -20,6 +20,7 @@ import { marketStringToResumeLocale } from "@/lib/shared/market";
 import { prisma } from "@/lib/server/prisma";
 import { getResumeProfile } from "@/lib/server/resumeProfile";
 import { buildManualImportArtifact } from "@/lib/server/applications/manualImportArtifact";
+import { buildAtsKeywords } from "@/lib/server/applications/finalizeApplication";
 import {
   ApplicationPromptError,
   buildApplicationPromptForUser,
@@ -44,7 +45,7 @@ export const runtime = "nodejs";
  *                     Codex Batch and any non-interactive caller path.
  *   false             Persist aiContent + status=DRAFT, skip PDF render,
  *                     return JSON { applicationId, status, aiContentHash }
- *                     so the client can navigate to /jobs/[id]/tailor.
+ *                     so the browser can open the review step on it.
  */
 function parseFinalizeFlag(req: Request): boolean {
   const url = new URL(req.url);
@@ -142,7 +143,6 @@ export async function POST(req: Request) {
         userId,
         jobId: data.jobId,
         target: data.target,
-        variant: "full",
       });
       expectedPromptMeta = prepared.promptMeta;
       promptSnapshotBinding = prepared.snapshotBinding;
@@ -190,7 +190,6 @@ export async function POST(req: Request) {
   // Build the artifact regardless of finalize mode — even DRAFT mode
   // needs the aiContent provenance extracted from the AI output JSON.
   const artifact = buildManualImportArtifact({
-    evidenceScopeKey: userId,
     target: data.target,
     modelOutput: data.modelOutput,
     source: data.source,
@@ -207,22 +206,8 @@ export async function POST(req: Request) {
       { details: artifact.error.details, requestId },
     );
   }
-  // The grounding gate lives at the commit boundary, which reviews the merged
-  // CV + Cover snapshot. There used to be a pre-emptive check here, reading a
-  // review that acceptApplicationGeneration had built over ONE target with the
-  // other half still empty — a different snapshot answering the same question.
-  // commitApplicationArtifact returns review_blocked and the FINAL path already
-  // handles it.
-  const reviewContext = {
-    scopeKey: userId,
-    resumeSnapshot: { profile, renderInput },
-    jobDescription: job.description,
-    jobSourceAvailable: true,
-  };
-
-  // DRAFT mode: skip PDF compile + Blob upload. Just persist the
-  // aiContent snapshot and return JSON. Caller navigates to
-  // /jobs/[id]/tailor to review.
+  // DRAFT mode: skip PDF compile + Blob upload. Persist the aiContent snapshot
+  // and return JSON so the caller can open the review step on it.
   if (!finalize) {
     const committed = await commitApplicationArtifact({
         userId,
@@ -235,7 +220,6 @@ export async function POST(req: Request) {
         artifacts: [],
         status: "DRAFT",
         mergeTarget: data.target,
-        reviewContext,
       });
     if (committed.kind !== "committed") {
       // Every rejection kind, mapped identically to the FINAL branch. This
@@ -285,10 +269,7 @@ export async function POST(req: Request) {
     atsValidation = await assertAtsPdf(pdf, {
       maxPages: 2,
       minTextChars: data.target === "resume" ? 180 : 160,
-      requiredKeywords: (artifact.aiContent.review?.requirements ?? [])
-        .flatMap((item) => item.text.split(/[\s,/|():;-]+/))
-        .filter((item) => item.length >= 3)
-        .slice(0, 30),
+      requiredKeywords: buildAtsKeywords(job.title),
     });
     filename = artifact.filename;
     coverQualityGate = artifact.coverQualityGate;
@@ -325,7 +306,6 @@ export async function POST(req: Request) {
       ],
       status: "FINAL",
       mergeTarget: data.target,
-      reviewContext,
     });
     if (result.kind !== "committed") {
       return commitRejectionResponse(result, {

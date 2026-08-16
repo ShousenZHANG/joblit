@@ -60,71 +60,16 @@ function parseCandidate(candidate: string): unknown {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function hasExactKeys(
-  value: Record<string, unknown>,
-  expected: readonly string[],
-): boolean {
-  const actual = Object.keys(value).sort();
-  const required = [...expected].sort();
-  return (
-    actual.length === required.length &&
-    actual.every((key, index) => key === required[index])
-  );
-}
-
-function hasOnlyKeys(
-  value: Record<string, unknown>,
-  allowed: readonly string[],
-): boolean {
-  const allowedSet = new Set(allowed);
-  return Object.keys(value).every((key) => allowedSet.has(key));
-}
-
-function hasValidLegacySkillGroups(value: unknown): boolean {
-  if (value === undefined) return true;
-  if (!Array.isArray(value) || value.length < 1 || value.length > 20) {
-    return false;
-  }
-  return value.every((item) => {
-    if (!isRecord(item) || !hasOnlyKeys(item, ["label", "category", "items"])) {
-      return false;
-    }
-    const label =
-      typeof item.label === "string"
-        ? item.label.trim()
-        : typeof item.category === "string"
-          ? item.category.trim()
-          : "";
-    return (
-      label.length > 0 &&
-      label.length <= 100 &&
-      Array.isArray(item.items) &&
-      item.items.length >= 1 &&
-      item.items.length <= 40 &&
-      item.items.every(
-        (skill) =>
-          typeof skill === "string" &&
-          skill.trim().length > 0 &&
-          skill.trim().length <= 120,
-      )
-    );
-  });
-}
-
-function isOptionalBoundedString(
-  value: unknown,
-  maxLength: number,
-): boolean {
-  return (
-    value === undefined ||
-    (typeof value === "string" && value.trim().length <= maxLength)
-  );
-}
-
+/**
+ * Decides whether a pasted payload is importable, using the same schemas the
+ * server validates against.
+ *
+ * The tolerance here is for how a chatbot wraps its answer \u2014 smart quotes, a
+ * code fence, a sentence before the JSON \u2014 not for what the answer contains.
+ * The server accepts a few key aliases on top of this; a paste this rejects and
+ * the server would have taken costs the user one retry, while the reverse would
+ * let them submit something the import boundary throws away.
+ */
 export function parseTailorOutput(
   raw: string,
   target: "resume" | "cover",
@@ -137,7 +82,7 @@ export function parseTailorOutput(
     const repaired = source
       .replace(/[\u201C\u201D]/g, '"')
       .replace(/[\u2018\u2019]/g, "'")
-      .replace(/\u00A0/g, " ")
+      .replace(/ /g, " ")
       .replace(/,\s*([}\]])/g, "$1");
     parsed = parseCandidate(repaired);
     if (!parsed) {
@@ -149,99 +94,16 @@ export function parseTailorOutput(
       if (firstObject) parsed = parseCandidate(firstObject);
     }
   }
-  if (!isRecord(parsed)) return null;
-
-  const obj = parsed;
-  if (target === "resume") {
-    const current = ResumeGenerationOutputSchema.safeParse(obj);
-    if (current.success) return current.data;
-
-    const cvSummary =
-      typeof obj.cvSummary === "string" ? obj.cvSummary.trim() : "";
-    if (
-      !cvSummary ||
-      cvSummary.length > 2000 ||
-      !isRecord(obj.latestExperience)
-    ) return null;
-
-    const legacyBullets = obj.latestExperience.bullets;
-    if (
-      !hasOnlyKeys(obj, ["cvSummary", "latestExperience", "skillsFinal"]) ||
-      !hasExactKeys(obj.latestExperience, ["bullets"]) ||
-      !Array.isArray(legacyBullets) ||
-      legacyBullets.length < 1 ||
-      legacyBullets.length > 15 ||
-      !legacyBullets.every(
-        (item) =>
-          typeof item === "string" &&
-          item.trim().length > 0 &&
-          item.trim().length <= 320,
-      ) ||
-      !hasValidLegacySkillGroups(obj.skillsFinal)
-    ) {
-      return null;
-    }
-    return {
-      cvSummary,
-      latestExperience: { addedBullets: [] },
-    };
-  }
-
-  const current = CoverGenerationOutputSchema.safeParse(obj);
-  if (current.success) return current.data;
-
-  if (!hasExactKeys(obj, ["cover"]) || !isRecord(obj.cover)) return null;
-  const coverRoot = obj.cover;
-  if (!hasOnlyKeys(coverRoot, [
-    "candidateTitle",
-    "subject",
-    "date",
-    "salutation",
-    "paragraphOne",
-    "paragraphTwo",
-    "paragraphThree",
-    "closing",
-    "signatureName",
-  ])) {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     return null;
   }
-  if (
-    !isOptionalBoundedString(coverRoot.candidateTitle, 160) ||
-    !isOptionalBoundedString(coverRoot.subject, 220) ||
-    !isOptionalBoundedString(coverRoot.date, 80) ||
-    !isOptionalBoundedString(coverRoot.salutation, 220) ||
-    !isOptionalBoundedString(coverRoot.closing, 300) ||
-    !isOptionalBoundedString(coverRoot.signatureName, 120)
-  ) {
-    return null;
-  }
-  const paragraphOne =
-    typeof coverRoot.paragraphOne === "string"
-      ? coverRoot.paragraphOne.trim()
-      : "";
-  const paragraphTwo =
-    typeof coverRoot.paragraphTwo === "string"
-      ? coverRoot.paragraphTwo.trim()
-      : "";
-  const paragraphThree =
-    typeof coverRoot.paragraphThree === "string"
-      ? coverRoot.paragraphThree.trim()
-      : "";
 
-  if (!paragraphOne || !paragraphTwo || !paragraphThree) return null;
-  if (
-    paragraphOne.length > 2000 ||
-    paragraphTwo.length > 2000 ||
-    paragraphThree.length > 2000
-  ) return null;
-
-  return {
-    cover: {
-      paragraphOne,
-      paragraphTwo,
-      paragraphThree,
-    },
-  };
+  const schema =
+    target === "resume"
+      ? ResumeGenerationOutputSchema
+      : CoverGenerationOutputSchema;
+  const result = schema.safeParse(parsed);
+  return result.success ? result.data : null;
 }
 
 export function filenameFromDisposition(disposition: string | null) {

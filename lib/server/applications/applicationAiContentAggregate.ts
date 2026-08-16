@@ -1,7 +1,5 @@
 import { AppError } from "@/lib/server/api/appError";
-import { attachEvidenceAndReview } from "@/lib/server/ai/evidenceLedger";
 import type {
-  AiAddedBullet,
   AiContent,
   AiCoverParagraph,
   AiGenerationProvenance,
@@ -9,18 +7,6 @@ import type {
 } from "@/lib/shared/schemas/aiContent";
 
 export type ApplicationAiContentTarget = "resume" | "cover";
-
-export type ApplicationAiContentReviewContext = {
-  scopeKey: string;
-  resumeSnapshot: unknown;
-  jobDescription: string | null | undefined;
-  /**
-   * Distinguishes an owned Job whose description is empty from a missing or
-   * foreign Job. Existing job evidence must never be silently rebuilt against
-   * an absent source.
-   */
-  jobSourceAvailable: boolean;
-};
 
 type ReplaceTargetProposalCommand = {
   kind: "replace_target_proposal";
@@ -30,24 +16,11 @@ type ReplaceTargetProposalCommand = {
 
 type ExistingContentCommand =
   | { kind: "apply_client_edits"; submitted: AiContent }
-  | { kind: "refresh_review"; preserveReviewedAt?: boolean }
   | { kind: "discard_edits" };
 
 export type EvolveApplicationAiContentInput =
-  | {
-      current: AiContent | null;
-      command: ReplaceTargetProposalCommand;
-      reviewContext: ApplicationAiContentReviewContext;
-    }
-  | {
-      current: AiContent;
-      command: ExistingContentCommand;
-      reviewContext?: ApplicationAiContentReviewContext;
-    };
-
-export type EvolveApplicationAiContentResult =
-  | { kind: "evolved"; aiContent: AiContent }
-  | { kind: "review_context_required" };
+  | { current: AiContent | null; command: ReplaceTargetProposalCommand }
+  | { current: AiContent; command: ExistingContentCommand };
 
 function mergeEditableText<T extends AiSummary | AiCoverParagraph>(
   canonical: T,
@@ -63,18 +36,26 @@ function mergeEditableText<T extends AiSummary | AiCoverParagraph>(
   } as T;
 }
 
-function mergeEditableBullet(
-  canonical: AiAddedBullet,
-  submitted: AiAddedBullet | undefined,
-): AiAddedBullet {
-  if (!submitted) return canonical;
-  const { userEdit: _ignored, ...serverOwned } = canonical;
+/**
+ * The browser may narrow or reorder the tailored skills, and nothing else about
+ * them: `aiSelection` is the generation's own record and stays server-owned so
+ * Discard can restore it.
+ *
+ * A submitted selection is a list of indexes, so the worst a forged body can do
+ * is address a skill that does not exist — `resolveSkillsSelection` drops
+ * unresolvable references at render time, and no path turns an index into a
+ * string the candidate never wrote.
+ */
+function mergeEditableSkillsSelection(
+  canonical: AiContent["cv"]["skillsSelection"],
+  submitted: AiContent["cv"]["skillsSelection"],
+): AiContent["cv"]["skillsSelection"] {
+  if (!canonical) return undefined;
   return {
-    ...serverOwned,
-    accepted: submitted.accepted,
-    ...(submitted.userEdit === undefined
-      ? {}
-      : { userEdit: submitted.userEdit }),
+    aiSelection: canonical.aiSelection,
+    ...(submitted?.userSelection
+      ? { userSelection: submitted.userSelection }
+      : {}),
   };
 }
 
@@ -82,24 +63,15 @@ function mergeClientEdits(
   canonical: AiContent,
   submitted: AiContent,
 ): AiContent {
+  const skillsSelection = mergeEditableSkillsSelection(
+    canonical.cv.skillsSelection,
+    submitted.cv.skillsSelection,
+  );
   return {
     ...canonical,
     cv: {
-      ...canonical.cv,
-      summary: mergeEditableText(
-        canonical.cv.summary,
-        submitted.cv.summary,
-      ),
-      latestExperience: {
-        ...canonical.cv.latestExperience,
-        addedBullets:
-          canonical.cv.latestExperience.addedBullets.map((bullet, index) =>
-            mergeEditableBullet(
-              bullet,
-              submitted.cv.latestExperience.addedBullets[index],
-            ),
-          ),
-      },
+      summary: mergeEditableText(canonical.cv.summary, submitted.cv.summary),
+      ...(skillsSelection ? { skillsSelection } : {}),
     },
     cover: {
       paragraphOne: mergeEditableText(
@@ -152,8 +124,7 @@ function replaceTargetProposal(
   return {
     ...proposalWithoutProvenance,
     cv: target === "resume" || !current ? proposal.cv : current.cv,
-    cover:
-      target === "cover" || !current ? proposal.cover : current.cover,
+    cover: target === "cover" || !current ? proposal.cover : current.cover,
     ...(Object.keys(provenance).length > 0 ? { provenance } : {}),
   };
 }
@@ -167,16 +138,13 @@ function resetToOriginalProposal(content: AiContent): AiContent {
         originalText: content.cv.summary.originalText,
         accepted: true,
       },
-      latestExperience: {
-        experienceIndex: content.cv.latestExperience.experienceIndex,
-        addedBullets: content.cv.latestExperience.addedBullets.map((bullet) => ({
-          text: bullet.text,
-          accepted: bullet.qualityGate?.passed ?? true,
-          ...(bullet.qualityGate
-            ? { qualityGate: bullet.qualityGate }
-            : {}),
-        })),
-      },
+      ...(content.cv.skillsSelection
+        ? {
+            skillsSelection: {
+              aiSelection: content.cv.skillsSelection.aiSelection,
+            },
+          }
+        : {}),
     },
     cover: {
       paragraphOne: {
@@ -195,128 +163,40 @@ function resetToOriginalProposal(content: AiContent): AiContent {
   };
 }
 
-function hasCanonicalReviewMetadata(content: AiContent): boolean {
-  return Boolean(
-    content.evidence !== undefined ||
-      content.review !== undefined ||
-      content.cv.summary.evidenceIds?.length ||
-      content.cv.latestExperience.addedBullets.some(
-        (bullet) => Boolean(bullet.evidenceIds?.length),
-      ) ||
-      content.cover.paragraphOne.evidenceIds?.length ||
-      content.cover.paragraphTwo.evidenceIds?.length ||
-      content.cover.paragraphThree.evidenceIds?.length,
-  );
-}
-
-function reviewInputsUnchanged(
-  before: AiContent,
-  after: AiContent,
-): boolean {
-  if (!before.review || !after.review) return false;
-  const { reviewedAt: _beforeReviewedAt, ...beforeReview } = before.review;
-  const { reviewedAt: _afterReviewedAt, ...afterReview } = after.review;
-  return (
-    JSON.stringify(before.evidence ?? []) ===
-      JSON.stringify(after.evidence ?? []) &&
-    JSON.stringify(beforeReview) === JSON.stringify(afterReview) &&
-    JSON.stringify(claimEvidenceAssignments(before)) ===
-      JSON.stringify(claimEvidenceAssignments(after))
-  );
-}
-
-function claimEvidenceAssignments(content: AiContent): string[][] {
-  return [
-    content.cv.summary.evidenceIds ?? [],
-    ...content.cv.latestExperience.addedBullets.map(
-      (bullet) => bullet.evidenceIds ?? [],
-    ),
-    content.cover.paragraphOne.evidenceIds ?? [],
-    content.cover.paragraphTwo.evidenceIds ?? [],
-    content.cover.paragraphThree.evidenceIds ?? [],
-  ];
-}
-
 /**
  * Evolve the server-owned AI Content aggregate through one interface.
  *
- * The implementation owns target preservation, per-target provenance,
- * browser-edit filtering, discard semantics, evidence refresh and review
- * ordering. Callers state an intent and provide canonical source facts; they
- * never sequence merge -> review -> hash themselves.
+ * The implementation owns target preservation, per-target provenance, browser-
+ * edit filtering and discard semantics. Callers state an intent and never
+ * assemble a new aggregate themselves.
+ *
+ * There is no review step. Generated content is judged at the import boundary
+ * by `lib/server/ai/summaryLint.ts` — a deterministic check the model cannot
+ * argue with — and the skills selection can only reference the candidate's own
+ * profile, so there is nothing left for a downstream gate to catch.
  */
 export function evolveApplicationAiContent(
   input: EvolveApplicationAiContentInput,
-): EvolveApplicationAiContentResult {
+): AiContent {
   const command = input.command;
-  let changed: AiContent;
-  let reviewBasis: AiContent;
 
   if (command.kind === "replace_target_proposal") {
-    changed = replaceTargetProposal(
-      input.current,
-      command.proposal,
-      command.target,
-    );
-    reviewBasis = input.current ?? changed;
-  } else {
-    // The input union requires current content for every non-proposal command.
-    // Keep the runtime assertion so an untyped JavaScript caller also fails
-    // closed instead of manufacturing an invalid aggregate.
-    if (!input.current) {
-      throw new AppError({
-        code: "APPLICATION_AI_CONTENT_CURRENT_REQUIRED",
-        status: 409,
-        publicMessage:
-          "There is no existing draft to apply this change to. Generate this job again.",
-      });
-    }
-    reviewBasis = input.current;
-    changed =
-      command.kind === "apply_client_edits"
-        ? mergeClientEdits(input.current, command.submitted)
-        : command.kind === "discard_edits"
-          ? resetToOriginalProposal(input.current)
-          : input.current;
+    return replaceTargetProposal(input.current, command.proposal, command.target);
   }
 
-  const reviewRequired =
-    command.kind === "replace_target_proposal" ||
-    command.kind === "refresh_review" ||
-    input.reviewContext !== undefined ||
-    hasCanonicalReviewMetadata(reviewBasis);
-  if (!reviewRequired) return { kind: "evolved", aiContent: changed };
-
-  const context = input.reviewContext;
-  if (!context || !context.jobSourceAvailable) {
-    return { kind: "review_context_required" };
+  // The input union requires current content for every non-proposal command.
+  // Keep the runtime assertion so an untyped JavaScript caller also fails
+  // closed instead of manufacturing an invalid aggregate.
+  if (!input.current) {
+    throw new AppError({
+      code: "APPLICATION_AI_CONTENT_CURRENT_REQUIRED",
+      status: 409,
+      publicMessage:
+        "There is no existing draft to apply this change to. Generate this job again.",
+    });
   }
 
-  const rebuilt = attachEvidenceAndReview({
-    aiContent: changed,
-    resumeSnapshot: context.resumeSnapshot,
-    jobDescription: context.jobDescription,
-    scopeKey: context.scopeKey,
-  });
-
-  if (
-    command.kind === "refresh_review" &&
-    command.preserveReviewedAt &&
-    rebuilt.review &&
-    reviewBasis.review?.reviewedAt &&
-    reviewInputsUnchanged(reviewBasis, rebuilt)
-  ) {
-    return {
-      kind: "evolved",
-      aiContent: {
-        ...rebuilt,
-        review: {
-          ...rebuilt.review,
-          reviewedAt: reviewBasis.review.reviewedAt,
-        },
-      },
-    };
-  }
-
-  return { kind: "evolved", aiContent: rebuilt };
+  return command.kind === "apply_client_edits"
+    ? mergeClientEdits(input.current, command.submitted)
+    : resetToOriginalProposal(input.current);
 }

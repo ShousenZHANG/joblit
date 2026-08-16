@@ -52,7 +52,7 @@ import type { AiContent } from "@/lib/shared/schemas/aiContent";
 
 function aiContent(): AiContent {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: "2026-07-28T00:00:00.000Z",
     promptMetaHash: "profile-publication-test",
     cv: {
@@ -61,10 +61,7 @@ function aiContent(): AiContent {
         originalText: "Original summary",
         accepted: true,
       },
-      latestExperience: {
-        experienceIndex: 0,
-        addedBullets: [{ text: "Tailored bullet", accepted: true }],
-      },
+      skillsSelection: { aiSelection: [{ group: 0, items: [0] }] },
     },
     cover: {
       paragraphOne: { aiText: "First paragraph", accepted: true },

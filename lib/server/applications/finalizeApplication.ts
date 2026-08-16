@@ -148,13 +148,16 @@ export async function renderCoverLetterPdf(input: {
   return { pdf, filename };
 }
 
-export function buildAtsKeywords(aiContent: AiContent, jobTitle: string) {
-  const values = [
-    ...jobTitle.split(/[\s,/|()-]+/),
-    ...(aiContent.review?.requirements ?? []).flatMap((item) =>
-      item.text.split(/[\s,/|():;-]+/),
-    ),
-  ];
+/**
+ * The words a rendered PDF must contain to count as on-target.
+ *
+ * Only the job title feeds this now. It used to also mine the review's
+ * extracted requirements, but that ledger is gone, and the title was always the
+ * load-bearing half: it is what recruiters search on, and the summary lint
+ * already guarantees the tailored summary states it.
+ */
+export function buildAtsKeywords(jobTitle: string) {
+  const values = jobTitle.split(/[\s,/|()-]+/);
   const seen = new Set<string>();
   return values
     .map((value) => value.normalize("NFKC").trim())

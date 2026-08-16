@@ -27,7 +27,10 @@ const profile = {
     phone: "+61 400 000 000",
   },
   links: [],
-  skills: [{ category: "Platform", items: ["Kubernetes"] }],
+  skills: [
+    { category: "Platform", items: ["Kubernetes", "Terraform"] },
+    { category: "Languages", items: ["Go"] },
+  ],
   experiences: [
     {
       title: "Engineer",
@@ -43,19 +46,19 @@ const profile = {
 };
 
 const aiContent = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   generatedAt: "2026-08-10T00:00:00.000Z",
   promptMetaHash: "prompt-hash",
   provenance: {
     resume: {
       generatedAt: "2026-08-10T00:00:00.000Z",
       promptMetaHash: "resume-prompt",
-      source: "codex_batch",
+      source: "manual_import",
     },
     cover: {
       generatedAt: "2026-08-10T00:01:00.000Z",
       promptMetaHash: "cover-prompt",
-      source: "codex_batch",
+      source: "manual_import",
     },
   },
   cv: {
@@ -64,7 +67,12 @@ const aiContent = {
       originalText: "Software engineer.",
       accepted: true,
     },
-    latestExperience: { experienceIndex: 0, addedBullets: [] },
+    skillsSelection: {
+      aiSelection: [
+        { group: 1, items: [0] },
+        { group: 0, items: [0] },
+      ],
+    },
   },
   cover: {
     paragraphOne: { aiText: "One", accepted: true },
@@ -150,6 +158,45 @@ describe("application review snapshot", () => {
       }),
     });
     expect(profileDependency.getResumeProfile).not.toHaveBeenCalled();
+  });
+
+  it("ships the candidate's own skill bank so the browser can resolve the selection", async () => {
+    // The stored selection is index references only. Without the bank those
+    // indexes address, the review panel cannot render the skills section at
+    // all — so it travels with the snapshot, not through a second request.
+    stores.application.findFirst.mockResolvedValueOnce(applicationRow());
+
+    const result = await loadApplicationReviewSnapshot({
+      userId: USER_ID,
+      applicationId: APPLICATION_ID,
+    });
+
+    expect(result.kind).toBe("ready");
+    if (result.kind !== "ready") return;
+    expect(result.snapshot.masterSkills).toEqual(profile.skills);
+  });
+
+  it("ships an empty bank rather than failing on a profile that will not parse", async () => {
+    // ResumeProfile.skills is a JSON column, so a row written before the
+    // current shape can hold anything. An empty bank makes the panel say so.
+    stores.application.findFirst.mockResolvedValueOnce(
+      applicationRow({
+        resumeProfile: {
+          ...profile,
+          userId: USER_ID,
+          skills: [{ heading: "not a skill group" }],
+        },
+      }),
+    );
+
+    const result = await loadApplicationReviewSnapshot({
+      userId: USER_ID,
+      applicationId: APPLICATION_ID,
+    });
+
+    expect(result.kind).toBe("ready");
+    if (result.kind !== "ready") return;
+    expect(result.snapshot.masterSkills).toEqual([]);
   });
 
   it("fails closed when the bound Job belongs to another user", async () => {

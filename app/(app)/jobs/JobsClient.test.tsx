@@ -2011,11 +2011,11 @@ describe("JobsClient", () => {
 
     await user.click((await screen.findAllByTestId("job-detail-overflow"))[0]);
     await user.click(
-      await screen.findByRole("menuitem", { name: /manual · cv/i }),
+      await screen.findByRole("menuitem", { name: /^tailor$/i }),
     );
 
     const downloadButton = await screen.findByRole("button", {
-      name: /preparing|download zip/i,
+      name: /download the skill pack first/i,
     });
     expect(downloadButton).toBeDisabled();
 
@@ -2043,8 +2043,11 @@ describe("JobsClient", () => {
     await user.click(downloadButton);
 
     expect(
-      await screen.findByRole("button", { name: /copy prompt to clipboard/i }),
+      await screen.findByText(/skill pack up to date/i),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /copy prompt/i }),
+    ).toBeEnabled();
     expect(createObjectUrlSpy).toHaveBeenCalled();
     expect(revokeObjectUrlSpy).toHaveBeenCalled();
     expect(anchorClickSpy).toHaveBeenCalled();
@@ -2146,31 +2149,32 @@ describe("JobsClient", () => {
 
     await user.click((await screen.findAllByTestId("job-detail-overflow"))[0]);
     await user.click(
-      await screen.findByRole("menuitem", { name: /manual · cv/i }),
+      await screen.findByRole("menuitem", { name: /^tailor$/i }),
     );
 
     const downloadButton = await screen.findByRole("button", {
-      name: /download zip/i,
+      name: /download the skill pack first/i,
     });
     await waitFor(() => {
       expect(downloadButton).toBeEnabled();
     });
     await user.click(downloadButton);
     expect(
-      await screen.findByRole("button", { name: /copy prompt to clipboard/i }),
+      await screen.findByText(/skill pack up to date/i),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /cancel/i }));
-
-    await user.click((await screen.findAllByTestId("job-detail-overflow"))[0]);
+    // Same dialog, other document: the pack the user already loaded into their
+    // chatbot covers both, so switching tabs must not ask for it again.
     await user.click(
-      await screen.findByRole("menuitem", { name: /manual · cl/i }),
+      screen.getByRole("tab", { name: messages.tailor.docCover }),
     );
     expect(
-      await screen.findByRole("button", { name: /copy prompt to clipboard/i }),
+      await screen.findByText(/skill pack up to date/i),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /download skill pack/i }),
+      screen.queryByRole("button", {
+        name: /download the skill pack first/i,
+      }),
     ).not.toBeInTheDocument();
 
     const downloadCalls = mockFetch.mock.calls.filter(([request]) => {
@@ -2635,7 +2639,7 @@ describe("JobsClient", () => {
       await screen.findAllByText("Alpha Engineer");
     }
 
-    it("cancels a pending Review request when delete selects the replacement job", async () => {
+    it("fences a pending Review request when the tailoring dialog is closed", async () => {
       const user = userEvent.setup();
       const pending = setupPendingReviewFetch();
       renderWithClient(
@@ -2649,16 +2653,13 @@ describe("JobsClient", () => {
         await screen.findByRole("button", { name: messages.jobs.savedCv }),
       );
       await waitFor(() => expect(pending).toHaveLength(1));
-      await user.click(await findRemoveAction());
+      await user.keyboard("{Escape}");
 
       await waitFor(() => expect(pending[0]?.signal?.aborted).toBe(true));
-      expect(
-        await screen.findByRole("heading", { name: reviewJobB.title }),
-      ).toBeInTheDocument();
       act(() => resolveReview(pending));
       await waitFor(() => {
         expect(
-          screen.queryByRole("heading", { name: "Review tailored CV" }),
+          screen.queryByRole("dialog", { name: messages.tailor.dialog.title }),
         ).not.toBeInTheDocument();
       });
     });
@@ -2690,15 +2691,15 @@ describe("JobsClient", () => {
       view.rerender(ui());
 
       await waitFor(() => expect(pending[0]?.signal?.aborted).toBe(true));
-      expect(
-        await screen.findByRole("heading", { name: reviewJobB.title }),
-      ).toBeInTheDocument();
       act(() => resolveReview(pending));
       await waitFor(() => {
         expect(
-          screen.queryByRole("heading", { name: "Review tailored CV" }),
+          screen.queryByRole("dialog", { name: messages.tailor.dialog.title }),
         ).not.toBeInTheDocument();
       });
+      expect(
+        await screen.findByRole("heading", { name: reviewJobB.title }),
+      ).toBeInTheDocument();
     });
 
     it("gives the standard jobs list one active row tab stop", async () => {

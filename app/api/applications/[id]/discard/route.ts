@@ -69,19 +69,6 @@ function applicationDiscardResponse(
       { status: 500 },
     );
   }
-  if (result.kind === "canonical_evidence_unavailable") {
-    return NextResponse.json(
-      {
-        error: {
-          code: "CANONICAL_EVIDENCE_UNAVAILABLE",
-          message:
-            "The server source snapshot is unavailable. Re-generate this draft.",
-        },
-        requestId,
-      },
-      { status: 409 },
-    );
-  }
   return NextResponse.json(
     {
       error: {

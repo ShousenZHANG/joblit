@@ -22,12 +22,23 @@ describe("prompt rule template contract filtering", () => {
         "Return skillsFinal as the COMPLETE final skills list.",
         "Do not return skillsAdditions; return skillsFinal only.",
         "Flag irrelevant base bullets in output comments but still include them to preserve verbatim.",
-        "Keep added bullets under 200 characters.",
+        "Bold 3-5 JD-aligned keywords in cvSummary.",
       ]),
     ).toEqual([
       "Keep every statement grounded in the Master Resume Profile.",
-      "Keep added bullets under 200 characters.",
+      "Bold 3-5 JD-aligned keywords in cvSummary.",
     ]);
+  });
+
+  it("removes stored rules that still ask for generated experience text", () => {
+    expect(
+      sanitizePromptCvRules([
+        "Return latestExperience.addedBullets as additions only.",
+        "Keep added bullets under 200 characters.",
+        "Start each added bullet with a strong action verb.",
+        "Order skillsSelection by relevance to the posting.",
+      ]),
+    ).toEqual(["Order skillsSelection by relevance to the posting."]);
   });
 
   it("falls back to current definitions when every stored CV rule is retired", () => {
@@ -64,13 +75,20 @@ describe("prompt rule template contract filtering", () => {
 
   it("keeps current defaults free of retired contract vocabulary", () => {
     expect(DEFAULT_CV_RULES.join("\n")).not.toMatch(
-      /skillsFinal|skillsAdditions|latestExperience\.bullets|complete final bullet|reorder/i,
+      /skillsFinal|skillsAdditions|latestExperience|addedBullets|bullets?\b|reorder/i,
     );
-    expect(DEFAULT_CV_RULES.join("\n")).toContain(
-      "latestExperience.addedBullets",
-    );
+    expect(DEFAULT_CV_RULES.join("\n")).toContain("skillsSelection");
     expect(DEFAULT_COVER_RULES.join("\n")).not.toMatch(
       /candidateTitle|signatureName|subject should|salutation should/i,
+    );
+  });
+
+  // A default that its own sanitizer strips would silently swap the whole
+  // active template for the fallback list, which is the same list.
+  it("survives its own retired-rule filter", () => {
+    expect(sanitizePromptCvRules(DEFAULT_CV_RULES)).toEqual(DEFAULT_CV_RULES);
+    expect(sanitizePromptCoverRules(DEFAULT_COVER_RULES)).toEqual(
+      DEFAULT_COVER_RULES,
     );
   });
 });

@@ -80,13 +80,17 @@ const PLACEHOLDER_JOB = {
   description: "{{JOB_DESCRIPTION}}",
 };
 
+// A single placeholder skill group survives here so a context-free pack still
+// renders the numbered skill bank the resume prompt asks the model to index
+// into. Without one, the template would show an empty bank and teach nothing
+// about the shape the reader has to fill in.
 const PLACEHOLDER_RESUME_SNAPSHOT = {
   basics: {
     fullName: "{{CANDIDATE_NAME}}",
     title: "{{CANDIDATE_TITLE}}",
   },
   summary: "{{RESUME_SUMMARY}}",
-  skills: [],
+  skills: [{ category: "{{SKILL_GROUP}}", items: ["{{SKILL}}"] }],
   experiences: [],
   projects: [],
   education: [],
@@ -226,10 +230,18 @@ This pack is configured for: ${locale}
 function buildV3ChangelogMd(): string {
   return `# Changelog
 
+## 3.1.0
+
+- Resume output is \`cvSummary\` plus \`skillsSelection\`. The AI no longer
+  writes experience text, and no longer writes skill names: it selects and
+  orders the candidate's existing skills by index into their own profile.
+- The summary carries a hard 120-350 character window, must contain the
+  posting's role title, and may state no number or skill the profile lacks.
+
 ## 3.0.0
 
-- Resume output is delta-only: \`cvSummary\` plus zero to three
-  \`latestExperience.addedBullets\`; skills remain Master Resume Profile-owned.
+- Resume output became delta-only and skills remained Master Resume
+  Profile-owned.
 - Cover output contains only the three body paragraphs.
 - Downloaded packs use the user's active effective rule template and a
   deterministic content version over every final logical file.
@@ -316,6 +328,9 @@ export function buildSkillPackV3Files(
     "",
     "## Key Rules",
     "- Every claim must be grounded in the resume snapshot — no fabrication.",
+    "- The resume target returns a summary plus index references into the",
+    "  candidate's own skills. Never write a skill name, and never write",
+    "  experience text: the master profile owns both.",
     "- Output strict JSON only (no code fences, no markdown outside JSON).",
     "- Bold JD-critical keywords with **keyword** markers.",
     "- Run the quality gates self-check (instructions/quality-gates.md) before returning.",

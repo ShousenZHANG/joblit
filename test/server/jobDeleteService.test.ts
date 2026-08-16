@@ -15,12 +15,6 @@ const prismaStore = vi.hoisted(() => ({
     upsert: vi.fn(),
     createMany: vi.fn(),
   },
-  evidenceSnapshot: {
-    deleteMany: vi.fn(),
-  },
-  claimEvidence: {
-    findMany: vi.fn(),
-  },
   applicationBatch: {
     findFirst: vi.fn(),
     update: vi.fn(),
@@ -128,14 +122,6 @@ describe("jobDeleteService", () => {
       prismaStore.operations.push("deletedJobUrl.createMany");
       return { count: 1 };
     });
-    prismaStore.evidenceSnapshot.deleteMany.mockImplementation(async () => {
-      prismaStore.operations.push("evidenceSnapshot.deleteMany");
-      return { count: 0 };
-    });
-    prismaStore.claimEvidence.findMany.mockImplementation(async () => {
-      prismaStore.operations.push("claimEvidence.findMany");
-      return [];
-    });
     prismaStore.applicationBatch.findFirst.mockImplementation(async () => {
       prismaStore.operations.push("applicationBatch.findFirst");
       return null;
@@ -163,8 +149,6 @@ describe("jobDeleteService", () => {
         job: prismaStore.job,
         application: prismaStore.application,
         deletedJobUrl: prismaStore.deletedJobUrl,
-        evidenceSnapshot: prismaStore.evidenceSnapshot,
-        claimEvidence: prismaStore.claimEvidence,
         applicationBatch: prismaStore.applicationBatch,
         applicationBatchTask: prismaStore.applicationBatchTask,
       }),
@@ -199,9 +183,6 @@ describe("jobDeleteService", () => {
         "application.findUnique",
         "deletedJobUrl.upsert",
         "application.deleteMany",
-        // After the Application delete cascades its ClaimEvidence edges, and
-        // before the Job delete nulls the jobId these rows are found by.
-        "evidenceSnapshot.deleteMany",
         "job.deleteMany",
       ]);
       expect(prismaStore.job.deleteMany).toHaveBeenCalledWith({
@@ -285,33 +266,6 @@ describe("jobDeleteService", () => {
       });
     });
 
-    it("preserves evidence that still backs a retained STAR story", async () => {
-      prismaStore.job.findFirst.mockResolvedValueOnce({
-        id: "job-1",
-        jobUrl: "https://e.com/1",
-      });
-      prismaStore.application.findUnique.mockResolvedValueOnce({
-        id: "application-1",
-        jobId: "job-1",
-        resumeTexUrl: null,
-        resumePdfUrl: null,
-        coverTexUrl: null,
-        coverPdfUrl: null,
-      });
-      prismaStore.claimEvidence.findMany.mockResolvedValueOnce([
-        { evidenceSnapshotId: "star-evidence" },
-      ]);
-
-      await deleteJob("user-1", "job-1");
-
-      expect(prismaStore.evidenceSnapshot.deleteMany).toHaveBeenCalledWith({
-        where: {
-          userId: "user-1",
-          OR: [{ jobId: { in: ["job-1"] } }, { id: { in: ["star-evidence"] } }],
-          claims: { none: {} },
-        },
-      });
-    });
   });
 
   describe("batchDeleteJobs", () => {
@@ -351,75 +305,9 @@ describe("jobDeleteService", () => {
         "application.findMany",
         "deletedJobUrl.createMany",
         "application.deleteMany",
-        "evidenceSnapshot.deleteMany",
         "job.deleteMany",
       ]);
       expect(result).toMatchObject({ deleted: 2, notFound: 1 });
-    });
-
-    it("deletes only the evidence no surviving Application still cites", async () => {
-      prismaStore.job.findMany.mockImplementation(async () => {
-        prismaStore.operations.push("job.findMany");
-        return [
-          { id: "a", jobUrl: "https://example.com/a" },
-          { id: "b", jobUrl: "https://example.com/b" },
-        ];
-      });
-      prismaStore.job.deleteMany.mockImplementation(async () => {
-        prismaStore.operations.push("job.deleteMany");
-        return { count: 2 };
-      });
-      prismaStore.application.findMany.mockImplementation(async () => {
-        prismaStore.operations.push("application.findMany");
-        return [
-          {
-            id: "application-a",
-            jobId: "a",
-            resumeTexUrl: null,
-            resumePdfUrl: null,
-            coverTexUrl: null,
-            coverPdfUrl: null,
-          },
-          {
-            id: "application-b",
-            jobId: "b",
-            resumeTexUrl: null,
-            resumePdfUrl: null,
-            coverTexUrl: null,
-            coverPdfUrl: null,
-          },
-        ];
-      });
-      prismaStore.claimEvidence.findMany.mockImplementation(async () => {
-        prismaStore.operations.push("claimEvidence.findMany");
-        return [
-          { evidenceSnapshotId: "shared-evidence" },
-          { evidenceSnapshotId: "shared-evidence" },
-        ];
-      });
-
-      await batchDeleteJobs("user-1", ["a", "b"]);
-
-      expect(prismaStore.claimEvidence.findMany).toHaveBeenCalledWith({
-        where: {
-          userId: "user-1",
-          applicationId: { in: ["application-a", "application-b"] },
-        },
-        select: { evidenceSnapshotId: true },
-      });
-      // Candidate ids are captured before the Application cascade. This finds
-      // a shared snapshot again when its original Job was deleted earlier and
-      // its scalar jobId has already become null.
-      expect(prismaStore.evidenceSnapshot.deleteMany).toHaveBeenCalledWith({
-        where: {
-          userId: "user-1",
-          OR: [
-            { jobId: { in: ["a", "b"] } },
-            { id: { in: ["shared-evidence"] } },
-          ],
-          claims: { none: {} },
-        },
-      });
     });
 
     it("takes application locks in stable job-id order before reading artifacts", async () => {

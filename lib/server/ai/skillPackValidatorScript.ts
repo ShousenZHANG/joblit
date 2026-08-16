@@ -1,14 +1,25 @@
+import { CV_SUMMARY_LENGTH } from "@/lib/shared/schemas/applicationGenerationOutput";
+
 /**
  * Source shipped as scripts/validate.mjs inside Skill Pack V3.
  *
  * Keep this zero-dependency: users run it with stock Node.js after generating
- * JSON in an external model.
+ * JSON in an external model. Numeric bounds are interpolated from the canonical
+ * schema rather than retyped, so a contract change cannot leave the downloaded
+ * validator passing output the server will reject.
  */
 export const SKILL_PACK_VALIDATOR_MJS = `#!/usr/bin/env node
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { argv, exit } from "node:process";
+
+const SUMMARY_MIN = ${CV_SUMMARY_LENGTH.min};
+const SUMMARY_MAX = ${CV_SUMMARY_LENGTH.max};
+// Mirrors ResumeProfileSchema.skills, which the output schema shipped alongside
+// this script (schema/resume-output.schema.json) states as maxItems.
+const MAX_GROUPS = 12;
+const MAX_ITEMS = 30;
 
 const args = argv.slice(2);
 const file = args.find((argument) => !argument.startsWith("--"));
@@ -50,6 +61,22 @@ try {
   // The locale file is optional when the validator is copied out of the pack.
 }
 
+// Group sizes from the packaged resume snapshot, when the pack shipped one.
+// With it, an index that does not exist on the profile fails here instead of at
+// import; without it only the index shape can be checked.
+let skillBank = null;
+try {
+  const snapshotPath = join(here, "..", "context", "resume-snapshot.json");
+  const snapshot = JSON.parse(readFileSync(snapshotPath, "utf8"));
+  if (snapshot && Array.isArray(snapshot.skills)) {
+    skillBank = snapshot.skills.map((group) =>
+      group && Array.isArray(group.items) ? group.items.length : 0,
+    );
+  }
+} catch {
+  // No packaged context; index-existence checking is skipped.
+}
+
 let raw;
 try {
   raw = readFileSync(file, "utf8");
@@ -80,6 +107,8 @@ const unexpectedKeys = (value, allowed) =>
   value && typeof value === "object" && !Array.isArray(value)
     ? Object.keys(value).filter((key) => !allowed.includes(key))
     : [];
+const isIndex = (value, exclusiveMax) =>
+  Number.isInteger(value) && value >= 0 && value < exclusiveMax;
 
 if (/\\x60\\x60\\x60/.test(raw)) {
   fail("JSON_ONLY", "Output contains code fences; return raw JSON only");
@@ -96,7 +125,7 @@ if (data && typeof data === "object" && !Array.isArray(data)) {
   if (target === "resume") {
     const extraRootKeys = unexpectedKeys(data, [
       "cvSummary",
-      "latestExperience",
+      "skillsSelection",
     ]);
     if (extraRootKeys.length > 0) {
       fail(
@@ -110,76 +139,121 @@ if (data && typeof data === "object" && !Array.isArray(data)) {
         "resume output must not contain a cover payload",
       );
     }
-    if (typeof data.cvSummary !== "string" || !data.cvSummary.trim()) {
-      fail("SCHEMA", "cvSummary missing or empty");
-    } else if (data.cvSummary.trim().length > 2000) {
-      fail("SCHEMA", "cvSummary exceeds 2000 chars");
-    }
 
-    const latestExperience = data.latestExperience;
-    if (
-      !latestExperience ||
-      typeof latestExperience !== "object" ||
-      Array.isArray(latestExperience)
-    ) {
-      fail("SCHEMA", "latestExperience object missing");
+    const summary =
+      typeof data.cvSummary === "string" ? data.cvSummary.trim() : "";
+    if (!summary) {
+      fail("SCHEMA", "cvSummary missing or empty");
     } else {
-      const extraLatestKeys = unexpectedKeys(latestExperience, [
-        "addedBullets",
-      ]);
-      if (extraLatestKeys.length > 0) {
+      if (summary.length < SUMMARY_MIN || summary.length > SUMMARY_MAX) {
         fail(
-          "SCHEMA",
-          "unexpected latestExperience key(s): " +
-            extraLatestKeys.join(", "),
+          "SUMMARY_LENGTH",
+          "cvSummary is " +
+            summary.length +
+            " chars; needs " +
+            SUMMARY_MIN +
+            "-" +
+            SUMMARY_MAX,
         );
       }
+      if (hasUncleanBold(summary)) {
+        fail("BOLD_MARKERS", "cvSummary has unclean ** markers");
+      }
+      if (boldCount(summary) < 1) {
+        warn("BOLD_MARKERS", "cvSummary has no **bold** JD keyword");
+      }
+    }
 
-      if (!Array.isArray(latestExperience.addedBullets)) {
-        fail("SCHEMA", "latestExperience.addedBullets missing");
-      } else {
-        const addedBullets = latestExperience.addedBullets;
-        if (addedBullets.length > 3) {
+    const selection = data.skillsSelection;
+    if (!Array.isArray(selection)) {
+      fail("SCHEMA", "skillsSelection missing or not an array");
+    } else if (selection.length < 1 || selection.length > MAX_GROUPS) {
+      fail(
+        "SELECTION_SIZE",
+        "skillsSelection has " +
+          selection.length +
+          " group(s); needs 1-" +
+          MAX_GROUPS,
+      );
+    } else {
+      const seenGroups = new Set();
+      selection.forEach((entry, index) => {
+        const label = "skillsSelection[" + index + "]";
+        if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+          fail("SCHEMA", label + " is not an object");
+          return;
+        }
+        const extraEntryKeys = unexpectedKeys(entry, ["group", "items"]);
+        if (extraEntryKeys.length > 0) {
           fail(
-            "ADDED_BULLETS_COUNT",
-            "latestExperience.addedBullets has " +
-              addedBullets.length +
-              " items (max 3)",
+            "SCHEMA",
+            label + " has unexpected key(s): " + extraEntryKeys.join(", "),
           );
         }
-        addedBullets.forEach((bullet, index) => {
-          if (typeof bullet !== "string" || !bullet.trim()) {
+
+        let groupOk = true;
+        if (!isIndex(entry.group, MAX_GROUPS)) {
+          fail(
+            "SELECTION_INDEX",
+            label + ".group must be an integer 0-" + (MAX_GROUPS - 1),
+          );
+          groupOk = false;
+        } else if (seenGroups.has(entry.group)) {
+          fail(
+            "SELECTION_DUPLICATE",
+            "group " + entry.group + " is selected more than once",
+          );
+        } else {
+          seenGroups.add(entry.group);
+        }
+        if (groupOk && skillBank && entry.group >= skillBank.length) {
+          fail(
+            "SELECTION_OUT_OF_BANK",
+            "group " + entry.group + " does not exist on the resume snapshot",
+          );
+          groupOk = false;
+        }
+
+        if (
+          !Array.isArray(entry.items) ||
+          entry.items.length < 1 ||
+          entry.items.length > MAX_ITEMS
+        ) {
+          fail(
+            "SCHEMA",
+            label + ".items must be an array of 1-" + MAX_ITEMS + " indexes",
+          );
+          return;
+        }
+        const groupSize =
+          groupOk && skillBank ? skillBank[entry.group] : null;
+        const seenItems = new Set();
+        entry.items.forEach((item, itemIndex) => {
+          const itemLabel = label + ".items[" + itemIndex + "]";
+          if (!isIndex(item, MAX_ITEMS)) {
             fail(
-              "SCHEMA",
-              "added bullet " +
-                (index + 1) +
-                " is not a non-empty string",
+              "SELECTION_INDEX",
+              itemLabel + " must be an integer 0-" + (MAX_ITEMS - 1),
             );
             return;
           }
-          if (bullet.length > 320) {
-            fail(
-              "BULLET_LENGTH",
-              "added bullet " + (index + 1) + " exceeds 320 chars",
-            );
+          if (seenItems.has(item)) {
+            fail("SELECTION_DUPLICATE", itemLabel + " repeats index " + item);
           }
-          if (hasUncleanBold(bullet)) {
+          seenItems.add(item);
+          if (groupSize !== null && item >= groupSize) {
             fail(
-              "BOLD_MARKERS",
-              "added bullet " + (index + 1) + " has unclean ** markers",
+              "SELECTION_OUT_OF_BANK",
+              itemLabel +
+                " points past group " +
+                entry.group +
+                ", which has " +
+                groupSize +
+                " skill(s)",
             );
           }
         });
-      }
-    }
-
-    if (typeof data.cvSummary === "string") {
-      if (hasUncleanBold(data.cvSummary)) {
-        fail("BOLD_MARKERS", "cvSummary has unclean ** markers");
-      }
-      if (boldCount(data.cvSummary) < 1) {
-        warn("BOLD_MARKERS", "cvSummary has no **bold** JD keyword");
-      }
+      });
     }
   } else {
     const extraRootKeys = unexpectedKeys(data, ["cover"]);
@@ -189,11 +263,7 @@ if (data && typeof data === "object" && !Array.isArray(data)) {
         "unexpected cover output key(s): " + extraRootKeys.join(", "),
       );
     }
-    if (
-      "cvSummary" in data ||
-      "latestExperience" in data ||
-      "skillsFinal" in data
-    ) {
+    if ("cvSummary" in data || "skillsSelection" in data) {
       fail("TARGET_LEAK", "cover output must not contain resume keys");
     }
 
@@ -317,8 +387,19 @@ node scripts/validate.mjs my-output.json --target=cover  --locale=zh-CN
 - Exit 1: hard contract failure; fix and re-run.
 - Exit 2: usage error or unreadable file.
 
-Hard gates include JSON validity, no code fences, exact target keys, zero to
-three \`latestExperience.addedBullets\`, no skills fields, only the three cover
-paragraph fields, string and length checks, and clean \`**bold**\` markers.
-Cover word-count and keyword-bolding drift remain non-blocking warnings.
+Resume hard gates: JSON validity, no code fences, exactly \`cvSummary\` and
+\`skillsSelection\`, a ${CV_SUMMARY_LENGTH.min}-${CV_SUMMARY_LENGTH.max}
+character summary, clean \`**bold**\` markers, and a \`skillsSelection\` made of
+integer indexes only, each group selected once and each index unique within its
+group. When the pack was exported with \`context/resume-snapshot.json\`, indexes
+are also checked against the real group sizes; without it only their shape can
+be checked, and Joblit performs the existence check at import.
+
+Cover hard gates: only the three body paragraph fields, string and length
+checks, and clean \`**bold**\` markers. Cover word-count and keyword-bolding
+drift remain non-blocking warnings.
+
+This validator cannot see your master profile's wording, so the summary's
+grounding rules — the role title must be present, and every number and skill
+must already exist on the profile — are enforced by Joblit on import.
 `;

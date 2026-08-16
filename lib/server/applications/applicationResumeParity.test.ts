@@ -27,6 +27,11 @@ vi.mock("@/lib/server/latex/mapResumeProfile", () => ({
 import { buildManualImportArtifact } from "./manualImportArtifact";
 import { renderApplicationPdf } from "./finalizeApplication";
 
+const skills = [
+  { label: "Core", items: ["TypeScript", "Node.js"] },
+  { label: "Cloud", items: ["AWS"] },
+];
+
 const masterRenderInput: ResumeRenderInput = {
   candidate: {
     name: "Jane Doe",
@@ -41,7 +46,7 @@ const masterRenderInput: ResumeRenderInput = {
     websiteText: undefined,
   },
   summary: "Master summary",
-  skills: [{ label: "Core", items: ["TypeScript"] }],
+  skills,
   experiences: [
     {
       title: "Engineer",
@@ -66,7 +71,25 @@ const profile = {
       bullets: ["Built TypeScript APIs.", "Maintained CI/CD."],
     },
   ],
+  skills,
 };
+
+const job = {
+  title: "Platform Engineer",
+  company: "Example Co",
+  description: "Build TypeScript APIs and maintain CI/CD.",
+};
+
+const SUMMARY =
+  "Platform Engineer building **TypeScript** APIs and maintaining CI/CD on " +
+  "AWS, focused on reliable delivery for product teams that depend on Node.js " +
+  "services running in production.";
+
+/** Cloud first, Core narrowed to one item — a tailored, non-default order. */
+const SELECTION = [
+  { group: 1, items: [0] },
+  { group: 0, items: [1] },
+];
 
 describe("Application resume render parity", () => {
   beforeEach(() => {
@@ -78,25 +101,16 @@ describe("Application resume render parity", () => {
 
   it("renders the same input for direct FINAL and DRAFT to FINAL", async () => {
     const direct = buildManualImportArtifact({
-      evidenceScopeKey: "user-1",
       target: "resume",
       modelOutput: JSON.stringify({
-        cvSummary: "Tailored **summary**.",
-        latestExperience: {
-          addedBullets: [
-            "Automated TypeScript APIs delivery for production services.",
-          ],
-        },
+        cvSummary: SUMMARY,
+        skillsSelection: SELECTION,
       }),
       source: "manual_import",
       promptMetaHash: "prompt-hash",
       renderInput: masterRenderInput,
       profile,
-      job: {
-        title: "Platform Engineer",
-        company: "Example Co",
-        description: "Build TypeScript APIs and maintain CI/CD.",
-      },
+      job,
     });
 
     expect(direct.ok).toBe(true);
@@ -111,8 +125,8 @@ describe("Application resume render parity", () => {
       aiContent: direct.aiContent,
       job: {
         id: "job-1",
-        title: "Platform Engineer",
-        company: "Example Co",
+        title: job.title,
+        company: job.company,
         market: "AU",
       },
     });
@@ -121,11 +135,30 @@ describe("Application resume render parity", () => {
     expect(resumeRender.renderResumeTex.mock.calls[0]?.[0]).toEqual(
       directRenderInput,
     );
-    expect(directRenderInput?.skills).toEqual(masterRenderInput.skills);
-    expect(directRenderInput?.experiences[0]?.bullets).toEqual([
-      "Built TypeScript APIs.",
-      "Maintained CI/CD.",
-      "Automated TypeScript APIs delivery for production services.",
+  });
+
+  it("carries the tailored skill order into both renders, not the profile default", () => {
+    // Parity is only meaningful if the two paths agree on something the master
+    // profile does not already say.
+    buildManualImportArtifact({
+      target: "resume",
+      modelOutput: JSON.stringify({
+        cvSummary: SUMMARY,
+        skillsSelection: SELECTION,
+      }),
+      source: "manual_import",
+      promptMetaHash: "prompt-hash",
+      renderInput: masterRenderInput,
+      profile,
+      job,
+    });
+
+    const rendered = resumeRender.renderResumeTex.mock.calls[0]?.[0];
+    expect(rendered?.skills).toEqual([
+      { label: "Cloud", items: ["AWS"] },
+      { label: "Core", items: ["Node.js"] },
     ]);
+    expect(rendered?.skills).not.toEqual(masterRenderInput.skills);
+    expect(rendered?.experiences).toEqual(masterRenderInput.experiences);
   });
 });

@@ -25,10 +25,26 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
 });
 
 import { useTailorReviewController } from "./useTailorReviewController";
+import type { JobItem } from "../types";
 
 const APPLICATION_ID = "22222222-2222-4222-8222-222222222222";
 const JOB_ID = "33333333-3333-4333-8333-333333333333";
 const OTHER_JOB_ID = "44444444-4444-4444-8444-444444444444";
+
+function job(overrides: Partial<JobItem> = {}): JobItem {
+  return {
+    id: JOB_ID,
+    title: "Platform Engineer",
+    company: "Lumi",
+    location: "Sydney",
+    jobUrl: "https://example.com/job",
+    status: "NEW",
+    createdAt: "2026-08-01T00:00:00.000Z",
+    updatedAt: "2026-08-01T00:00:00.000Z",
+    applicationId: APPLICATION_ID,
+    ...overrides,
+  } as JobItem;
+}
 
 const snapshot = {
   applicationId: APPLICATION_ID,
@@ -47,28 +63,16 @@ const snapshot = {
   },
   aiContentHash: "content-hash",
   aiContent: {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: "2026-08-10T00:00:00.000Z",
     promptMetaHash: "prompt-hash",
-    provenance: {
-      resume: {
-        generatedAt: "2026-08-10T00:00:00.000Z",
-        promptMetaHash: "resume-prompt",
-        source: "codex_batch",
-      },
-      cover: {
-        generatedAt: "2026-08-10T00:01:00.000Z",
-        promptMetaHash: "cover-prompt",
-        source: "codex_batch",
-      },
-    },
     cv: {
       summary: {
         aiText: "Platform engineer.",
         originalText: "Engineer.",
         accepted: true,
       },
-      latestExperience: { experienceIndex: 0, addedBullets: [] },
+      skillsSelection: { aiSelection: [{ group: 0, items: [0] }] },
     },
     cover: {
       paragraphOne: { aiText: "One", accepted: true },
@@ -76,6 +80,7 @@ const snapshot = {
       paragraphThree: { aiText: "Three", accepted: true },
     },
   },
+  masterSkills: [{ category: "Languages", items: ["TypeScript"] }],
   documents: {
     resume: { pdfUrl: "https://example.com/cv.pdf", pdfName: "Stored CV.pdf" },
     cover: { pdfUrl: "https://example.com/cl.pdf", pdfName: "Stored CL.pdf" },
@@ -106,21 +111,18 @@ describe("useTailorReviewController", () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it("loads one owned snapshot on demand and opens the existing edit session", async () => {
+  it("opens the dialog immediately and loads the owned snapshot behind it", async () => {
     const fetchMock = vi.fn().mockResolvedValue(json(snapshot));
     vi.stubGlobal("fetch", fetchMock);
     const { result } = renderHook(() => useTailorReviewController());
 
-    let opened = false;
-    await act(async () => {
-      opened = await result.current.openApplicationReview({
-        applicationId: APPLICATION_ID,
-        jobId: JOB_ID,
-        target: "cover",
-      });
-    });
+    act(() => result.current.openTailorDialog(job(), "cover"));
 
-    expect(opened).toBe(true);
+    expect(result.current.session).toEqual({
+      job: expect.objectContaining({ id: JOB_ID }),
+      target: "cover",
+    });
+    await waitFor(() => expect(result.current.draft).not.toBeNull());
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/applications/${APPLICATION_ID}/review-snapshot`,
       expect.objectContaining({
@@ -131,24 +133,37 @@ describe("useTailorReviewController", () => {
     expect(result.current.draft).toEqual(
       expect.objectContaining({
         applicationId: APPLICATION_ID,
-        target: "cover",
         source: "ai",
         initialAiContentHash: "content-hash",
-        pdfName: "Stored CL.pdf",
+        masterSkills: [{ category: "Languages", items: ["TypeScript"] }],
       }),
     );
-    expect(result.current.loadError).toBeNull();
+    expect(result.current.draftError).toBeNull();
   });
 
-  it("keeps the caller in Batch details when loading is rejected", async () => {
+  it("starts at the prompt step when the job has no Application yet", () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useTailorReviewController());
+
+    act(() =>
+      result.current.openTailorDialog(job({ applicationId: null }), "resume"),
+    );
+
+    expect(result.current.session).not.toBeNull();
+    expect(result.current.draft).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps the dialog open and reports why a snapshot could not be loaded", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
         json(
           {
             error: {
-              code: "APPLICATION_REVIEW_SETTLING",
-              message: "Generation is still settling.",
+              code: "APPLICATION_REVIEW_UNAVAILABLE",
+              message: "This generated document cannot be edited safely.",
             },
           },
           409,
@@ -157,21 +172,17 @@ describe("useTailorReviewController", () => {
     );
     const { result } = renderHook(() => useTailorReviewController());
 
-    let opened = true;
-    await act(async () => {
-      opened = await result.current.openApplicationReview({
-        applicationId: APPLICATION_ID,
-        jobId: JOB_ID,
-        target: "resume",
-      });
-    });
+    act(() => result.current.openTailorDialog(job(), "resume"));
+    await waitFor(() => expect(result.current.draftError).not.toBeNull());
 
-    expect(opened).toBe(false);
+    expect(result.current.session).not.toBeNull();
     expect(result.current.draft).toBeNull();
-    expect(result.current.loadError).toBe("Generation is still settling.");
+    expect(result.current.draftError).toBe(
+      "This generated document cannot be edited safely.",
+    );
   });
 
-  it("cancels and fences a stale response so it cannot open after close", async () => {
+  it("fences a stale response so it cannot land after the dialog closed", async () => {
     let resolveFetch!: (response: Response) => void;
     vi.stubGlobal(
       "fetch",
@@ -184,54 +195,64 @@ describe("useTailorReviewController", () => {
     );
     const { result } = renderHook(() => useTailorReviewController());
 
-    let request!: Promise<boolean>;
-    act(() => {
-      request = result.current.openApplicationReview({
-        applicationId: APPLICATION_ID,
-        jobId: JOB_ID,
-        target: "resume",
-      });
+    act(() => result.current.openTailorDialog(job(), "resume"));
+    await waitFor(() => expect(result.current.draftLoading).toBe(true));
+    act(() => result.current.cancelTailorDialog());
+    await act(async () => {
+      resolveFetch(json(snapshot));
     });
-    await waitFor(() => expect(result.current.loading).not.toBeNull());
-    act(() => result.current.cancelApplicationReviewLoad());
-    resolveFetch(json(snapshot));
-    await act(async () => void (await request));
 
+    expect(result.current.session).toBeNull();
     expect(result.current.draft).toBeNull();
-    expect(result.current.loading).toBeNull();
+    expect(result.current.draftLoading).toBe(false);
   });
 
-  it("fails closed when the loaded Application belongs to a different job context", async () => {
+  it("fails closed when the loaded Application belongs to a different job", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(snapshot)));
     const { result } = renderHook(() => useTailorReviewController());
 
-    let opened = true;
-    await act(async () => {
-      opened = await result.current.openApplicationReview({
-        applicationId: APPLICATION_ID,
-        jobId: OTHER_JOB_ID,
-        target: "resume",
-      });
-    });
+    act(() =>
+      result.current.openTailorDialog(job({ id: OTHER_JOB_ID }), "resume"),
+    );
+    await waitFor(() => expect(result.current.draftError).not.toBeNull());
 
-    expect(opened).toBe(false);
     expect(result.current.draft).toBeNull();
-    expect(result.current.loadError).toBe(
+    expect(result.current.draftError).toBe(
       "This result no longer matches the selected job.",
     );
   });
 
-  it("patches the Jobs cache after the shared editor finalizes", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(snapshot)));
+  it("re-reads the snapshot after an import so the skill bank is present", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json(snapshot));
+    vi.stubGlobal("fetch", fetchMock);
     const { result } = renderHook(() => useTailorReviewController());
 
+    act(() =>
+      result.current.openTailorDialog(job({ applicationId: null }), "resume"),
+    );
+    let loaded = false;
     await act(async () => {
-      await result.current.openApplicationReview({
+      loaded = await result.current.handleImported({
         applicationId: APPLICATION_ID,
         jobId: JOB_ID,
         target: "resume",
       });
     });
+
+    expect(loaded).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.current.draft?.source).toBe("manual_import");
+    expect(result.current.tailorSourceByJob[JOB_ID]).toEqual({
+      cv: "manual_import",
+    });
+  });
+
+  it("patches the Jobs cache after the editor publishes", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(snapshot)));
+    const { result } = renderHook(() => useTailorReviewController());
+
+    act(() => result.current.openTailorDialog(job(), "resume"));
+    await waitFor(() => expect(result.current.draft).not.toBeNull());
     act(() => {
       result.current.handleFinalized({
         target: "resume",

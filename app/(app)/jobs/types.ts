@@ -4,6 +4,10 @@ import type {
   JobsListResponse,
 } from "@/lib/shared/schemas/jobsList";
 import type { JobStatusValue } from "@/lib/shared/jobStatus";
+import type {
+  CoverGenerationOutput,
+  ResumeGenerationOutput,
+} from "@/lib/shared/schemas/applicationGenerationOutput";
 
 export type JobStatus = JobStatusValue;
 
@@ -35,20 +39,10 @@ export type { JobDetailResponse };
 export type CvSource = "ai" | "base" | "manual_import" | "local_ai";
 export type CoverSource = "ai" | "fallback" | "manual_import" | "local_ai";
 
-export type ResumeImportOutput = {
-  cvSummary: string;
-  latestExperience: {
-    addedBullets: string[];
-  };
-};
-
-export type CoverImportOutput = {
-  cover: {
-    paragraphOne: string;
-    paragraphTwo: string;
-    paragraphThree: string;
-  };
-};
+// Derived from the schemas the server validates against, so a client that
+// believes a paste is importable cannot disagree with the import boundary.
+export type ResumeImportOutput = ResumeGenerationOutput;
+export type CoverImportOutput = CoverGenerationOutput;
 
 export type ExternalPromptMeta = {
   ruleSetId: string;

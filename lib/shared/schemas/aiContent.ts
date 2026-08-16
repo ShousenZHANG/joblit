@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SkillsSelectionSchema } from "./applicationGenerationOutput";
 
 /**
  * Versioned snapshot of every AI proposal made for an Application,
@@ -9,10 +10,10 @@ import { z } from "zod";
  *
  * SCHEMA VERSIONING:
  * Bump AI_CONTENT_SCHEMA_VERSION whenever the JSON shape changes in a
- * non-additive way. The migration plan must convert older rows during
- * deploy; readers should reject unknown versions explicitly.
+ * non-additive way. Older rows are upgraded on read by `upgradeLegacyAiContent`
+ * below; readers reject unknown versions explicitly.
  */
-export const AI_CONTENT_SCHEMA_VERSION = 1;
+export const AI_CONTENT_SCHEMA_VERSION = 2;
 
 const aiImportSourceSchema = z.enum([
   "manual_import",
@@ -41,62 +42,70 @@ const aiTargetProvenanceSchema = z
   })
   .strict();
 
-const qualityGateSchema = z
-  .object({
-    passed: z.boolean(),
-    reason: z.string().optional(),
-  })
-  .strict();
-
-const addedBulletSchema = z
-  .object({
-    text: z.string(),
-    userEdit: z.string().optional(),
-    accepted: z.boolean(),
-    qualityGate: qualityGateSchema.optional(),
-    evidenceIds: z.array(z.string().regex(/^ev_[0-9a-f]{32}$/)).max(8).optional(),
-  })
-  .strict();
-
 const summarySchema = z
   .object({
     aiText: z.string(),
     originalText: z.string(),
     userEdit: z.string().optional(),
     accepted: z.boolean().default(true),
-    evidenceIds: z.array(z.string().regex(/^ev_[0-9a-f]{32}$/)).max(12).optional(),
-  })
-  .strict();
-
-const latestExperienceSchema = z
-  .object({
-    experienceIndex: z.number().int().nonnegative(),
-    addedBullets: z.array(addedBulletSchema),
   })
   .strict();
 
 /**
- * `skillsAdditions` (the AI's proposed new CV skill groups) was retired: the
- * model kept proposing skills the candidate had no evidence for, so the
- * grounding gate blocked finalize on almost every draft it produced.
+ * The tailored skills section: what the model selected, plus the user's
+ * override when they have reordered or unticked something in the review panel.
  *
- * Rows written before the removal still carry the key, and every other field
+ * Same shape as the summary's `aiText`/`userEdit` pair, and for the same
+ * reason — the AI proposal must survive an edit so Discard can restore it.
+ * `accepted` has no meaning here: a skills section is a replacement of required
+ * content, not an addition, so the user narrows the selection rather than
+ * rejecting it wholesale (CONTEXT.md → AI Content).
+ *
+ * Both halves are index references into `ResumeProfile.skills`. Nothing on this
+ * row is a skill name, so no edit — by the model or by a forged request body —
+ * can introduce a skill the candidate did not write themselves.
+ */
+const skillsSelectionSchema = z
+  .object({
+    aiSelection: SkillsSelectionSchema,
+    userSelection: SkillsSelectionSchema.optional(),
+  })
+  .strict();
+
+/**
+ * `skillsAdditions` (the AI's proposed new CV skill groups) and
+ * `latestExperience` (AI-added experience bullets) were both retired: the model
+ * kept proposing content the candidate had no evidence for, and the grounding
+ * gate blocked finalize on almost every draft that carried it. Tailoring now
+ * changes the summary and the skills *order* only.
+ *
+ * Rows written before the removal still carry those keys, and every other field
  * here stays `.strict()` on purpose — an unknown key is a signal that a client
  * is smuggling server-owned state. Rather than loosen that guarantee for the
- * whole object, drop this one retired key before validation so an old row (or
- * a browser tab loaded before the deploy) still reads back cleanly instead of
- * failing with AI_CONTENT_INVALID. No data migration is required; the key
- * disappears on the next write.
+ * whole object, drop the retired keys before validation so an old row (or a
+ * browser tab loaded before the deploy) still reads back cleanly instead of
+ * failing with AI_CONTENT_INVALID. No data migration is required; the keys
+ * disappear on the next write.
  */
+const RETIRED_CV_KEYS = ["skillsAdditions", "latestExperience"] as const;
+
 const cvSchema = z.preprocess((value) => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
-  if (!("skillsAdditions" in value)) return value;
-  const { skillsAdditions: _retired, ...rest } = value as Record<string, unknown>;
-  return rest;
+  const record = value as Record<string, unknown>;
+  if (!RETIRED_CV_KEYS.some((key) => key in record)) return value;
+  const next = { ...record };
+  for (const key of RETIRED_CV_KEYS) delete next[key];
+  return next;
 }, z
   .object({
     summary: summarySchema,
-    latestExperience: latestExperienceSchema,
+    /**
+     * Absent on rows written before tailoring selected skills. An absent
+     * selection means "render the master profile's skills as they are", which
+     * is exactly what those rows produced, so a legacy draft keeps rendering
+     * the document it already rendered.
+     */
+    skillsSelection: skillsSelectionSchema.optional(),
   })
   .strict());
 
@@ -105,7 +114,6 @@ const coverParagraphSchema = z
     aiText: z.string(),
     userEdit: z.string().optional(),
     accepted: z.boolean(),
-    evidenceIds: z.array(z.string().regex(/^ev_[0-9a-f]{32}$/)).max(12).optional(),
   })
   .strict();
 
@@ -117,75 +125,96 @@ const coverSchema = z
   })
   .strict();
 
-const evidenceReferenceSchema = z
-  .object({
-    id: z.string().regex(/^ev_[0-9a-f]{32}$/),
-    kind: z.enum(["candidate", "job"]),
-    path: z.string().min(1).max(160),
-    contentHash: z.string().regex(/^[0-9a-f]{64}$/),
-    excerpt: z.string().min(1).max(480),
-  })
-  .strict();
+/**
+ * Keys the v1 evidence ledger wrote. The ledger was deleted along with AI-added
+ * bullets: its two blocking rules only ever judged bullets and numeric claims,
+ * so once bullets stopped being generated it guarded a single 350-character
+ * field at the cost of two tables and a review pipeline. The summary is now
+ * guarded by a deterministic lint at the import boundary instead
+ * (`lib/server/ai/summaryLint.ts`), which needs no stored evidence.
+ */
+const RETIRED_ROOT_KEYS = ["evidence", "review"] as const;
 
-const requirementCoverageSchema = z
-  .object({
-    id: z.string().regex(/^req_[0-9a-f]{16}$/),
-    text: z.string().min(1).max(500),
-    status: z.enum(["covered", "partial", "missing"]),
-    evidenceIds: z.array(z.string().regex(/^ev_[0-9a-f]{32}$/)).max(12),
-  })
-  .strict();
+/** Strips the per-proposal evidence pointers v1 rows carry. */
+function withoutEvidenceIds(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const record = value as Record<string, unknown>;
+  if (!("evidenceIds" in record)) return value;
+  const { evidenceIds: _retired, ...rest } = record;
+  return rest;
+}
 
-/** Exported so a client parsing a blocked-finalize payload validates against
- *  the same shape the server serialises, instead of trusting its own guess. */
-export const applicationReviewSchema = z
-  .object({
-    verdict: z.enum(["pass", "revise", "blocked"]),
-    reviewedAt: z.string().datetime(),
-    coveragePercent: z.number().int().min(0).max(100),
-    requirements: z.array(requirementCoverageSchema).max(12),
-    issues: z.array(z.string().min(1).max(300)).max(20),
-  })
-  .strict();
+/**
+ * Upgrades a v1 row in place on read: drop the ledger, drop the bullets, keep
+ * the summary and the cover letter. A v1 row has no skills selection, and none
+ * is invented for it — `cvSchema` leaves it absent and the renderer falls back
+ * to the master profile's own skills.
+ */
+function upgradeLegacyAiContent(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const record = value as Record<string, unknown>;
+  if (record.schemaVersion !== 1) return value;
 
-export const aiContentSchema = z
-  .object({
-    schemaVersion: z.literal(AI_CONTENT_SCHEMA_VERSION),
-    generatedAt: z.string().datetime(),
-    /**
-     * Hash of the authoritative generation receipt for the latest import.
-     * Empty string is reserved for compatibility-only manual imports that
-     * arrived without a complete receipt. Current Agent Runner, Codex Batch,
-     * and internal generation paths always populate target-aware provenance.
-     */
-    promptMetaHash: z.string(),
-    source: aiImportSourceSchema.optional(),
-    /**
-     * Authoritative generation metadata for each independently generated
-     * target. The legacy root fields above describe only the most recent
-     * import and cannot safely attribute a preserved CV or cover letter.
-     *
-     * Optional for rows written before target-aware provenance existed. A
-     * missing target entry means "historically unknown", never "same as the
-     * latest root metadata".
-     */
-    provenance: aiTargetProvenanceSchema.optional(),
-    evidence: z.array(evidenceReferenceSchema).max(320).optional(),
-    review: applicationReviewSchema.optional(),
-    cv: cvSchema,
-    cover: coverSchema,
-  })
-  .strict();
+  const next: Record<string, unknown> = { ...record };
+  next.schemaVersion = AI_CONTENT_SCHEMA_VERSION;
+  for (const key of RETIRED_ROOT_KEYS) delete next[key];
+
+  const cv = next.cv;
+  if (cv && typeof cv === "object" && !Array.isArray(cv)) {
+    const cvRecord = cv as Record<string, unknown>;
+    next.cv = { ...cvRecord, summary: withoutEvidenceIds(cvRecord.summary) };
+  }
+
+  const cover = next.cover;
+  if (cover && typeof cover === "object" && !Array.isArray(cover)) {
+    const coverRecord = cover as Record<string, unknown>;
+    next.cover = Object.fromEntries(
+      Object.entries(coverRecord).map(([key, paragraph]) => [
+        key,
+        withoutEvidenceIds(paragraph),
+      ]),
+    );
+  }
+
+  return next;
+}
+
+export const aiContentSchema = z.preprocess(
+  upgradeLegacyAiContent,
+  z
+    .object({
+      schemaVersion: z.literal(AI_CONTENT_SCHEMA_VERSION),
+      generatedAt: z.string().datetime(),
+      /**
+       * Hash of the authoritative generation receipt for the latest import.
+       * Empty string is reserved for compatibility-only manual imports that
+       * arrived without a complete receipt.
+       */
+      promptMetaHash: z.string(),
+      source: aiImportSourceSchema.optional(),
+      /**
+       * Authoritative generation metadata for each independently generated
+       * target. The legacy root fields above describe only the most recent
+       * import and cannot safely attribute a preserved CV or cover letter.
+       *
+       * Optional for rows written before target-aware provenance existed. A
+       * missing target entry means "historically unknown", never "same as the
+       * latest root metadata".
+       */
+      provenance: aiTargetProvenanceSchema.optional(),
+      cv: cvSchema,
+      cover: coverSchema,
+    })
+    .strict(),
+);
 
 export type AiContent = z.infer<typeof aiContentSchema>;
 export type AiGenerationProvenance = z.infer<
   typeof aiGenerationProvenanceSchema
 >;
-export type AiAddedBullet = z.infer<typeof addedBulletSchema>;
 export type AiSummary = z.infer<typeof summarySchema>;
+export type AiSkillsSelection = z.infer<typeof skillsSelectionSchema>;
 export type AiCoverParagraph = z.infer<typeof coverParagraphSchema>;
-export type AiEvidenceReference = z.infer<typeof evidenceReferenceSchema>;
-export type AiApplicationReview = z.infer<typeof applicationReviewSchema>;
 
 /* ───────────────────────── hashing ───────────────────────── */
 

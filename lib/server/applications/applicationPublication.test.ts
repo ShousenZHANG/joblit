@@ -44,7 +44,7 @@ function transitionApplicationPublication(
 
 function content(): AiContent {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: "2026-07-28T00:00:00.000Z",
     promptMetaHash: "sha256:test",
     cv: {
@@ -53,13 +53,7 @@ function content(): AiContent {
         originalText: "Engineer",
         accepted: true,
       },
-      latestExperience: {
-        experienceIndex: 0,
-        addedBullets: [
-          { text: "Shipped a platform", accepted: true },
-          { text: "Rejected addition", accepted: false },
-        ],
-      },
+      skillsSelection: { aiSelection: [{ group: 0, items: [1, 0] }] },
     },
     cover: {
       paragraphOne: { aiText: "One", accepted: true },

@@ -7,10 +7,17 @@ export const RESUME_PROMPT_SNAPSHOT_LIMITS = {
     title: 120,
   },
   summary: 2_000,
+  /**
+   * These must not sit below `ResumeProfileSchema.skills` (12 groups of 30).
+   * Tailoring asks the model to pick skills by index out of this snapshot, so a
+   * tighter cap here does not merely shorten the prompt — it makes the skills
+   * past the cap permanently unselectable, silently, with no way for the user
+   * to tell which of their own skills the tailoring could never reach.
+   */
   skills: {
-    entries: 5,
+    entries: 12,
     category: 60,
-    items: 12,
+    items: 30,
     item: 60,
   },
   experiences: {
@@ -108,10 +115,21 @@ function compactObject<T extends Record<string, unknown>>(value: T): T | undefin
 
 function trimToTotalLimit(snapshot: ResumePromptSnapshot): ResumePromptSnapshot {
   const output = structuredClone(snapshot);
+  /**
+   * Trimmed narrowest-value-first, and `skills` is deliberately absent.
+   *
+   * Tailoring asks the model to choose skills by their index in this snapshot,
+   * so a trimmed skill is not merely missing context — it is a skill the
+   * candidate owns that no tailoring can ever surface, with nothing telling
+   * them which. Every other section is evidence the model reads, and reading
+   * less of it degrades the summary rather than silently shrinking what the
+   * document can contain. Skills are bounded to 12 groups of 30 short strings
+   * upstream, so exempting them cannot run away.
+   */
   const sectionOrder: Array<keyof Pick<
     ResumePromptSnapshot,
-    "education" | "projects" | "skills" | "experiences"
-  >> = ["education", "projects", "skills", "experiences"];
+    "education" | "projects" | "experiences"
+  >> = ["education", "projects", "experiences"];
 
   while (JSON.stringify(output).length > RESUME_PROMPT_SNAPSHOT_LIMITS.totalChars) {
     const section = sectionOrder.find((key) => (output[key]?.length ?? 0) > 0);

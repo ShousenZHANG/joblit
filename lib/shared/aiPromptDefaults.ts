@@ -1,3 +1,5 @@
+import { CV_SUMMARY_LENGTH } from "@/lib/shared/schemas/applicationGenerationOutput";
+
 export type SkillRuleDef = {
   id: string;
   category:
@@ -26,7 +28,7 @@ export const STRUCTURED_CV_RULES: SkillRuleDef[] = [
     priority: "critical",
     appliesTo: ["resume"],
     text:
-      "Tailor the candidate's existing resume to the role by adapting cvSummary and proposing grounded additions only. Do not invent a new profile.",
+      "Tailor the candidate's existing resume to the role by rewriting cvSummary and choosing which of their own skills the resume shows. Do not invent a new profile.",
   },
   {
     id: "cv.ats.01",
@@ -50,7 +52,7 @@ export const STRUCTURED_CV_RULES: SkillRuleDef[] = [
     priority: "critical",
     appliesTo: ["resume"],
     text:
-      "Keep every proposed addition grounded in Master Resume Profile facts and technologies; do not fabricate scope, systems, ownership, or outcomes.",
+      "Keep cvSummary grounded in Master Resume Profile facts and technologies; do not fabricate scope, systems, ownership, or outcomes.",
   },
   {
     id: "cv.grounding.04",
@@ -58,7 +60,7 @@ export const STRUCTURED_CV_RULES: SkillRuleDef[] = [
     priority: "critical",
     appliesTo: ["resume"],
     text:
-      "Do not invent numeric metrics. Mine real numbers from candidate evidence first; otherwise use truthful qualitative outcomes such as scope, efficiency, reliability, quality, stakeholder, or business impact.",
+      "Do not invent numeric metrics. Every number in cvSummary must already appear in the candidate evidence; otherwise use truthful qualitative outcomes such as scope, efficiency, reliability, quality, stakeholder, or business impact.",
   },
   {
     id: "cv.grounding.05",
@@ -66,15 +68,7 @@ export const STRUCTURED_CV_RULES: SkillRuleDef[] = [
     priority: "critical",
     appliesTo: ["resume"],
     text:
-      "If evidence is insufficient for a JD point, do not add a speculative bullet for it.",
-  },
-  {
-    id: "cv.grounding.06",
-    category: "grounding",
-    priority: "critical",
-    appliesTo: ["resume"],
-    text:
-      "For newly added bullets, prefer complementary JD-required concepts that are supported by candidate evidence and not already emphasized in the latest experience.",
+      "If evidence is insufficient for a JD point, leave it out of the summary rather than asserting it.",
   },
   {
     id: "cv.grounding.07",
@@ -98,7 +92,15 @@ export const STRUCTURED_CV_RULES: SkillRuleDef[] = [
     priority: "high",
     appliesTo: ["resume"],
     text:
-      "Preserve the base summary length within approximately 10% and keep its sentence count. If it is missing, generate a grounded 2-3 sentence summary of 150-250 characters.",
+      `Write cvSummary as 2-3 sentences of ${CV_SUMMARY_LENGTH.min}-${CV_SUMMARY_LENGTH.max} characters. It must contain the posting's role title, with seniority words and trailing qualifiers dropped.`,
+  },
+  {
+    id: "cv.content.07",
+    category: "content",
+    priority: "critical",
+    appliesTo: ["resume"],
+    text:
+      "Claim no title, level, or years of experience the candidate's own dates and job titles cannot support. Mirror the role, never the rank.",
   },
   {
     id: "cv.style.01",
@@ -114,39 +116,15 @@ export const STRUCTURED_CV_RULES: SkillRuleDef[] = [
     priority: "critical",
     appliesTo: ["resume"],
     text:
-      "Return latestExperience.addedBullets as additions only. The Master Resume Profile owns every existing bullet, so never copy existing bullets into the output.",
+      "Return skillsSelection as index references into the Master Resume Profile's own skills. Never write a skill name, and never reference an index the profile does not have.",
   },
   {
-    id: "cv.content.03",
-    category: "content",
-    priority: "high",
+    id: "cv.structure.03",
+    category: "structure",
+    priority: "critical",
     appliesTo: ["resume"],
     text:
-      "Each added bullet should follow Google XYZ style: Achieved X by doing Y, resulting in Z, or a grounded qualitative equivalent when metrics are unavailable.",
-  },
-  {
-    id: "cv.content.04",
-    category: "content",
-    priority: "high",
-    appliesTo: ["resume"],
-    text:
-      "Start each added bullet with a strong, specific action verb such as Led, Architected, Shipped, Designed, Migrated, Optimized, Automated, Implemented, Drove, or Delivered.",
-  },
-  {
-    id: "cv.content.05",
-    category: "content",
-    priority: "high",
-    appliesTo: ["resume"],
-    text:
-      "Each added bullet must introduce a meaningfully different JD-relevant concept. Keep only the strongest bullet when two additions cover the same theme.",
-  },
-  {
-    id: "cv.content.06",
-    category: "content",
-    priority: "high",
-    appliesTo: ["resume"],
-    text:
-      "Keep each added bullet similar in length and tone to the Master Resume Profile. Target under 200 characters and never exceed 250 characters.",
+      "Each skill group may be selected at most once, and each index at most once within its group.",
   },
   {
     id: "cv.coverage.01",
@@ -154,7 +132,7 @@ export const STRUCTURED_CV_RULES: SkillRuleDef[] = [
     priority: "high",
     appliesTo: ["resume"],
     text:
-      "When top JD responsibilities are under-covered and grounded evidence exists, propose only the minimum useful additions, with an absolute maximum of three.",
+      "Lead cvSummary with the top JD responsibilities the candidate can actually evidence, and ignore the ones the profile cannot support.",
   },
   {
     id: "cv.coverage.02",
@@ -162,7 +140,7 @@ export const STRUCTURED_CV_RULES: SkillRuleDef[] = [
     priority: "high",
     appliesTo: ["resume"],
     text:
-      "Prioritize uncovered top JD responsibilities first when choosing added bullets.",
+      "Sequence skillsSelection so the groups and skills this posting rewards come first. Array order is render order on the PDF.",
   },
   {
     id: "cv.coverage.03",
@@ -170,7 +148,7 @@ export const STRUCTURED_CV_RULES: SkillRuleDef[] = [
     priority: "high",
     appliesTo: ["resume"],
     text:
-      "If a top responsibility requires unsupported technology, skip it and use another responsibility or adjacent proven technology only when candidate evidence supports it.",
+      "If a top responsibility requires unsupported technology, skip it and lean on another responsibility or an adjacent proven technology only when candidate evidence supports it.",
   },
   {
     id: "cv.style.02",
@@ -178,7 +156,7 @@ export const STRUCTURED_CV_RULES: SkillRuleDef[] = [
     priority: "high",
     appliesTo: ["resume"],
     text:
-      "Bold at least one JD-critical keyword in every added bullet using syntactically clean **keyword** markers.",
+      "Keep the selection tight: drop the groups and items this posting does not care about instead of shipping the whole master list.",
   },
   {
     id: "cv.structure.02",
@@ -186,7 +164,7 @@ export const STRUCTURED_CV_RULES: SkillRuleDef[] = [
     priority: "critical",
     appliesTo: ["resume"],
     text:
-      "Resume output contains cvSummary and latestExperience.addedBullets only. Never return a cover payload or a skills payload.",
+      "Resume output contains cvSummary and skillsSelection only. Never return a cover payload, experience text, or skill strings.",
   },
   {
     id: "cv.style.03",

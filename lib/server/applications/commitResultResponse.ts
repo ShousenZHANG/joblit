@@ -41,14 +41,6 @@ export function commitRejectionResponse(
   };
 
   switch (result.kind) {
-    case "review_blocked":
-      return errorJson(
-        "APPLICATION_REVIEW_BLOCKED",
-        "The combined draft contains claims that are not grounded in the master resume.",
-        422,
-        { details: result.review, requestId },
-      );
-
     case "invalid_ai_content":
       return errorJson(
         "AI_CONTENT_INVALID",

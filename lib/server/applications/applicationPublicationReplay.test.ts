@@ -64,7 +64,7 @@ const AI_CONTENT: AiContent = {
       originalText: "Profile summary",
       accepted: true,
     },
-    latestExperience: { experienceIndex: 0, addedBullets: [] },
+    skillsSelection: { aiSelection: [{ group: 0, items: [0] }] },
   },
   cover: {
     paragraphOne: { aiText: "", accepted: false },
