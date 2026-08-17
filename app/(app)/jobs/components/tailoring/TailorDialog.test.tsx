@@ -143,6 +143,14 @@ function stubRoutes() {
         },
       });
     }
+    if (url.startsWith("/api/prompt-rules/skill-pack")) {
+      return new Response(new Blob(["skill-pack"]), {
+        status: 200,
+        headers: {
+          "content-disposition": 'attachment; filename="joblit-skills-v3.zip"',
+        },
+      });
+    }
     if (url.startsWith("/api/applications/manual-generate")) {
       return json({
         applicationId: APPLICATION_ID,
@@ -183,10 +191,19 @@ function stubRoutes() {
   return calls;
 }
 
+async function openPasteStep(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: "open" }));
+  await user.click(
+    await screen.findByRole("button", {
+      name: messages.tailor.dialog.stepPasteTitle,
+    }),
+  );
+}
+
 async function openReviewStep(user: ReturnType<typeof userEvent.setup>) {
   const calls = stubRoutes();
   renderHarness();
-  await user.click(screen.getByRole("button", { name: "open" }));
+  await openPasteStep(user);
   const textarea = await screen.findByLabelText(
     messages.tailor.dialog.pasteLabel,
   );
@@ -200,17 +217,21 @@ async function openReviewStep(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("TailorDialog", () => {
-  beforeEach(() => guide.markTaskComplete.mockReset());
+  beforeEach(() => {
+    guide.markTaskComplete.mockReset();
+    localStorage.clear();
+  });
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it("keeps Import inert until the paste parses against the current contract", async () => {
     const user = userEvent.setup();
     stubRoutes();
     renderHarness();
-    await user.click(screen.getByRole("button", { name: "open" }));
+    await openPasteStep(user);
 
     const importButton = await screen.findByRole("button", {
       name: messages.tailor.dialog.importResult,
@@ -263,16 +284,193 @@ describe("TailorDialog", () => {
     ).toHaveAttribute("aria-pressed", "false");
   });
 
-  it("says the PDF only exists after publishing, and links it once it does", async () => {
+  it("renders phases beyond the current one as quiet title-only rows", async () => {
+    const user = userEvent.setup();
+    stubRoutes();
+    renderHarness();
+    await user.click(screen.getByRole("button", { name: "open" }));
+
+    const dialog = within(screen.getByRole("dialog"));
+    expect(
+      await dialog.findByRole("button", {
+        name: messages.tailor.dialog.copyPrompt,
+      }),
+    ).toBeInTheDocument();
+
+    // No bodies leak out of the collapsed phases.
+    expect(
+      dialog.queryByLabelText(messages.tailor.dialog.pasteLabel),
+    ).not.toBeInTheDocument();
+    expect(
+      dialog.queryByText(messages.tailor.dialog.stepPublishBody),
+    ).not.toBeInTheDocument();
+    expect(
+      dialog.queryByRole("button", { name: messages.tailor.dialog.finalize }),
+    ).not.toBeInTheDocument();
+
+    // Paste is reachable ahead of time; review and publish are inert until an
+    // import gives them something to act on.
+    expect(
+      dialog.getByRole("button", { name: messages.tailor.dialog.stepPasteTitle }),
+    ).toBeInTheDocument();
+    expect(
+      dialog.getByText(messages.tailor.dialog.stepReviewTitle),
+    ).toBeInTheDocument();
+    expect(
+      dialog.queryByRole("button", {
+        name: messages.tailor.dialog.stepReviewTitle,
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      dialog.getByText(messages.tailor.dialog.stepPublishTitle),
+    ).toBeInTheDocument();
+    expect(
+      dialog.queryByRole("button", {
+        name: messages.tailor.dialog.stepPublishTitle,
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("collapses Paste and expands Review after a successful import", async () => {
+    const user = userEvent.setup();
+    await openReviewStep(user);
+
+    expect(
+      screen.queryByLabelText(messages.tailor.dialog.pasteLabel),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(messages.tailor.dialog.importedSummary),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(messages.tailor.summary.aria),
+    ).toBeInTheDocument();
+  });
+
+  it("re-expands a completed phase from its collapsed row and collapses the current one", async () => {
+    const user = userEvent.setup();
+    await openReviewStep(user);
+
+    await user.click(
+      screen.getByRole("button", {
+        name: new RegExp(messages.tailor.dialog.stepPasteTitle),
+      }),
+    );
+    expect(
+      await screen.findByLabelText(messages.tailor.dialog.pasteLabel),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(messages.tailor.summary.aria),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: messages.tailor.dialog.stepReviewTitle }),
+    );
+    expect(
+      await screen.findByLabelText(messages.tailor.summary.aria),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(messages.tailor.dialog.pasteLabel),
+    ).not.toBeInTheDocument();
+  });
+
+  it("copies as soon as the in-flight prompt build resolves", async () => {
+    const user = userEvent.setup();
+    let openPromptGate!: () => void;
+    const promptGate = new Promise<void>((resolve) => {
+      openPromptGate = resolve;
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url.startsWith("/api/applications/prompt")) {
+        await promptGate;
+        return json({
+          prompt: { systemPrompt: "system", userPrompt: "user" },
+          promptMeta: {
+            ruleSetId: "rules-1",
+            resumeSnapshotUpdatedAt: "2026-08-01T00:00:00.000Z",
+          },
+        });
+      }
+      return json({ error: { code: "NOT_MOCKED", message: "not mocked" } }, 500);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderHarness();
+    await user.click(screen.getByRole("button", { name: "open" }));
+
+    // Never a dead "preparing" state: the copy label is live from frame one.
+    const copyButton = screen.getByRole("button", {
+      name: messages.tailor.dialog.copyPrompt,
+    });
+    expect(copyButton).toBeEnabled();
+    await user.click(copyButton);
+    expect(
+      screen.queryByLabelText(messages.tailor.dialog.pasteLabel),
+    ).not.toBeInTheDocument();
+
+    openPromptGate();
+
+    // The copy lands once the build resolves: the copy phase collapses to its
+    // "Copied" receipt and paste opens up ready for the answer.
+    expect(
+      await screen.findByLabelText(messages.tailor.dialog.pasteLabel),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: new RegExp(`^${messages.tailor.dialog.stepPromptTitle}`),
+      }),
+    ).toHaveTextContent(messages.tailor.dialog.copied);
+    await expect(navigator.clipboard.readText()).resolves.toContain(
+      "SYSTEM INSTRUCTIONS START",
+    );
+  });
+
+  it("downloads the skill pack from the footer link only when clicked", async () => {
+    const user = userEvent.setup();
+    const anchorClickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+    const createObjectUrlSpy = vi
+      .spyOn(URL, "createObjectURL")
+      .mockReturnValue("blob:skill-pack");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const calls = stubRoutes();
+    renderHarness();
+    await user.click(screen.getByRole("button", { name: "open" }));
+
+    expect(
+      calls.some((call) => call.url.startsWith("/api/prompt-rules/skill-pack")),
+    ).toBe(false);
+
+    await user.click(
+      screen.getByRole("button", { name: messages.tailor.dialog.skillPackLink }),
+    );
+
+    await waitFor(() => expect(anchorClickSpy).toHaveBeenCalled());
+    expect(
+      calls.some((call) =>
+        call.url.startsWith("/api/prompt-rules/skill-pack?locale=en-AU"),
+      ),
+    ).toBe(true);
+    expect(createObjectUrlSpy).toHaveBeenCalled();
+  });
+
+  it("publishes from the Publish phase and collapses it to a published receipt", async () => {
     const user = userEvent.setup();
     const calls = await openReviewStep(user);
 
     expect(
-      screen.getByText(messages.tailor.dialog.stepPublishBody),
-    ).toBeInTheDocument();
+      screen.queryByText(messages.tailor.dialog.stepPublishBody),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: messages.tailor.dialog.openPdf }),
     ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: messages.tailor.dialog.stepPublishTitle }),
+    );
+    expect(
+      await screen.findByText(messages.tailor.dialog.stepPublishBody),
+    ).toBeInTheDocument();
 
     await user.click(
       screen.getByRole("button", { name: messages.tailor.dialog.finalize }),
@@ -281,6 +479,12 @@ describe("TailorDialog", () => {
     expect(
       await screen.findByRole("link", { name: messages.tailor.dialog.openPdf }),
     ).toHaveAttribute("href", "https://example.com/final-cv.pdf");
+    expect(
+      screen.getByText(messages.tailor.dialog.publishedSummary),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(messages.tailor.summary.aria),
+    ).not.toBeInTheDocument();
     expect(
       calls.some((call) => call.url.includes("/finalize?target=resume")),
     ).toBe(true);
@@ -300,7 +504,7 @@ describe("TailorDialog", () => {
     ).toBeInTheDocument();
   });
 
-  it("locks review for a target that has nothing generated yet", async () => {
+  it("keeps review and publish inert for a target with nothing generated yet", async () => {
     const user = userEvent.setup();
     await openReviewStep(user);
 
@@ -310,8 +514,13 @@ describe("TailorDialog", () => {
 
     const dialog = within(screen.getByRole("dialog"));
     expect(
-      dialog.getByText(messages.tailor.dialog.stepReviewLocked),
+      dialog.getByText(messages.tailor.dialog.stepReviewTitle),
     ).toBeInTheDocument();
+    expect(
+      dialog.queryByRole("button", {
+        name: messages.tailor.dialog.stepReviewTitle,
+      }),
+    ).not.toBeInTheDocument();
     expect(
       dialog.queryByRole("button", { name: messages.tailor.dialog.finalize }),
     ).not.toBeInTheDocument();

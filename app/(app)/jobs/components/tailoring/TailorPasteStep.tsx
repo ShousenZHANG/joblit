@@ -18,6 +18,7 @@ const PLACEHOLDER: Record<TailorTarget, string> = {
 interface TailorPasteStepProps {
   index: number;
   state: TailorStepState;
+  onExpand: () => void;
   target: TailorTarget;
   value: string;
   onChange: (value: string) => void;
@@ -29,6 +30,7 @@ interface TailorPasteStepProps {
 export function TailorPasteStep({
   index,
   state,
+  onExpand,
   target,
   value,
   onChange,
@@ -44,8 +46,10 @@ export function TailorPasteStep({
     <TailorStep
       index={index}
       state={state}
+      onExpand={onExpand}
       title={t("stepPasteTitle")}
       description={t("stepPasteBody")}
+      summary={t("importedSummary")}
     >
       <div className="space-y-3">
         <Textarea

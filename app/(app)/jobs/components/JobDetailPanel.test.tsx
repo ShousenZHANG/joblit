@@ -136,9 +136,7 @@ describe("JobDetailPanel touch contract", () => {
     expect(
       panel.getByRole("link", { name: messages.jobs.openJob }),
     ).toHaveClass("[@media(any-pointer:coarse)]:min-h-11");
-    // Remove is a menu item behind the overflow now, so the trigger is what
-    // has to stay thumb-sized; the item itself gets min-h-11 from the menu.
-    expect(panel.getByTestId("job-detail-overflow")).toHaveClass(
+    expect(panel.getByTestId("job-tailor-button")).toHaveClass(
       "[@media(any-pointer:coarse)]:min-h-11",
     );
   });
@@ -162,17 +160,17 @@ describe("JobDetailPanel saved document review", () => {
     expect(onTailor).toHaveBeenCalledWith(selected, "resume");
   });
 
-  it("offers one Tailor entry in the overflow menu", async () => {
+  it("opens tailoring on the resume target from the first-class Tailor button", async () => {
     const user = userEvent.setup();
     const onTailor = vi.fn();
     const selected = job();
     const view = renderPanel(selected, { onTailor });
 
-    await user.click(within(view.container).getByTestId("job-detail-overflow"));
-    const items = await screen.findAllByRole("menuitem");
-    expect(items).toHaveLength(1);
-    await user.click(items[0]);
-    expect(items[0]).toHaveTextContent(messages.jobs.tailorAction);
+    const tailorButton = within(view.container).getByRole("button", {
+      name: messages.jobs.tailorAction,
+    });
+    expect(tailorButton).toHaveAttribute("data-variant", "default");
+    await user.click(tailorButton);
     expect(onTailor).toHaveBeenCalledWith(selected, "resume");
   });
 

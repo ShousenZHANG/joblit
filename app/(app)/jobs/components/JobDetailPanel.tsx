@@ -18,19 +18,12 @@ import {
   ExternalLink,
   FileText,
   MapPin,
-  MoreHorizontal,
   Sparkles,
   Trash2,
   Wifi,
 } from "lucide-react";
 import { useMarket } from "@/hooks/useMarket";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { COARSE_POINTER_MIN_HEIGHT } from "@/components/ui/touchTarget";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -392,15 +385,11 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                   />
                 ) : null}
                 {/* The trailing cluster: what is neither "open this job" nor
-                    "read what we generated for it".
-
-                    Remove is one click again. Hiding it in the overflow was
-                    protecting an action that is already reversible — the
-                    delete is a deferred commit behind an Undo toast
-                    (useJobMutations), so the menu only ever cost a click. It
-                    stays icon-only and neutral until hover, which keeps a
-                    destructive action from shouting at rest without making it
-                    hard to reach. */}
+                    "read what we generated for it". Remove stays icon-only and
+                    neutral until hover — the delete is a deferred commit
+                    behind an Undo toast (useJobMutations) — while Tailor, the
+                    step that moves an application forward, carries the visual
+                    weight beside it. */}
                 <div className="flex items-center gap-2 lg:ml-auto">
                   <Button
                     variant="ghost"
@@ -417,33 +406,18 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                   >
                     <Trash2 className="h-4 w-4" aria-hidden />
                   </Button>
-                  {/* One entry, because there is one tailoring surface: the
-                      dialog carries both documents and the user picks inside
-                      it. CN ships a single Chinese resume with no tailoring, so
-                      it gets no menu rather than an empty one. */}
+                  {/* CN ships a single Chinese resume with no tailoring, so it
+                      gets no entry point at all. */}
                   {!isCN ? (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          aria-label={t("moreActions")}
-                          data-testid="job-detail-overflow"
-                          className={`flex-1 justify-center rounded-xl text-foreground/60 transition-colors hover:bg-muted hover:text-foreground sm:w-9 sm:flex-none ${actionHeight} px-0`}
-                        >
-                          <MoreHorizontal className="h-4 w-4" aria-hidden />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          className="min-h-11"
-                          onClick={() => onTailor(selectedJob, "resume")}
-                        >
-                          <Sparkles className="mr-2 h-4 w-4" aria-hidden />
-                          {t("tailorAction")}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <Button
+                      size="sm"
+                      data-testid="job-tailor-button"
+                      onClick={() => onTailor(selectedJob, "resume")}
+                      className={`flex-1 justify-center rounded-xl text-sm font-semibold shadow-sm sm:flex-none ${actionHeight} px-4`}
+                    >
+                      <Sparkles className="h-4 w-4" aria-hidden />
+                      {t("tailorAction")}
+                    </Button>
                   ) : null}
                 </div>
               </div>

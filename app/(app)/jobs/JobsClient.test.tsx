@@ -1938,14 +1938,14 @@ describe("JobsClient", () => {
     expect(detailsPanel.className).toContain("flex");
   });
 
-  it("disables skill pack download until prompt meta is ready, then advances to Copy Prompt with one click", async () => {
+  it("keeps Copy prompt live while the prompt builds and downloads the skill pack on demand", async () => {
     const user = userEvent.setup();
     const anchorClickSpy = vi
       .spyOn(HTMLAnchorElement.prototype, "click")
       .mockImplementation(() => {});
-    let resolvePrompt!: (value: Response) => void;
-    const promptResponse = new Promise<Response>((resolve) => {
-      resolvePrompt = resolve;
+    let openPromptGate!: () => void;
+    const promptGate = new Promise<void>((resolve) => {
+      openPromptGate = resolve;
     });
 
     const createObjectUrlSpy = vi
@@ -1988,7 +1988,21 @@ describe("JobsClient", () => {
         );
       }
       if (url.startsWith("/api/applications/prompt")) {
-        return promptResponse;
+        await promptGate;
+        return new Response(
+          JSON.stringify({
+            prompt: {
+              systemPrompt: "system",
+              userPrompt: "user",
+            },
+            expectedJsonShape: { cvSummary: "string" },
+            promptMeta: {
+              ruleSetId: "rules-1",
+              resumeSnapshotUpdatedAt: "2026-02-08T00:00:00.000Z",
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
       }
       if (url.startsWith("/api/prompt-rules/skill-pack")) {
         return new Response(new Blob(["skill-pack"]), {
@@ -2009,51 +2023,36 @@ describe("JobsClient", () => {
       <JobsClient initialItems={[baseJob]} initialCursor={null} />,
     );
 
-    await user.click((await screen.findAllByTestId("job-detail-overflow"))[0]);
+    await user.click((await screen.findAllByTestId("job-tailor-button"))[0]);
+
+    // Never a dead "preparing" state: the copy button stays live while the
+    // prompt is still building behind it.
+    const copyButton = await screen.findByRole("button", {
+      name: /copy prompt/i,
+    });
+    expect(copyButton).toBeEnabled();
+
+    // The skill pack is fetched only when the footer link is clicked; a click
+    // that lands early waits on the same in-flight prompt build.
     await user.click(
-      await screen.findByRole("menuitem", { name: /^tailor$/i }),
+      screen.getByRole("button", { name: /download the skill pack/i }),
     );
-
-    const downloadButton = await screen.findByRole("button", {
-      name: /download the skill pack first/i,
-    });
-    expect(downloadButton).toBeDisabled();
-
-    resolvePrompt(
-      new Response(
-        JSON.stringify({
-          prompt: {
-            systemPrompt: "system",
-            userPrompt: "user",
-          },
-          expectedJsonShape: { cvSummary: "string" },
-          promptMeta: {
-            ruleSetId: "rules-1",
-            resumeSnapshotUpdatedAt: "2026-02-08T00:00:00.000Z",
-          },
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    );
-
-    await waitFor(() => {
-      expect(downloadButton).toBeEnabled();
-    });
-
-    await user.click(downloadButton);
-
     expect(
-      await screen.findByText(/skill pack up to date/i),
+      await screen.findByRole("button", { name: /downloading/i }),
     ).toBeInTheDocument();
+    expect(anchorClickSpy).not.toHaveBeenCalled();
+
+    openPromptGate();
+
+    await waitFor(() => expect(anchorClickSpy).toHaveBeenCalled());
+    expect(createObjectUrlSpy).toHaveBeenCalled();
+    expect(revokeObjectUrlSpy).toHaveBeenCalled();
     expect(
       screen.getByRole("button", { name: /copy prompt/i }),
     ).toBeEnabled();
-    expect(createObjectUrlSpy).toHaveBeenCalled();
-    expect(revokeObjectUrlSpy).toHaveBeenCalled();
-    expect(anchorClickSpy).toHaveBeenCalled();
   });
 
-  it("reuses the downloaded skill pack between CV and CL when version is unchanged", async () => {
+  it("downloads the skill pack once and keeps it across CV and CL", async () => {
     const user = userEvent.setup();
     const anchorClickSpy = vi
       .spyOn(HTMLAnchorElement.prototype, "click")
@@ -2147,21 +2146,13 @@ describe("JobsClient", () => {
       <JobsClient initialItems={[baseJob]} initialCursor={null} />,
     );
 
-    await user.click((await screen.findAllByTestId("job-detail-overflow"))[0]);
-    await user.click(
-      await screen.findByRole("menuitem", { name: /^tailor$/i }),
-    );
+    await user.click((await screen.findAllByTestId("job-tailor-button"))[0]);
 
     const downloadButton = await screen.findByRole("button", {
-      name: /download the skill pack first/i,
-    });
-    await waitFor(() => {
-      expect(downloadButton).toBeEnabled();
+      name: /download the skill pack/i,
     });
     await user.click(downloadButton);
-    expect(
-      await screen.findByText(/skill pack up to date/i),
-    ).toBeInTheDocument();
+    await waitFor(() => expect(anchorClickSpy).toHaveBeenCalledTimes(1));
 
     // Same dialog, other document: the pack the user already loaded into their
     // chatbot covers both, so switching tabs must not ask for it again.
@@ -2169,13 +2160,8 @@ describe("JobsClient", () => {
       screen.getByRole("tab", { name: messages.tailor.docCover }),
     );
     expect(
-      await screen.findByText(/skill pack up to date/i),
+      await screen.findByRole("button", { name: /download the skill pack/i }),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", {
-        name: /download the skill pack first/i,
-      }),
-    ).not.toBeInTheDocument();
 
     const downloadCalls = mockFetch.mock.calls.filter(([request]) => {
       const requestUrl = typeof request === "string" ? request : request.url;

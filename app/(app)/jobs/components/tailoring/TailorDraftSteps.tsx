@@ -14,6 +14,7 @@ import { TailorLockedSteps } from "./TailorLockedSteps";
 import { TailorStep } from "./TailorStep";
 import type { TailorTarget } from "./tailorActions";
 import type {
+  TailorPhase,
   TailorReviewDraft,
   TailorReviewFinalized,
 } from "./tailorDialogTypes";
@@ -25,13 +26,15 @@ import {
 interface TailorDraftStepsProps {
   draft: TailorReviewDraft;
   target: TailorTarget;
+  expandedPhase: TailorPhase | "none";
+  onExpandPhase: (phase: Extract<TailorPhase, "review" | "publish">) => void;
   onFinalized: (result: TailorReviewFinalized) => void;
 }
 
 type PdfUrls = Record<TailorTarget, string | null>;
 
 /**
- * Steps three and four: edit what the model returned, then publish it.
+ * Phases three and four: edit what the model returned, then publish it.
  *
  * Mounted once per Application and pointed at whichever document the tabs
  * select, because both documents share one autosaving draft — remounting per
@@ -40,6 +43,8 @@ type PdfUrls = Record<TailorTarget, string | null>;
 export function TailorDraftSteps({
   draft,
   target,
+  expandedPhase,
+  onExpandPhase,
   onFinalized,
 }: TailorDraftStepsProps) {
   const t = useTranslations("tailor.dialog");
@@ -54,9 +59,13 @@ export function TailorDraftSteps({
     session.document.select(target);
   }, [session.document, target]);
 
-  const hasContent =
-    session.document.publication[target].status !== "MISSING";
-  const published = session.document.status === "FINAL";
+  const targetStatus = session.document.publication[target].status;
+  const hasContent = targetStatus !== "MISSING";
+  const published = targetStatus === "FINAL";
+  const reviewState =
+    expandedPhase === "review" ? "expanded" : published ? "done" : "future";
+  const publishState =
+    expandedPhase === "publish" ? "expanded" : published ? "done" : "future";
   const conflicted =
     session.content.saveStatus.kind === "error" &&
     session.content.saveStatus.conflict === true;
@@ -79,6 +88,18 @@ export function TailorDraftSteps({
 
   if (!hasContent) return <TailorLockedSteps />;
 
+  const pdfLink = pdfUrls[target] ? (
+    <a
+      href={pdfUrls[target] ?? undefined}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-emerald-text underline-offset-4 hover:underline"
+    >
+      <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+      {t("openPdf")}
+    </a>
+  ) : null;
+
   return (
     <>
       {session.issue.message ? (
@@ -100,7 +121,8 @@ export function TailorDraftSteps({
 
       <TailorStep
         index={3}
-        state="active"
+        state={reviewState}
+        onExpand={() => onExpandPhase("review")}
         title={t("stepReviewTitle")}
         description={t("stepReviewBody")}
         action={
@@ -135,9 +157,12 @@ export function TailorDraftSteps({
 
       <TailorStep
         index={4}
-        state={published ? "done" : "todo"}
+        state={publishState}
+        onExpand={() => onExpandPhase("publish")}
         title={t("stepPublishTitle")}
         description={t("stepPublishBody")}
+        summary={t("publishedSummary")}
+        doneAside={pdfLink}
         action={
           <Button
             type="button"
@@ -157,17 +182,7 @@ export function TailorDraftSteps({
           </Button>
         }
       >
-        {pdfUrls[target] ? (
-          <a
-            href={pdfUrls[target] ?? undefined}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-emerald-text underline-offset-4 hover:underline"
-          >
-            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-            {t("openPdf")}
-          </a>
-        ) : null}
+        {pdfLink}
       </TailorStep>
 
       {conflicted ? (

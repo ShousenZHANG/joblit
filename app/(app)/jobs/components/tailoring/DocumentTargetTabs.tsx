@@ -6,11 +6,18 @@ import type { TailorTarget } from "./tailorActions";
 
 const TARGETS = ["resume", "cover"] as const;
 
+/** Per-tab status dot plus the text that keeps it legible without colour. */
+export type DocumentTargetIndicator = {
+  kind: "draft" | "published";
+  label: string;
+};
+
 type DocumentTargetTabsProps = {
   target: TailorTarget;
   onSelect: (target: TailorTarget) => void;
   label: string;
   labels: Record<TailorTarget, string>;
+  indicators?: Record<TailorTarget, DocumentTargetIndicator | null>;
   disabled?: boolean;
   children: ReactNode;
 };
@@ -20,6 +27,7 @@ type TargetTabProps = {
   target: TailorTarget;
   baseId: string;
   label: string;
+  indicator: DocumentTargetIndicator | null;
   disabled: boolean;
   setRef: (node: HTMLButtonElement | null) => void;
   onSelect: (target: TailorTarget) => void;
@@ -28,7 +36,7 @@ type TargetTabProps = {
 
 type TargetTabListProps = Pick<
   DocumentTargetTabsProps,
-  "target" | "onSelect" | "label" | "labels"
+  "target" | "onSelect" | "label" | "labels" | "indicators"
 > & {
   baseId: string;
   disabled: boolean;
@@ -51,6 +59,7 @@ function TargetTab({
   target,
   baseId,
   label,
+  indicator,
   disabled,
   setRef,
   onSelect,
@@ -65,6 +74,7 @@ function TargetTab({
       role="tab"
       aria-selected={active}
       aria-controls={`${baseId}-panel`}
+      aria-label={indicator ? `${label}, ${indicator.label}` : undefined}
       tabIndex={active ? 0 : -1}
       disabled={disabled}
       onClick={() => onSelect(item)}
@@ -77,6 +87,18 @@ function TargetTab({
       )}
     >
       {label}
+      {indicator ? (
+        <span
+          aria-hidden
+          data-indicator={indicator.kind}
+          className={cn(
+            "ml-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
+            indicator.kind === "published"
+              ? "bg-brand-emerald-500"
+              : "bg-muted-foreground/50",
+          )}
+        />
+      ) : null}
     </button>
   );
 }
@@ -86,6 +108,7 @@ function TargetTabList({
   onSelect,
   label,
   labels,
+  indicators,
   baseId,
   disabled,
   setRef,
@@ -105,6 +128,7 @@ function TargetTabList({
           target={target}
           baseId={baseId}
           label={labels[item]}
+          indicator={indicators?.[item] ?? null}
           disabled={disabled}
           setRef={(node) => setRef(item, node)}
           onSelect={onSelect}
@@ -151,6 +175,7 @@ export function DocumentTargetTabs({
   onSelect,
   label,
   labels,
+  indicators,
   disabled = false,
   children,
 }: DocumentTargetTabsProps) {
@@ -180,6 +205,7 @@ export function DocumentTargetTabs({
         onSelect={onSelect}
         label={label}
         labels={labels}
+        indicators={indicators}
         baseId={baseId}
         disabled={disabled}
         setRef={(item, node) => {

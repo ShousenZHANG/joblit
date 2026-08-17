@@ -3,6 +3,9 @@ import type { AiContent } from "@/lib/shared/schemas/aiContent";
 import type { MasterSkillGroup } from "@/lib/shared/tailorReviewSnapshot";
 import type { TailorTarget } from "./tailorActions";
 
+/** The four phases of the tailoring accordion, in reading order. */
+export type TailorPhase = "copy" | "paste" | "review" | "publish";
+
 /**
  * Everything the dialog needs to edit one Application, loaded once when the
  * user opens it.

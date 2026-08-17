@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactElement } from "react";
+import { useCallback, useState, type ReactElement } from "react";
 import { useTranslations } from "next-intl";
 import { Loader2 } from "lucide-react";
 import {
@@ -11,13 +11,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { JobItem } from "../../types";
-import { DocumentTargetTabs } from "./DocumentTargetTabs";
+import {
+  DocumentTargetTabs,
+  type DocumentTargetIndicator,
+} from "./DocumentTargetTabs";
 import { TailorDraftSteps } from "./TailorDraftSteps";
 import { TailorLockedSteps } from "./TailorLockedSteps";
 import { TailorPasteStep } from "./TailorPasteStep";
 import { TailorPromptStep } from "./TailorPromptStep";
 import type { TailorTarget } from "./tailorActions";
 import type {
+  TailorPhase,
   TailorReviewDraft,
   TailorReviewFinalized,
 } from "./tailorDialogTypes";
@@ -104,16 +108,76 @@ function TailorDialogBody({
     resume: "",
     cover: "",
   });
-  const generation = useTailorGeneration({ job, target });
-  const hasContent = draft
-    ? draft.initialPublication[target].status !== "MISSING"
-    : false;
+  // null means "derive the expanded phase from the document's state"; a value
+  // is the phase the user explicitly re-opened. Every successful action clears
+  // the override so the accordion advances on its own.
+  const [phaseOverrides, setPhaseOverrides] = useState<
+    Record<TailorTarget, TailorPhase | null>
+  >({ resume: null, cover: null });
+  const [publishedTargets, setPublishedTargets] = useState<
+    Record<TailorTarget, boolean>
+  >({ resume: false, cover: false });
+
+  const expandPhase = useCallback((forTarget: TailorTarget, phase: TailorPhase) => {
+    setPhaseOverrides((current) => ({ ...current, [forTarget]: phase }));
+  }, []);
+
+  const generation = useTailorGeneration({
+    job,
+    target,
+    onCopied: (copiedTarget) => expandPhase(copiedTarget, "paste"),
+  });
+
+  const publication = draft?.initialPublication ?? null;
+  const importedFor = (forTarget: TailorTarget) =>
+    publication ? publication[forTarget].status !== "MISSING" : false;
+  const publishedFor = (forTarget: TailorTarget) =>
+    publishedTargets[forTarget] ||
+    (publication ? publication[forTarget].status === "FINAL" : false);
+
+  const hasContent = importedFor(target);
+  const autoPhase: TailorPhase | "none" = publishedFor(target)
+    ? "none"
+    : hasContent
+      ? "review"
+      : "copy";
+  const expandedPhase = phaseOverrides[target] ?? autoPhase;
+
+  const copyState =
+    expandedPhase === "copy"
+      ? "expanded"
+      : generation.hasCopied || hasContent
+        ? "done"
+        : "future";
+  const pasteState =
+    expandedPhase === "paste" ? "expanded" : hasContent ? "done" : "future";
+
+  const indicatorFor = (
+    forTarget: TailorTarget,
+  ): DocumentTargetIndicator | null => {
+    if (publishedFor(forTarget)) {
+      return { kind: "published", label: td("docStatusPublished") };
+    }
+    if (importedFor(forTarget)) {
+      return { kind: "draft", label: td("docStatusDraft") };
+    }
+    return null;
+  };
 
   async function importCurrentOutput() {
     const applicationId = await generation.importOutput(outputs[target]);
     if (!applicationId) return;
     const loaded = await onImported({ applicationId, jobId: job.id, target });
-    if (loaded) setOutputs((current) => ({ ...current, [target]: "" }));
+    if (loaded) {
+      setOutputs((current) => ({ ...current, [target]: "" }));
+      setPhaseOverrides((current) => ({ ...current, [target]: null }));
+    }
+  }
+
+  function handleFinalized(result: TailorReviewFinalized) {
+    setPublishedTargets((current) => ({ ...current, [result.target]: true }));
+    setPhaseOverrides((current) => ({ ...current, [result.target]: null }));
+    onFinalized(result);
   }
 
   return (
@@ -133,6 +197,10 @@ function TailorDialogBody({
           onSelect={setTarget}
           label={td("docTablistLabel")}
           labels={{ resume: td("docResume"), cover: td("docCover") }}
+          indicators={{
+            resume: indicatorFor("resume"),
+            cover: indicatorFor("cover"),
+          }}
         >
           <div className="pt-4">
             {draftError ? (
@@ -146,14 +214,14 @@ function TailorDialogBody({
 
             <TailorPromptStep
               index={1}
-              state={hasContent ? "done" : "active"}
+              state={copyState}
+              onExpand={() => expandPhase(target, "copy")}
               generation={generation}
             />
             <TailorPasteStep
               index={2}
-              state={
-                hasContent ? "done" : outputs[target].trim() ? "active" : "todo"
-              }
+              state={pasteState}
+              onExpand={() => expandPhase(target, "paste")}
               target={target}
               value={outputs[target]}
               onChange={(value) =>
@@ -178,13 +246,31 @@ function TailorDialogBody({
                 key={`${draft.applicationId}:${draft.initialAiContentHash ?? ""}`}
                 draft={draft}
                 target={target}
-                onFinalized={onFinalized}
+                expandedPhase={expandedPhase}
+                onExpandPhase={(phase) => expandPhase(target, phase)}
+                onFinalized={handleFinalized}
               />
             ) : (
               <TailorLockedSteps />
             )}
           </div>
         </DocumentTargetTabs>
+      </div>
+
+      <div className="shrink-0 border-t border-border/60 px-6 py-3">
+        <p className="text-xs text-muted-foreground">
+          {t("skillPackHint")}{" "}
+          <button
+            type="button"
+            onClick={() => void generation.downloadSkillPack()}
+            disabled={generation.skillPackLoading}
+            className="font-medium text-brand-emerald-text underline-offset-4 transition-colors hover:underline disabled:cursor-progress disabled:opacity-60 motion-reduce:transition-none"
+          >
+            {generation.skillPackLoading
+              ? t("skillPackDownloading")
+              : t("skillPackLink")}
+          </button>
+        </p>
       </div>
     </>
   );
