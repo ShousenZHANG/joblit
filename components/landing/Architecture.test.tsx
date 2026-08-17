@@ -14,37 +14,51 @@ function renderArchitecture() {
 }
 
 describe("landing Architecture", () => {
-  it("draws the local-first pipeline through the Codex CLI", () => {
+  it("draws the paste loop with the chatbot as the only boundary node", () => {
     renderArchitecture();
 
     expect(screen.getByTestId("landing-architecture")).toBeInTheDocument();
-    expect(screen.getByText("Runner")).toBeInTheDocument();
-    // Twice by design: the node inside the boundary and the credit link.
-    expect(screen.getAllByText("Codex CLI")).toHaveLength(2);
-    // The engine this section used to draw was retired by ADR-0018. Its name
-    // reappearing here means marketing has drifted from the runtime again.
-    expect(screen.queryByText(/hermes/i)).not.toBeInTheDocument();
 
-    // The boundary claim is the section's whole point: model calls and the
-    // user's AI credential stay inside their machine (ADR-0015). It must not
-    // drift into the false claim that resumes never leave the browser —
-    // profile data lives in the workspace by design.
+    // Four stages, in loop order: the workspace builds the prompt, the
+    // visitor's own chatbot writes, deterministic gates check the result,
+    // Finalize renders the one PDF (ADR-0015/0022/0023).
+    for (const title of [
+      en.landing.architecture.workspaceTitle,
+      en.landing.architecture.chatbotTitle,
+      en.landing.architecture.gatesTitle,
+      en.landing.architecture.pdfTitle,
+    ]) {
+      expect(
+        screen.getByRole("heading", { level: 3, name: title }),
+      ).toBeInTheDocument();
+    }
+
+    // The boundary claim is the section's whole point: the chatbot node is
+    // the one piece Joblit cannot see. It must not drift into the false
+    // claim that resumes never leave the browser — profile data lives in
+    // the workspace by design.
     expect(
-      screen.getByText(en.landing.architecture.boundaryNote),
+      screen.getByText(en.landing.architecture.boundaryCaption),
     ).toBeInTheDocument();
 
-    const codexLink = screen.getByRole("link", { name: "Codex CLI" });
-    expect(codexLink).toHaveAttribute(
-      "href",
-      "https://github.com/openai/codex",
-    );
-    expect(codexLink).toHaveAttribute("target", "_blank");
+    // The chatbot node names real paste targets, not an engine Joblit
+    // drives: any assistant the visitor already pays for.
+    expect(
+      screen.getByText(en.landing.architecture.chatbotDesc),
+    ).toBeInTheDocument();
 
-    // One real vector, nominative use only. Claude was removed when the
-    // Runner path was pinned to Codex: a mark for an engine the Runner
-    // cannot drive is a false claim, however real the logo itself is.
-    expect(screen.getByRole("img", { name: "OpenAI" })).toBeInTheDocument();
-    expect(screen.queryByRole("img", { name: "Claude" })).not.toBeInTheDocument();
+    // The Runner → Codex pipeline was retired by ADR-0022. Its vocabulary —
+    // or the OpenAI mark that credited it — reappearing here means marketing
+    // has drifted from the runtime again.
+    expect(screen.queryByText(/runner/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/codex/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "OpenAI" })).not.toBeInTheDocument();
+
+    // A nav anchor points here; the section must carry the matching id.
+    expect(screen.getByTestId("landing-architecture")).toHaveAttribute(
+      "id",
+      "architecture",
+    );
   });
 
   it("has no automated accessibility violations", async () => {

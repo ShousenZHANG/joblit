@@ -36,7 +36,9 @@ export function Cta() {
             aria-disabled={cta.disabled}
             tabIndex={cta.disabled ? -1 : undefined}
             className={
-              "group inline-flex h-11 shrink-0 items-center gap-2 rounded-full bg-foreground px-6 text-sm font-semibold text-background shadow-[0_8px_20px_-8px_rgba(15,23,42,0.4)] transition-all duration-200 hover:-translate-y-px hover:bg-foreground/90 hover:shadow-[0_12px_28px_-10px_rgba(15,23,42,0.5)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background " +
+              // Emerald shadow tokens, not a slate one-off: the close must sit
+              // in the same light as the hero CTA it echoes.
+              "group inline-flex h-11 shrink-0 items-center gap-2 rounded-full bg-foreground px-6 text-sm font-semibold text-background shadow-[var(--shadow-card-emerald)] transition-all duration-200 hover:-translate-y-px hover:bg-foreground/90 hover:shadow-[var(--shadow-elevated-emerald)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background " +
               (cta.disabled ? "pointer-events-none opacity-70" : "")
             }
           >

@@ -7,10 +7,10 @@ import { revealUp, useReveal } from "./lib/motion";
 
 /**
  * Three questions, because only three real objections exist: price, privacy,
- * and whether local AI is mandatory. The five-item version this replaces
+ * and whether anything must be installed. The five-item version this replaces
  * padded the list with restatements of the hero. Answers must stay true to
- * ADR-0015 (no server model keys) and to the manual import path being the
- * zero-install floor.
+ * ADR-0015 (no server model keys) and ADR-0022: the copy/paste loop is the
+ * product itself, not a degraded fallback for people without a local agent.
  */
 const FAQ_KEYS = ["free", "privacy", "byoai"] as const;
 
@@ -23,7 +23,7 @@ export function Faq() {
       {...reveal}
       id="faq"
       data-testid="landing-faq"
-      className="mx-auto w-full max-w-3xl px-6 py-16 sm:px-10 sm:py-24"
+      className="mx-auto w-full max-w-3xl scroll-mt-24 px-6 py-16 sm:px-10 sm:py-24"
       variants={revealUp}
     >
       <h2 className="text-balance text-center text-3xl font-bold tracking-tight text-foreground sm:text-[40px]">

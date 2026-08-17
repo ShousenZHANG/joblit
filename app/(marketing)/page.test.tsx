@@ -34,20 +34,22 @@ vi.mock("next-themes", async () => {
 });
 
 describe("MarketingPage", () => {
-  it("renders the five-movement landing without the retired sections", () => {
+  it("renders the six-movement landing without the retired sections", () => {
     render(
       <NextIntlClientProvider locale="en" messages={messages}>
         <MarketingPage />
       </NextIntlClientProvider>,
     );
 
-    // Five movements by design: hero + capability facts + the local-first
-    // architecture + the AI bento + the three-question close. The generic
-    // intro sections (how-it-works, feature grid) stay retired.
+    // Six movements by design: hero + capability facts + the four-stage
+    // flow + the paste-loop architecture + the AI bento + the
+    // three-question close. The generic intro sections (how-it-works,
+    // feature grid) stay retired.
     const required = [
       "landing-nav",
       "landing-hero",
       "landing-logobar",
+      "landing-flow",
       "landing-architecture",
       "landing-bento",
       "landing-faq",
@@ -63,6 +65,15 @@ describe("MarketingPage", () => {
     }
 
     expect(screen.queryByTestId("landing-access")).not.toBeInTheDocument();
+
+    // Every nav anchor must land on a real section id, or the smooth-scroll
+    // handler silently degrades into a no-op.
+    for (const anchor of ["flow", "architecture", "faq"]) {
+      expect(
+        document.getElementById(anchor),
+        `missing nav anchor target: #${anchor}`,
+      ).toBeInTheDocument();
+    }
 
     expect(screen.getByTestId("hero-demo-row-0")).toHaveAttribute(
       "data-active",

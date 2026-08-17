@@ -22,7 +22,9 @@ describe("landing LogoBar", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("LinkedIn role discovery")).toBeInTheDocument();
     expect(screen.getByText("Australian recall-safe screening")).toBeInTheDocument();
-    expect(screen.getByText("Your own AI — on your machine")).toBeInTheDocument();
+    expect(
+      screen.getByText("Your own chatbot — Joblit holds no model keys"),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/greenhouse|lever|ashby|workable/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/gemini/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^\d+$/)).not.toBeInTheDocument();

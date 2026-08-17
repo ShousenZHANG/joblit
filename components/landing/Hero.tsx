@@ -17,12 +17,12 @@ const useIsomorphicLayoutEffect =
 
 // Hero — Linear/Vercel pattern: centered headline, dual CTA, full-width
 // product mock as the visual anchor. The mock mirrors the REAL Jobs surface
-// (list of fetched roles + a detail panel with status, meta chips, the
-// Open/Generate actions, an experience-gate insight, and the JD) — it does
-// NOT show a fabricated match score or skill-fit, because the product has no
-// scoring feature. The only steady-state motion is the active-row rotation
-// and a gentle Sparkles pulse on the Generate action; everything else is the
-// one-shot intro choreography.
+// (list of fetched AU roles + a detail panel with status, meta chips, the
+// Open/Saved/Tailor actions, an experience-gate insight, and the JD) — it
+// does NOT show a fabricated match score or skill-fit, because the product
+// has no scoring feature (ADR-0019). The only steady-state motion is the
+// active-row rotation and a gentle Sparkles pulse on the Tailor action;
+// everything else is the one-shot intro choreography.
 
 export function Hero() {
   const reduced = useReducedMotion();

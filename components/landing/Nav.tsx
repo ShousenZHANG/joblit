@@ -16,16 +16,36 @@ import { useCtaHref } from "./lib/useCtaHref";
 // scrolls past 20px. Smooth scroll handler hijacks clicks on `#anchor`
 // links so the jumps feel native to the page.
 //
-// The previous "scale 0.97 on scroll" effect has been removed: it caused
-// a visible "jump" at the threshold that read as glitchy rather than
-// premium. The shadow change alone communicates the scroll state.
+// Visual hierarchy is deliberate and singular: the CTA is the ONLY solid
+// element in the bar. Everything else — GitHub, locale, theme, Log in —
+// is a ghost control from one family: identical height (h-11 touch,
+// h-9 ≥lg), identical radius, one focus ring (brand-emerald-600), and
+// hover states that change at most two properties. Five controls with
+// five different visual weights read as noise; one solid element reads
+// as a decision.
 
 interface NavLink {
-  label: string;
+  labelKey: "howItWorks" | "architecture" | "faq";
   href: string;
 }
 
 const GITHUB_REPO_URL = "https://github.com/ShousenZHANG/joblit";
+
+// The three anchors mirror the page's argument in order: the loop, the
+// boundary, the objections. Each target section carries a matching `id`
+// plus `scroll-mt-24` so the sticky pill never overlaps the heading.
+const LINKS: NavLink[] = [
+  { labelKey: "howItWorks", href: "#flow" },
+  { labelKey: "architecture", href: "#architecture" },
+  { labelKey: "faq", href: "#faq" },
+];
+
+/**
+ * The shared ghost-control recipe. Height and focus ring live here so a
+ * new right-cluster control cannot drift from the family by accident.
+ */
+const GHOST_CONTROL =
+  "inline-flex h-11 shrink-0 items-center justify-center rounded-full text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background lg:h-9";
 
 export function Nav() {
   const { status } = useSession();
@@ -34,13 +54,6 @@ export function Nav() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const t = useTranslations("landing.nav");
   const cta = useCtaHref();
-
-  // Dropped the "Changelog" link — it pointed at a dead "#" anchor, which
-  // reads as pre-launch in a primary nav. Re-add when a real page exists.
-  // The intro sections are gone by design and the demo sits right below the
-  // hero, so there is nothing left to anchor to. The GitHub button on the
-  // right is the only outbound link this nav needs.
-  const LINKS: NavLink[] = [];
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -120,13 +133,13 @@ export function Nav() {
 
         <ul className="hidden items-center gap-1 text-sm lg:flex" role="list">
           {LINKS.map((link) => (
-            <li key={link.label}>
+            <li key={link.labelKey}>
               <a
                 href={link.href}
                 onClick={handleSmoothScroll(link.href)}
-                className="rounded-full px-3 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                className={`${GHOST_CONTROL} px-3`}
               >
-                {link.label}
+                {t(link.labelKey)}
               </a>
             </li>
           ))}
@@ -139,21 +152,21 @@ export function Nav() {
             rel="noreferrer"
             aria-label={t("github")}
             title={t("github")}
-            className="inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full border border-border/70 bg-background/75 px-2.5 text-[13px] font-semibold text-muted-foreground shadow-sm transition-all duration-200 hover:-translate-y-px hover:border-brand-emerald-300 hover:bg-brand-emerald-50/70 hover:text-brand-emerald-800 hover:shadow-md active:translate-y-0 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-3 lg:h-9"
+            className={`${GHOST_CONTROL} min-w-11 gap-1.5 px-2.5 font-semibold sm:px-3 lg:min-w-9`}
           >
             <Github className="h-3.5 w-3.5" aria-hidden />
             <span className="hidden whitespace-nowrap lg:inline">GitHub</span>
           </a>
           <div className="hidden sm:inline-flex">
-            <LocaleSwitcher size="touch" />
+            <LocaleSwitcher size="touch" variant="ghost" />
           </div>
           <div className="hidden sm:inline-flex">
-            <ThemeToggle size="touch" />
+            <ThemeToggle size="touch" variant="ghost" className="lg:h-9 lg:w-9" />
           </div>
           {status === "unauthenticated" && (
             <Link
               href="/login"
-              className="hidden min-h-11 items-center rounded-full px-3 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:inline-flex lg:min-h-9"
+              className={`${GHOST_CONTROL} hidden px-3 sm:inline-flex`}
             >
               {t("logIn")}
             </Link>
@@ -163,7 +176,7 @@ export function Nav() {
               href={cta.href}
               prefetch={cta.prefetch}
               aria-label={cta.label}
-              className="inline-flex h-11 min-w-11 shrink-0 items-center gap-1 rounded-full bg-foreground px-3 text-[13px] font-semibold text-background shadow-sm transition-all hover:-translate-y-px hover:bg-foreground/90 hover:shadow-md active:translate-y-0 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-4 lg:h-9"
+              className="inline-flex h-11 min-w-11 shrink-0 items-center gap-1 rounded-full bg-foreground px-3 text-[13px] font-semibold text-background shadow-sm transition-[background-color,box-shadow] hover:bg-foreground/90 hover:shadow-md active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-4 lg:h-9"
             >
               <span className="hidden whitespace-nowrap sm:inline">{cta.label}</span>
               <ArrowRight className="h-3.5 w-3.5" aria-hidden />
@@ -178,7 +191,7 @@ export function Nav() {
             aria-label={mobileOpen ? t("closeMenu") : t("openMenu")}
             aria-expanded={mobileOpen}
             aria-controls="mobile-nav-panel"
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background/75 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background lg:hidden"
+            className={`${GHOST_CONTROL} h-11 w-11 lg:hidden`}
           >
             {mobileOpen ? (
               <X className="h-4 w-4" aria-hidden />
@@ -189,7 +202,9 @@ export function Nav() {
         </div>
       </motion.div>
 
-      {/* Mobile dropdown panel */}
+      {/* Mobile dropdown panel — the three anchors plus Log in. Locale and
+          theme live in the bar from `sm` up; below that they move here so
+          the pill never crowds past its border radius. */}
       <AnimatePresence>
         {mobileOpen ? (
           <motion.div
@@ -198,17 +213,17 @@ export function Nav() {
             animate={{ opacity: 1, y: 0 }}
             exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8 }}
             transition={{ duration: reduced ? 0 : 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="mt-2 overflow-hidden rounded-2xl border border-border/60 bg-[var(--landing-nav-bg,rgba(255,255,255,0.92))] p-2 shadow-[0_18px_40px_-20px_rgba(15,23,42,0.25)] backdrop-blur-xl lg:hidden"
+            className="mt-2 overflow-hidden rounded-2xl border border-border/60 bg-[var(--landing-nav-bg,rgba(255,255,255,0.92))] p-2 shadow-[var(--shadow-elevated-emerald)] backdrop-blur-xl lg:hidden"
           >
             <ul className="flex flex-col" role="list">
               {LINKS.map((link) => (
-                <li key={link.label}>
+                <li key={link.labelKey}>
                   <a
                     href={link.href}
                     onClick={handleSmoothScroll(link.href)}
                     className="inline-flex min-h-11 w-full items-center rounded-xl px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-inset"
                   >
-                    {link.label}
+                    {t(link.labelKey)}
                   </a>
                 </li>
               ))}
@@ -224,9 +239,9 @@ export function Nav() {
                 </li>
               ) : null}
             </ul>
-            <div className="mt-1 flex items-center gap-2 border-t border-border/60 px-2 pt-2">
-              <LocaleSwitcher size="touch" />
-              <ThemeToggle size="touch" />
+            <div className="mt-1 flex items-center gap-2 border-t border-border/60 px-2 pt-2 sm:hidden">
+              <LocaleSwitcher size="touch" variant="ghost" />
+              <ThemeToggle size="touch" variant="ghost" />
             </div>
           </motion.div>
         ) : null}

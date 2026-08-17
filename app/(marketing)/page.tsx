@@ -49,15 +49,19 @@ const jsonLd = {
  *   Hero + product demo — the product does the talking
  *   LogoBar             — one line of named capability facts, no counters
  *   Flow                — the four-stage loop, drawn from real UI fragments
- *   Architecture        — the signature visual: the local-first pipeline,
- *                         with the machine boundary drawn (ADR-0015/0018)
+ *   Architecture        — the signature visual: workspace → your chatbot →
+ *                         deterministic gates → PDF (ADR-0015/0022/0023)
  *   AiBento             — the AI story as product miniatures, not slogans
  *   Faq                 — the three real objections, then the close
  *
  * An earlier generic HowItWorks (icons + verbs) stayed dead; Flow replaced it
  * only once every step could carry a miniature of the real surface. Three of
  * the four atmosphere layers are gone; the starfield stays, dark-mode only.
- * Every claim on this page is auditable against the codebase.
+ *
+ * Every claim on this page is auditable against the codebase — which makes
+ * the page itself load-bearing: any change that retires or reshapes a piece
+ * of the architecture must update this page in the same change, or the
+ * landing starts lying about the product it fronts.
  */
 export default function MarketingPage() {
   return (

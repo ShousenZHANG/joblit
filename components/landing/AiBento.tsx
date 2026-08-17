@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
-import { FileCheck2, MousePointerClick } from "lucide-react";
+import { Check, FlaskConical, Github, KeyRound, MousePointerClick } from "lucide-react";
 import { useSpotlight } from "./lib/interactive";
 import { revealStagger, revealUp, useReveal } from "./lib/motion";
 import { cn } from "@/lib/utils";
@@ -14,13 +14,15 @@ import { cn } from "@/lib/utils";
  *
  * - Fine print: the JD requirements analysis (lib/shared/jobExperienceAnalysis)
  *   extracts hard asks with evidence offsets; every chip jumps to the sentence.
- * - Delta tailoring: summary + max three added bullets — the strict output
- *   contract in the prompt schema.
- * - Local-first: the Runner drives the user's own Codex CLI (ADR-0015/0018);
- *   the command shown is the real one.
- * - "Nothing runs twice": content-hash CAS on the Application commit —
- *   plain-language framing of content-addressed replay.
+ * - Summary gate: summaryLint (lib/server/ai/summaryLint.ts, ADR-0023) runs
+ *   three checks at import — role named, numbers grounded, skills grounded.
+ * - Index-reference skills: the model returns {group, items} positions into
+ *   the user's own skill bank; an unresolvable index is rejected (ADR-0023).
+ * - Proof: open source, the test count, and the no-server-model-keys
+ *   architecture (ADR-0015) — verifiable, not aspirational.
  */
+
+const GITHUB_REPO_URL = "https://github.com/ShousenZHANG/joblit";
 
 function BentoCell({
   children,
@@ -52,6 +54,16 @@ function CellHeading({ title, body }: { title: string; body: string }) {
         {body}
       </p>
     </>
+  );
+}
+
+/** One green tick + label row in the summary-gate miniature. */
+function GateCheckRow({ label }: { label: string }) {
+  return (
+    <li className="flex items-center gap-1.5 text-[11px] font-medium text-foreground/80">
+      <Check className="h-3 w-3 shrink-0 text-brand-emerald-600" aria-hidden />
+      {label}
+    </li>
   );
 }
 
@@ -104,50 +116,74 @@ export function AiBento() {
           </div>
         </BentoCell>
 
-        {/* Delta tailoring — the strict output contract, drawn */}
+        {/* Summary gate — the three summaryLint checks, drawn */}
         <BentoCell>
-          <CellHeading title={t("deltaTitle")} body={t("deltaBody")} />
-          <div className="mt-4 space-y-1.5 text-xs" aria-hidden>
-            <div className="rounded-lg border border-border/60 bg-background/70 px-3 py-1.5 text-muted-foreground">
-              Led the platform migration to Kubernetes…
+          <CellHeading title={t("summaryTitle")} body={t("summaryBody")} />
+          <div className="mt-4 space-y-2" aria-hidden>
+            <div className="rounded-lg border border-border/60 bg-background/70 px-3 py-1.5 text-xs italic text-muted-foreground">
+              “Frontend engineer with 6 years building accessible design
+              systems…”
             </div>
-            <div className="rounded-lg border border-border/60 bg-background/70 px-3 py-1.5 text-muted-foreground">
-              Cut CI feedback time by 60%…
-            </div>
-            <div className="rounded-lg border border-brand-emerald-300/60 bg-brand-emerald-50/70 px-3 py-1.5 font-medium text-brand-emerald-800 dark:bg-brand-emerald-500/10 dark:text-brand-emerald-300">
-              + Shipped observability for 40+ services…
-            </div>
+            <ul className="space-y-1">
+              <GateCheckRow label={t("summaryCheckRole")} />
+              <GateCheckRow label={t("summaryCheckNumbers")} />
+              <GateCheckRow label={t("summaryCheckSkills")} />
+            </ul>
           </div>
         </BentoCell>
 
-        {/* Local-first — the Runner, as it actually looks */}
+        {/* Index-reference skills — positions in, names never */}
         <BentoCell>
-          <CellHeading title={t("localTitle")} body={t("localBody")} />
-          <pre
-            aria-hidden
-            className="mt-4 overflow-x-auto rounded-lg border border-border/60 bg-foreground/[0.03] px-3 py-2.5 font-mono text-[11px] leading-relaxed text-muted-foreground dark:bg-background/60"
-          >
-{`$ node tools/runner/cli.mjs --watch
-✓ Resume tailored — saved to your workspace
-✓ Cover letter — saved`}
-          </pre>
-        </BentoCell>
-
-        {/* Receipts — settlement, not retries */}
-        <BentoCell>
-          <CellHeading title={t("receiptsTitle")} body={t("receiptsBody")} />
+          <CellHeading title={t("indexTitle")} body={t("indexBody")} />
           <div
             aria-hidden
-            className="mt-4 flex items-center gap-2 rounded-lg border border-border/60 bg-background/70 px-3 py-2.5"
+            className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center"
           >
-            <FileCheck2 className="h-4 w-4 shrink-0 text-brand-emerald-600" />
-            <span className="truncate text-[11px] font-medium text-muted-foreground">
-              {t("receiptsSaved")}
-            </span>
-            <span className="ml-auto shrink-0 rounded-full bg-brand-emerald-100/80 px-2 py-0.5 text-[10px] font-bold text-brand-emerald-800 dark:bg-brand-emerald-500/15 dark:text-brand-emerald-300">
-              {t("receiptsBadge")}
-            </span>
+            <pre className="shrink-0 overflow-x-auto rounded-lg border border-border/60 bg-foreground/[0.03] px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground dark:bg-background/60">
+{`{ "group": 1, "items": [2, 0] }`}
+            </pre>
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="rounded-full bg-brand-emerald-100/80 px-2 py-0.5 text-[10px] font-bold text-brand-emerald-800 dark:bg-brand-emerald-500/15 dark:text-brand-emerald-300">
+                TypeScript
+              </span>
+              <span className="rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                GraphQL
+              </span>
+              <span className="rounded-full bg-brand-emerald-100/80 px-2 py-0.5 text-[10px] font-bold text-brand-emerald-800 dark:bg-brand-emerald-500/15 dark:text-brand-emerald-300">
+                React
+              </span>
+            </div>
           </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+            {t("indexCaption")}
+          </p>
+        </BentoCell>
+
+        {/* Proof — verifiable facts, not adjectives. The GitHub row is a real
+            link, so this miniature is content, not decoration. */}
+        <BentoCell>
+          <CellHeading title={t("proofTitle")} body={t("proofBody")} />
+          <ul className="mt-4 space-y-2 text-xs font-medium text-foreground/80">
+            <li className="flex items-center gap-2">
+              <Github className="h-3.5 w-3.5 shrink-0 text-brand-emerald-600" aria-hidden />
+              <a
+                href={GITHUB_REPO_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
+                {t("proofOpenSource")}
+              </a>
+            </li>
+            <li className="flex items-center gap-2">
+              <FlaskConical className="h-3.5 w-3.5 shrink-0 text-brand-emerald-600" aria-hidden />
+              {t("proofTests")}
+            </li>
+            <li className="flex items-center gap-2">
+              <KeyRound className="h-3.5 w-3.5 shrink-0 text-brand-emerald-600" aria-hidden />
+              {t("proofNoKeys")}
+            </li>
+          </ul>
         </BentoCell>
       </div>
     </motion.section>

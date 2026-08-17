@@ -539,14 +539,17 @@
       "home": "Joblit home",
       "github": "Star Joblit on GitHub",
       "openMenu": "Open menu",
-      "closeMenu": "Close menu"
+      "closeMenu": "Close menu",
+      "howItWorks": "How it works",
+      "architecture": "Architecture",
+      "faq": "FAQ"
     },
     "hero": {
       "eyebrowNew": "New",
-      "eyebrowTagline": "Agent Runner · Codex CLI",
+      "eyebrowTagline": "Local-first · Open source · Built for AU job hunts",
       "titleLine1": "The job search,",
       "titleItalic": "re-engineered.",
-      "subtitle": "Joblit pulls roles into one workspace, tailors your CV and cover letter to each JD with your own AI — running on your machine — and exports clean LaTeX PDFs.",
+      "subtitle": "Joblit pulls Australian roles into one workspace and builds the exact tailoring prompt for each JD. Paste it into the chatbot you already use, paste the result back, export clean LaTeX PDFs — Joblit's servers hold no model keys.",
       "startFree": "Start free",
       "viewSource": "View source",
       "metaFree": "Free for everyone · No credit card · Google or GitHub sign-in"
@@ -563,7 +566,7 @@
           "label": "eligibility and seniority policy"
         },
         "byom": {
-          "value": "Your own AI — on your machine",
+          "value": "Your own chatbot — Joblit holds no model keys",
           "label": "generation, local-first"
         }
       }
@@ -582,8 +585,8 @@
           "body": "Scan each ad with the fine print already pulled out, and keep only the roles worth your time."
         },
         "generate": {
-          "title": "Generate",
-          "body": "One press queues every kept role. Your machine writes the CV and cover letter, and progress ticks up live."
+          "title": "Tailor",
+          "body": "Copy the prepared prompt into any chatbot, paste the JSON back, review, publish. Only the summary and the skills order change — never your bullets."
         },
         "export": {
           "title": "Export",
@@ -593,19 +596,19 @@
     },
     "architecture": {
       "kicker": "Architecture",
-      "titlePrefix": "The model runs on",
-      "titleItalic": "your machine.",
-      "lede": "Joblit's servers organise the work — jobs, prompts, drafts, receipts. The AI itself runs where you are: the Runner drives the official Codex CLI on your own machine, on the ChatGPT subscription you already pay for. The servers hold no model key and cannot call a model.",
+      "titlePrefix": "Bring your own",
+      "titleItalic": "chatbot.",
+      "lede": "Joblit builds the exact prompt and checks what comes back — the writing happens in whatever chatbot you already pay for. The servers hold no model key and cannot call a model. That is enforced by the architecture, not promised by a policy.",
       "workspaceTitle": "Joblit workspace",
-      "workspaceDesc": "Fetches roles, builds the exact prompt from your resume profile and rules, and queues the work.",
-      "machineLabel": "Your machine",
-      "runnerDesc": "Drains the queue, one command",
-      "codexDesc": "Runs the model on your ChatGPT subscription",
-      "boundaryNote": "Model calls and your AI credential never leave this box.",
-      "draftsTitle": "Drafts, back",
-      "draftsDesc": "Tailored resume and cover letter return as reviewable drafts with receipts — nothing is sent anywhere without you.",
-      "poweredByPrefix": "Local generation is powered by the official",
-      "poweredBySuffix": "— open source, on your machine, using the ChatGPT subscription you already pay for."
+      "workspaceDesc": "Builds the exact prompt from your resume profile and rules — and holds no model keys.",
+      "chatbotTitle": "Your chatbot",
+      "chatbotDesc": "Any assistant you already pay for — Claude, ChatGPT, Gemini.",
+      "boundaryLabel": "Your account",
+      "boundaryCaption": "Joblit never sees your model account.",
+      "gatesTitle": "Deterministic gates",
+      "gatesDesc": "Summary lint and index resolution — fabrication is rejected, not detected.",
+      "pdfTitle": "PDF",
+      "pdfDesc": "Finalize is the only render. Clean LaTeX, in English and Chinese."
     },
     "bento": {
       "kicker": "AI, kept honest",
@@ -613,14 +616,19 @@
       "titleItalic": "its work.",
       "requirementsTitle": "Reads the fine print for you",
       "requirementsBody": "Joblit reads every job ad and pulls out the hard asks — 8+ years of Java, security clearance, work rights — as tags you can click to jump to the exact sentence in the ad. No AI guesswork here: the same ad always reads the same way.",
-      "deltaTitle": "Never rewrites your resume",
-      "deltaBody": "Tailoring only adds: a fresh summary and up to three new bullet points. Everything you wrote stays untouched, and every change is visible before you use it.",
-      "localTitle": "Works on your computer, with your AI",
-      "localBody": "One command starts the helper on your own computer. It uses the AI plan you already pay for — Joblit's servers never see your AI account and never generate anything themselves.",
-      "receiptsTitle": "Nothing runs twice",
-      "receiptsBody": "Every finished draft is checked in with a receipt. If your connection drops halfway, Joblit picks up the finished draft from the receipt — it never quietly re-runs the AI or creates duplicates.",
-      "receiptsSaved": "Draft saved to your workspace",
-      "receiptsBadge": "won't run twice"
+      "summaryTitle": "The summary is checked at the door",
+      "summaryBody": "Tailoring rewrites your summary for the role — then three checks run before it can land. Fail any one, and the paste is rejected with the reason named.",
+      "summaryCheckRole": "Names the role you're applying for",
+      "summaryCheckNumbers": "Every number is already on your profile",
+      "summaryCheckSkills": "Every skill is already on your profile",
+      "indexTitle": "Skills are picked, never invented",
+      "indexBody": "For skills, the model can only answer with positions in your own skill bank — it never writes a skill name. A position that doesn't exist is rejected outright.",
+      "indexCaption": "The model returns positions, never names — it cannot invent a skill.",
+      "proofTitle": "Don't take this page's word for it",
+      "proofBody": "Every claim above is how the code is built — and the code is public.",
+      "proofOpenSource": "Open source — read every line on GitHub",
+      "proofTests": "2,000+ tests keep these claims pinned",
+      "proofNoKeys": "No model keys on the server — ever"
     },
     "faq": {
       "title": "Questions, answered straight",
@@ -631,11 +639,11 @@
         },
         "privacy": {
           "q": "Where does my data go?",
-          "a": "Your jobs, resume profile, and drafts live in your Joblit workspace. Model calls happen only on your machine — the servers hold no model key and cannot call a model. That is enforced by the architecture, not promised by a policy."
+          "a": "Your jobs, resume profile, and drafts live in your Joblit workspace. Generation happens in your own chatbot, on your own account — the servers hold no model key and cannot call a model. That is enforced by the architecture, not promised by a policy."
         },
         "byoai": {
           "q": "Do I have to run my own AI?",
-          "a": "No. The manual path needs nothing installed: copy the prepared prompt into whatever AI you already use, paste the result back, and Joblit imports it. The Runner simply automates that same loop."
+          "a": "There is nothing to install and nothing to run. Joblit prepares the exact prompt; you paste it into whatever chatbot you already use and paste the JSON back — that loop is the product, not a workaround. If you use Claude Code, an optional Skill Pack automates the same loop with your own rules."
         }
       }
     },
@@ -649,28 +657,16 @@
       "product": {
         "heading": "Product",
         "jobs": "Jobs",
-        "resume": "Resume studio",
-        "agent": "Agent"
-      },
-      "company": {
-        "heading": "Company",
-        "about": "About",
-        "careers": "Careers",
-        "press": "Press",
-        "contact": "Contact"
+        "resume": "Resume studio"
       },
       "resources": {
         "heading": "Resources",
-        "reportIssue": "Report an issue",
-        "docs": "Docs",
-        "guide": "Resume guide",
-        "templates": "Templates"
+        "reportIssue": "Report an issue"
       },
       "legal": {
         "heading": "Legal",
         "privacy": "Privacy",
-        "terms": "Terms",
-        "security": "Security"
+        "terms": "Terms"
       },
       "copyright": "© 2026 Joblit Labs. All rights reserved.",
       "designed": "Designed in Sydney · Built for candidates everywhere"

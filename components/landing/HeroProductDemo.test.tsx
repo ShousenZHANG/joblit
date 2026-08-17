@@ -136,7 +136,7 @@ describe("HeroProductDemo interval lifecycle", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it("mirrors the current nav and the batch-only generate action", () => {
+  it("mirrors the current nav, AU-only intake, and the Tailor action row", () => {
     render(<HeroProductDemo mounted reduced />);
 
     // The demo nav mirrors the real one: three pages, nothing retired.
@@ -146,9 +146,20 @@ describe("HeroProductDemo interval lifecycle", () => {
     expect(screen.queryByText("Discover")).not.toBeInTheDocument();
     expect(screen.queryByText("Extension")).not.toBeInTheDocument();
 
-    // Generation is one batch action with live progress, not per-job buttons.
-    expect(screen.getByText("AI Generate")).toBeInTheDocument();
-    expect(screen.queryByText("Generate CV")).not.toBeInTheDocument();
-    expect(screen.queryByText("Generate CL")).not.toBeInTheDocument();
+    // Fetch is AU-only (ADR-0017): the mock rows must be Australian roles,
+    // not a Bay Area wish list the product cannot deliver.
+    expect(screen.getByText("Atlassian · Sydney")).toBeInTheDocument();
+    expect(screen.getByText("Canva · Sydney")).toBeInTheDocument();
+    expect(screen.getByText("Airwallex · Melbourne")).toBeInTheDocument();
+    expect(screen.getByText("SEEK · Melbourne")).toBeInTheDocument();
+
+    // Tailoring is one dialog per job (ADR-0022): a single solid Tailor
+    // action plus the Saved CV/CL re-entry ghosts — no batch queue and no
+    // live progress count.
+    expect(screen.getByText("Tailor")).toBeInTheDocument();
+    expect(screen.getByText("Saved CV")).toBeInTheDocument();
+    expect(screen.getByText("Saved CL")).toBeInTheDocument();
+    expect(screen.queryByText("AI Generate")).not.toBeInTheDocument();
+    expect(screen.queryByText(/\d+ of \d+ done/)).not.toBeInTheDocument();
   });
 });

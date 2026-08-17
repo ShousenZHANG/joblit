@@ -67,6 +67,55 @@ describe("landing Nav", () => {
     );
   });
 
+  it("anchors the three page movements in argument order", () => {
+    renderNav();
+
+    // The nav mirrors the page's argument: the loop, the boundary, the
+    // objections. Each href must point at a real section id on the page —
+    // page.test.tsx asserts the matching targets exist.
+    expect(
+      screen.getByRole("link", { name: en.landing.nav.howItWorks }),
+    ).toHaveAttribute("href", "#flow");
+    expect(
+      screen.getByRole("link", { name: en.landing.nav.architecture }),
+    ).toHaveAttribute("href", "#architecture");
+    expect(
+      screen.getByRole("link", { name: en.landing.nav.faq }),
+    ).toHaveAttribute("href", "#faq");
+  });
+
+  it("keeps the CTA as the only solid control in the right cluster", () => {
+    renderNav();
+
+    const cta = screen.getByRole("link", { name: en.landing.nav.startFree });
+    const github = screen.getByRole("link", { name: en.landing.nav.github });
+    const theme = screen.getByRole("button", { name: "Switch to dark theme" });
+    const localeEn = screen.getByRole("button", { name: "EN" });
+
+    // One solid element: the CTA fills with the foreground color. Everything
+    // else is a ghost — no border chrome, no foreground fill, muted active
+    // states only.
+    expect(cta.className).toContain("bg-foreground");
+    for (const ghost of [github, theme, localeEn]) {
+      expect(ghost.className).not.toContain("bg-foreground");
+      expect(ghost.className).not.toContain("border-border");
+    }
+
+    // One focus ring family across every control, CTA included.
+    for (const control of [cta, github, theme, localeEn]) {
+      expect(control.className).toContain(
+        "focus-visible:ring-brand-emerald-600",
+      );
+    }
+
+    // One control height: touch-sized in the bar, collapsing to the desktop
+    // height at lg.
+    expect(github.className).toContain("h-11");
+    expect(github.className).toContain("lg:h-9");
+    expect(cta.className).toContain("h-11");
+    expect(cta.className).toContain("lg:h-9");
+  });
+
   it("uses localized Chinese labels and closes the mobile menu with Escape", async () => {
     const user = userEvent.setup();
     renderNav("zh");
@@ -108,8 +157,8 @@ describe("landing Nav", () => {
     renderNav();
 
     expect(screen.getByRole("link", { name: en.landing.nav.logIn })).toHaveClass(
-      "min-h-11",
-      "lg:min-h-9",
+      "h-11",
+      "lg:h-9",
     );
   });
 

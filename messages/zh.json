@@ -539,14 +539,17 @@
       "home": "Joblit 首页",
       "github": "在 GitHub 上查看 Joblit",
       "openMenu": "打开菜单",
-      "closeMenu": "关闭菜单"
+      "closeMenu": "关闭菜单",
+      "howItWorks": "工作原理",
+      "architecture": "架构",
+      "faq": "常见问题"
     },
     "hero": {
       "eyebrowNew": "新",
-      "eyebrowTagline": "Agent Runner · Codex CLI",
+      "eyebrowTagline": "本地优先 · 开源 · 为澳洲求职而生",
       "titleLine1": "求职流程，",
       "titleItalic": "重新定义。",
-      "subtitle": "Joblit 把岗位汇入一个工作台,用你自己的 AI —— 在你自己的机器上 —— 为每份 JD 定制简历与求职信,并导出整洁的 LaTeX PDF。",
+      "subtitle": "Joblit 把澳洲职位汇入一个工作台，为每份 JD 组装精确的定制提示词。你把它粘进自己常用的聊天助手，再把结果粘回来，导出整洁的 LaTeX PDF——Joblit 的服务器不持有任何模型密钥。",
       "startFree": "免费开始",
       "viewSource": "查看源码",
       "metaFree": "所有人免费开放 · 无需信用卡 · Google 或 GitHub 登录"
@@ -563,7 +566,7 @@
           "label": "资格与职级策略"
         },
         "byom": {
-          "value": "你的 AI，在本机运行",
+          "value": "你自己的聊天助手——Joblit 不持有模型密钥",
           "label": "本地优先生成"
         }
       }
@@ -582,8 +585,8 @@
           "body": "每份启事的硬性要求已经替你划出来，扫一眼就能只留下值得投的职位。"
         },
         "generate": {
-          "title": "生成",
-          "body": "一键把留下的职位全部排入队列。你的机器负责撰写简历与求职信，进度实时上涨。"
+          "title": "定制",
+          "body": "把准备好的提示词复制进任意聊天助手，把 JSON 粘回来，审阅后发布。只有摘要和技能顺序会变——你的经历要点一个字都不动。"
         },
         "export": {
           "title": "导出",
@@ -593,19 +596,19 @@
     },
     "architecture": {
       "kicker": "架构",
-      "titlePrefix": "模型跑在",
-      "titleItalic": "你自己的电脑上。",
-      "lede": "Joblit 的服务器只负责组织工作——职位、提示词、草稿、回执。AI 本身在你身边运行:Runner 在你自己的机器上驱动官方 Codex CLI,用你已经在付费的 ChatGPT 订阅。服务器不持有任何模型密钥,想调用模型也做不到。",
+      "titlePrefix": "带上你自己的",
+      "titleItalic": "聊天助手。",
+      "lede": "Joblit 负责组装精确的提示词，并检查粘贴回来的结果——写作发生在你已经在付费的任意聊天助手里。服务器不持有任何模型密钥，想调用模型也做不到。这由架构保证，而不是一纸承诺。",
       "workspaceTitle": "Joblit 工作台",
-      "workspaceDesc": "抓取职位,基于你的简历档案和规则组装精确提示词,并把任务排入队列。",
-      "machineLabel": "你的电脑",
-      "runnerDesc": "一条命令,持续消费队列",
-      "codexDesc": "用你的 ChatGPT 订阅运行模型",
-      "boundaryNote": "模型调用与你的 AI 凭证永远不出这个框。",
-      "draftsTitle": "草稿回流",
-      "draftsDesc": "定制后的简历与求职信以可审阅的草稿返回,并附带回执——未经你确认,什么都不会被发出去。",
-      "poweredByPrefix": "本地生成由官方",
-      "poweredBySuffix": "驱动——开源、跑在你的机器上、用你已经在付费的 ChatGPT 订阅。"
+      "workspaceDesc": "基于你的简历档案和规则组装精确提示词——不持有任何模型密钥。",
+      "chatbotTitle": "你的聊天助手",
+      "chatbotDesc": "你已经在付费的任意助手——Claude、ChatGPT、Gemini。",
+      "boundaryLabel": "你的账号",
+      "boundaryCaption": "Joblit 永远看不到你的模型账号。",
+      "gatesTitle": "确定性关卡",
+      "gatesDesc": "摘要检查加技能索引解析——伪造内容直接被拒绝，而不是靠事后检测。",
+      "pdfTitle": "PDF",
+      "pdfDesc": "Finalize 是唯一的渲染入口。整洁的 LaTeX，中英双语。"
     },
     "bento": {
       "kicker": "AI,可被审计",
@@ -613,14 +616,19 @@
       "titleItalic": "亮出证据的 AI。",
       "requirementsTitle": "替你读完招聘启事的小字",
       "requirementsBody": "Joblit 会通读每份招聘启事，把硬性要求——8 年以上 Java、安全许可、工作签证——逐条做成标签，点一下就跳到启事里的原句。这一步没有 AI 的猜测：同一份启事，读出来的结果永远一样。",
-      "deltaTitle": "绝不重写你的简历",
-      "deltaBody": "定制只做加法:一段新摘要,至多三条新要点。你写的内容原封不动,每处改动在使用前都看得见。",
-      "localTitle": "在你的电脑上,用你的 AI",
-      "localBody": "一条命令在你自己的电脑上启动助手,用的是你已经在付费的 AI 套餐——Joblit 的服务器碰不到你的 AI 账号,也从不自己生成任何内容。",
-      "receiptsTitle": "绝不重复运行",
-      "receiptsBody": "每份完成的草稿都有一张回执。就算网络中途断了,Joblit 也会凭回执取回已完成的草稿——绝不会悄悄重跑 AI,也不会产生重复。",
-      "receiptsSaved": "草稿已存入你的工作区",
-      "receiptsBadge": "不会重复运行"
+      "summaryTitle": "摘要在入口处逐条核查",
+      "summaryBody": "定制会为目标岗位重写你的摘要——但落库之前要过三道检查。任何一道不过，这次粘贴就会被拒绝，并说明原因。",
+      "summaryCheckRole": "点名你要申请的岗位",
+      "summaryCheckNumbers": "每个数字都已在你的档案里",
+      "summaryCheckSkills": "每项技能都已在你的档案里",
+      "indexTitle": "技能只能挑选，不能编造",
+      "indexBody": "对于技能，模型只能用位置作答——指向你自己的技能库，它从不书写技能名称。不存在的位置会被直接拒绝。",
+      "indexCaption": "模型返回的是位置而不是名称——它编不出你没有的技能。",
+      "proofTitle": "别只听这页纸的一面之词",
+      "proofBody": "上面的每条主张都写在代码里，而代码是公开的。",
+      "proofOpenSource": "开源——每一行都可以在 GitHub 上读到",
+      "proofTests": "2,000+ 个测试钉住这些主张",
+      "proofNoKeys": "服务器上没有模型密钥——永远没有"
     },
     "faq": {
       "title": "直接回答你的疑问",
@@ -631,11 +639,11 @@
         },
         "privacy": {
           "q": "我的数据去了哪里?",
-          "a": "你的职位、简历档案和草稿保存在你的 Joblit 工作区。模型调用只发生在你自己的电脑上——服务器不持有模型密钥,想调用模型也做不到。这由架构保证,而不是一纸承诺。"
+          "a": "你的职位、简历档案和草稿保存在你的 Joblit 工作区。生成发生在你自己的聊天助手里、用你自己的账号——服务器不持有模型密钥,想调用模型也做不到。这由架构保证,而不是一纸承诺。"
         },
         "byoai": {
           "q": "必须自己跑 AI 吗?",
-          "a": "不必。手动路径零安装:把准备好的提示词复制进你常用的任意 AI,把结果粘回来,Joblit 负责导入。Runner 只是把这个循环自动化而已。"
+          "a": "什么都不用装，什么都不用跑。Joblit 准备好精确的提示词，你把它粘进自己常用的任意聊天助手，再把 JSON 粘回来——这个循环本身就是产品，不是退而求其次的方案。如果你在用 Claude Code，可选的 Skill Pack 会带着你的规则把同一个循环自动化。"
         }
       }
     },
@@ -649,28 +657,16 @@
       "product": {
         "heading": "产品",
         "jobs": "岗位",
-        "resume": "简历工作室",
-        "agent": "智能体"
-      },
-      "company": {
-        "heading": "公司",
-        "about": "关于我们",
-        "careers": "加入我们",
-        "press": "媒体报道",
-        "contact": "联系我们"
+        "resume": "简历工作室"
       },
       "resources": {
         "heading": "资源",
-        "reportIssue": "报告问题",
-        "docs": "文档",
-        "guide": "简历指南",
-        "templates": "模板"
+        "reportIssue": "报告问题"
       },
       "legal": {
         "heading": "法律",
         "privacy": "隐私政策",
-        "terms": "使用条款",
-        "security": "安全说明"
+        "terms": "使用条款"
       },
       "copyright": "© 2026 Joblit Labs. 保留所有权利。",
       "designed": "设计于悉尼 · 为全球求职者打造"

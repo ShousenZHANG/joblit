@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
-import { Sparkles } from "lucide-react";
+import { Check } from "lucide-react";
 import { revealStagger, revealUp, useReveal } from "./lib/motion";
 
 /**
@@ -12,8 +12,10 @@ import { revealStagger, revealUp, useReveal } from "./lib/motion";
  * An earlier HowItWorks died for being generic (icons + verbs any SaaS could
  * ship). This one earns its place the same way the bento does: every
  * miniature is recognisable from the actual app — the status segments, the
- * generate button with live progress, the returned PDF chips — so the page
- * shows the loop rather than asserting one exists.
+ * Tailor dialog's four phases, the returned PDF chips — so the page shows
+ * the loop rather than asserting one exists. The tailor stage mirrors the
+ * one dialog the product actually ships (ADR-0022): copy the prompt, paste
+ * the JSON, review, publish.
  */
 
 const STEP_KEYS = ["fetch", "triage", "generate", "export"] as const;
@@ -55,14 +57,25 @@ function StepMini({ step }: { step: (typeof STEP_KEYS)[number] }) {
         </div>
       );
     case "generate":
+      // The Tailor dialog's phase rail, mid-loop: prompt copied, result
+      // pasted, review in progress, publish still ahead.
       return (
-        <div aria-hidden className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1 rounded-full bg-brand-emerald-600 px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm">
-            <Sparkles className="h-3 w-3" />
-            AI Generate
+        <div aria-hidden className="grid grid-cols-2 gap-x-3 gap-y-1">
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-foreground/70">
+            <Check className="h-3 w-3 shrink-0 text-brand-emerald-600" />
+            Copy prompt
           </span>
-          <span className="text-[10px] font-medium tabular-nums text-muted-foreground">
-            2 of 5 done
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-foreground/70">
+            <Check className="h-3 w-3 shrink-0 text-brand-emerald-600" />
+            Paste result
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-foreground">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-emerald-600" />
+            Review
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground/60">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-border" />
+            Publish
           </span>
         </div>
       );
@@ -83,8 +96,9 @@ export function Flow() {
   return (
     <motion.section
       {...reveal}
+      id="flow"
       data-testid="landing-flow"
-      className="mx-auto w-full max-w-6xl px-6 py-16 sm:px-10 sm:py-24"
+      className="mx-auto w-full max-w-6xl scroll-mt-24 px-6 py-16 sm:px-10 sm:py-24"
       variants={revealStagger}
     >
       <motion.p

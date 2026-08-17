@@ -23,32 +23,35 @@ interface JobRow {
   timeAgo: string;
 }
 
+// The demo rows are Australian by necessity, not flavour: the fetch pipeline
+// is AU-only (ADR-0017), so a mock full of San Francisco roles would be the
+// one thing this page must never be — a claim the product cannot honour.
 const JOB_ROWS: JobRow[] = [
   {
     title: "Sr. Frontend Engineer",
-    company: "Stripe",
-    location: "San Francisco",
+    company: "Atlassian",
+    location: "Sydney",
     status: "NEW",
     timeAgo: "3h",
   },
   {
     title: "Staff Product Designer",
-    company: "Linear",
-    location: "Remote",
+    company: "Canva",
+    location: "Sydney",
     status: "NEW",
     timeAgo: "5h",
   },
   {
     title: "Design Engineer",
-    company: "Figma",
-    location: "New York",
+    company: "Airwallex",
+    location: "Melbourne",
     status: "APPLIED",
     timeAgo: "1d",
   },
   {
     title: "Platform Engineer",
-    company: "PlanetScale",
-    location: "Remote",
+    company: "SEEK",
+    location: "Melbourne",
     status: "NEW",
     timeAgo: "2d",
   },
@@ -60,8 +63,8 @@ const STATUS_BG: Record<JobRow["status"], string> = {
 };
 
 const META_CHIPS = [
-  { icon: Building2, label: "Stripe" },
-  { icon: MapPin, label: "San Francisco" },
+  { icon: Building2, label: "Atlassian" },
+  { icon: MapPin, label: "Sydney" },
   { icon: Briefcase, label: "Full-time" },
   { icon: BarChart3, label: "Senior" },
 ];
@@ -230,7 +233,7 @@ export function HeroProductDemo({
         </motion.div>
 
         {/* Detail — mirrors the real JobDetailPanel: title + status,
-            meta chips, the Open/Generate action row, a Job Description
+            meta chips, the Open/Saved/Tailor action row, a Job Description
             header, an experience-gate insight, and JD text. No score. */}
         <motion.div variants={fadeUp} className="p-5">
           <div className="flex items-center gap-2">
@@ -255,23 +258,28 @@ export function HeroProductDemo({
             ))}
           </div>
 
-          {/* Action row — Open job plus the one batch AI Generate with its
-              live count, matching the real toolbar since generation went
-              batch-only. The Sparkles pulse signals the AI action. */}
+          {/* Action row — mirrors the real JobDetailPanel toolbar: Open job
+              and the Saved CV/CL re-entry points as quiet outlines, with
+              Tailor as the single solid action. Tailoring is one dialog per
+              job (ADR-0022) — there is no batch queue to count up, so no
+              progress figure appears here. */}
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            <span className="inline-flex items-center gap-1 rounded-lg bg-brand-emerald-500 px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm">
+            <span className="inline-flex items-center gap-1 rounded-lg border border-border/60 bg-background/70 px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">
               <ExternalLink className="h-3 w-3" aria-hidden />
               Open job
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-brand-emerald-600 px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm">
+            <span className="inline-flex items-center rounded-lg border border-border/60 bg-background/70 px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">
+              Saved CV
+            </span>
+            <span className="inline-flex items-center rounded-lg border border-border/60 bg-background/70 px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">
+              Saved CL
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-lg bg-brand-emerald-600 px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm">
               <Sparkles
                 className="h-3 w-3 animate-[landing-pulse_2.4s_ease-in-out_infinite] motion-reduce:animate-none"
                 aria-hidden
               />
-              AI Generate
-            </span>
-            <span className="text-[10px] font-medium tabular-nums text-muted-foreground">
-              2 of 5 done
+              Tailor
             </span>
           </div>
 
